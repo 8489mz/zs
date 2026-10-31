@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { IconShoppingCart } from './StorefrontIcons';
 
 interface StorefrontMobileBottomNavProps {
@@ -24,9 +24,45 @@ export const StorefrontMobileBottomNav = React.memo(function StorefrontMobileBot
   onToggleFavorites,
   onOpenCart,
 }: StorefrontMobileBottomNavProps) {
+  const [isHidden, setIsHidden] = useState(false);
+
+  useEffect(() => {
+    let lastScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    let rafId = 0;
+
+    const handleScroll = () => {
+      if (rafId) return;
+      rafId = window.requestAnimationFrame(() => {
+        const currentScrollY = Math.max(0, window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0);
+        const delta = currentScrollY - lastScrollY;
+
+        if (currentScrollY <= 40) {
+          setIsHidden(false);
+        } else if (delta > 8) {
+          // Scrolling down -> hide bottom nav
+          setIsHidden(true);
+        } else if (delta < -6) {
+          // Scrolling up (reverse scroll) -> show bottom nav
+          setIsHidden(false);
+        }
+
+        lastScrollY = currentScrollY;
+        rafId = 0;
+      });
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    document.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      document.removeEventListener('scroll', handleScroll);
+      if (rafId) window.cancelAnimationFrame(rafId);
+    };
+  }, []);
+
   return (
     <nav
-      className="storefront-mobile-bottom-nav"
+      className={`storefront-mobile-bottom-nav${isHidden ? ' is-hidden' : ''}`}
       aria-label="التنقل السريع للموبايل"
       dir="rtl"
     >
