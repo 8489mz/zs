@@ -774,7 +774,10 @@ export class SalesWriteService {
       await trx.updateTable('manufacturing_work_orders').set({ completed_at: new Date(), total_cost: totalCost } as any).where('tenant_id', '=', scope.tenantId).where('id', '=', woId).execute();
 
       const posting = await this.accountingPosting.postManufacturingWorkOrder(trx, woId, auth);
-      if (!posting.journalEntryId) throw new AppError(`Manufacturing work order ${woId} has no journal entry`, 'LEDGER_POSTING_MISSING', 500);
+      // INV-MANUFACTURING-ZERO-COST: a zero-cost auto-produced order posts
+      // no journal by design; only a positive-cost order missing its
+      // journal is a ledger failure.
+      if (!posting.journalEntryId && totalCost > 0) throw new AppError(`Manufacturing work order ${woId} has no journal entry`, 'LEDGER_POSTING_MISSING', 500);
     }
   }
 
