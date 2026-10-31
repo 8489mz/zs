@@ -18,6 +18,23 @@ import { generatePhoneSearchVariants, validateAndNormalizePhone } from '../../co
 import { resolveUserLimit, isUserLimitReached } from './engines/user-plan-limit.engine';
 import { AuthCacheService } from '../../core/auth/services/auth-cache.service';
 
+function parseStoredPermissions(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map(String);
+  if (typeof raw !== 'string' || !raw.trim()) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function samePermissionSet(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const set = new Set(a);
+  return b.every((item) => set.has(item));
+}
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -447,6 +464,28 @@ export class UsersService {
 
     if (!existing) {
       throw new AppError('User not found', 'USER_NOT_FOUND', 404);
+    }
+
+    // INV-USER-SELF-PROMOTION-FORBIDDEN: an actor must never change their
+    // own role or permissions through this helper (which serves both the
+    // single update and the bulk sync). The comparison runs against the
+    // values the update WOULD store: the effective role (after the
+    // super_admin demotion below) and the permission set the payload
+    // would write (an omitted permissions array writes []). Any other
+    // actor changing this user, and any self-edit that repeats the
+    // stored role and permissions, are unaffected. Checked first, before
+    // any uniqueness work, so a forbidden self-promotion fails fast.
+    if (id === actor.userId) {
+      const guardScope = this.scope(actor);
+      const guardRole = payload.role === 'super_admin' && !isPlatformTenantId(guardScope.tenantId) ? 'admin' : payload.role;
+      if (guardRole !== existing.role) {
+        throw new AppError('You cannot change your own role', 'SELF_PROMOTION_FORBIDDEN', 403);
+      }
+      const storedPermissions = parseStoredPermissions(existing.permissions_json);
+      const writtenPermissions = payload.permissions ?? [];
+      if (!samePermissionSet(storedPermissions, writtenPermissions)) {
+        throw new AppError('You cannot change your own permissions', 'SELF_PROMOTION_FORBIDDEN', 403);
+      }
     }
 
     await this.ensureUniqueUsername(payload.username, actor, id);
