@@ -5519,8 +5519,15 @@ export class VanSalesService {
 
   /**
    * Retrieves customer returnable packaging balance summary across all trips.
+   *
+   * INV-DRIVER-PORTAL-REP-SCOPED-READS-FOLLOWUP: the driver-portal read is
+   * scoped through the same assertRepServedCustomer predicate C1 used for
+   * the other customer reads. Staff callers pass no repId and skip the check.
    */
-  async getCustomerPackagingBalance(customerId: number, tenantId: string) {
+  async getCustomerPackagingBalance(customerId: number, tenantId: string, repId?: number) {
+    if (repId != null) {
+      await this.assertRepServedCustomer(tenantId, repId, customerId);
+    }
     const rows = await this.anyDb
       .selectFrom('van_trip_packaging_movements')
       .select([
@@ -5734,6 +5741,13 @@ export class VanSalesService {
   // =========================================================================
 
   async getCustomerSuggestedOrder(tenantId: string, accountId: string, repId: number, customerId: number) {
+    // INV-DRIVER-PORTAL-REP-SCOPED-READS-FOLLOWUP: the scope check runs
+    // BEFORE the van location resolution. getOrCreateVanLocation inserts a
+    // stock_locations row when the rep has none, and a forbidden read must
+    // not create rows. The repId here is the calling rep (the driver route
+    // passes the verified token's repId; there is no staff route), so the
+    // same assertRepServedCustomer predicate C1 used applies verbatim.
+    await this.assertRepServedCustomer(tenantId, repId, customerId);
     const vanLoc = await this.getOrCreateVanLocation(repId, tenantId, accountId);
 
     const recentSales = await this.anyDb

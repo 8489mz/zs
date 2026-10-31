@@ -636,7 +636,7 @@ export class VanSalesController {
     @Param('customerId', ParseIntPipe) customerId: number,
   ) {
     const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
-    return this.vanSalesService.getCustomerPackagingBalance(customerId, driver.tenantId);
+    return this.vanSalesService.getCustomerPackagingBalance(customerId, driver.tenantId, driver.repId);
   }
 
   @Get('customers/:customerId/suggested-order')
