@@ -62,12 +62,21 @@ async function main(): Promise<void> {
   const db2 = new Kysely<Database>({ dialect: new PGliteDialect(pg2) });
   try {
     await pg.exec(`
-      CREATE TABLE tenants (id text PRIMARY KEY, business_name text);
+      CREATE TABLE tenants (id text PRIMARY KEY, business_name text, status text, trial_ends_at timestamptz);
+      CREATE TABLE tenant_subscriptions (id bigserial PRIMARY KEY, tenant_id text, status text, created_at timestamptz DEFAULT NOW(), ends_at timestamptz, grace_ends_at timestamptz, updated_at timestamptz DEFAULT NOW());
       CREATE TABLE customers (id bigserial PRIMARY KEY, tenant_id text, account_id text, name text, phone text, company_name text, address text, balance numeric DEFAULT 0, credit_limit numeric DEFAULT 0, is_active boolean DEFAULT true, metadata text, portal_access_pin text, portal_pin_hash text, portal_pin_salt text, portal_token text, created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW());
       CREATE TABLE audit_logs (id bigserial PRIMARY KEY, action text, details text, event_code text, target_tenant_id text, created_by bigint, impersonated_by bigint, tenant_id text, account_id text, created_at timestamptz DEFAULT NOW());
     `);
-    await anyDb.insertInto('tenants').values({ id: TENANT, business_name: 'Test Freight Co' }).execute();
-    await anyDb.insertInto('tenants').values({ id: OTHER_TENANT, business_name: 'Other Freight Co' }).execute();
+    await anyDb.insertInto('tenants').values({ id: TENANT, business_name: 'Test Freight Co', status: 'active' }).execute();
+    await anyDb.insertInto('tenants').values({ id: OTHER_TENANT, business_name: 'Other Freight Co', status: 'active' }).execute();
+    // INV-PORTAL-TENANT-STATUS-ENFORCED: the shared portal tenant check
+    // reads status + the live subscription for 'active' tenants, so the
+    // fixture carries both; the PIN assertions below are unaffected.
+    const subEndsAt = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
+    await anyDb.insertInto('tenant_subscriptions').values([
+      { tenant_id: TENANT, status: 'active', ends_at: subEndsAt },
+      { tenant_id: OTHER_TENANT, status: 'active', ends_at: subEndsAt },
+    ]).execute();
 
     const auditStub = { log: async () => undefined };
     const service = new MaritimeCustomerPortalService(db, auditStub as never, {} as never);

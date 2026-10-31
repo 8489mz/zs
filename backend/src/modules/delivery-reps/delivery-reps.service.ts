@@ -1,8 +1,10 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Kysely, sql } from '../../database/kysely';
 import { AuditService } from '../../core/audit/audit.service';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
+import { AuthCacheService } from '../../core/auth/services/auth-cache.service';
+import { checkPortalTenantStatus } from '../../core/auth/utils/portal-tenant-status';
 import { boundedPage } from '../../common/utils/bounded-page';
 import {
   PORTAL_TOKEN_TTL_MS,
@@ -15,6 +17,7 @@ import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { UpsertDeliveryRepDto } from './dto/upsert-delivery-rep.dto';
 import { LoginAttemptLimiter } from '../../common/utils/login-attempt-limiter';
+import { assertPortalTenantAllowed } from '../../core/auth/utils/portal-tenant-status';
 import { createPasswordRecord, verifyPassword } from '../../core/auth/utils/password-hasher';
 import { assertSecurePasscode } from '../../core/auth/utils/password-policy';
 
@@ -37,6 +40,7 @@ export class DeliveryRepsService {
     private readonly audit: AuditService,
     private readonly accountingPosting: AccountingPostingService,
     private readonly salesFinance: SalesFinanceService,
+    @Optional() private readonly authCache: AuthCacheService = new AuthCacheService(),
   ) {}
 
   private tenantPredicate(actor: AuthContext) {
@@ -766,6 +770,10 @@ export class DeliveryRepsService {
       // fallback to tenant_id
     }
 
+    // INV-PORTAL-TENANT-STATUS-ENFORCED: no fresh login for a
+    // suspended / expired / trial-expired tenant, even with a valid PIN.
+    await assertPortalTenantAllowed(this.db as any, this.authCache, String(matchedRep.tenant_id));
+
     const token = signPortalToken(
       {
         repId: Number(matchedRep.id),
@@ -802,7 +810,19 @@ export class DeliveryRepsService {
    * البيانات أن المندوب ما زال نشطاً داخل نفس المستأجر — وإلا ظل مندوب موقوف قادراً
    * على البيع والتحصيل باسم المنشأة لمدة شهر بعد إيقافه.
    */
-  async verifyDriverToken(token: string): Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string }> {
+  /**
+   * INV-PORTAL-TENANT-STATUS-ENFORCED: the driver token is stateless,
+   * so every request re-checks the rep row AND the tenant status.
+   * `settleOnly` is the narrow finish-and-settle path: a suspended
+   * tenant's driver may still settle his already-open trip (the settle
+   * service methods themselves enforce open-trip + rep ownership), and
+   * the caller learns the tenant is suspended via `tenantSuspended`.
+   * Every other caller uses the strict form, which throws.
+   */
+  private async verifyDriverTokenCore(
+    token: string,
+    settleOnly: boolean,
+  ): Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string; tenantSuspended: boolean }> {
     const payload = verifyPortalToken<Record<string, any>>(token, DRIVER_TOKEN_ERRORS);
 
     const repId = Number(payload.repId || 0);
@@ -824,13 +844,29 @@ export class DeliveryRepsService {
       throw new AppError('تم إيقاف حساب المندوب. يرجى مراجعة الإدارة', 'DRIVER_INACTIVE', 401);
     }
 
+    const decision = await checkPortalTenantStatus(this.db as any, this.authCache, tenantId);
+    if (decision.blocked && !settleOnly) {
+      throw new AppError(decision.message || 'تم إيقاف أو انتهاء اشتراك هذه النسخة.', decision.code || 'TENANT_NOT_ALLOWED', 401);
+    }
+    const tenantSuspended = decision.blocked;
+
     return {
       repId,
       tenantId: String(rep.tenant_id),
       accountId: String(rep.account_id || accountId),
       name: String(rep.name || payload.name || ''),
       phone: String(rep.phone || payload.phone || ''),
+      tenantSuspended,
     };
+  }
+
+  async verifyDriverToken(token: string): Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string }> {
+    const { tenantSuspended: _tenantSuspended, ...driver } = await this.verifyDriverTokenCore(token, false);
+    return driver;
+  }
+
+  async verifyDriverTokenForSettlement(token: string): Promise<{ repId: number; tenantId: string; accountId: string; name: string; phone: string; tenantSuspended: boolean }> {
+    return this.verifyDriverTokenCore(token, true);
   }
 
   async driverListOrders(repId: number, tenantId: string, filters?: { dateFrom?: string; dateTo?: string; status?: string; page?: number; pageSize?: number }): Promise<Record<string, unknown>> {

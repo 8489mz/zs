@@ -1,8 +1,10 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Kysely, sql } from '../../database/kysely';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { AppError } from '../../common/errors/app-error';
+import { AuthCacheService } from '../../core/auth/services/auth-cache.service';
+import { assertPortalTenantAllowed } from '../../core/auth/utils/portal-tenant-status';
 import { LoginAttemptLimiter } from '../../common/utils/login-attempt-limiter';
 import { createPasswordRecord, verifyPassword } from '../../core/auth/utils/password-hasher';
 import { assertSecurePasscode } from '../../core/auth/utils/password-policy';
@@ -58,7 +60,10 @@ export function calculateDistanceMeters(
 export class MobileAttendanceService {
   private readonly loginLimiter = new LoginAttemptLimiter();
 
-  constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
+  constructor(
+    @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
+    @Optional() private readonly authCache: AuthCacheService = new AuthCacheService(),
+  ) {}
 
   private get anyDb(): any {
     return this.db as any;
@@ -255,6 +260,10 @@ export class MobileAttendanceService {
       distanceMeters: record?.distance_meters ? Number(record.distance_meters) : undefined,
     };
 
+    // INV-PORTAL-TENANT-STATUS-ENFORCED: no fresh login for a
+    // suspended / expired / trial-expired tenant, even with a valid PIN.
+    await assertPortalTenantAllowed(this.db as any, this.authCache, String(employeeUser.tenantId));
+
     const token = this.generateToken(employeeUser);
     this.loginLimiter.recordSuccess(rateLimitKey);
 
@@ -315,6 +324,10 @@ export class MobileAttendanceService {
     if (!employee || employee.status !== 'active') {
       throw new AppError('تم إيقاف حساب الموظف. يرجى مراجعة إدارة الموارد البشرية', 'EMPLOYEE_INACTIVE', 401);
     }
+
+    // INV-PORTAL-TENANT-STATUS-ENFORCED: the token is stateless, so
+    // every request re-checks the tenant status, not just the row.
+    await assertPortalTenantAllowed(this.db as any, this.authCache, tenantId);
 
     return {
       employeeId,

@@ -1,8 +1,10 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Kysely, sql } from '../../database/kysely';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { AppError } from '../../common/errors/app-error';
+import { AuthCacheService } from '../../core/auth/services/auth-cache.service';
+import { assertPortalTenantAllowed } from '../../core/auth/utils/portal-tenant-status';
 import { calculateLoanInstallmentSchedule, addLoanInstallmentMonths, requireLoanMoney } from './payroll-loan-allocation.engine';
 import { currencyMoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
@@ -42,7 +44,10 @@ export interface PortalEmployeeUser {
 export class EmployeePortalService {
   private readonly loginLimiter = new LoginAttemptLimiter();
 
-  constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
+  constructor(
+    @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
+    @Optional() private readonly authCache: AuthCacheService = new AuthCacheService(),
+  ) {}
 
   private get anyDb(): any {
     return this.db as any;
@@ -94,6 +99,10 @@ export class EmployeePortalService {
     if (!employee || employee.status !== 'active') {
       throw new AppError('تم إيقاف حساب الموظف. يرجى مراجعة إدارة الموارد البشرية', 'EMPLOYEE_INACTIVE', 401);
     }
+
+    // INV-PORTAL-TENANT-STATUS-ENFORCED: the token is stateless, so
+    // every request re-checks the tenant status, not just the row.
+    await assertPortalTenantAllowed(this.db as any, this.authCache, tenantId);
 
     return {
       employeeId,
@@ -319,6 +328,10 @@ export class EmployeePortalService {
       tenantId: matched.tenant_id,
       accountId: matched.account_id,
     };
+
+    // INV-PORTAL-TENANT-STATUS-ENFORCED: no fresh login for a
+    // suspended / expired / trial-expired tenant, even with a valid PIN.
+    await assertPortalTenantAllowed(this.db as any, this.authCache, String(matched.tenant_id));
 
     const rateLimitKey = `employee-portal:${rawIdentifier.toLowerCase()}:${(payload?.companyCode || payload?.tenantId || '').toLowerCase()}`;
     this.loginLimiter.recordSuccess(rateLimitKey);

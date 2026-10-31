@@ -1,9 +1,11 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { Kysely, sql } from '../../database/kysely';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { AuditService } from '../../core/audit/audit.service';
 import { AppError } from '../../common/errors/app-error';
+import { AuthCacheService } from '../../core/auth/services/auth-cache.service';
+import { assertPortalTenantAllowed } from '../../core/auth/utils/portal-tenant-status';
 import { LoginAttemptLimiter } from '../../common/utils/login-attempt-limiter';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
 import {
@@ -63,6 +65,7 @@ export class MaritimeCustomerPortalService {
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly audit: AuditService,
     private readonly freightService: MaritimeFreightService,
+    @Optional() private readonly authCache: AuthCacheService = new AuthCacheService(),
   ) {}
 
   /**
@@ -152,6 +155,10 @@ export class MaritimeCustomerPortalService {
       if (!pinCheck.valid) {
         throw new AppError('رمز الدخول السري (PIN) غير صحيح', 'UNAUTHORIZED_CUSTOMER', 401);
       }
+
+      // INV-PORTAL-TENANT-STATUS-ENFORCED: no fresh login for a
+      // suspended / expired / trial-expired tenant, even with a valid PIN.
+      await assertPortalTenantAllowed(this.db as any, this.authCache, String(matched.tenant_id));
 
       this.customerLoginLimiter.recordSuccess(rateLimitKey);
 
@@ -260,6 +267,10 @@ export class MaritimeCustomerPortalService {
       throw new AppError('رابط الوصول للبوابة غير صالح أو منتهي', 'UNAUTHORIZED_CUSTOMER', 401);
     }
 
+    // INV-PORTAL-TENANT-STATUS-ENFORCED: a magic link must not issue a
+    // token for a suspended / expired / trial-expired tenant either.
+    await assertPortalTenantAllowed(this.db as any, this.authCache, String(matched.tenant_id));
+
     const tenantRow = await this.db
       .selectFrom('tenants')
       .select(['business_name'])
@@ -319,6 +330,10 @@ export class MaritimeCustomerPortalService {
     if (!customer) {
       throw new AppError('حساب العميل غير موجود أو تم تعطيله', 'UNAUTHORIZED_CUSTOMER', 401);
     }
+
+    // INV-PORTAL-TENANT-STATUS-ENFORCED: the token is stateless, so
+    // every request re-checks the tenant status, not just the row.
+    await assertPortalTenantAllowed(this.db as any, this.authCache, tenantId);
 
     return {
       customerId: customer.id,

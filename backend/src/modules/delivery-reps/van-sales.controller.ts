@@ -130,7 +130,11 @@ export class VanSalesController {
       supervisorOverridePin?: string;
     },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    // INV-PORTAL-TENANT-STATUS-ENFORCED: finish-and-settle only. A
+    // suspended tenant's driver may settle his already-open trip; the
+    // settle service enforces open-trip + rep ownership. New trips and
+    // sales stay blocked by the strict verifier elsewhere.
+    const driver = await this.deliveryRepsService.verifyDriverTokenForSettlement(authHeader);
     const pinToVerify = String(body?.supervisorPin || body?.supervisorOverridePin || '').trim();
     const isPinRequired = await this.vanSalesService.isSupervisorPinRequiredForSettlement(driver.tenantId);
 
@@ -223,7 +227,9 @@ export class VanSalesController {
       notes?: string;
     },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    // INV-PORTAL-TENANT-STATUS-ENFORCED: finish-and-settle only (see
+    // settleTrip above).
+    const driver = await this.deliveryRepsService.verifyDriverTokenForSettlement(authHeader);
     return this.vanSalesService.submitTripSettlement(driver.repId, driver.tenantId, driver.accountId, body);
   }
 
