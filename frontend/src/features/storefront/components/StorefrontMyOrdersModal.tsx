@@ -5,6 +5,7 @@ import {
   XIcon,
   AlertTriangleIcon,
   SearchIcon,
+  PackageIcon,
 } from '@/shared/components/icons/AppIcons';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { storefrontApi } from '../api/storefront.api';
@@ -132,81 +133,16 @@ export function StorefrontMyOrdersModal({
 
   const allOrders = ordersQuery.data || [];
 
-  const sampleOrder = useMemo<OnlineOrderRecord>(() => {
-    const firstProd = allProducts[0];
-    const secondProd = allProducts[1];
-
-    const items =
-      firstProd && secondProd
-        ? [
-            {
-              productId: firstProd.id,
-              name: firstProd.name,
-              quantity: 1,
-              unitPrice: firstProd.price,
-              total: firstProd.price,
-            },
-            {
-              productId: secondProd.id,
-              name: secondProd.name,
-              quantity: 1,
-              unitPrice: secondProd.price,
-              total: secondProd.price,
-            },
-          ]
-        : [
-            {
-              productId: 101,
-              name: 'سماعات Apple AirPods Max الفضية',
-              quantity: 1,
-              unitPrice: 14800,
-              total: 14800,
-            },
-            {
-              productId: 102,
-              name: 'حقيبة يد نسائية عصرية باللون الأزرق الملكي',
-              quantity: 1,
-              unitPrice: 1190,
-              total: 1190,
-            },
-          ];
-
-    const subtotal = items.reduce((sum, it) => sum + it.total, 0);
-    const deliveryFee = info?.deliveryFee ?? 35;
-
-    return {
-      id: 99901,
-      orderNumber: '8726AB',
-      orderType: 'delivery',
-      customerName: 'عميل المتجر',
-      customerPhone: '01012345678',
-      customerAddress: info?.address || 'التجمع الخامس، القاهرة',
-      customerNotes: null,
-      deliveryZoneName: 'توصيل سريع',
-      subtotal,
-      deliveryFee,
-      discountAmount: 0,
-      totalAmount: subtotal + deliveryFee,
-      status: 'shipped',
-      paymentMethod: 'online',
-      paymentStatus: 'paid',
-      saleId: null,
-      createdAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-      items,
-    };
-  }, [allProducts, info]);
-
   const displayedOrders = useMemo(() => {
-    const source = allOrders.length > 0 ? allOrders : [sampleOrder];
-    if (!searchQuery.trim()) return source;
+    if (!searchQuery.trim()) return allOrders;
     const q = searchQuery.trim().replace(/^#/, '').toLowerCase();
-    return source.filter((order) => {
+    return allOrders.filter((order) => {
       const matchOrderNo = (order.orderNumber || '').toLowerCase().includes(q);
       const matchPhone = (order.customerPhone || '').toLowerCase().includes(q);
       const matchItem = (order.items || []).some((it) => (it.name || '').toLowerCase().includes(q));
       return matchOrderNo || matchPhone || matchItem;
     });
-  }, [allOrders, sampleOrder, searchQuery]);
+  }, [allOrders, searchQuery]);
 
   const handleCancelOrder = (order: OnlineOrderRecord) => {
     setCancellingOrder(order);
@@ -452,18 +388,137 @@ export function StorefrontMyOrdersModal({
             gap: '14px',
           }}
         >
-          {displayedOrders.map((order) => (
-            <StorefrontCustomerOrderCard
-              key={order.id || order.orderNumber}
-              order={order}
-              info={info}
-              onEditOrder={onEditOrder}
-              onReorder={onReorder}
-              onCancelOrder={handleCancelOrder}
-              isCancelling={cancelMutation.isPending}
-              allProducts={allProducts}
-            />
-          ))}
+          {ordersQuery.isLoading ? (
+            <div
+              style={{
+                padding: '40px 20px',
+                textAlign: 'center',
+                color: '#64748b',
+                fontSize: '13px',
+              }}
+            >
+              {t('storefront.my_orders.loading', 'جاري جلب بيانات الطلبات...')}
+            </div>
+          ) : displayedOrders.length === 0 ? (
+            <div
+              style={{
+                padding: '36px 20px',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: '#f8fafc',
+                borderRadius: '12px',
+                border: '1px dashed #e2e8f0',
+                margin: '8px 0',
+              }}
+            >
+              <div
+                style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '16px',
+                  background: '#f1f5f9',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '12px',
+                }}
+              >
+                {searchQuery.trim() ? (
+                  <SearchIcon size={24} color="#94a3b8" />
+                ) : (
+                  <PackageIcon size={26} color="#94a3b8" />
+                )}
+              </div>
+
+              <h4
+                style={{
+                  margin: '0 0 6px',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: '#0f172a',
+                }}
+              >
+                {searchQuery.trim()
+                  ? t('storefront.my_orders.no_search_results', 'لم يتم العثور على أي طلب يطابق بحثك')
+                  : t('storefront.my_orders.empty_title', 'لا توجد طلبات سابقة مسجلة حتى الآن')}
+              </h4>
+
+              <p
+                style={{
+                  margin: '0 0 16px',
+                  fontSize: '12px',
+                  color: '#64748b',
+                  lineHeight: 1.5,
+                  maxWidth: '340px',
+                }}
+              >
+                {searchQuery.trim()
+                  ? t(
+                      'storefront.my_orders.no_search_desc',
+                      'تأكد من كتابة رقم الطلب أو رقم الهاتف بصورة صحيحة، أو امسح البحث لإظهار كافة الطلبات.'
+                    )
+                  : t(
+                      'storefront.my_orders.empty_desc',
+                      'لم تقم بإتمام أي طلبات شراء من هذا المتصفح بعد. عند إتمام طلبك، ستتمكن من متابعة مراحله وتتبع شحنته من هنا مباشرة.'
+                    )}
+              </p>
+
+              {searchQuery.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  style={{
+                    padding: '7px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#334155',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {t('storefront.my_orders.clear_search', 'مسح البحث وعرض الكل')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  style={{
+                    padding: '8px 18px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'var(--storefront-primary-color, #170e5e)',
+                    color: 'var(--storefront-primary-contrast, #ffffff)',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+                    transition: 'opacity 0.15s ease',
+                  }}
+                >
+                  {t('storefront.my_orders.browse_store', 'تصفح المتجر الآن')}
+                </button>
+              )}
+            </div>
+          ) : (
+            displayedOrders.map((order) => (
+              <StorefrontCustomerOrderCard
+                key={order.id || order.orderNumber}
+                order={order}
+                info={info}
+                onEditOrder={onEditOrder}
+                onReorder={onReorder}
+                onCancelOrder={handleCancelOrder}
+                isCancelling={cancelMutation.isPending}
+                allProducts={allProducts}
+              />
+            ))
+          )}
         </div>
       </div>
     </DialogShell>

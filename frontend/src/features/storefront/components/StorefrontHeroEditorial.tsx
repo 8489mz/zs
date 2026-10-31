@@ -678,7 +678,11 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
           const autoPhoto = resolveProductPhoto(product.name, product.categoryName);
           const photoUrl = product.imageUrl || autoPhoto.url;
           const isOutOfStock = !product.inStock || product.stockQty <= 0;
-          const badgeText = isOutOfStock ? 'نفدت الكمية' : CARD_BADGES[originalIdx % CARD_BADGES.length];
+          const realBadge = product.offerBadge || (product.hasDiscount && product.discountPercent ? `خصم ${product.discountPercent}%` : '');
+          const fallbackBadge = info?.smartDealsEnabled
+            ? CARD_BADGES[originalIdx % CARD_BADGES.length]
+            : (isHighlighted ? 'مختاراتنا' : '');
+          const badgeText = isOutOfStock ? 'نفدت الكمية' : (realBadge || fallbackBadge);
 
           const svgPad = 18;
           const svgW = metrics.width + svgPad * 2;

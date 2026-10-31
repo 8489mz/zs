@@ -33,7 +33,7 @@ export function StorefrontDealSpotlight({
   product,
   cartQuantity,
   whatsappPhone,
-  isSmartDeal: _isSmartDeal,
+  isSmartDeal,
   categoryBadge: _categoryBadge,
   onAddToCart,
   onUpdateQuantity,
@@ -72,7 +72,7 @@ export function StorefrontDealSpotlight({
   const hasRealOffer = Boolean(product.hasDiscount && product.originalPrice && product.originalPrice > product.price);
   const oldPrice = hasRealOffer
     ? Number(product.originalPrice)
-    : (!isZeroPrice ? Math.round(product.price * 1.15) : 0);
+    : (!isZeroPrice && isSmartDeal ? Math.round(product.price * 1.15) : 0);
 
   const discountPercent = oldPrice > product.price
     ? Math.round(((oldPrice - product.price) / oldPrice) * 100)

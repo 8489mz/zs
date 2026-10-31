@@ -21,27 +21,15 @@ interface StorefrontHeaderProps {
 }
 
 export function resolveStorefrontBrand(info: { title?: string; businessName?: string; address?: string }) {
-  let business = String(info.businessName || '').trim().replace(/^Z-\s*/i, '');
-  let rawTitle = String(info.title || '').trim().replace(/^Z-\s*/i, '');
+  const business = String(info.businessName || '').trim().replace(/^Z-\s*/i, '');
+  const rawTitle = String(info.title || '').trim().replace(/^Z-\s*/i, '');
   const rawAddress = String(info.address || '').trim();
 
-  if (business === 'متجرنا' || business === 'متجرنا الإلكتروني' || business === 'المتجر') {
-    business = 'Systems ERP';
-  }
-
-  if (
-    rawTitle === 'تسوق أونلاين بأفضل الأسعار وتوصيل سريع' ||
-    rawTitle.includes('تسوق أونلاين بأفضل الأسعار') ||
-    rawTitle === 'متجرنا الإلكتروني' ||
-    rawTitle === 'متجرنا' ||
-    rawTitle === 'المتجر'
-  ) {
-    rawTitle = business || 'Systems ERP';
-  }
+  const title = rawTitle || business || 'متجرنا الإلكتروني';
 
   if (rawAddress) {
     return {
-      title: rawTitle || business || 'Systems ERP',
+      title,
       address: rawAddress,
     };
   }
@@ -57,7 +45,7 @@ export function resolveStorefrontBrand(info: { title?: string; businessName?: st
   }
 
   return {
-    title: rawTitle || business || 'Systems ERP',
+    title,
     address: '',
   };
 }
