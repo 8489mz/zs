@@ -375,7 +375,8 @@ export interface CustomerTable {
   credit_block_reason?: string | null;
   credit_blocked_at?: ColumnType<Date, string | Date | undefined, string | Date | undefined> | null;
   credit_blocked_by?: number | null;
-  portal_access_pin?: string | null;
+  portal_pin_hash?: string | null;
+  portal_pin_salt?: string | null;
   portal_token?: string | null;
   created_at: ColumnType<Date, string | undefined, never>;
   updated_at: ColumnType<Date, string | Date | undefined, string | Date | undefined>;

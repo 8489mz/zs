@@ -14,6 +14,8 @@ import {
 } from '../../core/auth/utils/portal-token';
 import { MaritimeFreightService } from './maritime-freight.service';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
+import { createPasswordRecord, verifyPassword } from '../../core/auth/utils/password-hasher';
+import { assertSecurePasscode } from '../../core/auth/utils/password-policy';
 import * as crypto from 'crypto';
 
 const CUSTOMER_PORTAL_TOKEN_ERRORS: PortalTokenErrorSpec = {
@@ -105,7 +107,8 @@ export class MaritimeCustomerPortalService {
           'is_active',
           'tenant_id',
           'account_id',
-          'portal_access_pin',
+          'portal_pin_hash',
+          'portal_pin_salt',
           'portal_token',
         ])
         .where('is_active', '=', true);
@@ -131,9 +134,22 @@ export class MaritimeCustomerPortalService {
         throw new AppError('لم يتم العثور على حساب عميل مسجل بهذا الرقم', 'UNAUTHORIZED_CUSTOMER', 401);
       }
 
-      // Verify PIN: accept configured PIN or default '1234'
-      const expectedPin = matched.portal_access_pin || '1234';
-      if (pinCode !== expectedPin && pinCode !== '1234') {
+      // INV-FREIGHT-PORTAL-PIN-HASHED: PINs are verified only against the
+      // stored bcrypt hash (the same createPasswordRecord/verifyPassword
+      // helper as driver/employee PINs). There is no default PIN and no
+      // plaintext fallback: '1234' works only if staff set exactly that
+      // value as the hash input, which assertSecurePasscode forbids at
+      // set time. A customer with no hash set fails closed and must
+      // obtain a PIN through the staff reset channel.
+      if (!matched.portal_pin_hash) {
+        throw new AppError(
+          'لم يتم تعيين رمز دخول لهذا الحساب بعد، يرجى التواصل مع الإدارة لتعيين رمز جديد',
+          'PORTAL_PIN_NOT_SET',
+          401,
+        );
+      }
+      const pinCheck = await verifyPassword(pinCode, String(matched.portal_pin_hash), String(matched.portal_pin_salt || ''));
+      if (!pinCheck.valid) {
         throw new AppError('رمز الدخول السري (PIN) غير صحيح', 'UNAUTHORIZED_CUSTOMER', 401);
       }
 
@@ -173,11 +189,55 @@ export class MaritimeCustomerPortalService {
         },
       };
     } catch (err) {
-      if (err instanceof AppError && ['UNAUTHORIZED_CUSTOMER'].includes(err.code)) {
+      if (err instanceof AppError && ['UNAUTHORIZED_CUSTOMER', 'PORTAL_PIN_NOT_SET'].includes(err.code)) {
         this.customerLoginLimiter.recordFailure(rateLimitKey);
       }
       throw err;
     }
+  }
+
+  /**
+   * Staff-only: set or rotate a customer's freight-portal PIN.
+   * INV-FREIGHT-PORTAL-PIN-HASHED: the PIN is stored only as a bcrypt
+   * hash (createPasswordRecord, the same helper as driver/employee
+   * PINs). assertSecurePasscode rejects trivial values including
+   * '1234', so the old universal default can never be reintroduced
+   * through this path. The plaintext PIN is never returned or logged.
+   */
+  async setCustomerPortalPin(
+    auth: AuthContext,
+    customerId: number,
+    pinCode: string,
+  ): Promise<{ ok: boolean; customerId: number }> {
+    const tenantId = String(auth?.tenantId || '').trim();
+    if (!tenantId || !Number.isSafeInteger(customerId) || customerId <= 0) {
+      throw new AppError('حساب العميل غير موجود', 'CUSTOMER_NOT_FOUND', 404);
+    }
+    const customer = await this.db
+      .selectFrom('customers')
+      .select(['id', 'phone'])
+      .where('id', '=', customerId)
+      .where('tenant_id', '=', tenantId)
+      .where('is_active', '=', true)
+      .executeTakeFirst();
+    if (!customer) {
+      throw new AppError('حساب العميل غير موجود', 'CUSTOMER_NOT_FOUND', 404);
+    }
+    const pin = String(pinCode || '').trim();
+    assertSecurePasscode(pin, { phone: customer.phone || undefined });
+    const record = await createPasswordRecord(pin);
+    await this.db
+      .updateTable('customers')
+      .set({ portal_pin_hash: record.hash, portal_pin_salt: record.salt, updated_at: sql`NOW()` })
+      .where('id', '=', customerId)
+      .where('tenant_id', '=', tenantId)
+      .execute();
+    await this.audit.log(
+      'تعيين رمز دخول بوابة عملاء الشحن',
+      `تم تعيين رمز دخول بوابة الشحن للعميل #${customerId} بواسطة ${auth.username}`,
+      auth,
+    );
+    return { ok: true, customerId };
   }
 
   /**

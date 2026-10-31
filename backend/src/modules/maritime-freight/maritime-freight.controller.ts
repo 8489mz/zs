@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { MaritimeFreightService } from './maritime-freight.service';
+import { MaritimeCustomerPortalService } from './maritime-customer-portal.service';
 import { MaritimeMailService, MaritimeMailConfig } from './maritime-mail.service';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
@@ -31,7 +32,22 @@ export class MaritimeFreightController {
   constructor(
     private readonly freightService: MaritimeFreightService,
     private readonly mailService: MaritimeMailService,
+    private readonly portalService: MaritimeCustomerPortalService,
   ) {}
+
+  // Staff-only: set/rotate a freight customer's portal PIN (stored hashed).
+  // Guarded by the same staff session auth as every other action in this
+  // controller (SessionAuthGuard + PermissionsGuard + maritime_freight
+  // feature); the public portal controller stays unauthenticated.
+  // INV-FREIGHT-PORTAL-PIN-HASHED.
+  @Put('customers/:id/portal-pin')
+  async setCustomerPortalPin(
+    @Param('id') id: string,
+    @Body() body: { pinCode: string },
+    @Req() req: RequestWithAuth,
+  ) {
+    return this.portalService.setCustomerPortalPin(req.authContext!, Number(id), String(body?.pinCode || ''));
+  }
 
   // 0. Aggregated Metrics & Tab Badges
   @Get('counts')
