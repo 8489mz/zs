@@ -122,16 +122,66 @@ export class TreasuryService {
       throw new AppError('Expense amount must be positive', 'INVALID_EXPENSE_AMOUNT', 400);
     }
     let amount: number;
+    let minorAmount: number;
     try {
-      amount = fromMinorUnits(toMinorUnits(requestedAmount, digits), digits);
+      minorAmount = toMinorUnits(requestedAmount, digits);
+      amount = fromMinorUnits(minorAmount, digits);
     } catch {
       throw new AppError('Expense amount must match the tenant currency minor units', 'INVALID_EXPENSE_PRECISION', 400);
     }
-    await this.tx.runInTransaction(this.db, async (trx) => {
+    // Idempotency key: mandatory, client-supplied, no server default --
+    // mirroring createTransfer. A missing or short key is a client error,
+    // never a silently generated one: a generated key cannot deduplicate
+    // the retry it was generated for.
+    const requestKey = String(payload.requestKey || '').trim();
+    if (requestKey.length < 8 || requestKey.length > 160) {
+      throw new AppError('A stable expense request key is required', 'EXPENSE_REQUEST_KEY_REQUIRED', 400);
+    }
+    const expenseDate = new Date(payload.date);
+    if (!Number.isFinite(expenseDate.getTime())) {
+      throw new AppError('Expense date is invalid', 'INVALID_EXPENSE_DATE', 400);
+    }
+    const title = String(payload.title || '').trim();
+    const note = String(payload.note || '').trim();
+    const branchId = payload.branchId ? Number(payload.branchId) : null;
+    const locationId = payload.locationId ? Number(payload.locationId) : null;
+    const costCenterId = payload.costCenterId ? Number(payload.costCenterId) : null;
+    const samePayload = (row: {
+      title: string; amount: number; expense_date: Date | string; note: string;
+      branch_id: number | null; location_id: number | null; cost_center_id: number | null;
+    }): boolean => {
+      if (String(row.title || '').trim() !== title) return false;
+      if (toMinorUnits(Number(row.amount), digits) !== minorAmount) return false;
+      if (new Date(row.expense_date).getTime() !== expenseDate.getTime()) return false;
+      if (String(row.note || '').trim() !== note) return false;
+      if ((row.branch_id == null ? null : Number(row.branch_id)) !== branchId) return false;
+      if ((row.location_id == null ? null : Number(row.location_id)) !== locationId) return false;
+      if ((row.cost_center_id == null ? null : Number(row.cost_center_id)) !== costCenterId) return false;
+      return true;
+    };
+    const findPrior = async (trx: Kysely<Database>) => sql<{
+      id: number; title: string; amount: number; expense_date: Date; note: string;
+      branch_id: number | null; location_id: number | null; cost_center_id: number | null;
+    }>`
+      SELECT id, title, amount, expense_date, note, branch_id, location_id, cost_center_id
+      FROM expenses
+      WHERE tenant_id = ${scope.tenantId} AND request_key = ${requestKey}
+      FOR UPDATE
+    `.execute(trx);
+
+    const result = await this.tx.runInTransaction(this.db, async (trx) => {
       await lockAccountingPeriod(trx, scope.tenantId);
-      const branchId = payload.branchId ? Number(payload.branchId) : null;
-      const locationId = payload.locationId ? Number(payload.locationId) : null;
-      const costCenterId = payload.costCenterId ? Number(payload.costCenterId) : null;
+      // Idempotency is checked under a row lock. A retry after a committed
+      // request returns the original expense instead of creating a second
+      // expense and a second journal.
+      const existing = await findPrior(trx);
+      const prior = existing.rows[0];
+      if (prior) {
+        if (!samePayload(prior)) {
+          throw new AppError('Expense request key was already used with different data', 'EXPENSE_IDEMPOTENCY_CONFLICT', 409);
+        }
+        return { expenseId: Number(prior.id), idempotent: true };
+      }
       if (branchId && !await trx.selectFrom('branches').select('id')
         .where('tenant_id', '=', scope.tenantId).where('id', '=', branchId).executeTakeFirst()) {
         throw new AppError('Branch does not belong to this tenant', 'INVALID_EXPENSE_BRANCH', 400);
@@ -144,19 +194,33 @@ export class TreasuryService {
         .where('tenant_id', '=', scope.tenantId).where('id', '=', costCenterId).executeTakeFirst()) {
         throw new AppError('Cost center does not belong to this tenant', 'INVALID_EXPENSE_COST_CENTER', 400);
       }
+      // The initial idempotency lookup may miss another request whose row
+      // was still uncommitted. Re-check AFTER the period lock and the
+      // scope validations, right before the insert: this makes same-key
+      // simultaneous retries return the committed receipt, without ever
+      // attempting a second insert/GL write.
+      const visibleAfterChecks = await findPrior(trx);
+      const completed = visibleAfterChecks.rows[0];
+      if (completed) {
+        if (!samePayload(completed)) {
+          throw new AppError('Expense request key was already used with different data', 'EXPENSE_IDEMPOTENCY_CONFLICT', 409);
+        }
+        return { expenseId: Number(completed.id), idempotent: true };
+      }
       const insert = await sql<{ id: number }>`
-        INSERT INTO expenses (title, amount, expense_date, note, branch_id, location_id, cost_center_id, created_by, tenant_id, account_id)
+        INSERT INTO expenses (title, amount, expense_date, note, branch_id, location_id, cost_center_id, created_by, tenant_id, account_id, request_key)
         VALUES (
-          ${String(payload.title || '').trim()},
+          ${title},
           ${amount},
-          ${new Date(payload.date)},
-          ${String(payload.note || '').trim()},
+          ${expenseDate},
+          ${note},
           ${branchId},
           ${locationId},
           ${costCenterId},
           ${auth.userId},
           ${scope.tenantId},
-          ${scope.accountId}
+          ${scope.accountId},
+          ${requestKey}
         )
         RETURNING id
       `.execute(trx);
@@ -166,7 +230,7 @@ export class TreasuryService {
       await trx.insertInto('treasury_transactions').values({
         txn_type: 'expense',
         amount: -amount,
-        note: 'مصروف: ' + String(payload.title || '').trim(),
+        note: 'مصروف: ' + title,
         reference_type: 'expense',
         reference_id: expenseId,
         branch_id: branchId,
@@ -185,9 +249,20 @@ export class TreasuryService {
       } else {
         this.logger.warn(`Skipped expense journal posting for expense ${expenseId}; existing entry ${accountingResult.journalEntryId ?? 'none'}`);
       }
+      return { expenseId, idempotent: false };
     });
 
-    await this.audit.log('تسجيل مصروف', 'تم تسجيل مصروف بواسطة ' + auth.username, auth);
+    if (!result.idempotent) {
+      // The expense and its journal are already committed. An audit-log
+      // failure must NOT turn this into an error response: the client
+      // would retry, and the retry is exactly the double posting this
+      // idempotency key exists to prevent. Log the failure and succeed.
+      try {
+        await this.audit.log('تسجيل مصروف', 'تم تسجيل مصروف بواسطة ' + auth.username, auth);
+      } catch (auditError) {
+        this.logger.error(`Expense ${result.expenseId} committed but audit log failed: ${(auditError as Error)?.message || auditError}`);
+      }
+    }
     return { ok: true, ...(await this.listExpenses({}, auth)) };
   }
 

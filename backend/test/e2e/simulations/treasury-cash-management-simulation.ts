@@ -161,6 +161,7 @@ async function runSimulation() {
       note: 'مشتريات مكتبية للفرع',
       branchId,
       locationId: mainLocationId,
+      requestKey: randomUUID(),
     }, auth);
     console.log(`✅ تم إنشاء مصروف بنجاح (#${expenseRes1.expenseId}) بمبلغ 1500.`);
 
@@ -171,6 +172,7 @@ async function runSimulation() {
       note: 'صيانة دورية',
       branchId,
       locationId: mainLocationId,
+      requestKey: randomUUID(),
     }, auth);
     console.log(`✅ تم إنشاء مصروف بنجاح (#${expenseRes2.expenseId}) بمبلغ 3500.`);
 

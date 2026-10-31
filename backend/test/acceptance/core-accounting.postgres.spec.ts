@@ -1294,7 +1294,7 @@ async function main() {
     assert.equal(competing.filter(x=>x.status==='rejected' && (x.reason as any).code==='INSUFFICIENT_TREASURY_BALANCE').length,1);
     assert.equal(await postingAmount(moneyTenant,'1110',3),0.001,'cash may not go below remaining fil');
     const expense=await treasury.createExpense({
-      title:'KWD utilities',amount:0.001,date:new Date().toISOString(),note:'one-fil utilities',
+      title:'KWD utilities',amount:0.001,date:new Date().toISOString(),note:'one-fil utilities',requestKey:'kwd-expense-one-fil-001',
     },moneyTenant.auth);
     assert.equal(expense.ok,true);
     const expenseSaved=await db.selectFrom('expenses').select(['id','amount'])
@@ -1342,7 +1342,7 @@ async function main() {
       (e:any)=>e.code==='TRANSFER_IDEMPOTENCY_CONFLICT');
     const egpTenant = await fixture('egp_treasury_precision');
     await assert.rejects(treasury.createExpense({
-      title:'Invalid subcent',amount:0.001,date:new Date().toISOString(),
+      title:'Invalid subcent',amount:0.001,date:new Date().toISOString(),requestKey:'egp-invalid-subcent-exp',
     },egpTenant.auth),(e:any)=>e.code==='INVALID_EXPENSE_PRECISION');
     await assert.rejects(treasury.createTransfer({
       fromAccountId:egpTenant.accounts.get('1110')!,toAccountId:egpTenant.accounts.get('1120')!,

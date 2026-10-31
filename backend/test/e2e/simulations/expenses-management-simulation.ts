@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { randomUUID } from 'crypto';
 import { Pool } from 'pg';
 import { Kysely, PostgresDialect, sql } from 'kysely';
 import { Database } from '../../../src/database/database.types';
@@ -158,6 +159,7 @@ async function runExpensesSimulation() {
         note: exp.note,
         branchId,
         locationId,
+        requestKey: randomUUID(),
       }, auth);
 
       totalExpensesAmount += exp.amount;
@@ -236,6 +238,7 @@ async function runExpensesSimulation() {
         title: 'مصروف غير صالح',
         amount: -100,
         date: new Date().toISOString(),
+        requestKey: randomUUID(),
       }, auth);
       console.log('[WARN] تم قبول مبلغ سالب.');
     } catch (e: any) {
