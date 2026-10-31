@@ -124,8 +124,11 @@ export class InventoryTransferService {
 
     const transferId = await this.tx.runInTransaction(this.db, async (trx) => {
       const issueMode = payload.issueMode || 'transfer_to_branch_stock';
-      const moneyDigits = issueMode === 'final_issue'
-        ? currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId)) : 2;
+      // INV-TRANSFER-RECEIPT-PINNED: the dispatch cost is frozen on the
+      // transfer_send movement at the tenant's book digits, so a later
+      // receipt values any shrinkage at this cost, never at the
+      // receive-time cost_price.
+      const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
       const initialStatus = issueMode === 'final_issue' ? 'received' : 'sent';
 
       const result = await trx.insertInto('stock_transfers').values({
@@ -187,10 +190,10 @@ export class InventoryTransferService {
           note: isFinalIssue ? `صرف نهائي TR-${id}` : `Sent transfer TR-${id}`,
           reference_type: 'transfer', reference_id: id, created_by: auth.userId,
           branch_id: from.branchId, location_id: from.id,
-          ...(isFinalIssue ? {
-            unit_cost: unitCost,
-            total_cost: roundMoney(Number(item.qty || 0) * unitCost, moneyDigits),
-          } : {}),
+          // The dispatch cost is frozen on every send movement, not only
+          // on final issues: the receipt reads it back to value shrinkage.
+          unit_cost: unitCost,
+          total_cost: roundMoney(Number(item.qty || 0) * unitCost, moneyDigits),
           ...this.tenantFields(auth),
         }).returning('id').executeTakeFirstOrThrow();
         if (isFinalIssue) {
@@ -233,7 +236,7 @@ export class InventoryTransferService {
     return transferId as Record<string, unknown>;
   }
 
-  async receiveStockTransfer(transferId: number, auth: AuthContext, receiptPayload?: { items?: TransferReceiptTraceRequest[] }): Promise<Record<string, unknown>> {
+  async receiveStockTransfer(transferId: number, auth: AuthContext, receiptPayload?: { items?: TransferReceiptTraceRequest[]; varianceReason?: string }): Promise<Record<string, unknown>> {
     const scope = this.tenantScope(auth);
     const result = await this.tx.runInTransaction(this.db, async (trx) => {
       const transfer = await trx.selectFrom('stock_transfers').selectAll().where('id', '=', transferId).where(this.tenantPredicate(auth)).forUpdate().executeTakeFirst();
@@ -274,6 +277,25 @@ export class InventoryTransferService {
         receivedByItemId.set(itemId, receivedQty);
       }
 
+      // INV-TRANSFER-RECEIPT-PINNED: a receipt must name an explicit
+      // received quantity for EVERY item. An omitted item used to be
+      // silently booked as fully received, so a lost shipment could
+      // be received with an empty payload and booked as arrived.
+      if (!receiptPayload?.items?.length || receivedByItemId.size !== items.length) {
+        throw new AppError('يجب تحديد كمية مستلمة لكل بند من بنود التحويل قبل الاستلام؛ لا يُفترض وصول البنود غير المذكورة', 'TRANSFER_RECEIPT_INVALID', 400);
+      }
+      // Plan the whole receipt before any write, so a missing variance
+      // reason fails closed with nothing half-moved.
+      const receiptPlan = items.map((item) => {
+        const dispatched = dispatchedQty(item);
+        const received = receivedByItemId.get(Number(item.id))!;
+        return { item, dispatched, received, shortfall: Number((dispatched - received).toFixed(3)) };
+      });
+      const varianceReason = String(receiptPayload?.varianceReason || '').trim();
+      if (receiptPlan.some((row) => row.shortfall > 0.0001) && varianceReason.length < 8) {
+        throw new AppError(`استلام التحويل TR-${transferId} فيه فرق كمية؛ اكتب سبب الفرق بوضوح في 8 أحرف على الأقل قبل الاستلام`, 'TRANSFER_VARIANCE_REASON_REQUIRED', 400);
+      }
+
       let inTransitLocationId: number | null = null;
       const inTransitRow = await trx.selectFrom('stock_locations').select('id').where('location_type', '=', 'in_transit').where('tenant_id', '=', scope.tenantId).executeTakeFirst();
       if (inTransitRow) inTransitLocationId = inTransitRow.id;
@@ -293,14 +315,10 @@ export class InventoryTransferService {
       }
       let anyVariance = false;
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+      const shrinkageJournalIds: number[] = [];
 
       if (effectiveToLocationId) {
-        for (const item of items) {
-          const dispatched = dispatchedQty(item);
-          const received = receivedByItemId.has(Number(item.id))
-            ? receivedByItemId.get(Number(item.id))!
-            : dispatched;
-          const shortfall = Number((dispatched - received).toFixed(3));
+        for (const { item, dispatched, received, shortfall } of receiptPlan) {
           if (shortfall > 0.0001) anyVariance = true;
           const traceReceipt = receiptDetails.get(Number(item.id)) || { itemId: Number(item.id), receivedQty: received };
           const reconciledBatches = await receiveTrackedStock(
@@ -343,11 +361,25 @@ export class InventoryTransferService {
             });
             // Transit goods are still inventory assets until receipt. A shortfall
             // is a real company-wide write-off, not merely a location transfer.
-            const productCost = await trx.selectFrom('products').select('cost_price')
-              .where('id', '=', Number(item.product_id))
-              .where('tenant_id', '=', scope.tenantId).executeTakeFirstOrThrow();
-            const rawUnitCost = Number(productCost.cost_price || 0);
-            const unitCost = Number.isFinite(rawUnitCost) && rawUnitCost > 0 ? rawUnitCost : 0;
+            // INV-TRANSFER-RECEIPT-PINNED: value the loss at the cost frozen
+            // on the dispatch (transfer_send) movement. Only transfers sent
+            // before that stamp existed fall back to the current cost_price.
+            const dispatchMovement = await trx.selectFrom('stock_movements')
+              .select(['unit_cost'])
+              .where('reference_type', '=', 'transfer').where('reference_id', '=', transferId)
+              .where('product_id', '=', Number(item.product_id)).where('movement_type', '=', 'transfer_send')
+              .where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+            const frozenCost = dispatchMovement?.unit_cost;
+            let unitCost: number;
+            if (frozenCost != null && Number.isFinite(Number(frozenCost))) {
+              unitCost = Number(frozenCost);
+            } else {
+              const productCost = await trx.selectFrom('products').select('cost_price')
+                .where('id', '=', Number(item.product_id))
+                .where('tenant_id', '=', scope.tenantId).executeTakeFirstOrThrow();
+              const rawUnitCost = Number(productCost.cost_price || 0);
+              unitCost = Number.isFinite(rawUnitCost) && rawUnitCost > 0 ? rawUnitCost : 0;
+            }
             const movement = await trx.insertInto('stock_movements').values({
               product_id: Number(item.product_id),
               movement_type: 'transfer_transit_loss',
@@ -371,17 +403,20 @@ export class InventoryTransferService {
             if (posting.hasFinancialImpact && !posting.journalEntryId) {
               throw new AppError('فاقد التحويل لم ينتج عنه قيد تسوية مخزون', 'TRANSFER_SHRINKAGE_JOURNAL_MISSING', 500);
             }
+            if (posting.journalEntryId) shrinkageJournalIds.push(Number(posting.journalEntryId));
           }
 
           await trx
             .updateTable('stock_transfer_items')
-            .set({ dispatched_qty: dispatched, received_qty: received, variance_qty: shortfall, batch_tracking: JSON.stringify(reconciledBatches) } as any)
+            .set({ dispatched_qty: dispatched, received_qty: received, variance_qty: shortfall, variance_reason: shortfall > 0.0001 ? varianceReason : null, batch_tracking: JSON.stringify(reconciledBatches) } as any)
             .where('id', '=', Number(item.id))
             .where(this.tenantPredicate(auth))
             .execute();
         }
       }
-      await trx.updateTable('stock_transfers').set({ status: 'received', to_location_id: effectiveToLocationId, received_by: auth.userId, received_at: sql`NOW()`, has_transit_variance: anyVariance, updated_at: sql`NOW()` } as any).where('id', '=', transferId).where(this.tenantPredicate(auth)).execute();
+      // INV-TRANSFER-RECEIPT-PINNED: the first shrinkage journal id is
+      // stamped on the header; the dead column now records the write-off.
+      await trx.updateTable('stock_transfers').set({ status: 'received', to_location_id: effectiveToLocationId, received_by: auth.userId, received_at: sql`NOW()`, has_transit_variance: anyVariance, transit_variance_journal_entry_id: shrinkageJournalIds[0] ?? null, updated_at: sql`NOW()` } as any).where('id', '=', transferId).where(this.tenantPredicate(auth)).execute();
 
       await this.audit.logWithExecutor(trx, 'استلام تحويل مخزون', `تم استلام التحويل TR-${transferId}`, auth);
 

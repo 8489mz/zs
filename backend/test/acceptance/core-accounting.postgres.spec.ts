@@ -1471,8 +1471,8 @@ async function main() {
     assert.equal(await postingAmount(moving,'1140',3),0.002,'transfer in transit does not change global GL asset');
     await assertTransferStock('after KWD transit dispatch',2);
     const received=await Promise.allSettled([
-      transfers.receiveStockTransfer(outboundId,moving.auth,{items:[{itemId:Number(outboundItem.id),receivedQty:0}]}),
-      transfers.receiveStockTransfer(outboundId,moving.auth,{items:[{itemId:Number(outboundItem.id),receivedQty:0}]}),
+      transfers.receiveStockTransfer(outboundId,moving.auth,{items:[{itemId:Number(outboundItem.id),receivedQty:0}],varianceReason:'entire shipment lost in transit'}),
+      transfers.receiveStockTransfer(outboundId,moving.auth,{items:[{itemId:Number(outboundItem.id),receivedQty:0}],varianceReason:'entire shipment lost in transit'}),
     ]);
     assert.equal(received.filter(r=>r.status==='fulfilled').length,1,'concurrent transfer receipt posts only once');
     assert.equal(received.filter(r=>r.status==='rejected').length,1);

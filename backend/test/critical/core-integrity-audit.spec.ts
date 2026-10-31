@@ -604,7 +604,7 @@ async function runCoreAuditSuite() {
 
       // 2. Receive Stock Transfer on single-connection pool!
       console.log('  Testing receiveStockTransfer with pool max: 1...');
-      const receiveRes = await transferService.receiveStockTransfer(transferId, auth);
+      const receiveRes = await transferService.receiveStockTransfer(transferId, auth, { items: (createdItem.items as Array<{ id: string; qty: number }>).map((row) => ({ itemId: Number(row.id), receivedQty: Number(row.qty) })) });
       assert.equal(receiveRes.ok, true);
       const transfersList2 = receiveRes.stockTransfers as Array<any>;
       const receivedItem = transfersList2.find((t) => Number(t.id) === transferId);
