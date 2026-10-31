@@ -3474,7 +3474,71 @@ export class VanSalesService {
   /**
    * Lists all damaged goods swaps performed on a trip.
    */
-  async listTripDamagedSwaps(tenantId: string, tripId: number) {
+  /**
+   * INV-DRIVER-PORTAL-REP-SCOPED-READS: rep scoping for driver-portal
+   * reads. The trip row owns the read: a rep may only read trip data for
+   * trips whose rep_id is his own. Staff callers pass no repId and skip
+   * the check (the supervisor view behind a staff session).
+   */
+  private async assertTripOwnedByRep(tenantId: string, tripId: number, repId: number): Promise<void> {
+    const trip = await this.anyDb
+      .selectFrom('van_sales_trips')
+      .select(['id', 'rep_id'])
+      .where('id', '=', tripId)
+      .where('tenant_id', '=', tenantId)
+      .executeTakeFirst();
+    if (!trip) {
+      throw new AppError('الرحلة غير موجودة', 'TRIP_NOT_FOUND', 404);
+    }
+    if (Number((trip as any).rep_id) !== Number(repId)) {
+      throw new AppError('غير مصرح لك بالاطلاع على بيانات رحلة مندوب آخر', 'FORBIDDEN', 403);
+    }
+  }
+
+  /**
+   * INV-DRIVER-PORTAL-REP-SCOPED-READS: a rep may read a customer's
+   * field statement and last sold prices only when the codebase already
+   * records him serving that customer: a field visit on one of his
+   * trips, a pre-sale order assigned to him, or a delivered sale
+   * carrying his delivery_rep_id. There is no static customer-to-rep
+   * assignment in the schema, so history is the association. Staff
+   * callers pass no repId and skip the check.
+   */
+  private async assertRepServedCustomer(tenantId: string, repId: number, customerId: number): Promise<void> {
+    const visit = await this.anyDb
+      .selectFrom('van_field_visits')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('rep_id', '=', repId)
+      .where('customer_id', '=', customerId)
+      .limit(1)
+      .executeTakeFirst();
+    if (visit) return;
+    const order = await this.anyDb
+      .selectFrom('sales_orders')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('rep_id', '=', repId)
+      .where('customer_id', '=', customerId)
+      .limit(1)
+      .executeTakeFirst();
+    if (order) return;
+    const sale = await this.anyDb
+      .selectFrom('sales')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('delivery_rep_id', '=', repId)
+      .where('customer_id', '=', customerId)
+      .limit(1)
+      .executeTakeFirst();
+    if (sale) return;
+    throw new AppError('غير مصرح لك بالاطلاع على بيانات عميل لا يتبع لك', 'FORBIDDEN', 403);
+  }
+
+  async listTripDamagedSwaps(tenantId: string, tripId: number, repId?: number) {
+    if (repId != null) {
+      await this.assertTripOwnedByRep(tenantId, tripId, repId);
+    }
     return this.anyDb
       .selectFrom('van_damaged_swaps as vds')
       .leftJoin('products as dp', 'dp.id', 'vds.damaged_product_id')
@@ -5329,7 +5393,10 @@ export class VanSalesService {
   /**
    * Retrieves all recorded trip expenses for a van trip.
    */
-  async getTripExpenses(tripId: number, tenantId: string) {
+  async getTripExpenses(tripId: number, tenantId: string, repId?: number) {
+    if (repId != null) {
+      await this.assertTripOwnedByRep(tenantId, tripId, repId);
+    }
     const rows = await this.anyDb
       .selectFrom('van_trip_expenses as te')
       .leftJoin('users as u', 'u.id', 'te.created_by_user_id')
@@ -5415,7 +5482,10 @@ export class VanSalesService {
   /**
    * Retrieves packaging movements for a van trip.
    */
-  async getTripPackagingMovements(tripId: number, tenantId: string) {
+  async getTripPackagingMovements(tripId: number, tenantId: string, repId?: number) {
+    if (repId != null) {
+      await this.assertTripOwnedByRep(tenantId, tripId, repId);
+    }
     const rows = await this.anyDb
       .selectFrom('van_trip_packaging_movements as pm')
       .leftJoin('customers as c', 'c.id', 'pm.customer_id')
@@ -5756,7 +5826,10 @@ export class VanSalesService {
   // FIELD WHOLESALE DOMINANCE: LAST SOLD PRICES PER CUSTOMER
   // =========================================================================
 
-  async getCustomerLastSoldPrices(tenantId: string, customerId: number) {
+  async getCustomerLastSoldPrices(tenantId: string, customerId: number, repId?: number) {
+    if (repId != null) {
+      await this.assertRepServedCustomer(tenantId, repId, customerId);
+    }
     const lastSales = await this.anyDb
       .selectFrom('sale_items as si')
       .innerJoin('sales as s', 's.id', 'si.sale_id')
@@ -5794,7 +5867,7 @@ export class VanSalesService {
   // FIELD WHOLESALE DOMINANCE: ON-THE-SPOT FIELD CUSTOMER STATEMENT
   // =========================================================================
 
-  async getCustomerFieldStatement(tenantId: string, customerId: number) {
+  async getCustomerFieldStatement(tenantId: string, customerId: number, repId?: number) {
     const customer = await this.anyDb
       .selectFrom('customers')
       .select([
@@ -5814,6 +5887,10 @@ export class VanSalesService {
 
     if (!customer) {
       throw new AppError('العميل غير موجود', 'CUSTOMER_NOT_FOUND', 404);
+    }
+
+    if (repId != null) {
+      await this.assertRepServedCustomer(tenantId, repId, customerId);
     }
 
     const packaging = await this.getCustomerPackagingBalance(customerId, tenantId);

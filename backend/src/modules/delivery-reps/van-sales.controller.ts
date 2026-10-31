@@ -72,7 +72,7 @@ export class VanSalesController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
-    return this.vanPreSalesService.getPreSalesOrderDetails(id, driver.tenantId);
+    return this.vanPreSalesService.getPreSalesOrderDetails(id, driver.tenantId, driver.repId);
   }
 
   @Get('active-trip')
@@ -339,7 +339,7 @@ export class VanSalesController {
     @Param('tripId', ParseIntPipe) tripId: number,
   ) {
     const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
-    const swaps = await this.vanSalesService.listTripDamagedSwaps(driver.tenantId, tripId);
+    const swaps = await this.vanSalesService.listTripDamagedSwaps(driver.tenantId, tripId, driver.repId);
     return { ok: true, swaps };
   }
 
@@ -595,7 +595,7 @@ export class VanSalesController {
     @Param('tripId', ParseIntPipe) tripId: number,
   ) {
     const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
-    return this.vanSalesService.getTripExpenses(tripId, driver.tenantId);
+    return this.vanSalesService.getTripExpenses(tripId, driver.tenantId, driver.repId);
   }
 
   // =========================================================================
@@ -621,7 +621,7 @@ export class VanSalesController {
     @Param('tripId', ParseIntPipe) tripId: number,
   ) {
     const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
-    return this.vanSalesService.getTripPackagingMovements(tripId, driver.tenantId);
+    return this.vanSalesService.getTripPackagingMovements(tripId, driver.tenantId, driver.repId);
   }
 
   @Get('customers/:customerId/packaging')
@@ -648,7 +648,7 @@ export class VanSalesController {
     @Param('customerId', ParseIntPipe) customerId: number,
   ) {
     const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
-    return this.vanSalesService.getCustomerLastSoldPrices(driver.tenantId, customerId);
+    return this.vanSalesService.getCustomerLastSoldPrices(driver.tenantId, customerId, driver.repId);
   }
 
   @Get('customers/:customerId/field-statement')
@@ -657,7 +657,7 @@ export class VanSalesController {
     @Param('customerId', ParseIntPipe) customerId: number,
   ) {
     const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
-    return this.vanSalesService.getCustomerFieldStatement(driver.tenantId, customerId);
+    return this.vanSalesService.getCustomerFieldStatement(driver.tenantId, customerId, driver.repId);
   }
 
   @Get('promotions')

@@ -792,7 +792,7 @@ export class VanPreSalesService {
   /**
    * Retrieves full details of a single Pre-Sales order including items and consumer pricing.
    */
-  async getPreSalesOrderDetails(orderId: number, tenantId: string) {
+  async getPreSalesOrderDetails(orderId: number, tenantId: string, repId?: number) {
     const order = await this.anyDb
       .selectFrom('sales_orders as so')
       .leftJoin('delivery_representatives as dr', 'dr.id', 'so.rep_id')
@@ -828,6 +828,14 @@ export class VanPreSalesService {
 
     if (!order) {
       throw new AppError('أمر الحجز الميداني غير موجود', 'PRESALE_ORDER_NOT_FOUND', 404);
+    }
+
+    // INV-DRIVER-PORTAL-REP-SCOPED-READS: a driver-portal read supplies the
+    // calling repId and may only see orders assigned to that rep. An order
+    // with no rep (or another rep) is not the caller's. Staff callers pass
+    // no repId and keep the unscoped supervisor view.
+    if (repId != null && Number((order as any).repId) !== Number(repId)) {
+      throw new AppError('غير مصرح لك بالاطلاع على أمر حجز ميداني لمندوب آخر', 'FORBIDDEN', 403);
     }
 
     const items = await this.anyDb
