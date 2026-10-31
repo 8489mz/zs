@@ -434,6 +434,122 @@ function guidedFilter(
   return out;
 }
 
+// Trim a fading floor-shadow skirt below the product. Measured
+// 2026-10-31 on a real AI cut (Fine Oud Wood can, 319x1252 WebP):
+// below the last solid row, a 7-row tail faded 255 -> 23 in max
+// alpha, narrowed 209 -> 23 px wide, and stayed neutral gray
+// (R ~= G ~= B, brightening toward the white floor) — the can's
+// contact shadow, kept because it touches the product. On white it
+// is invisible; composited on orange it reads as a blurry veil
+// under the product. The trim below fires ONLY for that exact
+// shape: a short PRESENT span below the last wide solid row, every
+// row non-solid, max alpha non-increasing, faint through much of
+// its length (at least 40% of rows at max alpha at most 0.6) and
+// fading out, never wider
+// than the product, bright and low-chroma throughout. Anything
+// else (thin legs, a translucent base, a strong shadow, a colored
+// reflection) is left untouched.
+function trimBottomShadowSkirt(
+  alpha: Float32Array,
+  rgb: Uint8ClampedArray,
+  width: number,
+  height: number,
+): void {
+  const opaqueCount = new Uint32Array(height);
+  const maxA = new Float32Array(height);
+  const presentCount = new Uint32Array(height);
+  for (let y = 0; y < height; y++) {
+    let opaque = 0;
+    let mx = 0;
+    let present = 0;
+    const rowStart = y * width;
+    for (let x = 0; x < width; x++) {
+      const a = alpha[rowStart + x];
+      if (a > mx) mx = a;
+      if (a >= 0.98) opaque++;
+      if (a > 0.02) present++;
+    }
+    opaqueCount[y] = opaque;
+    maxA[y] = mx;
+    presentCount[y] = present;
+  }
+  let refW = 0;
+  for (let y = 0; y < height; y++) if (opaqueCount[y] > refW) refW = opaqueCount[y];
+  if (refW === 0) return;
+  let lastSolid = -1;
+  const solidFloor = refW * 0.5;
+  for (let y = height - 1; y >= 0; y--) {
+    if (opaqueCount[y] >= solidFloor) {
+      lastSolid = y;
+      break;
+    }
+  }
+  if (lastSolid < 0) return;
+  const tailStart = lastSolid + 1;
+  // The skirt is the PRESENT span below the last solid row, not the
+  // distance to the bottom of the image: a product photographed
+  // mid-frame leaves empty margin below the skirt, and counting it
+  // made the height guard reject every real skirt (measured
+  // 2026-10-31 on the 819x1024 original: 74 rows to the image
+  // bottom vs a 10-row skirt fading 255 -> 10).
+  let lastPresentRow = -1;
+  for (let y = height - 1; y > lastSolid; y--) {
+    if (presentCount[y] > 0) {
+      lastPresentRow = y;
+      break;
+    }
+  }
+  if (lastPresentRow < 0) return;
+  const tailSpan = lastPresentRow - tailStart + 1;
+  if (tailSpan > Math.max(24, Math.ceil(height * 0.03))) return;
+  let presentRows = 0;
+  let lastPresent = -1;
+  let lumSum = 0;
+  let chromaSum = 0;
+  let presentPx = 0;
+  let prevMax = 1;
+  const tailMaxA: number[] = [];
+  for (let y = tailStart; y <= lastPresentRow; y++) {
+    if (opaqueCount[y] >= solidFloor) return;
+    if (presentCount[y] > refW) return;
+    if (maxA[y] > prevMax + 0.03) return;
+    prevMax = maxA[y];
+    if (presentCount[y] === 0) continue;
+    presentRows++;
+    lastPresent = y;
+    tailMaxA.push(maxA[y]);
+    const rowStart = y * width;
+    for (let x = 0; x < width; x++) {
+      const a = alpha[rowStart + x];
+      if (a <= 0.02) continue;
+      const r = rgb[(rowStart + x) * 4];
+      const g = rgb[(rowStart + x) * 4 + 1];
+      const b = rgb[(rowStart + x) * 4 + 2];
+      lumSum += 0.299 * r + 0.587 * g + 0.114 * b;
+      chromaSum += Math.max(r, g, b) - Math.min(r, g, b);
+      presentPx++;
+    }
+  }
+  if (presentRows < 3 || lastPresent < 0) return;
+  if (maxA[lastPresent] > 0.5) return;
+  // The tail must be faint through much of its length, not a strong
+  // plateau that only drops in its last row (a base plate or a
+  // solid stand). Measured 2026-10-31: the real skirt has about
+  // half its rows at max alpha at most 0.6, while a uniform 0.95
+  // plateau has almost none. A median cannot tell them apart when
+  // the rim's bottom rows stay opaque, so count faint rows instead.
+  let faintRows = 0;
+  for (const m of tailMaxA) if (m <= 0.6) faintRows++;
+  if (faintRows < Math.ceil(tailMaxA.length * 0.4)) return;
+  if (presentPx === 0) return;
+  const meanLum = lumSum / presentPx;
+  const meanChroma = chromaSum / presentPx;
+  if (meanLum < 140 || meanChroma > 20) return;
+  for (let y = tailStart; y < height; y++) {
+    alpha.fill(0, y * width, (y + 1) * width);
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* جوهر المعالجة: تنقية القناع والاحتفاظ بالمجسم الرئيسي مع فك خلط الألوان */
 /* ------------------------------------------------------------------ */
@@ -565,6 +681,9 @@ export function refineProductMatte(
   for (let i = 0; i < alpha.length; i++) {
     if (alpha[i] > 0.02 && alpha[i] < 0.98) alpha[i] = alpha[i] * 0.5 + blurred[i] * 0.5;
   }
+
+  // 5b) إزالة ذيل ظل الأرضية الباهت أسفل المنتج فقط عند تطابق شكل الظل المقاس (trimBottomShadowSkirt)
+  trimBottomShadowSkirt(alpha, rgb, width, height);
 
   // 6) فك خلط لون الخلفية (Un-premultiply) لإزالة الهالة البيضاء نهائياً
   const fullBg = estimateBackgroundColor(rgb, alpha, width, height);
