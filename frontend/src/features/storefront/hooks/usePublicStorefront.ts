@@ -54,16 +54,15 @@ export function usePublicStorefront(cleanSlug: string) {
   const handleRequestTableService = useCallback(async (tableNumber: string, callType: 'waiter' | 'bill') => {
     setIsCallingService(true);
     try {
-      const tenantId = (infoQuery.data as any)?.tenantId;
       await tableCallsApi.createCall({
         tableNumber,
         callType,
-      }, tenantId ? String(tenantId) : undefined);
+      }, cleanSlug);
       return true;
     } finally {
       setIsCallingService(false);
     }
-  }, [infoQuery.data]);
+  }, [cleanSlug]);
 
   // Favorites State (Persisted per slug)
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(() => {

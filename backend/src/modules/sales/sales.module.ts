@@ -38,6 +38,8 @@ import { KitchenPrintersController } from './controllers/kitchen-printers.contro
 import { KitchenPrintersService } from './services/kitchen-printers.service';
 import { TableServiceCallsController } from './controllers/table-service-calls.controller';
 import { TableServiceCallsService } from './services/table-service-calls.service';
+import { TableCallRateLimitGuard } from './guards/table-call-rate-limit.guard';
+import { InMemoryRateLimitService } from '../../common/security/in-memory-rate-limit.service';
 import { RestaurantAdvancedFnbController } from './controllers/restaurant-advanced-fnb.controller';
 import { RestaurantAdvancedFnbService } from './services/restaurant-advanced-fnb.service';
 
@@ -78,6 +80,8 @@ import { RestaurantAdvancedFnbService } from './services/restaurant-advanced-fnb
     TableReservationsService,
     KitchenPrintersService,
     TableServiceCallsService,
+    TableCallRateLimitGuard,
+    InMemoryRateLimitService,
     RestaurantAdvancedFnbService,
     CommercialSubscriptionService,
   ],

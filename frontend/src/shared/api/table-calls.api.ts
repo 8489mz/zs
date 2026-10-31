@@ -16,8 +16,11 @@ export interface TableServiceCall {
 }
 
 export const tableCallsApi = {
-  createCall: (data: { tableNumber: string; callType?: 'waiter' | 'bill' | 'water' | 'clean'; branchId?: number; notes?: string }, tenantId?: string) =>
-    http<TableServiceCall>(`/api/sales/table-calls${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`, {
+  // INV-TABLE-CALL-SLUG-TENANT: the public call sends the storefront
+  // slug; the backend resolves the tenant server-side. A caller-supplied
+  // tenantId is never sent (the backend ignores it).
+  createCall: (data: { tableNumber: string; callType?: 'waiter' | 'bill' | 'water' | 'clean'; branchId?: number; notes?: string }, slug?: string) =>
+    http<TableServiceCall>(`/api/sales/table-calls${slug ? `?slug=${encodeURIComponent(slug)}` : ''}`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),

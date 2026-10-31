@@ -3,6 +3,7 @@ import { Kysely } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { CreateTableServiceCallDto } from '../dto/table-service-call.dto';
+import { findTenantByStorefrontSlug } from '../../storefront/storefront-slug-resolution';
 
 @Injectable()
 export class TableServiceCallsService {
@@ -10,6 +11,20 @@ export class TableServiceCallsService {
     @Inject(KYSELY_DB)
     private readonly db: Kysely<Database>,
   ) {}
+
+  /**
+   * INV-TABLE-CALL-SLUG-TENANT: resolve the tenant for a public
+   * table call from the storefront slug, server-side. An unknown or
+   * missing slug fails closed; there is no 'default' tenant fallback
+   * and no caller-supplied tenant is ever consulted.
+   */
+  async resolveTenantBySlug(slug: string | undefined): Promise<string> {
+    const tenant = await findTenantByStorefrontSlug(this.db as any, slug || '');
+    if (!tenant) {
+      throw new NotFoundException('المتجر غير موجود');
+    }
+    return tenant.id;
+  }
 
   async listPendingCalls(tenantId: string, branchId?: number) {
     let query = this.db

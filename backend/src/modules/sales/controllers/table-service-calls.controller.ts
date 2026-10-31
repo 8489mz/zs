@@ -4,6 +4,7 @@ import { PermissionsGuard } from '../../../core/auth/guards/permissions.guard';
 import { RequirePermissions } from '../../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { TableServiceCallsService } from '../services/table-service-calls.service';
+import { TableCallRateLimitGuard } from '../guards/table-call-rate-limit.guard';
 import { CreateTableServiceCallDto } from '../dto/table-service-call.dto';
 
 @Controller('api/sales/table-calls')
@@ -11,12 +12,18 @@ export class TableServiceCallsController {
   constructor(private readonly service: TableServiceCallsService) {}
 
   @Post()
+  @UseGuards(TableCallRateLimitGuard)
   async createCall(
     @Req() req: RequestWithAuth,
     @Body() dto: CreateTableServiceCallDto,
-    @Query('tenantId') queryTenantId?: string,
+    @Query('slug') slug?: string,
   ) {
-    const tenantId = req.authContext?.tenantId || (req.headers['x-tenant-id'] as string) || queryTenantId || 'default';
+    // INV-TABLE-CALL-SLUG-TENANT: the endpoint stays public (the caller
+    // is a storefront guest), but the tenant is resolved server-side:
+    // a staff session wins when present, otherwise the storefront slug.
+    // Caller-supplied x-tenant-id / ?tenantId are never read, and there
+    // is no 'default' tenant fallback: an unknown slug fails closed.
+    const tenantId = req.authContext?.tenantId || (await this.service.resolveTenantBySlug(slug));
     return this.service.createCall(tenantId, dto);
   }
 
