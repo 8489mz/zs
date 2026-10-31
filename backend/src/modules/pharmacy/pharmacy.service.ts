@@ -24,6 +24,36 @@ import { UpsertShortageDto } from './dto/upsert-shortage.dto';
 import { UpsertClinicalServiceDto } from './dto/upsert-clinical-service.dto';
 import { EGYPTIAN_MASTER_DRUGS } from './data/egyptian-master-drugs.data';
 
+/*
+INV-PHARMACY-BATCH-FROZEN: batch identity helpers. An expiry is a
+real calendar date (YYYY-MM-DD) or a real month (YYYY-MM, the form
+the acceptance suite already creates with). The past check mirrors
+the FEFO sale gate's boundary exactly (month form against the
+current month, full date against today, both UTC), so a batch the
+gate would skip can never be (re-)activated as saleable here.
+*/
+function pharmacyExpiryText(value: unknown): string | null {
+  if (value == null) return null;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const text = String(value).trim();
+  return text ? text.slice(0, 10) : null;
+}
+
+function isValidPharmacyExpiry(value: string): boolean {
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) return true;
+  const match = /^(\d{4})-(0[1-9]|1[0-2])-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const day = Number(match[3]);
+  return day >= 1 && day <= new Date(Number(match[1]), Number(match[2]), 0).getDate();
+}
+
+function isPastPharmacyExpiry(normalized: string): boolean {
+  const todayIso = new Date().toISOString().slice(0, 10);
+  return normalized.length === 7 ? normalized < todayIso.slice(0, 7) : normalized < todayIso;
+}
+
+const PHARMACY_BATCH_STATUSES = ['active', 'expired', 'depleted'];
+
 @Injectable()
 export class PharmacyService {
   constructor(
@@ -664,6 +694,31 @@ export class PharmacyService {
           .where('tenant_id', '=', scope.tenantId).where('id', '=', dto.id)
           .forUpdate().executeTakeFirst();
         if (!old) throw new AppError('Batch not found', 'PHARMACY_BATCH_NOT_FOUND', 404);
+        // INV-PHARMACY-BATCH-FROZEN: expiry is identity, frozen at
+        // creation. Repeating the stored value (or omitting it) is a
+        // no-op and stays allowed; any change is rejected outright,
+        // so an expired batch can never be re-admitted by moving
+        // its expiry forward.
+        if (dto.expiryDate !== undefined) {
+          const newExpiry = pharmacyExpiryText(dto.expiryDate);
+          if (newExpiry !== pharmacyExpiryText(old.expiry_date)) {
+            throw new AppError('Batch expiry date cannot be changed after creation', 'PHARMACY_BATCH_EXPIRY_FROZEN', 409);
+          }
+        }
+        // Status comes from a closed list, and 'expired' is terminal:
+        // neither a batch already marked expired nor one whose
+        // expiry has passed may be flipped back to 'active'. Only
+        // an explicit activation is gated -- a notes-only update on
+        // a batch whose expiry passed with time is not blocked.
+        if (dto.status !== undefined && dto.status !== old.status) {
+          if (!PHARMACY_BATCH_STATUSES.includes(dto.status)) {
+            throw new AppError('Invalid pharmacy batch status', 'PHARMACY_BATCH_STATUS_INVALID', 422);
+          }
+          const oldExpiry = pharmacyExpiryText(old.expiry_date);
+          if (dto.status === 'active' && (old.status === 'expired' || (oldExpiry != null && isPastPharmacyExpiry(oldExpiry)))) {
+            throw new AppError('An expired batch cannot be returned to active status', 'PHARMACY_BATCH_REACTIVATION_FORBIDDEN', 409);
+          }
+        }
         if ((dto.quantity !== undefined && quantity !== Number(old.quantity)) ||
             (dto.unitCost !== undefined && unitCost !== Number(old.unit_cost)) ||
             (dto.productId !== undefined && dto.productId !== old.product_id) ||
@@ -688,12 +743,28 @@ export class PharmacyService {
         throw new AppError('Create stock via a supplier purchase, not direct batch entry',
           'PHARMACY_BATCH_PURCHASE_REQUIRED', 422);
       }
+      // INV-PHARMACY-BATCH-FROZEN: a batch is born with a real expiry
+      // and a listed status. An already-expired batch cannot be born
+      // 'active' -- it must be recorded 'expired'.
+      const createStatus = dto.status ?? 'active';
+      if (!PHARMACY_BATCH_STATUSES.includes(createStatus)) {
+        throw new AppError('Invalid pharmacy batch status', 'PHARMACY_BATCH_STATUS_INVALID', 422);
+      }
+      const createExpiry = (dto.expiryDate as unknown) instanceof Date
+        ? (dto.expiryDate as unknown as Date).toISOString().slice(0, 10)
+        : String(dto.expiryDate ?? '').trim();
+      if (!isValidPharmacyExpiry(createExpiry)) {
+        throw new AppError('Batch expiry date must be a real calendar date (YYYY-MM-DD) or month (YYYY-MM)', 'PHARMACY_BATCH_EXPIRY_INVALID', 422);
+      }
+      if (createStatus === 'active' && isPastPharmacyExpiry(createExpiry)) {
+        throw new AppError('An expired batch cannot be created with active status', 'PHARMACY_BATCH_EXPIRY_INVALID', 422);
+      }
       return trx.insertInto('pharmacy_batches').values({
         tenant_id: scope.tenantId, account_id: scope.accountId,
         product_id: dto.productId ?? null, drug_id: dto.drugId ?? null,
         batch_number: dto.batchNumber, expiry_date: dto.expiryDate,
         quantity: 0, unit_cost: 0, location_id: dto.locationId ?? null,
-        supplier_name: dto.supplierName ?? null, status: dto.status ?? 'active',
+        supplier_name: dto.supplierName ?? null, status: createStatus,
         notes: dto.notes ?? null,
       }).returningAll().executeTakeFirstOrThrow();
     });
