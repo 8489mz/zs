@@ -1,6 +1,7 @@
 import { valueStockReceipt } from '../../accounting/inventory-valuation';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { scaledBomOverhead } from '../../manufacturing/engines/manufacturing-overhead.engine';
 import { assertBusinessAccountingDate } from '../../accounting/accounting-boundaries';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Kysely, sql, type Transaction } from '../../../database/kysely';
@@ -629,7 +630,7 @@ export class SalesWriteService {
       // must already be at book precision, not 2dp. (tenantBaseCurrency,
       // currencyMoneyDigits and roundMoney are already imported in this file.)
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
-      let totalCost = roundMoney(Number(bom.overhead_cost || 0) * (baseShortfall / bomQuantity), moneyDigits);
+      let totalCost = scaledBomOverhead(Number(bom.overhead_cost || 0), baseShortfall, bomQuantity, moneyDigits);
       const wo = await trx.insertInto('manufacturing_work_orders').values({
         bom_id: item.bomId,
         quantity_to_produce: baseShortfall,

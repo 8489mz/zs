@@ -13,6 +13,7 @@ import { CreateBomDto, CreateWorkOrderDto, CompleteWorkOrderDto, UpsertWorkCente
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { scaledBomOverhead } from '../engines/manufacturing-overhead.engine';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 
 @Injectable()
@@ -428,9 +429,8 @@ export class ManufacturingService {
         }).execute();
       }
 
-      // Add overhead cost
-      const overheadCost = Number(wo.overhead_cost || 0);
-      const totalOverheadCost = roundMoney(overheadCost * (qtyToProduce / bomQuantity), moneyDigits);
+      // Add overhead cost (single shared formula: scaledBomOverhead).
+      const totalOverheadCost = scaledBomOverhead(Number(wo.overhead_cost || 0), qtyToProduce, bomQuantity, moneyDigits);
       totalCost += totalOverheadCost;
 
       // Add Work Center Operations & Machine Costs

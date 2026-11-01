@@ -17,6 +17,7 @@ import { assertTaxPeriodOpen } from './accounting-tax-lock';
 import { randomUUID } from 'node:crypto';
 import { tenantBaseCurrency } from './accounting-currency';
 import { currencyMoneyDigits, roundMoney, toMinorUnits, fromMinorUnits, MoneyDigits } from './engines/money-minor-units.engine';
+import { scaledBomOverhead } from '../manufacturing/engines/manufacturing-overhead.engine';
 
 type DbOrTx = Kysely<Database> | Transaction<Database>;
 
@@ -4069,7 +4070,8 @@ export class AccountingPostingService {
     // wo.total_cost into "overhead". Every component is now re-derived
     // from its stored
     // rows: operations from manufacturing_wo_operations, scaled BOM
-    // overhead from the same formula completeWorkOrder uses, the
+    // overhead via the single scaledBomOverhead function that
+    // completeWorkOrder also calls, the
     // finished-goods value from its stamped stock movement, and the
     // by-product value from its stamped movements. The stored total
     // is only a cross-check: any difference beyond one minor unit
@@ -4082,8 +4084,10 @@ export class AccountingPostingService {
       .executeTakeFirst();
     const opsCost = toBookMoney(operations?.amount || 0);
     const bomQuantity = Number(wo.bom_quantity || 1);
-    const scaledOverheadCost = roundMoney(
-      Number(wo.overhead_cost || 0) * (Number(wo.quantity_to_produce || 0) / bomQuantity),
+    const scaledOverheadCost = scaledBomOverhead(
+      Number(wo.overhead_cost || 0),
+      Number(wo.quantity_to_produce || 0),
+      bomQuantity,
       bookDigits,
     );
     const overheadCost = toBookMoney(opsCost + scaledOverheadCost);

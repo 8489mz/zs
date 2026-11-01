@@ -71,7 +71,10 @@ same module already performs — extend the existing one.
 Exception: the manufacturing work-order poster derives its journal
 explicitly (INV-MANUFACTURING-COST-DERIVATION) — operations + scaled
 overhead, a separate by-product leg, and a 5190 variance — never a
-stored-total-minus-materials residual.
+stored-total-minus-materials residual. The scaled overhead itself
+is computed once (INV-MANUFACTURING-OVERHEAD-UNIFICATION):
+scaledBomOverhead in manufacturing-overhead.engine.ts, called by
+completion, the poster, and the restaurant auto-produce path.
 
 ## Decisions that block unification (do not guess)
 
