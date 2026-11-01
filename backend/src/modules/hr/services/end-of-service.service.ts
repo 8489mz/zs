@@ -58,6 +58,48 @@ export class EndOfServiceService {
   ) {}
 
   /**
+   * The monthly allowance of the compensation package effective on the
+   * given date, mirroring payroll's effective-dated package semantics
+   * (see calculateEffectiveCompensationPay): no package covering the
+   * date means zero allowances; more than one covering it is ambiguous
+   * and fails closed instead of summing (double-pay) or picking one
+   * silently. The amount is the package's FULL monthly bucket, never
+   * prorated: EOS needs the monthly wage, not one day of it.
+   */
+  private async effectiveAllowanceAmount(
+    employeeId: number,
+    tenantId: string,
+    terminationDate: string,
+  ): Promise<number> {
+    const packages = await this.db
+      .selectFrom('hr_compensation_packages')
+      .select(['id', 'allowance_amount'])
+      .where('employee_id', '=', employeeId)
+      .where('tenant_id', '=', tenantId)
+      .where((eb) =>
+        eb.or([
+          eb('effective_from', 'is', null),
+          eb('effective_from', '<=', terminationDate),
+        ]),
+      )
+      .where((eb) =>
+        eb.or([
+          eb('effective_to', 'is', null),
+          eb('effective_to', '>=', terminationDate),
+        ]),
+      )
+      .execute();
+    if (packages.length > 1) {
+      throw new BadRequestException('يوجد أكثر من حزمة بدلات سارية في تاريخ إنهاء الخدمة؛ أغلق الحزم المتداخلة قبل احتساب المخالصة');
+    }
+    const amount = packages.length ? Number(packages[0].allowance_amount || 0) : 0;
+    if (!Number.isFinite(amount) || amount < 0) {
+      throw new BadRequestException('قيمة البدلات في حزمة التعويض غير صحيحة');
+    }
+    return amount;
+  }
+
+  /**
    * Preview & calculate end-of-service breakdown according to labor laws
    */
   async calculateSettlementPreview(input: SettlementCalculateInput, auth: AuthContext) {
@@ -117,13 +159,29 @@ export class EndOfServiceService {
 
     let basicSalary = 0;
     let totalSalary = 0;
+    let allowanceAmount = 0;
 
     if (latestContract) {
       basicSalary = Number(latestContract.base_salary || 0);
-      const housing = Number(latestContract.housing_allowance || 0);
-      const transport = Number(latestContract.transport_allowance || 0);
-      const other = Number(latestContract.other_allowances || 0);
-      totalSalary = Number(latestContract.gross_salary || (basicSalary + housing + transport + other));
+      // INV-EOS-TOTAL-WAGE-FROM-COMPENSATION: hr_employment_contracts has
+      // NO allowance columns (housing_allowance / transport_allowance /
+      // other_allowances / gross_salary do not exist in the schema), so
+      // reading them always yielded 0 and every settlement was computed
+      // on base salary alone. The total wage is now derived from the
+      // existing allowance store, hr_compensation_packages, mirroring
+      // payroll: the package effective on the termination date. The
+      // package store has ONE allowance bucket with no housing/transport
+      // split, so the WHOLE bucket counts toward the statutory total
+      // wage (flagged assumption: if non-statutory allowances are ever
+      // recorded in the same bucket, gratuity is overstated — the
+      // preview discloses allowanceAmount so the user can see it).
+      // Deductions never count toward the wage.
+      allowanceAmount = await this.effectiveAllowanceAmount(
+        input.employeeId,
+        tenantId,
+        input.terminationDate,
+      );
+      totalSalary = basicSalary + allowanceAmount;
     } else {
       throw new BadRequestException('لا يوجد عقد راتب صالح يغطي تاريخ إنهاء الخدمة؛ راجع العقد قبل تسعير المخالصة');
     }
@@ -259,6 +317,7 @@ export class EndOfServiceService {
       },
       salaries: {
         basicSalary,
+        allowanceAmount,
         totalSalary,
         dailyWage: roundMoney(dailyWage, bookDigits),
       },
