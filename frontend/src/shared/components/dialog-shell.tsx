@@ -31,6 +31,34 @@ let activeDialogCount = 0;
 let savedBodyOverflow = '';
 let savedHtmlOverflow = '';
 
+export function useBodyScrollLock(isLocked: boolean) {
+  useEffect(() => {
+    if (!isLocked || typeof document === 'undefined') return;
+
+    if (activeDialogCount === 0) {
+      savedBodyOverflow = document.body.style.overflow;
+      savedHtmlOverflow = document.documentElement.style.overflow;
+
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+      document.body.classList.add('dialog-shell-open');
+      document.documentElement.classList.add('dialog-shell-open');
+    }
+    activeDialogCount++;
+
+    return () => {
+      activeDialogCount--;
+      if (activeDialogCount <= 0) {
+        activeDialogCount = 0;
+        document.body.style.overflow = savedBodyOverflow;
+        document.documentElement.style.overflow = savedHtmlOverflow;
+        document.body.classList.remove('dialog-shell-open');
+        document.documentElement.classList.remove('dialog-shell-open');
+      }
+    };
+  }, [isLocked]);
+}
+
 export function DialogShell({
   open,
   isOpen,

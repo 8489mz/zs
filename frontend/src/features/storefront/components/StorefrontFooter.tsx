@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useBodyScrollLock } from '@/shared/components/dialog-shell';
 import type { StorefrontInfo } from '../types/storefront.types';
 import { resolveStorefrontBrand, StorefrontBrandLogo } from './StorefrontHeader';
 
@@ -41,6 +42,7 @@ export function StorefrontFooter({
   const currentYear = new Date().getFullYear();
 
   const [activePolicy, setActivePolicy] = useState<{ title: string; content: string } | null>(null);
+  useBodyScrollLock(Boolean(activePolicy));
 
   const supportEmail =
     safeInfo.supportEmail?.trim() ||
