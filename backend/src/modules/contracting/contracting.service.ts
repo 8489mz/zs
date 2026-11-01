@@ -3690,51 +3690,55 @@ export class ContractingService {
 
   async createSupplierReturn(auth: AuthContext, projectId: string, dto: CreateSupplierReturnDto) {
     const { tenantId } = requireTenantScope(auth);
-    let returnNumber = dto.returnNumber;
-    if (!returnNumber) {
-      const prefix = getDailyDocumentPrefix('RTN');
-      const countRes = await (this.db as any)
-        .selectFrom('contracting_supplier_returns')
-        .select(sql<number>`count(*)::int`.as('count'))
-        .where('tenant_id', '=', tenantId)
-        .where('return_number', 'like', `${prefix}%`)
-        .executeTakeFirst();
-      let count = (countRes?.count || 0) + 1;
-      let candidate = `${prefix}${String(count).padStart(4, '0')}`;
-      while (
-        await (this.db as any)
-          .selectFrom('contracting_supplier_returns')
-          .select('id')
-          .where('tenant_id', '=', tenantId)
-          .where('return_number', '=', candidate)
-          .executeTakeFirst()
-      ) {
-        count++;
-        candidate = `${prefix}${String(count).padStart(4, '0')}`;
-      }
-      returnNumber = candidate;
-    }
+    // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
+    // D6a): a generated number derives from the row id inside one
+    // transaction; the credit-note number derives from the same
+    // final number. A caller-supplied number is kept verbatim.
+    const suppliedNumber = dto.returnNumber;
+    const prefix = getDailyDocumentPrefix('RTN');
+    const tempNumber = `RTN-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const totalAmount = dto.items.reduce((sum: number, it: any) => sum + Number(it.totalAmount || Number(it.quantity) * Number(it.unitCost)), 0);
-    const creditNoteNumber = `CN-${returnNumber}`;
 
-    const [inserted] = await (this.db as any)
-      .insertInto('contracting_supplier_returns')
-      .values({
-        tenant_id: tenantId,
-        project_id: projectId as any,
-        return_number: returnNumber,
-        supplier_id: dto.supplierId ? Number(dto.supplierId) : null,
-        supplier_name: dto.supplierName.trim(),
-        return_date: dto.returnDate || new Date().toISOString().split('T')[0],
-        total_amount: totalAmount,
-        status: 'posted',
-        credit_note_number: creditNoteNumber,
-        items_json: JSON.stringify(dto.items),
-        notes: dto.notes || null,
-      })
-      .returningAll()
-      .execute();
+    const values: any = {
+      tenant_id: tenantId,
+      project_id: projectId as any,
+      return_number: suppliedNumber || tempNumber,
+      supplier_id: dto.supplierId ? Number(dto.supplierId) : null,
+      supplier_name: dto.supplierName.trim(),
+      return_date: dto.returnDate || new Date().toISOString().split('T')[0],
+      total_amount: totalAmount,
+      status: 'posted',
+      credit_note_number: `CN-${suppliedNumber || tempNumber}`,
+      items_json: JSON.stringify(dto.items),
+      notes: dto.notes || null,
+    };
+
+    if (suppliedNumber) {
+      const [inserted] = await (this.db as any)
+        .insertInto('contracting_supplier_returns')
+        .values(values)
+        .returningAll()
+        .execute();
+      return inserted;
+    }
+
+    const inserted = await this.db.transaction().execute(async (trx) => {
+      const row = await (trx as any)
+        .insertInto('contracting_supplier_returns')
+        .values(values)
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const finalNumber = `${prefix}${String(row.id).padStart(4, '0')}`;
+      const updated = await (trx as any)
+        .updateTable('contracting_supplier_returns')
+        .set({ return_number: finalNumber, credit_note_number: `CN-${finalNumber}`, updated_at: new Date() })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(row.id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      return updated;
+    });
 
     return inserted;
   }
@@ -3861,49 +3865,55 @@ export class ContractingService {
       );
     }
 
-    let disbNum = dto.disbursementNumber;
-    if (!disbNum) {
-      const prefix = getDailyDocumentPrefix('CSH');
-      const countRes = await (this.db as any)
-        .selectFrom('contracting_petty_cash')
-        .select(sql<number>`count(*)::int`.as('count'))
-        .where('tenant_id', '=', tenantId)
-        .where('disbursement_number', 'like', `${prefix}%`)
-        .executeTakeFirst();
-      let count = (countRes?.count || 0) + 1;
-      let candidate = `${prefix}${String(count).padStart(4, '0')}`;
-      while (
-        await (this.db as any)
-          .selectFrom('contracting_petty_cash')
-          .select('id')
-          .where('tenant_id', '=', tenantId)
-          .where('disbursement_number', '=', candidate)
-          .executeTakeFirst()
-      ) {
-        count++;
-        candidate = `${prefix}${String(count).padStart(4, '0')}`;
-      }
-      disbNum = candidate;
+    // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
+    // D6a): a generated number derives from the row id inside one
+    // transaction. A caller-supplied number is kept verbatim.
+    const suppliedNumber = dto.disbursementNumber;
+    const prefix = getDailyDocumentPrefix('CSH');
+    const tempNumber = `CSH-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+
+    const values: any = {
+      tenant_id: tenantId,
+      project_id: projectId as any,
+      custodian_name: dto.custodianName.trim(),
+      custodian_role: dto.custodianRole || 'site_engineer',
+      disbursement_number: suppliedNumber || tempNumber,
+      amount_given: Number(dto.amountGiven),
+      amount_settled: 0,
+      remaining_balance: Number(dto.amountGiven),
+      issue_date: dto.issueDate || new Date().toISOString().split('T')[0],
+      settlement_due_date: dto.settlementDueDate || null,
+      status: 'active',
+      receipts_json: '[]',
+    };
+
+    if (suppliedNumber) {
+      const [inserted] = await (this.db as any)
+        .insertInto('contracting_petty_cash')
+        .values(values)
+        .returningAll()
+        .execute();
+      return inserted;
     }
 
-    const [inserted] = await (this.db as any)
-      .insertInto('contracting_petty_cash')
-      .values({
-        tenant_id: tenantId,
-        project_id: projectId as any,
-        custodian_name: dto.custodianName.trim(),
-        custodian_role: dto.custodianRole || 'site_engineer',
-        disbursement_number: disbNum,
-        amount_given: Number(dto.amountGiven),
-        amount_settled: 0,
-        remaining_balance: Number(dto.amountGiven),
-        issue_date: dto.issueDate || new Date().toISOString().split('T')[0],
-        settlement_due_date: dto.settlementDueDate || null,
-        status: 'active',
-        receipts_json: '[]',
-      })
-      .returningAll()
-      .execute();
+    const inserted = await this.db.transaction().execute(async (trx) => {
+      const row = await (trx as any)
+        .insertInto('contracting_petty_cash')
+        .values(values)
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const updated = await (trx as any)
+        .updateTable('contracting_petty_cash')
+        .set({
+          disbursement_number: `${prefix}${String(row.id).padStart(4, '0')}`,
+          updated_at: new Date(),
+        })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(row.id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      return updated;
+    });
 
     return inserted;
   }
@@ -5847,38 +5857,56 @@ export class ContractingService {
 
   async createInspectionRequest(auth: AuthContext, projectId: string, dto: CreateInspectionRequestDto): Promise<ContractingInspectionRequest> {
     const { tenantId } = requireTenantScope(auth);
-    let wirNumber = dto.wirNumber?.trim().toUpperCase();
-    if (!wirNumber) {
-      const prefix = getDailyDocumentPrefix('WIR');
-      const countRes = await (this.db as any)
-        .selectFrom('contracting_inspection_requests')
-        .select(sql<number>`count(*)::int`.as('count'))
-        .where('tenant_id', '=', tenantId)
-        .where('wir_number', 'like', `${prefix}%`)
-        .executeTakeFirst();
-      const count = (countRes?.count || 0) + 1;
-      wirNumber = `${prefix}${String(count).padStart(4, '0')}`;
-    }
+    // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
+    // D6a): a generated number derives from the row id inside one
+    // transaction. A caller-supplied number is kept verbatim.
+    const suppliedNumber = dto.wirNumber?.trim().toUpperCase() || '';
+    const prefix = getDailyDocumentPrefix('WIR');
+    const tempNumber = `WIR-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
-    const [row] = await (this.db as any)
-      .insertInto('contracting_inspection_requests')
-      .values({
-        tenant_id: tenantId,
-        project_id: projectId as any,
-        wir_number: wirNumber,
-        boq_item_id: dto.boqItemId ? Number(dto.boqItemId) : null,
-        subcontract_id: dto.subcontractId ? Number(dto.subcontractId) : null,
-        location_grid: dto.locationGrid.trim(),
-        trade_category: dto.tradeCategory,
-        inspection_type: dto.inspectionType || 'work_inspection',
-        scheduled_date: dto.scheduledDate,
-        status: 'submitted',
-        consultant_name: dto.consultantName || null,
-        consultant_notes: dto.consultantNotes || null,
-        attachments: dto.attachments || null,
-      })
-      .returningAll()
-      .execute();
+    const values: any = {
+      tenant_id: tenantId,
+      project_id: projectId as any,
+      wir_number: suppliedNumber || tempNumber,
+      boq_item_id: dto.boqItemId ? Number(dto.boqItemId) : null,
+      subcontract_id: dto.subcontractId ? Number(dto.subcontractId) : null,
+      location_grid: dto.locationGrid.trim(),
+      trade_category: dto.tradeCategory,
+      inspection_type: dto.inspectionType || 'work_inspection',
+      scheduled_date: dto.scheduledDate,
+      status: 'submitted',
+      consultant_name: dto.consultantName || null,
+      consultant_notes: dto.consultantNotes || null,
+      attachments: dto.attachments || null,
+    };
+
+    let row: any;
+    if (suppliedNumber) {
+      [row] = await (this.db as any)
+        .insertInto('contracting_inspection_requests')
+        .values(values)
+        .returningAll()
+        .execute();
+    } else {
+      row = await this.db.transaction().execute(async (trx) => {
+        const inserted = await (trx as any)
+          .insertInto('contracting_inspection_requests')
+          .values(values)
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        const updated = await (trx as any)
+          .updateTable('contracting_inspection_requests')
+          .set({
+            wir_number: `${prefix}${String(inserted.id).padStart(4, '0')}`,
+            updated_at: new Date(),
+          })
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', String(inserted.id))
+          .returningAll()
+          .executeTakeFirstOrThrow();
+        return updated;
+      });
+    }
 
     const list = await this.getInspectionRequests(auth, projectId);
     return list.find((i) => i.id === String(row.id)) || (row as any);
@@ -6199,36 +6227,46 @@ export class ContractingService {
 
   async createSubmittal(auth: AuthContext, projectId: string, dto: CreateSubmittalDto): Promise<ContractingSubmittal> {
     const { tenantId } = requireTenantScope(auth);
+    // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
+    // D6a): the number derives from the row id inside one
+    // transaction, never from a COUNT(*).
     const prefix = getDailyDocumentPrefix(dto.submittalType === 'shop_drawing' ? 'DWG-SUB' : 'MAT-SUB');
-    const count = ((await (this.db as any)
-      .selectFrom('contracting_submittals')
-      .select(sql<number>`count(*)::int`.as('count'))
-      .where('tenant_id', '=', tenantId)
-      .where('submittal_number', 'like', `${prefix}%`)
-      .executeTakeFirst())?.count || 0) + 1;
-    const submittalNumber = `${prefix}${String(count).padStart(4, '0')}`;
+    const tempNumber = `SUB-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
-    const [row] = await (this.db as any)
-      .insertInto('contracting_submittals')
-      .values({
-        tenant_id: tenantId,
-        project_id: projectId as any,
-        submittal_number: submittalNumber,
-        submittal_type: dto.submittalType,
-        title: dto.title,
-        specification_section: dto.specificationSection || null,
-        supplier_manufacturer: dto.supplierManufacturer || null,
-        boq_item_id: dto.boqItemId ? (dto.boqItemId as any) : null,
-        subcontract_id: dto.subcontractId ? (dto.subcontractId as any) : null,
-        submission_date: dto.submissionDate || new Date(),
-        review_due_date: dto.reviewDueDate || null,
-        status: 'submitted',
-        attachments: dto.notes || null,
-        created_at: new Date(),
-        updated_at: new Date(),
-      })
-      .returningAll()
-      .execute();
+    const row = await this.db.transaction().execute(async (trx) => {
+      const inserted = await (trx as any)
+        .insertInto('contracting_submittals')
+        .values({
+          tenant_id: tenantId,
+          project_id: projectId as any,
+          submittal_number: tempNumber,
+          submittal_type: dto.submittalType,
+          title: dto.title,
+          specification_section: dto.specificationSection || null,
+          supplier_manufacturer: dto.supplierManufacturer || null,
+          boq_item_id: dto.boqItemId ? (dto.boqItemId as any) : null,
+          subcontract_id: dto.subcontractId ? (dto.subcontractId as any) : null,
+          submission_date: dto.submissionDate || new Date(),
+          review_due_date: dto.reviewDueDate || null,
+          status: 'submitted',
+          attachments: dto.notes || null,
+          created_at: new Date(),
+          updated_at: new Date(),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const updated = await (trx as any)
+        .updateTable('contracting_submittals')
+        .set({
+          submittal_number: `${prefix}${String(inserted.id).padStart(4, '0')}`,
+          updated_at: new Date(),
+        })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(inserted.id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      return updated;
+    });
 
     return {
       id: String(row.id),
@@ -6312,40 +6350,50 @@ export class ContractingService {
 
   async createMaterialEscalation(auth: AuthContext, projectId: string, dto: CreateMaterialEscalationDto): Promise<ContractingMaterialEscalation> {
     const { tenantId } = requireTenantScope(auth);
+    // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
+    // D6a): the number derives from the row id inside one
+    // transaction, never from a COUNT(*).
     const prefix = getDailyDocumentPrefix('ESC');
-    const count = ((await (this.db as any)
-      .selectFrom('contracting_material_escalations')
-      .select(sql<number>`count(*)::int`.as('count'))
-      .where('tenant_id', '=', tenantId)
-      .where('claim_number', 'like', `${prefix}%`)
-      .executeTakeFirst())?.count || 0) + 1;
-    const claimNumber = `${prefix}${String(count).padStart(4, '0')}`;
+    const tempNumber = `ESC-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const priceDifference = Math.max(0, dto.currentMarketPrice - dto.basePriceContract);
     const totalCompensationAmount = Number((priceDifference * dto.executedQuantity).toFixed(2));
 
-    const [row] = await (this.db as any)
-      .insertInto('contracting_material_escalations')
-      .values({
-        tenant_id: tenantId,
-        project_id: projectId as any,
-        claim_number: claimNumber,
-        material_type: dto.materialType,
-        material_name: dto.materialName,
-        base_price_contract: dto.basePriceContract,
-        current_market_price: dto.currentMarketPrice,
-        price_difference: priceDifference,
-        executed_quantity: dto.executedQuantity,
-        unit: dto.unit,
-        total_compensation_amount: totalCompensationAmount,
-        bulletin_source_reference: dto.bulletinSourceReference || null,
-        status: 'draft',
-        notes: dto.notes || null,
-        created_at: new Date(),
-        updated_at: new Date(),
-      })
-      .returningAll()
-      .execute();
+    const row = await this.db.transaction().execute(async (trx) => {
+      const inserted = await (trx as any)
+        .insertInto('contracting_material_escalations')
+        .values({
+          tenant_id: tenantId,
+          project_id: projectId as any,
+          claim_number: tempNumber,
+          material_type: dto.materialType,
+          material_name: dto.materialName,
+          base_price_contract: dto.basePriceContract,
+          current_market_price: dto.currentMarketPrice,
+          price_difference: priceDifference,
+          executed_quantity: dto.executedQuantity,
+          unit: dto.unit,
+          total_compensation_amount: totalCompensationAmount,
+          bulletin_source_reference: dto.bulletinSourceReference || null,
+          status: 'draft',
+          notes: dto.notes || null,
+          created_at: new Date(),
+          updated_at: new Date(),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const updated = await (trx as any)
+        .updateTable('contracting_material_escalations')
+        .set({
+          claim_number: `${prefix}${String(inserted.id).padStart(4, '0')}`,
+          updated_at: new Date(),
+        })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(inserted.id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      return updated;
+    });
 
     return {
       id: String(row.id),
@@ -6443,33 +6491,43 @@ export class ContractingService {
 
   async createSubcontractorBackcharge(auth: AuthContext, projectId: string, dto: CreateSubcontractorBackchargeDto): Promise<ContractingSubcontractorBackcharge> {
     const { tenantId } = requireTenantScope(auth);
+    // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
+    // D6a): the number derives from the row id inside one
+    // transaction, never from a COUNT(*).
     const prefix = getDailyDocumentPrefix('BCH');
-    const count = ((await (this.db as any)
-      .selectFrom('contracting_subcontractor_backcharges')
-      .select(sql<number>`count(*)::int`.as('count'))
-      .where('tenant_id', '=', tenantId)
-      .where('voucher_number', 'like', `${prefix}%`)
-      .executeTakeFirst())?.count || 0) + 1;
-    const voucherNumber = `${prefix}${String(count).padStart(4, '0')}`;
+    const tempNumber = `BCH-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
-    const [row] = await (this.db as any)
-      .insertInto('contracting_subcontractor_backcharges')
-      .values({
-        tenant_id: tenantId,
-        project_id: projectId as any,
-        voucher_number: voucherNumber,
-        subcontract_id: dto.subcontractId as any,
-        beneficiary_subcontract_id: dto.beneficiarySubcontractId ? (dto.beneficiarySubcontractId as any) : null,
-        backcharge_category: dto.backchargeCategory,
-        amount: dto.amount,
-        description: dto.description,
-        occurrence_date: dto.occurrenceDate || new Date(),
-        status: 'pending_approval',
-        created_at: new Date(),
-        updated_at: new Date(),
-      })
-      .returningAll()
-      .execute();
+    const row = await this.db.transaction().execute(async (trx) => {
+      const inserted = await (trx as any)
+        .insertInto('contracting_subcontractor_backcharges')
+        .values({
+          tenant_id: tenantId,
+          project_id: projectId as any,
+          voucher_number: tempNumber,
+          subcontract_id: dto.subcontractId as any,
+          beneficiary_subcontract_id: dto.beneficiarySubcontractId ? (dto.beneficiarySubcontractId as any) : null,
+          backcharge_category: dto.backchargeCategory,
+          amount: dto.amount,
+          description: dto.description,
+          occurrence_date: dto.occurrenceDate || new Date(),
+          status: 'pending_approval',
+          created_at: new Date(),
+          updated_at: new Date(),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const updated = await (trx as any)
+        .updateTable('contracting_subcontractor_backcharges')
+        .set({
+          voucher_number: `${prefix}${String(inserted.id).padStart(4, '0')}`,
+          updated_at: new Date(),
+        })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(inserted.id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      return updated;
+    });
 
     return {
       id: String(row.id),
@@ -7911,37 +7969,47 @@ export class ContractingService {
     const { tenantId } = requireTenantScope(auth);
     const summary = await this.previewBatchAllocation(auth, projectId, dto);
 
-    // Count existing batches to format YYMMDD document number (Rule 10)
-    const existingCountRes = await (this.db as any)
-      .selectFrom('contracting_allocation_batches')
-      .select((eb: any) => eb.fn.count('id').as('cnt'))
-      .where('tenant_id', '=', tenantId)
-      .executeTakeFirst();
-    const count = Number(existingCountRes?.cnt || 0);
-    const batchNumber = formatDailyDocumentNumber('ALLOC', count + 1);
+    // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
+    // D6a): the batch number derives from the row id inside one
+    // transaction, never from a COUNT(*) over all tenant batches.
+    const prefix = getDailyDocumentPrefix('ALLOC');
+    const tempNumber = `ALLOC-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     // Insert batch
-    const [batch] = await (this.db as any)
-      .insertInto('contracting_allocation_batches')
-      .values({
-        tenant_id: tenantId,
-        project_id: projectId as any,
-        batch_number: batchNumber,
-        period_start: dto.periodStart,
-        period_end: dto.periodEnd,
-        status: 'posted',
-        total_gross_expenses: summary.totalGrossExpense,
-        total_recovered_backcharges: summary.totalRecoveredBackcharge,
-        total_net_pool_cost: summary.totalNetCost,
-        total_allocated_amount: summary.totalAllocated,
-        deferred_in_amount: summary.totalDeferredIn,
-        deferred_out_amount: summary.totalDeferredOut,
-        posted_at: new Date(),
-        posted_by: auth.username || 'system',
-        notes: dto.notes || null,
-      })
-      .returningAll()
-      .execute();
+    const batch = await this.db.transaction().execute(async (trx) => {
+      const inserted = await (trx as any)
+        .insertInto('contracting_allocation_batches')
+        .values({
+          tenant_id: tenantId,
+          project_id: projectId as any,
+          batch_number: tempNumber,
+          period_start: dto.periodStart,
+          period_end: dto.periodEnd,
+          status: 'posted',
+          total_gross_expenses: summary.totalGrossExpense,
+          total_recovered_backcharges: summary.totalRecoveredBackcharge,
+          total_net_pool_cost: summary.totalNetCost,
+          total_allocated_amount: summary.totalAllocated,
+          deferred_in_amount: summary.totalDeferredIn,
+          deferred_out_amount: summary.totalDeferredOut,
+          posted_at: new Date(),
+          posted_by: auth.username || 'system',
+          notes: dto.notes || null,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const updated = await (trx as any)
+        .updateTable('contracting_allocation_batches')
+        .set({
+          batch_number: `${prefix}${String(inserted.id).padStart(4, '0')}`,
+          updated_at: new Date(),
+        })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(inserted.id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      return updated;
+    });
 
     // Link expenses to batch
     await (this.db as any)
