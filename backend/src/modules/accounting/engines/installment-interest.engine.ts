@@ -12,6 +12,35 @@ import { MoneyDigits, toMinorUnits, fromMinorUnits } from './money-minor-units.e
  * over-released deferred balance. The last installment still absorbs the
  * remainder, so the sum is exact at any precision.
  */
+/**
+ * Even minor-unit split of a book-precision total across installments.
+ *
+ * INV-CUSTOMER-INSTALLMENTS-MINOR-UNITS: the schedule is split in the
+ * tenant's minor units (required `minorUnits`, never a hard-coded 2):
+ * every row except the last gets the floored share and the LAST row
+ * absorbs the remainder, so the rows sum exactly to the total at book
+ * digits — the same last-row-remainder shape as the supplier schedule
+ * builder and as allocateInstallmentInterest below. The total must
+ * already be rounded at book digits by the caller (roundMoney); a
+ * sub-minor total throws via toMinorUnits, and the count must leave
+ * at least one minor unit per row. The old cents split gave the
+ * remainder to the FIRST rows; the new shape deliberately moves it
+ * to the last row.
+ */
+export function splitInstallmentSchedule(totalWithInterest: number, installmentCount: number, minorUnits: MoneyDigits): number[] {
+  if (!Number.isFinite(totalWithInterest) || totalWithInterest <= 0) throw new Error('Invalid installment total');
+  if (!Number.isSafeInteger(installmentCount) || installmentCount < 1) throw new Error('Invalid installment count');
+  const totalMinor = toMinorUnits(totalWithInterest, minorUnits);
+  if (installmentCount > totalMinor) throw new Error('Installment count exceeds available minor units');
+  const base = Math.floor(totalMinor / installmentCount);
+  const extra = totalMinor % installmentCount;
+  const rows: number[] = [];
+  for (let index = 0; index < installmentCount; index++) {
+    rows.push(fromMinorUnits(index === installmentCount - 1 ? base + extra : base, minorUnits));
+  }
+  return rows;
+}
+
 export function allocateInstallmentInterest(principal: number, payments: number[], totalInterest: number, minorUnits: MoneyDigits): number[] {
   if (!Number.isFinite(principal) || principal <= 0 || !payments.length || payments.some(p => !Number.isFinite(p) || p <= 0) || !Number.isFinite(totalInterest) || totalInterest < 0) throw new Error('Invalid financing terms');
   const factor = 10 ** minorUnits;

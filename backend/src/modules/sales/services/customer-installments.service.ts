@@ -9,6 +9,9 @@ import { TransactionHelper } from '../../../database/helpers/transaction.helper'
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 import { SalesFinanceService } from './sales-finance.service';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney, toMinorUnits, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { splitInstallmentSchedule } from '../../accounting/engines/installment-interest.engine';
 import {
   CreateInstallmentPlanDto,
   PayInstallmentDto,
@@ -35,8 +38,13 @@ export class CustomerInstallmentsService {
       : sql<boolean>`tenant_id = ${scope.tenantId}`;
   }
 
-  private roundCurrency(value: number): number {
-    return Number((Number(value) || 0).toFixed(2));
+  private async bookDigits(db: Kysely<Database>, auth: AuthContext): Promise<MoneyDigits> {
+    const scope = this.tenantScope(auth);
+    return currencyMoneyDigits(await tenantBaseCurrency(db, scope.tenantId));
+  }
+
+  private roundBook(value: number, digits: MoneyDigits): number {
+    return roundMoney(Number(value) || 0, digits);
   }
 
   async createPlan(dto: CreateInstallmentPlanDto, auth: AuthContext) {
@@ -54,34 +62,37 @@ export class CustomerInstallmentsService {
       throw new AppError('Customer not found', 'CUSTOMER_NOT_FOUND', 404);
     }
 
-    const totalAmount = this.roundCurrency(dto.totalAmount);
-    if (totalAmount <= 0) {
-      throw new AppError('Total amount must be greater than 0', 'INVALID_AMOUNT', 400);
-    }
-
-    const downPayment = this.roundCurrency(dto.downPayment || 0);
-    const financedAmount = this.roundCurrency(totalAmount - downPayment);
-    if (financedAmount <= 0) {
-      throw new AppError('Financed amount must be greater than 0', 'INVALID_FINANCED_AMOUNT', 400);
-    }
-
-    const interestRatePercent = Number(dto.interestRatePercent || 0);
-    if (!Number.isFinite(interestRatePercent) || interestRatePercent < 0) throw new AppError('Invalid interest rate', 'INVALID_INTEREST_RATE', 400);
-    const interestAmount = this.roundCurrency((financedAmount * interestRatePercent) / 100);
-    const totalWithInterest = this.roundCurrency(financedAmount + interestAmount);
-    const installmentCount = Number(dto.installmentCount);
-    const totalCents = Math.round(totalWithInterest * 100);
-    if (!Number.isSafeInteger(installmentCount) || installmentCount < 1 || installmentCount > 600
-      || installmentCount > totalCents) {
-      throw new AppError('Installment count must be a positive integer with at least one cent per installment', 'INVALID_INSTALLMENT_COUNT', 400);
-    }
-    const baseCents = Math.floor(totalCents / installmentCount);
-    const extraCents = totalCents % installmentCount;
-    const monthlyAmount = baseCents / 100;
-
     const startDate = dto.startDate ? new Date(dto.startDate) : new Date();
 
     return await this.tx.runInTransaction(this.db, async (trx: Kysely<Database>) => {
+      // INV-CUSTOMER-INSTALLMENTS-MINOR-UNITS: book digits resolve on
+      // the caller's own transaction handle, never the pool handle
+      // inside an open transaction; plan totals round leniently at
+      // book digits and the schedule splits in minor units.
+      const bookDigits = await this.bookDigits(trx, auth);
+      const totalAmount = this.roundBook(dto.totalAmount, bookDigits);
+      if (totalAmount <= 0) {
+        throw new AppError('Total amount must be greater than 0', 'INVALID_AMOUNT', 400);
+      }
+
+      const downPayment = this.roundBook(dto.downPayment || 0, bookDigits);
+      const financedAmount = this.roundBook(totalAmount - downPayment, bookDigits);
+      if (financedAmount <= 0) {
+        throw new AppError('Financed amount must be greater than 0', 'INVALID_FINANCED_AMOUNT', 400);
+      }
+
+      const interestRatePercent = Number(dto.interestRatePercent || 0);
+      if (!Number.isFinite(interestRatePercent) || interestRatePercent < 0) throw new AppError('Invalid interest rate', 'INVALID_INTEREST_RATE', 400);
+      const interestAmount = this.roundBook((financedAmount * interestRatePercent) / 100, bookDigits);
+      const totalWithInterest = this.roundBook(financedAmount + interestAmount, bookDigits);
+      const installmentCount = Number(dto.installmentCount);
+      const totalMinor = toMinorUnits(totalWithInterest, bookDigits);
+      if (!Number.isSafeInteger(installmentCount) || installmentCount < 1 || installmentCount > 600
+        || installmentCount > totalMinor) {
+        throw new AppError('Installment count must be a positive integer with at least one minor unit per installment', 'INVALID_INSTALLMENT_COUNT', 400);
+      }
+      const scheduleAmounts = splitInstallmentSchedule(totalWithInterest, installmentCount, bookDigits);
+      const monthlyAmount = scheduleAmounts[0];
       // 1. Insert temporary plan to obtain collision-proof identity (Invariant #10 & #13)
       const tempNumber = `INST-TMP-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const inserted = await trx
@@ -121,14 +132,15 @@ export class CustomerInstallmentsService {
         .returningAll()
         .executeTakeFirstOrThrow();
 
-      // Generate installments schedule
+      // Generate installments schedule: the last row absorbs the
+      // remainder in minor units, so the schedule sums exactly to
+      // the principal plus interest at book digits.
       const installmentsToInsert = [];
       for (let i = 1; i <= installmentCount; i++) {
         const dueDate = new Date(startDate);
         dueDate.setMonth(dueDate.getMonth() + i);
 
-        // Distribute each remainder cent once; the schedule sums exactly to the principal plus interest.
-        const currentAmount = (baseCents + (i <= extraCents ? 1 : 0)) / 100;
+        const currentAmount = scheduleAmounts[i - 1];
 
         installmentsToInsert.push({
           tenant_id: scope.tenantId,
@@ -238,6 +250,7 @@ export class CustomerInstallmentsService {
 
 
   async listPlans(query: { customerId?: number; status?: string; search?: string }, auth: AuthContext) {
+    const bookDigits = await this.bookDigits(this.db, auth);
     let q = this.db
       .selectFrom('customer_installment_plans as p')
       .innerJoin('customers as c', 'c.id', 'p.customer_id')
@@ -314,7 +327,7 @@ export class CustomerInstallmentsService {
     const formattedPlans = plans.map((p) => {
       const prog = progressMap.get(Number(p.id)) || { paid_amount: 0, paid_count: 0 };
       const totalWithInterest = Number(p.total_with_interest || 0);
-      const remainingAmount = Math.max(0, this.roundCurrency(totalWithInterest - prog.paid_amount));
+      const remainingAmount = Math.max(0, this.roundBook(totalWithInterest - prog.paid_amount, bookDigits));
       const progressPercent = totalWithInterest > 0
         ? Math.min(100, Math.round((prog.paid_amount / totalWithInterest) * 100))
         : 0;
@@ -332,6 +345,7 @@ export class CustomerInstallmentsService {
   }
 
   async getPlanDetails(planId: number, auth: AuthContext) {
+    const bookDigits = await this.bookDigits(this.db, auth);
     const plan = await this.db
       .selectFrom('customer_installment_plans as p')
       .innerJoin('customers as c', 'c.id', 'p.customer_id')
@@ -394,8 +408,8 @@ export class CustomerInstallmentsService {
     return {
       plan: {
         ...plan,
-        paid_amount: this.roundCurrency(totalPaid),
-        remaining_amount: Math.max(0, this.roundCurrency(totalWithInterest - totalPaid)),
+        paid_amount: this.roundBook(totalPaid, bookDigits),
+        remaining_amount: Math.max(0, this.roundBook(totalWithInterest - totalPaid, bookDigits)),
         progress_percent: totalWithInterest > 0
           ? Math.min(100, Math.round((totalPaid / totalWithInterest) * 100))
           : 0,
@@ -405,6 +419,7 @@ export class CustomerInstallmentsService {
   }
 
   async listInstallments(query: ListInstallmentsQueryDto, auth: AuthContext) {
+    const bookDigits = await this.bookDigits(this.db, auth);
     let q = this.db
       .selectFrom('customer_installments as i')
       .innerJoin('customer_installment_plans as p', 'p.id', 'i.plan_id')
@@ -477,7 +492,7 @@ export class CustomerInstallmentsService {
       return {
         ...r,
         display_status: displayStatus,
-        remaining_installment: Math.max(0, this.roundCurrency(Number(r.amount) - Number(r.paid_amount || 0))),
+        remaining_installment: Math.max(0, this.roundBook(Number(r.amount) - Number(r.paid_amount || 0), bookDigits)),
       };
     });
 
@@ -486,12 +501,14 @@ export class CustomerInstallmentsService {
 
   async payInstallment(installmentId: number, dto: PayInstallmentDto, auth: AuthContext) {
     const scope = this.tenantScope(auth);
-    const payAmount = this.roundCurrency(dto.amount);
-    if (payAmount <= 0) {
-      throw new AppError('Payment amount must be greater than 0', 'INVALID_AMOUNT', 400);
-    }
 
     return await this.tx.runInTransaction(this.db, async (trx: Kysely<Database>) => {
+      const bookDigits = await this.bookDigits(trx, auth);
+      const payAmount = this.roundBook(dto.amount, bookDigits);
+      if (payAmount <= 0) {
+        throw new AppError('Payment amount must be greater than 0', 'INVALID_AMOUNT', 400);
+      }
+
       // 1. Pessimistic lock on the installment row (Invariant #13)
       const installment = await trx
         .selectFrom('customer_installments')
@@ -524,7 +541,7 @@ export class CustomerInstallmentsService {
 
       const currentPaid = Number(installment.paid_amount || 0);
       const totalRequired = Number(installment.amount || 0);
-      const remainingOnInstallment = this.roundCurrency(totalRequired - currentPaid);
+      const remainingOnInstallment = this.roundBook(totalRequired - currentPaid, bookDigits);
 
       if (payAmount > remainingOnInstallment) {
         throw new AppError(
@@ -534,7 +551,7 @@ export class CustomerInstallmentsService {
         );
       }
 
-      const newPaidAmount = this.roundCurrency(currentPaid + payAmount);
+      const newPaidAmount = this.roundBook(currentPaid + payAmount, bookDigits);
       const newStatus = newPaidAmount >= totalRequired ? 'paid' : 'partially_paid';
       const paymentMethod = dto.paymentMethod || 'cash';
 
@@ -650,6 +667,7 @@ export class CustomerInstallmentsService {
 
 
   async getSummaryMetrics(auth: AuthContext) {
+    const bookDigits = await this.bookDigits(this.db, auth);
     const todayStr = new Date().toISOString().split('T')[0];
 
     const [plansSummary, installmentsSummary, overdueSummary] = await Promise.all([
@@ -688,11 +706,11 @@ export class CustomerInstallmentsService {
     return {
       active_plans: Number(plansSummary?.active_plans || 0),
       total_plans: Number(plansSummary?.total_plans || 0),
-      active_total_amount: this.roundCurrency(Number(plansSummary?.active_total_amount || 0)),
-      total_collected: this.roundCurrency(Number(installmentsSummary?.total_collected || 0)),
-      unpaid_amount: this.roundCurrency(Number(installmentsSummary?.unpaid_installments_amount || 0)),
+      active_total_amount: this.roundBook(Number(plansSummary?.active_total_amount || 0), bookDigits),
+      total_collected: this.roundBook(Number(installmentsSummary?.total_collected || 0), bookDigits),
+      unpaid_amount: this.roundBook(Number(installmentsSummary?.unpaid_installments_amount || 0), bookDigits),
       overdue_count: Number(overdueSummary?.overdue_count || 0),
-      overdue_amount: this.roundCurrency(Number(overdueSummary?.overdue_amount || 0)),
+      overdue_amount: this.roundBook(Number(overdueSummary?.overdue_amount || 0), bookDigits),
     };
   }
 }
