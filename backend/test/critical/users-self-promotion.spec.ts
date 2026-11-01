@@ -13,7 +13,11 @@ WHAT THIS PINS, driving the REAL UsersService on PGlite:
 1. Self-promotion of role -> 403 SELF_PROMOTION_FORBIDDEN, row unchanged.
 2. Self-change of permissions (same role) -> 403, row unchanged.
 3. Self-edit repeating the stored role and permissions (name change) succeeds.
-4. The same actor changing ANOTHER user (role + permissions) succeeds.
+4. The same actor changing ANOTHER user within their own holdings
+   (same role, a permission they hold) succeeds. Grants beyond the
+   actor's holdings are governed by INV-USER-GRANT-SUBSET (see
+   users-grant-subset.spec.ts); the old Case 4 grant of role 'admin'
+   with ['*'] by this cashier actor is now forbidden there.
 5. The bulk syncUsers path rejects a self-promotion entry the same way.
 
 Harness note: ensureUniqueUsername / ensureUniquePhone read the pool
@@ -113,12 +117,13 @@ async function main(): Promise<void> {
     assert.equal(after3.display_name, 'Manager Renamed');
     assert.equal(after3.role, 'cashier');
 
-    // Case 4: the same actor changing ANOTHER user succeeds.
-    const ok4 = await service.updateUser(2, payload('clerk', 'admin', ['*']), actor(1), 'sess-spec');
+    // Case 4: the same actor changing ANOTHER user within their own
+    // holdings (same role, a permission they hold) succeeds.
+    const ok4 = await service.updateUser(2, payload('clerk', 'cashier', ['canManageUsers']), actor(1), 'sess-spec');
     assert.equal((ok4 as any).ok, true);
     const after4 = await readUser(2);
-    assert.equal(after4.role, 'admin');
-    assert.equal(after4.permissions_json, JSON.stringify(['*']));
+    assert.equal(after4.role, 'cashier');
+    assert.equal(after4.permissions_json, JSON.stringify(['canManageUsers']));
 
     // Case 5: the bulk sync path rejects a self-promotion entry the same way.
     await assert.rejects(

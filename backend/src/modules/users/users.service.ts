@@ -35,6 +35,18 @@ function samePermissionSet(a: string[], b: string[]): boolean {
   return b.every((item) => set.has(item));
 }
 
+// INV-USER-GRANT-SUBSET: role rank for the grant ceiling. The DTO allows
+// exactly three roles; the ordering is evidenced by the existing
+// super_admin-to-admin demotion outside the platform tenant and by the
+// demotion/session-revocation handling of super_admin/admin as the
+// elevated roles. Unknown role strings rank 0 (fail closed).
+function roleRank(role: unknown): number {
+  if (role === 'super_admin') return 3;
+  if (role === 'admin') return 2;
+  if (role === 'cashier') return 1;
+  return 0;
+}
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -370,8 +382,48 @@ export class UsersService {
     };
   }
 
+  // INV-USER-GRANT-SUBSET: no actor may grant a permission they do not
+  // themselves hold, the granted role may not exceed the actor's own
+  // role, and '*' may be granted only from the platform tenant. The
+  // actor's stored row (read in the same transaction) is authoritative;
+  // when no actor row exists (synthetic actors in specs and internal
+  // callers), the server-set AuthContext role/permissions are used,
+  // never anything from the payload. Callers: executeUserCreate (every
+  // creation is a grant to another user) and executeUserUpdate for
+  // other-row updates; the SELF_PROMOTION_FORBIDDEN guard governs
+  // own-row edits and runs first.
+  private async assertGrantWithinActorScope(trx: Kysely<Database>, payload: UpsertUserDto, actor: AuthContext): Promise<void> {
+    const scope = this.scope(actor);
+    const isPlatformTenant = isPlatformTenantId(scope.tenantId);
+    const actorRow = await trx
+      .selectFrom('users')
+      .select(['role', 'permissions_json'])
+      .where('id', '=', actor.userId)
+      .where(this.tenantPredicate(actor))
+      .executeTakeFirst();
+    const actorRole = actorRow ? String(actorRow.role) : actor.role;
+    const actorPermissions = actorRow ? parseStoredPermissions(actorRow.permissions_json) : (actor.permissions ?? []);
+    const writtenPermissions = payload.permissions ?? [];
+    if (writtenPermissions.includes('*') && !isPlatformTenant) {
+      throw new AppError('Only the platform tenant may grant the all-permissions grant', 'GRANT_STAR_FORBIDDEN', 403);
+    }
+    if (!actorPermissions.includes('*')) {
+      const held = new Set(actorPermissions);
+      if (writtenPermissions.some((permission) => !held.has(permission))) {
+        throw new AppError('You cannot grant a permission you do not hold', 'GRANT_EXCEEDS_ACTOR_PERMISSIONS', 403);
+      }
+    }
+    if (typeof payload.role === 'string' && payload.role) {
+      const effectiveRole = payload.role === 'super_admin' && !isPlatformTenant ? 'admin' : payload.role;
+      if (roleRank(effectiveRole) > roleRank(actorRole)) {
+        throw new AppError('You cannot grant a role above your own', 'GRANT_ROLE_ABOVE_ACTOR', 403);
+      }
+    }
+  }
+
   private async executeUserCreate(trx: Kysely<Database>, payload: UpsertUserDto, actor: AuthContext): Promise<number> {
     const scope = this.scope(actor);
+    await this.assertGrantWithinActorScope(trx, payload, actor);
     if (!payload.password) {
       throw new AppError('Password is required', 'PASSWORD_REQUIRED', 400);
     }
@@ -471,9 +523,10 @@ export class UsersService {
     // single update and the bulk sync). The comparison runs against the
     // values the update WOULD store: the effective role (after the
     // super_admin demotion below) and the permission set the payload
-    // would write (an omitted permissions array writes []). Any other
-    // actor changing this user, and any self-edit that repeats the
-    // stored role and permissions, are unaffected. Checked first, before
+    // would write (an omitted permissions array writes []). Any
+    // self-edit that repeats the stored role and permissions is
+    // unaffected; grants to other users are governed by
+    // INV-USER-GRANT-SUBSET below. Checked first, before
     // any uniqueness work, so a forbidden self-promotion fails fast.
     if (id === actor.userId) {
       const guardScope = this.scope(actor);
@@ -486,6 +539,13 @@ export class UsersService {
       if (!samePermissionSet(storedPermissions, writtenPermissions)) {
         throw new AppError('You cannot change your own permissions', 'SELF_PROMOTION_FORBIDDEN', 403);
       }
+    }
+
+    // INV-USER-GRANT-SUBSET: grants to OTHER users must stay within the
+    // actor's own holdings (checked before any uniqueness work, so a
+    // forbidden grant fails fast like the self-guard above).
+    if (id !== actor.userId) {
+      await this.assertGrantWithinActorScope(trx, payload, actor);
     }
 
     await this.ensureUniqueUsername(payload.username, actor, id);
