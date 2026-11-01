@@ -78,7 +78,7 @@ export function StorefrontCategoriesModal({
   selectedCategoryId,
   onSelectCategory,
 }: StorefrontCategoriesModalProps) {
-  const { t, isEn, dir } = useStorefrontLang();
+  const { isEn, dir } = useStorefrontLang();
   const [modalSearch, setModalSearch] = useState('');
   const [activeGroup, setActiveGroup] = useState<string>('');
 

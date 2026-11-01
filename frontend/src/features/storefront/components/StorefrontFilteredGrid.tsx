@@ -58,7 +58,7 @@ export function StorefrontFilteredGrid({
   onToggleFavorite,
   onQuickView,
 }: StorefrontFilteredGridProps) {
-  const { t, isEn, dir } = useStorefrontLang();
+  const { isEn, dir } = useStorefrontLang();
   const [isSortOpen, setIsSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
 

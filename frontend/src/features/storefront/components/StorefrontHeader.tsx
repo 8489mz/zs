@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useStorefrontLang } from '@/i18n';
 import { StorefrontInfo, StorefrontProduct } from '../types/storefront.types';
 import { PackageIcon } from '@/shared/components/icons/AppIcons';
-import { IconShoppingCart, IconSearch, IconClose } from './StorefrontIcons';
+import { IconShoppingCart } from './StorefrontIcons';
 import { StorefrontPredictiveSearch } from './StorefrontPredictiveSearch';
 import { getCurrencySymbol, isThreeDecimalCurrency } from '@/lib/currencies';
 
@@ -313,9 +313,8 @@ export const StorefrontHeader = React.memo(function StorefrontHeader({
   onAddToCart,
   onOpenCategories,
 }: StorefrontHeaderProps) {
-  const { t, isEn, setLang } = useStorefrontLang();
+  const { isEn, setLang } = useStorefrontLang();
   const headerRef = React.useRef<HTMLElement | null>(null);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(() => getInitialStorefrontScrollTop() > 18);
   const isScrolledRef = React.useRef(getInitialStorefrontScrollTop() > 18);
@@ -384,25 +383,9 @@ export const StorefrontHeader = React.memo(function StorefrontHeader({
     };
   }, []);
 
-  const handleToggleMobileSearch = () => {
-    setMobileSearchOpen((prev) => {
-      const next = !prev;
-      if (next) {
-        window.requestAnimationFrame(() => {
-          const input = headerRef.current?.querySelector<HTMLInputElement>('.storefront-search-input');
-          input?.focus();
-        });
-      } else if (searchTerm) {
-        onSearchChange('');
-      }
-      return next;
-    });
-  };
-
   const brand = resolveStorefrontBrand(info, isEn);
   const storeCurr = info?.currency || 'EGP';
   const currSymbol = isEn && storeCurr === 'EGP' ? 'EGP' : getCurrencySymbol(storeCurr);
-  const showMobileSearchRow = mobileSearchOpen || Boolean(searchTerm.trim());
 
   const renderLangDropdown = (isMobileSlot = false) => (
     <div
