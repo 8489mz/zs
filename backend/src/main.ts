@@ -18,6 +18,7 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
 import { RequestContextInterceptor } from './common/interceptors/request-context.interceptor';
 import { ResponseMetadataInterceptor } from './common/interceptors/response-metadata.interceptor';
 import { requestValidationPipe } from './common/pipes/request-validation.pipe';
+import { isPublicApiPath, resolvePublicApiCorsOrigin } from './common/utils/public-cors-origin.util';
 import { LoggerService } from './core/logging/logger.service';
 import { isDesktopRuntimeMode } from './config/app-mode';
 
@@ -156,6 +157,19 @@ async function bootstrap(): Promise<void> {
 
   app.enableCors((req: any, callback: any) => {
     const originHeader = req.headers?.origin;
+    // Public marketing endpoints (pricing catalog, trial signup) must be
+    // readable from the marketing site regardless of the CORS_ORIGINS env
+    // list: the single pricing endpoint serves the website, the in-app
+    // client, and every other caller, so a missing env entry must never
+    // silently hide prices. Exact-origin match only; any other origin is
+    // denied (no Access-Control-Allow-Origin header).
+    if (isPublicApiPath(req.url)) {
+      callback(null, {
+        origin: resolvePublicApiCorsOrigin(originHeader, corsOrigins),
+        credentials: true,
+      });
+      return;
+    }
     if (req.url && req.url.startsWith('/api/updates/') && req.method === 'GET') {
       callback(null, { origin: originHeader || true, credentials: true });
     } else {
