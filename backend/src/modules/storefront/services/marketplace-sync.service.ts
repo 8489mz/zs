@@ -845,38 +845,44 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
       },
     ];
 
-    // 1. Create online order in `online_orders`
-    const insertResult = await this.db
-      .insertInto('online_orders')
-      .values({
-        tenant_id: scope.tenantId,
-        account_id: scope.accountId,
-        order_number: orderNumber,
-        customer_name: marketplace === 'amazon' ? 'عميل سوق أمازون (FBM)' : 'عميل متجر نون (Noon Direct)',
-        customer_phone: '01012345678',
-        customer_address: 'القاهرة - التجمع الخامس (طلب إلكتروني خارجي)',
-        customer_notes: `طلب تم سحبه ومزامنته تلقائياً من منصة ${marketplace === 'amazon' ? 'أمازون' : 'نون'} | SKU: ${selectedProductSku}`,
-        items_json: JSON.stringify(itemsPayload),
-        subtotal: totalAmount,
-        delivery_fee: 0,
-        total_amount: totalAmount,
-        status: 'confirmed',
-        payment_method: 'marketplace_prepaid',
-        payment_status: 'paid',
-        gateway_provider: marketplace,
-        shipping_carrier: marketplace === 'amazon' ? 'amazon_fbm' : 'noon_direct',
-        created_at: new Date(),
-        updated_at: new Date(),
-      } as any)
-      .returning('id')
-      .executeTakeFirst();
-
-    const orderId = Number(insertResult?.id || 0);
-
-    // 2. Reserve / deduct stock immediately to prevent overselling on other channels via ledger
+    // 1+2. Create the online order and deduct its stock in ONE
+    // transaction (INV-MARKETPLACE-SIMULATION-STOCK-ATOMIC). The order
+    // must never stay paid while its deduction failed: a ledger
+    // failure rolls the order back with it instead of being swallowed
+    // into a warning, and the deduction runs on the transaction
+    // handle so the ledger locks hold.
+    let orderId = 0;
     let newStock = Math.max(0, Number(product.stock_qty || 0) - orderQty);
-    try {
-      const stockChange = await applyStockDelta(this.db, {
+    await this.db.transaction().execute(async (trx) => {
+      const insertResult = await trx
+        .insertInto('online_orders')
+        .values({
+          tenant_id: scope.tenantId,
+          account_id: scope.accountId,
+          order_number: orderNumber,
+          customer_name: marketplace === 'amazon' ? 'عميل سوق أمازون (FBM)' : 'عميل متجر نون (Noon Direct)',
+          customer_phone: '01012345678',
+          customer_address: 'القاهرة - التجمع الخامس (طلب إلكتروني خارجي)',
+          customer_notes: `طلب تم سحبه ومزامنته تلقائياً من منصة ${marketplace === 'amazon' ? 'أمازون' : 'نون'} | SKU: ${selectedProductSku}`,
+          items_json: JSON.stringify(itemsPayload),
+          subtotal: totalAmount,
+          delivery_fee: 0,
+          total_amount: totalAmount,
+          status: 'confirmed',
+          payment_method: 'marketplace_prepaid',
+          payment_status: 'paid',
+          gateway_provider: marketplace,
+          shipping_carrier: marketplace === 'amazon' ? 'amazon_fbm' : 'noon_direct',
+          created_at: new Date(),
+          updated_at: new Date(),
+        } as any)
+        .returning('id')
+        .executeTakeFirst();
+
+      orderId = Number(insertResult?.id || 0);
+
+      // Reserve / deduct stock immediately to prevent overselling on other channels via ledger
+      const stockChange = await applyStockDelta(trx, {
         productId: Number(product.id),
         delta: -orderQty,
         tenantId: scope.tenantId,
@@ -884,9 +890,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
         allowNegative: true,
       });
       newStock = stockChange.globalAfter;
-    } catch (err: any) {
-      this.logger.warn(`Ledger stock deduction fallback: ${err?.message}`);
-    }
+    });
 
     // 3. Trigger auto-sync across remaining mappings
     await this.syncInventory(auth, marketplace);
