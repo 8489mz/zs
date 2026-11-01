@@ -4039,6 +4039,7 @@ export class AccountingPostingService {
         'wo.total_cost',
         'wo.quantity_to_produce',
         'bom.overhead_cost',
+        'bom.quantity as bom_quantity',
         'wo.created_at',
         'wo.completed_at',
         'wo.created_by',
@@ -4058,17 +4059,66 @@ export class AccountingPostingService {
       .select(sql<number>`coalesce(sum(c.line_total), 0)`.as('amount'))
       .where('w.tenant_id', '=', scope.tenantId).where('w.id', '=', workOrderId).executeTakeFirst();
     const rmCost = toBookMoney(consumed?.amount || 0);
-    const overheadCost = toBookMoney(fgCost - rmCost);
-    if (overheadCost < 0) throw new AppError('Manufacturing material costs exceed production value', 'MANUFACTURING_COST_MISMATCH', 409);
+
+    // INV-MANUFACTURING-COST-DERIVATION: overhead is NEVER a residual.
+    // The old derivation (stored total minus raw materials) debited
+    // the full stored total to finished goods -- overstating the Dr
+    // 1140 leg above the finished-goods stock movement by exactly
+    // the by-product value -- left the by-product stock increase
+    // with no journal leg at all, and laundered any drift in
+    // wo.total_cost into "overhead". Every component is now re-derived
+    // from its stored
+    // rows: operations from manufacturing_wo_operations, scaled BOM
+    // overhead from the same formula completeWorkOrder uses, the
+    // finished-goods value from its stamped stock movement, and the
+    // by-product value from its stamped movements. The stored total
+    // is only a cross-check: any difference beyond one minor unit
+    // (the codebase's own maxAllowedDifference) is data drift and
+    // fails closed instead of posting.
+    const operations = await queryable.selectFrom('manufacturing_wo_operations')
+      .select(sql<number>`coalesce(sum(total_cost), 0)`.as('amount'))
+      .where('work_order_id', '=', workOrderId)
+      .where('tenant_id', '=', scope.tenantId)
+      .executeTakeFirst();
+    const opsCost = toBookMoney(operations?.amount || 0);
+    const bomQuantity = Number(wo.bom_quantity || 1);
+    const scaledOverheadCost = roundMoney(
+      Number(wo.overhead_cost || 0) * (Number(wo.quantity_to_produce || 0) / bomQuantity),
+      bookDigits,
+    );
+    const overheadCost = toBookMoney(opsCost + scaledOverheadCost);
+    const fgMovement = await queryable.selectFrom('stock_movements')
+      .select('total_cost')
+      .where('reference_type', '=', 'manufacturing_work_order')
+      .where('reference_id', '=', workOrderId)
+      .where('movement_type', '=', 'manufacturing_production')
+      .where('tenant_id', '=', scope.tenantId)
+      .executeTakeFirst();
+    const finishedValue = toBookMoney(fgMovement?.total_cost || 0);
+    const byProducts = await queryable.selectFrom('stock_movements')
+      .select(sql<number>`coalesce(sum(total_cost), 0)`.as('amount'))
+      .where('reference_type', '=', 'manufacturing_work_order')
+      .where('reference_id', '=', workOrderId)
+      .where('movement_type', '=', 'manufacturing_byproduct')
+      .where('tenant_id', '=', scope.tenantId)
+      .executeTakeFirst();
+    const byProductValue = toBookMoney(byProducts?.amount || 0);
+    const expectedTotal = toBookMoney(rmCost + opsCost + scaledOverheadCost);
+    const difference = roundMoney(expectedTotal - finishedValue - byProductValue, bookDigits);
+    if (rmCost < 0 || opsCost < 0 || scaledOverheadCost < 0 || byProductValue < 0 || finishedValue < 0) {
+      throw new AppError('Manufacturing cost components are inconsistent', 'MANUFACTURING_COST_MISMATCH', 409);
+    }
+    if (Math.abs(difference) > this.maxAllowedDifference(bookDigits)) {
+      throw new AppError('Manufacturing stored total does not reconcile with its cost components', 'MANUFACTURING_COST_MISMATCH', 409);
+    }
 
     // INV-MANUFACTURING-ZERO-COST: a genuinely zero-cost work order posts
     // nothing and does not throw (same precedent as
     // postManufacturingUnbuildOrder). The mismatch guard above runs
-    // first, so this is reachable only when rmCost <= fgCost <= 0, in
+    // first, so this is reachable only when every component is zero, in
     // practice fgCost == rmCost == 0. Returning before the account
     // resolution also means a zero-cost order needs no 5400 account and
-    // never hits the empty-journal guard. The residual overhead
-    // derivation below is deliberately unchanged.
+    // never hits the empty-journal guard.
     if (fgCost <= 0) return { posted: false, journalEntryId: null };
 
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
@@ -4084,21 +4134,49 @@ export class AccountingPostingService {
       if (!overheadAccountId) throw new AppError('Manufacturing Overhead account 5400 not found', 'ACCOUNT_NOT_FOUND', 400);
     }
 
+    // The variance account is resolved only when a rounding-scale
+    // difference actually exists (the unbuild poster's convention);
+    // it auto-creates as a known system account when absent.
+    const varianceAccountId = difference !== 0
+      ? await this.resolveSystemAccountByCode(queryable, scope.tenantId, '5190')
+      : 0;
+
     const lines: JournalLineDraft[] = [];
     const branchId = null;
     const locationId = wo.destination_location_id ? Number(wo.destination_location_id) : null;
 
-    // 1. Debit FG (Inventory)
-    this.addLine(lines, { accountId: inventoryAccountId, description: `منتج تام إضافي - أمر #${workOrderId}`, debit: fgCost, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
+    // 1. Debit FG (Inventory) at finishedValue -- exactly the value
+    // stamped on the finished-goods stock movement.
+    this.addLine(lines, { accountId: inventoryAccountId, description: `منتج تام إضافي - أمر #${workOrderId}`, debit: finishedValue, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
 
-    // 2. Credit RM (Inventory)
+    // 2. Debit by-products (Inventory) as their OWN leg. Both legs
+    // debit 1140 (both are inventory increases) but stay separate
+    // lines: the by-product value is no longer buried in the 5400
+    // residual, and the 5400 credit below is only operations +
+    // scaled overhead.
+    if (byProductValue > 0) {
+      this.addLine(lines, { accountId: inventoryAccountId, description: `منتج ثانوي ناتج عن التصنيع - أمر #${workOrderId}`, debit: byProductValue, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
+    }
+
+    // 3. Credit RM (Inventory)
     if (rmCost > 0) {
       this.addLine(lines, { accountId: inventoryAccountId, description: `خامات مستهلكة - أمر #${workOrderId}`, debit: 0, credit: rmCost, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
     }
 
-    // 3. Credit Overhead
+    // 4. Credit operations + scaled overhead (5400 only -- never the
+    // by-product value, never a residual).
     if (overheadCost > 0) {
       this.addLine(lines, { accountId: overheadAccountId, description: `مصاريف صناعية محملة - أمر #${workOrderId}`, debit: 0, credit: overheadCost, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
+    }
+
+    // 5. Rounding-scale variance to 5190 (unbuild convention: debit
+    // when the components exceed the recorded output, credit when
+    // the recorded output exceeds the components). Anything larger
+    // already threw above.
+    if (difference > 0) {
+      this.addLine(lines, { accountId: varianceAccountId, description: `فرق تصنيع - أمر #${workOrderId}`, debit: difference, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
+    } else if (difference < 0) {
+      this.addLine(lines, { accountId: varianceAccountId, description: `فرق تصنيع - أمر #${workOrderId}`, debit: 0, credit: -difference, partnerType: 'none', partnerId: null, branchId, locationId }, bookDigits);
     }
 
     try {

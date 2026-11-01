@@ -16,16 +16,23 @@ WHAT THIS PINS, driving the REAL completeWorkOrder and the REAL poster
 on PGlite:
 1. A zero-cost work order completes, moves stock, and posts NO journal.
 2. A positive-cost work order still posts Dr 1140 / Cr 1140 / Cr 5400
-   exactly as before (the residual overhead derivation is unchanged).
+   with the same amounts as before: the order has no operations and
+   no by-products and zero BOM overhead, so the old residual
+   (stored total minus materials) and the new explicit derivation
+   (operations + scaled overhead) both equal zero. The derivation
+   itself is now explicit per INV-MANUFACTURING-COST-DERIVATION; only
+   this case's numbers are unchanged.
 3. A cost mismatch (consumption sum above the stored order total) still
-   throws MANUFACTURING_COST_MISMATCH when the poster is driven directly.
+   throws MANUFACTURING_COST_MISMATCH when the poster is driven directly
+   (now via the component reconciliation, same code and status).
 
 Deliberately NOT driven here: the restaurant auto-produce caller guard
 in sales-write.service.ts -- driving a full sale through the PGlite
 harness is out of scope for this spec; the one-line guard
 (totalCost > 0) is verified by inspection and shares the poster's
-return contract. The overhead-as-residual re-derivation is explicitly
-deferred and is pinned unchanged by case 2.
+return contract. The explicit cost derivation (operations, scaled
+overhead, by-product leg, 5190 variance) is pinned by
+manufacturing-cost-derivation.spec.ts.
 */
 
 import 'reflect-metadata';
