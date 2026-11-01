@@ -158,12 +158,14 @@ export interface PublicPricingFloor {
 
 export interface PublicPricing {
   catalogVersion: string;
-  product: { id: string; name: string; pos: boolean };
+  product: { id: string; name: string; pos: boolean; sellOffline: boolean };
   country: { code: string; currency: string; requiresWrittenDisclosure: boolean };
   /** المقاولات والشحن تُعرض بالسنوي فقط (PRICE-S4) */
   quoteAnnuallyOnly: boolean;
   annualEqualsMonths: number;
   trialDays: number;
+  /** الأسعار المعروضة غير شاملة ضريبة القيمة المضافة (من مصدر الكتالوج) */
+  vatIncluded: boolean;
   levels: PublicPricingLevel[];
   floors: PublicPricingFloor[];
   addons: {

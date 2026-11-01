@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Logger, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Header, Logger, NotFoundException, Post, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { PublicTrialSignupDto } from './dto/public-trial-signup.dto';
 import { PublicTrialSignupService } from './public-trial-signup.service';
@@ -76,14 +76,24 @@ export class PublicController {
    *
    * - `?product=pharmacy&country=EG` → عرض واحد محلول (نفس شكل شاشة الاشتراك).
    * - من غير باراميترات → الكتالوج العام كامل (كل منتج × كل بلد منشور) لبناء صفحات الموقع.
-   * لا حقل داخلي يخرج من هنا أبداً — `PricingCatalogService.resolveForTenant` هو نفسه
-   * الحارس (F40).
+   * لا حقل داخلي يخرج من هنا أبداً — `PricingCatalogService.resolvePublicOffer`
+   * هو الحارس للعرض الواحد (يرفض المجهول/المحظور بـ 404)، و`resolveForTenant`
+   * للكتالوج الكامل (F40).
    */
   @Get('pricing-catalog')
   @Header('Cache-Control', 'public, max-age=300')
   pricingCatalog(@Query('product') product?: string, @Query('country') country?: string) {
     if (product && country) {
-      return this.pricing.resolveForTenant({ industryPresetId: product, countryCode: country });
+      // المسار الصارم فقط: منتج أو بلد مجهول/محظور يرد 404 بدل عرض أسعار
+      // منتج أو بلد آخر بصمت. مسار المنشأة الداخلي يحتفظ بسقوطه الافتراضي.
+      const offer = this.pricing.resolvePublicOffer({ industryPresetId: product, countryCode: country });
+      if (!offer) {
+        throw new NotFoundException({
+          code: 'pricing_offer_not_found',
+          message: 'No published pricing for the requested product and country.',
+        });
+      }
+      return offer;
     }
 
     const products = this.pricing.listProducts();

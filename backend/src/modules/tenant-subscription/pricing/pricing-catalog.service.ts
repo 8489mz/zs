@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PRICING_CATALOG } from './pricing-catalog.generated';
 import type {
   CatalogFeatureGroup,
+  CatalogProduct,
   PublicPricing,
   PublicPricingFloor,
   PublicPricingLevel,
@@ -46,10 +47,11 @@ export class PricingCatalogService {
   }
 
   /**
-   * يحل المنتج من `IndustryPresetId` المسجَّل في المنشأة.
-   * لا يرمي: نشاط مجهول يسقط على التجزئة العامة بدل أن يُعطِّل شاشة الفوترة.
+   * يجد المنتج المطابق فقط (مع تطبيع الأسماء البديلة) — بلا أي سقوط افتراضي.
+   * يرجع `undefined` عند منتج مجهول؛ المستدعي العام يرفضه، ومسار المنشأة
+   * يسقطه على الافتراضي عبر `resolveProduct` (سلوك شاشة الفوترة المحفوظ).
    */
-  private resolveProduct(industryPresetId?: string | null) {
+  private findProduct(industryPresetId?: string | null): CatalogProduct | undefined {
     let wanted = String(industryPresetId || '').trim().toLowerCase();
     if (
       wanted === 'maritime_freight' ||
@@ -96,8 +98,17 @@ export class PricingCatalogService {
       wanted = 'warehousing';
     }
 
+    return this.catalog.products.find((p) => p.presetId.toLowerCase() === wanted);
+  }
+
+  /**
+   * يحل المنتج من `IndustryPresetId` المسجَّل في المنشأة.
+   * لا يرمي: نشاط مجهول يسقط على التجزئة العامة بدل أن يُعطِّل شاشة الفوترة.
+   * (مسار المنشأة الداخلي فقط — المسار العام يستخدم `resolvePublicOffer` الصارم.)
+   */
+  private resolveProduct(industryPresetId?: string | null): CatalogProduct {
     return (
-      this.catalog.products.find((p) => p.presetId.toLowerCase() === wanted) ??
+      this.findProduct(industryPresetId) ??
       this.catalog.products.find((p) => p.presetId === PricingCatalogService.FALLBACK_PRESET) ??
       this.catalog.products[0]
     );
@@ -123,8 +134,29 @@ export class PricingCatalogService {
   }
 
   /**
+   * الحل الصارم للمسار العام فقط: منتج مجهول أو بلد مجهول أو محظور يرجع
+   * `null` (المتحكم يرد 404) بدل عرض أسعار منتج أو بلد آخر بصمت.
+   */
+  resolvePublicOffer(input: {
+    industryPresetId?: string | null;
+    countryCode?: string | null;
+  }): PublicPricing | null {
+    const product = this.findProduct(input.industryPresetId);
+    if (!product) {
+      return null;
+    }
+    const wanted = String(input.countryCode || '').trim().toUpperCase();
+    const entry = this.catalog.countries[wanted];
+    if (!entry || entry.status === 'blocked') {
+      return null;
+    }
+    return this.buildPublicPricing(product, wanted);
+  }
+
+  /**
    * الشكل العام لشاشة الاشتراك: مستويات نطاق المنشأة الثلاثة بأسعار بلدها،
    * وميزات كل مستوى، والطوابق المفردة، والإضافات.
+   * سلوك السقوط الافتراضي محفوظ هنا عمداً (شاشة الفوترة لا تتعطل بنشاط مجهول).
    */
   resolveForTenant(input: {
     industryPresetId?: string | null;
@@ -132,6 +164,10 @@ export class PricingCatalogService {
   }): PublicPricing {
     const product = this.resolveProduct(input.industryPresetId);
     const { code: countryCode } = this.resolveCountry(input.countryCode);
+    return this.buildPublicPricing(product, countryCode);
+  }
+
+  private buildPublicPricing(product: CatalogProduct, countryCode: string): PublicPricing {
     const band = this.catalog.bands[product.band];
     const groupsByLevel = product.levelGroupsOverride ?? band.levelGroups;
 
@@ -177,7 +213,7 @@ export class PricingCatalogService {
 
     return {
       catalogVersion: this.catalog.version,
-      product: { id: product.id, name: product.publicName, pos: product.pos },
+      product: { id: product.id, name: product.publicName, pos: product.pos, sellOffline: product.sellOffline },
       country: {
         code: countryCode,
         currency: countryMeta?.currency || 'EGP',
@@ -186,6 +222,7 @@ export class PricingCatalogService {
       quoteAnnuallyOnly: !!band.quoteAnnuallyOnly,
       annualEqualsMonths: this.catalog.annualEqualsMonths,
       trialDays: this.catalog.trialDays,
+      vatIncluded: this.catalog.vatIncluded,
       levels,
       floors,
       addons: {
