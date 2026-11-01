@@ -46,7 +46,7 @@ import {
 } from './rep-target.engine';
 import { VanFleetService } from './services/van-fleet.service';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
-import { currencyMoneyDigits } from '../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { computeCashDrawerVariance } from '../cash-drawer/helpers/cash-drawer.helper';
 import { VanRequisitionsService } from './services/van-requisitions.service';
 import { DAY_KEY_TO_ARABIC, normalizeDayKey } from './van-routes-schedule.util';
@@ -2005,10 +2005,19 @@ export class VanSalesService {
     let createdSaleId = 0;
     let cashPaid = 0;
     let creditOwed = 0;
+    // Hoisted so the return echo below the transaction uses the same
+    // helper; assigned inside the callback, on the transaction handle.
+    let toBookMoney: (value: unknown) => number = (value) => Number(value ?? 0);
 
     await this.db.transaction().execute(async (trx) => {
       await assertBusinessAccountingDate(trx, tenantId, new Date(), true);
       const trxAny = trx as any;
+      // Book digits resolved once on THIS transaction handle (P2 pattern,
+      // fail closed on a base-currency/rate mismatch, P0-1/P0-2/P0-3).
+      // Every money derivation below rounds once with this helper; the
+      // posting boundary re-rounds idempotently from the stored values.
+      const bookDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
+      toBookMoney = (value: unknown): number => roundMoney(Number(value ?? 0), bookDigits);
       const saleItemRecords: any[] = [];
       // INV-VAN-FEFO-BATCHES: batch allocations per sale item, in the same
       // order as saleItemRecords (one entry per loop iteration).
@@ -2196,7 +2205,10 @@ export class VanSalesService {
           await this.deductVanSalePharmacyBatches(trx, pid, baseQty, { tenantId, accountId }, vanLocId),
         );
 
-        let systemAuthorizedPrice = Number((defaultBasePrice * multiplier).toFixed(2));
+        // The undiscounted unit price at book digits: the single baseline
+        // for offer savings and for the original-price fallback below.
+        const baseUnitPrice = toBookMoney(defaultBasePrice * multiplier);
+        let systemAuthorizedPrice = baseUnitPrice;
         let pricingTierType: 'cash' | 'credit' | 'offer' | 'bonus' = isBonus ? 'bonus' : (isCreditSale ? 'credit' : 'cash');
         let unitOfferSavings = 0;
 
@@ -2212,27 +2224,27 @@ export class VanSalesService {
           if (matchingOffer) {
             const offerVal = Number(matchingOffer.value || 0);
             if (matchingOffer.offer_type === 'percent' && offerVal > 0) {
-              const discountedBase = Math.max(0, Number((defaultBasePrice * (1 - offerVal / 100)).toFixed(2)));
-              systemAuthorizedPrice = Number((discountedBase * multiplier).toFixed(2));
+              const discountedBase = Math.max(0, toBookMoney(defaultBasePrice * (1 - offerVal / 100)));
+              systemAuthorizedPrice = toBookMoney(discountedBase * multiplier);
               pricingTierType = 'offer';
-              unitOfferSavings = Math.max(0, Number(((defaultBasePrice * multiplier) - systemAuthorizedPrice).toFixed(2)));
+              unitOfferSavings = Math.max(0, toBookMoney(baseUnitPrice - systemAuthorizedPrice));
             } else if (matchingOffer.offer_type === 'fixed' && offerVal > 0) {
-              const discountedBase = Math.max(0, Number((defaultBasePrice - offerVal).toFixed(2)));
-              systemAuthorizedPrice = Number((discountedBase * multiplier).toFixed(2));
+              const discountedBase = Math.max(0, toBookMoney(defaultBasePrice - offerVal));
+              systemAuthorizedPrice = toBookMoney(discountedBase * multiplier);
               pricingTierType = 'offer';
-              unitOfferSavings = Math.max(0, Number(((defaultBasePrice * multiplier) - systemAuthorizedPrice).toFixed(2)));
+              unitOfferSavings = Math.max(0, toBookMoney(baseUnitPrice - systemAuthorizedPrice));
             } else if (matchingOffer.offer_type === 'price' && offerVal > 0) {
-              systemAuthorizedPrice = Number((offerVal * multiplier).toFixed(2));
+              systemAuthorizedPrice = toBookMoney(offerVal * multiplier);
               pricingTierType = 'offer';
-              unitOfferSavings = Math.max(0, Number(((defaultBasePrice * multiplier) - systemAuthorizedPrice).toFixed(2)));
+              unitOfferSavings = Math.max(0, toBookMoney(baseUnitPrice - systemAuthorizedPrice));
             } else if (matchingOffer.offer_type === 'bundle' && offerVal > 0) {
               const minQ = Math.max(1, Number(matchingOffer.min_qty || 1));
               const bundles = Math.floor(inputQty / minQ);
               const rem = inputQty % minQ;
               const bundleTotal = (bundles * offerVal) + (rem * defaultBasePrice);
-              systemAuthorizedPrice = Number(((bundleTotal / inputQty) * multiplier).toFixed(2));
+              systemAuthorizedPrice = toBookMoney((bundleTotal / inputQty) * multiplier);
               pricingTierType = 'offer';
-              unitOfferSavings = Math.max(0, Number(((defaultBasePrice * multiplier) - systemAuthorizedPrice).toFixed(2)));
+              unitOfferSavings = Math.max(0, toBookMoney(baseUnitPrice - systemAuthorizedPrice));
             } else if (matchingOffer.offer_type === 'bogo') {
               const buyQ = Math.max(1, Number(matchingOffer.bogo_buy_qty || 1));
               const getQ = Math.max(1, Number(matchingOffer.bogo_get_qty || 1));
@@ -2244,9 +2256,9 @@ export class VanSalesService {
                 const freeUnits = (fullCycles * getQ) + Math.max(0, rem - buyQ);
                 const discAmt = freeUnits * defaultBasePrice * (discPct / 100);
                 const netTot = Math.max(0, (inputQty * defaultBasePrice) - discAmt);
-                systemAuthorizedPrice = Number(((netTot / inputQty) * multiplier).toFixed(2));
+                systemAuthorizedPrice = toBookMoney((netTot / inputQty) * multiplier);
                 pricingTierType = 'offer';
-                unitOfferSavings = Math.max(0, Number(((defaultBasePrice * multiplier) - systemAuthorizedPrice).toFixed(2)));
+                unitOfferSavings = Math.max(0, toBookMoney(baseUnitPrice - systemAuthorizedPrice));
               }
             }
           }
@@ -2256,7 +2268,12 @@ export class VanSalesService {
 
         // Security Invariant: Price Integrity Guard against Client Tampering
         if (!isBonus && item.unitPrice != null) {
-          const clientPrice = Number(Number(item.unitPrice).toFixed(2));
+          // The client price is rounded at book digits (a 3dp client price
+          // must survive); the 0.05 band itself stays ABSOLUTE: it is a
+          // fraud-policy allowance for human price deviation, not a
+          // rounding artifact, so it does not shrink to one minor unit
+          // at 3dp (see the invariant note; the return guards share it).
+          const clientPrice = toBookMoney(item.unitPrice);
           if (Math.abs(clientPrice - systemAuthorizedPrice) <= 0.05) {
             unitPrice = clientPrice;
           } else if (clientPrice < systemAuthorizedPrice - 0.05) {
@@ -2290,10 +2307,10 @@ export class VanSalesService {
         }
 
         const originalPrice = (item as any).originalPrice
-          ? Number((item as any).originalPrice)
-          : (isBonus ? defaultBasePrice * multiplier : Math.max(unitPrice, defaultBasePrice * multiplier));
-        const lineTotal = Number((unitPrice * inputQty).toFixed(2));
-        const lineSubtotal = Number((originalPrice * inputQty).toFixed(2));
+          ? toBookMoney((item as any).originalPrice)
+          : (isBonus ? baseUnitPrice : Math.max(unitPrice, baseUnitPrice));
+        const lineTotal = toBookMoney(unitPrice * inputQty);
+        const lineSubtotal = toBookMoney(originalPrice * inputQty);
         totalSale += lineTotal;
         subtotalSale += lineSubtotal;
 
@@ -2315,7 +2332,7 @@ export class VanSalesService {
       }
 
       if (subtotalSale < totalSale) subtotalSale = totalSale;
-      discountSale = Number(Math.max(0, subtotalSale - totalSale).toFixed(2));
+      discountSale = toBookMoney(Math.max(0, subtotalSale - totalSale));
 
       const systemAuth = await this.resolveSystemAuthContext(tenantId, accountId);
       const createdByUserId = systemAuth.userId > 0 ? systemAuth.userId : null;
@@ -2330,10 +2347,13 @@ export class VanSalesService {
       creditOwed = 0;
 
       if (isCash) {
-        const cashDiscount = Math.max(0, Number(payload.cashDiscountAmount || 0));
+        // The cash discount is rounded once at book digits, before it
+        // touches the totals (the old code took it raw and re-rounded
+        // the result at 2dp, so a 3dp discount never survived intact).
+        const cashDiscount = Math.max(0, toBookMoney(payload.cashDiscountAmount || 0));
         if (cashDiscount > 0 && cashDiscount < totalSale) {
-          totalSale = Number((totalSale - cashDiscount).toFixed(2));
-          discountSale = Number((discountSale + cashDiscount).toFixed(2));
+          totalSale = toBookMoney(totalSale - cashDiscount);
+          discountSale = toBookMoney(discountSale + cashDiscount);
         }
         cashPaid = totalSale;
         creditOwed = 0;
@@ -2345,8 +2365,8 @@ export class VanSalesService {
         creditOwed = 0;
       } else if (isSplit) {
         const rawPaid = Number(payload.paidAmount || 0);
-        cashPaid = Math.max(0, Math.min(totalSale, Number(rawPaid.toFixed(2))));
-        creditOwed = Math.max(0, Number((totalSale - cashPaid).toFixed(2)));
+        cashPaid = Math.max(0, Math.min(totalSale, toBookMoney(rawPaid)));
+        creditOwed = Math.max(0, toBookMoney(totalSale - cashPaid));
       }
 
       // Enforce customer credit limit and credit block in the field
@@ -2824,9 +2844,11 @@ export class VanSalesService {
       ok: true,
       saleId: createdSaleId,
       docNo,
-      total: Number(totalSale.toFixed(2)),
-      subtotal: Number(subtotalSale.toFixed(2)),
-      discount: Number(discountSale.toFixed(2)),
+      // Echo the stored book-digits values exactly: re-rounding the
+      // return at 2dp would report 100.13 for a stored 100.125 sale.
+      total: toBookMoney(totalSale),
+      subtotal: toBookMoney(subtotalSale),
+      discount: toBookMoney(discountSale),
       paymentMethod: payload.paymentMethod,
       customerName,
       itemsCount: payload.items.length,
