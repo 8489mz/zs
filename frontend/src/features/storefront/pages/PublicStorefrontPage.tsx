@@ -54,26 +54,30 @@ export function PublicStorefrontPage() {
   }, [location.pathname, cleanSlug, hostSlug]);
   const storeHomePath = storeBasePath || '/';
 
-  /** فتح منتج = استجابة فورية 0ms + مزامنة الرابط للتاريخ والمشاركة. */
+  /** فتح منتج = استجابة فورية 0ms + مزامنة الرابط للتاريخ والمشاركة بدون إعادة تركيب الصفحة. */
   const openProduct = useCallback(
     (product: StorefrontProduct) => {
       setQuickViewProduct(product);
-      navigate(`${storeBasePath}/p/${product.id}`);
+      const targetUrl = `${storeBasePath}/p/${product.id}`;
+      if (window.location.pathname !== targetUrl) {
+        window.history.pushState({ productId: product.id }, '', targetUrl);
+      }
     },
-    [navigate, storeBasePath],
+    [storeBasePath],
   );
 
-  /** الإغلاق يرجع خطوة في التاريخ حتى يعمل زر الرجوع طبيعياً. */
+  /** الإغلاق يرجع خطوة في التاريخ حتى يعمل زر الرجوع طبيعياً بدون إعادة تركيب الصفحة. */
   const closeProduct = useCallback(() => {
     setQuickViewProduct(null);
-    if (productId) {
-      if (paramCategoryId) {
-        navigate(`${storeBasePath}/c/${paramCategoryId}`, { replace: false });
+    const targetUrl = paramCategoryId ? `${storeBasePath}/c/${paramCategoryId}` : storeHomePath;
+    if (window.location.pathname !== targetUrl) {
+      if (window.history.state && window.history.state.productId) {
+        window.history.back();
       } else {
-        navigate(storeHomePath, { replace: false });
+        window.history.replaceState(null, '', targetUrl);
       }
     }
-  }, [navigate, productId, paramCategoryId, storeBasePath, storeHomePath]);
+  }, [paramCategoryId, storeBasePath, storeHomePath]);
 
   const {
     infoQuery,
@@ -391,15 +395,33 @@ export function PublicStorefrontPage() {
    * ويغلقه الرجوع للجذر — فيعمل زر الرجوع في المتصفح كما يتوقع المستخدم.
    * البحث في الكتالوج الكامل لا في المفلتر، وإلا لن يُفتح منتج خارج الفلتر النشط.
    */
+  /*
+   * مزامنة حالة زر الرجوع بالمتصفح (popstate) لإغلاق أو فتح المنتج بسلاسة دون إعادة تحميل الصفحة.
+   */
   useEffect(() => {
-    if (!productId) {
-      setQuickViewProduct(null);
-      return;
-    }
+    const handlePopState = () => {
+      const match = window.location.pathname.match(/\/p\/([^/]+)/);
+      if (match) {
+        const pId = match[1];
+        const products = catalogQuery.data?.products as StorefrontProduct[] | undefined;
+        const found = products?.find((p) => String(p.id) === String(pId));
+        setQuickViewProduct(found || null);
+      } else {
+        setQuickViewProduct(null);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [catalogQuery.data?.products]);
+
+  useEffect(() => {
+    if (!productId) return;
     const products = catalogQuery.data?.products as StorefrontProduct[] | undefined;
     if (!products) return;
     const found = products.find((p) => String(p.id) === String(productId));
-    setQuickViewProduct(found || null);
+    if (found) {
+      setQuickViewProduct(found);
+    }
   }, [productId, catalogQuery.data?.products]);
 
   if (catalogQuery.isLoading || infoQuery.isLoading) {
