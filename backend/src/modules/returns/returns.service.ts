@@ -1,4 +1,4 @@
-import { valueStockReceipt } from '../accounting/inventory-valuation';
+import { revalueStockReturn, valueStockReceipt } from '../accounting/inventory-valuation';
 import { exchangeStoreCreditAmount, hasUnpaidExchangeBalance } from './engines/exchange-store-credit.engine';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney as roundBookMoney } from '../accounting/engines/money-minor-units.engine';
@@ -1082,6 +1082,19 @@ export class ReturnsService {
         pricesIncludeTax: (purchase as any).prices_include_tax,
       });
       await trx.insertInto('stock_movements').values({ product_id: requestItem.productId, movement_type: 'purchase_return', qty: -preparedLine.stockDelta, before_qty: stockChange.scopeBefore, after_qty: stockChange.scopeAfter, unit_cost: originalCost.perBaseUnit, total_cost: roundBookMoney(preparedLine.stockDelta * originalCost.perBaseUnit, moneyDigits), reason: 'purchase_return', note: 'purchase return PUR-' + String(purchase.id), reference_type: 'purchase_return', reference_id: Number(payload.invoiceId), branch_id: purchase.branch_id, location_id: itemLocationId, created_by: auth.userId, ...this.tenantFields(auth) }).execute();
+      // INV-PURCHASE-RETURN-WAC-RECOMPUTE: the return leaves at the
+      // ORIGINAL cost, so re-blend the remaining pool at that cost in
+      // the SAME transaction. Without this, the GL inventory leg
+      // (original cost) and the physical pool (qty * cost_price)
+      // diverge by the whole WAC drift. The subtracted value is the
+      // line's GL inventory credit at book digits (sold qty x original
+      // per-sold-unit cost), exactly what postPurchaseReturn sums from
+      // return_items — not the stock movement's per-base-unit total,
+      // which can differ by rounding dust when a unit multiplier
+      // applies. Never in postPurchaseReturn: recovery re-posts
+      // journals for already-created documents and must never
+      // reprice stock twice.
+      await revalueStockReturn(trx, scope.tenantId, requestItem.productId, stockChange.globalAfter, preparedLine.stockDelta, roundBookMoney(preparedLine.qty * originalCost.perSoldUnit, moneyDigits));
       normalizedLines.push({ productId: preparedLine.productId, productName: preparedLine.productName, qty: preparedLine.qty, unitTotal: preparedLine.unitTotal, lineTotal: preparedLine.lineTotal, allocatedTax: preparedLine.allocatedTax, costPrice: originalCost.perSoldUnit, purchaseItemId: purchaseLineId });
     }
 

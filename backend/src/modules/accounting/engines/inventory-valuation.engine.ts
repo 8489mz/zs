@@ -91,3 +91,42 @@ export function weightedReceiptCost(beforeQty: number, beforeCost: number, recei
   }
   return afterQty > 0 ? Number((receivedValue / receivedQty).toFixed(6)) : Number(beforeCost.toFixed(6));
 }
+
+/**
+ * Weighted-average return cost: the mirror of weightedReceiptCost for a
+ * stock REMOVAL at a known value (INV-PURCHASE-RETURN-WAC-RECOMPUTE).
+ * A purchase return leaves the pool at the ORIGINAL purchase cost, not
+ * the current WAC (INV-PURCHASE-RETURN-ORIGINAL-COST), so the remaining
+ * pool must be re-blended: (beforeQty * beforeCost - returnedValue) /
+ * (beforeQty - returnedQty), rounded once to the same 6dp the receipt
+ * blend uses. Without this the GL inventory leg (original cost) and the
+ * physical pool (qty * cost_price) diverge by the whole WAC drift and
+ * reconciliation fails. This is the same blend identity as the receipt
+ * side, not a second formula: it lives in this canonical engine file
+ * and shares the rounding and degenerate policy.
+ *
+ * Same degenerate policy as the receipt blend, because a single-scalar
+ * WAC cannot represent these states either:
+ * - the return exactly empties the pool (|afterQty| below 0.00001):
+ *   keep beforeCost. The stored cost is irrelevant to future blends
+ *   (0 * cost == 0) and stays the last booked cost.
+ * - the algebraic result would be negative (the returned value exceeds
+ *   the pool value — the original cost was above the drifted WAC):
+ *   keep beforeCost. Never store a negative unit cost, and never
+ *   reprice the remaining pool UP to the returned cost: the return
+ *   must not mint unit cost the pool never held.
+ */
+export function weightedReturnCost(beforeQty: number, beforeCost: number, returnedQty: number, returnedValue: number): number {
+  if (![beforeQty, beforeCost, returnedQty, returnedValue].every(Number.isFinite) || beforeCost < 0 || returnedQty <= 0 || returnedValue < 0) {
+    throw new Error('Invalid inventory return valuation inputs');
+  }
+  const afterQty = beforeQty - returnedQty;
+  if (Math.abs(afterQty) < 0.00001) {
+    return Number(beforeCost.toFixed(6));
+  }
+  const algebraic = Number(((beforeQty * beforeCost - returnedValue) / afterQty).toFixed(6));
+  if (algebraic >= 0) {
+    return algebraic;
+  }
+  return Number(beforeCost.toFixed(6));
+}
