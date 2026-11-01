@@ -100,6 +100,18 @@ export const StorefrontPredictiveSearch = React.memo(function StorefrontPredicti
         .sf-mobile-search-sliders {
           display: none;
         }
+        .storefront-search-input,
+        .storefront-search-input:focus,
+        .storefront-search-input:focus-visible,
+        .storefront-search-input:active {
+          border: none !important;
+          outline: none !important;
+          box-shadow: none !important;
+          background: transparent !important;
+          min-height: 0 !important;
+          height: auto !important;
+          border-radius: 0 !important;
+        }
         @media (min-width: 769px) {
           .storefront-search-input:not(:focus)::placeholder {
             opacity: 0;
@@ -206,6 +218,8 @@ export const StorefrontPredictiveSearch = React.memo(function StorefrontPredicti
             background: 'transparent',
             padding: '6px 2px',
             fontFamily: 'inherit',
+            boxShadow: 'none',
+            minHeight: 'unset',
             minWidth: 0,
           }}
         />

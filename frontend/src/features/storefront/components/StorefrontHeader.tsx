@@ -516,9 +516,16 @@ export const StorefrontHeader = React.memo(function StorefrontHeader({
               border-color: var(--storefront-primary-color, #2d68c4) !important;
               box-shadow: 0 0 0 3px rgba(45, 104, 196, 0.12) !important;
             }
-            .storefront-search-input {
+            .storefront-search-input,
+            .storefront-search-input:focus,
+            .storefront-search-input:focus-visible {
               font-size: 12.5px !important;
               padding: 5px 4px !important;
+              border: none !important;
+              outline: none !important;
+              box-shadow: none !important;
+              min-height: 0 !important;
+              border-radius: 0 !important;
             }
             .storefront-search-btn {
               display: none !important;
