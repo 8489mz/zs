@@ -47,6 +47,7 @@ import {
 import { VanFleetService } from './services/van-fleet.service';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../accounting/engines/money-minor-units.engine';
+import { computeCashDrawerVariance } from '../cash-drawer/helpers/cash-drawer.helper';
 import { VanRequisitionsService } from './services/van-requisitions.service';
 import { DAY_KEY_TO_ARABIC, normalizeDayKey } from './van-routes-schedule.util';
 import { VanReturnsService } from './services/van-returns.service';
@@ -3638,7 +3639,10 @@ export class VanSalesService {
 
     const expectedCash = Number(trip.cash_collected || 0);
     const countedCash = Number(payload.countedCash || 0);
-    const variance = Number((countedCash - expectedCash).toFixed(2));
+    // Cash variance at tenant book digits via the shared drawer helper
+    // (was hardcoded toFixed(2)).
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
+    const variance = computeCashDrawerVariance(countedCash, expectedCash, bookDigits);
 
     await this.anyDb
       .updateTable('van_sales_trips')

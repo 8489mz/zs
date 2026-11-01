@@ -63,9 +63,13 @@ spec is the enforcement.
 `backend/src/modules/**/engines/` holds 50+ engine files (inventory,
 manufacturing, maritime, HR, pharmacy, reports, returns, …). They are
 NOT unified by this map and must not be treated as canonical for each
-other: repeated calculations inside inventory/manufacturing engines,
-inline cash-variance logic in settlement paths, and frontend/backend
-duplication remain open work, sequenced after the money/trust gaps.
+other: repeated calculations inside inventory/manufacturing engines and
+frontend/backend duplication remain open work, sequenced after the
+money/trust gaps. The inline cash-variance logic in the
+trip-submission path is closed (INV-CASH-VARIANCE-UNIFICATION):
+submitTripSettlement calls computeCashDrawerVariance at tenant book
+digits; the settleTrip path deliberately still holds its inline form
+(P9-cancelled site, separate decision).
 Do not invent a new engine for a computation an existing engine in the
 same module already performs — extend the existing one.
 Exception: the manufacturing work-order poster derives its journal
