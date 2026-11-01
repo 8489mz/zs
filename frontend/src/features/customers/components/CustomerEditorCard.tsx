@@ -18,6 +18,7 @@ import { useCustomerProfile } from '@/features/customers/constants/customer-prof
 import { deliveryRepsApi, type DeliveryRep } from '@/shared/api/delivery-reps.api';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import { CustomerVisitDaysPicker } from './CustomerVisitDaysPicker';
+import { FreightPortalPinCard } from './FreightPortalPinCard';
 import {
   UsersIcon,
   MapPinIcon,
@@ -204,6 +205,7 @@ export function CustomerEditorCard({
   }
 
   return (
+    <>
     <form
       onSubmit={form.handleSubmit(onSubmit)}
       style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}
@@ -801,5 +803,7 @@ export function CustomerEditorCard({
         </div>
       </div>
     </form>
+    <FreightPortalPinCard customerId={String(customer.id)} />
+    </>
   );
 }
