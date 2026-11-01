@@ -178,62 +178,7 @@ export class ContractingService {
   async createProject(auth: AuthContext, dto: CreateProjectDto) {
     const { tenantId } = requireTenantScope(auth);
 
-    // 1. Generate code if not supplied
-    let projectCode = dto.code ? dto.code.trim().toUpperCase() : '';
-    if (!projectCode) {
-      const prefix = getDailyDocumentPrefix('PRJ');
-      let count = ((await this.db
-        .selectFrom('contracting_projects')
-        .select(sql<number>`count(*)::int`.as('count'))
-        .where('tenant_id', '=', tenantId)
-        .where('code', 'like', `${prefix}%`)
-        .executeTakeFirst())?.count || 0) + 1;
-      let candidate = `${prefix}${String(count).padStart(4, '0')}`;
-      while (await this.db.selectFrom('contracting_projects').select('id').where('tenant_id', '=', tenantId).where('code', '=', candidate).executeTakeFirst()) {
-        count++;
-        candidate = `${prefix}${String(count).padStart(4, '0')}`;
-      }
-      projectCode = candidate;
-    }
-
-    // 2. Resolve or create Cost Center automatically (dimension = 'project')
-    let costCenterId = dto.costCenterId ? Number(dto.costCenterId) : null;
-    if (!costCenterId) {
-      try {
-        const ccCode = `CC-${projectCode}`;
-        const existingCc = await (this.db as any)
-          .selectFrom('cost_centers')
-          .select('id')
-          .where('tenant_id', '=', tenantId)
-          .where('code', '=', ccCode)
-          .executeTakeFirst();
-
-        if (existingCc) {
-          costCenterId = Number(existingCc.id);
-        } else {
-          const ccName = `مشروع: ${dto.name.trim()}`;
-          const [insertedCc] = await (this.db as any)
-            .insertInto('cost_centers')
-            .values({
-              tenant_id: tenantId,
-              code: ccCode,
-              name: ccName,
-              dimension: 'project',
-              budget_amount: Number(dto.contractValue || 0),
-              is_active: true,
-            })
-            .returning(['id'])
-            .execute();
-          if (insertedCc) {
-            costCenterId = Number(insertedCc.id);
-          }
-        }
-      } catch (err) {
-        this.logger.warn(`Could not auto-create cost center for project ${projectCode}: ${err}`);
-      }
-    }
-
-    // 3. Resolve client name if clientId is provided
+    // 1. Resolve client name if clientId is provided (independent of the code).
     let clientName = dto.clientName || '';
     if (dto.clientId && !clientName) {
       const client = await (this.db as any)
@@ -245,43 +190,130 @@ export class ContractingService {
       if (client) clientName = client.name;
     }
 
-    const [created] = await this.db
-      .insertInto('contracting_projects')
-      .values({
-        tenant_id: tenantId,
-        code: projectCode,
-        name: dto.name.trim(),
-        client_id: dto.clientId ? Number(dto.clientId) : null,
-        client_name: clientName,
-        status: dto.status || 'planning',
-        contract_value: Number(dto.contractValue || 0),
-        revised_contract_value: Number(dto.contractValue || 0),
-        down_payment_amount: Number(dto.downPaymentAmount || 0),
-        down_payment_recovered: 0,
-        retention_percent: dto.retentionPercent !== undefined ? Number(dto.retentionPercent) : 5.0,
-        retention_total_held: 0,
-        retention_released: 0,
-        start_date: dto.startDate || null,
-        expected_end_date: dto.expectedEndDate || null,
-        actual_end_date: null,
-        site_location_id: dto.siteLocationId ? Number(dto.siteLocationId) : null,
-        cost_center_id: costCenterId,
-        project_manager: dto.projectManager || null,
-        location_address: dto.locationAddress || null,
-        consultant_name: dto.consultantName || null,
-        contract_ref: dto.contractRef || null,
-        contract_date: dto.contractDate || null,
-        loss_reason: dto.lossReason || null,
-        loss_notes: dto.lossNotes || null,
-        competitor_price: dto.competitorPrice !== undefined ? Number(dto.competitorPrice) : null,
-        revision_number: dto.revisionNumber !== undefined ? Number(dto.revisionNumber) : 0,
-        original_tender_id: dto.originalTenderId ? Number(dto.originalTenderId) : null,
-        submitted_at: dto.submittedAt ? new Date(dto.submittedAt) : (dto.status === 'submitted' ? new Date() : null),
-        awarded_at: dto.awardedAt ? new Date(dto.awardedAt) : (dto.status === 'active' ? new Date() : null),
-        notes: dto.notes || null,
-      } as any)
-      .returningAll()
-      .execute();
+    // 2. Resolve or create Cost Center automatically (dimension = 'project').
+    // The cost-center code embeds the FINAL project code, so for a
+    // generated code the cost center is resolved only after the
+    // project row exists and its id-derived code is known (see below).
+    const resolveCostCenter = async (projectCode: string): Promise<number | null> => {
+      let costCenterId = dto.costCenterId ? Number(dto.costCenterId) : null;
+      if (!costCenterId) {
+        try {
+          const ccCode = `CC-${projectCode}`;
+          const existingCc = await (this.db as any)
+            .selectFrom('cost_centers')
+            .select('id')
+            .where('tenant_id', '=', tenantId)
+            .where('code', '=', ccCode)
+            .executeTakeFirst();
+
+          if (existingCc) {
+            costCenterId = Number(existingCc.id);
+          } else {
+            const ccName = `مشروع: ${dto.name.trim()}`;
+            const [insertedCc] = await (this.db as any)
+              .insertInto('cost_centers')
+              .values({
+                tenant_id: tenantId,
+                code: ccCode,
+                name: ccName,
+                dimension: 'project',
+                budget_amount: Number(dto.contractValue || 0),
+                is_active: true,
+              })
+              .returning(['id'])
+              .execute();
+            if (insertedCc) {
+              costCenterId = Number(insertedCc.id);
+            }
+          }
+        } catch (err) {
+          this.logger.warn(`Could not auto-create cost center for project ${projectCode}: ${err}`);
+        }
+      }
+      return costCenterId;
+    };
+
+    const values: any = {
+      tenant_id: tenantId,
+      code: '',
+      name: dto.name.trim(),
+      client_id: dto.clientId ? Number(dto.clientId) : null,
+      client_name: clientName,
+      status: dto.status || 'planning',
+      contract_value: Number(dto.contractValue || 0),
+      revised_contract_value: Number(dto.contractValue || 0),
+      down_payment_amount: Number(dto.downPaymentAmount || 0),
+      down_payment_recovered: 0,
+      retention_percent: dto.retentionPercent !== undefined ? Number(dto.retentionPercent) : 5.0,
+      retention_total_held: 0,
+      retention_released: 0,
+      start_date: dto.startDate || null,
+      expected_end_date: dto.expectedEndDate || null,
+      actual_end_date: null,
+      site_location_id: dto.siteLocationId ? Number(dto.siteLocationId) : null,
+      cost_center_id: null,
+      project_manager: dto.projectManager || null,
+      location_address: dto.locationAddress || null,
+      consultant_name: dto.consultantName || null,
+      contract_ref: dto.contractRef || null,
+      contract_date: dto.contractDate || null,
+      loss_reason: dto.lossReason || null,
+      loss_notes: dto.lossNotes || null,
+      competitor_price: dto.competitorPrice !== undefined ? Number(dto.competitorPrice) : null,
+      revision_number: dto.revisionNumber !== undefined ? Number(dto.revisionNumber) : 0,
+      original_tender_id: dto.originalTenderId ? Number(dto.originalTenderId) : null,
+      submitted_at: dto.submittedAt ? new Date(dto.submittedAt) : (dto.status === 'submitted' ? new Date() : null),
+      awarded_at: dto.awardedAt ? new Date(dto.awardedAt) : (dto.status === 'active' ? new Date() : null),
+      notes: dto.notes || null,
+    };
+
+    const suppliedCode = dto.code ? dto.code.trim().toUpperCase() : '';
+    if (suppliedCode) {
+      values.code = suppliedCode;
+      values.cost_center_id = await resolveCostCenter(suppliedCode);
+      const [created] = await this.db
+        .insertInto('contracting_projects')
+        .values(values)
+        .returningAll()
+        .execute();
+      return this.enrichProjectMetrics(tenantId, created);
+    }
+
+    // INV-CONTRACTING-ID-DERIVED-NUMBERS: no COUNT(*) numbering (the
+    // old count-then-retry loop still raced under concurrency and
+    // reused numbers after deletions). The row is inserted with a
+    // unique temp code, the final code is derived from the row id
+    // inside the same transaction (the DRG/MOM pattern), and only
+    // then is the cost center resolved against the final code.
+    const tempCode = `PRJ-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    values.code = tempCode;
+    const created = await this.db.transaction().execute(async (trx) => {
+      const inserted = await trx
+        .insertInto('contracting_projects')
+        .values(values)
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const finalCode = `${getDailyDocumentPrefix('PRJ')}${String(inserted.id).padStart(4, '0')}`;
+      const updated = await trx
+        .updateTable('contracting_projects')
+        .set({ code: finalCode, updated_at: new Date() })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(inserted.id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      return updated;
+    });
+
+    const costCenterId = await resolveCostCenter(created.code);
+    if (costCenterId) {
+      await this.db
+        .updateTable('contracting_projects')
+        .set({ cost_center_id: costCenterId, updated_at: new Date() })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', created.id)
+        .execute();
+      created.cost_center_id = costCenterId;
+    }
 
     return this.enrichProjectMetrics(tenantId, created);
   }
@@ -815,32 +847,40 @@ export class ContractingService {
 
   async createChangeOrder(auth: AuthContext, projectId: string, dto: CreateChangeOrderDto) {
     const { tenantId } = requireTenantScope(auth);
+    // INV-CONTRACTING-ID-DERIVED-NUMBERS: the number is derived from
+    // the row id inside one transaction (DRG/MOM pattern), never
+    // from a COUNT(*) that races and reuses numbers after deletions.
     const prefix = getDailyDocumentPrefix('CO');
-    const countRes = await this.db
-      .selectFrom('contracting_change_orders')
-      .select(sql<number>`count(*)::int`.as('count'))
-      .where('tenant_id', '=', tenantId)
-      .where('change_order_number', 'like', `${prefix}%`)
-      .executeTakeFirst();
-    const count = (countRes?.count || 0) + 1;
-    const coNum = `${prefix}${String(count).padStart(4, '0')}`;
-
-    const [co] = await this.db
-      .insertInto('contracting_change_orders')
-      .values({
-        tenant_id: tenantId,
-        project_id: projectId as any,
-        change_order_number: coNum,
-        title: dto.title.trim(),
-        reason: dto.reason || 'client_request',
-        impact_type: dto.impactType || 'cost_and_time',
-        cost_impact: Number(dto.costImpact || 0),
-        time_impact_days: Number(dto.timeImpactDays || 0),
-        status: 'draft',
-        notes: dto.notes || null,
-      })
-      .returningAll()
-      .execute();
+    const tempNumber = `CO-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    const co = await this.db.transaction().execute(async (trx) => {
+      const inserted = await trx
+        .insertInto('contracting_change_orders')
+        .values({
+          tenant_id: tenantId,
+          project_id: projectId as any,
+          change_order_number: tempNumber,
+          title: dto.title.trim(),
+          reason: dto.reason || 'client_request',
+          impact_type: dto.impactType || 'cost_and_time',
+          cost_impact: Number(dto.costImpact || 0),
+          time_impact_days: Number(dto.timeImpactDays || 0),
+          status: 'draft',
+          notes: dto.notes || null,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const updated = await trx
+        .updateTable('contracting_change_orders')
+        .set({
+          change_order_number: `${prefix}${String(inserted.id).padStart(4, '0')}`,
+          updated_at: new Date(),
+        })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(inserted.id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      return updated;
+    });
 
     return co;
   }
@@ -1989,58 +2029,77 @@ export class ContractingService {
 
   async createSubcontract(auth: AuthContext, projectId: string, dto: CreateSubcontractDto) {
     const { tenantId } = requireTenantScope(auth);
-    let contractNumber = dto.contractNumber ? dto.contractNumber.trim() : '';
-    if (!contractNumber) {
-      const prefix = getDailyDocumentPrefix('SC');
-      const countRes = await this.db
-        .selectFrom('contracting_subcontracts')
-        .select(sql<number>`count(*)::int`.as('count'))
-        .where('tenant_id', '=', tenantId)
-        .where('contract_number', 'like', `${prefix}%`)
-        .executeTakeFirst();
-      const count = (countRes?.count || 0) + 1;
-      contractNumber = `${prefix}${String(count).padStart(4, '0')}`;
-    }
+    // INV-CONTRACTING-ID-DERIVED-NUMBERS: a generated number is
+    // derived from the row id inside one transaction (DRG/MOM
+    // pattern), never from a COUNT(*) that races and reuses numbers
+    // after deletions; a caller-supplied number is kept verbatim.
+    const suppliedNumber = dto.contractNumber ? dto.contractNumber.trim() : '';
+    const prefix = getDailyDocumentPrefix('SC');
+    const tempNumber = `SC-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const totalAmount = Number(dto.totalAmount || 0);
     const advancePct = Number(dto.advancePct || 0);
     const advanceAmount = dto.advanceAmount !== undefined ? Number(dto.advanceAmount) : (totalAmount * advancePct) / 100;
 
-    const [sub] = await this.db
-      .insertInto('contracting_subcontracts')
-      .values({
-        tenant_id: tenantId,
-        project_id: projectId as any,
-        subcontractor_id: dto.subcontractorId,
-        contract_number: contractNumber,
-        contract_type: (dto.contractType || 'supply_and_apply') as any,
-        scope_of_work: dto.scopeOfWork.trim(),
-        total_amount: totalAmount,
-        retention_percent: dto.retentionPercent !== undefined ? Number(dto.retentionPercent) : 5.0,
-        advance_pct: advancePct,
-        advance_amount: advanceAmount,
-        advance_recovery_start_pct: dto.advanceRecoveryStartPct !== undefined ? Number(dto.advanceRecoveryStartPct) : 10.0,
-        advance_recovery_end_pct: dto.advanceRecoveryEndPct !== undefined ? Number(dto.advanceRecoveryEndPct) : 80.0,
-        retention_limit_pct: dto.retentionLimitPct !== undefined ? Number(dto.retentionLimitPct) : 5.0,
-        penalty_per_day: Number(dto.penaltyPerDay || 0),
-        ld_cap_pct: dto.ldCapPct !== undefined ? Number(dto.ldCapPct) : 10.0,
-        liability_cap_amount: dto.liabilityCapAmount !== undefined ? Number(dto.liabilityCapAmount) : null,
-        wht_rate: Number(dto.whtRate || 0),
-        social_insurance_pct: Number(dto.socialInsurancePct || 0),
-        payment_linkage_mode: (dto.paymentLinkageMode || 'independent') as any,
-        payment_terms_days: Number(dto.paymentTermsDays || 30),
-        tail_reserve_pct: Number(dto.tailReservePct || 10.0),
-        wastage_allowance_pct: Number(dto.wastageAllowancePct || 5.0),
-        mos_admissible_pct: Number(dto.mosAdmissiblePct || 0),
-        mos_cap_pct: Number(dto.mosCapPct || 15.0),
-        dlp_months: Number(dto.dlpMonths || 12),
-        start_date: dto.startDate || null,
-        end_date: dto.endDate || null,
-        status: 'active',
-        notes: dto.notes || null,
-      })
-      .returningAll()
-      .execute();
+    const values: any = {
+      tenant_id: tenantId,
+      project_id: projectId as any,
+      subcontractor_id: dto.subcontractorId,
+      contract_number: suppliedNumber || tempNumber,
+      contract_type: (dto.contractType || 'supply_and_apply') as any,
+      scope_of_work: dto.scopeOfWork.trim(),
+      total_amount: totalAmount,
+      retention_percent: dto.retentionPercent !== undefined ? Number(dto.retentionPercent) : 5.0,
+      advance_pct: advancePct,
+      advance_amount: advanceAmount,
+      advance_recovery_start_pct: dto.advanceRecoveryStartPct !== undefined ? Number(dto.advanceRecoveryStartPct) : 10.0,
+      advance_recovery_end_pct: dto.advanceRecoveryEndPct !== undefined ? Number(dto.advanceRecoveryEndPct) : 80.0,
+      retention_limit_pct: dto.retentionLimitPct !== undefined ? Number(dto.retentionLimitPct) : 5.0,
+      penalty_per_day: Number(dto.penaltyPerDay || 0),
+      ld_cap_pct: dto.ldCapPct !== undefined ? Number(dto.ldCapPct) : 10.0,
+      liability_cap_amount: dto.liabilityCapAmount !== undefined ? Number(dto.liabilityCapAmount) : null,
+      wht_rate: Number(dto.whtRate || 0),
+      social_insurance_pct: Number(dto.socialInsurancePct || 0),
+      payment_linkage_mode: (dto.paymentLinkageMode || 'independent') as any,
+      payment_terms_days: Number(dto.paymentTermsDays || 30),
+      tail_reserve_pct: Number(dto.tailReservePct || 10.0),
+      wastage_allowance_pct: Number(dto.wastageAllowancePct || 5.0),
+      mos_admissible_pct: Number(dto.mosAdmissiblePct || 0),
+      mos_cap_pct: Number(dto.mosCapPct || 15.0),
+      dlp_months: Number(dto.dlpMonths || 12),
+      start_date: dto.startDate || null,
+      end_date: dto.endDate || null,
+      status: 'active',
+      notes: dto.notes || null,
+    };
+
+    if (suppliedNumber) {
+      const [sub] = await this.db
+        .insertInto('contracting_subcontracts')
+        .values(values)
+        .returningAll()
+        .execute();
+      return sub;
+    }
+
+    const sub = await this.db.transaction().execute(async (trx) => {
+      const inserted = await trx
+        .insertInto('contracting_subcontracts')
+        .values(values)
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const updated = await trx
+        .updateTable('contracting_subcontracts')
+        .set({
+          contract_number: `${prefix}${String(inserted.id).padStart(4, '0')}`,
+          updated_at: new Date(),
+        })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(inserted.id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      return updated;
+    });
 
     return sub;
   }
@@ -2114,32 +2173,40 @@ export class ContractingService {
 
   async createRfi(auth: AuthContext, projectId: string, dto: CreateRfiDto) {
     const { tenantId } = requireTenantScope(auth);
+    // INV-CONTRACTING-ID-DERIVED-NUMBERS: the number is derived from
+    // the row id inside one transaction (DRG/MOM pattern), never
+    // from a COUNT(*) that races and reuses numbers after deletions.
     const prefix = getDailyDocumentPrefix('RFI');
-    const countRes = await this.db
-      .selectFrom('contracting_rfis')
-      .select(sql<number>`count(*)::int`.as('count'))
-      .where('tenant_id', '=', tenantId)
-      .where('rfi_number', 'like', `${prefix}%`)
-      .executeTakeFirst();
-    const count = (countRes?.count || 0) + 1;
-    const rfiNum = `${prefix}${String(count).padStart(4, '0')}`;
-
-    const [rfi] = await this.db
-      .insertInto('contracting_rfis')
-      .values({
-        tenant_id: tenantId,
-        project_id: projectId as any,
-        rfi_number: rfiNum,
-        subject: dto.subject.trim(),
-        question: dto.question.trim(),
-        assigned_to: dto.assignedTo || null,
-        status: 'open',
-        date_requested: new Date().toISOString().split('T')[0],
-        date_required: dto.dateRequired || null,
-        notes: dto.notes || null,
-      })
-      .returningAll()
-      .execute();
+    const tempNumber = `RFI-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    const rfi = await this.db.transaction().execute(async (trx) => {
+      const inserted = await trx
+        .insertInto('contracting_rfis')
+        .values({
+          tenant_id: tenantId,
+          project_id: projectId as any,
+          rfi_number: tempNumber,
+          subject: dto.subject.trim(),
+          question: dto.question.trim(),
+          assigned_to: dto.assignedTo || null,
+          status: 'open',
+          date_requested: new Date().toISOString().split('T')[0],
+          date_required: dto.dateRequired || null,
+          notes: dto.notes || null,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const updated = await trx
+        .updateTable('contracting_rfis')
+        .set({
+          rfi_number: `${prefix}${String(inserted.id).padStart(4, '0')}`,
+          updated_at: new Date(),
+        })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(inserted.id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      return updated;
+    });
 
     return rfi;
   }
@@ -2529,60 +2596,63 @@ export class ContractingService {
   async createMaterialRequisition(auth: AuthContext, projectId: string, dto: CreateMaterialRequisitionDto) {
     const { tenantId } = requireTenantScope(auth);
 
-    let reqNumber = dto.requisitionNumber?.trim().toUpperCase();
-    if (!reqNumber) {
-      const now = new Date();
-      const yy = String(now.getFullYear()).slice(-2);
-      const mm = String(now.getMonth() + 1).padStart(2, '0');
-      const dd = String(now.getDate()).padStart(2, '0');
-      const prefix = `MR-${yy}${mm}${dd}-`;
-      const countRes = await this.db
-        .selectFrom('contracting_material_requisitions')
-        .select(sql<number>`count(*)::int`.as('count'))
-        .where('tenant_id', '=', tenantId)
-        .where('requisition_number', 'like', `${prefix}%`)
-        .executeTakeFirst();
-      let count = (countRes?.count || 0) + 1;
-      let candidate = `${prefix}${String(count).padStart(4, '0')}`;
-      while (
-        await this.db
-          .selectFrom('contracting_material_requisitions')
-          .select('id')
-          .where('tenant_id', '=', tenantId)
-          .where('requisition_number', '=', candidate)
-          .executeTakeFirst()
-      ) {
-        count++;
-        candidate = `${prefix}${String(count).padStart(4, '0')}`;
-      }
-      reqNumber = candidate;
-    }
+    // INV-CONTRACTING-ID-DERIVED-NUMBERS: a generated number is
+    // derived from the row id inside one transaction (DRG/MOM
+    // pattern), never from a COUNT(*) that races and reuses numbers
+    // after deletions; a caller-supplied number is kept verbatim.
+    const suppliedNumber = dto.requisitionNumber?.trim().toUpperCase() || '';
+    const prefix = getDailyDocumentPrefix('MR');
+    const tempNumber = `MR-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const qty = Number(dto.quantity || 0);
     const unitCost = Number(dto.unitCost || 0);
     const totalCost = qty * unitCost;
 
-    const [req] = await this.db
-      .insertInto('contracting_material_requisitions')
-      .values({
-        tenant_id: tenantId,
-        project_id: projectId as any,
-        requisition_number: reqNumber,
-        boq_item_id: dto.boqItemId ? (dto.boqItemId as any) : null,
-        warehouse_id: dto.warehouseId ? Number(dto.warehouseId) : null,
-        product_id: dto.productId ? Number(dto.productId) : null,
-        item_name: dto.itemName.trim(),
-        unit: dto.unit || 'unit',
-        quantity: qty,
-        unit_cost: unitCost,
-        total_cost: totalCost,
-        issue_date: dto.issueDate || new Date().toISOString().split('T')[0],
-        recipient_name: dto.recipientName || null,
-        status: 'issued',
-        notes: dto.notes || null,
-      })
-      .returningAll()
-      .execute();
+    const values: any = {
+      tenant_id: tenantId,
+      project_id: projectId as any,
+      requisition_number: suppliedNumber || tempNumber,
+      boq_item_id: dto.boqItemId ? (dto.boqItemId as any) : null,
+      warehouse_id: dto.warehouseId ? Number(dto.warehouseId) : null,
+      product_id: dto.productId ? Number(dto.productId) : null,
+      item_name: dto.itemName.trim(),
+      unit: dto.unit || 'unit',
+      quantity: qty,
+      unit_cost: unitCost,
+      total_cost: totalCost,
+      issue_date: dto.issueDate || new Date().toISOString().split('T')[0],
+      recipient_name: dto.recipientName || null,
+      status: 'issued',
+      notes: dto.notes || null,
+    };
+
+    if (suppliedNumber) {
+      const [req] = await this.db
+        .insertInto('contracting_material_requisitions')
+        .values(values)
+        .returningAll()
+        .execute();
+      return req;
+    }
+
+    const req = await this.db.transaction().execute(async (trx) => {
+      const inserted = await trx
+        .insertInto('contracting_material_requisitions')
+        .values(values)
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const updated = await trx
+        .updateTable('contracting_material_requisitions')
+        .set({
+          requisition_number: `${prefix}${String(inserted.id).padStart(4, '0')}`,
+          updated_at: new Date(),
+        })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(inserted.id))
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      return updated;
+    });
 
     return req;
   }
