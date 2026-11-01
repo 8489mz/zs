@@ -455,6 +455,7 @@ export class AccountingPostingService {
       locationId?: number | null;
       createdBy: number | null;
       postedBy?: number | null;
+      cashFlowCategory?: 'operating' | 'investing' | 'financing' | null;
       lines: DomainJournalLineDraft[];
     },
   ): Promise<number> {
@@ -463,6 +464,7 @@ export class AccountingPostingService {
       branchId: params.branchId ?? null,
       locationId: params.locationId ?? null,
       postedBy: params.postedBy ?? params.createdBy,
+      cashFlowCategory: params.cashFlowCategory ?? null,
       lines: params.lines.map(line => ({
         ...line,
         branchId: line.branchId === undefined ? params.branchId ?? null : line.branchId,
@@ -545,6 +547,7 @@ export class AccountingPostingService {
       locationId: number | null;
       createdBy: number | null;
       postedBy: number | null;
+      cashFlowCategory?: 'operating' | 'investing' | 'financing' | null;
       lines: JournalLineDraft[];
       reversalOfEntryId?: number | null;
     },
@@ -711,6 +714,10 @@ export class AccountingPostingService {
       source_type: params.sourceType,
       source_id: params.sourceId,
       status: 'posted',
+      // Only callers that carry a cash-flow category (manual journals)
+      // set the column; every other caller leaves it absent, exactly
+      // as before this change.
+      ...(params.cashFlowCategory ? { cash_flow_category: params.cashFlowCategory } : {}),
       branch_id: params.branchId,
       location_id: params.locationId,
       created_by: params.createdBy && Number(params.createdBy) > 0 ? Number(params.createdBy) : null,

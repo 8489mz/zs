@@ -847,10 +847,11 @@ export class AccountingService {
     // Check period lock dates
     await this.assertNotInLockedPeriod(scope.tenantId, entryDate, { auth });
 
-    let totalDebit = 0;
-    let totalCredit = 0;
-
-    const validatedLines: Array<{
+    // Raw DTO lines are collected here unrounded. Rounding happens
+    // inside writeJournal, on the transaction handle, at the tenant's
+    // book digits (see below): resolving digits on the pool handle
+    // outside the transaction could post stale precision.
+    const pendingLines: Array<{
       accountId: number;
       costCenterId: number | null;
       description: string;
@@ -868,39 +869,25 @@ export class AccountingService {
       }
       accountIds.add(accId);
 
-      const debit = this.toMoney(line.debit ?? 0);
-      const credit = this.toMoney(line.credit ?? 0);
+      const rawDebit = Number(line.debit ?? 0);
+      const rawCredit = Number(line.credit ?? 0);
+      if (!Number.isFinite(rawDebit) || !Number.isFinite(rawCredit)) {
+        throw new BadRequestException('قيمة القيد يجب أن تكون رقمًا صالحًا.');
+      }
 
-      if (Number(line.debit) < 0 || Number(line.credit) < 0) {
+      if (rawDebit < 0 || rawCredit < 0) {
         throw new BadRequestException('مبالغ المدين والدائن يجب ألا تكون سالبة.');
       }
 
-      if (debit <= 0 && credit <= 0) {
-        throw new BadRequestException('يجب تحديد مبلغ مدين أو دائن أكبر من الصفر لكل سطر.');
-      }
-      if (debit > 0 && credit > 0) {
-        throw new BadRequestException('لا يمكن أن يكون السطر مدين ودائن في نفس الوقت.');
-      }
-
-      totalDebit += debit;
-      totalCredit += credit;
-
-      validatedLines.push({
+      pendingLines.push({
         accountId: accId,
         costCenterId: line.costCenterId ? Number(line.costCenterId) : null,
         description: String(line.description || dto.description || '').trim(),
-        debit,
-        credit,
+        debit: rawDebit,
+        credit: rawCredit,
         partnerType: line.partnerType || 'none',
         partnerId: line.partnerId ? Number(line.partnerId) : null,
       });
-    }
-
-    totalDebit = this.toMoney(totalDebit);
-    totalCredit = this.toMoney(totalCredit);
-
-    if (Math.abs(totalDebit - totalCredit) > 0.05) {
-      throw new BadRequestException(`القيد غير متزن: إجمالي المدين (${totalDebit}) لا يساوي إجمالي الدائن (${totalCredit}). الفارق: ${Math.abs(totalDebit - totalCredit).toFixed(2)}`);
     }
 
     // Verify all accounts belong to tenant and allow manual entries
@@ -925,24 +912,79 @@ export class AccountingService {
       }
     }
 
-    const difference = this.toMoney(totalDebit - totalCredit);
-    if (Math.abs(difference) >= 0.001) {
-      const roundingAccount = await this.db.selectFrom('accounting_accounts')
-        .select(['id', 'is_active']).where('tenant_id', '=', scope.tenantId)
-        .where('code', '=', '7290').executeTakeFirst();
-      if (!roundingAccount?.is_active) throw new BadRequestException('حساب فروق التقريب المحاسبي 7290 غير موجود أو غير نشط.');
-      const debit = difference < 0 ? Math.abs(difference) : 0;
-      const credit = difference > 0 ? difference : 0;
-      validatedLines.push({ accountId: Number(roundingAccount.id), costCenterId: null, description: 'فروق تقريب القيد', debit, credit, partnerType: 'none', partnerId: null });
-      totalDebit = this.toMoney(totalDebit + debit);
-      totalCredit = this.toMoney(totalCredit + credit);
-    }
-    if (Math.abs(totalDebit - totalCredit) >= 0.001) throw new BadRequestException('القيد غير متزن بعد التسوية.');
-
     const userId = Number(auth.userId) || null;
     const branchId = dto.branchId ? Number(dto.branchId) : null;
 
     const writeJournal = async (trx: Kysely<Database>) => {
+      const posting = this.accountingPosting;
+      if (!posting) throw new Error('Accounting posting service is required for manual journal posting');
+
+      // Book digits resolved on THIS transaction handle, fail closed
+      // on a base-currency/rate mismatch (P0-1/P0-2 pattern). The
+      // lines below are rounded once here, at book digits; the
+      // posting boundary re-rounds idempotently and re-validates.
+      const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+      const unit = 10 ** -digits;
+      const maxDifference = unit;
+
+      const validatedLines: Array<{
+        accountId: number;
+        costCenterId: number | null;
+        description: string;
+        debit: number;
+        credit: number;
+        partnerType: 'none' | 'customer' | 'supplier';
+        partnerId: number | null;
+      }> = [];
+
+      let totalDebit = 0;
+      let totalCredit = 0;
+      for (const line of pendingLines) {
+        const debit = this.toBookMoney(line.debit, digits);
+        const credit = this.toBookMoney(line.credit, digits);
+
+        if (debit <= 0 && credit <= 0) {
+          throw new BadRequestException('يجب تحديد مبلغ مدين أو دائن أكبر من الصفر لكل سطر.');
+        }
+        if (debit > 0 && credit > 0) {
+          throw new BadRequestException('لا يمكن أن يكون السطر مدين ودائن في نفس الوقت.');
+        }
+
+        totalDebit += debit;
+        totalCredit += credit;
+        validatedLines.push({ ...line, debit, credit });
+      }
+
+      totalDebit = this.toBookMoney(totalDebit, digits);
+      totalCredit = this.toBookMoney(totalCredit, digits);
+
+      // The difference itself is rounded at book digits before any
+      // comparison (the boundary does the same): the raw float
+      // subtraction of two rounded totals can exceed one minor
+      // unit by float dust alone.
+      const difference = this.toBookMoney(totalDebit - totalCredit, digits);
+      if (Math.abs(difference) > maxDifference) {
+        throw new BadRequestException(`القيد غير متزن: إجمالي المدين (${totalDebit}) لا يساوي إجمالي الدائن (${totalCredit}). الفارق: ${Math.abs(difference).toFixed(digits)}`);
+      }
+
+      // Rounding plug, book-digit-relative: the boundary plugs a
+      // difference of at least half a minor unit and at most one
+      // minor unit into 7290. After book-digit rounding a nonzero
+      // difference is exactly one minor unit, so the plug fires
+      // exactly when the rounded lines differ by one minor unit.
+      if (Math.abs(difference) >= unit / 2) {
+        const roundingAccount = await trx.selectFrom('accounting_accounts')
+          .select(['id', 'is_active']).where('tenant_id', '=', scope.tenantId)
+          .where('code', '=', '7290').executeTakeFirst();
+        if (!roundingAccount?.is_active) throw new BadRequestException('حساب فروق التقريب المحاسبي 7290 غير موجود أو غير نشط.');
+        const debit = difference < 0 ? Math.abs(difference) : 0;
+        const credit = difference > 0 ? difference : 0;
+        validatedLines.push({ accountId: Number(roundingAccount.id), costCenterId: null, description: 'فروق تقريب القيد', debit, credit, partnerType: 'none', partnerId: null });
+        totalDebit = this.toBookMoney(totalDebit + debit, digits);
+        totalCredit = this.toBookMoney(totalCredit + credit, digits);
+      }
+      if (Math.abs(this.toBookMoney(totalDebit - totalCredit, digits)) >= unit / 2) throw new BadRequestException('القيد غير متزن بعد التسوية.');
+
       await lockAccountingPeriod(trx, scope.tenantId);
       await this.assertNotInLockedPeriod(scope.tenantId, entryDate, { auth, queryable: trx });
       await assertTaxPeriodOpen(trx, scope.tenantId, entryDate, validatedLines.map((line) => line.accountId));
@@ -963,60 +1005,48 @@ export class AccountingService {
         }
       }
       await this.assertNotInLockedPeriod(scope.tenantId, entryDate, { auth, queryable: trx, isTaxOperation: lockedAccounts.some(account => account.is_tax || ['1150', '1155', '2120', '2126', '2146'].includes(account.code)) });
-      const tempEntryNo = `JE-TMP-${randomUUID()}`;
-      const inserted = await trx
-        .insertInto('journal_entries')
-        .values({
-          entry_no: tempEntryNo,
-          tenant_id: scope.tenantId,
-          account_id: scope.accountId,
-          entry_date: entryDate,
-          description: String(dto.description || '').trim(),
-          source_type: 'manual',
-          cash_flow_category: dto.cashFlowCategory || null,
-          source_id: null,
-          status: 'posted',
-          branch_id: branchId,
-          location_id: null,
-          created_by: userId,
-          posted_by: userId,
-          posted_at: sql`NOW()`,
-        } as any)
-        .returning('id')
-        .executeTakeFirstOrThrow();
-
-      const entryId = Number(inserted.id);
-      const officialEntryNo = `JE-${String(entryId).padStart(8, '0')}`;
-
-      await trx
-        .updateTable('journal_entries')
-        .set({ entry_no: officialEntryNo, updated_at: sql`NOW()` } as any)
+      // Post through the canonical posting boundary (P0-2 precedent):
+      // it owns numbering, re-rounding, the balance/plug backstop and
+      // the automated period lock. The manual validations above stay:
+      // the boundary checks active accounts only, not manual-entry
+      // eligibility, control accounts or mapped control accounts.
+      // sourceId 0 follows the forex-revaluation precedent for a
+      // sourceless journal; 'manual' has no dedup lookup. The cash
+      // flow category is carried by the boundary so the cash-flow
+      // report keeps reading it from the posted entry.
+      const entryId = await posting.postDomainJournal(trx, {
+        sourceType: 'manual',
+        sourceId: 0,
+        tenantId: scope.tenantId,
+        accountId: scope.accountId,
+        entryDate,
+        description: String(dto.description || '').trim(),
+        branchId,
+        createdBy: userId,
+        postedBy: userId,
+        cashFlowCategory: dto.cashFlowCategory ?? null,
+        lines: validatedLines.map((line) => ({
+          accountId: line.accountId,
+          description: line.description,
+          debit: line.debit,
+          credit: line.credit,
+          partnerType: line.partnerType,
+          partnerId: line.partnerId,
+          branchId,
+          locationId: null,
+          costCenterId: line.costCenterId,
+        })),
+      });
+      const stored = await trx
+        .selectFrom('journal_entries')
+        .select('entry_no')
         .where('id', '=', entryId)
         .where('tenant_id', '=', scope.tenantId)
-        .execute();
-
-      await trx
-        .insertInto('journal_entry_lines')
-        .values(
-          validatedLines.map((l) => ({
-            journal_entry_id: entryId,
-            tenant_id: scope.tenantId,
-            account_id: l.accountId,
-            cost_center_id: l.costCenterId,
-            description: l.description,
-            debit: l.debit,
-            credit: l.credit,
-            partner_type: l.partnerType,
-            partner_id: l.partnerId,
-            branch_id: branchId,
-            location_id: null,
-          } as any))
-        )
-        .execute();
+        .executeTakeFirstOrThrow();
 
       return {
         id: entryId,
-        entryNo: officialEntryNo,
+        entryNo: String(stored.entry_no),
         totalDebit,
         totalCredit,
       };
