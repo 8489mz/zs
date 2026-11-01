@@ -10,6 +10,8 @@ import { CreatePurchaseOrderDto, UpdatePurchaseOrderDto } from '../dto/purchase-
 import { PurchasesWriteService } from './purchases-write.service';
 import { ApprovalWorkflowService } from '../../approvals/approval-workflow.service';
 import { computeInvoiceTotals } from '../../../common/utils/invoice-totals';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { calculatePurchaseOrderTotals } from '../engines/purchase-order-totals.engine';
 
 @Injectable()
@@ -150,7 +152,10 @@ export class PurchaseOrdersService {
     if (!payload.items || payload.items.length === 0) {
       throw new BadRequestException('يجب إضافة صنف واحد على الأقل في أمر الشراء');
     }
-    const totals = calculatePurchaseOrderTotals(payload.items, payload.discountAmount);
+    // Book digits from the tenant's base currency (P2 pattern, pool handle:
+    // no transaction is open yet). Stored totals keep book precision.
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
+    const totals = calculatePurchaseOrderTotals(payload.items, payload.discountAmount, digits);
 
     return this.db.transaction().execute(async (trx) => {
     await this.assertOrderReferences(trx, scope.tenantId, payload.supplierId, payload.warehouseId,
@@ -249,7 +254,10 @@ export class PurchaseOrdersService {
           taxRate: Number(item.tax_rate || 0),
         })));
       if (!itemsForTotals) throw new BadRequestException('أمر الشراء يحتاج بنداً واحداً على الأقل.');
-      const totals = calculatePurchaseOrderTotals(itemsForTotals, payload.discountAmount ?? Number(order.discount_amount || 0));
+      // Book digits on the transaction handle (never the pool inside an
+      // open transaction). Stored totals keep book precision.
+      const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+      const totals = calculatePurchaseOrderTotals(itemsForTotals, payload.discountAmount ?? Number(order.discount_amount || 0), digits);
 
       const updated = await trx
         .updateTable('purchase_orders')
@@ -366,7 +374,10 @@ export class PurchaseOrdersService {
       || !Number.isFinite(Number(item.unit_cost)) || Number(item.unit_cost) <= 0)) {
       throw new BadRequestException('بنود أمر الشراء تحتوي كمية أو تكلفة غير صالحة');
     }
-    const subtotal = Number(items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_cost), 0).toFixed(2));
+    // Gate recomputation at book digits, matching the stored totals; the
+    // 0.01 reconciliation tolerance is unchanged (policy band).
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
+    const subtotal = Number(items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_cost), 0).toFixed(digits));
     const discount = Number(order.discount_amount || 0);
     const taxAmount = Number(order.tax_amount || 0);
     if (!Number.isFinite(subtotal) || !Number.isFinite(discount) || !Number.isFinite(taxAmount)
