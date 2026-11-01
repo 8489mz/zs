@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
+import { useStorefrontLang } from '@/i18n';
 import type { StorefrontInfo, StorefrontProduct, StorefrontCategory } from '../types/storefront.types';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { resolveProductPhoto, generatePremiumProductSvg } from '../lib/storefront-photo-matcher';
@@ -18,7 +19,7 @@ interface StorefrontHeroEditorialProps {
 }
 
 // Preset badges for the 3D coverflow product deck
-const CARD_BADGES = [
+const CARD_BADGES_AR = [
   'عرض محدود',
   'وصل حديثاً',
   'خصم خاص',
@@ -26,6 +27,16 @@ const CARD_BADGES = [
   'تخفيضات اليوم',
   'الأكثر مبيعاً',
   'مختاراتنا',
+];
+
+const CARD_BADGES_EN = [
+  'Limited Offer',
+  'New Arrival',
+  'Special Deal',
+  'Exclusive Deal',
+  "Today's Deal",
+  'Best Seller',
+  'Our Pick',
 ];
 
 interface CardSlotMetrics {
@@ -45,11 +56,6 @@ interface CardSlotMetrics {
   paddingBottom: number;
 }
 
-/**
- * Pure 2D Integer-Pixel Perspective Geometry (Zero CSS rotateY / Zero CSS scale)
- * Uses pure GPU translate3d for hover lift so moving the pointer across the 7-card deck
- * triggers zero React re-renders and zero layout reflows (locked 120Hz ProMotion).
- */
 function getCardSlotMetrics(offset: number): CardSlotMetrics {
   if (offset === 0) {
     return {
@@ -113,7 +119,6 @@ function getCardSlotMetrics(offset: number): CardSlotMetrics {
     };
   }
 
-  // abs >= 3
   const slant = 9;
   return {
     width: 160,
@@ -133,10 +138,6 @@ function getCardSlotMetrics(offset: number): CardSlotMetrics {
   };
 }
 
-/**
- * Generates a tangent-continuous rounded-trapezoid SVG path for the perspective card body.
- * Rendered via native 2D vector anti-aliasing (geometricPrecision) for 0% jagged edges.
- */
 function buildPerspectiveCardPath(
   w: number,
   h: number,
@@ -188,9 +189,11 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
   onSelectDeals,
   onOpenCategoriesModal,
 }: StorefrontHeroEditorialProps) {
+  const { isEn, dir } = useStorefrontLang();
   const [justAddedId, setJustAddedId] = useState<number | null>(null);
+  const [activeMobileSlide, setActiveMobileSlide] = useState<number>(0);
+  const mobileCarouselRef = useRef<HTMLDivElement | null>(null);
 
-  // Build a 7-card deck for the symmetrical 3D Coverflow (3 Left + 1 Center + 3 Right)
   const deckProducts = useMemo(() => {
     if (!featuredProducts || featuredProducts.length === 0) return [];
     if (featuredProducts.length >= 7) return featuredProducts.slice(0, 7);
@@ -207,7 +210,6 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
     ? Math.min(centerIdx, deckProducts.length - 1)
     : 0;
 
-  // Arrange products so the selected center product sits in the middle slot (slot 3)
   const orderedDeck = useMemo(() => {
     if (deckProducts.length < 7) {
       return deckProducts.map((product, originalIdx) => ({ product, originalIdx }));
@@ -231,14 +233,13 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
     }, 1200);
   };
 
-  // Build 4 curated mobile promo slides (only rendered on <= 640px)
   const mobileHeroSlides = useMemo(() => {
     const base = featuredProducts && featuredProducts.length > 0 ? featuredProducts.slice(0, 4) : [];
     const slideThemes = [
       {
-        kicker: 'وصل حديثاً',
-        headline: info?.heroHeadline?.trim() || 'تشكيلة مختارة بأعلى جودة',
-        cta: 'تسوق الآن',
+        kicker: isEn ? 'New Arrivals' : 'وصل حديثاً',
+        headline: info?.heroHeadline?.trim() || (isEn ? 'Handpicked Top-Quality Collection' : 'تشكيلة مختارة بأعلى جودة'),
+        cta: isEn ? 'Shop Now' : 'تسوق الآن',
         bg: 'linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%)',
         border: '#e2e8f0',
         textDark: true,
@@ -248,9 +249,9 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
         kickerColor: 'var(--storefront-primary-color, #2d68c4)',
       },
       {
-        kicker: 'عروض حصرية',
-        headline: 'خصومات يومية على أفضل الأصناف',
-        cta: 'اكتشف العروض',
+        kicker: isEn ? 'Exclusive Deals' : 'عروض حصرية',
+        headline: isEn ? 'Daily markdowns on top products' : 'خصومات يومية على أفضل الأصناف',
+        cta: isEn ? 'Explore Deals' : 'اكتشف العروض',
         bg: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
         border: '#1e293b',
         textDark: false,
@@ -260,9 +261,9 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
         kickerColor: '#f8fafc',
       },
       {
-        kicker: 'الأكثر مبيعاً',
-        headline: 'منتجات أصلية بتوصيل سريع',
-        cta: 'تصفح الآن',
+        kicker: isEn ? 'Best Sellers' : 'الأكثر مبيعاً',
+        headline: isEn ? '100% authentic with fast delivery' : 'منتجات أصلية بتوصيل سريع',
+        cta: isEn ? 'Browse Now' : 'تصفح الآن',
         bg: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
         border: '#bfdbfe',
         textDark: true,
@@ -284,7 +285,7 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
         photoUrl,
       };
     });
-  }, [featuredProducts]);
+  }, [featuredProducts, info?.heroHeadline, isEn]);
 
   return (
     <section
@@ -440,7 +441,20 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
       `}</style>
 
       {/* Mobile-Only Full-Width Swipeable Hero Promo Cards */}
-      <div className="sf-mobile-editorial-carousel" dir="rtl">
+      <div
+        ref={mobileCarouselRef}
+        className="sf-mobile-editorial-carousel"
+        dir={dir}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          if (!el.clientWidth) return;
+          const idx = Math.round(Math.abs(el.scrollLeft) / el.clientWidth);
+          const clamped = Math.max(0, Math.min(mobileHeroSlides.length - 1, idx));
+          if (clamped !== activeMobileSlide) {
+            setActiveMobileSlide(clamped);
+          }
+        }}
+      >
         {mobileHeroSlides.map((slide, idx) => (
           <div
             key={idx}
@@ -457,7 +471,7 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
               border: `1px solid ${slide.border}`,
             }}
           >
-            {/* Right Copy Column in RTL */}
+            {/* Copy Column */}
             <div
               style={{
                 display: 'flex',
@@ -467,7 +481,7 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
                 height: '100%',
                 flex: '1 1 auto',
                 minWidth: 0,
-                textAlign: 'right',
+                textAlign: isEn ? 'left' : 'right',
                 zIndex: 2,
               }}
             >
@@ -532,11 +546,11 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
                 }}
               >
                 <span>{slide.cta}</span>
-                <span style={{ fontSize: '11px', lineHeight: 1 }}>←</span>
+                <span style={{ fontSize: '11px', lineHeight: 1 }}>{isEn ? '→' : '←'}</span>
               </span>
             </div>
 
-            {/* Left Product Studio Image in RTL */}
+            {/* Product Studio Image */}
             {slide.photoUrl && (
               <div
                 style={{
@@ -578,18 +592,33 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
 
       {/* Subtle Soft Squircle Indicator Bars for Mobile Hero Carousel */}
       <div className="sf-mobile-editorial-dots" aria-hidden="true">
-        {mobileHeroSlides.map((_, idx) => (
-          <span
-            key={idx}
-            style={{
-              width: idx === 0 ? '18px' : '6px',
-              height: '5px',
-              borderRadius: '3px',
-              background: idx === 0 ? 'var(--storefront-primary-color, #2d68c4)' : '#cbd5e1',
-              transition: 'width 0.2s ease, background-color 0.2s ease',
-            }}
-          />
-        ))}
+        {mobileHeroSlides.map((_, idx) => {
+          const isActive = idx === activeMobileSlide;
+          return (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => {
+                setActiveMobileSlide(idx);
+                const el = mobileCarouselRef.current;
+                if (el) {
+                  const slideEls = el.querySelectorAll<HTMLElement>('.sf-mobile-editorial-slide');
+                  slideEls[idx]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                }
+              }}
+              style={{
+                width: isActive ? '18px' : '6px',
+                height: '5px',
+                borderRadius: '3px',
+                background: isActive ? 'var(--storefront-primary-color, #2d68c4)' : '#cbd5e1',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                transition: 'width 0.2s ease, background-color 0.2s ease',
+              }}
+            />
+          );
+        })}
       </div>
 
       {/* Top Main Headline */}
@@ -633,7 +662,7 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
           }
         `}</style>
         <h1 className="sf-hero-glass-headline" style={{ color: '#132032' }}>
-          {info?.heroHeadline?.trim() || 'أفضل المنتجات بأحسن سعر'}
+          {info?.heroHeadline?.trim() || (isEn ? 'Top Global Products at the Best Prices' : 'أفضل المنتجات بأحسن سعر')}
         </h1>
         {info?.heroSubtitle?.trim() && (
           <p
@@ -678,11 +707,22 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
           const autoPhoto = resolveProductPhoto(product.name, product.categoryName);
           const photoUrl = product.imageUrl || autoPhoto.url;
           const isOutOfStock = !product.inStock || product.stockQty <= 0;
-          const realBadge = product.offerBadge || (product.hasDiscount && product.discountPercent ? `خصم ${product.discountPercent}%` : '');
+          const realBadge =
+            product.offerBadge ||
+            (product.hasDiscount && product.discountPercent
+              ? isEn
+                ? `${product.discountPercent}% OFF`
+                : `خصم ${product.discountPercent}%`
+              : '');
+          const activeBadges = isEn ? CARD_BADGES_EN : CARD_BADGES_AR;
           const fallbackBadge = info?.smartDealsEnabled
-            ? CARD_BADGES[originalIdx % CARD_BADGES.length]
-            : (isHighlighted ? 'مختاراتنا' : '');
-          const badgeText = isOutOfStock ? 'نفدت الكمية' : (realBadge || fallbackBadge);
+            ? activeBadges[originalIdx % activeBadges.length]
+            : isHighlighted
+            ? isEn
+              ? 'Our Pick'
+              : 'مختاراتنا'
+            : '';
+          const badgeText = isOutOfStock ? (isEn ? 'Out of Stock' : 'نفدت الكمية') : realBadge || fallbackBadge;
 
           const svgPad = 18;
           const svgW = metrics.width + svgPad * 2;
@@ -742,7 +782,7 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
           return (
             <div
               key={`${product.id}-${slotIdx}`}
-              dir="rtl"
+              dir={dir}
               className={`storefront-coverflow-card ${isHighlighted ? 'is-highlighted' : ''}`}
               onClick={() => {
                 if (offset !== 0 && orderedDeck.length >= 7) {
@@ -809,7 +849,7 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
                 />
               </svg>
 
-              {/* Card Header: Badge (Right in RTL) */}
+              {/* Card Header: Badge */}
               <div
                 className="sf-coverflow-header"
                 style={{
@@ -902,7 +942,7 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
                     fontWeight: 700,
                     color: '#0f172a',
                     lineHeight: 1.35,
-                    textAlign: 'right',
+                    textAlign: isEn ? 'left' : 'right',
                     width: '100%',
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
@@ -914,7 +954,7 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
                   {product.name}
                 </span>
 
-                {/* Bottom Row: Add to Cart Button (Right) opposite Price (Left) */}
+                {/* Bottom Row: Add to Cart Button opposite Price */}
                 <div
                   style={{
                     display: 'flex',
@@ -957,7 +997,7 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
                       flexShrink: 0,
                       transition: 'background-color 0.16s ease, color 0.16s ease',
                     }}
-                    title="أضف للسلة"
+                    title={isEn ? 'Add to Cart' : 'أضف للسلة'}
                   >
                     {justAddedId === product.id ? (
                       <IconCheckCircle size={offset === 0 ? 14 : 13} />
@@ -975,22 +1015,6 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
                       fontVariantNumeric: 'tabular-nums',
                     }}
                   >
-                    <span
-                      className="sf-coverflow-price"
-                      style={{
-                        fontSize: offset === 0 ? '13px' : Math.abs(offset) === 1 ? '12px' : '11px',
-                        fontWeight: 600,
-                        color: '#0f172a',
-                        whiteSpace: 'nowrap',
-                        lineHeight: 1.1,
-                      }}
-                    >
-                      {product.price.toLocaleString('en-US')}{' '}
-                      <span style={{ fontSize: '0.85em', fontWeight: 500 }}>
-                        <CurrencySymbol />
-                      </span>
-                    </span>
-
                     {oldPrice > product.price && (
                       <span
                         className="sf-coverflow-oldprice"
@@ -1006,6 +1030,22 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
                         {oldPrice.toLocaleString('en-US')}
                       </span>
                     )}
+
+                    <span
+                      className="sf-coverflow-price"
+                      style={{
+                        fontSize: offset === 0 ? '13px' : Math.abs(offset) === 1 ? '12px' : '11px',
+                        fontWeight: 600,
+                        color: '#0f172a',
+                        whiteSpace: 'nowrap',
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      {product.price.toLocaleString('en-US')}{' '}
+                      <span style={{ fontSize: '0.85em', fontWeight: 500 }}>
+                        <CurrencySymbol />
+                      </span>
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1029,83 +1069,101 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
           zIndex: 5,
         }}
       >
-          <button
-            type="button"
-            className="sf-hero-btn-primary"
-            onClick={onSelectDeals}
-            style={{
-              height: '36px',
-              padding: '0 16px',
-              borderRadius: '12px',
-              background: 'var(--storefront-primary-color, #2d68c4)',
-              color: '#ffffff',
-              border: '1px solid var(--storefront-primary-color, #2d68c4)',
-              fontSize: '12.5px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-              transition: 'all 0.16s ease',
-            }}
-          >
-            <span>تصفح عروض اليوم</span>
-            <span style={{ fontSize: '13px', lineHeight: 1 }}>←</span>
-          </button>
+        <button
+          type="button"
+          className="sf-hero-btn-primary"
+          onClick={onSelectDeals}
+          style={{
+            height: '36px',
+            padding: '0 16px',
+            borderRadius: '12px',
+            background: 'var(--storefront-primary-color, #2d68c4)',
+            color: '#ffffff',
+            border: '1px solid var(--storefront-primary-color, #2d68c4)',
+            fontSize: '12.5px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+            transition: 'all 0.16s ease',
+          }}
+        >
+          <span>{isEn ? "Browse Today's Deals" : 'تصفح عروض اليوم'}</span>
+          <span style={{ fontSize: '13px', lineHeight: 1 }}>{isEn ? '→' : '←'}</span>
+        </button>
 
-          <button
-            type="button"
-            className="sf-hero-btn-secondary"
-            onClick={onOpenCategoriesModal}
-            style={{
-              height: '36px',
-              padding: '0 16px',
-              borderRadius: '12px',
-              background: '#ffffff',
-              color: '#1f1f1f',
-              border: '1px solid #dadce0',
-              fontSize: '12.5px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-              transition: 'all 0.16s ease',
-            }}
-          >
-            <span>تصفح كل الأقسام</span>
-            <IconArrowUpRight size={14} />
-          </button>
-        </div>
+        <button
+          type="button"
+          className="sf-hero-btn-secondary"
+          onClick={onOpenCategoriesModal}
+          style={{
+            height: '36px',
+            padding: '0 16px',
+            borderRadius: '12px',
+            background: '#ffffff',
+            color: '#1f1f1f',
+            border: '1px solid #dadce0',
+            fontSize: '12.5px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+            transition: 'all 0.16s ease',
+          }}
+        >
+          <span>{isEn ? 'Browse All Categories' : 'تصفح كل الأقسام'}</span>
+          <IconArrowUpRight size={14} />
+        </button>
+      </div>
 
       {/* Bottom Hero Continuous Moving Trust & Value Marquee Strip */}
-      <div className="sf-hero-ticker-viewport" dir="ltr" aria-label="مميزات المتجر">
+      <div className="sf-hero-ticker-viewport" dir="ltr" aria-label={isEn ? 'Store Features' : 'مميزات المتجر'}>
         <div className="sf-hero-ticker-track">
           {[0, 1].map((copyIdx) => {
             const rawCurr = (info.currency || '').trim().toUpperCase();
             const currLabel =
               !rawCurr || rawCurr === 'EGP' || rawCurr === 'ج.م'
-                ? 'جنيه'
+                ? isEn
+                  ? 'EGP'
+                  : 'جنيه'
                 : info.currency;
 
             const freeShipPhrase =
               info.freeShippingEnabled && info.freeShippingMinOrder
-                ? { start: 'شحن مجاني للطلبات فوق', bold: `${info.freeShippingMinOrder} ${currLabel}` }
+                ? isEn
+                  ? { start: 'Free Shipping on Orders Over', bold: `${info.freeShippingMinOrder} ${currLabel}` }
+                  : { start: 'شحن مجاني للطلبات فوق', bold: `${info.freeShippingMinOrder} ${currLabel}` }
+                : isEn
+                ? { bold: 'Fast Delivery', end: 'Right to Your Doorstep' }
                 : { bold: 'توصيل سريع', end: 'لباب البيت' };
 
-            const tickerPhrases: Array<{ start?: string; bold: string; end?: string }> = [
-              { start: 'جودة أصلية مضمونة', bold: '100%' },
-              freeShipPhrase,
-              { bold: 'دفع آمن', end: 'عند الاستلام أو بالبطاقات والمحافظ' },
-              { start: 'خدمة عملاء فورية عبر واتساب', bold: '24/7' },
-              { bold: '+10,000', end: 'عميل سعيد يثق بنا' },
-              { start: 'استبدال واسترجاع مرن خلال', bold: '14 يوم' },
-              { bold: 'تغليف محكم', end: 'وعناية فائقة بكل طلب حتى يصلك' },
-              { bold: 'أفضل سعر', end: 'وعروض وخصومات يومية حصرية' },
-              { bold: 'توصيل سريع', end: 'شحن مباشر لجميع المحافظات' },
-            ];
+            const tickerPhrases: Array<{ start?: string; bold: string; end?: string }> = isEn
+              ? [
+                  { start: 'Guaranteed Authentic Quality', bold: '100%' },
+                  freeShipPhrase,
+                  { bold: 'Secure Payment', end: 'Cash on Delivery, Cards & Wallets' },
+                  { start: 'Instant WhatsApp Support', bold: '24/7' },
+                  { bold: '+10,000', end: 'Happy Customers Trust Us' },
+                  { start: 'Easy Returns & Exchange Within', bold: '14 Days' },
+                  { bold: 'Careful Packaging', end: 'Safe & Secure Delivery for Every Order' },
+                  { bold: 'Best Price Guarantee', end: '& Exclusive Daily Deals' },
+                  { bold: 'Express Shipping', end: 'Direct Delivery to All Governorates' },
+                ]
+              : [
+                  { start: 'جودة أصلية مضمونة', bold: '100%' },
+                  freeShipPhrase,
+                  { bold: 'دفع آمن', end: 'عند الاستلام أو بالبطاقات والمحافظ' },
+                  { start: 'خدمة عملاء فورية عبر واتساب', bold: '24/7' },
+                  { bold: '+10,000', end: 'عميل سعيد يثق بنا' },
+                  { start: 'استبدال واسترجاع مرن خلال', bold: '14 يوم' },
+                  { bold: 'تغليف محكم', end: 'وعناية فائقة بكل طلب حتى يصلك' },
+                  { bold: 'أفضل سعر', end: 'وعروض وخصومات يومية حصرية' },
+                  { bold: 'توصيل سريع', end: 'شحن مباشر لجميع المحافظات' },
+                ];
 
             return (
               <div
@@ -1119,7 +1177,7 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
                 {tickerPhrases.map((phrase, idx) => (
                   <React.Fragment key={`${copyIdx}-${idx}`}>
                     <div
-                      dir="rtl"
+                      dir={dir}
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',

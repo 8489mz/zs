@@ -565,7 +565,6 @@ body, button, input, select, textarea, [class*="storefront-"] {
   flex-direction: column;
   overflow: hidden;
   overscroll-behavior: contain !important;
-  direction: rtl;
   padding: 0 !important;
   box-sizing: border-box;
 }
@@ -678,7 +677,7 @@ body, button, input, select, textarea, [class*="storefront-"] {
   width: 265px;
   flex-shrink: 0;
   background: #f8fafc;
-  border-left: 1px solid #edf1f7;
+  border-inline-end: 1px solid #edf1f7;
   padding: 14px 12px;
   display: flex;
   flex-direction: column;
@@ -1695,21 +1694,34 @@ button.storefront-btn-pill,
    Continuous curved sections, cards, and soft-studio photo containers
    ========================================================================== */
 
-/* 1. Main Sections, Shelves & Feature Containers -> 24px (desktop) */
+/* 1. Main Sections, Shelves & Feature Containers -> 20px (desktop) */
 .storefront-section-card,
 .storefront-customer-reviews-section,
 .storefront-deals-shelf-section {
-  border-radius: 24px !important;
+  border-radius: 20px !important;
   border: 1px solid #edf1f7 !important;
   box-shadow: 0 10px 30px -6px rgba(15, 23, 42, 0.04), 0 2px 8px -2px rgba(15, 23, 42, 0.02) !important;
 }
 
-/* 2. Bento Grid Hero & Major Cards -> 24px Squircle */
+/* Isolate View-All & Text Action Buttons from Global ERP <button> min-height / padding */
+.storefront-view-all-btn,
+button.storefront-view-all-btn {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  line-height: 1.35 !important;
+}
+
+/* 2. Bento Grid Hero & Major Cards -> 20px Squircle */
 .storefront-bento-card-hero,
 .storefront-bento-card,
 .storefront-mid-banner-card,
 .storefront-featured-broadcast-grid > div {
-  border-radius: 24px !important;
+  border-radius: 20px !important;
 }
 
 /* 3. Product Cards -> 16px Continuous Luxury Squircle (desktop), 14px (mobile) */
@@ -1816,6 +1828,10 @@ button.storefront-btn-pill,
     color: var(--storefront-primary-color, #2d68c4) !important;
   }
 
+  [dir="ltr"] .storefront-shelf-viewall-label::after {
+    content: 'View All';
+  }
+
   /* Shelf horizontal spacing & card width on mobile (pure touch-swipe, zero scrollbar or arrows) */
   .storefront-shelf,
   .sf-mobile-editorial-carousel,
@@ -1865,6 +1881,11 @@ button.storefront-btn-pill,
   .storefront-products-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 8px !important;
+  }
+
+  .storefront-products-grid.is-single-product {
+    grid-template-columns: minmax(0, 236px) !important;
+    justify-content: center !important;
   }
 
   /* Pure White Studio Product Card — Compact Mobile Luxury */
@@ -2044,7 +2065,6 @@ button.storefront-btn-pill,
   border-top: 1px solid #e5e7eb;
   box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.025);
   box-sizing: border-box;
-  direction: rtl;
   color: #111827;
 }
 

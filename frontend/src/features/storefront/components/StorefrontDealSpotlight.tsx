@@ -1,9 +1,9 @@
-import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '../../../i18n';
 import React, { useState } from 'react';
 import type { StorefrontProduct } from '../types/storefront.types';
 import { resolveProductPhoto, generatePremiumProductSvg } from '../lib/storefront-photo-matcher';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
-import { IconShoppingCart, IconWhatsapp } from './StorefrontIcons';
+import { IconShoppingCart, IconWhatsapp, IconCheckCircle } from './StorefrontIcons';
 import { EyeIcon } from '@/shared/components/icons/AppIcons';
 
 interface StorefrontDealSpotlightProps {
@@ -19,8 +19,8 @@ interface StorefrontDealSpotlightProps {
   onToggleFavorite?: (productId: number) => void;
 }
 
-function formatCategoryName(name?: string): string {
-  if (!name) return 'قسم عام';
+function formatCategoryName(name?: string, isEn?: boolean): string {
+  if (!name) return isEn ? 'General' : 'قسم عام';
   const trimmed = name.trim();
   if (trimmed.includes(' - ')) {
     const parts = trimmed.split(' - ').map((p) => p.trim()).filter(Boolean);
@@ -41,7 +41,7 @@ export function StorefrontDealSpotlight({
   isFavorite: isFavoriteProp,
   onToggleFavorite,
 }: StorefrontDealSpotlightProps) {
-  const { t } = useTranslation();
+  const { t, isEn, dir } = useStorefrontLang();
   const [localFavorite, setLocalFavorite] = useState(() => {
     try {
       return localStorage.getItem(`zs_fav_${product.id}`) === 'true';
@@ -78,19 +78,30 @@ export function StorefrontDealSpotlight({
     ? Math.round(((oldPrice - product.price) / oldPrice) * 100)
     : 0;
 
-  // const savingsAmount = oldPrice > product.price ? oldPrice - product.price : 0;
-
   const autoPhoto = resolveProductPhoto(product.name, product.categoryName);
   const displayPhotoUrl = product.imageUrl || autoPhoto.url;
 
   const cleanPhone = (whatsappPhone || '').replace(/[^0-9]/g, '');
   const formattedPhone = cleanPhone.startsWith('01') ? `2${cleanPhone}` : cleanPhone;
 
+  const [justAdded, setJustAdded] = useState(false);
+
   const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isOutOfStock) return;
+    if (isOutOfStock || isZeroPrice) return;
     onAddToCart(product);
+    setJustAdded(true);
+    window.setTimeout(() => setJustAdded(false), 650);
   };
+
+  let primaryBadge: { text: string; bg: string } | null = null;
+  if (isOutOfStock) {
+    primaryBadge = { text: isEn ? 'Out of Stock' : 'نفدت الكمية', bg: '#dc2626' };
+  } else if (product.stockQty > 0 && product.stockQty <= 5) {
+    primaryBadge = { text: isEn ? `Only ${product.stockQty} left` : `متبقي ${product.stockQty} فقط`, bg: '#c2410c' };
+  } else if (discountPercent > 0) {
+    primaryBadge = { text: isEn ? `${discountPercent}% OFF` : `${t('storefront.storefront_deal_spotlight.s0', 'خصم')} ${discountPercent}%`, bg: '#CC0C39' };
+  }
 
   return (
     <div
@@ -104,7 +115,7 @@ export function StorefrontDealSpotlight({
         gridTemplateColumns: 'minmax(300px, 420px) minmax(0, 1fr)',
         gap: '28px',
         alignItems: 'center',
-        direction: 'rtl',
+        direction: dir,
         position: 'relative',
         boxShadow: '0 4px 20px rgba(15, 23, 42, 0.04)',
       }}
@@ -131,7 +142,7 @@ export function StorefrontDealSpotlight({
         }
       `}</style>
 
-      {/* 1. Product Photo Box (Right side in RTL) */}
+      {/* 1. Product Photo Box */}
       <div
         className="storefront-deal-spotlight-photo-box"
         style={{
@@ -164,6 +175,7 @@ export function StorefrontDealSpotlight({
             maxWidth: '100%',
             maxHeight: '100%',
             objectFit: 'contain',
+            opacity: isOutOfStock ? 0.65 : 1,
             cursor: onQuickView ? 'pointer' : 'default',
             transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
           }}
@@ -171,17 +183,17 @@ export function StorefrontDealSpotlight({
           onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
         />
 
-        {/* Discount Badge on Top Right */}
-        {discountPercent > 0 && (
+        {/* Primary Badge on Top Right */}
+        {primaryBadge && (
           <span
             style={{
               position: 'absolute',
               top: '12px',
               right: '12px',
-              background: '#CC0C39',
+              background: primaryBadge.bg,
               color: '#ffffff',
               fontSize: '11.5px',
-              fontWeight: 500,
+              fontWeight: 600,
               padding: '3px 8px',
               borderRadius: '6px',
               boxShadow: 'none',
@@ -193,7 +205,7 @@ export function StorefrontDealSpotlight({
               zIndex: 2,
             }}
           >
-            <span>{t('storefront.storefront_deal_spotlight.s0', 'خصم')} {discountPercent}%</span>
+            <span>{primaryBadge.text}</span>
           </span>
         )}
 
@@ -240,7 +252,7 @@ export function StorefrontDealSpotlight({
         </button>
       </div>
 
-      {/* 2. Product Specs, Price, Actions & Trust Guarantees (Left in RTL) */}
+      {/* 2. Product Specs, Price, Actions & Trust Guarantees */}
       <div
         className="storefront-deal-spotlight-details"
         style={{
@@ -260,7 +272,7 @@ export function StorefrontDealSpotlight({
               fontWeight: 500,
             }}
           >
-            {formatCategoryName(product.categoryName)}
+            {formatCategoryName(product.categoryName, isEn)}
           </span>
         </div>
 
@@ -304,54 +316,67 @@ export function StorefrontDealSpotlight({
           style={{
             display: 'flex',
             alignItems: 'baseline',
-            direction: 'ltr',
+            direction: 'rtl',
             justifyContent: 'flex-start',
-            gap: '6px',
+            gap: '8px',
             margin: '2px 0 4px',
             fontVariantNumeric: 'tabular-nums',
           }}
         >
-          <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: '4px' }}>
+          {isZeroPrice ? (
             <span
               style={{
-                fontSize: '13px',
-                fontWeight: 600,
-                color: '#0f172a',
-              }}
-            >
-              <CurrencySymbol />
-            </span>
-            <span
-              className="storefront-deal-price-val"
-              style={{
-                fontSize: '24px',
+                fontSize: '16px',
                 fontWeight: 700,
-                color: '#0f172a',
-                letterSpacing: '-0.3px',
-                lineHeight: 1,
+                color: '#64748b',
               }}
             >
-              {Number(product.price || 0).toLocaleString()}
+              {t('storefront.storefront_product_card.s14', 'السعر عند التواصل')}
             </span>
-          </div>
-          {oldPrice > product.price && (
-            <span
-              style={{
-                fontSize: '14px',
-                color: '#94a3b8',
-                textDecoration: 'line-through',
-                fontWeight: 500,
-                marginLeft: '4px',
-              }}
-            >
-              {oldPrice.toLocaleString()}
-            </span>
+          ) : (
+            <>
+              {oldPrice > product.price && (
+                <span
+                  style={{
+                    fontSize: '14px',
+                    color: '#94a3b8',
+                    textDecoration: 'line-through',
+                    fontWeight: 500,
+                  }}
+                >
+                  {oldPrice.toLocaleString()}
+                </span>
+              )}
+              <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: '4px' }}>
+                <span
+                  className="storefront-deal-price-val"
+                  style={{
+                    fontSize: '24px',
+                    fontWeight: 700,
+                    color: '#0f172a',
+                    letterSpacing: '-0.3px',
+                    lineHeight: 1,
+                  }}
+                >
+                  {Number(product.price || 0).toLocaleString()}
+                </span>
+                <span
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: '#0f172a',
+                  }}
+                >
+                  <CurrencySymbol />
+                </span>
+              </div>
+            </>
           )}
         </div>
 
         {/* Action Controls: Stepper vs Add to Cart + WhatsApp */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {cartQuantity > 0 ? (
+          {cartQuantity > 0 && !isZeroPrice ? (
             /* Strict RTL Stepper Standard: [+] first (right), quantity in middle, [-] last (left) */
             <div
               className="storefront-deal-stepper"
@@ -379,7 +404,7 @@ export function StorefrontDealSpotlight({
                   height: '34px',
                   borderRadius: '8px',
                   background: 'rgba(255, 255, 255, 0.22)',
-                  color: '#ffffff',
+                  color: 'var(--storefront-primary-contrast, #ffffff)',
                   border: 'none',
                   fontSize: '18px',
                   fontWeight: 800,
@@ -400,14 +425,14 @@ export function StorefrontDealSpotlight({
                   style={{
                     fontSize: '15px',
                     fontWeight: 900,
-                    color: '#ffffff',
+                    color: 'var(--storefront-primary-contrast, #ffffff)',
                     lineHeight: '1.2',
                     fontVariantNumeric: 'tabular-nums',
                   }}
                 >
                   {cartQuantity}
                 </span>
-                <span style={{ fontSize: '10.5px', color: 'rgba(255, 255, 255, 0.9)', fontWeight: 600 }}>{t('storefront.storefront_deal_spotlight.s20', 'بالسلة')}</span>
+                <span style={{ fontSize: '10.5px', color: 'var(--storefront-primary-contrast, rgba(255, 255, 255, 0.9))', fontWeight: 600 }}>{t('storefront.storefront_deal_spotlight.s20', 'بالسلة')}</span>
               </div>
 
               {/* Decrease button (-) on the LEFT in RTL */}
@@ -420,7 +445,7 @@ export function StorefrontDealSpotlight({
                   height: '34px',
                   borderRadius: '8px',
                   background: 'rgba(255, 255, 255, 0.22)',
-                  color: '#ffffff',
+                  color: 'var(--storefront-primary-contrast, #ffffff)',
                   border: 'none',
                   fontSize: '18px',
                   fontWeight: 800,
@@ -436,6 +461,57 @@ export function StorefrontDealSpotlight({
                 -
               </button>
             </div>
+          ) : isZeroPrice ? (
+            formattedPhone ? (
+              <a
+                className="storefront-deal-add-btn"
+                href={`https://wa.me/${formattedPhone}?text=${encodeURIComponent(isEn ? `Hello, I would like to inquire about the price of: ${product.name}` : `مرحباً، أستفسر عن سعر صنف: ${product.name}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  flex: '1 1 200px',
+                  height: '36px',
+                  borderRadius: '12px',
+                  background: 'var(--storefront-primary-color, #170e5e)',
+                  color: 'var(--storefront-primary-contrast, #ffffff)',
+                  border: '1px solid var(--storefront-primary-color, #170e5e)',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                }}
+              >
+                <span>{t('storefront.storefront_product_card.s15', 'استفسر عن السعر')}</span>
+              </a>
+            ) : (
+              <button
+                className="storefront-deal-add-btn"
+                type="button"
+                onClick={() => onQuickView?.(product)}
+                style={{
+                  flex: '1 1 200px',
+                  height: '36px',
+                  borderRadius: '12px',
+                  background: 'var(--storefront-primary-color, #170e5e)',
+                  color: 'var(--storefront-primary-contrast, #ffffff)',
+                  border: '1px solid var(--storefront-primary-color, #170e5e)',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                }}
+              >
+                <span>{t('storefront.storefront_product_card.s15', 'استفسر عن السعر')}</span>
+              </button>
+            )
           ) : (
             <button
               className="storefront-deal-add-btn"
@@ -446,9 +522,17 @@ export function StorefrontDealSpotlight({
                 flex: '1 1 200px',
                 height: '36px',
                 borderRadius: '12px',
-                background: isOutOfStock ? '#e2e8f0' : 'var(--storefront-primary-color, #170e5e)',
-                color: isOutOfStock ? '#64748b' : '#ffffff',
-                border: isOutOfStock ? '1px solid #cbd5e1' : '1px solid var(--storefront-primary-color, #170e5e)',
+                background: isOutOfStock
+                  ? '#e2e8f0'
+                  : justAdded
+                  ? '#16a34a'
+                  : 'var(--storefront-primary-color, #170e5e)',
+                color: isOutOfStock ? '#64748b' : 'var(--storefront-primary-contrast, #ffffff)',
+                border: isOutOfStock
+                  ? '1px solid #cbd5e1'
+                  : justAdded
+                  ? '1px solid #16a34a'
+                  : '1px solid var(--storefront-primary-color, #170e5e)',
                 fontSize: '12.5px',
                 fontWeight: 600,
                 cursor: isOutOfStock ? 'not-allowed' : 'pointer',
@@ -457,13 +541,22 @@ export function StorefrontDealSpotlight({
                 justifyContent: 'center',
                 gap: '8px',
                 boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-                transition: 'filter 0.15s ease, transform 0.15s ease',
+                transition: 'filter 0.15s ease, transform 0.15s ease, background-color 0.15s ease',
               }}
               onMouseEnter={(e) => !isOutOfStock && (e.currentTarget.style.filter = 'brightness(1.12)')}
               onMouseLeave={(e) => (e.currentTarget.style.filter = 'none')}
             >
-              <span>{isOutOfStock ? 'غير متوفر' : t('storefront.storefront_deal_spotlight.s23', 'أضف للسلة الآن')}</span>
-              {!isOutOfStock && <IconShoppingCart size={16} color="#ffffff" strokeWidth={2.2} />}
+              {justAdded ? (
+                <>
+                  <span>{isEn ? 'Added' : 'تمت الإضافة'}</span>
+                  <IconCheckCircle size={16} color="#ffffff" strokeWidth={2.4} />
+                </>
+              ) : (
+                <>
+                  <span>{isOutOfStock ? (isEn ? 'Unavailable' : 'غير متوفر') : t('storefront.storefront_deal_spotlight.s23', 'أضف للسلة الآن')}</span>
+                  {!isOutOfStock && <IconShoppingCart size={16} color="currentColor" strokeWidth={2.2} />}
+                </>
+              )}
             </button>
           )}
 
@@ -471,7 +564,7 @@ export function StorefrontDealSpotlight({
           {formattedPhone && (
             <a
               className="storefront-deal-wa-btn"
-              href={`https://wa.me/${formattedPhone}?text=${encodeURIComponent(`مرحباً، أود الاستفسار عن: ${product.name}`)}`}
+              href={`https://wa.me/${formattedPhone}?text=${encodeURIComponent(isEn ? `Hello, I would like to inquire about: ${product.name}` : `مرحباً، أود الاستفسار عن: ${product.name}`)}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{

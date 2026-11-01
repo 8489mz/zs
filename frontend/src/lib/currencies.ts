@@ -50,11 +50,17 @@ export function getGlobalSystemCurrency(): string {
 }
 
 /**
- * Returns the Arabic currency symbol (e.g. 'ر.س', 'ج.م', 'د.إ', '$') for a given currency code.
+ * Returns the currency symbol ('ر.س' / 'ج.م' in Arabic, or 'SAR' / 'EGP' in English).
  */
 export function getCurrencySymbol(currencyCode?: string | null): string {
   const code = currencyCode || getGlobalSystemCurrency();
   const upper = String(code).trim().toUpperCase();
+  const isEn =
+    (typeof document !== 'undefined' && document.documentElement.lang === 'en') ||
+    (typeof localStorage !== 'undefined' && localStorage.getItem('zs_storefront_lang') === 'en');
+  if (isEn) {
+    return upper === 'USD' ? '$' : upper;
+  }
   const match = SUPPORTED_CURRENCIES.find((c) => c.code === upper);
   return match ? match.symbol : upper;
 }

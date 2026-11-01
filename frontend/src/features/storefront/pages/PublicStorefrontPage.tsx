@@ -1,4 +1,4 @@
-import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '@/i18n';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import '@/styles/partials/storefront.css';
 import { useParams, useSearchParams, useLocation, useNavigate } from 'react-router-dom';
@@ -16,6 +16,7 @@ import { StorefrontMobileBottomNav } from '../components/StorefrontMobileBottomN
 import { initStorefrontPixels, trackStorefrontEvent } from '../lib/storefront-pixel-tracker';
 import type { StorefrontProduct } from '../types/storefront.types';
 import { usePublicStorefront, ITEMS_PER_PAGE } from '../hooks/usePublicStorefront';
+import { localizeProduct } from '../lib/storefront-translations';
 import { useStorefrontSeo } from '../hooks/useStorefrontSeo';
 import { IconStore } from '../components/StorefrontIcons';
 import { UtensilsIcon, BellIcon, CreditCardIcon, ReceiptIcon } from '@/shared/components/icons/AppIcons';
@@ -28,7 +29,7 @@ import { StorefrontFloatingWhatsApp } from '../components/StorefrontFloatingWhat
 import { setGlobalSystemCurrency } from '@/lib/currencies';
 
 export function PublicStorefrontPage() {
-  const { t } = useTranslation();
+  const { t, lang, dir } = useStorefrontLang();
   const { slug, tableNo, categoryId: paramCategoryId, productId, orderNumber: trackOrderNumber } = useParams<{ slug?: string; tableNo?: string; categoryId?: string; productId?: string; orderNumber?: string }>();
   const [searchParams] = useSearchParams();
   const location = useLocation();
@@ -42,11 +43,6 @@ export function PublicStorefrontPage() {
   const [quickViewProduct, setQuickViewProduct] = useState<StorefrontProduct | null>(null);
   const [isTableBillOpen, setIsTableBillOpen] = useState(false);
 
-  /**
-   * جذر المتجر الحالي (`/st/:slug` أو `/store/:slug` أو `/shop/:slug`).
-   * يُشتق من المسار الفعلي حتى يبقى العميل على نفس البادئة التي دخل منها.
-   * على سب دومين المتجر الجذر هو `/` نفسه، فالبادئة فارغة.
-   */
   const storeBasePath = useMemo(() => {
     if (hostSlug) return '';
     const match = location.pathname.match(/^\/(st|store|shop)\/[^/]+/);
@@ -54,7 +50,6 @@ export function PublicStorefrontPage() {
   }, [location.pathname, cleanSlug, hostSlug]);
   const storeHomePath = storeBasePath || '/';
 
-  /** فتح منتج = استجابة فورية 0ms + مزامنة الرابط للتاريخ والمشاركة بدون إعادة تركيب الصفحة. */
   const openProduct = useCallback(
     (product: StorefrontProduct) => {
       setQuickViewProduct(product);
@@ -66,7 +61,6 @@ export function PublicStorefrontPage() {
     [storeBasePath],
   );
 
-  /** الإغلاق يرجع خطوة في التاريخ حتى يعمل زر الرجوع طبيعياً بدون إعادة تركيب الصفحة. */
   const closeProduct = useCallback(() => {
     setQuickViewProduct(null);
     const targetUrl = paramCategoryId ? `${storeBasePath}/c/${paramCategoryId}` : storeHomePath;
@@ -127,6 +121,7 @@ export function PublicStorefrontPage() {
     handleGoHome: _handleGoHome,
     handleEditOrder,
     handleReorder,
+    rawProducts,
     categories,
     dealsProducts,
     smartDealProductIds,
@@ -173,12 +168,19 @@ export function PublicStorefrontPage() {
 
   const handleSelectDealsSimple = useCallback(() => {
     setOnlyDeals(true);
-  }, [setOnlyDeals]);
+    setOnlyFavorites(false);
+    setSelectedCategory('all');
+    setSearchTerm('');
+    window.scrollTo({ top: 180, behavior: 'smooth' });
+  }, [setOnlyDeals, setOnlyFavorites, setSelectedCategory, setSearchTerm]);
 
   const handleFooterToggleDeals = useCallback(() => {
     setOnlyDeals(true);
+    setOnlyFavorites(false);
     setSelectedCategory('all');
-  }, [setOnlyDeals, setSelectedCategory]);
+    setSearchTerm('');
+    window.scrollTo({ top: 180, behavior: 'smooth' });
+  }, [setOnlyDeals, setOnlyFavorites, setSelectedCategory, setSearchTerm]);
 
   const handleLoadMore = useCallback(() => {
     setVisibleCount((prev) => prev + ITEMS_PER_PAGE);
@@ -192,11 +194,12 @@ export function PublicStorefrontPage() {
       } else {
         navigate(`${storeBasePath}/c/${id}`);
       }
+      setSearchTerm('');
       setOnlyDeals(false);
       setOnlyFavorites(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     },
-    [navigate, storeBasePath, storeHomePath, setOnlyDeals, setOnlyFavorites],
+    [navigate, storeBasePath, storeHomePath, setSearchTerm, setOnlyDeals, setOnlyFavorites],
   );
 
   const handleCustomGoHome = useCallback(() => {
@@ -433,7 +436,7 @@ export function PublicStorefrontPage() {
   if (infoQuery.data && infoQuery.data.enabled === false) {
     return (
       <div
-        dir="rtl"
+        dir={dir}
         style={{
           minHeight: '100vh',
           display: 'flex',
@@ -462,7 +465,7 @@ export function PublicStorefrontPage() {
   if (catalogQuery.isError || infoQuery.isError || !infoQuery.data || !catalogQuery.data) {
     return (
       <div
-        dir="rtl"
+        dir={dir}
         style={{
           minHeight: '100vh',
           display: 'flex',
@@ -487,9 +490,13 @@ export function PublicStorefrontPage() {
     );
   }
 
+  const activeQuickViewProduct = quickViewProduct
+    ? rawProducts.find((p) => Number(p.id) === Number(quickViewProduct.id)) || localizeProduct(quickViewProduct, lang)
+    : null;
+
   return (
     <div
-      dir="rtl"
+      dir={dir}
       className="storefront-public-root storefront-page"
       style={{
         minHeight: '100vh',
@@ -517,6 +524,7 @@ export function PublicStorefrontPage() {
         onSelectCategory={handleSelectCategory}
         onSelectProduct={openProduct}
         onAddToCart={handleAddToCart}
+        onOpenCategories={handleOpenCategories}
       />
 
       {/* Dine-In QR Table Banner */}
@@ -648,7 +656,7 @@ export function PublicStorefrontPage() {
         />
       )}
 
-      {/* Sub-Header Utility Navigation Bar */}
+      {/* Sub-Header Utility Navigation Bar — shown when searching or filtering by category/deals/favorites */}
       {!isHomepageMultiRow && (
         <StorefrontSubNav
           categories={categories}
@@ -667,8 +675,8 @@ export function PublicStorefrontPage() {
         />
       )}
 
-      {/* Horizontal Circular Category Showcase - Only shown on Home / All view to keep dedicated category page clean */}
-      {!searchTerm && selectedCategory === 'all' && !onlyDeals && !onlyFavorites && (
+      {/* Horizontal Category Showcase - Kept visible on Home AND Category views for instant 1-tap switching */}
+      {!searchTerm && !onlyDeals && !onlyFavorites && (
         <StorefrontCategoryShowcase
           categories={categories}
           selectedCategoryId={selectedCategory}
@@ -733,7 +741,6 @@ export function PublicStorefrontPage() {
           />
         )}
 
-        {/* 🛡️ شريط مميزات وثقة المتجر (Value Proposition & Trust Bar) - يظهر في الرئيسية فقط */}
         {info && isHomepageMultiRow && <StorefrontTrustBar info={info} />}
       </main>
 
@@ -772,9 +779,9 @@ export function PublicStorefrontPage() {
 
       {/* Modals & Live Cart */}
       <StorefrontModals
-        allProducts={filteredProducts || []}
+        allProducts={rawProducts.length > 0 ? rawProducts : filteredProducts}
         onAddToCart={handleAddToCart}
-        quickViewProduct={quickViewProduct}
+        quickViewProduct={activeQuickViewProduct}
         onCloseQuickView={closeProduct}
         onSelectQuickViewProduct={openProduct}
         favoriteIds={favoriteIds}
@@ -809,7 +816,7 @@ export function PublicStorefrontPage() {
         onEditOrder={handleEditOrder}
         onReorder={handleModalReorder}
         isReviewModalOpen={isReviewModalOpen}
-        reviewProduct={reviewProduct}
+        reviewProduct={reviewProduct ? localizeProduct(reviewProduct, lang) : null}
         onCloseReviewModal={handleCloseReviewModal}
         onReviewSubmitted={handleReviewSubmitted}
       />

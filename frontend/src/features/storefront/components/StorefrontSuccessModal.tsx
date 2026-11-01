@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '@/i18n';
 import { useState } from 'react';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { DialogShell } from '@/shared/components/dialog-shell';
@@ -31,6 +32,7 @@ export function StorefrontSuccessModal({
   onTrackOrder,
 }: StorefrontSuccessModalProps) {
   const { t } = useTranslation();
+  const { isEn, dir } = useStorefrontLang();
   const activeOrder = order || orderData;
   const [linkCopied, setLinkCopied] = useState(false);
   const [orderNumCopied, setOrderNumCopied] = useState(false);
@@ -70,7 +72,9 @@ export function StorefrontSuccessModal({
     activeOrder.whatsappUrl ||
     (whatsappPhone
       ? `https://wa.me/${whatsappPhone.replace(/\D/g, '')}?text=${encodeURIComponent(
-          `مرحباً، أود الاستفسار عن طلبي رقم #${activeOrder.orderNumber}`
+          isEn
+            ? `Hello, I would like to inquire about my order #${activeOrder.orderNumber}`
+            : `مرحباً، أود الاستفسار عن طلبي رقم #${activeOrder.orderNumber}`
         )}`
       : '');
 
@@ -84,11 +88,11 @@ export function StorefrontSuccessModal({
     >
       <div
         className="full-bleed"
-        dir="rtl"
+        dir={dir}
         style={{
           padding: '16px 18px 14px',
           textAlign: 'center',
-          direction: 'rtl',
+          direction: dir,
           boxSizing: 'border-box',
           background: '#ffffff',
           fontFamily: 'inherit',
@@ -198,7 +202,7 @@ export function StorefrontSuccessModal({
             border: '1px solid #e2e8f0',
             borderRadius: '13px',
             padding: '10px 12px',
-            textAlign: 'right',
+            textAlign: isEn ? 'left' : 'right',
             marginBottom: '10px',
             boxSizing: 'border-box',
           }}

@@ -1,4 +1,4 @@
-import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '@/i18n';
 import { useState } from 'react';
 import { Trash2Icon } from '@/shared/components/icons/AppIcons';
 import { CartItem } from '../types/storefront.types';
@@ -13,10 +13,10 @@ interface StorefrontLiveCartItemProps {
 }
 
 export function StorefrontLiveCartItem({ item, onUpdateQuantity }: StorefrontLiveCartItemProps) {
-  const { t } = useTranslation();
+  const { t, isEn } = useStorefrontLang();
   const currCode = getGlobalSystemCurrency();
   const isThreeDec = isThreeDecimalCurrency(currCode);
-  const activeSymbol = currCode === 'EGP' ? 'جنيه' : getGlobalCurrencySymbol();
+  const activeSymbol = currCode === 'EGP' ? (isEn ? 'EGP' : 'جنيه') : getGlobalCurrencySymbol();
 
   const formatPriceNumber = (val: number | string | undefined | null): string => {
     const num = Number(val || 0);
@@ -93,7 +93,7 @@ export function StorefrontLiveCartItem({ item, onUpdateQuantity }: StorefrontLiv
 
         {/* Subtle Category Label */}
         <div style={{ fontSize: '11.5px', color: '#94a3b8', fontWeight: 400, letterSpacing: '0px' }}>
-          {item.product.categoryName || t('storefront.storefront_live_cart_item.default_cat', 'منتج أصلي')}
+          {item.product.categoryName || (isEn ? 'Authentic Product' : t('storefront.storefront_live_cart_item.default_cat', 'منتج أصلي'))}
         </div>
 
         {/* Bottom Row: Price on Right + Circular Stepper on Left */}
@@ -108,14 +108,14 @@ export function StorefrontLiveCartItem({ item, onUpdateQuantity }: StorefrontLiv
         >
           {/* Price & Savings */}
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap', letterSpacing: '0px' }}>
-            <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: 600, letterSpacing: '0px' }}>
-              {formatPriceNumber(lineTotal)} {activeSymbol}
-            </span>
             {linePricing.savings > 0 && (
               <span style={{ textDecoration: 'line-through', color: '#cbd5e1', fontSize: '11.5px', fontWeight: 400, letterSpacing: '0px' }}>
                 {formatPriceNumber(linePricing.originalLineTotal)} {activeSymbol}
               </span>
             )}
+            <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: 600, letterSpacing: '0px' }}>
+              {formatPriceNumber(lineTotal)} {activeSymbol}
+            </span>
             {linePricing.isBogoApplied && (
               <span
                 style={{
@@ -136,6 +136,7 @@ export function StorefrontLiveCartItem({ item, onUpdateQuantity }: StorefrontLiv
           {/* Modern Circular Stepper Controls (Left in RTL) */}
           {/* CRITICAL: Follow RULE[AGENTS_md] Section 5 for RTL: [+] on Right, Quantity in Center, [-] on Left */}
           <div
+            dir="rtl"
             style={{
               display: 'flex',
               alignItems: 'center',

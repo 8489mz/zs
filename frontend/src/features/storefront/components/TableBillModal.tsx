@@ -1,4 +1,4 @@
-import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '@/i18n';
 import { useState, useId } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { storefrontApi } from '../api/storefront.api';
@@ -25,7 +25,7 @@ interface TableBillModalProps {
 }
 
 export function TableBillModal({ open, onClose, slug, tableNumber }: TableBillModalProps) {
-  const { t } = useTranslation();
+  const { t, isEn, dir, tProductName } = useStorefrontLang();
   const [tipAmount, setTipAmount] = useState<number>(0);
   const [customTip, setCustomTip] = useState<string>('');
   const [guestName, setGuestName] = useState<string>('');
@@ -57,11 +57,11 @@ export function TableBillModal({ open, onClose, slug, tableNumber }: TableBillMo
       }),
     onSuccess: (data) => {
       setPaymentSuccessData(data);
-      toast.success(data.message || 'تم سداد حساب الطاولة بنجاح!');
+      toast.success(data.message || (isEn ? 'Table bill paid successfully!' : 'تم سداد حساب الطاولة بنجاح!'));
       billQuery.refetch();
     },
     onError: (err: any) => {
-      toast.error(err?.message || 'تعذر استكمال عملية سداد الحساب إلكترونياً');
+      toast.error(err?.message || (isEn ? 'Could not complete online bill payment' : 'تعذر استكمال عملية سداد الحساب إلكترونياً'));
     },
   });
 
@@ -93,7 +93,7 @@ export function TableBillModal({ open, onClose, slug, tableNumber }: TableBillMo
           feedbackCategory: 'general',
         });
         setIsRatingSubmitted(true);
-        toast.success('شكراً جزيلاً لتقييمك الرائع!');
+        toast.success(isEn ? 'Thank you so much for your wonderful rating!' : 'شكراً جزيلاً لتقييمك الرائع!');
       } catch {
         // quiet
       } finally {
@@ -118,7 +118,7 @@ export function TableBillModal({ open, onClose, slug, tableNumber }: TableBillMo
       }
       toast.success(res.message);
     } catch {
-      toast.error('تعذر إرسال التقييم');
+      toast.error(isEn ? 'Could not submit rating' : 'تعذر إرسال التقييم');
     } finally {
       setIsSubmittingRating(false);
     }
@@ -131,7 +131,7 @@ export function TableBillModal({ open, onClose, slug, tableNumber }: TableBillMo
       width="min(560px, 95vw)"
       ariaLabel={t('storefront.table_bill_modal.s0', "فاتورة وسداد حساب الطاولة")}
     >
-      <div style={{ padding: '20px 24px', direction: 'rtl', fontFamily: 'inherit' }}>
+      <div style={{ padding: '20px 24px', direction: dir, fontFamily: 'inherit' }}>
         {/* Header */}
         <div
           style={{
@@ -513,8 +513,8 @@ export function TableBillModal({ open, onClose, slug, tableNumber }: TableBillMo
                       }}
                     >
                       <div>
-                        <span style={{ fontWeight: 700, color: '#0f172a' }}>{item.name}</span>
-                        <span style={{ color: '#64748b', marginRight: '6px', fontSize: '11px' }}>
+                        <span style={{ fontWeight: 700, color: '#0f172a' }}>{tProductName(item.name)}</span>
+                        <span style={{ color: '#64748b', marginRight: '6px', marginLeft: '6px', fontSize: '11px' }}>
                           × {item.qty}
                         </span>
                       </div>
@@ -688,6 +688,8 @@ export function TableBillModal({ open, onClose, slug, tableNumber }: TableBillMo
                   <span>
                     {payMutation.isPending
                       ? t('storefront.table_bill_modal.s42', "جارٍ تأكيد السداد...")
+                      : isEn
+                      ? `Pay Bill Now by Card • ${finalTotal} ${currencySymbol}`
                       : `سداد الحساب الآن بالبطاقة • ${finalTotal} ${currencySymbol}`}
                   </span>
                 </Button>

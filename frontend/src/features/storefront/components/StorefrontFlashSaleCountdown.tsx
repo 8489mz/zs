@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
+import { useStorefrontLang } from '../../../i18n';
 import type { StorefrontProduct } from '../types/storefront.types';
 import { resolveProductPhoto } from '../lib/storefront-photo-matcher';
 import {
@@ -26,6 +27,8 @@ export function StorefrontFlashSaleCountdown({
   onQuickView,
   onSelectDeals,
 }: StorefrontFlashSaleCountdownProps) {
+  const { isEn, dir } = useStorefrontLang();
+
   // Live Countdown Timer: Days, Hours, Minutes, Seconds
   const [timeLeft, setTimeLeft] = useState<{
     days: number;
@@ -99,7 +102,7 @@ export function StorefrontFlashSaleCountdown({
   return (
     <section
       className="storefront-deals-of-the-day-section"
-      dir="rtl"
+      dir={dir}
       style={{
         margin: '32px 0',
         padding: '0 4px',
@@ -117,7 +120,7 @@ export function StorefrontFlashSaleCountdown({
           letterSpacing: '-0.2px',
         }}
       >
-        عروض وتخفيضات اليوم
+        {isEn ? 'Deals & Discounts of the Day' : 'عروض وتخفيضات اليوم'}
       </h2>
 
       {/* Main Pastel Mesh Gradient Banner Card */}
@@ -145,7 +148,7 @@ export function StorefrontFlashSaleCountdown({
         <svg
           viewBox="0 0 1200 360"
           fill="none"
-           preserveAspectRatio="none"
+          preserveAspectRatio="none"
           style={{
             position: 'absolute',
             inset: 0,
@@ -183,7 +186,7 @@ export function StorefrontFlashSaleCountdown({
           />
         </svg>
 
-        {/* Right Side (in RTL): Title + 4 Countdown Boxes */}
+        {/* Right Side: Title + 4 Countdown Boxes */}
         <div
           style={{
             position: 'relative',
@@ -216,7 +219,7 @@ export function StorefrontFlashSaleCountdown({
                 width: '100%',
               }}
             >
-              سارع الآن! عروض محدودة
+              {isEn ? 'Hurry! Limited Time Deals' : 'سارع الآن! عروض محدودة'}
             </h3>
 
             {/* 4 Calm & Uniform Light Countdown Cards */}
@@ -226,14 +229,14 @@ export function StorefrontFlashSaleCountdown({
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '6px',
-                direction: 'rtl',
+                direction: dir,
               }}
             >
               {[
-                { label: 'يوم', value: padZero(timeLeft.days) },
-                { label: 'ساعة', value: padZero(timeLeft.hours) },
-                { label: 'دقيقة', value: padZero(timeLeft.minutes) },
-                { label: 'ثانية', value: padZero(timeLeft.seconds) },
+                { label: isEn ? 'Days' : 'يوم', value: padZero(timeLeft.days) },
+                { label: isEn ? 'Hours' : 'ساعة', value: padZero(timeLeft.hours) },
+                { label: isEn ? 'Mins' : 'دقيقة', value: padZero(timeLeft.minutes) },
+                { label: isEn ? 'Secs' : 'ثانية', value: padZero(timeLeft.seconds) },
               ].map((box, index, arr) => (
                 <Fragment key={index}>
                   <div

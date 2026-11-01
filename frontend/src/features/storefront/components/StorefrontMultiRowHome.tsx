@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '@/i18n';
 import type { StorefrontProduct, StorefrontCategory, StorefrontInfo } from '../types/storefront.types';
 import { StorefrontShelfSection } from './StorefrontShelfSection';
 import { StorefrontMidBannerCard } from './StorefrontMidBannerCard';
@@ -49,7 +49,7 @@ export function StorefrontMultiRowHome({
   onSelectCategory,
   onOpenCategoriesModal,
 }: StorefrontMultiRowHomeProps) {
-  const { t } = useTranslation();
+  const { isEn } = useStorefrontLang();
 
   const allProducts = React.useMemo(() => {
     const list: StorefrontProduct[] = [];
@@ -105,8 +105,8 @@ export function StorefrontMultiRowHome({
       {dealsProducts.length > 0 && (
         <StorefrontShelfSection
           sectionId="storefront-deals-shelf"
-          badge={t('storefront.storefront_multi_row_home.s0', 'تخفيضات وعروض اليوم')}
-          viewAllLabel={`عرض كل التخفيضات (${dealsProducts.length})`}
+          badge={isEn ? "Today's Deals & Discounts" : 'تخفيضات وعروض اليوم'}
+          viewAllLabel={isEn ? `View All Deals (${dealsProducts.length})` : `عرض كل التخفيضات (${dealsProducts.length})`}
           products={dealsProducts.slice(0, 12)}
           cartMap={cartMap}
           whatsappPhone={info.whatsappPhone}
@@ -153,7 +153,7 @@ export function StorefrontMultiRowHome({
             <StorefrontShelfSection
               sectionId={`storefront-category-shelf-${section.categoryId}`}
               badge={section.categoryName}
-              viewAllLabel={`عرض كل أصناف القسم (${section.totalCount})`}
+              viewAllLabel={isEn ? `View All (${section.totalCount})` : `عرض كل أصناف القسم (${section.totalCount})`}
               products={section.products.slice(0, 12)}
               cartMap={cartMap}
               whatsappPhone={info.whatsappPhone}

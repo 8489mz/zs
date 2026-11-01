@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '@/i18n';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -68,6 +69,7 @@ export function StorefrontMyOrdersModal({
   allProducts = [],
 }: StorefrontMyOrdersModalProps) {
   const { t } = useTranslation();
+  const { isEn, dir } = useStorefrontLang();
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState('');
   const [cancellingOrder, setCancellingOrder] = useState<OnlineOrderRecord | null>(null);
@@ -126,7 +128,7 @@ export function StorefrontMyOrdersModal({
       setCancellingOrder(null);
     },
     onError: (err: Error) => {
-      setActionError(err.message || 'تعذر إلغاء الطلب');
+      setActionError(err.message || (isEn ? 'Could not cancel order' : 'تعذر إلغاء الطلب'));
       setCancellingOrder(null);
     },
   });
@@ -165,7 +167,7 @@ export function StorefrontMyOrdersModal({
     >
       <div
         className="full-bleed"
-        dir="rtl"
+        dir={dir}
         style={{
           background: '#ffffff',
           borderRadius: '22px',
@@ -173,7 +175,7 @@ export function StorefrontMyOrdersModal({
           display: 'flex',
           flexDirection: 'column',
           maxHeight: 'min(90vh, 760px)',
-          direction: 'rtl',
+          direction: dir,
           position: 'relative',
           fontFamily: 'inherit',
         }}
@@ -204,7 +206,7 @@ export function StorefrontMyOrdersModal({
                 borderRadius: '16px',
                 padding: '20px',
                 textAlign: 'center',
-                direction: 'rtl',
+                direction: dir,
                 boxShadow: '0 20px 30px -10px rgba(15, 23, 42, 0.15)',
               }}
               onClick={(e) => e.stopPropagation()}
@@ -226,10 +228,10 @@ export function StorefrontMyOrdersModal({
               </div>
 
               <h4 style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: 600, color: '#0f172a' }}>
-                إلغاء الطلب #{cancellingOrder.orderNumber}
+                {isEn ? `Cancel Order #${cancellingOrder.orderNumber}` : `إلغاء الطلب #${cancellingOrder.orderNumber}`}
               </h4>
               <p style={{ margin: '0 0 16px', fontSize: '12.5px', color: '#64748b', lineHeight: 1.5, fontWeight: 400 }}>
-                هل أنت متأكد من رغبتك في إلغاء هذا الطلب؟
+                {isEn ? 'Are you sure you want to cancel this order?' : 'هل أنت متأكد من رغبتك في إلغاء هذا الطلب؟'}
               </p>
 
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -250,7 +252,7 @@ export function StorefrontMyOrdersModal({
                     fontFamily: 'inherit',
                   }}
                 >
-                  تراجع
+                  {isEn ? 'Keep Order' : 'تراجع'}
                 </button>
                 <button
                   type="button"
@@ -269,7 +271,9 @@ export function StorefrontMyOrdersModal({
                     fontFamily: 'inherit',
                   }}
                 >
-                  {cancelMutation.isPending ? 'جاري الإلغاء...' : 'تأكيد الإلغاء'}
+                  {cancelMutation.isPending
+                    ? (isEn ? 'Cancelling...' : 'جاري الإلغاء...')
+                    : (isEn ? 'Confirm Cancel' : 'تأكيد الإلغاء')}
                 </button>
               </div>
             </div>
@@ -295,13 +299,13 @@ export function StorefrontMyOrdersModal({
               color: '#0f172a',
             }}
           >
-            متابعة الطلبات
+            {isEn ? 'Track My Orders' : 'متابعة الطلبات'}
           </h3>
 
           <button
             type="button"
             onClick={onClose}
-            title="إغلاق"
+            title={isEn ? 'Close' : 'إغلاق'}
             style={{
               background: '#f8fafc',
               border: '1px solid #e2e8f0',
@@ -328,11 +332,11 @@ export function StorefrontMyOrdersModal({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ابحث برقم الطلب أو رقم الهاتف..."
+              placeholder={isEn ? 'Search by order number or phone...' : 'ابحث برقم الطلب أو رقم الهاتف...'}
               style={{
                 width: '100%',
                 height: '36px',
-                padding: '0 34px 0 12px',
+                padding: isEn ? '0 12px 0 34px' : '0 34px 0 12px',
                 borderRadius: '10px',
                 border: '1px solid #f1f5f9',
                 background: '#f9fafb',
@@ -348,7 +352,7 @@ export function StorefrontMyOrdersModal({
               style={{
                 position: 'absolute',
                 top: '50%',
-                right: '11px',
+                ...(isEn ? { left: '11px' } : { right: '11px' }),
                 transform: 'translateY(-50%)',
                 display: 'flex',
                 alignItems: 'center',
@@ -397,7 +401,7 @@ export function StorefrontMyOrdersModal({
                 fontSize: '13px',
               }}
             >
-              {t('storefront.my_orders.loading', 'جاري جلب بيانات الطلبات...')}
+              {isEn ? 'Loading your orders...' : 'جاري جلب بيانات الطلبات...'}
             </div>
           ) : displayedOrders.length === 0 ? (
             <div
@@ -442,8 +446,12 @@ export function StorefrontMyOrdersModal({
                 }}
               >
                 {searchQuery.trim()
-                  ? t('storefront.my_orders.no_search_results', 'لم يتم العثور على أي طلب يطابق بحثك')
-                  : t('storefront.my_orders.empty_title', 'لا توجد طلبات سابقة مسجلة حتى الآن')}
+                  ? isEn
+                    ? 'No orders match your search'
+                    : 'لم يتم العثور على أي طلب يطابق بحثك'
+                  : isEn
+                  ? 'No previous orders recorded yet'
+                  : 'لا توجد طلبات سابقة مسجلة حتى الآن'}
               </h4>
 
               <p
@@ -456,14 +464,12 @@ export function StorefrontMyOrdersModal({
                 }}
               >
                 {searchQuery.trim()
-                  ? t(
-                      'storefront.my_orders.no_search_desc',
-                      'تأكد من كتابة رقم الطلب أو رقم الهاتف بصورة صحيحة، أو امسح البحث لإظهار كافة الطلبات.'
-                    )
-                  : t(
-                      'storefront.my_orders.empty_desc',
-                      'لم تقم بإتمام أي طلبات شراء من هذا المتصفح بعد. عند إتمام طلبك، ستتمكن من متابعة مراحله وتتبع شحنته من هنا مباشرة.'
-                    )}
+                  ? isEn
+                    ? 'Make sure you typed the order number or phone number correctly, or clear the search to show all orders.'
+                    : 'تأكد من كتابة رقم الطلب أو رقم الهاتف بصورة صحيحة، أو امسح البحث لإظهار كافة الطلبات.'
+                  : isEn
+                  ? 'You have not placed any orders from this browser yet. Once you place an order, you can track its status and shipment right here.'
+                  : 'لم تقم بإتمام أي طلبات شراء من هذا المتصفح بعد. عند إتمام طلبك، ستتمكن من متابعة مراحله وتتبع شحنته من هنا مباشرة.'}
               </p>
 
               {searchQuery.trim() ? (
@@ -482,7 +488,7 @@ export function StorefrontMyOrdersModal({
                     transition: 'all 0.15s ease',
                   }}
                 >
-                  {t('storefront.my_orders.clear_search', 'مسح البحث وعرض الكل')}
+                  {isEn ? 'Clear search & show all' : 'مسح البحث وعرض الكل'}
                 </button>
               ) : (
                 <button
@@ -501,7 +507,7 @@ export function StorefrontMyOrdersModal({
                     transition: 'opacity 0.15s ease',
                   }}
                 >
-                  {t('storefront.my_orders.browse_store', 'تصفح المتجر الآن')}
+                  {isEn ? 'Browse Store Now' : 'تصفح المتجر الآن'}
                 </button>
               )}
             </div>

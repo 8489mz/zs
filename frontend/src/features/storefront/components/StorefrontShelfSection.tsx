@@ -1,30 +1,14 @@
-import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '@/i18n';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { StorefrontProduct } from '../types/storefront.types';
 import { StorefrontProductCard } from './StorefrontProductCard';
 import { StorefrontDealSpotlight } from './StorefrontDealSpotlight';
 import { IconArrowUpRight } from './StorefrontIcons';
 
-/**
- * رفّ منتجات ذكي تفاعلي (Dynamic Responsive Storefront Shelf):
- *
- * يطبّق معمارية العرض التفاعلي الذكي حسب عدد الأصناف (Zero Dead White Space):
- * 1. صنف واحد (1 Item): كارت أفقي عريض وفاخر (Full-Width Spotlight Showcase)
- *    بتخطيط من عمودين متوازنين (ديسكتوب) وعمود واحد (موبايل).
- * 2. صنفان (2 Items): شبكة ثنائية متوازنة (repeat(2, minmax(0, 1fr))) تملأ 100% من عرض الرف
- *    ببطاقات عريضة فاخرة تبرز الصورة والمواصفات.
- * 3. ثلاثة أصناف (3 Items): شبكة ثلاثية متوازنة (repeat(3, minmax(0, 1fr))) تملأ المساحة بالكامل.
- * 4. أربعة أصناف فأكثر (4+ Items): شريط تمرير أفقي سلس مع أسهم تنقل عند الفائض.
- */
-
 type Props = {
-  /** معرف الرف للتمرير السلس المباشر */
   sectionId?: string;
-  /** الاسم المعروض في الشارة (اسم القسم عادة) */
   badge: string;
-  /** سطر وصفي بجانب الشارة — يُخفى على الموبايل */
   subtitle?: string;
-  /** نص زر عرض الكل */
   viewAllLabel: string;
   products: StorefrontProduct[];
   cartMap: Map<number, number>;
@@ -56,11 +40,10 @@ export const StorefrontShelfSection = React.memo(function StorefrontShelfSection
   onToggleFavorite,
   onQuickView,
 }: Props) {
-  const { t } = useTranslation();
+  const { isEn, dir } = useStorefrontLang();
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [canScroll, setCanScroll] = useState(false);
 
-  // الأسهم تظهر فقط عندما يكون هناك ما يُمرَّر إليه فعلاً في حالة الـ 4 أصناف فأكثر
   const syncScrollability = useCallback(() => {
     if (products.length < 4) {
       setCanScroll(false);
@@ -81,15 +64,19 @@ export const StorefrontShelfSection = React.memo(function StorefrontShelfSection
     return () => observer.disconnect();
   }, [syncScrollability, products.length]);
 
-  /**
-   * `prev`/`next` منطقيان لا بصريان: في RTL يتكفّل المتصفح بعكس الاتجاه.
-   */
   const scrollBy = (direction: 'prev' | 'next') => {
     const el = trackRef.current;
     if (!el) return;
     const firstItem = el.querySelector<HTMLElement>('.storefront-shelf-item');
     const step = firstItem ? firstItem.offsetWidth + 16 : 226;
-    el.scrollBy({ left: direction === 'next' ? step : -step, behavior: 'smooth' });
+    const delta = isEn
+      ? direction === 'next'
+        ? step
+        : -step
+      : direction === 'next'
+        ? -step
+        : step;
+    el.scrollBy({ left: delta, behavior: 'smooth' });
   };
 
   const arrowStyle: React.CSSProperties = {
@@ -114,14 +101,16 @@ export const StorefrontShelfSection = React.memo(function StorefrontShelfSection
   return (
     <div
       id={sectionId}
+      dir={dir}
       className="storefront-section-card"
       style={{
         background: '#ffffff',
-        borderRadius: '36px',
+        borderRadius: '20px',
         border: '1px solid #edf1f7',
-        padding: '26px 24px 22px',
+        padding: '24px 22px 20px',
         boxShadow: '0 10px 30px -6px rgba(15, 23, 42, 0.04), 0 2px 8px -2px rgba(15, 23, 42, 0.02)',
         scrollMarginTop: '96px',
+        direction: dir,
       }}
     >
       {/* Shelf Header */}
@@ -181,27 +170,37 @@ export const StorefrontShelfSection = React.memo(function StorefrontShelfSection
               <button
                 type="button"
                 onClick={() => scrollBy('prev')}
-                title={t('storefront.storefront_shelf_section.s0', 'السابق')}
-                aria-label={t('storefront.storefront_shelf_section.s1', 'السابق')}
+                title={isEn ? 'Previous' : 'السابق'}
+                aria-label={isEn ? 'Previous' : 'السابق'}
                 style={arrowStyle}
                 onMouseEnter={(e) => (e.currentTarget.style.background = '#f1f5f9')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
               >
                 <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2.5"
+                    d={isEn ? 'M15 19l-7-7 7-7' : 'M9 5l7 7-7 7'}
+                  />
                 </svg>
               </button>
               <button
                 type="button"
                 onClick={() => scrollBy('next')}
-                title={t('storefront.storefront_shelf_section.s2', 'التالي')}
-                aria-label={t('storefront.storefront_shelf_section.s3', 'التالي')}
+                title={isEn ? 'Next' : 'التالي'}
+                aria-label={isEn ? 'Next' : 'التالي'}
                 style={arrowStyle}
                 onMouseEnter={(e) => (e.currentTarget.style.background = '#f1f5f9')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
               >
                 <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2.5"
+                    d={isEn ? 'M9 5l7 7-7 7' : 'M15 19l-7-7 7-7'}
+                  />
                 </svg>
               </button>
             </div>
@@ -224,20 +223,20 @@ export const StorefrontShelfSection = React.memo(function StorefrontShelfSection
               whiteSpace: 'nowrap',
               flexShrink: 0,
               padding: 0,
+              margin: 0,
+              minHeight: 0,
+              height: 'auto',
               fontFamily: 'inherit',
             }}
           >
-            <span className="storefront-shelf-viewall-label">{viewAllLabel}</span>
+            <span className="storefront-shelf-viewall-label">
+              {viewAllLabel === 'عرض كل أصناف القسم' && isEn ? 'View All' : viewAllLabel}
+            </span>
             <IconArrowUpRight size={13} strokeWidth={2.2} />
           </button>
         </div>
       </div>
 
-      {/* =========================================================================
-          معمارية العرض التفاعلي حسب عدد الأصناف (Zero Dead White Space):
-          ========================================================================= */}
-
-      {/* الحالة 1: صنف واحد فقط -> كارت أفقي عريض وفاخر (Full-Width Spotlight Showcase) */}
       {products.length === 1 ? (
         <StorefrontDealSpotlight
           product={products[0]}
@@ -252,7 +251,6 @@ export const StorefrontShelfSection = React.memo(function StorefrontShelfSection
           onToggleFavorite={onToggleFavorite}
         />
       ) : products.length === 2 ? (
-        /* الحالة 2: صنفان فقط -> شبكة ثنائية متوازنة تملأ 100% من عرض الرف ببطاقات عريضة */
         <div className="storefront-shelf-dual-grid">
           {products.map((product) => (
             <StorefrontProductCard
@@ -272,7 +270,6 @@ export const StorefrontShelfSection = React.memo(function StorefrontShelfSection
           ))}
         </div>
       ) : products.length === 3 ? (
-        /* الحالة 3: ثلاثة أصناف -> شبكة ثلاثية متوازنة تملأ المساحة بالكامل بتناسق بصري */
         <div className="storefront-shelf-tri-grid">
           {products.map((product) => (
             <StorefrontProductCard
@@ -292,16 +289,14 @@ export const StorefrontShelfSection = React.memo(function StorefrontShelfSection
           ))}
         </div>
       ) : (
-        /* الحالة 4: أربعة أصناف فأكثر -> شريط التمرير الأفقي السلس مع أسهم الفائض */
         <div className="storefront-shelf-wrapper">
-          {/* Floating Right Chevron (Previous in RTL) */}
           {canScroll && (
             <button
               type="button"
               className="storefront-shelf-floating-arrow storefront-shelf-arrow-prev"
               onClick={() => scrollBy('prev')}
-              aria-label={t('storefront.storefront_shelf_section.s4', 'السابق')}
-              title={t('storefront.storefront_shelf_section.s5', 'السابق')}
+              aria-label={isEn ? 'Previous' : 'السابق'}
+              title={isEn ? 'Previous' : 'السابق'}
             >
               <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.8" d="M9 5l7 7-7 7" />
@@ -329,14 +324,13 @@ export const StorefrontShelfSection = React.memo(function StorefrontShelfSection
             ))}
           </div>
 
-          {/* Floating Left Chevron (Next in RTL) */}
           {canScroll && (
             <button
               type="button"
               className="storefront-shelf-floating-arrow storefront-shelf-arrow-next"
               onClick={() => scrollBy('next')}
-              aria-label={t('storefront.storefront_shelf_section.s8', 'التالي')}
-              title={t('storefront.storefront_shelf_section.s9', 'التالي')}
+              aria-label={isEn ? 'التالي' : 'التالي'}
+              title={isEn ? 'Next' : 'التالي'}
             >
               <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.8" d="M15 19l-7-7 7-7" />

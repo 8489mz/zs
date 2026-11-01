@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { useStorefrontLang } from '../../../i18n';
 import type { StorefrontProduct, StorefrontCategory } from '../types/storefront.types';
 import { resolveProductPhoto, generatePremiumProductSvg } from '../lib/storefront-photo-matcher';
 
@@ -19,14 +20,14 @@ interface StorefrontAmazonVibrantSectionProps {
 }
 
 const QUICK_TILE_ITEMS = [
-  { label: 'الأكثر مبيعاً', badge: 'اختيار مميز', badgeBg: '#f1f5f9', badgeColor: '#334155' },
-  { label: 'ترشيحاتنا لك', badge: 'اختيار المتجر', badgeBg: '#eff6ff', badgeColor: '#2d68c4' },
-  { label: 'عرض خاص لك', badge: 'عرض لمدة محدودة', badgeBg: '#cc0c39', badgeColor: '#ffffff' },
-  { label: 'أفضل العروض', badge: 'خصم حصري', badgeBg: '#fef3c7', badgeColor: '#b45309' },
-  { label: 'مختارات مميزة', badge: 'الأكثر طلباً', badgeBg: '#f1f5f9', badgeColor: '#334155' },
-  { label: 'وصل حديثاً', badge: 'تشكيلة جديدة', badgeBg: '#ecfdf5', badgeColor: '#047857' },
-  { label: 'عروض اليوم', badge: 'فرصة توفير', badgeBg: '#eff6ff', badgeColor: '#2d68c4' },
-  { label: 'اختياراتنا لك', badge: 'موصى به', badgeBg: '#f1f5f9', badgeColor: '#334155' },
+  { labelAr: 'الأكثر مبيعاً', labelEn: 'Best Sellers', badgeAr: 'اختيار مميز', badgeEn: 'Top Pick', badgeBg: '#f1f5f9', badgeColor: '#334155' },
+  { labelAr: 'ترشيحاتنا لك', labelEn: 'Our Picks for You', badgeAr: 'اختيار المتجر', badgeEn: 'Store Choice', badgeBg: '#eff6ff', badgeColor: '#2d68c4' },
+  { labelAr: 'عرض خاص لك', labelEn: 'Special Offer', badgeAr: 'عرض لمدة محدودة', badgeEn: 'Limited Time Deal', badgeBg: '#cc0c39', badgeColor: '#ffffff' },
+  { labelAr: 'أفضل العروض', labelEn: 'Best Deals', badgeAr: 'خصم حصري', badgeEn: 'Exclusive Offer', badgeBg: '#fef3c7', badgeColor: '#b45309' },
+  { labelAr: 'مختارات مميزة', labelEn: 'Featured Picks', badgeAr: 'الأكثر طلباً', badgeEn: 'Most Popular', badgeBg: '#f1f5f9', badgeColor: '#334155' },
+  { labelAr: 'وصل حديثاً', labelEn: 'New Arrivals', badgeAr: 'تشكيلة جديدة', badgeEn: 'New Collection', badgeBg: '#ecfdf5', badgeColor: '#047857' },
+  { labelAr: 'عروض اليوم', labelEn: "Today's Deals", badgeAr: 'فرصة توفير', badgeEn: 'Super Saver', badgeBg: '#eff6ff', badgeColor: '#2d68c4' },
+  { labelAr: 'اختياراتنا لك', labelEn: 'Curated for You', badgeAr: 'موصى به', badgeEn: 'Recommended', badgeBg: '#f1f5f9', badgeColor: '#334155' },
 ];
 
 export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmazonVibrantSection({
@@ -36,6 +37,7 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
   onSelectCategory,
   onQuickView,
 }: StorefrontAmazonVibrantSectionProps) {
+  const { isEn, dir } = useStorefrontLang();
   const quickRowRef = useRef<HTMLDivElement>(null);
 
   const quickProducts = React.useMemo(() => {
@@ -77,9 +79,9 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
     [products]
   );
 
-  const scrollQuickRow = (dir: 'left' | 'right') => {
+  const scrollQuickRow = (scrollDir: 'left' | 'right') => {
     if (!quickRowRef.current) return;
-    const offset = dir === 'left' ? -320 : 320;
+    const offset = scrollDir === 'left' ? -320 : 320;
     quickRowRef.current.scrollBy({ left: offset, behavior: 'smooth' });
   };
 
@@ -93,7 +95,7 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
 
   return (
     <section
-      dir="rtl"
+      dir={dir}
       className="sf-amz-vibrant-section"
       style={{
         width: '100%',
@@ -122,10 +124,10 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
           position: relative;
         }
         .sf-amz-promo-card {
-          border-radius: 26px;
+          border-radius: 20px;
           overflow: hidden;
           position: relative;
-          height: 342px;
+          height: 332px;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
@@ -134,16 +136,16 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
           backface-visibility: hidden;
           -webkit-backface-visibility: hidden;
           transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s ease;
-          box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
           user-select: none;
           box-sizing: border-box;
         }
         .sf-amz-promo-card:hover {
           transform: translate3d(0, -4px, 0);
-          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+          box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
         }
         .sf-amz-hero-orange-card {
-          border-radius: 30px;
+          border-radius: 22px;
           background: linear-gradient(180deg, #ff6200 0%, #f95700 60%, #ea4c00 100%);
           color: #ffffff;
           position: relative;
@@ -152,8 +154,8 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
           flex-direction: column;
           justify-content: space-between;
           cursor: pointer;
-          min-height: 542px;
-          box-shadow: 0 6px 20px rgba(255, 98, 0, 0.22);
+          min-height: 530px;
+          box-shadow: 0 10px 26px rgba(249, 87, 0, 0.22);
           transform: translate3d(0, 0, 0);
           backface-visibility: hidden;
           -webkit-backface-visibility: hidden;
@@ -163,7 +165,7 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
         }
         .sf-amz-hero-orange-card:hover {
           transform: translate3d(0, -4px, 0);
-          box-shadow: 0 12px 28px rgba(255, 98, 0, 0.3);
+          box-shadow: 0 16px 34px rgba(249, 87, 0, 0.28);
         }
         .sf-amz-quick-tiles-wrapper {
           position: relative;
@@ -186,13 +188,13 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
         .sf-amz-quick-tile {
           background: #ffffff;
           border: 1px solid #edf1f7;
-          border-radius: 22px;
+          border-radius: 16px;
           padding: 12px 12px 10px;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
           gap: 8px;
-          height: 190px;
+          height: 184px;
           cursor: pointer;
           box-sizing: border-box;
           transform: translate3d(0, 0, 0);
@@ -211,8 +213,12 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
           left: 6px;
           top: 50%;
           transform: translate3d(0, -50%, 0);
-          width: 34px;
-          height: 34px;
+          width: 34px !important;
+          height: 34px !important;
+          min-width: 34px !important;
+          min-height: 34px !important;
+          padding: 0 !important;
+          margin: 0 !important;
           background: #ffffff !important;
           border: 1px solid #E0E3E7 !important;
           border-radius: 10px !important;
@@ -265,160 +271,17 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
           .sf-amz-vibrant-section {
             display: none !important;
           }
-          .sf-amz-hero-orange-card {
-            min-height: 224px !important;
-            border-radius: 14px !important;
-          }
-          .sf-amz-orange-copy {
-            padding: 14px 14px 4px !important;
-            gap: 4px !important;
-            justify-content: flex-start !important;
-          }
-          .sf-amz-orange-kicker {
-            font-size: 11px !important;
-          }
-          .sf-amz-orange-title {
-            font-size: 18px !important;
-            line-height: 1.3 !important;
-          }
-          .sf-amz-orange-pill {
-            font-size: 11px !important;
-            padding: 5px 12px !important;
-            margin-top: 4px !important;
-            border-radius: 8px !important;
-          }
-          .sf-amz-orange-stage {
-            height: 136px !important;
-          }
-          .sf-amz-orange-arch {
-            height: 124px !important;
-            width: 88% !important;
-          }
-          .sf-amz-orange-podiums {
-            height: 120px !important;
-            padding-bottom: 4px !important;
-          }
-          .sf-amz-podium-side-img {
-            width: 56px !important;
-            height: 56px !important;
-          }
-          .sf-amz-podium-side-box {
-            width: 54px !important;
-            height: 34px !important;
-          }
-          .sf-amz-podium-center-img {
-            width: 72px !important;
-            height: 72px !important;
-          }
-          .sf-amz-podium-center-box {
-            width: 66px !important;
-            height: 44px !important;
-          }
-          .sf-amz-promo-cards-row {
-            display: grid !important;
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-            gap: 8px !important;
-            overflow: visible !important;
-            padding-bottom: 0 !important;
-          }
-          .sf-amz-promo-card {
-            min-width: 0 !important;
-            width: 100% !important;
-            height: 184px !important;
-            padding: 11px 10px 8px !important;
-            border-radius: 12px !important;
-          }
-          .sf-amz-promo-card > div:first-child {
-            gap: 3px !important;
-            padding-bottom: 4px !important;
-            justify-content: flex-start !important;
-          }
-          .sf-amz-promo-card h3 {
-            font-size: 13px !important;
-            line-height: 1.3 !important;
-            font-weight: 700 !important;
-          }
-          .sf-amz-promo-sub {
-            font-size: 10.5px !important;
-            line-height: 1.3 !important;
-          }
-          .sf-amz-promo-stage {
-            height: 92px !important;
-            padding: 4px !important;
-            border-radius: 10px !important;
-          }
-          .sf-amz-promo-stage img {
-            width: 78px !important;
-            height: 78px !important;
-          }
-          .sf-amz-coupon-badge {
-            padding: 3px 8px !important;
-            margin-top: 2px !important;
-            border-radius: 7px !important;
-          }
-          .sf-amz-coupon-badge span {
-            font-size: 10px !important;
-          }
-          .sf-amz-bundle-row {
-            padding: 5px 4px !important;
-            border-radius: 10px !important;
-            gap: 4px !important;
-          }
-          .sf-amz-bundle-item {
-            width: auto !important;
-            height: 46px !important;
-            padding: 3px !important;
-            border-radius: 8px !important;
-          }
-          .sf-amz-quick-tiles-row {
-            display: grid !important;
-            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-            gap: 7px !important;
-            overflow: visible !important;
-          }
-          .sf-amz-quick-tile {
-            min-width: 0 !important;
-            width: 100% !important;
-            height: 130px !important;
-            padding: 8px 6px 6px !important;
-            gap: 4px !important;
-            border-radius: 12px !important;
-          }
-          .sf-amz-quick-tile-title {
-            font-size: 10.5px !important;
-            font-weight: 600 !important;
-            text-align: center !important;
-          }
-          .sf-amz-quick-tile-img-box {
-            padding: 4px !important;
-            border-radius: 9px !important;
-          }
-          .sf-amz-quick-tile-img {
-            max-height: 52px !important;
-          }
-          .sf-amz-quick-tile-badge {
-            font-size: 8.5px !important;
-            padding: 2px 5px !important;
-            max-width: 100% !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            border-radius: 6px !important;
-          }
-          .sf-amz-floating-nav-btn {
-            display: none !important;
-          }
         }
       `}</style>
 
       <div className="sf-amz-vibrant-grid">
         {/* RIGHT COLUMN: Tall Vibrant Orange Flagship Campaign Card */}
         <div className="sf-amz-hero-orange-card" onClick={onSelectDeals}>
-          {/* Top Copy — Balanced spacing & sizing to fill the upper box */}
           <div
             className="sf-amz-orange-copy"
             style={{
-              padding: '28px 24px 16px',
-              textAlign: 'right',
+              padding: '26px 24px 16px',
+              textAlign: isEn ? 'left' : 'right',
               position: 'relative',
               zIndex: 3,
               width: '100%',
@@ -428,34 +291,34 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
               flexDirection: 'column',
               justifyContent: 'space-between',
               alignItems: 'flex-start',
-              gap: '14px',
+              gap: '10px',
             }}
           >
             <div
               className="sf-amz-orange-kicker"
               style={{
-                fontSize: '15.5px',
+                fontSize: '15px',
                 fontWeight: 700,
-                lineHeight: 1.4,
-                color: 'rgba(255, 255, 255, 0.96)',
-                letterSpacing: '0px',
+                lineHeight: 1.45,
+                color: '#fff7ed',
+                opacity: 0.96,
               }}
             >
-              عروض الموسم الكبرى
+              {isEn ? 'Curated Store Collection' : 'تشكيلة المتجر المختارة'}
             </div>
             <h2
               className="sf-amz-orange-title"
               style={{
                 margin: 0,
-                fontSize: '28px',
+                fontSize: isEn ? '24px' : '27px',
                 fontWeight: 800,
                 lineHeight: 1.38,
                 color: '#ffffff',
-                letterSpacing: '0px',
+                letterSpacing: '-0.2px',
                 width: '100%',
               }}
             >
-              تخفيضات اليوم قربت!
+              {isEn ? 'Top Deals & Featured Products' : 'أقوى العروض والمنتجات المميزة'}
             </h2>
             <span
               className="sf-amz-orange-pill"
@@ -464,27 +327,27 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                 alignItems: 'center',
                 justifyContent: 'center',
                 marginTop: '4px',
-                background: '#1e293b',
+                background: '#111827',
                 color: '#ffffff',
                 fontSize: '14px',
                 fontWeight: 700,
                 lineHeight: 1.4,
-                padding: '9px 22px',
+                padding: '7px 18px',
                 borderRadius: '10px',
-                boxShadow: '0 6px 14px rgba(15, 23, 42, 0.24)',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.22)',
               }}
             >
-              وفر أكثر مع عروضنا
+              {isEn ? 'Explore Deals Now' : 'استكشف العروض الآن'}
             </span>
           </div>
 
-          {/* Bottom 3D Fluted Arch Showcase Stage */}
+          {/* Bottom Arch Showcase Stage with Real Store Products */}
           <div
             className="sf-amz-orange-stage"
             style={{
               position: 'relative',
               width: '100%',
-              height: '326px',
+              height: '320px',
               marginTop: 'auto',
               display: 'flex',
               alignItems: 'flex-end',
@@ -499,13 +362,15 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                 position: 'absolute',
                 bottom: 0,
                 width: '88%',
-                height: '312px',
+                height: '304px',
                 borderRadius: '999px 999px 0 0',
-                border: '4px solid #ffd4b8',
+                borderTop: '3px solid #ffd4b8',
+                borderRight: '3px solid #ffd4b8',
+                borderLeft: '3px solid #ffd4b8',
                 borderBottom: 'none',
                 background:
-                  'radial-gradient(circle at 50% 38%, rgba(255, 247, 237, 0.36) 0%, rgba(255, 180, 100, 0.14) 52%, rgba(0, 0, 0, 0) 78%), repeating-linear-gradient(90deg, #d94300 0px, #ef4f00 10px, #c83b00 20px)',
-                boxShadow: 'inset 0 12px 28px rgba(0, 0, 0, 0.2), 0 0 26px rgba(255, 212, 184, 0.38)',
+                  'radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.92) 0%, rgba(255, 198, 150, 0.55) 48%, rgba(234, 76, 0, 0.85) 85%)',
+                boxShadow: 'inset 0 12px 28px rgba(255, 255, 255, 0.5), 0 -4px 20px rgba(255, 212, 184, 0.35)',
                 zIndex: 1,
               }}
             />
@@ -517,11 +382,11 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                 position: 'relative',
                 zIndex: 2,
                 width: '92%',
-                height: '296px',
+                height: '290px',
                 display: 'flex',
                 alignItems: 'flex-end',
                 justifyContent: 'center',
-                gap: '6px',
+                gap: '8px',
                 paddingBottom: '12px',
               }}
             >
@@ -530,7 +395,7 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                 <img
                   className="sf-amz-podium-side-img"
                   src={getProductPhotoUrl(stageProdRight)}
-                  alt={stageProdRight?.name || 'عرض مميز'}
+                  alt={stageProdRight?.name || (isEn ? 'Featured Deal' : 'عرض مميز')}
                   decoding="async"
                   onError={(e) => {
                     if (stageProdRight) {
@@ -544,18 +409,18 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                     transform: 'translate3d(0, 4px, 0)',
                     position: 'relative',
                     zIndex: 2,
-                    filter: 'drop-shadow(0 14px 16px rgba(0, 0, 0, 0.40))',
+                    filter: 'drop-shadow(0 12px 14px rgba(120, 35, 0, 0.38))',
                   }}
                 />
                 <div
                   className="sf-amz-podium-side-box"
                   style={{
                     width: '78px',
-                    height: '68px',
+                    height: '64px',
                     borderRadius: '12px 12px 4px 4px',
-                    borderTop: '3px solid #ffedd5',
+                    borderTop: '3px solid #ffb074',
                     background: 'linear-gradient(180deg, #ff852b 0%, #cc3d00 100%)',
-                    boxShadow: '0 8px 16px rgba(0,0,0,0.26), inset 0 2px 6px rgba(255,255,255,0.28)',
+                    boxShadow: '0 8px 16px rgba(0,0,0,0.22)',
                   }}
                 />
               </div>
@@ -565,7 +430,7 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                 <img
                   className="sf-amz-podium-center-img"
                   src={getProductPhotoUrl(stageProdCenter)}
-                  alt={stageProdCenter?.name || 'عرض مميز'}
+                  alt={stageProdCenter?.name || (isEn ? 'Featured Deal' : 'عرض مميز')}
                   decoding="async"
                   onError={(e) => {
                     if (stageProdCenter) {
@@ -579,18 +444,18 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                     transform: 'translate3d(0, 6px, 0)',
                     position: 'relative',
                     zIndex: 3,
-                    filter: 'drop-shadow(0 16px 20px rgba(0, 0, 0, 0.45))',
+                    filter: 'drop-shadow(0 14px 18px rgba(120, 35, 0, 0.45))',
                   }}
                 />
                 <div
                   className="sf-amz-podium-center-box"
                   style={{
                     width: '96px',
-                    height: '96px',
+                    height: '92px',
                     borderRadius: '14px 14px 4px 4px',
-                    borderTop: '3.5px solid #fff7ed',
-                    background: 'linear-gradient(180deg, #ff9238 0%, #d44200 100%)',
-                    boxShadow: '0 10px 22px rgba(0,0,0,0.32), inset 0 2px 8px rgba(255,255,255,0.32)',
+                    borderTop: '4px solid #ffc08e',
+                    background: 'linear-gradient(180deg, #ff8f3d 0%, #c93b00 100%)',
+                    boxShadow: '0 10px 22px rgba(0,0,0,0.28)',
                   }}
                 />
               </div>
@@ -600,7 +465,7 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                 <img
                   className="sf-amz-podium-side-img"
                   src={getProductPhotoUrl(stageProdLeft)}
-                  alt={stageProdLeft?.name || 'عرض مميز'}
+                  alt={stageProdLeft?.name || (isEn ? 'Featured Deal' : 'عرض مميز')}
                   decoding="async"
                   onError={(e) => {
                     if (stageProdLeft) {
@@ -614,18 +479,18 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                     transform: 'translate3d(0, 4px, 0)',
                     position: 'relative',
                     zIndex: 2,
-                    filter: 'drop-shadow(0 14px 16px rgba(0, 0, 0, 0.40))',
+                    filter: 'drop-shadow(0 12px 14px rgba(120, 35, 0, 0.38))',
                   }}
                 />
                 <div
                   className="sf-amz-podium-side-box"
                   style={{
                     width: '78px',
-                    height: '58px',
+                    height: '56px',
                     borderRadius: '12px 12px 4px 4px',
-                    borderTop: '3px solid #ffedd5',
+                    borderTop: '3px solid #ffb074',
                     background: 'linear-gradient(180deg, #ff852b 0%, #cc3d00 100%)',
-                    boxShadow: '0 8px 16px rgba(0,0,0,0.26), inset 0 2px 6px rgba(255,255,255,0.28)',
+                    boxShadow: '0 8px 16px rgba(0,0,0,0.22)',
                   }}
                 />
               </div>
@@ -633,74 +498,85 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
           </div>
         </div>
 
-        {/* LEFT COLUMN: 4 Vibrant Promo Cards (Top) + 6 Quick Product Tiles (Bottom) */}
+        {/* LEFT COLUMN: 4 Vibrant Promotional Cards (Top) + 6 Quick Product Tiles (Bottom) */}
         <div className="sf-amz-left-stack">
-          {/* TOP ROW: 4 Vibrant Campaign Cards */}
+          {/* TOP ROW: 4 Vibrant Colored Campaign Cards */}
           <div className="sf-amz-promo-cards-row">
-            {/* Card 1: Soft Calm Azure Blue — Fast Delivery */}
+            {/* Card 1: Vibrant Azure Blue */}
             <div
               className="sf-amz-promo-card"
               onClick={() => handleCategoryOrDeals(0)}
               style={{
                 background: 'linear-gradient(180deg, #2d68c4 0%, #3470ce 60%, #3d7add 100%)',
                 color: '#ffffff',
-                padding: '22px 18px 14px',
+                padding: '20px 18px 14px',
               }}
             >
-              <div
-                style={{
-                  textAlign: 'right',
-                  position: 'relative',
-                  zIndex: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '10px',
-                }}
-              >
+              <div style={{ textAlign: isEn ? 'left' : 'right', position: 'relative', zIndex: 2 }}>
+                <div
+                  className="sf-amz-promo-kicker"
+                  style={{
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    lineHeight: 1.45,
+                    color: '#dbeafe',
+                    marginBottom: '4px',
+                  }}
+                >
+                  {categories?.[0]?.name || (isEn ? 'Store Picks' : 'اختيارات المتجر')}
+                </div>
                 <h3
                   style={{
                     margin: 0,
-                    fontSize: '20.5px',
+                    fontSize: isEn ? '17.5px' : '19px',
                     fontWeight: 800,
-                    lineHeight: 1.45,
-                    letterSpacing: '0px',
+                    lineHeight: 1.4,
                     color: '#ffffff',
                   }}
                 >
-                  أوردرك يوصلك النهارده!
+                  {isEn ? 'Most Popular & Best Selling' : 'الأكثر طلباً ومبيعاً'}
                 </h3>
                 <div
                   className="sf-amz-promo-sub"
                   style={{
-                    fontSize: '13.5px',
+                    fontSize: '13px',
                     fontWeight: 600,
                     lineHeight: 1.45,
-                    color: 'rgba(255, 255, 255, 0.94)',
+                    color: '#eff6ff',
+                    marginTop: '4px',
                   }}
                 >
-                  توصيل سريع لباب البيت
+                  {isEn ? 'Curated top-quality selection' : 'تشكيلة مختارة بأعلى جودة'}
                 </div>
               </div>
 
-              {/* Real Product Showcase on Luminous Blue Spotlight */}
               <div
                 className="sf-amz-promo-stage"
                 style={{
                   width: '100%',
-                  height: '186px',
+                  height: '185px',
                   marginTop: 'auto',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   position: 'relative',
-                  borderRadius: '16px',
-                  background:
-                    'radial-gradient(circle at 50% 52%, rgba(255, 255, 255, 0.42) 0%, rgba(186, 230, 253, 0.2) 45%, rgba(255, 255, 255, 0.04) 76%)',
                 }}
               >
+                {/* Luminous Studio Spotlight Behind Product */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    width: '164px',
+                    height: '164px',
+                    borderRadius: '50%',
+                    background:
+                      'radial-gradient(circle, rgba(255, 255, 255, 0.92) 0%, rgba(191, 219, 254, 0.45) 48%, rgba(45, 104, 196, 0) 74%)',
+                    zIndex: 1,
+                  }}
+                />
                 <img
                   src={getProductPhotoUrl(card1Prod)}
-                  alt={card1Prod?.name || 'توصيل سريع'}
+                  alt={card1Prod?.name || (isEn ? 'Featured Product' : 'منتج مميز')}
                   decoding="async"
                   onError={(e) => {
                     if (card1Prod) {
@@ -708,87 +584,83 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                     }
                   }}
                   style={{
-                    width: '168px',
-                    height: '168px',
+                    width: '166px',
+                    height: '166px',
                     objectFit: 'contain',
+                    position: 'relative',
+                    zIndex: 2,
                     transform: 'translate3d(0, 0, 0)',
-                    filter: 'drop-shadow(0 16px 22px rgba(15, 23, 42, 0.38))',
+                    filter: 'drop-shadow(0 14px 18px rgba(15, 23, 42, 0.34))',
                   }}
                 />
               </div>
             </div>
 
-            {/* Card 2: Vibrant Sunny Yellow — Super Saver Coupon */}
+            {/* Card 2: Vibrant Sunny Yellow + Blue Diagonal */}
             <div
               className="sf-amz-promo-card"
               onClick={onSelectDeals}
               style={{
                 background: 'linear-gradient(168deg, #ffd814 0%, #ffce00 66%, #2d68c4 66.5%, #2353a0 100%)',
-                color: '#0f172a',
-                padding: '22px 18px 14px',
+                color: '#111827',
+                padding: '18px 16px 14px',
               }}
             >
               <div
                 style={{
-                  textAlign: 'right',
+                  textAlign: isEn ? 'left' : 'right',
                   position: 'relative',
                   zIndex: 2,
                   width: '100%',
-                  flex: 1,
                   display: 'flex',
                   flexDirection: 'column',
-                  justifyContent: 'space-between',
                   alignItems: 'flex-start',
-                  gap: '10px',
-                  paddingBottom: '14px',
-                  boxSizing: 'border-box',
+                  gap: '6px',
                 }}
               >
+                {/* Dark Navy Ribbon Badge */}
                 <div
-                  className="sf-amz-promo-sub"
                   style={{
-                    fontSize: '14px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: '#131921',
+                    color: '#ffffff',
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    fontSize: '11.5px',
                     fontWeight: 700,
                     lineHeight: 1.4,
-                    color: '#1e293b',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.16)',
                   }}
                 >
-                  اطلب أونلاين ووفر
+                  <span style={{ color: '#ffd814', fontWeight: 800 }}>★</span>
+                  <span>{isEn ? 'Exclusive Deals' : 'عروض حصرية'}</span>
                 </div>
+
                 <h3
                   style={{
-                    margin: 0,
-                    fontSize: '21px',
+                    margin: '2px 0 0',
+                    fontSize: isEn ? '17.5px' : '18.5px',
                     fontWeight: 800,
-                    lineHeight: 1.38,
-                    letterSpacing: '0px',
+                    lineHeight: 1.4,
                     color: '#0f172a',
                     width: '100%',
                   }}
                 >
-                  خصم 10% مع الكوبون
+                  {isEn ? 'Discounts & Value Bundles' : 'تخفيضات وباقات التوفير'}
                 </h3>
 
-                {/* Dark Navy Ribbon Badge — Generous pill filling the space */}
                 <div
-                  className="sf-amz-coupon-badge"
+                  className="sf-amz-promo-sub"
                   style={{
-                    marginTop: '4px',
-                    background: '#131921',
-                    color: '#ffffff',
-                    borderRadius: '10px',
-                    padding: '8px 18px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    boxShadow: '0 6px 14px rgba(0,0,0,0.16)',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    lineHeight: 1.45,
+                    color: '#1e293b',
                   }}
                 >
-                  <span style={{ fontSize: '13.5px', fontWeight: 700, lineHeight: 1.4 }}>
-                    أسبوع السوبر{' '}
-                    <span style={{ color: '#ffd814', fontWeight: 800 }}>توفير</span>
-                  </span>
+                  {isEn ? 'Shop the best prices today' : 'تسوق أفضل الأسعار اليوم'}
                 </div>
               </div>
 
@@ -799,98 +671,85 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                   position: 'relative',
                   zIndex: 2,
                   marginTop: 'auto',
-                  background: '#ffffff',
-                  borderRadius: '16px',
-                  padding: '10px 8px',
+                  background: 'rgba(255, 255, 255, 0.94)',
+                  borderRadius: '14px',
+                  padding: '8px 6px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: '6px',
-                  boxShadow: '0 10px 24px rgba(15, 23, 42, 0.2)',
+                  gap: '4px',
+                  boxShadow: '0 8px 18px rgba(15, 23, 42, 0.2)',
                 }}
               >
                 {(card2Prods.length > 0 ? card2Prods : [products[0]].filter(Boolean)).slice(0, 3).map((prod, idx) => (
-                  <div
+                  <img
                     key={`${prod.id}-${idx}`}
-                    className="sf-amz-bundle-item"
-                    style={{
-                      flex: 1,
-                      height: '86px',
-                      borderRadius: '12px',
-                      background: '#f8fafc',
-                      border: '1px solid #eef2f6',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: '5px',
-                      boxSizing: 'border-box',
+                    className="sf-amz-bundle-img"
+                    src={getProductPhotoUrl(prod)}
+                    alt={prod.name}
+                    decoding="async"
+                    onError={(e) => {
+                      e.currentTarget.src = generatePremiumProductSvg(prod.name, prod.categoryName);
                     }}
-                  >
-                    <img
-                      src={getProductPhotoUrl(prod)}
-                      alt={prod.name}
-                      decoding="async"
-                      onError={(e) => {
-                        e.currentTarget.src = generatePremiumProductSvg(prod.name, prod.categoryName);
-                      }}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'contain',
-                        filter: 'drop-shadow(0 6px 10px rgba(15, 23, 42, 0.16))',
-                      }}
-                    />
-                  </div>
+                    style={{
+                      width: '68px',
+                      height: '78px',
+                      objectFit: 'contain',
+                      filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.14))',
+                    }}
+                  />
                 ))}
               </div>
             </div>
 
-            {/* Card 3: Sleek Dark Slate & Navy — Free Delivery */}
+            {/* Card 3: Sleek Dark Slate & Navy */}
             <div
               className="sf-amz-promo-card"
               onClick={() => handleCategoryOrDeals(1)}
               style={{
                 background: 'linear-gradient(180deg, #273549 0%, #1e293b 55%, #0f172a 100%)',
                 color: '#ffffff',
-                padding: '22px 18px 14px',
+                padding: '20px 18px 14px',
               }}
             >
-              <div
-                style={{
-                  textAlign: 'right',
-                  position: 'relative',
-                  zIndex: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '10px',
-                }}
-              >
+              <div style={{ textAlign: isEn ? 'left' : 'right', position: 'relative', zIndex: 2 }}>
+                <div
+                  className="sf-amz-promo-kicker"
+                  style={{
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    lineHeight: 1.45,
+                    color: '#94a3b8',
+                    marginBottom: '4px',
+                  }}
+                >
+                  {categories?.[1]?.name || (isEn ? 'Guaranteed Quality' : 'جودة مضمونة')}
+                </div>
                 <h3
                   style={{
                     margin: 0,
-                    fontSize: '20.5px',
+                    fontSize: isEn ? '17.5px' : '19px',
                     fontWeight: 800,
-                    lineHeight: 1.45,
-                    letterSpacing: '0px',
+                    lineHeight: 1.4,
                     color: '#ffffff',
                   }}
                 >
-                  توصيل مجاني للطلبات
+                  {isEn ? 'Authentic & Certified Products' : 'منتجات أصلية ومعتمدة'}
                 </h3>
                 <div
                   className="sf-amz-promo-sub"
                   style={{
-                    fontSize: '13.5px',
+                    fontSize: '13px',
                     fontWeight: 600,
                     lineHeight: 1.45,
                     color: '#cbd5e1',
+                    marginTop: '4px',
                   }}
                 >
-                  وفر أكثر مع باقات التوفير
+                  {isEn ? 'Always picking the best for you' : 'نختار لك الأفضل دائماً'}
                 </div>
               </div>
 
-              {/* Real Product Showcase on Luminous Slate Spotlight */}
               <div
                 className="sf-amz-promo-stage"
                 style={{
@@ -898,16 +757,25 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  height: '186px',
-                  borderRadius: '16px',
-                  background:
-                    'radial-gradient(circle at 50% 52%, rgba(241, 245, 249, 0.34) 0%, rgba(148, 163, 184, 0.16) 46%, rgba(15, 23, 42, 0.25) 78%)',
+                  height: '185px',
                   position: 'relative',
                 }}
               >
+                {/* Luminous Studio Spotlight Behind Product */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    width: '164px',
+                    height: '164px',
+                    borderRadius: '50%',
+                    background:
+                      'radial-gradient(circle, rgba(255, 255, 255, 0.9) 0%, rgba(148, 163, 184, 0.35) 50%, rgba(15, 23, 42, 0) 74%)',
+                    zIndex: 1,
+                  }}
+                />
                 <img
                   src={getProductPhotoUrl(card3Prod)}
-                  alt={card3Prod?.name || 'توصيل مجاني'}
+                  alt={card3Prod?.name || (isEn ? 'Authentic Product' : 'منتج أصلي')}
                   decoding="async"
                   onError={(e) => {
                     if (card3Prod) {
@@ -915,81 +783,92 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                     }
                   }}
                   style={{
-                    width: '164px',
-                    height: '164px',
+                    width: '166px',
+                    height: '166px',
                     objectFit: 'contain',
+                    position: 'relative',
+                    zIndex: 2,
                     transform: 'translate3d(0, 0, 0)',
-                    filter: 'drop-shadow(0 16px 22px rgba(0, 0, 0, 0.45))',
+                    filter: 'drop-shadow(0 14px 18px rgba(0, 0, 0, 0.45))',
                   }}
                 />
               </div>
             </div>
 
-            {/* Card 4: Rich Warm Espresso — Seasonal Collection */}
+            {/* Card 4: Rich Warm Espresso */}
             <div
               className="sf-amz-promo-card"
               onClick={() => handleCategoryOrDeals(2)}
               style={{
                 background: 'linear-gradient(180deg, #5c2d0c 0%, #3b1a06 58%, #230f03 100%)',
                 color: '#ffffff',
-                padding: '22px 18px 14px',
+                padding: '20px 18px 14px',
               }}
             >
-              <div
-                style={{
-                  textAlign: 'right',
-                  position: 'relative',
-                  zIndex: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '10px',
-                }}
-              >
+              <div style={{ textAlign: isEn ? 'left' : 'right', position: 'relative', zIndex: 2 }}>
+                <div
+                  className="sf-amz-promo-kicker"
+                  style={{
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    lineHeight: 1.45,
+                    color: '#fed7aa',
+                    marginBottom: '4px',
+                  }}
+                >
+                  {categories?.[2]?.name || (isEn ? 'New Arrivals' : 'وصل حديثاً')}
+                </div>
                 <h3
                   style={{
                     margin: 0,
-                    fontSize: '20.5px',
+                    fontSize: isEn ? '17.5px' : '19px',
                     fontWeight: 800,
-                    lineHeight: 1.45,
-                    letterSpacing: '0px',
+                    lineHeight: 1.4,
                     color: '#ffffff',
                   }}
                 >
-                  اكتشف التشكيلة الجديدة!
+                  {isEn ? 'Discover the New Collection' : 'اكتشف التشكيلة الجديدة'}
                 </h3>
                 <div
                   className="sf-amz-promo-sub"
                   style={{
                     fontSize: '13.5px',
-                    fontWeight: 600,
+                    fontWeight: 700,
                     lineHeight: 1.45,
                     color: '#fde68a',
+                    marginTop: '4px',
                   }}
                 >
-                  كل اللي تحتاجه في مكان واحد
+                  {isEn ? 'Latest releases all in one place' : 'أحدث الإصدارات في مكان واحد'}
                 </div>
               </div>
 
-              {/* Warm Golden Spotlight Product Stage */}
               <div
                 className="sf-amz-promo-stage"
                 style={{
                   marginTop: 'auto',
-                  height: '186px',
-                  borderRadius: '16px',
-                  background:
-                    'radial-gradient(circle at 50% 52%, rgba(254, 240, 138, 0.36) 0%, rgba(251, 146, 60, 0.22) 46%, rgba(0, 0, 0, 0.24) 78%)',
+                  height: '185px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   position: 'relative',
-                  padding: '8px',
-                  boxSizing: 'border-box',
                 }}
               >
+                {/* Warm Golden Studio Spotlight Behind Product */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    width: '164px',
+                    height: '164px',
+                    borderRadius: '50%',
+                    background:
+                      'radial-gradient(circle, rgba(255, 251, 235, 0.94) 0%, rgba(253, 230, 138, 0.42) 48%, rgba(59, 26, 6, 0) 74%)',
+                    zIndex: 1,
+                  }}
+                />
                 <img
                   src={getProductPhotoUrl(card4Prod)}
-                  alt={card4Prod?.name || 'تشكيلة الموسم'}
+                  alt={card4Prod?.name || (isEn ? 'New Collection' : 'تشكيلة جديدة')}
                   decoding="async"
                   onError={(e) => {
                     if (card4Prod) {
@@ -997,11 +876,13 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                     }
                   }}
                   style={{
-                    width: '160px',
-                    height: '160px',
+                    width: '166px',
+                    height: '166px',
                     objectFit: 'contain',
+                    position: 'relative',
+                    zIndex: 2,
                     transform: 'translate3d(0, 0, 0)',
-                    filter: 'drop-shadow(0 16px 22px rgba(0, 0, 0, 0.45))',
+                    filter: 'drop-shadow(0 14px 18px rgba(0, 0, 0, 0.5))',
                   }}
                 />
               </div>
@@ -1028,14 +909,14 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                         fontWeight: 700,
                         color: '#1e293b',
                         lineHeight: 1.35,
-                        textAlign: 'right',
+                        textAlign: isEn ? 'left' : 'right',
                         paddingInline: '2px',
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                       }}
                     >
-                      {meta.label}
+                      {isEn ? meta.labelEn : meta.labelAr}
                     </div>
 
                     <div
@@ -1086,7 +967,7 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
                           boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
                         }}
                       >
-                        {meta.badge}
+                        {isEn ? meta.badgeEn : meta.badgeAr}
                       </span>
                     </div>
                   </div>
@@ -1099,8 +980,8 @@ export const StorefrontAmazonVibrantSection = React.memo(function StorefrontAmaz
               type="button"
               className="sf-amz-floating-nav-btn"
               onClick={() => scrollQuickRow('left')}
-              aria-label="التالي"
-              title="استعرض المزيد"
+              aria-label={isEn ? 'Next' : 'التالي'}
+              title={isEn ? 'Explore More' : 'استعرض المزيد'}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />

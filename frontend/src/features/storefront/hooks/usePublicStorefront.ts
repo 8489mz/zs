@@ -1,9 +1,16 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useStorefrontLang } from '@/i18n';
 import { storefrontApi } from '../api/storefront.api';
 import { tableCallsApi } from '@/shared/api/table-calls.api';
 import { buildCartProduct } from '../lib/storefront-variant-pricing';
 import { calculateCartSubtotal } from '../lib/storefront-cart-pricing';
+import {
+  localizeCategory,
+  localizeProduct,
+  localizeStorefrontInfo,
+  subscribeAutoTranslation,
+} from '../lib/storefront-translations';
 import type {
   CartItem,
   CreateOnlineOrderResponse,
@@ -17,6 +24,14 @@ export const ITEMS_PER_PAGE = 24;
 const arCollator = new Intl.Collator('ar', { sensitivity: 'base' });
 
 export function usePublicStorefront(cleanSlug: string) {
+  const { lang } = useStorefrontLang();
+  const [autoTransVersion, setAutoTransVersion] = useState(0);
+
+  useEffect(() => {
+    return subscribeAutoTranslation(() => {
+      setAutoTransVersion((v) => v + 1);
+    });
+  }, []);
   // Queries for live Storefront data
   const infoQuery = useQuery({
     queryKey: ['storefront-info', cleanSlug],
@@ -306,8 +321,23 @@ export function usePublicStorefront(cleanSlug: string) {
     return { added: newCart.length, skipped };
   }, [catalogQuery.data?.products]);
 
-  const rawProducts: StorefrontProduct[] = catalogQuery.data?.products || [];
-  const categories: StorefrontCategory[] = catalogQuery.data?.categories || [];
+  const rawProducts: StorefrontProduct[] = useMemo(() => {
+    const base: StorefrontProduct[] = catalogQuery.data?.products || [];
+    return base.map((p) => localizeProduct(p, lang));
+  }, [catalogQuery.data?.products, lang, autoTransVersion]);
+
+  const categories: StorefrontCategory[] = useMemo(() => {
+    const base: StorefrontCategory[] = catalogQuery.data?.categories || [];
+    return base.map((c) => localizeCategory(c, lang));
+  }, [catalogQuery.data?.categories, lang, autoTransVersion]);
+
+  const localizedCartItems: CartItem[] = useMemo(() => {
+    return cartItems.map((item) => ({
+      ...item,
+      product: localizeProduct(item.product, lang),
+    }));
+  }, [cartItems, lang, autoTransVersion]);
+
   const isSmartDealsOn = Boolean(infoQuery.data?.smartDealsEnabled);
 
   const dealsProducts = useMemo(() => {
@@ -357,11 +387,22 @@ export function usePublicStorefront(cleanSlug: string) {
     }
     if (searchTerm.trim()) {
       const q = searchTerm.trim().toLowerCase();
+      const baseCatalog = catalogQuery.data?.products || [];
+      const baseMatchIds = new Set(
+        baseCatalog
+          .filter(
+            (bp: StorefrontProduct) =>
+              bp.name.toLowerCase().includes(q) ||
+              (bp.categoryName || '').toLowerCase().includes(q)
+          )
+          .map((bp: StorefrontProduct) => Number(bp.id))
+      );
       list = list.filter(
         (p) =>
           p.name.toLowerCase().includes(q) ||
           p.barcode.includes(q) ||
-          p.categoryName.toLowerCase().includes(q)
+          p.categoryName.toLowerCase().includes(q) ||
+          baseMatchIds.has(Number(p.id))
       );
     }
     list.sort((a, b) => {
@@ -377,7 +418,7 @@ export function usePublicStorefront(cleanSlug: string) {
       return 0;
     });
     return list;
-  }, [rawProducts, selectedCategory, inStockOnly, onlyDeals, onlyFavorites, favoriteIds, dealsProducts, searchTerm, sortBy, infoQuery.data?.showOutOfStockProducts]);
+  }, [rawProducts, catalogQuery.data?.products, selectedCategory, inStockOnly, onlyDeals, onlyFavorites, favoriteIds, dealsProducts, searchTerm, sortBy, infoQuery.data?.showOutOfStockProducts]);
 
   const topHomepageSections = useMemo(() => {
     const groups: { categoryId: number; categoryName: string; products: StorefrontProduct[]; totalCount: number }[] = [];
@@ -422,21 +463,25 @@ export function usePublicStorefront(cleanSlug: string) {
 
   const isHomepageMultiRow = selectedCategory === 'all' && !searchTerm.trim() && !onlyDeals && !onlyFavorites;
 
-  const info: StorefrontInfo = infoQuery.data || {
-    tenantId: '',
-    slug: cleanSlug,
-    businessName: '',
-    enabled: true,
-    title: '',
-    bio: '',
-    announcement: '',
-    bannerUrl: '',
-    deliveryFee: 0,
-    minOrder: 0,
-    whatsappPhone: '',
-    currency: 'EGP',
-    smartDealsEnabled: false,
-  };
+  const info: StorefrontInfo = useMemo(() => {
+    const baseInfo: StorefrontInfo = infoQuery.data || {
+      tenantId: '',
+      slug: cleanSlug,
+      businessName: '',
+      enabled: true,
+      title: '',
+      bio: '',
+      announcement: '',
+      bannerUrl: '',
+      deliveryFee: 0,
+      minOrder: 0,
+      whatsappPhone: '',
+      currency: 'EGP',
+      smartDealsEnabled: false,
+    };
+    return localizeStorefrontInfo(baseInfo, lang);
+  }, [infoQuery.data, cleanSlug, lang, autoTransVersion]);
+
   const paginatedProducts = filteredProducts.slice(0, visibleCount);
   const hasMore = visibleCount < filteredProducts.length;
 
@@ -479,7 +524,7 @@ export function usePublicStorefront(cleanSlug: string) {
     handleToggleFavorites,
     handleOpenReviewModal,
     handleReviewSubmitted,
-    cartItems,
+    cartItems: localizedCartItems,
     cartMap,
     cartCount,
     cartSubtotal,

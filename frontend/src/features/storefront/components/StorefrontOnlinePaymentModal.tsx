@@ -1,9 +1,10 @@
-import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '@/i18n';
 import { getCurrencySymbol, getGlobalSystemCurrency, isThreeDecimalCurrency, isKuwait, isSaudi } from '@/lib/currencies';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CreateOnlineOrderResponse, StorefrontPaymentSessionResponse } from '../types/storefront.types';
 import { storefrontApi } from '../api/storefront.api';
 import { ShieldCheckIcon, XIcon, AlertCircleIcon, CreditCardIcon, CheckIcon } from '@/shared/components/icons/AppIcons';
+import { useBodyScrollLock } from '@/shared/components/dialog-shell';
 
 interface StorefrontOnlinePaymentModalProps {
   isOpen: boolean;
@@ -22,15 +23,29 @@ export function StorefrontOnlinePaymentModal({
   onSuccess,
   onClose,
 }: StorefrontOnlinePaymentModalProps) {
-  const { t } = useTranslation();
+  const { t, isEn, dir } = useStorefrontLang();
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [cardNumber, setCardNumber] = useState('4111 2222 3333 4242');
-  const [cardHolder, setCardHolder] = useState(orderData?.orderNumber ? 'عميل المتجر' : 'Mohammed Ali');
+  const [cardHolder, setCardHolder] = useState(orderData?.orderNumber ? (isEn ? 'Store Customer' : 'عميل المتجر') : 'Mohammed Ali');
   const [cardExpiry, setCardExpiry] = useState('12/28');
   const [cardCvv, setCardCvv] = useState('123');
 
-  if (!isOpen || !session || !orderData) return null;
+  const isVisible = Boolean(isOpen && session && orderData);
+  useBodyScrollLock(isVisible);
+
+  useEffect(() => {
+    if (!isVisible) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !loading) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isVisible, loading, onClose]);
+
+  if (!isVisible || !session || !orderData) return null;
 
   const orderToken = orderData.accessToken || '';
   const totalAmount = session.amount || orderData.totalAmount;
@@ -38,7 +53,7 @@ export function StorefrontOnlinePaymentModal({
   const isKwd = isKuwait({ currency: rawCurrency });
   const isKsa = isSaudi({ currency: rawCurrency });
   const isThreeDec = isThreeDecimalCurrency(rawCurrency);
-  const currencyLabel = getCurrencySymbol(rawCurrency);
+  const currencyLabel = isEn ? rawCurrency : getCurrencySymbol(rawCurrency);
   const formattedTotal = isThreeDec
     ? Number(totalAmount).toFixed(3)
     : (rawCurrency === 'EGP' && Number(totalAmount) % 1 === 0 ? Number(totalAmount).toFixed(0) : Number(totalAmount).toFixed(2));
@@ -49,14 +64,14 @@ export function StorefrontOnlinePaymentModal({
 
   const providerLabel =
     session.provider === 'tap' || session.mode === 'tap'
-      ? 'تاب للمدفوعات (Tap GCC)'
+      ? isEn ? 'Tap Payments (GCC)' : 'تاب للمدفوعات (Tap GCC)'
       : session.provider === 'stripe' || session.mode === 'stripe'
-      ? 'سترايب (Stripe Global)'
+      ? isEn ? 'Stripe Global' : 'سترايب (Stripe Global)'
       : session.provider === 'xpay' || session.mode === 'xpay'
-      ? 'إكس باي (XPay)'
+      ? isEn ? 'XPay' : 'إكس باي (XPay)'
       : session.provider === 'paymob' || session.mode === 'paymob'
       ? 'Paymob'
-      : 'بيئة الاختبار التجريبية';
+      : isEn ? 'Sandbox Test Mode' : 'بيئة الاختبار التجريبية';
 
   const handleMockPay = async () => {
     setLoading(true);
@@ -72,10 +87,10 @@ export function StorefrontOnlinePaymentModal({
           transactionId: res.transactionId,
         });
       } else {
-        setErrorMsg('تعذر تأكيد الدفع التجريبي، يرجى المحاولة مرة أخرى');
+        setErrorMsg(isEn ? 'Could not confirm test payment, please try again.' : 'تعذر تأكيد الدفع التجريبي، يرجى المحاولة مرة أخرى');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'حدث خطأ أثناء معالجة الدفع التجريبي');
+      setErrorMsg(err.message || (isEn ? 'An error occurred while processing test payment.' : 'حدث خطأ أثناء معالجة الدفع التجريبي'));
     } finally {
       setLoading(false);
     }
@@ -91,10 +106,10 @@ export function StorefrontOnlinePaymentModal({
           transactionId: statusRes.gatewayTransactionId || `${(session.provider || 'ONLINE').toUpperCase()}-PAID`,
         });
       } else {
-        setErrorMsg('لم يتم رصد تأكيد الدفع بعد، يرجى استكمال السداد ثم الضغط على التحقق مجدداً.');
+        setErrorMsg(isEn ? 'Payment confirmation not detected yet. Please complete payment and verify again.' : 'لم يتم رصد تأكيد الدفع بعد، يرجى استكمال السداد ثم الضغط على التحقق مجدداً.');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'تعذر التحقق من حالة السداد');
+      setErrorMsg(err.message || (isEn ? 'Could not verify payment status.' : 'تعذر التحقق من حالة السداد'));
     } finally {
       setLoading(false);
     }
@@ -102,7 +117,7 @@ export function StorefrontOnlinePaymentModal({
 
   return (
     <div
-      dir="rtl"
+      dir={dir}
       style={{
         position: 'fixed',
         inset: 0,
@@ -113,6 +128,7 @@ export function StorefrontOnlinePaymentModal({
         alignItems: 'center',
         justifyContent: 'center',
         padding: '16px',
+        overscrollBehavior: 'contain',
         animation: 'fadeIn 0.2s ease',
       }}
     >
@@ -147,7 +163,13 @@ export function StorefrontOnlinePaymentModal({
             </div>
             <div>
               <div style={{ fontSize: '14px', fontWeight: 800 }}>
-                {isLiveIframe ? `بوابة الدفع الآمنة (${providerLabel})` : `بوابة الدفع الإلكتروني (${providerLabel} - تجريبي)`}
+                {isLiveIframe
+                  ? isEn
+                    ? `Secure Payment Gateway (${providerLabel})`
+                    : `بوابة الدفع الآمنة (${providerLabel})`
+                  : isEn
+                  ? `Online Payment Gateway (${providerLabel} - Test)`
+                  : `بوابة الدفع الإلكتروني (${providerLabel} - تجريبي)`}
               </div>
               <div style={{ fontSize: '11px', opacity: 0.85 }}>
                 {t('storefront.storefront_online_payment_modal.s0', "طلب رقم: #")}{session.orderNumber} {t('storefront.storefront_online_payment_modal.s1', "• الإجمالي:")} {formattedTotal} {currencyLabel}
@@ -175,7 +197,7 @@ export function StorefrontOnlinePaymentModal({
         </div>
 
         {/* Content Area */}
-        <div style={{ padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ padding: '20px', overflowY: 'auto', overscrollBehavior: 'contain', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {errorMsg && (
             <div
               style={{

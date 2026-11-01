@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useStorefrontLang } from '@/i18n';
 import { useBodyScrollLock } from '@/shared/components/dialog-shell';
 import type { StorefrontInfo } from '../types/storefront.types';
 import { resolveStorefrontBrand, StorefrontBrandLogo } from './StorefrontHeader';
@@ -20,6 +21,8 @@ export function StorefrontFooter({
   onGoHome,
   onToggleDeals,
 }: StorefrontFooterProps) {
+  const { isEn, dir, setLang } = useStorefrontLang();
+
   const safeInfo: StorefrontInfo = info || {
     tenantId: '',
     slug: '',
@@ -36,13 +39,22 @@ export function StorefrontFooter({
     smartDealsEnabled: false,
   };
 
-  const brand = resolveStorefrontBrand(safeInfo);
+  const brand = resolveStorefrontBrand(safeInfo, isEn);
   const whatsappNumber = (safeInfo.whatsappPhone || '').replace(/[^0-9]/g, '');
   const cleanPhone = whatsappNumber.startsWith('01') ? `2${whatsappNumber}` : whatsappNumber;
   const currentYear = new Date().getFullYear();
 
   const [activePolicy, setActivePolicy] = useState<{ title: string; content: string } | null>(null);
   useBodyScrollLock(Boolean(activePolicy));
+
+  useEffect(() => {
+    if (!activePolicy) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setActivePolicy(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activePolicy]);
 
   const supportEmail =
     safeInfo.supportEmail?.trim() ||
@@ -51,43 +63,61 @@ export function StorefrontFooter({
 
   const policies = {
     contact: {
-      title: 'تواصل معنا',
-      content: cleanPhone
-        ? `يسعدنا تواصلك معنا مباشرة عبر واتساب أو الهاتف على الرقم ${safeInfo.whatsappPhone || safeInfo.contactPhone || ''}${supportEmail ? ` أو عبر البريد الإلكتروني ${supportEmail}` : ''} طوال أيام الأسبوع.`
-        : supportEmail
-          ? `يسعدنا تواصلك معنا عبر البريد الإلكتروني ${supportEmail}${safeInfo.contactPhone ? ` أو هاتفياً على ${safeInfo.contactPhone}` : ''} للرد على كافة استفساراتك وطلباتك في أسرع وقت.`
-          : 'يسعدنا دائماً خدمتكم والتواصل معكم والرد على كافة استفساراتكم وطلباتكم في أسرع وقت.',
+      title: isEn ? 'Contact Us' : 'تواصل معنا',
+      content: isEn
+        ? cleanPhone
+          ? `We are happy to assist you directly via WhatsApp or phone at ${safeInfo.whatsappPhone || safeInfo.contactPhone || ''}${supportEmail ? ` or via email at ${supportEmail}` : ''} all week long.`
+          : supportEmail
+            ? `Reach out to us via email at ${supportEmail}${safeInfo.contactPhone ? ` or by phone at ${safeInfo.contactPhone}` : ''} for prompt assistance with your orders and inquiries.`
+            : 'We are always happy to serve you and answer all your inquiries and order requests as quickly as possible.'
+        : cleanPhone
+          ? `يسعدنا تواصلك معنا مباشرة عبر واتساب أو الهاتف على الرقم ${safeInfo.whatsappPhone || safeInfo.contactPhone || ''}${supportEmail ? ` أو عبر البريد الإلكتروني ${supportEmail}` : ''} طوال أيام الأسبوع.`
+          : supportEmail
+            ? `يسعدنا تواصلك معنا عبر البريد الإلكتروني ${supportEmail}${safeInfo.contactPhone ? ` أو هاتفياً على ${safeInfo.contactPhone}` : ''} للرد على كافة استفساراتك وطلباتك في أسرع وقت.`
+            : 'يسعدنا دائماً خدمتكم والتواصل معكم والرد على كافة استفساراتكم وطلباتكم في أسرع وقت.',
     },
     faq: {
-      title: 'الأسئلة الشائعة',
-      content:
-        'يمكنك الطلب بسهولة عبر إضافة المنتجات إلى سلة المشتريات ثم الضغط على إتمام الطلب وإدخال بيانات التوصيل. نوفر خدمة الدفع عند الاستلام والتوصيل السريع لكافة المناطق.',
+      title: isEn ? 'Frequently Asked Questions' : 'الأسئلة الشائعة',
+      content: isEn
+        ? 'You can easily place an order by adding products to your shopping cart, clicking Checkout, and entering your delivery details. We offer Cash on Delivery and fast nationwide shipping.'
+        : 'يمكنك الطلب بسهولة عبر إضافة المنتجات إلى سلة المشتريات ثم الضغط على إتمام الطلب وإدخال بيانات التوصيل. نوفر خدمة الدفع عند الاستلام والتوصيل السريع لكافة المناطق.',
     },
     shippingReturns: {
-      title: 'الشحن والاسترجاع',
-      content:
-        'يتم شحن الطلبات خلال 24 إلى 48 ساعة من تأكيد الطلب. كما يحق للعميل استبدال أو استرجاع المنتج خلال 14 يوماً من تاريخ الاستلام بشرط أن يكون بحالته الأصلية.',
+      title: isEn ? 'Shipping & Returns' : 'الشحن والاسترجاع',
+      content: isEn
+        ? 'Orders are shipped within 24 to 48 hours of confirmation. Customers may exchange or return products within 14 days of delivery provided the item is in its original condition.'
+        : 'يتم شحن الطلبات خلال 24 إلى 48 ساعة من تأكيد الطلب. كما يحق للعميل استبدال أو استرجاع المنتج خلال 14 يوماً من تاريخ الاستلام بشرط أن يكون بحالته الأصلية.',
     },
     qualityGuarantee: {
-      title: 'ضمان الجودة والأصالة',
-      content:
-        'نحرص على انتقاء وتقديم أفضل المنتجات الأصلية بعناية فائقة وبأعلى معايير الجودة، مع فحص وتغليف كل طلب باحترافية لضمان وصوله بأفضل حالة.',
+      title: isEn ? 'Quality & Authenticity Guarantee' : 'ضمان الجودة والأصالة',
+      content: isEn
+        ? 'We carefully select and provide 100% authentic products with the highest quality standards, inspecting and packaging every order professionally to ensure it arrives in perfect condition.'
+        : 'نحرص على انتقاء وتقديم أفضل المنتجات الأصلية بعناية فائقة وبأعلى معايير الجودة، مع فحص وتغليف كل طلب باحترافية لضمان وصوله بأفضل حالة.',
     },
     privacy: {
-      title: 'سياسة الخصوصية',
-      content:
-        'نحن نلتزم بحماية بياناتك الشخصية واستخدامها فقط لتنفيذ طلباتك وتحسين تجربة التسوق. جميع بياناتك ومعاملاتك محمية بأعلى معايير الأمان والخصوصية.',
+      title: isEn ? 'Privacy Policy' : 'سياسة الخصوصية',
+      content: isEn
+        ? 'We are committed to protecting your personal data and using it solely to fulfill your orders and improve your shopping experience. All your information and transactions are secured.'
+        : 'نحن نلتزم بحماية بياناتك الشخصية واستخدامها فقط لتنفيذ طلباتك وتحسين تجربة التسوق. جميع بياناتك ومعاملاتك محمية بأعلى معايير الأمان والخصوصية.',
     },
     terms: {
-      title: 'شروط الخدمة',
-      content:
-        'باستخدامك للمتجر فإنك توافق على شروط الخدمة والأسعار المعلنة. نحرص دائماً على تقديم أفضل جودة وأدق مواصفات لكافة المنتجات المعروضة.',
+      title: isEn ? 'Terms of Service' : 'شروط الخدمة',
+      content: isEn
+        ? 'By using our store, you agree to the terms of service and listed prices. We always strive to provide the best quality and most accurate specifications for all displayed products.'
+        : 'باستخدامك للمتجر فإنك توافق على شروط الخدمة والأسعار المعلنة. نحرص دائماً على تقديم أفضل جودة وأدق مواصفات لكافة المنتجات المعروضة.',
     },
   };
 
-  const storeDescription =
-    (safeInfo.bio || safeInfo.description || '').trim() ||
-    'وجهتك المفضلة لتجربة تسوق مميزة وسلسة. نوفر لكم تشكيلة مختارة بعناية بأعلى جودة وأفضل الأسعار.';
+  const rawBio = (safeInfo.bio || safeInfo.description || '').trim();
+  const isDefaultArBio =
+    rawBio.includes('وجهتك الأولى للتسوق') ||
+    rawBio.includes('وجهتك المفضلة') ||
+    rawBio.includes('تشكيلة متنوعة من المنتجات');
+  const storeDescription = isEn
+    ? (!rawBio || isDefaultArBio
+      ? 'A curated collection of authentic products — order online effortlessly and receive your doorstep delivery in record time.'
+      : rawBio)
+    : (rawBio || 'وجهتك المفضلة لتجربة تسوق مميزة وسلسة. نوفر لكم تشكيلة مختارة بعناية بأعلى جودة وأفضل الأسعار.');
 
   const scrollTopAndRun = (fn?: () => void) => {
     if (fn) fn();
@@ -95,7 +125,7 @@ export function StorefrontFooter({
   };
 
   return (
-    <footer className="sf-stylehub-footer-outer" dir="rtl">
+    <footer className="sf-stylehub-footer-outer" dir={dir} style={{ direction: dir }}>
       <div className="sf-stylehub-footer-card">
         <div className="sf-stylehub-footer-grid">
           {/* Column 1: Brand + Description + Outline Social Icons */}
@@ -398,7 +428,7 @@ export function StorefrontFooter({
 
           {/* Column 2: Quick Links (روابط سريعة) */}
           <div>
-            <h4 className="sf-stylehub-col-heading">روابط سريعة</h4>
+            <h4 className="sf-stylehub-col-heading">{isEn ? 'Quick Links' : 'روابط سريعة'}</h4>
             <ul className="sf-stylehub-links-list">
               <li>
                 <button
@@ -406,7 +436,7 @@ export function StorefrontFooter({
                   onClick={() => scrollTopAndRun(onGoHome)}
                   className="sf-stylehub-link-btn"
                 >
-                  تسوق الكل
+                  {isEn ? 'Shop All' : 'تسوق الكل'}
                 </button>
               </li>
               <li>
@@ -415,16 +445,22 @@ export function StorefrontFooter({
                   onClick={() => (onOpenCategories ? onOpenCategories() : scrollTopAndRun(onGoHome))}
                   className="sf-stylehub-link-btn"
                 >
-                  الأكثر مبيعاً
+                  {isEn ? 'Best Sellers' : 'الأكثر مبيعاً'}
                 </button>
               </li>
               <li>
                 <button
                   type="button"
-                  onClick={() => scrollTopAndRun(onToggleDeals || onGoHome)}
+                  onClick={() => {
+                    if (onToggleDeals) {
+                      onToggleDeals();
+                    } else {
+                      scrollTopAndRun(onGoHome);
+                    }
+                  }}
                   className="sf-stylehub-link-btn"
                 >
-                  العروض والتخفيضات
+                  {isEn ? 'Deals & Discounts' : 'العروض والتخفيضات'}
                 </button>
               </li>
             </ul>
@@ -432,7 +468,7 @@ export function StorefrontFooter({
 
           {/* Column 3: Customer Service (خدمة العملاء) */}
           <div>
-            <h4 className="sf-stylehub-col-heading">خدمة العملاء</h4>
+            <h4 className="sf-stylehub-col-heading">{isEn ? 'Customer Service' : 'خدمة العملاء'}</h4>
             <ul className="sf-stylehub-links-list">
               <li>
                 {cleanPhone ? (
@@ -443,7 +479,7 @@ export function StorefrontFooter({
                     className="sf-stylehub-link-btn"
                     style={{ textDecoration: 'none', display: 'inline-block' }}
                   >
-                    تواصل معنا
+                    {isEn ? 'Contact Us' : 'تواصل معنا'}
                   </a>
                 ) : (
                   <button
@@ -451,7 +487,7 @@ export function StorefrontFooter({
                     onClick={() => setActivePolicy(policies.contact)}
                     className="sf-stylehub-link-btn"
                   >
-                    تواصل معنا
+                    {isEn ? 'Contact Us' : 'تواصل معنا'}
                   </button>
                 )}
               </li>
@@ -461,7 +497,7 @@ export function StorefrontFooter({
                   onClick={() => setActivePolicy(policies.shippingReturns)}
                   className="sf-stylehub-link-btn"
                 >
-                  الشحن والاسترجاع
+                  {isEn ? 'Shipping & Returns' : 'الشحن والاسترجاع'}
                 </button>
               </li>
               <li>
@@ -470,7 +506,7 @@ export function StorefrontFooter({
                   onClick={() => setActivePolicy(policies.qualityGuarantee)}
                   className="sf-stylehub-link-btn"
                 >
-                  ضمان الجودة
+                  {isEn ? 'Quality Guarantee' : 'ضمان الجودة'}
                 </button>
               </li>
               <li>
@@ -479,7 +515,7 @@ export function StorefrontFooter({
                   onClick={() => (onOpenOrders ? onOpenOrders() : setActivePolicy(policies.shippingReturns))}
                   className="sf-stylehub-link-btn"
                 >
-                  تتبع الطلب
+                  {isEn ? 'Track Order' : 'تتبع الطلب'}
                 </button>
               </li>
             </ul>
@@ -487,7 +523,7 @@ export function StorefrontFooter({
 
           {/* Column 4: Stay Connected (ابقَ على تواصل) */}
           <div className="sf-stylehub-col-connect">
-            <h4 className="sf-stylehub-col-heading">ابقَ على تواصل</h4>
+            <h4 className="sf-stylehub-col-heading">{isEn ? 'Stay Connected' : 'ابقَ على تواصل'}</h4>
 
             {supportEmail ? (
               <a
@@ -537,7 +573,7 @@ export function StorefrontFooter({
               <div
                 className="sf-stylehub-support-mail"
                 style={{ opacity: 0.6, cursor: 'default' }}
-                title="يمكنك ضبط وسائل التواصل من لوحة الإعدادات"
+                title={isEn ? 'Configure contact channels in Store Settings' : 'يمكنك ضبط وسائل التواصل من لوحة الإعدادات'}
               >
                 <svg
                   width="15"
@@ -552,7 +588,7 @@ export function StorefrontFooter({
                   <rect width="20" height="16" x="2" y="4" rx="2" />
                   <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
                 </svg>
-                <span>خدمة العملاء متاحة أونلاين</span>
+                <span>{isEn ? 'Customer support available online' : 'خدمة العملاء متاحة أونلاين'}</span>
               </div>
             )}
           </div>
@@ -562,8 +598,8 @@ export function StorefrontFooter({
 
         {/* Centered Bottom Copyright & Legal Links */}
         <div className="sf-stylehub-bottom">
-          <p className="sf-stylehub-copyright">
-            © {currentYear} <span dir="auto">{brand.title}</span>. جميع الحقوق محفوظة.
+          <p className="sf-stylehub-copyright" style={{ textAlign: isEn ? 'left' : 'right' }}>
+            © {currentYear} <span dir="auto">{brand.title}</span>. {isEn ? 'All rights reserved.' : 'جميع الحقوق محفوظة.'}
           </p>
           <div className="sf-stylehub-bottom-links">
             <button
@@ -571,7 +607,7 @@ export function StorefrontFooter({
               onClick={() => setActivePolicy(policies.privacy)}
               className="sf-stylehub-bottom-link"
             >
-              سياسة الخصوصية
+              {isEn ? 'Privacy Policy' : 'سياسة الخصوصية'}
             </button>
             <span style={{ color: '#d1d5db' }}>|</span>
             <button
@@ -579,7 +615,17 @@ export function StorefrontFooter({
               onClick={() => setActivePolicy(policies.terms)}
               className="sf-stylehub-bottom-link"
             >
-              شروط الخدمة
+              {isEn ? 'Terms of Service' : 'شروط الخدمة'}
+            </button>
+            <span style={{ color: '#d1d5db' }}>|</span>
+            <button
+              type="button"
+              onClick={() => setLang(isEn ? 'ar' : 'en')}
+              className="sf-stylehub-bottom-link"
+              style={{ fontWeight: 700, color: 'var(--storefront-primary-color, #2d68c4)' }}
+              title={isEn ? 'التبديل إلى العربية' : 'Switch to English'}
+            >
+              🌐 {isEn ? 'العربية' : 'English'}
             </button>
           </div>
         </div>
@@ -604,6 +650,7 @@ export function StorefrontFooter({
         >
           <div
             onClick={(e) => e.stopPropagation()}
+            dir={dir}
             style={{
               background: '#ffffff',
               borderRadius: '20px',
@@ -613,7 +660,7 @@ export function StorefrontFooter({
               width: '100%',
               boxShadow: '0 20px 40px rgba(15, 23, 42, 0.16)',
               position: 'relative',
-              direction: 'rtl',
+              direction: dir,
             }}
           >
             <div

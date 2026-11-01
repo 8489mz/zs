@@ -1,4 +1,5 @@
 import React from 'react';
+import { useStorefrontLang } from '@/i18n';
 import type { StorefrontInfo } from '../types/storefront.types';
 
 interface StorefrontTrustBarProps {
@@ -6,11 +7,15 @@ interface StorefrontTrustBarProps {
 }
 
 export const StorefrontTrustBar = React.memo(function StorefrontTrustBar(_props: StorefrontTrustBarProps) {
+  const { isEn, dir } = useStorefrontLang();
+
   const trustFeatures = [
     {
       id: 'shipping',
-      title: 'شحن سريع وآمن',
-      subtitle: 'توصيل سريع لكافة المحافظات بعناية فائقة حتى باب المنزل',
+      title: isEn ? 'Fast & Safe Shipping' : 'شحن سريع وآمن',
+      subtitle: isEn
+        ? 'Express nationwide delivery handled with utmost care to your doorstep'
+        : 'توصيل سريع لكافة المحافظات بعناية فائقة حتى باب المنزل',
       icon: (
         <svg
           width="22"
@@ -32,8 +37,10 @@ export const StorefrontTrustBar = React.memo(function StorefrontTrustBar(_props:
     },
     {
       id: 'cod',
-      title: 'الدفع عند الاستلام',
-      subtitle: 'إمكانية معاينة وفحص طلبك بالكامل قبل الدفع بكل اطمئنان',
+      title: isEn ? 'Cash on Delivery' : 'الدفع عند الاستلام',
+      subtitle: isEn
+        ? 'Inspect and verify your entire order upon arrival before paying'
+        : 'إمكانية معاينة وفحص طلبك بالكامل قبل الدفع بكل اطمئنان',
       icon: (
         <svg
           width="22"
@@ -53,8 +60,10 @@ export const StorefrontTrustBar = React.memo(function StorefrontTrustBar(_props:
     },
     {
       id: 'quality',
-      title: 'جودة أصلية 100%',
-      subtitle: 'نختار لكم أجود المنتجات الأصلية بعناية لتجربة فاخرة ومميزة',
+      title: isEn ? '100% Authentic Quality' : 'جودة أصلية 100%',
+      subtitle: isEn
+        ? 'Carefully curated authentic products for a premium shopping experience'
+        : 'نختار لكم أجود المنتجات الأصلية بعناية لتجربة فاخرة ومميزة',
       icon: (
         <svg
           width="22"
@@ -73,8 +82,10 @@ export const StorefrontTrustBar = React.memo(function StorefrontTrustBar(_props:
     },
     {
       id: 'returns',
-      title: 'استبدال واسترجاع مرن',
-      subtitle: 'سياسة استبدال واسترجاع سهلة ومرنة خلال 14 يوماً بكل سهولة',
+      title: isEn ? 'Flexible Returns & Exchanges' : 'استبدال واسترجاع مرن',
+      subtitle: isEn
+        ? 'Easy, hassle-free return and exchange policy within 14 days'
+        : 'سياسة استبدال واسترجاع سهلة ومرنة خلال 14 يوماً بكل سهولة',
       icon: (
         <svg
           width="22"
@@ -97,9 +108,9 @@ export const StorefrontTrustBar = React.memo(function StorefrontTrustBar(_props:
 
   return (
     <section
-      aria-label="مميزات وثقة المتجر"
+      aria-label={isEn ? 'Store Trust & Features' : 'مميزات وثقة المتجر'}
       className="storefront-trust-bar-wrapper"
-      dir="rtl"
+      dir={dir}
       style={{
         maxWidth: 'var(--storefront-container, 1440px)',
         width: '100%',
@@ -128,16 +139,12 @@ export const StorefrontTrustBar = React.memo(function StorefrontTrustBar(_props:
       <style>{`
         .storefront-trust-banner {
           width: 100%;
-          border-radius: 16px;
-          background: linear-gradient(
-            135deg,
-            var(--storefront-secondary-color, #2353a0) 0%,
-            var(--storefront-primary-color, #2d68c4) 50%,
-            var(--storefront-secondary-color, #2353a0) 100%
-          );
-          padding: 32px 36px;
-          box-sizing: border-box;
-          box-shadow: 0 10px 28px -8px rgba(35, 83, 160, 0.28), 0 4px 12px -2px rgba(15, 23, 42, 0.08);
+          border-radius: 18px !important;
+          background: #ffffff !important;
+          border: 1px solid #e2e8f0 !important;
+          padding: 24px 28px !important;
+          box-sizing: border-box !important;
+          box-shadow: 0 6px 20px -4px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02) !important;
           position: relative;
           overflow: hidden;
           display: flex;
@@ -148,11 +155,11 @@ export const StorefrontTrustBar = React.memo(function StorefrontTrustBar(_props:
         .storefront-trust-bar-grid {
           display: grid;
           grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 24px;
-          align-items: center;
+          gap: 20px;
+          align-items: stretch;
           justify-items: center;
           width: 100%;
-          max-width: 1280px;
+          max-width: 1320px;
           margin: 0 auto;
         }
 
@@ -160,22 +167,28 @@ export const StorefrontTrustBar = React.memo(function StorefrontTrustBar(_props:
           display: flex;
           flex-direction: row;
           align-items: center;
-          justify-content: center;
-          gap: 14px;
-          color: #ffffff;
+          justify-content: flex-start;
+          gap: 13px;
+          color: #0f172a;
           position: relative;
-          width: fit-content;
-          margin: 0 auto;
-          transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+          width: 100%;
+          padding: 12px 14px;
+          border-radius: 14px;
+          background: #f8fafc;
+          border: 1px solid #f1f5f9;
+          box-sizing: border-box;
+          transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease, box-shadow 0.2s ease;
         }
 
         .storefront-trust-feature-item:hover {
           transform: translateY(-2px);
+          border-color: #cbd5e1;
+          box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
         }
 
         .storefront-trust-feature-item:hover .storefront-trust-icon-wrap {
-          background: rgba(255, 255, 255, 0.18);
-          border-color: rgba(255, 255, 255, 0.85);
+          background: var(--storefront-primary-color, #2d68c4);
+          color: #ffffff;
           transform: scale(1.04);
         }
 
@@ -183,13 +196,12 @@ export const StorefrontTrustBar = React.memo(function StorefrontTrustBar(_props:
           width: 44px;
           height: 44px;
           border-radius: 12px;
-          border: 1.5px solid rgba(255, 255, 255, 0.55);
-          background: rgba(255, 255, 255, 0.1);
-          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+          border: 1px solid rgba(45, 104, 196, 0.16);
+          background: var(--storefront-primary-subtle, #eff6ff);
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          color: #ffffff;
+          color: var(--storefront-primary-color, #2d68c4);
           flex-shrink: 0;
           transition: all 0.2s ease;
         }
@@ -197,57 +209,53 @@ export const StorefrontTrustBar = React.memo(function StorefrontTrustBar(_props:
         .storefront-trust-text-col {
           display: flex;
           flex-direction: column;
-          align-items: center;
-          text-align: center;
+          align-items: flex-start;
+          text-align: start;
           min-width: 0;
-          max-width: 210px;
+          flex: 1;
         }
 
         .storefront-trust-title {
-          margin: 0 0 5px;
-          font-size: 15px;
-          font-weight: 800;
-          color: #ffffff;
-          line-height: 1.35;
+          margin: 0 0 3px !important;
+          font-size: 14px !important;
+          font-weight: 800 !important;
+          color: #0f172a !important;
+          line-height: 1.35 !important;
           letter-spacing: -0.1px;
-          white-space: nowrap;
         }
 
         .storefront-trust-subtitle {
-          margin: 0;
-          font-size: 12px;
-          font-weight: 500;
-          color: rgba(255, 255, 255, 0.86);
-          line-height: 1.55;
+          margin: 0 !important;
+          font-size: 11.5px !important;
+          font-weight: 500 !important;
+          color: #64748b !important;
+          line-height: 1.45 !important;
         }
 
         @media (max-width: 1120px) {
           .storefront-trust-banner {
-            padding: 26px 22px;
+            padding: 20px 18px !important;
           }
           .storefront-trust-bar-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 22px 18px;
-          }
-          .storefront-trust-text-col {
-            max-width: 230px;
+            gap: 14px;
           }
         }
 
         @media (max-width: 640px) {
           .storefront-trust-bar-wrapper {
-            margin: 14px auto 0 !important;
-            padding: 0 12px !important;
+            margin: 12px auto 0 !important;
+            padding: 0 !important;
             box-sizing: border-box !important;
           }
           .storefront-trust-banner {
             border-radius: 16px !important;
-            padding: 14px 12px !important;
+            padding: 12px !important;
           }
           .storefront-trust-bar-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
             align-items: stretch !important;
-            gap: 10px !important;
+            gap: 8px !important;
           }
           .storefront-trust-feature-item {
             flex-direction: column !important;
@@ -256,37 +264,38 @@ export const StorefrontTrustBar = React.memo(function StorefrontTrustBar(_props:
             text-align: center !important;
             width: 100% !important;
             min-width: 0 !important;
-            gap: 8px !important;
-            padding: 12px 8px !important;
-            background: rgba(255, 255, 255, 0.08) !important;
-            border: 1px solid rgba(255, 255, 255, 0.16) !important;
+            gap: 6px !important;
+            padding: 10px 8px !important;
+            background: #f8fafc !important;
+            border: 1px solid #edf1f7 !important;
             border-radius: 12px !important;
             box-sizing: border-box !important;
           }
           .storefront-trust-text-col {
             width: 100% !important;
             max-width: 100% !important;
+            align-items: center !important;
+            text-align: center !important;
           }
           .storefront-trust-icon-wrap {
-            width: 36px !important;
-            height: 36px !important;
+            width: 34px !important;
+            height: 34px !important;
             border-radius: 10px !important;
-            border-width: 1.25px !important;
           }
           .storefront-trust-icon-wrap svg {
-            width: 18px !important;
-            height: 18px !important;
+            width: 17px !important;
+            height: 17px !important;
           }
           .storefront-trust-title {
-            font-size: 12.5px !important;
+            font-size: 12px !important;
             font-weight: 700 !important;
             white-space: normal !important;
-            margin-bottom: 3px !important;
+            margin-bottom: 2px !important;
             line-height: 1.3 !important;
           }
           .storefront-trust-subtitle {
-            font-size: 10.5px !important;
-            line-height: 1.42 !important;
+            font-size: 10px !important;
+            line-height: 1.38 !important;
           }
         }
       `}</style>

@@ -1,4 +1,4 @@
-import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '@/i18n';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import React, { useState, useEffect } from 'react';
 import { StorefrontProduct, StorefrontReview } from '../types/storefront.types';
@@ -6,6 +6,7 @@ import { storefrontApi } from '../api/storefront.api';
 import { IconStar, IconClose } from './StorefrontIcons';
 import { getAutoProductPhoto, generatePremiumProductSvg } from '../lib/storefront-photo-matcher';
 import { CheckCircleIcon, AlertCircleIcon } from '@/shared/components/icons/AppIcons';
+import { useBodyScrollLock } from '@/shared/components/dialog-shell';
 
 interface StorefrontReviewModalProps {
   isOpen: boolean;
@@ -23,6 +24,14 @@ const RATING_LABELS: Record<number, string> = {
   1: 'سيء (1/5)',
 };
 
+const RATING_LABELS_EN: Record<number, string> = {
+  5: 'Excellent (5/5)',
+  4: 'Very Good (4/5)',
+  3: 'Good (3/5)',
+  2: 'Fair (2/5)',
+  1: 'Poor (1/5)',
+};
+
 export function StorefrontReviewModal({
   isOpen,
   product,
@@ -30,7 +39,7 @@ export function StorefrontReviewModal({
   onClose,
   onReviewSubmitted,
 }: StorefrontReviewModalProps) {
-  const { t } = useTranslation();
+  const { t, isEn, dir } = useStorefrontLang();
   const [rating, setRating] = useState<number>(5);
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [customerName, setCustomerName] = useState('');
@@ -40,6 +49,8 @@ export function StorefrontReviewModal({
   const [errorMessage, setErrorMessage] = useState('');
   const [reviews, setReviews] = useState<StorefrontReview[]>([]);
   const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+
+  useBodyScrollLock(isOpen && Boolean(product));
 
   // Fetch past reviews when modal opens
   useEffect(() => {
@@ -89,14 +100,14 @@ export function StorefrontReviewModal({
       });
 
       if (res?.ok) {
-        setSuccessMessage('شكراً لك! تم تسجيل تقييمك بنجاح.');
+        setSuccessMessage(isEn ? 'Thank you! Your review has been submitted.' : 'شكراً لك! تم تسجيل تقييمك بنجاح.');
         onReviewSubmitted?.(product.id, res.avgRating, res.reviewCount);
 
         // Add to local list of reviews immediately
         const newRev: StorefrontReview = {
           id: Date.now(),
           rating,
-          customerName: customerName.trim() || 'عميل المتجر',
+          customerName: customerName.trim() || (isEn ? 'Store Customer' : 'عميل المتجر'),
           comment: comment.trim() || undefined,
           createdAt: new Date().toISOString(),
         };
@@ -107,10 +118,10 @@ export function StorefrontReviewModal({
           onClose();
         }, 1500);
       } else {
-        setErrorMessage(res?.message || 'تعذر إرسال التقييم، يرجى المحاولة لاحقاً');
+        setErrorMessage(res?.message || (isEn ? 'Could not submit review, please try again later.' : 'تعذر إرسال التقييم، يرجى المحاولة لاحقاً'));
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'حدث خطأ أثناء إرسال التقييم');
+      setErrorMessage(err.message || (isEn ? 'An error occurred while submitting your review.' : 'حدث خطأ أثناء إرسال التقييم'));
     } finally {
       setIsSubmitting(false);
     }
@@ -118,7 +129,7 @@ export function StorefrontReviewModal({
 
   return (
     <div
-      dir="rtl"
+      dir={dir}
       style={{
         position: 'fixed',
         inset: 0,
@@ -312,7 +323,7 @@ export function StorefrontReviewModal({
                 minHeight: '18px',
               }}
             >
-              {RATING_LABELS[activeStar] || ''}
+              {(isEn ? RATING_LABELS_EN : RATING_LABELS)[activeStar] || ''}
             </div>
           </div>
 

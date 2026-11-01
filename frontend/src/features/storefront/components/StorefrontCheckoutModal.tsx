@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '@/i18n';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { getGlobalCurrencySymbol, getCurrencySymbol, isThreeDecimalCurrency } from '@/lib/currencies';
 import React, { useState, useEffect, useRef } from 'react';
@@ -11,6 +12,7 @@ import { getCustomerOrderToken, saveCustomerOrderRef } from '../lib/customer-ord
 import { saveLocalOrderRecord } from './StorefrontMyOrdersModal';
 import { calculateCartSubtotal } from '../lib/storefront-cart-pricing';
 import { getContrastTextColor } from '../lib/storefront-theme-contrast';
+import { useBodyScrollLock } from '@/shared/components/dialog-shell';
 
 const STOREFRONT_SAVED_CUSTOMER_KEY = 'zsystems.storefront.saved_customer';
 
@@ -45,93 +47,95 @@ interface StorefrontCheckoutModalProps {
 export interface CountryOption {
   code: string;
   name: string;
+  nameEn: string;
   dialCode: string;
   placeholder: string;
+  placeholderEn: string;
 }
 
 export const COUNTRY_OPTIONS: CountryOption[] = [
-  { code: 'EG', name: 'مصر', dialCode: '+20', placeholder: '01012345678 (11 رقم)' },
-  { code: 'SA', name: 'السعودية', dialCode: '+966', placeholder: '501234567 (9 أرقام)' },
-  { code: 'AE', name: 'الإمارات', dialCode: '+971', placeholder: '501234567 (9 أرقام)' },
-  { code: 'KW', name: 'الكويت', dialCode: '+965', placeholder: '91234567 (8 أرقام)' },
-  { code: 'OM', name: 'عمان', dialCode: '+968', placeholder: '91234567 (8 أرقام)' },
-  { code: 'QA', name: 'قطر', dialCode: '+974', placeholder: '51234567 (8 أرقام)' },
-  { code: 'BH', name: 'البحرين', dialCode: '+973', placeholder: '31234567 (8 أرقام)' },
-  { code: 'OTHER', name: 'دولي / أخرى', dialCode: '+', placeholder: 'رقم الهاتف' },
+  { code: 'EG', name: 'مصر', nameEn: 'Egypt', dialCode: '+20', placeholder: '01012345678 (11 رقم)', placeholderEn: '01012345678 (11 digits)' },
+  { code: 'SA', name: 'السعودية', nameEn: 'Saudi Arabia', dialCode: '+966', placeholder: '501234567 (9 أرقام)', placeholderEn: '501234567 (9 digits)' },
+  { code: 'AE', name: 'الإمارات', nameEn: 'UAE', dialCode: '+971', placeholder: '501234567 (9 أرقام)', placeholderEn: '501234567 (9 digits)' },
+  { code: 'KW', name: 'الكويت', nameEn: 'Kuwait', dialCode: '+965', placeholder: '91234567 (8 أرقام)', placeholderEn: '91234567 (8 digits)' },
+  { code: 'OM', name: 'عمان', nameEn: 'Oman', dialCode: '+968', placeholder: '91234567 (8 أرقام)', placeholderEn: '91234567 (8 digits)' },
+  { code: 'QA', name: 'قطر', nameEn: 'Qatar', dialCode: '+974', placeholder: '51234567 (8 أرقام)', placeholderEn: '51234567 (8 digits)' },
+  { code: 'BH', name: 'البحرين', nameEn: 'Bahrain', dialCode: '+973', placeholder: '31234567 (8 أرقام)', placeholderEn: '31234567 (8 digits)' },
+  { code: 'OTHER', name: 'دولي / أخرى', nameEn: 'International / Other', dialCode: '+', placeholder: 'رقم الهاتف', placeholderEn: 'Phone number' },
 ];
 
-export function getDynamicPhoneValidation(phone: string, countryCode: string = 'EG'): { isValid: boolean; message: string; isComplete: boolean } {
+export function getDynamicPhoneValidation(phone: string, countryCode: string = 'EG', isEn = false): { isValid: boolean; message: string; isComplete: boolean } {
   const clean = phone.replace(/[^0-9+]/g, '');
   if (!clean) return { isValid: false, message: '', isComplete: false };
 
   if (countryCode === 'EG') {
     const digits = clean.replace(/\D/g, '');
     if (!digits.startsWith('01')) {
-      return { isValid: false, message: 'يجب أن يبدأ بـ 01', isComplete: false };
+      return { isValid: false, message: isEn ? 'Must start with 01' : 'يجب أن يبدأ بـ 01', isComplete: false };
     }
     if (digits.length >= 3 && !['010', '011', '012', '015'].includes(digits.slice(0, 3))) {
-      return { isValid: false, message: 'كود شبكة غير صحيح (010, 011, 012, 015)', isComplete: false };
+      return { isValid: false, message: isEn ? 'Invalid carrier prefix (010, 011, 012, 015)' : 'كود شبكة غير صحيح (010, 011, 012, 015)', isComplete: false };
     }
     if (digits.length === 11) {
-      return { isValid: true, message: 'رقم هاتف صحيح (11 رقم)', isComplete: true };
+      return { isValid: true, message: isEn ? 'Valid phone number (11 digits)' : 'رقم هاتف صحيح (11 رقم)', isComplete: true };
     }
-    return { isValid: false, message: `متبقي ${11 - digits.length} أرقام`, isComplete: false };
+    return { isValid: false, message: isEn ? `${11 - digits.length} digits remaining` : `متبقي ${11 - digits.length} أرقام`, isComplete: false };
   }
 
   if (countryCode === 'SA') {
     const digits = clean.replace(/\D/g, '').replace(/^966/, '').replace(/^0/, '');
     if (digits.length === 9 && digits.startsWith('5')) {
-      return { isValid: true, message: 'رقم هاتف سعودي صحيح', isComplete: true };
+      return { isValid: true, message: isEn ? 'Valid Saudi phone number' : 'رقم هاتف سعودي صحيح', isComplete: true };
     }
     if (digits.length < 9) {
-      return { isValid: false, message: `متبقي ${9 - digits.length} أرقام`, isComplete: false };
+      return { isValid: false, message: isEn ? `${9 - digits.length} digits remaining` : `متبقي ${9 - digits.length} أرقام`, isComplete: false };
     }
-    return { isValid: true, message: 'رقم هاتف مكتمل', isComplete: true };
+    return { isValid: true, message: isEn ? 'Complete phone number' : 'رقم هاتف مكتمل', isComplete: true };
   }
 
   if (countryCode === 'KW') {
     const digits = clean.replace(/\D/g, '').replace(/^965/, '').replace(/^00965/, '').replace(/^0/, '');
     if (digits.length > 0 && !['2', '5', '6', '9'].includes(digits[0])) {
-      return { isValid: false, message: 'يجب أن يبدأ بـ 2, 5, 6, أو 9', isComplete: false };
+      return { isValid: false, message: isEn ? 'Must start with 2, 5, 6, or 9' : 'يجب أن يبدأ بـ 2, 5, 6, أو 9', isComplete: false };
     }
     if (digits.length === 8) {
-      return { isValid: true, message: 'رقم هاتف كويتي صحيح (8 أرقام)', isComplete: true };
+      return { isValid: true, message: isEn ? 'Valid Kuwait phone number (8 digits)' : 'رقم هاتف كويتي صحيح (8 أرقام)', isComplete: true };
     }
     if (digits.length < 8) {
-      return { isValid: false, message: `متبقي ${8 - digits.length} أرقام`, isComplete: false };
+      return { isValid: false, message: isEn ? `${8 - digits.length} digits remaining` : `متبقي ${8 - digits.length} أرقام`, isComplete: false };
     }
-    return { isValid: false, message: 'رقم الهاتف الكويتي يتكون من 8 أرقام', isComplete: false };
+    return { isValid: false, message: isEn ? 'Kuwait phone number is 8 digits' : 'رقم الهاتف الكويتي يتكون من 8 أرقام', isComplete: false };
   }
 
   const generalDigits = clean.replace(/\D/g, '');
   if (generalDigits.length >= 7 && generalDigits.length <= 15) {
-    return { isValid: true, message: 'رقم الهاتف صحيح', isComplete: true };
+    return { isValid: true, message: isEn ? 'Valid phone number' : 'رقم الهاتف صحيح', isComplete: true };
   }
-  return { isValid: false, message: 'رقم الهاتف غير مكتمل', isComplete: false };
+  return { isValid: false, message: isEn ? 'Incomplete phone number' : 'رقم الهاتف غير مكتمل', isComplete: false };
 }
 
 export function getEgyptianPhoneValidation(phone: string): { isValid: boolean; message: string; isComplete: boolean } {
   return getDynamicPhoneValidation(phone, 'EG');
 }
 
-export function getCustomerNameValidation(name: string): { isValid: boolean; message: string } {
+export function getCustomerNameValidation(name: string, isEn = false): { isValid: boolean; message: string } {
   const trimmed = name.trim();
   if (!trimmed) return { isValid: false, message: '' };
   const lettersCount = (trimmed.match(/[\p{L}\p{M}]/gu) || []).length;
   if (trimmed.length < 3 || lettersCount < 3) {
-    return { isValid: false, message: 'الاسم يجب ألا يقل عن 3 أحرف' };
+    return { isValid: false, message: isEn ? 'Name must be at least 3 characters' : 'الاسم يجب ألا يقل عن 3 أحرف' };
   }
-  return { isValid: true, message: 'الاسم مكتمل' };
+  return { isValid: true, message: isEn ? 'Name complete' : 'الاسم مكتمل' };
 }
 
-export function getCustomerAddressValidation(address: string): { isValid: boolean; message: string } {
+export function getCustomerAddressValidation(address: string, isEn = false): { isValid: boolean; message: string } {
   const trimmed = address.trim();
   if (!trimmed) return { isValid: false, message: '' };
   const lettersCount = (trimmed.match(/[\p{L}\p{M}]/gu) || []).length;
   if (trimmed.length < 5 || lettersCount < 3) {
-    return { isValid: false, message: 'العنوان يجب ألا يقل عن 5 أحرف بالتفصيل' };
+    return { isValid: false, message: isEn ? 'Address must be at least 5 characters' : 'العنوان يجب ألا يقل عن 5 أحرف بالتفصيل' };
   }
-  return { isValid: true, message: 'العنوان مكتمل' };
+  return { isValid: true, message: isEn ? 'Address complete' : 'العنوان مكتمل' };
 }
 
 export const KUWAIT_POPULAR_AREAS = [
@@ -212,6 +216,7 @@ export function StorefrontCheckoutModal({
   onSubmitOrder,
 }: StorefrontCheckoutModalProps) {
   const { t } = useTranslation();
+  const { isEn, dir } = useStorefrontLang();
   const isDineIn = Boolean(tableNumber) || orderType === 'dine_in';
   const [fulfillmentType, setFulfillmentType] = useState<'delivery' | 'pickup'>('delivery');
   const [selectedCountry, setSelectedCountry] = useState<string>(() => {
@@ -398,15 +403,7 @@ export function StorefrontCheckoutModal({
     scrollBodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  useEffect(() => {
-    if (isOpen) {
-      const prevOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = prevOverflow;
-      };
-    }
-  }, [isOpen]);
+  useBodyScrollLock(isOpen);
 
   useEffect(() => {
     // Always reset loading and error states whenever modal open state toggles
@@ -493,7 +490,7 @@ export function StorefrontCheckoutModal({
   const handleApplyCoupon = async () => {
     const cleanCode = couponCodeInput.trim().toUpperCase();
     if (!cleanCode) {
-      setCouponError('يرجى كتابة كود الكوبون أولاً');
+      setCouponError(isEn ? 'Please enter a coupon code first' : 'يرجى كتابة كود الكوبون أولاً');
       return;
     }
     if (!tenantSlug) return;
@@ -508,11 +505,11 @@ export function StorefrontCheckoutModal({
         setCouponError('');
       } else {
         setAppliedCoupon(null);
-        setCouponError(res.message || 'كود الكوبون غير صالح');
+        setCouponError(res.message || (isEn ? 'Invalid coupon code' : 'كود الكوبون غير صالح'));
       }
     } catch (err: any) {
       setAppliedCoupon(null);
-      setCouponError(err.message || 'تعذر التحقق من كود الكوبون');
+      setCouponError(err.message || (isEn ? 'Could not verify coupon code' : 'تعذر التحقق من كود الكوبون'));
     } finally {
       setCouponLoading(false);
     }
@@ -573,9 +570,9 @@ export function StorefrontCheckoutModal({
     return num.toFixed(2);
   };
 
-  const phoneStatus = getDynamicPhoneValidation(customerPhone, selectedCountry);
-  const nameStatus = getCustomerNameValidation(customerName);
-  const addressStatus = getCustomerAddressValidation(customerAddress);
+  const phoneStatus = getDynamicPhoneValidation(customerPhone, selectedCountry, isEn);
+  const nameStatus = getCustomerNameValidation(customerName, isEn);
+  const addressStatus = getCustomerAddressValidation(customerAddress, isEn);
   // Only collapse when every saved field would pass validation — otherwise show the form so the
   // shopper can see what needs fixing.
   const canExpress = expressMode && phoneStatus.isValid && nameStatus.isValid && (isDineIn || isPickup || addressStatus.isValid);
@@ -585,39 +582,39 @@ export function StorefrontCheckoutModal({
     if (isSubmittingRef.current || loading) return;
 
     if (!editingOrderNumber && cartItems.length === 0) {
-      showError('سلة المشتريات فارغة، يرجى إضافة أصناف إلى السلة أولاً.');
+      showError(isEn ? 'Your cart is empty. Please add items first.' : 'سلة المشتريات فارغة، يرجى إضافة أصناف إلى السلة أولاً.');
       return;
     }
 
-    const phoneValid = getDynamicPhoneValidation(customerPhone, selectedCountry);
+    const phoneValid = getDynamicPhoneValidation(customerPhone, selectedCountry, isEn);
     if (!phoneValid.isValid) {
-      showError(phoneValid.message || 'يرجى إدخال رقم هاتف صحيح');
+      showError(phoneValid.message || (isEn ? 'Please enter a valid phone number' : 'يرجى إدخال رقم هاتف صحيح'));
       return;
     }
 
     const trimmedName = customerName.trim();
     const nameLetters = (trimmedName.match(/[\p{L}\p{M}]/gu) || []).length;
     if (trimmedName.length < 3 || nameLetters < 3) {
-      showError('يرجى إدخال اسم مستلم صحيح لا يقل عن 3 أحرف (مثال: علي، مازن، محمد)');
+      showError(isEn ? 'Please enter a valid full name (at least 3 characters)' : 'يرجى إدخال اسم مستلم صحيح لا يقل عن 3 أحرف (مثال: علي، مازن، محمد)');
       return;
     }
 
     const trimmedAddress = isDineIn
-      ? `طاولة رقم ${tableNumber}`
+      ? (isEn ? `Table #${tableNumber}` : `طاولة رقم ${tableNumber}`)
       : isPickup
-      ? 'استلام ذاتي من الفرع'
+      ? (isEn ? 'Store Pickup' : 'استلام ذاتي من الفرع')
       : customerAddress.trim();
 
     if (!isDineIn && !isPickup) {
       if (isKuwait && useKwStructured) {
         if (!kwArea.trim() || !kwBlock.trim() || !kwStreet.trim() || !kwHouse.trim()) {
-          showError('يرجى استكمال بيانات العنوان الكويتي: المنطقة، القطعة، الشارع، ورقم المنزل');
+          showError(isEn ? 'Please complete Kuwait address details: Area, Block, Street, and House number' : 'يرجى استكمال بيانات العنوان الكويتي: المنطقة، القطعة، الشارع، ورقم المنزل');
           return;
         }
       }
       const addressLetters = (trimmedAddress.match(/[\p{L}\p{M}]/gu) || []).length;
       if (trimmedAddress.length < 5 || addressLetters < 3) {
-        showError('يرجى إدخال عنوان توصيل واضح ومفصل لا يقل عن 5 أحرف (المنطقة، الشارع، رقم العقار)');
+        showError(isEn ? 'Please enter a detailed delivery address (at least 5 characters)' : 'يرجى إدخال عنوان توصيل واضح ومفصل لا يقل عن 5 أحرف (المنطقة، الشارع، رقم العقار)');
         return;
       }
     }
@@ -813,6 +810,7 @@ export function StorefrontCheckoutModal({
       onClick={handleModalClose}
     >
       <div
+        dir={dir}
         className="storefront-checkout-modal-container"
         style={{
           width: '100%',
@@ -827,6 +825,7 @@ export function StorefrontCheckoutModal({
           flexDirection: 'column',
           margin: 'auto',
           border: '1px solid #e2e8f0',
+          direction: dir,
           willChange: 'transform, opacity',
           animation: 'sfAppleSpringOpen 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards',
         }}
@@ -913,7 +912,9 @@ export function StorefrontCheckoutModal({
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ width: '3px', height: '12px', backgroundColor: '#170e5e', borderRadius: '2px', display: 'inline-block' }} />
                 <h2 style={{ margin: 0, fontSize: '14.5px', fontWeight: 800, color: '#0f172a' }}>
-                  {editingOrderNumber ? `تعديل الطلب #${editingOrderNumber}` : t('storefront.storefront_checkout_modal.s0', "إتمام وتأكيد الطلب")}
+                  {editingOrderNumber
+                    ? (isEn ? `Edit Order #${editingOrderNumber}` : `تعديل الطلب #${editingOrderNumber}`)
+                    : t('storefront.storefront_checkout_modal.s0', "إتمام وتأكيد الطلب")}
                 </h2>
               </div>
               <p style={{ margin: '1px 0 0', fontSize: '10.5px', color: '#64748b' }}>
@@ -1172,7 +1173,7 @@ export function StorefrontCheckoutModal({
                         >
                           {COUNTRY_OPTIONS.map((c) => (
                             <option key={c.code} value={c.code}>
-                              {c.name} ({c.dialCode})
+                              {isEn ? c.nameEn : c.name} ({c.dialCode})
                             </option>
                           ))}
                         </select>
@@ -1184,7 +1185,12 @@ export function StorefrontCheckoutModal({
                           value={customerPhone}
                           onChange={(e) => handlePhoneChange(e.target.value)}
                           onBlur={recordAbandonedCartSilent}
-                          placeholder={COUNTRY_OPTIONS.find((c) => c.code === selectedCountry)?.placeholder || t('storefront.storefront_checkout_modal.s13', "رقم الهاتف")}
+                          placeholder={
+                            (isEn
+                              ? COUNTRY_OPTIONS.find((c) => c.code === selectedCountry)?.placeholderEn
+                              : COUNTRY_OPTIONS.find((c) => c.code === selectedCountry)?.placeholder) ||
+                            t('storefront.storefront_checkout_modal.s13', "رقم الهاتف")
+                          }
                           style={{
                             flex: 1,
                             padding: '4px 10px',
@@ -1202,7 +1208,7 @@ export function StorefrontCheckoutModal({
                             background: '#f8fafc',
                             fontFamily: 'inherit',
                             direction: 'ltr',
-                            textAlign: 'right',
+                            textAlign: isEn ? 'left' : 'right',
                             transition: 'border-color 0.2s ease',
                           }}
                         />
@@ -2112,7 +2118,13 @@ export function StorefrontCheckoutModal({
                   )}
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10.5px', color: '#64748b' }}>
-                    <span>{isDineIn ? t('storefront.storefront_checkout_modal.s60', "خدمة الصالة / الطاولة:") : `خدمة التوصيل ${selectedZone ? `(${selectedZone.name})` : ''}:`}</span>
+                    <span>
+                      {isDineIn
+                        ? t('storefront.storefront_checkout_modal.s60', "خدمة الصالة / الطاولة:")
+                        : isEn
+                        ? `Delivery Fee ${selectedZone ? `(${selectedZone.name})` : ''}:`
+                        : `خدمة التوصيل ${selectedZone ? `(${selectedZone.name})` : ''}:`}
+                    </span>
                     {isDineIn ? (
                       <strong style={{ color: '#166534' }}>{t('storefront.storefront_checkout_modal.s61', "مجاناً (طلب صالة)")}</strong>
                     ) : effectiveDeliveryFee === 0 ? (
@@ -2220,7 +2232,13 @@ export function StorefrontCheckoutModal({
               transition: 'all 0.15s ease',
             }}
           >
-            {loading ? t('storefront.storefront_checkout_modal.s66', "جاري الحفظ...") : editingOrderNumber ? t('storefront.storefront_checkout_modal.s67', "حفظ تعديلات الطلب") : isDineIn ? `إرسال للمطبخ (طاولة ${tableNumber || ''})` : t('storefront.storefront_checkout_modal.s68', "إرسال وتأكيد الطلب الآن")}
+            {loading
+              ? t('storefront.storefront_checkout_modal.s66', "جاري الحفظ...")
+              : editingOrderNumber
+              ? t('storefront.storefront_checkout_modal.s67', "حفظ تعديلات الطلب")
+              : isDineIn
+              ? (isEn ? `Send to Kitchen (Table ${tableNumber || ''})` : `إرسال للمطبخ (طاولة ${tableNumber || ''})`)
+              : t('storefront.storefront_checkout_modal.s68', "إرسال وتأكيد الطلب الآن")}
           </button>
           <button
             type="button"

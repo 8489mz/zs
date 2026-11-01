@@ -1,9 +1,11 @@
-import { useTranslation } from 'react-i18next';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
+import { useStorefrontLang } from '@/i18n';
 import { useMemo } from 'react';
 import { isThreeDecimalCurrency, getGlobalSystemCurrency } from '@/lib/currencies';
 import { OnlineOrderRecord, StorefrontInfo, StorefrontProduct } from '../types/storefront.types';
 import { CheckIcon, PackageIcon } from '@/shared/components/icons/AppIcons';
+import { resolveProductPhoto, generatePremiumProductSvg } from '../lib/storefront-photo-matcher';
+import { translateKnownPhrase } from '../lib/storefront-translations';
 
 interface StorefrontCustomerOrderCardProps {
   order: OnlineOrderRecord;
@@ -17,10 +19,10 @@ interface StorefrontCustomerOrderCardProps {
 }
 
 const TRACKING_STEPS = [
-  { id: 'pending', label: 'تم الطلب' },
-  { id: 'processing', label: 'تم التجهيز' },
-  { id: 'shipped', label: 'في الطريق' },
-  { id: 'delivered', label: 'تم التسليم' },
+  { id: 'pending', labelAr: 'تم الطلب', labelEn: 'Order Placed' },
+  { id: 'processing', labelAr: 'تم التجهيز', labelEn: 'Prepared' },
+  { id: 'shipped', labelAr: 'في الطريق', labelEn: 'On the Way' },
+  { id: 'delivered', labelAr: 'تم التسليم', labelEn: 'Delivered' },
 ];
 
 function getStepIndex(status: string): number {
@@ -66,8 +68,7 @@ export function StorefrontCustomerOrderCard({
   isCancelling = false,
   allProducts = [],
 }: StorefrontCustomerOrderCardProps) {
-  const { i18n } = useTranslation();
-  const isEn = i18n.language === 'en';
+  const { isEn, lang } = useStorefrontLang();
 
   const badge = getStatusBadge(order.status, isEn);
   const isPending = order.status === 'pending' && !order.saleId;
@@ -103,7 +104,7 @@ export function StorefrontCustomerOrderCard({
   const stepTimestamps = useMemo(() => {
     const baseMs = createdDate.getTime();
     return [0, 15, 45, 120].map((offsetMinutes, idx) => {
-      if (idx > currentStepIndex) return 'قيد الانتظار...';
+      if (idx > currentStepIndex) return isEn ? 'Pending...' : 'قيد الانتظار...';
       const stepDate = new Date(baseMs + offsetMinutes * 60 * 1000);
       return stepDate.toLocaleTimeString(isEn ? 'en-US' : 'ar-EG', {
         hour: '2-digit',
@@ -123,19 +124,27 @@ export function StorefrontCustomerOrderCard({
     return { byId, byName };
   }, [allProducts]);
 
-  const getProductImageForItem = (productId: number, name: string): string | null => {
+  const getProductImageForItem = (productId: number, name: string): string => {
     const byIdMatch = productLookup.byId.get(Number(productId));
     if (byIdMatch?.imageUrl) return byIdMatch.imageUrl;
     const byNameMatch = productLookup.byName.get((name || '').trim().toLowerCase());
     if (byNameMatch?.imageUrl) return byNameMatch.imageUrl;
-    return null;
+    const categoryHint = byIdMatch?.categoryName || byNameMatch?.categoryName || '';
+    const autoPhoto = resolveProductPhoto(name || '', categoryHint);
+    return autoPhoto.url || generatePremiumProductSvg(name || (isEn ? 'Product' : 'منتج'), categoryHint);
+  };
+
+  const getLocalizedItemName = (productId: number, fallbackName: string): string => {
+    const byIdMatch = productLookup.byId.get(Number(productId));
+    if (byIdMatch?.name) return byIdMatch.name;
+    return isEn ? translateKnownPhrase(fallbackName, lang) : fallbackName;
   };
 
   const isPaid = order.paymentStatus === 'paid';
   const paymentMethodLabel =
     order.paymentMethod === 'online' || order.paymentMethod === 'card'
-      ? 'بطاقة بنكية'
-      : 'عند الاستلام';
+      ? (isEn ? 'Bank Card' : 'بطاقة بنكية')
+      : (isEn ? 'Cash on Delivery' : 'عند الاستلام');
 
   return (
     <div
@@ -150,7 +159,7 @@ export function StorefrontCustomerOrderCard({
         gap: '18px',
       }}
     >
-      {/* 1. Balanced Order Header: Icon + Order ID & Date on Right, Status Badge on Left */}
+      {/* 1. Balanced Order Header */}
       <div
         style={{
           display: 'flex',
@@ -183,7 +192,7 @@ export function StorefrontCustomerOrderCard({
                 fontSize: '15px',
                 fontWeight: 600,
                 color: '#0f172a',
-                textAlign: 'right',
+                textAlign: isEn ? 'left' : 'right',
                 lineHeight: 1.25,
               }}
             >
@@ -204,7 +213,7 @@ export function StorefrontCustomerOrderCard({
           </div>
         </div>
 
-        {/* Status Badge & Actions on Left */}
+        {/* Status Badge & Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
           <span
             style={{
@@ -240,7 +249,7 @@ export function StorefrontCustomerOrderCard({
                   fontFamily: 'inherit',
                 }}
               >
-                تعديل
+                {isEn ? 'Edit' : 'تعديل'}
               </button>
               <button
                 type="button"
@@ -259,12 +268,12 @@ export function StorefrontCustomerOrderCard({
                   fontFamily: 'inherit',
                 }}
               >
-                إلغاء
+                {isEn ? 'Cancel' : 'إلغاء'}
               </button>
             </>
           )}
 
-          {!isPending && onReorder && (order.status === 'delivered' || order.status === 'cancelled') && (
+          {!isPending && onReorder && (
             <button
               type="button"
               onClick={() => onReorder(order)}
@@ -281,13 +290,13 @@ export function StorefrontCustomerOrderCard({
                 fontFamily: 'inherit',
               }}
             >
-              إعادة الطلب
+              {isEn ? 'Reorder' : 'إعادة الطلب'}
             </button>
           )}
         </div>
       </div>
 
-      {/* 2. Clean Horizontal 4-Step Progress Bar (Image 1) */}
+      {/* 2. Clean Horizontal 4-Step Progress Bar */}
       {order.status !== 'cancelled' && (
         <div
           style={{
@@ -367,7 +376,7 @@ export function StorefrontCustomerOrderCard({
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {step.label}
+                    {isEn ? step.labelEn : step.labelAr}
                   </span>
 
                   <span
@@ -388,20 +397,19 @@ export function StorefrontCustomerOrderCard({
         </div>
       )}
 
-      {/* 3. Properly Proportioned 3-Column Info Row (Never wraps Date vertically) */}
+      {/* 3. Properly Proportioned 3-Column Info Row */}
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'auto auto 1fr',
           gap: '20px',
-          padding: '2px 2px 4px',
+          padding: '2px 2px 14px',
           borderBottom: '1px solid #f1f5f9',
-          paddingBottom: '14px',
         }}
       >
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: '11.5px', color: '#94a3b8', fontWeight: 400, marginBottom: '4px', whiteSpace: 'nowrap' }}>
-            تاريخ الطلب
+            {isEn ? 'Order Date' : 'تاريخ الطلب'}
           </div>
           <div style={{ fontSize: '12.5px', color: '#1e293b', fontWeight: 500, whiteSpace: 'nowrap' }}>
             {formattedOrderDate}
@@ -410,7 +418,7 @@ export function StorefrontCustomerOrderCard({
 
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: '11.5px', color: '#94a3b8', fontWeight: 400, marginBottom: '4px', whiteSpace: 'nowrap' }}>
-            شركة الشحن
+            {isEn ? 'Courier / Zone' : 'شركة الشحن'}
           </div>
           <div
             style={{
@@ -420,16 +428,18 @@ export function StorefrontCustomerOrderCard({
               whiteSpace: 'nowrap',
             }}
           >
-            {order.deliveryZoneName || 'توصيل سريع'}
+            {order.deliveryZoneName
+              ? (isEn ? translateKnownPhrase(order.deliveryZoneName, lang) : order.deliveryZoneName)
+              : (isEn ? 'Express Delivery' : 'توصيل سريع')}
           </div>
         </div>
 
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: '11.5px', color: '#94a3b8', fontWeight: 400, marginBottom: '4px', whiteSpace: 'nowrap' }}>
-            العنوان
+            {isEn ? 'Address' : 'العنوان'}
           </div>
           <div
-            title={order.customerAddress || 'استلام من الفرع'}
+            title={order.customerAddress || (isEn ? 'Store Pickup' : 'استلام من الفرع')}
             style={{
               fontSize: '12.5px',
               color: '#1e293b',
@@ -439,15 +449,16 @@ export function StorefrontCustomerOrderCard({
               whiteSpace: 'nowrap',
             }}
           >
-            {order.customerAddress || 'استلام من الفرع'}
+            {order.customerAddress || (isEn ? 'Store Pickup' : 'استلام من الفرع')}
           </div>
         </div>
       </div>
 
-      {/* 4. Clean Borderless Product Items List (Exact Image 3 layout: Title on top, Price & Qty on same bottom baseline) */}
+      {/* 4. Clean Borderless Product Items List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         {order.items.map((it, idx) => {
           const thumbUrl = getProductImageForItem(it.productId, it.name);
+          const displayName = getLocalizedItemName(it.productId, it.name);
           return (
             <div
               key={`${it.productId}-${idx}`}
@@ -476,7 +487,12 @@ export function StorefrontCustomerOrderCard({
                 {thumbUrl ? (
                   <img
                     src={thumbUrl}
-                    alt={it.name}
+                    alt={displayName}
+                    loading="lazy"
+                    decoding="async"
+                    onError={(e) => {
+                      e.currentTarget.src = generatePremiumProductSvg(displayName || (isEn ? 'Product' : 'منتج'), '');
+                    }}
                     style={{
                       width: '100%',
                       height: '100%',
@@ -501,7 +517,7 @@ export function StorefrontCustomerOrderCard({
                     lineHeight: 1.3,
                   }}
                 >
-                  {it.name}
+                  {displayName}
                 </div>
 
                 <div
@@ -534,7 +550,7 @@ export function StorefrontCustomerOrderCard({
                       flexShrink: 0,
                     }}
                   >
-                    الكمية : {it.quantity}
+                    {isEn ? `Qty: ${it.quantity}` : `الكمية : ${it.quantity}`}
                   </div>
                 </div>
               </div>
@@ -543,7 +559,7 @@ export function StorefrontCustomerOrderCard({
         })}
       </div>
 
-      {/* 5. Soft Order Summary Card (Image 1 & Image 3) */}
+      {/* 5. Soft Order Summary Card */}
       <div
         style={{
           background: '#f9fafb',
@@ -564,7 +580,7 @@ export function StorefrontCustomerOrderCard({
             fontWeight: 400,
           }}
         >
-          <span>المجموع الفرعي</span>
+          <span>{isEn ? 'Subtotal' : 'المجموع الفرعي'}</span>
           <span style={{ color: '#1e293b', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
             <span>{formatPriceNumber(order.subtotal)}</span>
             <CurrencySymbol currency={currCode} />
@@ -582,7 +598,7 @@ export function StorefrontCustomerOrderCard({
               fontWeight: 400,
             }}
           >
-            <span>الخصم</span>
+            <span>{isEn ? 'Discount' : 'الخصم'}</span>
             <span style={{ color: '#10b981', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
               <span>-{formatPriceNumber(order.discountAmount)}</span>
               <CurrencySymbol currency={currCode} />
@@ -600,10 +616,10 @@ export function StorefrontCustomerOrderCard({
             fontWeight: 400,
           }}
         >
-          <span>الشحن</span>
+          <span>{isEn ? 'Shipping' : 'الشحن'}</span>
           <span style={{ color: '#1e293b', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
             {order.deliveryFee === 0 ? (
-              <span>مجاناً</span>
+              <span>{isEn ? 'Free' : 'مجاناً'}</span>
             ) : (
               <>
                 <span>{formatPriceNumber(order.deliveryFee)}</span>
@@ -623,7 +639,7 @@ export function StorefrontCustomerOrderCard({
             fontWeight: 400,
           }}
         >
-          <span>طريقة الدفع</span>
+          <span>{isEn ? 'Payment Method' : 'طريقة الدفع'}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ color: '#1e293b', fontWeight: 500 }}>{paymentMethodLabel}</span>
             {isPaid && (
@@ -638,7 +654,7 @@ export function StorefrontCustomerOrderCard({
                   boxShadow: '0 1px 2px rgba(34, 197, 94, 0.25)',
                 }}
               >
-                مدفوع
+                {isEn ? 'Paid' : 'مدفوع'}
               </span>
             )}
           </div>
@@ -656,7 +672,7 @@ export function StorefrontCustomerOrderCard({
             fontWeight: 500,
           }}
         >
-          <span>الإجمالي</span>
+          <span>{isEn ? 'Total' : 'الإجمالي'}</span>
           <span
             style={{
               fontSize: '15.5px',
@@ -675,3 +691,4 @@ export function StorefrontCustomerOrderCard({
     </div>
   );
 }
+

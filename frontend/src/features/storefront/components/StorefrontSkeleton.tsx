@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '@/i18n';
 /**
  * First paint of the public storefront while /info and /catalog load.
  *
@@ -20,9 +21,10 @@ const shimmer: React.CSSProperties = {
 
 export function StorefrontSkeleton({ brandColor = '#2d68c4', cards = 8 }: StorefrontSkeletonProps) {
   const { t } = useTranslation();
+  const { dir } = useStorefrontLang();
   return (
     <div
-      dir="rtl"
+      dir={dir}
       aria-busy="true"
       aria-label={t('storefront.storefront_skeleton.s0', "جاري تحميل المتجر")}
       style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', flexDirection: 'column', width: '100%', overflowX: 'hidden' }}

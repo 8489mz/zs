@@ -1,4 +1,4 @@
-import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '@/i18n';
 import { useState, useMemo, useEffect } from 'react';
 import { StorefrontCategory } from '../types/storefront.types';
 import { getAutoProductPhoto, generatePremiumProductSvg } from '../lib/storefront-photo-matcher';
@@ -14,8 +14,10 @@ interface StorefrontCategoriesModalProps {
   onSelectCategory: (id: number | 'all') => void;
 }
 
-function parseCategory(name: string): { group: string; label: string } {
-  if (!name) return { group: 'أقسام عامة', label: 'عام' };
+function parseCategory(name: string, isEn = false): { group: string; label: string } {
+  const defaultGroup = isEn ? 'General Categories' : 'أقسام عامة';
+  const defaultLabel = isEn ? 'General' : 'عام';
+  if (!name) return { group: defaultGroup, label: defaultLabel };
   const trimmed = name.trim();
   if (trimmed.includes(' - ')) {
     const parts = trimmed.split(' - ').map((s) => s.trim()).filter(Boolean);
@@ -29,12 +31,12 @@ function parseCategory(name: string): { group: string; label: string } {
       return { group: parts[0], label: parts.slice(1).join(' / ') };
     }
   }
-  return { group: 'أقسام عامة', label: trimmed };
+  return { group: defaultGroup, label: trimmed };
 }
 
 function getFamilyIcon(groupName: string, size = 16) {
   const g = groupName.toLowerCase();
-  if (g.includes('صوت') || g.includes('سماع') || g.includes('إكسسوار') || g.includes('اكسسوار') || g.includes('شواحن') || g.includes('كابل')) {
+  if (g.includes('صوت') || g.includes('سماع') || g.includes('إكسسوار') || g.includes('اكسسوار') || g.includes('شواحن') || g.includes('كابل') || g.includes('audio') || g.includes('headphone')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
@@ -49,7 +51,7 @@ function getFamilyIcon(groupName: string, size = 16) {
       </svg>
     );
   }
-  if (g.includes('اقتصادي') || g.includes('توفير') || g.includes('مخفّض')) {
+  if (g.includes('اقتصادي') || g.includes('توفير') || g.includes('مخفّض') || g.includes('deal')) {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
@@ -76,7 +78,7 @@ export function StorefrontCategoriesModal({
   selectedCategoryId,
   onSelectCategory,
 }: StorefrontCategoriesModalProps) {
-  const { t } = useTranslation();
+  const { t, isEn, dir } = useStorefrontLang();
   const [modalSearch, setModalSearch] = useState('');
   const [activeGroup, setActiveGroup] = useState<string>('');
 
@@ -96,7 +98,7 @@ export function StorefrontCategoriesModal({
   const groupedFamilies = useMemo(() => {
     const map = new Map<string, StorefrontCategory[]>();
     for (const cat of categories) {
-      const parsed = parseCategory(cat.name);
+      const parsed = parseCategory(cat.name, isEn);
       const grp = parsed.group;
       if (!map.has(grp)) {
         map.set(grp, []);
@@ -111,11 +113,11 @@ export function StorefrontCategoriesModal({
         totalCount,
       };
     });
-  }, [categories, categoryCounts]);
+  }, [categories, categoryCounts, isEn]);
 
   // Initialize or keep active group valid
   useEffect(() => {
-    if (groupedFamilies.length > 0 && !activeGroup) {
+    if (groupedFamilies.length > 0 && (!activeGroup || !groupedFamilies.some((f) => f.groupName === activeGroup))) {
       setActiveGroup(groupedFamilies[0].groupName);
     }
   }, [groupedFamilies, activeGroup]);
@@ -144,14 +146,17 @@ export function StorefrontCategoriesModal({
   };
 
   const formatCountLabel = (count: number) => {
+    if (isEn) {
+      return `${count} ${count === 1 ? 'item' : 'items'}`;
+    }
     const unit =
       count === 1
-        ? t('storefront.storefront_categories_modal.s15', 'صنف')
+        ? 'صنف'
         : count === 2
-          ? t('storefront.storefront_categories_modal.s16', 'صنفان')
+          ? 'صنفان'
           : count <= 10
-            ? t('storefront.storefront_categories_modal.s17', 'أصناف')
-            : t('storefront.storefront_categories_modal.s18', 'صنف');
+            ? 'أصناف'
+            : 'صنف';
     return `${count} ${unit}`;
   };
 
@@ -162,25 +167,27 @@ export function StorefrontCategoriesModal({
       width="min(1220px, 95vw)"
       maxHeight="min(88vh, 800px)"
       shellClassName="storefront-cat-modal-shell"
-      ariaLabel={t('storefront.storefront_categories_modal.s0', 'جميع أقسام وتصنيفات المتجر')}
+      ariaLabel={isEn ? 'All Store Categories' : 'جميع أقسام وتصنيفات المتجر'}
     >
-      <div className="full-bleed storefront-cat-modal-root">
+      <div className="full-bleed storefront-cat-modal-root" dir={dir} style={{ direction: dir }}>
         {/* Top Header Bar: Luxury Rounded & Integrated */}
         <div className="storefront-cat-modal-header">
           {/* Title Area */}
           <div className="storefront-cat-modal-header-brand">
             <div>
               <h2 style={{ margin: 0, fontSize: '14.5px', fontWeight: 700, color: '#0f172a', lineHeight: 1.3, letterSpacing: '-0.1px' }}>
-                {t('storefront.storefront_categories_modal.s1', 'تصفح أقسام المتجر')}
+                {isEn ? 'Browse Store Categories' : 'تصفح أقسام المتجر'}
               </h2>
               <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
-                {categories.length === 1
-                  ? t('storefront.storefront_categories_modal.s2_single', 'قسم وتصنيف معتمد')
-                  : categories.length === 2
-                    ? t('storefront.storefront_categories_modal.s2_dual', 'قسمان وتصنيفان معتمدان')
-                    : categories.length <= 10
-                      ? `${categories.length} ${t('storefront.storefront_categories_modal.s2_few', 'أقسام وتصنيفات معتمدة')}`
-                      : `${categories.length} ${t('storefront.storefront_categories_modal.s2_many', 'قسماً وتصنيفاً معتمداً')}`}
+                {isEn
+                  ? `${categories.length} ${categories.length === 1 ? 'verified category' : 'verified categories'}`
+                  : categories.length === 1
+                    ? 'قسم وتصنيف معتمد'
+                    : categories.length === 2
+                      ? 'قسمان وتصنيفان معتمدان'
+                      : categories.length <= 10
+                        ? `${categories.length} أقسام وتصنيفات معتمدة`
+                        : `${categories.length} قسماً وتصنيفاً معتمداً`}
               </span>
             </div>
           </div>
@@ -191,11 +198,11 @@ export function StorefrontCategoriesModal({
               type="text"
               value={modalSearch}
               onChange={(e) => setModalSearch(e.target.value)}
-              placeholder={t('storefront.storefront_categories_modal.s3', 'ابحث عن اسم القسم أو الماركة...')}
+              placeholder={isEn ? 'Search for a category or brand...' : 'ابحث عن اسم القسم أو الماركة...'}
               style={{
                 width: '100%',
                 height: '36px',
-                padding: '6px 36px 6px 12px',
+                padding: isEn ? '6px 12px 6px 36px' : '6px 36px 6px 12px',
                 borderRadius: '11px',
                 border: '1px solid #e2e8f0',
                 fontSize: '12px',
@@ -222,7 +229,7 @@ export function StorefrontCategoriesModal({
               style={{
                 position: 'absolute',
                 top: '50%',
-                right: '12px',
+                [isEn ? 'left' : 'right']: '12px',
                 transform: 'translateY(-50%)',
                 display: 'flex',
                 alignItems: 'center',
@@ -238,7 +245,7 @@ export function StorefrontCategoriesModal({
                 style={{
                   position: 'absolute',
                   top: '50%',
-                  left: '8px',
+                  [isEn ? 'right' : 'left']: '8px',
                   transform: 'translateY(-50%)',
                   background: '#e2e8f0',
                   border: 'none',
@@ -250,7 +257,7 @@ export function StorefrontCategoriesModal({
                   fontWeight: 600,
                 }}
               >
-                {t('storefront.storefront_categories_modal.s4', 'مسح')}
+                {isEn ? 'Clear' : 'مسح'}
               </button>
             )}
           </div>
@@ -260,7 +267,7 @@ export function StorefrontCategoriesModal({
             type="button"
             onClick={onClose}
             className="storefront-cat-modal-close-btn"
-            title={t('storefront.storefront_categories_modal.s5', 'إغلاق (Esc)')}
+            title={isEn ? 'Close (Esc)' : 'إغلاق (Esc)'}
           >
             <IconClose size={15} strokeWidth={2.1} />
           </button>
@@ -276,10 +283,10 @@ export function StorefrontCategoriesModal({
               onClose();
             }}
             className={`storefront-cat-modal-chip ${selectedCategoryId === 'all' ? 'active' : ''}`}
-            title={t('storefront.storefront_categories_modal.s6', 'عرض جميع أصناف المتجر بدون فلترة')}
+            title={isEn ? 'View all store items without filtering' : 'عرض جميع أصناف المتجر بدون فلترة'}
           >
             <IconShoppingBag size={12} strokeWidth={2.2} />
-            <span>{t('storefront.storefront_categories_modal.s7', 'الكل')}</span>
+            <span>{isEn ? 'All' : 'الكل'}</span>
             <span className="storefront-cat-modal-chip-badge">{totalAllCount}</span>
           </button>
 
@@ -327,7 +334,7 @@ export function StorefrontCategoriesModal({
 
         {/* Main Two-Column Split Panel Body */}
         <div className="storefront-cat-modal-body">
-          {/* Right Sidebar: Master Category Navigation with Visual Thumbnails */}
+          {/* Sidebar: Master Category Navigation with Visual Thumbnails */}
           <div className="storefront-cat-modal-sidebar">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {/* Master Item: All Products Button */}
@@ -353,7 +360,7 @@ export function StorefrontCategoriesModal({
                       : '#ffffff',
                   color: '#0f172a',
                   cursor: 'pointer',
-                  textAlign: 'right',
+                  textAlign: isEn ? 'left' : 'right',
                   transition: 'all 0.18s ease',
                   marginBottom: '4px',
                   boxShadow:
@@ -363,7 +370,7 @@ export function StorefrontCategoriesModal({
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = 'var(--storefront-primary-color, #2d68c4)';
-                  e.currentTarget.style.transform = 'translateX(-2px)';
+                  e.currentTarget.style.transform = isEn ? 'translateX(2px)' : 'translateX(-2px)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor =
@@ -389,7 +396,7 @@ export function StorefrontCategoriesModal({
                     <IconShoppingBag size={16} color="#ffffff" strokeWidth={2.2} />
                   </div>
                   <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#0f172a' }}>
-                    {t('storefront.storefront_categories_modal.s8', 'جميع المنتجات')}
+                    {isEn ? 'All Products' : 'جميع المنتجات'}
                   </span>
                 </div>
                 <span
@@ -429,7 +436,7 @@ export function StorefrontCategoriesModal({
                     display: 'inline-block',
                   }}
                 />
-                <span>{t('storefront.storefront_categories_modal.s9', 'فئات وأقسام المتجر')}</span>
+                <span>{isEn ? 'Store Categories' : 'فئات وأقسام المتجر'}</span>
               </div>
 
               {/* Category Families or Categories List with Real Mini Product Thumbnails */}
@@ -450,7 +457,7 @@ export function StorefrontCategoriesModal({
                           if (!isActive) {
                             e.currentTarget.style.background = '#ffffff';
                             e.currentTarget.style.borderColor = '#e2e8f0';
-                            e.currentTarget.style.transform = 'translateX(-2px)';
+                            e.currentTarget.style.transform = isEn ? 'translateX(2px)' : 'translateX(-2px)';
                           }
                         }}
                         onMouseLeave={(e) => {
@@ -472,7 +479,7 @@ export function StorefrontCategoriesModal({
                           background: isActive ? '#ffffff' : 'transparent',
                           color: isActive ? 'var(--storefront-primary-color, #2d68c4)' : '#1e293b',
                           cursor: 'pointer',
-                          textAlign: 'right',
+                          textAlign: isEn ? 'left' : 'right',
                           transition: 'all 0.16s ease',
                           boxShadow: isActive ? '0 4px 12px rgba(15, 23, 42, 0.06)' : 'none',
                         }}
@@ -550,7 +557,7 @@ export function StorefrontCategoriesModal({
                             e.currentTarget.style.background = '#ffffff';
                             e.currentTarget.style.borderColor = '#e2e8f0';
                             e.currentTarget.style.boxShadow = '0 3px 10px rgba(15, 23, 42, 0.04)';
-                            e.currentTarget.style.transform = 'translateX(-2px)';
+                            e.currentTarget.style.transform = isEn ? 'translateX(2px)' : 'translateX(-2px)';
                           }
                         }}
                         onMouseLeave={(e) => {
@@ -573,7 +580,7 @@ export function StorefrontCategoriesModal({
                           background: isActive ? '#ffffff' : 'transparent',
                           color: isActive ? 'var(--storefront-primary-color, #2d68c4)' : '#1e293b',
                           cursor: 'pointer',
-                          textAlign: 'right',
+                          textAlign: isEn ? 'left' : 'right',
                           transition: 'all 0.16s ease',
                           boxShadow: isActive ? '0 4px 12px rgba(45, 104, 196, 0.1)' : 'none',
                           gap: '8px',
@@ -643,7 +650,7 @@ export function StorefrontCategoriesModal({
             </div>
           </div>
 
-          {/* Left Detail Panel: Luxury Squircle Category Cards Grid */}
+          {/* Detail Panel: Luxury Squircle Category Cards Grid */}
           <div className="storefront-cat-modal-content">
             {/* Active Group Header Bar */}
             <div className={`storefront-cat-modal-content-header ${!modalSearch.trim() ? 'is-default-header' : ''}`}>
@@ -672,10 +679,14 @@ export function StorefrontCategoriesModal({
                   />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {modalSearch.trim()
-                      ? `نتائج البحث عن «${modalSearch}»`
+                      ? isEn
+                        ? `Search results for "${modalSearch}"`
+                        : `نتائج البحث عن «${modalSearch}»`
                       : hasMultipleFamilies
                         ? activeGroup
-                        : t('storefront.storefront_categories_modal.s10', 'أقسام وتصنيفات المتجر')}
+                        : isEn
+                          ? 'Store Categories & Departments'
+                          : 'أقسام وتصنيفات المتجر'}
                   </span>
                 </h3>
                 <span
@@ -688,14 +699,16 @@ export function StorefrontCategoriesModal({
                   }}
                 >
                   {modalSearch.trim() ? (
-                    `تم العثور على ${displayedCategories.length} قسماً مطابقاً للبحث`
+                    isEn
+                      ? `Found ${displayedCategories.length} matching ${displayedCategories.length === 1 ? 'category' : 'categories'}`
+                      : `تم العثور على ${displayedCategories.length} قسماً مطابقاً للبحث`
                   ) : (
                     <>
                       <span>
-                        {t('storefront.storefront_categories_modal.s11', 'اختر القسم لتصفح الأصناف المعروضة')}
+                        {isEn ? 'Select a category to browse its products' : 'اختر القسم لتصفح الأصناف المعروضة'}
                       </span>{' '}
                       <span style={{ whiteSpace: 'nowrap' }}>
-                        ({displayedCategories.length} {t('storefront.storefront_categories_modal.s12', 'متاح)')}
+                        ({displayedCategories.length} {isEn ? 'available)' : 'متاح)'}
                       </span>
                     </>
                   )}
@@ -716,8 +729,7 @@ export function StorefrontCategoriesModal({
                     flexShrink: 0,
                   }}
                 >
-                  {t('storefront.storefront_categories_modal.s13', 'إجمالي')} {currentFamilyObj.totalCount}{' '}
-                  {t('storefront.storefront_categories_modal.s14', 'صنف')}
+                  {isEn ? `Total ${currentFamilyObj.totalCount} items` : `إجمالي ${currentFamilyObj.totalCount} صنف`}
                 </span>
               )}
             </div>
@@ -728,7 +740,7 @@ export function StorefrontCategoriesModal({
                 {displayedCategories.map((cat) => {
                   const count = categoryCounts.get(cat.id) || 0;
                   const isSelected = selectedCategoryId === cat.id;
-                  const parsed = parseCategory(cat.name);
+                  const parsed = parseCategory(cat.name, isEn);
                   const photoUrl = getCategoryPhoto(cat);
 
                   return (
@@ -844,14 +856,12 @@ export function StorefrontCategoriesModal({
               >
                 <IconFolder size={40} color="#cbd5e1" style={{ marginBottom: '10px' }} />
                 <div style={{ fontSize: '14.5px', fontWeight: 800, color: '#334155' }}>
-                  {t('storefront.storefront_categories_modal.s19', 'لا توجد أقسام تطابق «')}
-                  {modalSearch}»
+                  {isEn ? `No categories match "${modalSearch}"` : `لا توجد أقسام تطابق «${modalSearch}»`}
                 </div>
                 <div style={{ fontSize: '12px', marginTop: '4px', color: '#94a3b8' }}>
-                  {t(
-                    'storefront.storefront_categories_modal.s20',
-                    'تأكد من كتابة الكلمة بشكل صحيح أو اضغط على «مسح» للعودة.'
-                  )}
+                  {isEn
+                    ? 'Please check the spelling or click "Clear" to view all categories.'
+                    : 'تأكد من كتابة الكلمة بشكل صحيح أو اضغط على «مسح» للعودة.'}
                 </div>
               </div>
             )}

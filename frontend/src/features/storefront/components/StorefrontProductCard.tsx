@@ -1,4 +1,4 @@
-import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '../../../i18n';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import React, { useState } from 'react';
 import { StorefrontProduct } from '../types/storefront.types';
@@ -20,8 +20,8 @@ interface StorefrontProductCardProps {
   variant?: 'standard' | 'wide';
 }
 
-function formatSmartCategoryName(categoryName?: string): string {
-  if (!categoryName) return 'عام';
+function formatSmartCategoryName(categoryName?: string, isEn?: boolean): string {
+  if (!categoryName) return isEn ? 'General' : 'عام';
   const trimmed = categoryName.trim();
   if (trimmed.includes(' - ')) {
     const parts = trimmed.split(' - ').map((p) => p.trim()).filter(Boolean);
@@ -51,10 +51,13 @@ export const StorefrontProductCard = React.memo(function StorefrontProductCard({
   variant = 'standard',
 }: StorefrontProductCardProps) {
   const isWide = variant === 'wide';
-  const { t } = useTranslation();
+  const { t, isEn } = useStorefrontLang();
   const isOutOfStock = product.inStock !== undefined ? !product.inStock : product.stockQty <= 0;
   const isZeroPrice = product.price <= 0;
   const [justAdded, setJustAdded] = useState(false);
+
+  const cleanWaPhone = (whatsappPhone || '').replace(/[^0-9]/g, '');
+  const formattedWhatsappPhone = cleanWaPhone.startsWith('01') ? `2${cleanWaPhone}` : cleanWaPhone;
 
   // Clicking Add to Cart adds directly without opening the QuickView modal
   const handleAdd = (e: React.MouseEvent) => {
@@ -104,20 +107,30 @@ export const StorefrontProductCard = React.memo(function StorefrontProductCard({
   const discountPercent = product.discountPercent || (hasDiscount && oldPrice > 0
     ? Math.round(((oldPrice - product.price) / oldPrice) * 100)
     : 0);
-  const offerBadgeText = product.offerBadge || (discountPercent > 0 ? `خصم ${discountPercent}%` : 'عرض خاص');
+  const offerBadgeText =
+    product.offerBadge ||
+    (discountPercent > 0
+      ? isEn
+        ? `${discountPercent}% OFF`
+        : `خصم ${discountPercent}%`
+      : isEn
+      ? 'Special Offer'
+      : 'عرض خاص');
 
-  // Single-Badge Discipline: Out of Stock shows "نفدت الكمية"
+  // Single-Badge Discipline: Out of Stock shows "نفدت الكمية" / "Out of Stock"
   let primaryBadge: { text: string; bg: string; color: string; isOut?: boolean } | null = null;
   if (isOutOfStock) {
     primaryBadge = {
-      text: 'نفدت الكمية',
+      text: isEn ? 'Out of Stock' : 'نفدت الكمية',
       bg: '#dc2626',
       color: '#ffffff',
       isOut: true,
     };
   } else if (product.stockQty > 0 && product.stockQty <= 5) {
     primaryBadge = {
-      text: `${t('storefront.storefront_product_card.s2', 'متبقي')} ${product.stockQty} ${t('storefront.storefront_product_card.s3', 'فقط')}`,
+      text: isEn
+        ? `Only ${product.stockQty} left`
+        : `${t('storefront.storefront_product_card.s2', 'متبقي')} ${product.stockQty} ${t('storefront.storefront_product_card.s3', 'فقط')}`,
       bg: '#c2410c',
       color: '#ffffff',
     };
@@ -348,7 +361,7 @@ export const StorefrontProductCard = React.memo(function StorefrontProductCard({
               }}
               title={product.categoryName || t('storefront.storefront_product_card.s9', 'عام')}
             >
-              {formatSmartCategoryName(product.categoryName)}
+              {formatSmartCategoryName(product.categoryName, isEn)}
             </span>
           </div>
 
@@ -431,6 +444,20 @@ export const StorefrontProductCard = React.memo(function StorefrontProductCard({
                 fontVariantNumeric: 'tabular-nums',
               }}
             >
+              {hasDiscount && (
+                <span
+                  className="storefront-product-price-old"
+                  style={{
+                    fontSize: '11.5px',
+                    fontWeight: 500,
+                    color: '#94a3b8',
+                    textDecoration: 'line-through',
+                  }}
+                >
+                  {oldPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                </span>
+              )}
+
               <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: '3px' }}>
                 <span
                   className="storefront-product-price-main"
@@ -455,20 +482,6 @@ export const StorefrontProductCard = React.memo(function StorefrontProductCard({
                   <CurrencySymbol />
                 </span>
               </div>
-
-              {hasDiscount && (
-                <span
-                  className="storefront-product-price-old"
-                  style={{
-                    fontSize: '11.5px',
-                    fontWeight: 500,
-                    color: '#94a3b8',
-                    textDecoration: 'line-through',
-                  }}
-                >
-                  {oldPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                </span>
-              )}
             </div>
           )}
         </div>
@@ -482,10 +495,24 @@ export const StorefrontProductCard = React.memo(function StorefrontProductCard({
         <div className="sf-product-mobile-price-col">
           {isZeroPrice ? (
             <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b' }}>
-              عند التواصل
+              {isEn ? 'Upon Contact' : 'عند التواصل'}
             </span>
           ) : (
             <>
+              {hasDiscount && (
+                <span
+                  style={{
+                    fontSize: '10px',
+                    fontWeight: 400,
+                    color: '#94a3b8',
+                    textDecoration: 'line-through',
+                    lineHeight: 1,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {oldPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                </span>
+              )}
               <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: '2px' }}>
                 <span
                   style={{
@@ -503,20 +530,6 @@ export const StorefrontProductCard = React.memo(function StorefrontProductCard({
                   <CurrencySymbol />
                 </span>
               </div>
-              {hasDiscount && (
-                <span
-                  style={{
-                    fontSize: '10px',
-                    fontWeight: 400,
-                    color: '#94a3b8',
-                    textDecoration: 'line-through',
-                    lineHeight: 1,
-                    fontVariantNumeric: 'tabular-nums',
-                  }}
-                >
-                  {oldPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                </span>
-              )}
             </>
           )}
         </div>
@@ -535,35 +548,59 @@ export const StorefrontProductCard = React.memo(function StorefrontProductCard({
                 whiteSpace: 'nowrap',
               }}
             >
-              غير متوفر
+              {isEn ? 'Unavailable' : 'غير متوفر'}
             </span>
           ) : isZeroPrice ? (
-            <a
-              href={
-                whatsappPhone
-                  ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(`مرحباً، أستفسر عن سعر صنف: ${product.name}`)}`
-                  : '#'
-              }
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                height: '30px',
-                padding: '0 10px',
-                borderRadius: '9px',
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                color: '#0f172a',
-                fontSize: '10.5px',
-                fontWeight: 600,
-                textDecoration: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              استفسر
-            </a>
+            formattedWhatsappPhone ? (
+              <a
+                href={`https://wa.me/${formattedWhatsappPhone}?text=${encodeURIComponent(isEn ? `Hello, I would like to inquire about the price of: ${product.name}` : `مرحباً، أستفسر عن سعر صنف: ${product.name}`)}`}
+                onClick={(e) => e.stopPropagation()}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  height: '30px',
+                  padding: '0 10px',
+                  borderRadius: '9px',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  color: '#0f172a',
+                  fontSize: '10.5px',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {isEn ? 'Inquire' : 'استفسر'}
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQuickView?.(product);
+                }}
+                style={{
+                  height: '30px',
+                  padding: '0 10px',
+                  borderRadius: '9px',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  color: '#0f172a',
+                  fontSize: '10.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {isEn ? 'Inquire' : 'استفسر'}
+              </button>
+            )
           ) : cartQuantity > 0 ? (
             <div
               style={{
@@ -585,7 +622,7 @@ export const StorefrontProductCard = React.memo(function StorefrontProductCard({
                   e.stopPropagation();
                   onUpdateQuantity(product.id, cartQuantity + 1);
                 }}
-                aria-label="زيادة الكمية"
+                aria-label={isEn ? 'Increase Quantity' : 'زيادة الكمية'}
                 style={{
                   width: '24px',
                   height: '26px',
@@ -623,7 +660,7 @@ export const StorefrontProductCard = React.memo(function StorefrontProductCard({
                   e.stopPropagation();
                   onUpdateQuantity(product.id, cartQuantity - 1);
                 }}
-                aria-label="تقليل الكمية"
+                aria-label={isEn ? 'Decrease Quantity' : 'تقليل الكمية'}
                 style={{
                   width: '24px',
                   height: '26px',
@@ -648,8 +685,8 @@ export const StorefrontProductCard = React.memo(function StorefrontProductCard({
             <button
               type="button"
               onClick={handleAdd}
-              aria-label="أضف للسلة"
-              title="أضف للسلة"
+              aria-label={isEn ? 'Add to Cart' : 'أضف للسلة'}
+              title={isEn ? 'Add to Cart' : 'أضف للسلة'}
               style={{
                 width: '32px',
                 height: '32px',
@@ -708,40 +745,69 @@ export const StorefrontProductCard = React.memo(function StorefrontProductCard({
               boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
             }}
           >
-            <span>غير متوفر</span>
+            <span>{isEn ? 'Unavailable' : 'غير متوفر'}</span>
           </button>
         ) : isZeroPrice ? (
-          <a
-            className="storefront-product-action-btn"
-            href={
-              whatsappPhone
-                ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(`مرحباً، أستفسر عن سعر صنف: ${product.name}`)}`
-                : '#'
-            }
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              width: '100%',
-              height: '35px',
-              padding: '0 14px',
-              borderRadius: '12px',
-              border: '1px solid #dadce0',
-              background: '#ffffff',
-              color: '#0f172a',
-              fontSize: '12.5px',
-              fontWeight: 600,
-              textDecoration: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '7px',
-              boxSizing: 'border-box',
-              whiteSpace: 'nowrap',
-              boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-            }}
-          >
-            <span>{t('storefront.storefront_product_card.s15', 'استفسر عن السعر')}</span>
-          </a>
+          formattedWhatsappPhone ? (
+            <a
+              className="storefront-product-action-btn"
+              href={`https://wa.me/${formattedWhatsappPhone}?text=${encodeURIComponent(isEn ? `Hello, I would like to inquire about the price of: ${product.name}` : `مرحباً، أستفسر عن سعر صنف: ${product.name}`)}`}
+              onClick={(e) => e.stopPropagation()}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                width: '100%',
+                height: '35px',
+                padding: '0 14px',
+                borderRadius: '12px',
+                border: '1px solid #dadce0',
+                background: '#ffffff',
+                color: '#0f172a',
+                fontSize: '12.5px',
+                fontWeight: 600,
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '7px',
+                boxSizing: 'border-box',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+              }}
+            >
+              <span>{t('storefront.storefront_product_card.s15', 'استفسر عن السعر')}</span>
+            </a>
+          ) : (
+            <button
+              className="storefront-product-action-btn"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onQuickView?.(product);
+              }}
+              style={{
+                width: '100%',
+                height: '35px',
+                padding: '0 14px',
+                borderRadius: '12px',
+                border: '1px solid #dadce0',
+                background: '#ffffff',
+                color: '#0f172a',
+                fontSize: '12.5px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '7px',
+                boxSizing: 'border-box',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+              }}
+            >
+              <span>{t('storefront.storefront_product_card.s15', 'استفسر عن السعر')}</span>
+            </button>
+          )
         ) : cartQuantity > 0 ? (
           <div
             className="storefront-product-stepper"
@@ -858,7 +924,7 @@ export const StorefrontProductCard = React.memo(function StorefrontProductCard({
           >
             {justAdded ? (
               <>
-                <span>تمت الإضافة</span>
+                <span>{isEn ? 'Added' : 'تمت الإضافة'}</span>
                 <IconCheckCircle size={15} strokeWidth={2.4} color="#ffffff" />
               </>
             ) : (

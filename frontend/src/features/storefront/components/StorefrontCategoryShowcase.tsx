@@ -1,5 +1,5 @@
-import { useTranslation } from 'react-i18next';
 import { useRef, useEffect } from 'react';
+import { useStorefrontLang } from '../../../i18n';
 import { StorefrontCategory } from '../types/storefront.types';
 import { generatePremiumProductSvg } from '../lib/storefront-photo-matcher';
 import { IconFolder, IconGrid, IconArrowUpRight } from './StorefrontIcons';
@@ -12,8 +12,8 @@ interface StorefrontCategoryShowcaseProps {
   categoryCounts: Map<number | 'all', number>;
 }
 
-function formatSmartCategoryName(categoryName?: string): string {
-  if (!categoryName) return 'عام';
+function formatSmartCategoryName(categoryName?: string, isEn?: boolean): string {
+  if (!categoryName) return isEn ? 'General' : 'عام';
   const trimmed = categoryName.trim();
   if (trimmed.includes(' - ')) {
     const parts = trimmed.split(' - ').map((p) => p.trim()).filter(Boolean);
@@ -30,8 +30,20 @@ function formatSmartCategoryName(categoryName?: string): string {
   return trimmed;
 }
 
-function formatConciseMobileCategoryName(categoryName?: string): string {
-  const base = formatSmartCategoryName(categoryName);
+function formatConciseMobileCategoryName(categoryName?: string, isEn?: boolean): string {
+  const base = formatSmartCategoryName(categoryName, isEn);
+  if (isEn) {
+    return base
+      .replace('Phones & Smart Audio', 'Phones & Audio')
+      .replace('Laptops & Tablets', 'Laptops')
+      .replace('Luxury & Smart Watches', 'Watches')
+      .replace('Perfumes & Beauty', 'Perfumes')
+      .replace('Sneakers & Casual Shoes', 'Sneakers')
+      .replace('Bags & Luxury Eyewear', 'Bags & Eyewear')
+      .replace('Bags & Sunglasses', 'Bags & Eyewear')
+      .replace("Men's Fashion & Apparel", "Men's Fashion")
+      .replace("Women's Fashion & Apparel", "Women's Fashion");
+  }
   return base
     .replace('العطور ومستحضرات التجميل', 'العطور والتجميل')
     .replace('الهواتف والصوتيات الذكية', 'الهواتف والصوتيات')
@@ -50,7 +62,7 @@ export function StorefrontCategoryShowcase({
   onOpenCategoriesModal,
   categoryCounts,
 }: StorefrontCategoryShowcaseProps) {
-  const { t } = useTranslation();
+  const { t, isEn, dir } = useStorefrontLang();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const selectedItemRef = useRef<HTMLDivElement | null>(null);
 
@@ -94,7 +106,7 @@ export function StorefrontCategoryShowcase({
         border: '1px solid #edf1f7',
         boxShadow: '0 4px 18px rgba(15, 23, 42, 0.03)',
         padding: '14px 14px',
-        direction: 'rtl',
+        direction: dir,
         maxWidth: 'var(--storefront-container, 1440px)',
         margin: '18px auto 12px',
         width: 'calc(100% - 32px)',
@@ -122,29 +134,33 @@ export function StorefrontCategoryShowcase({
           height: 0 !important;
         }
         .storefront-cat-nav-btn {
-          width: 36px;
-          height: 36px;
-          border-radius: 10px;
-          border: 1px solid #e2e8f0;
-          background: #ffffff;
-          color: #1e293b;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          flex-shrink: 0;
-          box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
-          transition: all 0.2s ease;
-          padding: 0;
+          width: 36px !important;
+          height: 36px !important;
+          min-width: 36px !important;
+          min-height: 36px !important;
+          border-radius: 10px !important;
+          border: 1px solid #e2e8f0 !important;
+          background: #ffffff !important;
+          color: #1e293b !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          cursor: pointer !important;
+          flex-shrink: 0 !important;
+          box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05) !important;
+          transition: all 0.2s ease !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          box-sizing: border-box !important;
         }
         .storefront-cat-nav-btn:hover {
-          background: var(--storefront-primary-color, #2d68c4);
-          border-color: var(--storefront-primary-color, #2d68c4);
-          color: #ffffff;
-          box-shadow: 0 4px 12px rgba(45, 104, 196, 0.2);
+          background: var(--storefront-primary-color, #2d68c4) !important;
+          border-color: var(--storefront-primary-color, #2d68c4) !important;
+          color: #ffffff !important;
+          box-shadow: 0 4px 12px rgba(45, 104, 196, 0.2) !important;
         }
         .storefront-cat-nav-btn:active {
-          transform: scale(0.96);
+          transform: scale(0.96) !important;
         }
         @media (max-width: 920px) {
           .storefront-cat-showcase {
@@ -196,23 +212,29 @@ export function StorefrontCategoryShowcase({
             width: 0 !important;
             height: 0 !important;
           }
-          .sf-mobile-cat-circle-item {
+          .sf-mobile-cat-circle-item,
+          button.sf-mobile-cat-circle-item {
             display: flex !important;
             flex-direction: column !important;
             align-items: center !important;
             justify-content: flex-start !important;
-            gap: 6px !important;
-            width: 74px !important;
-            min-width: 74px !important;
-            max-width: 78px !important;
+            gap: 5px !important;
+            width: 76px !important;
+            min-width: 76px !important;
+            max-width: 80px !important;
+            min-height: 0 !important;
+            height: auto !important;
             flex-shrink: 0 !important;
             background: transparent !important;
             border: none !important;
+            box-shadow: none !important;
             padding: 0 !important;
+            margin: 0 !important;
             cursor: pointer !important;
             scroll-snap-align: start !important;
             font-family: inherit !important;
             transition: transform 0.16s ease !important;
+            box-sizing: border-box !important;
           }
           .sf-mobile-cat-circle-item:active {
             transform: scale(0.95) !important;
@@ -227,7 +249,7 @@ export function StorefrontCategoryShowcase({
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
-            padding: 9px !important;
+            padding: 7px !important;
             box-sizing: border-box !important;
             overflow: hidden !important;
             transition: all 0.18s cubic-bezier(0.22, 1, 0.36, 1) !important;
@@ -239,9 +261,9 @@ export function StorefrontCategoryShowcase({
           }
           .sf-mobile-cat-circle-label {
             font-size: 10.5px !important;
-            font-weight: 500 !important;
+            font-weight: 600 !important;
             color: #0f172a !important;
-            line-height: 1.48 !important;
+            line-height: 1.32 !important;
             text-align: center !important;
             width: 100% !important;
             display: -webkit-box !important;
@@ -254,7 +276,7 @@ export function StorefrontCategoryShowcase({
           }
           .sf-mobile-cat-circle-item.is-active .sf-mobile-cat-circle-label {
             color: var(--storefront-primary-color, #2d68c4) !important;
-            font-weight: 600 !important;
+            font-weight: 700 !important;
           }
         }
       `}</style>
@@ -269,7 +291,7 @@ export function StorefrontCategoryShowcase({
             letterSpacing: '-0.1px',
           }}
         >
-          الأقسام
+          {isEn ? 'Categories' : 'الأقسام'}
         </span>
         <button
           type="button"
@@ -279,6 +301,9 @@ export function StorefrontCategoryShowcase({
             background: 'none',
             border: 'none',
             padding: 0,
+            margin: 0,
+            minHeight: 0,
+            height: 'auto',
             fontSize: '11.5px',
             fontWeight: 600,
             color: 'var(--storefront-primary-color, #2d68c4)',
@@ -291,7 +316,7 @@ export function StorefrontCategoryShowcase({
             flexShrink: 0,
           }}
         >
-          <span>عرض الكل</span>
+          <span>{isEn ? 'View All' : 'عرض الكل'}</span>
           <IconArrowUpRight size={13} strokeWidth={2.2} />
         </button>
       </div>
@@ -301,7 +326,13 @@ export function StorefrontCategoryShowcase({
         <button
           type="button"
           className={`sf-mobile-cat-circle-item ${selectedCategoryId === 'all' ? 'is-active' : ''}`}
-          onClick={onOpenCategoriesModal}
+          onClick={() => {
+            if (selectedCategoryId !== 'all') {
+              onSelectCategory('all');
+            } else {
+              onOpenCategoriesModal();
+            }
+          }}
         >
           <span
             className="sf-mobile-cat-circle-avatar"
@@ -312,7 +343,7 @@ export function StorefrontCategoryShowcase({
           >
             <IconGrid size={22} />
           </span>
-          <span className="sf-mobile-cat-circle-label">الكل</span>
+          <span className="sf-mobile-cat-circle-label">{isEn ? 'All' : 'الكل'}</span>
         </button>
 
         {populatedCategories.slice(0, 14).map((cat) => {
@@ -347,7 +378,7 @@ export function StorefrontCategoryShowcase({
                   }}
                 />
               </span>
-              <span className="sf-mobile-cat-circle-label">{formatConciseMobileCategoryName(cat.name)}</span>
+              <span className="sf-mobile-cat-circle-label">{formatConciseMobileCategoryName(cat.name, isEn)}</span>
             </button>
           );
         })}
@@ -356,7 +387,7 @@ export function StorefrontCategoryShowcase({
       {/* زر التمرير لليمين (للديسكتوب فقط) */}
       <button
         type="button"
-        aria-label="التمرير لليمين"
+        aria-label={isEn ? 'Scroll right' : 'التمرير لليمين'}
         className="storefront-cat-nav-btn"
         onClick={() => scrollByDirection('right')}
       >
@@ -392,15 +423,21 @@ export function StorefrontCategoryShowcase({
             display: 'flex',
             alignItems: 'flex-start',
             justifyContent: 'flex-start',
-            gap: '22px',
+            gap: '20px',
             width: 'max-content',
             minWidth: '100%',
           }}
         >
-          {/* أول زر: كل الأقسام */}
+          {/* أول زر: كل الأقسام / الرئيسية */}
           <div
             className="storefront-cat-item"
-            onClick={onOpenCategoriesModal}
+            onClick={() => {
+              if (selectedCategoryId !== 'all') {
+                onSelectCategory('all');
+              } else {
+                onOpenCategoriesModal();
+              }
+            }}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -408,6 +445,7 @@ export function StorefrontCategoryShowcase({
               justifyContent: 'flex-start',
               cursor: 'pointer',
               minWidth: '78px',
+              maxWidth: '92px',
               flexShrink: 0,
               transition: 'transform 0.18s ease',
             }}
@@ -422,13 +460,19 @@ export function StorefrontCategoryShowcase({
                 borderRadius: '14px',
                 background: 'var(--storefront-primary-subtle, #eff6ff)',
                 color: 'var(--storefront-primary-color, #2d68c4)',
-                border: '1.5px solid rgba(45, 104, 196, 0.22)',
+                border:
+                  selectedCategoryId === 'all'
+                    ? '2px solid var(--storefront-primary-color, #2d68c4)'
+                    : '1.5px solid rgba(45, 104, 196, 0.22)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 marginBottom: '6px',
                 boxSizing: 'border-box',
-                boxShadow: '0 2px 6px rgba(15, 23, 42, 0.04)',
+                boxShadow:
+                  selectedCategoryId === 'all'
+                    ? '0 6px 14px rgba(45, 104, 196, 0.18)'
+                    : '0 2px 6px rgba(15, 23, 42, 0.04)',
                 transition: 'all 0.2s ease',
               }}
             >
@@ -438,14 +482,20 @@ export function StorefrontCategoryShowcase({
               className="storefront-cat-label"
               style={{
                 fontSize: '12px',
-                fontWeight: 600,
+                fontWeight: selectedCategoryId === 'all' ? 700 : 600,
                 lineHeight: 1.3,
                 color: 'var(--storefront-primary-color, #2d68c4)',
                 textAlign: 'center',
                 whiteSpace: 'nowrap',
               }}
             >
-              كل الأقسام
+              {selectedCategoryId === 'all'
+                ? isEn
+                  ? 'All Categories'
+                  : 'كل الأقسام'
+                : isEn
+                ? 'Home (All)'
+                : 'الرئيسية (الكل)'}
             </span>
           </div>
 
@@ -469,7 +519,8 @@ export function StorefrontCategoryShowcase({
                   alignItems: 'center',
                   justifyContent: 'flex-start',
                   cursor: 'pointer',
-                  minWidth: '78px',
+                  minWidth: '80px',
+                  maxWidth: '96px',
                   flexShrink: 0,
                   transition: 'transform 0.18s ease',
                 }}
@@ -489,10 +540,10 @@ export function StorefrontCategoryShowcase({
                       ? '0 6px 16px var(--storefront-primary-subtle, rgba(45, 104, 196, 0.22))'
                       : '0 2px 6px rgba(15, 23, 42, 0.04)',
                     position: 'relative',
-                    background: '#f8fafc',
+                    background: isSelected ? 'var(--storefront-primary-subtle, #eff6ff)' : '#f8fafc',
                     padding: '5px',
                     boxSizing: 'border-box',
-                    transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+                    transition: 'border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease',
                   }}
                 >
                   <img
@@ -520,80 +571,90 @@ export function StorefrontCategoryShowcase({
                   className="storefront-cat-label"
                   style={{
                     fontSize: '12px',
-                    fontWeight: 600,
+                    fontWeight: isSelected ? 700 : 600,
                     lineHeight: 1.3,
-                    color: '#0f172a',
+                    color: isSelected ? 'var(--storefront-primary-color, #2d68c4)' : '#0f172a',
                     textAlign: 'center',
-                    whiteSpace: 'nowrap',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'normal',
+                    wordBreak: 'break-word',
+                    maxWidth: '94px',
                   }}
                   title={cat.name}
                 >
-                  {formatSmartCategoryName(cat.name)}
+                  {formatSmartCategoryName(cat.name, isEn)}
                 </span>
               </div>
             );
           })}
 
           {/* "More Categories" Rounded-Square Avatar */}
-          {remainingCount > 0 && (
+          <div
+            className="storefront-cat-item"
+            onClick={onOpenCategoriesModal}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'flex-start',
+              cursor: 'pointer',
+              minWidth: '78px',
+              maxWidth: '92px',
+              flexShrink: 0,
+              transition: 'transform 0.18s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-3px)')}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+          >
             <div
-              className="storefront-cat-item"
-              onClick={onOpenCategoriesModal}
+              className="storefront-cat-avatar"
               style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '14px',
+                background: '#f8fafc',
+                color: '#0f172a',
+                border: '1.5px dashed #cbd5e1',
                 display: 'flex',
-                flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: 'flex-start',
-                cursor: 'pointer',
-                minWidth: '78px',
-                flexShrink: 0,
-                transition: 'transform 0.18s ease',
+                justifyContent: 'center',
+                marginBottom: '6px',
+                boxSizing: 'border-box',
+                boxShadow: '0 2px 6px rgba(15, 23, 42, 0.04)',
+                transition: 'all 0.2s ease',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-3px)')}
-              onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
             >
-              <div
-                className="storefront-cat-avatar"
-                style={{
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: '14px',
-                  background: '#f8fafc',
-                  color: '#0f172a',
-                  border: '1.5px dashed #cbd5e1',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: '6px',
-                  boxSizing: 'border-box',
-                  boxShadow: '0 2px 6px rgba(15, 23, 42, 0.04)',
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                <IconFolder size={20} color="#0f172a" strokeWidth={1.8} />
-              </div>
-              <span
-                className="storefront-cat-label"
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  lineHeight: 1.3,
-                  color: '#0f172a',
-                  textAlign: 'center',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {t('storefront.storefront_category_showcase.s2', 'باقي الأقسام')}
-              </span>
+              <IconFolder size={20} color="#0f172a" strokeWidth={1.8} />
             </div>
-          )}
+            <span
+              className="storefront-cat-label"
+              style={{
+                fontSize: '12px',
+                fontWeight: 600,
+                lineHeight: 1.3,
+                color: '#0f172a',
+                textAlign: 'center',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {remainingCount > 0
+                ? t('storefront.storefront_category_showcase.s2', 'باقي الأقسام')
+                : isEn
+                ? 'Category Guide'
+                : 'دليل الأقسام'}
+            </span>
+          </div>
         </div>
       </div>
 
       {/* زر التمرير لليسار (للديسكتوب فقط) */}
       <button
         type="button"
-        aria-label="التمرير لليسار"
+        aria-label={isEn ? 'Scroll left' : 'التمرير لليسار'}
         className="storefront-cat-nav-btn"
         onClick={() => scrollByDirection('left')}
       >

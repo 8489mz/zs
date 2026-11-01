@@ -1,13 +1,13 @@
-import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '@/i18n';
 import { useEffect } from 'react';
 import { getCurrencySymbol, isThreeDecimalCurrency } from '@/lib/currencies';
 import { XIcon, Trash2Icon } from '@/shared/components/icons/AppIcons';
 import { CartItem, StorefrontInfo } from '../types/storefront.types';
 import { ProductIcon } from '@/shared/components/icons/product-svg-catalog';
-import { StorefrontFreeShippingBar } from './StorefrontFreeShippingBar';
 import { IconShoppingCart } from './StorefrontIcons';
 import { calculateCartSubtotal, calculateCartLinePricing } from '../lib/storefront-cart-pricing';
 import { resolveProductPhoto } from '../lib/storefront-photo-matcher';
+import { useBodyScrollLock } from '@/shared/components/dialog-shell';
 
 interface StorefrontCartDrawerProps {
   isOpen: boolean;
@@ -32,7 +32,9 @@ export function StorefrontCartDrawer({
   onClearCart,
   onProceedToCheckout,
 }: StorefrontCartDrawerProps) {
-  const { t } = useTranslation();
+  const { t, isEn, dir } = useStorefrontLang();
+
+  useBodyScrollLock(isOpen);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -51,7 +53,7 @@ export function StorefrontCartDrawer({
 
   const storeCurrency = info?.currency || 'EGP';
   const isThreeDec = isThreeDecimalCurrency(storeCurrency);
-  const activeCurrencySymbol = storeCurrency === 'EGP' ? 'جنيه' : getCurrencySymbol(storeCurrency);
+  const activeCurrencySymbol = isEn ? storeCurrency : storeCurrency === 'EGP' ? 'جنيه' : getCurrencySymbol(storeCurrency);
 
   const formatPriceNumber = (val: number | string | undefined | null): string => {
     const num = Number(val || 0);
@@ -94,7 +96,7 @@ export function StorefrontCartDrawer({
       onClick={onClose}
     >
       <div
-        dir="rtl"
+        dir={dir}
         style={{
           width: '100%',
           maxWidth: '410px',
@@ -123,7 +125,7 @@ export function StorefrontCartDrawer({
           <button
             type="button"
             onClick={onClose}
-            title={t('common.close', 'إغلاق')}
+            title={isEn ? 'Close' : 'إغلاق'}
             style={{
               background: '#f8fafc',
               border: '1px solid #e2e8f0',
@@ -145,14 +147,14 @@ export function StorefrontCartDrawer({
           </button>
 
           <h2 style={{ margin: 0, fontSize: '16.5px', fontWeight: 600, color: '#0f172a', letterSpacing: '0px' }}>
-            {t('storefront.storefront_cart_drawer.s0', 'سلة المشتريات')}
+            {isEn ? 'Shopping Cart' : 'سلة المشتريات'}
           </h2>
 
           {cartItems.length > 0 ? (
             <button
               type="button"
               onClick={onClearCart}
-              title={t('storefront.storefront_cart_drawer.s15', 'مسح الكل')}
+              title={isEn ? 'Clear all' : 'مسح الكل'}
               style={{
                 width: '36px',
                 height: '36px',
@@ -181,19 +183,6 @@ export function StorefrontCartDrawer({
             <div style={{ width: '36px', height: '36px' }} />
           )}
         </div>
-
-        {/* Free Shipping Progress Bar */}
-        {info?.freeShippingEnabled && (
-          <div style={{ padding: '0 22px 10px', letterSpacing: '0px' }}>
-            <StorefrontFreeShippingBar
-              subtotal={subtotal}
-              freeShippingEnabled={info.freeShippingEnabled}
-              freeShippingMinOrder={info.freeShippingMinOrder}
-              currency={info.currency}
-              compact
-            />
-          </div>
-        )}
 
         {/* Drawer Body: Un-boxed Minimalist Items List */}
         <div
@@ -339,14 +328,14 @@ export function StorefrontCartDrawer({
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end', textAlign: 'left', gap: '6px', flexWrap: 'wrap', letterSpacing: '0px' }}>
-                        <span style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', letterSpacing: '0px' }}>
-                          {formatPriceNumber(linePricing.lineTotal)} {activeCurrencySymbol}
-                        </span>
                         {linePricing.savings > 0 && (
                           <span style={{ textDecoration: 'line-through', color: '#cbd5e1', fontSize: '11.5px', fontWeight: 400, letterSpacing: '0px' }}>
                             {formatPriceNumber(linePricing.originalLineTotal)} {activeCurrencySymbol}
                           </span>
                         )}
+                        <span style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', letterSpacing: '0px' }}>
+                          {formatPriceNumber(linePricing.lineTotal)} {activeCurrencySymbol}
+                        </span>
                         {linePricing.isBogoApplied && (
                           <span
                             style={{

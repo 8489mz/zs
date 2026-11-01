@@ -1,5 +1,5 @@
-import { useTranslation } from 'react-i18next';
 import React from 'react';
+import { useStorefrontLang } from '../../../i18n';
 import type { StorefrontCategory, StorefrontProduct } from '../types/storefront.types';
 import { resolveProductPhoto, generatePremiumProductSvg } from '../lib/storefront-photo-matcher';
 import { IconArrowUpRight } from './StorefrontIcons';
@@ -88,27 +88,18 @@ export const StorefrontShopByCategoryGrid = React.memo(function StorefrontShopBy
   onOpenCategoriesModal,
   onSelectDeals,
 }: StorefrontShopByCategoryGridProps) {
-  const { t } = useTranslation();
+  const { t, isEn, dir } = useStorefrontLang();
 
-  // Curate 8 seamless tiles: populated categories first, then smart curated discovery collections
+  // Curate real populated store categories only (up to 8) — no fake duplicate filler categories
   const tilesData = React.useMemo(() => {
-    const validCats = categories.filter((c) => c && c.name);
+    const validCats = categories.filter((c) => c && c.name && (categoryCounts ? (categoryCounts.get(c.id) || 0) > 0 : true));
     const sorted = [...validCats].sort((a, b) => {
       const cntA = categoryCounts?.get(a.id) || 0;
       const cntB = categoryCounts?.get(b.id) || 0;
       return cntB - cntA;
     });
 
-    const items: Array<{
-      id: number;
-      name: string;
-      photo: string;
-      count?: number;
-      isDeals?: boolean;
-    }> = [];
-
-    for (let i = 0; i < sorted.length && items.length < 8; i++) {
-      const cat = sorted[i];
+    return sorted.slice(0, 8).map((cat) => {
       const count = categoryCounts?.get(cat.id);
       const catProduct = products?.find((p) => p.categoryId === cat.id || p.categoryName === cat.name);
       const photo =
@@ -118,57 +109,20 @@ export const StorefrontShopByCategoryGrid = React.memo(function StorefrontShopBy
             resolveProductPhoto(catProduct?.name || cat.name, cat.name)?.url ||
             generatePremiumProductSvg(cat.name, cat.name);
 
-      items.push({
+      return {
         id: cat.id,
         name: cat.name,
         photo,
         count,
-      });
-    }
-
-    // If fewer than 8 categories exist, fill to 8 with smart discovery collections
-    const discoveryFillers = [
-      {
-        id: -1,
-        name: 'عروض وتخفيضات اليوم',
-        isDeals: true,
-      },
-      {
-        id: -2,
-        name: 'الأكثر طلباً ومبيعاً',
-        isDeals: true,
-      },
-      {
-        id: -3,
-        name: 'وصل حديثاً للمتجر',
-        isDeals: false,
-      },
-    ];
-
-    let fillerIdx = 0;
-    while (items.length < 8 && fillerIdx < discoveryFillers.length) {
-      const filler = discoveryFillers[fillerIdx++];
-      const fillerProduct = products?.[fillerIdx];
-      const photo =
-        fillerProduct?.imageUrl ||
-        resolveProductPhoto(fillerProduct?.name || filler.name, filler.name)?.url ||
-        generatePremiumProductSvg(filler.name, filler.name);
-
-      items.push({
-        id: filler.id,
-        name: filler.name,
-        photo,
-        count: undefined,
-        isDeals: filler.isDeals,
-      });
-    }
-
-    return items;
+      };
+    });
   }, [categories, products, categoryCounts]);
 
   if (!tilesData || tilesData.length === 0) {
     return null;
   }
+
+  const desktopCols = tilesData.length === 1 ? 1 : tilesData.length === 2 ? 2 : tilesData.length === 3 ? 3 : 4;
 
   return (
     <section
@@ -176,43 +130,45 @@ export const StorefrontShopByCategoryGrid = React.memo(function StorefrontShopBy
       aria-label={t('storefront.shop_by_cat.title', 'تسوق حسب القسم')}
       style={{
         background: '#ffffff',
-        borderRadius: '36px',
+        borderRadius: '20px',
         border: '1px solid #edf1f7',
-        padding: '28px 24px 24px',
+        padding: '24px 22px 22px',
         boxShadow: '0 10px 30px -6px rgba(15, 23, 42, 0.04), 0 2px 8px -2px rgba(15, 23, 42, 0.02)',
         margin: '16px 0',
-        direction: 'rtl',
+        direction: dir,
         boxSizing: 'border-box',
       }}
     >
       <style>{`
         .sf-cat-tiles-grid {
           display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+          grid-template-columns: repeat(${desktopCols}, minmax(0, 1fr));
           gap: 14px;
         }
 
         .sf-cat-tile {
           position: relative;
           overflow: hidden;
-          border-radius: 14px;
-          height: 114px;
-          padding: 12px 14px;
+          border-radius: 16px;
+          height: 122px;
+          padding: 14px 16px;
           display: flex;
           align-items: center;
           justify-content: space-between;
+          gap: 10px;
           cursor: pointer;
           user-select: none;
           box-sizing: border-box;
+          border: 1px solid rgba(255, 255, 255, 0.65);
           transform: translate3d(0, 0, 0);
           backface-visibility: hidden;
           -webkit-backface-visibility: hidden;
-          transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s ease;
-          box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+          transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s ease;
+          box-shadow: 0 4px 14px -2px rgba(15, 23, 42, 0.06);
         }
 
         .sf-cat-tile:hover {
-          transform: translate3d(0, -4px, 0);
+          transform: translate3d(0, -3px, 0);
           box-shadow: 0 12px 24px -4px rgba(15, 23, 42, 0.12);
         }
 
@@ -221,36 +177,44 @@ export const StorefrontShopByCategoryGrid = React.memo(function StorefrontShopBy
         }
 
         .sf-cat-tile-title {
-          font-size: 13px !important;
-          font-weight: 500 !important;
-          white-space: nowrap !important;
+          font-size: 14px !important;
+          font-weight: 800 !important;
+          line-height: 1.38 !important;
+          display: -webkit-box !important;
+          -webkit-line-clamp: 2 !important;
+          -webkit-box-orient: vertical !important;
           overflow: hidden !important;
           text-overflow: ellipsis !important;
-          line-height: 1.45 !important;
+          white-space: normal !important;
         }
 
         .sf-cat-tile-img-wrap {
-          width: 70px;
-          height: 70px;
+          width: 86px;
+          height: 86px;
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
         }
 
         .sf-cat-tile-img {
-          width: 66px;
-          height: 66px;
+          width: 82px;
+          height: 82px;
           object-fit: contain;
           transform: translate3d(0, 0, 0);
           transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-          filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.15));
+          filter: drop-shadow(0 8px 14px rgba(15, 23, 42, 0.14));
           pointer-events: none;
         }
 
         .sf-cat-tile:hover .sf-cat-tile-img {
-          transform: scale(1.09);
+          transform: scale(1.08) rotate(-2deg);
         }
 
         @media (max-width: 1100px) {
           .sf-cat-tiles-grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(${Math.min(desktopCols, 3)}, minmax(0, 1fr));
           }
         }
 
@@ -260,17 +224,17 @@ export const StorefrontShopByCategoryGrid = React.memo(function StorefrontShopBy
             gap: 10px;
           }
           .sf-cat-tile {
-            height: 98px;
-            padding: 10px 12px;
-            border-radius: 12px;
+            height: 104px;
+            padding: 12px 13px;
+            border-radius: 14px;
           }
           .sf-cat-tile-img-wrap {
-            width: 54px !important;
-            height: 54px !important;
+            width: 68px !important;
+            height: 68px !important;
           }
           .sf-cat-tile-img {
-            width: 50px !important;
-            height: 50px !important;
+            width: 64px !important;
+            height: 64px !important;
           }
         }
 
@@ -296,41 +260,29 @@ export const StorefrontShopByCategoryGrid = React.memo(function StorefrontShopBy
             gap: 10px;
           }
           .sf-cat-tile {
-            height: 94px !important;
-            padding: 10px 11px !important;
+            height: 96px !important;
+            padding: 10px 12px !important;
             border-radius: 14px !important;
-            gap: 6px !important;
-            border: 1px solid rgba(255, 255, 255, 0.7) !important;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04) !important;
+            gap: 8px !important;
           }
           .sf-cat-tile-img-wrap {
-            width: 46px !important;
-            height: 46px !important;
-            border-radius: 11px !important;
-            background: rgba(255, 255, 255, 0.55) !important;
+            width: 62px !important;
+            height: 62px !important;
           }
           .sf-cat-tile-img {
-            width: 40px !important;
-            height: 40px !important;
-            filter: drop-shadow(0 4px 8px rgba(15, 23, 42, 0.1)) !important;
+            width: 58px !important;
+            height: 58px !important;
           }
           .sf-cat-tile-title {
-            font-size: 11px !important;
-            font-weight: 500 !important;
-            line-height: 1.55 !important;
-            letter-spacing: 0px !important;
+            font-size: 12px !important;
+            font-weight: 800 !important;
+            line-height: 1.35 !important;
             margin-bottom: 2px !important;
-            white-space: normal !important;
-            display: -webkit-box !important;
-            -webkit-line-clamp: 2 !important;
-            -webkit-box-orient: vertical !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
           }
           .sf-cat-tile-cta {
             font-size: 9.5px !important;
-            font-weight: 500 !important;
-            padding: 2px 7px !important;
+            font-weight: 700 !important;
+            padding: 2.5px 7px !important;
             border-radius: 7px !important;
           }
         }
@@ -389,6 +341,9 @@ export const StorefrontShopByCategoryGrid = React.memo(function StorefrontShopBy
             whiteSpace: 'nowrap',
             flexShrink: 0,
             padding: 0,
+            margin: 0,
+            minHeight: 0,
+            height: 'auto',
             fontFamily: 'inherit',
             transition: 'color 0.16s ease, transform 0.16s ease',
           }}
@@ -404,7 +359,7 @@ export const StorefrontShopByCategoryGrid = React.memo(function StorefrontShopBy
         </button>
       </div>
 
-      {/* 8 Vibrant Blended Seamless Category Tiles Grid */}
+      {/* Vibrant Colorful Category Tiles Grid */}
       <div className="sf-cat-tiles-grid">
         {tilesData.map((item, idx) => {
           const theme = TILE_THEMES[idx % TILE_THEMES.length];
@@ -413,21 +368,15 @@ export const StorefrontShopByCategoryGrid = React.memo(function StorefrontShopBy
             <div
               key={`${item.id}-${idx}`}
               className="sf-cat-tile"
-              onClick={() => {
-                if (item.isDeals && onSelectDeals) {
-                  onSelectDeals();
-                } else if (item.id > 0) {
-                  onSelectCategory(item.id);
-                } else if (onSelectDeals) {
-                  onSelectDeals();
-                }
-                window.scrollTo({ top: 220, behavior: 'smooth' });
-              }}
               style={{
                 background: theme.gradient,
               }}
+              onClick={() => {
+                onSelectCategory(item.id);
+                window.scrollTo({ top: 180, behavior: 'smooth' });
+              }}
             >
-              {/* Text Side (Right in RTL) */}
+              {/* Text Side */}
               <div
                 style={{
                   display: 'flex',
@@ -437,72 +386,59 @@ export const StorefrontShopByCategoryGrid = React.memo(function StorefrontShopBy
                   zIndex: 2,
                   minWidth: 0,
                   flex: '1 1 auto',
-                  gap: '6px',
-                  paddingInlineEnd: '4px',
+                  gap: '7px',
                 }}
               >
                 <h3
                   className="sf-cat-tile-title"
                   style={{
                     margin: 0,
-                    fontSize: '12.5px',
-                    fontWeight: 500,
-                    color: theme.textColor,
-                    lineHeight: 1.5,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
                     width: '100%',
+                    color: theme.textColor,
                   }}
                   title={item.name}
                 >
-                  {item.name
-                    .replace('العطور ومستحضرات التجميل', 'العطور والتجميل')
-                    .replace('الهواتف والصوتيات الذكية', 'الهواتف والصوتيات')
-                    .replace('الساعات الفاخرة والذكية', 'الساعات الفاخرة')
-                    .replace('الحقائب والنظارات الفاخرة', 'الحقائب والنظارات')
-                    .replace('الحقائب والنظارات الشمسية', 'الحقائب والنظارات')
-                    .replace('الأحذية الرياضية والكاجوال', 'الأحذية الرياضية')
-                    .replace('الأزياء والملابس الرجالية', 'الأزياء الرجالية')
-                    .replace('الأزياء والملابس النسائية', 'الأزياء النسائية')}
+                  {item.name}
                 </h3>
 
                 <span
                   className="sf-cat-tile-cta"
                   style={{
-                    fontSize: '10px',
-                    fontWeight: 500,
+                    fontSize: '10.5px',
+                    fontWeight: 700,
                     color: theme.badgeColor,
                     background: theme.badgeBg,
-                    padding: '2px 7.5px',
-                    borderRadius: '7px',
+                    padding: '3px 9px',
+                    borderRadius: '8px',
                     whiteSpace: 'nowrap',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '3px',
-                    border: '1px solid rgba(255, 255, 255, 0.65)',
-                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+                    gap: '4px',
+                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)',
                   }}
                 >
-                  <span>{t('storefront.shop_by_cat.explore', 'تسوق الآن')}</span>
-                  <span style={{ fontSize: '9.5px' }}>←</span>
+                  <span>
+                    {item.count
+                      ? isEn
+                        ? `${item.count} Products`
+                        : `${item.count} منتج`
+                      : t('storefront.shop_by_cat.explore', 'تسوق الآن')}
+                  </span>
+                  <span style={{ fontSize: '9.5px' }}>{isEn ? '→' : '←'}</span>
                 </span>
               </div>
 
-              {/* Photo Showcase (Left in RTL) */}
-              <div
-                className="sf-cat-tile-img-wrap"
-                style={{
-                  position: 'relative',
-                  zIndex: 2,
-                  flexShrink: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '50%',
-                  background: 'radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.46) 0%, rgba(255, 255, 255, 0) 72%)',
-                }}
-              >
+              {/* Studio Photo Showcase */}
+              <div className="sf-cat-tile-img-wrap">
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: '2px',
+                    borderRadius: '50%',
+                    background: 'radial-gradient(circle, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 70%)',
+                    pointerEvents: 'none',
+                  }}
+                />
                 <img
                   className="sf-cat-tile-img"
                   src={item.photo || generatePremiumProductSvg(item.name, item.name)}

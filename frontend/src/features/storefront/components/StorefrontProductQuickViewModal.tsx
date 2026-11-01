@@ -1,4 +1,4 @@
-import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '@/i18n';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { StorefrontProduct, StorefrontInfo } from '../types/storefront.types';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
@@ -17,6 +17,7 @@ import { trackStorefrontEvent } from '../lib/storefront-pixel-tracker';
 import { buildCartProduct, getProductVariants, resolveVariantUnitPrice } from '../lib/storefront-variant-pricing';
 import { generatePremiumProductSvg, resolveProductPhoto } from '../lib/storefront-photo-matcher';
 import { getContrastTextColor } from '../lib/storefront-theme-contrast';
+import { useBodyScrollLock } from '@/shared/components/dialog-shell';
 
 interface TapOriginMetrics {
   dx: number;
@@ -91,7 +92,7 @@ export function StorefrontProductQuickViewModal({
   isFavorite: isFavoriteProp,
   onToggleFavorite,
 }: StorefrontProductQuickViewModalProps) {
-  const { t } = useTranslation();
+  const { t, isEn, dir } = useStorefrontLang();
   const [mountedProduct, setMountedProduct] = useState<StorefrontProduct | null>(propProduct);
   const [isClosing, setIsClosing] = useState(false);
   const [originMetrics, setOriginMetrics] = useState<TapOriginMetrics>({ dx: 0, dy: 48, scale: 0.38, timestamp: 0 });
@@ -157,6 +158,8 @@ export function StorefrontProductQuickViewModal({
   }, [isOpen, handleAnimatedClose]);
 
   const product = propProduct || mountedProduct;
+  const isModalActive = Boolean(product && (isOpen || mountedProduct));
+  useBodyScrollLock(isModalActive);
 
   useEffect(() => {
     if (propProduct) {
@@ -174,7 +177,7 @@ export function StorefrontProductQuickViewModal({
     }
   }, [propProduct]);
 
-  if (!product || (!isOpen && !mountedProduct)) return null;
+  if (!isModalActive || !product) return null;
 
   const isFavorite = isFavoriteProp !== undefined ? isFavoriteProp : localFavorite;
 
@@ -258,7 +261,9 @@ export function StorefrontProductQuickViewModal({
   const cleanWhatsappPhone = ((info?.whatsappPhone || (info as any)?.whatsapp) || '').replace(/[^0-9]/g, '');
   const whatsappInquiryUrl = cleanWhatsappPhone
     ? `https://wa.me/${cleanWhatsappPhone}?text=${encodeURIComponent(
-        `مرحباً، أود الاستفسار عن صنف: ${product.name}${selectedVariant ? ` (${selectedVariant.name})` : ''} - بسعر ${basePrice.toLocaleString()} ${info?.currency || 'ج.م'}`
+        isEn
+          ? `Hello, I would like to inquire about: ${product.name}${selectedVariant ? ` (${selectedVariant.name})` : ''} - Price: ${basePrice.toLocaleString()} ${info?.currency || 'EGP'}`
+          : `مرحباً، أود الاستفسار عن صنف: ${product.name}${selectedVariant ? ` (${selectedVariant.name})` : ''} - بسعر ${basePrice.toLocaleString()} ${info?.currency || 'ج.م'}`
       )}`
     : null;
 
@@ -283,7 +288,7 @@ export function StorefrontProductQuickViewModal({
 
   return (
     <div
-      dir="rtl"
+      dir={dir}
       className={`sf-quickview-backdrop ${isClosing ? 'is-closing' : 'is-opening'}`}
       style={
         {
@@ -294,6 +299,7 @@ export function StorefrontProductQuickViewModal({
           alignItems: 'center',
           justifyContent: 'center',
           padding: '16px',
+          overscrollBehavior: 'contain',
           '--ios-origin-x': `${originMetrics.dx}px`,
           '--ios-origin-y': `${originMetrics.dy}px`,
           '--ios-init-scale': `${originMetrics.scale}`,
@@ -408,7 +414,7 @@ export function StorefrontProductQuickViewModal({
             type="button"
             onClick={handleAnimatedClose}
             className="sf-quickview-ai-btn"
-            aria-label="إغلاق"
+            aria-label={isEn ? 'Close' : 'إغلاق'}
             style={{
               width: '34px',
               height: '34px',
@@ -434,14 +440,14 @@ export function StorefrontProductQuickViewModal({
               color: '#0f172a',
             }}
           >
-            تفاصيل المنتج
+            {isEn ? 'Product Details' : 'تفاصيل المنتج'}
           </span>
 
           <button
             type="button"
             onClick={handleShareClick}
             className="sf-quickview-ai-btn"
-            title={copiedLink ? 'تم نسخ الرابط' : 'مشاركة المنتج'}
+            title={copiedLink ? (isEn ? 'Link Copied' : 'تم نسخ الرابط') : (isEn ? 'Share Product' : 'مشاركة المنتج')}
             style={{
               width: '34px',
               height: '34px',
@@ -467,6 +473,7 @@ export function StorefrontProductQuickViewModal({
           style={{
             flex: 1,
             overflowY: 'auto',
+            overscrollBehavior: 'contain',
             display: 'flex',
             flexDirection: 'column',
             gap: '14px',
@@ -477,7 +484,7 @@ export function StorefrontProductQuickViewModal({
             <div
               style={{
                 width: '100%',
-                height: '245px',
+                height: '264px',
                 borderRadius: '14px',
                 backgroundColor: '#f8fafc',
                 border: '1px solid #f1f5f9',
@@ -485,7 +492,7 @@ export function StorefrontProductQuickViewModal({
                 alignItems: 'center',
                 justifyContent: 'center',
                 position: 'relative',
-                padding: '22px',
+                padding: '10px',
                 boxSizing: 'border-box',
               }}
             >
@@ -497,10 +504,10 @@ export function StorefrontProductQuickViewModal({
                   e.currentTarget.src = generatePremiumProductSvg(product.name, product.categoryName);
                 }}
                 style={{
+                  width: '100%',
+                  height: '100%',
                   maxWidth: '100%',
                   maxHeight: '100%',
-                  width: 'auto',
-                  height: 'auto',
                   objectFit: 'contain',
                   mixBlendMode: 'multiply',
                 }}
@@ -520,15 +527,15 @@ export function StorefrontProductQuickViewModal({
                     borderRadius: '8px',
                   }}
                 >
-                  خصم {discountPercentage}%
+                  {isEn ? `${discountPercentage}% OFF` : `خصم ${discountPercentage}%`}
                 </span>
               )}
             </div>
 
-            {/* Minimal Dot Indicator */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
-              {gallery.length > 1 ? (
-                gallery.map((_, idx) => {
+            {/* Minimal Dot Indicator (shown only when product has multiple photos) */}
+            {gallery.length > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
+                {gallery.map((_, idx) => {
                   const isCurrent = idx === activePhotoIndex;
                   return (
                     <button
@@ -547,15 +554,9 @@ export function StorefrontProductQuickViewModal({
                       }}
                     />
                   );
-                })
-              ) : (
-                <>
-                  <span style={{ width: '5px', height: '5px', borderRadius: '5px', background: '#e2e8f0' }} />
-                  <span style={{ width: '20px', height: '5px', borderRadius: '5px', background: '#0f172a' }} />
-                  <span style={{ width: '5px', height: '5px', borderRadius: '5px', background: '#e2e8f0' }} />
-                </>
-              )}
-            </div>
+                })}
+              </div>
+            )}
           </div>
 
           {/* 3. Category Label + Title + Favorite Button (No Star Ratings) */}
@@ -592,7 +593,7 @@ export function StorefrontProductQuickViewModal({
               type="button"
               onClick={handleFavoriteClick}
               className="sf-quickview-ai-btn"
-              aria-label="المفضلة"
+              aria-label={isEn ? 'Favorites' : 'المفضلة'}
               style={{
                 width: '36px',
                 height: '36px',
@@ -637,7 +638,7 @@ export function StorefrontProductQuickViewModal({
             {/* Right side: Variants (or Stock status if no variants) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: '150px' }}>
               <span style={{ fontSize: '12px', fontWeight: 400, color: '#94a3b8' }}>
-                {variants.length > 0 ? 'اختر الخيار' : 'الحالة'}
+                {variants.length > 0 ? (isEn ? 'Select Option' : 'اختر الخيار') : (isEn ? 'Availability' : 'الحالة')}
               </span>
 
               {variants.length > 0 ? (
@@ -655,7 +656,7 @@ export function StorefrontProductQuickViewModal({
                           borderRadius: '10px',
                           border: isSelected ? `1px solid ${brandColor}` : '1px solid #e2e8f0',
                           background: isSelected ? brandColor : '#ffffff',
-                          color: isSelected ? '#ffffff' : '#334155',
+                          color: isSelected ? (brandColorContrast || '#ffffff') : '#334155',
                           fontSize: '12.5px',
                           fontWeight: 500,
                           cursor: 'pointer',
@@ -684,7 +685,9 @@ export function StorefrontProductQuickViewModal({
                       fontWeight: 500,
                     }}
                   >
-                    {inStock ? 'متوفر وجاهز للشحن' : 'نفدت الكمية حالياً'}
+                    {inStock
+                      ? (isEn ? 'In Stock & Ready to Ship' : 'متوفر وجاهز للشحن')
+                      : (isEn ? 'Currently Out of Stock' : 'نفدت الكمية حالياً')}
                   </span>
                 </div>
               )}
@@ -694,10 +697,11 @@ export function StorefrontProductQuickViewModal({
             {!isZeroPrice && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '6px', flexShrink: 0 }}>
                 <span style={{ fontSize: '12px', fontWeight: 400, color: '#94a3b8' }}>
-                  الكمية
+                  {isEn ? 'Quantity' : 'الكمية'}
                 </span>
 
                 <div
+                  dir="rtl"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -773,7 +777,7 @@ export function StorefrontProductQuickViewModal({
           {product.description && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingTop: '2px' }}>
               <span style={{ fontSize: '12px', fontWeight: 400, color: '#94a3b8' }}>
-                الوصف
+                {isEn ? 'Description' : 'الوصف'}
               </span>
               <p
                 style={{
@@ -825,11 +829,11 @@ export function StorefrontProductQuickViewModal({
               }}
             >
               <IconWhatsapp size={17} color="#ffffff" />
-              <span>{t('storefront.storefront_product_quick_view_modal.s23', 'استفسر عن السعر عبر واتساب')}</span>
+              <span>{isEn ? 'Inquire via WhatsApp' : t('storefront.storefront_product_quick_view_modal.s23', 'استفسر عن السعر عبر واتساب')}</span>
             </a>
           ) : (
             <>
-              {/* Storefront-styled Add to Cart Button (Right side in RTL) */}
+              {/* Storefront-styled Add to Cart Button */}
               <button
                 type="button"
                 className="sf-quickview-ai-btn"
@@ -857,28 +861,41 @@ export function StorefrontProductQuickViewModal({
               >
                 {addedAnimation ? (
                   <>
-                    <CheckIcon size={16} color="#ffffff" />
-                    <span>تمت الإضافة</span>
+                    <CheckIcon size={16} color={brandColorContrast || '#ffffff'} />
+                    <span>{isEn ? 'Added to Cart' : 'تمت الإضافة'}</span>
                   </>
                 ) : inStock ? (
                   <>
-                    <IconShoppingBag size={16} color="#ffffff" strokeWidth={2} />
-                    <span>إضافة إلى السلة</span>
+                    <IconShoppingBag size={16} color={brandColorContrast || '#ffffff'} strokeWidth={2} />
+                    <span>{isEn ? 'Add to Cart' : 'إضافة إلى السلة'}</span>
                   </>
                 ) : (
                   <>
                     <ClockIcon size={15} color="#64748b" />
-                    <span>غير متوفر</span>
+                    <span>{isEn ? 'Out of Stock' : 'غير متوفر'}</span>
                   </>
                 )}
               </button>
 
-              {/* Total Price Column (Left side in RTL) */}
+              {/* Total Price Column */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textAlign: 'left', minWidth: 0 }}>
                 <span style={{ fontSize: '11.5px', fontWeight: 400, color: '#94a3b8' }}>
-                  السعر الإجمالي
+                  {isEn ? 'Total Price' : 'السعر الإجمالي'}
                 </span>
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end', gap: '6px', marginTop: '2px' }}>
+                  {hasOriginalDiscount && product.originalPrice && (
+                    <span
+                      style={{
+                        fontSize: '12.5px',
+                        color: '#94a3b8',
+                        textDecoration: 'line-through',
+                        fontWeight: 400,
+                      }}
+                    >
+                      {(product.originalPrice * qty).toLocaleString()}
+                    </span>
+                  )}
+
                   <span
                     style={{
                       fontSize: '20px',
@@ -894,19 +911,6 @@ export function StorefrontProductQuickViewModal({
                       <CurrencySymbol />
                     </span>
                   </span>
-
-                  {hasOriginalDiscount && product.originalPrice && (
-                    <span
-                      style={{
-                        fontSize: '12.5px',
-                        color: '#94a3b8',
-                        textDecoration: 'line-through',
-                        fontWeight: 400,
-                      }}
-                    >
-                      {(product.originalPrice * qty).toLocaleString()}
-                    </span>
-                  )}
                 </div>
               </div>
             </>

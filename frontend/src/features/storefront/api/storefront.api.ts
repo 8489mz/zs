@@ -236,19 +236,37 @@ export const storefrontApi = {
   },
 
   getSearchSuggestions: async (slug: string, q: string) => {
+    const lang = typeof localStorage !== 'undefined' && localStorage.getItem('zs_storefront_lang') === 'en' ? 'en' : 'ar';
+    const { localizeCategory, localizeProduct } = await import('../lib/storefront-translations');
     try {
       const res = await http<{
         categories: Array<{ id: number; name: string; imageUrl?: string }>;
         products: Array<{ id: number; name: string; price: number; imageUrl?: string; categoryName?: string; inStock: boolean }>;
       }>(`/api/storefront/${encodeURIComponent(slug)}/search/suggest?q=${encodeURIComponent(q)}`);
       return {
-        categories: (res?.categories || []).map((c) => ({ ...c, imageUrl: resolveStorefrontMediaUrl(c.imageUrl) })),
-        products: (res?.products || []).map((p) => withResolvedProductMedia(p)),
+        categories: (res?.categories || []).map((c) => {
+          const loc = localizeCategory(c as any, lang);
+          return { ...loc, imageUrl: resolveStorefrontMediaUrl(c.imageUrl) };
+        }),
+        products: (res?.products || []).map((p) => localizeProduct(withResolvedProductMedia(p as any), lang)),
       };
     } catch {
       const cleanQ = (q || '').trim().toLowerCase();
-      const matchedCats = DEMO_STOREFRONT_CATALOG.categories.filter((c) => c.name.toLowerCase().includes(cleanQ));
-      const matchedProds = DEMO_STOREFRONT_CATALOG.products.filter((p) => p.name.toLowerCase().includes(cleanQ));
+      const allCats = DEMO_STOREFRONT_CATALOG.categories.map((c) => ({ raw: c, loc: localizeCategory(c, lang) }));
+      const allProds = DEMO_STOREFRONT_CATALOG.products.map((p) => ({ raw: p, loc: localizeProduct(p, lang) }));
+
+      const matchedCats = allCats
+        .filter(({ raw, loc }) => raw.name.toLowerCase().includes(cleanQ) || loc.name.toLowerCase().includes(cleanQ))
+        .map(({ loc }) => loc);
+      const matchedProds = allProds
+        .filter(
+          ({ raw, loc }) =>
+            raw.name.toLowerCase().includes(cleanQ) ||
+            loc.name.toLowerCase().includes(cleanQ) ||
+            (loc.categoryName || '').toLowerCase().includes(cleanQ)
+        )
+        .map(({ loc }) => loc);
+
       return {
         categories: matchedCats.map((c) => ({ id: c.id, name: c.name, imageUrl: c.imageUrl })),
         products: matchedProds.map((p) => ({ id: p.id, name: p.name, price: p.price, imageUrl: p.imageUrl, categoryName: p.categoryName, inStock: p.inStock })),
@@ -257,6 +275,8 @@ export const storefrontApi = {
   },
 
   getProductDetails: async (slug: string, productId: number) => {
+    const lang = typeof localStorage !== 'undefined' && localStorage.getItem('zs_storefront_lang') === 'en' ? 'en' : 'ar';
+    const { localizeProduct } = await import('../lib/storefront-translations');
     try {
       const res = await http<{
         product: any;
@@ -264,17 +284,17 @@ export const storefrontApi = {
         crossSell: any[];
       }>(`/api/storefront/${encodeURIComponent(slug)}/products/${productId}`);
       return {
-        product: withResolvedProductMedia(res?.product),
-        related: (res?.related || []).map((p) => withResolvedProductMedia(p)),
-        crossSell: (res?.crossSell || []).map((p) => withResolvedProductMedia(p)),
+        product: localizeProduct(withResolvedProductMedia(res?.product), lang),
+        related: (res?.related || []).map((p) => localizeProduct(withResolvedProductMedia(p), lang)),
+        crossSell: (res?.crossSell || []).map((p) => localizeProduct(withResolvedProductMedia(p), lang)),
       };
     } catch {
       const found = DEMO_STOREFRONT_CATALOG.products.find((p) => p.id === Number(productId)) || DEMO_STOREFRONT_CATALOG.products[0];
       const related = DEMO_STOREFRONT_CATALOG.products.filter((p) => p.id !== found.id).slice(0, 4);
       return {
-        product: withResolvedProductMedia(found),
-        related: related.map((p) => withResolvedProductMedia(p)),
-        crossSell: related.slice(0, 2).map((p) => withResolvedProductMedia(p)),
+        product: localizeProduct(withResolvedProductMedia(found), lang),
+        related: related.map((p) => localizeProduct(withResolvedProductMedia(p), lang)),
+        crossSell: related.slice(0, 2).map((p) => localizeProduct(withResolvedProductMedia(p), lang)),
       };
     }
   },

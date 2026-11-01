@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useStorefrontLang } from '@/i18n';
 import { IconShoppingCart } from './StorefrontIcons';
 
 interface StorefrontMobileBottomNavProps {
@@ -24,6 +25,7 @@ export const StorefrontMobileBottomNav = React.memo(function StorefrontMobileBot
   onToggleFavorites,
   onOpenCart,
 }: StorefrontMobileBottomNavProps) {
+  const { isEn } = useStorefrontLang();
   const [isHidden, setIsHidden] = useState(false);
 
   useEffect(() => {
@@ -63,7 +65,7 @@ export const StorefrontMobileBottomNav = React.memo(function StorefrontMobileBot
   return (
     <nav
       className={`storefront-mobile-bottom-nav${isHidden ? ' is-hidden' : ''}`}
-      aria-label="التنقل السريع للموبايل"
+      aria-label={isEn ? 'Mobile Quick Navigation' : 'التنقل السريع للموبايل'}
       dir="rtl"
     >
       {/* Curved Notched Dock Background with True Air-Gap Cutout */}
@@ -98,7 +100,7 @@ export const StorefrontMobileBottomNav = React.memo(function StorefrontMobileBot
             <path d="M9 21.5V13h6v8.5" />
           </svg>
         </div>
-        <span>الرئيسية</span>
+        <span>{isEn ? 'Home' : 'الرئيسية'}</span>
       </button>
 
       {/* 2. Categories */}
@@ -115,7 +117,7 @@ export const StorefrontMobileBottomNav = React.memo(function StorefrontMobileBot
             <rect x="3" y="13.5" width="7.5" height="7.5" rx="2" />
           </svg>
         </div>
-        <span>الأقسام</span>
+        <span>{isEn ? 'Categories' : 'الأقسام'}</span>
       </button>
 
       {/* 3. Center Floating Action Button: Cart (السلة) */}
@@ -123,7 +125,7 @@ export const StorefrontMobileBottomNav = React.memo(function StorefrontMobileBot
         <button
           type="button"
           onClick={onOpenCart}
-          aria-label="سلة التسوق"
+          aria-label={isEn ? 'Shopping Cart' : 'سلة التسوق'}
           className={`storefront-mobile-nav-center-btn ${activeTab === 'cart' ? 'active' : ''}`}
         >
           <IconShoppingCart size={19} strokeWidth={2.1} />
@@ -152,7 +154,7 @@ export const StorefrontMobileBottomNav = React.memo(function StorefrontMobileBot
             </span>
           )}
         </div>
-        <span>العروض</span>
+        <span>{isEn ? 'Deals' : 'العروض'}</span>
       </button>
 
       {/* 5. Favorites (Leftmost in RTL) */}
@@ -171,7 +173,7 @@ export const StorefrontMobileBottomNav = React.memo(function StorefrontMobileBot
             </span>
           )}
         </div>
-        <span>المفضلة</span>
+        <span>{isEn ? 'Favorites' : 'المفضلة'}</span>
       </button>
     </nav>
   );

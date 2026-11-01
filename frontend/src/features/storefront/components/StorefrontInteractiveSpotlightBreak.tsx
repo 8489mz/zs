@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useStorefrontLang } from '@/i18n';
 import type { StorefrontProduct } from '../types/storefront.types';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { ShoppingCartIcon, CheckCircleIcon, EyeIcon } from '@/shared/components/icons/AppIcons';
@@ -28,6 +29,7 @@ export const StorefrontInteractiveSpotlightBreak = React.memo(function Storefron
   onQuickView,
 }: StorefrontInteractiveSpotlightBreakProps) {
   const { t } = useTranslation();
+  const { isEn, dir } = useStorefrontLang();
   const pool = dealProducts.length > 0 ? dealProducts.slice(0, 4) : (initialProduct ? [initialProduct] : []);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const product = pool[selectedIndex] || initialProduct;
@@ -77,11 +79,16 @@ export const StorefrontInteractiveSpotlightBreak = React.memo(function Storefron
 
   const cleanPhone = (whatsappPhone || '').replace(/[^0-9]/g, '');
   const whatsappUrl = cleanPhone
-    ? `https://wa.me/${cleanPhone.startsWith('01') ? `2${cleanPhone}` : cleanPhone}?text=${encodeURIComponent(`مرحباً، أود الاستفسار وطلب صفقة اليوم: ${product.name} بسعر ${product.price}`)}`
+    ? `https://wa.me/${cleanPhone.startsWith('01') ? `2${cleanPhone}` : cleanPhone}?text=${encodeURIComponent(
+        isEn
+          ? `Hello, I would like to inquire and order today's deal: ${product.name} for ${product.price}`
+          : `مرحباً، أود الاستفسار وطلب صفقة اليوم: ${product.name} بسعر ${product.price}`
+      )}`
     : undefined;
 
   return (
     <section
+      dir={dir}
       className="storefront-spotlight-breakaway"
       style={{
         margin: '16px 0',
@@ -121,10 +128,10 @@ export const StorefrontInteractiveSpotlightBreak = React.memo(function Storefron
               whiteSpace: 'nowrap',
             }}
           >
-            صفقة اليوم
+            {isEn ? 'Deal of the Day' : 'صفقة اليوم'}
           </span>
           <span style={{ fontSize: '13px', color: '#cbd5e1', fontWeight: 600 }}>
-            وفر أكثر مع خصومات اليوم المحدودة
+            {isEn ? "Save more with today's limited discounts" : 'وفر أكثر مع خصومات اليوم المحدودة'}
           </span>
         </div>
 
@@ -157,7 +164,7 @@ export const StorefrontInteractiveSpotlightBreak = React.memo(function Storefron
                   boxSizing: 'border-box',
                 }}
               >
-                عرض #{idx + 1}
+                {isEn ? `Deal #${idx + 1}` : `عرض #${idx + 1}`}
               </button>
             ))}
           </div>
@@ -209,7 +216,9 @@ export const StorefrontInteractiveSpotlightBreak = React.memo(function Storefron
                 fontVariantNumeric: 'tabular-nums',
               }}
             >
-              {(!product.inStock || product.stockQty <= 0) ? 'نفدت الكمية' : t('storefront.spotlight.badge', 'خصم {{percent}}%', { percent: discountPercent })}
+              {(!product.inStock || product.stockQty <= 0)
+                ? (isEn ? 'Out of Stock' : 'نفدت الكمية')
+                : t('storefront.spotlight.badge', 'خصم {{percent}}%', { percent: discountPercent })}
             </div>
 
             <img
@@ -232,7 +241,7 @@ export const StorefrontInteractiveSpotlightBreak = React.memo(function Storefron
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {/* Unboxed Metadata Line */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12.5px', color: '#cbd5e1', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-            <span style={{ color: '#fbbf24' }}>{product.categoryName || 'أفضل العروض'}</span>
+            <span style={{ color: '#fbbf24' }}>{product.categoryName || (isEn ? 'Best Deals' : 'أفضل العروض')}</span>
           </div>
 
           <h3
@@ -262,6 +271,19 @@ export const StorefrontInteractiveSpotlightBreak = React.memo(function Storefron
 
           {/* Pricing Row */}
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end', gap: '12px', flexWrap: 'wrap', fontVariantNumeric: 'tabular-nums' }}>
+            {oldPrice > product.price && (
+              <span
+                style={{
+                  fontSize: '15px',
+                  color: '#94a3b8',
+                  textDecoration: 'line-through',
+                  fontWeight: 600,
+                }}
+              >
+                {oldPrice.toLocaleString('en-US')} <CurrencySymbol />
+              </span>
+            )}
+
             <div
               style={{
                 fontSize: '28px',
@@ -276,19 +298,6 @@ export const StorefrontInteractiveSpotlightBreak = React.memo(function Storefron
               <span style={{ fontSize: '14px' }}><CurrencySymbol /></span>
             </div>
 
-            {oldPrice > product.price && (
-              <span
-                style={{
-                  fontSize: '15px',
-                  color: '#94a3b8',
-                  textDecoration: 'line-through',
-                  fontWeight: 600,
-                }}
-              >
-                {oldPrice.toLocaleString('en-US')} <CurrencySymbol />
-              </span>
-            )}
-
             {savings > 0 && (
               <span
                 style={{
@@ -297,7 +306,7 @@ export const StorefrontInteractiveSpotlightBreak = React.memo(function Storefron
                   color: '#4ade80',
                 }}
               >
-                · وفرت {savings.toLocaleString('en-US')} <CurrencySymbol />
+                · {isEn ? 'Save' : 'وفرت'} {savings.toLocaleString('en-US')} <CurrencySymbol />
               </span>
             )}
           </div>
@@ -313,8 +322,12 @@ export const StorefrontInteractiveSpotlightBreak = React.memo(function Storefron
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', fontWeight: 700, marginBottom: '6px' }}>
-              <span style={{ color: '#fbbf24' }}>تم بيع {claimedPercent}% من الكمية المتوفرة</span>
-              <span style={{ color: '#e2e8f0' }}>متبقي {stockRemaining} فقط بالمخزون</span>
+              <span style={{ color: '#fbbf24' }}>
+                {isEn ? `${claimedPercent}% of available stock sold` : `تم بيع ${claimedPercent}% من الكمية المتوفرة`}
+              </span>
+              <span style={{ color: '#e2e8f0' }}>
+                {isEn ? `Only ${stockRemaining} left in stock` : `متبقي ${stockRemaining} فقط بالمخزون`}
+              </span>
             </div>
             <div style={{ width: '100%', height: '6px', background: 'rgba(255, 255, 255, 0.14)', borderRadius: '4px', overflow: 'hidden' }}>
               <div
@@ -331,6 +344,7 @@ export const StorefrontInteractiveSpotlightBreak = React.memo(function Storefron
           {/* Stepper + Add to Cart Action Row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '4px' }}>
             <div
+              dir="rtl"
               className="storefront-stepper-control"
               style={{
                 display: 'inline-flex',
