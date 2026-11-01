@@ -20,6 +20,22 @@ export interface IdempotencyResult {
   documentId?: string;
 }
 
+/** A 'processing' row older than this is treated as stuck and escalates to recovery_required. */
+export const IDEMPOTENCY_STUCK_PROCESSING_MS = 60000;
+
+/** Terminal rows are pruned only once they are at least this old (D5 decision). */
+export const IDEMPOTENCY_PRUNE_RETENTION_DAYS = 30;
+
+export interface IdempotencyReviewItem {
+  idempotencyKey: string;
+  operationType: string;
+  /** Effective status: both classes below need manual recovery; nothing here auto-retries. */
+  status: 'recovery_required';
+  errorCode: string | null;
+  documentId: string | null;
+  updatedAt: Date;
+}
+
 @Injectable()
 export class IdempotencyService {
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
@@ -99,7 +115,7 @@ export class IdempotencyService {
 
       if (matchingOp.status === 'processing') {
         const ageMs = Date.now() - new Date(matchingOp.updated_at).getTime();
-        if (ageMs > 60000) {
+        if (ageMs > IDEMPOTENCY_STUCK_PROCESSING_MS) {
           return { status: 'recovery_required' };
         }
         return { status: 'processing' };
@@ -159,7 +175,7 @@ export class IdempotencyService {
 
         if (match.status === 'processing') {
           const ageMs = Date.now() - new Date(match.updated_at).getTime();
-          if (ageMs > 60000) {
+          if (ageMs > IDEMPOTENCY_STUCK_PROCESSING_MS) {
             return { status: 'recovery_required' };
           }
           return { status: 'processing' };
@@ -276,6 +292,71 @@ export class IdempotencyService {
       .where('operation_type', '=', params.operationType)
       .where('status', '=', 'processing')
       .execute();
+  }
+
+  /**
+   * INV-IDEMPOTENCY-RETENTION-REVIEW-QUEUE (D5): deletes only
+   * TERMINAL rows (committed / failed) whose completed_at is at
+   * least 30 days old. 'processing' and 'recovery_required' rows are
+   * never deleted here — they are the review queue's input, and
+   * deleting them would destroy the only trace of an ambiguous
+   * operation. Rows with a NULL completed_at are kept (unknown age).
+   * The retention floor is 30 days: a smaller requested value is
+   * clamped up, so no caller can prune recent history by accident.
+   * There is no scheduler in this codebase; the prune is an explicit
+   * staff action through the operations controller.
+   */
+  async pruneTerminalOperations(
+    scope: { tenantId: string; accountId: string },
+    retentionDays: number = IDEMPOTENCY_PRUNE_RETENTION_DAYS,
+  ): Promise<{ deleted: number }> {
+    const retention = Math.max(IDEMPOTENCY_PRUNE_RETENTION_DAYS, Math.floor(retentionDays) || IDEMPOTENCY_PRUNE_RETENTION_DAYS);
+    const cutoff = new Date(Date.now() - retention * 24 * 60 * 60 * 1000);
+    const result = await this.db
+      .deleteFrom('operation_executions')
+      .where('tenant_id', '=', scope.tenantId)
+      .where('account_id', '=', scope.accountId)
+      .where('status', 'in', ['committed', 'failed'])
+      .where('completed_at', '<', cutoff)
+      .executeTakeFirst();
+    return { deleted: Number(result.numDeletedRows ?? 0) };
+  }
+
+  /**
+   * INV-IDEMPOTENCY-RETENTION-REVIEW-QUEUE (D5): the manual review
+   * queue — 'recovery_required' rows of any age plus 'processing'
+   * rows stuck past the 60-second escalation threshold, oldest
+   * first. Read-only: nothing here retries or re-drives an operation
+   * (D5 forbids automatic retry). Tenant- and account-scoped.
+   */
+  async listOperationsNeedingReview(
+    scope: { tenantId: string; accountId: string },
+    limit = 50,
+  ): Promise<IdempotencyReviewItem[]> {
+    const capped = Math.min(100, Math.max(1, Math.floor(limit) || 50));
+    const stuckCutoff = new Date(Date.now() - IDEMPOTENCY_STUCK_PROCESSING_MS);
+    const rows = await this.db
+      .selectFrom('operation_executions')
+      .selectAll()
+      .where('tenant_id', '=', scope.tenantId)
+      .where('account_id', '=', scope.accountId)
+      .where((eb) =>
+        eb.or([
+          eb('status', '=', 'recovery_required'),
+          eb.and([eb('status', '=', 'processing'), eb('updated_at', '<', stuckCutoff)]),
+        ]),
+      )
+      .orderBy('updated_at', 'asc')
+      .limit(capped)
+      .execute();
+    return rows.map((row) => ({
+      idempotencyKey: row.idempotency_key,
+      operationType: row.operation_type,
+      status: 'recovery_required' as const,
+      errorCode: row.error_code,
+      documentId: row.document_id,
+      updatedAt: row.updated_at as Date,
+    }));
   }
 
   /**
