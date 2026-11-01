@@ -192,6 +192,35 @@ export function pickFashionStockConsolidationTarget(rows: VariantDraft[], source
   return kept.find((row) => normalizeArabicSearchKey(row.color) === normalizeArabicSearchKey(source.color));
 }
 
+/**
+ * Save-row projection for the group editor's mutation. This is the ONLY
+ * place the editor's draft rows become the save payload, so every field the
+ * backend must receive has to be listed here. imageUrl MUST be carried:
+ * dropping it silently discards a photo set (or cut) in the matrix — the
+ * cell writes row state, buildPayload forwards imageUrl, and the backend
+ * merges it into metadata, but none of that runs if this projection drops
+ * the field (regression: photos vanished on save while the save itself
+ * reported success, because the payload simply never contained them).
+ */
+export function buildGroupSaveRows(rows: VariantDraft[], fallbackMinStock: number): VariantDraft[] {
+  return sortVariants(rows.map((row) => ({
+    id: row.id,
+    color: row.color.trim(),
+    size: row.size.trim(),
+    sku: row.sku ? row.sku.trim() : undefined,
+    barcode: row.barcode.trim(),
+    useCustomPricing: Boolean(row.useCustomPricing),
+    pricingEditorOpen: false,
+    costPrice: Number(row.costPrice || 0),
+    retailPrice: Number(row.retailPrice || 0),
+    wholesalePrice: Number(row.wholesalePrice || 0),
+    stock: Number(row.stock || 0),
+    originalStock: row.originalStock,
+    minStock: Number(row.minStock ?? fallbackMinStock),
+    imageUrl: row.imageUrl,
+  })).filter((row) => Boolean(variantLabel(row))));
+}
+
 export function buildPayload(common: CommonDraft, row: VariantDraft, source?: Product, originalLocationId?: string) {
   const label = variantLabel(row);
   return {

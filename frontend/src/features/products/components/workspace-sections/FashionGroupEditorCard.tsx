@@ -18,11 +18,11 @@ import { QuickStockAdjustmentDialog, useInventoryActionCatalog } from '@/feature
 import { systemConfirm, toast } from '@/shared/components/system-alert';
 import type { Category, Product, Supplier, Location } from '@/types/domain';
 import {
+  buildGroupSaveRows,
   buildPayload,
   deriveBaseName,
   duplicateSummary,
   rowsFingerprint,
-  sortVariants,
   toCommonDraft,
   toVariantRows,
   variantLabel,
@@ -234,21 +234,7 @@ export function FashionGroupEditorCard({ product, categories, suppliers, locatio
     mutationFn: async () => {
       const trimmedName = commonDraft.name.trim();
       const trimmedStyleCode = commonDraft.styleCode.trim();
-      const cleanRows = sortVariants(variantRows.map((row) => ({
-        id: row.id,
-        color: row.color.trim(),
-        size: row.size.trim(),
-        sku: row.sku ? row.sku.trim() : undefined,
-        barcode: row.barcode.trim(),
-        useCustomPricing: Boolean(row.useCustomPricing),
-        pricingEditorOpen: false,
-        costPrice: Number(row.costPrice || 0),
-        retailPrice: Number(row.retailPrice || 0),
-        wholesalePrice: Number(row.wholesalePrice || 0),
-        stock: Number(row.stock || 0),
-        originalStock: row.originalStock,
-        minStock: Number(row.minStock ?? commonDraft.minStock),
-      })).filter((row) => Boolean(variantLabel(row))));
+      const cleanRows = buildGroupSaveRows(variantRows, commonDraft.minStock);
 
       if (!trimmedName) throw new Error('اسم الصنف الأساسي مطلوب');
       if (!trimmedStyleCode) throw new Error('كود المجموعة / الموديل مطلوب');
