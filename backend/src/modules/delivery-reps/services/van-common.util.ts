@@ -2,6 +2,7 @@ import { Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
 import { formatDailyDocumentNumber, getDailyDocumentPrefix } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { AppError } from '../../../common/errors/app-error';
 
 export const FLEET_VEHICLE_STATUSES = ['available', 'assigned', 'maintenance', 'retired'] as const;
@@ -183,7 +184,12 @@ export async function generateDailySequenceNumber(
     );
   }
 
-  const dailyPrefix = getDailyDocumentPrefix(prefix, date);
+  // Resolve through the caller's handle (trxOrDb), NOT the pool db:
+  // on PGlite's single connection a pool query inside an open
+  // transaction waits forever; on Postgres it would still be a
+  // second connection for a value the transaction could read itself.
+  const businessTz = await getTenantTimezone(trxOrDb, tenantId);
+  const dailyPrefix = getDailyDocumentPrefix(prefix, date, businessTz);
 
   // Advisory transaction lock to prevent concurrent races for this tenant + daily prefix.
   // Fail closed: any lock failure means the number is not issued.
@@ -232,7 +238,7 @@ export async function generateDailySequenceNumber(
   }
 
   const nextSeq = lastSeq + 1;
-  return formatDailyDocumentNumber(prefix, nextSeq, date);
+  return formatDailyDocumentNumber(prefix, nextSeq, date, 4, businessTz);
 }
 
 export async function getMonthlyOfficialHolidayDates(

@@ -2,11 +2,12 @@ import { BadRequestException } from '@nestjs/common';
 import { Kysely, sql } from '../../database/kysely';
 import { Database } from '../../database/database.types';
 import { lockAccountingPeriod } from './accounting-period-lock';
+import { resolveBusinessDateKey } from './engines/accounting-date.engine';
 
 export async function assertBusinessAccountingDate(db: Kysely<Database>, tenantId: string, date: Date, taxable = false): Promise<void> {
   await lockAccountingPeriod(db, tenantId);
   if (!Number.isFinite(date.getTime())) throw new BadRequestException('تاريخ الترحيل غير صالح.');
-  const day = date.toISOString().slice(0, 10);
+  const day = await resolveBusinessDateKey(db, tenantId, date);
   const settings = await db.selectFrom('accounting_settings').select(['lock_date_all', 'lock_date_non_adviser', 'lock_date_tax'])
     .where('tenant_id', '=', tenantId).where('id', '=', 1).executeTakeFirst();
   for (const lock of [settings?.lock_date_all, settings?.lock_date_non_adviser, ...(taxable ? [settings?.lock_date_tax] : [])]) {

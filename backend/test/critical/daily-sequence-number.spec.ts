@@ -45,6 +45,10 @@ async function main() {
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
   try {
     await pg.exec(`
+      -- The settings table MUST exist here: generateDailySequenceNumber
+      -- resolves the tenant timezone through the open transaction, and a
+      -- failed SELECT would poison that transaction (INV-BUSINESS-DATE-TENANT-LOCAL).
+      CREATE TABLE settings (key text NOT NULL, value text, tenant_id text NOT NULL, account_id text NOT NULL, PRIMARY KEY (tenant_id, key));
       CREATE TABLE van_load_requisitions (id bigserial PRIMARY KEY, tenant_id text, doc_no text);
     `);
 

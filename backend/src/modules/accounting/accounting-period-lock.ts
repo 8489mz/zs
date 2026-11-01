@@ -2,6 +2,7 @@ import { Kysely, sql } from '../../database/kysely';
 import { Database } from '../../database/database.types';
 import { AppError } from '../../common/errors/app-error';
 import { accountingDateKey, assertTaxPeriodOpen } from './accounting-tax-lock';
+import { resolveBusinessDateKey } from './engines/accounting-date.engine';
 
 /** Serialize a tenant's postings and fiscal-period transitions in one transaction. */
 export async function lockAccountingPeriod(queryable: Kysely<Database>, tenantId: string): Promise<void> {
@@ -13,7 +14,7 @@ export async function assertAutomatedJournalPeriodOpen(
   queryable: Kysely<Database>, tenantId: string, entryDate: Date | string, accountIds: number[],
 ): Promise<void> {
   await lockAccountingPeriod(queryable, tenantId);
-  const date = accountingDateKey(entryDate);
+  const date = await resolveBusinessDateKey(queryable, tenantId, entryDate);
   const settings = await queryable.selectFrom('accounting_settings')
     .select(['lock_date_all', 'lock_date_non_adviser'])
     .where('tenant_id', '=', tenantId).where('id', '=', 1).executeTakeFirst();

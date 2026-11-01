@@ -4,7 +4,7 @@ import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
-import { isValidTimezone } from '../../common/utils/tenant-timezone.util';
+import { getTenantTimezone, isValidTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
 import { verifyPassword } from '../../core/auth/utils/password-hasher';
 import { CreateOnlineOrderDto } from './dto/create-online-order.dto';
 import { CreateProductReviewDto } from './dto/create-product-review.dto';
@@ -1701,12 +1701,14 @@ export class StorefrontService {
       }
     }
 
-    // Date-based daily sequential numbering: ON-YYMMDD-0001
+    // Date-based daily sequential numbering: ON-YYMMDD-0001. The day
+    // is the TENANT's business day (INV-BUSINESS-DATE-TENANT-LOCAL),
+    // never the host-local day: a 00:30 Cairo checkout must number
+    // under the same day the period gates check.
     const now = new Date();
-    const yy = String(now.getFullYear()).slice(-2);
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const datePrefix = `${yy}${mm}${dd}`;
+    const businessTz = await getTenantTimezone(this.db, tenant.id);
+    const [yyyy, mm, dd] = todayTenantDate(businessTz, now).split('-');
+    const datePrefix = `${yyyy.slice(-2)}${mm}${dd}`;
     let orderNumber = '';
     // The order and (for dine-in) its kitchen draft are written together: a QR order the kitchen never
     // sees, or a kitchen ticket with no order behind it, are both worse than a clear error.

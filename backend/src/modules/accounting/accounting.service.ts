@@ -40,6 +40,7 @@ import {
 import { AccountingTenantFoundationService } from './accounting-tenant-foundation.service';
 import { AccountingPostingService } from './accounting-posting.service';
 import { lockAccountingPeriod } from './accounting-period-lock';
+import { resolveBusinessDateKey } from './engines/accounting-date.engine';
 import { accountingDateKey, assertTaxPeriodOpen } from './accounting-tax-lock';
 import { nextAccountingDay } from './engines/accounting-date.engine';
 import { calculateAssetDepreciation, validateFixedAssetTerms } from './engines/fixed-asset-depreciation.engine';
@@ -763,7 +764,7 @@ export class AccountingService {
       .where('id', '=', 1)
       .executeTakeFirst();
 
-    const dateStr = accountingDateKey(entryDate);
+    const dateStr = await resolveBusinessDateKey(queryable, tenantId, entryDate);
 
     if (settings) {
       // 1. Hard lock (All users)

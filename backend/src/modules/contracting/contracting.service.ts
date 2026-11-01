@@ -12,6 +12,7 @@ import {
   getDailyDocumentPrefix,
   formatDailyDocumentNumber,
 } from '../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import {
   CreateProjectDto,
   UpdateProjectDto,
@@ -177,6 +178,7 @@ export class ContractingService {
 
   async createProject(auth: AuthContext, dto: CreateProjectDto) {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
 
     // 1. Resolve client name if clientId is provided (independent of the code).
     let clientName = dto.clientName || '';
@@ -293,7 +295,7 @@ export class ContractingService {
         .values(values)
         .returning('id')
         .executeTakeFirstOrThrow();
-      const finalCode = `${getDailyDocumentPrefix('PRJ')}${String(inserted.id).padStart(4, '0')}`;
+      const finalCode = `${getDailyDocumentPrefix('PRJ', undefined, businessTz)}${String(inserted.id).padStart(4, '0')}`;
       const updated = await trx
         .updateTable('contracting_projects')
         .set({ code: finalCode, updated_at: new Date() })
@@ -847,10 +849,11 @@ export class ContractingService {
 
   async createChangeOrder(auth: AuthContext, projectId: string, dto: CreateChangeOrderDto) {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
     // INV-CONTRACTING-ID-DERIVED-NUMBERS: the number is derived from
     // the row id inside one transaction (DRG/MOM pattern), never
     // from a COUNT(*) that races and reuses numbers after deletions.
-    const prefix = getDailyDocumentPrefix('CO');
+    const prefix = getDailyDocumentPrefix('CO', undefined, businessTz);
     const tempNumber = `CO-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const co = await this.db.transaction().execute(async (trx) => {
       const inserted = await trx
@@ -2029,12 +2032,13 @@ export class ContractingService {
 
   async createSubcontract(auth: AuthContext, projectId: string, dto: CreateSubcontractDto) {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
     // INV-CONTRACTING-ID-DERIVED-NUMBERS: a generated number is
     // derived from the row id inside one transaction (DRG/MOM
     // pattern), never from a COUNT(*) that races and reuses numbers
     // after deletions; a caller-supplied number is kept verbatim.
     const suppliedNumber = dto.contractNumber ? dto.contractNumber.trim() : '';
-    const prefix = getDailyDocumentPrefix('SC');
+    const prefix = getDailyDocumentPrefix('SC', undefined, businessTz);
     const tempNumber = `SC-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const totalAmount = Number(dto.totalAmount || 0);
@@ -2173,10 +2177,11 @@ export class ContractingService {
 
   async createRfi(auth: AuthContext, projectId: string, dto: CreateRfiDto) {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
     // INV-CONTRACTING-ID-DERIVED-NUMBERS: the number is derived from
     // the row id inside one transaction (DRG/MOM pattern), never
     // from a COUNT(*) that races and reuses numbers after deletions.
-    const prefix = getDailyDocumentPrefix('RFI');
+    const prefix = getDailyDocumentPrefix('RFI', undefined, businessTz);
     const tempNumber = `RFI-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const rfi = await this.db.transaction().execute(async (trx) => {
       const inserted = await trx
@@ -2595,13 +2600,14 @@ export class ContractingService {
 
   async createMaterialRequisition(auth: AuthContext, projectId: string, dto: CreateMaterialRequisitionDto) {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
 
     // INV-CONTRACTING-ID-DERIVED-NUMBERS: a generated number is
     // derived from the row id inside one transaction (DRG/MOM
     // pattern), never from a COUNT(*) that races and reuses numbers
     // after deletions; a caller-supplied number is kept verbatim.
     const suppliedNumber = dto.requisitionNumber?.trim().toUpperCase() || '';
-    const prefix = getDailyDocumentPrefix('MR');
+    const prefix = getDailyDocumentPrefix('MR', undefined, businessTz);
     const tempNumber = `MR-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const qty = Number(dto.quantity || 0);
@@ -3690,12 +3696,13 @@ export class ContractingService {
 
   async createSupplierReturn(auth: AuthContext, projectId: string, dto: CreateSupplierReturnDto) {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
     // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
     // D6a): a generated number derives from the row id inside one
     // transaction; the credit-note number derives from the same
     // final number. A caller-supplied number is kept verbatim.
     const suppliedNumber = dto.returnNumber;
-    const prefix = getDailyDocumentPrefix('RTN');
+    const prefix = getDailyDocumentPrefix('RTN', undefined, businessTz);
     const tempNumber = `RTN-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const totalAmount = dto.items.reduce((sum: number, it: any) => sum + Number(it.totalAmount || Number(it.quantity) * Number(it.unitCost)), 0);
@@ -3850,6 +3857,7 @@ export class ContractingService {
 
   async createPettyCash(auth: AuthContext, projectId: string, dto: CreatePettyCashDto) {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
     // Strict Auditor Rule: Check if custodian already has an active, un-settled petty cash custody
     const activeCustody = await (this.db as any)
       .selectFrom('contracting_petty_cash')
@@ -3869,7 +3877,7 @@ export class ContractingService {
     // D6a): a generated number derives from the row id inside one
     // transaction. A caller-supplied number is kept verbatim.
     const suppliedNumber = dto.disbursementNumber;
-    const prefix = getDailyDocumentPrefix('CSH');
+    const prefix = getDailyDocumentPrefix('CSH', undefined, businessTz);
     const tempNumber = `CSH-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const values: any = {
@@ -5857,11 +5865,12 @@ export class ContractingService {
 
   async createInspectionRequest(auth: AuthContext, projectId: string, dto: CreateInspectionRequestDto): Promise<ContractingInspectionRequest> {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
     // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
     // D6a): a generated number derives from the row id inside one
     // transaction. A caller-supplied number is kept verbatim.
     const suppliedNumber = dto.wirNumber?.trim().toUpperCase() || '';
-    const prefix = getDailyDocumentPrefix('WIR');
+    const prefix = getDailyDocumentPrefix('WIR', undefined, businessTz);
     const tempNumber = `WIR-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const values: any = {
@@ -6227,10 +6236,11 @@ export class ContractingService {
 
   async createSubmittal(auth: AuthContext, projectId: string, dto: CreateSubmittalDto): Promise<ContractingSubmittal> {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
     // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
     // D6a): the number derives from the row id inside one
     // transaction, never from a COUNT(*).
-    const prefix = getDailyDocumentPrefix(dto.submittalType === 'shop_drawing' ? 'DWG-SUB' : 'MAT-SUB');
+    const prefix = getDailyDocumentPrefix(dto.submittalType === 'shop_drawing' ? 'DWG-SUB' : 'MAT-SUB', undefined, businessTz);
     const tempNumber = `SUB-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const row = await this.db.transaction().execute(async (trx) => {
@@ -6350,10 +6360,11 @@ export class ContractingService {
 
   async createMaterialEscalation(auth: AuthContext, projectId: string, dto: CreateMaterialEscalationDto): Promise<ContractingMaterialEscalation> {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
     // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
     // D6a): the number derives from the row id inside one
     // transaction, never from a COUNT(*).
-    const prefix = getDailyDocumentPrefix('ESC');
+    const prefix = getDailyDocumentPrefix('ESC', undefined, businessTz);
     const tempNumber = `ESC-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const priceDifference = Math.max(0, dto.currentMarketPrice - dto.basePriceContract);
@@ -6491,10 +6502,11 @@ export class ContractingService {
 
   async createSubcontractorBackcharge(auth: AuthContext, projectId: string, dto: CreateSubcontractorBackchargeDto): Promise<ContractingSubcontractorBackcharge> {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
     // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
     // D6a): the number derives from the row id inside one
     // transaction, never from a COUNT(*).
-    const prefix = getDailyDocumentPrefix('BCH');
+    const prefix = getDailyDocumentPrefix('BCH', undefined, businessTz);
     const tempNumber = `BCH-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const row = await this.db.transaction().execute(async (trx) => {
@@ -7148,6 +7160,7 @@ export class ContractingService {
 
   async createSubcontractorPayment(auth: AuthContext, dto: CreateSubcontractorPaymentDto) {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
     return this.db.transaction().execute(async trx => {
       await lockAccountingPeriod(trx, tenantId);
       if (!dto.requestKey || !/^[A-Za-z0-9_-]{16,128}$/.test(dto.requestKey)) throw new BadRequestException('يلزم مفتاح طلب ثابت لمنع تكرار الدفعة.');
@@ -7278,7 +7291,7 @@ export class ContractingService {
         .returningAll()
         .execute();
 
-      const officialNumber = formatDailyDocumentNumber('SPAY', Number(payment.id), new Date(payment.payment_date));
+      const officialNumber = formatDailyDocumentNumber('SPAY', Number(payment.id), new Date(payment.payment_date), 4, businessTz);
       await trx.updateTable('contracting_subcontractor_payments').set({ payment_number: officialNumber }).where('tenant_id', '=', tenantId).where('id', '=', payment.id).execute();
       payment.payment_number = officialNumber;
       const advance = ['advance', 'operational_advance'].includes(finalPaymentCategory);
@@ -7967,12 +7980,13 @@ export class ContractingService {
 
   async postBatchAllocation(auth: AuthContext, projectId: string, dto: CreateAllocationBatchDto) {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
     const summary = await this.previewBatchAllocation(auth, projectId, dto);
 
     // INV-CONTRACTING-ID-DERIVED-NUMBERS (D6b, same invariant as
     // D6a): the batch number derives from the row id inside one
     // transaction, never from a COUNT(*) over all tenant batches.
-    const prefix = getDailyDocumentPrefix('ALLOC');
+    const prefix = getDailyDocumentPrefix('ALLOC', undefined, businessTz);
     const tempNumber = `ALLOC-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     // Insert batch
@@ -8172,6 +8186,7 @@ export class ContractingService {
 
   async createDocument(auth: AuthContext, projectId: string, dto: CreateContractingDocumentDto) {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
 
     return this.db.transaction().execute(async (trx) => {
       const tempDocNumber = `DRG-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -8192,7 +8207,7 @@ export class ContractingService {
         .executeTakeFirstOrThrow();
 
       const documentId = String(inserted.id);
-      const prefix = getDailyDocumentPrefix('DRG');
+      const prefix = getDailyDocumentPrefix('DRG', undefined, businessTz);
       const docNumber = `${prefix}${String(inserted.id).padStart(4, '0')}`;
 
       await trx
@@ -8445,6 +8460,7 @@ export class ContractingService {
 
   async createMeetingMinute(auth: AuthContext, projectId: string, dto: CreateMeetingMinuteDto) {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
 
     return this.db.transaction().execute(async (trx) => {
       const tempNumber = `MOM-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -8467,7 +8483,7 @@ export class ContractingService {
         .returning('id')
         .executeTakeFirstOrThrow();
 
-      const prefix = getDailyDocumentPrefix('MOM');
+      const prefix = getDailyDocumentPrefix('MOM', undefined, businessTz);
       const minuteNumber = `${prefix}${String(inserted.id).padStart(4, '0')}`;
 
       const finalRow = await trx
