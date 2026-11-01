@@ -5,6 +5,21 @@ export interface Phase1BootstrapTable {
   created_at: ColumnType<Date, string | undefined, never>;
 }
 
+export interface MarketplaceWebhookEventTable {
+  id: Generated<number>;
+  tenant_id: string | null;
+  account_id: string | null;
+  marketplace: string;
+  event_type: string;
+  event_key: string;
+  dedup_key: string;
+  payload: ColumnType<unknown, unknown | undefined, unknown | undefined>;
+  payload_hash: string;
+  status: string; // pending, unresolved
+  received_at: ColumnType<Date, string | undefined, never>;
+  processed_at: Date | null;
+}
+
 export interface OperationExecutionTable {
   id: Generated<number>;
   tenant_id: string;
@@ -2388,6 +2403,7 @@ export interface Database {
   tenant_subscription_payments: TenantSubscriptionPaymentTable;
   _phase1_bootstrap: Phase1BootstrapTable;
   operation_executions: OperationExecutionTable;
+  marketplace_webhook_events: MarketplaceWebhookEventTable;
   sessions: SessionTable;
   users: UserTable;
   tenants: TenantTable;

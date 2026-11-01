@@ -187,8 +187,26 @@ export class MarketplaceSyncController {
   }
 
   @Post('webhook/:marketplace')
-  handleWebhook(@Param('marketplace') marketplace: SupportedMarketplace, @Body() payload: any) {
-    return this.syncService.handleMarketplaceWebhook(marketplace, payload);
+  handleWebhook(
+    @Param('marketplace') marketplace: SupportedMarketplace,
+    @Body() payload: any,
+    @Req() req: RequestWithAuth,
+  ) {
+    return this.syncService.handleMarketplaceWebhook(marketplace, payload, req.authContext?.tenantId);
+  }
+
+  @Get('webhook-events')
+  listWebhookEvents(
+    @Query('marketplace') marketplace: SupportedMarketplace | undefined,
+    @Query('status') status: string | undefined,
+    @Query('limit') limit: string | undefined,
+    @Req() req: RequestWithAuth,
+  ) {
+    return this.syncService.listMarketplaceWebhookEvents(req.authContext!, {
+      marketplace,
+      status,
+      limit: limit ? Number(limit) : undefined,
+    });
   }
 
   @Get('onboarding-check')

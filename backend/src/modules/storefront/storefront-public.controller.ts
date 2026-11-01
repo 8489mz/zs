@@ -4,6 +4,7 @@ import { StorefrontService } from './storefront.service';
 import { StorefrontPaymentService } from './storefront-payment.service';
 import { StorefrontSocialPreviewService } from './storefront-social-preview.service';
 import { StorefrontMediaService } from './storefront-media.service';
+import { MarketplaceSyncService, type SupportedMarketplace } from './services/marketplace-sync.service';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { CreateOnlineOrderDto } from './dto/create-online-order.dto';
 import { CreateProductReviewDto } from './dto/create-product-review.dto';
@@ -18,6 +19,7 @@ export class StorefrontPublicController {
     private readonly paymentService: StorefrontPaymentService,
     private readonly socialPreviewService: StorefrontSocialPreviewService,
     private readonly mediaService: StorefrontMediaService,
+    private readonly marketplaceSyncService: MarketplaceSyncService,
   ) {}
 
   /**
@@ -304,6 +306,23 @@ export class StorefrontPublicController {
     @Req() req: RequestWithAuth,
   ) {
     return this.paymentService.processStripeWebhook(headers, body, (req as any)?.rawBody);
+  }
+
+  /**
+   * Inbound marketplace webhooks (INV-MARKETPLACE-WEBHOOK-PERSISTENCE).
+   * Public by necessity: marketplace gateways cannot hold a staff
+   * session (the previous route lived behind SessionAuthGuard, so no
+   * external gateway could ever reach it). The handler ONLY persists
+   * the raw payload and returns 200 after the insert -- it creates no
+   * order, moves no stock, and runs no repricing. Acting on these
+   * payloads needs signature verification first (separate package).
+   */
+  @Post('webhooks/marketplace/:marketplace')
+  handleMarketplaceWebhook(
+    @Param('marketplace') marketplace: SupportedMarketplace,
+    @Body() body: any,
+  ) {
+    return this.marketplaceSyncService.receiveMarketplaceWebhook(marketplace, body);
   }
 
   /**

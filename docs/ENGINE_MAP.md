@@ -34,6 +34,7 @@ spec is the enforcement.
 | Document sequence numbers | `backend/src/modules/delivery-reps/services/van-common.util.ts` — `generateDailySequenceNumber` (transaction-held advisory lock, fail-closed) | PARTIAL: van call sites routed through transactions; contracting document numbers are id-derived throughout (INV-CONTRACTING-ID-DERIVED-NUMBERS, D6 decided and closed: core + operational documents) |
 | User privilege guards | `backend/src/modules/users/users.service.ts` — self-promotion freeze, `assertGrantWithinActorScope`, `assertPeerAdminActionAllowed` | UNIFIED for create/update/sync/bulk-disable; peer demotion, deletion, and unlock deliberately unchanged |
 | Idempotency (money writes) | Mandatory `requestKey` + in-transaction `FOR UPDATE` re-check + partial unique index: treasury transfers, expenses, drawer movements, subcontractor payments; `core/idempotency` interceptor for the covered controllers | PARTIAL: interceptor covers 5 controllers; finalize is awaited before the response and finalize failures flag recovery_required (INV-IDEMPOTENCY-FINALIZE-AWAITED); 30-day prune of terminal rows + manual review queue closed (INV-IDEMPOTENCY-RETENTION-REVIEW-QUEUE, D5; prune is an explicit staff action — no scheduler exists in this codebase) |
+| Outbox (inbound webhooks) | `backend/src/modules/storefront/engines/marketplace-webhook-event.engine.ts` — `extractMarketplaceEventIdentity`, `marketplaceWebhookDedupKey`, `matchMarketplaceTenant`; `marketplace_webhook_events` table (migration 0275) | PARTIAL, first slice only: inbound marketplace webhook payloads are persisted (deduped, tenant-resolved or unresolved) BEFORE the 200 response (INV-MARKETPLACE-WEBHOOK-PERSISTENCE). No relay, no processing of stored events, no signature verification yet -- rows are inert evidence for staff review |
 
 ## Forbidden patterns (guarded)
 
@@ -76,5 +77,5 @@ stored-total-minus-materials residual.
 - Contracting numbering (D6): id-derived vs advisory-lock + unique index.
 - EOS allowance source: new contract columns vs compensation/payroll data.
 - Landed-cost single engine: needs the WAC policy decision first.
-- Outbox, business-date definition, idempotency horizon: see
+- Outbox relay, business-date definition, idempotency horizon: see
   `phase345-grounding/` reports in the audit workspace.
