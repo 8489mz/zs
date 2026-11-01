@@ -19,7 +19,7 @@ import {
 
 // Test 2: Line totals and VAT calculation
 {
-  const line = calculateSubscriptionLineTotals(5, 200, 14); // 5 * 200 = 1000, VAT 14% = 140, total = 1140
+  const line = calculateSubscriptionLineTotals(5, 200, 14, 2); // 5 * 200 = 1000, VAT 14% = 140, total = 1140
   assert.equal(line.netAmount, 1000);
   assert.equal(line.taxAmount, 140);
   assert.equal(line.totalAmount, 1140);
@@ -32,7 +32,7 @@ import {
     { quantity: 2, unitPrice: 500, taxRate: 14 }, // net: 1000, tax: 140
     { quantity: 1, unitPrice: 2000, taxRate: 0 },  // net: 2000, tax: 0
   ];
-  const totals = calculateSubscriptionTotals(lines);
+  const totals = calculateSubscriptionTotals(lines, 2);
   assert.equal(totals.subtotal, 3000);
   assert.equal(totals.taxTotal, 140);
   assert.equal(totals.grandTotal, 3140);
@@ -86,4 +86,13 @@ import {
   console.log('✓ Test 6 Passed: Non-renewing contract terminates and expires when endDate passes');
 }
 
-console.log('\nAll 6 Subscription Billing Engine tests passed with 100% precision.');
+// Test 7: Three-decimal tenant rounds at book precision, not cents (INV-SUBSCRIPTION-BILLING-DIGITS)
+{
+  const line = calculateSubscriptionLineTotals(3, 0.125, 14, 3);
+  assert.equal(line.netAmount, 0.375);
+  assert.equal(line.taxAmount, 0.053);
+  assert.equal(line.totalAmount, 0.428);
+  console.log('✓ Test 7 Passed: 3-decimal tenant totals keep book precision');
+}
+
+console.log('\nAll 7 Subscription Billing Engine tests passed with 100% precision.');

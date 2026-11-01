@@ -12,6 +12,8 @@ import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import {
   CreateCommercialSubscriptionDto,
   UpdateSubscriptionStatusDto,
@@ -74,8 +76,9 @@ export class CommercialSubscriptionService {
       contractNumber = formatDailyDocumentNumber('SUB', seq);
     }
 
-    // Calculate totals
-    const totals = calculateSubscriptionTotals(dto.lines);
+    // Calculate totals at the tenant's book precision (INV-SUBSCRIPTION-BILLING-DIGITS)
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+    const totals = calculateSubscriptionTotals(dto.lines, digits);
     const subscriptionId = `sub_${randomUUID()}`;
 
     // Execute in transaction
@@ -103,7 +106,7 @@ export class CommercialSubscriptionService {
         .execute();
 
       for (const line of dto.lines) {
-        const lineTotals = calculateSubscriptionLineTotals(line.quantity, line.unitPrice, line.taxRate || 0);
+        const lineTotals = calculateSubscriptionLineTotals(line.quantity, line.unitPrice, line.taxRate || 0, digits);
         await trx
           .insertInto('commercial_subscription_lines')
           .values({
@@ -316,7 +319,18 @@ export class CommercialSubscriptionService {
         .where('tenant_id', '=', tenantId)
         .execute();
 
-      const totals = calculateSubscriptionTotals(lines);
+      const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+      // Stored rows carry snake_case columns; the engine takes
+      // camelCase inputs. Passing rows through unmapped silently
+      // zeroed every recurring invoice (unitPrice/taxRate undefined).
+      const totals = calculateSubscriptionTotals(
+        lines.map((line: any) => ({
+          quantity: line.quantity,
+          unitPrice: line.unit_price,
+          taxRate: line.tax_rate || 0,
+        })),
+        digits,
+      );
 
       // Create Sale Record
       const invNumber = formatDailyDocumentNumber('SUB-INV', (sub.invoices_count || 0) + 1);

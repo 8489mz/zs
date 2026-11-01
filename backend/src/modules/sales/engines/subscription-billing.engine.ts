@@ -9,6 +9,8 @@
  * Pure, side-effect free, and fully testable.
  */
 
+import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+
 export type BillingPeriod = 'monthly' | 'quarterly' | 'semi_annual' | 'annual';
 
 export interface SubscriptionLineInput {
@@ -73,42 +75,49 @@ export function calculateNextBillingDate(
 }
 
 /**
- * Calculates line totals including tax
+ * Calculates line totals including tax, rounded at the tenant's book
+ * precision (INV-SUBSCRIPTION-BILLING-DIGITS). `digits` is required:
+ * silently defaulting to 2 decimals is what corrupted 3-decimal
+ * tenants. Tax is computed on the rounded net, matching invoice math.
  */
 export function calculateSubscriptionLineTotals(
   quantity: number,
   unitPrice: number,
   taxRate = 0,
+  digits: MoneyDigits,
 ): { netAmount: number; taxAmount: number; totalAmount: number } {
   const qty = Number(quantity || 0);
   const price = Number(unitPrice || 0);
   const tax = Number(taxRate || 0);
 
-  const netAmount = Number((qty * price).toFixed(2));
-  const taxAmount = Number(((netAmount * tax) / 100).toFixed(2));
-  const totalAmount = Number((netAmount + taxAmount).toFixed(2));
+  const netAmount = roundMoney(qty * price, digits);
+  const taxAmount = roundMoney((netAmount * tax) / 100, digits);
+  const totalAmount = roundMoney(netAmount + taxAmount, digits);
 
   return { netAmount, taxAmount, totalAmount };
 }
 
 /**
- * Aggregates all subscription lines into subtotal, taxTotal, and grandTotal
+ * Aggregates all subscription lines into subtotal, taxTotal, and grandTotal.
+ * Line amounts are already at book precision, so the sums are exact;
+ * the final roundMoney is a no-op guard, not a second rounding.
  */
 export function calculateSubscriptionTotals(
   lines: SubscriptionLineInput[],
+  digits: MoneyDigits,
 ): { subtotal: number; taxTotal: number; grandTotal: number } {
   let subtotal = 0;
   let taxTotal = 0;
 
   for (const line of lines) {
-    const res = calculateSubscriptionLineTotals(line.quantity, line.unitPrice, line.taxRate || 0);
+    const res = calculateSubscriptionLineTotals(line.quantity, line.unitPrice, line.taxRate || 0, digits);
     subtotal += res.netAmount;
     taxTotal += res.taxAmount;
   }
 
-  subtotal = Number(subtotal.toFixed(2));
-  taxTotal = Number(taxTotal.toFixed(2));
-  const grandTotal = Number((subtotal + taxTotal).toFixed(2));
+  subtotal = roundMoney(subtotal, digits);
+  taxTotal = roundMoney(taxTotal, digits);
+  const grandTotal = roundMoney(subtotal + taxTotal, digits);
 
   return { subtotal, taxTotal, grandTotal };
 }
