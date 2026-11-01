@@ -3680,10 +3680,15 @@ export class MaritimeFreightService {
       if (Number(customer.balance) > 0.01) throw new BadRequestException('الرصيد الإجمالي للعميل مدين؛ يلزم تحصيل أو تخصيص سند سداد قبل المطابقة من الرصيد.');
       const invoiced = Number(job.client_invoiced_total);
       const paid = Number(job.client_paid_total || 0);
-      const remaining = Number(Math.max(0, invoiced - paid).toFixed(2));
+      // Settle math at the tenant's book digits, resolved on the
+      // transaction handle with the pattern this file already uses: the
+      // invoiced total is book-precision, so a hardcoded 2dp settle
+      // stored 100.01 against an invoiced 100.005.
+      const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
+      const remaining = roundMoney(Math.max(0, invoiced - paid), digits);
       const amount = dto?.amount == null ? remaining : Number(dto.amount);
       if (!Number.isFinite(amount) || amount < 0 || amount > remaining + 0.001) throw new BadRequestException('مبلغ المطابقة يتجاوز المتبقي على الشحنة.');
-      const newPaid = Number((paid + amount).toFixed(2));
+      const newPaid = roundMoney(paid + amount, digits);
       const full = newPaid >= invoiced - 0.01;
       const updated = await trx.updateTable('maritime_jobs').set({ client_paid_total: newPaid, payment_status: full ? 'paid' : 'partially_paid', paid_at: full ? new Date() : job.paid_at, updated_at: new Date() })
         .where('tenant_id', '=', tenantId).where('id', '=', job.id).returningAll().executeTakeFirstOrThrow();
