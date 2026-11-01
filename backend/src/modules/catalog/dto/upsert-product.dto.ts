@@ -149,6 +149,10 @@ class ProductFashionVariantDto {
   @IsOptional()
   @IsString()
   sku?: string;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
 }
 
 export class UpsertProductDto {
@@ -388,6 +392,9 @@ export type NormalizedFashionVariant = {
   wholesalePrice?: number;
   minStock?: number;
   sku?: string;
+  /** Per-variant photo. Undefined = inherit the parent photo on create;
+   * '' = no photo. Stored in the child row's metadata.imageUrl. */
+  imageUrl?: string;
 };
 
 export class FashionGroupRowDto extends UpsertProductDto {

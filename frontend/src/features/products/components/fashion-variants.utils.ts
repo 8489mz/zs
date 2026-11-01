@@ -12,6 +12,12 @@ export interface FashionVariantDraft {
   minStock?: number;
   sku?: string;
   isManual?: boolean;
+  /** Per-variant photo. Same value format as a single product's imageUrl
+   * (compressed data URL from VariantImageCell / ProductImageUploadField);
+   * the backend stores it in the child row's metadata.imageUrl via the
+   * existing storefront-media normalization. Undefined = no per-variant
+   * photo (the child inherits the parent photo on create). */
+  imageUrl?: string;
 }
 
 function makeVariantKey(color: string, size: string) {

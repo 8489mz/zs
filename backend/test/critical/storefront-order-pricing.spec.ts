@@ -49,7 +49,27 @@ function testLineName(): void {
   assert.equal(formatVariantLineName('بيتزا', null), 'بيتزا');
 }
 
+function testVariantPhotos(): void {
+  // SF-12: the display-only variant photo rides readProductVariants verbatim
+  // (trimmed; blank/non-string dropped) and never affects the priced amount.
+  const withPhotos = {
+    variants: [
+      { name: 'أحمر', price: 550, imageUrl: '  /api/storefront/media/2/bbb  ' },
+      { name: 'أزرق', extraPrice: 20 },
+      { name: 'أخضر', price: 500, imageUrl: '   ' },
+      { name: 'أصفر', price: 500, imageUrl: 42 },
+    ],
+  };
+  const variants = readProductVariants(withPhotos);
+  assert.equal(variants[0]?.imageUrl, '/api/storefront/media/2/bbb', 'variant photo is carried, trimmed');
+  assert.equal(variants[1]?.imageUrl, undefined, 'no photo stays absent');
+  assert.equal(variants[2]?.imageUrl, undefined, 'blank photo is dropped');
+  assert.equal(variants[3]?.imageUrl, undefined, 'non-string photo is dropped');
+  assert.deepEqual(resolveOrderLinePrice(500, withPhotos, 'أحمر', 2), { ok: true, unitPrice: 550, variantName: 'أحمر' }, 'photo never changes price');
+}
+
 testVariantParsing();
 testPricing();
 testLineName();
+testVariantPhotos();
 console.log('storefront-order-pricing.spec: all checks passed');

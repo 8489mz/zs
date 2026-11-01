@@ -97,7 +97,7 @@ function getDefaultValues(itemKind: 'standard' | 'fashion' = 'standard'): Produc
 }
 
 function serializeVariantRows(rows: FashionVariantDraft[]) {
-  return JSON.stringify(rows.map((row) => ({ color: row.color, size: row.size, barcode: row.barcode, stock: Number(row.stock || 0) })));
+  return JSON.stringify(rows.map((row) => ({ color: row.color, size: row.size, barcode: row.barcode, stock: Number(row.stock || 0), imageUrl: row.imageUrl || '' })));
 }
 
 const LazyFashionVariantsBuilder = lazy(() => import('@/features/products/components/FashionVariantsBuilder').then((module) => ({ default: module.FashionVariantsBuilder })));

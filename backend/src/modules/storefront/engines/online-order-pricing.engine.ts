@@ -21,6 +21,12 @@ export interface ProductVariantDef {
   price?: number;
   /** Added to the product's base price when no absolute price is set. */
   extraPrice?: number;
+  /** Display-only: photo shown when the shopper picks this variant. Never
+   * priced, never read by the order engine; the catalog passes it through
+   * verbatim and the storefront swaps to it with fallback to the product
+   * photo. Carried by readProductVariants so the shape is honored
+   * everywhere the def is used. */
+  imageUrl?: string;
 }
 
 function toFiniteNumber(value: unknown): number | null {
@@ -52,10 +58,12 @@ export function readProductVariants(metadata: unknown): ProductVariantDef[] {
     if (!name) continue;
     const price = toFiniteNumber((v as Record<string, unknown>).price);
     const extraPrice = toFiniteNumber((v as Record<string, unknown>).extraPrice);
+    const imageUrl = (v as Record<string, unknown>).imageUrl;
     variants.push({
       name,
       ...(price !== null ? { price } : {}),
       ...(extraPrice !== null ? { extraPrice } : {}),
+      ...(typeof imageUrl === 'string' && imageUrl.trim() ? { imageUrl: imageUrl.trim() } : {}),
     });
   }
   return variants;

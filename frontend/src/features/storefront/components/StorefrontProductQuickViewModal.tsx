@@ -220,25 +220,30 @@ export function StorefrontProductQuickViewModal({
     } catch {}
   };
 
+  const variants = getProductVariants(product);
+  const selectedVariant = selectedVariantIndex !== null ? variants[selectedVariantIndex] || null : null;
+
   const autoPhoto = resolveProductPhoto(product.name, product.categoryName);
-  const displayPrimaryPhoto = product.imageUrl || autoPhoto.url || '';
+  // The picked variant's photo wins; otherwise the product photo, then the
+  // auto photo — exactly the fallback the cart line uses (buildCartProduct).
+  const variantPhoto = selectedVariant?.imageUrl || '';
+  const displayPrimaryPhoto = variantPhoto || product.imageUrl || autoPhoto.url || '';
 
   const brandColor = info?.brandColor || 'var(--storefront-primary-color, #2563eb)';
   const brandColorContrast = getContrastTextColor(info?.brandColor);
   const inStock = product.inStock !== false;
 
   const gallery: string[] =
-    (product as any).gallery && (product as any).gallery.length > 0
-      ? (product as any).gallery
-      : displayPrimaryPhoto
-      ? [displayPrimaryPhoto]
-      : [];
+    variantPhoto
+      ? [variantPhoto]
+      : (product as any).gallery && (product as any).gallery.length > 0
+        ? (product as any).gallery
+        : displayPrimaryPhoto
+          ? [displayPrimaryPhoto]
+          : [];
 
   const activePhotoUrl =
     gallery[activePhotoIndex] || displayPrimaryPhoto || generatePremiumProductSvg(product.name, product.categoryName);
-
-  const variants = getProductVariants(product);
-  const selectedVariant = selectedVariantIndex !== null ? variants[selectedVariantIndex] || null : null;
 
   const basePrice = resolveVariantUnitPrice(product.price, selectedVariant) ?? product.price;
   const isZeroPrice = Number(basePrice || 0) <= 0;
@@ -643,7 +648,7 @@ export function StorefrontProductQuickViewModal({
                       <button
                         key={idx}
                         type="button"
-                        onClick={() => setSelectedVariantIndex(idx)}
+                        onClick={() => { setSelectedVariantIndex(idx); setActivePhotoIndex(0); }}
                         style={{
                           height: '36px',
                           padding: '0 14px',

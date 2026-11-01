@@ -6,6 +6,7 @@ import { Field } from '@/shared/ui/field';
 import { normalizeArabicSearchKey } from '@/lib/arabic-normalization';
 
 import { mergeFashionTokens, splitFashionTokens, type FashionVariantDraft } from '@/features/products/components/fashion-variants.utils';
+import { VariantImageCell } from '@/features/products/components/VariantImageCell';
 import { CheckIcon, PlusIcon, XIcon } from '@/shared/components/icons/AppIcons';
 
 export type VariantTemplateType = 'fashion' | 'scents' | 'sizes' | 'custom';
@@ -690,12 +691,13 @@ export function FashionVariantsBuilder({
           </div>
         ) : (
           <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflowX: 'auto', background: '#ffffff' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '0.8rem', minWidth: '780px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '0.8rem', minWidth: '832px' }}>
               <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                 <tr style={{ color: '#475569', fontWeight: 700 }}>
                   <th style={{ padding: '8px 8px', width: '32px', textAlign: 'center', verticalAlign: 'middle' }}>#</th>
                   <th style={{ padding: '8px 6px', width: '15%', verticalAlign: 'middle' }}>{templateConfig.primarySingleLabel}</th>
                   <th style={{ padding: '8px 6px', width: '13%', verticalAlign: 'middle' }}>{templateConfig.secondarySingleLabel}</th>
+                  <th style={{ padding: '8px 6px', width: '52px', textAlign: 'center', verticalAlign: 'middle' }}>{t('products.fashion_variants_builder.s34', "الصورة")}</th>
                   <th style={{ padding: '8px 6px', width: '15%', verticalAlign: 'middle' }}>{t('products.fashion_variants_builder.s21', "رمز SKU")}</th>
                   <th style={{ padding: '8px 6px', width: '17%', verticalAlign: 'middle' }}>{t('products.fashion_variants_builder.s22', "الباركود")}</th>
                   <th style={{ padding: '8px 6px', width: '13%', verticalAlign: 'middle' }}>{t('products.fashion_variants_builder.s23', "سعر البيع (")}{getGlobalCurrencySymbol()})</th>
@@ -731,6 +733,13 @@ export function FashionVariantsBuilder({
                         disabled={disabled}
                         placeholder={templateConfig.secondarySingleLabel}
                         style={{ height: '30px', fontSize: '0.78rem', fontWeight: 600, padding: '4px 8px', width: '100%' }}
+                      />
+                    </td>
+                    <td style={{ padding: '4px 6px', verticalAlign: 'middle', textAlign: 'center' }}>
+                      <VariantImageCell
+                        value={row.imageUrl || ''}
+                        disabled={disabled}
+                        onChange={(url) => updateRow(index, { imageUrl: url ? url : undefined })}
                       />
                     </td>
                     <td style={{ padding: '4px 6px', verticalAlign: 'middle' }}>

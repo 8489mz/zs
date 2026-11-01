@@ -31,6 +31,7 @@ function buildFashionVariants(values: ProductFormValues) {
           wholesalePrice: row.wholesalePrice !== undefined && row.wholesalePrice !== null && !isNaN(Number(row.wholesalePrice)) && Number(row.wholesalePrice) >= 0 ? Number(row.wholesalePrice) : undefined,
           minStock: row.minStock !== undefined && row.minStock !== null && !isNaN(Number(row.minStock)) && Number(row.minStock) >= 0 ? Number(row.minStock) : undefined,
           sku: row.sku ? String(row.sku).trim() : undefined,
+          imageUrl: row.imageUrl ? String(row.imageUrl).trim() : undefined,
         }))
         .filter((row) => row.color || row.size)
     : [];

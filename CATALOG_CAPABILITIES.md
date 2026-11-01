@@ -207,6 +207,8 @@ emoveDraftRow):**
      - منع حذف أي صنف له رصيد مخزني من الواجهة (stock > 0) بنافذة إرشادية واضحة تشرح للعميل سبب المنع وكيفية تعديل المقاس مباشرة أو تسويته، بدلاً من تركه يحذف السطر ثم يواجه خطأ 409 المحبط عند الحفظ.
   5. **ترقية رسائل الخطأ الرقابية في الباك إند (catalog-product.service.ts):**
      - تفصيل رسالة الخطأ FASHION_VARIANT_HAS_STOCK لتذكر أسماء المقاسات المحددة المعترضة ورصيد كل منها لتوجيه المستخدم بدقة.
+  6. **صورة لكل متغير (نوفمبر 2026 — SF-12):**
+     - عمود صورة في مصفوفة `FashionVariantsBuilder` وفي محرر المجموعة (`FashionGroupEditorCard`) بنفس صيغة `ProductImageUploadField` (ضغط `compressImage`، بلا إزالة خلفية)؛ الصورة تُحفظ في `metadata.imageUrl` الخاص بصف الصنف الفرعي بعد مرورها على `normalizeImageRef` (SF-9)، و`''` تعني بلا صورة، وغيابها عند الإنشاء يورّث صورة الصنف الأب. التحديث في `saveFashionGroup` يدمج `metadata` ولا يستبدله، فلا تضيع باقي بيانات الصف.
 - **الملفات المنفذة والمعدلة:**
   - rontend/src/features/products/components/workspace-sections/FashionGroupEditorCard.tsx
   - ackend/src/modules/catalog/services/catalog-product.service.ts

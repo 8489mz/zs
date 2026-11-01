@@ -123,6 +123,10 @@ export interface StorefrontProductVariant {
   name: string;
   price?: number | string | null;
   extraPrice?: number | string | null;
+  /** Display-only photo for this variant (mirror of the server's
+   * ProductVariantDef). Never priced; the QuickView swaps to it when the
+   * variant is picked, falling back to the product photo. */
+  imageUrl?: string | null;
 }
 
 export interface StorefrontReview {

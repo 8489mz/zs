@@ -30,6 +30,9 @@ export type VariantDraft = {
   stock?: number;
   originalStock?: number;
   minStock?: number;
+  /** Per-variant photo, hydrated from the product row's imageUrl. '' = no
+   * stored photo (clear on save for existing rows); undefined = untouched. */
+  imageUrl?: string;
 };
 
 export function resolveGroupBaselinePricing(products: Product[], fallback?: Product) {
@@ -118,6 +121,7 @@ export function toVariantRows(products: Product[]) {
         stock: Number(entry.stock ?? 0),
         originalStock: Number(entry.stock ?? 0),
         minStock: Number(entry.minStock ?? 0),
+        imageUrl: entry.imageUrl || '',
       };
     })
   );
@@ -137,6 +141,7 @@ export function rowsFingerprint(rows: VariantDraft[]) {
       wholesalePrice: Number(row.wholesalePrice || 0),
       stock: Number(row.stock || 0),
       minStock: Number(row.minStock ?? 0),
+      imageUrl: (row.imageUrl || '').trim(),
     }))
   );
 }
@@ -198,6 +203,11 @@ export function buildPayload(common: CommonDraft, row: VariantDraft, source?: Pr
     styleCode: common.styleCode.trim(),
     color: row.color.trim(),
     size: row.size.trim(),
+    // Per-variant photo: a set photo is stored; '' on an existing row clears
+    // the stored photo (saveFashionGroup deletes metadata.imageUrl); a new
+    // row without a photo sends nothing and inherits nothing (unlike the
+    // create flow, where children inherit the parent photo).
+    ...(row.imageUrl ? { imageUrl: row.imageUrl } : source ? { imageUrl: '' } : {}),
     costPrice: Number((row.useCustomPricing ? row.costPrice : common.costPrice) || 0),
     retailPrice: Number((row.useCustomPricing ? row.retailPrice : common.retailPrice) || 0),
     wholesalePrice: Number((row.useCustomPricing ? row.wholesalePrice : common.wholesalePrice) || 0),

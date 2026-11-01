@@ -15,7 +15,11 @@ export function getProductVariants(product: StorefrontProduct | null | undefined
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((v) => v && typeof v === 'object' && String((v as { name?: unknown }).name ?? '').trim())
-    .map((v) => ({ ...(v as StorefrontProductVariant), name: String((v as { name: unknown }).name).trim() }));
+    .map((v) => {
+      const { imageUrl: rawImage, ...rest } = v as StorefrontProductVariant;
+      const imageUrl = typeof rawImage === 'string' && rawImage.trim() ? rawImage.trim() : undefined;
+      return { ...rest, name: String(rest.name).trim(), ...(imageUrl ? { imageUrl } : {}) };
+    });
 }
 
 /** null when the variant does not exist or would price below zero (the server rejects both). */
@@ -49,5 +53,8 @@ export function buildCartProduct(catalogProduct: StorefrontProduct, variantName?
     basePrice: base,
     name: `${catalogProduct.name} (${variant.name})`,
     variantName: variant.name,
+    // The cart line shows the picked variant's photo (display-only); the
+    // product photo stays the fallback, exactly like the QuickView swap.
+    ...(variant.imageUrl ? { imageUrl: variant.imageUrl } : {}),
   };
 }

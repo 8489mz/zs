@@ -25,4 +25,11 @@ describe('fashion variants', () => {
     expect(rows.find((row) => row.size === '42.5')?.stock).toBe(8);
     expect(rows.find((row) => row.size === '43')?.stock).toBe(2);
   });
+
+  it('preserves a per-variant photo across regeneration', () => {
+    const old = [{ id: 'old', color: 'أسود', size: '42.5', barcode: 'OLD-1', stock: 8, imageUrl: 'data:image/png;base64,AAA', isManual: true }];
+    const rows = buildFashionVariantDrafts(['أسود'], ['42.5', '43'], old, 2);
+    expect(rows.find((row) => row.size === '42.5')?.imageUrl).toBe('data:image/png;base64,AAA');
+    expect(rows.find((row) => row.size === '43')?.imageUrl).toBeUndefined();
+  });
 });

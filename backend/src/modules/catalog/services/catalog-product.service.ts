@@ -1542,6 +1542,7 @@ export class CatalogProductService {
           wholesalePrice: entry.wholesalePrice !== undefined && entry.wholesalePrice !== null && !isNaN(Number(entry.wholesalePrice)) && Number(entry.wholesalePrice) >= 0 ? Number(entry.wholesalePrice) : undefined,
           minStock: entry.minStock !== undefined && entry.minStock !== null && !isNaN(Number(entry.minStock)) && Number(entry.minStock) >= 0 ? Number(entry.minStock) : undefined,
           sku: entry.sku ? String(entry.sku).trim() : undefined,
+          imageUrl: entry.imageUrl !== undefined ? String(entry.imageUrl).trim() : undefined,
         }))
         .filter((entry) => entry.color || entry.size);
     const seenVariants = new Set<string>();
@@ -1855,6 +1856,34 @@ export class CatalogProductService {
       throw new AppError('Fashion group must contain between 1 and 400 variants', 'FASHION_GROUP_INVALID', 400);
     }
     const drafts = rows.map((row) => ({ id: Number(row.id || 0), input: row, value: this.normalizeProductPayload(row) }));
+    // Per-variant photos: normalize each distinct draft image once through
+    // the storefront-media writer (SF-9), mirroring createProduct. Runs
+    // before the transaction; a draft whose image fails to normalize keeps
+    // the original ref. An explicit '' clears the photo (metadata.imageUrl
+    // is dropped so the insert/update branches never store an empty ref).
+    {
+      const normalizedGroupImages = new Map<string, string>();
+      for (const draft of drafts) {
+        if (draft.value.imageUrl === '') {
+          const metadata = { ...(draft.value.metadata || {}) };
+          delete metadata.imageUrl;
+          draft.value.metadata = metadata;
+          continue;
+        }
+        const raw = draft.value.imageUrl ? String(draft.value.imageUrl).trim() : '';
+        if (!raw || !this.mediaService) continue;
+        if (!normalizedGroupImages.has(raw)) {
+          try {
+            normalizedGroupImages.set(raw, await this.mediaService.normalizeImageRef(this.tenantId(actor), raw));
+          } catch {
+            normalizedGroupImages.set(raw, raw);
+          }
+        }
+        const resolved = normalizedGroupImages.get(raw)!;
+        draft.value.imageUrl = resolved;
+        draft.value.metadata = { ...(draft.value.metadata || {}), imageUrl: resolved };
+      }
+    }
     const newStyle = this.coerceNewStyleCode(drafts[0].value.styleCode);
     const groupKind = drafts[0].value.itemKind;
     if (groupKind !== 'fashion') throw new AppError('Only fashion variants can be saved as a fashion group', 'FASHION_GROUP_INVALID', 400);
@@ -2248,6 +2277,26 @@ export class CatalogProductService {
             }
           }
 
+          // Per-variant photo change: merge into the stored metadata (the
+          // update below otherwise never touches metadata, so a photo set
+          // in the group matrix would silently vanish). Only when the row
+          // carried an image decision; rows without one keep their photo.
+          let metadataUpdate: string | undefined;
+          if (value.imageUrl !== undefined) {
+            const priorMetaRaw = (prior as { metadata?: unknown }).metadata;
+            let nextMeta: Record<string, unknown> = {};
+            if (priorMetaRaw && typeof priorMetaRaw === 'object') nextMeta = { ...(priorMetaRaw as Record<string, unknown>) };
+            else if (typeof priorMetaRaw === 'string') {
+              try {
+                const parsed: unknown = JSON.parse(priorMetaRaw);
+                if (parsed && typeof parsed === 'object') nextMeta = { ...(parsed as Record<string, unknown>) };
+              } catch {}
+            }
+            if (value.imageUrl) nextMeta.imageUrl = (value.metadata && value.metadata.imageUrl) || value.imageUrl;
+            else delete nextMeta.imageUrl;
+            metadataUpdate = JSON.stringify(nextMeta);
+          }
+
           await trx.updateTable('products').set({
             name: value.name, barcode: value.barcode || null, sku: value.sku || null,
             item_type: value.itemType, item_kind: groupKind, style_code: newStyle,
@@ -2256,6 +2305,7 @@ export class CatalogProductService {
             cost_price: value.costPrice, retail_price: value.retailPrice,
             wholesale_price: value.wholesalePrice, min_stock_qty: value.minStock,
             notes: value.notes, default_location_id: value.warehouseId || prior.default_location_id,
+            ...(metadataUpdate !== undefined ? { metadata: metadataUpdate } : {}),
             catalog_updated_at: sql`NOW()`, updated_at: sql`NOW()`,
           }).where('id', '=', id).where(this.tenantPredicate(actor)).execute();
           await trx.updateTable('product_units').set({ barcode: value.barcode || null })
@@ -2331,7 +2381,7 @@ export class CatalogProductService {
     const drafts = shouldExpandVariants
       ? normalized.fashionVariants.map((variant) => {
           const label = this.buildVariantLabel(variant);
-          return {
+          const draft = {
             ...normalized,
             name: label ? `${normalized.name} - ${label}` : normalized.name,
             barcode: variant.barcode || '',
@@ -2346,6 +2396,17 @@ export class CatalogProductService {
             minStock: variant.minStock !== undefined && variant.minStock !== null && !isNaN(Number(variant.minStock)) && Number(variant.minStock) >= 0 ? Number(variant.minStock) : normalized.minStock,
             fashionVariants: [],
           };
+          // Per-variant photo: an explicit variant image wins; an explicit ''
+          // clears the inherited parent photo; undefined inherits the parent
+          // photo (the pre-expansion behaviour for every child).
+          if (variant.imageUrl !== undefined) {
+            draft.imageUrl = variant.imageUrl;
+            const metadata = { ...(normalized.metadata || {}) };
+            if (variant.imageUrl) metadata.imageUrl = variant.imageUrl;
+            else delete metadata.imageUrl;
+            draft.metadata = metadata;
+          }
+          return draft;
         })
       : [normalized];
 
@@ -2398,11 +2459,28 @@ export class CatalogProductService {
     if (resolvedLocationId) await this.inventoryScope.assertLocationScope(resolvedLocationId, actor, false, 'write');
 
     let firstProductId: number | null = null;
-    let storedImageUrl = payload.imageUrl;
-    if (storedImageUrl && this.mediaService) {
-      try {
-        storedImageUrl = await this.mediaService.normalizeImageRef(this.tenantId(actor), storedImageUrl);
-      } catch {}
+    // Per-draft photos: normalize each distinct draft image once through the
+    // storefront-media writer (SF-9), exactly as the single-product path did
+    // for the parent image. A draft without its own image already carries the
+    // parent image from the expansion override above; a draft whose image
+    // fails to normalize keeps the original ref (the same fallback the
+    // single-product path used). Runs before the transaction, as before.
+    if (this.mediaService) {
+      const normalizedDraftImages = new Map<string, string>();
+      for (const draft of drafts) {
+        const raw = draft.imageUrl ? String(draft.imageUrl).trim() : '';
+        if (!raw) continue;
+        if (!normalizedDraftImages.has(raw)) {
+          try {
+            normalizedDraftImages.set(raw, await this.mediaService.normalizeImageRef(this.tenantId(actor), raw));
+          } catch {
+            normalizedDraftImages.set(raw, raw);
+          }
+        }
+        const resolved = normalizedDraftImages.get(raw)!;
+        draft.imageUrl = resolved;
+        draft.metadata = { ...(draft.metadata || {}), imageUrl: resolved };
+      }
     }
 
     await this.db.transaction().execute(async (trx) => {
@@ -2415,7 +2493,7 @@ export class CatalogProductService {
         const metaObj = {
           ...(draft.metadata || {}),
           ...(draft.icon ? { icon: draft.icon } : {}),
-          ...(storedImageUrl ? { imageUrl: storedImageUrl } : {}),
+          ...(draft.imageUrl ? { imageUrl: draft.imageUrl } : {}),
         };
         const hasMeta = Object.keys(metaObj).length > 0;
         const result = await trx

@@ -30,6 +30,7 @@ import {
   type VariantDraft
 } from '@/features/products/components/workspace-sections/FashionGroupEditorCard.helpers';
 import { splitFashionTokens, mergeFashionTokens } from '@/features/products/components/fashion-variants.utils';
+import { VariantImageCell } from '@/features/products/components/VariantImageCell';
 
 export type VariantTemplateType = 'fashion' | 'scents' | 'sizes' | 'custom';
 
@@ -1294,12 +1295,13 @@ export function FashionGroupEditorCard({ product, categories, suppliers, locatio
 
         {/* Variants Table */}
         <div style={{ overflowX: 'auto', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', minWidth: '850px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', minWidth: '902px' }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0', color: '#475569', fontWeight: 700, textAlign: 'right' }}>
                 <th style={{ padding: '8px 8px', width: '32px', textAlign: 'center' }}>#</th>
                 <th style={{ padding: '8px 8px', minWidth: '110px' }}>{primaryLabel}</th>
                 <th style={{ padding: '8px 8px', minWidth: '100px' }}>{secondaryLabel}</th>
+                <th style={{ padding: '8px 8px', width: '52px', textAlign: 'center' }}>{t('products.workspace_sections.fashion_group_editor_card.s68', "الصورة")}</th>
                 <th style={{ padding: '8px 8px', minWidth: '110px' }}>{t('products.workspace_sections.fashion_group_editor_card.s37', "رمز SKU")}</th>
                 <th style={{ padding: '8px 8px', minWidth: '120px' }}>{t('products.workspace_sections.fashion_group_editor_card.s38', "الباركود")}</th>
                 <th style={{ padding: '8px 8px', minWidth: '95px' }}>{t('products.workspace_sections.fashion_group_editor_card.s39', "سعر البيع (")}{getGlobalCurrencySymbol()})</th>
@@ -1339,6 +1341,13 @@ export function FashionGroupEditorCard({ product, categories, suppliers, locatio
                           onChange={(event) => updateRow(index, { size: normalizeArabicInput(event.target.value) })}
                           disabled={mutation.isPending}
                           placeholder={secondaryLabel}
+                        />
+                      </td>
+                      <td style={{ padding: '6px 6px', textAlign: 'center' }}>
+                        <VariantImageCell
+                          value={row.imageUrl || ''}
+                          disabled={mutation.isPending}
+                          onChange={(url) => updateRow(index, { imageUrl: url })}
                         />
                       </td>
                       <td style={{ padding: '6px 6px' }}>
