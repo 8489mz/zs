@@ -421,6 +421,50 @@ export class UsersService {
     }
   }
 
+  // INV-USER-PEER-ADMIN-ACTIONS: the actor's stored role rank (same
+  // authoritative read as the grant guard; the AuthContext role is only
+  // the fallback when no actor row exists).
+  private async actorRoleRank(trx: Kysely<Database>, actor: AuthContext): Promise<number> {
+    const actorRow = await trx
+      .selectFrom('users')
+      .select('role')
+      .where('id', '=', actor.userId)
+      .where(this.tenantPredicate(actor))
+      .executeTakeFirst();
+    return roleRank(actorRow ? String(actorRow.role) : actor.role);
+  }
+
+  // INV-USER-PEER-ADMIN-ACTIONS: an actor may reset the password of, or
+  // change the active state of, only a user whose stored role ranks
+  // strictly BELOW their own. A peer-or-higher target fails closed
+  // (403), so a delegated admin can neither take over a fellow admin's
+  // account nor disable/enable one. The check fires only on a real
+  // password reset or a real active-state change: an omitted isActive
+  // writes true, so re-enabling a disabled peer by omitting the field
+  // is a status change too. Role demotion is deliberately NOT covered
+  // here — downward grants stay governed by INV-USER-GRANT-SUBSET.
+  private async assertPeerAdminActionAllowed(
+    trx: Kysely<Database>,
+    existing: { role: unknown; is_active: unknown },
+    payload: UpsertUserDto,
+    actor: AuthContext,
+  ): Promise<void> {
+    const isPasswordReset = Boolean(payload.password);
+    const writtenActive = payload.isActive !== false;
+    const storedActive = existing.is_active !== false && existing.is_active !== 0;
+    const isStatusChange = writtenActive !== storedActive;
+    if (!isPasswordReset && !isStatusChange) return;
+    if (roleRank(existing.role) >= (await this.actorRoleRank(trx, actor))) {
+      throw new AppError(
+        isPasswordReset
+          ? 'You cannot reset the password of a user at your rank or above'
+          : 'You cannot change the active state of a user at your rank or above',
+        isPasswordReset ? 'PASSWORD_RESET_TARGET_RANK_FORBIDDEN' : 'STATUS_CHANGE_TARGET_RANK_FORBIDDEN',
+        403,
+      );
+    }
+  }
+
   private async executeUserCreate(trx: Kysely<Database>, payload: UpsertUserDto, actor: AuthContext): Promise<number> {
     const scope = this.scope(actor);
     await this.assertGrantWithinActorScope(trx, payload, actor);
@@ -546,6 +590,10 @@ export class UsersService {
     // forbidden grant fails fast like the self-guard above).
     if (id !== actor.userId) {
       await this.assertGrantWithinActorScope(trx, payload, actor);
+      // INV-USER-PEER-ADMIN-ACTIONS: password resets and active-state
+      // changes on peer-or-higher targets fail closed here too, before
+      // any uniqueness work.
+      await this.assertPeerAdminActionAllowed(trx, existing, payload, actor);
     }
 
     await this.ensureUniqueUsername(payload.username, actor, id);
@@ -879,6 +927,18 @@ export class UsersService {
       .where(this.tenantPredicate(actor))
       .execute();
 
+    // INV-USER-PEER-ADMIN-ACTIONS: the actor's stored role rank decides
+    // which selected rows may be disabled at all (same authoritative
+    // read as the update-path guard; the AuthContext role is only the
+    // fallback when no actor row exists).
+    const bulkActorRow = await this.db
+      .selectFrom('users')
+      .select('role')
+      .where('id', '=', actor.userId)
+      .where(this.tenantPredicate(actor))
+      .executeTakeFirst();
+    const bulkActorRank = roleRank(bulkActorRow ? String(bulkActorRow.role) : actor.role);
+
     const activePrivilegedIds = new Set(
       allTenantUsers
         .filter((row) => row.is_active !== false && (row.role === 'admin' || row.role === 'super_admin'))
@@ -900,6 +960,15 @@ export class UsersService {
 
       if (row.role === 'super_admin') {
         skipped.push({ id: String(id), username, reason: 'لا يمكن إيقاف حساب السوبر أدمن.' });
+        continue;
+      }
+
+      // INV-USER-PEER-ADMIN-ACTIONS: only users strictly below the
+      // actor's rank may be bulk-disabled; a peer-or-higher admin is
+      // skipped with a reason, like the existing self/super_admin
+      // skips, and still counts toward the last-admin protection.
+      if (roleRank(row.role) >= bulkActorRank) {
+        skipped.push({ id: String(id), username, reason: 'لا يمكن إيقاف مستخدم بنفس رتبتك أو أعلى.' });
         continue;
       }
 
