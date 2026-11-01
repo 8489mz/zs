@@ -1160,6 +1160,7 @@ export interface TreasuryTransactionTable {
   id: Generated<number>;
   txn_type: string;
   amount: number;
+  request_key?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
   payment_channel?: 'cash'|'bank'|'card'|'wallet'|'instapay';
   note: string;
   reference_type: string | null;

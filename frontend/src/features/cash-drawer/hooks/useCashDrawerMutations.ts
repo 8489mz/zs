@@ -1,7 +1,14 @@
+import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/app/query-keys';
 import { invalidateTreasuryDomain } from '@/app/query-invalidation';
 import { cashDrawerApi } from '@/features/cash-drawer/api/cash-drawer.api';
+import {
+  acquireCashDrawerMovementRequestAttempt,
+  mayReleaseCashDrawerMovementRequestAttempt,
+  normalizeCashDrawerMovementRequestPayload,
+  type CashDrawerMovementRequestAttempt,
+} from '@/features/cash-drawer/lib/cash-drawer-movement-request-key';
 
 interface OpenShiftValues {
   openingCash: number;
@@ -67,18 +74,37 @@ export function useCashDrawerMutations(actions?: {
     }
   });
 
+  // One stable requestKey per movement submission: retries of the
+  // identical payload reuse it so the backend returns the current
+  // listing instead of posting a second movement
+  // (INV-CASH-DRAWER-MOVEMENT-IDEMPOTENCY). The attempt is released
+  // only on success or a known client rejection; an unknown outcome
+  // keeps it, and a changed payload then throws in the mutation
+  // function before any HTTP call.
+  const movementAttemptRef = useRef<CashDrawerMovementRequestAttempt | null>(null);
   const movementMutation = useMutation({
-    mutationFn: (values: MovementValues) =>
-      cashDrawerApi.movement(values.shiftId, {
-        type: values.type,
-        amount: Number(values.amount || 0),
-        note: values.note || '',
-        managerPin: values.managerPin || ''
-      }),
+    mutationFn: (values: MovementValues) => {
+      const normalized = normalizeCashDrawerMovementRequestPayload(values);
+      const attempt = acquireCashDrawerMovementRequestAttempt(movementAttemptRef.current, normalized);
+      movementAttemptRef.current = attempt;
+      return cashDrawerApi.movement(values.shiftId, {
+        type: normalized.type,
+        amount: normalized.amount,
+        note: normalized.note,
+        managerPin: values.managerPin || '',
+        requestKey: attempt.requestKey,
+      });
+    },
     onSuccess: async () => {
+      movementAttemptRef.current = null;
       await refreshAll();
       actions?.onMovementSuccess?.();
-    }
+    },
+    onError: (error: unknown) => {
+      if (mayReleaseCashDrawerMovementRequestAttempt(error)) {
+        movementAttemptRef.current = null;
+      }
+    },
   });
 
   const closeMutation = useMutation({

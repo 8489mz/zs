@@ -838,7 +838,7 @@ export class CashDrawerService {
     return { ok: true, cashierShifts: listing.cashierShifts, pagination: listing.pagination, summary: listing.summary };
   }
 
-  async recordCashMovement(shiftId: number, payload: { type?: string; amount?: number; note?: string; managerPin?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
+  async recordCashMovement(shiftId: number, payload: { type?: string; amount?: number; note?: string; managerPin?: string; requestKey?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = this.scope(auth);
     if (!(shiftId > 0)) throw new AppError('الوردية غير موجودة', 'SHIFT_NOT_FOUND', 404);
     const shift = await this.getShift(shiftId, auth);
@@ -849,6 +849,13 @@ export class CashDrawerService {
     const amount = Number(payload.amount || 0);
     const note = String(payload.note || '').trim();
     assertCashDrawerAmount(amount); assertCashDrawerNote(note);
+    // Idempotency key: mandatory, client-supplied, no server default --
+    // mirroring createExpense. Checked before the approval check so an
+    // invalid key fails fast without consuming a password/PIN attempt.
+    const requestKey = String(payload.requestKey || '').trim();
+    if (requestKey.length < 8 || requestKey.length > 160) {
+      throw new AppError('A stable drawer movement request key is required', 'DRAWER_REQUEST_KEY_REQUIRED', 400);
+    }
     await this.assertCashDrawerApproval(movementType, String(payload.managerPin || '').trim(), auth);
     const signedAmount = toSignedCashDrawerAmount(movementType, amount);
 
@@ -867,7 +874,46 @@ export class CashDrawerService {
       if (!lockedShift) throw new AppError('الوردية غير موجودة', 'SHIFT_NOT_FOUND', 404);
       if (String(lockedShift.status || 'open') !== 'open') throw new AppError('لا يمكن تسجيل حركة على وردية مغلقة', 'SHIFT_CLOSED', 400);
 
-      const insertRes = await sql<{ id: number }>`insert into treasury_transactions (txn_type, amount, note, reference_type, reference_id, branch_id, location_id, created_by, tenant_id, account_id) values (${movementType}, ${signedAmount}, ${`وردية ${shift.doc_no || shift.id}: ${note}`}, 'cashier_shift', ${shiftId}, ${shift.branch_id ? Number(shift.branch_id) : null}, ${shift.location_id ? Number(shift.location_id) : null}, ${auth.userId}, ${scope.tenantId}, ${scope.accountId}) returning id`.execute(trx);
+      // INV-CASH-DRAWER-MOVEMENT-IDEMPOTENCY: a retry with the same key
+      // and the same payload returns the current listing without
+      // inserting a second treasury row or posting a second journal.
+      // The lookup runs under the shift-row lock, so two retries for
+      // the same shift serialize here. The stored row carries only
+      // txn_type, signed amount, and the composed note, so the payload
+      // comparison reconstructs exactly those stored values (the
+      // manager PIN is an approval credential, not payload identity,
+      // and is deliberately excluded). A row inserted between the
+      // lookup and the insert (same key on another shift) hits the
+      // partial unique index and surfaces as a 409 conflict.
+      const expectedNote = `وردية ${shift.doc_no || shift.id}: ${note}`;
+      const existing = await sql<{ id: number; txn_type: string; amount: number; note: string }>`
+        SELECT id, txn_type, amount, note
+        FROM treasury_transactions
+        WHERE tenant_id = ${scope.tenantId} AND request_key = ${requestKey}
+          AND reference_type = 'cashier_shift' AND reference_id = ${shiftId}
+        FOR UPDATE
+      `.execute(trx);
+      const prior = existing.rows[0];
+      if (prior) {
+        if (String(prior.txn_type || '') !== movementType
+          || Number(prior.amount) !== signedAmount
+          || String(prior.note || '') !== expectedNote) {
+          throw new AppError('Drawer movement request key was already used with different data', 'DRAWER_IDEMPOTENCY_CONFLICT', 409);
+        }
+        return false;
+      }
+
+      let insertRes: { rows: Array<{ id: number }> };
+      try {
+        insertRes = await sql<{ id: number }>`insert into treasury_transactions (txn_type, amount, note, reference_type, reference_id, branch_id, location_id, created_by, tenant_id, account_id, request_key) values (${movementType}, ${signedAmount}, ${expectedNote}, 'cashier_shift', ${shiftId}, ${shift.branch_id ? Number(shift.branch_id) : null}, ${shift.location_id ? Number(shift.location_id) : null}, ${auth.userId}, ${scope.tenantId}, ${scope.accountId}, ${requestKey}) returning id`.execute(trx);
+      } catch (err) {
+        const code = (err as { code?: unknown })?.code;
+        const message = err instanceof Error ? err.message : String(err || '');
+        if (code === '23505' || message.includes('idx_treasury_txns_drawer_request_key_uniq')) {
+          throw new AppError('Drawer movement request key was already used with different data', 'DRAWER_IDEMPOTENCY_CONFLICT', 409);
+        }
+        throw err;
+      }
       const expectedCash = await this.computeShiftExpectedCashFromShift(lockedShift as ShiftRow, auth, undefined, undefined, trx);
       await sql`update cashier_shifts set expected_cash = ${expectedCash} where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
 
@@ -886,6 +932,7 @@ export class CashDrawerService {
           );
         }
       }
+      return true;
     });
 
     const listing = await this.listCashierShifts({}, auth);
