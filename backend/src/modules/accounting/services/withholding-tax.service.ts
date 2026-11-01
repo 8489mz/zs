@@ -5,7 +5,8 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { AccountingPostingService } from '../accounting-posting.service';
-import { currencyMoneyDigits, roundMoney } from '../engines/money-minor-units.engine';
+import { tenantBaseCurrency } from '../accounting-currency';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 
 export interface WithholdingTaxRecord {
   id: number;
@@ -90,6 +91,18 @@ export class WithholdingTaxService {
   private toMoney(value: unknown): number {
     const n = Number(value || 0);
     return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
+  }
+
+  /**
+   * Stored-amount rounding: round once with the canonical engine at
+   * the tenant's book digits. Kept separate from toMoney (2dp display
+   * shaping for report/return records) so stored creation and
+   * subledger amounts can never silently fall back to two decimals.
+   */
+  private toBookMoney(value: unknown, digits: MoneyDigits): number {
+    const n = Number(value ?? 0);
+    if (!Number.isFinite(n)) throw new BadRequestException('قيمة الضريبة يجب أن تكون رقمًا صالحًا.');
+    return roundMoney(n, digits);
   }
 
   private formatDate(date: any): string {
@@ -238,68 +251,80 @@ export class WithholdingTaxService {
       else rate = 1.00;
     }
 
-    const taxAmount = this.toMoney(baseAmount * (rate / 100));
     const period = this.determineQuarterAndYear(dto.invoice_date);
     const quarter = dto.quarter || period.quarter;
     const taxYear = dto.tax_year || period.year;
 
-    const inserted = await (this.db as any)
-      .insertInto('withholding_tax_transactions')
-      .values({
-        tenant_id: tenantId,
-        direction: dto.direction || 'payable',
-        source_type: dto.source_type || 'manual',
-        source_id: dto.source_id || null,
-        invoice_number: dto.invoice_number.trim(),
-        invoice_date: dto.invoice_date,
-        partner_type: dto.partner_type || (dto.direction === 'receivable' ? 'customer' : 'supplier'),
-        partner_id: dto.partner_id || null,
-        partner_name: dto.partner_name.trim(),
-        tax_id_number: dto.tax_id_number?.trim() || null,
-        file_number: dto.file_number?.trim() || null,
-        tax_office_code: dto.tax_office_code?.trim() || null,
-        partner_address: dto.partner_address?.trim() || null,
-        wht_type: dto.wht_type || 'goods',
-        wht_rate: rate,
-        base_amount: baseAmount,
-        tax_amount: taxAmount,
-        quarter,
-        tax_year: taxYear,
-        status: 'draft',
-        notes: dto.notes?.trim() || null,
-        created_by: auth.userId ? Number(auth.userId) : null,
-      })
-      .returningAll()
-      .executeTakeFirstOrThrow();
+    // Stored amounts round once at the tenant's book digits, resolved
+    // on the transaction handle with the P2 pattern
+    // (tenantBaseCurrency + currencyMoneyDigits), fail closed on a
+    // base-currency/rate mismatch exactly like the posting boundary
+    // (P0-1/P0-2/P0-3). Creation previously ran on the pool handle
+    // with a hardcoded 2dp helper, so a KWD 10.001 of withholding
+    // was truncated to 10.00 before the widened columns could hold it.
+    return this.db.transaction().execute(async (trx) => {
+      const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
+      const bookBaseAmount = this.toBookMoney(baseAmount, digits);
+      const taxAmount = this.toBookMoney(bookBaseAmount * (rate / 100), digits);
 
-    return {
-      id: inserted.id,
-      tenant_id: inserted.tenant_id,
-      direction: inserted.direction,
-      source_type: inserted.source_type,
-      source_id: inserted.source_id,
-      invoice_number: inserted.invoice_number,
-      invoice_date: this.formatDate(inserted.invoice_date),
-      partner_type: inserted.partner_type,
-      partner_id: inserted.partner_id,
-      partner_name: inserted.partner_name,
-      tax_id_number: inserted.tax_id_number,
-      file_number: inserted.file_number,
-      tax_office_code: inserted.tax_office_code,
-      partner_address: inserted.partner_address,
-      wht_type: inserted.wht_type,
-      wht_rate: Number(inserted.wht_rate),
-      base_amount: this.toMoney(inserted.base_amount),
-      tax_amount: this.toMoney(inserted.tax_amount),
-      quarter: inserted.quarter,
-      tax_year: inserted.tax_year,
-      status: inserted.status,
-      payment_reference: inserted.payment_reference,
-      notes: inserted.notes,
-      created_by: inserted.created_by,
-      created_at: inserted.created_at ? new Date(inserted.created_at).toISOString() : '',
-      updated_at: inserted.updated_at ? new Date(inserted.updated_at).toISOString() : '',
-    };
+      const inserted = await (trx as any)
+        .insertInto('withholding_tax_transactions')
+        .values({
+          tenant_id: tenantId,
+          direction: dto.direction || 'payable',
+          source_type: dto.source_type || 'manual',
+          source_id: dto.source_id || null,
+          invoice_number: dto.invoice_number.trim(),
+          invoice_date: dto.invoice_date,
+          partner_type: dto.partner_type || (dto.direction === 'receivable' ? 'customer' : 'supplier'),
+          partner_id: dto.partner_id || null,
+          partner_name: dto.partner_name.trim(),
+          tax_id_number: dto.tax_id_number?.trim() || null,
+          file_number: dto.file_number?.trim() || null,
+          tax_office_code: dto.tax_office_code?.trim() || null,
+          partner_address: dto.partner_address?.trim() || null,
+          wht_type: dto.wht_type || 'goods',
+          wht_rate: rate,
+          base_amount: bookBaseAmount,
+          tax_amount: taxAmount,
+          quarter,
+          tax_year: taxYear,
+          status: 'draft',
+          notes: dto.notes?.trim() || null,
+          created_by: auth.userId ? Number(auth.userId) : null,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+
+      return {
+        id: inserted.id,
+        tenant_id: inserted.tenant_id,
+        direction: inserted.direction,
+        source_type: inserted.source_type,
+        source_id: inserted.source_id,
+        invoice_number: inserted.invoice_number,
+        invoice_date: this.formatDate(inserted.invoice_date),
+        partner_type: inserted.partner_type,
+        partner_id: inserted.partner_id,
+        partner_name: inserted.partner_name,
+        tax_id_number: inserted.tax_id_number,
+        file_number: inserted.file_number,
+        tax_office_code: inserted.tax_office_code,
+        partner_address: inserted.partner_address,
+        wht_type: inserted.wht_type,
+        wht_rate: Number(inserted.wht_rate),
+        base_amount: this.toMoney(inserted.base_amount),
+        tax_amount: this.toMoney(inserted.tax_amount),
+        quarter: inserted.quarter,
+        tax_year: inserted.tax_year,
+        status: inserted.status,
+        payment_reference: inserted.payment_reference,
+        notes: inserted.notes,
+        created_by: inserted.created_by,
+        created_at: inserted.created_at ? new Date(inserted.created_at).toISOString() : '',
+        updated_at: inserted.updated_at ? new Date(inserted.updated_at).toISOString() : '',
+      };
+    });
   }
 
   /**
@@ -525,7 +550,16 @@ export class WithholdingTaxService {
   private async syncPartnerSubLedger(trx: any, auth: AuthContext, tx: any): Promise<void> {
     const tenantId = String(auth.tenantId || '');
     const accountId = String(auth.accountId || tenantId);
-    const amount = -this.toMoney(tx.tax_amount);
+    // The stored tax_amount is re-rounded at the tenant's book digits
+    // resolved on THIS transaction handle — the same settings row the
+    // remittance posting reads on the same trx, so GL and subledger
+    // always agree exactly. The old 2dp helper moved the partner
+    // balance by 10.00 while the journal posted 10.001. The snapshot
+    // is the exact returned balance (partner-subledger.ts precedent),
+    // never re-rounded: ledger balance_after columns already hold
+    // scale 3 after the minor-unit widening migrations.
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
+    const amount = -this.toBookMoney(tx.tax_amount, digits);
     const partnerId = Number(tx.partner_id);
     const isSupplier = tx.direction === 'payable';
     const table = isSupplier ? 'suppliers' : 'customers';
@@ -538,7 +572,7 @@ export class WithholdingTaxService {
       [isSupplier ? 'supplier_id' : 'customer_id']: partnerId,
       entry_type: 'withholding_tax',
       amount,
-      balance_after: Number(Number(updated.balance).toFixed(2)),
+      balance_after: Number(updated.balance),
       note: `ضريبة خصم وإضافة - فاتورة #${tx.invoice_number}`,
       reference_type: 'withholding_tax',
       reference_id: Number(tx.id),
