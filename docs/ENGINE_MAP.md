@@ -33,7 +33,7 @@ spec is the enforcement.
 | Gateway amounts | `backend/src/modules/storefront/engines/gateway-amount.engine.ts` — exponents 0/2/3 | UNIFIED |
 | Document sequence numbers | `backend/src/modules/delivery-reps/services/van-common.util.ts` — `generateDailySequenceNumber` (transaction-held advisory lock, fail-closed) | PARTIAL: van call sites routed through transactions; contracting COUNT+1 numbering is DECISION-BLOCKED (D6) |
 | User privilege guards | `backend/src/modules/users/users.service.ts` — self-promotion freeze, `assertGrantWithinActorScope`, `assertPeerAdminActionAllowed` | UNIFIED for create/update/sync/bulk-disable; peer demotion, deletion, and unlock deliberately unchanged |
-| Idempotency (money writes) | Mandatory `requestKey` + in-transaction `FOR UPDATE` re-check + partial unique index: treasury transfers, expenses, drawer movements, subcontractor payments; `core/idempotency` interceptor for the covered controllers | PARTIAL: interceptor covers 5 controllers; finalize race + 30-day prune horizon open (D5) |
+| Idempotency (money writes) | Mandatory `requestKey` + in-transaction `FOR UPDATE` re-check + partial unique index: treasury transfers, expenses, drawer movements, subcontractor payments; `core/idempotency` interceptor for the covered controllers | PARTIAL: interceptor covers 5 controllers; finalize is awaited before the response and finalize failures flag recovery_required (INV-IDEMPOTENCY-FINALIZE-AWAITED); 30-day prune horizon still open (D5) |
 
 ## Forbidden patterns (guarded)
 

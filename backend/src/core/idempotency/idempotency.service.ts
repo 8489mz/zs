@@ -251,6 +251,34 @@ export class IdempotencyService {
   }
 
   /**
+   * Marks a still-processing operation as needing manual recovery
+   * (INV-IDEMPOTENCY-FINALIZE-AWAITED). Used only when the business
+   * work committed but its result could not be recorded: the guarded
+   * WHERE status = 'processing' never overwrites a committed or
+   * failed row. A retry then reads 'recovery_required' (422) instead
+   * of spinning on 'processing'.
+   */
+  async markRecoveryRequired(
+    params: Pick<IdempotencyReservation, 'tenantId' | 'accountId' | 'idempotencyKey' | 'operationType'>,
+    errorCode: string,
+  ): Promise<void> {
+    await this.db
+      .updateTable('operation_executions')
+      .set({
+        status: 'recovery_required',
+        error_code: errorCode,
+        updated_at: sql`CURRENT_TIMESTAMP`,
+        completed_at: sql`CURRENT_TIMESTAMP`,
+      })
+      .where('tenant_id', '=', params.tenantId)
+      .where('account_id', '=', params.accountId)
+      .where('idempotency_key', '=', params.idempotencyKey)
+      .where('operation_type', '=', params.operationType)
+      .where('status', '=', 'processing')
+      .execute();
+  }
+
+  /**
    * Checks if an operation is already processed for this specific operation type.
    */
   async check(
