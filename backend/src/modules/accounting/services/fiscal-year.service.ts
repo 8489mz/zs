@@ -9,6 +9,8 @@ import { AccountingPostingService } from '../accounting-posting.service';
 import { lockAccountingPeriod } from '../accounting-period-lock';
 import { nextAccountingDay } from '../engines/accounting-date.engine';
 import { assertAccountingCloseReady } from '../accounting-close-readiness';
+import { tenantBaseCurrency } from '../accounting-currency';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 
 export interface CreateFiscalYearDto {
   name: string;
@@ -103,6 +105,17 @@ export class FiscalYearService {
   private toMoney(value: unknown): number {
     const n = Number(value || 0);
     return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
+  }
+
+  /**
+   * Close-path rounding: round once with the canonical engine at the
+   * tenant's book digits. Kept separate from toMoney (2dp display
+   * shaping for list/get) so the close computation can never silently
+   * fall back to two decimals.
+   */
+  private toBookMoney(value: unknown, digits: MoneyDigits): number {
+    const n = Number(value || 0);
+    return Number.isFinite(n) ? roundMoney(n, digits) : 0;
   }
 
   private formatDate(date: any): string {
@@ -295,12 +308,31 @@ export class FiscalYearService {
   }
 
   /**
-   * Preview closing of fiscal year with pre-closing audit and simulated zeroing entries
+   * Preview closing of fiscal year with pre-closing audit and simulated zeroing entries.
+   *
+   * Digits are the tenant's book digits, resolved on the caller's handle
+   * with the P2 pattern (tenantBaseCurrency + currencyMoneyDigits) and
+   * fail closed on a currency mismatch, exactly like the posting
+   * boundary. The standalone preview and the execute path share one
+   * computation (buildFiscalYearClosePreview); execute re-runs it
+   * inside its transaction on the transaction handle and posts the
+   * recomputed lines, so preview and post can never disagree.
    */
   async previewFiscalYearClose(auth: AuthContext, id: number): Promise<FiscalYearPreviewResult> {
     const tenantId = String(auth.tenantId || '');
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+    return this.buildFiscalYearClosePreview(auth, id, this.db, digits);
+  }
 
-    const fy = await this.db
+  private async buildFiscalYearClosePreview(
+    auth: AuthContext,
+    id: number,
+    db: Kysely<Database>,
+    digits: MoneyDigits,
+  ): Promise<FiscalYearPreviewResult> {
+    const tenantId = String(auth.tenantId || '');
+
+    const fy = await db
       .selectFrom('accounting_fiscal_years')
       .selectAll()
       .where('tenant_id', '=', tenantId)
@@ -319,7 +351,7 @@ export class FiscalYearService {
     const endDate = this.formatDate(fy.end_date);
 
     // 1. Audit: Check unposted / draft journal entries in the period
-    const unpostedResult = await this.db
+    const unpostedResult = await db
       .selectFrom('journal_entries')
       .select(sql<number>`COUNT(*)`.as('count'))
       .where('tenant_id', '=', tenantId)
@@ -331,7 +363,7 @@ export class FiscalYearService {
     const unpostedCount = Number(unpostedResult?.count || 0);
 
     // 2. Fetch all accounts for tenant
-    const accounts = await this.db
+    const accounts = await db
       .selectFrom('accounting_accounts')
       .selectAll()
       .where('tenant_id', '=', tenantId)
@@ -339,7 +371,7 @@ export class FiscalYearService {
       .execute();
 
     // 3. Query debit and credit sums per account in this fiscal year period
-    const balances = await (this.db as any)
+    const balances = await (db as any)
       .selectFrom('journal_entry_lines as jel')
       .innerJoin('journal_entries as je', 'je.id', 'jel.journal_entry_id')
       .select([
@@ -359,8 +391,8 @@ export class FiscalYearService {
     const balanceMap = new Map<number, { debit: number; credit: number }>();
     for (const b of balances) {
       balanceMap.set(Number(b.account_id), {
-        debit: this.toMoney(b.total_debit),
-        credit: this.toMoney(b.total_credit),
+        debit: this.toBookMoney(b.total_debit, digits),
+        credit: this.toBookMoney(b.total_credit, digits),
       });
     }
 
@@ -376,7 +408,7 @@ export class FiscalYearService {
 
       if (category === 'revenue') {
         // Normal balance for Revenue is Credit: net = credit - debit
-        const net = this.toMoney(b.credit - b.debit);
+        const net = this.toBookMoney(b.credit - b.debit, digits);
         if (net !== 0) {
           totalRevenue += net;
           revenueAccounts.push({
@@ -393,7 +425,7 @@ export class FiscalYearService {
         }
       } else if (category === 'expense') {
         // Normal balance for Expense is Debit: net = debit - credit
-        const net = this.toMoney(b.debit - b.credit);
+        const net = this.toBookMoney(b.debit - b.credit, digits);
         if (net !== 0) {
           totalExpense += net;
           expenseAccounts.push({
@@ -411,9 +443,9 @@ export class FiscalYearService {
       }
     }
 
-    totalRevenue = this.toMoney(totalRevenue);
-    totalExpense = this.toMoney(totalExpense);
-    const netProfitLoss = this.toMoney(totalRevenue - totalExpense);
+    totalRevenue = this.toBookMoney(totalRevenue, digits);
+    totalExpense = this.toBookMoney(totalExpense, digits);
+    const netProfitLoss = this.toBookMoney(totalRevenue - totalExpense, digits);
     const isProfit = netProfitLoss >= 0;
 
     // 4. Default Retained Earnings Account (code 3200 or equity)
@@ -560,8 +592,8 @@ export class FiscalYearService {
       await lockAccountingPeriod(trx, tenantId);
       // The preview above (balances, proposed lines, canClose) was computed OUTSIDE this transaction.
       // Two things can have changed since: another admin may have closed the year, and new entries
-      // may have been posted inside the period — which would be silently left out of the closing
-      // entry, leaving revenue/expense accounts un-zeroed and retained earnings wrong.
+      // may have been posted inside the period. The close is therefore recomputed below on this
+      // transaction handle and compared exactly with the preview; stale lines are never posted.
       const lockedFy = await trx
         .selectFrom('accounting_fiscal_years')
         .select(['id', 'status'])
@@ -585,44 +617,36 @@ export class FiscalYearService {
         throw new BadRequestException('ظهرت مسودات قيود داخل السنة المالية؛ يرجى تسويتها قبل الإقفال.');
       }
 
-      const startDateStr = this.formatDate(fy.start_date);
-      // Compare balances for EACH profit/loss account, not just the aggregate;
-      // the same account classifier is used for preview and final posting.
-      const liveRows = await (trx as any)
-        .selectFrom('journal_entry_lines as jel')
-        .innerJoin('journal_entries as je', 'je.id', 'jel.journal_entry_id')
-        .innerJoin('accounting_accounts as a', 'a.id', 'jel.account_id')
-        .select([
-          'jel.account_id', 'a.account_type', 'a.code',
-          sql<number>`COALESCE(SUM(jel.debit), 0)`.as('total_debit'),
-          sql<number>`COALESCE(SUM(jel.credit), 0)`.as('total_credit'),
-        ])
-        .where('je.tenant_id', '=', tenantId)
-        .where('jel.tenant_id', '=', tenantId)
-        .where('a.tenant_id', '=', tenantId)
-        .where('je.status', '=', 'posted')
-        .where('je.source_type', 'not in', ['fiscal_year_closing', 'fiscal_year_reopen'])
-        .where('je.entry_date', '>=', startDateStr as any)
-        .where('je.entry_date', '<', nextAccountingDay(endDate))
-        .groupBy(['jel.account_id', 'a.account_type', 'a.code'])
-        .execute();
+      // Recompute the close on THIS transaction handle at the book
+      // digits resolved on this handle. The preview above was computed
+      // outside the transaction (different handle, possibly different
+      // digits if settings changed); posting it verbatim would bake
+      // in stale precision. The recomputation is the single source of
+      // truth for the posted lines and the stored totals.
+      const postDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
+      const recomputed = await this.buildFiscalYearClosePreview(auth, id, trx, postDigits);
+      if (recomputed.blockReason) {
+        throw new BadRequestException(recomputed.blockReason);
+      }
 
+      // Fail closed on ANY difference between the preview and the
+      // live recomputation: exact equality at book digits, per
+      // account and for the totals. A changed balance, a new P&L
+      // account, or a digits change since the preview all fail here
+      // instead of posting stale lines. (The old 0.009 band was
+      // invisible to precision loss: a 0.005 drift passed silently.)
       const expectedBalances = new Map<number, number>();
       for (const account of preview.revenueAccounts) expectedBalances.set(account.id, account.balance);
       for (const account of preview.expenseAccounts) expectedBalances.set(account.id, account.balance);
       const actualBalances = new Map<number, number>();
-      for (const row of liveRows) {
-        const category = fiscalProfitAndLossCategory(row);
-        if (!category) continue;
-        const debit = this.toMoney(row.total_debit);
-        const credit = this.toMoney(row.total_credit);
-        const net = this.toMoney(category === 'revenue' ? credit - debit : debit - credit);
-        if (net !== 0) actualBalances.set(Number(row.account_id), net);
-      }
+      for (const account of recomputed.revenueAccounts) actualBalances.set(account.id, account.balance);
+      for (const account of recomputed.expenseAccounts) actualBalances.set(account.id, account.balance);
       if (expectedBalances.size !== actualBalances.size ||
           [...expectedBalances].some(([accountId, balance]) =>
-            !actualBalances.has(accountId) ||
-            Math.abs(balance - (actualBalances.get(accountId) || 0)) > 0.009)) {
+            !actualBalances.has(accountId) || actualBalances.get(accountId) !== balance) ||
+          preview.totalRevenue !== recomputed.totalRevenue ||
+          preview.totalExpense !== recomputed.totalExpense ||
+          preview.netProfitLoss !== recomputed.netProfitLoss) {
         throw new BadRequestException(
           'تغير رصيد واحد أو أكثر من حسابات الأرباح والخسائر بعد المعاينة؛ يجب تحديث المعاينة قبل الإقفال.',
         );
@@ -630,30 +654,32 @@ export class FiscalYearService {
 
       let createdJournalEntryId: number | null = null;
 
-      if (preview.proposedClosingLines.length > 0) {
-        // Validate balance of proposed lines
+      if (recomputed.proposedClosingLines.length > 0) {
+        // Validate balance of the recomputed lines. The close is
+        // balanced by construction, so equality at book digits is
+        // exact: the old 0.05 band tolerated a real imbalance.
         let totalDebit = 0;
         let totalCredit = 0;
-        for (const line of preview.proposedClosingLines) {
+        for (const line of recomputed.proposedClosingLines) {
           totalDebit += line.debit;
           totalCredit += line.credit;
         }
-        totalDebit = this.toMoney(totalDebit);
-        totalCredit = this.toMoney(totalCredit);
+        totalDebit = this.toBookMoney(totalDebit, postDigits);
+        totalCredit = this.toBookMoney(totalCredit, postDigits);
 
-        if (Math.abs(totalDebit - totalCredit) > 0.05) {
+        if (totalDebit !== totalCredit) {
           throw new BadRequestException(
-            `قيد الإقفال غير متزن: إجمالي المدين (${totalDebit}) لا يساوي إجمالي الدائن (${totalCredit}). الفارق: ${Math.abs(totalDebit - totalCredit).toFixed(2)}`,
+            `قيد الإقفال غير متزن: إجمالي المدين (${totalDebit}) لا يساوي إجمالي الدائن (${totalCredit}). الفارق: ${Math.abs(totalDebit - totalCredit).toFixed(postDigits)}`,
           );
         }
 
-        const description = `إقفال السنة المالية: ${fy.name} وترحيل صافي ${preview.isProfit ? 'الأرباح' : 'الخسائر'} (${Math.abs(preview.netProfitLoss).toFixed(2)}) إلى حساب [${retainedAccount.code} - ${retainedAccount.name_ar}]`;
+        const description = `إقفال السنة المالية: ${fy.name} وترحيل صافي ${recomputed.isProfit ? 'الأرباح' : 'الخسائر'} (${Math.abs(recomputed.netProfitLoss).toFixed(postDigits)}) إلى حساب [${retainedAccount.code} - ${retainedAccount.name_ar}]`;
         const entryId = await this.accountingPosting.postDomainJournal(trx, {
           sourceType: 'fiscal_year_closing', sourceId: fy.id, tenantId,
           accountId: auth.accountId || tenantId, entryDate: new Date(endDate),
           description, createdBy: userId,
           lines: resolveClosingJournalAccounts(
-            preview.proposedClosingLines, preview.retainedEarningsAccount?.id ?? null, retainedEarningsAccountId,
+            recomputed.proposedClosingLines, recomputed.retainedEarningsAccount?.id ?? null, retainedEarningsAccountId,
           ).map((line) => ({
             accountId: line.accountId, description: line.description,
             debit: line.debit, credit: line.credit,
@@ -682,9 +708,9 @@ export class FiscalYearService {
         .set({
           status: 'closed',
           closing_entry_id: createdJournalEntryId,
-          net_profit_loss: preview.netProfitLoss,
-          total_revenue: preview.totalRevenue,
-          total_expense: preview.totalExpense,
+          net_profit_loss: recomputed.netProfitLoss,
+          total_revenue: recomputed.totalRevenue,
+          total_expense: recomputed.totalExpense,
           retained_earnings_account_id: retainedEarningsAccountId,
           closed_at: sql`NOW()` as any,
           closed_by: userId,
