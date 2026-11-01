@@ -317,3 +317,19 @@ export type NormalizedSalePayload = {
   cardScheme?: string | null;
   cardLastFour?: string | null;
 };
+
+/**
+ * Internal-only handoff from convertToSale to createSale
+ * (INV-SALES-ORDER-CONVERSION-STOCK-LEGS). It is a plain type, never
+ * a DTO field: an HTTP caller must never be able to ask createSale to
+ * release an arbitrary order's reservation. Only the sales-orders
+ * service builds it, and createSale honors it solely as its fourth
+ * argument, inside the sale transaction, after verifying the order is
+ * in the 'converting' state claimed by convertToSale.
+ */
+export interface SalesOrderConversionRelease {
+  salesOrderId: number;
+  branchId: number | null;
+  locationId: number | null;
+  items: Array<{ productId: number; qty: number }>;
+}

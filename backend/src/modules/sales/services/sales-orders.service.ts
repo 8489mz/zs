@@ -487,7 +487,13 @@ export class SalesOrdersService {
       branchId = primaryBranch ? Number(primaryBranch.id) : 1;
     }
 
-    // Release reserved quantity first so createSale has clean stock allocation
+    // INV-SALES-ORDER-CONVERSION-STOCK-LEGS: the reservation is NOT
+    // released here. It travels with the sale payload into createSale,
+    // which releases it inside the sale transaction (under the product
+    // locks, before the stock deduction) — so a failed sale rolls the
+    // release back with it and no re-reserve is ever needed. Releasing
+    // on the pool handle first exposed the freed stock to concurrent
+    // sales and left the swallowed re-reserve as the only recovery.
     const releaseItems: Array<{ productId: number; qty: number }> = [];
     for (const item of items) {
       const reservedQty = Number(item.reserved_quantity || 0);
@@ -508,15 +514,10 @@ export class SalesOrdersService {
         .where('tenant_id', '=', scope.tenantId)
         .executeTakeFirst();
       locationId = branchRow?.default_stock_location_id ? Number(branchRow.default_stock_location_id) : null;
-
-      await releaseLocationStock(this.db, {
-        branchId: order.branch_id,
-        locationId,
-        tenantId: scope.tenantId,
-        accountId: scope.accountId,
-        items: releaseItems,
-      });
     }
+    const conversionRelease = releaseItems.length > 0
+      ? { salesOrderId: id, branchId: order.branch_id, locationId, items: releaseItems }
+      : undefined;
 
     // Prepare sale items
     const saleItems = items.map((item) => ({
@@ -552,7 +553,7 @@ export class SalesOrdersService {
       const idemKey = `so_convert_${scope.tenantId}_${id}`;
       const saleResult: any = await idempotencyStorage.run(
         { idempotencyKey: idemKey, operationType: 'sale', accountId: scope.accountId },
-        () => this.salesWrite.createSale(salePayload, auth),
+        () => this.salesWrite.createSale(salePayload, auth, undefined, conversionRelease),
       );
       const saleId = Number(saleResult?.sale?.id || saleResult?.id);
 
@@ -587,7 +588,11 @@ export class SalesOrdersService {
         sale: saleResult?.sale || saleResult,
       };
     } catch (error) {
-      // Revert status to confirmed and re-reserve stock if release was performed
+      // Revert status to confirmed. No re-reserve: the reservation was
+      // only ever released inside the sale transaction, so a failed
+      // sale rolled it back with the sale itself. The old swallowed
+      // re-reserve (`.catch(() => undefined)`) could silently leave the
+      // order confirmed with no reservation at all.
       await this.db
         .updateTable('sales_orders')
         .set({ status: 'confirmed', updated_at: new Date() })
@@ -595,16 +600,6 @@ export class SalesOrdersService {
         .where('status', '=', 'converting')
         .where('tenant_id', '=', scope.tenantId)
         .execute();
-
-      if (releaseItems.length > 0) {
-        await reserveLocationStock(this.db, {
-          branchId: order.branch_id,
-          locationId,
-          tenantId: scope.tenantId,
-          accountId: scope.accountId,
-          items: releaseItems,
-        }).catch(() => undefined);
-      }
 
       throw error;
     }

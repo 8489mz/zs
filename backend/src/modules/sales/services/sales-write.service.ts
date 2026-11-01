@@ -20,7 +20,7 @@ import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { HeldSaleDto } from '../dto/held-sale.dto';
 import { PosAuditEventDto } from '../dto/pos-audit-event.dto';
-import { UpsertSaleDto } from '../dto/upsert-sale.dto';
+import { UpsertSaleDto, SalesOrderConversionRelease } from '../dto/upsert-sale.dto';
 import { normalizeSalePayload } from '../helpers/sales-payload.helper';
 import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateRestoredStockQuantity, resolvePostedSalePaymentChannel, restoreFrozenSaleLineCosts } from '../helpers/sales-write.helper';
 import { allocateSaleTenders, type SaleTenderChannel } from '../engines/sale-tender.engine';
@@ -1056,7 +1056,7 @@ export class SalesWriteService {
     };
   }
 
-  async createSale(payload: UpsertSaleDto, auth: AuthContext, approvedTerms?: SystemApprovedSaleTerms): Promise<Record<string, unknown>> {
+  async createSale(payload: UpsertSaleDto, auth: AuthContext, approvedTerms?: SystemApprovedSaleTerms, conversionRelease?: SalesOrderConversionRelease): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     const requestStartedAt = Date.now();
 
@@ -1170,6 +1170,34 @@ export class SalesWriteService {
 
       if (normalized.discount < 0) throw new AppError('Discount cannot be negative', 'INVALID_DISCOUNT', 400);
       if (normalized.storeCreditUsed < 0) throw new AppError('Store credit cannot be negative', 'INVALID_STORE_CREDIT', 400);
+
+      // INV-SALES-ORDER-CONVERSION-STOCK-LEGS: a sales-order conversion
+      // releases its reservation here, inside the sale transaction, under
+      // the product locks taken above — never before the sale, where a
+      // concurrent sale could consume the freed stock, and never after,
+      // where a rollback would leave the reservation silently lost.
+      // The order must still be in the 'converting' state claimed by
+      // convertToSale; anything else fails closed before any stock moves.
+      if (conversionRelease && conversionRelease.items.length > 0) {
+        const converting = await trx
+          .selectFrom('sales_orders')
+          .select('id')
+          .where('id', '=', conversionRelease.salesOrderId)
+          .where('tenant_id', '=', scope.tenantId)
+          .where('status', '=', 'converting')
+          .forUpdate()
+          .executeTakeFirst();
+        if (!converting) {
+          throw new AppError('Sales order is not being converted', 'SALES_ORDER_NOT_CONVERTING', 409);
+        }
+        await releaseLocationStock(trx, {
+          branchId: conversionRelease.branchId,
+          locationId: conversionRelease.locationId,
+          tenantId: scope.tenantId,
+          accountId: scope.accountId,
+          items: conversionRelease.items,
+        });
+      }
 
       const customer = normalized.customerId
         ? await trx.selectFrom('customers').select(['id', 'name', 'balance', 'credit_limit', 'store_credit_balance', 'loyalty_points', 'is_credit_blocked', 'credit_block_reason']).where('id', '=', normalized.customerId).where('tenant_id', '=', scope.tenantId).where('is_active', '=', true).forUpdate().executeTakeFirst()
