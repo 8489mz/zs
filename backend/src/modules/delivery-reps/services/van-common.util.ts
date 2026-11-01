@@ -156,6 +156,15 @@ export async function getOrCreateVanLocation(
  * Generates a collision-proof, tenant-scoped daily sequence number (0001, 0002, ...)
  * strictly adhering to the Universal Document Numbering Standard (PREFIX-YYMMDD-XXXX).
  * Automatically resets to 0001 every single day, and guards against legacy high IDs.
+ *
+ * INV-SEQUENCE-NUMBER-FAIL-CLOSED: the first argument MUST be a transaction
+ * handle. A pg_advisory_xact_lock lives only for its transaction, so calling
+ * with the pool handle (the `db` itself) would release the lock the moment
+ * the SELECT returns and silently unserialize the MAX+1 read. Passing the
+ * pool is therefore rejected outright, and a lock failure is rethrown as a
+ * named error instead of silently degrading to an unguarded MAX+1: a
+ * document is never numbered without its lock. Test doubles must support
+ * the advisory-lock query; there is no silent fallback for mocks.
  */
 export async function generateDailySequenceNumber(
   trxOrDb: any,
@@ -166,15 +175,29 @@ export async function generateDailySequenceNumber(
   tenantId: string,
   date = new Date(),
 ): Promise<string> {
+  if (trxOrDb === db) {
+    throw new AppError(
+      'Daily sequence numbering requires a transaction handle',
+      'SEQUENCE_REQUIRES_TRANSACTION',
+      500,
+    );
+  }
+
   const dailyPrefix = getDailyDocumentPrefix(prefix, date);
 
-  // Advisory transaction lock to prevent concurrent races for this tenant + daily prefix
+  // Advisory transaction lock to prevent concurrent races for this tenant + daily prefix.
+  // Fail closed: any lock failure means the number is not issued.
   try {
     await trxOrDb.executeQuery(
       sql`SELECT pg_advisory_xact_lock(hashtext(${'daily_seq_' + tenantId + '_' + dailyPrefix}))`.compile(db),
     );
-  } catch {
-    // Fallback if advisory lock is not supported in test mocks
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(
+      'Daily sequence lock failed; the document was not numbered',
+      'SEQUENCE_LOCK_FAILED',
+      500,
+    );
   }
 
   let lastSeq = 0;

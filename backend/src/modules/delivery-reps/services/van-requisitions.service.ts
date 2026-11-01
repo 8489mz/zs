@@ -63,33 +63,40 @@ export class VanRequisitionsService {
     // If sourceWarehouseId is explicitly specified, all items belong to this warehouse:
     if (payload.sourceWarehouseId && Number(payload.sourceWarehouseId) > 0) {
       const sourceWarehouseId = Number(payload.sourceWarehouseId);
-      const tempDocNo = `TMP-REQ-${Date.now()}`;
-      const [inserted] = await this.anyDb
-        .insertInto('van_load_requisitions')
-        .values({
-          tenant_id: tenantId,
-          account_id: accountId,
-          doc_no: tempDocNo,
-          rep_id: repId,
-          source_warehouse_id: sourceWarehouseId,
-          status: 'pending',
-          requested_items: JSON.stringify(payload.items.map((it) => ({ ...it, sourceWarehouseId }))),
-          approved_items: JSON.stringify(payload.items.map((it) => ({ ...it, sourceWarehouseId }))),
-          notes: payload.notes || null,
-        })
-        .returning(['id'])
-        .execute();
+      // INV-SEQUENCE-NUMBER-FAIL-CLOSED: the insert, the locked MAX+1
+      // numbering, and the rename run in one transaction, so a crash
+      // rolls the TMP row back with the number instead of leaving a
+      // TMP-REQ row, and the advisory lock is held across the read.
+      return await this.db.transaction().execute(async (trx) => {
+        const trxAny = trx as any;
+        const tempDocNo = `TMP-REQ-${Date.now()}`;
+        const [inserted] = await trxAny
+          .insertInto('van_load_requisitions')
+          .values({
+            tenant_id: tenantId,
+            account_id: accountId,
+            doc_no: tempDocNo,
+            rep_id: repId,
+            source_warehouse_id: sourceWarehouseId,
+            status: 'pending',
+            requested_items: JSON.stringify(payload.items.map((it) => ({ ...it, sourceWarehouseId }))),
+            approved_items: JSON.stringify(payload.items.map((it) => ({ ...it, sourceWarehouseId }))),
+            notes: payload.notes || null,
+          })
+          .returning(['id'])
+          .execute();
 
-      const requisitionId = Number(inserted.id);
-      const docNo = await generateDailySequenceNumber(this.anyDb, this.db, 'van_load_requisitions', 'doc_no', 'REQ', tenantId);
-      await this.anyDb
-        .updateTable('van_load_requisitions')
-        .set({ doc_no: docNo })
-        .where('id', '=', requisitionId)
-        .where('tenant_id', '=', tenantId)
-        .execute();
+        const requisitionId = Number(inserted.id);
+        const docNo = await generateDailySequenceNumber(trxAny, this.db, 'van_load_requisitions', 'doc_no', 'REQ', tenantId);
+        await trxAny
+          .updateTable('van_load_requisitions')
+          .set({ doc_no: docNo })
+          .where('id', '=', requisitionId)
+          .where('tenant_id', '=', tenantId)
+          .execute();
 
-      return { ok: true, docNo, requisitionId };
+        return { ok: true, docNo, requisitionId };
+      });
     }
 
     // Otherwise (e.g. driver submitted across all warehouses), group items by their source warehouse
@@ -106,36 +113,42 @@ export class VanRequisitionsService {
     const allRequisitionIds: number[] = [];
 
     for (const [whId, groupItems] of itemsByWarehouse.entries()) {
-      const tempDocNo = `TMP-REQ-${Date.now()}-${whId}`;
-      const [inserted] = await this.anyDb
-        .insertInto('van_load_requisitions')
-        .values({
-          tenant_id: tenantId,
-          account_id: accountId,
-          doc_no: tempDocNo,
-          rep_id: repId,
-          source_warehouse_id: whId,
-          status: 'pending',
-          requested_items: JSON.stringify(groupItems),
-          approved_items: JSON.stringify(groupItems),
-          notes: payload.notes || null,
-        })
-        .returning(['id'])
-        .execute();
+      // INV-SEQUENCE-NUMBER-FAIL-CLOSED: one transaction per warehouse
+      // group, covering the insert, the locked numbering, and the rename.
+      const created = await this.db.transaction().execute(async (trx) => {
+        const trxAny = trx as any;
+        const tempDocNo = `TMP-REQ-${Date.now()}-${whId}`;
+        const [inserted] = await trxAny
+          .insertInto('van_load_requisitions')
+          .values({
+            tenant_id: tenantId,
+            account_id: accountId,
+            doc_no: tempDocNo,
+            rep_id: repId,
+            source_warehouse_id: whId,
+            status: 'pending',
+            requested_items: JSON.stringify(groupItems),
+            approved_items: JSON.stringify(groupItems),
+            notes: payload.notes || null,
+          })
+          .returning(['id'])
+          .execute();
 
-      const requisitionId = Number(inserted.id);
-      if (!firstRequisitionId) firstRequisitionId = requisitionId;
-      allRequisitionIds.push(requisitionId);
+        const requisitionId = Number(inserted.id);
+        const docNo = await generateDailySequenceNumber(trxAny, this.db, 'van_load_requisitions', 'doc_no', 'REQ', tenantId);
+        await trxAny
+          .updateTable('van_load_requisitions')
+          .set({ doc_no: docNo })
+          .where('id', '=', requisitionId)
+          .where('tenant_id', '=', tenantId)
+          .execute();
 
-      const docNo = await generateDailySequenceNumber(this.anyDb, this.db, 'van_load_requisitions', 'doc_no', 'REQ', tenantId);
-      await this.anyDb
-        .updateTable('van_load_requisitions')
-        .set({ doc_no: docNo })
-        .where('id', '=', requisitionId)
-        .where('tenant_id', '=', tenantId)
-        .execute();
+        return { requisitionId, docNo };
+      });
 
-      createdDocNos.push(docNo);
+      if (!firstRequisitionId) firstRequisitionId = created.requisitionId;
+      allRequisitionIds.push(created.requisitionId);
+      createdDocNos.push(created.docNo);
     }
 
     return {

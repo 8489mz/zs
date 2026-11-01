@@ -475,40 +475,48 @@ export class VanReturnsService {
       }
     }
 
-    const tempDocNo = `TMP-VRET-${Date.now()}`;
-    const [inserted] = await this.anyDb
-      .insertInto('van_field_returns')
-      .values({
-        tenant_id: tenantId,
-        account_id: accountId,
-        doc_no: tempDocNo,
-        trip_id: payload.tripId,
-        rep_id: repId,
-        customer_id: payload.customerId,
-        sale_id: payload.saleId || null,
-        status: 'pending_approval',
-        return_reason: payload.returnReason,
-        refund_method: payload.refundMethod || 'credit',
-        total_amount: totalAmount,
-        items_json: JSON.stringify(payload.items),
-        notes: payload.notes || null,
-      })
-      .returning(['id'])
-      .execute();
+    // INV-SEQUENCE-NUMBER-FAIL-CLOSED: the insert, the locked MAX+1
+    // numbering, and the rename run in one transaction. Validation
+    // reads above stay outside; only the numbering unit is atomic.
+    const created = await this.db.transaction().execute(async (trx) => {
+      const trxAny = trx as any;
+      const tempDocNo = `TMP-VRET-${Date.now()}`;
+      const [inserted] = await trxAny
+        .insertInto('van_field_returns')
+        .values({
+          tenant_id: tenantId,
+          account_id: accountId,
+          doc_no: tempDocNo,
+          trip_id: payload.tripId,
+          rep_id: repId,
+          customer_id: payload.customerId,
+          sale_id: payload.saleId || null,
+          status: 'pending_approval',
+          return_reason: payload.returnReason,
+          refund_method: payload.refundMethod || 'credit',
+          total_amount: totalAmount,
+          items_json: JSON.stringify(payload.items),
+          notes: payload.notes || null,
+        })
+        .returning(['id'])
+        .execute();
 
-    const returnId = Number(inserted.id);
-    const docNo = await generateDailySequenceNumber(this.anyDb, this.db, 'van_field_returns', 'doc_no', 'VRET', tenantId);
-    await this.anyDb
-      .updateTable('van_field_returns')
-      .set({ doc_no: docNo })
-      .where('id', '=', returnId)
-      .where('tenant_id', '=', tenantId)
-      .execute();
+      const returnId = Number(inserted.id);
+      const docNo = await generateDailySequenceNumber(trxAny, this.db, 'van_field_returns', 'doc_no', 'VRET', tenantId);
+      await trxAny
+        .updateTable('van_field_returns')
+        .set({ doc_no: docNo })
+        .where('id', '=', returnId)
+        .where('tenant_id', '=', tenantId)
+        .execute();
+
+      return { returnId, docNo };
+    });
 
     return {
       ok: true,
-      returnDocNo: docNo,
-      returnId,
+      returnDocNo: created.docNo,
+      returnId: created.returnId,
       status: 'pending_approval',
       totalAmount,
     };

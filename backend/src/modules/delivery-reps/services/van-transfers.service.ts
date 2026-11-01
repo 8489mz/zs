@@ -75,40 +75,50 @@ export class VanTransfersService {
       }
     }
 
-    const tempDoc = `TMP-XFR-${Date.now()}`;
+    // INV-SEQUENCE-NUMBER-FAIL-CLOSED: the insert, the locked MAX+1
+    // numbering, and the rename run in one transaction. The transfer
+    // line inserts below stay outside; only the numbering unit is atomic.
     const totalQty = payload.items.reduce((s: number, it: any) => s + Number(it.qty || 0), 0);
+    const created = await this.db.transaction().execute(async (trx) => {
+      const trxAny = trx as any;
+      const tempDoc = `TMP-XFR-${Date.now()}`;
+      const inserted = await trxAny
+        .insertInto('van_stock_transfers')
+        .values({
+          tenant_id: tenantId,
+          account_id: accountId,
+          transfer_no: tempDoc,
+          from_rep_id: fromRepId,
+          from_trip_id: payload.fromTripId || null,
+          from_van_location_id: fromVanLoc.id,
+          to_rep_id: payload.toRepId,
+          to_trip_id: payload.toTripId || null,
+          to_van_location_id: toVanLoc.id,
+          status: 'pending',
+          total_items_count: payload.items.length,
+          total_qty: totalQty,
+          notes: payload.notes || null,
+          created_at: sql`NOW()`,
+          updated_at: sql`NOW()`,
+        })
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
 
-    const inserted = await this.anyDb
-      .insertInto('van_stock_transfers')
-      .values({
-        tenant_id: tenantId,
-        account_id: accountId,
-        transfer_no: tempDoc,
-        from_rep_id: fromRepId,
-        from_trip_id: payload.fromTripId || null,
-        from_van_location_id: fromVanLoc.id,
-        to_rep_id: payload.toRepId,
-        to_trip_id: payload.toTripId || null,
-        to_van_location_id: toVanLoc.id,
-        status: 'pending',
-        total_items_count: payload.items.length,
-        total_qty: totalQty,
-        notes: payload.notes || null,
-        created_at: sql`NOW()`,
-        updated_at: sql`NOW()`,
-      })
-      .returning(['id'])
-      .executeTakeFirstOrThrow();
+      const transferId = Number(inserted.id);
+      const transferNo = await generateDailySequenceNumber(trxAny, this.db, 'van_stock_transfers', 'transfer_no', 'XFR', tenantId);
 
-    const transferId = Number(inserted.id);
-    const transferNo = await generateDailySequenceNumber(this.anyDb, this.db, 'van_stock_transfers', 'transfer_no', 'XFR', tenantId);
+      await trxAny
+        .updateTable('van_stock_transfers')
+        .set({ transfer_no: transferNo })
+        .where('id', '=', transferId)
+        .where('tenant_id', '=', tenantId)
+        .execute();
 
-    await this.anyDb
-      .updateTable('van_stock_transfers')
-      .set({ transfer_no: transferNo })
-      .where('id', '=', transferId)
-      .where('tenant_id', '=', tenantId)
-      .execute();
+      return { transferId, transferNo };
+    });
+
+    const transferId = created.transferId;
+    const transferNo = created.transferNo;
 
     for (const item of payload.items) {
       const pid = Number(item.productId);
