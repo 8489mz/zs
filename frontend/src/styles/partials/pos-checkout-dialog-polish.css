@@ -14,8 +14,13 @@
   border-radius: 12px !important;
 }
 
+.pos-checkout-dialog-shell.is-express {
+  height: auto !important;
+  max-height: calc(100vh - 24px) !important;
+}
+
 .pos-checkout-dialog-card {
-  height: 100% !important;
+  height: auto !important;
   max-height: calc(100vh - 24px) !important;
   display: flex !important;
   flex-direction: column !important;
@@ -36,7 +41,8 @@
   overflow-y: auto !important;
   overflow-x: hidden !important;
   padding-inline-end: 4px;
-  flex: 1 1 0px !important;
+  flex: 1 1 auto !important;
+  max-height: calc(100vh - 160px) !important;
   min-height: 0 !important;
   box-sizing: border-box !important;
 }
@@ -342,10 +348,13 @@
     overflow: hidden !important;
   }
 
-  .pos-checkout-dialog-shell {
+  .pos-checkout-dialog-shell,
+  .pos-checkout-dialog-shell.is-express,
+  .pos-checkout-dialog-shell.is-detailed {
     width: min(1080px, calc(100vw - 12px)) !important;
     max-height: calc(100dvh - 16px) !important;
     height: calc(100dvh - 16px) !important;
+    min-height: 0 !important;
     margin: auto !important;
     overflow: hidden !important;
     border-radius: 12px !important;

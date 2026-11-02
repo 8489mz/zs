@@ -1,6 +1,7 @@
+import { createPortal } from 'react-dom';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { getGlobalCurrencySymbol, getGlobalSystemCurrency, getSystemCountryCode, isKuwait, isSaudi } from '@/lib/currencies';
-import { useState, useEffect, useMemo, type FormEvent, type RefObject } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, type FormEvent, type RefObject } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { customersApi } from '@/shared/api/customers.api';
 import { posApi } from '@/features/pos/api/pos.api';
@@ -1532,10 +1533,75 @@ export function PosCheckoutDeliverySection({ pos, deliveryReps, isMobile: isMobi
 
   const [repSearchOpen, setRepSearchOpen] = useState(false);
   const [repSearchQuery, setRepSearchQuery] = useState('');
+  const inputContainerRef = useRef<HTMLDivElement | null>(null);
+  const dropdownPortalRef = useRef<HTMLDivElement | null>(null);
+  const [dropdownCoords, setDropdownCoords] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const activeReps = deliveryReps.filter((r) => r.is_active);
   const selectedRep = activeReps.find((r) => String(r.id) === String(pos.deliveryRepId));
   const filteredReps = activeReps.filter(r => r.name.toLowerCase().includes(repSearchQuery.toLowerCase()) || r.phone?.includes(repSearchQuery));
+
+  const updateDropdownCoords = useCallback(() => {
+    if (!inputContainerRef.current) return;
+    const rect = inputContainerRef.current.getBoundingClientRect();
+    setDropdownCoords({
+      top: Math.round(rect.bottom + 4),
+      left: Math.round(rect.left),
+      width: Math.round(rect.width),
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!repSearchOpen) {
+      setDropdownCoords(null);
+      return;
+    }
+    updateDropdownCoords();
+    const handleViewportChange = () => {
+      updateDropdownCoords();
+    };
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
+    return () => {
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
+    };
+  }, [repSearchOpen, updateDropdownCoords]);
+
+  useEffect(() => {
+    if (!repSearchOpen) return;
+    const handleDocumentMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        inputContainerRef.current && !inputContainerRef.current.contains(target) &&
+        dropdownPortalRef.current && !dropdownPortalRef.current.contains(target)
+      ) {
+        setRepSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleDocumentMouseDown);
+    return () => document.removeEventListener('mousedown', handleDocumentMouseDown);
+  }, [repSearchOpen]);
+
+  const handleClearRep = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    pos.setDeliveryRepId('');
+    pos.setDeliveryFeeMode('store_fleet');
+    setRepSearchQuery('');
+    setRepSearchOpen(false);
+  };
+
+  const handleSelectRep = (repId: string, repType?: string) => {
+    pos.setDeliveryRepId(repId);
+    if (repType === 'store_fleet') {
+      pos.setDeliveryFeeMode('store_fleet');
+    } else if (repType === 'freelance') {
+      pos.setDeliveryFeeMode('freelance_courier');
+    }
+    setRepSearchQuery('');
+    setRepSearchOpen(false);
+  };
 
   if (pos.orderType !== 'delivery') return null;
 
@@ -1567,38 +1633,163 @@ export function PosCheckoutDeliverySection({ pos, deliveryReps, isMobile: isMobi
           <label className="field" style={{ margin: 0, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
             <span style={{ fontSize: '12px', fontWeight: 700, color: isRepMissing ? '#dc2626' : '#64748b', marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', whiteSpace: 'nowrap' }}>
               <span>مندوب التوصيل {isRepRequired ? <span style={{ color: '#dc2626' }}>*</span> : <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: '11px' }}>(اختياري)</span>}</span>
+              {selectedRep && (
+                <button
+                  type="button"
+                  onMouseDown={handleClearRep}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ef4444',
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    padding: '0 4px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '2px'
+                  }}
+                  title="مسح المندوب"
+                >
+                  ✕ إلغاء المندوب
+                </button>
+              )}
             </span>
-            <input
-              placeholder={selectedRep?.name || (isRepRequired ? "-- اختر مندوب التوصيل --" : "-- مندوب التوصيل (اختياري) --")}
-              value={repSearchOpen ? repSearchQuery : (selectedRep?.name || '')}
-              onFocus={() => { setRepSearchOpen(true); setRepSearchQuery(''); }}
-              onBlur={() => setTimeout(() => setRepSearchOpen(false), 200)}
-              onChange={(e) => setRepSearchQuery(e.target.value)}
-              style={{
-                boxSizing: 'border-box',
-                padding: '6px 10px',
-                height: '38px',
-                width: '100%',
-                minWidth: 0,
-                borderRadius: '6px',
-                border: isRepMissing ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                background: isRepMissing ? '#fff5f5' : 'white',
-                fontSize: '13px'
-              }}
-            />
+            <div ref={inputContainerRef} style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'center' }}>
+              <input
+                placeholder={selectedRep?.name || (isRepRequired ? "-- اختر مندوب التوصيل --" : "-- مندوب التوصيل (اختياري) --")}
+                value={repSearchOpen ? repSearchQuery : (selectedRep?.name || '')}
+                onFocus={() => {
+                  setRepSearchOpen(true);
+                  updateDropdownCoords();
+                }}
+                onClick={() => {
+                  setRepSearchOpen(true);
+                  updateDropdownCoords();
+                }}
+                onChange={(e) => {
+                  setRepSearchQuery(e.target.value);
+                  if (!repSearchOpen) setRepSearchOpen(true);
+                  updateDropdownCoords();
+                }}
+                style={{
+                  boxSizing: 'border-box',
+                  padding: selectedRep ? '6px 36px 6px 32px' : '6px 32px 6px 10px',
+                  height: '38px',
+                  width: '100%',
+                  minWidth: 0,
+                  borderRadius: '6px',
+                  border: isRepMissing ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                  background: isRepMissing ? '#fff5f5' : 'white',
+                  fontSize: '13px',
+                  fontWeight: selectedRep && !repSearchOpen ? 800 : 500,
+                  color: selectedRep && !repSearchOpen ? '#0f172a' : 'inherit',
+                  cursor: 'pointer'
+                }}
+              />
+              {selectedRep && (
+                <button
+                  type="button"
+                  onMouseDown={handleClearRep}
+                  style={{
+                    position: 'absolute',
+                    left: '8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: '#fee2e2',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '22px',
+                    height: '22px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#dc2626',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    fontWeight: 900,
+                    zIndex: 2
+                  }}
+                  title="مسح المندوب"
+                >
+                  ✕
+                </button>
+              )}
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setRepSearchOpen(prev => {
+                    const next = !prev;
+                    if (next) updateDropdownCoords();
+                    return next;
+                  });
+                }}
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '4px',
+                  zIndex: 2
+                }}
+                title={repSearchOpen ? 'إغلاق القائمة' : 'فتح قائمة المناديب'}
+              >
+                {repSearchOpen ? '▲' : '▼'}
+              </button>
+            </div>
           </label>
 
-          {repSearchOpen && (
+          {repSearchOpen && dropdownCoords && typeof document !== 'undefined' && createPortal(
             <div 
+              ref={dropdownPortalRef}
               style={{ 
-                position: 'absolute', top: '100%', left: 0, right: 0, 
-                background: 'white', border: '1px solid #cbd5e1', 
-                borderRadius: '6px', zIndex: 30, maxHeight: '180px', 
-                overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+                position: 'fixed',
+                top: `${dropdownCoords.top}px`,
+                left: `${dropdownCoords.left}px`,
+                width: `${dropdownCoords.width}px`,
+                background: '#ffffff',
+                border: '1.5px solid #cbd5e1', 
+                borderRadius: '8px',
+                zIndex: 100000,
+                maxHeight: '230px', 
+                overflowY: 'auto',
+                boxShadow: '0 12px 32px rgba(15, 23, 42, 0.25), 0 4px 12px rgba(0, 0, 0, 0.1)',
+                boxSizing: 'border-box',
               }}
+              dir="rtl"
             >
+              {selectedRep && (
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    cursor: 'pointer',
+                    borderBottom: '1.5px dashed #fecaca',
+                    background: '#fff5f5',
+                    color: '#dc2626',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                  onMouseDown={handleClearRep}
+                >
+                  <span>✕ إلغاء تحديد المندوب (حذف)</span>
+                  <span style={{ fontSize: '11px', color: '#991b1b', fontWeight: 500 }}>مسح المندوب الحالي</span>
+                </div>
+              )}
+
               {filteredReps.length === 0 && (
-                <div style={{ padding: '8px 12px', color: '#dc2626', fontSize: '12px', fontWeight: 600 }}>
+                <div style={{ padding: '10px 12px', color: '#dc2626', fontSize: '12px', fontWeight: 600 }}>
                   {activeReps.length === 0 ? 'لا يوجد مناديب مسجلين بالنظام' : 'لا توجد نتائج مطابقة'}
                 </div>
               )}
@@ -1606,33 +1797,38 @@ export function PosCheckoutDeliverySection({ pos, deliveryReps, isMobile: isMobi
                 <div 
                   key={rep.id}
                   style={{ 
-                    padding: '6px 10px', cursor: 'pointer', 
+                    padding: '8px 12px', cursor: 'pointer', 
                     borderBottom: '1px solid #f1f5f9',
-                    background: String(rep.id) === String(pos.deliveryRepId) ? '#eff6ff' : 'white',
+                    background: String(rep.id) === String(pos.deliveryRepId) ? '#eff6ff' : '#ffffff',
                     color: String(rep.id) === String(pos.deliveryRepId) ? '#170c5c' : '#334155',
-                    fontSize: '13px'
+                    fontSize: '13px',
+                    fontWeight: String(rep.id) === String(pos.deliveryRepId) ? 800 : 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
                   }}
                   onMouseDown={(e) => {
                     e.preventDefault();
-                    pos.setDeliveryRepId(String(rep.id));
-                    if ((rep as any).rep_type === 'store_fleet') {
-                      pos.setDeliveryFeeMode('store_fleet');
-                    } else if ((rep as any).rep_type === 'freelance') {
-                      pos.setDeliveryFeeMode('freelance_courier');
-                    }
-                    setRepSearchOpen(false);
+                    handleSelectRep(String(rep.id), (rep as any).rep_type);
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = '#f8fafc')}
                   onMouseLeave={(e) => {
-                    if (String(rep.id) !== String(pos.deliveryRepId)) e.currentTarget.style.background = 'white';
+                    if (String(rep.id) !== String(pos.deliveryRepId)) e.currentTarget.style.background = '#ffffff';
                     else e.currentTarget.style.background = '#eff6ff';
                   }}
                 >
-                  {rep.name} {rep.phone ? <span style={{ color: '#94a3b8', fontSize: '11px' }}>({rep.phone})</span> : null}
-                  {(rep as any).rep_type === 'store_fleet' ? <span style={{ color: '#059669', fontSize: '10px', marginRight: '6px' }}>[أسطول المحل]</span> : null}
+                  <div>
+                    <span>{rep.name}</span>
+                    {rep.phone ? <span style={{ color: '#94a3b8', fontSize: '11px', marginRight: '6px' }}>({rep.phone})</span> : null}
+                    {(rep as any).rep_type === 'store_fleet' ? <span style={{ color: '#059669', fontSize: '10px', marginRight: '6px', background: '#ecfdf5', padding: '1px 6px', borderRadius: '4px' }}>أسطول المحل</span> : null}
+                  </div>
+                  {String(rep.id) === String(pos.deliveryRepId) && (
+                    <span style={{ color: '#10b981', fontSize: '12px', fontWeight: 900 }}>✓ محدد</span>
+                  )}
                 </div>
               ))}
-            </div>
+            </div>,
+            document.body
           )}
         </div>
 

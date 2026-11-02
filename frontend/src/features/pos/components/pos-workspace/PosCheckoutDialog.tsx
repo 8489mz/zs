@@ -281,7 +281,7 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
       zIndex={86}
       ariaLabel={t('pos.review_and_checkout', 'مراجعة وإتمام البيع')}
       overlayClassName="pos-checkout-dialog-overlay"
-      shellClassName="pos-checkout-dialog-shell"
+      shellClassName={`pos-checkout-dialog-shell ${checkoutViewMode === 'express' ? 'is-express' : 'is-detailed'}`}
     >
       <Card
         title={(
@@ -390,7 +390,7 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
         ) : (
           /* Detailed Desktop / Delivery Mode */
           <>
-            <div className="pos-checkout-dialog">
+            <div className="pos-checkout-dialog thin-scrollbar">
               <section className="pos-checkout-dialog-section pos-checkout-summary-section" style={{ padding: 0, border: 'none', background: 'transparent', marginBottom: '2px' }}>
                 <div style={{
                   display: 'flex',
@@ -431,7 +431,7 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
                   display: 'grid',
                   gridTemplateColumns: isMobile
                     ? 'minmax(0, 1fr)'
-                    : (pos.orderType === 'delivery' || pos.customerId ? 'minmax(0, 1.15fr) minmax(0, 1fr)' : 'minmax(0, 1fr)'),
+                    : 'minmax(0, 1.15fr) minmax(0, 1fr)',
                   gap: isMobile ? '8px' : '12px',
                   alignItems: 'start',
                   width: '100%',
