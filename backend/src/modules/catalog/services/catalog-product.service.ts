@@ -14,6 +14,9 @@ import { AccountingPostingService } from '../../accounting/accounting-posting.se
 import { AccountingTenantFoundationService } from '../../accounting/accounting-tenant-foundation.service';
 import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
 import { assertFashionExpectedStock, assertFashionRemovedStockSafe, fashionLocationAccessMode } from '../engines/fashion-stock-safety.engine';
+import { stockMovementTotal } from '../engines/stock-movement-total.engine';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { StorefrontMediaService } from '../../storefront/storefront-media.service';
 
 type ProductRow = {
@@ -130,9 +133,16 @@ export class CatalogProductService {
     await this.accountingFoundation.ensureForAuth(this.db, actor);
   }
 
+  // INV-CATALOG-STOCK-TOTALS-BOOK-DIGITS: book digits resolved on the
+  // caller's own handle (the open transaction inside write flows),
+  // fail closed on a base-currency/rate mismatch via tenantBaseCurrency.
+  private async bookDigits(executor: ProductWriteExecutor, actor: AuthContext): Promise<MoneyDigits> {
+    return currencyMoneyDigits(await tenantBaseCurrency(executor, this.tenantId(actor)));
+  }
+
   private async postOpeningStock(trx: ProductWriteExecutor, productId: number, qty: number, unitCost: number,
     locationId: number | null, actor: AuthContext): Promise<void> {
-    const amount = Number((qty * unitCost).toFixed(2));
+    const amount = stockMovementTotal(qty, unitCost, await this.bookDigits(trx, actor));
     if (amount <= 0) return;
     const accounts = await trx.selectFrom('accounting_accounts').select(['id', 'code'])
       .where('tenant_id', '=', this.tenantId(actor)).where('code', 'in', ['1140', '3100'])
@@ -2117,6 +2127,7 @@ export class CatalogProductService {
               assertFashionRemovedStockSafe(removedProduct, locStocks, undefined, { allowMismatchForZeroing: true });
               for (const locStock of locStocks) await assertStockLocationWriteScope(locStock.location_id);
 
+              const bookDigits = await this.bookDigits(trx, actor);
               for (const ls of locStocks) {
                 const qtyToDeduct = Number(ls.qty || 0);
                 if (qtyToDeduct <= 0) continue;
@@ -2145,7 +2156,7 @@ export class CatalogProductService {
                   before_qty: qtyToDeduct,
                   after_qty: 0,
                   unit_cost: unitCost,
-                  total_cost: Number((qtyToDeduct * unitCost).toFixed(2)),
+                  total_cost: stockMovementTotal(qtyToDeduct, unitCost, bookDigits),
                   reason: 'fashion_matrix_adjustment',
                   note: `تسوية وتصفير رصيد المقاس الملغي (${removedProduct.name || removedProduct.size}) عند تعديل الموديل`,
                   reference_type: 'inventory_adjustment',
@@ -2251,6 +2262,7 @@ export class CatalogProductService {
 
               const unitCost = Number(value.costPrice || prior.cost_price || 0);
               const absDelta = Math.abs(stockDelta);
+              const bookDigits = await this.bookDigits(trx, actor);
               const insertedMovement = await trx.insertInto('stock_movements').values({
                 product_id: id,
                 movement_type: stockDelta > 0 ? 'add' : 'deduct',
@@ -2258,7 +2270,7 @@ export class CatalogProductService {
                 before_qty: currentStock,
                 after_qty: targetStock,
                 unit_cost: unitCost,
-                total_cost: Number((absDelta * unitCost).toFixed(2)),
+                total_cost: stockMovementTotal(absDelta, unitCost, bookDigits),
                 reason: 'fashion_matrix_adjustment',
                 note: stockDelta > 0
                   ? `تسوية زيادة رصيد المقاس (${value.color || ''} / ${value.size || ''}) من شاشة الموديل`
@@ -2342,6 +2354,8 @@ export class CatalogProductService {
           const newValue = { ...value, units: value.units.map((u) => u.isBaseUnit ? { ...u, barcode: value.barcode } : u) };
           await this.replaceProductRelations(trx, productId, newValue, actor);
           if (stock > 0) {
+            const bookDigits = await this.bookDigits(trx, actor);
+            const openingTotal = stockMovementTotal(stock, value.costPrice, bookDigits);
             await trx.insertInto('product_location_stock').values({
               product_id: productId, branch_id: null, location_id: resolvedWarehouseId!, qty: stock,
               ...this.tenantFields(actor),
@@ -2349,7 +2363,7 @@ export class CatalogProductService {
             await trx.insertInto('stock_movements').values({
               product_id: productId, movement_type: 'opening_balance', qty: stock,
               before_qty: 0, after_qty: stock,
-              unit_cost: value.costPrice, total_cost: Number((stock * value.costPrice).toFixed(2)),
+              unit_cost: value.costPrice, total_cost: openingTotal,
               reason: 'opening_balance',
               note: 'رصيد افتتاحي لمقاس جديد', reference_type: 'product',
               reference_id: productId, location_id: resolvedWarehouseId!, created_by: actor.userId,
@@ -2538,6 +2552,8 @@ export class CatalogProductService {
         if (firstProductId === null) firstProductId = productId;
         await this.replaceProductRelations(trx, productId, draft, actor);
         if (initialStockQty > 0) {
+          const bookDigits = await this.bookDigits(trx, actor);
+          const openingTotal = stockMovementTotal(initialStockQty, draft.costPrice, bookDigits);
           await trx.insertInto('product_location_stock').values({ product_id: productId, branch_id: null, location_id: resolvedLocationId, qty: initialStockQty, ...this.tenantFields(actor) }).execute();
           // Opening balance must appear in the perpetual ledger, otherwise rebuilding stock from
           // stock_movements starts from zero and disagrees with products.stock_qty forever.
@@ -2548,7 +2564,7 @@ export class CatalogProductService {
             before_qty: 0,
             after_qty: initialStockQty,
             unit_cost: draft.costPrice,
-            total_cost: Number((initialStockQty * draft.costPrice).toFixed(2)),
+            total_cost: openingTotal,
             reason: 'opening_balance',
             note: 'رصيد افتتاحي عند إنشاء الصنف',
             reference_type: 'product',
@@ -2776,6 +2792,7 @@ export class CatalogProductService {
             }
 
             const unitCost = Number(product.cost_price || 0);
+            const bookDigits = await this.bookDigits(trx, actor);
 
             if (locStocks.length > 0) {
               for (const ls of locStocks) {
@@ -2803,7 +2820,7 @@ export class CatalogProductService {
                   before_qty: qtyToDeduct,
                   after_qty: 0,
                   unit_cost: unitCost,
-                  total_cost: Number((qtyToDeduct * unitCost).toFixed(2)),
+                  total_cost: stockMovementTotal(qtyToDeduct, unitCost, bookDigits),
                   reason: 'archive_stock_zeroing',
                   note: `تسوية وتصفير رصيد الصنف (${product.name}) عند الأرشفة والتعطيل`,
                   reference_type: 'inventory_adjustment',
@@ -2839,7 +2856,7 @@ export class CatalogProductService {
                 before_qty: globalQty,
                 after_qty: 0,
                 unit_cost: unitCost,
-                total_cost: Number((globalQty * unitCost).toFixed(2)),
+                total_cost: stockMovementTotal(globalQty, unitCost, bookDigits),
                 reason: 'archive_stock_zeroing',
                 note: `تسوية وتصفير رصيد الصنف (${product.name}) عند الأرشفة والتعطيل`,
                 reference_type: 'inventory_adjustment',
