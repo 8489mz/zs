@@ -1480,6 +1480,12 @@ export class ImportSalesService {
         vat_refundable_egp: dto.vatRefundableEgp,
         is_consolidated: dto.isConsolidated,
         cost_allocation_method: dto.costAllocationMethod,
+        exchange_rate_at_arrival: dto.exchangeRateAtArrival !== undefined
+          ? requireImportNumber(dto.exchangeRateAtArrival, 'سعر الصرف عند الوصول', Number.MIN_VALUE)
+          : undefined,
+        pricing_exchange_rate: dto.pricingExchangeRate !== undefined
+          ? requireImportNumber(dto.pricingExchangeRate, 'سعر صرف التسعير', Number.MIN_VALUE)
+          : undefined,
       })
       .returningAll()
       .executeTakeFirstOrThrow();
@@ -1903,6 +1909,18 @@ export class ImportSalesService {
       }
       const updated = Object.keys(payload).length ? await trx.updateTable('import_shipments').set(payload)
         .where('tenant_id', '=', tenantId).where('id', '=', shipmentId).returningAll().executeTakeFirstOrThrow() : shipment;
+      // Marking Arrived requires a real arrival rate on the stored
+      // row (set in this same call or earlier): the recalculation
+      // below would catch a missing rate only when items exist, so
+      // the transition itself is guarded explicitly.
+      if (dto.status === 'Arrived') {
+        const effectiveArrivalRate = dto.exchangeRateAtArrival ?? updated.exchange_rate_at_arrival;
+        if (effectiveArrivalRate === null || effectiveArrivalRate === undefined || !Number.isFinite(Number(effectiveArrivalRate)) || Number(effectiveArrivalRate) <= 0) {
+          throw new BadRequestException(
+            'لا يمكن تمييز الشحنة كواصلة بلا سعر صرف وصول حقيقي وموجب؛ حدد سعر الصرف عند الوصول أولاً. [IMPORT_ARRIVAL_RATE_REQUIRED]',
+          );
+        }
+      }
       if (!receipt) {
         await this.calculateLandedCostInTransaction(trx, updated);
         if (dto.status === 'Arrived') await this.postShipmentToInventory(trx, tenantId, shipmentId, userId, dto.receiptLocationId);
@@ -2138,6 +2156,19 @@ export class ImportSalesService {
       return { success: true, message: 'لا توجد أصناف بالشحنة' };
     }
 
+    // INV-IMPORT-ARRIVAL-RATE-FAIL-CLOSED: a missing, zero,
+    // negative or non-finite arrival rate fails closed with a named
+    // shipment-specific error. The generic requireImportNumber
+    // below cannot carry this meaning, and the migration-2033
+    // DEFAULT 1 used to make every fresh shipment silently pass
+    // at rate 1. No item may be costed and no shipment may post
+    // on an invented rate.
+    const arrivalRateRaw = shipment.exchange_rate_at_arrival;
+    if (arrivalRateRaw === null || arrivalRateRaw === undefined || !Number.isFinite(Number(arrivalRateRaw)) || Number(arrivalRateRaw) <= 0) {
+      throw new BadRequestException(
+        'لا يمكن احتساب التكلفة المحملة أو ترحيل الشحنة بلا سعر صرف وصول حقيقي وموجب؛ حدد سعر الصرف عند الوصول قبل إضافة الأصناف أو الترحيل. [IMPORT_ARRIVAL_RATE_REQUIRED]',
+      );
+    }
     const rate = requireImportNumber(shipment.exchange_rate_at_arrival, 'سعر الصرف', Number.MIN_VALUE);
     const method = (shipment.cost_allocation_method as 'value' | 'weight' | 'cbm') || 'value';
 
