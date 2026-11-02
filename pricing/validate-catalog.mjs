@@ -16,6 +16,9 @@
  *  8. أي منتج sellOffline = false يحمل سبباً مكتوباً.
  *  9. المنتجات التي بلا نقطة بيع لا تحمل مجموعة online في أي مستوى.
  * 10. كل طابق يعلن includedFromLevel ومجموعة ميزاته موجودة.
+ * 11. الفرع الإضافي لا يتجاوز نصف سعر المستوى الأول الشهري لنطاقه (تقريب
+ *     النصف إلى الأعلى لوحدة عملة كاملة)، ولا يحمل سعراً لأي بلد محظور،
+ *     والبلدان بلا سعر فرع تبقى null (اتصل بنا) ولا يُخترع لها رقم.
  *
  * ويولّد بعد نجاح التحقق مصدرَ الباك إند:
  *   backend/src/modules/tenant-subscription/pricing/pricing-catalog.generated.ts
@@ -106,6 +109,23 @@ for (const [bandId, band] of Object.entries(bands)) {
 for (const f of catalog.floors?.items ?? []) {
   if (!('includedFromLevel' in f)) fail(`الطابق ${f.id}: includedFromLevel مفقود (استخدم null إن كان يُباع مفرداً دائماً)`);
   if (f.featureGroup && !featureGroups[f.featureGroup]) fail(`الطابق ${f.id}: مجموعة ميزات غير موجودة «${f.featureGroup}»`);
+}
+
+// 11. الفرع الإضافي: سقف نصف سعر المستوى الأول، بلا سعر لبلد محظور،
+//     والبلدان بلا سعر تبقى null (اتصل بنا) ولا يُخترع لها رقم.
+for (const [bandId, band] of Object.entries(bands)) {
+  const l1 = band.levels?.L1?.prices ?? {};
+  for (const [code, value] of Object.entries(catalog.addons?.extraBranch?.monthly?.[bandId] ?? {})) {
+    if (blockedCountries.includes(code)) {
+      fail(`النطاق ${bandId}: الفرع الإضافي يحمل سعراً للبلد المحظور ${code}`);
+      continue;
+    }
+    const base = l1[code]?.monthly;
+    if (typeof base !== 'number') { fail(`النطاق ${bandId}: الفرع الإضافي للبلد ${code} بلا سعر مستوى أول`); continue; }
+    if (typeof value !== 'number' || value > Math.ceil(base / 2)) {
+      fail(`النطاق ${bandId}/${code}: الفرع الإضافي ${value} يتجاوز نصف سعر المستوى الأول ${base}`);
+    }
+  }
 }
 
 if (errors.length) {
