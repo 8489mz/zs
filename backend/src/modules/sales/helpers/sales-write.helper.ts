@@ -219,6 +219,26 @@ export function calculateCollectibleTotal(total: number, storeCreditUsed: number
   return roundCurrency(Number(total || 0) - Number(storeCreditUsed || 0), digits);
 }
 
+/* P1-16 sales-write residuals: every derived money amount the sale
+ * writer stores or posts rounds ONCE at the tenant's book digits
+ * (INV-SALES-WRITE-RESIDUAL-BOOK-DIGITS). The writer previously
+ * re-rounded these residuals with toFixed(2), which truncated a
+ * 3-decimal tenant's third decimal on every create/edit/cancel and
+ * compounded in the stored store-credit balance. Book digits are
+ * REQUIRED here, as in the neighbouring helpers: a silent `= 2`
+ * default would reintroduce the truncation this package removes. */
+export function calculateStoreCreditBalance(currentBalance: number, signedDelta: number, digits: MoneyDigits): number {
+  return roundCurrency(Number(currentBalance || 0) + Number(signedDelta || 0), digits);
+}
+
+export function calculateRemainingDebt(collectibleTotal: number, paidAmount: number, digits: MoneyDigits): number {
+  return roundCurrency(Math.max(0, Number(collectibleTotal || 0) - Number(paidAmount || 0)), digits);
+}
+
+export function roundSaleResidual(value: number, digits: MoneyDigits): number {
+  return roundCurrency(Number(value || 0), digits);
+}
+
 function normalizeDateOnly(value: unknown): string {
   if (!value) return '';
   if (value instanceof Date) {

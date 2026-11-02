@@ -23,7 +23,7 @@ import { HeldSaleDto } from '../dto/held-sale.dto';
 import { PosAuditEventDto } from '../dto/pos-audit-event.dto';
 import { UpsertSaleDto, SalesOrderConversionRelease } from '../dto/upsert-sale.dto';
 import { normalizeSalePayload } from '../helpers/sales-payload.helper';
-import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateRestoredStockQuantity, resolvePostedSalePaymentChannel, restoreFrozenSaleLineCosts } from '../helpers/sales-write.helper';
+import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateRemainingDebt, calculateRestoredStockQuantity, calculateStoreCreditBalance, resolvePostedSalePaymentChannel, restoreFrozenSaleLineCosts, roundSaleResidual } from '../helpers/sales-write.helper';
 import { allocateSaleTenders, type SaleTenderChannel } from '../engines/sale-tender.engine';
 import { allocateInvoiceDiscount } from '../engines/invoice-discount.engine';
 import { resolveSaleTaxRate } from '../engines/sale-tax-rate.engine';
@@ -1508,14 +1508,14 @@ export class SalesWriteService {
         if (minRedeemPoints > 0 && availablePoints < minRedeemPoints - 0.001) {
           throw new AppError(`الحد الأدنى لرصيد النقاط للاستبدال هو ${minRedeemPoints} نقطة`, 'MIN_LOYALTY_POINTS_NOT_MET', 400);
         }
-        const calculatedDiscount = Number((normalized.loyaltyPointsRedeemed * pointRedeemValue).toFixed(2));
-        const maxAllowedDiscount = Number(((subtotal * maxDiscountPercentage) / 100).toFixed(2));
+        const calculatedDiscount = roundSaleResidual(normalized.loyaltyPointsRedeemed * pointRedeemValue, moneyDigits);
+        const maxAllowedDiscount = roundSaleResidual((subtotal * maxDiscountPercentage) / 100, moneyDigits);
         loyaltyDiscount = Math.min(calculatedDiscount, maxAllowedDiscount);
-        effectiveDiscount = Number((effectiveDiscount + loyaltyDiscount).toFixed(2));
+        effectiveDiscount = roundSaleResidual(effectiveDiscount + loyaltyDiscount, moneyDigits);
         pointsAfterRedeem = Math.max(0, Number((availablePoints - normalized.loyaltyPointsRedeemed).toFixed(2)));
       }
 
-      const unapprovedDiscount = Math.max(0, Number((normalized.discount - Number(approvedTerms?.approvedDiscount || 0)).toFixed(2)));
+      const unapprovedDiscount = Math.max(0, roundSaleResidual(normalized.discount - Number(approvedTerms?.approvedDiscount || 0), moneyDigits));
       await this.assertDiscountChangeAllowed(trx, auth, unapprovedDiscount, normalized.managerPin, subtotal);
       if (effectiveDiscount > subtotal) throw new AppError('Discount cannot exceed subtotal', 'INVALID_DISCOUNT', 400);
       const { taxAmount, total } = computeInvoiceTotals(subtotal, effectiveDiscount, normalized.taxRate, normalized.pricesIncludeTax, normalized.deliveryFee, normalized.serviceCharge, Number((normalized as any).tipAmount || 0));
@@ -2033,7 +2033,7 @@ export class SalesWriteService {
       if (normalized.storeCreditUsed > 0 && customer) {
         await trx
           .updateTable('customers')
-          .set({ store_credit_balance: Number((Number(customer.store_credit_balance || 0) - normalized.storeCreditUsed).toFixed(2)), updated_at: sql`NOW()` })
+          .set({ store_credit_balance: calculateStoreCreditBalance(Number(customer.store_credit_balance || 0), -normalized.storeCreditUsed, moneyDigits), updated_at: sql`NOW()` })
           .where('id', '=', customer.id)
           .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
           .execute();
@@ -2589,7 +2589,7 @@ export class SalesWriteService {
       const oldPaid = currentPayments.length
         ? currentPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
         : Number(sale.paid_amount || 0);
-      const oldDebt = Number(Math.max(0, oldCollectibleTotal - oldPaid).toFixed(2));
+      const oldDebt = calculateRemainingDebt(oldCollectibleTotal, oldPaid, moneyDigits);
       if (sale.customer_id && oldDebt > 0) {
         await this.finance.createCustomerLedgerEntry(trx, sale.customer_id, -oldDebt, `عكس تعديل فاتورة بيع S-${saleId}`, saleId, auth);
       }
@@ -2607,7 +2607,7 @@ export class SalesWriteService {
           .executeTakeFirst();
         if (customerBefore) {
           await trx.updateTable('customers').set({
-            store_credit_balance: Number((Number(customerBefore.store_credit_balance || 0) + Number(sale.store_credit_used || 0)).toFixed(2)),
+            store_credit_balance: calculateStoreCreditBalance(Number(customerBefore.store_credit_balance || 0), Number(sale.store_credit_used || 0), moneyDigits),
             updated_at: sql`NOW()`,
           }).where('id', '=', sale.customer_id).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
         }
@@ -3170,7 +3170,7 @@ export class SalesWriteService {
 
       if (normalized.storeCreditUsed > 0 && customer) {
         await trx.updateTable('customers').set({
-          store_credit_balance: Number((Number(customer.store_credit_balance || 0) - normalized.storeCreditUsed).toFixed(2)),
+          store_credit_balance: calculateStoreCreditBalance(Number(customer.store_credit_balance || 0), -normalized.storeCreditUsed, moneyDigits),
           updated_at: sql`NOW()`,
         }).where('id', '=', customer.id).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
       }
@@ -3205,6 +3205,11 @@ export class SalesWriteService {
     if (!managerPin) throw new AppError('رمز اعتماد المدير مطلوب لإلغاء الفاتورة.', 'MANAGER_AUTH_REQUIRED', 400);
     await this.authz.authorizeDiscountOverride(managerPin, auth, this.db);
     await this.tx.runInTransaction(this.db, async (trx) => {
+      // Cancel previously had no book-digits resolution: its reversal
+      // residuals rounded with toFixed(2). Resolve the tenant's digits
+      // on this transaction handle, as create/update do, before any
+      // reversal amount is computed.
+      const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
       // forUpdate is mandatory here: without the row lock two concurrent cancel requests both read
       // status='posted', both pass the guard below, and stock is restored twice while the sale
       // journal is reversed twice. The lock serializes them so the second one hits the guard.
@@ -3415,7 +3420,7 @@ export class SalesWriteService {
       const originalPaid = originalPayments.length
         ? originalPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
         : Number(sale.paid_amount || 0);
-      const remainingDebt = Number(Math.max(0, collectibleTotal - originalPaid).toFixed(2));
+      const remainingDebt = calculateRemainingDebt(collectibleTotal, originalPaid, moneyDigits);
       if (sale.customer_id && remainingDebt > 0) {
         await this.finance.createCustomerLedgerEntry(trx, sale.customer_id, -remainingDebt, `عكس فاتورة بيع S-${saleId}`, saleId, auth);
       }
@@ -3440,7 +3445,7 @@ export class SalesWriteService {
         if (!refundShift && !['admin', 'super_admin'].includes(auth.role)) {
           throw new AppError('يجب فتح وردية على الفرع قبل رد نقدية فاتورة ملغاة', 'OPEN_SHIFT_REQUIRED', 400);
         }
-        await this.finance.addTreasuryTransaction(trx, -Number(cashRefundTotal.toFixed(2)),
+        await this.finance.addTreasuryTransaction(trx, -roundSaleResidual(cashRefundTotal, moneyDigits),
           `إلغاء فاتورة بيع S-${saleId}`, saleId, auth, sale.branch_id, sale.location_id,
           refundShift?.id || null);
       }
@@ -3448,7 +3453,7 @@ export class SalesWriteService {
       if (Number(sale.store_credit_used || 0) > 0 && sale.customer_id) {
         const customer = await trx.selectFrom('customers').select(['store_credit_balance']).where('id', '=', sale.customer_id).where(sql<boolean>`tenant_id = ${scope.tenantId}`).forUpdate().executeTakeFirst();
         if (customer) {
-          await trx.updateTable('customers').set({ store_credit_balance: Number((Number(customer.store_credit_balance || 0) + Number(sale.store_credit_used || 0)).toFixed(2)), updated_at: sql`NOW()` }).where('id', '=', sale.customer_id).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+          await trx.updateTable('customers').set({ store_credit_balance: calculateStoreCreditBalance(Number(customer.store_credit_balance || 0), Number(sale.store_credit_used || 0), moneyDigits), updated_at: sql`NOW()` }).where('id', '=', sale.customer_id).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
         }
       }
 
