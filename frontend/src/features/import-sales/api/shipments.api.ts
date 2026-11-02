@@ -1052,6 +1052,22 @@ export const useLiquidateBrokerExpenseMutation = () => {
   });
 };
 
+export const useVerifyBrokerExpenseMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (dto: { expenseId: string; approvalRequestId: string }) => {
+      return await http<any>(`/api/import-sales/customs-brokers/expenses/${dto.expenseId}/verify`, {
+        method: 'POST',
+        body: JSON.stringify({ approvalRequestId: dto.approvalRequestId }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customs-brokers'] });
+      queryClient.invalidateQueries({ queryKey: ['customs-broker-statement'] });
+    },
+  });
+};
+
 export const useCustomsBrokerStatementQuery = (brokerId: string) => {
   return useQuery({
     queryKey: ['customs-broker-statement', brokerId],

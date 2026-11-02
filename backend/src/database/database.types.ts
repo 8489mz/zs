@@ -5969,6 +5969,25 @@ export interface ImportBrokerExpenseTable {
   verified_by: number | null;
   verified_at: Date | null;
   notes: string | null;
+  /** Late-expense event carrying the post-receipt revaluation spread, when capitalised after posting. NULL otherwise. */
+  late_expense_event_id?: number | null;
+  /** Capitalisation treatment: 'folded' | 'consumed' | 'revalued' | 'expensed' | 'vat_asset'. NULL on legacy rows. */
+  capitalization_state?: string | null;
+  /** User who liquidated the expense (maker-checker identity for verification). NULL on legacy rows. */
+  created_by?: number | null;
+  created_at: Generated<Date>;
+}
+
+export interface ImportBrokerCapitalizationTable {
+  id: Generated<number>;
+  tenant_id: string;
+  broker_expense_id: string;
+  shipment_id: string;
+  cost_bucket: string | null;
+  amount_egp: ImportNumeric;
+  state: string;
+  late_expense_event_id: number | null;
+  created_by: number | null;
   created_at: Generated<Date>;
 }
 
@@ -5984,6 +6003,8 @@ export interface ImportLateExpenseEventTable {
   created_by: number | null;
   created_at: Generated<Date>;
   idempotency_key: string | null;
+  /** Broker expense capitalised through this event (post-receipt revaluation path). NULL for ordinary late expenses. */
+  broker_expense_id?: string | null;
 }
 
 export interface ImportContainerRefundEventTable {
@@ -6168,6 +6189,7 @@ export interface Database {
   import_customs_brokers: ImportCustomsBrokerTable;
   import_broker_advances: ImportBrokerAdvanceTable;
   import_broker_expenses: ImportBrokerExpenseTable;
+  import_broker_capitalizations: ImportBrokerCapitalizationTable;
   import_container_deposits: ImportContainerDepositTable;
   import_container_refund_events: ImportContainerRefundEventTable;
   import_late_expense_events: ImportLateExpenseEventTable;

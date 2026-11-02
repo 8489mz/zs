@@ -3,7 +3,7 @@ import { Injectable, NotFoundException, BadRequestException, ConflictException, 
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { AccountingTenantFoundationService } from '../accounting/accounting-tenant-foundation.service';
 import { Kysely, sql, Transaction, Selectable, Updateable } from 'kysely';
-import { Database, ImportShipmentTable, ImportShipmentItemTable } from '../../database/database.types';
+import { Database, ImportInventoryReceiptTable, ImportShipmentTable, ImportShipmentItemTable } from '../../database/database.types';
 import { calculateImportLandedCosts, groupImportReceipts, requireImportNumber } from './import-inventory-cost.engine';
 import { revalueStockCost, revalueStockReturn, valueStockReceipt } from '../accounting/inventory-valuation';
 import { KYSELY_DB } from '../../database/database.constants';
@@ -44,6 +44,7 @@ import {
   ResolveExceptionDto,
   ReverseImportReceiptDto,
   ResolveLegacyReceiptDto,
+  VerifyBrokerExpenseDto,
 } from './dto/import-sales.dto';
 import { allocateSaleFromImportLots, calculateImportSaleCost } from './helpers/import-lot-allocation.helper';
 import { applyStockDelta, lockStockProducts } from '../../common/utils/location-stock-ledger';
@@ -64,6 +65,7 @@ import {
   validatePaymentEvidence,
 } from './engines/import-payment-method.engine';
 import { evaluateForm4Gate, FORM4_REQUIRED_THRESHOLD_USD } from './engines/import-form4-gate.engine';
+import { resolveBrokerCapitalizationBucket } from './engines/import-broker-capitalization.engine';
 
 @Injectable()
 export class ImportSalesService {
@@ -302,7 +304,7 @@ export class ImportSalesService {
     actionType: string,
     referenceId: string,
     approvalRequestId?: string,
-    expectedDetails?: { amount?: number; projectId?: string; partnerId?: string; currency?: string; proformaInvoiceId?: string; supplierId?: string; paymentMethod?: string; shipmentId?: string; receiptId?: string }
+    expectedDetails?: { amount?: number; projectId?: string; partnerId?: string; currency?: string; proformaInvoiceId?: string; supplierId?: string; paymentMethod?: string; shipmentId?: string; receiptId?: string; brokerExpenseId?: string }
   ): Promise<void> {
     if (!approvalRequestId) return;
 
@@ -377,6 +379,18 @@ export class ImportSalesService {
       if (expectedDetails?.receiptId && String(payload.receiptId ?? '') !== expectedDetails.receiptId) {
         throw new BadRequestException(
           `طلب الاعتماد مخصص لسند استلام (${payload.receiptId}) ولا يطابق سند الاستلام المطلوب (${expectedDetails.receiptId}).`
+        );
+      }
+
+      // Broker-expense binding (INV-IMPORT-BROKER-CAPITALISATION): a
+      // verification approval authorizes exactly one broker
+      // expense. The reference_id already binds the expense id;
+      // this payload check binds the expense id carried in the
+      // payload too, so a token minted for another receipt cannot
+      // verify this one.
+      if (expectedDetails?.brokerExpenseId && String(payload.brokerExpenseId ?? '') !== expectedDetails.brokerExpenseId) {
+        throw new BadRequestException(
+          `طلب الاعتماد مخصص لمصروف مخلص (${payload.brokerExpenseId}) ولا يطابق المصروف المطلوب (${expectedDetails.brokerExpenseId}).`
         );
       }
 
@@ -1970,6 +1984,27 @@ export class ImportSalesService {
           payload.transport_expense_id = await handleExpense(Number(dto.internalTransportCostEgp ?? shipment.internal_transport_cost_egp ?? 0), dto.transportAccountId, shipment.transport_expense_id, 'مصاريف نقل داخلي');
         }
       }
+      // Broker-capitalisation floor (INV-IMPORT-BROKER-CAPITALISATION):
+      // a cost bucket that already carries folded broker expenses
+      // can never be set below their sum: lowering it would silently
+      // remove a cost the receipt journal is about to recognise
+      // against the broker advance. Post-receipt the buckets are
+      // frozen above, so this floor only binds pre-receipt writes.
+      const bucketFloorColumns = ['customs_cost_egp', 'actual_demurrage_fees', 'internal_transport_cost_egp'] as const;
+      const flooredBuckets = bucketFloorColumns.filter((column) => (payload as any)[column] !== undefined);
+      if (flooredBuckets.length > 0) {
+        const foldedSums = await trx.selectFrom('import_broker_capitalizations')
+          .select(['cost_bucket', sql<number>`coalesce(sum(amount_egp), 0)`.as('folded_total')])
+          .where('tenant_id', '=', tenantId).where('shipment_id', '=', shipmentId).where('state', '=', 'folded')
+          .groupBy('cost_bucket')
+          .execute();
+        for (const column of flooredBuckets) {
+          const folded = Number(foldedSums.find((row) => row.cost_bucket === column)?.folded_total || 0);
+          if (Number((payload as any)[column]) < folded - 0.001) {
+            throw new BadRequestException(`لا يمكن تخفيض بند التكلفة (${column}) دون إجمالي مصروفات المخلص المرسملة فيه (${folded.toFixed(2)} ج.م). [IMPORT_BROKER_CAPITALIZATION_FLOOR]`);
+          }
+        }
+      }
       const updated = Object.keys(payload).length ? await trx.updateTable('import_shipments').set(payload)
         .where('tenant_id', '=', tenantId).where('id', '=', shipmentId).returningAll().executeTakeFirstOrThrow() : shipment;
       // Marking Arrived requires a real arrival rate on the stored
@@ -2164,10 +2199,26 @@ export class ImportSalesService {
     // --- ACCOUNTING: Double-entry journal for inventory receipt ---
     // DR: Inventory (at total landed cost of all received goods)
     // DR: Shortage Expense (if any items had shortage_handling_method = 'expense')
-    // CR: Accounts Payable / Supplier (total)
+    // CR: Accounts Payable / Supplier (total), less the broker
+    // costs already spent from broker advances and folded into
+    // the shipment buckets (INV-IMPORT-BROKER-CAPITALISATION).
+    // Those folded amounts reach inventory through the landed
+    // cost above, but they were never owed to the supplier: the
+    // credit for them relieves the broker-advance asset instead.
+    // The split keeps the journal balanced and the supplier
+    // subledger honest, and the package-3 reversal mirrors both
+    // credit legs because they share this one journal.
     const totalInventoryValue = Number(groups.reduce((sum, g) => sum + g.value, 0).toFixed(2));
     const totalShortageExpense = Number(groups.reduce((sum, g) => sum + g.shortageExpense, 0).toFixed(2));
     const totalCreditPayable = Number((totalInventoryValue + totalShortageExpense).toFixed(2));
+    const foldedRows = await trx.selectFrom('import_broker_capitalizations')
+      .select(['id', 'broker_expense_id', 'amount_egp'])
+      .where('tenant_id', '=', tenantId).where('shipment_id', '=', shipmentId).where('state', '=', 'folded')
+      .execute();
+    const foldedBrokerTotal = Number(foldedRows.reduce((sum, r) => sum + Number(r.amount_egp || 0), 0).toFixed(2));
+    if (foldedBrokerTotal > totalInventoryValue + 0.001) {
+      throw new BadRequestException('إجمالي مصروفات المخلص المرسملة يتجاوز قيمة المخزون المستلم؛ راجع بنود تكلفة الشحنة قبل الترحيل. [IMPORT_BROKER_CAPITALIZATION_EXCEEDS_LANDED]');
+    }
 
     if (totalCreditPayable > 0) {
       const postingService = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
@@ -2210,17 +2261,37 @@ export class ImportSalesService {
         });
       }
 
-      // CR: Accounts Payable / Supplier
-      journalLines.push({
-        accountId: payableAccountId,
-        description: `استحقاق مورد استيراد - حاوية ${shipment.container_number || shipmentId}`,
-        debit: 0,
-        credit: totalCreditPayable,
-        partnerType: 'supplier',
-        partnerId: effectiveReceiptSupplierId,
-        branchId: receiptBranchId,
-        locationId: Number(receiptLocationId),
-      });
+      // CR: Accounts Payable / Supplier (landed value less the
+      // broker-advance-funded folded portion)
+      const supplierCredit = Number((totalCreditPayable - foldedBrokerTotal).toFixed(2));
+      if (supplierCredit > 0) {
+        journalLines.push({
+          accountId: payableAccountId,
+          description: `استحقاق مورد استيراد - حاوية ${shipment.container_number || shipmentId}`,
+          debit: 0,
+          credit: supplierCredit,
+          partnerType: 'supplier',
+          partnerId: effectiveReceiptSupplierId,
+          branchId: receiptBranchId,
+          locationId: Number(receiptLocationId),
+        });
+      }
+
+      // CR: Broker-advance asset (folded broker costs already
+      // spent from the advance; no supplier payable arises)
+      if (foldedBrokerTotal > 0) {
+        const advanceAccountId = await this.resolveTenantAccount(trx, tenantId, 'broker_advance');
+        journalLines.push({
+          accountId: advanceAccountId,
+          description: `تخفيض عهدة المخلص الجمركي بمصروفات مرسملة - حاوية ${shipment.container_number || shipmentId}`,
+          debit: 0,
+          credit: foldedBrokerTotal,
+          partnerType: 'none',
+          partnerId: null,
+          branchId: receiptBranchId,
+          locationId: Number(receiptLocationId),
+        });
+      }
 
       const journalEntryId = await postingService.postDomainJournal(trx, {
         sourceType: 'import_inventory_receipt',
@@ -2240,6 +2311,23 @@ export class ImportSalesService {
         .set({ journal_entry_id: journalEntryId })
         .where('tenant_id', '=', tenantId)
         .where('id', '=', receipt.id)
+        .execute();
+    }
+
+    // Consume the folded capitalisations: the receipt journal
+    // above is their single GL recognition. A consumed fold can
+    // never be recognised again, and the expense rows record the
+    // same transition so the two sides of the link always agree.
+    if (foldedRows.length > 0) {
+      await trx.updateTable('import_broker_capitalizations')
+        .set({ state: 'consumed' })
+        .where('tenant_id', '=', tenantId)
+        .where('id', 'in', foldedRows.map((r) => Number(r.id)))
+        .execute();
+      await trx.updateTable('import_broker_expenses')
+        .set({ capitalization_state: 'consumed' })
+        .where('tenant_id', '=', tenantId)
+        .where('id', 'in', foldedRows.map((r) => r.broker_expense_id))
         .execute();
     }
 
@@ -2657,35 +2745,47 @@ export class ImportSalesService {
     };
   }
 
-  async processLateShipmentExpense(
+  /**
+   * Shared cost-revaluation core (INV-IMPORT-BROKER-CAPITALISATION):
+   * spreads one landed-cost amount over a posted receipt's lots and
+   * WAC pool exactly like a late expense, in the caller's
+   * transaction. The credit leg is either the supplier payable
+   * (ordinary late expense) or the broker-advance asset (a
+   * liquidated broker expense capitalised after posting). The
+   * caller owns the shipment lock, the posted-receipt proof and
+   * the credit-side identity; this core never defaults either.
+   */
+  private async applyImportCostRevaluation(
+    trx: Transaction<Database>,
     tenantId: string,
     userId: number,
-    shipmentId: string,
-    dto: ProcessLateExpenseDto
+    shipment: Selectable<ImportShipmentTable>,
+    receipt: Selectable<ImportInventoryReceiptTable> | undefined,
+    opts: {
+      amount: number;
+      title: string;
+      note?: string | null;
+      idempotencyKey?: string;
+      accountId?: number | null;
+      payableAccountId?: number | null;
+      credit: { kind: 'payable'; supplierId: number } | { kind: 'broker_advance'; accountId: number };
+      brokerExpenseId?: string;
+    },
   ) {
-    return await this.inventoryDb.transaction().execute(async (trx) => {
-      const state = await this.lockShipment(trx, tenantId, shipmentId);
-      const { shipment, receipt } = state;
       if (!receipt || receipt.state !== 'posted') {
-        throw new BadRequestException('لا يمكن تسجيل مصروفات متأخرة إلا بعد استلام الشحنة وترحيل المخزون.');
+        throw new BadRequestException('لا يمكن تسوية تكلفة إلا بعد استلام الشحنة وترحيل المخزون.');
       }
+      const shipmentId = shipment.id;
 
-      // Fail closed BEFORE any revaluation or journal write: the
-      // payable supplier must be identified now, never defaulted later.
-      // Branch/location stay null on these lines: on-hand is read
-      // company-wide across locations, so no single receipt location
-      // can be attributed honestly here.
-      const effectiveExpenseSupplierId = await this.resolveImportReceiptSupplierId(trx, tenantId, shipment);
-
-      if (!Number.isFinite(dto.lateExpenseAmount) || dto.lateExpenseAmount <= 0) {
-        throw new BadRequestException('مبلغ المصروف المتأخر يجب أن يكون أكبر من صفر.');
+      if (!Number.isFinite(opts.amount) || opts.amount <= 0) {
+        throw new BadRequestException('مبلغ التسوية يجب أن يكون أكبر من صفر.');
       }
       // Idempotency (the deposit/preorder refund pattern): a supplied
       // key is checked before any write, and a provisional event row
       // is inserted after validation (pass 1) so the partial unique
       // index serialises concurrent retries. Without a key the call
       // behaves exactly as before.
-      const lateExpenseKey = dto.idempotencyKey ? String(dto.idempotencyKey).trim() : '';
+      const lateExpenseKey = opts.idempotencyKey ? String(opts.idempotencyKey).trim() : '';
       if (lateExpenseKey.length > 128) {
         throw new BadRequestException('مفتاح عدم التكرار للمصروف المتأخر يجب ألا يتجاوز 128 حرفاً.');
       }
@@ -2757,7 +2857,7 @@ export class ImportSalesService {
       // Book digits: per-item adjustments round at the tenant base
       // currency's digits so their sum equals the journal totals.
       const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
-      const roundedTotal = roundMoney(dto.lateExpenseAmount, digits);
+      const roundedTotal = roundMoney(opts.amount, digits);
 
       let totalSoldUnits = 0;
       let totalOnHandUnits = 0;
@@ -2869,13 +2969,14 @@ export class ImportSalesService {
             .values({
               tenant_id: tenantId,
               shipment_id: shipmentId,
-              title: dto.title,
-              total_amount_egp: dto.lateExpenseAmount,
+              title: opts.title,
+              total_amount_egp: opts.amount,
               inventory_amount_egp: roundedTotal,
               cogs_amount_egp: 0,
               created_by: userId,
               journal_entry_id: null,
               idempotency_key: lateExpenseKey,
+              broker_expense_id: opts.brokerExpenseId ?? null,
             })
             .returning('id')
             .executeTakeFirstOrThrow();
@@ -2932,10 +3033,19 @@ export class ImportSalesService {
           .execute();
       }
 
-      // Resolve accounts dynamically from COA / Accounting Settings
-      const cogsAccountId = await this.resolveTenantAccount(trx, tenantId, 'cogs', dto.accountId ? Number(dto.accountId) : null);
+      // Resolve accounts dynamically from COA / Accounting Settings.
+      // Branch/location stay null on these lines: on-hand is read
+      // company-wide across locations, so no single receipt location
+      // can be attributed honestly here.
+      const cogsAccountId = await this.resolveTenantAccount(trx, tenantId, 'cogs', opts.accountId ? Number(opts.accountId) : null);
       const inventoryAccountId = await this.resolveTenantAccount(trx, tenantId, 'inventory');
-      const payableAccountId = await this.resolveTenantAccount(trx, tenantId, 'payable', dto.payableAccountId ? Number(dto.payableAccountId) : null);
+      // The credit side is caller-owned: the supplier payable for an
+      // ordinary late expense, the broker-advance asset (already
+      // resolved by the caller, never defaulted here) for a
+      // capitalised broker expense.
+      const creditAccountId = opts.credit.kind === 'payable'
+        ? await this.resolveTenantAccount(trx, tenantId, 'payable', opts.payableAccountId ? Number(opts.payableAccountId) : null)
+        : opts.credit.accountId;
 
       let expenseId: number | null = null;
       if (totalLateCogs > 0) {
@@ -2944,11 +3054,11 @@ export class ImportSalesService {
           .values({
             tenant_id: tenantId,
             account_id: String(cogsAccountId),
-            title: `${dto.title} (تسوية تكلفة متأخرة على مبيعات سابقة) - حاوية ${shipment.container_number}`,
+            title: `${opts.title} (تسوية تكلفة متأخرة على مبيعات سابقة) - حاوية ${shipment.container_number}`,
             amount: totalLateCogs,
             expense_date: new Date().toISOString().slice(0, 10),
             created_by: userId,
-            note: dto.note || `تم تحميل ${totalSoldUnits} وحدة مباعة بقيمة ${totalLateCogs} ج.م`,
+            note: opts.note || `تم تحميل ${totalSoldUnits} وحدة مباعة بقيمة ${totalLateCogs} ج.م`,
             branch_id: null,
             location_id: null,
           })
@@ -2974,9 +3084,10 @@ export class ImportSalesService {
       } else {
         lateExpenseDocument = await trx.insertInto('import_late_expense_events').values({
           tenant_id: tenantId, shipment_id: shipmentId,
-          title: dto.title, total_amount_egp: roundedTotal,
+          title: opts.title, total_amount_egp: roundedTotal,
           inventory_amount_egp: totalLateInventory, cogs_amount_egp: totalLateCogs,
           created_by: userId, journal_entry_id: null,
+          broker_expense_id: opts.brokerExpenseId ?? null,
         }).returning('id').executeTakeFirstOrThrow();
       }
       const postingService = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
@@ -3005,24 +3116,46 @@ export class ImportSalesService {
           locationId: null,
         });
       }
-      lines.push({
-        accountId: payableAccountId,
-        description: `استحقاق مصروف متأخر - حاوية ${shipment.container_number}`,
-        debit: 0,
-        credit: roundedTotal,
-        partnerType: 'supplier',
-        partnerId: effectiveExpenseSupplierId,
-        branchId: null,
-        locationId: null,
-      });
+      if (opts.credit.kind === 'payable') {
+        lines.push({
+          accountId: creditAccountId,
+          description: `استحقاق مصروف متأخر - حاوية ${shipment.container_number}`,
+          debit: 0,
+          credit: roundedTotal,
+          partnerType: 'supplier',
+          partnerId: opts.credit.supplierId,
+          branchId: null,
+          locationId: null,
+        });
+      } else {
+        // Capitalised broker expense: the advance asset is relieved
+        // here, in the same transaction as the spread. No supplier
+        // payable is created for money already spent from the
+        // broker's advance, and no separate broker journal is
+        // posted for the capitalised portion.
+        lines.push({
+          accountId: creditAccountId,
+          description: `تخفيض عهدة المخلص الجمركي برسملة مصروف - حاوية ${shipment.container_number}`,
+          debit: 0,
+          credit: roundedTotal,
+          partnerType: 'none',
+          partnerId: null,
+          branchId: null,
+          locationId: null,
+        });
+      }
 
       const journalEntryId = await postingService.postDomainJournal(trx, {
-        sourceType: 'import_late_expense',
+        // The broker-capitalisation journal carries no supplier
+        // payable leg, so it must not run the partner-subledger
+        // sync (its allowlist is the payable-carrying source
+        // types); the advance-asset leg has no partner subledger.
+        sourceType: opts.credit.kind === 'payable' ? 'import_late_expense' : 'import_broker_capitalization',
         sourceId: Number(lateExpenseDocument.id),
         tenantId,
         accountId: tenantId,
         entryDate: new Date(),
-        description: `تسوية مصروف استيراد متأخر - حاوية ${shipment.container_number} (${dto.title})`,
+        description: `تسوية مصروف استيراد متأخر - حاوية ${shipment.container_number} (${opts.title})`,
         branchId: null,
         locationId: null,
         createdBy: userId,
@@ -3045,17 +3178,55 @@ export class ImportSalesService {
         .execute();
 
       return {
+        journalEntryId,
+        lateExpenseEventId: lateExpenseDocument.id,
+        roundedTotal,
+        totalLateCogs,
+        totalLateInventory,
+        soldQuantity: totalSoldUnits,
+        onHandQuantity: totalOnHandUnits,
+        cogsExpenseId: expenseId,
+      };
+  }
+
+  async processLateShipmentExpense(
+    tenantId: string,
+    userId: number,
+    shipmentId: string,
+    dto: ProcessLateExpenseDto
+  ) {
+    return await this.inventoryDb.transaction().execute(async (trx) => {
+      const state = await this.lockShipment(trx, tenantId, shipmentId);
+      const { shipment, receipt } = state;
+      if (!receipt || receipt.state !== 'posted') {
+        throw new BadRequestException('لا يمكن تسجيل مصروفات متأخرة إلا بعد استلام الشحنة وترحيل المخزون.');
+      }
+
+      // Fail closed BEFORE any revaluation or journal write: the
+      // payable supplier must be identified now, never defaulted later.
+      const effectiveExpenseSupplierId = await this.resolveImportReceiptSupplierId(trx, tenantId, shipment);
+
+      const result = await this.applyImportCostRevaluation(trx, tenantId, userId, shipment, receipt, {
+        amount: dto.lateExpenseAmount,
+        title: dto.title,
+        note: dto.note,
+        idempotencyKey: dto.idempotencyKey,
+        accountId: dto.accountId ? Number(dto.accountId) : null,
+        payableAccountId: dto.payableAccountId ? Number(dto.payableAccountId) : null,
+        credit: { kind: 'payable', supplierId: effectiveExpenseSupplierId },
+      });
+      return {
         success: true,
         message: 'تمت معالجة المصروف المتأخر وتوزيعه محاسبياً بين تكلفة البضاعة المباعة والمخزون المتبقي بنجاح.',
         allocation: {
-          lateExpenseAmount: roundedTotal,
-          lateCogsAdjustmentEgp: totalLateCogs,
-          lateInventoryAdjustmentEgp: totalLateInventory,
-          soldQuantity: totalSoldUnits,
-          onHandQuantity: totalOnHandUnits,
-          journalEntryId,
+          lateExpenseAmount: result.roundedTotal,
+          lateCogsAdjustmentEgp: result.totalLateCogs,
+          lateInventoryAdjustmentEgp: result.totalLateInventory,
+          soldQuantity: result.soldQuantity,
+          onHandQuantity: result.onHandQuantity,
+          journalEntryId: result.journalEntryId,
         },
-        cogsExpenseId: expenseId,
+        cogsExpenseId: result.cogsExpenseId,
       };
     });
   }
@@ -4790,6 +4961,31 @@ export class ImportSalesService {
         );
       }
 
+      // Guard: No unverified broker expenses (INV-IMPORT-BROKER-
+      // CAPITALISATION). A project cannot close while a
+      // liquidated broker expense still awaits its maker-checker
+      // verification: the capitalisation underneath it is
+      // attested by one person only.
+      const unverifiedExpenses = await trx
+        .selectFrom('import_broker_expenses')
+        .select(['receipt_no', 'amount_egp'])
+        .where('tenant_id', '=', tenantId)
+        .where((eb) =>
+          eb.or([
+            eb('project_id', '=', projectId),
+            shipments.length > 0 ? eb('shipment_id', 'in', shipments.map((s) => s.id)) : sql`1=0`,
+          ])
+        )
+        .where('is_verified', '=', false)
+        .execute();
+
+      if (unverifiedExpenses.length > 0) {
+        const first = unverifiedExpenses[0];
+        throw new BadRequestException(
+          `لا يمكن إقفال المشروع: يوجد مصروف مخلص غير متحقق منه (إيصال #${first.receipt_no}، ${Number(first.amount_egp).toFixed(2)} ج.م) يلزم التحقق منه بموافقة معتمدة أولاً.`
+        );
+      }
+
       const startDate = project.created_at || new Date('2020-01-01');
       const profitReport = await this.generatePeriodProfitReport(tenantId, startDate, new Date(), projectId, trx);
 
@@ -5661,6 +5857,34 @@ export class ImportSalesService {
       if (Number(dto.amountEgp) > Number(advanceForValidation.remaining_amount_egp || 0) + 0.001) {
         throw new BadRequestException('قيمة تسوية المخلص تتجاوز الرصيد المتبقي من العهدة.');
       }
+
+      // Capitalisation routing (INV-IMPORT-BROKER-CAPITALISATION),
+      // decided BEFORE any write. A capitalised expense reaches
+      // the GL exactly once: folded into a shipment cost bucket
+      // when no receipt has posted, or spread by revaluation when
+      // the receipt has posted. A frozen legacy-review receipt
+      // blocks both (resolve the review first). Without a
+      // shipment there is nowhere to capitalise: fail closed
+      // instead of silently expensing a capitalised cost.
+      const wantsCapitalize = dto.isCapitalized ?? true;
+      const vatAsset = dto.isRefundableVat ?? false;
+      const effectiveShipmentId: string | null = dto.shipmentId ?? advanceForValidation.shipment_id ?? null;
+      let capitalizationState: 'folded' | 'revalued' | 'expensed' | 'vat_asset';
+      let lockedShipment: Awaited<ReturnType<ImportSalesService['lockShipment']>> | null = null;
+      if (vatAsset) {
+        capitalizationState = 'vat_asset';
+      } else if (!wantsCapitalize) {
+        capitalizationState = 'expensed';
+      } else {
+        if (!effectiveShipmentId) {
+          throw new BadRequestException('مصروف مخلص مرسمل يتطلب شحنة مرتبطة (من الإيصال أو من العهدة)؛ بلا شحنة لا يوجد مكان ترسمل فيه التكلفة. [IMPORT_BROKER_EXPENSE_NO_SHIPMENT]');
+        }
+        lockedShipment = await this.lockShipment(trx, tenantId, effectiveShipmentId);
+        if (lockedShipment.receipt && lockedShipment.receipt.state === 'legacy_review_required') {
+          throw new BadRequestException('لا يمكن تسوية مصروف مخلص مرسمل على شحنة استلامها مجمد للمراجعة؛ سوِّ المراجعة المعتمدة أولاً ثم أعد التسوية. [IMPORT_BROKER_EXPENSE_LEGACY_RECEIPT]');
+        }
+        capitalizationState = lockedShipment.receipt?.state === 'posted' ? 'revalued' : 'folded';
+      }
       const expense = await trx
         .insertInto('import_broker_expenses')
         .values({
@@ -5676,10 +5900,18 @@ export class ImportSalesService {
           is_capitalized: dto.isCapitalized ?? true,
           is_refundable_vat: dto.isRefundableVat ?? false,
           attachment_url: dto.attachmentUrl || null,
-          is_verified: true,
-          verified_by: userId,
-          verified_at: new Date(),
+          // Maker-checker (INV-IMPORT-BROKER-CAPITALISATION): the
+          // liquidator never verifies their own expense. Verification
+          // is a separate approval-gated step (verifyBrokerExpense);
+          // created_by records the liquidator so that step can
+          // enforce the separation.
+          is_verified: false,
+          verified_by: null,
+          verified_at: null,
           notes: dto.notes || null,
+          created_by: userId,
+          capitalization_state: capitalizationState,
+          late_expense_event_id: null,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -5710,11 +5942,73 @@ export class ImportSalesService {
           .execute();
       }
 
-      {
-        const creditAccId = await this.resolveTenantAccount(trx, tenantId, 'broker_advance');
-        let debitRole: 'vat_receivable' | 'inventory' | 'cogs' = 'cogs';
-        if (dto.isRefundableVat) debitRole = 'vat_receivable';
-        else if (dto.isCapitalized) debitRole = 'inventory';
+      // Path execution: the advance settlement above is bookkeeping
+      // only. The GL effect arrives exactly once, through the path
+      // decided before the insert. The old lump-sum Dr-inventory
+      // journal is gone: it inflated the inventory account without
+      // touching any lot, WAC pool or landed cost, and it double-
+      // counted whenever the same cost also sat in a shipment
+      // cost bucket.
+      const advanceAccountId = await this.resolveTenantAccount(trx, tenantId, 'broker_advance');
+      if (capitalizationState === 'folded') {
+        const bucketDecision = resolveBrokerCapitalizationBucket(dto.category, vatAsset);
+        if (!bucketDecision.bucket) {
+          throw new BadRequestException(`فئة مصروف المخلص (${dto.category}) بلا بند تكلفة شحنة قبل الاستلام؛ سجّلها بعد ترحيل الاستلام لتُرسمل عبر التسوية، أو كأصل ضريبي إن كانت ضريبة مستردة. [IMPORT_BROKER_EXPENSE_NO_BUCKET]`);
+        }
+        const bucket = bucketDecision.bucket;
+        await trx.insertInto('import_broker_capitalizations').values({
+          tenant_id: tenantId,
+          broker_expense_id: expense.id,
+          shipment_id: effectiveShipmentId as string,
+          cost_bucket: bucket,
+          amount_egp: Number(dto.amountEgp),
+          state: 'folded',
+          late_expense_event_id: null,
+          created_by: userId,
+        }).execute();
+        // Fold the amount into the bucket itself: the receipt
+        // journal will carry it into landed cost, and the bucket
+        // floor in updateShipmentCosts prevents removing it
+        // afterwards. The fold creates no expenses row and no
+        // journal: the cost reaches the GL once, at receipt.
+        await trx.updateTable('import_shipments')
+          .set((eb) => ({ [bucket]: sql`coalesce(${eb.ref(bucket)}, 0) + ${Number(dto.amountEgp)}` }))
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', effectiveShipmentId as string)
+          .execute();
+      } else if (capitalizationState === 'revalued') {
+        const revaluation = await this.applyImportCostRevaluation(
+          trx, tenantId, userId,
+          lockedShipment!.shipment, lockedShipment!.receipt,
+          {
+            amount: Number(dto.amountEgp),
+            title: `تسوية مخلص (${dto.category}) - إيصال #${dto.receiptNo}`,
+            note: dto.notes || null,
+            credit: { kind: 'broker_advance', accountId: advanceAccountId },
+            brokerExpenseId: expense.id,
+          },
+        );
+        await trx.insertInto('import_broker_capitalizations').values({
+          tenant_id: tenantId,
+          broker_expense_id: expense.id,
+          shipment_id: effectiveShipmentId as string,
+          cost_bucket: null,
+          amount_egp: Number(dto.amountEgp),
+          state: 'revalued',
+          late_expense_event_id: revaluation.lateExpenseEventId,
+          created_by: userId,
+        }).execute();
+        await trx.updateTable('import_broker_expenses')
+          .set({ late_expense_event_id: revaluation.lateExpenseEventId })
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', expense.id)
+          .execute();
+      } else {
+        // Period expense or VAT asset: the money is spent and the
+        // advance is relieved now. Capitalised treatment never
+        // reaches this branch.
+        let debitRole: 'vat_receivable' | 'cogs' = 'cogs';
+        if (vatAsset) debitRole = 'vat_receivable';
         const debitAccId = await this.resolveTenantAccount(trx, tenantId, debitRole);
 
         const posting = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
@@ -5741,7 +6035,7 @@ export class ImportSalesService {
               locationId: null,
             },
             {
-              accountId: creditAccId,
+              accountId: advanceAccountId,
               debit: 0,
               credit: Number(dto.amountEgp),
               description: `تخفيض عهدة المخلص الجمركي بإيصال #${dto.receiptNo}`,
@@ -5755,6 +6049,44 @@ export class ImportSalesService {
       }
 
       return expense;
+    });
+  }
+
+  /**
+   * Maker-checker verification of a liquidated broker expense
+   * (INV-IMPORT-BROKER-CAPITALISATION). The liquidator never
+   * verifies their own expense: the consumer must differ from
+   * the expense's created_by, and must present a single-use
+   * approval token bound to this exact expense id and amount
+   * ceiling (the decision-time self-approval block in
+   * decideApprovalRequest is the second leg). Verification
+   * changes no amount, no journal and no capitalisation: it only
+   * attests that a second person reviewed the evidence.
+   */
+  async verifyBrokerExpense(tenantId: string, userId: number, expenseId: string, dto: VerifyBrokerExpenseDto) {
+    if (!dto.approvalRequestId) {
+      throw new BadRequestException('التحقق من مصروف مخلص يتطلب موافقة Maker-Checker معتمدة.');
+    }
+    return await this.db.transaction().execute(async (trx) => {
+      const expense = await trx.selectFrom('import_broker_expenses').selectAll()
+        .where('tenant_id', '=', tenantId).where('id', '=', expenseId)
+        .forUpdate().executeTakeFirst();
+      if (!expense) throw new BadRequestException('مصروف المخلص غير تابع للمنشأة.');
+      if (expense.is_verified) {
+        throw new ConflictException('تم التحقق من مصروف المخلص مسبقاً.');
+      }
+      if (expense.created_by !== null && expense.created_by !== undefined && Number(expense.created_by) === userId) {
+        throw new BadRequestException('مبدأ الرقابة الثنائية (Maker-Checker): لا يجوز لمن سوّى المصروف التحقق منه بنفسه. [IMPORT_BROKER_EXPENSE_SELF_VERIFICATION]');
+      }
+      await this.verifyAndConsumeApprovalRequest(trx, tenantId, 'broker_expense_verification', expenseId, dto.approvalRequestId, {
+        brokerExpenseId: expenseId,
+        amount: Number(expense.amount_egp),
+      });
+      return await trx.updateTable('import_broker_expenses')
+        .set({ is_verified: true, verified_by: userId, verified_at: new Date() })
+        .where('tenant_id', '=', tenantId).where('id', '=', expenseId)
+        .returningAll()
+        .executeTakeFirstOrThrow();
     });
   }
 
@@ -7012,6 +7344,12 @@ export class ImportSalesService {
       const payload = dto.requestPayload;
       if (!payload || payload.shipmentId !== dto.referenceId || !String(payload.receiptId || '').trim()) {
         throw new BadRequestException('اعتماد عكس/مراجعة الاستلام يتطلب ربط الشحنة وسند الاستلام بالمرجع نفسه.');
+      }
+    }
+    if (dto.actionType === 'broker_expense_verification') {
+      const payload = dto.requestPayload;
+      if (!payload || String(payload.brokerExpenseId || '') !== String(dto.referenceId) || !Number.isFinite(Number(payload.amount)) || Number(payload.amount) <= 0) {
+        throw new BadRequestException('اعتماد التحقق من مصروف مخلص يتطلب ربط المصروف بالمرجع نفسه وسقف مبلغ موجب.');
       }
     }
     return await this.db

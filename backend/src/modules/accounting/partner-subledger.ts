@@ -10,13 +10,29 @@ export async function syncPostedPartnerLedger(db: Kysely<Database>, tenantId: st
   const movements = await db.selectFrom('journal_entry_lines as l')
     .innerJoin('accounting_accounts as a', join => join.onRef('a.id', '=', 'l.account_id').onRef('a.tenant_id', '=', 'l.tenant_id'))
     .innerJoin('journal_entries as j', join => join.onRef('j.id', '=', 'l.journal_entry_id').onRef('j.tenant_id', '=', 'l.tenant_id'))
-    .select(['l.partner_type', 'l.partner_id', 'l.debit', 'l.credit', 'l.branch_id', 'l.location_id', 'j.entry_date', 'j.description', 'j.account_id', 'j.created_by'])
+    .select(['l.partner_type', 'l.partner_id', 'l.debit', 'l.credit', 'l.branch_id', 'l.location_id', 'j.entry_date', 'j.description', 'j.account_id', 'j.created_by', 'j.source_type', 'a.code', 'a.is_receivable', 'a.is_payable'])
     .where('l.tenant_id', '=', tenantId).where('j.tenant_id', '=', tenantId).where('l.journal_entry_id', '=', entryId)
     .where(eb => eb.or([eb('a.is_receivable', '=', true), eb('a.is_payable', '=', true), eb('a.code', 'in', ['1130', '2110'])]))
     .orderBy('l.partner_type').orderBy('l.partner_id').execute();
   const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(db, tenantId));
   const groups = new Map<string, { row: typeof movements[number]; amount: number }>();
   for (const row of movements) {
+    // Broker-capitalisation receipt leg (INV-IMPORT-BROKER-
+    // CAPITALISATION): the broker-advance asset (code 1130
+    // fallback, never flagged receivable/payable) is relieved by
+    // a partner-less credit line on the receipt journal and its
+    // reversal mirror. It has no partner subledger: the advance
+    // bookkeeping is its counterparty. The exemption is scoped
+    // to receipt journals and to unflagged 1130 accounts only;
+    // a partner-less line on any flagged control account still
+    // throws below.
+    if (
+      (!row.partner_id || row.partner_type === 'none') &&
+      (row.source_type === 'import_inventory_receipt' || row.source_type === 'import_inventory_receipt_reversal') &&
+      row.code === '1130' && !row.is_receivable && !row.is_payable
+    ) {
+      continue;
+    }
     if (!['customer', 'supplier'].includes(row.partner_type) || !row.partner_id) throw new BadRequestException('حركة الحساب الرقابي تتطلب شريكاً محدداً من نفس المنشأة.');
     const key = `${row.partner_type}:${row.partner_id}`;
     const group = groups.get(key) || { row, amount: 0 };

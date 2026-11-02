@@ -40,6 +40,7 @@ import {
   CloseImportProjectDto,
   ReverseImportReceiptDto,
   ResolveLegacyReceiptDto,
+  VerifyBrokerExpenseDto,
 } from './dto/import-sales.dto';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
@@ -651,6 +652,12 @@ export class ImportSalesController {
   @Post('customs-brokers/liquidate')
   async liquidateBrokerExpenses(@Req() req: RequestWithAuth, @Body() dto: LiquidateBrokerExpenseDto) {
     return this.importSalesService.liquidateBrokerExpenses(req.authContext!.tenantId!, req.authContext!.userId!, dto);
+  }
+
+  @RequireAnyPermission('accounting', 'purchases')
+  @Post('customs-brokers/expenses/:id/verify')
+  async verifyBrokerExpense(@Req() req: RequestWithAuth, @Param('id') expenseId: string, @Body() dto: VerifyBrokerExpenseDto) {
+    return this.importSalesService.verifyBrokerExpense(req.authContext!.tenantId!, req.authContext!.userId!, expenseId, dto);
   }
 
   // ==========================================

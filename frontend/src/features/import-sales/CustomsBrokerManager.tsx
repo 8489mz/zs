@@ -6,6 +6,7 @@ import {
   useCreateCustomsBrokerMutation,
   useDisburseBrokerAdvanceMutation,
   useLiquidateBrokerExpenseMutation,
+  useVerifyBrokerExpenseMutation,
   useCustomsBrokerStatementQuery,
   useShipmentsQuery,
   useImportProjectsQuery,
@@ -27,6 +28,13 @@ export function CustomsBrokerManager() {
   const createBrokerMutation = useCreateCustomsBrokerMutation();
   const disburseAdvanceMutation = useDisburseBrokerAdvanceMutation();
   const liquidateExpenseMutation = useLiquidateBrokerExpenseMutation();
+  const verifyExpenseMutation = useVerifyBrokerExpenseMutation();
+
+  // Broker-expense verification state (maker-checker: the
+  // verifier must differ from the liquidator; the token is
+  // minted in the approvals screen).
+  const [verifyExpenseId, setVerifyExpenseId] = useState('');
+  const [verifyTokenId, setVerifyTokenId] = useState('');
 
   // Modals
   const [isCreateBrokerOpen, setIsCreateBrokerOpen] = useState(false);
@@ -167,6 +175,14 @@ export function CustomsBrokerManager() {
       toast.error('مبلغ التصفية يجب أن يكون أكبر من صفر');
       return;
     }
+    // A capitalised settlement with no linked shipment has nowhere
+    // to capitalise: the backend fails it closed. Surface the
+    // requirement here instead of a bare server error.
+    const targetAdvance = activeBrokerAdvances.find((a: any) => a.id === targetAdvanceId);
+    if ((isRefundableVat ? false : isCapitalized) && !selectedShipmentId && !targetAdvance?.shipment_id) {
+      toast.error('التسوية المرسملة تتطلب شحنة مرتبطة: اختر شحنة أو عهدة مرتبطة بشحنة');
+      return;
+    }
     try {
       await liquidateExpenseMutation.mutateAsync({
         brokerId: selectedBrokerId,
@@ -180,13 +196,38 @@ export function CustomsBrokerManager() {
         isRefundableVat,
         notes: liquidateNotes || undefined,
       });
-      toast.success('تمت تصفية وقيد المصروف الجمركي وخصمه من رصيد العهدة');
+      toast.success(
+        isRefundableVat || !isCapitalized
+          ? 'تمت تصفية المصروف وقيده وخصمه من رصيد العهدة؛ بانتظار التحقق بموافقة ثانية'
+          : 'تمت تسوية المصروف وسُجلت رسملته (تدخل التكلفة عند الاستلام أو عبر التسوية)؛ بانتظار التحقق بموافقة ثانية'
+      );
       setIsLiquidateOpen(false);
       setLiquidateReceiptNo('');
       refetch();
       if (selectedBrokerForStatement) refetchStatement();
     } catch (err: any) {
       toast.error('فشل تصفية المصروف: ' + (err.message || 'خطأ'));
+    }
+  };
+
+  const handleVerifyExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!verifyExpenseId) {
+      toast.error('يرجى اختيار إيصال غير متحقق منه');
+      return;
+    }
+    if (!verifyTokenId.trim()) {
+      toast.error('معرف طلب الاعتماد المعتمد إلزامي للتحقق');
+      return;
+    }
+    try {
+      await verifyExpenseMutation.mutateAsync({ expenseId: verifyExpenseId, approvalRequestId: verifyTokenId.trim() });
+      toast.success('تم التحقق من مصروف المخلص بموافقة ثانية');
+      setVerifyTokenId('');
+      setVerifyExpenseId('');
+      if (selectedBrokerForStatement) refetchStatement();
+    } catch (err: any) {
+      toast.error('فشل التحقق: ' + (err.message || 'خطأ'));
     }
   };
 
@@ -881,6 +922,7 @@ export function CustomsBrokerManager() {
                       <th style={{ padding: '8px 10px', color: '#475569', fontWeight: 600 }}>التصنيف</th>
                       <th style={{ padding: '8px 10px', color: '#475569', fontWeight: 600 }}>المبلغ</th>
                       <th style={{ padding: '8px 10px', color: '#475569', fontWeight: 600 }}>المعالجة</th>
+                      <th style={{ padding: '8px 10px', color: '#475569', fontWeight: 600 }}>التحقق</th>
                       <th style={{ padding: '8px 10px', color: '#475569', fontWeight: 600 }}>البيان</th>
                       <th style={{ padding: '8px 10px', color: '#475569', fontWeight: 600 }}>التاريخ</th>
                     </tr>
@@ -888,7 +930,7 @@ export function CustomsBrokerManager() {
                   <tbody>
                     {brokerStatement.expenses.length === 0 ? (
                       <tr>
-                        <td colSpan={6} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>
+                        <td colSpan={7} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>
                           لا توجد إيصالات مصفاة مسجلة حتى الآن
                         </td>
                       </tr>
@@ -917,6 +959,19 @@ export function CustomsBrokerManager() {
                                   : 'مصروف فترة'}
                             </span>
                           </td>
+                          <td style={{ padding: '8px 10px' }}>
+                            <span
+                              style={{
+                                fontSize: 11,
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                backgroundColor: exp.is_verified ? '#dcfce7' : '#fef3c7',
+                                color: exp.is_verified ? '#15803d' : '#b45309',
+                              }}
+                            >
+                              {exp.is_verified ? 'تم التحقق' : 'بانتظار التحقق'}
+                            </span>
+                          </td>
                           <td style={{ padding: '8px 10px', color: '#64748b' }}>{exp.notes || '—'}</td>
                           <td style={{ padding: '8px 10px', color: '#64748b' }}>
                             {new Date(exp.expense_date || exp.created_at || Date.now()).toLocaleDateString('ar-EG')}
@@ -927,6 +982,45 @@ export function CustomsBrokerManager() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Maker-checker verification: a second person verifies a
+                  liquidated expense with an approved token minted in
+                  the approvals screen. The liquidator cannot verify
+                  their own expense. */}
+              {brokerStatement.expenses.some((e: any) => !e.is_verified) && (
+                <form onSubmit={handleVerifyExpense} style={{ marginTop: 12, border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', backgroundColor: '#fffbeb' }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>
+                    التحقق من مصروف مخلص (رقابة ثنائية) — اطلب اعتماد التحقق من شاشة الاعتمادات أولاً
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: '#334155', display: 'block', marginBottom: 4 }}>الإيصال غير المتحقق منه</label>
+                      <select
+                        value={verifyExpenseId}
+                        onChange={(e) => setVerifyExpenseId(e.target.value)}
+                        style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
+                      >
+                        <option value="">اختر إيصالاً…</option>
+                        {brokerStatement.expenses.filter((e: any) => !e.is_verified).map((e: any) => (
+                          <option key={e.id} value={e.id}>
+                            {e.receipt_no || e.receipt_number || e.id} — {formatCurrency(e.amount_egp)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: '#334155', display: 'block', marginBottom: 4 }}>معرف طلب الاعتماد المعتمد</label>
+                      <input
+                        value={verifyTokenId}
+                        onChange={(e) => setVerifyTokenId(e.target.value)}
+                        placeholder="معرف الطلب من شاشة الاعتمادات"
+                        style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
+                      />
+                    </div>
+                    <Button type="submit" disabled={verifyExpenseMutation.isPending}>تحقق</Button>
+                  </div>
+                </form>
+              )}
             </div>
           )}
         </StandardDialog>

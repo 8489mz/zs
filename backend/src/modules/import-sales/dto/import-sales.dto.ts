@@ -1483,8 +1483,8 @@ export class CreateImportDocumentDto {
 }
 
 export class CreateApprovalRequestDto {
-  @IsIn(['supplier_bank_change', 'large_transfer', 'broker_settlement', 'partner_distribution', 'project_closure', 'import_receipt_reversal', 'import_legacy_receipt_review'])
-  actionType!: 'supplier_bank_change' | 'large_transfer' | 'broker_settlement' | 'partner_distribution' | 'project_closure' | 'import_receipt_reversal' | 'import_legacy_receipt_review';
+  @IsIn(['supplier_bank_change', 'large_transfer', 'broker_settlement', 'partner_distribution', 'project_closure', 'import_receipt_reversal', 'import_legacy_receipt_review', 'broker_expense_verification'])
+  actionType!: 'supplier_bank_change' | 'large_transfer' | 'broker_settlement' | 'partner_distribution' | 'project_closure' | 'import_receipt_reversal' | 'import_legacy_receipt_review' | 'broker_expense_verification';
 
   @IsString()
   referenceId!: string;
@@ -1517,6 +1517,12 @@ export class ResolveLegacyReceiptDto {
   @IsString()
   @IsNotEmpty()
   reason!: string;
+}
+
+export class VerifyBrokerExpenseDto {
+  @IsString()
+  @IsNotEmpty()
+  approvalRequestId!: string;
 }
 
 export class DecideApprovalRequestDto {

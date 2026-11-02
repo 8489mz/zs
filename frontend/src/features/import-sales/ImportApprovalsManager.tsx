@@ -89,6 +89,9 @@ export default function ImportApprovalsManager() {
       if (isReceiptAction && !receiptApprovalId.trim()) {
         throw new Error('اعتماد عكس/مراجعة الاستلام يتطلب معرف سند الاستلام المربوط بالشحنة.');
       }
+      if (requestType === 'broker_expense_verification' && (!Number(amountEgp) || Number(amountEgp) <= 0)) {
+        throw new Error('اعتماد التحقق من مصروف مخلص يتطلب مبلغ المصروف بالجنيه كسقف للموافقة.');
+      }
       await createApprovalMutation.mutateAsync({
         actionType: requestType,
         referenceId: entityId.trim(),
@@ -100,6 +103,7 @@ export default function ImportApprovalsManager() {
           paymentMethod: requestType === 'large_transfer' && transferPaymentMethod ? transferPaymentMethod : undefined,
           shipmentId: isReceiptAction ? entityId.trim() : undefined,
           receiptId: isReceiptAction ? receiptApprovalId.trim() : undefined,
+          brokerExpenseId: requestType === 'broker_expense_verification' ? entityId.trim() : undefined,
           partnerId: requestType === 'partner_distribution' ? entityId.trim() : undefined,
           projectId: requestType === 'partner_distribution' ? projectId.trim() : undefined,
           justification,
@@ -157,6 +161,8 @@ export default function ImportApprovalsManager() {
         return 'عكس سند استلام مرحل';
       case 'import_legacy_receipt_review':
         return 'مراجعة استلام قديم مجمد';
+      case 'broker_expense_verification':
+        return 'التحقق من مصروف مخلص (رقابة ثنائية)';
       case 'late_expense_allocation':
         return 'تحميل مصروفات متأخرة على الحاوية';
       default:
@@ -403,6 +409,7 @@ export default function ImportApprovalsManager() {
               <option value="project_closure">إقفال مشروع الاستيراد</option>
               <option value="import_receipt_reversal">عكس سند استلام مرحل</option>
               <option value="import_legacy_receipt_review">مراجعة استلام قديم مجمد</option>
+              <option value="broker_expense_verification">التحقق من مصروف مخلص (رقابة ثنائية)</option>
             </select>
           </div>
 
