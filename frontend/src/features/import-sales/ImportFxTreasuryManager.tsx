@@ -27,6 +27,7 @@ export default function ImportFxTreasuryManager() {
   const [egpCost, setEgpCost] = useState<number>(485000);
   const [sourceProvider, setSourceProvider] = useState('اعتماد بنكي رسمي');
   const [treasuryAccountId, setTreasuryAccountId] = useState('');
+  const [sourceTreasuryAccountId, setSourceTreasuryAccountId] = useState('');
   const [notes, setNotes] = useState('');
 
   // Fetch Treasury Accounts
@@ -54,6 +55,13 @@ export default function ImportFxTreasuryManager() {
 
   const handleRecordAcquisition = async (e: React.FormEvent) => {
     e.preventDefault();
+    // The posting moves EGP from the source account to the
+    // destination account: the two must differ, or there is no
+    // movement to post.
+    if (sourceTreasuryAccountId && treasuryAccountId && sourceTreasuryAccountId === treasuryAccountId) {
+      toast.error('حساب مصدر التدبير يجب أن يختلف عن حساب الوجهة');
+      return;
+    }
     try {
       await recordAcquisitionMutation.mutateAsync({
         currency,
@@ -61,9 +69,10 @@ export default function ImportFxTreasuryManager() {
         egpCost: Number(egpCost),
         source: 'bank',
         bankAccountId: treasuryAccountId || undefined,
+        sourceAccountId: sourceTreasuryAccountId || undefined,
         notes: `جهة التدبير: ${sourceProvider}. ${notes}`,
       });
-      toast.success('تم حفظ بيان تدبير العملة كسجل مرجعي (بدون ترحيل قيود للخزينة)');
+      toast.success('تم ترحيل تدبير العملة بقيد خزينة متوازن من حساب المصدر إلى حساب الوجهة');
       setIsRecordModalOpen(false);
       setNotes('');
       refetch();
@@ -151,8 +160,8 @@ export default function ImportFxTreasuryManager() {
 
         <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px' }}>
           <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: 4 }}>مستوى التحقق المحاسبي</div>
-          <div style={{ fontSize: '22px', fontWeight: 800, color: '#334155' }}>مرجعي</div>
-          <div style={{ fontSize: '11px', color: '#16a34a', marginTop: 4 }}>يتطلب مطابقة يدوية مع كشف البنك والتحويلات</div>
+          <div style={{ fontSize: '22px', fontWeight: 800, color: '#334155' }}>مرحل بقيد متوازن</div>
+          <div style={{ fontSize: '11px', color: '#16a34a', marginTop: 4 }}>كل تدبير مسجل يرحل قيد خزينة متوازناً من حساب المصدر إلى حساب الوجهة</div>
         </div>
       </div>
 
@@ -286,6 +295,24 @@ export default function ImportFxTreasuryManager() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: 4 }}>
+                حساب المصدر (يُخصم منه بالجنيه)
+              </label>
+              <select
+                value={sourceTreasuryAccountId}
+                onChange={(e) => setSourceTreasuryAccountId(e.target.value)}
+                style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
+              >
+                <option value="">-- الحساب الافتراضي للبنك --</option>
+                {bankAccounts.map((acc: any) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.nameAr || acc.nameEn || acc.code}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: 4 }}>
                 مصدر وجهة التدبير
               </label>
               <select
@@ -298,7 +325,9 @@ export default function ImportFxTreasuryManager() {
                 <option value="تدبير تجاري مباشر">تدبير تجاري مباشر (Commercial FX)</option>
               </select>
             </div>
+          </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: 4 }}>
                 الحساب البنكي / الخزينة المودع فيها

@@ -14,6 +14,7 @@ import {
   CreateQcInspectionDto,
   UpsertAciComplianceDto,
   CreateSourcingTripDto,
+  PostSourcingTripExpenseDto,
   ProcessLateExpenseDto,
   CalculateCustomsTaxDto,
   VerifyBankDetailsDto,
@@ -169,6 +170,12 @@ export class ImportSalesController {
   @Post('sourcing-trips')
   async createSourcingTrip(@Req() req: RequestWithAuth, @Body() dto: CreateSourcingTripDto) {
     return this.importSalesService.createSourcingTrip(req.authContext!.tenantId!, dto);
+  }
+
+  @RequireAnyPermission('accounting', 'purchases')
+  @Post('sourcing-trips/:id/post-expense')
+  async postSourcingTripExpense(@Req() req: RequestWithAuth, @Param('id') tripId: string, @Body() dto: PostSourcingTripExpenseDto) {
+    return this.importSalesService.postSourcingTripExpense(req.authContext!.tenantId!, Number(req.authContext!.userId!), tripId, dto);
   }
 
   @Get('qc-inspections')

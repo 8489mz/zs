@@ -17,6 +17,7 @@ import { up as up240 } from '../../src/database/migrations/2040000000240_import_
 import { up as up241 } from '../../src/database/migrations/2040000000241_import_container_refund_events';
 import { up as up242 } from '../../src/database/migrations/2040000000242_import_late_expense_events';
 import { up as up245 } from '../../src/database/migrations/2040000000245_import_preorder_refunds';
+import { up as up286 } from '../../src/database/migrations/2040000000286_import_broker_capitalizations';
 import {
   allocateSaleFromImportLots,
   restoreImportLotsFromCancelledSale,
@@ -204,6 +205,20 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
       amount NUMERIC(15, 2) NOT NULL,
       payment_date DATE NOT NULL,
       payment_method TEXT DEFAULT 'bank_transfer',
+      payment_reference TEXT,
+      bank_swift_code TEXT,
+      form4_number TEXT,
+      form4_date DATE,
+      evidence_carrier_name TEXT,
+      evidence_travel_date DATE,
+      evidence_handover_receipt TEXT,
+      evidence_lc_number TEXT,
+      evidence_lc_issuing_bank TEXT,
+      evidence_lc_expiry DATE,
+      evidence_lc_documents TEXT,
+      evidence_cad_proof TEXT,
+      evidence_payment_terms TEXT,
+      evidence_payment_due_date DATE,
       payment_type TEXT DEFAULT 'normal',
       purchase_id BIGINT,
       account_id TEXT NOT NULL,
@@ -681,6 +696,7 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
       actual_cost_egp NUMERIC(12, 2) DEFAULT 0,
       notes TEXT,
       findings JSONB DEFAULT '{}'::jsonb,
+      journal_entry_id BIGINT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
@@ -821,6 +837,7 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
   await up241(db as any);
   await up242(db as any);
   await up245(db as any);
+  await up286(db as any);
 
   // Seed default tenant
   await pglite.exec(`INSERT INTO tenants (id, name) VALUES ('tenant-e2e', 'Global Import & Trade Ltd');`);
@@ -1145,6 +1162,11 @@ async function runBusinessSimulation() {
     exchangeRateContract: 50.0,
     bankAccountId: accounts['1120'],
     idempotencyKey: 'IDEMP-WIRE-BALANCE-002',
+    // The bank issues Form 4 after the transfer; the importer
+    // records it before clearance (INV-IMPORT-FORM4-CLEARANCE-GATE):
+    // a bank-funded shipment above USD 2,000 cannot clear without it.
+    form4Number: 'F4-2026-0001',
+    form4Date: '2026-03-20',
     notes: 'سداد باقي قيمة الفاتورة المبدئية 70% بعد اجتياز فحص الجودة واستلام بوليصة الشحن',
   });
   assert.ok(finalWireTransfer.success);
@@ -1533,7 +1555,7 @@ async function runBusinessSimulation() {
   console.log('PASS: Gate 1 blocked closure: Unliquidated broker advance detected.');
 
   // Liquidate remaining 10,000 EGP broker advance to clear Gate 1
-  await importService.liquidateBrokerExpenses(tenantId, userId, {
+  const exp3 = await importService.liquidateBrokerExpenses(tenantId, userId, {
     brokerId: broker.id,
     advanceId: brokerAdvance.id,
     projectId: project.id,
@@ -1577,6 +1599,20 @@ async function runBusinessSimulation() {
     deductionsAmountEgp: 0,
     treasuryAccountId: String(accounts['1120']),
   });
+
+  // Maker-checker verification (INV-IMPORT-BROKER-CAPITALISATION):
+  // a liquidated broker expense is never self-verified, and
+  // unverified expenses block project closure. The independent
+  // checker verifies each expense against its own approval.
+  for (const exp of [exp1, exp2, exp3]) {
+    const verifyApproval = await importService.createApprovalRequest(tenantId, userId, {
+      actionType: 'broker_expense_verification', referenceId: exp.id,
+      requestPayload: { brokerExpenseId: exp.id, amount: Number(exp.amount_egp) },
+    });
+    await importService.decideApprovalRequest(tenantId, Number(auditor.id), verifyApproval.id, { decision: 'approved' });
+    await importService.verifyBrokerExpense(tenantId, Number(auditor.id), exp.id, { approvalRequestId: verifyApproval.id });
+  }
+  console.log('PASS: Broker expenses independently verified under maker-checker control.');
 
   // Gate 3: Project closure blocked by unsold inventory remaining in lots
   let unsoldLotsGateTriggered = false;

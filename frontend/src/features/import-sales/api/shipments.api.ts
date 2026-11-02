@@ -1653,6 +1653,25 @@ export const useDecideApprovalRequestMutation = () => {
 // ==========================================
 // FX TREASURY & CURRENCY PORTFOLIO
 // ==========================================
+export const usePostSourcingTripExpenseMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (dto: { tripId: string; approvalRequestId: string; supplierId: number; expenseAccountId: number }) => {
+      return await http<any>(`/api/import-sales/sourcing-trips/${dto.tripId}/post-expense`, {
+        method: 'POST',
+        body: JSON.stringify({
+          approvalRequestId: dto.approvalRequestId,
+          supplierId: dto.supplierId,
+          expenseAccountId: dto.expenseAccountId,
+        }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['import-sourcing-trips'] });
+    },
+  });
+};
+
 export const useFxPortfolioQuery = () => {
   return useQuery({
     queryKey: ['import-fx-portfolio'],
@@ -1673,9 +1692,12 @@ export const useRecordFxAcquisitionMutation = () => {
         currency: dto.currency || 'USD',
         foreignAmount,
         egpCost,
+        exchangeRate: dto.exchangeRate ?? dto.exchange_rate ?? undefined,
         acquisitionDate: dto.acquisitionDate || dto.acquisition_date || new Date().toISOString().slice(0, 10),
         source: dto.source || dto.sourceType || 'bank',
         bankAccountId: dto.bankAccountId || (dto.treasuryAccountId ? String(dto.treasuryAccountId) : undefined),
+        sourceAccountId: dto.sourceAccountId || (dto.sourceTreasuryAccountId ? String(dto.sourceTreasuryAccountId) : undefined),
+        transferId: dto.transferId ?? dto.supplierPaymentId ?? undefined,
         notes: dto.notes || undefined,
       };
       return await http<any>('/api/import-sales/fx-acquisitions', {

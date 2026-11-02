@@ -2318,6 +2318,7 @@ export interface ImportSupplierMetaTable {
 
 export interface ImportSourcingTripTable {
   id: Generated<string>;
+  serial_id: Generated<number>;
   tenant_id: string;
   project_id: string | null;
   trip_title: string;
@@ -2328,6 +2329,8 @@ export interface ImportSourcingTripTable {
   actual_cost_egp: ImportNumeric;
   notes: string | null;
   findings: any | null;
+  /** Journal entry that posted this trip as a project expense. NULL = memo estimate, excluded from financial reports. */
+  journal_entry_id?: number | null;
   created_at: Generated<Date>;
 }
 
@@ -6105,6 +6108,7 @@ export interface ImportSaleAllocationTable {
 
 export interface ImportFxAcquisitionTable {
   id: Generated<string>;
+  serial_id: Generated<number>;
   tenant_id: string;
   currency: string;
   foreign_amount: ImportNumeric;
@@ -6114,6 +6118,10 @@ export interface ImportFxAcquisitionTable {
   source: string;
   bank_account_id: number | null;
   notes: string | null;
+  /** Balanced treasury journal posted for this acquisition. NULL on legacy memo rows. */
+  journal_entry_id?: number | null;
+  /** Foreign transfer this acquisition funds, when linked. NULL when unlinked. */
+  supplier_payment_id?: number | null;
   created_at: Generated<Date>;
 }
 

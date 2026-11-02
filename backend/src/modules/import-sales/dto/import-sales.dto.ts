@@ -1440,6 +1440,33 @@ export class RecordFxAcquisitionDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  /** EGP source (cash/bank) account the EGP was paid from. Defaults via the bank resolver; must differ from the destination account. */
+  @IsOptional()
+  @IsString()
+  sourceAccountId?: string;
+
+  /** Foreign transfer (supplier payment id) this acquisition funds. The transfer's currency must match the acquisition currency. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  transferId?: number;
+}
+
+export class PostSourcingTripExpenseDto {
+  @IsString()
+  @IsNotEmpty()
+  approvalRequestId!: string;
+
+  /** Tenant supplier the trip expense is owed to (the payable leg's partner). */
+  @Type(() => Number)
+  @IsNumber()
+  supplierId!: number;
+
+  /** Expense-type account the trip cost posts to (validated as an expense account, never defaulted). */
+  @Type(() => Number)
+  @IsNumber()
+  expenseAccountId!: number;
 }
 
 export class CreateImportDocumentDto {
@@ -1483,8 +1510,8 @@ export class CreateImportDocumentDto {
 }
 
 export class CreateApprovalRequestDto {
-  @IsIn(['supplier_bank_change', 'large_transfer', 'broker_settlement', 'partner_distribution', 'project_closure', 'import_receipt_reversal', 'import_legacy_receipt_review', 'broker_expense_verification'])
-  actionType!: 'supplier_bank_change' | 'large_transfer' | 'broker_settlement' | 'partner_distribution' | 'project_closure' | 'import_receipt_reversal' | 'import_legacy_receipt_review' | 'broker_expense_verification';
+  @IsIn(['supplier_bank_change', 'large_transfer', 'broker_settlement', 'partner_distribution', 'project_closure', 'import_receipt_reversal', 'import_legacy_receipt_review', 'broker_expense_verification', 'sourcing_trip_expense'])
+  actionType!: 'supplier_bank_change' | 'large_transfer' | 'broker_settlement' | 'partner_distribution' | 'project_closure' | 'import_receipt_reversal' | 'import_legacy_receipt_review' | 'broker_expense_verification' | 'sourcing_trip_expense';
 
   @IsString()
   referenceId!: string;

@@ -7,6 +7,8 @@ import {
   useUpsertSupplierMetaMutation,
   useQcInspectionsQuery,
   useCreateQcInspectionMutation,
+  useSourcingTripsQuery,
+  useCreateSourcingTripMutation,
   ChinaSupplier,
 } from './api/shipments.api';
 import { StandardDialog } from '@/shared/components/StandardDialog';
@@ -21,7 +23,6 @@ import { toast } from '@/shared/components/system-alert';
 import { ChinaQuotationsTab } from './components/ChinaQuotationsTab';
 import { ChinaSamplesTab } from './components/ChinaSamplesTab';
 import { ChinaProformasTab } from './components/ChinaProformasTab';
-import { useSourcingTripsQuery, useCreateSourcingTripMutation } from './api/shipments.api';
 
 export default function ChinaSourcingPage() {
   const { data: suppliers = [], refetch } = useChinaSuppliersQuery();
@@ -337,6 +338,7 @@ export default function ChinaSourcingPage() {
                     <th style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>تاريخ البدء والانتهاء</th>
                     <th style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>الميزانية المقدرة</th>
                     <th style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>المصروف الفعلي</th>
+                    <th style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>حالة الترحيل</th>
                     <th style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>الملاحظات والأهداف</th>
                   </tr>
                 </thead>
@@ -350,6 +352,13 @@ export default function ChinaSourcingPage() {
                       </td>
                       <td style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: '#0f172a' }}>{Number(t.budget_egp || 0).toLocaleString()} ج.م</td>
                       <td style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: '#0f172a' }}>{Number(t.actual_cost_egp ?? t.actual_expenses_egp ?? 0).toLocaleString()} ج.م</td>
+                      <td style={{ padding: '10px 12px', fontSize: '11.5px' }}>
+                        {t.journal_entry_id ? (
+                          <span style={{ background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', borderRadius: 999, padding: '2px 8px', fontWeight: 700 }}>مرحل بقيد محاسبي</span>
+                        ) : (
+                          <span style={{ background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a', borderRadius: 999, padding: '2px 8px', fontWeight: 700 }}>تقدير غير مرحل — مستبعد من التقارير المالية</span>
+                        )}
+                      </td>
                       <td style={{ padding: '10px 12px', fontSize: '12px', color: '#475569' }}>
                         {t.notes || '—'}
                       </td>

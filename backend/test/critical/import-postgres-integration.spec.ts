@@ -15,6 +15,7 @@ import { up as up240 } from '../../src/database/migrations/2040000000240_import_
 import { up as up241 } from '../../src/database/migrations/2040000000241_import_container_refund_events';
 import { up as up242 } from '../../src/database/migrations/2040000000242_import_late_expense_events';
 import { up as up245 } from '../../src/database/migrations/2040000000245_import_preorder_refunds';
+import { up as up286 } from '../../src/database/migrations/2040000000286_import_broker_capitalizations';
 import {
   allocateSaleFromImportLots,
   restoreImportLotsFromCancelledSale,
@@ -286,6 +287,7 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
       account_id TEXT,
       supplier_id BIGINT NOT NULL REFERENCES suppliers(id),
       amount NUMERIC(15, 2) NOT NULL,
+      amount_foreign NUMERIC(15, 2),
       doc_no TEXT,
       note TEXT,
       payment_date DATE DEFAULT CURRENT_DATE,
@@ -293,6 +295,22 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
       exchange_rate NUMERIC(10, 4) DEFAULT 1.0,
       forex_variance_egp NUMERIC(12, 2) DEFAULT 0,
       proforma_invoice_id UUID,
+      idempotency_key TEXT,
+      payment_method TEXT,
+      payment_reference TEXT,
+      bank_swift_code TEXT,
+      form4_number TEXT,
+      form4_date DATE,
+      evidence_carrier_name TEXT,
+      evidence_travel_date DATE,
+      evidence_handover_receipt TEXT,
+      evidence_lc_number TEXT,
+      evidence_lc_issuing_bank TEXT,
+      evidence_lc_expiry DATE,
+      evidence_lc_documents TEXT,
+      evidence_cad_proof TEXT,
+      evidence_payment_terms TEXT,
+      evidence_payment_due_date DATE,
       created_by BIGINT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
@@ -564,6 +582,7 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
       actual_cost_egp NUMERIC(12, 2) DEFAULT 0,
       notes TEXT,
       findings JSONB DEFAULT '{}'::jsonb,
+      journal_entry_id BIGINT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
@@ -722,6 +741,9 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
   await up241(db as any);
   await up242(db as any);
   await up245(db as any);
+  // Batch 3 package 4 adds the broker-capitalisation link columns/tables
+  // the late-expense core now writes (fixture: real migration, additive only).
+  await up286(db as any);
 
   // Seed default tenant and users
   await pglite.exec(`INSERT INTO tenants (id, name) VALUES ('tenant-audit-1', 'Audited Trading Tenant');`);

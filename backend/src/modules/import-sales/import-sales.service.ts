@@ -21,6 +21,7 @@ import {
   CreateQcInspectionDto,
   UpsertAciComplianceDto,
   CreateSourcingTripDto,
+  PostSourcingTripExpenseDto,
   ProcessLateExpenseDto,
   CalculateCustomsTaxDto,
   CreateQuotationDto,
@@ -304,7 +305,7 @@ export class ImportSalesService {
     actionType: string,
     referenceId: string,
     approvalRequestId?: string,
-    expectedDetails?: { amount?: number; projectId?: string; partnerId?: string; currency?: string; proformaInvoiceId?: string; supplierId?: string; paymentMethod?: string; shipmentId?: string; receiptId?: string; brokerExpenseId?: string }
+    expectedDetails?: { amount?: number; projectId?: string; partnerId?: string; currency?: string; proformaInvoiceId?: string; supplierId?: string; paymentMethod?: string; shipmentId?: string; receiptId?: string; brokerExpenseId?: string; tripId?: string }
   ): Promise<void> {
     if (!approvalRequestId) return;
 
@@ -360,7 +361,12 @@ export class ImportSalesService {
         );
       }
 
-      if (expectedDetails?.supplierId && payload.supplierId !== expectedDetails.supplierId) {
+      // Supplier binding: compare as strings — the payload may
+      // carry the supplier id as a number (trip-expense
+      // approvals) while the caller passes a string, and the
+      // binding must mean "the same supplier", not "the same
+      // JSON type" (INV-IMPORT-FX-TRIPS-POSTING).
+      if (expectedDetails?.supplierId && String(payload.supplierId ?? '') !== String(expectedDetails.supplierId)) {
         throw new BadRequestException(
           `طلب الاعتماد مخصص للمورد (${payload.supplierId}) ولا يطابق المورد المطلوب (${expectedDetails.supplierId}).`
         );
@@ -391,6 +397,16 @@ export class ImportSalesService {
       if (expectedDetails?.brokerExpenseId && String(payload.brokerExpenseId ?? '') !== expectedDetails.brokerExpenseId) {
         throw new BadRequestException(
           `طلب الاعتماد مخصص لمصروف مخلص (${payload.brokerExpenseId}) ولا يطابق المصروف المطلوب (${expectedDetails.brokerExpenseId}).`
+        );
+      }
+
+      // Sourcing-trip binding (INV-IMPORT-FX-TRIPS-POSTING): a
+      // trip-expense approval authorizes exactly one trip. The
+      // reference_id already binds the trip id; this payload
+      // check binds the trip id carried in the payload too.
+      if (expectedDetails?.tripId && String(payload.tripId ?? '') !== expectedDetails.tripId) {
+        throw new BadRequestException(
+          `طلب الاعتماد مخصص لرحلة توريد (${payload.tripId}) ولا يطابق الرحلة المطلوبة (${expectedDetails.tripId}).`
         );
       }
 
@@ -1197,6 +1213,112 @@ export class ImportSalesService {
       })
       .returningAll()
       .executeTakeFirstOrThrow();
+  }
+
+  /**
+   * Posts a sourcing trip's actual cost as a project expense
+   * (INV-IMPORT-FX-TRIPS-POSTING). Approval-gated and
+   * single-posting: the trip row is locked, the token must be
+   * bound to this trip with an amount ceiling covering the
+   * actual cost, and a trip that already posted conflicts.
+   * The payable leg needs a real tenant supplier as its
+   * partner — a partner-less payable would be invisible in the
+   * supplier subledger. The expense account must be an
+   * expense-type account, validated here, never defaulted.
+   * The profit report reads exactly this posted expense (it
+   * filters on journal_entry_id), so an unposted trip stays a
+   * memo estimate and can never double-count.
+   */
+  async postSourcingTripExpense(tenantId: string, userId: number, tripId: string, dto: PostSourcingTripExpenseDto) {
+    if (!dto.approvalRequestId) {
+      throw new BadRequestException('ترحيل مصروف رحلة توريد يتطلب موافقة Maker-Checker معتمدة.');
+    }
+    return await this.db.transaction().execute(async (trx) => {
+      const trip: any = await trx.selectFrom('import_sourcing_trips').selectAll()
+        .where('tenant_id', '=', tenantId).where('id', '=', tripId)
+        .forUpdate().executeTakeFirst();
+      if (!trip) throw new BadRequestException('رحلة التوريد غير تابعة للمنشأة.');
+      if (trip.journal_entry_id !== null && trip.journal_entry_id !== undefined) {
+        throw new ConflictException('تم ترحيل مصروف هذه الرحلة مسبقاً بقيد محاسبي.');
+      }
+      const actualCost = Number(trip.actual_cost_egp || 0);
+      if (!Number.isFinite(actualCost) || actualCost <= 0) {
+        throw new BadRequestException('لا يمكن ترحيل رحلة بلا تكلفة فعلية موجبة؛ حدد التكلفة الفعلية أولاً.');
+      }
+      const supplier: any = await trx.selectFrom('suppliers').select(['id', 'account_id'])
+        .where('tenant_id', '=', tenantId).where('id', '=', Number(dto.supplierId)).executeTakeFirst();
+      if (!supplier) throw new BadRequestException('المورد المستحق لمصروف الرحلة غير تابع للمنشأة.');
+      const expenseAccount: any = await trx.selectFrom('accounting_accounts')
+        .select(['id', 'account_type', 'is_active'])
+        .where('tenant_id', '=', tenantId).where('id', '=', Number(dto.expenseAccountId)).executeTakeFirst();
+      if (!expenseAccount || !expenseAccount.is_active || expenseAccount.account_type !== 'expense') {
+        throw new BadRequestException('حساب مصروف الرحلة يجب أن يكون حساب مصروف نشطاً في دليل حسابات المنشأة.');
+      }
+      await this.verifyAndConsumeApprovalRequest(trx, tenantId, 'sourcing_trip_expense', tripId, dto.approvalRequestId, {
+        tripId,
+        amount: actualCost,
+        supplierId: String(dto.supplierId),
+        // No projectId binding: the project is implied by the
+        // locked trip row (trips have no update path, so the
+        // project cannot drift between minting and execution),
+        // and the minter knows the trip id, not its project.
+      });
+      const payableAccountId = await this.resolveTenantAccount(trx, tenantId, 'payable');
+      const expenseDate = trip.start_date ? String(trip.start_date).slice(0, 10) : new Date().toISOString().slice(0, 10);
+      await trx.insertInto('expenses').values({
+        tenant_id: tenantId,
+        account_id: String(dto.expenseAccountId),
+        title: `مصروف رحلة توريد - ${trip.trip_title}`,
+        amount: actualCost,
+        expense_date: expenseDate,
+        created_by: userId,
+        note: `رحلة ${trip.trip_title} إلى ${trip.destination_city} - ترحيل معتمد`,
+        branch_id: null,
+        location_id: null,
+      }).execute();
+      const posting = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
+      const tripSerialId = Number(trip.serial_id);
+      if (!Number.isSafeInteger(tripSerialId)) {
+        throw new BadRequestException('ترحيل مصروف الرحلة يتطلب تشغيل الترحيل 0287 أولاً (الرقم المسلسل لربط القيد). [IMPORT_TRIP_SERIAL_MISSING]');
+      }
+      const journalEntryId = await posting.postDomainJournal(trx, {
+        sourceType: 'import_sourcing_trip_expense',
+        sourceId: tripSerialId,
+        tenantId,
+        accountId: tenantId,
+        entryDate: new Date(expenseDate),
+        description: `ترحيل مصروف رحلة توريد - ${trip.trip_title} (${actualCost} ج.م)`,
+        branchId: null,
+        locationId: null,
+        createdBy: userId,
+        postedBy: userId,
+        lines: [
+          {
+            accountId: Number(dto.expenseAccountId),
+            debit: actualCost,
+            credit: 0,
+            description: `مصروف رحلة توريد - ${trip.trip_title}`,
+            partnerType: 'none',
+            partnerId: null,
+            branchId: null,
+            locationId: null,
+          },
+          {
+            accountId: payableAccountId,
+            debit: 0,
+            credit: actualCost,
+            description: `استحقاق مورد عن رحلة توريد - ${trip.trip_title}`,
+            partnerType: 'supplier',
+            partnerId: Number(dto.supplierId),
+            branchId: null,
+            locationId: null,
+          },
+        ],
+      });
+      await trx.updateTable('import_sourcing_trips').set({ journal_entry_id: journalEntryId })
+        .where('tenant_id', '=', tenantId).where('id', '=', tripId).execute();
+      return { ...trip, journal_entry_id: journalEntryId };
+    });
   }
 
   async listQcInspections(tenantId: string, projectId?: string, shipmentId?: string) {
@@ -3507,6 +3629,11 @@ export class ImportSalesService {
         .select([sql<number>`coalesce(sum(actual_cost_egp), 0)`.as('total_sourcing')])
         .where('tenant_id', '=', tenantId)
         .where('project_id', '=', projectId)
+        // Posted expenses only (INV-IMPORT-FX-TRIPS-POSTING):
+        // an unposted trip is a memo estimate, never a financial
+        // report figure. Counting it here would double-count the
+        // moment it posts, and overstate profit before it does.
+        .where('journal_entry_id', 'is not', null)
         .where('start_date', '>=', start.toISOString().slice(0, 10))
         .where('start_date', '<=', end.toISOString().slice(0, 10))
         .executeTakeFirst();
@@ -7228,27 +7355,128 @@ export class ImportSalesService {
         !Number.isFinite(egpCost) || egpCost <= 0) {
       throw new BadRequestException('مبالغ تدبير العملة يجب أن تكون أرقاماً موجبة صحيحة.');
     }
-    const bankId = dto.bankAccountId ? Number(dto.bankAccountId) : null;
-    if (bankId !== null) {
-      // This log is informational; still never allow linking a bank belonging to another tenant.
-      await this.resolveTenantAccount(this.db, tenantId, 'bank', bankId);
+    // Currency is stored normalised: 'usd' and 'USD' are one
+    // currency, never two portfolio buckets.
+    const currency = String(dto.currency || '').trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) {
+      throw new BadRequestException('عملة تدبير العملة يجب أن تكون رمزاً من ثلاثة أحرف (مثال: USD). [IMPORT_FX_CURRENCY_INVALID]');
     }
     const effectiveRate = egpCost / foreignAmount;
-    return await this.db
-      .insertInto('import_fx_acquisitions')
-      .values({
-        tenant_id: tenantId,
-        currency: dto.currency,
-        foreign_amount: dto.foreignAmount,
-        egp_cost: dto.egpCost,
-        effective_exchange_rate: Number(effectiveRate.toFixed(4)),
-        acquisition_date: dto.acquisitionDate || new Date().toISOString().slice(0, 10),
-        source: dto.source || 'bank',
-        bank_account_id: bankId,
-        notes: dto.notes || null,
-      })
-      .returningAll()
-      .executeTakeFirstOrThrow();
+    const effectiveRate4dp = Number(effectiveRate.toFixed(4));
+    if (dto.exchangeRate !== undefined && dto.exchangeRate !== null) {
+      const supplied = Number(dto.exchangeRate);
+      if (!Number.isFinite(supplied) || supplied <= 0 || Math.abs(supplied - effectiveRate4dp) > 0.0001) {
+        throw new BadRequestException('سعر الصرف المرسل لا يطابق المبالغ (تكلفة الجنيه ÷ المبلغ الأجنبي)؛ صحح السعر أو المبالغ. [IMPORT_FX_RATE_MISMATCH]');
+      }
+    }
+    const acquisitionDate = dto.acquisitionDate || new Date().toISOString().slice(0, 10);
+    return await this.db.transaction().execute(async (trx) => {
+      // Optional transfer link: the transfer must belong to this
+      // tenant and its currency must match the acquisition. The
+      // link is attribution only — it never settles the transfer.
+      let transferId: number | null = null;
+      if (dto.transferId !== undefined && dto.transferId !== null) {
+        transferId = Number(dto.transferId);
+        if (!Number.isSafeInteger(transferId) || transferId <= 0) {
+          throw new BadRequestException('معرف الحوالة المرتبطة بتدبير العملة غير صالح.');
+        }
+        const payment: any = await trx.selectFrom('supplier_payments').select(['id', 'currency'])
+          .where('tenant_id', '=', tenantId).where('id', '=', transferId).executeTakeFirst();
+        if (!payment) throw new BadRequestException('الحوالة المرتبطة بتدبير العملة غير تابعة للمنشأة.');
+        if (String(payment.currency || '').trim().toUpperCase() !== currency) {
+          throw new BadRequestException(`عملة الحوالة المرتبطة (${payment.currency}) لا تطابق عملة التدبير (${currency}). [IMPORT_FX_TRANSFER_CURRENCY_MISMATCH]`);
+        }
+      }
+      // Destination: the cash/bank account receiving the foreign
+      // currency. Source: the EGP account paid from. Both resolve
+      // through the bank role (never a silent default account),
+      // and moving money from an account to itself is meaningless.
+      const destinationAccountId = await this.resolveTenantAccount(trx, tenantId, 'bank', dto.bankAccountId ? Number(dto.bankAccountId) : null);
+      const sourceAccountId = await this.resolveTenantAccount(trx, tenantId, 'bank', dto.sourceAccountId ? Number(dto.sourceAccountId) : null);
+      if (sourceAccountId === destinationAccountId) {
+        throw new BadRequestException('حساب مصدر تدبير العملة يجب أن يختلف عن حساب الوجهة؛ حدد حساب المصدر (sourceAccountId) صراحة. [IMPORT_FX_SAME_ACCOUNT]');
+      }
+      const acquisition: any = await trx
+        .insertInto('import_fx_acquisitions')
+        .values({
+          tenant_id: tenantId,
+          currency,
+          foreign_amount: dto.foreignAmount,
+          egp_cost: dto.egpCost,
+          effective_exchange_rate: effectiveRate4dp,
+          acquisition_date: acquisitionDate,
+          source: dto.source || 'bank',
+          bank_account_id: destinationAccountId,
+          notes: dto.notes || null,
+          supplier_payment_id: transferId,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      const serialId = Number(acquisition.serial_id);
+      if (!Number.isSafeInteger(serialId)) {
+        throw new BadRequestException('تدبير العملة يتطلب تشغيل الترحيل 0287 أولاً (الرقم المسلسل لربط القيد). [IMPORT_FX_SERIAL_MISSING]');
+      }
+      // Balanced treasury movement: the EGP value leaves the
+      // source account and enters the destination account, in
+      // the same transaction as the acquisition record.
+      const posting = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
+      const journalEntryId = await posting.postDomainJournal(trx, {
+        sourceType: 'import_fx_acquisition',
+        sourceId: serialId,
+        tenantId,
+        accountId: tenantId,
+        entryDate: new Date(acquisitionDate),
+        description: `تدبير عملة ${currency} ${foreignAmount} بسعر ${effectiveRate4dp} (تكلفة ${egpCost} ج.م)`,
+        branchId: null,
+        locationId: null,
+        createdBy: userId,
+        postedBy: userId,
+        lines: [
+          {
+            accountId: destinationAccountId,
+            debit: egpCost,
+            credit: 0,
+            description: `استلام ${currency} ${foreignAmount} - تدبير عملة`,
+            partnerType: 'none',
+            partnerId: null,
+            branchId: null,
+            locationId: null,
+          },
+          {
+            accountId: sourceAccountId,
+            debit: 0,
+            credit: egpCost,
+            description: `سداد تكلفة تدبير ${currency} ${foreignAmount}`,
+            partnerType: 'none',
+            partnerId: null,
+            branchId: null,
+            locationId: null,
+          },
+        ],
+      });
+      // Treasury legs mirror the journal in EGP book value, so
+      // the cash/bank balances and the GL agree.
+      const scopes = await trx.selectFrom('accounting_accounts').select(['id', 'account_id'])
+        .where('tenant_id', '=', tenantId).where('id', 'in', [sourceAccountId, destinationAccountId]).execute();
+      const scopeById = new Map(scopes.map((s) => [Number(s.id), s.account_id]));
+      await trx.insertInto('treasury_transactions').values([
+        {
+          tenant_id: tenantId, account_id: scopeById.get(destinationAccountId) || tenantId,
+          txn_type: 'import_fx_acquisition', amount: egpCost,
+          note: `تدبير عملة: استلام ${foreignAmount} ${currency}`,
+          reference_type: 'import_fx_acquisition', reference_id: serialId, created_by: userId,
+        },
+        {
+          tenant_id: tenantId, account_id: scopeById.get(sourceAccountId) || tenantId,
+          txn_type: 'import_fx_acquisition', amount: -egpCost,
+          note: `تدبير عملة: سداد ${egpCost} ج.م مقابل ${foreignAmount} ${currency}`,
+          reference_type: 'import_fx_acquisition', reference_id: serialId, created_by: userId,
+        },
+      ]).execute();
+      await trx.updateTable('import_fx_acquisitions').set({ journal_entry_id: journalEntryId })
+        .where('tenant_id', '=', tenantId).where('id', '=', acquisition.id).execute();
+      return { ...acquisition, journal_entry_id: journalEntryId };
+    });
   }
 
   async getFxPortfolio(tenantId: string) {
@@ -7261,11 +7489,14 @@ export class ImportSalesService {
 
     const byCurrency: Record<string, { totalForeign: number; totalEgp: number; weightedAvgRate: number }> = {};
     for (const r of records) {
-      if (!byCurrency[r.currency]) {
-        byCurrency[r.currency] = { totalForeign: 0, totalEgp: 0, weightedAvgRate: 0 };
+      // Legacy rows may store 'usd' where new rows store 'USD':
+      // group case-insensitively so one currency is one bucket.
+      const key = String(r.currency || '').trim().toUpperCase();
+      if (!byCurrency[key]) {
+        byCurrency[key] = { totalForeign: 0, totalEgp: 0, weightedAvgRate: 0 };
       }
-      byCurrency[r.currency].totalForeign += Number(r.foreign_amount);
-      byCurrency[r.currency].totalEgp += Number(r.egp_cost);
+      byCurrency[key].totalForeign += Number(r.foreign_amount);
+      byCurrency[key].totalEgp += Number(r.egp_cost);
     }
 
     for (const curr of Object.keys(byCurrency)) {
@@ -7350,6 +7581,12 @@ export class ImportSalesService {
       const payload = dto.requestPayload;
       if (!payload || String(payload.brokerExpenseId || '') !== String(dto.referenceId) || !Number.isFinite(Number(payload.amount)) || Number(payload.amount) <= 0) {
         throw new BadRequestException('اعتماد التحقق من مصروف مخلص يتطلب ربط المصروف بالمرجع نفسه وسقف مبلغ موجب.');
+      }
+    }
+    if (dto.actionType === 'sourcing_trip_expense') {
+      const payload = dto.requestPayload;
+      if (!payload || String(payload.tripId || '') !== String(dto.referenceId) || !Number.isFinite(Number(payload.amount)) || Number(payload.amount) <= 0 || !Number.isFinite(Number(payload.supplierId)) || Number(payload.supplierId) <= 0) {
+        throw new BadRequestException('اعتماد ترحيل مصروف رحلة يتطلب ربط الرحلة بالمرجع نفسه وسقف مبلغ موجباً ومورداً مستحقاً.');
       }
     }
     return await this.db

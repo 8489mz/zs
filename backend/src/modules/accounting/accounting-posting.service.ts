@@ -773,7 +773,7 @@ export class AccountingPostingService {
         )
         .execute();
 
-    if (['purchase_landed_cost', 'import_inventory_receipt', 'import_inventory_receipt_reversal', 'import_late_expense', 'contracting_ipc', 'contracting_subcontract_ipc', 'contracting_subcontractor_payment', 'maritime_job', 'maritime_job_expense', 'maritime_carrier_invoice', 'maritime_carrier_credit_note'].includes(params.sourceType)) {
+    if (['purchase_landed_cost', 'import_inventory_receipt', 'import_inventory_receipt_reversal', 'import_late_expense', 'import_sourcing_trip_expense', 'contracting_ipc', 'contracting_subcontract_ipc', 'contracting_subcontractor_payment', 'maritime_job', 'maritime_job_expense', 'maritime_carrier_invoice', 'maritime_carrier_credit_note'].includes(params.sourceType)) {
       await syncPostedPartnerLedger(queryable, params.tenantId, entryId);
     }
     return entryId;

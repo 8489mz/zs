@@ -49,6 +49,10 @@ export default function ImportApprovalsManager() {
   // the approval is bound to one shipment (the reference id) and
   // one receipt; the backend rejects a token minted without both.
   const [receiptApprovalId, setReceiptApprovalId] = useState('');
+  // Trip-expense binding field (INV-IMPORT-FX-TRIPS-POSTING): the
+  // approval is bound to one trip (the reference id) with an
+  // amount ceiling and the supplier the payable leg is owed to.
+  const [tripSupplierId, setTripSupplierId] = useState('');
 
   const parsePayload = (r: any) => {
     try {
@@ -92,18 +96,27 @@ export default function ImportApprovalsManager() {
       if (requestType === 'broker_expense_verification' && (!Number(amountEgp) || Number(amountEgp) <= 0)) {
         throw new Error('اعتماد التحقق من مصروف مخلص يتطلب مبلغ المصروف بالجنيه كسقف للموافقة.');
       }
+      if (requestType === 'sourcing_trip_expense') {
+        if (!Number(amountEgp) || Number(amountEgp) <= 0) {
+          throw new Error('اعتماد ترحيل مصروف رحلة يتطلب التكلفة الفعلية بالجنيه كسقف للموافقة.');
+        }
+        if (!Number(tripSupplierId) || Number(tripSupplierId) <= 0) {
+          throw new Error('اعتماد ترحيل مصروف رحلة يتطلب معرف المورد المستحق (رقم المورد).');
+        }
+      }
       await createApprovalMutation.mutateAsync({
         actionType: requestType,
         referenceId: entityId.trim(),
         requestPayload: {
           amount: isReceiptAction ? undefined : (requestType === 'large_transfer' ? Number(transferAmountForeign) : Number(amountEgp)),
           currency: requestType === 'large_transfer' ? transferCurrency.trim().toUpperCase() : undefined,
-          supplierId: requestType === 'large_transfer' ? (transferSupplierId.trim() || entityId.trim()) : undefined,
+          supplierId: requestType === 'large_transfer' ? (transferSupplierId.trim() || entityId.trim()) : (requestType === 'sourcing_trip_expense' ? Number(tripSupplierId) : undefined),
           proformaInvoiceId: requestType === 'large_transfer' && transferProformaId.trim() ? transferProformaId.trim() : undefined,
           paymentMethod: requestType === 'large_transfer' && transferPaymentMethod ? transferPaymentMethod : undefined,
           shipmentId: isReceiptAction ? entityId.trim() : undefined,
           receiptId: isReceiptAction ? receiptApprovalId.trim() : undefined,
           brokerExpenseId: requestType === 'broker_expense_verification' ? entityId.trim() : undefined,
+          tripId: requestType === 'sourcing_trip_expense' ? entityId.trim() : undefined,
           partnerId: requestType === 'partner_distribution' ? entityId.trim() : undefined,
           projectId: requestType === 'partner_distribution' ? projectId.trim() : undefined,
           justification,
@@ -118,6 +131,7 @@ export default function ImportApprovalsManager() {
       setTransferProformaId('');
       setTransferPaymentMethod('');
       setReceiptApprovalId('');
+      setTripSupplierId('');
       refetch();
     } catch (err: any) {
       toast.error('فشل رفع طلب الاعتماد: ' + (err.message || 'خطأ غير معروف'));
@@ -163,6 +177,8 @@ export default function ImportApprovalsManager() {
         return 'مراجعة استلام قديم مجمد';
       case 'broker_expense_verification':
         return 'التحقق من مصروف مخلص (رقابة ثنائية)';
+      case 'sourcing_trip_expense':
+        return 'ترحيل مصروف رحلة توريد كمشروع';
       case 'late_expense_allocation':
         return 'تحميل مصروفات متأخرة على الحاوية';
       default:
@@ -410,6 +426,7 @@ export default function ImportApprovalsManager() {
               <option value="import_receipt_reversal">عكس سند استلام مرحل</option>
               <option value="import_legacy_receipt_review">مراجعة استلام قديم مجمد</option>
               <option value="broker_expense_verification">التحقق من مصروف مخلص (رقابة ثنائية)</option>
+              <option value="sourcing_trip_expense">ترحيل مصروف رحلة توريد كمشروع</option>
             </select>
           </div>
 
@@ -457,6 +474,20 @@ export default function ImportApprovalsManager() {
                 required
                 value={receiptApprovalId}
                 onChange={(e) => setReceiptApprovalId(e.target.value)}
+                style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
+              />
+            </div>
+          )}
+          {requestType === 'sourcing_trip_expense' && (
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: 4 }}>
+                معرف المورد المستحق لمصروف الرحلة (رقم المورد)
+              </label>
+              <input
+                required
+                type="number"
+                value={tripSupplierId}
+                onChange={(e) => setTripSupplierId(e.target.value)}
                 style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
               />
             </div>
