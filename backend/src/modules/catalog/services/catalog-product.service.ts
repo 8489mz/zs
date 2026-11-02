@@ -2020,6 +2020,12 @@ export class CatalogProductService {
         const stillUnresolvedWithStock: typeof removedWithStock = [];
 
         if (payload.consolidateStock) {
+          // INV-VARIANT-CONSOLIDATION-BOOK-DIGITS: consolidation
+          // movement totals use the single book-digits computation,
+          // resolved once on this transaction handle. Each leg keeps
+          // its own unit cost (target vs removed); only the rounding
+          // granularity changes — the valuation question stays open.
+          const consolidationDigits = await this.bookDigits(trx, actor);
           for (const removedProduct of removedWithStock) {
             const removedId = Number(removedProduct.id);
             // Strictly consolidate only into the EXACT SAME color
@@ -2082,7 +2088,7 @@ export class CatalogProductService {
                 before_qty: prevTargetStock,
                 after_qty: nextTargetStock,
                 unit_cost: Number(target.value.costPrice || 0),
-                total_cost: Number((qtyToMove * Number(target.value.costPrice || 0)).toFixed(2)),
+                total_cost: stockMovementTotal(qtyToMove, Number(target.value.costPrice || 0), consolidationDigits),
                 reason: 'variant_consolidation',
                 note: `دمج رصيد المقاس الملغي (${removedProduct.name || removedProduct.size}) إلى نفس اللون (${target.value.color || target.value.name})`,
                 reference_type: 'product',
@@ -2100,7 +2106,7 @@ export class CatalogProductService {
                 before_qty: prevRemovedStock,
                 after_qty: Math.max(0, prevRemovedStock - qtyToMove),
                 unit_cost: Number(removedProduct.cost_price || 0),
-                total_cost: Number((qtyToMove * Number(removedProduct.cost_price || 0)).toFixed(2)),
+                total_cost: stockMovementTotal(qtyToMove, Number(removedProduct.cost_price || 0), consolidationDigits),
                 reason: 'variant_consolidation',
                 note: `تحويل ودمج رصيد المقاس الملغي إلى نفس اللون (${target.value.color || target.value.name})`,
                 reference_type: 'product',

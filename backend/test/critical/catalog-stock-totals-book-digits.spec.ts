@@ -35,11 +35,12 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
  * keep their stored amounts.
  *
  * DELIBERATELY UNCHANGED, as separate scope:
- * - Variant-consolidation legs (two total_cost legs using different
- *   unit costs) need a valuation decision first; they still use
- *   toFixed(2) and are pinned below as the only remaining
- *   toFixed(2) sites besides the combo display shaping.
  * - comboOriginalPrice display shaping (RETURN-only).
+ * (Variant-consolidation legs used to be excluded here pending a
+ * valuation decision; since INV-VARIANT-CONSOLIDATION-BOOK-DIGITS
+ * they use the single computation too — each leg keeps its own
+ * unit cost, only the rounding granularity changed, and the
+ * valuation question itself stays open.)
  * - The frontend archive-confirm dialog's display estimate.
  * - products.cost_price / stock_movements.unit_cost stay as
  *   supplied (raw cost); only the total is rounded.
@@ -62,8 +63,10 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
  *   opening post with no stored journal entry.
  * - Verbatim adjustment: a movement row stored at the helper total
  *   posts through postInventoryAdjustment at exactly that amount.
- * - Source pin: the only remaining toFixed(2) lines in the service
- *   are the excluded consolidation/display sites.
+ * - Source pin: the only remaining toFixed(2) line in the service
+ *   is the combo display shaping; the consolidation legs use the
+ *   single computation (their end-to-end saveFashionGroup drive
+ *   still rests on the live-Postgres acceptance run, as before).
  * This is not an end-to-end post on live Postgres, and it does not
  * drive createProduct/saveFashionGroup/toggleProductArchive
  * end-to-end (their PGlite setup needs the full catalog write
@@ -229,21 +232,22 @@ async function main(): Promise<void> {
     }
   }
 
-  // Case 6: source pin — the only remaining toFixed(2) lines in the
-  // service are the excluded consolidation legs and combo display.
+  // Case 6: source pin — the only remaining toFixed(2) line in the
+  // service is the combo display shaping; both consolidation legs
+  // use the single computation at book digits.
   {
     const servicePath = resolve(__dirname, '../../src/modules/catalog/services/catalog-product.service.ts');
     const source = readFileSync(servicePath, 'utf8');
     const toFixedLines = source.split('\n').filter((line) => line.includes('toFixed(2)'));
-    assert.equal(toFixedLines.length, 3);
+    assert.equal(toFixedLines.length, 1);
     for (const line of toFixedLines) {
       assert.ok(
-        line.includes('comboOriginalPrice') || line.includes('qtyToMove'),
+        line.includes('comboOriginalPrice'),
         `unexpected toFixed(2) site: ${line.trim()}`,
       );
     }
     const helperCalls = source.match(/stockMovementTotal\(/g) ?? [];
-    assert.ok(helperCalls.length >= 7, `expected at least 7 stockMovementTotal call sites, found ${helperCalls.length}`);
+    assert.ok(helperCalls.length >= 9, `expected at least 9 stockMovementTotal call sites, found ${helperCalls.length}`);
     assert.ok(!source.includes('roundCurrency'), 'no roundCurrency helper may remain in the catalog service');
   }
 
