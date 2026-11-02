@@ -23,13 +23,13 @@ assert.equal(extraBranch('retail', 'SA'), 75);
 assert.equal(extraBranch('pharmacy', 'EG'), 325);
 assert.equal(extraBranch('pharmacy', 'SA'), 100);
 
-// Band 3 (restaurant): 1400/2 = 700 EG, 349/2 = 174.5 -> 175 SA (half-up).
+// Band 3 (restaurant): 1400/2 = 700 EG, 249/2 = 124.5 -> 125 SA (half-up).
 assert.equal(extraBranch('restaurant', 'EG'), 700);
-assert.equal(extraBranch('restaurant', 'SA'), 175);
+assert.equal(extraBranch('restaurant', 'SA'), 125);
 
-// Band 4 (wholesale): 1500/2 = 750 EG, 399/2 = 199.5 -> 200 SA (half-up).
+// Band 4 (wholesale): 1500/2 = 750 EG, 349/2 = 174.5 -> 175 SA (half-up).
 assert.equal(extraBranch('wholesale', 'EG'), 750);
-assert.equal(extraBranch('wholesale', 'SA'), 200);
+assert.equal(extraBranch('wholesale', 'SA'), 175);
 
 // Band 5 (contracting): already under the cap, unchanged.
 assert.equal(extraBranch('contracting', 'EG'), 1200);

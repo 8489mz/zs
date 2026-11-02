@@ -12,6 +12,11 @@ export const PRICING_CATALOG: PricingCatalog = {
   "reviewDueAt": "2027-03-25",
   "vatIncluded": false,
   "annualEqualsMonths": 10,
+  "launchOffer": {
+    "percentOffFirstYear": 20,
+    "firstYearOnly": true,
+    "newCustomersOnly": true
+  },
   "trialDays": 14,
   "trialMaxUsers": 5,
   "fx": {
@@ -236,13 +241,13 @@ export const PRICING_CATALOG: PricingCatalog = {
             },
             "AE": {
               "currency": "AED",
-              "monthly": 159,
-              "annual": 1590
+              "monthly": 153,
+              "annual": 1530
             },
             "QA": {
               "currency": "QAR",
-              "monthly": 159,
-              "annual": 1590
+              "monthly": 151,
+              "annual": 1510
             },
             "KW": {
               "currency": "KWD",
@@ -282,13 +287,13 @@ export const PRICING_CATALOG: PricingCatalog = {
             },
             "AE": {
               "currency": "AED",
-              "monthly": 479,
-              "annual": 4790
+              "monthly": 460,
+              "annual": 4600
             },
             "QA": {
               "currency": "QAR",
-              "monthly": 479,
-              "annual": 4790
+              "monthly": 456,
+              "annual": 4560
             },
             "KW": {
               "currency": "KWD",
@@ -328,18 +333,18 @@ export const PRICING_CATALOG: PricingCatalog = {
             },
             "AE": {
               "currency": "AED",
-              "monthly": 1059,
-              "annual": 10590
+              "monthly": 1023,
+              "annual": 10230
             },
             "QA": {
               "currency": "QAR",
-              "monthly": 1059,
-              "annual": 10590
+              "monthly": 1014,
+              "annual": 10140
             },
             "KW": {
               "currency": "KWD",
-              "monthly": 89,
-              "annual": 890
+              "monthly": 87,
+              "annual": 870
             },
             "BH": {
               "currency": "BHD",
@@ -397,13 +402,13 @@ export const PRICING_CATALOG: PricingCatalog = {
             },
             "AE": {
               "currency": "AED",
-              "monthly": 209,
-              "annual": 2090
+              "monthly": 204,
+              "annual": 2040
             },
             "QA": {
               "currency": "QAR",
-              "monthly": 209,
-              "annual": 2090
+              "monthly": 202,
+              "annual": 2020
             },
             "KW": {
               "currency": "KWD",
@@ -443,18 +448,18 @@ export const PRICING_CATALOG: PricingCatalog = {
             },
             "AE": {
               "currency": "AED",
-              "monthly": 579,
-              "annual": 5790
+              "monthly": 562,
+              "annual": 5620
             },
             "QA": {
               "currency": "QAR",
-              "monthly": 579,
-              "annual": 5790
+              "monthly": 557,
+              "annual": 5570
             },
             "KW": {
               "currency": "KWD",
-              "monthly": 49,
-              "annual": 490
+              "monthly": 48,
+              "annual": 480
             },
             "BH": {
               "currency": "BHD",
@@ -489,18 +494,18 @@ export const PRICING_CATALOG: PricingCatalog = {
             },
             "AE": {
               "currency": "AED",
-              "monthly": 1269,
-              "annual": 12690
+              "monthly": 1228,
+              "annual": 12280
             },
             "QA": {
               "currency": "QAR",
-              "monthly": 1269,
-              "annual": 12690
+              "monthly": 1217,
+              "annual": 12170
             },
             "KW": {
               "currency": "KWD",
-              "monthly": 105,
-              "annual": 1050
+              "monthly": 104,
+              "annual": 1040
             },
             "BH": {
               "currency": "BHD",
@@ -553,33 +558,33 @@ export const PRICING_CATALOG: PricingCatalog = {
             },
             "SA": {
               "currency": "SAR",
-              "monthly": 349,
-              "annual": 3490
+              "monthly": 249,
+              "annual": 2490
             },
             "AE": {
               "currency": "AED",
-              "monthly": 369,
-              "annual": 3690
+              "monthly": 255,
+              "annual": 2550
             },
             "QA": {
               "currency": "QAR",
-              "monthly": 369,
-              "annual": 3690
+              "monthly": 253,
+              "annual": 2530
             },
             "KW": {
               "currency": "KWD",
-              "monthly": 29,
-              "annual": 290
+              "monthly": 22,
+              "annual": 220
             },
             "BH": {
               "currency": "BHD",
-              "monthly": 35,
-              "annual": 350
+              "monthly": 26,
+              "annual": 260
             },
             "OM": {
               "currency": "OMR",
-              "monthly": 35,
-              "annual": 350
+              "monthly": 27,
+              "annual": 270
             }
           }
         },
@@ -599,33 +604,33 @@ export const PRICING_CATALOG: PricingCatalog = {
             },
             "SA": {
               "currency": "SAR",
-              "monthly": 749,
-              "annual": 7490
+              "monthly": 649,
+              "annual": 6490
             },
             "AE": {
               "currency": "AED",
-              "monthly": 789,
-              "annual": 7890
+              "monthly": 665,
+              "annual": 6650
             },
             "QA": {
               "currency": "QAR",
-              "monthly": 789,
-              "annual": 7890
+              "monthly": 659,
+              "annual": 6590
             },
             "KW": {
               "currency": "KWD",
-              "monthly": 65,
-              "annual": 650
+              "monthly": 56,
+              "annual": 560
             },
             "BH": {
               "currency": "BHD",
-              "monthly": 75,
-              "annual": 750
+              "monthly": 69,
+              "annual": 690
             },
             "OM": {
               "currency": "OMR",
-              "monthly": 75,
-              "annual": 750
+              "monthly": 70,
+              "annual": 700
             }
           }
         },
@@ -645,33 +650,33 @@ export const PRICING_CATALOG: PricingCatalog = {
             },
             "SA": {
               "currency": "SAR",
-              "monthly": 1499,
-              "annual": 14990
+              "monthly": 1299,
+              "annual": 12990
             },
             "AE": {
               "currency": "AED",
-              "monthly": 1589,
-              "annual": 15890
+              "monthly": 1331,
+              "annual": 13310
             },
             "QA": {
               "currency": "QAR",
-              "monthly": 1589,
-              "annual": 15890
+              "monthly": 1319,
+              "annual": 13190
             },
             "KW": {
               "currency": "KWD",
-              "monthly": 129,
-              "annual": 1290
+              "monthly": 113,
+              "annual": 1130
             },
             "BH": {
               "currency": "BHD",
-              "monthly": 149,
-              "annual": 1490
+              "monthly": 137,
+              "annual": 1370
             },
             "OM": {
               "currency": "OMR",
-              "monthly": 149,
-              "annual": 1490
+              "monthly": 139,
+              "annual": 1390
             }
           }
         }
@@ -714,33 +719,33 @@ export const PRICING_CATALOG: PricingCatalog = {
             },
             "SA": {
               "currency": "SAR",
-              "monthly": 399,
-              "annual": 3990
+              "monthly": 349,
+              "annual": 3490
             },
             "AE": {
               "currency": "AED",
-              "monthly": 419,
-              "annual": 4190
+              "monthly": 357,
+              "annual": 3570
             },
             "QA": {
               "currency": "QAR",
-              "monthly": 419,
-              "annual": 4190
+              "monthly": 354,
+              "annual": 3540
             },
             "KW": {
               "currency": "KWD",
-              "monthly": 35,
-              "annual": 350
+              "monthly": 30,
+              "annual": 300
             },
             "BH": {
               "currency": "BHD",
-              "monthly": 39,
-              "annual": 390
+              "monthly": 37,
+              "annual": 370
             },
             "OM": {
               "currency": "OMR",
-              "monthly": 39,
-              "annual": 390
+              "monthly": 37,
+              "annual": 370
             }
           }
         },
@@ -765,18 +770,18 @@ export const PRICING_CATALOG: PricingCatalog = {
             },
             "AE": {
               "currency": "AED",
-              "monthly": 949,
-              "annual": 9490
+              "monthly": 921,
+              "annual": 9210
             },
             "QA": {
               "currency": "QAR",
-              "monthly": 949,
-              "annual": 9490
+              "monthly": 913,
+              "annual": 9130
             },
             "KW": {
               "currency": "KWD",
-              "monthly": 79,
-              "annual": 790
+              "monthly": 78,
+              "annual": 780
             },
             "BH": {
               "currency": "BHD",
@@ -811,18 +816,18 @@ export const PRICING_CATALOG: PricingCatalog = {
             },
             "AE": {
               "currency": "AED",
-              "monthly": 1899,
-              "annual": 18990
+              "monthly": 1843,
+              "annual": 18430
             },
             "QA": {
               "currency": "QAR",
-              "monthly": 1899,
-              "annual": 18990
+              "monthly": 1826,
+              "annual": 18260
             },
             "KW": {
               "currency": "KWD",
-              "monthly": 159,
-              "annual": 1590
+              "monthly": 156,
+              "annual": 1560
             },
             "BH": {
               "currency": "BHD",
@@ -870,18 +875,18 @@ export const PRICING_CATALOG: PricingCatalog = {
             },
             "AE": {
               "currency": "AED",
-              "monthly": 1290,
-              "annual": 12900
+              "monthly": 1229,
+              "annual": 12290
             },
             "QA": {
               "currency": "QAR",
-              "monthly": 1290,
-              "annual": 12900
+              "monthly": 1218,
+              "annual": 12180
             },
             "KW": {
               "currency": "KWD",
-              "monthly": 105,
-              "annual": 1050
+              "monthly": 104,
+              "annual": 1040
             },
             "BH": {
               "currency": "BHD",
@@ -916,18 +921,18 @@ export const PRICING_CATALOG: PricingCatalog = {
             },
             "AE": {
               "currency": "AED",
-              "monthly": 2649,
-              "annual": 26490
+              "monthly": 2561,
+              "annual": 25610
             },
             "QA": {
               "currency": "QAR",
-              "monthly": 2649,
-              "annual": 26490
+              "monthly": 2538,
+              "annual": 25380
             },
             "KW": {
               "currency": "KWD",
-              "monthly": 219,
-              "annual": 2190
+              "monthly": 217,
+              "annual": 2170
             },
             "BH": {
               "currency": "BHD",
@@ -963,18 +968,18 @@ export const PRICING_CATALOG: PricingCatalog = {
             },
             "AE": {
               "currency": "AED",
-              "monthly": 5190,
-              "annual": 51900
+              "monthly": 5019,
+              "annual": 50190
             },
             "QA": {
               "currency": "QAR",
-              "monthly": 5190,
-              "annual": 51900
+              "monthly": 4975,
+              "annual": 49750
             },
             "KW": {
               "currency": "KWD",
-              "monthly": 429,
-              "annual": 4290
+              "monthly": 425,
+              "annual": 4250
             },
             "BH": {
               "currency": "BHD",
@@ -1493,11 +1498,11 @@ export const PRICING_CATALOG: PricingCatalog = {
         },
         "band3": {
           "EG": 700,
-          "SA": 175
+          "SA": 125
         },
         "band4": {
           "EG": 750,
-          "SA": 200
+          "SA": 175
         },
         "band5": {
           "EG": 1200,

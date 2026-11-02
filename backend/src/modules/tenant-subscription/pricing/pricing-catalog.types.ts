@@ -83,6 +83,12 @@ export interface CatalogCountry {
   reason?: string;
 }
 
+export interface CatalogLaunchOffer {
+  percentOffFirstYear: number;
+  firstYearOnly: boolean;
+  newCustomersOnly: boolean;
+}
+
 export interface CatalogOffline {
   supportRateFromYearTwo: number;
   firstYearSupportIncluded: boolean;
@@ -107,6 +113,7 @@ export interface PricingCatalog {
   reviewDueAt: string;
   vatIncluded: boolean;
   annualEqualsMonths: number;
+  launchOffer: CatalogLaunchOffer;
   trialDays: number;
   trialMaxUsers: number;
   fx: { base: string; asOf: string; rates: Record<string, number> };
@@ -164,6 +171,8 @@ export interface PublicPricing {
   quoteAnnuallyOnly: boolean;
   annualEqualsMonths: number;
   trialDays: number;
+  /** عرض الإطلاق المعلن في الكتالوج — نسبة الخصم على السنة الأولى فقط */
+  launchOffer: CatalogLaunchOffer;
   /** الأسعار المعروضة غير شاملة ضريبة القيمة المضافة (من مصدر الكتالوج) */
   vatIncluded: boolean;
   levels: PublicPricingLevel[];

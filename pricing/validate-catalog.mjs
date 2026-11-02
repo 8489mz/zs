@@ -19,6 +19,8 @@
  * 11. الفرع الإضافي لا يتجاوز نصف سعر المستوى الأول الشهري لنطاقه (تقريب
  *     النصف إلى الأعلى لوحدة عملة كاملة)، ولا يحمل سعراً لأي بلد محظور،
  *     والبلدان بلا سعر فرع تبقى null (اتصل بنا) ولا يُخترع لها رقم.
+ * 12. عرض الإطلاق معلن كبيانات: نسبة صحيحة بين 1 و50، للسنة الأولى فقط،
+ *     وللعملاء الجدد فقط — بلا تاريخ انتهاء مخترع (يحدده المالك لاحقاً).
  *
  * ويولّد بعد نجاح التحقق مصدرَ الباك إند:
  *   backend/src/modules/tenant-subscription/pricing/pricing-catalog.generated.ts
@@ -126,6 +128,19 @@ for (const [bandId, band] of Object.entries(bands)) {
       fail(`النطاق ${bandId}/${code}: الفرع الإضافي ${value} يتجاوز نصف سعر المستوى الأول ${base}`);
     }
   }
+}
+
+// 12. عرض الإطلاق: نسبة صحيحة بين 1 و50، للسنة الأولى وللعملاء الجدد فقط.
+const launchOffer = catalog.launchOffer;
+if (!launchOffer || typeof launchOffer !== 'object') {
+  fail('عرض الإطلاق launchOffer مفقود');
+} else {
+  const pct = launchOffer.percentOffFirstYear;
+  if (!Number.isInteger(pct) || pct < 1 || pct > 50) {
+    fail(`عرض الإطلاق: النسبة «${pct}» يجب أن تكون عدداً صحيحاً بين 1 و50`);
+  }
+  if (launchOffer.firstYearOnly !== true) fail('عرض الإطلاق: firstYearOnly يجب أن تكون true');
+  if (launchOffer.newCustomersOnly !== true) fail('عرض الإطلاق: newCustomersOnly يجب أن تكون true');
 }
 
 if (errors.length) {

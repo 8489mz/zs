@@ -221,6 +221,11 @@ export class PricingCatalogService {
       },
       quoteAnnuallyOnly: !!band.quoteAnnuallyOnly,
       annualEqualsMonths: this.catalog.annualEqualsMonths,
+      launchOffer: {
+        percentOffFirstYear: this.catalog.launchOffer.percentOffFirstYear,
+        firstYearOnly: this.catalog.launchOffer.firstYearOnly,
+        newCustomersOnly: this.catalog.launchOffer.newCustomersOnly,
+      },
       trialDays: this.catalog.trialDays,
       vatIncluded: this.catalog.vatIncluded,
       levels,
