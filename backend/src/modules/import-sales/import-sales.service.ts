@@ -46,6 +46,7 @@ import {
 import { allocateSaleFromImportLots, calculateImportSaleCost } from './helpers/import-lot-allocation.helper';
 import { applyStockDelta, lockStockProducts } from '../../common/utils/location-stock-ledger';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
+import { generateDailySequenceNumber } from '../delivery-reps/services/van-common.util';
 import { resolveFxRate } from '../accounting/fx-rate-resolution';
 import { calculateImportFeasibility, FeasibilityCalculationResult } from './engines/import-feasibility.engine';
 import { EGYPT_CUSTOMS_TARIFFS, TARIFF_SECTORS } from './data/egypt-customs-tariffs.data';
@@ -727,34 +728,44 @@ export class ImportSalesService {
 
   async createProject(tenantId: string, dto: CreateImportProjectDto) {
     return await this.db.transaction().execute(async (trx) => {
-      const todayCount = await trx
-        .selectFrom('import_projects')
-        .select(sql<number>`count(*)`.as('count'))
-        .where('tenant_id', '=', tenantId)
-        .where('created_at', '>=', sql`CURRENT_DATE`)
-        .executeTakeFirst();
+      // Collision-proof numbering: an advisory-locked MAX+1 over
+      // today's tenant-local numbers, never COUNT(*) + 1, which
+      // duplicates under concurrency. An explicitly supplied number
+      // is kept (trimmed) and guarded by the unique index on
+      // (tenant_id, project_no) added by migration 0279.
+      const suppliedNo = dto.projectNo?.trim();
+      const projectNo = suppliedNo
+        ? suppliedNo
+        : await generateDailySequenceNumber(trx, this.db as any, 'import_projects', 'project_no', 'IMP', tenantId);
 
-      const seq = Number(todayCount?.count || 0) + 1;
-      const projectNo = dto.projectNo || formatDailyDocumentNumber('IMP', seq);
-
-      const project = await trx
-        .insertInto('import_projects')
-        .values({
-          tenant_id: tenantId,
-          project_no: projectNo,
-          title: dto.title.trim(),
-          target_market: dto.targetMarket || 'Egypt',
-          country_origin: dto.countryOrigin || 'China',
-          country_destination: dto.countryDestination || 'Egypt',
-          budget_currency: dto.budgetCurrency || 'USD',
-          allocated_capital: dto.allocatedCapital || 0,
-          target_roi_percentage: dto.targetRoiPercentage || 25,
-          status: dto.status || 'feasibility',
-          feasibility_data: dto.feasibilityData ? JSON.stringify(dto.feasibilityData) : '{}',
-          notes: dto.notes,
-        })
-        .returningAll()
-        .executeTakeFirstOrThrow();
+      let project;
+      try {
+        project = await trx
+          .insertInto('import_projects')
+          .values({
+            tenant_id: tenantId,
+            project_no: projectNo,
+            title: dto.title.trim(),
+            target_market: dto.targetMarket || 'Egypt',
+            country_origin: dto.countryOrigin || 'China',
+            country_destination: dto.countryDestination || 'Egypt',
+            budget_currency: dto.budgetCurrency || 'USD',
+            allocated_capital: dto.allocatedCapital || 0,
+            target_roi_percentage: dto.targetRoiPercentage || 25,
+            status: dto.status || 'feasibility',
+            feasibility_data: dto.feasibilityData ? JSON.stringify(dto.feasibilityData) : '{}',
+            notes: dto.notes,
+          })
+          .returningAll()
+          .executeTakeFirstOrThrow();
+      } catch (err: any) {
+        if (err?.code === '23505') {
+          throw new ConflictException(
+            `رقم المشروع (${projectNo}) مستخدم بالفعل لهذه المنشأة؛ اختر رقماً آخر أو اترك الترقيم التلقائي.`
+          );
+        }
+        throw err;
+      }
 
       if (dto.partners && Array.isArray(dto.partners) && dto.partners.length > 0) {
         for (const p of dto.partners) {
