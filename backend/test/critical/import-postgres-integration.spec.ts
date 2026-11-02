@@ -252,6 +252,7 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
       id BIGSERIAL PRIMARY KEY,
       tenant_id TEXT NOT NULL REFERENCES tenants(id),
       account_id TEXT NOT NULL,
+      branch_id BIGINT NULL,
       name TEXT NOT NULL,
       is_default BOOLEAN DEFAULT TRUE,
       created_at TIMESTAMPTZ DEFAULT NOW()
@@ -1189,10 +1190,24 @@ async function runTests() {
       })
       .execute();
 
+    const expenseSupplier = await db
+      .insertInto('suppliers')
+      .values({
+        tenant_id: tenantId,
+        name: 'Late Expense Shipping Supplier',
+        phone: '020-999999',
+        address: 'Port, Egypt',
+        balance: 0,
+        is_active: true,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+
     const shipment = await db
       .insertInto('import_shipments')
       .values({
         tenant_id: tenantId,
+        supplier_id: expenseSupplier.id,
         container_number: 'CONT-EXP-01',
         status: 'Arrived',
       })
@@ -1364,7 +1379,7 @@ async function runTests() {
 
     const shipment = await db
       .insertInto('import_shipments')
-      .values({ tenant_id: tenantId, container_number: 'CONT-NEG-01', status: 'Arrived' })
+      .values({ tenant_id: tenantId, supplier_id: supplier.id, container_number: 'CONT-NEG-01', status: 'Arrived' })
       .returning('id')
       .executeTakeFirstOrThrow();
 

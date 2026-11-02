@@ -241,6 +241,48 @@ export class ImportSalesService {
   }
 
   /**
+   * INV-IMPORT-RECEIPT-SUPPLIER-FAIL-CLOSED: the supplier credited by
+   * an import receipt / late-expense journal is the shipment supplier,
+   * else the linked project's feasibility supplier. There is no
+   * fallback to the tenant's first supplier and no auto-created
+   * generic supplier: crediting the wrong subledger silently
+   * misstates supplier balances. The resolved id is validated to
+   * belong to this tenant's suppliers. Callers must resolve BEFORE
+   * any stock or journal write.
+   */
+  private async resolveImportReceiptSupplierId(
+    trx: any,
+    tenantId: string,
+    shipment: any,
+  ): Promise<number> {
+    const candidates: number[] = [];
+    if (shipment?.supplier_id) candidates.push(Number(shipment.supplier_id));
+    if (shipment?.project_id) {
+      const proj = await trx
+        .selectFrom('import_projects')
+        .select('feasibility_data')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', shipment.project_id)
+        .executeTakeFirst();
+      const f = typeof proj?.feasibility_data === 'string' ? JSON.parse(proj.feasibility_data) : (proj?.feasibility_data || {});
+      if (f?.supplierId) candidates.push(Number(f.supplierId));
+    }
+    for (const candidate of candidates) {
+      if (!Number.isSafeInteger(candidate) || candidate <= 0) continue;
+      const supplier = await trx
+        .selectFrom('suppliers')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', candidate)
+        .executeTakeFirst();
+      if (supplier) return Number(supplier.id);
+    }
+    throw new BadRequestException(
+      'لا يمكن ترحيل قيد استلام أو مصروف متأخر بلا مورد محدد: حدد مورد الشحنة أو مورد دراسة جدوى المشروع قبل الترحيل. [IMPORT_RECEIPT_SUPPLIER_REQUIRED]',
+    );
+  }
+
+  /**
    * Helper to verify and consume a Maker-Checker approval request for sensitive actions
    */
   private async verifyAndConsumeApprovalRequest(
@@ -1822,13 +1864,17 @@ export class ImportSalesService {
     if (!Number.isSafeInteger(receiptLocationId) || Number(receiptLocationId) <= 0) {
       throw new BadRequestException('يجب تحديد مخزن الاستلام الحقيقي (receiptLocationId) قبل ترحيل الحاوية؛ يمنع إنشاء باتشات بلا موقع.');
     }
-    const receivingLocation = await trx.selectFrom('stock_locations').select(['id', 'tenant_id'])
+    const receivingLocation = await trx.selectFrom('stock_locations').select(['id', 'tenant_id', 'branch_id'])
       .where('id', '=', Number(receiptLocationId)).where('tenant_id', '=', tenantId).executeTakeFirst();
     if (!receivingLocation) throw new BadRequestException('مخزن استلام الحاوية غير موجود في المنشأة.');
+    const receiptBranchId = receivingLocation.branch_id ? Number(receivingLocation.branch_id) : null;
     const shipment = await trx.selectFrom('import_shipments').selectAll().where('tenant_id', '=', tenantId).where('id', '=', shipmentId).executeTakeFirstOrThrow();
     const items = await trx.selectFrom('import_shipment_items').selectAll()
       .where('tenant_id', '=', tenantId).where('shipment_id', '=', shipmentId).execute();
     if (!items.length) throw new BadRequestException('لا يمكن استلام شحنة بدون أصناف');
+    // Fail closed BEFORE any stock or journal write: the payable
+    // supplier must be identified now, never defaulted later.
+    const effectiveReceiptSupplierId = await this.resolveImportReceiptSupplierId(trx, tenantId, shipment);
     // Never silently allocate more pre-sold stock than the physically received quantity.
     const receivedByProduct = new Map<number, number>();
     for (const item of items) {
@@ -1942,7 +1988,7 @@ export class ImportSalesService {
         accountId: number; description: string;
         debit: number; credit: number;
         partnerType: 'supplier' | 'none'; partnerId: number | null;
-        branchId: null; locationId: null;
+        branchId: number | null; locationId: number | null;
       }> = [];
 
       // DR: Inventory (landed cost value of physically received goods)
@@ -1954,8 +2000,8 @@ export class ImportSalesService {
           credit: 0,
           partnerType: 'none',
           partnerId: null,
-          branchId: null,
-          locationId: null,
+          branchId: receiptBranchId,
+          locationId: Number(receiptLocationId),
         });
       }
 
@@ -1969,46 +2015,9 @@ export class ImportSalesService {
           credit: 0,
           partnerType: 'none',
           partnerId: null,
-          branchId: null,
-          locationId: null,
+          branchId: receiptBranchId,
+          locationId: Number(receiptLocationId),
         });
-      }
-
-      let effectiveReceiptSupplierId = (shipment as any)?.supplier_id ? Number((shipment as any).supplier_id) : null;
-      if (!effectiveReceiptSupplierId && shipment.project_id) {
-        const proj = await trx
-          .selectFrom('import_projects')
-          .select('feasibility_data')
-          .where('tenant_id', '=', tenantId)
-          .where('id', '=', shipment.project_id)
-          .executeTakeFirst();
-        const f = typeof proj?.feasibility_data === 'string' ? JSON.parse(proj.feasibility_data) : (proj?.feasibility_data || {});
-        if (f?.supplierId) effectiveReceiptSupplierId = Number(f.supplierId);
-      }
-      if (!effectiveReceiptSupplierId) {
-        const anySup = await trx
-          .selectFrom('suppliers')
-          .select('id')
-          .where('tenant_id', '=', tenantId)
-          .orderBy('id', 'asc')
-          .limit(1)
-          .executeTakeFirst();
-        if (anySup) effectiveReceiptSupplierId = Number(anySup.id);
-      }
-      if (!effectiveReceiptSupplierId) {
-        const defaultSup = await trx
-          .insertInto('suppliers')
-          .values({
-            tenant_id: tenantId,
-            name: 'مورد استيراد عام / توكيلات شحن',
-            phone: '',
-            address: '',
-            balance: 0,
-            is_active: true,
-          } as any)
-          .returning('id')
-          .executeTakeFirst();
-        if (defaultSup) effectiveReceiptSupplierId = Number(defaultSup.id);
       }
 
       // CR: Accounts Payable / Supplier
@@ -2017,10 +2026,10 @@ export class ImportSalesService {
         description: `استحقاق مورد استيراد - حاوية ${shipment.container_number || shipmentId}`,
         debit: 0,
         credit: totalCreditPayable,
-        partnerType: effectiveReceiptSupplierId ? 'supplier' : 'none',
-        partnerId: effectiveReceiptSupplierId ? Number(effectiveReceiptSupplierId) : null,
-        branchId: null,
-        locationId: null,
+        partnerType: 'supplier',
+        partnerId: effectiveReceiptSupplierId,
+        branchId: receiptBranchId,
+        locationId: Number(receiptLocationId),
       });
 
       const journalEntryId = await postingService.postDomainJournal(trx, {
@@ -2030,8 +2039,8 @@ export class ImportSalesService {
         accountId: tenantId,
         entryDate: new Date(),
         description: `قيد استلام مخزون استيراد - حاوية ${shipment.container_number || shipmentId} (سند استلام #${receipt.id})`,
-        branchId: null,
-        locationId: null,
+        branchId: receiptBranchId,
+        locationId: Number(receiptLocationId),
         createdBy: userId,
         postedBy: userId,
         lines: journalLines,
@@ -2138,6 +2147,13 @@ export class ImportSalesService {
       if (!receipt || receipt.state !== 'posted') {
         throw new BadRequestException('لا يمكن تسجيل مصروفات متأخرة إلا بعد استلام الشحنة وترحيل المخزون.');
       }
+
+      // Fail closed BEFORE any revaluation or journal write: the
+      // payable supplier must be identified now, never defaulted later.
+      // Branch/location stay null on these lines: on-hand is read
+      // company-wide across locations, so no single receipt location
+      // can be attributed honestly here.
+      const effectiveExpenseSupplierId = await this.resolveImportReceiptSupplierId(trx, tenantId, shipment);
 
       const items = await trx
         .selectFrom('import_shipment_items')
@@ -2334,50 +2350,13 @@ export class ImportSalesService {
           locationId: null,
         });
       }
-      let effectiveExpenseSupplierId = (shipment as any)?.supplier_id ? Number((shipment as any).supplier_id) : null;
-      if (!effectiveExpenseSupplierId && shipment.project_id) {
-        const proj = await trx
-          .selectFrom('import_projects')
-          .select('feasibility_data')
-          .where('tenant_id', '=', tenantId)
-          .where('id', '=', shipment.project_id)
-          .executeTakeFirst();
-        const f = typeof proj?.feasibility_data === 'string' ? JSON.parse(proj.feasibility_data) : (proj?.feasibility_data || {});
-        if (f?.supplierId) effectiveExpenseSupplierId = Number(f.supplierId);
-      }
-      if (!effectiveExpenseSupplierId) {
-        const anySup = await trx
-          .selectFrom('suppliers')
-          .select('id')
-          .where('tenant_id', '=', tenantId)
-          .orderBy('id', 'asc')
-          .limit(1)
-          .executeTakeFirst();
-        if (anySup) effectiveExpenseSupplierId = Number(anySup.id);
-      }
-      if (!effectiveExpenseSupplierId) {
-        const defaultSup = await trx
-          .insertInto('suppliers')
-          .values({
-            tenant_id: tenantId,
-            name: 'مورد استيراد عام / توكيلات شحن',
-            phone: '',
-            address: '',
-            balance: 0,
-            is_active: true,
-          } as any)
-          .returning('id')
-          .executeTakeFirst();
-        if (defaultSup) effectiveExpenseSupplierId = Number(defaultSup.id);
-      }
-
       lines.push({
         accountId: payableAccountId,
         description: `استحقاق مصروف متأخر - حاوية ${shipment.container_number}`,
         debit: 0,
         credit: Number(dto.lateExpenseAmount.toFixed(2)),
-        partnerType: effectiveExpenseSupplierId ? 'supplier' : 'none',
-        partnerId: effectiveExpenseSupplierId ? Number(effectiveExpenseSupplierId) : null,
+        partnerType: 'supplier',
+        partnerId: effectiveExpenseSupplierId,
         branchId: null,
         locationId: null,
       });

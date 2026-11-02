@@ -357,6 +357,7 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
       id BIGSERIAL PRIMARY KEY,
       tenant_id TEXT NOT NULL REFERENCES tenants(id),
       account_id TEXT NOT NULL,
+      branch_id BIGINT NULL,
       name TEXT NOT NULL,
       is_default BOOLEAN DEFAULT TRUE,
       created_at TIMESTAMPTZ DEFAULT NOW()
