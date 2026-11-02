@@ -57,6 +57,10 @@ import {
   calculateDemurrageRisk,
   calculateLateExpenseAllocation,
 } from './engines/import-landed-cost.engine';
+import {
+  isPaymentMethod,
+  validatePaymentEvidence,
+} from './engines/import-payment-method.engine';
 
 @Injectable()
 export class ImportSalesService {
@@ -295,7 +299,7 @@ export class ImportSalesService {
     actionType: string,
     referenceId: string,
     approvalRequestId?: string,
-    expectedDetails?: { amount?: number; projectId?: string; partnerId?: string; currency?: string; proformaInvoiceId?: string; supplierId?: string }
+    expectedDetails?: { amount?: number; projectId?: string; partnerId?: string; currency?: string; proformaInvoiceId?: string; supplierId?: string; paymentMethod?: string }
   ): Promise<void> {
     if (!approvalRequestId) return;
 
@@ -366,6 +370,17 @@ export class ImportSalesService {
       if (expectedDetails?.proformaInvoiceId && payload.proformaInvoiceId !== expectedDetails.proformaInvoiceId) {
         throw new BadRequestException(
           `طلب الاعتماد مخصص للفاتورة المبدئية (${payload.proformaInvoiceId}) ولا يطابق الفاتورة المطلوبة (${expectedDetails.proformaInvoiceId}).`
+        );
+      }
+
+      // Payment-method binding (INV-IMPORT-PAYMENT-METHODS): an
+      // approval that names a payment method authorizes only that
+      // method, exactly like the currency binding above. An
+      // approval with no method in its payload cannot authorize a
+      // method-bound transfer: the approver never saw the method.
+      if (expectedDetails?.paymentMethod && payload.paymentMethod !== expectedDetails.paymentMethod) {
+        throw new BadRequestException(
+          `طلب الاعتماد مخصص لطريقة دفع (${payload.paymentMethod}) ولا يطابق طريقة الدفع المطلوبة (${expectedDetails.paymentMethod}).`
         );
       }
 
@@ -3126,6 +3141,50 @@ export class ImportSalesService {
       throw new BadRequestException('مبالغ الحوالة بالجنيه والعملة الأجنبية يجب أن تكون أكبر من الصفر.');
     }
 
+    // Payment method (INV-IMPORT-PAYMENT-METHODS): a caller that
+    // supplies no method is recorded as a bank transfer, the
+    // historical behaviour, and no new evidence is demanded of
+    // legacy callers. A caller that DOES supply a method must
+    // supply that method's evidence, validated by the pure engine
+    // before any write. Cash-carried money must name its custody
+    // account explicitly: the settings default bank account is
+    // never silently treated as cash in hand. The chart of
+    // accounts carries no cash-vs-bank distinction beyond
+    // is_cash_bank, so the method is recorded with the explicit
+    // account rather than inferred from it.
+    const explicitPaymentMethod = typeof dto.paymentMethod === 'string' && dto.paymentMethod.trim()
+      ? dto.paymentMethod.trim()
+      : null;
+    if (explicitPaymentMethod && !isPaymentMethod(explicitPaymentMethod)) {
+      throw new BadRequestException(`طريقة الدفع '${explicitPaymentMethod}' غير مدعومة. [IMPORT_PAYMENT_METHOD_UNKNOWN]`);
+    }
+    const effectivePaymentMethod = explicitPaymentMethod ?? 'bank_transfer';
+    if (explicitPaymentMethod) {
+      try {
+        validatePaymentEvidence(explicitPaymentMethod, {
+          paymentReference: dto.paymentReference,
+          bankSwiftCode: dto.bankSwiftCode,
+          form4Number: dto.form4Number,
+          form4Date: dto.form4Date,
+          carrierName: dto.carrierName,
+          travelDate: dto.travelDate,
+          handoverReceiptNo: dto.handoverReceiptNo,
+          lcNumber: dto.lcNumber,
+          lcIssuingBank: dto.lcIssuingBank,
+          lcExpiryDate: dto.lcExpiryDate,
+          lcDocuments: dto.lcDocuments,
+          cadHandoverProof: dto.cadHandoverProof,
+          paymentTerms: dto.paymentTerms,
+          paymentDueDate: dto.paymentDueDate,
+        });
+      } catch (err: any) {
+        throw new BadRequestException(err?.message || 'دليل طريقة الدفع ناقص.');
+      }
+    }
+    if (effectivePaymentMethod === 'cash_carried' && !reqBankAccountId) {
+      throw new BadRequestException('الدفع النقدي المحمول يتطلب تحديد حساب العهدة النقدية صراحة (bankAccountId).');
+    }
+
     return await this.db.transaction().execute(async (trx) => {
       // The threshold is normalised to the tenant base currency through
       // the single FX resolver: 100,000 JPY is not a large transfer,
@@ -3181,6 +3240,7 @@ export class ImportSalesService {
             supplierId: String(sId),
             proformaInvoiceId: proformaInvoiceId ? String(proformaInvoiceId) : undefined,
             projectId: (projectId || piProjectId) ? String(projectId || piProjectId) : undefined,
+            paymentMethod: explicitPaymentMethod ? effectivePaymentMethod : undefined,
           }
         );
       }
@@ -3315,6 +3375,21 @@ export class ImportSalesService {
             forex_variance_egp: forexVarianceEgp,
             proforma_invoice_id: proformaInvoiceId || null,
             idempotency_key: requestKey,
+            payment_method: effectivePaymentMethod,
+            payment_reference: dto.paymentReference || null,
+            bank_swift_code: dto.bankSwiftCode || null,
+            form4_number: dto.form4Number || null,
+            form4_date: dto.form4Date || null,
+            evidence_carrier_name: dto.carrierName || null,
+            evidence_travel_date: dto.travelDate || null,
+            evidence_handover_receipt: dto.handoverReceiptNo || null,
+            evidence_lc_number: dto.lcNumber || null,
+            evidence_lc_issuing_bank: dto.lcIssuingBank || null,
+            evidence_lc_expiry: dto.lcExpiryDate || null,
+            evidence_lc_documents: dto.lcDocuments || null,
+            evidence_cad_proof: dto.cadHandoverProof || null,
+            evidence_payment_terms: dto.paymentTerms || null,
+            evidence_payment_due_date: dto.paymentDueDate || null,
           } as any)
           .returning('id')
           .executeTakeFirstOrThrow();
@@ -3343,7 +3418,7 @@ export class ImportSalesService {
           account_id: bankScope.account_id,
           txn_type: 'supplier_payment',
           amount: -actualEgp,
-          note: `تدبير عملة: حوالة خارجية إلى ${supplier.name} (${cleanForeign} ${currency || 'USD'})` +
+          note: `تدبير عملة: حوالة خارجية إلى ${supplier.name} (${cleanForeign} ${currency || 'USD'}) [طريقة الدفع: ${effectivePaymentMethod}]` +
             (forexVarianceEgp !== 0 ? ` [فروق صرف: ${forexVarianceEgp.toFixed(2)} ج.م]` : ''),
           reference_type: 'supplier_payment',
           reference_id: paymentId,
@@ -3460,6 +3535,7 @@ export class ImportSalesService {
         journalEntryId: jeId,
         bankAccountId,
         supplierApAccountId,
+        paymentMethod: effectivePaymentMethod,
       };
     });
   }
@@ -4713,6 +4789,20 @@ export class ImportSalesService {
         `رقم الفاتورة المبدئية ${dto.piNumber} مستخدم بالفعل في هذه المنشأة. [IMPORT_PROFORMA_DUPLICATE_NUMBER]`,
       );
     }
+    // Advance+balance structure (INV-IMPORT-PAYMENT-METHODS): no
+    // silent 30/70 split. Either both percentages are explicit and
+    // sum to 100, or neither is recorded (NULL = no advance
+    // structure agreed). A one-sided percentage fails closed.
+    const advPct = dto.advancePercentage;
+    const balPct = dto.balancePercentage;
+    if ((advPct !== undefined) !== (balPct !== undefined)) {
+      throw new BadRequestException('نسبة الدفعة المقدمة ونسبة الرصيد يجب تحديدهما معًا صراحة أو تركهما معًا.');
+    }
+    if (advPct !== undefined && balPct !== undefined) {
+      if (!Number.isFinite(advPct) || !Number.isFinite(balPct) || advPct <= 0 || advPct >= 100 || Math.abs(advPct + balPct - 100) > 0.001) {
+        throw new BadRequestException('نسبة الدفعة المقدمة والرصيد يجب أن تكونا موجبتين ومجموعهما 100.');
+      }
+    }
     return await this.db
       .insertInto('import_proforma_invoices')
       .values({
@@ -4727,8 +4817,8 @@ export class ImportSalesService {
         delivery_port: dto.deliveryPort || null,
         payment_terms: dto.paymentTerms || null,
         exchange_rate_contract: dto.exchangeRateContract || null,
-        advance_percentage: dto.advancePercentage || 30.0,
-        balance_percentage: dto.balancePercentage || 70.0,
+        advance_percentage: advPct ?? null,
+        balance_percentage: balPct ?? null,
         status: 'draft',
         payment_status: 'unpaid',
         paid_amount_foreign: 0,
@@ -5043,6 +5133,11 @@ export class ImportSalesService {
   async disburseBrokerAdvance(tenantId: string, userId: number, dto: DisburseBrokerAdvanceDto) {
     if (!Number.isFinite(Number(dto.amountEgp)) || Number(dto.amountEgp) <= 0) {
       throw new BadRequestException('مبلغ عهدة المخلص يجب أن يكون رقمًا موجبًا.');
+    }
+    // Broker payment method (INV-IMPORT-PAYMENT-METHODS): closed
+    // enum, defaulting to bank transfer as before when absent.
+    if (dto.paymentMethod !== undefined && dto.paymentMethod !== null && !isPaymentMethod(dto.paymentMethod)) {
+      throw new BadRequestException(`طريقة دفع العهدة '${dto.paymentMethod}' غير مدعومة. [IMPORT_PAYMENT_METHOD_UNKNOWN]`);
     }
     return await this.db.transaction().execute(async (trx) => {
       if (dto.projectId) {
@@ -6512,6 +6607,9 @@ export class ImportSalesService {
       }
       if (payload.projectId !== undefined && !String(payload.projectId).trim()) {
         throw new BadRequestException('اعتماد الحوالة الكبيرة يتطلب معرف مشروع غير فارغ عند تحديده.');
+      }
+      if (payload.paymentMethod !== undefined && !isPaymentMethod(payload.paymentMethod)) {
+        throw new BadRequestException('اعتماد الحوالة الكبيرة يتطلب طريقة دفع صالحة عند تحديدها.');
       }
     }
     return await this.db

@@ -5,6 +5,8 @@ import {
   useApprovalRequestsQuery,
   useCreateApprovalRequestMutation,
   useDecideApprovalRequestMutation,
+  IMPORT_PAYMENT_METHODS,
+  IMPORT_PAYMENT_METHOD_LABELS,
 } from './api/shipments.api';
 import { StandardDialog } from '@/shared/components/StandardDialog';
 import { formatCurrency } from '@/lib/format';
@@ -32,6 +34,17 @@ export default function ImportApprovalsManager() {
   const [entityId, setEntityId] = useState('');
   const [amountEgp, setAmountEgp] = useState<number | string>('');
   const [justification, setJustification] = useState('');
+  // Large-transfer binding fields (INV-IMPORT-PAYMENT-METHODS):
+  // the backend binds an approval to the foreign amount, currency,
+  // supplier, proforma and payment method at execution. Without
+  // these the approval cannot authorize a transfer: the old form
+  // sent only an EGP estimate, which never matched the foreign
+  // amount and silently failed the binding.
+  const [transferAmountForeign, setTransferAmountForeign] = useState<number | string>('');
+  const [transferCurrency, setTransferCurrency] = useState('USD');
+  const [transferSupplierId, setTransferSupplierId] = useState('');
+  const [transferProformaId, setTransferProformaId] = useState('');
+  const [transferPaymentMethod, setTransferPaymentMethod] = useState('');
 
   const parsePayload = (r: any) => {
     try {
@@ -65,11 +78,18 @@ export default function ImportApprovalsManager() {
     try {
       if (!entityId.trim()) throw new Error('معرف المورد أو الشريك أو المشروع إلزامي.');
       if (requestType === 'partner_distribution' && !projectId.trim()) throw new Error('معرف المشروع إلزامي لصرف الأرباح.');
+      if (requestType === 'large_transfer' && (!Number(transferAmountForeign) || Number(transferAmountForeign) <= 0)) {
+        throw new Error('اعتماد الحوالة يتطلب المبلغ بالعملة الأجنبية كما سينفذ بالضبط.');
+      }
       await createApprovalMutation.mutateAsync({
         actionType: requestType,
         referenceId: entityId.trim(),
         requestPayload: {
-          amount: Number(amountEgp),
+          amount: requestType === 'large_transfer' ? Number(transferAmountForeign) : Number(amountEgp),
+          currency: requestType === 'large_transfer' ? transferCurrency.trim().toUpperCase() : undefined,
+          supplierId: requestType === 'large_transfer' ? (transferSupplierId.trim() || entityId.trim()) : undefined,
+          proformaInvoiceId: requestType === 'large_transfer' && transferProformaId.trim() ? transferProformaId.trim() : undefined,
+          paymentMethod: requestType === 'large_transfer' && transferPaymentMethod ? transferPaymentMethod : undefined,
           partnerId: requestType === 'partner_distribution' ? entityId.trim() : undefined,
           projectId: requestType === 'partner_distribution' ? projectId.trim() : undefined,
           justification,
@@ -79,6 +99,10 @@ export default function ImportApprovalsManager() {
       setIsCreateModalOpen(false);
       setEntityId('');
       setJustification('');
+      setTransferAmountForeign('');
+      setTransferSupplierId('');
+      setTransferProformaId('');
+      setTransferPaymentMethod('');
       refetch();
     } catch (err: any) {
       toast.error('فشل رفع طلب الاعتماد: ' + (err.message || 'خطأ غير معروف'));
@@ -398,6 +422,71 @@ export default function ImportApprovalsManager() {
               <label style={{ display: 'block', marginBottom: 4 }}>معرف مشروع أرباح الشريك (UUID)</label>
               <input required value={projectId} onChange={e => setProjectId(e.target.value)}
                 style={{ width: '100%', height: 36, padding: 6, border: '1px solid #cbd5e1', borderRadius: 6 }} />
+            </div>
+          )}
+          {requestType === 'large_transfer' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: 4 }}>
+                  المبلغ بالعملة الأجنبية (كما سينفذ)
+                </label>
+                <input
+                  type="number"
+                  required
+                  value={transferAmountForeign}
+                  onChange={(e) => setTransferAmountForeign(Number(e.target.value))}
+                  style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: 4 }}>
+                  العملة
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={transferCurrency}
+                  onChange={(e) => setTransferCurrency(e.target.value)}
+                  style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: 4 }}>
+                  معرف المورد (فارغ = نفس معرف السجل أعلاه)
+                </label>
+                <input
+                  type="text"
+                  value={transferSupplierId}
+                  onChange={(e) => setTransferSupplierId(e.target.value)}
+                  style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: 4 }}>
+                  معرف الفاتورة المبدئية (اختياري)
+                </label>
+                <input
+                  type="text"
+                  value={transferProformaId}
+                  onChange={(e) => setTransferProformaId(e.target.value)}
+                  style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: 4 }}>
+                  طريقة الدفع المرخص بها (اختياري — تقيد الاعتماد بها)
+                </label>
+                <select
+                  value={transferPaymentMethod}
+                  onChange={(e) => setTransferPaymentMethod(e.target.value)}
+                  style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
+                >
+                  <option value="">-- بدون طريقة (لا يجيز تحويلًا مقيدًا بطريقة دفع) --</option>
+                  {IMPORT_PAYMENT_METHODS.map((m) => (
+                    <option key={m} value={m}>{IMPORT_PAYMENT_METHOD_LABELS[m]}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
           <div>

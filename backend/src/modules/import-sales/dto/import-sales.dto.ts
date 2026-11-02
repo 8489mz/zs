@@ -349,6 +349,66 @@ export class RecordForeignTransferDto {
   @IsOptional()
   @IsString()
   approvalRequestId?: string;
+
+  @IsOptional()
+  @IsIn(['bank_transfer', 'cash_carried', 'letter_of_credit', 'cash_against_documents', 'open_account'])
+  paymentMethod?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentReference?: string;
+
+  @IsOptional()
+  @IsString()
+  bankSwiftCode?: string;
+
+  @IsOptional()
+  @IsString()
+  form4Number?: string;
+
+  @IsOptional()
+  @IsString()
+  form4Date?: string;
+
+  @IsOptional()
+  @IsString()
+  carrierName?: string;
+
+  @IsOptional()
+  @IsString()
+  travelDate?: string;
+
+  @IsOptional()
+  @IsString()
+  handoverReceiptNo?: string;
+
+  @IsOptional()
+  @IsString()
+  lcNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  lcIssuingBank?: string;
+
+  @IsOptional()
+  @IsString()
+  lcExpiryDate?: string;
+
+  @IsOptional()
+  @IsString()
+  lcDocuments?: string;
+
+  @IsOptional()
+  @IsString()
+  cadHandoverProof?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentTerms?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentDueDate?: string;
 }
 
 export class CreateImportProjectDto {

@@ -1700,6 +1700,22 @@ export interface SupplierPaymentTable {
   idempotency_key?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
   /** Original currency amount; amount is always base currency EGP. */
   amount_foreign?: ColumnType<number | null, number | null | undefined, number | null | undefined>;
+  /** Closed payment method (import-payment-method.engine) + its evidence. NULL on legacy rows: method unrecorded, never backfilled. */
+  payment_method?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  payment_reference?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  bank_swift_code?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  form4_number?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  form4_date?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  evidence_carrier_name?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  evidence_travel_date?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  evidence_handover_receipt?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  evidence_lc_number?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  evidence_lc_issuing_bank?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  evidence_lc_expiry?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  evidence_lc_documents?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  evidence_cad_proof?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  evidence_payment_terms?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  evidence_payment_due_date?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
 }
 
 export interface SupplierPaymentScheduleTable {

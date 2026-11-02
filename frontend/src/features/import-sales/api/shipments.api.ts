@@ -104,6 +104,86 @@ export interface RecordForeignTransferDto {
   bankAccountId?: number;
   idempotencyKey?: string;
   notes?: string;
+  approvalRequestId?: string;
+  paymentMethod?: string;
+  paymentReference?: string;
+  bankSwiftCode?: string;
+  form4Number?: string;
+  form4Date?: string;
+  carrierName?: string;
+  travelDate?: string;
+  handoverReceiptNo?: string;
+  lcNumber?: string;
+  lcIssuingBank?: string;
+  lcExpiryDate?: string;
+  lcDocuments?: string;
+  cadHandoverProof?: string;
+  paymentTerms?: string;
+  paymentDueDate?: string;
+}
+
+/** Closed payment-method enum, mirroring the backend engine. Form 4 values stay optional at recording. */
+export const IMPORT_PAYMENT_METHODS = [
+  'bank_transfer',
+  'cash_carried',
+  'letter_of_credit',
+  'cash_against_documents',
+  'open_account',
+] as const;
+
+/** Arabic labels for the payment-method select, shared by the transfer and approvals forms. */
+export const IMPORT_PAYMENT_METHOD_LABELS: Record<string, string> = {
+  bank_transfer: 'تحويل بنكي',
+  cash_carried: 'نقد محمول مع مسافر',
+  letter_of_credit: 'اعتماد مستندي (LC)',
+  cash_against_documents: 'دفع مقابل مستندات (CAD)',
+  open_account: 'حساب مفتوح / آجل',
+};
+
+export type ImportPaymentMethod = (typeof IMPORT_PAYMENT_METHODS)[number];
+
+/** Evidence fields the backend requires for each explicitly chosen method. */
+export function paymentMethodEvidenceFields(method: string): string[] {
+  switch (method) {
+    case 'bank_transfer':
+      return ['paymentReference'];
+    case 'cash_carried':
+      return ['carrierName', 'travelDate', 'handoverReceiptNo'];
+    case 'letter_of_credit':
+      return ['lcNumber', 'lcIssuingBank', 'lcExpiryDate', 'lcDocuments'];
+    case 'cash_against_documents':
+      return ['cadHandoverProof'];
+    case 'open_account':
+      return ['paymentTerms', 'paymentDueDate'];
+    default:
+      return [];
+  }
+}
+
+export type ForeignTransferEvidence = Partial<Record<
+  | 'paymentReference' | 'bankSwiftCode' | 'form4Number' | 'form4Date'
+  | 'carrierName' | 'travelDate' | 'handoverReceiptNo'
+  | 'lcNumber' | 'lcIssuingBank' | 'lcExpiryDate' | 'lcDocuments'
+  | 'cadHandoverProof' | 'paymentTerms' | 'paymentDueDate',
+  string
+>>;
+
+/**
+ * Builds the transfer payload the backend DTO declares: the method
+ * and its evidence travel with the money record. Evidence keys with
+ * empty values are dropped so the backend sees only what the user
+ * actually entered.
+ */
+export function buildForeignTransferPayload(
+  base: Omit<RecordForeignTransferDto, 'paymentMethod'>,
+  paymentMethod: string,
+  evidence: ForeignTransferEvidence,
+): RecordForeignTransferDto {
+  const cleaned: ForeignTransferEvidence = {};
+  for (const [key, value] of Object.entries(evidence)) {
+    if (typeof value === 'string' && value.trim()) cleaned[key as keyof ForeignTransferEvidence] = value.trim();
+  }
+  return { ...base, paymentMethod, ...cleaned };
 }
 
 export const useShipmentsQuery = () => {

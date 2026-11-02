@@ -2,6 +2,8 @@ import { toast } from '@/shared/components/system-alert';
 import { useTranslation } from 'react-i18next';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { http } from '@/lib/http';
 import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/shared/ui/button';
 import { formatCurrency } from '@/lib/format';
@@ -12,6 +14,11 @@ import {
   useForeignTransfersQuery,
   useProformaInvoicesQuery,
   useChinaSuppliersQuery,
+  buildForeignTransferPayload,
+  paymentMethodEvidenceFields,
+  IMPORT_PAYMENT_METHODS,
+  IMPORT_PAYMENT_METHOD_LABELS,
+  type ForeignTransferEvidence,
 } from './api/shipments.api';
 import {
   BuildingIcon,
@@ -22,6 +29,23 @@ import {
   CheckCircleIcon,
   SlidersIcon,
 } from '@/shared/components/icons/AppIcons';
+
+const EVIDENCE_FIELD_META: Record<string, { label: string; type?: string; optional?: boolean }> = {
+  paymentReference: { label: 'مرجع الحوالة / رقم العملية' },
+  bankSwiftCode: { label: 'كود SWIFT للبنك', optional: true },
+  form4Number: { label: 'رقم نموذج 4 (اختياري عند التسجيل)', optional: true },
+  form4Date: { label: 'تاريخ نموذج 4', type: 'date', optional: true },
+  carrierName: { label: 'اسم المسافر الحامل للنقد' },
+  travelDate: { label: 'تاريخ السفر', type: 'date' },
+  handoverReceiptNo: { label: 'رقم إيصال التسليم للمورد' },
+  lcNumber: { label: 'رقم الاعتماد المستندي' },
+  lcIssuingBank: { label: 'البنك المصدر للاعتماد' },
+  lcExpiryDate: { label: 'تاريخ انتهاء الاعتماد', type: 'date' },
+  lcDocuments: { label: 'قائمة المستندات المطلوبة' },
+  cadHandoverProof: { label: 'إثبات تسليم المستندات' },
+  paymentTerms: { label: 'شروط الدفع الآجل' },
+  paymentDueDate: { label: 'تاريخ الاستحقاق', type: 'date' },
+};
 
 export default function SupplierCredit() {
   const { t } = useTranslation();
@@ -37,8 +61,24 @@ export default function SupplierCredit() {
   const [amountEgp, setAmountEgp] = useState('');
   const [amountForeign, setAmountForeign] = useState('');
   const [notes, setNotes] = useState('');
+  // Payment method + evidence (INV-IMPORT-PAYMENT-METHODS): the
+  // method travels with the money record; evidence is required by
+  // the backend for the chosen method. Bank transfer is the
+  // historical default when the user picks nothing else.
+  const [paymentMethod, setPaymentMethod] = useState<string>('bank_transfer');
+  const [evidence, setEvidence] = useState<ForeignTransferEvidence>({});
+  const [custodyAccountId, setCustodyAccountId] = useState('');
   // Preserve the key across network retries of the *same* request.
   const transferAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
+
+  const { data: accountsData } = useQuery({
+    queryKey: ['accounts-list'],
+    queryFn: () => http<any>('/api/accounting/accounts').catch(() => ({ accounts: [] })),
+  });
+  const cashBankAccounts = useMemo(() => {
+    const list = accountsData?.accounts || (Array.isArray(accountsData) ? accountsData : []);
+    return (list as any[]).filter((a: any) => a.accountGroup === 'current_assets' || a.isCashBank);
+  }, [accountsData]);
 
   // Combine China suppliers and general suppliers without empty metadata filters
   const factories = useMemo(() => {
@@ -121,16 +161,31 @@ export default function SupplierCredit() {
       toast.error('المبلغ المحول للمصنع يجب أن يكون أكبر من صفر');
       return;
     }
+    const requiredEvidence = paymentMethodEvidenceFields(paymentMethod);
+    const missingEvidence = requiredEvidence.filter((f) => !(evidence as any)[f]?.trim());
+    if (missingEvidence.length > 0) {
+      toast.error('طريقة الدفع المختارة تتطلب استكمال بيانات الإثبات قبل التسجيل');
+      return;
+    }
+    if (paymentMethod === 'cash_carried' && !custodyAccountId) {
+      toast.error('الدفع النقدي المحمول يتطلب اختيار حساب العهدة النقدية صراحة');
+      return;
+    }
 
     const contractRate = selectedPi?.exchange_rate_contract ? Number(selectedPi.exchange_rate_contract) : undefined;
-    const payload = {
-      supplierId: selectedSupplier,
-      amountEgp: egpNum,
-      amountForeign: foreignNum,
-      notes,
-      proformaInvoiceId: selectedPiId || undefined,
-      exchangeRateContract: contractRate && contractRate > 0 ? contractRate : undefined,
-    };
+    const payload = buildForeignTransferPayload(
+      {
+        supplierId: selectedSupplier,
+        amountEgp: egpNum,
+        amountForeign: foreignNum,
+        notes,
+        proformaInvoiceId: selectedPiId || undefined,
+        exchangeRateContract: contractRate && contractRate > 0 ? contractRate : undefined,
+        bankAccountId: custodyAccountId ? Number(custodyAccountId) : undefined,
+      },
+      paymentMethod,
+      evidence,
+    );
     const fingerprint = JSON.stringify(payload);
     if (!transferAttempt.current || transferAttempt.current.fingerprint !== fingerprint) {
       transferAttempt.current = { fingerprint, key: crypto.randomUUID() };
@@ -147,6 +202,8 @@ export default function SupplierCredit() {
         setAmountForeign('');
         setSelectedPiId('');
         setNotes('');
+        setEvidence({});
+        setCustodyAccountId('');
         void suppliersQuery.refetch();
         void chinaSuppliersQuery.refetch();
         void treasuryQuery.refetch();
@@ -405,6 +462,87 @@ export default function SupplierCredit() {
                 </div>
               </div>
             </div>
+
+            {/* Row 2b: Payment method & evidence */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: '#1e293b', marginBottom: '6px' }}>
+                  طريقة الدفع <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <select
+                  style={{
+                    width: '100%', height: '38px', borderRadius: '8px', border: '1px solid #cbd5e1',
+                    padding: '0 12px', fontSize: '0.84rem', background: '#ffffff', color: '#0f172a',
+                    boxSizing: 'border-box', outline: 'none',
+                  }}
+                  value={paymentMethod}
+                  onChange={e => { setPaymentMethod(e.target.value); setEvidence({}); }}
+                  disabled={transferMutation.isPending}
+                >
+                  {IMPORT_PAYMENT_METHODS.map((m) => (
+                    <option key={m} value={m}>{IMPORT_PAYMENT_METHOD_LABELS[m]}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: '#1e293b', marginBottom: '6px' }}>
+                  حساب الخزينة / البنك المصدر {paymentMethod === 'cash_carried' ? <span style={{ color: '#ef4444' }}>*</span> : '(اختياري — الافتراضي من الإعدادات)'}
+                </label>
+                <select
+                  style={{
+                    width: '100%', height: '38px', borderRadius: '8px', border: '1px solid #cbd5e1',
+                    padding: '0 12px', fontSize: '0.84rem', background: '#ffffff', color: '#0f172a',
+                    boxSizing: 'border-box', outline: 'none',
+                  }}
+                  value={custodyAccountId}
+                  onChange={e => setCustodyAccountId(e.target.value)}
+                  required={paymentMethod === 'cash_carried'}
+                  disabled={transferMutation.isPending}
+                >
+                  <option value="">-- الحساب الافتراضي من الإعدادات --</option>
+                  {cashBankAccounts.map((acc: any) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.nameAr || acc.nameEn || acc.code}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {(() => {
+              const evidenceFields = [
+                ...paymentMethodEvidenceFields(paymentMethod),
+                ...(paymentMethod === 'bank_transfer' ? ['bankSwiftCode', 'form4Number', 'form4Date'] : []),
+              ];
+              if (evidenceFields.length === 0) return null;
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                  {evidenceFields.map((field) => {
+                    const meta = EVIDENCE_FIELD_META[field];
+                    return (
+                      <div key={field}>
+                        <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: '#1e293b', marginBottom: '6px' }}>
+                          {meta.label} {meta.optional ? '' : <span style={{ color: '#ef4444' }}>*</span>}
+                        </label>
+                        <input
+                          type={meta.type || 'text'}
+                          style={{
+                            width: '100%', height: '38px', borderRadius: '8px', border: '1px solid #cbd5e1',
+                            padding: '0 12px', fontSize: '0.84rem', background: '#ffffff', color: '#0f172a',
+                            boxSizing: 'border-box', outline: 'none',
+                          }}
+                          value={(evidence as any)[field] || ''}
+                          onChange={e => setEvidence((prev) => ({ ...prev, [field]: e.target.value }))}
+                          required={!meta.optional}
+                          disabled={transferMutation.isPending}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {/* Row 3: Notes & SWIFT details */}
             <div style={{ marginBottom: '18px' }}>
