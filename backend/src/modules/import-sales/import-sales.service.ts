@@ -3502,45 +3502,58 @@ export class ImportSalesService {
 
       const shipment = await trx
         .selectFrom('import_shipments')
-        .select(['exchange_rate_at_arrival', 'pricing_exchange_rate', 'project_id', 'supplier_id', 'container_number'])
+        .select(['exchange_rate_at_arrival', 'pricing_exchange_rate'])
         .where('id', '=', shipmentId)
         .where('tenant_id', '=', tenantId)
         .executeTakeFirst();
-        
+      if (!shipment) throw new NotFoundException('الشحنة غير موجودة');
+
       const arrivalRate = Number(shipment?.exchange_rate_at_arrival) || 1;
       const pricingRate = Number(shipment?.pricing_exchange_rate) || arrivalRate;
 
-      let projectSupplierId = shipment?.supplier_id ? Number(shipment.supplier_id) : null;
-      let categoryId: number | null = null;
-      if (shipment?.project_id) {
-        const proj = await trx.selectFrom('import_projects').select('supplier_id').where('tenant_id', '=', tenantId).where('id', '=', shipment.project_id).executeTakeFirst();
-        if (proj?.supplier_id) projectSupplierId = Number(proj.supplier_id);
-
-        const cat = await trx.selectFrom('product_categories').select('id').where('tenant_id', '=', tenantId).where('name', '=', 'قطع غيار شاحنات ونقل ثقيل').executeTakeFirst();
-        if (cat) categoryId = Number(cat.id);
+      // INV-IMPORT-APPLY-PRICES-NO-WAC-OVERWRITE: lock every touched
+      // product row FOR UPDATE in global ID order, grouped by its own
+      // account scope (the canonical lockStockProducts helper), before
+      // any price write. This function must never write cost_price
+      // (the blended WAC) and never overwrite catalog identity
+      // (supplier/category); only retail/wholesale selling prices move.
+      if (items.length) {
+        const products = await trx
+          .selectFrom('products')
+          .select(['id', 'account_id'])
+          .where('tenant_id', '=', tenantId)
+          .where('id', 'in', items.map((item) => Number(item.product_id)))
+          .orderBy('id', 'asc')
+          .execute();
+        const idsByAccount = new Map<string, number[]>();
+        for (const product of products) {
+          const accountId = String(product.account_id);
+          const ids = idsByAccount.get(accountId) || [];
+          ids.push(Number(product.id));
+          idsByAccount.set(accountId, ids);
+        }
+        for (const [accountId, productIds] of idsByAccount) {
+          await lockStockProducts(trx as any, { tenantId, accountId, productIds });
+        }
       }
-        
+
       let updatedCount = 0;
       for (const item of items) {
         const cost = Number(item.landed_cost_egp || 0);
-        
+
         // If pricing rate is different, adjust the base cost for pricing
         const unitUsd = Number(item.factory_unit_price_usd || 0);
         const pricingCostEgp = cost + (unitUsd * (pricingRate - arrivalRate));
 
-        let updateData: any = {
-          cost_price: cost > 0 ? Number(cost.toFixed(2)) : undefined,
+        const updateData: any = {
           catalog_updated_at: new Date(),
         };
-
-        if (projectSupplierId) updateData.supplier_id = projectSupplierId;
-        if (categoryId) updateData.category_id = categoryId;
 
         if (item.target_retail_margin !== null && Number(item.target_retail_margin) > 0) {
           const rMargin = Number(item.target_retail_margin) / 100;
           updateData.retail_price = Number((pricingCostEgp * (1 + rMargin)).toFixed(2));
         }
-        
+
         if (item.target_wholesale_margin !== null && Number(item.target_wholesale_margin) > 0) {
           const wMargin = Number(item.target_wholesale_margin) / 100;
           updateData.wholesale_price = Number((pricingCostEgp * (1 + wMargin)).toFixed(2));
@@ -3553,7 +3566,7 @@ export class ImportSalesService {
             .where('id', '=', Number(item.product_id))
             .where('tenant_id', '=', tenantId)
             .execute();
-            
+
           updatedCount++;
         }
       }
