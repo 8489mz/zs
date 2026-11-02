@@ -3,6 +3,7 @@ import { DEFAULT_TRIAL_DAYS } from '../saas-admin/trial.constants';
 
 type TrialSignupMailPayload = {
   businessName: string;
+  ownerName?: string;
   ownerEmail: string;
   username: string;
   temporaryPassword: string;
@@ -28,13 +29,16 @@ export class TrialSignupMailService {
   private buildText(payload: TrialSignupMailPayload): string {
     const loginUrl = String(process.env.APP_LOGIN_URL || '').trim() || '/login';
     const trialDays = payload.trialDays ?? DEFAULT_TRIAL_DAYS;
+    // Greet the person when the signup carried their name; the business
+    // name stays the fallback for older clients that send no ownerName.
+    const greetName = payload.ownerName || payload.businessName;
 
     return [
       '==================================================',
       '      Z SYSTEMS PRO | Z ERP - النسخة التجريبية    ',
       '==================================================',
       '',
-      `مرحباً ${payload.businessName}،`,
+      `مرحباً ${greetName}،`,
       '',
       'تم إنشاء وتجهيز نسختك التجريبية في Z Systems Pro بنجاح.',
       `مدة التجربة المجانية: ${trialDays} أيام كاملة بكافة المميزات.`,
@@ -53,7 +57,7 @@ export class TrialSignupMailService {
       '==================================================',
       '           ENGLISH VERSION / SUMMARY              ',
       '==================================================',
-      `Welcome ${payload.businessName},`,
+      `Welcome ${greetName},`,
       `Your Z Systems Pro workspace is active for ${trialDays} days.`,
       '',
       `• Login URL: ${loginUrl}`,
@@ -69,7 +73,7 @@ export class TrialSignupMailService {
   private buildHtml(payload: TrialSignupMailPayload): string {
     const loginUrl = String(process.env.APP_LOGIN_URL || '').trim() || '/login';
     const trialDays = payload.trialDays ?? DEFAULT_TRIAL_DAYS;
-    const safeBusinessName = escapeHtml(payload.businessName);
+    const safeGreetName = escapeHtml(payload.ownerName || payload.businessName);
     const safeUsername = escapeHtml(payload.username);
     const safeEmail = escapeHtml(payload.ownerEmail);
     const safePassword = escapeHtml(payload.temporaryPassword);
@@ -115,7 +119,7 @@ export class TrialSignupMailService {
         <div style="display: inline-block; margin-bottom: 16px; padding: 5px 14px; background-color: ${primaryTint}; border-radius: 6px; color: ${primary}; font-size: 12px; font-weight: 700;">
           تفعيل النسخة التجريبية — ${trialDays} يوم
         </div>
-        <h1 style="margin: 0 0 10px 0; color: #0f172a; font-size: 19px; font-weight: 800; line-height: 1.3;">مرحباً ${safeBusinessName}</h1>
+        <h1 style="margin: 0 0 10px 0; color: #0f172a; font-size: 19px; font-weight: 800; line-height: 1.3;">مرحباً ${safeGreetName}</h1>
         <p style="margin: 0 0 20px 0; color: ${text}; font-size: 14px; line-height: 1.7;">
           تم تجهيز وتفعيل مساحة العمل السحابية الخاصة بنشاطك التجاري بنجاح، ونسختك التجريبية جاهزة للاستخدام الفوري بكافة الصلاحيات لمدة <strong>${trialDays} أيام</strong>.
         </p>
@@ -179,7 +183,7 @@ export class TrialSignupMailService {
       <div dir="ltr" style="text-align: left;">
         <h2 style="margin: 0 0 8px 0; color: #0f172a; font-size: 15px; font-weight: 700;">Welcome to Z Systems Pro</h2>
         <p style="margin: 0 0 14px 0; color: ${muted}; font-size: 13px; line-height: 1.6;">
-          Hello <strong>${safeBusinessName}</strong>, your cloud workspace is ready for <strong>${trialDays} days</strong>.
+          Hello <strong>${safeGreetName}</strong>, your cloud workspace is ready for <strong>${trialDays} days</strong>.
         </p>
 
         <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; color: ${text};">

@@ -111,6 +111,9 @@ export class PublicTrialSignupService {
 
     const email = this.normalizeEmail(payload.ownerEmail);
     const phone = this.normalizePhone(payload.ownerPhone);
+    // The person's name when the client sends it; the business name stays
+    // the fallback so older clients that send no ownerName keep working.
+    const ownerName = String(payload.ownerName || '').trim() || String(payload.businessName || '').trim();
     const maskedEmail = this.maskEmail(email);
     const maskedPhone = this.maskPhone(phone);
 
@@ -130,7 +133,7 @@ export class PublicTrialSignupService {
       const provisioned = await this.provisioning.createTrialTenant(
         {
           businessName: String(payload.businessName || '').trim(),
-          ownerName: String(payload.businessName || '').trim(),
+          ownerName,
           ownerPhone: phone,
           ownerEmail: email,
           days: DEFAULT_TRIAL_DAYS,
@@ -148,6 +151,7 @@ export class PublicTrialSignupService {
       try {
         await this.mail.sendTrialCredentials({
           businessName: provisioned.tenant.businessName,
+          ownerName,
           ownerEmail: email,
           username: provisioned.owner.username,
           temporaryPassword: provisioned.owner.temporaryPassword,

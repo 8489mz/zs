@@ -20,6 +20,7 @@ const FIELD_LABELS: Record<string, string> = {
   creditLimit: 'حد الائتمان',
   storeCreditBalance: 'رصيد الرصيد الدفتري',
   companyName: 'اسم الشركة',
+  ownerName: 'اسم المالك',
   taxNumber: 'الرقم الضريبي',
   type: 'النوع',
   amount: 'المبلغ',

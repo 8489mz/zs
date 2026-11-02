@@ -5,6 +5,11 @@ export class PublicTrialSignupDto {
   @Length(2, 80)
   businessName!: string;
 
+  @IsOptional()
+  @IsString()
+  @Length(2, 80)
+  ownerName?: string;
+
   @IsString()
   @Length(6, 30)
   ownerPhone!: string;
