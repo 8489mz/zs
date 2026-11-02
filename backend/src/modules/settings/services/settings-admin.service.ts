@@ -7,6 +7,8 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope, TenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, fromMinorUnits, toMinorUnits } from '../../accounting/engines/money-minor-units.engine';
 
 @Injectable()
 export class SettingsAdminService {
@@ -239,66 +241,85 @@ export class SettingsAdminService {
     return { ok: true, removed };
   }
 
-  async reconcileCustomers(actor: AuthContext): Promise<Record<string, unknown>> {
-    this.assertDestructiveAdminPermission(actor);
-    const { tenantId } = this.scope(actor);
-    const rows = await this.db
-      .selectFrom('customers as c')
-      .leftJoin('customer_ledger as l', 'l.customer_id', 'c.id')
-      .select(['c.id', 'c.balance'])
-      .select((eb) => sql<number>`coalesce(sum(l.amount), 0)`.as('ledger_balance'))
-      .where(sql<boolean>`c.tenant_id = ${tenantId}`)
+  /**
+   * Reconcile one partner side (customers or suppliers) against its
+   * ledger inside the caller's transaction. The ledger sum is rounded
+   * ONCE at tenant book digits through minor units, and the stored
+   * balance is compared EXACTLY: no skip band, no second rounding of
+   * either side. A partner with no ledger rows and a non-zero stored
+   * balance is fail-closed: skipped and reported, never zeroed,
+   * because a ledger-less balance may be a genuine opening balance.
+   * Currency settings are resolved on the caller's transaction handle
+   * and fail closed on mismatch, like every other posting path.
+   */
+  private async reconcilePartners(
+    db: Kysely<Database>,
+    tenantId: string,
+    kind: 'customer' | 'supplier',
+  ): Promise<{ updated: number; skipped: number }> {
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(db, tenantId));
+    const partnerTable = kind === 'customer' ? 'customers' : 'suppliers';
+    const ledgerTable = kind === 'customer' ? 'customer_ledger' : 'supplier_ledger';
+    const partnerIdColumn = kind === 'customer' ? 'customer_id' : 'supplier_id';
+    const rows = await (db as any)
+      .selectFrom(`${partnerTable} as p`)
+      .leftJoin(`${ledgerTable} as l`, `l.${partnerIdColumn}`, 'p.id')
+      .select(['p.id', 'p.balance'])
+      .select((eb: any) => sql<number>`coalesce(sum(l.amount), 0)`.as('ledger_balance'))
+      .select((eb: any) => sql<number>`count(l.id)`.as('ledger_rows'))
+      .where(sql<boolean>`p.tenant_id = ${tenantId}`)
       .where(sql<boolean>`(l.id is null or l.tenant_id = ${tenantId})`)
-      .groupBy(['c.id', 'c.balance'])
+      .groupBy(['p.id', 'p.balance'])
       .execute();
 
     let updated = 0;
+    let skipped = 0;
     for (const row of rows) {
-      const nextBalance = Number(Number(row.ledger_balance || 0).toFixed(2));
-      const currentBalance = Number(Number(row.balance || 0).toFixed(2));
-      if (Math.abs(nextBalance - currentBalance) <= 0.0001) continue;
-      await this.db.updateTable('customers').set({ balance: nextBalance, updated_at: sql`NOW()` }).where('id', '=', Number(row.id)).where(sql<boolean>`tenant_id = ${tenantId}`).execute();
+      const currentBalance = Number(row.balance || 0);
+      if (Number(row.ledger_rows || 0) === 0 && currentBalance !== 0) {
+        skipped += 1;
+        continue;
+      }
+      const nextBalance = fromMinorUnits(toMinorUnits(Number(row.ledger_balance || 0), bookDigits), bookDigits);
+      if (nextBalance === currentBalance) continue;
+      await (db as any).updateTable(partnerTable).set({ balance: nextBalance, updated_at: sql`NOW()` }).where('id', '=', Number(row.id)).where(sql<boolean>`tenant_id = ${tenantId}`).execute();
       updated += 1;
     }
+    return { updated, skipped };
+  }
 
-    await this.audit.log('مطابقة أرصدة العملاء', `تمت مطابقة ${updated} عميل بواسطة ${actor.username}`, actor);
-    return { ok: true, updated };
+  async reconcileCustomers(actor: AuthContext): Promise<Record<string, unknown>> {
+    this.assertDestructiveAdminPermission(actor);
+    const { tenantId } = this.scope(actor);
+    const result = await this.db.transaction().execute((trx) => this.reconcilePartners(trx, tenantId, 'customer'));
+    await this.audit.log('مطابقة أرصدة العملاء', `تمت مطابقة ${result.updated} عميل بواسطة ${actor.username}`, actor);
+    return { ok: true, updated: result.updated, skipped: result.skipped };
   }
 
   async reconcileSuppliers(actor: AuthContext): Promise<Record<string, unknown>> {
     this.assertDestructiveAdminPermission(actor);
     const { tenantId } = this.scope(actor);
-    const rows = await this.db
-      .selectFrom('suppliers as s')
-      .leftJoin('supplier_ledger as l', 'l.supplier_id', 's.id')
-      .select(['s.id', 's.balance'])
-      .select((eb) => sql<number>`coalesce(sum(l.amount), 0)`.as('ledger_balance'))
-      .where(sql<boolean>`s.tenant_id = ${tenantId}`)
-      .where(sql<boolean>`(l.id is null or l.tenant_id = ${tenantId})`)
-      .groupBy(['s.id', 's.balance'])
-      .execute();
-
-    let updated = 0;
-    for (const row of rows) {
-      const nextBalance = Number(Number(row.ledger_balance || 0).toFixed(2));
-      const currentBalance = Number(Number(row.balance || 0).toFixed(2));
-      if (Math.abs(nextBalance - currentBalance) <= 0.0001) continue;
-      await this.db.updateTable('suppliers').set({ balance: nextBalance, updated_at: sql`NOW()` }).where('id', '=', Number(row.id)).where(sql<boolean>`tenant_id = ${tenantId}`).execute();
-      updated += 1;
-    }
-
-    await this.audit.log('مطابقة أرصدة الموردين', `تمت مطابقة ${updated} مورد بواسطة ${actor.username}`, actor);
-    return { ok: true, updated };
+    const result = await this.db.transaction().execute((trx) => this.reconcilePartners(trx, tenantId, 'supplier'));
+    await this.audit.log('مطابقة أرصدة الموردين', `تمت مطابقة ${result.updated} مورد بواسطة ${actor.username}`, actor);
+    return { ok: true, updated: result.updated, skipped: result.skipped };
   }
 
   async reconcileAll(actor: AuthContext): Promise<Record<string, unknown>> {
     this.assertDestructiveAdminPermission(actor);
-    const customers = await this.reconcileCustomers(actor);
-    const suppliers = await this.reconcileSuppliers(actor);
+    const { tenantId } = this.scope(actor);
+    const result = await this.db.transaction().execute(async (trx) => {
+      const customers = await this.reconcilePartners(trx, tenantId, 'customer');
+      const suppliers = await this.reconcilePartners(trx, tenantId, 'supplier');
+      return { customers, suppliers };
+    });
+    await this.audit.log('مطابقة أرصدة العملاء', `تمت مطابقة ${result.customers.updated} عميل بواسطة ${actor.username}`, actor);
+    await this.audit.log('مطابقة أرصدة الموردين', `تمت مطابقة ${result.suppliers.updated} مورد بواسطة ${actor.username}`, actor);
     return {
       ok: true,
-      customersUpdated: customers.updated,
-      suppliersUpdated: suppliers.updated,
+      customersUpdated: result.customers.updated,
+      suppliersUpdated: result.suppliers.updated,
+      customersSkipped: result.customers.skipped,
+      suppliersSkipped: result.suppliers.skipped,
     };
   }
 }
