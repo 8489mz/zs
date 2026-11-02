@@ -79,12 +79,13 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator && !window.loc
         const swUrl = `/sw.js?v=${typeof __APP_BUILD_ID__ !== 'undefined' ? __APP_BUILD_ID__ : Date.now()}`;
         const wb = new Workbox(swUrl, { scope: '/' });
 
-        // Zero forced reloads: Never interrupt active cashier, invoices, forms or storefront carts.
-        // The service worker downloads new assets quietly in the background without forcing a refresh.
-        wb.addEventListener('waiting', () => {
-          wb.messageSkipWaiting();
-        });
-
+        // INV-NO-FORCED-UPDATE-RELOAD: a deployed build must never interrupt
+        // a live session. The worker is registered for offline operation only:
+        // a waiting worker is never forced to take over (no skipWaiting), and
+        // no update check runs on tab focus or visibility. The new build
+        // applies on the next fresh navigation or on a user-initiated reload
+        // (including a hard refresh), never on its own in front of a cashier,
+        // a form, or a storefront popup.
         wb.addEventListener('controlling', () => {
           // Broadcast update event silently without refreshing the window
           window.dispatchEvent(new CustomEvent('pwa-updated'));
@@ -96,24 +97,7 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator && !window.loc
           }
         });
 
-        // Throttle background update checks (at most once every 15 minutes) on tab focus/visibility
-        let lastUpdateCheck = 0;
-        const throttledUpdate = () => {
-          const now = Date.now();
-          if (now - lastUpdateCheck < 15 * 60 * 1000) return;
-          lastUpdateCheck = now;
-          wb.update().catch(() => {});
-        };
-
-        window.addEventListener('focus', throttledUpdate);
-
         wb.register({ immediate: true }).catch(() => {});
-
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible' && navigator.onLine) {
-            throttledUpdate();
-          }
-        });
       })
       .catch(() => {});
   }

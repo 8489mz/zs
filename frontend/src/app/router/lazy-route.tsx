@@ -173,25 +173,15 @@ function RouteLoadErrorFallback() {
 
 function lazyWithRetry(loader: LazyLoader) {
   return lazy(() =>
-    loader().catch((_err) => {
-      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-      if (isOffline) {
-        return { default: RouteLoadErrorFallback as unknown as ComponentType<unknown> };
-      }
-
-      // Chunk failed to load (likely a new deployment changed the hash).
-      // Reload the page once to fetch fresh assets.
-      const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
-      const reloadKey = `_chunk_reload_${encodeURIComponent(pathname)}`;
-      if (typeof sessionStorage !== 'undefined' && !sessionStorage.getItem(reloadKey)) {
-        sessionStorage.setItem(reloadKey, '1');
-        window.location.reload();
-        return new Promise(() => {});
-      } else if (typeof sessionStorage !== 'undefined') {
-        sessionStorage.removeItem(reloadKey);
-      }
-      return { default: RouteLoadErrorFallback as unknown as ComponentType<unknown> };
-    }),
+    loader()
+      // INV-NO-FORCED-UPDATE-RELOAD: one silent retry covers a transient
+      // network blip. A chunk that is gone because a new build deployed
+      // still fails here on purpose: the error fallback below is the only
+      // path, and only the user pressing its reload button reloads the page.
+      // Never reload automatically: a reload drops in-memory state (open
+      // popups, search text, scroll position) in front of the user.
+      .catch(() => loader())
+      .catch(() => ({ default: RouteLoadErrorFallback as unknown as ComponentType<unknown> })),
   );
 }
 
