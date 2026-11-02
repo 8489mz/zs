@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, Min, IsIn, IsInt, IsPositive, IsArray, ValidateNested, IsBoolean, IsNotEmpty } from 'class-validator';
+import { IsString, IsNumber, IsOptional, Min, IsIn, IsInt, IsPositive, IsArray, ValidateNested, IsBoolean, IsNotEmpty, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateShipmentDto {
@@ -774,6 +774,11 @@ export class ProcessLateExpenseDto {
   @Type(() => Number)
   @IsNumber()
   payableAccountId?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  idempotencyKey?: string;
 }
 
 export class CalculateCustomsTaxDto {

@@ -46,6 +46,8 @@ import {
 import { allocateSaleFromImportLots, calculateImportSaleCost } from './helpers/import-lot-allocation.helper';
 import { applyStockDelta, lockStockProducts } from '../../common/utils/location-stock-ledger';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
+import { tenantBaseCurrency } from '../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
 import { generateDailySequenceNumber } from '../delivery-reps/services/van-common.util';
 import { resolveFxRate } from '../accounting/fx-rate-resolution';
 import { calculateImportFeasibility, FeasibilityCalculationResult } from './engines/import-feasibility.engine';
@@ -2206,6 +2208,32 @@ export class ImportSalesService {
       // can be attributed honestly here.
       const effectiveExpenseSupplierId = await this.resolveImportReceiptSupplierId(trx, tenantId, shipment);
 
+      if (!Number.isFinite(dto.lateExpenseAmount) || dto.lateExpenseAmount <= 0) {
+        throw new BadRequestException('مبلغ المصروف المتأخر يجب أن يكون أكبر من صفر.');
+      }
+      // Idempotency (the deposit/preorder refund pattern): a supplied
+      // key is checked before any write, and a provisional event row
+      // is inserted after validation (pass 1) so the partial unique
+      // index serialises concurrent retries. Without a key the call
+      // behaves exactly as before.
+      const lateExpenseKey = dto.idempotencyKey ? String(dto.idempotencyKey).trim() : '';
+      if (lateExpenseKey.length > 128) {
+        throw new BadRequestException('مفتاح عدم التكرار للمصروف المتأخر يجب ألا يتجاوز 128 حرفاً.');
+      }
+      let lateExpenseEventId: number | null = null;
+      if (lateExpenseKey) {
+        const previousLateExpense = await trx
+          .selectFrom('import_late_expense_events')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('shipment_id', '=', shipmentId)
+          .where('idempotency_key', '=', lateExpenseKey)
+          .executeTakeFirst();
+        if (previousLateExpense) {
+          throw new ConflictException('تم تسجيل هذا المصروف المتأخر مسبقاً بنفس مفتاح عدم التكرار.');
+        }
+      }
+
       const items = await trx
         .selectFrom('import_shipment_items')
         .selectAll()
@@ -2234,18 +2262,40 @@ export class ImportSalesService {
         await lockStockProducts(trx, { tenantId, accountId: p.account_id, productIds: [Number(p.id)] });
       }
 
-      // Calculate item weights/shares for fair expense distribution across shipment items
-      const itemBaseCosts = items.map((it) => {
-        const qty = Number(it.quantity || 1);
-        const unitUsd = Number(it.factory_unit_price_usd || 0);
-        return qty * unitUsd;
+      // Allocation honours the shipment's cost_allocation_method
+      // with the landed-cost engine's guards: weight/cbm require a
+      // positive unit weight/CBM on every item. Share bases mirror
+      // the engine (B/L quantity x unit value/weight/CBM); when the
+      // chosen base totals zero, fall back to the value base, then
+      // to the received-quantity share used before this change.
+      const allocationMethod = (shipment.cost_allocation_method as 'value' | 'weight' | 'cbm') || 'value';
+      if (allocationMethod === 'weight' && items.some((item) => Number(item.gross_weight_kg_unit || 0) <= 0)) {
+        throw new BadRequestException('يلزم تحديد وزن الوحدة لكل صنف قبل التوزيع بالوزن.');
+      }
+      if (allocationMethod === 'cbm' && items.some((item) => Number(item.cbm_unit || 0) <= 0)) {
+        throw new BadRequestException('يلزم تحديد CBM الوحدة لكل صنف قبل التوزيع بالحجم.');
+      }
+      const itemShareBases = items.map((it) => {
+        const qty = Math.max(0, Number(it.quantity || 0));
+        if (allocationMethod === 'weight') return qty * Math.max(0, Number(it.gross_weight_kg_unit || 0));
+        if (allocationMethod === 'cbm') return qty * Math.max(0, Number(it.cbm_unit || 0));
+        return qty * Math.max(0, Number(it.factory_unit_price_usd || 0));
       });
-      const totalShipmentBaseUsd = itemBaseCosts.reduce((sum, v) => sum + v, 0);
+      const totalShareBase = itemShareBases.reduce((sum, v) => sum + v, 0);
+      const itemValueBases = items.map((it) => Math.max(0, Number(it.quantity || 0)) * Math.max(0, Number(it.factory_unit_price_usd || 0)));
+      const totalValueBase = itemValueBases.reduce((sum, v) => sum + v, 0);
 
-      let totalLateCogs = 0;
-      let totalLateInventory = 0;
+      // Book digits: per-item adjustments round at the tenant base
+      // currency's digits so their sum equals the journal totals.
+      const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
+      const roundedTotal = roundMoney(dto.lateExpenseAmount, digits);
+
       let totalSoldUnits = 0;
       let totalOnHandUnits = 0;
+      const rawAdjustments: Array<{
+        item: (typeof items)[number]; receivedQty: number; onHandQty: number;
+        soldQty: number; rawCogs: number; rawInventory: number; companyStock: number;
+      }> = [];
 
       for (let idx = 0; idx < items.length; idx++) {
         const item = items[idx];
@@ -2279,20 +2329,16 @@ export class ImportSalesService {
         totalOnHandUnits += itemOnHandQty;
         totalSoldUnits += itemSoldQty;
 
-        // Share of late expense allocated to this item
-        const itemShare = totalShipmentBaseUsd > 0
-          ? itemBaseCosts[idx] / totalShipmentBaseUsd
-          : itemReceivedQty / Math.max(1, totalReceivedQty);
-        const itemLateExpense = dto.lateExpenseAmount * itemShare;
-
+        // Share of the late expense allocated to this item, on the
+        // shipment's allocation method (see the bases above).
+        const itemShare = totalShareBase > 0
+          ? itemShareBases[idx] / totalShareBase
+          : totalValueBase > 0
+            ? itemValueBases[idx] / totalValueBase
+            : itemReceivedQty / Math.max(1, totalReceivedQty);
+        const itemLateExpense = roundedTotal * itemShare;
         const itemCogsAdj = (itemSoldQty / itemReceivedQty) * itemLateExpense;
         const itemInventoryAdj = (itemOnHandQty / itemReceivedQty) * itemLateExpense;
-
-        totalLateCogs += itemCogsAdj;
-        totalLateInventory += itemInventoryAdj;
-
-        // Lot-specific landed cost increase for this shipment's container lot
-        const lotUnitCostIncrease = itemOnHandQty > 0 ? itemInventoryAdj / itemOnHandQty : 0;
 
         // Query total company-wide on-hand stock for this product across all locations
         // to maintain exact Weighted Average Cost (WAC) and General Ledger inventory reconciliation (IAS 2)
@@ -2303,20 +2349,97 @@ export class ImportSalesService {
           .where('product_id', '=', pId)
           .executeTakeFirst();
         const totalCompanyStock = Math.max(itemOnHandQty, Number(totalCompanyStockRow?.total_qty || 0));
-        const wacUnitCostIncrease = totalCompanyStock > 0 ? itemInventoryAdj / totalCompanyStock : 0;
 
-        // INV-STOCK-POOL-REVALUATION: the pool revaluation writer
-        // spreads the inventory adjustment over the company-wide
-        // on-hand stock. The SQL-increment form is gone: under the
-        // product lock held above, read-primitive-write is equally
-        // safe, and the rounding policy is now the primitive's
-        // round-the-result instead of rounding the increase first.
-        // The lot and shipment-item increments below stay SQL-atomic
-        // deliberately: no lot lock is held in this flow.
+        rawAdjustments.push({
+          item, receivedQty: itemReceivedQty, onHandQty: itemOnHandQty,
+          soldQty: itemSoldQty, rawCogs: itemCogsAdj, rawInventory: itemInventoryAdj,
+          companyStock: totalCompanyStock,
+        });
+      }
+
+      // Pass 2: round each part at book digits; the remainder lands
+      // on the last item so the rounded parts sum exactly to the
+      // posted total (no drift between parts and journal).
+      const roundedAdjustments = rawAdjustments.map((adj) => ({
+        ...adj,
+        cogs: roundMoney(adj.rawCogs, digits),
+        inventory: roundMoney(adj.rawInventory, digits),
+      }));
+      let roundingDrift = roundMoney(
+        roundedTotal - roundedAdjustments.reduce((sum, adj) => sum + adj.cogs + adj.inventory, 0),
+        digits,
+      );
+      for (let i = roundedAdjustments.length - 1; i >= 0 && roundingDrift !== 0; i--) {
+        const target = roundedAdjustments[i];
+        if (roundingDrift > 0) {
+          target.inventory += roundingDrift;
+          roundingDrift = 0;
+        } else {
+          const fromInventory = Math.min(target.inventory, -roundingDrift);
+          target.inventory -= fromInventory;
+          roundingDrift += fromInventory;
+          if (roundingDrift !== 0) {
+            const fromCogs = Math.min(target.cogs, -roundingDrift);
+            target.cogs -= fromCogs;
+            roundingDrift += fromCogs;
+          }
+        }
+      }
+      if (roundingDrift !== 0) {
+        throw new UnprocessableEntityException('تعذر توزيع المصروف المتأخر بدقة وحدات العملة.');
+      }
+
+      // All validations passed: record the idempotency event row
+      // here, before any write, with a provisional split that keeps
+      // the amounts CHECK true at all times. The partial unique
+      // index serialises concurrent retries with the same key.
+      if (lateExpenseKey) {
+        try {
+          const provisional = await trx
+            .insertInto('import_late_expense_events')
+            .values({
+              tenant_id: tenantId,
+              shipment_id: shipmentId,
+              title: dto.title,
+              total_amount_egp: dto.lateExpenseAmount,
+              inventory_amount_egp: roundedTotal,
+              cogs_amount_egp: 0,
+              created_by: userId,
+              journal_entry_id: null,
+              idempotency_key: lateExpenseKey,
+            })
+            .returning('id')
+            .executeTakeFirstOrThrow();
+          lateExpenseEventId = provisional.id;
+        } catch (err: any) {
+          if (err?.code === '23505') {
+            throw new ConflictException('تم تسجيل هذا المصروف المتأخر مسبقاً بنفس مفتاح عدم التكرار.');
+          }
+          throw err;
+        }
+      }
+
+      // Pass 3: apply the rounded adjustments. The pool revaluation
+      // writer spreads the inventory adjustment over the
+      // company-wide on-hand stock; under the product lock held
+      // above, read-primitive-write is safe, and the rounding
+      // policy is the primitive's round-the-result. The lot and
+      // shipment-item increments stay SQL-atomic deliberately: no
+      // lot lock is held in this flow.
+      let totalLateCogs = 0;
+      let totalLateInventory = 0;
+      for (const adj of roundedAdjustments) {
+        const { item } = adj;
+        const adjProductId = Number(item.product_id);
+        totalLateCogs += adj.cogs;
+        totalLateInventory += adj.inventory;
+
+        const wacUnitCostIncrease = adj.companyStock > 0 ? adj.inventory / adj.companyStock : 0;
         if (wacUnitCostIncrease > 0) {
-          await revalueStockCost(trx, tenantId, pId, totalCompanyStock, itemInventoryAdj);
+          await revalueStockCost(trx, tenantId, adjProductId, adj.companyStock, adj.inventory);
         }
 
+        const lotUnitCostIncrease = adj.onHandQty > 0 ? adj.inventory / adj.onHandQty : 0;
         if (lotUnitCostIncrease > 0) {
           await trx
             .updateTable('import_inventory_lots')
@@ -2333,15 +2456,12 @@ export class ImportSalesService {
         await trx
           .updateTable('import_shipment_items')
           .set((eb) => ({
-            landed_cost_egp: sql`${eb.ref('landed_cost_egp')} + ${Number((itemLateExpense / itemReceivedQty).toFixed(6))}`,
+            landed_cost_egp: sql`${eb.ref('landed_cost_egp')} + ${Number(((adj.cogs + adj.inventory) / adj.receivedQty).toFixed(6))}`,
           }))
           .where('tenant_id', '=', tenantId)
           .where('id', '=', item.id)
           .execute();
       }
-
-      totalLateCogs = Number(totalLateCogs.toFixed(2));
-      totalLateInventory = Number((dto.lateExpenseAmount - totalLateCogs).toFixed(2));
 
       // Resolve accounts dynamically from COA / Accounting Settings
       const cogsAccountId = await this.resolveTenantAccount(trx, tenantId, 'cogs', dto.accountId ? Number(dto.accountId) : null);
@@ -2369,12 +2489,27 @@ export class ImportSalesService {
       }
 
       // Every late expense has a proper source document, including inventory-only capitalization.
-      const lateExpenseDocument = await trx.insertInto('import_late_expense_events').values({
-        tenant_id: tenantId, shipment_id: shipmentId,
-        title: dto.title, total_amount_egp: dto.lateExpenseAmount,
-        inventory_amount_egp: totalLateInventory, cogs_amount_egp: totalLateCogs,
-        created_by: userId, journal_entry_id: null,
-      }).returning('id').executeTakeFirstOrThrow();
+      let lateExpenseDocument: { id: number };
+      if (lateExpenseEventId !== null) {
+        await trx
+          .updateTable('import_late_expense_events')
+          .set({
+            total_amount_egp: roundedTotal,
+            inventory_amount_egp: totalLateInventory,
+            cogs_amount_egp: totalLateCogs,
+          })
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', lateExpenseEventId)
+          .execute();
+        lateExpenseDocument = { id: lateExpenseEventId };
+      } else {
+        lateExpenseDocument = await trx.insertInto('import_late_expense_events').values({
+          tenant_id: tenantId, shipment_id: shipmentId,
+          title: dto.title, total_amount_egp: roundedTotal,
+          inventory_amount_egp: totalLateInventory, cogs_amount_egp: totalLateCogs,
+          created_by: userId, journal_entry_id: null,
+        }).returning('id').executeTakeFirstOrThrow();
+      }
       const postingService = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
       const lines: any[] = [];
       if (totalLateCogs > 0) {
@@ -2405,7 +2540,7 @@ export class ImportSalesService {
         accountId: payableAccountId,
         description: `استحقاق مصروف متأخر - حاوية ${shipment.container_number}`,
         debit: 0,
-        credit: Number(dto.lateExpenseAmount.toFixed(2)),
+        credit: roundedTotal,
         partnerType: 'supplier',
         partnerId: effectiveExpenseSupplierId,
         branchId: null,
@@ -2432,7 +2567,7 @@ export class ImportSalesService {
       await trx
         .updateTable('import_shipments')
         .set((eb) => ({
-          late_expenses_total_egp: sql`coalesce(late_expenses_total_egp, 0) + ${dto.lateExpenseAmount}`,
+          late_expenses_total_egp: sql`coalesce(late_expenses_total_egp, 0) + ${roundedTotal}`,
           late_cogs_adjustment_egp: sql`coalesce(late_cogs_adjustment_egp, 0) + ${totalLateCogs}`,
           late_inventory_adjustment_egp: sql`coalesce(late_inventory_adjustment_egp, 0) + ${totalLateInventory}`,
         }))
@@ -2444,7 +2579,7 @@ export class ImportSalesService {
         success: true,
         message: 'تمت معالجة المصروف المتأخر وتوزيعه محاسبياً بين تكلفة البضاعة المباعة والمخزون المتبقي بنجاح.',
         allocation: {
-          lateExpenseAmount: dto.lateExpenseAmount,
+          lateExpenseAmount: roundedTotal,
           lateCogsAdjustmentEgp: totalLateCogs,
           lateInventoryAdjustmentEgp: totalLateInventory,
           soldQuantity: totalSoldUnits,
