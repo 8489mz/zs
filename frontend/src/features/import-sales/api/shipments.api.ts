@@ -1648,23 +1648,59 @@ export const useCreateReceivingInspectionMutation = (defaultShipmentId?: string)
   });
 };
 
+// The backend route is POST shipments/:shipmentId/late-expense and its
+// DTO (ProcessLateExpenseDto) declares only lateExpenseAmount, title,
+// accountId, note and payableAccountId. The dialog historically sent
+// unrelated fields (expenseCategory, handlingMethod, treasuryAccountId,
+// idempotencyKey) to the plural route; the whitelist validation pipe
+// rejected every submit before the service. Map every caller shape to
+// exactly the DTO fields. The dialog treasury account is deliberately
+// NOT mapped to accountId: the backend reads accountId as a COGS-account
+// override, not a payment account, and this endpoint posts a payable,
+// never a treasury movement.
+const LATE_EXPENSE_TYPE_TITLES: Record<string, string> = {
+  demurrage: 'غرامات تأخير وأرضيات',
+  customs_diff: 'فروق تسوية جمركية لاحقة',
+  transport: 'نقل ومشال إضافي',
+  other: 'مصروفات استيراد أخرى',
+};
+
+export function buildLateExpensePayload(rawDto: any): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    lateExpenseAmount: Number(rawDto?.lateExpenseAmount ?? rawDto?.amountEgp ?? rawDto?.amount ?? 0),
+    title:
+      rawDto?.title ||
+      LATE_EXPENSE_TYPE_TITLES[rawDto?.expenseCategory || rawDto?.expenseType] ||
+      'Late shipment expense',
+  };
+  const note = rawDto?.note ?? rawDto?.notes ?? rawDto?.description;
+  if (note !== undefined) payload.note = note;
+  if (rawDto?.accountId !== undefined) payload.accountId = String(rawDto.accountId);
+  if (rawDto?.payableAccountId !== undefined) payload.payableAccountId = Number(rawDto.payableAccountId);
+  return payload;
+}
+
+// The backend returns the split under allocation.lateCogsAdjustmentEgp /
+// allocation.lateInventoryAdjustmentEgp. Read only those fields.
+export function lateExpenseAllocationSummary(res: any): {
+  capitalizedToInventoryEgp: number;
+  expensedToCogsEgp: number;
+} {
+  return {
+    capitalizedToInventoryEgp: Number(res?.allocation?.lateInventoryAdjustmentEgp || 0),
+    expensedToCogsEgp: Number(res?.allocation?.lateCogsAdjustmentEgp || 0),
+  };
+}
+
 export const useRecordLateShipmentExpenseMutation = (defaultShipmentId?: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (args: any) => {
       const shipmentId = args?.shipmentId || defaultShipmentId;
       const rawDto = args?.dto !== undefined ? args.dto : args;
-      const payload = {
-        expenseCategory: rawDto.expenseCategory || rawDto.expenseType || 'demurrage',
-        amountEgp: Number(rawDto.amountEgp ?? rawDto.amount ?? 0),
-        handlingMethod: rawDto.handlingMethod || (rawDto.treatment === 'charge_to_pnl' ? 'charge_to_project_pnl' : 'revalue_unsold_stock'),
-        treasuryAccountId: rawDto.treasuryAccountId ? Number(rawDto.treasuryAccountId) : undefined,
-        idempotencyKey: rawDto.idempotencyKey || `LATE-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        notes: rawDto.notes || rawDto.description || undefined,
-      };
-      return await http<any>(`/api/import-sales/shipments/${shipmentId}/late-expenses`, {
+      return await http<any>(`/api/import-sales/shipments/${shipmentId}/late-expense`, {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(buildLateExpensePayload(rawDto)),
       });
     },
     onSuccess: (_data, variables: any) => {

@@ -12,6 +12,7 @@ import {
   useApplyPricesMutation,
   useCreateReceivingInspectionMutation,
   useRecordLateShipmentExpenseMutation,
+  lateExpenseAllocationSummary,
   type ShipmentItem 
 } from './api/shipments.api';
 import { formatCurrency } from '@/lib/format';
@@ -199,8 +200,6 @@ export default function ShipmentDetailsPage() {
   // Late Expense state
   const [lateExpenseType, setLateExpenseType] = useState('demurrage');
   const [lateAmountEgp, setLateAmountEgp] = useState('');
-  const [lateTreatment, setLateTreatment] = useState<'capitalize' | 'expense'>('capitalize');
-  const [lateTreasuryAccId, setLateTreasuryAccId] = useState('');
   const [lateDescription, setLateDescription] = useState('');
   
   const [globalRetailMargin, setGlobalRetailMargin] = useState('');
@@ -830,14 +829,13 @@ export default function ShipmentDetailsPage() {
                       dto: {
                         expenseType: lateExpenseType,
                         amountEgp: amt,
-                        treatment: lateTreatment,
-                        treasuryAccountId: lateTreasuryAccId ? Number(lateTreasuryAccId) : undefined,
                         description: lateDescription || undefined,
                       },
                     },
                     {
                       onSuccess: (res: any) => {
-                        toast.success(`تم تسجيل المصروف المتأخر بنجاح (مُرسمل للمخزون: ${formatCurrency(res?.capitalizedToInventoryEgp || 0)} | محمل على COGS: ${formatCurrency(res?.expensedToCogsEgp || 0)})`);
+                        const summary = lateExpenseAllocationSummary(res);
+                        toast.success(`تم تسجيل المصروف المتأخر بنجاح (مُرسمل للمخزون: ${formatCurrency(summary.capitalizedToInventoryEgp)} | محمل على COGS: ${formatCurrency(summary.expensedToCogsEgp)})`);
                         setIsLateExpenseOpen(false);
                         setLateAmountEgp('');
                         setLateDescription('');
@@ -866,21 +864,8 @@ export default function ShipmentDetailsPage() {
               <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, marginBottom: '4px' }}>المبلغ (ج.م) *</label>
               <input type="number" step="0.01" className="input" style={{ width: '100%' }} value={lateAmountEgp} onChange={e => setLateAmountEgp(e.target.value)} placeholder="0.00" />
             </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, marginBottom: '4px' }}>المعالجة المحاسبية</label>
-              <select className="input" style={{ width: '100%' }} value={lateTreatment} onChange={e => setLateTreatment(e.target.value as 'capitalize' | 'expense')}>
-                <option value="capitalize">رسملة تناسبية (تعلية المتبقي بالمخزن + COGS للمباع)</option>
-                <option value="expense">تحميل كامل مباشر على تكلفة المبيعات (COGS)</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, marginBottom: '4px' }}>حساب السداد (الخزينة / البنك)</label>
-              <select className="input" style={{ width: '100%' }} value={lateTreasuryAccId} onChange={e => setLateTreasuryAccId(e.target.value)}>
-                <option value="">-- الخزينة الافتراضية --</option>
-                {treasuryAccounts.map((a: any) => (
-                  <option key={a.id} value={a.id}>{a.nameAr || a.name}</option>
-                ))}
-              </select>
+            <div style={{ gridColumn: '1 / -1', fontSize: '12.5px', color: '#475569' }}>
+              يوزع المصروف دائما تناسبيا بين البضاعة المباعة (COGS) والمتبقي بالمخزون، حسب الكميات المباعة والمتبقية وقت التسجيل. يسجل القيد استحقاقا على المورد ولا يصرف من الخزينة.
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, marginBottom: '4px' }}>البيان والتفاصيل</label>
