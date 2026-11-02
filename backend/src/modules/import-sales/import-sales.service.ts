@@ -4441,54 +4441,14 @@ export class ImportSalesService {
       if (pi.status !== 'approved') throw new BadRequestException('يجب اعتماد الفاتورة المبدئية قبل إصدار أمر شراء.');
       let raw = typeof pi.items === 'string' ? JSON.parse(pi.items) : pi.items;
 
-      // Auto-recovery fallback: If items array contains empty objects or is invalid, recover from linked project feasibility
-      const hasValidItems = Array.isArray(raw) && raw.length > 0 && raw.some((it: any) => it && (Number(it.quantity ?? it.qty) > 0 || String(it.productName ?? it.name ?? '').trim()));
-      if (!hasValidItems) {
-        let feasItems: any[] | null = null;
-        if (pi.project_id) {
-          const proj = await trx
-            .selectFrom('import_projects')
-            .select(['feasibility_data'])
-            .where('id', '=', pi.project_id)
-            .where('tenant_id', '=', tenantId)
-            .executeTakeFirst();
-          if (proj?.feasibility_data) {
-            const feas = typeof proj.feasibility_data === 'string' ? JSON.parse(proj.feasibility_data) : proj.feasibility_data;
-            if (Array.isArray(feas?.items) && feas.items.length > 0) feasItems = feas.items;
-          }
-        }
-        if (!feasItems) {
-          const anyProj = await trx
-            .selectFrom('import_projects')
-            .select(['feasibility_data'])
-            .where('tenant_id', '=', tenantId)
-            .where('feasibility_data', 'is not', null)
-            .orderBy('created_at', 'desc')
-            .execute();
-          for (const p of anyProj) {
-            const feas = typeof p.feasibility_data === 'string' ? JSON.parse(p.feasibility_data) : p.feasibility_data;
-            if (Array.isArray(feas?.items) && feas.items.length > 0) {
-              feasItems = feas.items;
-              break;
-            }
-          }
-        }
-        if (feasItems && feasItems.length > 0) {
-          raw = feasItems.map((it: any) => ({
-            productName: it.name || it.productName || 'صنف استيراد',
-            quantity: Number(it.qty ?? it.quantity ?? 1),
-            unitPriceForeign: Number(it.factoryPriceUsd ?? it.unitPriceForeign ?? 0),
-            hsCode: it.hsCode || '',
-          }));
-          await trx
-            .updateTable('import_proforma_invoices')
-            .set({ items: JSON.stringify(raw) })
-            .where('id', '=', id)
-            .where('tenant_id', '=', tenantId)
-            .execute();
-        }
-      }
-
+      // No auto-recovery: a proforma without usable items must fail
+      // closed here. The old fallback first tried the linked project's
+      // feasibility, then the tenant's most recently created project,
+      // so a PO could be built from a different project's goods; and
+      // its item mapping dropped productId, so the recovered lines
+      // always failed validation and the transaction rolled back
+      // anyway. Items are linked explicitly (updateProformaInvoice)
+      // before conversion; nothing is borrowed.
       if (!Array.isArray(raw) || !raw.length) throw new BadRequestException('الفاتورة المبدئية لا تحتوي على أصناف قابلة للشراء.');
       // No invented rate: a foreign-currency proforma without a usable
       // contract rate must not be costed at a silent default (the old
@@ -4527,13 +4487,13 @@ export class ImportSalesService {
       }
       foreignTotal = Number(foreignTotal.toFixed(2));
       if (Math.abs(foreignTotal - Number(pi.total_amount_foreign)) > 0.02) {
-        // Synchronize header total with lines total seamlessly
-        await trx
-          .updateTable('import_proforma_invoices')
-          .set({ total_amount_foreign: foreignTotal })
-          .where('id', '=', id)
-          .where('tenant_id', '=', tenantId)
-          .execute();
+        // Fail closed: a supplier-document discrepancy must be fixed on
+        // the proforma itself, never silently overwritten. The header
+        // total feeds the later paid-amount checks; overwriting it here
+        // would launder the discrepancy into the payment chain.
+        throw new BadRequestException(
+          `إجمالي بنود الفاتورة المبدئية ${pi.pi_number} (${foreignTotal}) لا يطابق إجمالي الفاتورة (${pi.total_amount_foreign})؛ صحح الفاتورة المبدئية قبل إصدار أمر الشراء. [IMPORT_PROFORMA_TOTAL_MISMATCH]`,
+        );
       }
       const subtotal = Number(lines.reduce((sum, item) => sum + item.total, 0).toFixed(3));
       const inserted = await trx.insertInto('purchase_orders').values({
