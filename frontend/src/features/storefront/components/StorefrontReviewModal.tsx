@@ -168,9 +168,11 @@ export function StorefrontReviewModal({
           boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25)',
           border: '1px solid #e2e8f0',
           position: 'relative',
-          willChange: 'transform, opacity',
           animation: 'sfAppleSpringOpen 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards',
           pointerEvents: 'auto',
+          WebkitFontSmoothing: 'antialiased',
+          MozOsxFontSmoothing: 'grayscale',
+          textRendering: 'optimizeLegibility',
         }}
         onClick={(e) => e.stopPropagation()}
       >

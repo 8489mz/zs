@@ -131,8 +131,8 @@ export function StorefrontLiveCartDock({
     >
       <style>{`
         @keyframes liveCartSlideInRight {
-          from { opacity: 0; transform: translate3d(32px, 0, 0); }
-          to { opacity: 1; transform: translate3d(0, 0, 0); }
+          from { opacity: 0; transform: translateX(32px); }
+          to { opacity: 1; transform: none; }
         }
         @keyframes fadeIn {
           from { opacity: 0; }
@@ -158,8 +158,10 @@ export function StorefrontLiveCartDock({
           display: 'flex',
           flexDirection: 'column',
           position: 'relative',
-          willChange: 'transform, opacity',
           animation: 'liveCartSlideInRight 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards',
+          WebkitFontSmoothing: 'antialiased',
+          MozOsxFontSmoothing: 'grayscale',
+          textRendering: 'optimizeLegibility',
           overflow: 'hidden',
           pointerEvents: 'auto',
         }}

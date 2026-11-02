@@ -2562,27 +2562,34 @@ button.sf-stylehub-bottom-link:hover {
 @keyframes sfAppleSpringOpen {
   0% {
     opacity: 0;
-    transform: translate3d(0, 14px, 0) scale3d(0.94, 0.94, 1);
-  }
-  70% {
-    opacity: 1;
-    transform: translate3d(0, -1px, 0) scale3d(1.008, 1.008, 1);
+    transform: translateY(12px) scale(0.97);
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
+    transform: none;
   }
 }
 
 @keyframes sfAppleSlideInRight {
   0% {
     opacity: 0;
-    transform: translate3d(32px, 0, 0);
+    transform: translateX(32px);
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: none;
   }
+}
+
+/* Crisp rendering standards for storefront modals and drawers */
+.storefront-checkout-modal-container,
+.storefront-review-modal-shell,
+.sf-quickview-shell,
+.storefront-cart-drawer-shell,
+.storefront-live-cart-fullsheet {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* Instant zero-latency touch response and GPU compositing */

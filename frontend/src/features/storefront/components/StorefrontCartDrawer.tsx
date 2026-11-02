@@ -121,8 +121,10 @@ export function StorefrontCartDrawer({
           flexDirection: 'column',
           position: 'relative',
           cursor: 'default',
-          willChange: 'transform, opacity',
           animation: 'sfAppleSlideInRight 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards',
+          WebkitFontSmoothing: 'antialiased',
+          MozOsxFontSmoothing: 'grayscale',
+          textRendering: 'optimizeLegibility',
         }}
       >
         {/* Minimalist Centered Top Bar */}

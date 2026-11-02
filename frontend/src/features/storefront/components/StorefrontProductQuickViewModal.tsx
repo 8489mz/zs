@@ -328,25 +328,21 @@ export function StorefrontProductQuickViewModal({
         @keyframes sfIosAppLaunchOpen {
           0% {
             opacity: 0;
-            transform: translate3d(var(--ios-origin-x, 0px), var(--ios-origin-y, 48px), 0) scale3d(var(--ios-init-scale, 0.36), var(--ios-init-scale, 0.36), 1);
-          }
-          66% {
-            opacity: 1;
-            transform: translate3d(0, 0, 0) scale3d(1.012, 1.012, 1);
+            transform: translateY(24px) scale(0.96);
           }
           100% {
             opacity: 1;
-            transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
+            transform: none;
           }
         }
         @keyframes sfIosAppLaunchClose {
           0% {
             opacity: 1;
-            transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
+            transform: none;
           }
           100% {
             opacity: 0;
-            transform: translate3d(var(--ios-origin-x, 0px), var(--ios-origin-y, 48px), 0) scale3d(var(--ios-init-scale, 0.34), var(--ios-init-scale, 0.34), 1);
+            transform: translateY(24px) scale(0.96);
           }
         }
         .sf-quickview-backdrop {
@@ -365,7 +361,9 @@ export function StorefrontProductQuickViewModal({
           pointer-events: none;
         }
         .sf-quickview-shell {
-          will-change: transform, opacity;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          text-rendering: optimizeLegibility;
           transform-origin: center center;
           pointer-events: auto !important;
           cursor: default;
