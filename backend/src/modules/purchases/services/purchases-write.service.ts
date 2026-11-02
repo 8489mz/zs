@@ -8,7 +8,7 @@ import { assertUntrackedStockMutation } from '../../inventory/helpers/inventory-
 import { reversePurchaseTrackedStock } from '../helpers/purchase-cancellation-trace.helper';
 import { computeInvoiceTotals } from '../../../common/utils/invoice-totals';
 import { purchaseReceiptBaseUnitCost } from '../engines/purchase-receipt-cost.engine';
-import { valueStockReceipt } from '../../accounting/inventory-valuation';
+import { revalueStockReturn, valueStockReceipt } from '../../accounting/inventory-valuation';
 import { ensureNonNegativeStock, ensureUniqueFlowItems } from '../../../common/utils/financial-integrity';
 import { applyStockDelta, lockStockProducts, previewConsumableStockQty } from '../../../common/utils/location-stock-ledger';
 import { KYSELY_DB } from '../../../database/database.constants';
@@ -1054,6 +1054,9 @@ export class PurchasesWriteService {
           .where('status', '!=', 'cancelled').execute();
       }
 
+      // Book digits for the WAC removal value below, resolved once on the
+      // transaction handle like every other purchase posting path.
+      const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
       const items = await trx.selectFrom('purchase_items').selectAll().where('purchase_id', '=', purchaseId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
       await lockStockProducts(trx, { ...scope, productIds: items.map((item) => Number(item.product_id)) });
       for (const item of [...items].sort((a, b) => Number(a.product_id || 0) - Number(b.product_id || 0))) {
@@ -1080,6 +1083,31 @@ export class PurchasesWriteService {
           errorMessage: `Cannot cancel purchase because stock would go negative for product #${item.product_id}`,
           disableAutoDrain: true,
         });
+        // INV-PURCHASE-CANCEL-WAC-RECOMPUTE: the cancelled receipt leaves
+        // the pool at its ORIGINAL receipt value — the exact inverse of
+        // the creation blend (purchaseReceiptBaseUnitCost over the
+        // stored unit_cost, VAT-stripped, per base unit, at book
+        // digits). Without this, cost_price keeps the cancelled blend
+        // and every later COGS is priced off stock that no longer
+        // exists. The location-scoped guard above already makes cancel
+        // all-or-nothing per line, so removeQty is the full receipt
+        // quantity whenever this runs; valuation itself is global,
+        // through applyStockDelta's corrected globalAfter, exactly
+        // like the purchase-return revaluation. A missing or corrupt
+        // stored cost fails the cancel closed instead of silently
+        // keeping the stale WAC.
+        if (removeQty > 0) {
+          if (item.unit_cost == null || !Number.isFinite(Number(item.unit_cost)) || Number(item.unit_cost) < 0) {
+            throw new AppError('سعر تكلفة سطر الشراء الأصلي غير محفوظ؛ لا يمكن إلغاء الفاتورة دون إعادة حساب متوسط التكلفة', 'PURCHASE_CANCEL_COST_INVALID', 409);
+          }
+          const removedBaseUnitCost = purchaseReceiptBaseUnitCost(
+            Number(item.unit_cost),
+            Number(item.unit_multiplier ?? 1),
+            Number(purchase.tax_rate || 0),
+            Boolean(purchase.prices_include_tax),
+          );
+          await revalueStockReturn(trx, scope.tenantId, Number(item.product_id), stockChange.globalAfter, removeQty, roundMoney(removeQty * removedBaseUnitCost, moneyDigits));
+        }
         await trx.insertInto('stock_movements').values({
           product_id: item.product_id,
           movement_type: 'purchase_cancel',
