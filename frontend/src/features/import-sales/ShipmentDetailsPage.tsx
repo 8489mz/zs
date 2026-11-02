@@ -184,6 +184,8 @@ export default function ShipmentDetailsPage() {
   const [shippedDate, setShippedDate] = useState('');
   const [etaDate, setEtaDate] = useState('');
   const [clearanceDate, setClearanceDate] = useState('');
+  const [form4Number, setForm4Number] = useState('');
+  const [form4Date, setForm4Date] = useState('');
 
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [isAutopsyOpen, setIsAutopsyOpen] = useState(false);
@@ -218,6 +220,8 @@ export default function ShipmentDetailsPage() {
       const eta = data.eta_date || data.arrival_date;
       setEtaDate(eta ? eta.split('T')[0] : '');
       setClearanceDate(data.clearance_date ? data.clearance_date.split('T')[0] : '');
+      setForm4Number(data.form4_number || '');
+      setForm4Date(data.form4_date ? data.form4_date.split('T')[0] : '');
       if (data.exchange_rate_at_arrival != null && Number(data.exchange_rate_at_arrival) > 0) {
         setExchangeRate(String(Number(data.exchange_rate_at_arrival)));
       }
@@ -303,6 +307,8 @@ export default function ShipmentDetailsPage() {
         shippedDate: shippedDate || undefined,
         etaDate: etaDate || undefined,
         clearanceDate: clearanceDate || undefined,
+        form4Number: form4Number || undefined,
+        form4Date: form4Date || undefined,
       });
       setShippingAcc('');
       setCustomsAcc('');
@@ -422,6 +428,14 @@ export default function ShipmentDetailsPage() {
             <div className="form-group">
               <label>{t('import_sales.shipment_details_page.s14', "تاريخ التخليص الجمركي")}</label>
               <input type="date" className="input" value={clearanceDate} onChange={e => setClearanceDate(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>رقم نموذج 4 (مطلوب قبل التخليص للشحنات الممولة بنكيًا فوق 2000 دولار)</label>
+              <input type="text" className="input" value={form4Number} onChange={e => setForm4Number(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>تاريخ نموذج 4</label>
+              <input type="date" className="input" value={form4Date} onChange={e => setForm4Date(e.target.value)} />
             </div>
             <div className="form-group">
               <label>سعر صرف الدولار الجمركي / الفعلي (التكلفة الدفترية)</label>

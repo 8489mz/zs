@@ -157,6 +157,14 @@ export class UpdateShipmentCostsDto {
 
   @IsOptional()
   @IsString()
+  form4Number?: string;
+
+  @IsOptional()
+  @IsString()
+  form4Date?: string;
+
+  @IsOptional()
+  @IsString()
   projectId?: string;
 
   @IsOptional()

@@ -5812,6 +5812,9 @@ export interface ImportShipmentTable {
   gate_out_date?: ImportDate;
   unstuffing_date?: ImportDate;
   empty_returned_date?: ImportDate;
+  /** Form 4 authorizing clearance (INV-IMPORT-FORM4-CLEARANCE-GATE). NULL = none on record. */
+  form4_number?: string | null;
+  form4_date?: ImportDate;
   created_at: Generated<Date>;
 }
 export interface ImportShipmentItemTable {

@@ -18,6 +18,8 @@ export interface Shipment {
   shipped_date?: string;
   eta_date?: string;
   clearance_date?: string;
+  form4_number?: string | null;
+  form4_date?: string | null;
   supplier_name?: string;
   bill_of_lading?: string;
   pricing_exchange_rate?: string;
@@ -82,6 +84,8 @@ export interface UpdateShipmentCostsDto {
   etaDate?: string;
   clearanceDate?: string;
   pricingExchangeRate?: number;
+  form4Number?: string;
+  form4Date?: string;
   costAllocationMethod?: 'value' | 'weight' | 'cbm';
 }
 

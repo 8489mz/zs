@@ -61,6 +61,7 @@ import {
   isPaymentMethod,
   validatePaymentEvidence,
 } from './engines/import-payment-method.engine';
+import { evaluateForm4Gate, FORM4_REQUIRED_THRESHOLD_USD } from './engines/import-form4-gate.engine';
 
 @Injectable()
 export class ImportSalesService {
@@ -1852,6 +1853,8 @@ export class ImportSalesService {
       if (dto.shippedDate !== undefined) payload.shipped_date = dto.shippedDate;
       if (dto.etaDate !== undefined) payload.eta_date = dto.etaDate;
       if (dto.clearanceDate !== undefined) payload.clearance_date = dto.clearanceDate;
+      if (dto.form4Number !== undefined) payload.form4_number = dto.form4Number || null;
+      if (dto.form4Date !== undefined) payload.form4_date = dto.form4Date || null;
       if (dto.projectId !== undefined) {
         if (dto.projectId) {
           const matchingProject = await trx.selectFrom('import_projects').select('id')
@@ -1963,12 +1966,68 @@ export class ImportSalesService {
           );
         }
       }
+      // Form 4 clearance gate (INV-IMPORT-FORM4-CLEARANCE-GATE):
+      // evaluated on a status TRANSITION into clearance or receipt,
+      // after the row reflects this call's Form 4 fields and before
+      // any landed-cost recalculation or inventory posting. The
+      // gate reads the updated row (Form 4 supplied in this same
+      // call satisfies it) and the project-linked funding.
+      if (dto.status !== undefined && dto.status !== shipment.status && (dto.status === 'In Customs' || dto.status === 'Arrived')) {
+        await this.assertForm4ClearanceGate(trx, tenantId, updated);
+      }
       if (!receipt) {
         await this.calculateLandedCostInTransaction(trx, updated);
         if (dto.status === 'Arrived') await this.postShipmentToInventory(trx, tenantId, shipmentId, userId, dto.receiptLocationId);
       }
     });
     return this.getShipmentById(tenantId, shipmentId);
+  }
+
+  /**
+   * Form 4 clearance gate (INV-IMPORT-FORM4-CLEARANCE-GATE).
+   * Caller holds the shipment lock and runs inside the costs
+   * transaction; the shipment row already reflects this call's
+   * Form 4 fields. B/L value is the sum of item quantity x
+   * factory unit price in USD. Funding is attributed through
+   * project-linked proforma invoices only: an unlinked transfer
+   * cannot be attributed to a shipment, so it neither triggers
+   * nor satisfies the gate (recorded scoping, same attribution
+   * limit as the approval binding). Throws before any write
+   * outside this transaction commits.
+   */
+  private async assertForm4ClearanceGate(trx: Transaction<Database>, tenantId: string, shipment: Selectable<ImportShipmentTable>): Promise<void> {
+    const items = await trx.selectFrom('import_shipment_items')
+      .select(['quantity', 'factory_unit_price_usd'])
+      .where('tenant_id', '=', tenantId)
+      .where('shipment_id', '=', shipment.id)
+      .execute();
+    const shipmentUsdValue = items.reduce(
+      (sum, item) => sum + Number(item.quantity || 0) * Number(item.factory_unit_price_usd || 0),
+      0,
+    );
+    let funding: Array<{ payment_method: string | null | undefined; form4_number: string | null | undefined }> = [];
+    if (shipment.project_id) {
+      funding = await trx.selectFrom('supplier_payments')
+        .innerJoin('import_proforma_invoices', 'import_proforma_invoices.id', 'supplier_payments.proforma_invoice_id')
+        .select([
+          'supplier_payments.payment_method as payment_method',
+          'supplier_payments.form4_number as form4_number',
+        ])
+        .where('supplier_payments.tenant_id', '=', tenantId)
+        .where('import_proforma_invoices.project_id', '=', shipment.project_id)
+        .execute();
+    }
+    const decision = evaluateForm4Gate({
+      shipmentUsdValue,
+      fundingMethods: funding.map((f) => f.payment_method),
+      shipmentForm4Number: shipment.form4_number ?? null,
+      transferForm4Numbers: funding.map((f) => f.form4_number),
+    });
+    if (decision.required && !decision.satisfied) {
+      throw new BadRequestException(
+        `لا يمكن نقل الشحنة إلى التخليص الجمركي أو الوصول بلا نموذج 4: شحنة ممولة عبر القنوات البنكية بقيمة ${shipmentUsdValue.toFixed(2)} دولار تتجاوز حد ${FORM4_REQUIRED_THRESHOLD_USD} دولار. سجل رقم نموذج 4 على الشحنة أو على الحوالة الممولة أولاً. [IMPORT_FORM4_REQUIRED]`,
+      );
+    }
   }
 
   /** Caller holds the shipment lock; status, costs, receipt and stock commit together. */
