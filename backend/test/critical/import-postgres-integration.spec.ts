@@ -576,6 +576,7 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
       pi_date DATE NOT NULL,
       currency VARCHAR(10) DEFAULT 'USD',
       exchange_rate NUMERIC(10, 4) DEFAULT 1.0,
+      exchange_rate_contract NUMERIC(10, 4),
       total_amount_foreign NUMERIC(15, 2) DEFAULT 0,
       paid_amount_foreign NUMERIC(15, 2) DEFAULT 0,
       payment_status VARCHAR(50) DEFAULT 'unpaid',
@@ -724,6 +725,14 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
 
   // Seed default tenant and users
   await pglite.exec(`INSERT INTO tenants (id, name) VALUES ('tenant-audit-1', 'Audited Trading Tenant');`);
+
+  // Base currency + USD rate (production tenants carry these rows; the
+  // transfer threshold is normalised through resolveFxRate).
+  await pglite.exec(`
+    INSERT INTO settings (tenant_id, key, value) VALUES ('tenant-audit-1', 'currency', '"EGP"');
+    INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate)
+    VALUES ('tenant-audit-1', 'EGP', true, 1), ('tenant-audit-1', 'USD', false, 50), ('tenant-audit-1', 'EUR', false, 55);
+  `);
   await pglite.exec(`
     INSERT INTO users (id, tenant_id, username, password_hash, role)
     VALUES (101, 'tenant-audit-1', 'admin', 'hash', 'admin'), (102, 'tenant-audit-1', 'checker', 'hash', 'admin');
@@ -790,6 +799,19 @@ async function runTests() {
   const service = new ImportSalesService(db as any);
   const tenantId = 'tenant-audit-1';
   const userId = 101;
+
+  // Fixture-only bound approval for large transfers (base-currency
+  // normalised threshold): created with a full binding payload, then
+  // marked approved exactly like approvedClosure above.
+  const approvedTransfer = async (opts: { supplierId: string; amount: number; proformaInvoiceId?: string; projectId?: string }) => {
+    const request = await service.createApprovalRequest(tenantId, userId, {
+      actionType: 'large_transfer', referenceId: opts.supplierId,
+      requestPayload: { amount: opts.amount, currency: 'USD', supplierId: opts.supplierId, proformaInvoiceId: opts.proformaInvoiceId, projectId: opts.projectId },
+    });
+    await db.updateTable('import_approval_requests').set({ status: 'approved', approved_by: userId, decided_at: new Date() })
+      .where('id', '=', request.id).execute();
+    return request.id;
+  };
 
   // Fixture-only approval arrangement for unrelated close-project guard tests.
   const approvedClosure = async (projectId: string) => {
@@ -948,6 +970,7 @@ async function runTests() {
     // Execute foreign transfer without specifying accounts; service must dynamically resolve from COA / settings
     const transferRes = await service.recordForeignTransfer(tenantId, userId, {
       supplierId: String(supplier.id),
+      approvalRequestId: await approvedTransfer({ supplierId: String(supplier.id), amount: 2000 }),
       amountForeign: 2000,
       amountEgp: 100000,
       currency: 'USD',
@@ -1101,6 +1124,7 @@ async function runTests() {
     try {
       await service.recordForeignTransfer(tenantId, userId, {
         supplierId: String(supplierA.id),
+        approvalRequestId: await approvedTransfer({ supplierId: String(supplierA.id), amount: 3500, proformaInvoiceId: proforma.id, projectId: projectA.id }),
         amountForeign: 3500, // Overpayment!
         amountEgp: 175000,
         currency: 'USD',
@@ -1117,6 +1141,7 @@ async function runTests() {
     // 3-E: Successful legitimate transfer paying remainder exactly
     const transferSuccess = await service.recordForeignTransfer(tenantId, userId, {
       supplierId: String(supplierA.id),
+      approvalRequestId: await approvedTransfer({ supplierId: String(supplierA.id), amount: 3000, proformaInvoiceId: proforma.id, projectId: projectA.id }),
       projectId: projectA.id,
       amountForeign: 3000,
       amountEgp: 153000,
@@ -1142,6 +1167,7 @@ async function runTests() {
     try {
       await service.recordForeignTransfer(tenantId, userId, {
         supplierId: String(supplierA.id),
+        approvalRequestId: await approvedTransfer({ supplierId: String(supplierA.id), amount: 3000, projectId: projectA.id }),
         projectId: projectA.id,
         amountForeign: 3000,
         amountEgp: 153000,
@@ -1453,6 +1479,7 @@ async function runTests() {
         amountForeign: 500,
         amountEgp: 25000,
         currency: 'USD',
+        exchangeRateContract: 50,
         idempotencyKey: 'IDEMP-TEST-7C',
       });
     } catch (err: any) {
@@ -1542,6 +1569,7 @@ async function runTests() {
       amountForeign: 1500,
       amountEgp: 75000,
       currency: 'USD',
+      exchangeRateContract: 50,
       idempotencyKey: 'IDEMP-FT-LEGIT-001',
       notes: 'Legitimate Transfer 1',
     });
@@ -1552,6 +1580,7 @@ async function runTests() {
       amountForeign: 1500,
       amountEgp: 75000,
       currency: 'USD',
+      exchangeRateContract: 50,
       idempotencyKey: 'IDEMP-FT-LEGIT-002',
       notes: 'Legitimate Transfer 2',
     });

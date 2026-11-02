@@ -620,6 +620,27 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE import_approval_requests (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      module TEXT,
+      action_type TEXT NOT NULL,
+      reference_id TEXT,
+      requested_by BIGINT,
+      created_by BIGINT,
+      status TEXT DEFAULT 'pending',
+      request_payload TEXT,
+      decided_by BIGINT,
+      approved_by BIGINT,
+      decision_notes TEXT,
+      rejection_reason TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      decided_at TIMESTAMPTZ,
+      consumed_at TIMESTAMPTZ,
+      consumed_by BIGINT,
+      updated_at TIMESTAMPTZ
+    );
+
     CREATE TABLE import_suppliers_meta (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -802,6 +823,14 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
 
   // Seed default tenant
   await pglite.exec(`INSERT INTO tenants (id, name) VALUES ('tenant-e2e', 'Global Import & Trade Ltd');`);
+
+  // Base currency + USD rate (production tenants carry these rows; the
+  // transfer threshold is normalised through resolveFxRate).
+  await pglite.exec(`
+    INSERT INTO settings (tenant_id, key, value) VALUES ('tenant-e2e', 'currency', '"EGP"');
+    INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate)
+    VALUES ('tenant-e2e', 'EGP', true, 1), ('tenant-e2e', 'USD', false, 50);
+  `);
 
   // Seed default stock location
   await pglite.exec(`
@@ -1037,10 +1066,28 @@ async function runBusinessSimulation() {
     'تم التحقق من الآيبان والسويفت كود عبر خطاب رسمي من بنك الصين في نينغبو'
   );
 
+  // Large transfers (base-currency normalised) require a bound maker-checker
+  // approval: fixture-only approved token, as granted out of band.
+  const advanceApproval = await (db as any)
+    .insertInto('import_approval_requests')
+    .values({
+      tenant_id: tenantId,
+      module: 'import',
+      action_type: 'large_transfer',
+      reference_id: String(supplier.id),
+      requested_by: userId,
+      created_by: userId,
+      status: 'approved',
+      request_payload: JSON.stringify({ amount: 13500, currency: 'USD', supplierId: String(supplier.id), proformaInvoiceId: conversionResult.proformaId, projectId: project.id }),
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+
   const wireTransfer = await importService.recordForeignTransfer(tenantId, userId, {
     supplierId: String(supplier.id),
     projectId: project.id,
     proformaInvoiceId: conversionResult.proformaId!,
+    approvalRequestId: String(advanceApproval.id),
     amountForeign: 13500,
     amountEgp: 675000,
     currency: 'USD',
@@ -1071,10 +1118,26 @@ async function runBusinessSimulation() {
   console.log('PASS: QC Pre-shipment passed 100% of tested units.');
 
   // Final Wire Transfer to release Bill of Lading (70% balance = $31,500)
+  const balanceApproval = await (db as any)
+    .insertInto('import_approval_requests')
+    .values({
+      tenant_id: tenantId,
+      module: 'import',
+      action_type: 'large_transfer',
+      reference_id: String(supplier.id),
+      requested_by: userId,
+      created_by: userId,
+      status: 'approved',
+      request_payload: JSON.stringify({ amount: 31500, currency: 'USD', supplierId: String(supplier.id), proformaInvoiceId: conversionResult.proformaId, projectId: project.id }),
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+
   const finalWireTransfer = await importService.recordForeignTransfer(tenantId, userId, {
     supplierId: String(supplier.id),
     projectId: project.id,
     proformaInvoiceId: conversionResult.proformaId!,
+    approvalRequestId: String(balanceApproval.id),
     amountForeign: 31500,
     amountEgp: 1575000,
     currency: 'USD',

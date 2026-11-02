@@ -46,6 +46,7 @@ import {
 import { allocateSaleFromImportLots, calculateImportSaleCost } from './helpers/import-lot-allocation.helper';
 import { applyStockDelta, lockStockProducts } from '../../common/utils/location-stock-ledger';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
+import { resolveFxRate } from '../accounting/fx-rate-resolution';
 import { calculateImportFeasibility, FeasibilityCalculationResult } from './engines/import-feasibility.engine';
 import { EGYPT_CUSTOMS_TARIFFS, TARIFF_SECTORS } from './data/egypt-customs-tariffs.data';
 import {
@@ -291,7 +292,7 @@ export class ImportSalesService {
     actionType: string,
     referenceId: string,
     approvalRequestId?: string,
-    expectedDetails?: { amount?: number; projectId?: string; partnerId?: string }
+    expectedDetails?: { amount?: number; projectId?: string; partnerId?: string; currency?: string; proformaInvoiceId?: string; supplierId?: string }
   ): Promise<void> {
     if (!approvalRequestId) return;
 
@@ -344,6 +345,24 @@ export class ImportSalesService {
       if (expectedDetails?.projectId && payload.projectId !== expectedDetails.projectId) {
         throw new BadRequestException(
           `طلب الاعتماد مخصص للمشروع (${payload.projectId}) ولا يطابق المشروع (${expectedDetails.projectId}).`
+        );
+      }
+
+      if (expectedDetails?.supplierId && payload.supplierId !== expectedDetails.supplierId) {
+        throw new BadRequestException(
+          `طلب الاعتماد مخصص للمورد (${payload.supplierId}) ولا يطابق المورد المطلوب (${expectedDetails.supplierId}).`
+        );
+      }
+
+      if (expectedDetails?.currency && String(payload.currency || '').toUpperCase() !== expectedDetails.currency) {
+        throw new BadRequestException(
+          `طلب الاعتماد مخصص لعملة (${payload.currency}) ولا يطابق عملة الحوالة المطلوبة (${expectedDetails.currency}).`
+        );
+      }
+
+      if (expectedDetails?.proformaInvoiceId && payload.proformaInvoiceId !== expectedDetails.proformaInvoiceId) {
+        throw new BadRequestException(
+          `طلب الاعتماد مخصص للفاتورة المبدئية (${payload.proformaInvoiceId}) ولا يطابق الفاتورة المطلوبة (${expectedDetails.proformaInvoiceId}).`
         );
       }
 
@@ -2904,17 +2923,61 @@ export class ImportSalesService {
     }
 
     return await this.db.transaction().execute(async (trx) => {
-      // Maker-Checker approval check
-      if (approvalRequestId || cleanForeign >= 100000) {
-        if (!approvalRequestId && cleanForeign >= 100000) {
-          throw new BadRequestException('الحوالات الكبرى (100,000 فأكثر) تتطلب اعتماداً ثنائياً مسبقاً (Maker-Checker).');
+      // The threshold is normalised to the tenant base currency through
+      // the single FX resolver: 100,000 JPY is not a large transfer,
+      // 100,000 USD is. An unregistered currency fails closed here
+      // (resolveFxRate) instead of silently classifying by foreign units.
+      // When an approval token is supplied the classification is moot
+      // and the token itself is bound below, so no rate is resolved.
+      const transferCurrency = (currency || 'USD').toUpperCase();
+      let isLargeTransfer = false;
+      if (!approvalRequestId) {
+        const thresholdRate = await resolveFxRate(trx as any, tenantId, transferCurrency);
+        isLargeTransfer = cleanForeign * thresholdRate >= 100000;
+      }
+
+      // Read-only binding data for the approval token: the PI row is
+      // re-read with its integrity checks below; this read applies no
+      // update, so a rejected approval still rolls the transaction back
+      // with no PI mutation.
+      let piContractRate: number | null = null;
+      let piProjectId: string | null = null;
+      if (proformaInvoiceId) {
+        const bindingPi = await trx
+          .selectFrom('import_proforma_invoices')
+          .select(['project_id', 'currency', 'exchange_rate_contract'])
+          .where('id', '=', proformaInvoiceId)
+          .where('tenant_id', '=', tenantId)
+          .forUpdate()
+          .executeTakeFirst();
+        if (bindingPi) {
+          piProjectId = bindingPi.project_id;
+          piContractRate = (bindingPi.currency || 'USD').toUpperCase() === 'EGP'
+            ? 1
+            : Number(bindingPi.exchange_rate_contract);
+        }
+      }
+
+      // Maker-Checker approval check, bound to supplier, proforma,
+      // project, amount ceiling and currency: an approval for one
+      // proforma/amount must never authorize a different one.
+      if (approvalRequestId || isLargeTransfer) {
+        if (!approvalRequestId && isLargeTransfer) {
+          throw new BadRequestException('الحوالات الكبرى (ما يعادل 100,000 بعملة الأساس فأكثر) تتطلب اعتماداً ثنائياً مسبقاً (Maker-Checker).');
         }
         await this.verifyAndConsumeApprovalRequest(
           trx,
           tenantId,
           'large_transfer',
           String(sId),
-          approvalRequestId
+          approvalRequestId,
+          {
+            amount: cleanForeign,
+            currency: transferCurrency,
+            supplierId: String(sId),
+            proformaInvoiceId: proformaInvoiceId ? String(proformaInvoiceId) : undefined,
+            projectId: (projectId || piProjectId) ? String(projectId || piProjectId) : undefined,
+          }
         );
       }
 
@@ -3011,9 +3074,21 @@ export class ImportSalesService {
         .executeTakeFirstOrThrow();
 
       // 4. Exact Base Currency (EGP) Accounting Entries without mixing foreign units
+      // No invented rate: the contract rate comes from the caller or
+      // from the proforma's own contract rate. Deriving it from the
+      // amounts themselves (cleanEgp / cleanForeign) made the forex
+      // variance identically zero on every transfer without a caller
+      // rate. With neither source, fail closed.
       const effectiveRateContract = exchangeRateContract && exchangeRateContract > 0
         ? exchangeRateContract
-        : (cleanEgp / cleanForeign);
+        : (piContractRate !== null && Number.isFinite(piContractRate) && piContractRate > 0
+          ? piContractRate
+          : null);
+      if (effectiveRateContract === null) {
+        throw new BadRequestException(
+          'لا يمكن تنفيذ الحوالة بلا سعر صرف تعاقدي صالح؛ حدد سعر الصرف التعاقدي على الفاتورة المبدئية أو في الحوالة. [IMPORT_EXCHANGE_RATE_REQUIRED]',
+        );
+      }
       const contractValue = Number((cleanForeign * effectiveRateContract).toFixed(2));
       const actualEgp = Number(cleanEgp.toFixed(2));
       const forexVarianceEgp = Number((actualEgp - contractValue).toFixed(2));
@@ -6177,6 +6252,22 @@ export class ImportSalesService {
       const payload = dto.requestPayload;
       if (!payload || payload.partnerId !== dto.referenceId || !payload.projectId || !Number.isFinite(Number(payload.amount)) || Number(payload.amount) <= 0) {
         throw new BadRequestException('اعتماد صرف الأرباح يتطلب الشريك والمشروع وسقف مبلغ موجب ومطابقة المرجع.');
+      }
+    }
+    if (dto.actionType === 'large_transfer') {
+      const payload = dto.requestPayload;
+      const payloadCurrency = String(payload?.currency || '').trim().toUpperCase();
+      if (!payload || !Number.isFinite(Number(payload.amount)) || Number(payload.amount) <= 0 || !/^[A-Z]{3}$/.test(payloadCurrency)) {
+        throw new BadRequestException('اعتماد الحوالة الكبيرة يتطلب سقف مبلغ موجباً وعملة صالحة من ثلاثة أحرف.');
+      }
+      if (payload.supplierId !== undefined && String(payload.supplierId) !== String(dto.referenceId)) {
+        throw new BadRequestException('اعتماد الحوالة الكبيرة يتطلب مطابقة المورد للمرجع.');
+      }
+      if (payload.proformaInvoiceId !== undefined && !String(payload.proformaInvoiceId).trim()) {
+        throw new BadRequestException('اعتماد الحوالة الكبيرة يتطلب معرف فاتورة مبدئية غير فارغ عند تحديده.');
+      }
+      if (payload.projectId !== undefined && !String(payload.projectId).trim()) {
+        throw new BadRequestException('اعتماد الحوالة الكبيرة يتطلب معرف مشروع غير فارغ عند تحديده.');
       }
     }
     return await this.db
