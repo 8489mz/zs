@@ -16,6 +16,7 @@ import { currencyMoneyDigits, fromMinorUnits, roundMoney, toMinorUnits } from '.
 import { assertAutomatedJournalPeriodOpen } from '../../accounting/accounting-period-lock';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { PurchasesFinanceService } from './purchases-finance.service';
+import { advancePurchaseOrderReceipt } from '../engines/purchase-order-receipt.engine';
 import { normalizeBillNumber } from '../engines/duplicate-bill-detector.engine';
 import { assertGrnRequestedLocationScope } from '../engines/grn-location-policy.engine';
 
@@ -558,6 +559,29 @@ export class GoodsReceiptService {
               }).execute();
             }
           }
+        }
+      }
+
+      // INV-PO-RECEIVED-QUANTITY-ADVANCE: reflect this receipt on its
+      // purchase order in the same transaction, after every stock write
+      // above succeeded, so a failed receipt advances nothing. Rejected
+      // quantities never advance: only accepted stock counts as received.
+      if (grn.purchaseOrderId) {
+        const receivedByItem = new Map<number, number>();
+        for (const line of grn.lines) {
+          const accepted = Number(line.acceptedQty || 0);
+          const poItemId = line.purchaseOrderItemId ? Number(line.purchaseOrderItemId) : 0;
+          if (accepted > 0 && poItemId > 0) {
+            receivedByItem.set(poItemId, Number(((receivedByItem.get(poItemId) || 0) + accepted).toFixed(3)));
+          }
+        }
+        if (receivedByItem.size > 0) {
+          await advancePurchaseOrderReceipt(
+            trx,
+            scope.tenantId,
+            Number(grn.purchaseOrderId),
+            [...receivedByItem.entries()].map(([poItemId, quantity]) => ({ poItemId, quantity })),
+          );
         }
       }
 

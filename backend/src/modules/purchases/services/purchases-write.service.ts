@@ -8,6 +8,7 @@ import { assertUntrackedStockMutation } from '../../inventory/helpers/inventory-
 import { reversePurchaseTrackedStock } from '../helpers/purchase-cancellation-trace.helper';
 import { computeInvoiceTotals } from '../../../common/utils/invoice-totals';
 import { purchaseReceiptBaseUnitCost } from '../engines/purchase-receipt-cost.engine';
+import { advancePurchaseOrderReceipt } from '../engines/purchase-order-receipt.engine';
 import { revalueStockReturn, valueStockReceipt } from '../../accounting/inventory-valuation';
 import { ensureNonNegativeStock, ensureUniqueFlowItems } from '../../../common/utils/financial-integrity';
 import { applyStockDelta, lockStockProducts, previewConsumableStockQty } from '../../../common/utils/location-stock-ledger';
@@ -1689,6 +1690,37 @@ export class PurchasesWriteService {
           tenant_id: scope.tenantId,
           account_id: scope.accountId,
         } as any).execute();
+      }
+
+      // INV-PO-RECEIVED-QUANTITY-ADVANCE: reflect this receipt on its
+      // purchase order in the same transaction, after every stock write
+      // above succeeded, so a failed receipt advances nothing. The advance
+      // is in purchase-item units (qtyToReceive), not base stock units:
+      // the PO item quantity and the bill item quantity share those units.
+      const receivedByPoItem = new Map<number, number>();
+      let hasLinkedItem = false;
+      for (const rec of receivedItems) {
+        const item = itemsMap.get(Number(rec.itemId));
+        const poItemId = item?.po_item_id ? Number(item.po_item_id) : 0;
+        if (poItemId > 0) {
+          hasLinkedItem = true;
+          receivedByPoItem.set(poItemId, Number(((receivedByPoItem.get(poItemId) || 0) + Number(rec.receivedQty || 0)).toFixed(3)));
+        }
+      }
+      if (hasLinkedItem && !purchase.po_id) {
+        throw new AppError(
+          'بند فاتورة مرتبط بأمر شراء دون ارتباط الفاتورة نفسها بأمر الشراء؛ تعذر تحديث الكمية المستلمة',
+          'PO_RECEIPT_LINKAGE_INVALID',
+          409,
+        );
+      }
+      if (purchase.po_id && receivedByPoItem.size > 0) {
+        await advancePurchaseOrderReceipt(
+          trx,
+          scope.tenantId,
+          Number(purchase.po_id),
+          [...receivedByPoItem.entries()].map(([poItemId, quantity]) => ({ poItemId, quantity })),
+        );
       }
 
       let totalOrdered = 0;
