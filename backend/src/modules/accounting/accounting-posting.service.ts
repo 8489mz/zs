@@ -11,6 +11,7 @@ import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { AccountingTenantFoundationService } from './accounting-tenant-foundation.service';
 import { AppError } from '../../common/errors/app-error';
 import { calculateSalesReturnCost } from './engines/sales-return-cost.engine';
+import { cogsResidualAmount, type CogsResidualGroup } from './engines/cogs-residual.engine';
 import { allocatePayrollAccrual } from '../hr/engines/payroll-accrual-allocation.engine';
 import { assertAutomatedJournalPeriodOpen, lockAccountingPeriod } from './accounting-period-lock';
 import { assertTaxPeriodOpen } from './accounting-tax-lock';
@@ -785,6 +786,60 @@ export class AccountingPostingService {
     }
   }
 
+  /**
+   * INV-COGS-REMAINDER-ABSORPTION: COGS for a sale (or edited sale)
+   * is the residual of the pre-sale stock value minus the remaining
+   * stock value at book digits, per product and frozen unit cost.
+   * The remaining quantity is read AFTER the sale's stock movement
+   * on the caller's transaction handle, summed across all branches
+   * and locations (weighted cost is product-level), so the read
+   * and the journal commit or roll back together. Products with
+   * no stock row (or a null product) contribute zero remaining
+   * quantity, which makes the residual equal the old total
+   * rounding for those lines.
+   */
+  private async saleCogsResidual(
+    queryable: Transaction<Database>,
+    tenantId: string,
+    saleId: number,
+    bookDigits: MoneyDigits,
+  ): Promise<number> {
+    const saleItems = await queryable
+      .selectFrom('sale_items')
+      .select(['product_id', 'qty', 'cost_price'])
+      .where('sale_id', '=', saleId)
+      .where(sql<boolean>`tenant_id = ${tenantId}`)
+      .execute();
+    const productIds = [...new Set(saleItems.map((item) => Number(item.product_id || 0)).filter((id) => id > 0))];
+    const remainingByProduct = new Map<number, number>();
+    if (productIds.length > 0) {
+      const stockRows = await queryable
+        .selectFrom('product_location_stock')
+        .select(['product_id', 'qty'])
+        .where('tenant_id', '=', tenantId)
+        .where('product_id', 'in', productIds)
+        .execute();
+      for (const row of stockRows) {
+        const id = Number(row.product_id || 0);
+        remainingByProduct.set(id, (remainingByProduct.get(id) || 0) + Number(row.qty || 0));
+      }
+    }
+    const grouped = new Map<string, CogsResidualGroup>();
+    for (const item of saleItems) {
+      const productId = Number(item.product_id || 0);
+      const unitCost = Number(item.cost_price || 0);
+      const qtySold = Number(item.qty || 0);
+      const key = `${productId}|${unitCost}`;
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.qtySold += qtySold;
+      } else {
+        grouped.set(key, { qtySold, unitCost, qtyRemaining: productId > 0 ? (remainingByProduct.get(productId) || 0) : 0 });
+      }
+    }
+    return cogsResidualAmount([...grouped.values()], bookDigits);
+  }
+
   async postSale(queryable: Transaction<Database>, saleId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number }> {
     this.assertTransaction(queryable, 'postSale');
     const scope = requireTenantScope(auth);
@@ -997,14 +1052,10 @@ export class AccountingPostingService {
 
     // Reliable COGS source: sale_items.cost_price captured at sale time.
     // In this codebase, sale_items.cost_price is stored per sold unit (already adjusted by unit_multiplier),
-    // so do not multiply by unit_multiplier again here.
-    const saleItems = await queryable
-      .selectFrom('sale_items')
-      .select(['qty', 'cost_price'])
-      .where('sale_id', '=', saleId)
-      .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
-      .execute();
-    const cogsAmount = toBookMoney(saleItems.reduce((sum, item) => sum + (Number(item.qty || 0) * Number(item.cost_price || 0)), 0));
+    // so do not multiply by unit_multiplier again here. The amount is
+    // the remainder-absorbed residual (INV-COGS-REMAINDER-ABSORPTION):
+    // pre-sale stock value minus remaining stock value at book digits.
+    const cogsAmount = toBookMoney(await this.saleCogsResidual(queryable, scope.tenantId, saleId, bookDigits));
 
     if (cogsAmount > 0) {
       addBookLine({
@@ -1302,13 +1353,10 @@ export class AccountingPostingService {
       }, bookDigits);
     }
 
-    const saleItems = await queryable
-      .selectFrom('sale_items')
-      .select(['qty', 'cost_price'])
-      .where('sale_id', '=', saleId)
-      .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
-      .execute();
-    const cogsAmount = toBookMoney(saleItems.reduce((sum, item) => sum + (Number(item.qty || 0) * Number(item.cost_price || 0)), 0));
+    // Same remainder-absorbed residual as postSale
+    // (INV-COGS-REMAINDER-ABSORPTION): the edited sale re-posts
+    // against the stock remaining after the edit's movement.
+    const cogsAmount = toBookMoney(await this.saleCogsResidual(queryable, scope.tenantId, saleId, bookDigits));
 
     if (cogsAmount > 0) {
       this.addLine(lines, {
