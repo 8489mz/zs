@@ -457,6 +457,8 @@ export class AccountingPostingService {
       createdBy: number | null;
       postedBy?: number | null;
       cashFlowCategory?: 'operating' | 'investing' | 'financing' | null;
+      /** Links the new entry as the reversal of a posted original; insertPostedJournal validates and stamps the original. */
+      reversalOfEntryId?: number | null;
       lines: DomainJournalLineDraft[];
     },
   ): Promise<number> {
@@ -466,6 +468,7 @@ export class AccountingPostingService {
       locationId: params.locationId ?? null,
       postedBy: params.postedBy ?? params.createdBy,
       cashFlowCategory: params.cashFlowCategory ?? null,
+      reversalOfEntryId: params.reversalOfEntryId ?? null,
       lines: params.lines.map(line => ({
         ...line,
         branchId: line.branchId === undefined ? params.branchId ?? null : line.branchId,
@@ -770,7 +773,7 @@ export class AccountingPostingService {
         )
         .execute();
 
-    if (['purchase_landed_cost', 'import_inventory_receipt', 'import_late_expense', 'contracting_ipc', 'contracting_subcontract_ipc', 'contracting_subcontractor_payment', 'maritime_job', 'maritime_job_expense', 'maritime_carrier_invoice', 'maritime_carrier_credit_note'].includes(params.sourceType)) {
+    if (['purchase_landed_cost', 'import_inventory_receipt', 'import_inventory_receipt_reversal', 'import_late_expense', 'contracting_ipc', 'contracting_subcontract_ipc', 'contracting_subcontractor_payment', 'maritime_job', 'maritime_job_expense', 'maritime_carrier_invoice', 'maritime_carrier_credit_note'].includes(params.sourceType)) {
       await syncPostedPartnerLedger(queryable, params.tenantId, entryId);
     }
     return entryId;

@@ -5,7 +5,7 @@ import { AccountingTenantFoundationService } from '../accounting/accounting-tena
 import { Kysely, sql, Transaction, Selectable, Updateable } from 'kysely';
 import { Database, ImportShipmentTable, ImportShipmentItemTable } from '../../database/database.types';
 import { calculateImportLandedCosts, groupImportReceipts, requireImportNumber } from './import-inventory-cost.engine';
-import { revalueStockCost, valueStockReceipt } from '../accounting/inventory-valuation';
+import { revalueStockCost, revalueStockReturn, valueStockReceipt } from '../accounting/inventory-valuation';
 import { KYSELY_DB } from '../../database/database.constants';
 import {
   CreateShipmentDto,
@@ -42,6 +42,8 @@ import {
   CreateApprovalRequestDto,
   DecideApprovalRequestDto,
   ResolveExceptionDto,
+  ReverseImportReceiptDto,
+  ResolveLegacyReceiptDto,
 } from './dto/import-sales.dto';
 import { allocateSaleFromImportLots, calculateImportSaleCost } from './helpers/import-lot-allocation.helper';
 import { applyStockDelta, lockStockProducts } from '../../common/utils/location-stock-ledger';
@@ -300,7 +302,7 @@ export class ImportSalesService {
     actionType: string,
     referenceId: string,
     approvalRequestId?: string,
-    expectedDetails?: { amount?: number; projectId?: string; partnerId?: string; currency?: string; proformaInvoiceId?: string; supplierId?: string; paymentMethod?: string }
+    expectedDetails?: { amount?: number; projectId?: string; partnerId?: string; currency?: string; proformaInvoiceId?: string; supplierId?: string; paymentMethod?: string; shipmentId?: string; receiptId?: string }
   ): Promise<void> {
     if (!approvalRequestId) return;
 
@@ -359,6 +361,22 @@ export class ImportSalesService {
       if (expectedDetails?.supplierId && payload.supplierId !== expectedDetails.supplierId) {
         throw new BadRequestException(
           `طلب الاعتماد مخصص للمورد (${payload.supplierId}) ولا يطابق المورد المطلوب (${expectedDetails.supplierId}).`
+        );
+      }
+
+      // Receipt binding (INV-IMPORT-RECEIPT-REVERSAL): a reversal
+      // or legacy-review approval authorizes exactly one shipment
+      // and one receipt. The reference_id already binds the
+      // shipment; these payload checks bind the receipt and
+      // reject a token minted for a different document.
+      if (expectedDetails?.shipmentId && payload.shipmentId !== expectedDetails.shipmentId) {
+        throw new BadRequestException(
+          `طلب الاعتماد مخصص للشحنة (${payload.shipmentId}) ولا يطابق الشحنة المطلوبة (${expectedDetails.shipmentId}).`
+        );
+      }
+      if (expectedDetails?.receiptId && String(payload.receiptId ?? '') !== expectedDetails.receiptId) {
+        throw new BadRequestException(
+          `طلب الاعتماد مخصص لسند استلام (${payload.receiptId}) ولا يطابق سند الاستلام المطلوب (${expectedDetails.receiptId}).`
         );
       }
 
@@ -2232,6 +2250,325 @@ export class ImportSalesService {
       .where('shipment_id', '=', shipmentId)
       .where('status', '=', 'reserved')
       .execute();
+  }
+
+  /**
+   * Approval-gated, prospective-only reversal of a posted import
+   * receipt (INV-IMPORT-RECEIPT-REVERSAL). The original receipt
+   * row and the original journal are NEVER rewritten or deleted:
+   * stock is restored, the WAC is un-blended through the
+   * canonical engine, lots are zeroed and marked reversed,
+   * allocated preorders return to reserved, and a REVERSAL
+   * journal mirrors the original lines exactly (debit/credit
+   * swapped) through the posting boundary with the reversal
+   * link. Everything commits in one transaction: a failure
+   * anywhere (including a closed period at the posting
+   * boundary) rolls the whole correction back.
+   *
+   * Fail-closed blockers, all checked before any write:
+   * no approval token; no single posted receipt; a reversal
+   * already exists; the project is closed; a late-expense
+   * revaluation already spread this shipment's costs; a lot was
+   * consumed or is missing; an invoiced preorder exists; no
+   * receipt movements exist; the original journal was already
+   * reversed. The shipment status is left at 'Arrived': the
+   * reversal is a terminal correction, not a re-receipt path —
+   * re-receipt needs a new shipment record (recorded residual).
+   * Shortage `expenses` rows from the original posting are left
+   * as historical records; the reversal journal offsets their GL
+   * effect (recorded residual: no FK links them to the receipt).
+   */
+  async reversePostedReceipt(tenantId: string, userId: number, shipmentId: string, dto: ReverseImportReceiptDto) {
+    if (!dto.approvalRequestId?.trim()) {
+      throw new BadRequestException('عكس استلام الشحنة يتطلب موافقة Maker-Checker معتمدة.');
+    }
+    if (!dto.reason?.trim() || dto.reason.trim().length < 10) {
+      throw new BadRequestException('عكس الاستلام يتطلب سبباً موثقاً لا يقل عن 10 أحرف.');
+    }
+    return await this.inventoryDb.transaction().execute(async (trx) => {
+      const state = await this.lockShipment(trx, tenantId, shipmentId);
+      const { shipment } = state;
+
+      const receipts = await trx.selectFrom('import_inventory_receipts').selectAll()
+        .where('tenant_id', '=', tenantId).where('shipment_id', '=', shipmentId)
+        .orderBy('id', 'asc').execute();
+      const posted = receipts.filter((r) => r.state === 'posted');
+      if (posted.length === 0) {
+        throw new BadRequestException('لا يوجد سند استلام مرحل لعكسه على هذه الشحنة. [IMPORT_RECEIPT_REVERSAL_NO_POSTED_RECEIPT]');
+      }
+      if (posted.length > 1) {
+        throw new BadRequestException('يوجد أكثر من سند استلام مرحل على الشحنة؛ العكس يتطلب سنداً واحداً فقط. [IMPORT_RECEIPT_REVERSAL_AMBIGUOUS_RECEIPT]');
+      }
+      const receipt = posted[0];
+      const receiptId = Number(receipt.id);
+
+      const existingReversal = await trx.selectFrom('import_inventory_receipt_reversals').select('id')
+        .where('tenant_id', '=', tenantId).where('receipt_id', '=', receiptId).executeTakeFirst();
+      if (existingReversal) {
+        throw new BadRequestException('سند الاستلام هذا تم عكسه مسبقاً ولا يمكن عكسه مرة أخرى. [IMPORT_RECEIPT_ALREADY_REVERSED]');
+      }
+
+      if (shipment.project_id) {
+        const project = await trx.selectFrom('import_projects').select('status')
+          .where('tenant_id', '=', tenantId).where('id', '=', shipment.project_id).executeTakeFirst();
+        if (project?.status === 'closed') {
+          throw new BadRequestException('لا يمكن عكس استلام شحنة تابعة لمشروع مقفل. [IMPORT_RECEIPT_REVERSAL_PROJECT_CLOSED]');
+        }
+      }
+
+      const lateEvent = await trx.selectFrom('import_late_expense_events').select('id')
+        .where('tenant_id', '=', tenantId).where('shipment_id', '=', shipmentId).executeTakeFirst();
+      if (lateEvent) {
+        throw new BadRequestException('لا يمكن عكس الاستلام بعد تحميل مصروفات متأخرة على الشحنة؛ التكلفة أعيد توزيعها بالفعل. [IMPORT_RECEIPT_REVERSAL_LATE_EXPENSE_EXISTS]');
+      }
+
+      const invoicedPreorder = await trx.selectFrom('import_container_preorders').select('id')
+        .where('tenant_id', '=', tenantId).where('shipment_id', '=', shipmentId)
+        .where('status', '=', 'invoiced').executeTakeFirst();
+      if (invoicedPreorder) {
+        throw new BadRequestException('لا يمكن عكس الاستلام بعد فوترة حجز مسبق من الشحنة. [IMPORT_RECEIPT_REVERSAL_PREORDER_INVOICED]');
+      }
+
+      const lots = await trx.selectFrom('import_inventory_lots').selectAll()
+        .where('tenant_id', '=', tenantId).where('shipment_id', '=', shipmentId).execute();
+      if (!lots.length) {
+        throw new BadRequestException('لا توجد باتشات مخزنية لسند الاستلام؛ لا يمكن التحقق من سلامة العكس. [IMPORT_RECEIPT_REVERSAL_NO_LOTS]');
+      }
+      for (const lot of lots) {
+        const initial = Number(lot.initial_quantity || 0);
+        const remaining = Number(lot.remaining_quantity || 0);
+        if (lot.status !== 'active' || Math.abs(remaining - initial) > 0.0001) {
+          throw new BadRequestException(`لا يمكن عكس الاستلام: الباتش ${lot.lot_number} تم استهلاك جزء منه أو لم يعد نشطاً. [IMPORT_RECEIPT_REVERSAL_LOT_CONSUMED]`);
+        }
+      }
+
+      const movements = await trx.selectFrom('stock_movements').selectAll()
+        .where('tenant_id', '=', tenantId).where('import_receipt_id', '=', receiptId)
+        .where('movement_type', '=', 'import_receipt').execute();
+      if (!movements.length) {
+        throw new BadRequestException('لا توجد حركات مخزنية لسند الاستلام؛ لا يمكن استعادة الرصيد من مصدر موثوق. [IMPORT_RECEIPT_REVERSAL_NO_MOVEMENTS]');
+      }
+      const groups = new Map<string, { productId: number; accountId: string; locationId: number; quantity: number; value: number }>();
+      for (const movement of movements) {
+        const productId = Number(movement.product_id);
+        const qty = Number(movement.qty || 0);
+        const value = Number(movement.total_cost || 0);
+        if (!Number.isSafeInteger(productId) || productId <= 0 || qty <= 0 || value < 0) {
+          throw new BadRequestException('حركة مخزنية غير متسقة لسند الاستلام؛ العكس مرفوض. [IMPORT_RECEIPT_REVERSAL_INCONSISTENT_MOVEMENT]');
+        }
+        const key = `${productId}:${movement.location_id}`;
+        const existing = groups.get(key);
+        if (existing) {
+          existing.quantity = Number((existing.quantity + qty).toFixed(3));
+          existing.value = Number((existing.value + value).toFixed(4));
+        } else {
+          groups.set(key, {
+            productId,
+            accountId: String(movement.account_id),
+            locationId: Number(movement.location_id),
+            quantity: qty,
+            value,
+          });
+        }
+      }
+
+      let originalJournal: { id: number; branch_id: number | null; location_id: number | null; reversed_by_entry_id: number | null | undefined } | undefined;
+      if (receipt.journal_entry_id) {
+        originalJournal = await trx.selectFrom('journal_entries')
+          .select(['id', 'branch_id', 'location_id', 'reversed_by_entry_id'])
+          .where('tenant_id', '=', tenantId).where('id', '=', Number(receipt.journal_entry_id)).executeTakeFirst();
+        if (!originalJournal) {
+          throw new BadRequestException('قيد الاستلام الأصلي المشار إليه غير موجود؛ العكس مرفوض. [IMPORT_RECEIPT_REVERSAL_JOURNAL_MISSING]');
+        }
+        if (originalJournal?.reversed_by_entry_id) {
+          throw new BadRequestException('قيد الاستلام الأصلي تم عكسه مسبقاً. [IMPORT_RECEIPT_REVERSAL_JOURNAL_REVERSED]');
+        }
+      }
+
+      // Maker-checker: the token is bound to this shipment and
+      // this receipt, single-use, and consumed here. The helper
+      // returns silently without a token, so the token is
+      // required above; the payload binding below rejects a
+      // token minted for a different receipt.
+      await this.verifyAndConsumeApprovalRequest(trx, tenantId, 'import_receipt_reversal', shipmentId, dto.approvalRequestId, {
+        shipmentId,
+        receiptId: String(receiptId),
+      });
+
+      // Lock ALL products in global ID order before touching any
+      // location (canonical lock order), exactly as posting does.
+      const productIds = Array.from(new Set(Array.from(groups.values()).map((g) => g.productId))).sort((a, b) => a - b);
+      const accountByProduct = new Map<number, string>();
+      for (const group of groups.values()) accountByProduct.set(group.productId, group.accountId);
+      for (const productId of productIds) {
+        await lockStockProducts(trx, { tenantId, accountId: accountByProduct.get(productId)!, productIds: [productId] });
+      }
+
+      for (const group of groups.values()) {
+        const stock = await applyStockDelta(trx, {
+          tenantId, accountId: group.accountId, productId: group.productId, delta: -group.quantity,
+          allowNegative: false, locationId: group.locationId, disableAutoDrain: true,
+        });
+        // The WAC un-blend mirrors valueStockReceipt: the delta's
+        // corrected globalAfter already includes this deduction.
+        await revalueStockReturn(trx, tenantId, group.productId, stock.globalAfter, group.quantity, group.value);
+        await trx.insertInto('stock_movements').values({
+          tenant_id: tenantId, account_id: group.accountId, product_id: group.productId,
+          movement_type: 'import_receipt_reversal', qty: -group.quantity,
+          before_qty: stock.scopeBefore, after_qty: stock.scopeAfter,
+          unit_cost: Number((group.value / group.quantity).toFixed(6)), total_cost: Number(group.value.toFixed(4)),
+          reason: 'عكس استلام شحنة استيراد', note: `عكس سند استلام #${receiptId} - شحنة استيراد #${shipmentId}`,
+          reference_type: 'import_inventory_receipt', reference_id: receiptId, import_receipt_id: receiptId,
+          created_by: userId, branch_id: null, location_id: group.locationId,
+        }).execute();
+      }
+
+      for (const lot of lots) {
+        const updated = await trx.updateTable('import_inventory_lots')
+          .set({ remaining_quantity: 0, status: 'reversed' })
+          .where('tenant_id', '=', tenantId).where('id', '=', lot.id)
+          .where('status', '=', 'active')
+          .where('remaining_quantity', '=', lot.remaining_quantity)
+          .executeTakeFirst();
+        if (Number(updated.numUpdatedRows || 0) !== 1) {
+          throw new BadRequestException(`تعارض متزامن على الباتش ${lot.lot_number} أثناء العكس؛ أعد المحاولة. [IMPORT_RECEIPT_REVERSAL_LOT_RACE]`);
+        }
+      }
+
+      await trx.updateTable('import_container_preorders').set({ status: 'reserved' })
+        .where('tenant_id', '=', tenantId).where('shipment_id', '=', shipmentId)
+        .where('status', '=', 'allocated').execute();
+
+      // Mirror journal: the original lines exactly, debit and
+      // credit swapped, through the posting boundary with the
+      // reversal link. No journal exists when the original
+      // receipt posted none (zero value): then there is nothing
+      // to mirror and no journal is created.
+      let reversalJournalId: number | null = null;
+      if (originalJournal) {
+        const originalLines = await trx.selectFrom('journal_entry_lines').selectAll()
+          .where('tenant_id', '=', tenantId).where('journal_entry_id', '=', Number(originalJournal.id))
+          .orderBy('id', 'asc').execute();
+        if (!originalLines.length) {
+          throw new BadRequestException('قيد الاستلام الأصلي بلا سطور؛ لا يمكن عكس قيد غير مكتمل. [IMPORT_RECEIPT_REVERSAL_EMPTY_JOURNAL]');
+        }
+        const postingService = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
+        reversalJournalId = await postingService.postDomainJournal(trx, {
+          sourceType: 'import_inventory_receipt_reversal',
+          sourceId: receiptId,
+          tenantId,
+          accountId: tenantId,
+          entryDate: new Date(),
+          description: `قيد عكس استلام مخزون استيراد - سند استلام #${receiptId} (شحنة ${shipmentId})`,
+          branchId: originalJournal.branch_id ? Number(originalJournal.branch_id) : null,
+          locationId: originalJournal.location_id ? Number(originalJournal.location_id) : null,
+          createdBy: userId,
+          postedBy: userId,
+          reversalOfEntryId: Number(originalJournal.id),
+          lines: originalLines.map((line) => ({
+            accountId: Number(line.account_id),
+            description: `عكس: ${line.description}`,
+            debit: Number(line.credit || 0),
+            credit: Number(line.debit || 0),
+            partnerType: (line.partner_type as 'none' | 'customer' | 'supplier' | 'employee') || 'none',
+            partnerId: line.partner_id ? Number(line.partner_id) : null,
+            branchId: line.branch_id ? Number(line.branch_id) : null,
+            locationId: line.location_id ? Number(line.location_id) : null,
+            costCenterId: line.cost_center_id ? Number(line.cost_center_id) : null,
+          })),
+        });
+      }
+
+      const reversal = await trx.insertInto('import_inventory_receipt_reversals').values({
+        tenant_id: tenantId, receipt_id: receiptId, shipment_id: shipmentId,
+        approval_request_id: dto.approvalRequestId, journal_entry_id: reversalJournalId,
+        reason: dto.reason.trim(), created_by: userId,
+      }).returning('id').executeTakeFirstOrThrow();
+
+      return {
+        success: true,
+        shipmentId,
+        receiptId,
+        reversalId: Number(reversal.id),
+        journalEntryId: reversalJournalId,
+        restoredGroups: Array.from(groups.values()).map((g) => ({ productId: g.productId, quantity: g.quantity, value: g.value })),
+      };
+    });
+  }
+
+  /**
+   * Approval-gated review/resolve path for shipments frozen in
+   * legacy_review_required (INV-IMPORT-LEGACY-RECEIPT-REVIEW).
+   * No silent unfreeze: the caller proves the receipt really
+   * posted (a posted journal AND at least one receipt stock
+   * movement) and a maker-checker approval bound to the shipment
+   * and receipt authorizes the transition. posted_at is set to
+   * the earliest receipt movement date — evidence, never
+   * fabricated. No stock, lot or journal write happens here:
+   * the receipt already posted; this only unfreezes its state.
+   * Legacy rows with no journal and no movements (the migration
+   * 0231 seed shape) can never satisfy the proof and stay frozen.
+   */
+  async resolveLegacyReceipt(tenantId: string, userId: number, shipmentId: string, dto: ResolveLegacyReceiptDto) {
+    if (!dto.approvalRequestId?.trim()) {
+      throw new BadRequestException('مراجعة الاستلام القديم تتطلب موافقة Maker-Checker معتمدة.');
+    }
+    if (!dto.reason?.trim() || dto.reason.trim().length < 10) {
+      throw new BadRequestException('مراجعة الاستلام القديم تتطلب سبباً موثقاً لا يقل عن 10 أحرف.');
+    }
+    return await this.inventoryDb.transaction().execute(async (trx) => {
+      const state = await this.lockShipment(trx, tenantId, shipmentId);
+      const { shipment } = state;
+
+      const receipts = await trx.selectFrom('import_inventory_receipts').selectAll()
+        .where('tenant_id', '=', tenantId).where('shipment_id', '=', shipmentId)
+        .orderBy('id', 'asc').execute();
+      const frozen = receipts.filter((r) => r.state === 'legacy_review_required');
+      if (frozen.length === 0) {
+        throw new BadRequestException('لا يوجد سند استلام مجمد بانتظار المراجعة على هذه الشحنة. [IMPORT_LEGACY_REVIEW_NO_FROZEN_RECEIPT]');
+      }
+      if (frozen.length > 1) {
+        throw new BadRequestException('يوجد أكثر من سند مجمد على الشحنة؛ المراجعة تتطلب سنداً واحداً فقط. [IMPORT_LEGACY_REVIEW_AMBIGUOUS_RECEIPT]');
+      }
+      const receipt = frozen[0];
+      const receiptId = Number(receipt.id);
+
+      if (shipment.project_id) {
+        const project = await trx.selectFrom('import_projects').select('status')
+          .where('tenant_id', '=', tenantId).where('id', '=', shipment.project_id).executeTakeFirst();
+        if (project?.status === 'closed') {
+          throw new BadRequestException('لا يمكن مراجعة استلام شحنة تابعة لمشروع مقفل. [IMPORT_LEGACY_REVIEW_PROJECT_CLOSED]');
+        }
+      }
+
+      await this.verifyAndConsumeApprovalRequest(trx, tenantId, 'import_legacy_receipt_review', shipmentId, dto.approvalRequestId, {
+        shipmentId,
+        receiptId: String(receiptId),
+      });
+
+      // Proof: a posted journal AND at least one receipt movement.
+      // Either one alone is not proof the receipt posted.
+      let journalPosted = false;
+      if (receipt.journal_entry_id) {
+        const journal = await trx.selectFrom('journal_entries').select(['id', 'status'])
+          .where('tenant_id', '=', tenantId).where('id', '=', Number(receipt.journal_entry_id)).executeTakeFirst();
+        journalPosted = journal?.status === 'posted';
+      }
+      const movements = await trx.selectFrom('stock_movements')
+        .select(['id', 'created_at'])
+        .where('tenant_id', '=', tenantId).where('import_receipt_id', '=', receiptId)
+        .where('movement_type', '=', 'import_receipt')
+        .orderBy('created_at', 'asc').execute();
+      if (!journalPosted || !movements.length) {
+        throw new BadRequestException('لا يمكن اعتماد الاستلام القديم بلا دليل ترحيل: يلزم قيد مرحل وحركة مخزنية واحدة على الأقل. [IMPORT_LEGACY_REVIEW_NO_PROOF]');
+      }
+      const postedAt = movements[0].created_at ? new Date(movements[0].created_at) : new Date();
+      await trx.updateTable('import_inventory_receipts')
+        .set({ state: 'posted', posted_at: postedAt })
+        .where('tenant_id', '=', tenantId).where('id', '=', receiptId).execute();
+
+      return { success: true, shipmentId, receiptId, postedAt: postedAt.toISOString() };
+    });
   }
 
   async calculateLandedCost(tenantId: string, shipmentId: string) {
@@ -6669,6 +7006,12 @@ export class ImportSalesService {
       }
       if (payload.paymentMethod !== undefined && !isPaymentMethod(payload.paymentMethod)) {
         throw new BadRequestException('اعتماد الحوالة الكبيرة يتطلب طريقة دفع صالحة عند تحديدها.');
+      }
+    }
+    if (dto.actionType === 'import_receipt_reversal' || dto.actionType === 'import_legacy_receipt_review') {
+      const payload = dto.requestPayload;
+      if (!payload || payload.shipmentId !== dto.referenceId || !String(payload.receiptId || '').trim()) {
+        throw new BadRequestException('اعتماد عكس/مراجعة الاستلام يتطلب ربط الشحنة وسند الاستلام بالمرجع نفسه.');
       }
     }
     return await this.db

@@ -45,6 +45,10 @@ export default function ImportApprovalsManager() {
   const [transferSupplierId, setTransferSupplierId] = useState('');
   const [transferProformaId, setTransferProformaId] = useState('');
   const [transferPaymentMethod, setTransferPaymentMethod] = useState('');
+  // Receipt-correction binding fields (INV-IMPORT-RECEIPT-REVERSAL):
+  // the approval is bound to one shipment (the reference id) and
+  // one receipt; the backend rejects a token minted without both.
+  const [receiptApprovalId, setReceiptApprovalId] = useState('');
 
   const parsePayload = (r: any) => {
     try {
@@ -81,15 +85,21 @@ export default function ImportApprovalsManager() {
       if (requestType === 'large_transfer' && (!Number(transferAmountForeign) || Number(transferAmountForeign) <= 0)) {
         throw new Error('اعتماد الحوالة يتطلب المبلغ بالعملة الأجنبية كما سينفذ بالضبط.');
       }
+      const isReceiptAction = requestType === 'import_receipt_reversal' || requestType === 'import_legacy_receipt_review';
+      if (isReceiptAction && !receiptApprovalId.trim()) {
+        throw new Error('اعتماد عكس/مراجعة الاستلام يتطلب معرف سند الاستلام المربوط بالشحنة.');
+      }
       await createApprovalMutation.mutateAsync({
         actionType: requestType,
         referenceId: entityId.trim(),
         requestPayload: {
-          amount: requestType === 'large_transfer' ? Number(transferAmountForeign) : Number(amountEgp),
+          amount: isReceiptAction ? undefined : (requestType === 'large_transfer' ? Number(transferAmountForeign) : Number(amountEgp)),
           currency: requestType === 'large_transfer' ? transferCurrency.trim().toUpperCase() : undefined,
           supplierId: requestType === 'large_transfer' ? (transferSupplierId.trim() || entityId.trim()) : undefined,
           proformaInvoiceId: requestType === 'large_transfer' && transferProformaId.trim() ? transferProformaId.trim() : undefined,
           paymentMethod: requestType === 'large_transfer' && transferPaymentMethod ? transferPaymentMethod : undefined,
+          shipmentId: isReceiptAction ? entityId.trim() : undefined,
+          receiptId: isReceiptAction ? receiptApprovalId.trim() : undefined,
           partnerId: requestType === 'partner_distribution' ? entityId.trim() : undefined,
           projectId: requestType === 'partner_distribution' ? projectId.trim() : undefined,
           justification,
@@ -103,6 +113,7 @@ export default function ImportApprovalsManager() {
       setTransferSupplierId('');
       setTransferProformaId('');
       setTransferPaymentMethod('');
+      setReceiptApprovalId('');
       refetch();
     } catch (err: any) {
       toast.error('فشل رفع طلب الاعتماد: ' + (err.message || 'خطأ غير معروف'));
@@ -142,6 +153,10 @@ export default function ImportApprovalsManager() {
         return 'تعديل نسب مشاركة الشركاء';
       case 'project_closure':
         return 'إقفال حسابات مشروع الاستيراد';
+      case 'import_receipt_reversal':
+        return 'عكس سند استلام مرحل';
+      case 'import_legacy_receipt_review':
+        return 'مراجعة استلام قديم مجمد';
       case 'late_expense_allocation':
         return 'تحميل مصروفات متأخرة على الحاوية';
       default:
@@ -386,6 +401,8 @@ export default function ImportApprovalsManager() {
               <option value="broker_settlement">تسوية عهدة مخلص جمركي</option>
               <option value="partner_distribution">صرف أرباح شريك من مشروع محدد</option>
               <option value="project_closure">إقفال مشروع الاستيراد</option>
+              <option value="import_receipt_reversal">عكس سند استلام مرحل</option>
+              <option value="import_legacy_receipt_review">مراجعة استلام قديم مجمد</option>
             </select>
           </div>
 
@@ -396,7 +413,7 @@ export default function ImportApprovalsManager() {
               </label>
               <input
                 type="number"
-                required
+                required={requestType !== 'import_receipt_reversal' && requestType !== 'import_legacy_receipt_review'}
                 value={amountEgp}
                 onChange={(e) => setAmountEgp(Number(e.target.value))}
                 style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
@@ -422,6 +439,19 @@ export default function ImportApprovalsManager() {
               <label style={{ display: 'block', marginBottom: 4 }}>معرف مشروع أرباح الشريك (UUID)</label>
               <input required value={projectId} onChange={e => setProjectId(e.target.value)}
                 style={{ width: '100%', height: 36, padding: 6, border: '1px solid #cbd5e1', borderRadius: 6 }} />
+            </div>
+          )}
+          {(requestType === 'import_receipt_reversal' || requestType === 'import_legacy_receipt_review') && (
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: 4 }}>
+                معرف سند الاستلام المربوط بالشحنة (يظهر في صفحة الشحنة)
+              </label>
+              <input
+                required
+                value={receiptApprovalId}
+                onChange={(e) => setReceiptApprovalId(e.target.value)}
+                style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
+              />
             </div>
           )}
           {requestType === 'large_transfer' && (

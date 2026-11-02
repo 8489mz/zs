@@ -12,6 +12,8 @@ import {
   useApplyPricesMutation,
   useCreateReceivingInspectionMutation,
   useRecordLateShipmentExpenseMutation,
+  useReversePostedReceiptMutation,
+  useResolveLegacyReceiptMutation,
   lateExpenseAllocationSummary,
   type ShipmentItem 
 } from './api/shipments.api';
@@ -199,8 +201,13 @@ export default function ShipmentDetailsPage() {
   const [grnNotes, setGrnNotes] = useState('');
   const [grnDamagedMap, setGrnDamagedMap] = useState<Record<string, number>>({});
 
-  // Late Expense state
-  const [lateExpenseType, setLateExpenseType] = useState('demurrage');
+  // Receipt correction state (INV-IMPORT-RECEIPT-REVERSAL): the
+  // approval token is minted in the approvals center bound to
+  // this shipment and receipt; the token id + reason execute it.
+  const [reversalApprovalId, setReversalApprovalId] = useState('');
+  const [reversalReason, setReversalReason] = useState('');
+  const [resolveApprovalId, setResolveApprovalId] = useState('');
+  const [resolveReason, setResolveReason] = useState('');
   const [lateAmountEgp, setLateAmountEgp] = useState('');
   const [lateDescription, setLateDescription] = useState('');
   
@@ -209,6 +216,8 @@ export default function ShipmentDetailsPage() {
   
   const updateCostsMutation = useUpdateShipmentCostsMutation(id!);
   const applyPricesMutation = useApplyPricesMutation(id!);
+  const reverseReceiptMutation = useReversePostedReceiptMutation(id!);
+  const resolveLegacyMutation = useResolveLegacyReceiptMutation(id!);
   const updateItemMutation = useUpdateShipmentItemMutation(id!);
   const importProjectItemsMutation = useImportProjectItemsMutation(id!);
   const createGrnMutation = useCreateReceivingInspectionMutation();
@@ -319,6 +328,44 @@ export default function ShipmentDetailsPage() {
     }
   };
 
+  const handleReverseReceipt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reversalApprovalId.trim() || reversalReason.trim().length < 10) {
+      toast.error('عكس الاستلام يتطلب معرف اعتماد معتمد وسبباً لا يقل عن 10 أحرف');
+      return;
+    }
+    const confirmed = await systemConfirm({
+      title: 'تأكيد عكس سند الاستلام المرحل',
+      message: 'سيتم استعادة المخزون ومتوسط التكلفة والباتشات، وعكس قيد اليومية الأصلي بقيد عكسي مرتبط، ولا يمكن التراجع عن العكس إلا بسند استلام جديد. هل ترغب في المتابعة؟',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    try {
+      await reverseReceiptMutation.mutateAsync({ approvalRequestId: reversalApprovalId.trim(), reason: reversalReason.trim() });
+      setReversalApprovalId('');
+      setReversalReason('');
+      toast.success('تم عكس سند الاستلام واستعادة المخزون وعكس القيد بنجاح');
+    } catch (err: any) {
+      toast.error('حدث خطأ أثناء عكس الاستلام: ' + (err?.message || 'خطأ غير معروف'));
+    }
+  };
+
+  const handleResolveLegacy = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resolveApprovalId.trim() || resolveReason.trim().length < 10) {
+      toast.error('مراجعة الاستلام القديم تتطلب معرف اعتماد معتمد وسبباً لا يقل عن 10 أحرف');
+      return;
+    }
+    try {
+      await resolveLegacyMutation.mutateAsync({ approvalRequestId: resolveApprovalId.trim(), reason: resolveReason.trim() });
+      setResolveApprovalId('');
+      setResolveReason('');
+      toast.success('تم اعتماد الاستلام القديم بعد التحقق من دليل الترحيل');
+    } catch (err: any) {
+      toast.error('حدث خطأ أثناء مراجعة الاستلام: ' + (err?.message || 'خطأ غير معروف'));
+    }
+  };
+
   const handleApplyGlobalMargins = async () => {
     if (!data.items || data.items.length === 0) {
       toast.warning('لا توجد أصناف في هذه الحاوية لتطبيق الهامش عليها. يرجى سحب أو إضافة الأصناف أولاً.');
@@ -379,8 +426,8 @@ export default function ShipmentDetailsPage() {
                 <span>المسار: <strong>{(data as any).port_of_loading} &larr; {(data as any).port_of_discharge || 'Alexandria'}</strong></span>
               )}
               {data.inventory_receipt && (
-                <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: 4, fontWeight: 700, border: '1px solid #bbf7d0', fontSize: '0.78rem' }}>
-                  سند استلام مخزني: #{data.inventory_receipt.id} (مرحل)
+                <span style={{ backgroundColor: data.inventory_receipt.state === 'posted' ? '#dcfce7' : '#fef3c7', color: data.inventory_receipt.state === 'posted' ? '#15803d' : '#92400e', padding: '2px 8px', borderRadius: 4, fontWeight: 700, border: '1px solid #bbf7d0', fontSize: '0.78rem' }}>
+                  سند استلام مخزني: #{data.inventory_receipt.id} ({data.inventory_receipt.state === 'posted' ? 'مرحل' : 'مجمد بانتظار المراجعة'})
                 </span>
               )}
               {data.inventory_receipt?.journal_entry_id && (
@@ -531,6 +578,54 @@ export default function ShipmentDetailsPage() {
             </div>
           </form>
         </FormSection>
+
+        {data.inventory_receipt && (
+        <FormSection
+          title="تصحيح سند الاستلام المعتمد"
+          description="عكس سند مرحل أو اعتماد سند قديم مجمد — كلاهما يتطلب موافقة Maker-Checker مربوطة بهذه الشحنة وسندها، ولا يتم أي تعديل صامت."
+        >
+          <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ fontSize: '0.84rem', color: '#334155' }}>
+              سند الاستلام #{data.inventory_receipt.id} — الحالة: <strong>{data.inventory_receipt.state === 'posted' ? 'مرحل' : 'مجمد بانتظار المراجعة'}</strong>
+              {data.inventory_receipt.review_reason && <> — سبب التجميد: {data.inventory_receipt.review_reason}</>}
+              {' — '}أنشئ طلب الاعتماد من مركز الموافقات بنوع عكس/مراجعة الاستلام ومرجع الشحنة الحالي، ثم نفذه هنا بمعرف الاعتماد.
+            </div>
+            {data.inventory_receipt.state === 'posted' ? (
+              <form onSubmit={handleReverseReceipt} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
+                  <label>معرف طلب الاعتماد المعتمد</label>
+                  <input type="text" className="input" value={reversalApprovalId} onChange={e => setReversalApprovalId(e.target.value)} placeholder="معرف الاعتماد المربوط بهذا السند" />
+                </div>
+                <div className="form-group">
+                  <label>سبب العكس (10 أحرف على الأقل)</label>
+                  <input type="text" className="input" value={reversalReason} onChange={e => setReversalReason(e.target.value)} placeholder="مثال: تم الاستلام في المخزن الخطأ" />
+                </div>
+                <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button type="submit" variant="secondary" disabled={reverseReceiptMutation.isPending} style={{ borderColor: '#b91c1c', color: '#b91c1c', fontWeight: 700 }}>
+                    {reverseReceiptMutation.isPending ? 'جاري عكس الاستلام...' : 'عكس سند الاستلام المرحل'}
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleResolveLegacy} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
+                  <label>معرف طلب الاعتماد المعتمد</label>
+                  <input type="text" className="input" value={resolveApprovalId} onChange={e => setResolveApprovalId(e.target.value)} placeholder="معرف الاعتماد المربوط بهذا السند" />
+                </div>
+                <div className="form-group">
+                  <label>سبب المراجعة (10 أحرف على الأقل)</label>
+                  <input type="text" className="input" value={resolveReason} onChange={e => setResolveReason(e.target.value)} placeholder="مثال: تم التحقق من القيد والحركة المخزنية" />
+                </div>
+                <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button type="submit" variant="secondary" disabled={resolveLegacyMutation.isPending} style={{ borderColor: '#92400e', color: '#92400e', fontWeight: 700 }}>
+                    {resolveLegacyMutation.isPending ? 'جاري مراجعة الاستلام...' : 'اعتماد الاستلام القديم بعد التحقق'}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
+        </FormSection>
+        )}
 
         <FormSection 
           title={t('import_sales.shipment_details_page.s29', "أصناف الحاوية وتحديد أسعار البيع")} 

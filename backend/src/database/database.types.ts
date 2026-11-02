@@ -5852,6 +5852,18 @@ export interface ImportInventoryReceiptTable {
   journal_entry_id: number | null;
 }
 
+export interface ImportInventoryReceiptReversalTable {
+  id: Generated<number>;
+  tenant_id: string;
+  receipt_id: number;
+  shipment_id: string;
+  approval_request_id: string;
+  journal_entry_id: number | null;
+  reason: string;
+  created_by: number | null;
+  created_at: Generated<Date>;
+}
+
 export interface ImportQuotationTable {
   id: Generated<string>;
   tenant_id: string;
@@ -6140,6 +6152,7 @@ export interface Database {
   import_shipments: ImportShipmentTable;
   import_shipment_items: ImportShipmentItemTable;
   import_inventory_receipts: ImportInventoryReceiptTable;
+  import_inventory_receipt_reversals: ImportInventoryReceiptReversalTable;
   import_partners: ImportPartnerTable;
   import_partner_ledger: ImportPartnerLedgerTable;
   import_projects: ImportProjectTable;

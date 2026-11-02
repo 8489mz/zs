@@ -1483,8 +1483,8 @@ export class CreateImportDocumentDto {
 }
 
 export class CreateApprovalRequestDto {
-  @IsIn(['supplier_bank_change', 'large_transfer', 'broker_settlement', 'partner_distribution', 'project_closure'])
-  actionType!: 'supplier_bank_change' | 'large_transfer' | 'broker_settlement' | 'partner_distribution' | 'project_closure';
+  @IsIn(['supplier_bank_change', 'large_transfer', 'broker_settlement', 'partner_distribution', 'project_closure', 'import_receipt_reversal', 'import_legacy_receipt_review'])
+  actionType!: 'supplier_bank_change' | 'large_transfer' | 'broker_settlement' | 'partner_distribution' | 'project_closure' | 'import_receipt_reversal' | 'import_legacy_receipt_review';
 
   @IsString()
   referenceId!: string;
@@ -1497,6 +1497,26 @@ export class CloseImportProjectDto {
   @IsString()
   @IsNotEmpty()
   approvalRequestId!: string;
+}
+
+export class ReverseImportReceiptDto {
+  @IsString()
+  @IsNotEmpty()
+  approvalRequestId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  reason!: string;
+}
+
+export class ResolveLegacyReceiptDto {
+  @IsString()
+  @IsNotEmpty()
+  approvalRequestId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  reason!: string;
 }
 
 export class DecideApprovalRequestDto {

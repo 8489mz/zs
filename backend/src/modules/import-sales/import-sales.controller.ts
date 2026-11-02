@@ -38,6 +38,8 @@ import {
   ResolveExceptionDto,
   RecordPartnerPayoutDto,
   CloseImportProjectDto,
+  ReverseImportReceiptDto,
+  ResolveLegacyReceiptDto,
 } from './dto/import-sales.dto';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
@@ -402,6 +404,36 @@ export class ImportSalesController {
     @Body() dto: ProcessLateExpenseDto
   ) {
     return this.importSalesService.processLateShipmentExpense(
+      req.authContext!.tenantId!,
+      Number(req.authContext!.userId!),
+      shipmentId,
+      dto
+    );
+  }
+
+  @RequireAnyPermission('accounting', 'inventory')
+  @Post('shipments/:id/reverse-receipt')
+  async reversePostedReceipt(
+    @Req() req: RequestWithAuth,
+    @Param('id') shipmentId: string,
+    @Body() dto: ReverseImportReceiptDto
+  ) {
+    return this.importSalesService.reversePostedReceipt(
+      req.authContext!.tenantId!,
+      Number(req.authContext!.userId!),
+      shipmentId,
+      dto
+    );
+  }
+
+  @RequireAnyPermission('accounting', 'inventory')
+  @Post('shipments/:id/resolve-legacy-review')
+  async resolveLegacyReceipt(
+    @Req() req: RequestWithAuth,
+    @Param('id') shipmentId: string,
+    @Body() dto: ResolveLegacyReceiptDto
+  ) {
+    return this.importSalesService.resolveLegacyReceipt(
       req.authContext!.tenantId!,
       Number(req.authContext!.userId!),
       shipmentId,

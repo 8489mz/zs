@@ -255,6 +255,50 @@ export const useUpdateShipmentCostsMutation = (shipmentId: string) => {
   });
 };
 
+export interface ReverseImportReceiptDto {
+  approvalRequestId: string;
+  reason: string;
+}
+
+export interface ResolveLegacyReceiptDto {
+  approvalRequestId: string;
+  reason: string;
+}
+
+/** Approval-gated reversal of a posted receipt: restores stock/WAC/lots and mirrors the journal. */
+export const useReversePostedReceiptMutation = (shipmentId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (dto: ReverseImportReceiptDto) => {
+      return await http(`/api/import-sales/shipments/${shipmentId}/reverse-receipt`, {
+        method: 'POST',
+        body: JSON.stringify(dto),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['import-shipments', shipmentId] });
+      queryClient.invalidateQueries({ queryKey: ['import-shipments'] });
+    },
+  });
+};
+
+/** Approval-gated review that unfreezes a legacy_review_required receipt on journal + movement proof. */
+export const useResolveLegacyReceiptMutation = (shipmentId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (dto: ResolveLegacyReceiptDto) => {
+      return await http(`/api/import-sales/shipments/${shipmentId}/resolve-legacy-review`, {
+        method: 'POST',
+        body: JSON.stringify(dto),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['import-shipments', shipmentId] });
+      queryClient.invalidateQueries({ queryKey: ['import-shipments'] });
+    },
+  });
+};
+
 export const useAddShipmentItemMutation = (shipmentId: string) => {
   const queryClient = useQueryClient();
   
