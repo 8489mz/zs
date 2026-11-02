@@ -707,12 +707,21 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
           const autoPhoto = resolveProductPhoto(product.name, product.categoryName);
           const photoUrl = product.imageUrl || autoPhoto.url;
           const isOutOfStock = !product.inStock || product.stockQty <= 0;
+          const hasDiscount = Boolean(
+            (product.hasDiscount && product.discountPercent && product.discountPercent > 0) ||
+            (product.originalPrice && Number(product.originalPrice) > Number(product.price))
+          );
+          const computedDiscount = product.discountPercent || (
+            product.originalPrice && Number(product.originalPrice) > Number(product.price)
+              ? Math.round(((Number(product.originalPrice) - Number(product.price)) / Number(product.originalPrice)) * 100)
+              : 0
+          );
           const realBadge =
             product.offerBadge ||
-            (product.hasDiscount && product.discountPercent
+            (hasDiscount && computedDiscount > 0
               ? isEn
-                ? `${product.discountPercent}% OFF`
-                : `خصم ${product.discountPercent}%`
+                ? `${computedDiscount}% OFF`
+                : `خصم ${computedDiscount}%`
               : '');
           const activeBadges = isEn ? CARD_BADGES_EN : CARD_BADGES_AR;
           const fallbackBadge = info?.smartDealsEnabled
@@ -849,7 +858,7 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
                 />
               </svg>
 
-              {/* Card Header: Badge */}
+              {/* Card Header: Badge - Only render if badgeText has actual content */}
               <div
                 className="sf-coverflow-header"
                 style={{
@@ -858,32 +867,35 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
                   justifyContent: 'flex-start',
                   position: 'relative',
                   zIndex: 2,
+                  minHeight: '22px',
                 }}
               >
-                <span
-                  className="sf-coverflow-badge"
-                  style={{
-                    background: isOutOfStock
-                      ? '#991b1b'
-                      : isHighlighted
-                      ? '#dc2626'
-                      : '#ef4444',
-                    color: '#ffffff',
-                    border: 'none',
-                    fontSize: metrics.badgeFontSize,
-                    fontWeight: 700,
-                    padding: offset === 0 ? '4px 10px' : '3.5px 8px',
-                    borderRadius: '8px',
-                    whiteSpace: 'nowrap',
-                    lineHeight: 1.2,
-                    marginTop: `${rightSideSlantOffset}px`,
-                    boxShadow: isHighlighted
-                      ? '0 3px 8px rgba(220, 38, 38, 0.28)'
-                      : '0 2px 5px rgba(239, 68, 68, 0.18)',
-                  }}
-                >
-                  {badgeText}
-                </span>
+                {badgeText && badgeText.trim() ? (
+                  <span
+                    className="sf-coverflow-badge"
+                    style={{
+                      background: isOutOfStock
+                        ? '#991b1b'
+                        : isHighlighted
+                        ? '#dc2626'
+                        : '#ef4444',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontSize: metrics.badgeFontSize,
+                      fontWeight: 700,
+                      padding: offset === 0 ? '4px 10px' : '3.5px 8px',
+                      borderRadius: '8px',
+                      whiteSpace: 'nowrap',
+                      lineHeight: 1.2,
+                      marginTop: `${rightSideSlantOffset}px`,
+                      boxShadow: isHighlighted
+                        ? '0 3px 8px rgba(220, 38, 38, 0.28)'
+                        : '0 2px 5px rgba(239, 68, 68, 0.18)',
+                    }}
+                  >
+                    {badgeText}
+                  </span>
+                ) : null}
               </div>
 
               {/* Product Artwork Container (100% Native 1:1 Vector Rendering — Zero scale() bitmap blur) */}
@@ -1186,14 +1198,14 @@ export const StorefrontHeroEditorial = React.memo(function StorefrontHeroEditori
                         whiteSpace: 'nowrap',
                         fontSize: '13px',
                         fontWeight: 600,
-                        color: '#475569',
+                        color: '#1e293b',
                       }}
                     >
                       {phrase.start && <span>{phrase.start}</span>}
                       <span
                         style={{
                           fontWeight: 800,
-                          color: 'var(--storefront-primary-color, #2d68c4)',
+                          color: 'var(--storefront-primary-color, #170e5e)',
                           fontSize: '13.5px',
                         }}
                       >

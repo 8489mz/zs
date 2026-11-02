@@ -65,11 +65,7 @@ export function PublicStorefrontPage() {
     setQuickViewProduct(null);
     const targetUrl = paramCategoryId ? `${storeBasePath}/c/${paramCategoryId}` : storeHomePath;
     if (window.location.pathname !== targetUrl) {
-      if (window.history.state && window.history.state.productId) {
-        window.history.back();
-      } else {
-        window.history.replaceState(null, '', targetUrl);
-      }
+      window.history.replaceState(null, '', targetUrl);
     }
   }, [paramCategoryId, storeBasePath, storeHomePath]);
 

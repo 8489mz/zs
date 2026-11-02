@@ -230,7 +230,7 @@ export const StorefrontProductCard = React.memo(function StorefrontProductCard({
           )}
 
           {/* Top Right: Deal / Offer / Low-Stock badge only (no duplicate category pill) */}
-          {primaryBadge ? (
+          {primaryBadge && primaryBadge.text && primaryBadge.text.trim() ? (
             <div
               className="storefront-product-badge-wrap"
               style={{

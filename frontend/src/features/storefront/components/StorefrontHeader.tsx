@@ -316,8 +316,8 @@ export const StorefrontHeader = React.memo(function StorefrontHeader({
   const { isEn, setLang } = useStorefrontLang();
   const headerRef = React.useRef<HTMLElement | null>(null);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(() => getInitialStorefrontScrollTop() > 18);
-  const isScrolledRef = React.useRef(getInitialStorefrontScrollTop() > 18);
+  const [isScrolled, setIsScrolled] = useState(() => getInitialStorefrontScrollTop() > 48);
+  const isScrolledRef = React.useRef(getInitialStorefrontScrollTop() > 48);
 
   useEffect(() => {
     if (!langMenuOpen) return;
@@ -354,7 +354,7 @@ export const StorefrontHeader = React.memo(function StorefrontHeader({
 
     const updateScrollState = () => {
       const y = getScrollTop();
-      const nextScrolled = isScrolledRef.current ? y > 8 : y > 18;
+      const nextScrolled = isScrolledRef.current ? y > 24 : y > 48;
       if (nextScrolled !== isScrolledRef.current) {
         isScrolledRef.current = nextScrolled;
         if (headerRef.current) {
@@ -562,8 +562,9 @@ export const StorefrontHeader = React.memo(function StorefrontHeader({
           padding: isScrolled ? '6px 16px' : '8px 16px',
           boxSizing: 'border-box',
           pointerEvents: 'none',
-          transform: 'none',
-          transition: 'padding 0.22s cubic-bezier(0.22, 1, 0.36, 1)',
+          transform: 'translateZ(0)',
+          willChange: 'padding',
+          transition: 'padding 0.28s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
         <style>{`
@@ -604,9 +605,14 @@ export const StorefrontHeader = React.memo(function StorefrontHeader({
             background: #ffffff !important;
             border: 1px solid #e2e8f0 !important;
             box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04) !important;
-            transform: translate3d(0, 0, 0);
+            transform: translateZ(0);
+            will-change: max-width, padding, box-shadow;
             backface-visibility: hidden;
-            transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+            transition: max-width 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+                        padding 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+                        box-shadow 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+                        background-color 0.24s ease,
+                        border-color 0.24s ease !important;
           }
           .storefront-nav-desktop-row {
             display: flex;
@@ -678,39 +684,18 @@ export const StorefrontHeader = React.memo(function StorefrontHeader({
               display: none !important;
             }
             .storefront-sticky-header.is-scrolled {
-              padding: 5px 14px !important;
+              padding: 6px 16px !important;
             }
             .storefront-sticky-header.is-scrolled .storefront-navbar {
               max-width: 880px !important;
-              padding: 5px 12px !important;
-              gap: 8px !important;
+              padding: 6px 14px !important;
+              gap: 10px !important;
               background: rgba(255, 255, 255, 0.98) !important;
               backdrop-filter: blur(16px) !important;
               -webkit-backdrop-filter: blur(16px) !important;
               border-color: #cbd5e1 !important;
               border-radius: 14px !important;
               box-shadow: 0 10px 28px -6px rgba(15, 23, 42, 0.14), 0 4px 10px -2px rgba(15, 23, 42, 0.06) !important;
-            }
-            .storefront-sticky-header.is-scrolled .storefront-search-box {
-              height: 32px !important;
-            }
-            .storefront-sticky-header.is-scrolled .storefront-brand-avatar {
-              width: 28px !important;
-              height: 28px !important;
-            }
-            .storefront-sticky-header.is-scrolled .storefront-brand-title {
-              font-size: 13px !important;
-            }
-            .storefront-sticky-header.is-scrolled .storefront-orders-btn,
-            .storefront-sticky-header.is-scrolled .storefront-cart-btn {
-              height: 30px !important;
-              min-height: 30px !important;
-              padding: 0 8px !important;
-              font-size: 11px !important;
-            }
-            .storefront-sticky-header.is-scrolled .sf-lang-trigger-btn {
-              height: 30px !important;
-              min-height: 30px !important;
             }
           }
           @media (max-width: 768px) {
@@ -769,7 +754,9 @@ export const StorefrontHeader = React.memo(function StorefrontHeader({
           className="storefront-navbar storefront-header-shell"
           style={{
             maxWidth: isScrolled ? '880px' : 'var(--storefront-container, 1440px)',
-            transition: 'all 0.25s cubic-bezier(0.22, 1, 0.36, 1)',
+            transition: 'max-width 0.28s cubic-bezier(0.16, 1, 0.3, 1), padding 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s cubic-bezier(0.16, 1, 0.3, 1)',
+            willChange: 'max-width, padding, box-shadow',
+            transform: 'translateZ(0)',
           }}
         >
           {/* DESKTOP ROW (> 768px): Brand + Orders on Start, Centered Search, Cart + Lang on End */}

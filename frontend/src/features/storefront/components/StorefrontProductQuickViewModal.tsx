@@ -1,5 +1,6 @@
 import { useStorefrontLang } from '@/i18n';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { StorefrontProduct, StorefrontInfo } from '../types/storefront.types';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import {
@@ -286,7 +287,9 @@ export function StorefrontProductQuickViewModal({
     }, 300);
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
       dir={dir}
       className={`sf-quickview-backdrop ${isClosing ? 'is-closing' : 'is-opening'}`}
@@ -305,7 +308,13 @@ export function StorefrontProductQuickViewModal({
           '--ios-init-scale': `${originMetrics.scale}`,
         } as React.CSSProperties
       }
-      onClick={handleAnimatedClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleAnimatedClose();
+        }
+      }}
     >
       <style>{`
         @keyframes sfIosBackdropIn {
@@ -344,9 +353,12 @@ export function StorefrontProductQuickViewModal({
           background-color: rgba(15, 23, 42, 0.45);
           backdrop-filter: blur(8px);
           -webkit-backdrop-filter: blur(8px);
+          pointer-events: auto !important;
+          cursor: pointer;
         }
         .sf-quickview-backdrop.is-opening {
           animation: sfIosBackdropIn 0.15s ease forwards;
+          pointer-events: auto !important;
         }
         .sf-quickview-backdrop.is-closing {
           animation: sfIosBackdropOut 0.14s ease forwards;
@@ -355,6 +367,8 @@ export function StorefrontProductQuickViewModal({
         .sf-quickview-shell {
           will-change: transform, opacity;
           transform-origin: center center;
+          pointer-events: auto !important;
+          cursor: default;
         }
         .sf-quickview-backdrop.is-opening .sf-quickview-shell {
           animation: sfIosAppLaunchOpen 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
@@ -412,7 +426,11 @@ export function StorefrontProductQuickViewModal({
         >
           <button
             type="button"
-            onClick={handleAnimatedClose}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleAnimatedClose();
+            }}
             className="sf-quickview-ai-btn"
             aria-label={isEn ? 'Close' : 'إغلاق'}
             style={{
@@ -917,6 +935,7 @@ export function StorefrontProductQuickViewModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
