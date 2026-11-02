@@ -464,6 +464,36 @@ export function calculatePaidAmount(payments: Array<{ amount: number }>, digits:
   return roundCurrency(payments.reduce((sum, entry) => sum + Number(entry.amount || 0), 0), digits);
 }
 
+// Sale-edit guard: the header paid_amount must not exceed the sum of the
+// recorded sale_payments rows, compared at the tenant's book digits.
+// Comparing in cents falsely blocks a legitimate edit on a 3-decimal
+// tenant (two 0.004 payments record 0 cents while a 0.008 header rounds
+// to 1 cent). Digits are required, never a silent cents default. Each
+// leg is rounded once to minor units: stored amounts are at book digits,
+// so rounding is the identity on legitimate data and only guards float
+// noise. A non-finite leg blocks the edit (fail closed) instead of
+// being skipped, because an unmeasurable collection must never be
+// treated as reconciled.
+export function paidAmountExceedsRecordedPayments(
+  payments: Array<{ amount: number | string | null | undefined }>,
+  paidAmount: number | string | null | undefined,
+  digits: MoneyDigits,
+): boolean {
+  const factor = 10 ** digits;
+  const toMinorUnits = (value: number | string | null | undefined): number => {
+    // Nullish means "no amount" and counts as zero; NaN/Infinity must
+    // survive coercion (Number(NaN || 0) would silently become 0) so
+    // the non-finite check below can block the edit fail-closed.
+    const amount = Number(value ?? 0);
+    if (!Number.isFinite(amount)) return Number.NaN;
+    return Math.round(amount * factor);
+  };
+  const recorded = payments.reduce((sum, payment) => sum + toMinorUnits(payment.amount), 0);
+  const paid = toMinorUnits(paidAmount);
+  if (!Number.isFinite(recorded) || !Number.isFinite(paid)) return true;
+  return paid > recorded;
+}
+
 export function resolvePostedSalePaymentChannel(
   paymentType: 'cash' | 'credit',
   payments: Array<{ paymentChannel: 'cash' | 'card' | 'wallet' | 'instapay' }>,

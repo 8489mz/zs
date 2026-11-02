@@ -23,7 +23,7 @@ import { HeldSaleDto } from '../dto/held-sale.dto';
 import { PosAuditEventDto } from '../dto/pos-audit-event.dto';
 import { UpsertSaleDto, SalesOrderConversionRelease } from '../dto/upsert-sale.dto';
 import { normalizeSalePayload } from '../helpers/sales-payload.helper';
-import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateRemainingDebt, calculateRestoredStockQuantity, calculateStoreCreditBalance, resolvePostedSalePaymentChannel, restoreFrozenSaleLineCosts, roundSaleResidual } from '../helpers/sales-write.helper';
+import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateRemainingDebt, calculateRestoredStockQuantity, calculateStoreCreditBalance, paidAmountExceedsRecordedPayments, resolvePostedSalePaymentChannel, restoreFrozenSaleLineCosts, roundSaleResidual } from '../helpers/sales-write.helper';
 import { allocateSaleTenders, type SaleTenderChannel } from '../engines/sale-tender.engine';
 import { allocateInvoiceDiscount } from '../engines/invoice-discount.engine';
 import { resolveSaleTaxRate } from '../engines/sale-tax-rate.engine';
@@ -2478,10 +2478,8 @@ export class SalesWriteService {
         .where('sale_id', '=', saleId)
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .execute();
-      const recordedCheckoutCents = currentPayments.reduce((sum, payment) =>
-        sum + Math.round(Number(payment.amount || 0) * 100), 0);
       if (currentPayments.length > 0 &&
-          Math.round(Number(sale.paid_amount || 0) * 100) > recordedCheckoutCents) {
+          paidAmountExceedsRecordedPayments(currentPayments, sale.paid_amount, moneyDigits)) {
         throw new AppError('الفاتورة عليها تحصيلات إضافية لا يمكن عكسها بتعديل الفاتورة', 'SALE_EDIT_PAYMENT_RECONCILIATION_REQUIRED', 409);
       }
       if (currentPayments.length === 0 && Number(sale.paid_amount || 0) > 0 && sale.payment_channel === 'mixed') {

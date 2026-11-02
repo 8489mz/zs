@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { AppError } from '../../src/common/errors/app-error';
 import { applyStockDelta } from '../../src/common/utils/location-stock-ledger';
-import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculatePaidAmount, calculateRestoredStockQuantity, resolvePostedSalePaymentChannel, resolveSalePayments } from '../../src/modules/sales/helpers/sales-write.helper';
+import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculatePaidAmount, calculateRestoredStockQuantity, paidAmountExceedsRecordedPayments, resolvePostedSalePaymentChannel, resolveSalePayments } from '../../src/modules/sales/helpers/sales-write.helper';
 
 const STOCK_TEST_SCOPE = { tenantId: 'tenant-test', accountId: 'account-test' };
 
@@ -171,6 +171,21 @@ assert.deepEqual(resolveSalePayments('credit', [{ paymentChannel: 'cash', amount
 assert.deepEqual(resolveSalePayments('credit', [], 100), []);
 assert.deepEqual(resolveSalePayments('cash', [], 55), [{ paymentChannel: 'cash', amount: 55 }]);
 assert.equal(calculatePaidAmount([{ amount: 10 }, { amount: 5.255 }], 2), 15.26);
+
+// Sale-edit guard at book digits: two 0.004 payments plus a 0.008 header
+// must not block the edit on a 3-decimal tenant (cents netting blocked
+// it: 0 + 0 recorded cents vs 1 header cent), while a 0.009 header over
+// the same rows must block it. The same amounts at 2 digits would block,
+// because the digits — not the amounts alone — decide the answer.
+assert.equal(paidAmountExceedsRecordedPayments([{ amount: 0.004 }, { amount: 0.004 }], 0.008, 3), false);
+assert.equal(paidAmountExceedsRecordedPayments([{ amount: 0.004 }, { amount: 0.004 }], 0.009, 3), true);
+assert.equal(paidAmountExceedsRecordedPayments([{ amount: 0.004 }, { amount: 0.004 }], 0.008, 2), true);
+assert.equal(paidAmountExceedsRecordedPayments([{ amount: 100 }, { amount: 50 }], 150, 2), false);
+assert.equal(paidAmountExceedsRecordedPayments([{ amount: 100 }, { amount: 50 }], 149.99, 2), false);
+assert.equal(paidAmountExceedsRecordedPayments([{ amount: 100 }, { amount: 50 }], 150.01, 2), true);
+assert.equal(paidAmountExceedsRecordedPayments([{ amount: '100.125' }, { amount: null }], '100.125', 3), false);
+assert.equal(paidAmountExceedsRecordedPayments([{ amount: 100 }], Number.NaN, 2), true);
+assert.equal(paidAmountExceedsRecordedPayments([{ amount: Number.POSITIVE_INFINITY }], 100, 2), true);
 assert.equal(resolvePostedSalePaymentChannel('credit', []), 'credit');
 assert.equal(resolvePostedSalePaymentChannel('credit', [{ paymentChannel: 'cash' }]), 'cash');
 assert.equal(resolvePostedSalePaymentChannel('credit', [{ paymentChannel: 'cash' }, { paymentChannel: 'card' }]), 'mixed');
