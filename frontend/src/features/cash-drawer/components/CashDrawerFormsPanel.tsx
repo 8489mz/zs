@@ -834,8 +834,8 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
         <div className="cash-drawer-modal-scroll">
           <style>{`
             .cash-drawer-adaptive-dialog {
-              height: min(92vh, calc(100dvh - 24px)) !important;
-              max-height: min(92vh, calc(100dvh - 24px)) !important;
+              height: auto !important;
+              max-height: min(92vh, calc(100vh - 24px)) !important;
               display: flex !important;
               flex-direction: column !important;
               overflow: hidden !important;
@@ -845,18 +845,29 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
               touch-action: pan-y !important;
             }
             .cash-drawer-modal-scroll {
-              flex: 1 1 0% !important;
+              flex: 1 1 auto !important;
               min-height: 0 !important;
               overflow-y: auto !important;
               overscroll-behavior: contain !important;
               -webkit-overflow-scrolling: touch !important;
               touch-action: pan-y !important;
-              padding: 20px 24px 32px 24px;
+              padding: 20px 24px 24px 24px;
               box-sizing: border-box !important;
               width: 100% !important;
               display: flex;
               flex-direction: column;
               gap: 12px;
+            }
+            @media (max-width: 860px) {
+              .cash-drawer-adaptive-dialog {
+                height: min(92vh, calc(100dvh - 24px)) !important;
+                max-height: min(92vh, calc(100dvh - 24px)) !important;
+                width: calc(100vw - 16px) !important;
+              }
+              .cash-drawer-modal-scroll {
+                flex: 1 1 0% !important;
+                padding: 14px 16px 28px 16px !important;
+              }
             }
             .cash-drawer-form-title {
               margin: 0 0 16px 0;
