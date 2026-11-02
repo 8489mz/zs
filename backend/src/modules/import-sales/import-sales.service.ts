@@ -797,6 +797,28 @@ export class ImportSalesService {
   }
 
   async updateProject(tenantId: string, projectId: string, dto: UpdateImportProjectDto) {
+    // INV-IMPORT-PROJECT-PROFORMA-GUARDS: status never moves through
+    // the plain PATCH. Lifecycle transitions (close) run only through
+    // closeProject with its maker-checker approval and settlement
+    // checks; a PATCH-supplied status would bypass all of them.
+    if (dto.status !== undefined) {
+      throw new BadRequestException(
+        'لا يمكن تغيير حالة المشروع من هنا: إغلاق المشروع يتم فقط عبر مسار الإغلاق المعتمد. [IMPORT_PROJECT_STATUS_VIA_CLOSE_ONLY]',
+      );
+    }
+    if (dto.feasibilityData !== undefined) {
+      const current = await this.db
+        .selectFrom('import_projects')
+        .select('status')
+        .where('id', '=', projectId)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      if (current?.status === 'closed') {
+        throw new BadRequestException(
+          'لا يمكن تعديل دراسة جدوى مشروع مغلق: بيانات الدراسة مجمدة بعد الإغلاق. [IMPORT_PROJECT_CLOSED_FEASIBILITY_FROZEN]',
+        );
+      }
+    }
     const payload: any = { updated_at: sql`NOW()` };
     if (dto.title !== undefined) payload.title = dto.title.trim();
     if (dto.targetMarket !== undefined) payload.target_market = dto.targetMarket;
@@ -805,7 +827,6 @@ export class ImportSalesService {
     if (dto.budgetCurrency !== undefined) payload.budget_currency = dto.budgetCurrency;
     if (dto.allocatedCapital !== undefined) payload.allocated_capital = dto.allocatedCapital;
     if (dto.targetRoiPercentage !== undefined) payload.target_roi_percentage = dto.targetRoiPercentage;
-    if (dto.status !== undefined) payload.status = dto.status;
     if (dto.feasibilityData !== undefined) payload.feasibility_data = JSON.stringify(dto.feasibilityData);
     if (dto.notes !== undefined) payload.notes = dto.notes;
 
@@ -4346,6 +4367,33 @@ export class ImportSalesService {
   }
 
   async createProformaInvoice(tenantId: string, dto: CreateProformaInvoiceDto) {
+    // INV-IMPORT-PROJECT-PROFORMA-GUARDS: the supplier must exist in
+    // this tenant (the FK alone allows any tenant's supplier), and
+    // pi_number must be unique per tenant. The duplicate check is a
+    // service check only — no unique index exists, so concurrent
+    // creates can still race; that residual is recorded, not hidden.
+    const supplier = await this.db
+      .selectFrom('suppliers')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', Number(dto.supplierId))
+      .executeTakeFirst();
+    if (!supplier) {
+      throw new BadRequestException(
+        'المورد المحدد للفاتورة المبدئية غير موجود في هذه المنشأة. [IMPORT_PROFORMA_SUPPLIER_REQUIRED]',
+      );
+    }
+    const duplicate = await this.db
+      .selectFrom('import_proforma_invoices')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('pi_number', '=', dto.piNumber)
+      .executeTakeFirst();
+    if (duplicate) {
+      throw new BadRequestException(
+        `رقم الفاتورة المبدئية ${dto.piNumber} مستخدم بالفعل في هذه المنشأة. [IMPORT_PROFORMA_DUPLICATE_NUMBER]`,
+      );
+    }
     return await this.db
       .insertInto('import_proforma_invoices')
       .values({
@@ -4373,6 +4421,59 @@ export class ImportSalesService {
   }
 
   async updateProformaInvoice(tenantId: string, id: string, dto: Partial<CreateProformaInvoiceDto>) {
+    // INV-IMPORT-PROJECT-PROFORMA-GUARDS: a proforma freezes once
+    // money moved (any payment) or its PO was issued. Post-approval
+    // edits stay allowed while unpaid and PO-less: the established
+    // workflow approves first, then links catalog products into the
+    // items, then generates the PO.
+    const current = await this.db
+      .selectFrom('import_proforma_invoices')
+      .selectAll()
+      .where('id', '=', id)
+      .where('tenant_id', '=', tenantId)
+      .executeTakeFirstOrThrow();
+    const paid = Number(current.paid_amount_foreign || 0) > 0 ||
+      (current.payment_status && current.payment_status !== 'unpaid');
+    const poIssued = current.po_status === 'issued' || !!current.po_number;
+    if (poIssued) {
+      throw new BadRequestException(
+        'لا يمكن تعديل فاتورة مبدئية بعد إصدار أمر الشراء الخاص بها. [IMPORT_PROFORMA_FROZEN]',
+      );
+    }
+    if (paid) {
+      // The established workflow pays the proforma BEFORE its items
+      // are linked to catalog products (the e2e simulation settles
+      // the balance, then links items, then generates the PO), so an
+      // items-only update stays allowed after payment. Every money
+      // or identity field is frozen: changing the total after money
+      // moved would silently diverge the payment record. The PO
+      // generation re-validates the header total against the items,
+      // so an items edit cannot corrupt the PO either.
+      const moneyFieldsTouched =
+        dto.piNumber !== undefined || dto.piDate !== undefined ||
+        dto.currency !== undefined || dto.totalAmountForeign !== undefined ||
+        dto.incoterm !== undefined || dto.deliveryPort !== undefined ||
+        dto.paymentTerms !== undefined || dto.exchangeRateContract !== undefined ||
+        dto.advancePercentage !== undefined || dto.balancePercentage !== undefined;
+      if (moneyFieldsTouched) {
+        throw new BadRequestException(
+          'لا يمكن تعديل مبالغ أو بيانات فاتورة مبدئية بعد سداد أي دفعة؛ يُسمح فقط بربط الأصناف بالمنتجات. [IMPORT_PROFORMA_FROZEN]',
+        );
+      }
+    }
+    if (dto.piNumber && dto.piNumber !== current.pi_number) {
+      const duplicate = await this.db
+        .selectFrom('import_proforma_invoices')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('pi_number', '=', dto.piNumber)
+        .executeTakeFirst();
+      if (duplicate) {
+        throw new BadRequestException(
+          `رقم الفاتورة المبدئية ${dto.piNumber} مستخدم بالفعل في هذه المنشأة. [IMPORT_PROFORMA_DUPLICATE_NUMBER]`,
+        );
+      }
+    }
     const updates: any = {};
     if (dto.piNumber) updates.pi_number = dto.piNumber;
     if (dto.piDate) updates.pi_date = dto.piDate;
@@ -4397,6 +4498,35 @@ export class ImportSalesService {
   }
 
   async approveProformaInvoice(tenantId: string, userId: number, id: string) {
+    // INV-IMPORT-PROJECT-PROFORMA-GUARDS: approve only a draft with
+    // at least one validated item. Feasibility-style items (name +
+    // qty, no catalog productId yet) are valid — the catalog link
+    // happens after approval. Maker-checker (approver != creator)
+    // cannot be enforced: import_proforma_invoices has no
+    // created_by column, so the creator is unknowable here; that
+    // residual needs a migration and is recorded in the invariant.
+    const current = await this.db
+      .selectFrom('import_proforma_invoices')
+      .selectAll()
+      .where('id', '=', id)
+      .where('tenant_id', '=', tenantId)
+      .executeTakeFirstOrThrow();
+    if (current.status !== 'draft') {
+      throw new BadRequestException(
+        'لا يمكن اعتماد فاتورة مبدئية ليست في حالة مسودة. [IMPORT_PROFORMA_NOT_DRAFT]',
+      );
+    }
+    const rawItems = typeof current.items === 'string' ? JSON.parse(current.items || '[]') : (current.items || []);
+    const hasValidItem = Array.isArray(rawItems) && rawItems.some((item: any) => {
+      const qty = Number(item?.quantity ?? item?.qty);
+      const name = String(item?.name ?? item?.productName ?? '').trim();
+      return (Number.isFinite(qty) && qty > 0) || name.length > 0;
+    });
+    if (!hasValidItem) {
+      throw new BadRequestException(
+        'لا يمكن اعتماد فاتورة مبدئية بلا أصناف صالحة. [IMPORT_PROFORMA_NO_VALID_ITEMS]',
+      );
+    }
     return await this.db
       .updateTable('import_proforma_invoices')
       .set({
