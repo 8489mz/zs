@@ -302,7 +302,7 @@ export class ImportSalesController {
   async recordCapitalTransaction(
     @Req() req: RequestWithAuth,
     @Param('id') id: string,
-    @Body() dto: { type: 'DEPOSIT' | 'WITHDRAWAL'; amount: number; date: string; note?: string; accountId?: string }
+    @Body() dto: { type: 'DEPOSIT' | 'WITHDRAWAL'; amount: number; date: string; note?: string; accountId?: string; idempotencyKey?: string }
   ) {
     return this.importSalesService.recordCapitalTransaction(
       req.authContext!.tenantId!,

@@ -2263,6 +2263,7 @@ export interface ImportPartnerLedgerTable {
   note?: string | null;
   created_by?: number | null;
   created_at: Generated<Date>;
+  idempotency_key: string | null;
 }
 
 export interface ImportProjectPartnerTable {

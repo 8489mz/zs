@@ -499,19 +499,11 @@ export class ImportSalesService {
       throw new BadRequestException('يلزم تحديد حساب بنك أو خزينة معتمد لإثبات إيداع رأس مال الشريك.');
     }
 
+    // The global profit_share_percentage on import_partners is a
+    // legacy field: distribution reads the per-project pool in
+    // import_project_partners, which enforces its own <= 100.001
+    // ceiling per project. No global sum is enforced here.
     return await this.db.transaction().execute(async (trx) => {
-      // Serialize creation / percentage edits across all partners of this tenant.
-      await trx.selectFrom('tenants').select('id')
-        .where('id', '=', tenantId).forUpdate().executeTakeFirstOrThrow();
-
-      const existing = await trx.selectFrom('import_partners')
-        .select(sql<number>`coalesce(sum(profit_share_percentage), 0)`.as('total_percentage'))
-        .where('tenant_id', '=', tenantId)
-        .executeTakeFirst();
-      if (Number(existing?.total_percentage || 0) + cleanPercentage > 100.001) {
-        throw new BadRequestException('مجموع نسب الشركاء سيتجاوز 100%.');
-      }
-
       const partner = await trx.insertInto('import_partners').values({
         tenant_id: tenantId,
         name: name.trim(),
@@ -529,6 +521,7 @@ export class ImportSalesService {
           transaction_date: new Date(),
           note: 'إيداع رأس مال افتتاحي',
           created_by: userId,
+          idempotency_key: null,
         }).returning('id').executeTakeFirstOrThrow();
 
         await this.postPartnerCapitalMovement(
@@ -575,15 +568,6 @@ export class ImportSalesService {
           throw new BadRequestException('لا يمكن تعديل نسبة شريك بعد توزيع أرباح فعلية دون نظام نسب تاريخية معتمد.');
         }
 
-        const existing = await trx.selectFrom('import_partners')
-          .select(sql<number>`coalesce(sum(profit_share_percentage), 0)`.as('total_percentage'))
-          .where('tenant_id', '=', tenantId)
-          .where('id', '!=', id)
-          .executeTakeFirst();
-        const otherTotal = Number(existing?.total_percentage || 0);
-        if (otherTotal + Number(percentage) > 100.001) {
-          throw new BadRequestException(`مجموع نسب الشركاء سيتجاوز 100% (باقي الشركاء: ${otherTotal}%).`);
-        }
       }
 
       let updateData: any = {};
@@ -770,6 +754,20 @@ export class ImportSalesService {
       }
 
       if (dto.partners && Array.isArray(dto.partners) && dto.partners.length > 0) {
+        // The per-project pool is authoritative: its percentages
+        // must each lie in 0..100 and sum to <= 100.001, the same
+        // ceiling setProjectPartners enforces.
+        let projectPercentageTotal = 0;
+        for (const p of dto.partners) {
+          const pct = Number(p.profitPercentage || 0);
+          if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+            throw new BadRequestException('نسبة ربح الشريك في المشروع يجب أن تكون بين 0% و 100%.');
+          }
+          projectPercentageTotal += pct;
+        }
+        if (projectPercentageTotal > 100.001) {
+          throw new BadRequestException(`مجموع نسب شركاء المشروع (${projectPercentageTotal}%) يتجاوز 100%.`);
+        }
         for (const p of dto.partners) {
           let partnerId = p.partnerId;
           const partnerName = (p as any).name?.trim();
@@ -1456,8 +1454,31 @@ export class ImportSalesService {
         .where('tenant_id', '=', tenantId).where('id', '=', dto.projectId).executeTakeFirst();
       if (!project || project.status === 'closed') throw new BadRequestException('مشروع الاستيراد غير متاح لهذه المنشأة.');
     }
-    const result = await this.db
-      .insertInto('import_shipments')
+    // Same container on the same bill of lading is the same
+    // shipment recorded twice. One B/L legitimately covers many
+    // containers, and container numbers are reused over time, so
+    // neither identifier is unique alone; the pair is the
+    // duplicate. The existing unique index on (tenant_id,
+    // container_number) is the race backstop via the 23505 catch
+    // below (createShipment holds no transaction).
+    const containerNo = dto.containerNumber?.trim();
+    const bolNo = dto.billOfLading?.trim();
+    if (containerNo && bolNo) {
+      const duplicate = await this.db
+        .selectFrom('import_shipments')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where(sql<boolean>`btrim(container_number) = ${containerNo}`)
+        .where(sql<boolean>`btrim(bill_of_lading) = ${bolNo}`)
+        .executeTakeFirst();
+      if (duplicate) {
+        throw new ConflictException(`الحاوية (${containerNo}) مسجلة بالفعل على نفس بوليصة الشحن (${bolNo}) لهذه المنشأة.`);
+      }
+    }
+    let result;
+    try {
+      result = await this.db
+        .insertInto('import_shipments')
       .values({
         tenant_id: tenantId,
         container_number: dto.containerNumber,
@@ -1489,6 +1510,12 @@ export class ImportSalesService {
       })
       .returningAll()
       .executeTakeFirstOrThrow();
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        throw new ConflictException(`رقم الحاوية (${containerNo || dto.containerNumber}) مسجل بالفعل لهذه المنشأة.`);
+      }
+      throw err;
+    }
     return result;
   }
 
@@ -3638,7 +3665,7 @@ export class ImportSalesService {
     tenantId: string,
     userId: number,
     partnerId: string,
-    dto: { type: 'DEPOSIT' | 'WITHDRAWAL'; amount: number; date: string; note?: string; accountId?: string }
+    dto: { type: 'DEPOSIT' | 'WITHDRAWAL'; amount: number; date: string; note?: string; accountId?: string; idempotencyKey?: string }
   ) {
     const cleanAmount = Number(dto.amount);
     const movementDate = new Date(dto.date);
@@ -3671,19 +3698,50 @@ export class ImportSalesService {
         );
       }
 
-      const ledgerInsert = await trx
-        .insertInto('import_partner_ledger')
-        .values({
-          tenant_id: tenantId,
-          partner_id: partnerId,
-          type: dto.type,
-          amount: cleanAmount,
-          transaction_date: dto.date,
-          note: dto.note || '',
-          created_by: userId,
-        })
-        .returning('id')
-        .executeTakeFirstOrThrow();
+      // Optional idempotency key (same pattern as the deposit /
+      // preorder refund paths): a supplied key is checked before
+      // the insert, and the partial unique index serialises
+      // concurrent retries. Without a key the call behaves exactly
+      // as before.
+      const capitalKey = dto.idempotencyKey ? String(dto.idempotencyKey).trim() : '';
+      if (capitalKey.length > 128) {
+        throw new BadRequestException('مفتاح عدم التكرار لحركة رأس المال يجب ألا يتجاوز 128 حرفاً.');
+      }
+      if (capitalKey) {
+        const previousMovement = await trx
+          .selectFrom('import_partner_ledger')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('partner_id', '=', partnerId)
+          .where('idempotency_key', '=', capitalKey)
+          .executeTakeFirst();
+        if (previousMovement) {
+          throw new ConflictException('تم تسجيل حركة رأس المال هذه مسبقاً بنفس مفتاح عدم التكرار.');
+        }
+      }
+
+      let ledgerInsert;
+      try {
+        ledgerInsert = await trx
+          .insertInto('import_partner_ledger')
+          .values({
+            tenant_id: tenantId,
+            partner_id: partnerId,
+            type: dto.type,
+            amount: cleanAmount,
+            transaction_date: dto.date,
+            note: dto.note || '',
+            created_by: userId,
+            idempotency_key: capitalKey || null,
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+      } catch (err: any) {
+        if (err?.code === '23505') {
+          throw new ConflictException('تم تسجيل حركة رأس المال هذه مسبقاً بنفس مفتاح عدم التكرار.');
+        }
+        throw err;
+      }
 
       const sign = dto.type === 'DEPOSIT' ? '+' : '-';
       await trx
@@ -3727,7 +3785,16 @@ export class ImportSalesService {
         dto.unitWeightKg !== undefined || dto.unitCbm !== undefined;
       if (stockEdit) {
         this.assertShipmentEditable(state);
-        if (dto.receivedQuantity !== undefined) payload.received_quantity = requireImportNumber(dto.receivedQuantity, 'الكمية المستلمة');
+        if (dto.receivedQuantity !== undefined) {
+          payload.received_quantity = requireImportNumber(dto.receivedQuantity, 'الكمية المستلمة');
+          // validateImportLine precedent: receiving more than the
+          // B/L quantity, or beyond 3-decimal stock precision, is
+          // rejected, never silently clamped.
+          const receivedQty = Number(payload.received_quantity);
+          if (receivedQty > Number(item.quantity) || Math.abs(receivedQty - Number(receivedQty.toFixed(3))) > 1e-9) {
+            throw new BadRequestException('الكمية المستلمة تتجاوز البوليصة أو دقة المخزون (3 منازل)');
+          }
+        }
         if (dto.shortageHandlingMethod !== undefined) payload.shortage_handling_method = dto.shortageHandlingMethod;
         if (dto.unitWeightKg !== undefined) payload.gross_weight_kg_unit = requireImportNumber(dto.unitWeightKg, 'وزن الوحدة');
         if (dto.unitCbm !== undefined) payload.cbm_unit = requireImportNumber(dto.unitCbm, 'حجم الوحدة');

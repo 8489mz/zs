@@ -530,6 +530,7 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
       transaction_date DATE NOT NULL,
       note TEXT,
       created_by BIGINT,
+      idempotency_key TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
