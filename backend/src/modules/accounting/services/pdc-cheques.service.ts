@@ -949,7 +949,11 @@ export class PdcChequesService {
         customer_id: customerId,
         entry_type: entryType,
         amount: amount,
-        balance_after: Number(Number(updated.balance).toFixed(2)),
+        // Exact returned balance, never re-rounded: the partner balance
+        // is a SQL increment of book-digit amounts, and balance_after
+        // must equal it (partner-subledger precedent). toFixed(2)
+        // diverged by up to 0.005 on 3-decimal tenants.
+        balance_after: Number(updated.balance),
         note: note,
         reference_type: 'pdc_cheque',
         reference_id: chequeId,
@@ -994,7 +998,9 @@ export class PdcChequesService {
         supplier_id: supplierId,
         entry_type: entryType,
         amount: amount,
-        balance_after: Number(Number(updated.balance).toFixed(2)),
+        // Exact returned balance, never re-rounded: see the customer
+        // sync above (partner-subledger precedent).
+        balance_after: Number(updated.balance),
         note: note,
         reference_type: 'pdc_cheque',
         reference_id: chequeId,
