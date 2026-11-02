@@ -124,7 +124,6 @@ export function StorefrontCartDrawer({
           willChange: 'transform, opacity',
           animation: 'sfAppleSlideInRight 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards',
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Minimalist Centered Top Bar */}
         <div
