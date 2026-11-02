@@ -5420,7 +5420,7 @@ export class AccountingPostingService {
     }
   }
 
-  private async exactPdcReversalSource(queryable: DbOrTx, tenantId: string, candidateId: number | null, lines: JournalLineDraft[]): Promise<number | null> {
+  private async exactPdcReversalSource(queryable: DbOrTx, tenantId: string, candidateId: number | null, lines: JournalLineDraft[], digits: MoneyDigits): Promise<number | null> {
     if (!candidateId) return null;
     const header = await queryable.selectFrom('journal_entries').select('id').where('tenant_id', '=', tenantId)
       .where('id', '=', candidateId).where('status', '=', 'posted').where('reversed_by_entry_id', 'is', null).forUpdate().executeTakeFirst();
@@ -5428,7 +5428,7 @@ export class AccountingPostingService {
     const prior = await queryable.selectFrom('journal_entry_lines').selectAll().where('tenant_id', '=', tenantId).where('journal_entry_id', '=', candidateId).execute();
     const original = prior.map(line => ({ accountId: Number(line.account_id), debit: Number(line.debit), credit: Number(line.credit),
       partnerType: line.partner_type, partnerId: line.partner_id, branchId: line.branch_id, locationId: line.location_id, costCenterId: line.cost_center_id }));
-    return areOppositeJournalLines(original, lines) ? candidateId : null;
+    return areOppositeJournalLines(original, lines, digits) ? candidateId : null;
   }
 
   async postPdcChequeCancelOrReturn(
@@ -5513,7 +5513,7 @@ export class AccountingPostingService {
     }
 
     const actionText = action === 'cancel' ? 'إلغاء' : 'رد';
-    const reversalOfEntryId = await this.exactPdcReversalSource(queryable, scope.tenantId, Number(cheque.journal_entry_id) || null, lines);
+    const reversalOfEntryId = await this.exactPdcReversalSource(queryable, scope.tenantId, Number(cheque.journal_entry_id) || null, lines, bookDigits);
     const entryId = await this.insertPostedJournal(queryable, {
       sourceType: `pdc_cheque_${action}`,
       sourceId: chequeId,
@@ -5625,7 +5625,7 @@ export class AccountingPostingService {
       .orderBy('id', 'desc')
       .executeTakeFirst();
 
-    const reversalOfEntryId = await this.exactPdcReversalSource(queryable, scope.tenantId, Number(priorEntry?.id) || null, lines);
+    const reversalOfEntryId = await this.exactPdcReversalSource(queryable, scope.tenantId, Number(priorEntry?.id) || null, lines, bookDigits);
     const entryId = await this.insertPostedJournal(queryable, {
       sourceType: 'pdc_cheque_restore',
       sourceId: chequeId,

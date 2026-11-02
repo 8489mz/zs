@@ -60,11 +60,35 @@ const restore = [
   { accountId: 2, debit: 100, credit: 0 },
   { accountId: 1, debit: 0, credit: 100, partnerType: 'customer', partnerId: 7 },
 ];
-assert.equal(areOppositeJournalLines(bounce, restore), true);
-assert.equal(areOppositeJournalLines(bounce, restore.map(line => ({ ...line, partnerId: line.partnerType === 'customer' ? 8 : null }))), false);
+assert.equal(areOppositeJournalLines(bounce, restore, 2), true);
+assert.equal(areOppositeJournalLines(bounce, restore.map(line => ({ ...line, partnerId: line.partnerType === 'customer' ? 8 : null })), 2), false);
 // Restoring custody leaves bank fees incurred; it cannot claim to fully reverse them.
-assert.equal(areOppositeJournalLines([...bounce, { accountId: 3, debit: 10, credit: 0 }, { accountId: 4, debit: 0, credit: 10 }], restore), false);
-assert.equal(areOppositeJournalLines(bounce, [{ accountId: 5, debit: 100, credit: 0 }, restore[1]]), false);
+assert.equal(areOppositeJournalLines([...bounce, { accountId: 3, debit: 10, credit: 0 }, { accountId: 4, debit: 0, credit: 10 }], restore, 2), false);
+assert.equal(areOppositeJournalLines(bounce, [{ accountId: 5, debit: 100, credit: 0 }, restore[1]], 2), false);
+// A reversal link is exact at the tenant's book digits, never in cents: at
+// 3 digits 0.011 vs 0.009 differ by 2 fils and must not link, while 0.011
+// vs 0.006 + 0.005 offsets exactly and must link. The old cents netting
+// answered both cases backwards. The same amounts at 2 digits round to
+// the same cent, so the digits — not the amounts alone — decide the answer.
+const threeDpOriginal = [
+  { accountId: 1, debit: 0.011, credit: 0 },
+  { accountId: 2, debit: 0, credit: 0.011 },
+];
+const threeDpShort = [
+  { accountId: 1, debit: 0, credit: 0.009 },
+  { accountId: 2, debit: 0.009, credit: 0 },
+];
+const threeDpSplit = [
+  { accountId: 1, debit: 0, credit: 0.006 },
+  { accountId: 1, debit: 0, credit: 0.005 },
+  { accountId: 2, debit: 0.006, credit: 0 },
+  { accountId: 2, debit: 0.005, credit: 0 },
+];
+assert.equal(areOppositeJournalLines(threeDpOriginal, threeDpShort, 3), false);
+assert.equal(areOppositeJournalLines(threeDpOriginal, threeDpSplit, 3), true);
+assert.equal(areOppositeJournalLines(threeDpOriginal, threeDpShort, 2), true);
+assert.equal(areOppositeJournalLines([], restore, 2), false);
+assert.equal(areOppositeJournalLines(bounce, [{ accountId: 2, debit: 100, credit: 0 }, { accountId: 1, debit: 0, credit: Number.NaN, partnerType: 'customer', partnerId: 7 }], 2), false);
 
 // Principal 100, two payments of 60: total interest 20 is earned over time.
 assert.deepEqual(allocateInstallmentInterest(100, [60, 60], 20, 2), [13.07, 6.93]);
