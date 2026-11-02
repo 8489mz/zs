@@ -19,9 +19,38 @@ body.dialog-shell-open .pos-body {
 }
 
 .dialog-overlay,
-.dialog-shell {
+.dialog-shell,
+.sf-quickview-backdrop,
+.sf-quickview-shell,
+.sf-apple-modal-overlay,
+.sf-apple-modal-shell,
+.storefront-quickview-modal,
+.storefront-live-cart-backdrop,
+.storefront-live-cart-fullsheet,
+.storefront-checkout-modal-backdrop,
+.storefront-checkout-modal-container,
+.storefront-review-modal-backdrop,
+.storefront-review-modal-shell,
+.storefront-policy-modal-backdrop,
+.storefront-policy-modal-shell,
+.storefront-online-payment-backdrop,
+.storefront-online-payment-shell,
+.storefront-cart-drawer-backdrop,
+.storefront-cart-drawer-shell,
+[data-storefront-overlay],
+[data-storefront-modal],
+[data-storefront-drawer] {
   pointer-events: auto !important;
   touch-action: pan-y !important;
+}
+
+.storefront-live-cart-backdrop *,
+.storefront-checkout-modal-backdrop *,
+.storefront-review-modal-backdrop *,
+.storefront-policy-modal-backdrop *,
+.storefront-online-payment-backdrop *,
+.sf-quickview-backdrop * {
+  pointer-events: auto;
 }
 
 /* Global dialog shell positioning

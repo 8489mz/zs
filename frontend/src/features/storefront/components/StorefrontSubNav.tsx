@@ -38,16 +38,16 @@ export function StorefrontSubNav({
       className="storefront-subnav"
       dir={dir}
       style={{
-        background: 'rgba(255, 255, 255, 0.92)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        borderBottom: '1px solid #e2e8f0',
-        padding: '8px 20px',
+        background: '#ffffff',
+        border: '1px solid #edf1f7',
+        borderRadius: '16px',
+        boxShadow: '0 2px 10px rgba(15, 23, 42, 0.03)',
+        padding: '8px 14px',
         position: 'relative',
         zIndex: 85,
-        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.03)',
         width: '100%',
-        maxWidth: '100vw',
+        maxWidth: '100%',
+        margin: '0 0 12px 0',
         boxSizing: 'border-box',
         direction: dir,
       }}
@@ -99,8 +99,8 @@ export function StorefrontSubNav({
       <div
         className="storefront-subnav-inner storefront-subnav-shell"
         style={{
-          maxWidth: 'var(--storefront-container, 1440px)',
-          margin: '0 auto',
+          width: '100%',
+          maxWidth: '100%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',

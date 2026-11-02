@@ -107,9 +107,9 @@ export function StorefrontCategoryShowcase({
         boxShadow: '0 4px 18px rgba(15, 23, 42, 0.03)',
         padding: '14px 14px',
         direction: dir,
-        maxWidth: 'var(--storefront-container, 1440px)',
-        margin: '18px auto 12px',
-        width: 'calc(100% - 32px)',
+        maxWidth: '100%',
+        margin: '0 0 16px 0',
+        width: '100%',
         boxSizing: 'border-box',
         display: 'flex',
         alignItems: 'center',
@@ -164,18 +164,18 @@ export function StorefrontCategoryShowcase({
         }
         @media (max-width: 920px) {
           .storefront-cat-showcase {
-            margin: 14px auto 10px !important;
+            margin: 0 0 12px 0 !important;
           }
         }
         @media (max-width: 768px) {
           .storefront-cat-showcase {
             width: 100% !important;
-            margin: 6px auto 6px !important;
+            margin: 0 0 8px 0 !important;
             border-radius: 0 !important;
             background: transparent !important;
             border: none !important;
             box-shadow: none !important;
-            padding: 4px 14px 2px !important;
+            padding: 4px 0 2px !important;
             display: flex !important;
             flex-direction: column !important;
             align-items: stretch !important;

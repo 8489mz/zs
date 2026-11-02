@@ -1,6 +1,7 @@
 import { useStorefrontLang } from '@/i18n';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { StorefrontProduct, StorefrontReview } from '../types/storefront.types';
 import { storefrontApi } from '../api/storefront.api';
 import { IconStar, IconClose } from './StorefrontIcons';
@@ -127,9 +128,12 @@ export function StorefrontReviewModal({
     }
   };
 
-  return (
+  if (!isOpen) return null;
+
+  const reviewModalContent = (
     <div
       dir={dir}
+      className="storefront-review-modal-backdrop"
       style={{
         position: 'fixed',
         inset: 0,
@@ -142,10 +146,18 @@ export function StorefrontReviewModal({
         justifyContent: 'center',
         padding: '16px',
         animation: 'sfAppleBackdropIn 0.16s cubic-bezier(0.22, 1, 0.36, 1) forwards',
+        pointerEvents: 'auto',
       }}
-      onClick={onClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+          e.stopPropagation();
+          onClose();
+        }
+      }}
     >
       <div
+        className="storefront-review-modal-shell"
         style={{
           background: '#ffffff',
           borderRadius: '20px',
@@ -158,6 +170,7 @@ export function StorefrontReviewModal({
           position: 'relative',
           willChange: 'transform, opacity',
           animation: 'sfAppleSpringOpen 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards',
+          pointerEvents: 'auto',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -552,4 +565,7 @@ export function StorefrontReviewModal({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(reviewModalContent, document.body);
 }

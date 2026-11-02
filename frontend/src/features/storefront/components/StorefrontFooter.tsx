@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useStorefrontLang } from '@/i18n';
 import { useBodyScrollLock } from '@/shared/components/dialog-shell';
 import type { StorefrontInfo } from '../types/storefront.types';
@@ -632,9 +633,16 @@ export function StorefrontFooter({
       </div>
 
       {/* Policy Modal */}
-      {activePolicy && (
+      {activePolicy && typeof document !== 'undefined' && createPortal(
         <div
-          onClick={() => setActivePolicy(null)}
+          className="storefront-policy-modal-backdrop"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              e.preventDefault();
+              e.stopPropagation();
+              setActivePolicy(null);
+            }
+          }}
           style={{
             position: 'fixed',
             inset: 0,
@@ -646,9 +654,11 @@ export function StorefrontFooter({
             zIndex: 9999,
             padding: '16px',
             boxSizing: 'border-box',
+            pointerEvents: 'auto',
           }}
         >
           <div
+            className="storefront-policy-modal-shell"
             onClick={(e) => e.stopPropagation()}
             dir={dir}
             style={{
@@ -661,6 +671,7 @@ export function StorefrontFooter({
               boxShadow: '0 20px 40px rgba(15, 23, 42, 0.16)',
               position: 'relative',
               direction: dir,
+              pointerEvents: 'auto',
             }}
           >
             <div
@@ -676,7 +687,11 @@ export function StorefrontFooter({
               </h3>
               <button
                 type="button"
-                onClick={() => setActivePolicy(null)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setActivePolicy(null);
+                }}
                 style={{
                   background: '#f8fafc',
                   border: '1px solid #e2e8f0',
@@ -709,7 +724,8 @@ export function StorefrontFooter({
               {activePolicy.content}
             </p>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </footer>
   );

@@ -1,5 +1,6 @@
 import { useStorefrontLang } from '@/i18n';
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { CartItem, StorefrontInfo, StorefrontProduct } from '../types/storefront.types';
 import { StorefrontLiveCartItem } from './StorefrontLiveCartItem';
 import { IconShoppingCart } from './StorefrontIcons';
@@ -102,9 +103,10 @@ export function StorefrontLiveCartDock({
   if (!isOpen) return null;
 
   // Case 2: Expanded State -> Brand New Modern Minimalist Cart Sheet (Nike / Apple Inspired)
-  return (
+  const cartContent = (
     <div
       dir={dir}
+      className="storefront-live-cart-backdrop"
       style={{
         position: 'fixed',
         inset: 0,
@@ -117,8 +119,15 @@ export function StorefrontLiveCartDock({
         alignItems: 'stretch',
         animation: 'sfAppleBackdropIn 0.16s cubic-bezier(0.22, 1, 0.36, 1) forwards',
         fontFamily: 'inherit',
+        pointerEvents: 'auto',
       }}
-      onClick={onClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+          e.stopPropagation();
+          onClose();
+        }
+      }}
     >
       <style>{`
         @keyframes liveCartSlideInRight {
@@ -152,6 +161,7 @@ export function StorefrontLiveCartDock({
           willChange: 'transform, opacity',
           animation: 'liveCartSlideInRight 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards',
           overflow: 'hidden',
+          pointerEvents: 'auto',
         }}
       >
         {/* Minimalist Centered Top Bar (Soft Squircle Back/Close Button, Centered Title, Squircle Clear Button) */}
@@ -168,7 +178,11 @@ export function StorefrontLiveCartDock({
           {/* Right Soft Squircle Button: Close / Back */}
           <button
             type="button"
-            onClick={onClose}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onClose();
+            }}
             title={t('storefront.storefront_live_cart_dock.s3', 'تصغير ومتابعة التسوق')}
             style={{
               width: '36px',
@@ -520,5 +534,8 @@ export function StorefrontLiveCartDock({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(cartContent, document.body);
 }
 

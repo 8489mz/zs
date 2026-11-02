@@ -1,5 +1,6 @@
 import { useStorefrontLang } from '@/i18n';
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { getCurrencySymbol, isThreeDecimalCurrency } from '@/lib/currencies';
 import { XIcon, Trash2Icon } from '@/shared/components/icons/AppIcons';
 import { CartItem, StorefrontInfo } from '../types/storefront.types';
@@ -80,8 +81,11 @@ export function StorefrontCartDrawer({
   const total = subtotal + deliveryFee;
   const isMinOrderMet = minOrder <= 0 || subtotal >= minOrder;
 
-  return (
+  if (!isOpen) return null;
+
+  const drawerContent = (
     <div
+      className="storefront-cart-drawer-backdrop"
       style={{
         position: 'fixed',
         inset: 0,
@@ -92,16 +96,26 @@ export function StorefrontCartDrawer({
         backdropFilter: 'blur(8px)',
         WebkitBackdropFilter: 'blur(8px)',
         animation: 'sfAppleBackdropIn 0.16s cubic-bezier(0.22, 1, 0.36, 1) forwards',
+        pointerEvents: 'auto',
       }}
-      onClick={onClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+          e.stopPropagation();
+          onClose();
+        }
+      }}
     >
       <div
         dir={dir}
+        className="storefront-cart-drawer-shell"
+        onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
           maxWidth: '410px',
           height: '100%',
           background: '#ffffff',
+          pointerEvents: 'auto',
           boxShadow: '-20px 0 50px rgba(15, 23, 42, 0.16)',
           display: 'flex',
           flexDirection: 'column',
@@ -559,6 +573,9 @@ export function StorefrontCartDrawer({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(drawerContent, document.body);
 }
 
 

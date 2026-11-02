@@ -1,6 +1,7 @@
 import { useStorefrontLang } from '@/i18n';
 import { getCurrencySymbol, getGlobalSystemCurrency, isThreeDecimalCurrency, isKuwait, isSaudi } from '@/lib/currencies';
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { CreateOnlineOrderResponse, StorefrontPaymentSessionResponse } from '../types/storefront.types';
 import { storefrontApi } from '../api/storefront.api';
 import { ShieldCheckIcon, XIcon, AlertCircleIcon, CreditCardIcon, CheckIcon } from '@/shared/components/icons/AppIcons';
@@ -115,9 +116,12 @@ export function StorefrontOnlinePaymentModal({
     }
   };
 
-  return (
+  if (!isOpen) return null;
+
+  const paymentModalContent = (
     <div
       dir={dir}
+      className="storefront-online-payment-backdrop"
       style={{
         position: 'fixed',
         inset: 0,
@@ -130,9 +134,19 @@ export function StorefrontOnlinePaymentModal({
         padding: '16px',
         overscrollBehavior: 'contain',
         animation: 'fadeIn 0.2s ease',
+        pointerEvents: 'auto',
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+          e.stopPropagation();
+          onClose();
+        }
       }}
     >
       <div
+        className="storefront-online-payment-shell"
+        onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
           maxWidth: isLiveIframe ? '640px' : '460px',
@@ -142,6 +156,7 @@ export function StorefrontOnlinePaymentModal({
           boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.3)',
           overflow: 'hidden',
           display: 'flex',
+          pointerEvents: 'auto',
           flexDirection: 'column',
           border: '1px solid #cbd5e1',
         }}
@@ -582,4 +597,7 @@ export function StorefrontOnlinePaymentModal({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(paymentModalContent, document.body);
 }

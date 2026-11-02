@@ -3,6 +3,7 @@ import { useStorefrontLang } from '@/i18n';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { getGlobalCurrencySymbol, getCurrencySymbol, isThreeDecimalCurrency } from '@/lib/currencies';
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { CartItem, CreateOnlineOrderResponse, StorefrontInfo, ValidateCouponResponse, StorefrontPaymentSessionResponse, QuoteCartResponse } from '../types/storefront.types';
 import { storefrontApi } from '../api/storefront.api';
 import { StorefrontOnlinePaymentModal } from './StorefrontOnlinePaymentModal';
@@ -790,8 +791,11 @@ export function StorefrontCheckoutModal({
     }
   };
 
-  return (
+  if (!isOpen) return null;
+
+  const checkoutModalContent = (
     <div
+      className="storefront-checkout-modal-backdrop"
       style={{
         position: 'fixed',
         inset: 0,
@@ -806,8 +810,15 @@ export function StorefrontCheckoutModal({
         overflowY: 'auto',
         WebkitOverflowScrolling: 'touch',
         animation: 'sfAppleBackdropIn 0.16s cubic-bezier(0.22, 1, 0.36, 1) forwards',
+        pointerEvents: 'auto',
       }}
-      onClick={handleModalClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleModalClose();
+        }
+      }}
     >
       <div
         dir={dir}
@@ -828,6 +839,7 @@ export function StorefrontCheckoutModal({
           direction: dir,
           willChange: 'transform, opacity',
           animation: 'sfAppleSpringOpen 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards',
+          pointerEvents: 'auto',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -2286,4 +2298,7 @@ export function StorefrontCheckoutModal({
     )}
   </div>
 );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(checkoutModalContent, document.body);
 }
