@@ -3735,16 +3735,40 @@ export class SalesWriteService {
           .reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
         : sale.payment_channel === 'cash' ? originalPaid : 0;
       if (cashRefundTotal > 0) {
-        // Cash refunds belong to the shift that ACTUALLY pays the customer,
-        // not the original checkout shift. Without this link, cross-shift
-        // cancellation silently understates cash withdrawn today.
+        // INV-CROSS-SHIFT-CANCEL-CASH-ATTRIBUTION: the refund belongs
+        // to the shift that took the sale's cash — the opener's shift
+        // whose window contains the sale, branch-scoped like the
+        // fallback lookup and hasOpenCashierShift (one open shift
+        // per user, so the creator's open shift on the branch is
+        // the drawer that took the cash) — so that shift nets the
+        // restored receipt (computeShiftCancelledSaleCashReceipts)
+        // against the refund and the cancelling shift is untouched.
+        // Only when that original shift is closed (its stored
+        // expected cash is frozen and never restated) does the refund
+        // fall back to the cancelling user's latest open shift on the
+        // branch, as before; admins with no open shift keep the
+        // sale-linked row.
+        const originalCashShift = Number(sale.created_by || 0) > 0 && sale.created_at
+          ? await trx.selectFrom('cashier_shifts').select(['id', 'status'])
+            .where('tenant_id', '=', scope.tenantId)
+            .where('opened_by', '=', Number(sale.created_by))
+            .where('created_at', '<=', sale.created_at)
+            .where(sql<boolean>`(closed_at is null or closed_at >= ${sale.created_at})`)
+            .where(sql<boolean>`(${sale.branch_id}::int is null or branch_id is null or branch_id = ${sale.branch_id})`)
+            .orderBy('id', 'desc').forUpdate().executeTakeFirst()
+          : undefined;
         const refundShiftQuery = trx.selectFrom('cashier_shifts').select('id')
           .where('opened_by', '=', auth.userId).where('status', '=', 'open')
           .where('tenant_id', '=', scope.tenantId);
-        const refundShift = await (sale.branch_id == null
-          ? refundShiftQuery.where('branch_id', 'is', null)
-          : refundShiftQuery.where('branch_id', '=', sale.branch_id))
-          .orderBy('id', 'desc').forUpdate().executeTakeFirst();
+        const fallbackShift = originalCashShift && String(originalCashShift.status || '') === 'open'
+          ? undefined
+          : await (sale.branch_id == null
+            ? refundShiftQuery.where('branch_id', 'is', null)
+            : refundShiftQuery.where('branch_id', '=', sale.branch_id))
+            .orderBy('id', 'desc').forUpdate().executeTakeFirst();
+        const refundShift = originalCashShift && String(originalCashShift.status || '') === 'open'
+          ? originalCashShift
+          : fallbackShift;
         if (!refundShift && !['admin', 'super_admin'].includes(auth.role)) {
           throw new AppError('يجب فتح وردية على الفرع قبل رد نقدية فاتورة ملغاة', 'OPEN_SHIFT_REQUIRED', 400);
         }
