@@ -208,6 +208,7 @@ export default function ShipmentDetailsPage() {
   const [reversalReason, setReversalReason] = useState('');
   const [resolveApprovalId, setResolveApprovalId] = useState('');
   const [resolveReason, setResolveReason] = useState('');
+  const [lateExpenseType, setLateExpenseType] = useState('demurrage');
   const [lateAmountEgp, setLateAmountEgp] = useState('');
   const [lateDescription, setLateDescription] = useState('');
   
