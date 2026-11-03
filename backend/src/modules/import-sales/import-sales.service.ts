@@ -5643,14 +5643,76 @@ export class ImportSalesService {
 
   async selectQuotation(tenantId: string, quotationId: string, dto: SelectQuotationDto) {
     return await this.db.transaction().execute(async (trx) => {
+      // INV-IMPORT-QUOTATION-LOCK: the candidate row is locked
+      // for the transaction, so two concurrent selections of the
+      // same quotation serialise instead of racing.
       const quote = await trx
         .selectFrom('import_quotations')
         .selectAll()
         .where('id', '=', quotationId)
         .where('tenant_id', '=', tenantId)
+        .forUpdate()
         .executeTakeFirstOrThrow();
 
+      // Re-selecting the same already-selected quotation is an
+      // idempotent no-op: it succeeds unchanged and never
+      // re-rejects siblings (a new round's candidates stay).
+      if (quote.status === 'selected') {
+        return quote;
+      }
+      if (quote.status !== 'pending') {
+        throw new BadRequestException(
+          `لا يمكن اعتماد عرض سعر غير معلق (الحالة الحالية: ${quote.status})؛ الاعتماد متاح فقط للعروض المعلقة. [IMPORT_QUOTATION_NOT_SELECTABLE]`,
+        );
+      }
+
+      // An expired quotation can never be selected.
+      const toDateOnly = (v: any): string | null => {
+        if (v === null || v === undefined || v === '') return null;
+        if (v instanceof Date) return v.toISOString().slice(0, 10);
+        return String(v).slice(0, 10);
+      };
+      const today = new Date().toISOString().slice(0, 10);
+      const expiry = toDateOnly((quote as any).expiry_date);
+      if (expiry && expiry < today) {
+        throw new BadRequestException(
+          `انتهت صلاحية عرض السعر هذا (تاريخ الانتهاء: ${expiry}) ولا يمكن اعتماده؛ اطلب عرض سعر جديداً. [IMPORT_QUOTATION_EXPIRED]`,
+        );
+      }
+
       if (quote.project_id) {
+        // Lock the whole (project, item) sibling group before
+        // deciding: concurrent selections for the same item
+        // serialise on these rows, so exactly one winner emerges
+        // and a stale sibling can never flip a locked selection.
+        const siblings = await trx
+          .selectFrom('import_quotations')
+          .select(['id', 'status', 'created_at', 'updated_at'])
+          .where('tenant_id', '=', tenantId)
+          .where('project_id', '=', quote.project_id)
+          .where('item_name', '=', quote.item_name)
+          .forUpdate()
+          .execute();
+        const winner = siblings.find(
+          (s: any) => s.status === 'selected' && String(s.id) !== String(quotationId),
+        );
+        if (winner) {
+          // Stale-round rule: a quotation created at or before
+          // the existing selection belongs to the locked round
+          // and cannot supersede it; a quotation created after
+          // the selection is a new round and may supersede.
+          const toMs = (v: any): number => {
+            if (v instanceof Date) return v.getTime();
+            const t = Date.parse(String(v));
+            return Number.isFinite(t) ? t : 0;
+          };
+          if (toMs((quote as any).created_at) <= toMs((winner as any).updated_at)) {
+            throw new BadRequestException(
+              'تم اعتماد عرض سعر أحدث لنفس الصنف في هذا المشروع؛ لا يمكن لعرض أقدم أن يلغي الاعتماد المقفل. أنشئ عرض سعر جديداً لجولة تفاوض جديدة. [IMPORT_QUOTATION_SELECTION_LOCKED]',
+            );
+          }
+        }
+
         await trx
           .updateTable('import_quotations')
           .set({ status: 'rejected' })
