@@ -16,6 +16,7 @@ import { up as up241 } from '../../src/database/migrations/2040000000241_import_
 import { up as up242 } from '../../src/database/migrations/2040000000242_import_late_expense_events';
 import { up as up245 } from '../../src/database/migrations/2040000000245_import_preorder_refunds';
 import { up as up286 } from '../../src/database/migrations/2040000000286_import_broker_capitalizations';
+import { up as up290 } from '../../src/database/migrations/2040000000290_import_cost_component_payees';
 import {
   allocateSaleFromImportLots,
   restoreImportLotsFromCancelledSale,
@@ -744,6 +745,10 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
   // Batch 3 package 4 adds the broker-capitalisation link columns/tables
   // the late-expense core now writes (fixture: real migration, additive only).
   await up286(db as any);
+  // Batch 5 package 2 adds the cost-component payee columns, the
+  // late-expense attribution columns and the clearing-account
+  // settings column (fixture: real migration, additive only).
+  await up290(db as any);
 
   // Seed default tenant and users
   await pglite.exec(`INSERT INTO tenants (id, name) VALUES ('tenant-audit-1', 'Audited Trading Tenant');`);
@@ -1296,6 +1301,7 @@ async function runTests() {
       title: 'Late Detention & Terminal Charges',
       lateExpenseAmount: 10000,
       note: 'Late demurrage from shipping line',
+      supplierId: Number(expenseSupplier.id),
     });
 
     assert.strictEqual(res.success, true);
@@ -1459,6 +1465,7 @@ async function runTests() {
         title: 'Invalid Payable Account ID',
         lateExpenseAmount: 1000,
         payableAccountId: 99999, // Non-existent GL account
+        supplierId: Number(supplier.id),
       });
     } catch (err: any) {
       supplierAsGlRejected = true;

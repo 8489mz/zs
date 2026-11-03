@@ -26,6 +26,13 @@ export interface Shipment {
   cost_allocation_method?: 'value' | 'weight' | 'cbm';
   project_id?: string | null;
   supplier_id?: number | null;
+  actual_demurrage_fees?: string;
+  // Explicit payee per cost component (INV-IMPORT-SUPPLIER-ATTRIBUTION).
+  freight_supplier_id?: number | null;
+  customs_supplier_id?: number | null;
+  transport_supplier_id?: number | null;
+  demurrage_supplier_id?: number | null;
+  unallocable_cost_reason?: string | null;
 }
 
 export interface ShipmentItem {
@@ -78,6 +85,14 @@ export interface UpdateShipmentCostsDto {
   customsAccountId?: string;
   internalTransportCostEgp?: number;
   transportAccountId?: string;
+  // Explicit payee per cost component (INV-IMPORT-SUPPLIER-ATTRIBUTION).
+  // A nonzero component with no payee and no unallocable reason fails
+  // the receipt closed; the reason routes the component to clearing.
+  freightSupplierId?: number;
+  customsSupplierId?: number;
+  transportSupplierId?: number;
+  demurrageSupplierId?: number;
+  unallocableCostReason?: string;
   exchangeRateAtArrival?: number;
   status?: string;
   shippedDate?: string;
@@ -1764,15 +1779,20 @@ export const useCreateReceivingInspectionMutation = (defaultShipmentId?: string)
 };
 
 // The backend route is POST shipments/:shipmentId/late-expense and its
-// DTO (ProcessLateExpenseDto) declares only lateExpenseAmount, title,
-// accountId, note and payableAccountId. The dialog historically sent
-// unrelated fields (expenseCategory, handlingMethod, treasuryAccountId,
-// idempotencyKey) to the plural route; the whitelist validation pipe
-// rejected every submit before the service. Map every caller shape to
-// exactly the DTO fields. The dialog treasury account is deliberately
-// NOT mapped to accountId: the backend reads accountId as a COGS-account
-// override, not a payment account, and this endpoint posts a payable,
-// never a treasury movement.
+// DTO (ProcessLateExpenseDto) declares lateExpenseAmount, title,
+// accountId, note, payableAccountId, supplierId and
+// unallocableReason. The dialog historically sent unrelated fields
+// (expenseCategory, handlingMethod, treasuryAccountId,
+// idempotencyKey) to the plural route; the whitelist validation
+// pipe rejected every submit before the service. Map every caller
+// shape to exactly the DTO fields. The dialog treasury account is
+// deliberately NOT mapped to accountId: the backend reads
+// accountId as a COGS-account override, not a payment account,
+// and this endpoint posts a payable, never a treasury movement.
+// supplierId names the explicit payee; unallocableReason records
+// why the expense is genuinely unallocable (clearing path) —
+// exactly one of the two must be supplied, never a silent
+// default to the goods supplier.
 const LATE_EXPENSE_TYPE_TITLES: Record<string, string> = {
   demurrage: 'غرامات تأخير وأرضيات',
   customs_diff: 'فروق تسوية جمركية لاحقة',
@@ -1792,6 +1812,8 @@ export function buildLateExpensePayload(rawDto: any): Record<string, unknown> {
   if (note !== undefined) payload.note = note;
   if (rawDto?.accountId !== undefined) payload.accountId = String(rawDto.accountId);
   if (rawDto?.payableAccountId !== undefined) payload.payableAccountId = Number(rawDto.payableAccountId);
+  if (rawDto?.supplierId !== undefined && rawDto?.supplierId !== null && rawDto?.supplierId !== '') payload.supplierId = Number(rawDto.supplierId);
+  if (rawDto?.unallocableReason !== undefined && rawDto?.unallocableReason !== null && String(rawDto.unallocableReason).trim() !== '') payload.unallocableReason = String(rawDto.unallocableReason);
   return payload;
 }
 

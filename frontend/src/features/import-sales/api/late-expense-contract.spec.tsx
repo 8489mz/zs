@@ -88,6 +88,20 @@ describe('late-expense frontend contract', () => {
     ).toEqual({ lateExpenseAmount: 500, title: 'Customs difference', note: 'n1' });
   });
 
+  it('passes the explicit payee and the unallocable reason through (INV-IMPORT-SUPPLIER-ATTRIBUTION)', () => {
+    expect(
+      buildLateExpensePayload({ lateExpenseAmount: 500, title: 'Demurrage', supplierId: 7 }),
+    ).toEqual({ lateExpenseAmount: 500, title: 'Demurrage', supplierId: 7 });
+    expect(
+      buildLateExpensePayload({ lateExpenseAmount: 500, title: 'Port fee', unallocableReason: 'cash receipt, no supplier' }),
+    ).toEqual({ lateExpenseAmount: 500, title: 'Port fee', unallocableReason: 'cash receipt, no supplier' });
+    // Empty values never reach the backend: an empty payee/reason is
+    // "not supplied", not a zero payee or a blank reason.
+    expect(
+      buildLateExpensePayload({ lateExpenseAmount: 500, title: 'Demurrage', supplierId: '', unallocableReason: '  ' }),
+    ).toEqual({ lateExpenseAmount: 500, title: 'Demurrage' });
+  });
+
   it('reads the allocation from the fields the backend actually returns', () => {
     expect(
       lateExpenseAllocationSummary({

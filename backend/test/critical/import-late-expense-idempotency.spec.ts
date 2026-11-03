@@ -61,7 +61,7 @@ async function makeDb(): Promise<Kysely<Database>> {
     CREATE TABLE import_shipment_items (id text PRIMARY KEY, tenant_id text, shipment_id text, product_id bigint, quantity numeric, received_quantity numeric, factory_unit_price_usd numeric, landed_cost_egp numeric, shortage_handling_method text, gross_weight_kg_unit numeric, cbm_unit numeric);
     CREATE TABLE import_inventory_receipts (id bigserial PRIMARY KEY, tenant_id text, shipment_id text, state text, review_reason text, posted_at timestamptz, created_by bigint, journal_entry_id bigint);
     CREATE TABLE import_inventory_lots (id bigserial PRIMARY KEY, tenant_id text, lot_number text, project_id text, shipment_id text, shipment_item_id text, product_id bigint, location_id bigint, initial_quantity numeric, remaining_quantity numeric, unit_landed_cost_egp numeric, status text, receipt_date text, updated_at timestamptz);
-    CREATE TABLE import_late_expense_events (id bigserial PRIMARY KEY, tenant_id text, shipment_id text, title text, total_amount_egp numeric, inventory_amount_egp numeric, cogs_amount_egp numeric, created_by bigint, journal_entry_id bigint, idempotency_key text, broker_expense_id text, CONSTRAINT chk_import_late_amounts CHECK (total_amount_egp > 0 AND inventory_amount_egp >= 0 AND cogs_amount_egp >= 0 AND abs((inventory_amount_egp + cogs_amount_egp) - total_amount_egp) <= 0.02));
+    CREATE TABLE import_late_expense_events (id bigserial PRIMARY KEY, tenant_id text, shipment_id text, title text, total_amount_egp numeric, inventory_amount_egp numeric, cogs_amount_egp numeric, created_by bigint, journal_entry_id bigint, idempotency_key text, broker_expense_id text, supplier_id bigint, unallocable_reason text, CONSTRAINT chk_import_late_amounts CHECK (total_amount_egp > 0 AND inventory_amount_egp >= 0 AND cogs_amount_egp >= 0 AND abs((inventory_amount_egp + cogs_amount_egp) - total_amount_egp) <= 0.02));
     CREATE UNIQUE INDEX uq_late_expense_events_tenant_shipment_key ON import_late_expense_events (tenant_id, shipment_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
     CREATE TABLE expenses (id bigserial PRIMARY KEY, tenant_id text, account_id text, title text, amount numeric, expense_date text, created_by bigint, note text, branch_id bigint, location_id bigint);
     INSERT INTO settings VALUES ('t1', 'currency', '"EGP"');
@@ -145,7 +145,8 @@ async function main(): Promise<void> {
           { id: 'item-2', productId: 6, qty: 10, priceUsd: 10, weight: 1, cbm: 0.1, onHand: 10 },
         ],
       });
-      const dto = { lateExpenseAmount: 1000, title: 'Demurrage', idempotencyKey: 'late-key-1' };
+      // supplierId is the now-required explicit payee (INV-IMPORT-SUPPLIER-ATTRIBUTION); the pinned contract here is idempotency, not payee defaulting.
+      const dto = { lateExpenseAmount: 1000, title: 'Demurrage', idempotencyKey: 'late-key-1', supplierId: 9 };
       const first = await service.processLateShipmentExpense('t1', 1, 'sh-1', dto);
       assert.equal(first.success, true);
       await assert.rejects(
@@ -174,7 +175,7 @@ async function main(): Promise<void> {
           { id: 'item-b', productId: 8, qty: 10, priceUsd: 10, weight: 3, cbm: 0.1, onHand: 10 },
         ],
       });
-      await service.processLateShipmentExpense('t1', 1, 'sh-2', { lateExpenseAmount: 1000, title: 'Freight top-up' });
+      await service.processLateShipmentExpense('t1', 1, 'sh-2', { lateExpenseAmount: 1000, title: 'Freight top-up', supplierId: 9 });
       // All on hand: the whole expense capitalises to inventory.
       // Weight shares: 10kg vs 30kg -> 250 vs 750.
       const light: any = await (db as any).selectFrom('import_shipment_items').selectAll().where('id', '=', 'item-a').executeTakeFirstOrThrow();
@@ -189,7 +190,7 @@ async function main(): Promise<void> {
         ],
       });
       await assert.rejects(
-        async () => service.processLateShipmentExpense('t1', 1, 'sh-2b', { lateExpenseAmount: 100, title: 'No weight' }),
+        async () => service.processLateShipmentExpense('t1', 1, 'sh-2b', { lateExpenseAmount: 100, title: 'No weight', supplierId: 9 }),
         /وزن الوحدة/,
         'Weight allocation without a unit weight must fail closed',
       );
@@ -214,7 +215,7 @@ async function main(): Promise<void> {
       // 100.01 split three ways with mixed sold/on-hand: raw parts
       // carry repeating decimals; the rounded parts must still sum
       // exactly to the journal.
-      const result = await service.processLateShipmentExpense('t1', 1, 'sh-3', { lateExpenseAmount: 100.01, title: 'Rounding probe' });
+      const result = await service.processLateShipmentExpense('t1', 1, 'sh-3', { lateExpenseAmount: 100.01, title: 'Rounding probe', supplierId: 9 });
       assert.equal(result.allocation.lateExpenseAmount, 100.01);
       const lines: any[] = await (db as any).selectFrom('journal_entry_lines').selectAll().execute();
       const debits = lines.reduce((s, l) => s + Number(l.debit), 0);
@@ -255,11 +256,11 @@ async function main(): Promise<void> {
         shipmentId: 'sh-5', method: 'value',
         items: [{ id: 'item-m', productId: 16, qty: 10, priceUsd: 10, weight: 1, cbm: 0.1, onHand: 10 }],
       });
-      await service.processLateShipmentExpense('t1', 1, 'sh-4', { lateExpenseAmount: 100, title: 'Keyless' });
-      await service.processLateShipmentExpense('t1', 1, 'sh-4', { lateExpenseAmount: 50, title: 'Keyless again' });
+      await service.processLateShipmentExpense('t1', 1, 'sh-4', { lateExpenseAmount: 100, title: 'Keyless', supplierId: 9 });
+      await service.processLateShipmentExpense('t1', 1, 'sh-4', { lateExpenseAmount: 50, title: 'Keyless again', supplierId: 9 });
       assert.equal(await countRows(db, 'journal_entries'), 2, 'Keyless calls post independently');
-      await service.processLateShipmentExpense('t1', 1, 'sh-5', { lateExpenseAmount: 100, title: 'Shared key', idempotencyKey: 'shared-key' });
-      const other = await service.processLateShipmentExpense('t1', 1, 'sh-4', { lateExpenseAmount: 100, title: 'Shared key', idempotencyKey: 'shared-key' });
+      await service.processLateShipmentExpense('t1', 1, 'sh-5', { lateExpenseAmount: 100, title: 'Shared key', idempotencyKey: 'shared-key', supplierId: 9 });
+      const other = await service.processLateShipmentExpense('t1', 1, 'sh-4', { lateExpenseAmount: 100, title: 'Shared key', idempotencyKey: 'shared-key', supplierId: 9 });
       assert.equal(other.success, true, 'The same key on another shipment is a different dedup scope');
     } finally {
       await db.destroy();

@@ -24,6 +24,7 @@ import { ContainerAutopsyModal } from './ContainerAutopsyModal';
 import { ContainerPreordersModal } from './ContainerPreordersModal';
 import { StandardDialog } from '@/shared/components/StandardDialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { suppliersApi } from '@/shared/api/suppliers.api';
 import { http } from '@/lib/http';
 import { referenceDataApi } from '@/services/reference-data.api';
 import { DownloadIcon, PackageIcon, PlusCircleIcon } from '@/shared/components/icons/AppIcons';
@@ -176,6 +177,27 @@ export default function ShipmentDetailsPage() {
   const [transportCost, setTransportCost] = useState('');
   const [transportAcc, setTransportAcc] = useState('');
 
+  // Explicit payee per cost component (INV-IMPORT-SUPPLIER-ATTRIBUTION):
+  // empty means "no change" — the stored payee is shown in the first
+  // option. A nonzero component with no payee and no recorded reason
+  // fails the receipt closed, so the operator records the payee (or
+  // the unallocable reason) here before marking the shipment Arrived.
+  const [freightSupplier, setFreightSupplier] = useState('');
+  const [customsSupplier, setCustomsSupplier] = useState('');
+  const [transportSupplier, setTransportSupplier] = useState('');
+  const [demurrageSupplier, setDemurrageSupplier] = useState('');
+  const [unallocableCostReason, setUnallocableCostReason] = useState('');
+  const { data: suppliersData } = useQuery({
+    queryKey: ['suppliers', 'all'],
+    queryFn: () => suppliersApi.listAll(),
+  });
+  const suppliersList: any[] = suppliersData?.suppliers || [];
+  const supplierName = (supplierId: number | null | undefined) => {
+    if (!supplierId) return 'غير محدد';
+    const found = suppliersList.find((s: any) => Number(s.id) === Number(supplierId));
+    return found ? (found.name || found.nameAr || found.name_ar || `#${supplierId}`) : `#${supplierId}`;
+  };
+
   const [exchangeRate, setExchangeRate] = useState('');
   const [pricingExchangeRate, setPricingExchangeRate] = useState('');
   const [status, setStatus] = useState<string>('');
@@ -211,6 +233,8 @@ export default function ShipmentDetailsPage() {
   const [lateExpenseType, setLateExpenseType] = useState('demurrage');
   const [lateAmountEgp, setLateAmountEgp] = useState('');
   const [lateDescription, setLateDescription] = useState('');
+  const [lateExpenseSupplier, setLateExpenseSupplier] = useState('');
+  const [lateExpenseUnallocableReason, setLateExpenseUnallocableReason] = useState('');
   
   const [globalRetailMargin, setGlobalRetailMargin] = useState('');
   const [globalWholesaleMargin, setGlobalWholesaleMargin] = useState('');
@@ -309,6 +333,11 @@ export default function ShipmentDetailsPage() {
         customsAccountId: customsAcc || undefined,
         internalTransportCostEgp: transportCost ? Number(transportCost) : undefined,
         transportAccountId: transportAcc || undefined,
+        freightSupplierId: freightSupplier ? Number(freightSupplier) : undefined,
+        customsSupplierId: customsSupplier ? Number(customsSupplier) : undefined,
+        transportSupplierId: transportSupplier ? Number(transportSupplier) : undefined,
+        demurrageSupplierId: demurrageSupplier ? Number(demurrageSupplier) : undefined,
+        unallocableCostReason: unallocableCostReason || undefined,
         exchangeRateAtArrival: exchangeRate ? Number(exchangeRate) : undefined,
         costAllocationMethod: allocationMethod || undefined,
         pricingExchangeRate: pricingExchangeRate ? Number(pricingExchangeRate) : undefined,
@@ -323,6 +352,11 @@ export default function ShipmentDetailsPage() {
       setShippingAcc('');
       setCustomsAcc('');
       setTransportAcc('');
+      setFreightSupplier('');
+      setCustomsSupplier('');
+      setTransportSupplier('');
+      setDemurrageSupplier('');
+      setUnallocableCostReason('');
       toast.success('تم حفظ وتحديث تكاليف وبيانات الحاوية بنجاح');
     } catch (err: any) {
       toast.error('حدث خطأ أثناء تحديث التكاليف: ' + (err?.message || 'خطأ غير معروف'));
@@ -535,6 +569,47 @@ export default function ShipmentDetailsPage() {
                   {treasuryAccounts.map((a: any) => <option key={a.id} value={a.id}>سداد من: {a.nameAr || a.name_ar || a.name}</option>)}
                 </select>
               </div>
+            </div>
+
+            {/* Explicit payee per cost component (INV-IMPORT-SUPPLIER-ATTRIBUTION).
+                Each nonzero component must name the supplier it is owed to
+                before the receipt posts; a component with no payee needs a
+                recorded unallocable reason instead (clearing path). */}
+            <div className="form-group">
+              <label>مورد الشحن البحري (مستحق الشحن)</label>
+              <select className="input" value={freightSupplier} onChange={e => setFreightSupplier(e.target.value)}>
+                <option value="">-- بلا تغيير (الحالي: {supplierName(data.freight_supplier_id)}) --</option>
+                {suppliersList.map((s: any) => <option key={s.id} value={s.id}>{s.name || s.nameAr || s.name_ar || `#${s.id}`}</option>)}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>مورد الجمارك والتخليص (مستحق الجمارك)</label>
+              <select className="input" value={customsSupplier} onChange={e => setCustomsSupplier(e.target.value)}>
+                <option value="">-- بلا تغيير (الحالي: {supplierName(data.customs_supplier_id)}) --</option>
+                {suppliersList.map((s: any) => <option key={s.id} value={s.id}>{s.name || s.nameAr || s.name_ar || `#${s.id}`}</option>)}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>مورد النقل الداخلي (مستحق النقل)</label>
+              <select className="input" value={transportSupplier} onChange={e => setTransportSupplier(e.target.value)}>
+                <option value="">-- بلا تغيير (الحالي: {supplierName(data.transport_supplier_id)}) --</option>
+                {suppliersList.map((s: any) => <option key={s.id} value={s.id}>{s.name || s.nameAr || s.name_ar || `#${s.id}`}</option>)}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>مورد غرامات التأخير والأرضيات (الحالي: {data.actual_demurrage_fees || 0} ج)</label>
+              <select className="input" value={demurrageSupplier} onChange={e => setDemurrageSupplier(e.target.value)}>
+                <option value="">-- بلا تغيير (الحالي: {supplierName(data.demurrage_supplier_id)}) --</option>
+                {suppliersList.map((s: any) => <option key={s.id} value={s.id}>{s.name || s.nameAr || s.name_ar || `#${s.id}`}</option>)}
+              </select>
+            </div>
+
+            <div className="form-group" style={{ gridColumn: 'span 2' }}>
+              <label>سبب عدم قابلية التخصيص (لبند بلا مورد — يقيد على حساب التسوية)</label>
+              <input className="input" value={unallocableCostReason} onChange={e => setUnallocableCostReason(e.target.value)} placeholder={data.unallocable_cost_reason ? `الحالي: ${data.unallocable_cost_reason}` : 'يترك فارغاً إلا إذا كان بند بلا مورد محدد فعلاً'} />
             </div>
 
             <div className="form-group">
@@ -940,6 +1015,8 @@ export default function ShipmentDetailsPage() {
                         expenseType: lateExpenseType,
                         amountEgp: amt,
                         description: lateDescription || undefined,
+                        supplierId: lateExpenseSupplier ? Number(lateExpenseSupplier) : undefined,
+                        unallocableReason: lateExpenseUnallocableReason || undefined,
                       },
                     },
                     {
@@ -949,6 +1026,8 @@ export default function ShipmentDetailsPage() {
                         setIsLateExpenseOpen(false);
                         setLateAmountEgp('');
                         setLateDescription('');
+                        setLateExpenseSupplier('');
+                        setLateExpenseUnallocableReason('');
                       },
                       onError: (err: any) => toast.error(err?.message || 'تعذر تسجيل المصروف المتأخر'),
                     },
@@ -974,8 +1053,19 @@ export default function ShipmentDetailsPage() {
               <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, marginBottom: '4px' }}>المبلغ (ج.م) *</label>
               <input type="number" step="0.01" className="input" style={{ width: '100%' }} value={lateAmountEgp} onChange={e => setLateAmountEgp(e.target.value)} placeholder="0.00" />
             </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, marginBottom: '4px' }}>المورد المستحق (مورد المصروف) *</label>
+              <select className="input" style={{ width: '100%' }} value={lateExpenseSupplier} onChange={e => setLateExpenseSupplier(e.target.value)}>
+                <option value="">-- اختر المورد المستحق --</option>
+                {suppliersList.map((s: any) => <option key={s.id} value={s.id}>{s.name || s.nameAr || s.name_ar || `#${s.id}`}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, marginBottom: '4px' }}>سبب عدم قابلية التخصيص (بديل المورد — يقيد على حساب التسوية)</label>
+              <input className="input" style={{ width: '100%' }} value={lateExpenseUnallocableReason} onChange={e => setLateExpenseUnallocableReason(e.target.value)} placeholder="يترك فارغاً إذا تم اختيار المورد" />
+            </div>
             <div style={{ gridColumn: '1 / -1', fontSize: '12.5px', color: '#475569' }}>
-              يوزع المصروف دائما تناسبيا بين البضاعة المباعة (COGS) والمتبقي بالمخزون، حسب الكميات المباعة والمتبقية وقت التسجيل. يسجل القيد استحقاقا على المورد ولا يصرف من الخزينة.
+              يوزع المصروف دائما تناسبيا بين البضاعة المباعة (COGS) والمتبقي بالمخزون، حسب الكميات المباعة والمتبقية وقت التسجيل. يسجل القيد استحقاقا على المورد المحدد أعلاه، أو على حساب التسوية إذا سجل سبب عدم قابلية التخصيص — ولا ينسب أبدا لمورد البضاعة تلقائيا.
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, marginBottom: '4px' }}>البيان والتفاصيل</label>

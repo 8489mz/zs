@@ -23,8 +23,11 @@ boundary:
   location; the supplier subledger balance follows the journal.
 - A receipt with no shipment supplier but a project feasibility
   supplier posts to the feasibility supplier.
-- A late expense with no supplier anywhere fails closed the same way,
-  before any WAC revaluation or journal.
+- A late expense with no explicit payee and no recorded unallocable
+  reason fails closed with IMPORT_LATE_EXPENSE_PAYEE_REQUIRED
+  (INV-IMPORT-SUPPLIER-ATTRIBUTION: late expenses are never
+  defaulted to the goods supplier), before any WAC revaluation
+  or journal.
 */
 
 import 'reflect-metadata';
@@ -55,14 +58,14 @@ async function makeDb(): Promise<Kysely<Database>> {
     CREATE TABLE journal_entries (id bigserial PRIMARY KEY, tenant_id text, account_id text, entry_no text, dedup_key text, entry_date date, description text, source_type text, source_id bigint, status text, branch_id bigint, location_id bigint, created_by bigint, posted_by bigint, posted_at timestamptz, reversal_of_entry_id bigint, reversed_by_entry_id bigint, updated_at timestamptz);
     CREATE TABLE journal_entry_lines (id bigserial PRIMARY KEY, tenant_id text, journal_entry_id bigint, account_id bigint, cost_center_id bigint, description text, debit numeric, credit numeric, partner_type text, partner_id bigint, branch_id bigint, location_id bigint);
     CREATE TABLE import_projects (id text PRIMARY KEY, tenant_id text, feasibility_data text);
-    CREATE TABLE import_shipments (id text PRIMARY KEY, tenant_id text, supplier_id bigint, project_id text, container_number text, status text);
+    CREATE TABLE import_shipments (id text PRIMARY KEY, tenant_id text, supplier_id bigint, project_id text, container_number text, status text, exchange_rate_at_arrival numeric, shipping_cost_usd numeric, customs_cost_egp numeric, internal_transport_cost_egp numeric, actual_demurrage_fees numeric, freight_supplier_id bigint, customs_supplier_id bigint, transport_supplier_id bigint, demurrage_supplier_id bigint, unallocable_cost_reason text);
     CREATE TABLE import_shipment_items (id text PRIMARY KEY, tenant_id text, shipment_id text, product_id bigint, quantity numeric, received_quantity numeric, factory_unit_price_usd numeric, landed_cost_egp numeric, shortage_handling_method text);
     CREATE TABLE import_container_preorders (id bigserial PRIMARY KEY, tenant_id text, shipment_id text, product_id bigint, reserved_quantity numeric, status text);
     CREATE TABLE import_inventory_receipts (id bigserial PRIMARY KEY, tenant_id text, shipment_id text, state text, review_reason text, posted_at timestamptz, created_by bigint, journal_entry_id bigint);
     CREATE TABLE import_inventory_lots (id bigserial PRIMARY KEY, tenant_id text, lot_number text, project_id text, shipment_id text, shipment_item_id text, product_id bigint, location_id bigint, initial_quantity numeric, remaining_quantity numeric, unit_landed_cost_egp numeric, status text, receipt_date text, updated_at timestamptz);
     CREATE TABLE import_broker_capitalizations (id bigserial PRIMARY KEY, tenant_id text NOT NULL, broker_expense_id text NOT NULL, shipment_id text NOT NULL, cost_bucket text, amount_egp numeric(19, 4) NOT NULL, state text NOT NULL CHECK (state IN ('folded', 'consumed', 'revalued')), late_expense_event_id bigint, created_by bigint, created_at timestamptz NOT NULL DEFAULT NOW(), UNIQUE (tenant_id, broker_expense_id));
     CREATE INDEX import_broker_capitalizations_shipment_idx ON import_broker_capitalizations (tenant_id, shipment_id, state);
-    CREATE TABLE import_late_expense_events (id bigserial PRIMARY KEY, tenant_id text, shipment_id text, title text, total_amount_egp numeric, inventory_amount_egp numeric, cogs_amount_egp numeric, created_by bigint, journal_entry_id bigint);
+    CREATE TABLE import_late_expense_events (id bigserial PRIMARY KEY, tenant_id text, shipment_id text, title text, total_amount_egp numeric, inventory_amount_egp numeric, cogs_amount_egp numeric, created_by bigint, journal_entry_id bigint, supplier_id bigint, unallocable_reason text);
     CREATE TABLE expenses (id bigserial PRIMARY KEY, tenant_id text, account_id text, title text, amount numeric, expense_date text, created_by bigint, note text, branch_id bigint, location_id bigint);
     INSERT INTO settings VALUES ('t1', 'currency', '"EGP"');
     INSERT INTO currency_exchange_rates (tenant_id, currency_code, exchange_rate, is_base) VALUES ('t1', 'EGP', 1, true);
@@ -114,6 +117,8 @@ async function seedReceiptFixture(
   await db.insertInto('import_shipments' as never).values({
     id: 'sh-1', tenant_id: 't1', supplier_id: opts.shipmentSupplierId,
     project_id: opts.projectId, container_number: 'MSCU-1', status: 'Arrived',
+    exchange_rate_at_arrival: 50, shipping_cost_usd: 0, customs_cost_egp: 0,
+    internal_transport_cost_egp: 0, actual_demurrage_fees: 0,
   } as never).execute();
   await db.insertInto('import_shipment_items' as never).values({
     id: 'item-1', tenant_id: 't1', shipment_id: 'sh-1', product_id: 5,
@@ -223,8 +228,8 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await assert.rejects(
         async () => service.processLateShipmentExpense('t1', 1, 'sh-1', { lateExpenseAmount: 1000, title: 'Demurrage' }),
-        /IMPORT_RECEIPT_SUPPLIER_REQUIRED/,
-        'A late expense with no supplier must fail closed with the same named error',
+        /IMPORT_LATE_EXPENSE_PAYEE_REQUIRED/,
+        'A late expense with no payee must fail closed with its own named error (INV-IMPORT-SUPPLIER-ATTRIBUTION: late expenses are never defaulted to the goods supplier)',
       );
       assert.equal(await countRows(db, 'journal_entries'), 0, 'No late-expense journal may be posted');
       assert.equal(await countRows(db, 'import_late_expense_events'), 0, 'No late-expense event may be recorded');

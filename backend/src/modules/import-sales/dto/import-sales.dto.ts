@@ -128,6 +128,45 @@ export class UpdateShipmentCostsDto {
   @IsString()
   transportAccountId?: string;
 
+  // INV-IMPORT-SUPPLIER-ATTRIBUTION: the explicit supplier each
+  // cost component is owed to. Recorded before posting; a nonzero
+  // component with no payee and no unallocable reason fails the
+  // receipt closed. Null (omitted) leaves the stored payee
+  // untouched; an explicit null clears it (see the service: the
+  // payload mapping treats null as clear, undefined as untouched).
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  freightSupplierId?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  customsSupplierId?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  transportSupplierId?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  demurrageSupplierId?: number;
+
+  // Recorded reason when a cost component is genuinely
+  // unallocable: the component posts to the tenant-designated
+  // clearing account, labelled with this reason. An empty string
+  // clears the recorded reason.
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  unallocableCostReason?: string;
+
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
@@ -855,6 +894,23 @@ export class ProcessLateExpenseDto {
   @IsString()
   @MaxLength(128)
   idempotencyKey?: string;
+
+  // INV-IMPORT-SUPPLIER-ATTRIBUTION: the explicit supplier this
+  // late expense is owed to. Exactly one of supplierId /
+  // unallocableReason must be supplied: a late expense is never
+  // silently attributed to the goods supplier. When
+  // unallocableReason is recorded, the credit posts to the
+  // tenant-designated clearing account, labelled with the reason.
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  supplierId?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  unallocableReason?: string;
 }
 
 export class CalculateCustomsTaxDto {

@@ -54,6 +54,39 @@ import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
 import { generateDailySequenceNumber } from '../delivery-reps/services/van-common.util';
 import { resolveFxRate } from '../accounting/fx-rate-resolution';
+
+/**
+ * INV-IMPORT-SUPPLIER-ATTRIBUTION: apportion a cent-exact total
+ * across non-negative bucket weights by share, largest-remainder
+ * to the cent. The returned shares always sum to exactly `total`
+ * (a final correction on the largest weight absorbs float dust),
+ * so a split journal can never drift from its single-line total
+ * by rounding. Zero total or all-zero weights yield all zeros;
+ * the caller decides whether that is a mismatch.
+ */
+export function apportionByBucketShares(total: number, weights: number[]): number[] {
+  const totalCents = Math.round(Number(total) * 100);
+  const shares = weights.map(() => 0);
+  const weightSum = weights.reduce((sum, w) => sum + Math.max(0, Number(w) || 0), 0);
+  if (totalCents === 0 || weightSum <= 0) return shares;
+  const raw = weights.map((w) => (totalCents * Math.max(0, Number(w) || 0)) / weightSum);
+  const floors = raw.map((r) => Math.floor(r));
+  let remainder = totalCents - floors.reduce((sum, f) => sum + f, 0);
+  const order = raw.map((r, i) => i).sort((a, b) => raw[b] - Math.floor(raw[b]) - (raw[a] - Math.floor(raw[a])));
+  for (const i of order) {
+    if (remainder <= 0) break;
+    floors[i] += 1;
+    remainder -= 1;
+  }
+  const out = floors.map((f) => Number((f / 100).toFixed(2)));
+  const drift = Number((total - out.reduce((sum, s) => sum + s, 0)).toFixed(2));
+  if (drift !== 0) {
+    let largest = 0;
+    for (let i = 1; i < weights.length; i += 1) if (weights[i] > weights[largest]) largest = i;
+    out[largest] = Number((out[largest] + drift).toFixed(2));
+  }
+  return out;
+}
 import { calculateImportFeasibility, FeasibilityCalculationResult } from './engines/import-feasibility.engine';
 import { EGYPT_CUSTOMS_TARIFFS, TARIFF_DATA_VERSION, TARIFF_SECTORS } from './data/egypt-customs-tariffs.data';
 import { SECTOR_PRESETS, resolveSectorPreset } from './data/sector-presets.data';
@@ -118,6 +151,7 @@ export class ImportSalesService {
       | 'container_deposit'
       | 'customer_advance'
       | 'vat_receivable'
+      | 'clearing'
       | 'equity',
     preferredAccountId?: number | null
   ): Promise<number> {
@@ -141,6 +175,21 @@ export class ImportSalesService {
 
     const accountIsEligible = (account: any): boolean => {
       if (!account || !account.is_active) return false;
+      // INV-IMPORT-SUPPLIER-ATTRIBUTION: the clearing/suspense
+      // account is tenant-designated only (accounting_settings
+      // .clearing_account_id, no COA-code fallback below) and must
+      // be a plain asset/liability account: never a flagged control
+      // account and never code 1130/2110, because the partner
+      // subledger sync reads every line on a flagged or 1130/2110
+      // account and throws on a partner-less line — a clearing
+      // line is partner-less by definition, so designating a
+      // control account as the clearing account must fail closed
+      // here, at resolve time, with a clear message.
+      if (role === 'clearing') {
+        if (['1130', '2110'].includes(account.code)) return false;
+        if (account.is_cash_bank || account.is_inventory || account.is_payable || account.is_receivable) return false;
+        return account.account_type === 'asset' || account.account_type === 'liability';
+      }
       if (role === 'receivable') {
         if (account.is_cash_bank || account.is_inventory || account.is_payable) return false;
         return account.account_type === 'asset' || account.is_receivable === true;
@@ -208,6 +257,7 @@ export class ImportSalesService {
       else if (role === 'payable') settingsAccountId = settings.supplier_payable_account_id;
       else if (role === 'receivable') settingsAccountId = settings.customer_receivable_account_id;
       else if (role === 'sales_revenue') settingsAccountId = settings.sales_revenue_account_id;
+      else if (role === 'clearing') settingsAccountId = (settings as any).clearing_account_id;
       else if (role === 'bank') settingsAccountId = settings.bank_account_id || settings.cash_account_id;
     }
 
@@ -232,6 +282,10 @@ export class ImportSalesService {
       container_deposit: ['1180', '1182', '1240'],
       customer_advance: ['2130', '2120'],
       vat_receivable: ['1160', '1150'],
+      // Clearing has NO code fallback: a suspense account is
+      // designated explicitly in settings, never guessed from a
+      // COA code (INV-IMPORT-SUPPLIER-ATTRIBUTION).
+      clearing: [],
       equity: ['3100', '3101', '3200', '3000'],
     };
 
@@ -2127,6 +2181,34 @@ export class ImportSalesService {
       if (dto.vatRefundableEgp !== undefined) payload.vat_refundable_egp = dto.vatRefundableEgp;
       if (dto.isConsolidated !== undefined) payload.is_consolidated = dto.isConsolidated;
       if (dto.costAllocationMethod !== undefined) payload.cost_allocation_method = dto.costAllocationMethod;
+      // INV-IMPORT-SUPPLIER-ATTRIBUTION: explicit payee per cost
+      // component, recorded before posting. A changed payee is
+      // validated against the tenant's suppliers now; an unchanged
+      // replay skips the lookup so a later supplier deletion can
+      // never break replaying an identical posted request. The
+      // frozen-fields block below strips these columns once the
+      // receipt is posted: attribution is part of the posted
+      // record, corrected only through reversal + re-posting.
+      const payeeFields = [
+        ['freightSupplierId', 'freight_supplier_id'],
+        ['customsSupplierId', 'customs_supplier_id'],
+        ['transportSupplierId', 'transport_supplier_id'],
+        ['demurrageSupplierId', 'demurrage_supplier_id'],
+      ] as const;
+      for (const [input, column] of payeeFields) {
+        if (dto[input] !== undefined) {
+          const supplierId = Number(dto[input]);
+          if (supplierId !== Number((shipment as any)[column])) {
+            const supplier = await trx.selectFrom('suppliers').select('id')
+              .where('tenant_id', '=', tenantId).where('id', '=', supplierId).executeTakeFirst();
+            if (!supplier) {
+              throw new BadRequestException(`مورد بند التكلفة (${input}) غير موجود في هذه المنشأة؛ حدد مورداً حقيقياً قبل الترحيل. [IMPORT_COMPONENT_PAYEE_REQUIRED]`);
+            }
+          }
+          (payload as any)[column] = supplierId;
+        }
+      }
+      if (dto.unallocableCostReason !== undefined) payload.unallocable_cost_reason = dto.unallocableCostReason || null;
 
       const expenseInputs = [
         [dto.shippingAccountId, shipment.shipping_expense_id, shipment.shipping_cost_usd],
@@ -2145,6 +2227,11 @@ export class ImportSalesService {
           ['carrierName','carrier_name'], ['freeDemurrageDays','free_demurrage_days'],
           ['demurrageStartDate','demurrage_start_date'], ['demurrageRatePerDay','demurrage_rate_per_day'],
           ['customsDeclarationNo','customs_declaration_no'], ['isConsolidated','is_consolidated'],
+          // Attribution is part of the posted record: payees and
+          // the unallocable reason freeze with the receipt.
+          ['freightSupplierId','freight_supplier_id'], ['customsSupplierId','customs_supplier_id'],
+          ['transportSupplierId','transport_supplier_id'], ['demurrageSupplierId','demurrage_supplier_id'],
+          ['unallocableCostReason','unallocable_cost_reason'],
         ];
         for (const [input, column] of frozenFields) {
           const submitted = dto[input];
@@ -2348,6 +2435,127 @@ export class ImportSalesService {
     for (const product of products) {
       await lockStockProducts(trx, { tenantId, accountId: product.account_id, productIds: [Number(product.id)] });
     }
+    // INV-IMPORT-SUPPLIER-ATTRIBUTION: split the receipt credit
+    // into per-component lines BEFORE any write, so a missing
+    // payee fails closed with zero writes. Until this package the
+    // whole landed value (goods + freight + customs + transport
+    // + demurrage) was credited to one payable line attributed
+    // to the goods supplier: the goods subledger was overstated
+    // and the carrier/customs/transporter payees had no record.
+    // The split is derived from stored values only (no engine
+    // recomputation): goods = ordered qty x factory price x the
+    // arrival rate updateShipmentCosts recalculated with in this
+    // same transaction; the overhead residual (total landed less
+    // goods) is apportioned across the shipment buckets net of
+    // the broker-folded portion of each bucket, so the component
+    // lines always sum to exactly the old single-line total. A
+    // final dust correction on the goods line (at most a cent of
+    // 4-decimal unit rounding) keeps the journal balanced to the
+    // cent; a residual more than 0.50 below zero means the stored
+    // costs disagree with the arrival rate and fails closed.
+    const totalInventoryValue = Number(groups.reduce((sum, g) => sum + g.value, 0).toFixed(2));
+    const totalShortageExpense = Number(groups.reduce((sum, g) => sum + g.shortageExpense, 0).toFixed(2));
+    const totalCreditPayable = Number((totalInventoryValue + totalShortageExpense).toFixed(2));
+    const foldedRows = await trx.selectFrom('import_broker_capitalizations')
+      .select(['id', 'broker_expense_id', 'amount_egp', 'cost_bucket'])
+      .where('tenant_id', '=', tenantId).where('shipment_id', '=', shipmentId).where('state', '=', 'folded')
+      .execute();
+    const foldedBrokerTotal = Number(foldedRows.reduce((sum, r) => sum + Number(r.amount_egp || 0), 0).toFixed(2));
+    if (foldedBrokerTotal > totalInventoryValue + 0.001) {
+      throw new BadRequestException('إجمالي مصروفات المخلص المرسملة يتجاوز قيمة المخزون المستلم؛ راجع بنود تكلفة الشحنة قبل الترحيل. [IMPORT_BROKER_CAPITALIZATION_EXCEEDS_LANDED]');
+    }
+    const arrivalRateForSplit = requireImportNumber(shipment.exchange_rate_at_arrival, 'سعر الصرف عند الوصول', Number.MIN_VALUE);
+    const goodsValue = Number(items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.factory_unit_price_usd || 0) * arrivalRateForSplit, 0).toFixed(2));
+    const overheadResidual = Number((totalCreditPayable - goodsValue).toFixed(2));
+    if (overheadResidual < -0.5) {
+      throw new BadRequestException('تعذر تقسيم قيد الاستلام على بنود التكلفة: قيمة البضاعة المحسوبة بسعر الوصول تتجاوز إجمالي التكلفة المحملة؛ راجع سعر الصرف وبنود الشحنة قبل الترحيل. [IMPORT_RECEIPT_COMPONENT_SPLIT_MISMATCH]');
+    }
+    const foldedByBucket = new Map<string, number>();
+    for (const row of foldedRows) {
+      const bucket = String((row as any).cost_bucket || '');
+      foldedByBucket.set(bucket, (foldedByBucket.get(bucket) || 0) + Number(row.amount_egp || 0));
+    }
+    const bucketTotals = {
+      freight: Number((Number(shipment.shipping_cost_usd || 0) * arrivalRateForSplit).toFixed(2)),
+      customs: Number(Number(shipment.customs_cost_egp || 0).toFixed(2)),
+      transport: Number(Number(shipment.internal_transport_cost_egp || 0).toFixed(2)),
+      demurrage: Number(Number(shipment.actual_demurrage_fees || 0).toFixed(2)),
+    };
+    const netWeights = [
+      Math.max(0, bucketTotals.freight),
+      Math.max(0, bucketTotals.customs - (foldedByBucket.get('customs_cost_egp') || 0)),
+      Math.max(0, bucketTotals.transport - (foldedByBucket.get('internal_transport_cost_egp') || 0)),
+      Math.max(0, bucketTotals.demurrage - (foldedByBucket.get('actual_demurrage_fees') || 0)),
+    ];
+    const payableOverhead = Number((overheadResidual - foldedBrokerTotal).toFixed(2));
+    if (payableOverhead < -0.005) {
+      throw new BadRequestException('إجمالي مصروفات المخلص المرسملة يتجاوز الأعباء المستحقة؛ راجع بنود تكلفة الشحنة قبل الترحيل. [IMPORT_BROKER_CAPITALIZATION_EXCEEDS_LANDED]');
+    }
+    const overheadKeys = ['freight', 'customs', 'transport', 'demurrage'] as const;
+    const overheadLabels: Record<string, string> = { freight: 'شحن بحري', customs: 'جمارك وتخليص', transport: 'نقل داخلي', demurrage: 'غرامات تأخير وأرضيات' };
+    const overheadPayeeColumns: Record<string, string> = {
+      freight: 'freight_supplier_id', customs: 'customs_supplier_id',
+      transport: 'transport_supplier_id', demurrage: 'demurrage_supplier_id',
+    };
+    const overheadShares = apportionByBucketShares(payableOverhead, netWeights);
+    const unallocableReason = typeof (shipment as any).unallocable_cost_reason === 'string'
+      ? (shipment as any).unallocable_cost_reason.trim() : '';
+    let clearingAccountId: number | null = null;
+    const resolveComponentPayee = async (
+      key: string, amount: number,
+    ): Promise<{ kind: 'supplier'; supplierId: number } | { kind: 'clearing'; reason: string }> => {
+      const supplierId = Number((shipment as any)[overheadPayeeColumns[key]]);
+      if (Number.isSafeInteger(supplierId) && supplierId > 0) {
+        const supplier = await trx.selectFrom('suppliers').select('id')
+          .where('tenant_id', '=', tenantId).where('id', '=', supplierId).executeTakeFirst();
+        if (supplier) return { kind: 'supplier', supplierId };
+        throw new BadRequestException(`مورد بند التكلفة (${overheadLabels[key]}) غير موجود في هذه المنشأة؛ حدد مورداً حقيقياً قبل الترحيل. [IMPORT_COMPONENT_PAYEE_REQUIRED]`);
+      }
+      // Clearing is ONLY for a fee proven genuinely unallocable:
+      // the reason must be recorded on the shipment, and the
+      // credit posts to the tenant-designated clearing account,
+      // labelled with the reason — never silently to the goods
+      // supplier or any other default payee.
+      if (unallocableReason) {
+        if (clearingAccountId === null) clearingAccountId = await this.resolveTenantAccount(trx, tenantId, 'clearing');
+        return { kind: 'clearing', reason: unallocableReason };
+      }
+      throw new BadRequestException(`لا يمكن ترحيل بند التكلفة (${overheadLabels[key]}) بلا مورد محدد: حدد مورد البند أو سجل سبب عدم قابلية التخصيص قبل الترحيل. [IMPORT_COMPONENT_PAYEE_REQUIRED]`);
+    };
+    type ReceiptCreditComponent = {
+      key: string; label: string; amount: number;
+      payee: { kind: 'supplier'; supplierId: number } | { kind: 'clearing'; reason: string };
+      clearingAccountId?: number | null;
+    };
+    const receiptCreditComponents: ReceiptCreditComponent[] = [];
+    const payableTotal = Number((totalCreditPayable - foldedBrokerTotal).toFixed(2));
+    const dust = Number((payableTotal - (goodsValue + totalShortageExpense + overheadShares.reduce((s, v) => s + v, 0))).toFixed(2));
+    let goodsCredit = Number((goodsValue + totalShortageExpense + dust).toFixed(2));
+    const overheadEntries = overheadKeys
+      .map((key, i) => ({ key, amount: overheadShares[i] }))
+      .filter((entry) => entry.amount > 0);
+    if (goodsCredit <= 0 && overheadEntries.length > 0) {
+      // A zero-goods shipment (free goods + freight): the dust
+      // correction rides on the largest overhead component so the
+      // split still sums exactly, with no goods line at all.
+      let largest = overheadEntries[0];
+      for (const entry of overheadEntries) if (entry.amount > largest.amount) largest = entry;
+      largest.amount = Number((largest.amount + dust).toFixed(2));
+      goodsCredit = 0;
+    }
+    if (goodsCredit > 0) {
+      receiptCreditComponents.push({
+        key: 'goods', label: 'بضاعة', amount: goodsCredit,
+        payee: { kind: 'supplier', supplierId: effectiveReceiptSupplierId },
+      });
+    }
+    for (const entry of overheadEntries) {
+      const payee = await resolveComponentPayee(entry.key, entry.amount);
+      receiptCreditComponents.push({
+        key: entry.key, label: overheadLabels[entry.key], amount: entry.amount, payee,
+        clearingAccountId: payee.kind === 'clearing' ? clearingAccountId : null,
+      });
+    }
     const receipt = await trx.insertInto('import_inventory_receipts').values({
       tenant_id: tenantId, shipment_id: shipmentId, state: 'posted', review_reason: null,
       posted_at: new Date(), created_by: userId,
@@ -2416,31 +2624,24 @@ export class ImportSalesService {
     // --- ACCOUNTING: Double-entry journal for inventory receipt ---
     // DR: Inventory (at total landed cost of all received goods)
     // DR: Shortage Expense (if any items had shortage_handling_method = 'expense')
-    // CR: Accounts Payable / Supplier (total), less the broker
-    // costs already spent from broker advances and folded into
-    // the shipment buckets (INV-IMPORT-BROKER-CAPITALISATION).
-    // Those folded amounts reach inventory through the landed
-    // cost above, but they were never owed to the supplier: the
-    // credit for them relieves the broker-advance asset instead.
-    // The split keeps the journal balanced and the supplier
-    // subledger honest, and the package-3 reversal mirrors both
-    // credit legs because they share this one journal.
-    const totalInventoryValue = Number(groups.reduce((sum, g) => sum + g.value, 0).toFixed(2));
-    const totalShortageExpense = Number(groups.reduce((sum, g) => sum + g.shortageExpense, 0).toFixed(2));
-    const totalCreditPayable = Number((totalInventoryValue + totalShortageExpense).toFixed(2));
-    const foldedRows = await trx.selectFrom('import_broker_capitalizations')
-      .select(['id', 'broker_expense_id', 'amount_egp'])
-      .where('tenant_id', '=', tenantId).where('shipment_id', '=', shipmentId).where('state', '=', 'folded')
-      .execute();
-    const foldedBrokerTotal = Number(foldedRows.reduce((sum, r) => sum + Number(r.amount_egp || 0), 0).toFixed(2));
-    if (foldedBrokerTotal > totalInventoryValue + 0.001) {
-      throw new BadRequestException('إجمالي مصروفات المخلص المرسملة يتجاوز قيمة المخزون المستلم؛ راجع بنود تكلفة الشحنة قبل الترحيل. [IMPORT_BROKER_CAPITALIZATION_EXCEEDS_LANDED]');
-    }
-
+    // CR: one payable/clearing line PER COST COMPONENT
+    // (INV-IMPORT-SUPPLIER-ATTRIBUTION), each attributed to its
+    // explicit payee, less the broker costs already spent from
+    // broker advances and folded into the shipment buckets
+    // (INV-IMPORT-BROKER-CAPITALISATION). Those folded amounts
+    // reach inventory through the landed cost above, but they
+    // were never owed to a supplier: the credit for them
+    // relieves the broker-advance asset instead. The split keeps
+    // the journal balanced and every supplier subledger honest,
+    // and the package-3 reversal mirrors all credit legs because
+    // they share this one journal (it mirrors lines generically).
+    // The component amounts and payees were resolved before any
+    // stock or receipt write above; this block only posts them.
     if (totalCreditPayable > 0) {
       const postingService = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
       const inventoryAccountId = await this.resolveTenantAccount(trx, tenantId, 'inventory');
-      const payableAccountId = await this.resolveTenantAccount(trx, tenantId, 'payable');
+      const needsPayableAccount = receiptCreditComponents.some((c) => c.payee.kind === 'supplier');
+      const payableAccountId = needsPayableAccount ? await this.resolveTenantAccount(trx, tenantId, 'payable') : null;
 
       const journalLines: Array<{
         accountId: number; description: string;
@@ -2478,20 +2679,35 @@ export class ImportSalesService {
         });
       }
 
-      // CR: Accounts Payable / Supplier (landed value less the
-      // broker-advance-funded folded portion)
-      const supplierCredit = Number((totalCreditPayable - foldedBrokerTotal).toFixed(2));
-      if (supplierCredit > 0) {
-        journalLines.push({
-          accountId: payableAccountId,
-          description: `استحقاق مورد استيراد - حاوية ${shipment.container_number || shipmentId}`,
-          debit: 0,
-          credit: supplierCredit,
-          partnerType: 'supplier',
-          partnerId: effectiveReceiptSupplierId,
-          branchId: receiptBranchId,
-          locationId: Number(receiptLocationId),
-        });
+      // CR: one line per cost component, each to its explicit
+      // payee (supplier payable) or, for a component with a
+      // recorded unallocable reason, to the designated clearing
+      // account labelled with the reason. The component lines
+      // sum to exactly the old single-line total.
+      for (const component of receiptCreditComponents) {
+        if (component.payee.kind === 'supplier') {
+          journalLines.push({
+            accountId: payableAccountId!,
+            description: `استحقاق مورد استيراد (${component.label}) - حاوية ${shipment.container_number || shipmentId}`,
+            debit: 0,
+            credit: component.amount,
+            partnerType: 'supplier',
+            partnerId: component.payee.supplierId,
+            branchId: receiptBranchId,
+            locationId: Number(receiptLocationId),
+          });
+        } else {
+          journalLines.push({
+            accountId: component.clearingAccountId!,
+            description: `استحقاق غير قابل للتخصيص (${component.label}) - سبب: ${component.payee.reason} - حاوية ${shipment.container_number || shipmentId}`,
+            debit: 0,
+            credit: component.amount,
+            partnerType: 'none',
+            partnerId: null,
+            branchId: receiptBranchId,
+            locationId: Number(receiptLocationId),
+          });
+        }
       }
 
       // CR: Broker-advance asset (folded broker costs already
@@ -2985,7 +3201,10 @@ export class ImportSalesService {
       idempotencyKey?: string;
       accountId?: number | null;
       payableAccountId?: number | null;
-      credit: { kind: 'payable'; supplierId: number } | { kind: 'broker_advance'; accountId: number };
+      credit: { kind: 'payable'; supplierId: number } | { kind: 'broker_advance'; accountId: number } | { kind: 'clearing'; accountId: number; reason: string };
+      /** Attribution recorded on the late-expense event row (INV-IMPORT-SUPPLIER-ATTRIBUTION). */
+      supplierId?: number | null;
+      unallocableReason?: string | null;
       brokerExpenseId?: string;
     },
   ) {
@@ -3194,6 +3413,8 @@ export class ImportSalesService {
               journal_entry_id: null,
               idempotency_key: lateExpenseKey,
               broker_expense_id: opts.brokerExpenseId ?? null,
+              supplier_id: opts.supplierId ?? null,
+              unallocable_reason: opts.unallocableReason ?? null,
             })
             .returning('id')
             .executeTakeFirstOrThrow();
@@ -3257,9 +3478,11 @@ export class ImportSalesService {
       const cogsAccountId = await this.resolveTenantAccount(trx, tenantId, 'cogs', opts.accountId ? Number(opts.accountId) : null);
       const inventoryAccountId = await this.resolveTenantAccount(trx, tenantId, 'inventory');
       // The credit side is caller-owned: the supplier payable for an
-      // ordinary late expense, the broker-advance asset (already
-      // resolved by the caller, never defaulted here) for a
-      // capitalised broker expense.
+      // ordinary late expense, the designated clearing account
+      // (already resolved by the caller, never defaulted here) for
+      // a genuinely unallocable expense, or the broker-advance
+      // asset (already resolved by the caller) for a capitalised
+      // broker expense.
       const creditAccountId = opts.credit.kind === 'payable'
         ? await this.resolveTenantAccount(trx, tenantId, 'payable', opts.payableAccountId ? Number(opts.payableAccountId) : null)
         : opts.credit.accountId;
@@ -3293,6 +3516,8 @@ export class ImportSalesService {
             total_amount_egp: roundedTotal,
             inventory_amount_egp: totalLateInventory,
             cogs_amount_egp: totalLateCogs,
+            supplier_id: opts.supplierId ?? null,
+            unallocable_reason: opts.unallocableReason ?? null,
           })
           .where('tenant_id', '=', tenantId)
           .where('id', '=', lateExpenseEventId)
@@ -3305,6 +3530,8 @@ export class ImportSalesService {
           inventory_amount_egp: totalLateInventory, cogs_amount_egp: totalLateCogs,
           created_by: userId, journal_entry_id: null,
           broker_expense_id: opts.brokerExpenseId ?? null,
+          supplier_id: opts.supplierId ?? null,
+          unallocable_reason: opts.unallocableReason ?? null,
         }).returning('id').executeTakeFirstOrThrow();
       }
       const postingService = this.accountingPosting ?? new AccountingPostingService(new AccountingTenantFoundationService());
@@ -3344,6 +3571,21 @@ export class ImportSalesService {
           branchId: null,
           locationId: null,
         });
+      } else if (opts.credit.kind === 'clearing') {
+        // Genuinely unallocable late expense: the credit posts to
+        // the tenant-designated clearing account (an unflagged
+        // account the partner sync skips), labelled with the
+        // recorded reason — never to a default supplier.
+        lines.push({
+          accountId: creditAccountId,
+          description: `استحقاق مصروف متأخر غير قابل للتخصيص - سبب: ${opts.credit.reason} - حاوية ${shipment.container_number}`,
+          debit: 0,
+          credit: roundedTotal,
+          partnerType: 'none',
+          partnerId: null,
+          branchId: null,
+          locationId: null,
+        });
       } else {
         // Capitalised broker expense: the advance asset is relieved
         // here, in the same transaction as the spread. No supplier
@@ -3367,7 +3609,11 @@ export class ImportSalesService {
         // payable leg, so it must not run the partner-subledger
         // sync (its allowlist is the payable-carrying source
         // types); the advance-asset leg has no partner subledger.
-        sourceType: opts.credit.kind === 'payable' ? 'import_late_expense' : 'import_broker_capitalization',
+        // A clearing late-expense journal keeps the
+        // import_late_expense type: its partner-less credit sits
+        // on the unflagged clearing account, which the sync's own
+        // account filter skips.
+        sourceType: opts.credit.kind === 'broker_advance' ? 'import_broker_capitalization' : 'import_late_expense',
         sourceId: Number(lateExpenseDocument.id),
         tenantId,
         accountId: tenantId,
@@ -3419,9 +3665,30 @@ export class ImportSalesService {
         throw new BadRequestException('لا يمكن تسجيل مصروفات متأخرة إلا بعد استلام الشحنة وترحيل المخزون.');
       }
 
-      // Fail closed BEFORE any revaluation or journal write: the
-      // payable supplier must be identified now, never defaulted later.
-      const effectiveExpenseSupplierId = await this.resolveImportReceiptSupplierId(trx, tenantId, shipment);
+      // INV-IMPORT-SUPPLIER-ATTRIBUTION: fail closed BEFORE any
+      // revaluation or journal write. A late expense is never
+      // silently attributed to the goods supplier: the caller
+      // names the explicit payee, or records the reason the
+      // expense is genuinely unallocable (clearing path). The
+      // old default — crediting the whole expense to the shipment
+      // supplier — overstated that subledger for demurrage,
+      // storage and broker fees owed to other parties.
+      const lateExpenseSupplierId = dto.supplierId !== undefined && dto.supplierId !== null ? Number(dto.supplierId) : null;
+      const lateExpenseUnallocableReason = typeof dto.unallocableReason === 'string' ? dto.unallocableReason.trim() : '';
+      let lateExpenseCredit: { kind: 'payable'; supplierId: number } | { kind: 'clearing'; accountId: number; reason: string };
+      if (lateExpenseSupplierId !== null) {
+        const payee = await trx.selectFrom('suppliers').select('id')
+          .where('tenant_id', '=', tenantId).where('id', '=', lateExpenseSupplierId).executeTakeFirst();
+        if (!payee) {
+          throw new BadRequestException('مورد المصروف المتأخر المحدد غير موجود في هذه المنشأة؛ حدد مورداً حقيقياً قبل الترحيل. [IMPORT_LATE_EXPENSE_PAYEE_REQUIRED]');
+        }
+        lateExpenseCredit = { kind: 'payable', supplierId: lateExpenseSupplierId };
+      } else if (lateExpenseUnallocableReason) {
+        const clearingAccountId = await this.resolveTenantAccount(trx, tenantId, 'clearing');
+        lateExpenseCredit = { kind: 'clearing', accountId: clearingAccountId, reason: lateExpenseUnallocableReason };
+      } else {
+        throw new BadRequestException('لا يمكن تسجيل مصروف متأخر بلا مورد محدد: حدد مورد المصروف أو سجل سبب عدم قابلية التخصيص قبل الترحيل. [IMPORT_LATE_EXPENSE_PAYEE_REQUIRED]');
+      }
 
       const result = await this.applyImportCostRevaluation(trx, tenantId, userId, shipment, receipt, {
         amount: dto.lateExpenseAmount,
@@ -3430,7 +3697,9 @@ export class ImportSalesService {
         idempotencyKey: dto.idempotencyKey,
         accountId: dto.accountId ? Number(dto.accountId) : null,
         payableAccountId: dto.payableAccountId ? Number(dto.payableAccountId) : null,
-        credit: { kind: 'payable', supplierId: effectiveExpenseSupplierId },
+        credit: lateExpenseCredit,
+        supplierId: lateExpenseSupplierId,
+        unallocableReason: lateExpenseUnallocableReason || null,
       });
       return {
         success: true,

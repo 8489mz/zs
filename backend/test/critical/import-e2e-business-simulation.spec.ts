@@ -18,6 +18,7 @@ import { up as up241 } from '../../src/database/migrations/2040000000241_import_
 import { up as up242 } from '../../src/database/migrations/2040000000242_import_late_expense_events';
 import { up as up245 } from '../../src/database/migrations/2040000000245_import_preorder_refunds';
 import { up as up286 } from '../../src/database/migrations/2040000000286_import_broker_capitalizations';
+import { up as up290 } from '../../src/database/migrations/2040000000290_import_cost_component_payees';
 import {
   allocateSaleFromImportLots,
   restoreImportLotsFromCancelledSale,
@@ -839,6 +840,7 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
   await up242(db as any);
   await up245(db as any);
   await up286(db as any);
+  await up290(db as any);
 
   // Seed default tenant
   await pglite.exec(`INSERT INTO tenants (id, name) VALUES ('tenant-e2e', 'Global Import & Trade Ltd');`);
@@ -1422,6 +1424,14 @@ async function runBusinessSimulation() {
     customsCostEgp: 140000,
     internalTransportCostEgp: 15000,
     exchangeRateAtArrival: 50.0,
+    // Explicit component payees (INV-IMPORT-SUPPLIER-ATTRIBUTION):
+    // the simulation's single supplier is named for every
+    // component, so the split credits the same books as the old
+    // single-line journal, line by line.
+    freightSupplierId: Number(supplier.id),
+    customsSupplierId: Number(supplier.id),
+    transportSupplierId: Number(supplier.id),
+    demurrageSupplierId: Number(supplier.id),
   });
 
   // Verify inventory lots created automatically
@@ -1451,6 +1461,10 @@ async function runBusinessSimulation() {
     title: 'فاتورة أرضيات إضافية متأخرة من هيئة ميناء الإسكندرية',
     lateExpenseAmount: 15000,
     payableAccountId: accounts['2110'],
+    // Explicit payee (INV-IMPORT-SUPPLIER-ATTRIBUTION): the
+    // simulation's supplier is named, preserving the old
+    // single-payee economics for the downstream assertions.
+    supplierId: Number(supplier.id),
   });
   assert.equal(lateExp.allocation.lateExpenseAmount, 15000);
   console.log('PASS: Late expense allocated with IAS 2 mathematical precision.');
@@ -1962,6 +1976,8 @@ async function runBusinessSimulation() {
     lateExpenseAmount: 20000,
     payableAccountId: accounts['2110'],
     note: 'توزيع متأخر بموجب IAS 2 بين البضاعة المباعة والمتبقية',
+    // Explicit payee (INV-IMPORT-SUPPLIER-ATTRIBUTION), as in Step 15.
+    supplierId: Number(supplier.id),
   });
 
   assert.ok(latePostSaleExp.success);
@@ -2004,6 +2020,10 @@ async function runBusinessSimulation() {
     customsCostEgp: 70000,
     internalTransportCostEgp: 8000,
     exchangeRateAtArrival: 50.0,
+    freightSupplierId: Number(supplier.id),
+    customsSupplierId: Number(supplier.id),
+    transportSupplierId: Number(supplier.id),
+    demurrageSupplierId: Number(supplier.id),
   });
 
   // Verify Lot 2 created for Project 2

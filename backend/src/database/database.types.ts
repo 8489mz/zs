@@ -278,6 +278,8 @@ export interface AccountingSettingsTable {
   sales_tax_account_id: number | null;
   purchase_tax_account_id: number | null;
   manufacturing_overhead_account_id: number | null;
+  /** Tenant-designated suspense/clearing account (INV-IMPORT-SUPPLIER-ATTRIBUTION). NULL = none designated; the clearing path fails closed until one is designated. */
+  clearing_account_id: number | null;
   lock_date_all: ColumnType<string | null, string | Date | null | undefined, string | Date | null | undefined>;
   lock_date_non_adviser: ColumnType<string | null, string | Date | null | undefined, string | Date | null | undefined>;
   lock_date_tax: ColumnType<string | null, string | Date | null | undefined, string | Date | null | undefined>;
@@ -5820,6 +5822,13 @@ export interface ImportShipmentTable {
   /** Form 4 authorizing clearance (INV-IMPORT-FORM4-CLEARANCE-GATE). NULL = none on record. */
   form4_number?: string | null;
   form4_date?: ImportDate;
+  /** Explicit payee per cost component (INV-IMPORT-SUPPLIER-ATTRIBUTION). NULL = unattributed. */
+  freight_supplier_id?: number | null;
+  customs_supplier_id?: number | null;
+  transport_supplier_id?: number | null;
+  demurrage_supplier_id?: number | null;
+  /** Recorded reason when a component is genuinely unallocable (clearing path). NULL = none recorded. */
+  unallocable_cost_reason?: string | null;
   created_at: Generated<Date>;
 }
 export interface ImportShipmentItemTable {
@@ -6010,6 +6019,10 @@ export interface ImportLateExpenseEventTable {
   idempotency_key: string | null;
   /** Broker expense capitalised through this event (post-receipt revaluation path). NULL for ordinary late expenses. */
   broker_expense_id?: string | null;
+  /** Explicit payee of the late expense (INV-IMPORT-SUPPLIER-ATTRIBUTION). NULL when the clearing path applies. */
+  supplier_id?: number | null;
+  /** Recorded reason when the expense is genuinely unallocable (clearing path). NULL = none recorded. */
+  unallocable_reason?: string | null;
 }
 
 export interface ImportContainerRefundEventTable {
