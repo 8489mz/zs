@@ -40,6 +40,34 @@ export async function reconcileStockCountTrace(
   const needsSerials = product.track_serials === true || Boolean(anySerial);
   const needsBatches = Boolean(anyBatch || drug);
 
+  // The counted quantity is the physical on-hand quantity, reservations
+  // included (INV-STOCK-COUNT-ACTUAL-DELTA). The registered serial/batch
+  // ledger is gross too, so it reconciles against the GROSS scoped
+  // quantity at the counted location -- never against the
+  // available-basis expectedQty snapshot, which differs by exactly the
+  // reserved quantity whenever a reservation exists and made every
+  // tracked count with a reservation unpostable. The scoped row is
+  // read locked: the caller already holds the product locks, and the
+  // stale check ran against the same scope moments earlier in this
+  // transaction. A missing balance row reads as zero (fail-closed).
+  // Reserved quantities are never touched here: the stock write
+  // (setScopedStockQty) still refuses a counted quantity below the
+  // reserved quantity, and this helper writes no reserved_qty.
+  let grossScopedQty: number | null = null;
+  async function readGrossScopedQty(): Promise<number> {
+    if (grossScopedQty == null) {
+      let query = trx.selectFrom('product_location_stock').select('qty')
+        .where('tenant_id', '=', scope.tenantId)
+        .where('account_id', '=', scope.accountId)
+        .where('product_id', '=', input.productId)
+        .where('location_id', '=', input.locationId);
+      query = input.branchId == null ? query.where('branch_id', 'is', null) : query.where('branch_id', '=', input.branchId);
+      const row = await query.forUpdate().executeTakeFirst();
+      grossScopedQty = row ? Number(row.qty || 0) : 0;
+    }
+    return grossScopedQty;
+  }
+
   if (needsSerials) {
     if (!Number.isSafeInteger(input.expectedQty) || !Number.isSafeInteger(input.countedQty) ||
       serialNumbers.length !== input.countedQty || new Set(serialNumbers.map(s => String(s).trim().toLowerCase())).size !== serialNumbers.length ||
@@ -51,7 +79,8 @@ export async function reconcileStockCountTrace(
       .where('location_id', '=', input.locationId);
     query = input.branchId == null ? query.where('branch_id', 'is', null) : query.where('branch_id', '=', input.branchId);
     const current = await query.orderBy('id', 'asc').forUpdate().execute();
-    if (current.length !== input.expectedQty) {
+    const ledgerQty = await readGrossScopedQty();
+    if (current.length !== ledgerQty) {
       throw new AppError('الرصيد المسجل للسيريالات لا يساوي المخزون؛ يلزم مصالحة قبل الجرد',
         'COUNT_SERIAL_LEDGER_MISMATCH', 409);
     }
@@ -100,7 +129,8 @@ export async function reconcileStockCountTrace(
       .where('tenant_id', '=', scope.tenantId).where('product_id', '=', input.productId)
       .where('location_id', '=', input.locationId).orderBy('id', 'asc').forUpdate().execute();
     const registeredQty = stored.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
-    if (Math.abs(registeredQty - input.expectedQty) > 1e-7) {
+    const ledgerQty = await readGrossScopedQty();
+    if (Math.abs(registeredQty - ledgerQty) > 1e-7) {
       throw new AppError('سجل التشغيلات لا يطابق المخزون قبل الجرد', 'COUNT_BATCH_LEDGER_MISMATCH', 409);
     }
     const normalized = new Map<number, number>();
