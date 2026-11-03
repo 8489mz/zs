@@ -1762,8 +1762,8 @@ async function runTests() {
     const autopsyP01 = await service.getContainerAutopsySheet(tenantId, shpP01.id);
     assert.strictEqual(autopsyP01.salesAndInventory.invoicedSalesEgp, 74000);
     assert.strictEqual(autopsyP01.profitability.cogsSoldUnitsEgp, 50000);
-    assert.strictEqual(autopsyP01.profitability.realizedNetProfitEgp, 24000);
-    console.log('PASS: Container Autopsy Sheet reflects net profit of 24,000 EGP.');
+    assert.strictEqual(autopsyP01.profitability.realizedGrossTradingMarginEgp, 24000);
+    console.log('PASS: Container Autopsy Sheet reflects gross trading margin of 24,000 EGP (operating and posted costs excluded).');
 
     // =========================================================================
     // Test 9: Cumulative Container Deposit Partial Refunds & Zero-Balance Guard (P0-4)

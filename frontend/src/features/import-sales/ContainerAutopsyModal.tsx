@@ -49,7 +49,7 @@ export function ContainerAutopsyModal({ isOpen, onClose, shipmentId }: Container
       rows.push(['رقم الحاوية', autopsy.operational.containerNumber, 'بوليصة الشحن', autopsy.operational.billOfLading || '—', 'المورد', autopsy.operational.supplierName || '—']);
       rows.push(['إجمالي التكلفة الواصلة (Landed Cost EGP)', Number(autopsy.landedCosts.totalLandedCostEgp || 0), '', '', '', '']);
       rows.push(['إجمالي مبيعات الحاوية (Gross Sales EGP)', Number(autopsy.salesAndInventory.grossSalesEgp || 0), '', '', '', '']);
-      rows.push(['صافي الربح المحقق (Realized Net EGP)', Number(autopsy.profitability.realizedNetProfitEgp || 0), '', '', '', '']);
+      rows.push(['هامش التداول الإجمالي (Gross Trading Margin EGP)', Number(autopsy.profitability.realizedGrossTradingMarginEgp || 0), '', '', '', '']);
       rows.push(['العائد على الاستثمار (ROI %)', `%`, '', '', '', '']);
       rows.push(['قيمة المخزون المتبقي (Landed Value EGP)', Number(autopsy.salesAndInventory.unsoldStockLandedValueEgp || 0), '', '', '', '']);
 
@@ -144,6 +144,11 @@ export function ContainerAutopsyModal({ isOpen, onClose, shipmentId }: Container
               <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
                 متوسط تكلفة القطعة: {formatCurrency(autopsy.landedCosts.avgCostPerUnitEgp)}
               </div>
+              {autopsy.landedCosts.exchangeRateAssumed && (
+                <div style={{ fontSize: 11, color: '#b45309', marginTop: 2 }}>
+                  سعر الصرف مفترض (50) لعدم وجود سعر وصول أو تسعير — كل أرقام الجنيه هنا تقديرية.
+                </div>
+              )}
             </div>
 
             <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12 }}>
@@ -157,12 +162,15 @@ export function ContainerAutopsyModal({ isOpen, onClose, shipmentId }: Container
             </div>
 
             <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12 }}>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>صافي الربح المحقق (Realized Net)</div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: autopsy.profitability.realizedNetProfitEgp >= 0 ? '#15803d' : '#b91c1c', marginTop: 4 }}>
-                {formatCurrency(autopsy.profitability.realizedNetProfitEgp)}
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>هامش التداول الإجمالي (Gross Trading Margin)</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: autopsy.profitability.realizedGrossTradingMarginEgp >= 0 ? '#15803d' : '#b91c1c', marginTop: 4 }}>
+                {formatCurrency(autopsy.profitability.realizedGrossTradingMarginEgp)}
               </div>
               <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
                 العائد الاستثماري: {autopsy.profitability.roiPercentage}% ROI
+              </div>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                هامش إجمالي قبل المصاريف التشغيلية والتكاليف المرحّلة؛ صافي الربح في تقرير أرباح المشروع.
               </div>
             </div>
 

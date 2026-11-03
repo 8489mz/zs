@@ -3353,6 +3353,245 @@ export class ImportSalesService {
     });
   }
 
+  /**
+   * The set of accounts a READ may attribute to a role: the same
+   * acceptance set resolveTenantAccount enforces on posting
+   * paths (accounting_settings override, else the candidate COA
+   * codes, active, correctly typed and flagged). A read sums
+   * over the whole set instead of resolving one id: a missing
+   * role account then yields an empty set and a zero component
+   * instead of breaking the report — posting paths still fail
+   * closed through resolveTenantAccount itself, and a posted
+   * line can only sit on an account the posting resolver
+   * accepted, so the set can never undercount the ledger.
+   */
+  private async eligibleRoleAccountIds(
+    qb: any,
+    tenantId: string,
+    role: 'cogs' | 'forex_loss' | 'forex_gain' | 'inventory',
+  ): Promise<number[]> {
+    const roleSpec: Record<string, { type: string; codes: string[]; settingsKey?: string; requireInventoryFlag?: boolean }> = {
+      cogs: { type: 'expense', codes: ['5110', '5101', '5100'], settingsKey: 'cogs_account_id' },
+      forex_loss: { type: 'expense', codes: ['5201', '5190'] },
+      forex_gain: { type: 'revenue', codes: ['4201', '4190'] },
+      inventory: { type: 'asset', codes: ['1140', '1141', '1200'], settingsKey: 'inventory_account_id', requireInventoryFlag: true },
+    };
+    const spec = roleSpec[role];
+    let settingsId: number | null = null;
+    if (spec.settingsKey) {
+      const settings: any = await qb
+        .selectFrom('accounting_settings')
+        .select(spec.settingsKey as any)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      const raw = settings ? Number((settings as any)[spec.settingsKey]) : NaN;
+      if (Number.isSafeInteger(raw) && raw > 0) settingsId = raw;
+    }
+    const rows: any[] = await qb
+      .selectFrom('accounting_accounts')
+      .select(['id'])
+      .where('tenant_id', '=', tenantId)
+      .where('is_active', '=', true)
+      .where('account_type', '=', spec.type)
+      .$if(spec.requireInventoryFlag === true, (eb: any) => eb.where('is_inventory', '=', true))
+      .where((eb: any) =>
+        eb.or([
+          ...(settingsId !== null ? [eb('id', '=', settingsId)] : []),
+          eb('code', 'in', spec.codes),
+        ]),
+      )
+      .execute();
+    return rows.map((r) => Number(r.id)).filter((n) => Number.isSafeInteger(n) && n > 0);
+  }
+
+  /**
+   * Posted-ledger cost components for one project
+   * (INV-IMPORT-PROFIT-HONESTY). Every figure is read from journals
+   * with status='posted' through the attribution chain the posting
+   * path already records; estimates and memo rows are never read
+   * here. Folded/revalued broker costs are deliberately NOT read:
+   * they reached the GL inside the receipt / late-expense journals,
+   * so counting them again would double-count. All sums are
+   * debit-minus-credit over the resolver-eligible account sets,
+   * so an FX gain (a credit) reduces its component and a reversal
+   * mirror nets its original journal to zero.
+   */
+  private async sumPostedProjectCostComponents(
+    qb: any,
+    tenantId: string,
+    projectId: string,
+    start: Date,
+    end: Date,
+  ): Promise<{
+    shortageExpenseEgp: number;
+    brokerExpensedEgp: number;
+    fxVarianceEgp: number;
+    depositDeductionsEgp: number;
+  }> {
+    const cogsAccountIds = await this.eligibleRoleAccountIds(qb, tenantId, 'cogs');
+    const fxAccountIds = [
+      ...(await this.eligibleRoleAccountIds(qb, tenantId, 'forex_loss')),
+      ...(await this.eligibleRoleAccountIds(qb, tenantId, 'forex_gain')),
+    ];
+
+    const sumLines = async (entryIds: number[], accountIds: number[]): Promise<number> => {
+      if (entryIds.length === 0 || accountIds.length === 0) return 0;
+      const rows: any[] = await qb
+        .selectFrom('journal_entry_lines')
+        .select(['debit', 'credit'])
+        .where('journal_entry_id', 'in', entryIds)
+        .where('account_id', 'in', accountIds)
+        .execute();
+      return rows.reduce((sum, r) => sum + Number(r.debit || 0) - Number(r.credit || 0), 0);
+    };
+    const postedEntries = async (sourceType: string, sourceIds: number[]): Promise<number[]> => {
+      if (sourceIds.length === 0) return [];
+      const rows: any[] = await qb
+        .selectFrom('journal_entries')
+        .select(['id'])
+        .where('tenant_id', '=', tenantId)
+        .where('source_type', '=', sourceType)
+        .where('source_id', 'in', sourceIds)
+        .where('status', '=', 'posted')
+        .where('entry_date', '>=', start)
+        .where('entry_date', '<=', end)
+        .execute();
+      return rows.map((r) => Number(r.id));
+    };
+
+    const projectShipments: any[] = await qb
+      .selectFrom('import_shipments')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('project_id', '=', projectId)
+      .execute();
+    const shipmentIds = projectShipments.map((s) => String(s.id));
+
+    // 1. Shortage expense: the COGS line of the posted receipt
+    // journal, netted with its Batch-3 reversal mirror posted in
+    // the same period (the mirror credits the same COGS line).
+    const receipts: any[] = shipmentIds.length
+      ? await qb
+          .selectFrom('import_inventory_receipts')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('shipment_id', 'in', shipmentIds)
+          .execute()
+      : [];
+    // Receipt ids are BIGSERIAL in production (migration 0230) and
+    // the receipt journal carries Number(receipt.id) as its
+    // source_id. Non-numeric ids (a UUID-shaped harness table
+    // that predates 0230) can never reference a journal entry,
+    // so they are skipped rather than sent to a BIGINT column.
+    const receiptIds = receipts
+      .map((r) => Number(r.id))
+      .filter((n) => Number.isFinite(n));
+    const receiptEntries = await postedEntries('import_inventory_receipt', receiptIds);
+    let reversalIds: number[] = [];
+    if (receiptEntries.length > 0) {
+      const mirrors: any[] = await qb
+        .selectFrom('journal_entries')
+        .select(['id'])
+        .where('tenant_id', '=', tenantId)
+        .where('source_type', '=', 'import_inventory_receipt_reversal')
+        .where('reversal_of_entry_id', 'in', receiptEntries)
+        .where('status', '=', 'posted')
+        .where('entry_date', '>=', start)
+        .where('entry_date', '<=', end)
+        .execute();
+      reversalIds = mirrors.map((m) => Number(m.id));
+    }
+    const shortageExpenseEgp = await sumLines([...receiptEntries, ...reversalIds], cogsAccountIds);
+
+    // 2. Expensed broker costs: the COGS line of the posted
+    // broker-expense journal (Dr COGS / Cr broker-advance). Only
+    // the 'expensed' path posts this source type; folded and
+    // revalued costs post under other source types and are
+    // already inside the receipt / late-expense journals.
+    const brokerByProject: any[] = await qb
+      .selectFrom('import_broker_expenses')
+      .select('serial_id')
+      .where('tenant_id', '=', tenantId)
+      .where('project_id', '=', projectId)
+      .execute();
+    const brokerByShipment: any[] = shipmentIds.length
+      ? await qb
+          .selectFrom('import_broker_expenses')
+          .select('serial_id')
+          .where('tenant_id', '=', tenantId)
+          .where('shipment_id', 'in', shipmentIds)
+          .execute()
+      : [];
+    const brokerSerialIds = [
+      ...new Set(
+        [...brokerByProject, ...brokerByShipment]
+          .map((e) => Number(e.serial_id))
+          .filter((n) => Number.isSafeInteger(n) && n > 0),
+      ),
+    ];
+    const brokerEntries = await postedEntries('import_broker_expense', brokerSerialIds);
+    const brokerExpensedEgp = await sumLines(brokerEntries, cogsAccountIds);
+
+    // 3. FX variance: the forex loss/gain lines of transfer
+    // journals, attributed through the proforma invoice to the
+    // project. Unlinked transfers have no project and are
+    // excluded from the project report by construction.
+    const pis: any[] = await qb
+      .selectFrom('import_proforma_invoices')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('project_id', '=', projectId)
+      .execute();
+    const piIds = pis.map((p) => String(p.id));
+    const payments: any[] = piIds.length
+      ? await qb
+          .selectFrom('supplier_payments')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('proforma_invoice_id', 'in', piIds)
+          .execute()
+      : [];
+    const paymentIds = payments.map((p) => Number(p.id));
+    const fxEntries = await postedEntries('supplier_payment', paymentIds);
+    const fxVarianceEgp = await sumLines(fxEntries, fxAccountIds);
+
+    // 4. Deposit deductions: the COGS line of the posted
+    // container-refund journal, attributed through the deposit
+    // to the project.
+    const depositsByProject: any[] = await qb
+      .selectFrom('import_container_deposits')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('project_id', '=', projectId)
+      .execute();
+    const depositsByShipment: any[] = shipmentIds.length
+      ? await qb
+          .selectFrom('import_container_deposits')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('shipment_id', 'in', shipmentIds)
+          .execute()
+      : [];
+    const depositIds = [
+      ...new Set([...depositsByProject, ...depositsByShipment].map((d) => String(d.id))),
+    ];
+    const refundEvents: any[] = depositIds.length
+      ? await qb
+          .selectFrom('import_container_refund_events')
+          .select('serial_id')
+          .where('tenant_id', '=', tenantId)
+          .where('deposit_id', 'in', depositIds)
+          .execute()
+      : [];
+    const refundSerialIds = refundEvents
+      .map((e) => Number(e.serial_id))
+      .filter((n) => Number.isSafeInteger(n) && n > 0);
+    const refundEntries = await postedEntries('import_container_refund', refundSerialIds);
+    const depositDeductionsEgp = await sumLines(refundEntries, cogsAccountIds);
+
+    return { shortageExpenseEgp, brokerExpensedEgp, fxVarianceEgp, depositDeductionsEgp };
+  }
+
   async generatePeriodProfitReport(
     tenantId: string,
     startDate: string | Date,
@@ -3622,6 +3861,18 @@ export class ImportSalesService {
     const grossProfit = netSalesRevenue - netCogs;
 
     let totalExpenses = 0;
+    let postedCostComponents: {
+      shortageExpenseEgp: number;
+      brokerExpensedEgp: number;
+      fxVarianceEgp: number;
+      depositDeductionsEgp: number;
+      totalPostedCostComponentsEgp: number;
+    } | null = null;
+    let unpostedEstimatesExcluded: {
+      unpostedTripEstimatesEgp: number;
+      unpostedLateExpenseMemosEgp: number;
+      totalExcludedEgp: number;
+    } | null = null;
 
     if (projectId) {
       const sourcingExpenses = await qb
@@ -3648,6 +3899,60 @@ export class ImportSalesService {
         : null;
 
       totalExpenses = Number(sourcingExpenses?.total_sourcing || 0) + Number(lateCogsExp?.total_late_cogs || 0);
+
+      // Posted-ledger components (INV-IMPORT-PROFIT-HONESTY): the
+      // project report counts only posted evidence. Each component
+      // below is read from a posted journal; folded/revalued broker
+      // costs are excluded by construction (already inside the
+      // receipt / late-expense journals). A signed FX variance is
+      // kept signed: a gain reduces expenses.
+      const components = await this.sumPostedProjectCostComponents(qb, tenantId, projectId, start, end);
+      const totalPostedCostComponentsEgp = Number(
+        (
+          components.shortageExpenseEgp +
+          components.brokerExpensedEgp +
+          components.fxVarianceEgp +
+          components.depositDeductionsEgp
+        ).toFixed(2),
+      );
+      postedCostComponents = {
+        shortageExpenseEgp: Number(components.shortageExpenseEgp.toFixed(2)),
+        brokerExpensedEgp: Number(components.brokerExpensedEgp.toFixed(2)),
+        fxVarianceEgp: Number(components.fxVarianceEgp.toFixed(2)),
+        depositDeductionsEgp: Number(components.depositDeductionsEgp.toFixed(2)),
+        totalPostedCostComponentsEgp,
+      };
+      totalExpenses = Number((totalExpenses + totalPostedCostComponentsEgp).toFixed(2));
+
+      // Estimates that must NOT enter profit, reported so the
+      // reader can see exactly what was left out and why: trips
+      // with no posted journal and late-expense memo rows with no
+      // posted journal are not financial evidence yet.
+      const unpostedTrips = await qb
+        .selectFrom('import_sourcing_trips')
+        .select([sql<number>`coalesce(sum(actual_cost_egp), 0)`.as('total_unposted')])
+        .where('tenant_id', '=', tenantId)
+        .where('project_id', '=', projectId)
+        .where('journal_entry_id', 'is', null)
+        .where('start_date', '>=', start.toISOString().slice(0, 10))
+        .where('start_date', '<=', end.toISOString().slice(0, 10))
+        .executeTakeFirst();
+      const unpostedLate = projectShipmentIds.length
+        ? await qb.selectFrom('import_late_expense_events')
+            .select([sql<number>`coalesce(sum(total_amount_egp), 0)`.as('total_unposted')])
+            .where('tenant_id', '=', tenantId)
+            .where('shipment_id', 'in', projectShipmentIds)
+            .where('journal_entry_id', 'is', null)
+            .where('created_at', '>=', start).where('created_at', '<=', end)
+            .executeTakeFirst()
+        : null;
+      const unpostedTripEstimatesEgp = Number(unpostedTrips?.total_unposted || 0);
+      const unpostedLateExpenseMemosEgp = Number(unpostedLate?.total_unposted || 0);
+      unpostedEstimatesExcluded = {
+        unpostedTripEstimatesEgp: Number(unpostedTripEstimatesEgp.toFixed(2)),
+        unpostedLateExpenseMemosEgp: Number(unpostedLateExpenseMemosEgp.toFixed(2)),
+        totalExcludedEgp: Number((unpostedTripEstimatesEgp + unpostedLateExpenseMemosEgp).toFixed(2)),
+      };
     } else {
       const shipmentExpenseIds = await qb
         .selectFrom('import_shipments')
@@ -3751,6 +4056,9 @@ export class ImportSalesService {
         operatingExpenses: Number(totalExpenses.toFixed(2)),
         totalExpenses: Number(totalExpenses.toFixed(2)),
         netProfitPool: Number(netProfitPool.toFixed(2)),
+        postedCostComponents,
+        unpostedEstimatesExcluded,
+        profitBasis: projectId ? 'POSTED_LEDGER_ONLY' : 'COMPANY_WIDE_EXPENSES_TABLE',
         partnerShares,
       },
     };
@@ -7210,9 +7518,33 @@ export class ImportSalesService {
       .where('tenant_id', '=', tenantId)
       .execute();
 
-    const exRate = Number(shipment.exchange_rate_at_arrival || shipment.pricing_exchange_rate || 50);
+    // Exchange rate: the arrival rate is authoritative, then the
+    // pricing rate. A missing rate is NEVER silently replaced by
+    // 50 in a way the reader cannot see: the fallback is labelled
+    // as an assumption (exchangeRateAssumed + exchangeRateSource)
+    // so every EGP figure below is visibly an estimate when no
+    // real rate exists (INV-IMPORT-PROFIT-HONESTY).
+    const arrivalRate = Number(shipment.exchange_rate_at_arrival);
+    const pricingRate = Number(shipment.pricing_exchange_rate);
+    const exchangeRateSource =
+      Number.isFinite(arrivalRate) && arrivalRate > 0
+        ? 'arrival'
+        : Number.isFinite(pricingRate) && pricingRate > 0
+          ? 'pricing'
+          : 'assumed_50';
+    const exRate = exchangeRateSource === 'arrival' ? arrivalRate : exchangeRateSource === 'pricing' ? pricingRate : 50;
+    const exchangeRateAssumed = exchangeRateSource === 'assumed_50';
     const factoryTotalUsd = items.reduce((acc, i) => acc + Number(i.quantity) * Number(i.factory_unit_price_usd), 0);
     const factoryTotalEgp = factoryTotalUsd * exRate;
+    // Factory cost on the B/L (ordered) quantity is what the
+    // shipment fields describe; the received-quantity basis is
+    // the cost of the goods that physically arrived, and the two
+    // differ exactly by the shortage. Both are reported, labelled.
+    const factoryTotalReceivedUsd = items.reduce(
+      (acc, i) => acc + Number(i.received_quantity ?? i.quantity) * Number(i.factory_unit_price_usd),
+      0,
+    );
+    const factoryTotalReceivedEgp = factoryTotalReceivedUsd * exRate;
     const shippingEgp = Number(shipment.shipping_cost_usd || 0) * exRate;
     const customsEgp = Number(shipment.customs_cost_egp || 0);
     const transportEgp = Number(shipment.internal_transport_cost_egp || 0);
@@ -7221,6 +7553,80 @@ export class ImportSalesService {
 
     const totalLandedCostEgp =
       factoryTotalEgp + shippingEgp + customsEgp + transportEgp + demurrageEgp + lateExpensesEgp;
+
+    // Frozen vs open figures (INV-IMPORT-PROFIT-HONESTY). The
+    // posted receipt journal is frozen evidence: its inventory
+    // line is the landed value that actually reached the GL. The
+    // shipment-field total above is an open estimate until the
+    // receipt posts. Broker expenses are broken down by the path
+    // each one took, so a capitalised cost is never presented as
+    // a period expense and an expensed cost is never presented
+    // as landed cost.
+    const postedReceipt = await this.db
+      .selectFrom('import_inventory_receipts')
+      .select(['id', 'state'])
+      .where('tenant_id', '=', tenantId)
+      .where('shipment_id', '=', shipmentId)
+      .where('state', '=', 'posted')
+      .executeTakeFirst();
+    let postedLandedValueEgp: number | null = null;
+    if (postedReceipt) {
+      // Receipt ids are BIGSERIAL in production (migration 0230);
+      // a non-numeric id can never match a journal source_id.
+      const receiptIdNum = Number(postedReceipt.id);
+      const receiptJournal: any = Number.isFinite(receiptIdNum)
+        ? await this.db
+            .selectFrom('journal_entries')
+            .select('id')
+            .where('tenant_id', '=', tenantId)
+            .where('source_type', '=', 'import_inventory_receipt')
+            .where('source_id', '=', receiptIdNum)
+            .where('status', '=', 'posted')
+            .executeTakeFirst()
+        : undefined;
+      if (receiptJournal) {
+        // Read-path set sum (same acceptance set as the posting
+        // resolver): a missing inventory role account leaves the
+        // frozen value null instead of breaking the sheet.
+        const inventoryAccountIds = await this.eligibleRoleAccountIds(this.db as any, tenantId, 'inventory');
+        const invLines: any[] = inventoryAccountIds.length
+          ? await this.db
+              .selectFrom('journal_entry_lines')
+              .select(['debit', 'credit'])
+              .where('journal_entry_id', '=', Number(receiptJournal.id))
+              .where('account_id', 'in', inventoryAccountIds)
+              .execute()
+          : [];
+        postedLandedValueEgp = Number(
+          invLines.reduce((sum, l) => sum + Number(l.debit || 0) - Number(l.credit || 0), 0).toFixed(2),
+        );
+      }
+    }
+    const brokerByState = new Map<string, { count: number; amountEgp: number }>();
+    let brokerVerifiedCount = 0;
+    let brokerUnverifiedCount = 0;
+    for (const e of brokerExpenses) {
+      const state = String((e as any).capitalization_state || 'unknown');
+      const slot = brokerByState.get(state) || { count: 0, amountEgp: 0 };
+      slot.count += 1;
+      slot.amountEgp = Number((slot.amountEgp + Number((e as any).amount_egp || 0)).toFixed(2));
+      brokerByState.set(state, slot);
+      if ((e as any).is_verified) brokerVerifiedCount += 1;
+      else brokerUnverifiedCount += 1;
+    }
+    const brokerLinks: any[] = await this.db
+      .selectFrom('import_broker_capitalizations')
+      .select(['state', 'amount_egp'])
+      .where('tenant_id', '=', tenantId)
+      .where('shipment_id', '=', shipmentId)
+      .execute();
+    const brokerCapitalisedInLandedEgp = Number(
+      brokerLinks
+        .filter((l) => ['folded', 'consumed', 'revalued'].includes(String(l.state)))
+        .reduce((sum, l) => sum + Number(l.amount_egp || 0), 0)
+        .toFixed(2),
+    );
+    const brokerExpensedEgp = Number((brokerByState.get('expensed')?.amountEgp || 0).toFixed(2));
 
     const allocations = await this.db
       .selectFrom('import_sale_allocations')
@@ -7273,13 +7679,28 @@ export class ImportSalesService {
 
     const avgCostPerUnit = totalUnitsReceived > 0 ? totalLandedCostEgp / totalUnitsReceived : 0;
     const cogsSoldUnitsEgp = actualAllocatedCogsEgp > 0 ? actualAllocatedCogsEgp : totalSoldUnits * avgCostPerUnit;
-    const realizedNetProfitEgp = actualInvoicedSalesEgp > 0 ? actualInvoicedSalesEgp - cogsSoldUnitsEgp : 0;
-    const roiPercentage = totalLandedCostEgp > 0 ? (realizedNetProfitEgp / totalLandedCostEgp) * 100 : 0;
+    // Gross trading margin, never "net profit": operating costs,
+    // expensed broker costs, FX variance, shortage expense and
+    // deposit deductions are all excluded from this figure. The
+    // project profit report (INV-IMPORT-PROFIT-HONESTY) is the
+    // place those posted costs land.
+    const realizedGrossTradingMarginEgp = actualInvoicedSalesEgp > 0 ? actualInvoicedSalesEgp - cogsSoldUnitsEgp : 0;
+    const roiPercentage = totalLandedCostEgp > 0 ? (realizedGrossTradingMarginEgp / totalLandedCostEgp) * 100 : 0;
 
     const pendingDeposits = deposits.filter((d) => d.refund_status === 'pending');
     const totalPendingDepositEgp = pendingDeposits.reduce((acc, d) => acc + Number(d.deposit_amount_egp), 0);
 
     return {
+      basis: {
+        exchangeRateSource,
+        exchangeRateAssumed,
+        factoryTotalBasis: 'bill_of_lading_quantity',
+        landedCostBasis: postedLandedValueEgp !== null ? 'posted_receipt_journal' : 'shipment_field_estimates',
+        postedReceipt: postedReceipt !== undefined && postedReceipt !== null,
+        marginBasis:
+          'gross_trading_margin_excluding_operating_costs_broker_expensed_fx_variance_shortage_and_deposit_deductions',
+        liabilityBasis: 'deposits_held_for_open_bookings_net_of_refunds',
+      },
       operational: {
         shipmentId,
         containerNumber: shipment.container_number,
@@ -7303,14 +7724,21 @@ export class ImportSalesService {
       },
       landedCosts: {
         exchangeRate: exRate,
+        exchangeRateSource,
+        exchangeRateAssumed,
         factoryTotalUsd: Number(factoryTotalUsd.toFixed(2)),
         factoryTotalEgp: Number(factoryTotalEgp.toFixed(2)),
+        factoryTotalBasis: 'bill_of_lading_quantity',
+        factoryTotalReceivedUsd: Number(factoryTotalReceivedUsd.toFixed(2)),
+        factoryTotalReceivedEgp: Number(factoryTotalReceivedEgp.toFixed(2)),
         shippingEgp: Number(shippingEgp.toFixed(2)),
         customsEgp: Number(customsEgp.toFixed(2)),
         transportEgp: Number(transportEgp.toFixed(2)),
         demurrageEgp: Number(demurrageEgp.toFixed(2)),
         lateExpensesEgp: Number(lateExpensesEgp.toFixed(2)),
         totalLandedCostEgp: Number(totalLandedCostEgp.toFixed(2)),
+        landedCostBasis: postedLandedValueEgp !== null ? 'posted_receipt_journal' : 'shipment_field_estimates',
+        postedLandedValueEgp,
         avgCostPerUnitEgp: Number(avgCostPerUnit.toFixed(4)),
       },
       salesAndInventory: {
@@ -7320,13 +7748,17 @@ export class ImportSalesService {
         depositsCollectedEgp: Number(preordersDepositsCollected.toFixed(2)),
         refundedPreorderDepositsEgp: Number(preordersDepositsRefunded.toFixed(2)),
         unearnedPreorderLiabilityEgp: Number(preordersDepositsCollected.toFixed(2)),
+        liabilityBasis: 'deposits_held_for_open_bookings_net_of_refunds',
         unsoldStockLandedValueEgp: Number(unsoldStockLandedValueEgp.toFixed(2)),
         lotsCount: lots.length,
       },
       profitability: {
         cogsSoldUnitsEgp: Number(cogsSoldUnitsEgp.toFixed(2)),
-        realizedNetProfitEgp: Number(realizedNetProfitEgp.toFixed(2)),
+        realizedGrossTradingMarginEgp: Number(realizedGrossTradingMarginEgp.toFixed(2)),
+        marginBasis:
+          'gross_trading_margin_excluding_operating_costs_broker_expensed_fx_variance_shortage_and_deposit_deductions',
         roiPercentage: Number(roiPercentage.toFixed(2)),
+        roiBasis: 'gross_trading_margin_divided_by_estimated_total_landed_cost',
       },
       inTransitPreorders: {
         totalBookingsEgp: Number(preordersTotalRevenue.toFixed(2)),
@@ -7338,6 +7770,11 @@ export class ImportSalesService {
         pendingContainerDepositsCount: pendingDeposits.length,
         totalPendingDepositEgp: Number(totalPendingDepositEgp.toFixed(2)),
         brokerExpensesCount: brokerExpenses.length,
+        brokerExpensesByState: Object.fromEntries(brokerByState),
+        brokerVerifiedCount,
+        brokerUnverifiedCount,
+        brokerCapitalisedInLandedEgp,
+        brokerExpensedEgp,
       },
       items,
       lots,
