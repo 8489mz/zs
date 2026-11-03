@@ -63,6 +63,17 @@ function buildService(opts: { preCheckTrip: any; inTxTrip: any; counters: any })
       if (table === 'van_trip_expenses') {
         return chainable({ executeTakeFirst: async () => ({ totalExpenses: 0 }) });
       }
+      // Slice 7 P6: settleTrip resolves the tenant book currency on
+      // the outer connection before the transaction (same pattern as
+      // submitTripSettlement). The mock answers the two reads with
+      // a consistent EGP base so the guard assertions below still
+      // test the in-transaction order only.
+      if (table === 'settings') {
+        return chainable({ executeTakeFirst: async () => ({ value: 'EGP' }) });
+      }
+      if (table === 'currency_exchange_rates') {
+        return chainable({ execute: async () => [{ currency_code: 'EGP', exchange_rate: 1 }] });
+      }
       throw new Error(`unexpected outer query on table ${table}`);
     },
     transaction: () => ({ execute: async (cb: any) => cb(trx) }),

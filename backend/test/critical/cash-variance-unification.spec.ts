@@ -15,23 +15,19 @@ import { computeCashDrawerVariance } from '../../src/modules/cash-drawer/helpers
  * That path now calls the shared computeCashDrawerVariance helper at
  * tenant book digits, the same helper the cash-drawer shift close uses.
  *
- * Deliberately NOT converged: the settleTrip path still computes its
- * cash variance inline with the same toFixed(2) form. That site was
- * previously proposed as P9 and cancelled when the user pivoted away
- * from the rep/settlement line (2026-10-30: "leave the reps aside",
- * do not resume unless asked). Converging it is a separate decision
- * for the user; this package must not resume cancelled work. The
- * source pin below pins the exclusion: settleTrip still holds the
- * inline form, so a future change there is visible, not silent.
+ * Converged by Slice 7 Batch 2 P6 (INV-VAN-SETTLE-BOOK-DIGITS-VARIANCE,
+ * user-authorized 2026-11-03 as the second batch of 4): settleTrip now
+ * computes its cash variance through the same shared helper at book
+ * digits, and its cash ledger gates are nonzero-at-book-digits. The
+ * source pin below pins the convergence, so a future regression to
+ * the inline form is visible, not silent.
  *
  * Deliberately unchanged, as separate findings:
- * - The expectedCash derivation in settleTrip
- *   (grossCashCollected - totalTripExpenses, rounded with toFixed(2))
- *   is not a variance computation; it still pre-rounds the expected
- *   side before the variance is computed.
- * - The +/-0.01 ledger thresholds and the -0.5 suspicion threshold are
- *   policy bands (same precedent as the P8 0.01 status band), not
- *   precision.
+ * - The -0.5 suspicion threshold is a currency materiality policy
+ *   band, not precision (same precedent as the P8 0.01 status band).
+ * - The stock-shortage ledger gate (> 0.01 on the engine-computed
+ *   stock cost) is a different figure from the cash variance and is
+ *   untouched by the convergence.
  *
  * The service is driven with a recording mock database, mirroring the
  * van-settle-double-settle critical spec: the real service methods,
@@ -216,9 +212,9 @@ async function main(): Promise<void> {
   }
 
   // Source pin: submitTripSettlement calls the shared helper with
-  // book digits and keeps no inline toFixed(2) variance form, while
-  // settleTrip deliberately still holds the inline form (P9-cancelled
-  // site, excluded from this package -- see the header).
+  // book digits and keeps no inline toFixed(2) variance form, and
+  // settleTrip does the same since Slice 7 P6 converged it (the
+  // inline form is gone from both paths).
   {
     const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
     assert.ok(source.includes("import { computeCashDrawerVariance } from '../cash-drawer/helpers/cash-drawer.helper';"));
@@ -230,8 +226,9 @@ async function main(): Promise<void> {
     const settleBody = source.slice(settleStart, afterSettle);
     assert.ok(submitBody.includes('computeCashDrawerVariance(countedCash, expectedCash, bookDigits)'));
     assert.ok(!submitBody.includes('(countedCash - expectedCash).toFixed(2)'));
-    assert.ok(settleBody.includes('(countedCash - expectedCash).toFixed(2)'));
-    assert.ok(!settleBody.includes('computeCashDrawerVariance(countedCash, expectedCash,'));
+    assert.ok(settleBody.includes('computeCashDrawerVariance(countedCash, expectedCash, bookDigits)'));
+    assert.ok(!settleBody.includes('(countedCash - expectedCash).toFixed(2)'));
+    assert.ok(!settleBody.includes('(grossCashCollected - totalTripExpenses).toFixed(2)'));
   }
 
   console.log('cash-variance-unification: all cases passed');

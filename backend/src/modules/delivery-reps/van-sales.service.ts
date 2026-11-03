@@ -3906,9 +3906,16 @@ export class VanSalesService {
     const totalTripExpenses = Number(tripExpensesRow?.totalExpenses || 0);
 
     const grossCashCollected = Number(trip.cash_collected || 0);
-    const expectedCash = Number((grossCashCollected - totalTripExpenses).toFixed(2));
+    // INV-VAN-SETTLE-BOOK-DIGITS-VARIANCE: the settle cash variance is
+    // computed at tenant book digits through the shared drawer helper,
+    // exactly like submitTripSettlement (was hardcoded toFixed(2), so
+    // a KWD 0.005 variance vanished and submit/settle disagreed by a
+    // fils on the same trip). The expected side is rounded to book
+    // digits before the variance is taken, matching the submit path.
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
+    const expectedCash = roundMoney(grossCashCollected - totalTripExpenses, bookDigits);
     const countedCash = Number(payload.countedCash || 0);
-    const cashVariance = Number((countedCash - expectedCash).toFixed(2));
+    const cashVariance = computeCashDrawerVariance(countedCash, expectedCash, bookDigits);
     let unloadedItemsCount = 0;
     let totalStockVarianceCost = 0;
     let totalUnloadedCost = 0;
@@ -4129,8 +4136,12 @@ export class VanSalesService {
         .where('tenant_id', '=', tenantId)
         .execute();
 
-      // Record cash variance in rep financial ledger
-      if (cashVariance < -0.01) {
+      // Record cash variance in rep financial ledger. The gate is
+      // nonzero-at-book-digits (INV-VAN-SETTLE-BOOK-DIGITS-VARIANCE):
+      // the old fixed 0.01 gate dropped real fils variances on
+      // 3-decimal tenants. The 0.5 suspicion gate below is a currency
+      // materiality policy and is deliberately unchanged.
+      if (cashVariance < 0) {
         await trxAny
           .insertInto('van_rep_financial_settlements')
           .values({
@@ -4146,7 +4157,7 @@ export class VanSalesService {
             updated_at: sql`NOW()`,
           })
           .execute();
-      } else if (cashVariance > 0.01) {
+      } else if (cashVariance > 0) {
         await trxAny
           .insertInto('van_rep_financial_settlements')
           .values({
