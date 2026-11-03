@@ -1771,15 +1771,21 @@ export class VanSalesService {
       return await VanSalesService.inFlightSalePromises.get(fingerprintKey)!;
     }
 
-    // 2. Recent In-Memory Cache Deduplication (< 5 seconds for fingerprint, < 30s for txKey)
+    // 2. Recent In-Memory Cache Deduplication (< 30s for txKey only).
+    // INV-VAN-DEDUP-DISTINGUISHING-KEY: a COMPLETED sale is never
+    // returned from a fingerprint-keyed cache. The fingerprint
+    // (tenant+trip+rep+customer+items signature) identifies a basket,
+    // not a submission: two genuinely identical baskets sold seconds
+    // apart are two sales. Only the client-supplied clientTxId key
+    // (txKey) caches a completed result, backed by the durable
+    // [tx:clientTxId] database check below. Concurrent keyless
+    // duplicates are still collapsed by the in-flight promise map
+    // (step 1), and the 4-second multiset database backstop (step 4)
+    // is unchanged.
     const nowMs = Date.now();
     if (txKey && VanSalesService.recentSalesCache.has(txKey)) {
       const entry = VanSalesService.recentSalesCache.get(txKey)!;
       if (nowMs - entry.timestamp < 30000) return entry.result;
-    }
-    if (VanSalesService.recentSalesCache.has(fingerprintKey)) {
-      const entry = VanSalesService.recentSalesCache.get(fingerprintKey)!;
-      if (nowMs - entry.timestamp < 5000) return entry.result;
     }
 
     // Register promise IMMEDIATELY (synchronously) before any await call
@@ -1871,8 +1877,10 @@ export class VanSalesService {
     try {
       const result = await salePromise;
       const ts = Date.now();
+      // INV-VAN-DEDUP-DISTINGUISHING-KEY: cache the completed result
+      // under the clientTxId key only — never under the fingerprint
+      // key (see step 2 above).
       if (txKey) VanSalesService.recentSalesCache.set(txKey, { result, timestamp: ts });
-      VanSalesService.recentSalesCache.set(fingerprintKey, { result, timestamp: ts });
 
       if (VanSalesService.recentSalesCache.size > 200) {
         const threshold = ts - 60000;

@@ -281,13 +281,15 @@ async function main() {
       assert.ok(quotationsSource.includes('resolveConversionPaymentTerms(undefined)'));
     }
 
-    // 10. Invariant pin: exactly once, last line; P3 entry still once.
+    // 10. Invariant pin: exactly once; P3 entry still once. (Last-line
+    // ownership passes to newer entries: INV-VAN-DEDUP-DISTINGUISHING-KEY
+    // appends after this entry, so the last-line assertion that held at
+    // this package's own landing is relaxed here — test-only, behaviour
+    // cases above are unchanged.)
     {
       const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
       assert.equal(invariants.split('INV-CONVERSION-PAYMENT-TERMS-CARRIED').length - 1, 1, 'the invariant entry must exist exactly once');
       assert.equal(invariants.split('INV-FLOATING-POOL-ALLOCATION-LEG').length - 1, 1, 'the P3 invariant entry must still exist exactly once');
-      const lines = invariants.split('\n').filter((line) => line.trim().length > 0);
-      assert.ok(lines[lines.length - 1].includes('INV-CONVERSION-PAYMENT-TERMS-CARRIED'), 'the invariant entry must be the last line');
     }
   } finally {
     await db.destroy();

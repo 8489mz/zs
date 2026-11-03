@@ -305,12 +305,14 @@ async function main(): Promise<void> {
     assert.ok(helper.includes('fromPool: true'));
   }
 
-  // --- Case 12: invariant pin — exactly one entry.
+  // --- Case 12: invariant pin — exactly one entry. (Last-line
+  // ownership passes to newer entries: INV-VAN-DEDUP-DISTINGUISHING-KEY
+  // appends after this entry, so the last-line assertion that held at
+  // this package's own landing is relaxed here — test-only, behaviour
+  // cases above are unchanged.)
   {
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(invariants.split('INV-FLOATING-POOL-ALLOCATION-LEG').length - 1, 1, 'the invariant entry must exist exactly once');
-    const lastLine = invariants.trimEnd().split('\n').pop() || '';
-    assert.ok(lastLine.includes('INV-FLOATING-POOL-ALLOCATION-LEG'), 'the invariant entry must be the last line');
   }
 
   console.log('Sale floating-pool allocation-leg tests passed');
