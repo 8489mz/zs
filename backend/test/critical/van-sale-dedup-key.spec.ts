@@ -314,8 +314,12 @@ async function main(): Promise<void> {
     assert.equal(invariants.split('INV-VAN-DEDUP-DISTINGUISHING-KEY').length - 1, 1, 'the invariant entry must exist exactly once');
     assert.equal(invariants.split('INV-FLOATING-POOL-ALLOCATION-LEG').length - 1, 1, 'the P3 invariant entry must still exist exactly once');
     assert.equal(invariants.split('INV-CONVERSION-PAYMENT-TERMS-CARRIED').length - 1, 1, 'the P6b invariant entry must still exist exactly once');
-    const lines = invariants.trimEnd().split('\n');
-    assert.ok(lines[lines.length - 1].includes('INV-VAN-DEDUP-DISTINGUISHING-KEY'), 'the invariant entry must be the last line');
+    // Last-line ownership passes to newer entries:
+    // INV-CONVERSION-LIFECYCLE-RACES appends after this entry, so
+    // the last-line assertion that held at this package's own
+    // landing is relaxed here — test-only, behaviour cases above
+    // are unchanged. (Same chaining precedent as P7-2's own
+    // relaxation of the P3/P6b last-line pins.)
   }
 
   console.log('Van sale dedup key tests passed');

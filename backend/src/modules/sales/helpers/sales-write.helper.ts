@@ -1,6 +1,7 @@
 import { AppError } from '../../../common/errors/app-error';
 import { NormalizedSalePayload } from '../dto/upsert-sale.dto';
 import { type MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { IDEMPOTENCY_STUCK_PROCESSING_MS } from '../../../core/idempotency/idempotency.service';
 
 // Book digits are REQUIRED (INV-POS-OFFER-DIGITS): this rounder is
 // used for every money amount the sale helper computes, so a silent
@@ -221,6 +222,82 @@ export function resolveConversionPaymentTerms(
     'CONVERSION_PAYMENT_TERMS_UNKNOWN',
     400,
   );
+}
+
+/*
+ * Conversion lifecycle recovery (INV-CONVERSION-LIFECYCLE-RACES).
+ *
+ * The order claim (ZS-075) and the new quotation claim are atomic
+ * status transitions, but a claim alone cannot tell a live
+ * conversion from a dead one: a process that dies after the sale
+ * commits and before the 'converted' marking strands the document
+ * in 'converting' forever. The durable evidence is the
+ * operation_executions row reserved for the conversion's
+ * idempotency key BEFORE createSale runs: createSale commits that
+ * row (document_id = the sale id, response payload carries saleId)
+ * atomically inside the sale transaction, so a 'committed' row
+ * proves the sale exists and a row that is not committed proves it
+ * does not — no sale commits without committing its row, and no
+ * row commits without its sale. The decision below is pure so the
+ * spec can drive the whole table without a database:
+ *
+ * - 'committed' row            => 'attach': re-attach the existing
+ *   sale, never create a second one.
+ * - 'failed' row               => 'stale-retry': the previous
+ *   attempt recorded its failure (its sale never committed), so
+ *   the claim may be reverted and the conversion retried.
+ * - 'processing' row, fresh    => 'in-flight': a conversion may
+ *   still be running; fail closed, do not touch the claim.
+ * - 'processing' row, stale    => 'stale-retry': older than the
+ *   codebase's own stuck-processing threshold
+ *   (IDEMPOTENCY_STUCK_PROCESSING_MS, 60s); the reserver is dead.
+ * - 'recovery_required' row    => 'in-flight': D5 reserves this
+ *   state for manual review; nothing auto-retries it.
+ * - no row, fresh claim        => 'in-flight': the claim was just
+ *   taken by a concurrent attempt that has not reserved yet.
+ * - no row, stale claim        => 'stale-retry': the claimer died
+ *   between claiming and reserving; createSale never ran.
+ *
+ * A stale verdict is only ever acted on by reverting the claim
+ * (guarded converting -> confirmed / previous status) and
+ * re-claiming atomically, so a concurrent converter that wins the
+ * re-claim still cannot produce a second sale.
+ */
+export type ConversionRecoveryVerdict = 'attach' | 'stale-retry' | 'in-flight';
+
+export type ConversionOperationRow = {
+  status: string;
+  documentId: string | null;
+  responsePayload: unknown;
+  updatedAt: Date | string;
+} | null;
+
+export function decideConversionRecovery(
+  row: ConversionOperationRow,
+  claimedAt: Date | string,
+  nowMs: number = Date.now(),
+): ConversionRecoveryVerdict {
+  if (row?.status === 'committed') return 'attach';
+  if (row?.status === 'failed') return 'stale-retry';
+  if (row?.status === 'recovery_required') return 'in-flight';
+  if (row?.status === 'processing') {
+    const ageMs = nowMs - new Date(row.updatedAt).getTime();
+    return ageMs > IDEMPOTENCY_STUCK_PROCESSING_MS ? 'stale-retry' : 'in-flight';
+  }
+  if (row && row.status !== 'processing') return 'in-flight';
+  const claimAgeMs = nowMs - new Date(claimedAt).getTime();
+  return claimAgeMs > IDEMPOTENCY_STUCK_PROCESSING_MS ? 'stale-retry' : 'in-flight';
+}
+
+/** Sale id carried by a committed conversion row, if either copy parses. */
+export function conversionRecoverySaleId(row: ConversionOperationRow): number | null {
+  if (!row) return null;
+  const fromDocument = Number(row.documentId);
+  if (Number.isInteger(fromDocument) && fromDocument > 0) return fromDocument;
+  const payload = row.responsePayload as { saleId?: unknown } | null | undefined;
+  const fromPayload = Number(payload?.saleId);
+  if (Number.isInteger(fromPayload) && fromPayload > 0) return fromPayload;
+  return null;
 }
 
 /**

@@ -385,4 +385,46 @@ export class IdempotencyService {
     }
     return null;
   }
+
+  /**
+   * INV-CONVERSION-LIFECYCLE-RACES: read-only view of one reserved
+   * operation, for callers that must decide what a stuck claim means
+   * (order/quotation conversion recovery, stuck-claim deletion).
+   * Unlike check(), this returns every status — a 'processing' row
+   * and its age are evidence, not just a cache miss — and it accepts
+   * an explicit executor so the read can run inside the caller's
+   * transaction, after its row locks are held. Never writes.
+   */
+  async getOperationState(
+    params: Pick<IdempotencyReservation, 'tenantId' | 'accountId' | 'idempotencyKey' | 'operationType'>,
+    executor?: Kysely<Database>,
+  ): Promise<{
+    status: string;
+    documentId: string | null;
+    responsePayload: any;
+    updatedAt: Date;
+  } | null> {
+    const db = executor ?? this.db;
+    const record = await db
+      .selectFrom('operation_executions')
+      .selectAll()
+      .where('tenant_id', '=', params.tenantId)
+      .where('account_id', '=', params.accountId)
+      .where('idempotency_key', '=', params.idempotencyKey)
+      .where('operation_type', '=', params.operationType)
+      .executeTakeFirst();
+    if (!record) return null;
+    let responsePayload: any;
+    try {
+      responsePayload = record.response_payload ? JSON.parse(record.response_payload) : undefined;
+    } catch {
+      responsePayload = undefined;
+    }
+    return {
+      status: record.status,
+      documentId: record.document_id ?? null,
+      responsePayload,
+      updatedAt: new Date(record.updated_at as any),
+    };
+  }
 }
