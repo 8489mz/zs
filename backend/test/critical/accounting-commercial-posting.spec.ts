@@ -78,7 +78,7 @@ async function main() {
         tip_amount numeric DEFAULT 0, prices_include_tax boolean DEFAULT false, sale_origin text,
         payment_type text DEFAULT 'cash', collection_status text, status text DEFAULT 'posted');
       CREATE TABLE sale_payments (tenant_id text, sale_id bigint, payment_channel text, amount numeric);
-      CREATE TABLE sale_items (id bigint PRIMARY KEY, tenant_id text, sale_id bigint, product_id bigint, qty numeric, cost_price numeric);
+      CREATE TABLE sale_items (id bigint PRIMARY KEY, tenant_id text, sale_id bigint, product_id bigint, qty numeric, cost_price numeric, unit_multiplier numeric, modifiers jsonb);
       CREATE TABLE purchases (id bigint PRIMARY KEY, tenant_id text, doc_no text, supplier_id bigint,
         payment_type text, subtotal numeric, discount numeric DEFAULT 0, tax_amount numeric, total numeric,
         branch_id bigint, location_id bigint, created_by bigint DEFAULT 1, created_at timestamptz DEFAULT '2026-10-01',

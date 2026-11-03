@@ -39,6 +39,124 @@ type DomainJournalLineDraft = Omit<JournalLineDraft, 'branchId' | 'locationId'> 
   locationId?: number | null;
 };
 
+/*
+ * COGS remainder-absorption input shaping (INV-COGS-REMAINDER-SOLD-UNIT-BASIS).
+ *
+ * sale_items.cost_price is stored PER SOLD UNIT (frozen WAC x unit_multiplier
+ * plus restaurant modifier costs), while product_location_stock.qty is in BASE
+ * units. The residual engine anchors on (remaining + sold) x unit cost, so the
+ * remaining quantity must be converted to the sold-unit basis before the
+ * residual is computed, or a multi-unit sale re-opens the one-minor-unit
+ * GL-vs-physical split the remainder absorption closed.
+ *
+ * Modifier lists are read from the stored sale_items.modifiers JSON. The
+ * writer stores either a plain array or the offer wrapper
+ * { mods: [...], offer: {...} }; both shapes are unwrapped here (the frozen-
+ * cost helper only understands the plain array, so the wrapper must not be
+ * mistaken for "no modifiers"). A modifier entry carries, per sold unit,
+ * qty, consumptionQty (base units of the component per modifier unit) and
+ * costPrice (component WAC x consumptionQty, 6dp, from
+ * resolveSaleModifierCosts, which costs every component at the LOCKED
+ * product WAC). An unparseable value fails safe to "no modifiers", matching
+ * the frozen-cost helper's posture; nothing here re-reads the current WAC,
+ * so frozen costs stay frozen on edits.
+ */
+type ResidualModifier = {
+  componentId: number;
+  qtyPerSoldUnit: number;
+  consumptionQty: number;
+  costPrice: number;
+};
+
+function residualModifierList(modifiers: unknown): ResidualModifier[] {
+  let value: unknown = modifiers;
+  if (typeof value === 'string') {
+    if (!value.trim()) return [];
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+  const list: unknown = Array.isArray(value)
+    ? value
+    : value && typeof value === 'object' && Array.isArray((value as any).mods)
+      ? (value as any).mods
+      : null;
+  if (!Array.isArray(list)) return [];
+  const parsed: ResidualModifier[] = [];
+  for (const mod of list as Array<Record<string, any>>) {
+    if (!mod || typeof mod !== 'object') continue;
+    parsed.push({
+      componentId: Number(mod.productId || mod.componentProductId || mod.component_product_id || 0) || 0,
+      qtyPerSoldUnit: Number(mod.qty ?? 1),
+      consumptionQty: Number(mod.consumptionQty ?? mod.consumption_qty ?? 1),
+      costPrice: Number(mod.costPrice ?? mod.cost_price ?? 0),
+    });
+  }
+  return parsed;
+}
+
+/*
+ * Convert one residual group's remaining quantity (base units) to the
+ * sold-unit basis the residual engine anchors on: the remaining VALUE
+ * (parent stock at its per-base-unit frozen WAC plus anchored modifier
+ * components at theirs) divided by the group's per-sold-unit frozen cost.
+ * With no modifiers this is exactly remaining / unit_multiplier.
+ *
+ * Apportionment follows the existing per-group rule: the full remaining
+ * quantity of a product is assigned to the first occurrence of EACH
+ * product-and-cost group, as before — a product sold at two frozen
+ * costs in one sale therefore carries one minor unit of anchor
+ * rounding per group, and the remaining GL equals physical exactly
+ * for the single-group-per-product cases. A modifier component's remaining stock is
+ * anchored at most once per sale, in the first group that consumes it; a
+ * component that is itself a sold line in the same sale is anchored by its
+ * own line group, never twice, and a component identical to the parent
+ * product shares the parent pool and is not counted again. Zero, negative
+ * or non-finite frozen costs keep the old base-unit assignment, so the
+ * residual engine's existing fail-closed behaviour for those inputs is
+ * unchanged. A stored modifier mix whose contributions exceed the frozen
+ * line cost by more than a rounding hair is corrupt frozen data and fails
+ * closed instead of inventing an anchor.
+ */
+function residualSoldUnitRemaining(args: {
+  unitCost: number;
+  multiplier: number;
+  remainingBaseQty: number;
+  modifiers: ResidualModifier[];
+  remainingByProduct: Map<number, number>;
+  soldProductIds: Set<number>;
+  anchoredModifierProducts: Set<number>;
+  parentProductId: number;
+}): number {
+  if (!(args.unitCost > 0)) return args.remainingBaseQty;
+  let modifierContribution = 0;
+  for (const mod of args.modifiers) {
+    if (Number.isFinite(mod.qtyPerSoldUnit) && Number.isFinite(mod.costPrice)) {
+      modifierContribution += mod.qtyPerSoldUnit * mod.costPrice;
+    }
+  }
+  let parentPerSoldUnit = args.unitCost - modifierContribution;
+  if (parentPerSoldUnit < 0) {
+    if (parentPerSoldUnit < -0.001) {
+      throw new Error('Stored sale line cost is inconsistent with its modifier costs');
+    }
+    parentPerSoldUnit = 0;
+  }
+  let remainingValue = args.remainingBaseQty * (parentPerSoldUnit / args.multiplier);
+  for (const mod of args.modifiers) {
+    if (mod.componentId <= 0 || mod.componentId === args.parentProductId) continue;
+    if (args.soldProductIds.has(mod.componentId)) continue;
+    if (args.anchoredModifierProducts.has(mod.componentId)) continue;
+    if (!(mod.consumptionQty > 0) || !Number.isFinite(mod.costPrice)) continue;
+    const componentWac = mod.costPrice / mod.consumptionQty;
+    remainingValue += (args.remainingByProduct.get(mod.componentId) || 0) * componentWac;
+    args.anchoredModifierProducts.add(mod.componentId);
+  }
+  return remainingValue / args.unitCost;
+}
+
 type ExpenseAccountCandidate = {
   id: number;
   code: string;
@@ -790,13 +908,15 @@ export class AccountingPostingService {
   }
 
   /**
-   * INV-COGS-REMAINDER-ABSORPTION: COGS for a sale (or edited sale)
-   * is the residual of the pre-sale stock value minus the remaining
-   * stock value at book digits, per product and frozen unit cost.
-   * The remaining quantity is read AFTER the sale's stock movement
-   * on the caller's transaction handle, summed across all branches
-   * and locations (weighted cost is product-level), so the read
-   * and the journal commit or roll back together. Products with
+   * INV-COGS-REMAINDER-ABSORPTION + INV-COGS-REMAINDER-SOLD-UNIT-BASIS:
+   * COGS for a sale (or edited sale) is the residual of the pre-sale stock
+   * value minus the remaining stock value at book digits, per product and
+   * frozen unit cost. The remaining quantity is read AFTER the sale's stock
+   * movement on the caller's transaction handle, summed across all branches
+   * and locations (weighted cost is product-level), and converted to the
+   * sold-unit basis before the residual (remaining VALUE at the frozen
+   * per-base-unit costs, divided by the per-sold-unit frozen cost), so the
+   * read and the journal commit or roll back together. Products with
    * no stock row (or a null product) contribute zero remaining
    * quantity, which makes the residual equal the old total
    * rounding for those lines.
@@ -809,26 +929,42 @@ export class AccountingPostingService {
   ): Promise<number> {
     const saleItems = await queryable
       .selectFrom('sale_items')
-      .select(['product_id', 'qty', 'cost_price'])
+      .select(['product_id', 'qty', 'cost_price', 'unit_multiplier', 'modifiers'])
       .where('sale_id', '=', saleId)
       .where(sql<boolean>`tenant_id = ${tenantId}`)
+      // Deterministic line order: the remaining quantity of a product is
+      // assigned to its first product-and-cost group, so the anchor must
+      // not depend on the database's unspecified row order.
+      .orderBy('id')
       .execute();
-    const productIds = [...new Set(saleItems.map((item) => Number(item.product_id || 0)).filter((id) => id > 0))];
+    const soldProductIds = new Set<number>();
+    for (const item of saleItems) {
+      const id = Number(item.product_id || 0);
+      if (id > 0) soldProductIds.add(id);
+    }
+    const modifierLists = saleItems.map((item) => residualModifierList((item as any).modifiers));
+    const productIds = new Set<number>(soldProductIds);
+    for (const mods of modifierLists) {
+      for (const mod of mods) {
+        if (mod.componentId > 0) productIds.add(mod.componentId);
+      }
+    }
     const remainingByProduct = new Map<number, number>();
-    if (productIds.length > 0) {
+    if (productIds.size > 0) {
       const stockRows = await queryable
         .selectFrom('product_location_stock')
         .select(['product_id', 'qty'])
         .where('tenant_id', '=', tenantId)
-        .where('product_id', 'in', productIds)
+        .where('product_id', 'in', [...productIds])
         .execute();
       for (const row of stockRows) {
         const id = Number(row.product_id || 0);
         remainingByProduct.set(id, (remainingByProduct.get(id) || 0) + Number(row.qty || 0));
       }
     }
+    const anchoredModifierProducts = new Set<number>();
     const grouped = new Map<string, CogsResidualGroup>();
-    for (const item of saleItems) {
+    saleItems.forEach((item, index) => {
       const productId = Number(item.product_id || 0);
       const unitCost = Number(item.cost_price || 0);
       const qtySold = Number(item.qty || 0);
@@ -836,10 +972,25 @@ export class AccountingPostingService {
       const existing = grouped.get(key);
       if (existing) {
         existing.qtySold += qtySold;
-      } else {
-        grouped.set(key, { qtySold, unitCost, qtyRemaining: productId > 0 ? (remainingByProduct.get(productId) || 0) : 0 });
+        return;
       }
-    }
+      const rawMultiplier = Number((item as any).unit_multiplier ?? 1);
+      const multiplier = Number.isFinite(rawMultiplier) && rawMultiplier > 0 ? rawMultiplier : 1;
+      grouped.set(key, {
+        qtySold,
+        unitCost,
+        qtyRemaining: residualSoldUnitRemaining({
+          unitCost,
+          multiplier,
+          remainingBaseQty: productId > 0 ? (remainingByProduct.get(productId) || 0) : 0,
+          modifiers: modifierLists[index],
+          remainingByProduct,
+          soldProductIds,
+          anchoredModifierProducts,
+          parentProductId: productId,
+        }),
+      });
+    });
     return cogsResidualAmount([...grouped.values()], bookDigits);
   }
 
