@@ -5,6 +5,15 @@
  * Inspection fee (GOEIC / NTRA / NFSA): 1.00%.
  */
 
+/**
+ * Version stamp for the bundled snapshot below
+ * (INV-IMPORT-TARIFF-VERSIONING). The refresh path stamps every
+ * row it inserts with this value; it names the bundled source
+ * (Decree 218/2022), not a re-verification date — the snapshot
+ * is explicit data, never a silent background update.
+ */
+export const TARIFF_DATA_VERSION = 'decree-218-2022';
+
 export interface CustomsTariffSeedItem {
   hs_code: string;
   description_ar: string;

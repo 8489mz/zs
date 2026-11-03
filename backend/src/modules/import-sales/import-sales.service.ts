@@ -55,7 +55,7 @@ import { currencyMoneyDigits, roundMoney } from '../accounting/engines/money-min
 import { generateDailySequenceNumber } from '../delivery-reps/services/van-common.util';
 import { resolveFxRate } from '../accounting/fx-rate-resolution';
 import { calculateImportFeasibility, FeasibilityCalculationResult } from './engines/import-feasibility.engine';
-import { EGYPT_CUSTOMS_TARIFFS, TARIFF_SECTORS } from './data/egypt-customs-tariffs.data';
+import { EGYPT_CUSTOMS_TARIFFS, TARIFF_DATA_VERSION, TARIFF_SECTORS } from './data/egypt-customs-tariffs.data';
 import {
   calculateLandedCostBreakdown,
   calculateDemurrageRisk,
@@ -1442,9 +1442,20 @@ export class ImportSalesService {
     return TARIFF_SECTORS;
   }
 
+  /**
+   * Explicit manual refresh of the bundled official tariffs
+   * (INV-IMPORT-TARIFF-VERSIONING). Insert-only: a row the tenant
+   * already has — including a tenant-edited rate — is NEVER
+   * overwritten, and the refresh stamps every row it inserts
+   * with TARIFF_DATA_VERSION so reads can name their snapshot.
+   * No background job, cron or read path calls this; the only
+   * entry point is the explicit POST customs-tariffs/sync-official
+   * route. The counts returned are the refresh log.
+   */
   async syncOfficialTariffs(tenantId: string) {
+    let inserted = 0;
     for (const item of EGYPT_CUSTOMS_TARIFFS) {
-      await this.db
+      const rows = await this.db
         .insertInto('import_customs_tariffs')
         .values({
           tenant_id: tenantId,
@@ -1459,37 +1470,33 @@ export class ImportSalesService {
           category_ar: item.category_ar,
           official_source: item.official_source,
           is_official: true,
+          data_version: TARIFF_DATA_VERSION,
         })
-        .onConflict((oc) =>
-          oc.columns(['tenant_id', 'hs_code']).doUpdateSet({
-            description_ar: item.description_ar,
-            description_en: item.description_en || null,
-            duty_rate_percent: item.duty_rate_percent,
-            vat_rate_percent: item.vat_rate_percent,
-            inspection_fees_percent: item.inspection_fees_percent,
-            regulatory_body: item.regulatory_body || 'GOEIC',
-            sector: item.sector,
-            category_ar: item.category_ar,
-            official_source: item.official_source,
-            is_official: true,
-          })
-        )
+        .onConflict((oc) => oc.columns(['tenant_id', 'hs_code']).doNothing())
+        .returning('hs_code')
         .execute();
+      inserted += rows.length;
     }
-    return { success: true, count: EGYPT_CUSTOMS_TARIFFS.length };
+    const total = EGYPT_CUSTOMS_TARIFFS.length;
+    return {
+      success: true,
+      count: total,
+      inserted,
+      skipped: total - inserted,
+      total,
+      dataVersion: TARIFF_DATA_VERSION,
+    };
   }
 
+  /**
+   * Reads return exactly what the tenant stored — the last
+   * explicit version. The former auto-sync (seeding the bundled
+   * snapshot whenever fewer than 15 rows existed, overwriting
+   * tenant edits on every read) is removed: a tenant with no
+   * tariff rows gets an empty list, and the calculator path
+   * labels an unknown HS code instead of silently using zeros.
+   */
   async listCustomsTariffs(tenantId: string, search?: string, sector?: string) {
-    const existingCount = await this.db
-      .selectFrom('import_customs_tariffs')
-      .where('tenant_id', '=', tenantId)
-      .select((eb) => eb.fn.countAll<number>().as('cnt'))
-      .executeTakeFirst();
-
-    if (Number(existingCount?.cnt || 0) < 15) {
-      await this.syncOfficialTariffs(tenantId);
-    }
-
     let query = this.db
       .selectFrom('import_customs_tariffs')
       .selectAll()

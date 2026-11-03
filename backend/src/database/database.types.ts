@@ -2412,6 +2412,7 @@ export interface ImportCustomsTariffTable {
   is_official?: boolean;
   sector?: string | null;
   category_ar?: string | null;
+  data_version?: string | null;
   created_at: Generated<Date>;
 }
 

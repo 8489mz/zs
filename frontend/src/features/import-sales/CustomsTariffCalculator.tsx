@@ -65,7 +65,13 @@ export default function CustomsTariffCalculator() {
         cifValueEgp: Number(cifValueEgp),
       });
       setCalcResult(res);
-      toast.success('تم احتساب الرسوم والضرائب الجمركية بنجاح');
+      // An undocumented HS code returns labelled zeros, never a
+      // silent default: warn loudly instead of reporting success.
+      if (res && res.isDocumentedTariff === false) {
+        toast.warning(res.message || 'البند الجمركي غير مسجل بالتعريفة الرسمية المعتمدة. يلزم إدخال النسبة المعتمدة يدوياً.');
+      } else {
+        toast.success('تم احتساب الرسوم والضرائب الجمركية بنجاح');
+      }
     } catch (err: any) {
       toast.error('حدث خطأ أثناء احتساب الرسوم: ' + (err.message || 'خطأ غير معروف'));
     }
@@ -194,7 +200,12 @@ export default function CustomsTariffCalculator() {
         {/* Calculation Result */}
         {calcResult && (
           <div style={{ marginTop: 16, backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 10, padding: 14 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            {calcResult.isDocumentedTariff === false && (
+              <div style={{ marginBottom: 12, backgroundColor: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '8px 12px', fontSize: '0.8rem', color: '#92400e' }}>
+                {calcResult.message || 'البند الجمركي غير مسجل بالتعريفة الرسمية المعتمدة. يلزم إدخال النسبة المعتمدة يدوياً.'}
+                {' '}الأرقام أدناه أصفار تقديرية وليست رسوماً فعلية.
+              </div>
+            )}            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
               <div>
                 <span style={{ fontSize: '11px', color: '#64748b' }}>الرسوم الجمركية ({calcResult.dutyRatePercent}%)</span>
                 <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', marginTop: 2 }}>
