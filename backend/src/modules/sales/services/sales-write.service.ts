@@ -1579,7 +1579,13 @@ export class SalesWriteService {
       if (normalized.source === 'pos') {
         const hasOpenShift = await this.authz.hasOpenCashierShift(trx, auth, normalized.branchId);
         if (!hasOpenShift) throw new AppError('Open cashier shift is required before posting a POS sale', 'OPEN_SHIFT_REQUIRED', 400);
-      } else if (normalized.paymentType !== 'credit' && !['admin', 'super_admin'].includes(auth.role) && (normalized.payments.some((entry) => entry.paymentChannel === 'cash') || normalized.paymentChannel === 'cash')) {
+      } else if (normalized.paymentType !== 'credit' && (normalized.payments.some((entry) => entry.paymentChannel === 'cash') || normalized.paymentChannel === 'cash')) {
+        // INV-ADMIN-CASH-SALE-SHIFT-REQUIRED: every cash receipt
+        // needs an open shift, regardless of role. Admins used to be
+        // exempt here, so a back-office cash sale wrote GL cash with
+        // no shift attribution and surfaced as a false overage at
+        // close. Admins can hold shifts (openCashierShift exempts
+        // them from branch assignment), so this never deadlocks.
         const hasOpenShift = await this.authz.hasOpenCashierShift(trx, auth, normalized.branchId);
         if (!hasOpenShift) throw new AppError('Open cashier shift is required before posting a cash sale', 'OPEN_SHIFT_REQUIRED', 400);
       }

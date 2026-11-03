@@ -217,6 +217,14 @@ function buildService(db: Kysely<Database>): SalesWriteService {
 
 
 async function createAndGetId(service: SalesWriteService, payload: any, auth: AuthContext): Promise<number> {
+  // P3 composition (test-only): createSale now requires an open
+  // shift for every cash receipt regardless of role, so the
+  // fixture opens one for the creator before creating. The waste
+  // behaviour under test does not depend on shift linkage.
+  const db: any = (service as any).db ?? (service as any).kysely ?? null;
+  if (db && typeof db.insertInto === 'function') {
+    await db.insertInto('cashier_shifts').values({ tenant_id: TENANT, account_id: '1', opened_by: auth.userId, status: 'open', branch_id: 1 }).execute();
+  }
   const created: any = await service.createSale(payload, auth);
   const id = Number(created?.sale?.id ?? created?.saleId ?? created?.id);
   assert.ok(Number.isInteger(id) && id > 0, `createSale must return a sale id, got ${JSON.stringify(created)?.slice(0, 120)}`);

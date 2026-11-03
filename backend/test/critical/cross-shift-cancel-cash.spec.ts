@@ -303,12 +303,21 @@ async function main(): Promise<void> {
 
   // 4. Admin with no open shift: the no-shift exemption is
   // unchanged — the refund is a sale-linked row, not a shift row.
+  // P3 composition (test-only): createSale now requires an open
+  // shift for every cash receipt regardless of role, so the
+  // fixture opens one for the admin, creates the sale, then
+  // removes the shift row — reaching the same cancel-time state
+  // the exemption was written for (no covering shift, and the
+  // canceller holds none). The cancel behaviour under test is
+  // unchanged.
   {
     const { pg, db } = await makeDb();
     try {
       await seedFoundation(db);
       const { sales } = buildServices(db);
+      await seedShift(db, 1, 1);
       const saleId = await createAndGetId(sales, salePayload(100), adminAuth);
+      await (db as any).deleteFrom('cashier_shifts').where('id', '=', 1).execute();
       await sales.cancelSale(saleId, 'إلغاء إداري بلا وردية', MANAGER_PIN, adminAuth);
       const row = await refundRow(db, saleId);
       assert.equal(row.reference_type, 'sale', 'admin with no shift keeps the sale-linked refund row');
