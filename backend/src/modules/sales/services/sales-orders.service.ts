@@ -628,8 +628,16 @@ export class SalesOrdersService {
       }
     }
 
+    // INV-CONVERSION-STOCK-DEDUCTION: resolve the branch default
+    // stock location for EVERY conversion, not only when reserved
+    // items exist. The payload below carries it into createSale, so
+    // a goods conversion deducts from the branch's default location
+    // exactly like a POS sale. A branch with no default location
+    // keeps the prior null-location behaviour (locationId null);
+    // createSale's explicit-location validation still fails closed
+    // when a resolved default is deleted or inactive.
     let locationId: number | null = null;
-    if (releaseItems.length > 0) {
+    {
       const branchRow = await this.db
         .selectFrom('branches')
         .select(['default_stock_location_id'])
@@ -719,6 +727,7 @@ export class SalesOrdersService {
 
       const salePayload: any = {
         branchId,
+        locationId,
         customerId: order.customer_id ? Number(order.customer_id) : undefined,
         customerName: order.customer_name,
         customerPhone: order.customer_phone || undefined,

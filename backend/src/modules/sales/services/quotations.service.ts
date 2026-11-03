@@ -406,6 +406,25 @@ export class QuotationsService {
         branchId = primaryBranch ? Number(primaryBranch.id) : 1;
       }
 
+      // INV-CONVERSION-STOCK-DEDUCTION: carry the branch default
+      // stock location into the sale payload, so a goods conversion
+      // deducts from the branch's default location exactly like a
+      // POS sale (same shape as the sales-order conversion). A
+      // branch with no default location keeps the prior
+      // null-location behaviour; createSale's explicit-location
+      // validation still fails closed on a deleted/inactive
+      // default.
+      let locationId: number | null = null;
+      {
+        const branchRow = await this.db
+          .selectFrom('branches')
+          .select(['default_stock_location_id'])
+          .where('id', '=', branchId)
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst();
+        locationId = branchRow?.default_stock_location_id ? Number(branchRow.default_stock_location_id) : null;
+      }
+
       // INV-CONVERSION-LIFECYCLE-RACES: reserve the conversion
       // operation before createSale runs (same outcomes as the
       // order path: 'committed' attaches, fresh 'processing' fails
@@ -464,6 +483,7 @@ export class QuotationsService {
 
       const salePayload: any = {
         branchId,
+        locationId,
         customerId: quotation.customer_id ? Number(quotation.customer_id) : undefined,
         customerName: quotation.customer_name,
         customerPhone: quotation.customer_phone || undefined,

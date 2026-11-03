@@ -40,26 +40,28 @@ single-connection, so true two-connection conversion races stay
 deferred to the live-Postgres acceptance (GAP-3); this spec pins
 the single-attempt integrated path only.
 
-FINDING FROM THIS DRIVE (behaviour defect, NOT fixed here —
-guard packages change no behaviour): a GOODS order/quotation
-conversion fails through the real path with INSUFFICIENT_STOCK
-even when the stock exists in a real location. convertToSale
-builds its sale payload with NO locationId
-(sales-orders.service.ts / quotations.service.ts), and
-createSale only defaults locationId from the branch default for
-POS source — so for the dashboard-source conversion payload the
-deduction loop reads zero availability (Kysely renders
-`.where('location_id', '=', null)` as `= NULL`, which matches
-nothing) and skips the pool re-read, because an eligible
-location IS null. Seeding an unassigned pool row does not help:
-the leg query still matches nothing. The conversion cases below
-therefore use SERVICE items, which skip stock deduction, so the
-discount/terms/journal wiring — what GAP-2 guards — is driven
-end to end; the goods-conversion stock leg stays UNGUARDED until
-a fix package carries locationId into the conversion payload
-(or defaults it in createSale) by a separate decision. Do not
-"fix" this spec's fixture to hide the finding: the goods leg
-must stay visibly uncovered until the behaviour fix lands.
+FINDING FROM THIS DRIVE, FIXED BY THE CONVERSION STOCK
+DEDUCTION PACKAGE (INV-CONVERSION-STOCK-DEDUCTION): a GOODS
+order/quotation conversion used to fail through the real path
+with INSUFFICIENT_STOCK even when the stock existed in a real
+location. convertToSale built its sale payload with NO
+locationId (sales-orders.service.ts / quotations.service.ts),
+and createSale only defaulted locationId from the branch
+default for POS source — so for the dashboard-source conversion
+payload the deduction loop read zero availability (Kysely
+renders `.where('location_id', '=', null)` as `= NULL`, which
+matches nothing) and skipped the pool re-read, because an
+eligible location IS null. Both convertToSale methods now carry
+the branch default stock location into the sale payload, so a
+goods conversion deducts from the branch's default location
+exactly like a POS sale; a branch with no default location
+keeps the prior null-location behaviour. Cases (e) and (f)
+below drive the goods leg end to end; cases (b)–(d) keep
+SERVICE items for the discount/terms/journal wiring.
+(e) Goods order conversion deducts stock: 2x50 + 1x30 at cost
+10, location stock 100 each, lands location stock 98/99, a
+stock allocation per line at location 10, and the 30 COGS leg.
+(f) Goods quotation conversion deducts stock the same way.
 */
 
 import 'reflect-metadata';
@@ -422,6 +424,91 @@ async function main(): Promise<void> {
     console.log('  quotation conversion discounts passed');
   }
 
+  // (e) Goods order conversion deducts stock from the branch
+  // default location: location stock 100 -> 98/99, one allocation
+  // per line at location 10, and the 30 COGS leg. Before the fix
+  // this case failed INSUFFICIENT_STOCK: the payload carried no
+  // locationId, so the deduction loop saw zero availability.
+  {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedProducts(db);
+      const { orders } = buildServices(db);
+      await (db as any).insertInto('sales_orders').values({
+        id: 3, tenant_id: TENANT, account_id: ACCOUNT, order_number: 'SO-3',
+        customer_name: 'Cust', branch_id: 1, discount_amount: 10, total_amount: 120,
+        status: 'confirmed',
+      }).execute();
+      await seedOrderItems(db, 3);
+      const result: any = await orders.convertToSale(3, adminAuth);
+      const saleId = Number(result?.saleId);
+      assert.ok(Number.isInteger(saleId) && saleId > 0, 'conversion must return a sale id');
+      const sale = await readSale(db, saleId);
+      assert.equal(Number(sale.total), 120, 'converted total carries the line discounts');
+      assert.equal(Number(sale.location_id), 10, 'the posted sale carries the branch default location');
+      const locStock = await (db as any).selectFrom('product_location_stock')
+        .select(['product_id', 'qty']).where('tenant_id', '=', TENANT)
+        .where('location_id', '=', 10)
+        .orderBy('product_id', 'asc').execute();
+      assert.equal(Number(locStock[0].qty), 98, 'location stock deducts the 2 sold units');
+      assert.equal(Number(locStock[1].qty), 99, 'location stock deducts the 1 sold unit');
+      const allocations = await (db as any).selectFrom('sale_line_stock_allocations')
+        .select(['product_id', 'location_id', 'quantity'])
+        .where('sale_id', '=', saleId).orderBy('product_id', 'asc').execute();
+      assert.equal(allocations.length, 2, 'one stock allocation per converted line');
+      assert.equal(Number(allocations[0].location_id), 10, 'first allocation targets the default location');
+      assert.equal(Number(allocations[0].quantity), 2, 'first allocation deducts 2 units');
+      assert.equal(Number(allocations[1].location_id), 10, 'second allocation targets the default location');
+      assert.equal(Number(allocations[1].quantity), 1, 'second allocation deducts 1 unit');
+      const movements = await (db as any).selectFrom('stock_movements')
+        .select(['product_id', 'qty', 'location_id'])
+        .where('reference_type', '=', 'sale').where('reference_id', '=', saleId)
+        .orderBy('product_id', 'asc').execute();
+      assert.equal(movements.length, 2, 'one stock movement per converted line');
+      assert.equal(Number(movements[0].qty), -2, 'first movement removes 2 units');
+      assert.equal(Number(movements[0].location_id), 10, 'first movement is booked at the default location');
+      assert.equal(await journalLeg(db, saleId, 5100, 'debit'), 30, 'COGS leg covers 3 units at cost 10');
+      assert.equal(await journalLeg(db, saleId, 1140, 'credit'), 30, 'inventory leg releases 3 units at cost 10');
+    } finally {
+      await db.destroy();
+    }
+    console.log('  goods order conversion deducts stock passed');
+  }
+
+  // (f) Goods quotation conversion deducts stock the same way.
+  {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedProducts(db);
+      const { quotations } = buildServices(db);
+      await (db as any).insertInto('quotations').values({
+        id: 2, tenant_id: TENANT, account_id: ACCOUNT, quotation_number: 'Q-2',
+        customer_name: 'Cust', branch_id: 1, discount_amount: 10, total_amount: 120,
+        status: 'draft',
+      }).execute();
+      await seedQuotationItems(db, 2);
+      const result: any = await quotations.convertToSale(2, adminAuth);
+      const saleId = Number(result?.saleId);
+      assert.ok(Number.isInteger(saleId) && saleId > 0, 'conversion must return a sale id');
+      const locStock = await (db as any).selectFrom('product_location_stock')
+        .select(['product_id', 'qty']).where('tenant_id', '=', TENANT)
+        .where('location_id', '=', 10)
+        .orderBy('product_id', 'asc').execute();
+      assert.equal(Number(locStock[0].qty), 98, 'location stock deducts the 2 sold units');
+      assert.equal(Number(locStock[1].qty), 99, 'location stock deducts the 1 sold unit');
+      const allocations = await (db as any).selectFrom('sale_line_stock_allocations')
+        .select(['location_id']).where('sale_id', '=', saleId).execute();
+      assert.equal(allocations.length, 2, 'one stock allocation per converted line');
+      assert.ok(allocations.every((a: any) => Number(a.location_id) === 10), 'allocations target the default location');
+      assert.equal(await journalLeg(db, saleId, 5100, 'debit'), 30, 'COGS leg covers 3 units at cost 10');
+    } finally {
+      await db.destroy();
+    }
+    console.log('  goods quotation conversion deducts stock passed');
+  }
+
   // 5. Source + invariant pins (presence, never last-line: order
   // ownership lives in architecture-guard.spec.ts alone).
   {
@@ -436,8 +523,11 @@ async function main(): Promise<void> {
     const quotationsSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/quotations.service.ts'), 'utf8');
     assert.ok(quotationsSource.includes('resolveConversionDiscounts'), 'quotation conversion reconciles line discounts');
     assert.ok(quotationsSource.includes('lineDiscount'), 'quotation conversion payloads carry lineDiscount');
+    assert.ok(ordersSource.includes('INV-CONVERSION-STOCK-DEDUCTION'), 'order conversion carries the branch default location');
+    assert.ok(quotationsSource.includes('INV-CONVERSION-STOCK-DEDUCTION'), 'quotation conversion carries the branch default location');
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(invariants.split('INV-CONVERSION-INTEGRATION-GUARD').length - 1, 1, 'the invariant entry must exist exactly once');
+    assert.equal(invariants.split('INV-CONVERSION-STOCK-DEDUCTION').length - 1, 1, 'the stock-deduction invariant entry must exist exactly once');
     console.log('  source + invariant pins passed');
   }
 
