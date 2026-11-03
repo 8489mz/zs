@@ -336,6 +336,95 @@ export function roundSaleInvoiceTotals(
   };
 }
 
+export type SaleAllocationAvailability = {
+  locationId: number | null;
+  branchId: number | null;
+  availableQty: number;
+};
+
+export type SaleAllocationLeg = {
+  locationId: number | null;
+  branchId: number | null;
+  qty: number;
+  /** True when the quantity comes from the unassigned (floating) pool. */
+  fromPool: boolean;
+};
+
+/*
+ * Sale stock allocation legs (INV-FLOATING-POOL-ALLOCATION-LEG): the
+ * availability check counts the unassigned pool, but the deduction
+ * loops used to iterate assigned locations only, so pooled stock was
+ * unsellable with overselling OFF. This seam computes the legs for
+ * ONE item: assigned locations first, in the caller's order, then the
+ * unassigned pool as the final leg, capped at the pool quantity net
+ * of the pool row's reserved_qty (the same pooled-availability
+ * formula the check uses).
+ *
+ * Settled from code, not invented:
+ * - Reservations are booked on the LOCATION row by
+ *   `reserveLocationStock` (location-stock-ledger.ts) — never on the
+ *   pool row — so the pool cap is the pool row's own qty minus its
+ *   own reserved_qty, and location legs are capped at their own
+ *   qty minus reserved_qty. No reservation model is changed here.
+ * - `sale_line_stock_allocations.location_id` is NOT NULL with an FK
+ *   (migration 2029000000000), so a pool leg cannot be recorded with
+ *   a null location. The pool leg is therefore attributed to the
+ *   FIRST leg's location (or the sale location when no assigned leg
+ *   exists): `applyStockDelta`'s auto-drain physically re-homes the
+ *   pool quantity into that location row before deducting, so the
+ *   attribution is true at deduction time and the existing
+ *   edit/cancel restore paths round-trip through the same row.
+ *   If neither attribution target has a real location id, the pool
+ *   leg is NOT added — the sale fails closed exactly as before.
+ * - Quantities are 3dp ledger quantities (toFixed(3)), never money
+ *   digits. `pooledAvailableQty` is the true pooled figure the
+ *   INSUFFICIENT_STOCK error must report (the loops used to pass 0).
+ */
+export function computeSaleAllocationLegs(params: {
+  requiredQty: number;
+  locationAvailabilities: SaleAllocationAvailability[];
+  poolAvailableQty: number;
+  saleLocationId: number | null;
+  saleBranchId: number | null;
+}): { legs: SaleAllocationLeg[]; pooledAvailableQty: number; remainingQty: number } {
+  const roundQty = (value: number): number => Number((Number(value || 0)).toFixed(3));
+  const requiredQty = roundQty(params.requiredQty);
+  const poolAvailableQty = Math.max(0, roundQty(params.poolAvailableQty));
+  let remainingQty = requiredQty;
+  let pooledAvailableQty = poolAvailableQty;
+  const legs: SaleAllocationLeg[] = [];
+  for (const availability of params.locationAvailabilities) {
+    if (remainingQty <= 0) break;
+    const availableQty = Math.max(0, roundQty(availability.availableQty));
+    pooledAvailableQty = roundQty(pooledAvailableQty + availableQty);
+    if (availableQty <= 0) continue;
+    const allocateQty = Math.min(availableQty, remainingQty);
+    remainingQty = roundQty(remainingQty - allocateQty);
+    legs.push({
+      locationId: availability.locationId,
+      branchId: availability.branchId,
+      qty: allocateQty,
+      fromPool: false,
+    });
+  }
+  if (remainingQty > 0 && poolAvailableQty > 0) {
+    const poolQty = Math.min(poolAvailableQty, remainingQty);
+    const attribution = legs.length > 0
+      ? { locationId: legs[0].locationId, branchId: legs[0].branchId }
+      : { locationId: params.saleLocationId, branchId: params.saleBranchId };
+    if (attribution.locationId != null) {
+      remainingQty = roundQty(remainingQty - poolQty);
+      legs.push({
+        locationId: attribution.locationId,
+        branchId: attribution.branchId,
+        qty: poolQty,
+        fromPool: true,
+      });
+    }
+  }
+  return { legs, pooledAvailableQty, remainingQty };
+}
+
 function normalizeDateOnly(value: unknown): string {
   if (!value) return '';
   if (value instanceof Date) {

@@ -386,14 +386,16 @@ async function main(): Promise<void> {
     assert.ok(helper.includes('export function todayLocalIsoDate('), 'shared offer-clock date is exported for both writers');
   }
 
-  // 8. Invariant pin: exactly once, last line.
+  // 8. Invariant pin: exactly once. (Last-line ownership passes to
+  // newer entries: INV-FLOATING-POOL-ALLOCATION-LEG appends after
+  // this entry, so the last-line assertion that held at this
+  // package's own landing is relaxed here — test-only, behaviour
+  // cases above are unchanged.)
   {
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     const name = 'INV-OFFER-SELECTION-SHARED-POS-VAN';
     const occurrences = invariants.split(name).length - 1;
     assert.equal(occurrences, 1);
-    const lines = invariants.trimEnd().split('\n');
-    assert.ok(lines[lines.length - 1].includes(name), 'invariant is the last line');
     assert.equal(invariants.split('INV-SALE-TAX-BOOK-DIGITS-PRE-ROUND').length - 1, 1);
     assert.equal(invariants.split('INV-CONVERSION-LINE-DISCOUNTS-PRESERVED').length - 1, 1);
   }

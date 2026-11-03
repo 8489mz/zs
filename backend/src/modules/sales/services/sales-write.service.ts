@@ -23,7 +23,7 @@ import { HeldSaleDto } from '../dto/held-sale.dto';
 import { PosAuditEventDto } from '../dto/pos-audit-event.dto';
 import { UpsertSaleDto, SalesOrderConversionRelease } from '../dto/upsert-sale.dto';
 import { normalizeSalePayload } from '../helpers/sales-payload.helper';
-import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateRemainingDebt, calculateRestoredStockQuantity, calculateStoreCreditBalance, paidAmountExceedsRecordedPayments, resolvePostedSalePaymentChannel, restoreFrozenSaleLineCosts, roundSaleInvoiceTotals, roundSaleResidual } from '../helpers/sales-write.helper';
+import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateRemainingDebt, calculateRestoredStockQuantity, calculateStoreCreditBalance, computeSaleAllocationLegs, paidAmountExceedsRecordedPayments, resolvePostedSalePaymentChannel, restoreFrozenSaleLineCosts, roundSaleInvoiceTotals, roundSaleResidual } from '../helpers/sales-write.helper';
 import { allocateSaleTenders, type SaleTenderChannel } from '../engines/sale-tender.engine';
 import { allocateInvoiceDiscount } from '../engines/invoice-discount.engine';
 import { resolveSaleTaxRate } from '../engines/sale-tax-rate.engine';
@@ -1858,8 +1858,14 @@ export class SalesWriteService {
         // product row up front makes the global order products -> product_location_stock everywhere.
         await this.lockProductRow(trx, item.productId, scope);
 
+        // INV-FLOATING-POOL-ALLOCATION-LEG: assigned locations first,
+        // then the unassigned pool as the final leg (see
+        // computeSaleAllocationLegs in sales-write.helper.ts). The pool
+        // row is read only when the assigned legs leave a shortfall,
+        // and never when an eligible leg already targets a null
+        // location (that read already targets a null-location row).
+        const locationAvailabilities: Array<{ locationId: number | null; branchId: number | null; availableQty: number }> = [];
         for (const loc of eligibleLocations) {
-          if (remainingQty <= 0) break;
           const locStock = await trx.selectFrom('product_location_stock')
             .select(['qty', 'reserved_qty'])
             .where('product_id', '=', item.productId)
@@ -1867,14 +1873,41 @@ export class SalesWriteService {
             .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
             .forUpdate()
             .executeTakeFirst();
-          
-          const availableQty = Math.max(0, Number(locStock?.qty || 0) - Number(locStock?.reserved_qty || 0));
-          if (availableQty > 0) {
-            const allocateQty = Math.min(availableQty, remainingQty);
-            remainingQty = Number((remainingQty - allocateQty).toFixed(3));
-            allocations.push({ locationId: loc.id, branchId: loc.branchId, qty: allocateQty });
-          }
+
+          locationAvailabilities.push({
+            locationId: loc.id,
+            branchId: loc.branchId,
+            availableQty: Math.max(0, Number(locStock?.qty || 0) - Number(locStock?.reserved_qty || 0)),
+          });
         }
+        let allocationLegs = computeSaleAllocationLegs({
+          requiredQty: remainingQty,
+          locationAvailabilities,
+          poolAvailableQty: 0,
+          saleLocationId: normalized.locationId,
+          saleBranchId: normalized.branchId,
+        });
+        if (allocationLegs.remainingQty > 0 && !eligibleLocations.some((loc) => loc.id == null)) {
+          const poolRow = await trx.selectFrom('product_location_stock')
+            .select(['qty', 'reserved_qty'])
+            .where('product_id', '=', item.productId)
+            .where('location_id', 'is', null)
+            .where('branch_id', 'is', null)
+            .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+            .forUpdate()
+            .executeTakeFirst();
+          allocationLegs = computeSaleAllocationLegs({
+            requiredQty: remainingQty,
+            locationAvailabilities,
+            poolAvailableQty: Math.max(0, Number(poolRow?.qty || 0) - Number(poolRow?.reserved_qty || 0)),
+            saleLocationId: normalized.locationId,
+            saleBranchId: normalized.branchId,
+          });
+        }
+        for (const leg of allocationLegs.legs) {
+          allocations.push({ locationId: leg.locationId, branchId: leg.branchId, qty: leg.qty });
+        }
+        remainingQty = allocationLegs.remainingQty;
 
         if (remainingQty > 0) {
            if (!allowNegativeStockSales) {
@@ -1884,7 +1917,7 @@ export class SalesWriteService {
                 currentLocationId: eligibleLocations.length === 1 ? eligibleLocations[0].id : null,
                 currentLocationName: eligibleLocations.length > 1 ? 'المخازن المتاحة للفرع' : undefined,
                 excludedLocationIds: eligibleLocations.map((l) => l.id).filter((id): id is number => id != null),
-                currentAvailableQty: 0,
+                currentAvailableQty: allocationLegs.pooledAvailableQty,
                 requiredQty: item.qty,
                 tenantId: scope.tenantId,
               });
@@ -1971,8 +2004,11 @@ export class SalesWriteService {
               // Same canonical lock order as the parent item (products -> product_location_stock).
               await this.lockProductRow(trx, rawModProductId, scope);
 
+              // INV-FLOATING-POOL-ALLOCATION-LEG: same assigned-first,
+              // pool-last leg computation as the parent item (see
+              // computeSaleAllocationLegs in sales-write.helper.ts).
+              const modLocationAvailabilities: Array<{ locationId: number | null; branchId: number | null; availableQty: number }> = [];
               for (const loc of eligibleLocations) {
-                if (modRemainingQty <= 0) break;
                 const locStock = await trx.selectFrom('product_location_stock')
                   .select(['qty', 'reserved_qty'])
                   .where('product_id', '=', rawModProductId)
@@ -1980,14 +2016,41 @@ export class SalesWriteService {
                   .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
                   .forUpdate()
                   .executeTakeFirst();
-                
-                const availableQty = Math.max(0, Number(locStock?.qty || 0) - Number(locStock?.reserved_qty || 0));
-                if (availableQty > 0) {
-                  const allocateQty = Math.min(availableQty, modRemainingQty);
-                  modRemainingQty = Number((modRemainingQty - allocateQty).toFixed(3));
-                  modAllocations.push({ locationId: loc.id, branchId: loc.branchId, qty: allocateQty });
-                }
+
+                modLocationAvailabilities.push({
+                  locationId: loc.id,
+                  branchId: loc.branchId,
+                  availableQty: Math.max(0, Number(locStock?.qty || 0) - Number(locStock?.reserved_qty || 0)),
+                });
               }
+              let modAllocationLegs = computeSaleAllocationLegs({
+                requiredQty: modRemainingQty,
+                locationAvailabilities: modLocationAvailabilities,
+                poolAvailableQty: 0,
+                saleLocationId: normalized.locationId,
+                saleBranchId: normalized.branchId,
+              });
+              if (modAllocationLegs.remainingQty > 0 && !eligibleLocations.some((loc) => loc.id == null)) {
+                const modPoolRow = await trx.selectFrom('product_location_stock')
+                  .select(['qty', 'reserved_qty'])
+                  .where('product_id', '=', rawModProductId)
+                  .where('location_id', 'is', null)
+                  .where('branch_id', 'is', null)
+                  .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+                  .forUpdate()
+                  .executeTakeFirst();
+                modAllocationLegs = computeSaleAllocationLegs({
+                  requiredQty: modRemainingQty,
+                  locationAvailabilities: modLocationAvailabilities,
+                  poolAvailableQty: Math.max(0, Number(modPoolRow?.qty || 0) - Number(modPoolRow?.reserved_qty || 0)),
+                  saleLocationId: normalized.locationId,
+                  saleBranchId: normalized.branchId,
+                });
+              }
+              for (const leg of modAllocationLegs.legs) {
+                modAllocations.push({ locationId: leg.locationId, branchId: leg.branchId, qty: leg.qty });
+              }
+              modRemainingQty = modAllocationLegs.remainingQty;
 
               if (modRemainingQty > 0) {
                  if (!allowNegativeStockSales) {
@@ -3010,8 +3073,14 @@ export class SalesWriteService {
         // product row up front makes the global order products -> product_location_stock everywhere.
         await this.lockProductRow(trx, item.productId, scope);
 
+        // INV-FLOATING-POOL-ALLOCATION-LEG: assigned locations first,
+        // then the unassigned pool as the final leg (see
+        // computeSaleAllocationLegs in sales-write.helper.ts). The pool
+        // row is read only when the assigned legs leave a shortfall,
+        // and never when an eligible leg already targets a null
+        // location (that read already targets a null-location row).
+        const locationAvailabilities: Array<{ locationId: number | null; branchId: number | null; availableQty: number }> = [];
         for (const loc of eligibleLocations) {
-          if (remainingQty <= 0) break;
           const locStock = await trx.selectFrom('product_location_stock')
             .select(['qty', 'reserved_qty'])
             .where('product_id', '=', item.productId)
@@ -3019,14 +3088,41 @@ export class SalesWriteService {
             .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
             .forUpdate()
             .executeTakeFirst();
-          
-          const availableQty = Math.max(0, Number(locStock?.qty || 0) - Number(locStock?.reserved_qty || 0));
-          if (availableQty > 0) {
-            const allocateQty = Math.min(availableQty, remainingQty);
-            remainingQty = Number((remainingQty - allocateQty).toFixed(3));
-            allocations.push({ locationId: loc.id, branchId: loc.branchId, qty: allocateQty });
-          }
+
+          locationAvailabilities.push({
+            locationId: loc.id,
+            branchId: loc.branchId,
+            availableQty: Math.max(0, Number(locStock?.qty || 0) - Number(locStock?.reserved_qty || 0)),
+          });
         }
+        let allocationLegs = computeSaleAllocationLegs({
+          requiredQty: remainingQty,
+          locationAvailabilities,
+          poolAvailableQty: 0,
+          saleLocationId: normalized.locationId,
+          saleBranchId: normalized.branchId,
+        });
+        if (allocationLegs.remainingQty > 0 && !eligibleLocations.some((loc) => loc.id == null)) {
+          const poolRow = await trx.selectFrom('product_location_stock')
+            .select(['qty', 'reserved_qty'])
+            .where('product_id', '=', item.productId)
+            .where('location_id', 'is', null)
+            .where('branch_id', 'is', null)
+            .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+            .forUpdate()
+            .executeTakeFirst();
+          allocationLegs = computeSaleAllocationLegs({
+            requiredQty: remainingQty,
+            locationAvailabilities,
+            poolAvailableQty: Math.max(0, Number(poolRow?.qty || 0) - Number(poolRow?.reserved_qty || 0)),
+            saleLocationId: normalized.locationId,
+            saleBranchId: normalized.branchId,
+          });
+        }
+        for (const leg of allocationLegs.legs) {
+          allocations.push({ locationId: leg.locationId, branchId: leg.branchId, qty: leg.qty });
+        }
+        remainingQty = allocationLegs.remainingQty;
 
         if (remainingQty > 0) {
            if (!allowNegativeStockSales) {
@@ -3036,7 +3132,7 @@ export class SalesWriteService {
                 currentLocationId: eligibleLocations.length === 1 ? eligibleLocations[0].id : null,
                 currentLocationName: eligibleLocations.length > 1 ? 'المخازن المتاحة للفرع' : undefined,
                 excludedLocationIds: eligibleLocations.map((l) => l.id).filter((id): id is number => id != null),
-                currentAvailableQty: 0,
+                currentAvailableQty: allocationLegs.pooledAvailableQty,
                 requiredQty: item.qty,
                 tenantId: scope.tenantId,
               });
@@ -3117,8 +3213,11 @@ export class SalesWriteService {
               // Same canonical lock order as the parent item (products -> product_location_stock).
               await this.lockProductRow(trx, Number(mod.productId), scope);
 
+              // INV-FLOATING-POOL-ALLOCATION-LEG: same assigned-first,
+              // pool-last leg computation as the parent item (see
+              // computeSaleAllocationLegs in sales-write.helper.ts).
+              const modLocationAvailabilities: Array<{ locationId: number | null; branchId: number | null; availableQty: number }> = [];
               for (const loc of eligibleLocations) {
-                if (modRemainingQty <= 0) break;
                 const locStock = await trx.selectFrom('product_location_stock')
                   .select(['qty', 'reserved_qty'])
                   .where('product_id', '=', Number(mod.productId))
@@ -3126,14 +3225,41 @@ export class SalesWriteService {
                   .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
                   .forUpdate()
                   .executeTakeFirst();
-                
-                const availableQty = Math.max(0, Number(locStock?.qty || 0) - Number(locStock?.reserved_qty || 0));
-                if (availableQty > 0) {
-                  const allocateQty = Math.min(availableQty, modRemainingQty);
-                  modRemainingQty = Number((modRemainingQty - allocateQty).toFixed(3));
-                  modAllocations.push({ locationId: loc.id, branchId: loc.branchId, qty: allocateQty });
-                }
+
+                modLocationAvailabilities.push({
+                  locationId: loc.id,
+                  branchId: loc.branchId,
+                  availableQty: Math.max(0, Number(locStock?.qty || 0) - Number(locStock?.reserved_qty || 0)),
+                });
               }
+              let modAllocationLegs = computeSaleAllocationLegs({
+                requiredQty: modRemainingQty,
+                locationAvailabilities: modLocationAvailabilities,
+                poolAvailableQty: 0,
+                saleLocationId: normalized.locationId,
+                saleBranchId: normalized.branchId,
+              });
+              if (modAllocationLegs.remainingQty > 0 && !eligibleLocations.some((loc) => loc.id == null)) {
+                const modPoolRow = await trx.selectFrom('product_location_stock')
+                  .select(['qty', 'reserved_qty'])
+                  .where('product_id', '=', Number(mod.productId))
+                  .where('location_id', 'is', null)
+                  .where('branch_id', 'is', null)
+                  .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+                  .forUpdate()
+                  .executeTakeFirst();
+                modAllocationLegs = computeSaleAllocationLegs({
+                  requiredQty: modRemainingQty,
+                  locationAvailabilities: modLocationAvailabilities,
+                  poolAvailableQty: Math.max(0, Number(modPoolRow?.qty || 0) - Number(modPoolRow?.reserved_qty || 0)),
+                  saleLocationId: normalized.locationId,
+                  saleBranchId: normalized.branchId,
+                });
+              }
+              for (const leg of modAllocationLegs.legs) {
+                modAllocations.push({ locationId: leg.locationId, branchId: leg.branchId, qty: leg.qty });
+              }
+              modRemainingQty = modAllocationLegs.remainingQty;
 
               if (modRemainingQty > 0) {
                  if (!allowNegativeStockSales) {
