@@ -3721,10 +3721,16 @@ export class AccountingPostingService {
 
   /**
    * Cash shortage tolerance per shift. Shortages at or below it are absorbed as an operating
-   * expense; anything above becomes a receivable on the custodian. Defaults to 0 (no tolerance),
-   * so the stricter treatment applies unless a tenant explicitly configures otherwise.
+   * expense; anything above becomes a receivable on the custodian. When the tenant has never
+   * configured cashierShortageTolerance, the default is one minor unit
+   * (INV-CASHIER-SHORTAGE-TOLERANCE-DEFAULT): a dust shortage of a fils is an operating cost of
+   * running a till, not a receivable that accumulates per cashier. An explicitly configured
+   * value — including 0 — is honoured exactly; only the unset case (no row, null, or empty
+   * value) defaults. Unparseable or negative values fail closed to 0, as before, and a read
+   * error fails closed to 0 as well. There is no settings UI for this key; it is set directly
+   * in settings.
    */
-  private async getCashierShortageTolerance(queryable: DbOrTx, tenantId: string): Promise<number> {
+  private async getCashierShortageTolerance(queryable: DbOrTx, tenantId: string, digits: MoneyDigits): Promise<number> {
     try {
       const row = await queryable
         .selectFrom('settings')
@@ -3732,11 +3738,11 @@ export class AccountingPostingService {
         .where('tenant_id', '=', tenantId)
         .where('key', '=', 'cashierShortageTolerance')
         .executeTakeFirst();
-      if (!row?.value) return 0;
+      if (row == null || row.value == null || String(row.value).trim() === '') return this.maxAllowedDifference(digits);
       let raw: unknown = row.value;
       try { raw = JSON.parse(String(row.value)); } catch { /* plain scalar */ }
       const parsed = Number(raw);
-      return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
     } catch {
       return 0;
     }
@@ -3771,7 +3777,7 @@ export class AccountingPostingService {
     // Shortages up to the configured tolerance are an operating cost of running a till.
     // Beyond it, the shortage is a debt of the custodian and must sit on a receivable in their name,
     // not be silently written off to expense.
-    const shortageTolerance = await this.getCashierShortageTolerance(queryable, scope.tenantId);
+    const shortageTolerance = await this.getCashierShortageTolerance(queryable, scope.tenantId, bookDigits);
     let resolution: 'within_tolerance' | 'charged_to_cashier' | 'surplus_recognized';
     let chargedToUserId: number | null = null;
 
