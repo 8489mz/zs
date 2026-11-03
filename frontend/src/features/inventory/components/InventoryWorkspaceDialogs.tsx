@@ -12,6 +12,36 @@ type ReceiptLine = {
 };
 type ReceiptRows = Record<string, ReceiptLine[]>;
 type ReceiptDraft = { receivedQty: string; serials: string; batches: string };
+/** Variance reason per transfer, keyed by String(transfer.id). The backend
+ *  requires one reason of at least 8 characters per short receipt
+ *  (TRANSFER_VARIANCE_REASON_REQUIRED) and stores it on each shortfall
+ *  item; a full receipt sends none. */
+type TransferVarianceReasons = Record<string, string>;
+
+function transferHasShortfall(transfer: StockTransfer, draft: Record<string, ReceiptDraft>): boolean {
+  return transfer.items.some((item) => {
+    const entry = draft[`${transfer.id}:${item.id}`];
+    const receivedQty = entry ? Number(entry.receivedQty) : Number(item.qty);
+    return Number(item.qty) - receivedQty > 0.0001;
+  });
+}
+
+function varianceReasonsFromDraft(
+  transfers: StockTransfer[],
+  draft: Record<string, ReceiptDraft>,
+  reasons: TransferVarianceReasons,
+): TransferVarianceReasons {
+  const collected: TransferVarianceReasons = {};
+  for (const transfer of transfers) {
+    if (!transferHasShortfall(transfer, draft)) continue;
+    const reason = (reasons[String(transfer.id)] || '').trim();
+    if (reason.length < 8) {
+      throw new Error(`اكتب سبب فرق الكمية للتحويل ${transfer.docNo || transfer.id} بوضوح في 8 أحرف على الأقل قبل الاستلام`);
+    }
+    collected[String(transfer.id)] = reason;
+  }
+  return collected;
+}
 
 function receiptRowsFromDraft(transfers: StockTransfer[], draft: Record<string, ReceiptDraft>): ReceiptRows {
   const rows: ReceiptRows = {};
@@ -58,11 +88,12 @@ export function InventoryTransferActionDialog({
   action: { action: 'receive' | 'cancel'; transfers: StockTransfer[] } | null;
   isBusy: boolean;
   onCancel: () => void;
-  onConfirm: (receipts?: ReceiptRows) => void | Promise<void>;
+  onConfirm: (receipts?: ReceiptRows, varianceReasons?: TransferVarianceReasons) => void | Promise<void>;
 }) {
   const { t } = useTranslation();
   const [receiptDraft, setReceiptDraft] = useState<Record<string, ReceiptDraft>>({});
-  useEffect(() => { setReceiptDraft({}); }, [action]);
+  const [varianceReasonDraft, setVarianceReasonDraft] = useState<TransferVarianceReasons>({});
+  useEffect(() => { setReceiptDraft({}); setVarianceReasonDraft({}); }, [action]);
   const transferCount = action?.transfers.length || 0;
   const firstTransfer = action?.transfers[0] || null;
   const title = action?.action === 'receive' ? 'تأكيد استلام التحويل' : action?.action === 'cancel' ? 'تأكيد إلغاء التحويل' : '';
@@ -80,7 +111,9 @@ export function InventoryTransferActionDialog({
         {description}
         {action?.action === 'receive' ? (
           <div style={{ maxHeight: '240px', overflowY: 'auto', marginTop: 12 }}>
-            {action.transfers.flatMap(transfer => transfer.items.map(item => {
+            {action.transfers.map(transfer => (
+              <div key={`transfer-${transfer.id}`}>
+                {transfer.items.map(item => {
               const key = `${transfer.id}:${item.id}`;
               const draft = receiptDraft[key];
               const patch = (change: Partial<ReceiptDraft>) =>
@@ -109,7 +142,18 @@ export function InventoryTransferActionDialog({
                   </div>
                 </div>
               );
-            }))}
+            })}
+                {transferHasShortfall(transfer, receiptDraft) ? (
+                  <div style={{ padding: '8px 0', borderBottom: '1px solid #e2e8f0' }}>
+                    <label>سبب فرق الكمية للتحويل {transfer.docNo || transfer.id} (مطلوب عند وجود فاقد — 8 أحرف على الأقل)
+                      <textarea rows={2} value={varianceReasonDraft[String(transfer.id)] ?? ''}
+                        onChange={e => setVarianceReasonDraft(current => ({ ...current, [String(transfer.id)]: e.target.value }))}
+                        placeholder="مثال: نقصت وحدتان أثناء النقل" disabled={isBusy}/>
+                    </label>
+                  </div>
+                ) : null}
+              </div>
+            ))}
           </div>
         ) : null}
       </>}
@@ -121,7 +165,9 @@ export function InventoryTransferActionDialog({
         if (!action) return;
         if (action.action !== 'receive') return onConfirm();
         try {
-          return onConfirm(receiptRowsFromDraft(action.transfers, receiptDraft));
+          const rows = receiptRowsFromDraft(action.transfers, receiptDraft);
+          const reasons = varianceReasonsFromDraft(action.transfers, receiptDraft, varianceReasonDraft);
+          return onConfirm(rows, reasons);
         } catch (error) {
           toast.error(error instanceof Error ? error.message : 'تعذر قراءة كميات استلام التحويل');
         }

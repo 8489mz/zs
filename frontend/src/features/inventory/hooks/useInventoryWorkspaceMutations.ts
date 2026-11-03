@@ -91,9 +91,12 @@ export function useInventoryWorkspaceMutations({
   });
 
   const transferActionMutation = useMutation({
-    mutationFn: async ({ transferIds, action, receiptItems }: {
+    mutationFn: async ({ transferIds, action, receiptItems, varianceReasons }: {
       transferIds: string[]; action: 'receive' | 'cancel';
       receiptItems?: Record<string, Array<{ itemId: number; receivedQty: number; receivedSerials?: string[]; batchReceipts?: Array<{ transitBatchId: number; receivedQty: number }> }>>;
+      /** Variance reason per transfer, keyed by transfer id; required by the
+       *  backend for any short receipt (at least 8 characters). */
+      varianceReasons?: Record<string, string>;
     }) => {
       const operationKeys = transferIds.map(id => inventoryTransferActionAttemptKey(action, id));
       const frozenKeys = [...transferActionAttempts.current.keys()];
@@ -107,7 +110,7 @@ export function useInventoryWorkspaceMutations({
         };
         const payload: Record<string, unknown> = {
           transferId, action,
-          ...(action === 'receive' ? { items: receiptItems?.[transferId] } : {}),
+          ...(action === 'receive' ? { items: receiptItems?.[transferId], varianceReason: varianceReasons?.[transferId] } : {}),
         };
         try {
           await executeStickyInventoryMutation(ref, payload,
@@ -118,6 +121,7 @@ export function useInventoryWorkspaceMutations({
                     itemId: number; receivedQty: number; receivedSerials?: string[];
                     batchReceipts?: Array<{ transitBatchId: number; receivedQty: number }>;
                   }> | undefined,
+                  varianceReason: frozen.varianceReason as string | undefined,
                 })
               : inventoryApi.cancelStockTransfer(String(frozen.transferId), headers));
         } finally {
