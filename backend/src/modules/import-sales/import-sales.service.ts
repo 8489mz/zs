@@ -7282,7 +7282,33 @@ export class ImportSalesService {
       const appliedDeposit = Math.min(depositAmount, total);
       const balanceDue = Math.max(0, Number((total - appliedDeposit).toFixed(2)));
 
-      const lot = await trx
+      // P10 guard (INV-IMPORT-PREARRIVAL-CONVERSION-GUARD): a container
+      // preorder may only become a sale once the goods have physically
+      // arrived AND been posted into stock. A receipt in state 'posted'
+      // is the proof of arrival (the same test the late-expense and
+      // broker paths already use); active lots for THIS shipment and
+      // product whose remaining quantity covers the full preorder
+      // quantity are the proof of allocation. Anything less fails
+      // closed here, before any write — no stock deduction, no sale,
+      // no journal, and no COGS credited against inventory that was
+      // never debited. The preorder row is already locked above and
+      // the lot rows are locked below, so a concurrent receipt
+      // reversal (which zeroes lots and flips preorders back to
+      // reserved) serialises against this check instead of racing it.
+      const postedReceipt = await trx
+        .selectFrom('import_inventory_receipts')
+        .select(['id', 'state'])
+        .where('tenant_id', '=', tenantId)
+        .where('shipment_id', '=', preorder.shipment_id)
+        .where('state', '=', 'posted')
+        .forUpdate()
+        .executeTakeFirst();
+      if (!postedReceipt) {
+        throw new BadRequestException(
+          `لا يمكن تحويل الحجز إلى بيع قبل استلام مرحّل للشحنة: لا يوجد إيصال بحالة مرحّل. [IMPORT_PREORDER_CONVERSION_NO_POSTED_RECEIPT]`,
+        );
+      }
+      const coveringLots = await trx
         .selectFrom('import_inventory_lots')
         .selectAll()
         .where('tenant_id', '=', tenantId)
@@ -7290,25 +7316,44 @@ export class ImportSalesService {
         .where('product_id', '=', preorder.product_id)
         .where('status', '=', 'active')
         .forUpdate()
-        .executeTakeFirst();
+        .orderBy('id')
+        .execute();
+      const allocatedQty = coveringLots.reduce(
+        (sum, l) => sum + Number((l as any).remaining_quantity || 0),
+        0,
+      );
+      if (allocatedQty + 0.0001 < qty) {
+        throw new BadRequestException(
+          `لا يمكن تحويل الحجز إلى بيع: الحصص المخصصة للشحنة (${allocatedQty}) أقل من كمية الحجز (${qty}). [IMPORT_PREORDER_CONVERSION_NOT_ALLOCATED]`,
+        );
+      }
+      const lot = coveringLots[0];
 
       const branchId = dto.branchId || lot?.branch_id || 1;
       const locationId = dto.locationId || lot?.location_id || 1;
 
+      // The P10 lot guard above proves this shipment's lots cover the
+      // full quantity, so the deduction must never drive the location
+      // balance negative: allowNegative is false, and a diverged
+      // physical balance fails closed (INSUFFICIENT_STOCK) instead of
+      // minting negative stock. The canonical delta result carries
+      // the true scope before/after quantities stamped on the
+      // movement row below.
+      let stockDelta: { scopeBefore: number; scopeAfter: number } | null = null;
       if (product) {
         await lockStockProducts(trx as any, {
           tenantId,
           accountId: (product as any).account_id || tenantId,
           productIds: [Number(preorder.product_id)],
         });
-        await applyStockDelta(trx as any, {
+        stockDelta = await applyStockDelta(trx as any, {
           tenantId,
           accountId: (product as any).account_id || tenantId,
           productId: Number(preorder.product_id),
           delta: -qty,
           branchId,
           locationId,
-          allowNegative: true,
+          allowNegative: false,
         });
       }
 
@@ -7468,6 +7513,8 @@ export class ImportSalesService {
             location_id: locationId,
             movement_type: 'sale',
             qty: -qty,
+            before_qty: stockDelta?.scopeBefore ?? null,
+            after_qty: stockDelta?.scopeAfter ?? null,
             unit_cost: unitCostEgp,
             reference_type: 'sale',
             reference_id: saleId,
