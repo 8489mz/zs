@@ -35,40 +35,6 @@ export function validateImportLine(line: ImportCostLine): void {
   }
 }
 
-/** Allocate once from source costs, never from previously allocated landed costs. */
-export function calculateImportLandedCosts(
-  lines: ImportCostLine[],
-  costs: { exchangeRate: number; shippingUsd: number; customsEgp: number; transportEgp: number },
-) {
-  requireImportNumber(costs.exchangeRate, 'سعر الصرف', Number.MIN_VALUE);
-  requireImportNumber(costs.shippingUsd, 'الشحن');
-  requireImportNumber(costs.customsEgp, 'الجمارك');
-  requireImportNumber(costs.transportEgp, 'النقل');
-  lines.forEach(validateImportLine);
-  const totalUsd = lines.reduce((sum, line) => sum + line.quantity * line.factoryUnitPriceUsd, 0);
-  const overhead = costs.shippingUsd * costs.exchangeRate + costs.customsEgp + costs.transportEgp;
-  requireImportNumber(totalUsd, 'إجمالي قيمة البوليصة');
-  requireImportNumber(overhead, 'إجمالي المصاريف');
-  return lines.map((line) => {
-    const baseUsd = line.quantity * line.factoryUnitPriceUsd;
-    const allocated = overhead * (totalUsd > 0 ? baseUsd / totalUsd : 1 / lines.length);
-    const totalCost = baseUsd * costs.exchangeRate + allocated;
-    if (line.shortageHandlingMethod === 'capitalize' && line.receivedQuantity === 0 && totalCost > 0) {
-      throw new BadRequestException('لا يمكن رسملة تكلفة على كمية مستلمة صفرية؛ اختر معالجة النقص كمصروف');
-    }
-    const denominator = line.shortageHandlingMethod === 'capitalize'
-      ? line.receivedQuantity : line.quantity;
-    // Match the existing NUMERIC(10,2) line columns before posting their value.
-    const landedCost = denominator > 0 ? Number((totalCost / denominator).toFixed(2)) : 0;
-    requireImportNumber(landedCost, 'التكلفة المحملة');
-    return {
-      ...line,
-      landedCost,
-      allocatedOverhead: denominator > 0 ? Number((allocated / denominator).toFixed(2)) : 0,
-    };
-  });
-}
-
 export function groupImportReceipts(lines: Array<ImportCostLine & { landedCost: number }>) {
   const products = new Map<number, { productId: number; quantity: number; value: number; shortageExpense: number }>();
   for (const line of lines) {

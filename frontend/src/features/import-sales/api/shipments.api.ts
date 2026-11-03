@@ -1194,69 +1194,6 @@ export const useCreateContainerPreorderMutation = () => {
   });
 };
 
-export const useCollectPreorderDepositMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      preorderId,
-      depositAmountEgp,
-      treasuryAccountId,
-      idempotencyKey,
-    }: {
-      preorderId: string;
-      depositAmountEgp: number;
-      treasuryAccountId?: number;
-      idempotencyKey?: string;
-    }) => {
-      return await http<any>(`/api/import-sales/preorders/${preorderId}/deposit`, {
-        method: 'POST',
-        body: JSON.stringify({
-          depositAmountEgp: Number(depositAmountEgp),
-          treasuryAccountId,
-          idempotencyKey: idempotencyKey || `PDEP-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        }),
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['container-preorders'] });
-      queryClient.invalidateQueries({ queryKey: ['container-autopsy'] });
-    },
-  });
-};
-
-export const useRefundPreorderDepositMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      preorderId,
-      refundAmountEgp,
-      treasuryAccountId,
-      idempotencyKey,
-      reason,
-    }: {
-      preorderId: string;
-      refundAmountEgp: number;
-      treasuryAccountId?: number;
-      idempotencyKey?: string;
-      reason?: string;
-    }) => {
-      return await http<any>(`/api/import-sales/preorders/${preorderId}/refund-deposit`, {
-        method: 'POST',
-        body: JSON.stringify({
-          refundAmountEgp: Number(refundAmountEgp),
-          treasuryAccountId,
-          idempotencyKey: idempotencyKey || `PREF-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          reason,
-        }),
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['container-preorders'] });
-      queryClient.invalidateQueries({ queryKey: ['container-autopsy'] });
-    },
-  });
-};
-
 export const useCancelPreorderMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
