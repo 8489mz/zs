@@ -2,7 +2,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Kysely, sql } from '../../database/kysely';
 import { AppError } from '../../common/errors/app-error';
 import { assertCashDrawerAmount, assertCashDrawerCountedCash, assertCashDrawerNote, buildCashDrawerShiftDocNo, computeCashDrawerVariance, filterCashDrawerRows, mapCashDrawerShiftRow, normalizeCashDrawerMovementType, normalizeShiftOpenPayload, paginateCashDrawerRows, summarizeCashDrawerRows, toSignedCashDrawerAmount, buildShiftCashReturnItem, isDrawerCashTender, isCashDrawerTransferType } from './helpers/cash-drawer.helper';
-import type { CashDrawerMovementType } from './helpers/cash-drawer.helper';
+import type { BlindCloseChannelReconciliation, BlindCloseReconciliation, CashDrawerMovementType } from './helpers/cash-drawer.helper';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { verifyPassword } from '../../core/auth/utils/password-hasher';
@@ -93,7 +93,7 @@ type ShiftSalesBreakdown = {
 };
 type ShiftSaleReturnTotals = { saleReturnCashRefundTotal: number; saleReturnCardRefundTotal: number; saleReturnTotal: number };
 type CloseOperationDetailInput = { amount?: number; reference?: string };
-type BlindCloseMetadata = { blindClose: true; declared: { cash: number; cardTotal: number; cardCount: number; walletTotal: number; walletCount: number; instapayTotal: number; instapayCount: number }; detailTotals: { card: number; wallet: number; instapay: number }; details: { card: Array<{ amount: number; reference?: string }>; wallet: Array<{ amount: number; reference?: string }>; instapay: Array<{ amount: number; reference?: string }> }; managerReview?: { note: string; reviewedById: number; reviewedByName: string; reviewedAt: string }; note: string };
+type BlindCloseMetadata = { blindClose: true; declared: { cash: number; cardTotal: number; cardCount: number; walletTotal: number; walletCount: number; instapayTotal: number; instapayCount: number }; detailTotals: { card: number; wallet: number; instapay: number }; details: { card: Array<{ amount: number; reference?: string }>; wallet: Array<{ amount: number; reference?: string }>; instapay: Array<{ amount: number; reference?: string }> }; managerReview?: { note: string; reviewedById: number; reviewedByName: string; reviewedAt: string }; reconciliation?: BlindCloseReconciliation; note: string };
 
 const BLIND_CLOSE_NOTE_PREFIX = 'BLIND_CLOSE::';
 
@@ -108,19 +108,22 @@ export class CashDrawerService {
 
   private toMoney(value: unknown): number { return Number(Number(value || 0).toFixed(2)); }
   /**
-   * Book-precision rounding for the EXPECTED-CASH computation only.
-   * The legacy toMoney (2dp) stays for blind-close declared totals, which
-   * are deliberately untouched by this change (see header).
+   * Book-precision rounding for the EXPECTED-CASH computation and,
+   * since INV-BLIND-CLOSE-DECLARED-RECONCILIATION, for blind-close
+   * declared totals too: the legacy 2dp toMoney truncated a KWD
+   * 100.005 declaration to 100.01 at close, manufacturing a 0.005
+   * reconciliation delta out of storage rounding alone. Declared
+   * values stored at 2dp before the package parse back identically.
    */
   private toBookMoney(value: unknown, digits: MoneyDigits): number { return roundMoney(Number(value || 0), digits); }
   private scope(auth: AuthContext) { return requireTenantScope(auth); }
   private normalizeOperationCount(value: unknown): number { const parsed = Number(value || 0); return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0; }
-  private normalizeOperationDetails(details: unknown, maxCount: number): Array<{ amount: number; reference?: string }> {
+  private normalizeOperationDetails(details: unknown, maxCount: number, digits: MoneyDigits): Array<{ amount: number; reference?: string }> {
     if (!Array.isArray(details) || details.length === 0) return [];
     const effectiveLimit = Math.max(maxCount, details.length);
     if (effectiveLimit <= 0) return [];
     return details.slice(0, effectiveLimit).map((entry) => {
-      const amount = this.toMoney((entry as CloseOperationDetailInput)?.amount || 0);
+      const amount = this.toBookMoney((entry as CloseOperationDetailInput)?.amount || 0, digits);
       const reference = String((entry as CloseOperationDetailInput)?.reference || '').trim();
       return { amount: amount >= 0 ? amount : 0, ...(reference ? { reference } : {}) };
     });
@@ -1084,10 +1087,15 @@ export class CashDrawerService {
     const cardOperationCount = this.normalizeOperationCount(payload.cardOperationCount);
     const walletOperationCount = this.normalizeOperationCount(payload.walletOperationCount);
     const instapayOperationCount = this.normalizeOperationCount(payload.instapayOperationCount);
-    const cardDetails = this.normalizeOperationDetails(payload.cardDetails, cardOperationCount);
-    const walletDetails = this.normalizeOperationDetails(payload.walletDetails, walletOperationCount);
-    const instapayDetails = this.normalizeOperationDetails(payload.instapayDetails, instapayOperationCount);
-    const blindCloseMeta: BlindCloseMetadata | null = isBlindCloseCashier ? { blindClose: true, declared: { cash: this.toMoney(countedCash), cardTotal: this.toMoney(payload.cardDeclaredTotal || 0), cardCount: cardOperationCount, walletTotal: this.toMoney(payload.walletDeclaredTotal || 0), walletCount: walletOperationCount, instapayTotal: this.toMoney(payload.instapayDeclaredTotal || 0), instapayCount: instapayOperationCount }, detailTotals: { card: this.toMoney(cardDetails.reduce((sum, row) => sum + row.amount, 0)), wallet: this.toMoney(walletDetails.reduce((sum, row) => sum + row.amount, 0)), instapay: this.toMoney(instapayDetails.reduce((sum, row) => sum + row.amount, 0)) }, details: { card: cardDetails, wallet: walletDetails, instapay: instapayDetails }, note } : null;
+    // INV-BLIND-CLOSE-DECLARED-RECONCILIATION: declared totals and
+    // detail amounts are stored at book digits, on the pool read
+    // like the expected-cash computation — the stored declaration
+    // must survive whole so review can reconcile it exactly.
+    const closeDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
+    const cardDetails = this.normalizeOperationDetails(payload.cardDetails, cardOperationCount, closeDigits);
+    const walletDetails = this.normalizeOperationDetails(payload.walletDetails, walletOperationCount, closeDigits);
+    const instapayDetails = this.normalizeOperationDetails(payload.instapayDetails, instapayOperationCount, closeDigits);
+    const blindCloseMeta: BlindCloseMetadata | null = isBlindCloseCashier ? { blindClose: true, declared: { cash: this.toBookMoney(countedCash, closeDigits), cardTotal: this.toBookMoney(payload.cardDeclaredTotal || 0, closeDigits), cardCount: cardOperationCount, walletTotal: this.toBookMoney(payload.walletDeclaredTotal || 0, closeDigits), walletCount: walletOperationCount, instapayTotal: this.toBookMoney(payload.instapayDeclaredTotal || 0, closeDigits), instapayCount: instapayOperationCount }, detailTotals: { card: this.toBookMoney(cardDetails.reduce((sum, row) => sum + row.amount, 0), closeDigits), wallet: this.toBookMoney(walletDetails.reduce((sum, row) => sum + row.amount, 0), closeDigits), instapay: this.toBookMoney(instapayDetails.reduce((sum, row) => sum + row.amount, 0), closeDigits) }, details: { card: cardDetails, wallet: walletDetails, instapay: instapayDetails }, note } : null;
     const closeStatus = isBlindCloseCashier ? 'pending_review' : 'closed';
     const closeNoteValue = blindCloseMeta ? this.serializeBlindCloseNote(blindCloseMeta) : note;
 
@@ -1126,6 +1134,44 @@ export class CashDrawerService {
     return { ok: true, cashierShifts: listing.cashierShifts, pagination: listing.pagination, summary: listing.summary };
   }
 
+  /**
+   * INV-BLIND-CLOSE-DECLARED-RECONCILIATION: the authoritative
+   * declared-vs-computed reconciliation at book digits, computed
+   * on the review transaction from the same breakdowns the listing
+   * hydrates. The computed side mirrors the review screen's
+   * definition exactly: card = card sales + service card − card
+   * return refunds; wallet/instapay = their sales totals. Counts
+   * come from the breakdown's operation counts. Declared figures
+   * are re-rounded to book digits so shifts closed at 2dp before
+   * this package reconcile against their stored values unchanged.
+   * A mismatch never blocks review: it is recorded, and the cash
+   * variance posting is untouched.
+   */
+  private async computeBlindCloseReconciliation(
+    shift: ShiftRow,
+    declared: { cardTotal: number; cardCount: number; walletTotal: number; walletCount: number; instapayTotal: number; instapayCount: number },
+    auth: AuthContext,
+    queryable: Kysely<Database>,
+    digits: MoneyDigits,
+  ): Promise<BlindCloseReconciliation> {
+    const breakdown = await this.computeShiftSalesBreakdown(shift, auth, queryable, digits);
+    const services = await this.computeShiftServiceBreakdown(shift, auth, queryable, digits);
+    const returns = await this.computeShiftSaleReturnTotals(shift, auth, queryable, digits);
+    const channel = (declaredTotal: number, declaredCount: number, computed: number, computedCount: number): BlindCloseChannelReconciliation => ({
+      declared: this.toBookMoney(declaredTotal, digits),
+      computed: this.toBookMoney(computed, digits),
+      delta: this.toBookMoney(declaredTotal - computed, digits),
+      declaredCount,
+      computedCount,
+      countDelta: declaredCount - computedCount,
+    });
+    return {
+      card: channel(declared.cardTotal, declared.cardCount, breakdown.cardSalesTotal + services.serviceCardTotal - returns.saleReturnCardRefundTotal, breakdown.cardOperationCount),
+      wallet: channel(declared.walletTotal, declared.walletCount, breakdown.walletSalesTotal, breakdown.walletOperationCount),
+      instapay: channel(declared.instapayTotal, declared.instapayCount, breakdown.instapaySalesTotal, breakdown.instapayOperationCount),
+    };
+  }
+
   async reviewCashierShiftClose(shiftId: number, payload: { note?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = this.scope(auth);
     if (!(shiftId > 0)) throw new AppError('الوردية غير موجودة', 'SHIFT_NOT_FOUND', 404);
@@ -1137,6 +1183,7 @@ export class CashDrawerService {
     const rawCloseNote = String(shift.close_note || '');
     const parsedBlindClose = this.parseBlindCloseNote(rawCloseNote);
     let closeNoteValue = rawCloseNote;
+    let reconciliation: BlindCloseReconciliation | null = null;
     if (parsedBlindClose) {
       parsedBlindClose.managerReview = { note: managerNote, reviewedById: Number(auth.userId || 0), reviewedByName: String(auth.username || ''), reviewedAt: new Date().toISOString() };
       closeNoteValue = this.serializeBlindCloseNote(parsedBlindClose);
@@ -1145,13 +1192,33 @@ export class CashDrawerService {
     }
 
     await this.tx.runInTransaction(this.db, async (trx) => {
-      const lockedShift = await trx.selectFrom('cashier_shifts').select('status').where('id', '=', shiftId).where('tenant_id', '=', scope.tenantId).forUpdate().executeTakeFirst();
+      const lockedShift = await trx.selectFrom('cashier_shifts').selectAll().where('id', '=', shiftId).where('tenant_id', '=', scope.tenantId).forUpdate().executeTakeFirst();
       if (!lockedShift || lockedShift.status !== 'pending_review') throw new AppError('الوردية ليست في انتظار مراجعة المدير', 'SHIFT_NOT_PENDING_REVIEW', 409);
+
+      if (parsedBlindClose) {
+        const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+        reconciliation = await this.computeBlindCloseReconciliation(
+          lockedShift as ShiftRow,
+          {
+            cardTotal: Number(parsedBlindClose.declared?.cardTotal || 0),
+            cardCount: Number(parsedBlindClose.declared?.cardCount || 0),
+            walletTotal: Number(parsedBlindClose.declared?.walletTotal || 0),
+            walletCount: Number(parsedBlindClose.declared?.walletCount || 0),
+            instapayTotal: Number(parsedBlindClose.declared?.instapayTotal || 0),
+            instapayCount: Number(parsedBlindClose.declared?.instapayCount || 0),
+          },
+          auth,
+          trx,
+          digits,
+        );
+        parsedBlindClose.reconciliation = reconciliation;
+        closeNoteValue = this.serializeBlindCloseNote(parsedBlindClose);
+      }
 
       await sql`update cashier_shifts set status = 'closed', close_note = ${closeNoteValue}, closed_by = coalesce(closed_by, ${auth.userId}), closed_at = coalesce(closed_at, now()), updated_at = now() where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
       await this.accountingPosting.postCashierShiftVariance(trx, shiftId, auth);
     });
     const listing = await this.listCashierShifts({}, auth);
-    return { ok: true, cashierShifts: listing.cashierShifts, pagination: listing.pagination, summary: listing.summary };
+    return { ok: true, cashierShifts: listing.cashierShifts, pagination: listing.pagination, summary: listing.summary, reconciliation };
   }
 }

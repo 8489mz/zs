@@ -93,7 +93,31 @@ type BlindClosePayload = {
     reviewedByName?: string;
     reviewedAt?: string;
   };
+  /**
+   * INV-BLIND-CLOSE-DECLARED-RECONCILIATION: the authoritative
+   * declared-vs-computed reconciliation, written by manager review
+   * at book digits. The review dialog's client-side diff is
+   * transient and 2dp; this record is durable and survives the
+   * review. Absent on shifts closed before the package, and on
+   * non-blind closes.
+   */
+  reconciliation?: BlindCloseReconciliation;
   note?: string;
+};
+
+export type BlindCloseChannelReconciliation = {
+  declared: number;
+  computed: number;
+  delta: number;
+  declaredCount: number;
+  computedCount: number;
+  countDelta: number;
+};
+
+export type BlindCloseReconciliation = {
+  card: BlindCloseChannelReconciliation;
+  wallet: BlindCloseChannelReconciliation;
+  instapay: BlindCloseChannelReconciliation;
 };
 
 type ParsedCloseNote = {
@@ -183,7 +207,11 @@ function normalizeBlindOperationList(value: unknown): BlindCloseOperationDetail[
     const amount = Number((entry as { amount?: unknown })?.amount || 0);
     const reference = String((entry as { reference?: unknown })?.reference || '').trim();
     return {
-      amount: Number.isFinite(amount) ? Number(amount.toFixed(2)) : 0,
+      // INV-BLIND-CLOSE-DECLARED-RECONCILIATION: the stored amount is
+      // kept whole. The old toFixed(2) re-truncated 3-decimal declared
+      // detail amounts on every read; values stored at 2dp before the
+      // package parse back identically.
+      amount: Number.isFinite(amount) ? amount : 0,
       ...(reference ? { reference } : {}),
     };
   });
@@ -276,6 +304,7 @@ export function mapCashDrawerShiftRow(row: CashDrawerShiftSource): CashDrawerMap
     managerReviewedById: managerReview.reviewedById == null ? null : Number(managerReview.reviewedById || 0),
     managerReviewedByName: String(managerReview.reviewedByName || ''),
     managerReviewedAt: String(managerReview.reviewedAt || ''),
+    reconciliation: parsedClose.blindClose?.reconciliation || null,
     closedBy: row.closed_by_name || '',
     closedByName: row.closed_by_name || '',
     closedById: row.closed_by ? String(row.closed_by) : '',
