@@ -47,6 +47,7 @@ import {
 import { VanFleetService } from './services/van-fleet.service';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
+import { isOfferActive, pickBestApplicableOffer, todayLocalIsoDate } from '../sales/helpers/sales-write.helper';
 import { computeCashDrawerVariance } from '../cash-drawer/helpers/cash-drawer.helper';
 import { VanRequisitionsService } from './services/van-requisitions.service';
 import { DAY_KEY_TO_ARABIC, normalizeDayKey } from './van-routes-schedule.util';
@@ -2024,11 +2025,17 @@ export class VanSalesService {
       const vanBatchAllocations: Array<Array<{ pharmacyBatchId: number; quantity: number }>> = [];
       const sortedItems = this.sortItemsByProductId(payload.items);
       const productIds = sortedItems.map((it) => Number(it.productId));
-      const nowIso = new Date().toISOString().slice(0, 10);
+      // INV-OFFER-SELECTION-SHARED-POS-VAN: one instant for the whole
+      // sale, evaluated in host-local parts — the same clock the POS
+      // writer uses (todayLocalIsoDate / `now` defaults). Start/end
+      // dates and happy-hour/days-of-week windows are applied by the
+      // shared selector below, never pre-filtered here in UTC.
+      const saleNow = new Date();
+      const offerTodayIso = todayLocalIsoDate(saleNow);
 
       const rawOffers = productIds.length > 0 ? await trxAny
         .selectFrom('product_offers')
-        .select(['product_id', 'offer_type', 'value', 'min_qty', 'start_date', 'end_date', 'bogo_buy_qty', 'bogo_get_qty', 'bogo_discount_percent'])
+        .select(['product_id', 'offer_type', 'value', 'min_qty', 'start_date', 'end_date', 'bogo_buy_qty', 'bogo_get_qty', 'bogo_discount_percent', 'happy_hour_start', 'happy_hour_end', 'days_of_week'])
         .where('product_id', 'in', productIds)
         .where('tenant_id', '=', tenantId)
         .where('is_active', '=', true)
@@ -2037,12 +2044,8 @@ export class VanSalesService {
       const offersByProduct = new Map<number, any[]>();
       for (const off of rawOffers) {
         const pId = Number(off.product_id);
-        const start = off.start_date ? String(off.start_date).slice(0, 10) : null;
-        const end = off.end_date ? String(off.end_date).slice(0, 10) : null;
-        if ((!start || start <= nowIso) && (!end || end >= nowIso)) {
-          if (!offersByProduct.has(pId)) offersByProduct.set(pId, []);
-          offersByProduct.get(pId)!.push(off);
-        }
+        if (!offersByProduct.has(pId)) offersByProduct.set(pId, []);
+        offersByProduct.get(pId)!.push(off);
       }
 
       // Security Invariant: Pre-resolve supervisor authorization if PIN is provided (with Maker-Checker enforcement)
@@ -2140,7 +2143,11 @@ export class VanSalesService {
         // Security Invariant: Gated Bonus Items
         // Free bonus items cannot be arbitrarily flipped by the driver unless an active promotion allows it or supervisor PIN is provided
         if (isBonus) {
-          const hasActiveBogoOffer = activeOffers.some((o: any) => o.offer_type === 'bogo');
+          // INV-OFFER-SELECTION-SHARED-POS-VAN: the BOGO that
+          // authorises a bonus must be active under the shared rule
+          // (date range AND happy-hour/days-of-week windows at the
+          // sale instant), not merely date-filtered as before.
+          const hasActiveBogoOffer = activeOffers.some((o: any) => o.offer_type === 'bogo' && isOfferActive(o, offerTodayIso, saleNow));
           if (!hasActiveBogoOffer && !supervisorOverrideApproved) {
             const attemptedVal = Number((defaultBasePrice * multiplier * inputQty).toFixed(2));
             await this.vanFraudRadarService.recordSuspicionEvent({
@@ -2216,10 +2223,13 @@ export class VanSalesService {
           systemAuthorizedPrice = 0;
           pricingTierType = 'bonus';
         } else {
-          const getMinQty = (o: any) => o.offer_type === 'bogo' ? (Number(o.bogo_buy_qty || 1) + Number(o.bogo_get_qty || 1)) : Math.max(1, Number(o.min_qty || 1));
-          const matchingOffer = activeOffers
-            .filter((off) => baseQty >= getMinQty(off))
-            .sort((a, b) => getMinQty(b) - getMinQty(a))[0];
+          // INV-OFFER-SELECTION-SHARED-POS-VAN: the winner is the
+          // shared POS selector — lowest adjusted price among offers
+          // active at the sale instant, qualified on the SOLD
+          // quantity (inputQty), never on base units, never by
+          // highest minimum quantity. The per-type price derivation
+          // below is unchanged and still computes from the winner.
+          const matchingOffer = pickBestApplicableOffer(activeOffers, offerTodayIso, inputQty, baseUnitPrice, saleNow, bookDigits);
 
           if (matchingOffer) {
             const offerVal = Number(matchingOffer.value || 0);

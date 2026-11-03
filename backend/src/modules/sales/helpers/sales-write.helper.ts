@@ -356,11 +356,20 @@ function normalizeDateOnly(value: unknown): string {
   return '';
 }
 
-function todayLocalIsoDate(): string {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
+/*
+ * Host-local calendar date (YYYY-MM-DD) for the shared offer clock
+ * (INV-OFFER-SELECTION-SHARED-POS-VAN): both the POS sale writer and
+ * the van field-sale writer evaluate offer windows from this date and
+ * from the same instant, so the same offer set yields the same winner
+ * on both channels. The optional instant lets the van writer derive
+ * the date from the single instant it passes as `now`, instead of
+ * sampling the clock twice. Defaults preserve the long-standing POS
+ * behaviour exactly (host-local parts of a fresh instant).
+ */
+export function todayLocalIsoDate(now: Date = new Date()): string {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
