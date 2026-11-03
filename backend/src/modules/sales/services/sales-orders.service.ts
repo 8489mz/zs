@@ -10,7 +10,7 @@ import { formatDailyDocumentNumber } from '../../../common/utils/document-number
 import { randomUUID } from 'node:crypto';
 import { reserveLocationStock, releaseLocationStock } from '../../../common/utils/location-stock-ledger';
 import { idempotencyStorage } from '../../../core/idempotency/idempotency.context';
-import { resolveConversionDiscounts } from '../helpers/sales-write.helper';
+import { resolveConversionDiscounts, resolveConversionPaymentTerms } from '../helpers/sales-write.helper';
 
 @Injectable()
 export class SalesOrdersService {
@@ -548,6 +548,17 @@ export class SalesOrdersService {
 
       const totalAmount = Number(order.total_amount);
 
+      // INV-CONVERSION-PAYMENT-TERMS-CARRIED: carry the stored
+      // payment_terms ('cash' | 'credit', van pre-sales only) into the
+      // sale payload instead of forcing cash. A credit payload is the
+      // sale writer's own full-credit shape (paymentType/paymentChannel
+      // 'credit', no payment lines) so createSale's existing
+      // customer-required / credit-blocked / credit-limit checks
+      // consume it unchanged; an unrecognised stored value throws
+      // CONVERSION_PAYMENT_TERMS_UNKNOWN inside this try, so the
+      // 'converting' claim reverts exactly like a discount mismatch.
+      const paymentTerms = resolveConversionPaymentTerms(order.payment_terms);
+
       const salePayload: any = {
         branchId,
         customerId: order.customer_id ? Number(order.customer_id) : undefined,
@@ -556,15 +567,17 @@ export class SalesOrdersService {
         note: `تم إنشاؤها تحويلاً من أمر البيع #${order.order_number}${order.notes ? ` - ${order.notes}` : ''}`,
         items: saleItems,
         discount: globalDiscount,
-        paymentType: 'cash',
-        paymentChannel: 'cash',
+        paymentType: paymentTerms,
+        paymentChannel: paymentTerms,
         source: 'dashboard',
-        payments: [
-          {
-            paymentChannel: 'cash',
-            amount: totalAmount,
-          },
-        ],
+        payments: paymentTerms === 'credit'
+          ? []
+          : [
+              {
+                paymentChannel: 'cash',
+                amount: totalAmount,
+              },
+            ],
       };
 
       const idemKey = `so_convert_${scope.tenantId}_${id}`;

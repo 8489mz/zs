@@ -8,7 +8,7 @@ import { canWriteQuotations } from '../../../core/auth/utils/commerce-operation-
 import { CreateQuotationDto, UpdateQuotationDto } from '../dto/quotation.dto';
 import { SalesWriteService } from './sales-write.service';
 import { UpsertSaleDto } from '../dto/upsert-sale.dto';
-import { resolveConversionDiscounts } from '../helpers/sales-write.helper';
+import { resolveConversionDiscounts, resolveConversionPaymentTerms } from '../helpers/sales-write.helper';
 
 @Injectable()
 export class QuotationsService {
@@ -306,6 +306,14 @@ export class QuotationsService {
 
     const totalAmount = Number(quotation.total_amount);
 
+    // INV-CONVERSION-PAYMENT-TERMS-CARRIED: quotations carry no
+    // payment-terms column, so the only representable shape is the
+    // historical cash payload. The resolver is called with no stored
+    // value (=> 'cash') so both conversions share one terms shape and
+    // a future terms column can be wired here without changing the
+    // payload construction below.
+    const paymentTerms = resolveConversionPaymentTerms(undefined);
+
     const salePayload: any = {
       branchId,
       customerId: quotation.customer_id ? Number(quotation.customer_id) : undefined,
@@ -314,15 +322,17 @@ export class QuotationsService {
       note: `تم إنشاؤها تحويلاً من عرض السعر #${quotation.quotation_number}${quotation.notes ? ` - ${quotation.notes}` : ''}`,
       items: saleItems,
       discount: globalDiscount,
-      paymentType: 'cash',
-      paymentChannel: 'cash',
+      paymentType: paymentTerms,
+      paymentChannel: paymentTerms,
       source: 'dashboard',
-      payments: [
-        {
-          paymentChannel: 'cash',
-          amount: totalAmount,
-        },
-      ],
+      payments: paymentTerms === 'credit'
+        ? []
+        : [
+            {
+              paymentChannel: 'cash',
+              amount: totalAmount,
+            },
+          ],
     };
 
     const saleResult: any = await this.salesWrite.createSale(salePayload, auth);

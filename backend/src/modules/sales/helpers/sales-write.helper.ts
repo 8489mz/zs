@@ -181,6 +181,48 @@ export function resolveConversionDiscounts(
   return { lineDiscounts, globalDiscount: Math.max(0, globalRaw) };
 }
 
+/*
+ * Conversion payment terms (INV-CONVERSION-PAYMENT-TERMS-CARRIED):
+ * the only payment-terms data stored on a sales order today is the
+ * `sales_orders.payment_terms` column (migration 0199, written only
+ * by van pre-sales as 'cash' | 'credit'; dashboard orders never set
+ * it and the column defaults to 'cash'). Quotations carry no terms
+ * column at all. There is no stored partial/deposit/due-date field
+ * on either document, so no partial shape can be carried — inventing
+ * one from nothing would fabricate terms the customer never agreed.
+ * This resolver therefore maps the stored value onto the sale
+ * writer's own paymentType vocabulary and fails closed on anything
+ * it cannot represent, instead of silently treating it as cash:
+ * missing/blank means "no terms recorded" and keeps the historical
+ * cash behaviour; 'cash' | 'credit' (trimmed, case-insensitive)
+ * carry through; any other value throws
+ * CONVERSION_PAYMENT_TERMS_UNKNOWN before any sale is created.
+ * Credit enforcement itself (customer required, credit-blocked,
+ * credit limit) is NOT duplicated here: createSale's existing
+ * checks consume the resulting payload (paymentType 'credit' +
+ * empty payments => remaining debt is the full total).
+ */
+export function resolveConversionPaymentTerms(
+  storedTerms: unknown,
+): 'cash' | 'credit' {
+  if (storedTerms === null || storedTerms === undefined) return 'cash';
+  if (typeof storedTerms !== 'string') {
+    throw new AppError(
+      'Order payment terms are not a recognised value and cannot be converted',
+      'CONVERSION_PAYMENT_TERMS_UNKNOWN',
+      400,
+    );
+  }
+  const normalized = storedTerms.trim().toLowerCase();
+  if (normalized === '' || normalized === 'cash') return 'cash';
+  if (normalized === 'credit') return 'credit';
+  throw new AppError(
+    'Order payment terms are not a recognised value and cannot be converted',
+    'CONVERSION_PAYMENT_TERMS_UNKNOWN',
+    400,
+  );
+}
+
 /**
  * Frozen sale-line cost preservation (INV-SALE-EDIT-FROZEN-COST).
  *
