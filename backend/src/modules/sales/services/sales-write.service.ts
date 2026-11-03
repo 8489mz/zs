@@ -1515,7 +1515,12 @@ export class SalesWriteService {
         pointsAfterRedeem = Math.max(0, Number((availablePoints - normalized.loyaltyPointsRedeemed).toFixed(2)));
       }
 
-      const unapprovedDiscount = Math.max(0, roundSaleResidual(normalized.discount - Number(approvedTerms?.approvedDiscount || 0), moneyDigits));
+      // INV-CONVERSION-LINE-DISCOUNTS-PRESERVED: per-line discounts are
+      // discounts granted at conversion too, so they count toward the
+      // gated amount alongside the header discount (POS payloads never
+      // send lineDiscount, so direct sales are unchanged).
+      const lineDiscountTotal = roundSaleResidual(normalized.items.reduce((sum, item) => sum + Number((item as { lineDiscount?: number }).lineDiscount || 0), 0), moneyDigits);
+      const unapprovedDiscount = Math.max(0, roundSaleResidual(roundSaleResidual(normalized.discount - Number(approvedTerms?.approvedDiscount || 0), moneyDigits) + lineDiscountTotal, moneyDigits));
       await this.assertDiscountChangeAllowed(trx, auth, unapprovedDiscount, normalized.managerPin, subtotal);
       if (effectiveDiscount > subtotal) throw new AppError('Discount cannot exceed subtotal', 'INVALID_DISCOUNT', 400);
       // Pre-round the sale-side totals to book digits before allocation
@@ -2829,7 +2834,10 @@ export class SalesWriteService {
         }
       }
 
-      await this.assertDiscountChangeAllowed(trx, auth, normalized.discount, managerPin, subtotal);
+      // INV-CONVERSION-LINE-DISCOUNTS-PRESERVED: same gate inclusion as
+      // createSale — per-line discounts count toward the gated amount.
+      const editLineDiscountTotal = roundSaleResidual(normalized.items.reduce((sum, item) => sum + Number((item as { lineDiscount?: number }).lineDiscount || 0), 0), moneyDigits);
+      await this.assertDiscountChangeAllowed(trx, auth, roundSaleResidual(normalized.discount + editLineDiscountTotal, moneyDigits), managerPin, subtotal);
       if (normalized.discount > subtotal) throw new AppError('Discount cannot exceed subtotal', 'INVALID_DISCOUNT', 400);
       // Tax F1 (same rule as createSale): an edit re-derives the tax
       // from the payload rate, so it must pass the same configured-or-0

@@ -119,6 +119,15 @@ export function normalizeSalePayload(payload: UpsertSaleDto): NormalizedSalePayl
         price: Number((item as any).price ?? (item as any).unitPrice ?? 0),
         originalPrice: item.originalPrice != null && Number(item.originalPrice) > 0 ? Number(item.originalPrice) : undefined,
         offerDiscount: item.offerDiscount != null && Number(item.offerDiscount) > 0 ? Number(item.offerDiscount) : undefined,
+        // INV-CONVERSION-LINE-DISCOUNTS-PRESERVED: the per-line total
+        // discount survives normalization. A negative or non-finite
+        // value is invalid here (same SALE_ITEM_INVALID class as the
+        // other item checks below); the gross-vs-discount bound is
+        // enforced by buildPreparedSaleItem. The legacy per-item
+        // `discount` field is deliberately NOT read: storefront and
+        // van conversions still send it, and mapping it would silently
+        // change their totals.
+        lineDiscount: item.lineDiscount != null ? Number(item.lineDiscount) : undefined,
         offerName: item.offerName ? String(item.offerName).trim() : undefined,
         unitName: String(item.unitName || 'قطعة').trim() || 'قطعة',
         unitMultiplier: Number(item.unitMultiplier ?? 1),
@@ -133,7 +142,8 @@ export function normalizeSalePayload(payload: UpsertSaleDto): NormalizedSalePayl
         if (!Number.isInteger(item.productId) || item.productId <= 0 ||
             !Number.isFinite(item.qty) || item.qty <= 0 ||
             !Number.isFinite(item.price) || item.price < 0 ||
-            !Number.isFinite(item.unitMultiplier) || item.unitMultiplier <= 0) {
+            !Number.isFinite(item.unitMultiplier) || item.unitMultiplier <= 0 ||
+            (item.lineDiscount !== undefined && (!Number.isFinite(item.lineDiscount) || item.lineDiscount < 0))) {
           throw new AppError('تحتوي الفاتورة على صنف أو كمية أو سعر غير صالح', 'SALE_ITEM_INVALID', 400);
         }
         return item;

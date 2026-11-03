@@ -49,6 +49,22 @@ class SaleItemDto {
   @Min(0)
   offerDiscount?: number;
 
+  /**
+   * Per-line TOTAL discount (INV-CONVERSION-LINE-DISCOUNTS-PRESERVED):
+   * the amount subtracted from this line's gross total (qty x price),
+   * not a per-unit amount. Only order/quotation conversion sends it;
+   * POS payloads never do, so direct sales are unchanged. Deliberately
+   * NOT named `discount`: conversion payloads historically sent a
+   * per-item `discount` that normalizeSalePayload drops, and reusing
+   * that name would silently change storefront/van conversions that
+   * still send it.
+   */
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  lineDiscount?: number;
+
   @IsOptional()
   @IsString()
   offerName?: string;
@@ -300,7 +316,7 @@ export type NormalizedSalePayload = {
   branchId: number | null;
   locationId: number | null;
   source: 'pos' | 'dashboard';
-  items: Array<{ productId: number; qty: number; price: number; originalPrice?: number; offerDiscount?: number; offerName?: string; unitName: string; unitMultiplier: number; priceType: 'retail' | 'wholesale'; notes: string; modifiers: any; serials?: string[] }>;
+  items: Array<{ productId: number; qty: number; price: number; originalPrice?: number; offerDiscount?: number; lineDiscount?: number; offerName?: string; unitName: string; unitMultiplier: number; priceType: 'retail' | 'wholesale'; notes: string; modifiers: any; serials?: string[] }>;
   payments: Array<{ paymentChannel: 'cash' | 'card' | 'wallet' | 'instapay'; amount: number }>;
   tenderedAmount: number;
   tableNumber: string | null;

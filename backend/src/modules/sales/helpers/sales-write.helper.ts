@@ -47,6 +47,8 @@ export type PreparedSaleItem = {
   originalPrice?: number;
   offerDiscount?: number;
   offerName?: string;
+  /** Per-line TOTAL discount carried from order/quotation conversion (INV-CONVERSION-LINE-DISCOUNTS-PRESERVED). */
+  lineDiscount?: number;
   lineTotal: number;
   unitName: string;
   unitMultiplier: number;
@@ -80,7 +82,21 @@ export function buildPreparedSaleItem(
   }
 
   const modifiersTotal = (item.modifiers || []).reduce((sum: number, mod: any) => sum + (Number(mod.price || 0) * Number(mod.qty || 1)), 0);
-  const lineTotal = roundCurrency(Number(item.qty || 0) * (Number(item.price || 0) + modifiersTotal), options.moneyDigits);
+  // INV-CONVERSION-LINE-DISCOUNTS-PRESERVED: a per-line TOTAL discount
+  // reduces this line's gross total before the header discount is
+  // allocated over the lines. A discount larger than the gross line
+  // total fails closed (0.001 of float hair is tolerated and clamps
+  // the net to zero); POS payloads never send lineDiscount, so their
+  // line totals are unchanged.
+  const lineDiscount = Number(item.lineDiscount || 0);
+  if (!Number.isFinite(lineDiscount) || lineDiscount < 0) {
+    throw new AppError('Line discount must be a non-negative amount', 'INVALID_DISCOUNT', 400);
+  }
+  const grossLineTotal = Number(item.qty || 0) * (Number(item.price || 0) + modifiersTotal);
+  if (lineDiscount > grossLineTotal + 0.001) {
+    throw new AppError('Line discount cannot exceed line total', 'INVALID_DISCOUNT', 400);
+  }
+  const lineTotal = roundCurrency(Math.max(0, grossLineTotal - lineDiscount), options.moneyDigits);
   const modifiersCostTotal = (item.modifiers || []).reduce((sum: number, mod: any) => sum + (Number(mod.costPrice || 0) * Number(mod.qty || 1)), 0);
 
   return {
@@ -91,6 +107,7 @@ export function buildPreparedSaleItem(
     unitPrice: Number(item.price || 0),
     ...(item.originalPrice !== undefined ? { originalPrice: Number(item.originalPrice) } : {}),
     ...(item.offerDiscount !== undefined ? { offerDiscount: Number(item.offerDiscount) } : {}),
+    ...(item.lineDiscount !== undefined ? { lineDiscount: Number(item.lineDiscount) } : {}),
     ...(item.offerName !== undefined ? { offerName: item.offerName } : {}),
     lineTotal,
     unitName: String(item.unitName || 'قطعة').trim() || 'قطعة',
@@ -106,6 +123,62 @@ export function buildPreparedSaleItem(
     isService: (product as any)?.item_type === 'service',
     ...(item.serials !== undefined ? { serials: item.serials } : {}),
   };
+}
+
+/**
+ * Order/quotation conversion discount reconciliation
+ * (INV-CONVERSION-LINE-DISCOUNTS-PRESERVED).
+ *
+ * Settled from the only in-repo producers of these rows: the dashboard
+ * order/quotation forms (CreateSalesOrderPage / CreateQuotationPage)
+ * compute each line as total = max(0, qty x unit_price - discount) and
+ * FOLD the per-line discounts into the header discount_amount
+ * (discountAmount = itemsDiscountTotal + globalDiscountAmount), with
+ * subtotal = sum(qty x unit_price) gross. The stored total_amount is
+ * client-supplied verbatim at order/quotation creation, so it is never
+ * trusted as the reconciliation target; instead the stored rows are
+ * reconciled against EACH OTHER before any sale is created:
+ *
+ *  - every per-line discount is a line TOTAL, finite, >= 0 and <= the
+ *    line's gross total (qty x unit_price);
+ *  - the header amount equals the line discounts plus a non-negative
+ *    global discount, which becomes the sale payload's header discount.
+ *
+ * The stored per-line `total` is deliberately NOT reconciled:
+ * creation stores the client-supplied field verbatim, the DTOs are
+ * plain interfaces with no runtime validation, and the column
+ * defaults to 0 — so a row with total 0 and a real gross total is a
+ * producible shape (the stock-legs spec seeds exactly that), and
+ * conversion never reads item.total. The sale is recomputed from
+ * quantity, unit_price and discount alone, so a stale total is inert
+ * display data, never a posting input.
+ *
+ * Any inconsistency fails closed with CONVERSION_DISCOUNT_MISMATCH
+ * before createSale runs, so no sale is created from corrupt rows.
+ * Tolerance is 0.001 (one minor unit at 3dp, the finest book digits):
+ * stored rows are compared with each other, never with settings, and
+ * dashboard float hair sits far below it.
+ */
+export function resolveConversionDiscounts(
+  lines: Array<{ quantity: number | string | null; unitPrice: number | string | null; discount?: number | string | null }>,
+  headerDiscountAmount: number | string | null,
+): { lineDiscounts: number[]; globalDiscount: number } {
+  const TOL = 0.001;
+  const fail = (): never => {
+    throw new AppError('Order/quotation discount rows are inconsistent and cannot be converted', 'CONVERSION_DISCOUNT_MISMATCH', 400);
+  };
+  const lineDiscounts = lines.map((line) => {
+    const qty = Number(line.quantity || 0);
+    const price = Number(line.unitPrice || 0);
+    const discount = Number(line.discount || 0);
+    const gross = qty * price;
+    if (!Number.isFinite(discount) || discount < 0 || discount > gross + TOL) fail();
+    return discount;
+  });
+  const lineDiscountTotal = lineDiscounts.reduce((sum, discount) => sum + discount, 0);
+  const globalRaw = Number(headerDiscountAmount || 0) - lineDiscountTotal;
+  if (!Number.isFinite(globalRaw) || globalRaw < -TOL) fail();
+  return { lineDiscounts, globalDiscount: Math.max(0, globalRaw) };
 }
 
 /**

@@ -10,6 +10,7 @@ import { formatDailyDocumentNumber } from '../../../common/utils/document-number
 import { randomUUID } from 'node:crypto';
 import { reserveLocationStock, releaseLocationStock } from '../../../common/utils/location-stock-ledger';
 import { idempotencyStorage } from '../../../core/idempotency/idempotency.context';
+import { resolveConversionDiscounts } from '../helpers/sales-write.helper';
 
 @Injectable()
 export class SalesOrdersService {
@@ -519,37 +520,53 @@ export class SalesOrdersService {
       ? { salesOrderId: id, branchId: order.branch_id, locationId, items: releaseItems }
       : undefined;
 
-    // Prepare sale items
-    const saleItems = items.map((item) => ({
-      productId: Number(item.product_id),
-      qty: Number(item.quantity),
-      price: Number(item.unit_price),
-      discount: Number(item.discount || 0),
-      unitName: item.unit_name || undefined,
-    }));
-
-    const totalAmount = Number(order.total_amount);
-
-    const salePayload: any = {
-      branchId,
-      customerId: order.customer_id ? Number(order.customer_id) : undefined,
-      customerName: order.customer_name,
-      customerPhone: order.customer_phone || undefined,
-      note: `تم إنشاؤها تحويلاً من أمر البيع #${order.order_number}${order.notes ? ` - ${order.notes}` : ''}`,
-      items: saleItems,
-      discount: Number(order.discount_amount || 0),
-      paymentType: 'cash',
-      paymentChannel: 'cash',
-      source: 'dashboard',
-      payments: [
-        {
-          paymentChannel: 'cash',
-          amount: totalAmount,
-        },
-      ],
-    };
-
+    // INV-CONVERSION-LINE-DISCOUNTS-PRESERVED: reconcile the stored
+    // discount rows against each other BEFORE any sale is created
+    // (the stored total_amount is client-supplied and never trusted
+    // as the target). Throws CONVERSION_DISCOUNT_MISMATCH on any
+    // inconsistency; the catch below reverts the 'converting' claim.
+    // This block sits INSIDE the try so a reconciliation failure
+    // reverts the claim instead of stranding the order 'converting'.
     try {
+      const { lineDiscounts, globalDiscount } = resolveConversionDiscounts(
+        items.map((item) => ({
+          quantity: item.quantity,
+          unitPrice: item.unit_price,
+          discount: item.discount,
+        })),
+        order.discount_amount,
+      );
+
+      // Prepare sale items
+      const saleItems = items.map((item, index) => ({
+        productId: Number(item.product_id),
+        qty: Number(item.quantity),
+        price: Number(item.unit_price),
+        lineDiscount: lineDiscounts[index],
+        unitName: item.unit_name || undefined,
+      }));
+
+      const totalAmount = Number(order.total_amount);
+
+      const salePayload: any = {
+        branchId,
+        customerId: order.customer_id ? Number(order.customer_id) : undefined,
+        customerName: order.customer_name,
+        customerPhone: order.customer_phone || undefined,
+        note: `تم إنشاؤها تحويلاً من أمر البيع #${order.order_number}${order.notes ? ` - ${order.notes}` : ''}`,
+        items: saleItems,
+        discount: globalDiscount,
+        paymentType: 'cash',
+        paymentChannel: 'cash',
+        source: 'dashboard',
+        payments: [
+          {
+            paymentChannel: 'cash',
+            amount: totalAmount,
+          },
+        ],
+      };
+
       const idemKey = `so_convert_${scope.tenantId}_${id}`;
       const saleResult: any = await idempotencyStorage.run(
         { idempotencyKey: idemKey, operationType: 'sale', accountId: scope.accountId },

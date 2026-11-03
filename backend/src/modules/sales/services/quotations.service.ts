@@ -8,6 +8,7 @@ import { canWriteQuotations } from '../../../core/auth/utils/commerce-operation-
 import { CreateQuotationDto, UpdateQuotationDto } from '../dto/quotation.dto';
 import { SalesWriteService } from './sales-write.service';
 import { UpsertSaleDto } from '../dto/upsert-sale.dto';
+import { resolveConversionDiscounts } from '../helpers/sales-write.helper';
 
 @Injectable()
 export class QuotationsService {
@@ -280,12 +281,26 @@ export class QuotationsService {
       branchId = primaryBranch ? Number(primaryBranch.id) : 1;
     }
 
+    // INV-CONVERSION-LINE-DISCOUNTS-PRESERVED: same reconciliation as
+    // sales-order conversion — the stored discount rows are checked
+    // against each other before any sale is created (the stored
+    // total_amount is client-supplied and never trusted as the
+    // target). Throws CONVERSION_DISCOUNT_MISMATCH on inconsistency.
+    const { lineDiscounts, globalDiscount } = resolveConversionDiscounts(
+      items.map((item) => ({
+        quantity: item.quantity,
+        unitPrice: item.unit_price,
+        discount: item.discount,
+      })),
+      quotation.discount_amount,
+    );
+
     // Prepare sale items
-    const saleItems = items.map((item) => ({
+    const saleItems = items.map((item, index) => ({
       productId: Number(item.product_id),
       qty: Number(item.quantity),
       price: Number(item.unit_price),
-      discount: Number(item.discount || 0),
+      lineDiscount: lineDiscounts[index],
       unitName: item.unit_name || undefined,
     }));
 
@@ -298,7 +313,7 @@ export class QuotationsService {
       customerPhone: quotation.customer_phone || undefined,
       note: `تم إنشاؤها تحويلاً من عرض السعر #${quotation.quotation_number}${quotation.notes ? ` - ${quotation.notes}` : ''}`,
       items: saleItems,
-      discount: Number(quotation.discount_amount || 0),
+      discount: globalDiscount,
       paymentType: 'cash',
       paymentChannel: 'cash',
       source: 'dashboard',
