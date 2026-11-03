@@ -342,8 +342,12 @@ async function main() {
     assert.ok(quoteSlice.includes('reserveOperation'), 'quotation conversion must reserve the operation row');
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(invariants.split('INV-CONVERSION-LIFECYCLE-RACES').length - 1, 1, 'the invariant entry must exist exactly once');
-    const lastLine = invariants.trimEnd().split('\n').pop() || '';
-    assert.ok(lastLine.includes('INV-CONVERSION-LIFECYCLE-RACES'), 'the invariant entry must be the last line');
+    // Last-line ownership passes to newer entries:
+    // INV-SALE-EDIT-COST-FLOOR appends after this entry, so the
+    // last-line assertion that held at this package's own landing is
+    // relaxed here — test-only, behaviour cases above are unchanged.
+    // (Same chaining precedent as P7-2's own relaxation of the
+    // P3/P6b last-line pins.)
   } finally {
     await db.destroy();
   }

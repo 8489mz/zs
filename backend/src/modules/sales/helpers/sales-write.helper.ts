@@ -127,6 +127,51 @@ export function buildPreparedSaleItem(
 }
 
 /**
+ * Selling-floor check shared by sale creation and sale edit
+ * (INV-SALE-EDIT-COST-FLOOR). A line is below the floor when its
+ * discount-allocated net line total falls below
+ * min(max(frozen unit cost, min selling price x unit multiplier),
+ *     effective allowed unit price) x qty, with 0.001 of float hair
+ * tolerated. Services are exempt (no cost). The caller supplies the
+ * cost that will actually be stored/posted: at creation that is the
+ * current cost, on edit it is the frozen cost restored by
+ * restoreFrozenSaleLineCosts. The effective allowed unit price is
+ * the system-approved price at creation when one applies, else the
+ * allowed (retail/offer) price; on edit it is always the allowed
+ * price, because updateSale has no approved-terms channel — a
+ * system-approved below-floor price therefore needs a floor
+ * approval on edit (fail-closed). Pure: no I/O, no rounding beyond
+ * the inputs it is given.
+ */
+export type BelowFloorSaleLineInput = {
+  productId: number;
+  isService?: boolean;
+  /** Per-sold-unit cost (cost_price x unit multiplier + modifier costs). */
+  costPrice: number;
+  unitMultiplier: number;
+  qty: number;
+  minSellingPrice: number;
+  effectiveAllowedUnitPrice?: number;
+  /** Discount-allocated net line total at book digits. */
+  netLineTotal: number;
+};
+
+export function findBelowFloorSaleItems(lines: BelowFloorSaleLineInput[]): number[] {
+  const below: number[] = [];
+  for (const line of lines) {
+    if (line.isService) continue;
+    const minUnitPrice = Number(line.minSellingPrice || 0) * Number(line.unitMultiplier || 1);
+    const standardFloor = Math.max(Number(line.costPrice || 0), minUnitPrice) * Number(line.qty || 0);
+    const preApprovedFloor = line.effectiveAllowedUnitPrice != null && line.effectiveAllowedUnitPrice > 0
+      ? line.effectiveAllowedUnitPrice * Number(line.qty || 0)
+      : standardFloor;
+    const floor = Math.min(standardFloor, preApprovedFloor);
+    if (Number(line.netLineTotal) + 0.001 < floor) below.push(Number(line.productId));
+  }
+  return below;
+}
+
+/**
  * Order/quotation conversion discount reconciliation
  * (INV-CONVERSION-LINE-DISCOUNTS-PRESERVED).
  *

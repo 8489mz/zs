@@ -23,7 +23,7 @@ import { HeldSaleDto } from '../dto/held-sale.dto';
 import { PosAuditEventDto } from '../dto/pos-audit-event.dto';
 import { UpsertSaleDto, SalesOrderConversionRelease } from '../dto/upsert-sale.dto';
 import { normalizeSalePayload } from '../helpers/sales-payload.helper';
-import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateRemainingDebt, calculateRestoredStockQuantity, calculateStoreCreditBalance, computeSaleAllocationLegs, paidAmountExceedsRecordedPayments, resolvePostedSalePaymentChannel, restoreFrozenSaleLineCosts, roundSaleInvoiceTotals, roundSaleResidual } from '../helpers/sales-write.helper';
+import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateRemainingDebt, calculateRestoredStockQuantity, calculateStoreCreditBalance, computeSaleAllocationLegs, findBelowFloorSaleItems, paidAmountExceedsRecordedPayments, resolvePostedSalePaymentChannel, restoreFrozenSaleLineCosts, roundSaleInvoiceTotals, roundSaleResidual } from '../helpers/sales-write.helper';
 import { allocateSaleTenders, type SaleTenderChannel } from '../engines/sale-tender.engine';
 import { allocateInvoiceDiscount } from '../engines/invoice-discount.engine';
 import { resolveSaleTaxRate } from '../engines/sale-tax-rate.engine';
@@ -1545,20 +1545,21 @@ export class SalesWriteService {
       if (normalized.storeCreditUsed > total + 0.0001) throw new AppError('Store credit cannot exceed invoice total', 'INVALID_STORE_CREDIT', 400);
 
       // Distribute the invoice discount across lines before checking the real selling floor.
-      const belowFloorItems = preparedItems.filter((item) => {
-        if (item.isService) return false;
+      // INV-SALE-EDIT-COST-FLOOR: the floor computation is the shared
+      // findBelowFloorSaleItems helper, also called by updateSale.
+      const belowFloorItems = findBelowFloorSaleItems(preparedItems.map((item) => {
         const product = productMap.get(item.productId);
-        const minUnitPrice = Number(product?.min_selling_price || 0) * Number(item.unitMultiplier || 1);
-        const standardFloor = Math.max(Number(item.costPrice || 0), minUnitPrice) * Number(item.qty || 0);
-        // Pre-approved promotion or system-approved price set by management overrides the cost floor
-        const preApprovedFloor = (item.effectiveAllowedUnitPrice != null && item.effectiveAllowedUnitPrice > 0)
-          ? item.effectiveAllowedUnitPrice * Number(item.qty || 0)
-          : standardFloor;
-        const floor = Math.min(standardFloor, preApprovedFloor);
-        const allocation = allocationByItem.get(item)!;
-        const netLine = allocation.netLineTotal;
-        return netLine + 0.001 < floor;
-      });
+        return {
+          productId: item.productId,
+          isService: item.isService,
+          costPrice: item.costPrice,
+          unitMultiplier: item.unitMultiplier,
+          qty: item.qty,
+          minSellingPrice: Number(product?.min_selling_price || 0),
+          effectiveAllowedUnitPrice: item.effectiveAllowedUnitPrice,
+          netLineTotal: allocationByItem.get(item)!.netLineTotal,
+        };
+      }));
       const floorApproval = belowFloorItems.length
         ? await this.authz.authorizeDiscountOverride(normalized.managerPin, auth, trx)
         : null;
@@ -1682,7 +1683,7 @@ export class SalesWriteService {
         saleNote = saleNote ? `${saleNote} | ${offlineTag}` : offlineTag;
       }
       if (floorApproval) {
-        saleNote = `${saleNote ? `${saleNote} | ` : ''}[اعتماد بيع تحت الحد: ${floorApproval.authorizedByName}; أصناف ${belowFloorItems.map((item) => item.productId).join(',')}]`;
+        saleNote = `${saleNote ? `${saleNote} | ` : ''}[اعتماد بيع تحت الحد: ${floorApproval.authorizedByName}; أصناف ${belowFloorItems.join(',')}]`;
       }
       if (normalized.terminalAuthCode) {
         const terminalTag = `[تفويض شبكة: ${normalized.cardScheme || 'بطاقة'} | ${normalized.terminalAuthCode}${normalized.terminalRrn ? ` | مرجع: ${normalized.terminalRrn}` : ''}]`;
@@ -2824,7 +2825,7 @@ export class SalesWriteService {
         }
         const product = await trx.selectFrom('products as p')
           .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true))
-          .select(['p.id', 'p.name', 'p.stock_qty', 'p.retail_price', 'p.wholesale_price', 'p.cost_price', 'p.item_type', 'b.id as bom_id'])
+          .select(['p.id', 'p.name', 'p.stock_qty', 'p.retail_price', 'p.wholesale_price', 'p.cost_price', 'p.min_selling_price', 'p.item_type', 'b.id as bom_id'])
           .where('p.id', '=', item.productId)
           .where(sql<boolean>`p.tenant_id = ${scope.tenantId}`)
           .where('p.is_active', '=', true)
@@ -2883,7 +2884,17 @@ export class SalesWriteService {
           { allowNegativeStockSales: allowNegativeStockSales || hasBOM || (product as any).item_type === 'service', moneyDigits }
         );
         subtotal += preparedItem.lineTotal;
-        preparedItems.push({ ...preparedItem, isService: (product as any).item_type === 'service' });
+        preparedItems.push({
+          ...preparedItem,
+          isService: (product as any).item_type === 'service',
+          // INV-SALE-EDIT-COST-FLOOR: carry the floor inputs on the
+          // rebuilt line so the edit floor check below can use them.
+          // The pre-approved override is the edit's own allowed
+          // (retail/offer) price, as at creation for non-system-approved
+          // sales; updateSale has no approved-terms channel.
+          effectiveAllowedUnitPrice: allowedUnitPrice,
+          minSellingPrice: Number((product as any).min_selling_price || 0),
+        });
         
         if (hasBOM) {
           autoProduceItems.push({
@@ -3026,6 +3037,35 @@ export class SalesWriteService {
       // the old sale_items rows were deleted, so it still carries the
       // original costs; createSale has no old lines and is untouched.
       restoreFrozenSaleLineCosts(preparedItems, currentItems);
+
+      // INV-SALE-EDIT-COST-FLOOR: creation refuses a net line below the
+      // selling floor, but edits previously re-ran only the deviation
+      // gate, so an admin could edit below cost with no PIN and a
+      // manager approving the edit never saw a floor computation. Run
+      // the same shared check here, AFTER the frozen-cost restore, so
+      // the floor is computed on the cost that will actually be stored
+      // and posted by postSaleEdit. The approval and the sale-note tag
+      // mirror creation; the tag is written back to the sales row
+      // updated above, inside this same transaction.
+      const belowFloorProductIds = findBelowFloorSaleItems(preparedItems.map((item) => ({
+        productId: item.productId,
+        isService: item.isService,
+        costPrice: item.costPrice,
+        unitMultiplier: item.unitMultiplier,
+        qty: item.qty,
+        minSellingPrice: item.minSellingPrice,
+        effectiveAllowedUnitPrice: item.effectiveAllowedUnitPrice,
+        netLineTotal: allocationByItem.get(item)!.netLineTotal,
+      })));
+      const editFloorApproval = belowFloorProductIds.length
+        ? await this.authz.authorizeDiscountOverride(normalized.managerPin, auth, trx)
+        : null;
+      if (editFloorApproval) {
+        const floorTag = `[اعتماد بيع تحت الحد: ${editFloorApproval.authorizedByName}; أصناف ${belowFloorProductIds.join(',')}]`;
+        const editNote = normalized.note ? `${normalized.note} | ${floorTag}` : floorTag;
+        await trx.updateTable('sales').set({ note: editNote } as any)
+          .where('id', '=', saleId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+      }
 
       // Deadlock prevention: identical canonical lock ordering as createSale (see note there).
       const stockOrderedItems = [...preparedItems].sort((a, b) => Number(a.productId || 0) - Number(b.productId || 0));
