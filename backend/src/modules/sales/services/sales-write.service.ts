@@ -23,7 +23,7 @@ import { HeldSaleDto } from '../dto/held-sale.dto';
 import { PosAuditEventDto } from '../dto/pos-audit-event.dto';
 import { UpsertSaleDto, SalesOrderConversionRelease } from '../dto/upsert-sale.dto';
 import { normalizeSalePayload } from '../helpers/sales-payload.helper';
-import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateRemainingDebt, calculateRestoredStockQuantity, calculateStoreCreditBalance, paidAmountExceedsRecordedPayments, resolvePostedSalePaymentChannel, restoreFrozenSaleLineCosts, roundSaleResidual } from '../helpers/sales-write.helper';
+import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateRemainingDebt, calculateRestoredStockQuantity, calculateStoreCreditBalance, paidAmountExceedsRecordedPayments, resolvePostedSalePaymentChannel, restoreFrozenSaleLineCosts, roundSaleInvoiceTotals, roundSaleResidual } from '../helpers/sales-write.helper';
 import { allocateSaleTenders, type SaleTenderChannel } from '../engines/sale-tender.engine';
 import { allocateInvoiceDiscount } from '../engines/invoice-discount.engine';
 import { resolveSaleTaxRate } from '../engines/sale-tax-rate.engine';
@@ -1518,8 +1518,20 @@ export class SalesWriteService {
       const unapprovedDiscount = Math.max(0, roundSaleResidual(normalized.discount - Number(approvedTerms?.approvedDiscount || 0), moneyDigits));
       await this.assertDiscountChangeAllowed(trx, auth, unapprovedDiscount, normalized.managerPin, subtotal);
       if (effectiveDiscount > subtotal) throw new AppError('Discount cannot exceed subtotal', 'INVALID_DISCOUNT', 400);
-      const { taxAmount, total } = computeInvoiceTotals(subtotal, effectiveDiscount, normalized.taxRate, normalized.pricesIncludeTax, normalized.deliveryFee, normalized.serviceCharge, Number((normalized as any).tipAmount || 0));
-      const { taxAmount: itemOnlyTaxAmount } = computeInvoiceTotals(subtotal, effectiveDiscount, normalized.taxRate, normalized.pricesIncludeTax, 0, 0, 0);
+      // Pre-round the sale-side totals to book digits before allocation
+      // (INV-SALE-TAX-BOOK-DIGITS-PRE-ROUND): computeInvoiceTotals
+      // always rounds to 3 decimals, but the allocation engine fails
+      // closed on anything finer than book digits. The shared totals
+      // util is untouched; postSale re-rounds these same book-digits
+      // values, so the journal legs are unchanged.
+      const { taxAmount, total } = roundSaleInvoiceTotals(
+        computeInvoiceTotals(subtotal, effectiveDiscount, normalized.taxRate, normalized.pricesIncludeTax, normalized.deliveryFee, normalized.serviceCharge, Number((normalized as any).tipAmount || 0)),
+        moneyDigits,
+      );
+      const { taxAmount: itemOnlyTaxAmount } = roundSaleInvoiceTotals(
+        computeInvoiceTotals(subtotal, effectiveDiscount, normalized.taxRate, normalized.pricesIncludeTax, 0, 0, 0),
+        moneyDigits,
+      );
       const allocatedLines = allocateInvoiceDiscount({
         lines: preparedItems.map((item) => ({ lineTotal: item.lineTotal, qty: item.qty })),
         invoiceDiscount: effectiveDiscount, invoiceTax: itemOnlyTaxAmount, pricesIncludeTax: normalized.pricesIncludeTax, digits: moneyDigits,
@@ -2828,8 +2840,14 @@ export class SalesWriteService {
         normalized.taxRate,
         taxSettingsMap.get('taxRate') ?? taxSettingsMap.get('tax_rate'),
       );
-      const { taxAmount, total } = computeInvoiceTotals(subtotal, normalized.discount, normalized.taxRate, normalized.pricesIncludeTax, normalized.deliveryFee, normalized.serviceCharge, Number((normalized as any).tipAmount || 0));
-      const { taxAmount: itemOnlyTaxAmount } = computeInvoiceTotals(subtotal, normalized.discount, normalized.taxRate, normalized.pricesIncludeTax, 0, 0, 0);
+      const { taxAmount, total } = roundSaleInvoiceTotals(
+        computeInvoiceTotals(subtotal, normalized.discount, normalized.taxRate, normalized.pricesIncludeTax, normalized.deliveryFee, normalized.serviceCharge, Number((normalized as any).tipAmount || 0)),
+        moneyDigits,
+      );
+      const { taxAmount: itemOnlyTaxAmount } = roundSaleInvoiceTotals(
+        computeInvoiceTotals(subtotal, normalized.discount, normalized.taxRate, normalized.pricesIncludeTax, 0, 0, 0),
+        moneyDigits,
+      );
       const allocatedLines = allocateInvoiceDiscount({
         lines: preparedItems.map((item) => ({ lineTotal: item.lineTotal, qty: item.qty })),
         invoiceDiscount: normalized.discount, invoiceTax: itemOnlyTaxAmount, pricesIncludeTax: normalized.pricesIncludeTax, digits: moneyDigits,

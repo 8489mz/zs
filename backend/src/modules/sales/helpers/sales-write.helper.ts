@@ -239,6 +239,30 @@ export function roundSaleResidual(value: number, digits: MoneyDigits): number {
   return roundCurrency(Number(value || 0), digits);
 }
 
+/*
+ * Sale-side invoice totals at book digits (INV-SALE-TAX-BOOK-DIGITS-PRE-ROUND):
+ * `computeInvoiceTotals` always rounds to 3 decimals, but the invoice
+ * allocation engine fails closed on anything finer than the tenant's
+ * book digits — so a 2-decimal tenant's sale whose tax needs a third
+ * decimal was rejected outright. The sale writer rounds the totals
+ * to book digits at this seam, before allocation, at both the create
+ * and the edit call sites. The shared totals util and the allocation
+ * engine are untouched, and postSale re-rounds these same book-digits
+ * values, so the journal legs are unchanged. Non-finite inputs fail
+ * closed through the canonical rounder (never coerced to 0 here, unlike
+ * roundCurrency's `Number(value || 0)`); digits are the tenant's book
+ * digits from `currencyMoneyDigits`, which only ever returns 2 or 3.
+ */
+export function roundSaleInvoiceTotals(
+  totals: { taxAmount: number; total: number },
+  digits: MoneyDigits,
+): { taxAmount: number; total: number } {
+  return {
+    taxAmount: roundMoney(totals.taxAmount, digits),
+    total: roundMoney(totals.total, digits),
+  };
+}
+
 function normalizeDateOnly(value: unknown): string {
   if (!value) return '';
   if (value instanceof Date) {
