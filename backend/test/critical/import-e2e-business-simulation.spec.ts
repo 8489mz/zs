@@ -520,6 +520,7 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
       closure_date TIMESTAMPTZ DEFAULT NULL,
       closed_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
       notes TEXT,
+      sector_preset TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW(),
       CONSTRAINT uq_import_projects_tenant_project_no UNIQUE (tenant_id, project_no)

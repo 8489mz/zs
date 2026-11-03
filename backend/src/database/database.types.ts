@@ -2248,6 +2248,7 @@ export interface ImportProjectTable {
   feasibility_converted_at?: Date | null;
   cash_flow_schedule?: any | null;
   initial_po_id?: string | null;
+  sector_preset?: string | null;
   notes: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;

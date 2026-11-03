@@ -223,6 +223,11 @@ export class ImportSalesController {
     return this.importSalesService.listTariffSectors();
   }
 
+  @Get('sector-presets')
+  async listSectorPresets() {
+    return this.importSalesService.listSectorPresets();
+  }
+
   @Post('customs-tariffs/sync-official')
   async syncOfficialTariffs(@Req() req: RequestWithAuth) {
     return this.importSalesService.syncOfficialTariffs(req.authContext!.tenantId!);

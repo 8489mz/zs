@@ -465,6 +465,10 @@ export class CreateImportProjectDto {
   notes?: string;
 
   @IsOptional()
+  @IsString()
+  sectorPreset?: string;
+
+  @IsOptional()
   @IsArray()
   partners?: Array<{ partnerId?: string; name?: string; capitalShare?: number; profitPercentage: number }>;
 }
@@ -510,6 +514,10 @@ export class UpdateImportProjectDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  sectorPreset?: string | null;
 }
 
 export class CalculateFeasibilityDto {

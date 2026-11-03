@@ -53,6 +53,7 @@ async function makeDb(withIndex: boolean): Promise<Kysely<Database>> {
       status text,
       feasibility_data text,
       notes text,
+      sector_preset text,
       created_at timestamptz DEFAULT NOW()
     );
     ${withIndex ? 'CREATE UNIQUE INDEX uq_import_projects_tenant_project_no ON import_projects (tenant_id, project_no);' : ''}

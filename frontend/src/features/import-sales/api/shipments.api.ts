@@ -897,6 +897,18 @@ export const useCustomsTariffSectorsQuery = () => {
   });
 };
 
+export const useSectorPresetsQuery = () => {
+  return useQuery({
+    queryKey: ['import-sector-presets'],
+    queryFn: async () => {
+      return await http<Array<{ key: string; nameAr: string; nameEn: string; categoryName: string }>>(
+        '/api/import-sales/sector-presets'
+      );
+    },
+    staleTime: 1000 * 60 * 30,
+  });
+};
+
 export const useSyncOfficialTariffsMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({

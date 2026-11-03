@@ -56,6 +56,7 @@ import { generateDailySequenceNumber } from '../delivery-reps/services/van-commo
 import { resolveFxRate } from '../accounting/fx-rate-resolution';
 import { calculateImportFeasibility, FeasibilityCalculationResult } from './engines/import-feasibility.engine';
 import { EGYPT_CUSTOMS_TARIFFS, TARIFF_DATA_VERSION, TARIFF_SECTORS } from './data/egypt-customs-tariffs.data';
+import { SECTOR_PRESETS, resolveSectorPreset } from './data/sector-presets.data';
 import {
   calculateLandedCostBreakdown,
   calculateDemurrageRisk,
@@ -788,6 +789,16 @@ export class ImportSalesService {
         ? suppliedNo
         : await generateDailySequenceNumber(trx, this.db as any, 'import_projects', 'project_no', 'IMP', tenantId);
 
+      // INV-IMPORT-SECTOR-PRESET: the preset is a validated data
+      // choice. An unknown key fails closed before any write; a
+      // project with no preset stores NULL (generic behaviour).
+      const sectorPresetKey = dto.sectorPreset?.trim() || null;
+      if (sectorPresetKey && !resolveSectorPreset(sectorPresetKey)) {
+        throw new BadRequestException(
+          `قطاع الاستيراد المحدد (${sectorPresetKey}) غير معروف؛ اختر قطاعاً من القائمة المعتمدة أو اتركه فارغاً للسلوك العام. [IMPORT_UNKNOWN_SECTOR_PRESET]`,
+        );
+      }
+
       let project;
       try {
         project = await trx
@@ -805,6 +816,7 @@ export class ImportSalesService {
             status: dto.status || 'feasibility',
             feasibility_data: dto.feasibilityData ? JSON.stringify(dto.feasibilityData) : '{}',
             notes: dto.notes,
+            sector_preset: sectorPresetKey,
           })
           .returningAll()
           .executeTakeFirstOrThrow();
@@ -923,6 +935,43 @@ export class ImportSalesService {
     if (dto.targetRoiPercentage !== undefined) payload.target_roi_percentage = dto.targetRoiPercentage;
     if (dto.feasibilityData !== undefined) payload.feasibility_data = JSON.stringify(dto.feasibilityData);
     if (dto.notes !== undefined) payload.notes = dto.notes;
+    if (dto.sectorPreset !== undefined) {
+      // INV-IMPORT-SECTOR-PRESET: the preset may change only
+      // before any shipment items exist for the project — after
+      // that, catalog rows were already created under the old
+      // preset's conventions and mixing them would corrupt the
+      // catalog. Clearing the preset (null/empty) follows the
+      // same guard.
+      const nextPresetKey = dto.sectorPreset?.trim() || null;
+      if (nextPresetKey && !resolveSectorPreset(nextPresetKey)) {
+        throw new BadRequestException(
+          `قطاع الاستيراد المحدد (${nextPresetKey}) غير معروف؛ اختر قطاعاً من القائمة المعتمدة أو اتركه فارغاً للسلوك العام. [IMPORT_UNKNOWN_SECTOR_PRESET]`,
+        );
+      }
+      const current = await this.db
+        .selectFrom('import_projects')
+        .select('sector_preset')
+        .where('id', '=', projectId)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      const currentKey = (current as any)?.sector_preset || null;
+      if (currentKey !== nextPresetKey) {
+        const hasItems = await this.db
+          .selectFrom('import_shipment_items')
+          .innerJoin('import_shipments', 'import_shipments.id', 'import_shipment_items.shipment_id')
+          .select('import_shipment_items.id')
+          .where('import_shipments.tenant_id', '=', tenantId)
+          .where('import_shipments.project_id', '=', projectId)
+          .limit(1)
+          .executeTakeFirst();
+        if (hasItems) {
+          throw new BadRequestException(
+            'لا يمكن تغيير قطاع المشروع بعد استيراد أصنافه إلى الحاويات: الأصناف أُنشئت وفق قواعد القطاع السابق. أنشئ مشروعاً جديداً بالقطاع المطلوب. [IMPORT_SECTOR_PRESET_LOCKED]',
+          );
+        }
+      }
+      payload.sector_preset = nextPresetKey;
+    }
 
     return await this.db
       .updateTable('import_projects')
@@ -1442,6 +1491,16 @@ export class ImportSalesService {
     return TARIFF_SECTORS;
   }
 
+  /** Selectable sector presets for the project form (data, never code branches). */
+  listSectorPresets() {
+    return SECTOR_PRESETS.map((p) => ({
+      key: p.key,
+      nameAr: p.nameAr,
+      nameEn: p.nameEn,
+      categoryName: p.categoryName,
+    }));
+  }
+
   /**
    * Explicit manual refresh of the bundled official tariffs
    * (INV-IMPORT-TARIFF-VERSIONING). Insert-only: a row the tenant
@@ -1820,46 +1879,60 @@ export class ImportSalesService {
         if (sup?.account_id) scopeAccountId = sup.account_id;
       }
 
-      let categoryId: number | null = null;
-      const categoryName = 'قطع غيار شاحنات ونقل ثقيل';
-      let cat = await trx
-        .selectFrom('product_categories')
-        .select('id')
-        .where('tenant_id', '=', tenantId)
-        .where('name', '=', categoryName)
-        .executeTakeFirst();
-      if (!cat) {
-        cat = await trx
-          .insertInto('product_categories')
-          .values({
-            tenant_id: tenantId,
-            account_id: scopeAccountId,
-            name: categoryName,
-            is_active: true,
-          } as any)
-          .returning('id')
-          .executeTakeFirst();
+      // INV-IMPORT-SECTOR-PRESET: sector conventions apply only
+      // when the project chose a preset. A generic project gets
+      // no category, no OEM map, no invented identifiers and no
+      // markup; an unknown stored key fails closed.
+      const presetKey = (project as any)?.sector_preset;
+      const preset = resolveSectorPreset(presetKey ? String(presetKey) : null);
+      if (presetKey && String(presetKey).trim() && !preset) {
+        throw new BadRequestException(
+          `قطاع المشروع المخزن (${presetKey}) غير معروف؛ حدد قطاعاً معتمداً قبل استيراد الأصناف. [IMPORT_UNKNOWN_SECTOR_PRESET]`,
+        );
       }
-      if (cat) categoryId = Number(cat.id);
+
+      let categoryId: number | null = null;
+      if (preset) {
+        let cat = await trx
+          .selectFrom('product_categories')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('name', '=', preset.categoryName)
+          .executeTakeFirst();
+        if (!cat) {
+          cat = await trx
+            .insertInto('product_categories')
+            .values({
+              tenant_id: tenantId,
+              account_id: scopeAccountId,
+              name: preset.categoryName,
+              is_active: true,
+            } as any)
+            .returning('id')
+            .executeTakeFirst();
+        }
+        if (cat) categoryId = Number(cat.id);
+      }
 
       const rawSupplierId = (project as any)?.supplier_id || rawShipmentSupplier || feas?.supplierId || null;
       const projectSupplierId = rawSupplierId ? Number(rawSupplierId) : null;
 
-      const defaultOems: Record<string, string> = {
-        'طقم تيل فرامل وبطانات مكابح شاحنات وتريلات ثقيلة': 'WG9100440030',
-        'طقم بستم وشنابر محرك ديزل 6 سلندر شاحنات نقل ثقيل': 'VG1560030010',
-        'طقم دبرياج كامل (ديسك + اسطوانة + بلية) شاحنات نقل ثقيل': 'WG9114160010',
-        'شواحن توربينية (تيربو) لمحركات شاحنات النقل الثقيل والديزل': 'VG1560118227',
-        'فلاتر زيت وفلاتر وقود ديزل (جاز) لشاحنات وسيارات النقل': 'VG61000070005',
-        'إطارات هوائية سلك جديدة للشاحنات والمقطورات (315/80R22.5 و 295/80R22.5)': 'TYR-31580R225',
-        'سوست ورقية مصفحة متعددة الطبقات (ستست ورق وحديد شاحنات ومقطورات)': 'AZ9725520278',
-        'محركات ديزل جديدة كاملة مخصصة لسيارات النقل والشاحنات التجارية': 'WD615.47-ENG',
-        'فوانيس أمامية وخلفية وكشافات ضباب ولمبات إشارة للشاحنات والتريلات': 'WG9719720001',
-        'مولدات كهرباء وشحن بطاريات (دينامو شاحنات 24V و 12V)': 'VG1560090012',
-        'مواتير بادئ الحركة (مارش شاحنات ديزل 24V و 12V)': 'VG1560090001',
-      };
-
-      const exchangeRate = Number(shipment.exchange_rate_at_arrival || feas.exchangeRateCommercial || 50);
+      // No silent || 50: the import needs a real rate — arrival
+      // first, then the feasibility commercial rate — or it fails
+      // closed, the same rule as every other money path.
+      const arrivalRate = Number((shipment as any).exchange_rate_at_arrival);
+      const feasRate = Number(feas?.exchangeRateCommercial);
+      const exchangeRate =
+        Number.isFinite(arrivalRate) && arrivalRate > 0
+          ? arrivalRate
+          : Number.isFinite(feasRate) && feasRate > 0
+            ? feasRate
+            : NaN;
+      if (!Number.isFinite(exchangeRate)) {
+        throw new BadRequestException(
+          'لا يمكن استيراد أصناف المشروع بلا سعر صرف صالح؛ حدد سعر الصرف عند الوصول أو السعر التجاري على دراسة الجدوى قبل الاستيراد. [IMPORT_EXCHANGE_RATE_REQUIRED]',
+        );
+      }
 
       const insertedItems: any[] = [];
       let itemIndex = 0;
@@ -1871,21 +1944,40 @@ export class ImportSalesService {
         const weightKg = Number(it.unitWeightKg || 0);
         const cbm = Number(it.unitCbm || 0);
 
-        const oemNumber = it.oemNumber || it.partNumber || it.part_number || defaultOems[itemName] || `TRK-OEM-${String(itemIndex).padStart(4, '0')}`;
-        const sku = it.sku || oemNumber || `TRK-${project.project_no?.replace('IMP-', '') || '2610'}-${String(itemIndex).padStart(3, '0')}`;
-        const barcode = it.barcode || `200${String(project.project_no || '').replace(/\D/g, '').slice(-4)}${String(itemIndex).padStart(4, '0')}`;
-        const metadata = {
-          oemNumber,
-          partNumber: oemNumber,
-          carBrand: it.brand || it.carBrand || 'شاحنات نقل ثقيل (HOWO / Shacman / Weichai)',
-          carModel: it.model || it.carModel || 'ديزل تجاري',
-          carYearFrom: it.carYearFrom || 2018,
-          carYearTo: it.carYearTo || 2026,
-          origin: 'الصين',
+        // Preset conventions apply only under a preset: the OEM
+        // map, fabricated SKU/barcode and metadata defaults are
+        // the preset's explicit conventions. The generic path
+        // keeps only what the item itself supplied, plus
+        // provenance — nothing is invented.
+        const suppliedOem = it.oemNumber || it.partNumber || it.part_number || null;
+        const oemNumber = preset
+          ? suppliedOem || preset.oemMap[itemName] || `TRK-OEM-${String(itemIndex).padStart(4, '0')}`
+          : suppliedOem;
+        const sku = preset
+          ? it.sku || oemNumber || `TRK-${project.project_no?.replace('IMP-', '') || '2610'}-${String(itemIndex).padStart(3, '0')}`
+          : it.sku || null;
+        const barcode = preset
+          ? it.barcode || `200${String(project.project_no || '').replace(/\D/g, '').slice(-4)}${String(itemIndex).padStart(4, '0')}`
+          : it.barcode || null;
+        const metadata: Record<string, any> = {
+          ...(oemNumber ? { oemNumber, partNumber: oemNumber } : {}),
           projectNo: project.project_no,
           containerNo: shipment.container_number,
           importedAt: new Date().toISOString(),
         };
+        if (preset) {
+          metadata.carBrand = it.brand || it.carBrand || preset.defaultBrand;
+          metadata.carModel = it.model || it.carModel || preset.defaultModel;
+          metadata.carYearFrom = it.carYearFrom || preset.defaultYearFrom;
+          metadata.carYearTo = it.carYearTo || preset.defaultYearTo;
+          metadata.origin = preset.defaultOrigin;
+        } else {
+          if (it.brand || it.carBrand) metadata.carBrand = it.brand || it.carBrand;
+          if (it.model || it.carModel) metadata.carModel = it.model || it.carModel;
+          if (it.carYearFrom) metadata.carYearFrom = it.carYearFrom;
+          if (it.carYearTo) metadata.carYearTo = it.carYearTo;
+          if (it.origin) metadata.origin = it.origin;
+        }
 
         let productId = Number(it.productId ?? it.product_id);
         let product: any = null;
@@ -1909,6 +2001,16 @@ export class ImportSalesService {
 
           if (!product) {
             const estimatedCost = Number((foreignPrice * exchangeRate).toFixed(3));
+            // Fixed markups are a preset convention only. The
+            // generic path prices a new product at its estimated
+            // cost (retail/wholesale columns are NOT NULL) —
+            // no silent margin is invented.
+            const retailPrice = preset
+              ? Number((estimatedCost * preset.retailMarkup).toFixed(3))
+              : estimatedCost;
+            const wholesalePrice = preset
+              ? Number((estimatedCost * preset.wholesaleMarkup).toFixed(3))
+              : estimatedCost;
             product = await trx
               .insertInto('products')
               .values({
@@ -1920,8 +2022,8 @@ export class ImportSalesService {
                 supplier_id: projectSupplierId,
                 category_id: categoryId,
                 cost_price: estimatedCost,
-                retail_price: Number((estimatedCost * 1.35).toFixed(3)),
-                wholesale_price: Number((estimatedCost * 1.2).toFixed(3)),
+                retail_price: retailPrice,
+                wholesale_price: wholesalePrice,
                 stock_qty: 0,
                 min_stock_qty: 0,
                 notes: `صنف استيراد من مشروع ${project.project_no} - حاوية ${shipment.container_number}`,
@@ -1935,25 +2037,11 @@ export class ImportSalesService {
               } as any)
               .returning(['id', 'name'])
               .executeTakeFirstOrThrow();
-          } else {
-            await trx
-              .updateTable('products')
-              .set({
-                supplier_id: projectSupplierId || undefined,
-                category_id: categoryId || undefined,
-                sku: (product as any).sku || sku,
-                barcode: (product as any).barcode || barcode,
-                notes: `صنف استيراد من مشروع ${project.project_no} - حاوية ${shipment.container_number}`,
-                metadata: {
-                  ...((product.metadata && typeof product.metadata === 'object') ? product.metadata : {}),
-                  ...metadata,
-                },
-                catalog_updated_at: new Date(),
-              } as any)
-              .where('id', '=', Number(product.id))
-              .where('tenant_id', '=', tenantId)
-              .execute();
           }
+          // An existing product is linked as-is: importing a
+          // shipment never rewrites catalog data (supplier,
+          // category, SKU, barcode, notes, metadata) on the
+          // strength of a name match, under any preset.
           productId = Number(product.id);
         }
 

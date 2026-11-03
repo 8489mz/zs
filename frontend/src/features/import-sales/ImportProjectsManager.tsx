@@ -11,6 +11,7 @@ import {
   useCreateApprovalRequestMutation,
   useCustomsTariffsQuery,
   useCustomsTariffSectorsQuery,
+  useSectorPresetsQuery,
   usePartnersQuery,
 } from './api/shipments.api';
 import { StandardDialog } from '@/shared/components/StandardDialog';
@@ -50,6 +51,10 @@ export default function ImportProjectsManager() {
   const [targetMarket, setTargetMarket] = useState('السوق المحلي المصري');
   const [countryOrigin, setCountryOrigin] = useState('الصين');
   const [targetSector, setTargetSector] = useState('commercial_vehicles_spare_parts');
+  // Sector preset for catalog creation on import: '' = generic
+  // (no invented category, barcode or markup). Chosen explicitly.
+  const [sectorPreset, setSectorPreset] = useState('');
+  const { data: sectorPresets = [] } = useSectorPresetsQuery();
   const [budgetCurrency, setBudgetCurrency] = useState<'EGP' | 'USD'>('EGP');
   const [allocatedCapital, setAllocatedCapital] = useState<number>(6000000);
   const [targetRoi, setTargetRoi] = useState<number>(25);
@@ -605,6 +610,7 @@ export default function ImportProjectsManager() {
         allocatedCapital: Number(allocatedCapital),
         targetRoiPercentage: Number(targetRoi),
         notes: notesSummary,
+        sectorPreset: sectorPreset || undefined,
         feasibilityData: feasibilityResult || {},
         partners: activePartners.map((p) => ({
           partnerId: p.partnerId,
@@ -618,6 +624,7 @@ export default function ImportProjectsManager() {
       setIsNewProjectOpen(false);
       setProjectTitle('');
       setProjectNotes('');
+      setSectorPreset('');
       refetch();
     } catch (err: any) {
       toast.error('حدث خطأ أثناء إنشاء المشروع: ' + (err.message || 'خطأ غير معروف'));
@@ -1727,6 +1734,23 @@ export default function ImportProjectsManager() {
                 {availableSectors.map((sec: any) => (
                   <option key={sec.id} value={sec.id}>
                     {sec.name_ar}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: 4 }}>
+                قالب القطاع لأصناف الاستيراد
+              </label>
+              <select
+                value={sectorPreset}
+                onChange={(e) => setSectorPreset(e.target.value)}
+                style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px', backgroundColor: '#ffffff' }}
+              >
+                <option value="">عام — بدون قالب (بدون فئة أو باركود أو هامش تلقائي)</option>
+                {sectorPresets.map((preset: any) => (
+                  <option key={preset.key} value={preset.key}>
+                    {preset.nameAr}
                   </option>
                 ))}
               </select>
