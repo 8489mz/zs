@@ -261,8 +261,8 @@ export class CashDrawerService {
           select sum(sp.amount)
           from supplier_payments sp
           where sp.tenant_id = ${scope.tenantId} and coalesce(sp.payment_channel,'cash') = 'cash'
-            and sp.created_by = ${openerId} and sp.payment_date >= ${shift.created_at}
-            and (${shift.closed_at || null}::timestamptz is null or sp.payment_date <= ${shift.closed_at || null})
+            and sp.created_by = ${openerId} and sp.created_at >= ${shift.created_at}
+            and (${shift.closed_at || null}::timestamptz is null or sp.created_at <= ${shift.closed_at || null})
             and (${shift.branch_id || null}::int is null or sp.branch_id is null or sp.branch_id = ${Number(shift.branch_id || 0) || null})
             and (${shift.location_id || null}::int is null or sp.location_id is null or sp.location_id = ${Number(shift.location_id || 0) || null})
         ), 0)
@@ -289,8 +289,8 @@ export class CashDrawerService {
       select coalesce(sum(e.amount), 0) as total
       from expenses e
       where e.tenant_id = ${scope.tenantId} and e.created_by = ${openerId}
-        and (e.expense_date >= ${shift.created_at} or e.created_at >= ${shift.created_at})
-        and (${shift.closed_at || null}::timestamptz is null or (e.expense_date <= ${shift.closed_at || null} and e.created_at <= ${shift.closed_at || null}))
+        and e.created_at >= ${shift.created_at}
+        and (${shift.closed_at || null}::timestamptz is null or e.created_at <= ${shift.closed_at || null})
         and (${shift.branch_id || null}::int is null or e.branch_id is null or e.branch_id = ${Number(shift.branch_id || 0) || null})
         and (${shift.location_id || null}::int is null or e.location_id is null or e.location_id = ${Number(shift.location_id || 0) || null})
     `.execute(queryable ?? this.db);
@@ -307,8 +307,8 @@ export class CashDrawerService {
              coalesce(sum(s.amount), 0) as service_total
       from services s
       where s.tenant_id = ${scope.tenantId} and s.created_by = ${openerId}
-        and (s.service_date >= ${shift.created_at} or s.created_at >= ${shift.created_at})
-        and (${shift.closed_at || null}::timestamptz is null or (s.service_date <= ${shift.closed_at || null} and s.created_at <= ${shift.closed_at || null}))
+        and s.created_at >= ${shift.created_at}
+        and (${shift.closed_at || null}::timestamptz is null or s.created_at <= ${shift.closed_at || null})
         and (${shift.branch_id || null}::int is null or s.branch_id is null or s.branch_id = ${Number(shift.branch_id || 0) || null})
         and (${shift.location_id || null}::int is null or s.location_id is null or s.location_id = ${Number(shift.location_id || 0) || null})
     `.execute(queryable ?? this.db);
@@ -571,6 +571,23 @@ export class CashDrawerService {
     return { total: this.toBookMoney(total, bookDigits), items };
   }
 
+  /**
+   * INV-EXPECTED-CASH-SINGLE-WINDOW: every time-windowed component of
+   * expected cash is predicated on ONE timestamp — the row's
+   * created_at, the moment the cash actually moved — inside
+   * [shift.created_at, shift.closed_at]. Business dates
+   * (expense_date, service_date, payment_date) are stored and shown
+   * on their own screens but never drive drawer attribution: an
+   * expense created in shift 1 with a business date inside shift 2
+   * used to count in both shifts, and a supplier payment dated
+   * inside a shift but recorded later counted in a shift that never
+   * held the cash. Windows on created_at partition time, so each
+   * movement counts exactly once across consecutive shifts of the
+   * same opener. The shift-linked treasury legs carry no time
+   * predicate: they are exactly-once by link and are unchanged.
+   * Sales, returns, and collections already used created_at and
+   * are unchanged.
+   */
   private async computeShiftExpectedCashFromShift(shift: ShiftRow, auth: AuthContext, salesBreakdown?: ShiftSalesBreakdown, serviceBreakdown?: ShiftServiceBreakdown, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<number> {
     const bookDigits = digits ?? currencyMoneyDigits(await tenantBaseCurrency(queryable ?? this.db, this.scope(auth).tenantId));
     const shiftId = Number(shift.id || 0);
@@ -661,8 +678,8 @@ export class CashDrawerService {
         select e.id, e.amount, e.title, e.note, e.expense_date, e.created_at
         from expenses e
         where e.tenant_id = ${scope.tenantId} and e.created_by = ${openerId}
-          and (e.expense_date >= ${shift.created_at} or e.created_at >= ${shift.created_at})
-          and (${shift.closed_at || null}::timestamptz is null or (e.expense_date <= ${shift.closed_at || null} and e.created_at <= ${shift.closed_at || null}))
+          and e.created_at >= ${shift.created_at}
+          and (${shift.closed_at || null}::timestamptz is null or e.created_at <= ${shift.closed_at || null})
           and (${shift.branch_id || null}::int is null or e.branch_id is null or e.branch_id = ${Number(shift.branch_id || 0) || null})
           and (${shift.location_id || null}::int is null or e.location_id is null or e.location_id = ${Number(shift.location_id || 0) || null})
         order by e.id asc
@@ -677,19 +694,19 @@ export class CashDrawerService {
           kindLabel: 'مصروفات تشغيلية',
           amount: Math.abs(amt),
           note: note.trim() || 'مصروفات تشغيلية',
-          createdAt: exp.expense_date ? new Date(exp.expense_date).toISOString() : (exp.created_at ? new Date(exp.created_at).toISOString() : ''),
+          createdAt: exp.created_at ? new Date(exp.created_at).toISOString() : '',
         });
       }
 
       // 4. Supplier payments
-      const supRows = await sql<{ id: number; amount: number | string; note?: string | null; supplier_name?: string | null; payment_date?: string | Date | null; payment_channel?: string | null }>`
-        select sp.id, sp.amount, sp.note, sp.payment_date, sp.payment_channel, sup.name as supplier_name
+      const supRows = await sql<{ id: number; amount: number | string; note?: string | null; supplier_name?: string | null; payment_date?: string | Date | null; created_at?: string | Date | null; payment_channel?: string | null }>`
+        select sp.id, sp.amount, sp.note, sp.payment_date, sp.created_at, sp.payment_channel, sup.name as supplier_name
         from supplier_payments sp
         left join suppliers sup on sup.id = sp.supplier_id and sup.tenant_id = sp.tenant_id
         where sp.tenant_id = ${scope.tenantId}
           and coalesce(sp.payment_channel, 'cash') = 'cash'
-          and sp.created_by = ${openerId} and sp.payment_date >= ${shift.created_at}
-          and (${shift.closed_at || null}::timestamptz is null or sp.payment_date <= ${shift.closed_at || null})
+          and sp.created_by = ${openerId} and sp.created_at >= ${shift.created_at}
+          and (${shift.closed_at || null}::timestamptz is null or sp.created_at <= ${shift.closed_at || null})
           and (${shift.branch_id || null}::int is null or sp.branch_id is null or sp.branch_id = ${Number(shift.branch_id || 0) || null})
           and (${shift.location_id || null}::int is null or sp.location_id is null or sp.location_id = ${Number(shift.location_id || 0) || null})
         order by sp.id asc
@@ -705,7 +722,7 @@ export class CashDrawerService {
           kindLabel: 'سداد مورد',
           amount: Math.abs(amt),
           note: note.trim() || 'سداد مورد',
-          createdAt: sup.payment_date ? new Date(sup.payment_date).toISOString() : '',
+          createdAt: sup.created_at ? new Date(sup.created_at).toISOString() : '',
         });
       }
 

@@ -68,7 +68,7 @@ async function main() {
       CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text, return_type text, created_by bigint,
         created_at timestamptz, branch_id bigint, location_id bigint, total numeric, settlement_mode text,
         refund_method text, refund_allocations jsonb);
-      CREATE TABLE supplier_payments (id bigint PRIMARY KEY, tenant_id text, created_by bigint, payment_date timestamptz,
+      CREATE TABLE supplier_payments (id bigint PRIMARY KEY, tenant_id text, created_by bigint, payment_date timestamptz, created_at timestamptz,
         branch_id bigint, location_id bigint, payment_channel text, amount numeric);
       CREATE TABLE expenses (id bigint PRIMARY KEY, tenant_id text, created_by bigint, expense_date timestamptz,
         created_at timestamptz, branch_id bigint, location_id bigint, amount numeric);
