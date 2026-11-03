@@ -26,9 +26,14 @@ import { assertCashDrawerAmount, assertCashDrawerCountedCash, assertCashDrawerNo
   assert.equal(normalized.locationId, 4);
   assert.equal(normalized.password, 'secret123');
   assert.equal(normalizeCashDrawerMovementType('cash_out'), 'cash_out');
-  assert.equal(normalizeCashDrawerMovementType('other'), 'cash_in');
+  assert.equal(normalizeCashDrawerMovementType('safe_drop'), 'safe_drop');
+  assert.equal(normalizeCashDrawerMovementType('safe_replenishment'), 'safe_replenishment');
+  assert.equal(normalizeCashDrawerMovementType(''), 'cash_in');
+  assert.throws(() => normalizeCashDrawerMovementType('other'), (error: any) => error?.code === 'DRAWER_MOVEMENT_TYPE_UNKNOWN');
   assert.equal(toSignedCashDrawerAmount('cash_out', 10.5), -10.5);
   assert.equal(toSignedCashDrawerAmount('cash_in', 10.5), 10.5);
+  assert.equal(toSignedCashDrawerAmount('safe_drop', 10.5), -10.5);
+  assert.equal(toSignedCashDrawerAmount('safe_replenishment', 10.5), 10.5);
   assert.equal(computeCashDrawerVariance(88.5, 100, 2), -11.5);
   assert.throws(() => assertCashDrawerAmount(0), (error: any) => error?.code === 'AMOUNT_INVALID');
   assert.throws(() => assertCashDrawerCountedCash(-1), (error: any) => error?.code === 'COUNTED_CASH_INVALID');

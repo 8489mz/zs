@@ -6388,16 +6388,47 @@ export class AccountingPostingService {
     branchId: number | null,
     locationId: number | null,
     auth: AuthContext,
+    counterpartAccountId?: number | null,
   ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     await this.ensureTenantFoundation(queryable, auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const moneyAmount = this.toMoney(amount, bookDigits);
-    if (moneyAmount <= 0) return { posted: false, journalEntryId: null };
 
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
     let cashAccountId = Number(settings?.cash_account_id || 0);
     if (!(cashAccountId > 0)) cashAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1110');
+
+    // INV-CASH-DRAWER-MOVEMENT-TYPES: safe transfers are
+    // asset-to-asset journals, never profit legs. The counterpart
+    // is caller-named (no safe account exists in the chart) and is
+    // validated here — the journal writer fails closed — exactly
+    // like a treasury transfer, under lock, before any line is
+    // built. An unknown movement type throws instead of returning
+    // unposted: a silent skip would leave the treasury row posted
+    // with no journal and no trace.
+    const isTransferType = movementType === 'safe_drop' || movementType === 'safe_replenishment';
+    let counterpartId = 0;
+    if (isTransferType) {
+      counterpartId = Number(counterpartAccountId || 0);
+      if (!(counterpartId > 0)) throw new AppError('A counterpart cash or bank account is required for a safe transfer', 'DRAWER_COUNTERPART_REQUIRED', 400);
+      const counterpart = await queryable
+        .selectFrom('accounting_accounts')
+        .select('id')
+        .where('tenant_id', '=', scope.tenantId)
+        .where('id', '=', counterpartId)
+        .where('account_type', '=', 'asset')
+        .where('normal_balance', '=', 'debit')
+        .where('is_cash_bank', '=', true)
+        .where('is_active', '=', true)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!counterpart) throw new AppError('The counterpart must be an active cash or bank account in this tenant', 'TREASURY_ACCOUNT_NOT_FOUND', 400);
+      if (counterpartId === cashAccountId) throw new AppError('The counterpart must differ from the drawer cash account', 'DRAWER_COUNTERPART_SAME_AS_CASH', 400);
+    } else if (movementType !== 'cash_in' && movementType !== 'cash_out') {
+      throw new AppError('Unknown cash drawer movement type', 'DRAWER_MOVEMENT_TYPE_UNKNOWN', 400);
+    }
+    if (moneyAmount <= 0) return { posted: false, journalEntryId: null };
 
     const lines: JournalLineDraft[] = [];
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
@@ -6446,17 +6477,60 @@ export class AccountingPostingService {
         branchId,
         locationId,
       });
+    } else if (movementType === 'safe_drop') {
+      addBookLine({
+        accountId: counterpartId,
+        description: `تحويل نقدية من الدرج إلى الخزنة: ${note}`,
+        debit: moneyAmount,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
+      addBookLine({
+        accountId: cashAccountId,
+        description: `سحب نقدية من الدرج إلى الخزنة: ${note}`,
+        debit: 0,
+        credit: moneyAmount,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
+    } else if (movementType === 'safe_replenishment') {
+      addBookLine({
+        accountId: cashAccountId,
+        description: `تغذية الدرج من الخزنة: ${note}`,
+        debit: moneyAmount,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
+      addBookLine({
+        accountId: counterpartId,
+        description: `تحويل نقدية من الخزنة إلى الدرج: ${note}`,
+        debit: 0,
+        credit: moneyAmount,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
     } else {
-      return { posted: false, journalEntryId: null };
+      throw new AppError('Unknown cash drawer movement type', 'DRAWER_MOVEMENT_TYPE_UNKNOWN', 400);
     }
 
+    const movementLabel = movementType === 'cash_in' ? 'توريد' : movementType === 'cash_out' ? 'صرف' : movementType === 'safe_drop' ? 'تحويل للخزنة' : 'تغذية من الخزنة';
     const entryId = await this.insertPostedJournal(queryable, {
       sourceType: `cash_drawer_${movementType}`,
       sourceId: txnId,
       tenantId: scope.tenantId,
       accountId: scope.accountId,
       entryDate: new Date(),
-      description: `قيد حركة درج نقدية #${txnId} (${movementType === 'cash_in' ? 'توريد' : 'صرف'})`,
+      description: `قيد حركة درج نقدية #${txnId} (${movementLabel})`,
       branchId,
       locationId,
       createdBy: auth.userId,

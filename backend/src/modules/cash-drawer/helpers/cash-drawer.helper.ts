@@ -303,8 +303,15 @@ export function assertCashDrawerNote(note: string, code = 'NOTE_REQUIRED', minLe
     throw new AppError('اكتب سبب العملية', code, 400);
   }
 }
-export function normalizeCashDrawerMovementType(type?: string): 'cash_in' | 'cash_out' { return String(type || '').trim() === 'cash_out' ? 'cash_out' : 'cash_in'; }
-export function toSignedCashDrawerAmount(type: 'cash_in' | 'cash_out', amount: number): number { return type === 'cash_out' ? -Math.abs(amount) : Math.abs(amount); }
+export type CashDrawerMovementType = 'cash_in' | 'cash_out' | 'safe_drop' | 'safe_replenishment';
+export function normalizeCashDrawerMovementType(type?: string): CashDrawerMovementType {
+  const raw = String(type || '').trim();
+  if (raw === '') return 'cash_in';
+  if (raw === 'cash_in' || raw === 'cash_out' || raw === 'safe_drop' || raw === 'safe_replenishment') return raw;
+  throw new AppError('نوع حركة الدرج غير معروف', 'DRAWER_MOVEMENT_TYPE_UNKNOWN', 400);
+}
+export function isCashDrawerTransferType(type: CashDrawerMovementType): boolean { return type === 'safe_drop' || type === 'safe_replenishment'; }
+export function toSignedCashDrawerAmount(type: CashDrawerMovementType, amount: number): number { return type === 'cash_out' || type === 'safe_drop' ? -Math.abs(amount) : Math.abs(amount); }
 /**
  * Shift variance at the tenant's minor unit. digits is required: the old
  * toFixed(2) turned a KWD 0.005 variance into 0.01 (overstating the GL

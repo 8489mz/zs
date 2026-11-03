@@ -1,7 +1,8 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Kysely, sql } from '../../database/kysely';
 import { AppError } from '../../common/errors/app-error';
-import { assertCashDrawerAmount, assertCashDrawerCountedCash, assertCashDrawerNote, buildCashDrawerShiftDocNo, computeCashDrawerVariance, filterCashDrawerRows, mapCashDrawerShiftRow, normalizeCashDrawerMovementType, normalizeShiftOpenPayload, paginateCashDrawerRows, summarizeCashDrawerRows, toSignedCashDrawerAmount, buildShiftCashReturnItem, isDrawerCashTender } from './helpers/cash-drawer.helper';
+import { assertCashDrawerAmount, assertCashDrawerCountedCash, assertCashDrawerNote, buildCashDrawerShiftDocNo, computeCashDrawerVariance, filterCashDrawerRows, mapCashDrawerShiftRow, normalizeCashDrawerMovementType, normalizeShiftOpenPayload, paginateCashDrawerRows, summarizeCashDrawerRows, toSignedCashDrawerAmount, buildShiftCashReturnItem, isDrawerCashTender, isCashDrawerTransferType } from './helpers/cash-drawer.helper';
+import type { CashDrawerMovementType } from './helpers/cash-drawer.helper';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { verifyPassword } from '../../core/auth/utils/password-hasher';
@@ -202,8 +203,8 @@ export class CashDrawerService {
     }
   }
 
-  private async assertCashDrawerApproval(movementType: 'cash_in' | 'cash_out', approvalSecret: string, auth: AuthContext): Promise<void> {
-    if (movementType === 'cash_out' && this.shouldRequireManagerApprovalForCashOut(auth)) { await this.assertManagerPin(approvalSecret, auth); return; }
+  private async assertCashDrawerApproval(movementType: CashDrawerMovementType, approvalSecret: string, auth: AuthContext): Promise<void> {
+    if ((movementType === 'cash_out' || movementType === 'safe_drop') && this.shouldRequireManagerApprovalForCashOut(auth)) { await this.assertManagerPin(approvalSecret, auth); return; }
     await this.assertCurrentUserPassword(approvalSecret, auth);
   }
 
@@ -631,7 +632,11 @@ export class CashDrawerService {
       const isSaleCancellation = tt.txn_type === 'sale_cancel_restore';
       const isDelivery = !isPurchaseRefund && !isSaleCancellation && (rawNote.includes('دليفري') || rawNote.includes('مندوب'));
       const kind = isDelivery ? 'delivery' : (amt > 0 ? 'cash_in' : 'cash_out');
-      const kindLabel = isPurchaseRefund ? 'استرداد نقدي من مورد بعد مرتجع شراء'
+      const isSafeDrop = tt.txn_type === 'safe_drop';
+      const isSafeReplenishment = tt.txn_type === 'safe_replenishment';
+      const kindLabel = isSafeDrop ? 'تحويل نقدية للخزنة (إيداع آمن)'
+        : isSafeReplenishment ? 'تغذية الدرج من الخزنة'
+        : isPurchaseRefund ? 'استرداد نقدي من مورد بعد مرتجع شراء'
         : isSaleCancellation ? 'رد نقدية فاتورة بيع ملغاة'
         : isDelivery
           ? (amt > 0 ? 'تحصيل وتسوية دليفري' : 'صرف أجرة طيار دليفري')
@@ -938,7 +943,7 @@ export class CashDrawerService {
     return { ok: true, cashierShifts: listing.cashierShifts, pagination: listing.pagination, summary: listing.summary };
   }
 
-  async recordCashMovement(shiftId: number, payload: { type?: string; amount?: number; note?: string; managerPin?: string; requestKey?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
+  async recordCashMovement(shiftId: number, payload: { type?: string; amount?: number; note?: string; managerPin?: string; requestKey?: string; counterpartAccountId?: number }, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = this.scope(auth);
     if (!(shiftId > 0)) throw new AppError('الوردية غير موجودة', 'SHIFT_NOT_FOUND', 404);
     const shift = await this.getShift(shiftId, auth);
@@ -955,6 +960,30 @@ export class CashDrawerService {
     const requestKey = String(payload.requestKey || '').trim();
     if (requestKey.length < 8 || requestKey.length > 160) {
       throw new AppError('A stable drawer movement request key is required', 'DRAWER_REQUEST_KEY_REQUIRED', 400);
+    }
+    // INV-CASH-DRAWER-MOVEMENT-TYPES: a safe transfer names its
+    // counterpart cash/bank account. There is no safe/cash-box
+    // account in the chart, so the caller names an existing one
+    // and it is validated exactly like a treasury transfer
+    // (active cash/bank asset, debit normal balance). This
+    // fail-fast check runs before the approval check so a bad
+    // counterpart never consumes a password/PIN attempt; the
+    // journal writer re-validates under lock inside the
+    // transaction before anything is written.
+    if (isCashDrawerTransferType(movementType)) {
+      const counterpartId = Number(payload.counterpartAccountId || 0);
+      if (!(counterpartId > 0)) throw new AppError('A counterpart cash or bank account is required for a safe transfer', 'DRAWER_COUNTERPART_REQUIRED', 400);
+      const counterpart = await this.db
+        .selectFrom('accounting_accounts')
+        .select('id')
+        .where('tenant_id', '=', scope.tenantId)
+        .where('id', '=', counterpartId)
+        .where('account_type', '=', 'asset')
+        .where('normal_balance', '=', 'debit')
+        .where('is_cash_bank', '=', true)
+        .where('is_active', '=', true)
+        .executeTakeFirst();
+      if (!counterpart) throw new AppError('The counterpart must be an active cash or bank account in this tenant', 'TREASURY_ACCOUNT_NOT_FOUND', 400);
     }
     await this.assertCashDrawerApproval(movementType, String(payload.managerPin || '').trim(), auth);
     const signedAmount = toSignedCashDrawerAmount(movementType, amount);
@@ -1017,7 +1046,7 @@ export class CashDrawerService {
       const expectedCash = await this.computeShiftExpectedCashFromShift(lockedShift as ShiftRow, auth, undefined, undefined, trx);
       await sql`update cashier_shifts set expected_cash = ${expectedCash} where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
 
-      if (movementType === 'cash_in' || movementType === 'cash_out') {
+      if (movementType === 'cash_in' || movementType === 'cash_out' || movementType === 'safe_drop' || movementType === 'safe_replenishment') {
         const txnId = Number(insertRes.rows?.[0]?.id || 0);
         if (txnId > 0) {
           await this.accountingPosting.postCashDrawerMovement(
@@ -1029,6 +1058,7 @@ export class CashDrawerService {
             shift.branch_id ? Number(shift.branch_id) : null,
             shift.location_id ? Number(shift.location_id) : null,
             auth,
+            isCashDrawerTransferType(movementType) ? Number(payload.counterpartAccountId || 0) : null,
           );
         }
       }
