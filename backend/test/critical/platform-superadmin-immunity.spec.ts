@@ -37,9 +37,13 @@ function testPlatformRestoreShield(): void {
   const { join } = require('node:path');
   const service = readFileSync(join(__dirname, '../../src/modules/settings/services/settings-backup.service.ts'), 'utf8');
 
-  // 1. Guard against restoring backup on platform tenant
+  // 1. Guard against restoring backup on platform tenant: the
+  // shield lives in isProtectedTenantDataTarget (shared helper,
+  // true for 'zs' and every platform id), called at the top of
+  // restoreBackup — the literal inline check this spec used to
+  // grep for was refactored into the helper, not removed.
   assert.ok(
-    service.includes("scope.tenantId === 'zs'"),
+    service.includes("isProtectedTenantDataTarget(scope.tenantId)"),
 
     'restoreBackup must explicitly check and reject platform tenant restore'
   );
@@ -57,8 +61,16 @@ function testPlatformRestoreShield(): void {
     service.includes("if (row.role === 'super_admin') row.role = 'admin';"),
     'restoreBackup must downgrade any super_admin role to admin'
   );
+  // The tenants/sessions exclusion was refactored: 'sessions'
+  // rows are skipped inline in the restore loop, and 'tenants'
+  // is excluded by isTenantBackupDataTable, which filters the
+  // clear/restore table lists. Both current forms are pinned.
   assert.ok(
-    service.includes("if (String(table) === 'sessions' || String(table) === 'tenants') continue;"),
+    service.includes("if (String(table) === 'sessions') continue;"),
+    'restoreBackup must never wipe or restore sessions'
+  );
+  assert.ok(
+    service.includes("name !== 'tenants'"),
     'restoreBackup must never wipe or restore tenants table'
   );
 }
@@ -69,12 +81,16 @@ function testTenantTransferShield(): void {
   const transferService = readFileSync(join(__dirname, '../../src/modules/settings/services/tenant-transfer.service.ts'), 'utf8');
   const pkgService = readFileSync(join(__dirname, '../../src/core/tenant-transfer/tenant-package.ts'), 'utf8');
 
+  // Both platform rejections were refactored into the shared
+  // isProtectedTenantDataTarget helper (true for 'zs' and every
+  // platform id); the current call forms are pinned, not the old
+  // inline literal comparisons.
   assert.ok(
-    transferService.includes("scope.tenantId === 'zs'"),
+    transferService.includes("isProtectedTenantDataTarget(scope.tenantId)"),
     'TenantTransferService.importForActor must reject platform tenant'
   );
   assert.ok(
-    pkgService.includes("target.tenantId === 'zs'"),
+    pkgService.includes("isProtectedTenantDataTarget(target.tenantId)"),
     'tenant-package.importTenantPackage must reject platform tenant'
   );
 

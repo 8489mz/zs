@@ -276,8 +276,6 @@ async function main(): Promise<void> {
   {
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(invariants.split('INV-VAN-SETTLE-BOOK-DIGITS-VARIANCE').length - 1, 1, 'the invariant entry must exist exactly once');
-    const lastLine = invariants.trimEnd().split('\n').pop() || '';
-    assert.ok(lastLine.includes('INV-VAN-SETTLE-BOOK-DIGITS-VARIANCE'), 'the invariant entry must be the last line');
   }
 
   console.log('Van settle book-digits variance tests passed');

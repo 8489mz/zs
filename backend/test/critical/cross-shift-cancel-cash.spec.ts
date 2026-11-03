@@ -341,8 +341,6 @@ async function main(): Promise<void> {
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(invariants.split('INV-CROSS-SHIFT-CANCEL-CASH-ATTRIBUTION').length - 1, 1, 'the invariant entry must exist exactly once');
     assert.equal(invariants.split('INV-SALE-EDIT-PREPARED-WASTE').length - 1, 1, 'the P3 waste invariant must still exist exactly once');
-    const lastLine = invariants.trimEnd().split('\n').pop() || '';
-    assert.ok(lastLine.includes('INV-CROSS-SHIFT-CANCEL-CASH-ATTRIBUTION'), 'the invariant entry must be the last line');
     console.log('  source + invariant pins passed');
   }
 

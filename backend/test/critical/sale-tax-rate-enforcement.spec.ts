@@ -92,6 +92,12 @@ function buildService(settingsRows: any[]) {
   service.db = {};
   service.tx = { runInTransaction: async (_db: any, cb: any) => cb(trx) };
   service.lockSaleStockRows = async () => {};
+  // The open-shift gate (INV-ADMIN-CASH-SALE-SHIFT-REQUIRED) now
+  // calls this.authz.hasOpenCashierShift after the tax gate. The
+  // stub reports an open shift so execution reaches the first
+  // post-gate query, preserving this spec's sentinel assertions
+  // about the tax gate running before any write.
+  service.authz = { hasOpenCashierShift: async () => true };
   return service;
 }
 

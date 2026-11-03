@@ -459,8 +459,8 @@ async function main(): Promise<void> {
 
   // 8. Source + invariant pins: one shared detection helper called
   // by both cancelSale and updateSale; the partial-exclusion
-  // plumbing in the posting service; the invariant exactly once as
-  // the last line, with the two previous sale-edit invariants still
+  // plumbing in the posting service; the invariant exactly once
+  // (presence-pinned), with the two previous sale-edit invariants still
   // exactly once each.
   {
     const { readFileSync } = await import('node:fs');
@@ -476,8 +476,6 @@ async function main(): Promise<void> {
     assert.equal(invariants.split('INV-SALE-EDIT-PREPARED-WASTE').length - 1, 1, 'the invariant entry must exist exactly once');
     assert.equal(invariants.split('INV-SALES-RETURN-COGS-RESIDUAL-MIRROR').length - 1, 1, 'the P2 mirror invariant must still exist exactly once');
     assert.equal(invariants.split('INV-SALE-EDIT-COST-FLOOR').length - 1, 1, 'the P1 floor invariant must still exist exactly once');
-    const lastLine = invariants.trimEnd().split('\n').pop() || '';
-    assert.ok(lastLine.includes('INV-SALE-EDIT-PREPARED-WASTE'), 'the invariant entry must be the last line');
     console.log('  source + invariant pins passed');
   }
 

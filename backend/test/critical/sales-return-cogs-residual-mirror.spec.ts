@@ -469,8 +469,6 @@ async function main(): Promise<void> {
     assert.ok(postingSource.includes('resolveSalesReturnCostLines'), 'the return cost resolver must be shared');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(invariants.split('INV-SALES-RETURN-COGS-RESIDUAL-MIRROR').length - 1, 1, 'the invariant entry must exist exactly once');
-    const lastLine = invariants.trimEnd().split('\n').pop() || '';
-    assert.ok(lastLine.includes('INV-SALES-RETURN-COGS-RESIDUAL-MIRROR'), 'the invariant entry must be the last line');
   }
 
   console.log('Sales return COGS residual mirror tests passed');

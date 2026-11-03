@@ -404,7 +404,7 @@ async function main(): Promise<void> {
 
   // 8. Source + invariant pins: the transfer branches exist in
   // the journal writer, the silent else-branch is gone, and the
-  // invariant is exactly once as the last line.
+  // invariant is exactly once (presence-pinned).
   {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
@@ -421,8 +421,6 @@ async function main(): Promise<void> {
     assert.equal(invariants.split('INV-ADMIN-CASH-SALE-SHIFT-REQUIRED').length - 1, 1, 'the P3 invariant must still exist exactly once');
     assert.equal(invariants.split('INV-SHIFT-SALE-CASH-ATTRIBUTION').length - 1, 1, 'the P2 invariant must still exist exactly once');
     assert.equal(invariants.split('INV-CROSS-SHIFT-CANCEL-CASH-ATTRIBUTION').length - 1, 1, 'the P1 invariant must still exist exactly once');
-    const lastLine = invariants.trimEnd().split('\n').pop() || '';
-    assert.ok(lastLine.includes('INV-CASH-DRAWER-MOVEMENT-TYPES'), 'the invariant entry must be the last line');
     console.log('  source + invariant pins passed');
   }
 

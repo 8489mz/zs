@@ -217,8 +217,6 @@ async function main(): Promise<void> {
     const { resolve } = await import('node:path');
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(invariants.split('INV-BLIND-CLOSE-DECLARED-RECONCILIATION').length - 1, 1, 'the invariant entry must exist exactly once');
-    const lastLine = invariants.trimEnd().split('\n').pop() || '';
-    assert.ok(lastLine.includes('INV-BLIND-CLOSE-DECLARED-RECONCILIATION'), 'the invariant entry must be the last line');
 
     console.log('Blind-close declared reconciliation tests passed');
   } finally {

@@ -180,6 +180,21 @@ async function main(): Promise<void> {
     assert.ok(invariants.includes(id), `invariant ${id} must stay recorded`);
   }
 
+  // 9. Invariant file order (INV-GUARD-PRESENCE-PINS): THIS spec is
+  // the single owner of the order assertion. Every other guard spec
+  // pins its own entry by presence exactly once, never by last
+  // line, so a later append cannot turn every earlier guard red
+  // (GAP-5: red-by-construction masked real failures). Order is
+  // append-only: every `- INV-` id is unique, and the newest entry
+  // is the file's last `- INV-` line. A package that appends a new
+  // entry updates the expected tail id below, in that same package.
+  const invariantIds = invariants.split('\n')
+    .filter((line) => line.startsWith('- INV-'))
+    .map((line) => line.split(' ')[1]);
+  assert.ok(invariantIds.length > 0, 'the invariants file must list INV- entries');
+  assert.equal(new Set(invariantIds).size, invariantIds.length, 'invariant ids must be unique: no duplicated entry');
+  assert.equal(invariantIds[invariantIds.length - 1], 'INV-GUARD-PRESENCE-PINS', 'the newest invariant entry must be the last INV- line');
+
   console.log('architecture guard checks passed');
 }
 

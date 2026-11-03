@@ -344,7 +344,7 @@ async function main(): Promise<void> {
   }
 
   // 6. Source + invariant pins: the remittance write exists in
-  // settleTrip, and the invariant is exactly once as the last line
+  // settleTrip, and the invariant is exactly once (presence-pinned)
   // with the Batch 1/2 drawer invariants still exactly once.
   {
     const { readFileSync } = await import('node:fs');
@@ -358,8 +358,6 @@ async function main(): Promise<void> {
     assert.equal(invariants.split('INV-REP-CASH-REMITTANCE-SHIFT').length - 1, 1, 'the invariant entry must exist exactly once');
     assert.equal(invariants.split('INV-EXPECTED-CASH-SINGLE-WINDOW').length - 1, 1, 'the P8 window invariant must still exist exactly once');
     assert.equal(invariants.split('INV-CASH-DRAWER-MOVEMENT-TYPES').length - 1, 1, 'the P4 movement-types invariant must still exist exactly once');
-    const lastLine = invariants.trimEnd().split('\n').pop() || '';
-    assert.ok(lastLine.includes('INV-REP-CASH-REMITTANCE-SHIFT'), 'the invariant entry must be the last line');
     console.log('  source + invariant pins passed');
   }
 

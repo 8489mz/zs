@@ -144,8 +144,6 @@ async function main() {
     // Invariant pin: the entry exists exactly once and is last.
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(invariants.split('INV-EXPECTED-CASH-SINGLE-WINDOW').length - 1, 1, 'the invariant entry must exist exactly once');
-    const lastLine = invariants.trimEnd().split('\n').pop() || '';
-    assert.ok(lastLine.includes('INV-EXPECTED-CASH-SINGLE-WINDOW'), 'the invariant entry must be the last line');
 
     console.log('Expected cash single window tests passed');
   } finally {

@@ -371,7 +371,7 @@ async function main(): Promise<void> {
 
   // 6. Source + invariant pins: one shared attribution helper
   // called by the breakdown, the restore, and the totals query;
-  // the invariant is exactly once as the last line, with the P1
+  // the invariant is exactly once (presence-pinned), with the P1
   // invariant still exactly once.
   {
     const { readFileSync } = await import('node:fs');
@@ -382,8 +382,6 @@ async function main(): Promise<void> {
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(invariants.split('INV-SHIFT-SALE-CASH-ATTRIBUTION').length - 1, 1, 'the invariant entry must exist exactly once');
     assert.equal(invariants.split('INV-CROSS-SHIFT-CANCEL-CASH-ATTRIBUTION').length - 1, 1, 'the P1 invariant must still exist exactly once');
-    const lastLine = invariants.trimEnd().split('\n').pop() || '';
-    assert.ok(lastLine.includes('INV-SHIFT-SALE-CASH-ATTRIBUTION'), 'the invariant entry must be the last line');
     console.log('  source + invariant pins passed');
   }
 
