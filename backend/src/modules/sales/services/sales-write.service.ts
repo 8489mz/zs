@@ -2577,6 +2577,52 @@ export class SalesWriteService {
           .where('id', '=', customerId).where('tenant_id', '=', scope.tenantId)
           .forUpdate().executeTakeFirst();
       }
+      // INV-SALE-EDIT-PREPARED-WASTE: a served dine-in/takeaway/delivery
+      // sale is prepared waste (the same detection cancelSale uses). Its
+      // consumed allocations are not resurrected: restoration is capped
+      // at the edited lines' new consumption, so kept quantities net to
+      // zero and only reduced/removed quantities stay consumed. Retail
+      // sales (predicate false) restore exactly as before.
+      const isPreparedWaste = await this.detectPreparedWasteSale(trx, sale, scope.tenantId);
+      const wasteConsumptionByProduct = new Map<number, number>();
+      const wasteRestoredByProduct = new Map<number, number>();
+      const restoredBaseBySaleItemId = new Map<number, number>();
+      if (isPreparedWaste) {
+        const restaurantOn = await this.planFeatureService.hasFeature(auth.planId, auth.extraFeatures, 'restaurant');
+        const optionIds = new Set<number>();
+        for (const payloadItem of normalized.items || []) {
+          for (const mod of payloadItem.modifiers || []) {
+            if (mod?.optionId) optionIds.add(Number(mod.optionId));
+          }
+        }
+        const modifierOptions = new Map<number, { componentProductId: number; consumptionQty: number }>();
+        if (restaurantOn && optionIds.size > 0) {
+          const optionRows = await trx.selectFrom('pos_modifier_options').selectAll()
+            .where('tenant_id', '=', scope.tenantId).where('id', 'in', [...optionIds]).execute();
+          for (const optionRow of optionRows) {
+            modifierOptions.set(Number(optionRow.id), {
+              componentProductId: Number(optionRow.component_product_id || 0),
+              consumptionQty: Number(optionRow.consumption_qty || 1),
+            });
+          }
+        }
+        const addWasteConsumption = (productId: number, qty: number): void => {
+          if (!productId || !(qty > 0)) return;
+          wasteConsumptionByProduct.set(productId, Number((Number(wasteConsumptionByProduct.get(productId) || 0) + qty).toFixed(3)));
+        };
+        for (const payloadItem of normalized.items || []) {
+          const itemQty = Number(payloadItem.qty || 0);
+          const itemMultiplier = Number(payloadItem.unitMultiplier || 1);
+          addWasteConsumption(Number(payloadItem.productId), Number((itemQty * itemMultiplier).toFixed(3)));
+          if (!restaurantOn) continue;
+          for (const mod of payloadItem.modifiers || []) {
+            const option = mod?.optionId ? modifierOptions.get(Number(mod.optionId)) : undefined;
+            const componentId = option ? option.componentProductId : Number(mod?.productId || mod?.componentProductId || 0);
+            const consumption = option ? option.consumptionQty : Number(mod?.consumptionQty || mod?.consumption_qty || 1);
+            addWasteConsumption(componentId, Number((Number(mod?.qty || 1) * itemQty * consumption).toFixed(3)));
+          }
+        }
+      }
       for (const item of [...currentItems].sort((a, b) => Number(a.product_id || 0) - Number(b.product_id || 0))) {
         if (!item.product_id) continue;
         const restoreQty = Number((Number(item.qty || 0) * Number(item.unit_multiplier || 1)).toFixed(3));
@@ -2593,7 +2639,18 @@ export class SalesWriteService {
              const isParentProduct = Number(alloc.product_id) === Number(item.product_id);
              if (isParentProduct && remainingToRestore <= 0) continue;
              const allocQty = Number(alloc.quantity || 0);
-             const qtyToRestore = isParentProduct ? Math.min(allocQty, remainingToRestore) : allocQty;
+             let qtyToRestore = isParentProduct ? Math.min(allocQty, remainingToRestore) : allocQty;
+             if (isPreparedWaste) {
+               const productKey = Number(alloc.product_id);
+               const remainingBudget = Math.max(0, Number((Number(wasteConsumptionByProduct.get(productKey) || 0) - Number(wasteRestoredByProduct.get(productKey) || 0)).toFixed(3)));
+               qtyToRestore = Math.min(qtyToRestore, remainingBudget);
+               if (qtyToRestore > 0) {
+                 wasteRestoredByProduct.set(productKey, Number((Number(wasteRestoredByProduct.get(productKey) || 0) + qtyToRestore).toFixed(3)));
+                 if (isParentProduct) {
+                   restoredBaseBySaleItemId.set(Number(item.id), Number((Number(restoredBaseBySaleItemId.get(Number(item.id)) || 0) + qtyToRestore).toFixed(3)));
+                 }
+               }
+             }
              if (qtyToRestore <= 0) continue;
              if (isParentProduct) {
                remainingToRestore -= qtyToRestore;
@@ -2632,37 +2689,74 @@ export class SalesWriteService {
                account_id: scope.accountId,
              }).execute();
            }
-           if (remainingToRestore > 0.0001) {
+           // Prepared waste: the un-restored remainder is consumed food,
+           // not a reconciliation gap, so the completeness throw is
+           // skipped exactly for waste sales.
+           if (remainingToRestore > 0.0001 && !isPreparedWaste) {
              throw new AppError('توزيع مخزون سطر البيع الأصلي غير مكتمل؛ لا يمكن تعديل الفاتورة دون تسوية', 'SALE_EDIT_STOCK_ALLOCATION_RECONCILIATION_REQUIRED', 409);
            }
         } else {
-           // Fallback for legacy sales without allocations
-           const stockChange = await applyStockDelta(trx, {
-             productId: Number(item.product_id),
-             delta: restoreQty,
-             branchId: sale.branch_id,
-             locationId: sale.location_id,
-             tenantId: scope.tenantId,
-             accountId: scope.accountId,
-           });
-           await trx.insertInto('stock_movements').values({
-             product_id: item.product_id,
-             movement_type: 'sale_edit_reversal',
-             qty: restoreQty,
-             before_qty: stockChange.scopeBefore,
-             after_qty: stockChange.scopeAfter,
-             reason: 'sale_edit_reversal',
-             note: `Edit reversal S-${saleId}`,
-             reference_type: 'sale',
-             reference_id: saleId,
-             branch_id: sale.branch_id,
-             location_id: sale.location_id,
-             created_by: auth.userId,
-             tenant_id: scope.tenantId,
-             account_id: scope.accountId,
-           }).execute();
+           // Fallback for legacy sales without allocations. For prepared
+           // waste the fallback is capped at the same new-consumption
+           // budget, so a removed legacy line stays consumed.
+           const fallbackRestoreQty = isPreparedWaste
+             ? Math.min(restoreQty, Math.max(0, Number((Number(wasteConsumptionByProduct.get(Number(item.product_id)) || 0) - Number(wasteRestoredByProduct.get(Number(item.product_id)) || 0)).toFixed(3))))
+             : restoreQty;
+           if (fallbackRestoreQty > 0) {
+             const stockChange = await applyStockDelta(trx, {
+               productId: Number(item.product_id),
+               delta: fallbackRestoreQty,
+               branchId: sale.branch_id,
+               locationId: sale.location_id,
+               tenantId: scope.tenantId,
+               accountId: scope.accountId,
+             });
+             await trx.insertInto('stock_movements').values({
+               product_id: item.product_id,
+               movement_type: 'sale_edit_reversal',
+               qty: fallbackRestoreQty,
+               before_qty: stockChange.scopeBefore,
+               after_qty: stockChange.scopeAfter,
+               reason: 'sale_edit_reversal',
+               note: `Edit reversal S-${saleId}`,
+               reference_type: 'sale',
+               reference_id: saleId,
+               branch_id: sale.branch_id,
+               location_id: sale.location_id,
+               created_by: auth.userId,
+               tenant_id: scope.tenantId,
+               account_id: scope.accountId,
+             }).execute();
+             if (isPreparedWaste) {
+               wasteRestoredByProduct.set(Number(item.product_id), Number((Number(wasteRestoredByProduct.get(Number(item.product_id)) || 0) + fallbackRestoreQty).toFixed(3)));
+               restoredBaseBySaleItemId.set(Number(item.id), Number((Number(restoredBaseBySaleItemId.get(Number(item.id)) || 0) + fallbackRestoreQty).toFixed(3)));
+             }
+           }
         }
       }
+
+      // INV-SALE-EDIT-PREPARED-WASTE: snapshot the old lines and the
+      // restored sold quantity per line so postSaleEdit can exclude the
+      // consumed portion's residual COGS from the reversal, exactly as
+      // cancelSale excludes it in full. Kept lines restore fully, so
+      // their exclusion is zero.
+      const preparedWasteEdit = isPreparedWaste ? {
+        oldItems: currentItems.map((oldItem) => ({
+          id: Number(oldItem.id),
+          product_id: Number(oldItem.product_id || 0),
+          qty: Number(oldItem.qty || 0),
+          cost_price: Number(oldItem.cost_price || 0),
+          unit_multiplier: Number(oldItem.unit_multiplier || 1),
+          modifiers: oldItem.modifiers ?? null,
+        })),
+        restoredQtyBySaleItemId: new Map<number, number>(
+          [...restoredBaseBySaleItemId.entries()].map(([saleItemId, baseQty]) => {
+            const oldItem = currentItems.find((candidate) => Number(candidate.id) === saleItemId);
+            const multiplier = Number(oldItem?.unit_multiplier || 1) || 1;
+            return [saleItemId, Number((baseQty / multiplier).toFixed(3))] as [number, number];
+          }),
+        ),
+      } : undefined;
 
       const oldCollectibleTotal = Math.max(0, Number(sale.total || 0) - Number(sale.store_credit_used || 0));
       const oldPaid = currentPayments.length
@@ -3382,12 +3476,69 @@ export class SalesWriteService {
         await this.finance.addTreasuryTransaction(trx, payment.amount, `تعديل فاتورة بيع S-${saleId}`, saleId, auth, normalized.branchId, normalized.locationId);
       }
 
-      await this.accountingPosting.postSaleEdit(trx, saleId, auth, editReason);
+      await this.accountingPosting.postSaleEdit(trx, saleId, auth, editReason, preparedWasteEdit ? { preparedWaste: preparedWasteEdit } : undefined);
     });
 
     await this.audit.log('تعديل فاتورة بيع', `تم تعديل الفاتورة S-${saleId} بواسطة ${auth.username} | السبب: ${editReason}`, auth);
     const sale = await this.query.getSaleById(saleId, auth);
     return { ok: true, sale: sale.sale };
+  }
+
+  /**
+   * Shared prepared-waste detection for cancelSale and updateSale:
+   * a dine-in/takeaway/delivery sale is prepared waste when it has a
+   * consumed-ingredient allocation or a recipe meal AND the kitchen
+   * state shows the food was consumed (KDS cooking/ready/served, or a
+   * non-pending stage on a sale older than 14h / with an unreadable
+   * date). The predicate is cancelSale's original logic, unchanged;
+   * both paths call it so the two treatments can never drift apart.
+   */
+  private async detectPreparedWasteSale(
+    trx: Kysely<Database>,
+    sale: { id: number; order_type?: string | null; created_at?: Date | string | null },
+    tenantId: string,
+  ): Promise<boolean> {
+    let isPreparedWaste = false;
+    const saleId = Number(sale.id);
+    if (['dine_in', 'takeaway', 'delivery'].includes(String(sale.order_type || ''))) {
+      const consumedIngredient = await trx.selectFrom('sale_line_stock_allocations as a')
+        .innerJoin('sale_items as i', (join) => join
+          .onRef('i.id', '=', 'a.sale_line_id')
+          .onRef('i.tenant_id', '=', 'a.tenant_id'))
+        .select('a.id')
+        .where('a.tenant_id', '=', tenantId)
+        .where('i.sale_id', '=', saleId)
+        .whereRef('a.product_id', '!=', 'i.product_id')
+        .limit(1).executeTakeFirst();
+      const recipeMeal = await trx.selectFrom('sale_items as i')
+        .innerJoin('manufacturing_boms as b', (join) => join
+          .onRef('b.product_id', '=', 'i.product_id')
+          .onRef('b.tenant_id', '=', 'i.tenant_id'))
+        .select('i.id')
+        .where('i.tenant_id', '=', tenantId)
+        .where('i.sale_id', '=', saleId)
+        .where('b.is_active', '=', true)
+        .limit(1).executeTakeFirst();
+      if (consumedIngredient || recipeMeal) {
+        const kitchenRecord = await trx.selectFrom('settings').select('value')
+          .where('tenant_id', '=', tenantId)
+          .where('key', '=', 'kds_tickets_runtime_state').executeTakeFirst();
+        let stage: string | undefined;
+        try {
+          const parsed = kitchenRecord?.value ? JSON.parse(String(kitchenRecord.value)) : null;
+          stage = parsed?.tickets?.[String(saleId)]?.status;
+        } catch {
+          stage = 'pending';
+        }
+        const createdMs = sale.created_at ? new Date(sale.created_at).getTime() : NaN;
+        if (stage === 'cooking' || stage === 'ready' || stage === 'served' ||
+            (stage !== 'pending' && (!Number.isFinite(createdMs) ||
+              Date.now() - createdMs > 14 * 60 * 60 * 1000))) {
+          isPreparedWaste = true;
+        }
+      }
+    }
+    return isPreparedWaste;
   }
 
   async cancelSale(saleId: number, reason: string, managerPin: string, auth: AuthContext): Promise<Record<string, unknown>> {
@@ -3468,45 +3619,7 @@ export class SalesWriteService {
         });
         await applyTripCounterDelta(trx, scope.tenantId, tripId, negateContribution(oldContribution));
       }
-      let isPreparedWaste = false;
-      if (['dine_in', 'takeaway', 'delivery'].includes(String(sale.order_type || ''))) {
-        const consumedIngredient = await trx.selectFrom('sale_line_stock_allocations as a')
-          .innerJoin('sale_items as i', (join) => join
-            .onRef('i.id', '=', 'a.sale_line_id')
-            .onRef('i.tenant_id', '=', 'a.tenant_id'))
-          .select('a.id')
-          .where('a.tenant_id', '=', scope.tenantId)
-          .where('i.sale_id', '=', saleId)
-          .whereRef('a.product_id', '!=', 'i.product_id')
-          .limit(1).executeTakeFirst();
-        const recipeMeal = await trx.selectFrom('sale_items as i')
-          .innerJoin('manufacturing_boms as b', (join) => join
-            .onRef('b.product_id', '=', 'i.product_id')
-            .onRef('b.tenant_id', '=', 'i.tenant_id'))
-          .select('i.id')
-          .where('i.tenant_id', '=', scope.tenantId)
-          .where('i.sale_id', '=', saleId)
-          .where('b.is_active', '=', true)
-          .limit(1).executeTakeFirst();
-        if (consumedIngredient || recipeMeal) {
-          const kitchenRecord = await trx.selectFrom('settings').select('value')
-            .where('tenant_id', '=', scope.tenantId)
-            .where('key', '=', 'kds_tickets_runtime_state').executeTakeFirst();
-          let stage: string | undefined;
-          try {
-            const parsed = kitchenRecord?.value ? JSON.parse(String(kitchenRecord.value)) : null;
-            stage = parsed?.tickets?.[String(saleId)]?.status;
-          } catch {
-            stage = 'pending';
-          }
-          const createdMs = sale.created_at ? new Date(sale.created_at).getTime() : NaN;
-          if (stage === 'cooking' || stage === 'ready' || stage === 'served' ||
-              (stage !== 'pending' && (!Number.isFinite(createdMs) ||
-                Date.now() - createdMs > 14 * 60 * 60 * 1000))) {
-            isPreparedWaste = true;
-          }
-        }
-      }
+      const isPreparedWaste = await this.detectPreparedWasteSale(trx, sale, scope.tenantId);
       const items = await trx.selectFrom('sale_items').selectAll().where('sale_id', '=', saleId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
       await this.lockSaleStockRows(trx, scope, items);
       await this.restoreSalePharmacyBatches(trx, saleId, items, scope, false);

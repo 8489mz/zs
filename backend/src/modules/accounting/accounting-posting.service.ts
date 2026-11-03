@@ -1389,7 +1389,18 @@ export class AccountingPostingService {
     return { posted: true, journalEntryId: entryId };
   }
 
-  async postSaleEdit(queryable: Transaction<Database>, saleId: number, auth: AuthContext, reason?: string): Promise<{ posted: boolean; journalEntryId: number }> {
+  async postSaleEdit(
+    queryable: Transaction<Database>,
+    saleId: number,
+    auth: AuthContext,
+    reason?: string,
+    options?: {
+      preparedWaste?: {
+        oldItems: Array<{ id: number; product_id: number | null; qty: number | string; cost_price: number | string | null; unit_multiplier: number | string | null; modifiers: unknown }>;
+        restoredQtyBySaleItemId: Map<number, number>;
+      };
+    },
+  ): Promise<{ posted: boolean; journalEntryId: number }> {
     this.assertTransaction(queryable, 'postSaleEdit');
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
@@ -1417,7 +1428,28 @@ export class AccountingPostingService {
 
     if (activePostings > 0) {
       const reversalReason = reason ? `تعديل فاتورة: ${reason}` : 'تعديل فاتورة مبيعات';
-      const reversal = await this.reverseSaleJournal(queryable, saleId, reversalReason, auth);
+      // INV-SALE-EDIT-PREPARED-WASTE: exclude the consumed portion's
+      // residual COGS from the reversal, so the waste cost stays posted
+      // exactly as cancelSale's full exclusion keeps it. Both residual
+      // evaluations read the same post-movement remaining stock, so a
+      // kept line excludes zero and a removed line excludes its full
+      // old residual.
+      let preparedWasteCogsExclusion = 0;
+      if (options?.preparedWaste) {
+        const { oldItems, restoredQtyBySaleItemId } = options.preparedWaste;
+        const oldGroups = await this.residualCogsGroups(queryable, scope.tenantId, oldItems, null);
+        const restoredItems = oldItems.map((oldItem) => ({
+          ...oldItem,
+          qty: Number(restoredQtyBySaleItemId.get(Number(oldItem.id)) || 0),
+        }));
+        const restoredGroups = await this.residualCogsGroups(queryable, scope.tenantId, restoredItems, null);
+        preparedWasteCogsExclusion = Math.max(0, toBookMoney(
+          cogsResidualAmount(oldGroups, bookDigits) - cogsResidualAmount(restoredGroups, bookDigits)));
+      }
+      const reversal = await this.reverseSaleJournal(
+        queryable, saleId, reversalReason, auth,
+        preparedWasteCogsExclusion > 0 ? { preparedWasteCogsExclusion } : undefined,
+      );
       if (!reversal.reversed && reversal.journalEntryId == null) {
         throw new AppError('تعذر عكس قيد المبيعات السابق للفاتورة المعدلة', 'SALE_EDIT_REVERSAL_FAILED', 409);
       }
@@ -1691,7 +1723,7 @@ export class AccountingPostingService {
     return { posted: true, journalEntryId: entryId };
   }
 
-  async reverseSaleJournal(queryable: DbOrTx, saleId: number, reason: string, auth: AuthContext, options?: { isPreparedWaste?: boolean }): Promise<{ reversed: boolean; journalEntryId: number | null }> {
+  async reverseSaleJournal(queryable: DbOrTx, saleId: number, reason: string, auth: AuthContext, options?: { isPreparedWaste?: boolean; preparedWasteCogsExclusion?: number }): Promise<{ reversed: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
@@ -1768,6 +1800,50 @@ export class AccountingPostingService {
       branchId: line.branch_id ? Number(line.branch_id) : null,
       locationId: line.location_id ? Number(line.location_id) : null,
     })).filter((line) => line.debit > 0 || line.credit > 0);
+
+    // INV-SALE-EDIT-PREPARED-WASTE: a partial exclusion reduces only
+    // the COGS/inventory reversal lines, by the residual value of the
+    // consumed portion, so the waste cost stays posted. The inventory
+    // (debit) side and the COGS (credit) side are reduced by the same
+    // amount, so the reversal stays balanced; an exclusion larger than
+    // either side fails closed instead of posting a lopsided reversal.
+    if (options?.preparedWasteCogsExclusion && options.preparedWasteCogsExclusion > 0) {
+      const exclusion = toBookMoney(options.preparedWasteCogsExclusion);
+      const invAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, null, '1140');
+      const cogsAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, null, '5100');
+      const totals = new Map<number, number>();
+      for (const line of reversalLines) {
+        totals.set(line.accountId, toBookMoney(Number(totals.get(line.accountId) || 0) + Number(line.debit || 0) + Number(line.credit || 0)));
+      }
+      if (exclusion > Number(totals.get(invAccountId) || 0) + 0.0001 || exclusion > Number(totals.get(cogsAccountId) || 0) + 0.0001) {
+        throw new Error(`Prepared-waste COGS exclusion ${exclusion} exceeds the reversal COGS/inventory totals for sale ${saleId}`);
+      }
+      let remainingInventoryExclusion = exclusion;
+      for (const line of reversalLines) {
+        if (remainingInventoryExclusion <= 0) break;
+        if (line.accountId !== invAccountId) continue;
+        const reducible = Math.min(Number(line.debit || 0), remainingInventoryExclusion);
+        line.debit = toBookMoney(Number(line.debit || 0) - reducible);
+        remainingInventoryExclusion = Number((remainingInventoryExclusion - reducible).toFixed(3));
+      }
+      if (remainingInventoryExclusion > 0.001) {
+        throw new Error(`Prepared-waste COGS exclusion ${exclusion} could not be applied to the inventory reversal lines for sale ${saleId}`);
+      }
+      let remainingCogsExclusion = exclusion;
+      for (const line of reversalLines) {
+        if (remainingCogsExclusion <= 0) break;
+        if (line.accountId !== cogsAccountId) continue;
+        const reducible = Math.min(Number(line.credit || 0), remainingCogsExclusion);
+        line.credit = toBookMoney(Number(line.credit || 0) - reducible);
+        remainingCogsExclusion = Number((remainingCogsExclusion - reducible).toFixed(3));
+      }
+      if (remainingCogsExclusion > 0.001) {
+        throw new Error(`Prepared-waste COGS exclusion ${exclusion} could not be applied to the COGS reversal lines for sale ${saleId}`);
+      }
+      for (let i = reversalLines.length - 1; i >= 0; i--) {
+        if (!(Number(reversalLines[i].debit) > 0 || Number(reversalLines[i].credit) > 0)) reversalLines.splice(i, 1);
+      }
+    }
 
     const totalDebit = toBookMoney(reversalLines.reduce((sum, line) => sum + line.debit, 0));
     const totalCredit = toBookMoney(reversalLines.reduce((sum, line) => sum + line.credit, 0));
