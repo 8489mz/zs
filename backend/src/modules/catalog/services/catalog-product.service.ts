@@ -18,6 +18,7 @@ import { stockMovementTotal } from '../engines/stock-movement-total.engine';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { StorefrontMediaService } from '../../storefront/storefront-media.service';
+import { availableAcrossLocations } from '../../../common/engines/branch-sellable-locations.engine';
 
 type ProductRow = {
   id: number;
@@ -633,6 +634,12 @@ export class CatalogProductService {
            return false;
         });
         eligibleLocationIds = sortedLocs.map(l => l.id);
+      } else if (branch && !scopedLocation && branch.default_stock_location_id) {
+        // INV-POS-NET-STOCK-DISPLAY: single_location mode sells from the
+        // branch default only (checkout: one eligible location), so the
+        // display scope is the default location too — not the global
+        // figure the empty-eligible fallback used to return.
+        eligibleLocationIds = [Number(branch.default_stock_location_id)];
       }
     }
 
@@ -649,6 +656,12 @@ export class CatalogProductService {
       products: uniqueRows.map((product) => this.mapPosProduct(product, {
         scopedLocationId: scopedLocation?.id || null,
         scopedStockByProduct: scopedStockResult.stock,
+        // INV-POS-NET-STOCK-DISPLAY: the scoped figure must reach the
+        // `stock` field even when no explicit locationId was passed
+        // (branch-scoped lookup): getListProductStock falls back to the
+        // global figure when scopedLocationId is null, which discarded
+        // the scoped computation entirely for branch-only lookups.
+        useScopedStock: eligibleLocationIds.length > 0,
         unitsByProduct,
         offersByProduct,
         bomCombosById,
@@ -1044,6 +1057,7 @@ export class CatalogProductService {
     context: {
       scopedLocationId: number | null;
       scopedStockByProduct: Map<string, number>;
+      useScopedStock?: boolean;
       unitsByProduct: Map<string, Record<string, unknown>[]>;
       offersByProduct: Map<string, Record<string, unknown>[]>;
       bomCombosById?: Map<number, { comboOriginalPrice: number; componentsSummary: string }>;
@@ -1081,7 +1095,9 @@ export class CatalogProductService {
       consumerPrice: product.consumer_price != null ? Number(product.consumer_price) : null,
       minSellingPrice: product.min_selling_price == null ? null : Number(product.min_selling_price),
       categoryId: product.category_id ? String(product.category_id) : undefined,
-      stock: this.getListProductStock(product, context.scopedLocationId, context.scopedStockByProduct),
+      stock: context.useScopedStock
+        ? Number(context.scopedStockByProduct.get(String(product.id)) || 0)
+        : this.getListProductStock(product, context.scopedLocationId, context.scopedStockByProduct),
       globalStock: Number(product.stock_qty || 0),
       minStock: Number(product.min_stock_qty || 0),
       locationId: context.scopedLocationId ? String(context.scopedLocationId) : '',
@@ -1119,7 +1135,7 @@ export class CatalogProductService {
 
     let query = this.db
       .selectFrom('product_location_stock as pls')
-      .select(['pls.product_id', 'pls.location_id', 'pls.qty'])
+      .select(['pls.product_id', 'pls.location_id', 'pls.branch_id', 'pls.qty', 'pls.reserved_qty'])
       .where(this.tenantPredicate(actor, 'pls'));
 
     if (!isFullCatalog) {
@@ -1132,34 +1148,45 @@ export class CatalogProductService {
     // over stockRows. The product loop below must only read these maps — a `stockRows.filter(...)` per
     // product was O(products × stock rows): ~600M comparisons for a 20k-item full POS catalog.
     const eligibleLocationSet = new Set(eligibleLocationIds.map((id) => Number(id)));
-    const locationQtyByProduct = new Map<string, number>();
-    const unassignedQtyByProduct = new Map<string, number>();
-    const assignedQtyByProduct = new Map<string, number>();
+    const eligibleRowsByProduct = new Map<string, Array<{ qty: number; reserved: number }>>();
+    const unassignedByProduct = new Map<string, { qty: number; reserved: number }>();
     for (const row of stockRows) {
       const key = String(row.product_id);
       const qty = Number(row.qty || 0);
+      const reserved = Number((row as { reserved_qty?: unknown }).reserved_qty || 0);
 
       if (!activeLocationsByProduct.has(key)) activeLocationsByProduct.set(key, []);
       if (row.location_id) activeLocationsByProduct.get(key)!.push(row.location_id);
 
-      if (row.location_id == null) unassignedQtyByProduct.set(key, qty);
-      else assignedQtyByProduct.set(key, (assignedQtyByProduct.get(key) || 0) + qty);
-      if (eligibleLocationSet.has(Number(row.location_id || 0))) {
-        locationQtyByProduct.set(key, (locationQtyByProduct.get(key) || 0) + qty);
+      // The unassigned pool is the single row with neither a location nor a
+      // branch (location-stock-ledger.ts): the same bucket checkout reads.
+      if (row.location_id == null && (row as { branch_id?: unknown }).branch_id == null) {
+        const bucket = unassignedByProduct.get(key) || { qty: 0, reserved: 0 };
+        bucket.qty += qty;
+        bucket.reserved += reserved;
+        unassignedByProduct.set(key, bucket);
+      } else if (eligibleLocationSet.has(Number(row.location_id || 0))) {
+        const rows = eligibleRowsByProduct.get(key) || [];
+        rows.push({ qty, reserved });
+        eligibleRowsByProduct.set(key, rows);
       }
     }
 
     for (const product of products) {
       const key = String(product.id);
       if (eligibleLocationIds.length > 0) {
-        const currentSum = assignedQtyByProduct.get(key) || 0;
-        const discrepancy = Number(product.stock_qty || 0) - currentSum;
-        const locationQty = locationQtyByProduct.get(key) || 0;
-        const unassignedQty = unassignedQtyByProduct.get(key) || 0;
-        let available = locationQty + unassignedQty;
-        if (discrepancy > 0.001 && unassignedQty === 0) {
-           available += discrepancy;
-        }
+        // INV-POS-NET-STOCK-DISPLAY: the displayed figure is the checkout
+        // figure — availableAcrossLocations, the same helper the
+        // reservation path documents as the catalog number (net of
+        // reserved, per row, eligible locations + unassigned pool).
+        // The old code summed gross qty and then added a
+        // `stock_qty − Σ assigned` "discrepancy" whenever the pool was
+        // empty: phantom stock checkout never credits, so a reserved
+        // item looked sellable and the sale failed at the till.
+        const available = availableAcrossLocations(
+          eligibleRowsByProduct.get(key) || [],
+          unassignedByProduct.get(key) || { qty: 0, reserved: 0 },
+        );
         scopedStockByProduct.set(key, Number(available.toFixed(3)));
       } else {
         scopedStockByProduct.set(key, Number(product.stock_qty || 0));

@@ -53,16 +53,16 @@ async function testScopedStockSemantics(): Promise<void> {
   ]);
   const products = [
     { id: 1, stock_qty: 10 }, // 5 + 3 assigned, 2 unassigned: no discrepancy
-    { id: 2, stock_qty: 9 },  // 4 assigned elsewhere, no unassigned row: discrepancy 5 is sellable
+    { id: 2, stock_qty: 9 },  // 4 assigned elsewhere, no unassigned row: INV-POS-NET-STOCK-DISPLAY — the old "discrepancy 5 is sellable" add is gone, because checkout never credits stock with no location row (it reads the pool row only); display must equal the checkout figure, 0 here
     { id: 3, stock_qty: 1 },
-    { id: 4, stock_qty: 7 },  // no stock rows at all: whole global qty is unassigned
+    { id: 4, stock_qty: 7 },  // no stock rows at all: INV-POS-NET-STOCK-DISPLAY — no location row and no pool row means checkout can sell 0 at location 10, even though the global figure is 7
   ];
 
   const scoped = await service.resolveScopedStockByProduct([1, 2, 3, 4], [10], products, actor);
   assert.equal(scoped.stock.get('1'), 7, 'location 10 (5) + unassigned row (2)');
-  assert.equal(scoped.stock.get('2'), 5, 'not in location 10, but 5 units are unassigned by discrepancy');
+  assert.equal(scoped.stock.get('2'), 0, 'not in location 10 and no pool row: nothing checkout can sell');
   assert.equal(scoped.stock.get('3'), 1);
-  assert.equal(scoped.stock.get('4'), 7);
+  assert.equal(scoped.stock.get('4'), 0, 'no location row and no pool row: nothing checkout can sell at location 10');
   assert.deepEqual(scoped.locations.get('1'), [10, 20]);
   assert.deepEqual(scoped.locations.get('2'), [20]);
 
