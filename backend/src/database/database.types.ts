@@ -5897,6 +5897,9 @@ export interface ImportQuotationTable {
   estimated_freight_usd: ImportNumeric;
   estimated_customs_rate_percent: ImportNumeric;
   estimated_landed_cost_egp: ImportNumeric;
+  exchange_rate_used: ImportNumeric | null;
+  exchange_rate_assumed: boolean | null;
+  customs_rate_assumed: boolean | null;
   status: string;
   selection_reason: string | null;
   notes: string | null;

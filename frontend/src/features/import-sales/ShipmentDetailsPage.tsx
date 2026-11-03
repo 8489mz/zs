@@ -488,6 +488,9 @@ export default function ShipmentDetailsPage() {
         {(data as any).demurrageRisk?.isOverdue && (
           <div style={{ backgroundColor: '#fee2e2', border: '1px solid #fca5a5', padding: '10px 16px', borderRadius: 10, color: '#b91c1c', fontWeight: 700, fontSize: '12.5px', marginBottom: 14 }}>
             تحذير تشغيلي: تجاوزت الحاوية فترة السماح للأرضيات بـ {(data as any).demurrageRisk.overdueDays} يوم! غرامات تأخير تقديرية: {(data as any).demurrageRisk.estimatedFeesEgp?.toLocaleString()} ج.م
+            {(data as any).demurrageRisk.assumptions && ((data as any).demurrageRisk.assumptions.exchangeRateAssumed || (data as any).demurrageRisk.assumptions.dailyRateAssumed || (data as any).demurrageRisk.assumptions.freeDaysAssumed) && (
+              <> (بافتراض: سعر صرف {(data as any).demurrageRisk.assumptions.exchangeRate}، رسم يومي {(data as any).demurrageRisk.assumptions.dailyRateUsd}$، سماح {(data as any).demurrageRisk.assumptions.freeDays} يوم — سجل القيم الفعلية على الشحنة لعرض تقدير دقيق)</>
+            )}
           </div>
         )}
         {!(data as any).demurrageRisk?.isOverdue && (data as any).demurrageRisk?.daysRemaining !== null && (

@@ -204,9 +204,9 @@ export function calculateLateExpenseAllocation(
 export function calculateDemurrageRisk(input: {
   arrivalDate?: string | Date | null;
   demurrageStartDate?: string | Date | null;
-  freeDays?: number;
-  ratePerDayUsd?: number;
-  exchangeRate?: number;
+  freeDays?: number | string | null;
+  ratePerDayUsd?: number | string | null;
+  exchangeRate?: number | string | null;
   status?: string;
 }): {
   isOverdue: boolean;
@@ -215,10 +215,33 @@ export function calculateDemurrageRisk(input: {
   overdueDays: number;
   totalEstimatedDemurrageFeesEgp: number;
   estimatedFeesEgp: number;
+  // INV-IMPORT-ESTIMATES-HONEST: the estimate's basis. Every default the
+  // caller left blank (14 free days, $50/day, rate 1) is named here so the
+  // warning banner can show what was assumed instead of presenting an
+  // invented rate as fact.
+  assumptions: {
+    freeDays: number;
+    freeDaysAssumed: boolean;
+    dailyRateUsd: number;
+    dailyRateAssumed: boolean;
+    exchangeRate: number;
+    exchangeRateAssumed: boolean;
+  };
 } {
+  const freeDaysAssumed = input.freeDays === undefined || input.freeDays === null;
+  const dailyRateAssumed = input.ratePerDayUsd === undefined || input.ratePerDayUsd === null;
+  const exchangeRateAssumed = input.exchangeRate === undefined || input.exchangeRate === null || Number(input.exchangeRate) <= 0;
   const freeDays = Math.max(0, Number(input.freeDays ?? 14));
   const rateUsd = Math.max(0, Number(input.ratePerDayUsd ?? 50));
   const exchangeRate = Math.max(0.0001, Number(input.exchangeRate) || 1);
+  const assumptions = {
+    freeDays,
+    freeDaysAssumed,
+    dailyRateUsd: rateUsd,
+    dailyRateAssumed,
+    exchangeRate,
+    exchangeRateAssumed,
+  };
 
   const status = (input.status || '').trim().toLowerCase();
   // Arrival does not end container detention; only the empty equipment return does.
@@ -230,6 +253,7 @@ export function calculateDemurrageRisk(input: {
       overdueDays: 0,
       totalEstimatedDemurrageFeesEgp: 0,
       estimatedFeesEgp: 0,
+      assumptions,
     };
   }
 
@@ -241,6 +265,7 @@ export function calculateDemurrageRisk(input: {
       overdueDays: 0,
       totalEstimatedDemurrageFeesEgp: 0,
       estimatedFeesEgp: 0,
+      assumptions,
     };
   }
 
@@ -263,6 +288,7 @@ export function calculateDemurrageRisk(input: {
       overdueDays: 0,
       totalEstimatedDemurrageFeesEgp: 0,
       estimatedFeesEgp: 0,
+      assumptions,
     };
   } else {
     const overdueDays = Math.abs(diffDays);
@@ -274,6 +300,7 @@ export function calculateDemurrageRisk(input: {
       overdueDays,
       totalEstimatedDemurrageFeesEgp: feesEgp,
       estimatedFeesEgp: feesEgp,
+      assumptions,
     };
   }
 }

@@ -1848,9 +1848,12 @@ export class ImportSalesService {
     const demurrageRisk = calculateDemurrageRisk({
       arrivalDate: shipment.arrival_date,
       demurrageStartDate: shipment.demurrage_start_date,
-      freeDays: Number(shipment.free_demurrage_days ?? 14),
-      ratePerDayUsd: Number(shipment.demurrage_rate_per_day ?? 50),
-      exchangeRate: Number(shipment.exchange_rate_at_arrival || 1),
+      // Raw values: the engine owns the 14 / $50 / rate-1 fallbacks AND
+      // records which of them it used (INV-IMPORT-ESTIMATES-HONEST). Do
+      // not pre-default here — pre-defaulting would hide the assumption.
+      freeDays: shipment.free_demurrage_days,
+      ratePerDayUsd: shipment.demurrage_rate_per_day,
+      exchangeRate: shipment.exchange_rate_at_arrival,
       status: shipment.container_status === 'empty_returned' ? 'empty_returned' : (shipment.status || 'Pending'),
     });
 
@@ -5272,6 +5275,21 @@ export class ImportSalesService {
       const arrivalRate = Number(shipment?.exchange_rate_at_arrival) || 1;
       const pricingRate = Number(shipment?.pricing_exchange_rate) || arrivalRate;
 
+      // INV-IMPORT-ESTIMATES-HONEST: the pricing adjustment reprices from
+      // the DIFFERENCE between the pricing rate and the arrival rate. When
+      // a pricing rate is recorded but no arrival rate exists, the silent
+      // `|| 1` arrival fallback would inflate every selling price by
+      // unitUsd x (pricingRate - 1). That inconsistent state fails closed
+      // before any price write; when neither rate exists the adjustment is
+      // exactly zero and pricing proceeds from the stored landed cost.
+      const hasPricingRate = shipment?.pricing_exchange_rate !== null && shipment?.pricing_exchange_rate !== undefined && Number(shipment.pricing_exchange_rate) > 0;
+      const hasArrivalRate = shipment?.exchange_rate_at_arrival !== null && shipment?.exchange_rate_at_arrival !== undefined && Number(shipment.exchange_rate_at_arrival) > 0;
+      if (hasPricingRate && !hasArrivalRate) {
+        throw new BadRequestException(
+          'لا يمكن تطبيق الأسعار المقترحة بسعر تسعير مسجل بلا سعر صرف وصول؛ حدد سعر الصرف عند الوصول أولاً. [IMPORT_ARRIVAL_RATE_REQUIRED]',
+        );
+      }
+
       // INV-IMPORT-APPLY-PRICES-NO-WAC-OVERWRITE: lock every touched
       // product row FOR UPDATE in global ID order, grouped by its own
       // account scope (the canonical lockStockProducts helper), before
@@ -5466,9 +5484,9 @@ export class ImportSalesService {
       const risk = calculateDemurrageRisk({
         arrivalDate: s.arrival_date,
         demurrageStartDate: s.demurrage_start_date,
-        freeDays: Number(s.free_demurrage_days ?? 14),
-        ratePerDayUsd: Number(s.demurrage_rate_per_day ?? 50),
-        exchangeRate: Number(s.exchange_rate_at_arrival || 1),
+        freeDays: s.free_demurrage_days,
+        ratePerDayUsd: s.demurrage_rate_per_day,
+        exchangeRate: s.exchange_rate_at_arrival,
         status: s.container_status === 'empty_returned' ? 'empty_returned' : (s.status || 'Pending'),
       });
       if (risk.isOverdue || (risk.daysRemaining !== null && risk.daysRemaining <= 3)) {
@@ -5865,7 +5883,13 @@ export class ImportSalesService {
   // INTERNATIONAL RFQ & QUOTATIONS COMPARISON
   // -------------------------------------------------------------
   async createQuotation(tenantId: string, dto: CreateQuotationDto) {
-    const commRate = Number(dto.exchangeRate || 50) > 0 ? Number(dto.exchangeRate || 50) : 50;
+    // INV-IMPORT-ESTIMATES-HONEST: the 50 rate / 5% customs fallbacks are
+    // recorded, never silent. The estimate stays an estimate, but the row
+    // now carries the exact basis it was computed from so every consumer
+    // (comparison list, reports) can label it with what was assumed.
+    const rateAssumed = dto.exchangeRate === undefined || dto.exchangeRate === null || Number(dto.exchangeRate) <= 0;
+    const customsAssumed = dto.estimatedCustomsRatePercent === undefined || dto.estimatedCustomsRatePercent === null;
+    const commRate = !rateAssumed ? Number(dto.exchangeRate) : 50;
     const estLanded =
       Number(dto.unitPriceForeign) * commRate +
       Number(dto.estimatedFreightUsd || 0) * commRate +
@@ -5891,6 +5915,9 @@ export class ImportSalesService {
         estimated_freight_usd: dto.estimatedFreightUsd || 0,
         estimated_customs_rate_percent: dto.estimatedCustomsRatePercent || 5,
         estimated_landed_cost_egp: Number(estLanded.toFixed(4)),
+        exchange_rate_used: commRate,
+        exchange_rate_assumed: rateAssumed,
+        customs_rate_assumed: customsAssumed,
         status: 'pending',
         notes: dto.notes || null,
       })
@@ -6095,7 +6122,13 @@ export class ImportSalesService {
         );
       }
       const totalFactoryUsd = Number(feas.totalFactoryCostUsd || 0);
-      const advPercent = dto.advancePaymentPercentage || 30;
+      // INV-IMPORT-ESTIMATES-HONEST: the 30% advance default is recorded,
+      // and the milestone text states the ACTUAL percentages used — the
+      // previous hardcoded "(30%)" / "(70%)" text lied whenever the caller
+      // supplied a different split. Each schedule entry carries its basis
+      // (estimate flag, whether the advance split was assumed, the rate).
+      const advanceAssumed = dto.advancePaymentPercentage === undefined || dto.advancePaymentPercentage === null;
+      const advPercent = advanceAssumed ? 30 : Number(dto.advancePaymentPercentage);
       const balPercent = 100 - advPercent;
       const advanceUsd = (totalFactoryUsd * advPercent) / 100;
       const balanceUsd = (totalFactoryUsd * balPercent) / 100;
@@ -6103,17 +6136,23 @@ export class ImportSalesService {
       const cashFlowSchedule = [
         {
           stage: 'T0_Contract_Advance',
-          milestone: 'دفعة مقدمة للمصنع عند توقيع العقد (30%)',
+          milestone: `دفعة مقدمة للمصنع عند توقيع العقد (${advPercent}%)`,
           amountUsd: advanceUsd,
           amountEgp: advanceUsd * commRate,
           dueDaysFromStart: 0,
+          is_estimate: true,
+          assumed_advance_percentage: advanceAssumed,
+          exchange_rate_used: commRate,
         },
         {
           stage: 'T1_Pre_Shipment_Balance',
-          milestone: 'سداد رصيد المصنع بعد فحص الجودة وقبل الشحن (70%)',
+          milestone: `سداد رصيد المصنع بعد فحص الجودة وقبل الشحن (${balPercent}%)`,
           amountUsd: balanceUsd,
           amountEgp: balanceUsd * commRate,
           dueDaysFromStart: 30,
+          is_estimate: true,
+          assumed_advance_percentage: advanceAssumed,
+          exchange_rate_used: commRate,
         },
         {
           stage: 'T2_Freight_And_Insurance',
@@ -6121,6 +6160,9 @@ export class ImportSalesService {
           amountUsd: Number(feas.internationalShippingUsd || 0) + Number(feas.insuranceUsd || 0),
           amountEgp: (Number(feas.internationalShippingUsd || 0) + Number(feas.insuranceUsd || 0)) * commRate,
           dueDaysFromStart: 40,
+          is_estimate: true,
+          assumed_advance_percentage: advanceAssumed,
+          exchange_rate_used: commRate,
         },
         {
           stage: 'T3_Customs_And_Clearance',
@@ -6131,6 +6173,9 @@ export class ImportSalesService {
             Number(feas.clearanceAndPortFeesEgp || 0) +
             (feas.vatIsRefundable ? 0 : Number(feas.customsVatEgp || 0)),
           dueDaysFromStart: 55,
+          is_estimate: true,
+          assumed_advance_percentage: advanceAssumed,
+          exchange_rate_used: commRate,
         },
         {
           stage: 'T4_Inland_Transport',
@@ -6138,6 +6183,9 @@ export class ImportSalesService {
           amountUsd: 0,
           amountEgp: Number(feas.internalTransportEgp || 0),
           dueDaysFromStart: 60,
+          is_estimate: true,
+          assumed_advance_percentage: advanceAssumed,
+          exchange_rate_used: commRate,
         },
       ];
 

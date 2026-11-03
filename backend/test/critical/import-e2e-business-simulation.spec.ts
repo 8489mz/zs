@@ -19,6 +19,7 @@ import { up as up242 } from '../../src/database/migrations/2040000000242_import_
 import { up as up245 } from '../../src/database/migrations/2040000000245_import_preorder_refunds';
 import { up as up286 } from '../../src/database/migrations/2040000000286_import_broker_capitalizations';
 import { up as up290 } from '../../src/database/migrations/2040000000290_import_cost_component_payees';
+import { up as up291 } from '../../src/database/migrations/2040000000291_import_quotation_estimate_basis';
 import {
   allocateSaleFromImportLots,
   restoreImportLotsFromCancelledSale,
@@ -841,6 +842,7 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
   await up245(db as any);
   await up286(db as any);
   await up290(db as any);
+  await up291(db as any);
 
   // Seed default tenant
   await pglite.exec(`INSERT INTO tenants (id, name) VALUES ('tenant-e2e', 'Global Import & Trade Ltd');`);

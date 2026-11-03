@@ -1645,25 +1645,45 @@ export const useFxPortfolioQuery = () => {
   });
 };
 
+/**
+ * INV-IMPORT-ESTIMATES-HONEST: builds the FX-acquisition POST payload.
+ * The EGP cost is NEVER invented: when the caller supplies neither an
+ * explicit EGP cost nor an explicit exchange rate, this throws before any
+ * request is sent instead of silently pricing the acquisition at an
+ * assumed rate of 50. The backend trusts egpCost and posts a treasury
+ * journal from it, so a silent fallback here would post invented money.
+ */
+export function buildFxAcquisitionPayload(dto: any): Record<string, unknown> {
+  const foreignAmount = Number(dto.foreignAmount ?? dto.foreign_amount ?? 0);
+  const explicitEgp = dto.egpCost ?? dto.egp_cost;
+  const explicitRate = dto.exchangeRate ?? dto.exchange_rate;
+  const hasEgp = explicitEgp !== undefined && explicitEgp !== null && explicitEgp !== '';
+  const hasRate = explicitRate !== undefined && explicitRate !== null && explicitRate !== '' && Number(explicitRate) > 0;
+  if (!hasEgp && !hasRate) {
+    throw new Error(
+      'لا يمكن تسجيل تدبير عملة بلا تكلفة بالجنيه ولا سعر صرف؛ حدد أحدهما صراحة. [IMPORT_FX_RATE_REQUIRED]',
+    );
+  }
+  const egpCost = hasEgp ? Number(explicitEgp) : foreignAmount * Number(explicitRate);
+  return {
+    currency: dto.currency || 'USD',
+    foreignAmount,
+    egpCost,
+    exchangeRate: dto.exchangeRate ?? dto.exchange_rate ?? undefined,
+    acquisitionDate: dto.acquisitionDate || dto.acquisition_date || new Date().toISOString().slice(0, 10),
+    source: dto.source || dto.sourceType || 'bank',
+    bankAccountId: dto.bankAccountId || (dto.treasuryAccountId ? String(dto.treasuryAccountId) : undefined),
+    sourceAccountId: dto.sourceAccountId || (dto.sourceTreasuryAccountId ? String(dto.sourceTreasuryAccountId) : undefined),
+    transferId: dto.transferId ?? dto.supplierPaymentId ?? undefined,
+    notes: dto.notes || undefined,
+  };
+}
+
 export const useRecordFxAcquisitionMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (dto: any) => {
-      const foreignAmount = Number(dto.foreignAmount ?? dto.foreign_amount ?? 0);
-      const rate = Number(dto.exchangeRate ?? dto.exchange_rate ?? 0);
-      const egpCost = Number(dto.egpCost ?? dto.egp_cost ?? (foreignAmount * (rate || 50)));
-      const payload = {
-        currency: dto.currency || 'USD',
-        foreignAmount,
-        egpCost,
-        exchangeRate: dto.exchangeRate ?? dto.exchange_rate ?? undefined,
-        acquisitionDate: dto.acquisitionDate || dto.acquisition_date || new Date().toISOString().slice(0, 10),
-        source: dto.source || dto.sourceType || 'bank',
-        bankAccountId: dto.bankAccountId || (dto.treasuryAccountId ? String(dto.treasuryAccountId) : undefined),
-        sourceAccountId: dto.sourceAccountId || (dto.sourceTreasuryAccountId ? String(dto.sourceTreasuryAccountId) : undefined),
-        transferId: dto.transferId ?? dto.supplierPaymentId ?? undefined,
-        notes: dto.notes || undefined,
-      };
+      const payload = buildFxAcquisitionPayload(dto);
       return await http<any>('/api/import-sales/fx-acquisitions', {
         method: 'POST',
         body: JSON.stringify(payload),

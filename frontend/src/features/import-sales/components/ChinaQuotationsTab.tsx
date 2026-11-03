@@ -51,11 +51,19 @@ export function ChinaQuotationsTab() {
     : (selectedProject?.feasibility_data || {});
   const projectItems: any[] = Array.isArray(projectFeas?.items) ? projectFeas.items : [];
 
+  // INV-IMPORT-ESTIMATES-HONEST: the live estimate shows the EFFECTIVE
+  // values it was computed from. When the operator clears the rate or
+  // customs field, the computation falls back to 50 / 5% — the formula
+  // line must say so instead of showing a blank input as if no
+  // assumption was made.
+  const effectiveEstimateRate = Number(exchangeRate || 50);
+  const effectiveEstimateCustoms = Number(customsDutyEgp || 5);
+  const estimateUsesAssumedInputs = !exchangeRate || !customsDutyEgp;
   const estimatedUnitLandedCostEgp = Number(
     (
       (Number(totalForeign || 0) + Number(shippingCostUsd || 0)) *
-      Number(exchangeRate || 50) *
-      (1 + Number(customsDutyEgp || 5) / 100) *
+      effectiveEstimateRate *
+      (1 + effectiveEstimateCustoms / 100) *
       1.14
     ).toFixed(2)
   );
@@ -471,7 +479,8 @@ export function ChinaQuotationsTab() {
                 </span>
               </div>
               <span style={{ fontSize: 11, color: '#047857' }}>
-                (سعر المصنع ${totalForeign} + شحن القطعة ${shippingCostUsd}) × {exchangeRate} ج.م + جمارك {customsDutyEgp}% + ض.ق.م 14%
+                (سعر المصنع ${totalForeign} + شحن القطعة ${shippingCostUsd}) × {effectiveEstimateRate} ج.م + جمارك {effectiveEstimateCustoms}% + ض.ق.م 14%
+                {estimateUsesAssumedInputs ? ' — قيم مفترضة (سعر 50 / جمارك 5%)، حدد القيم الفعلية قبل الاعتماد' : ''}
               </span>
             </div>
           </div>
