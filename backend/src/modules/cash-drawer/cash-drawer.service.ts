@@ -41,6 +41,7 @@ type ShiftRow = {
   cash_drawer_delivery_cash_in_total?: number | string | null;
   cash_drawer_manual_cash_in_total?: number | string | null;
   cash_drawer_cash_out_total?: number | string | null;
+  sale_cash_total?: number | string | null;
   supplier_payments_total?: number | string | null;
   expenses_total?: number | string | null;
   service_cash_total?: number | string | null;
@@ -311,6 +312,54 @@ export class CashDrawerService {
     return { serviceCashTotal: this.toBookMoney(row.service_cash_total || 0, bookDigits), serviceCardTotal: this.toBookMoney(row.service_card_total || 0, bookDigits), serviceTotal: this.toBookMoney(row.service_total || 0, bookDigits) };
   }
 
+  /**
+   * INV-SHIFT-SALE-CASH-ATTRIBUTION: the ONE key that attributes a
+   * sale's cash to a shift. It is used by the sales breakdown, the
+   * cancelled-sale receipt restore, and the attributed sale-cash
+   * totals/items below — never three different predicates. A sale
+   * belongs to a shift when it was created by the shift's opener
+   * inside the shift's window on the same branch/location (the
+   * historical rule), OR when no shift of its creator covers it and
+   * this open shift is the only open shift covering it on the
+   * branch/location (a sale posted by another login at the same
+   * terminal). The fallback never claims rep-custody cash: a sale
+   * whose collection_status is prepaid_by_rep (van field cash and
+   * rep-prepaid deliveries) stays with its creator's shift only.
+   * Call sites always alias the sales table `s`. Only columns that
+   * every drawer fixture carries are referenced (no sale_origin /
+   * van_trip_id: minimal harnesses do not seed them).
+   */
+  private shiftSaleCashAttribution(tenantId: string, shift: ShiftRow, openerId: number) {
+    const fallback = String(shift.status || 'open') === 'open'
+      ? sql<boolean>`or (
+          coalesce(s.collection_status, '') <> 'prepaid_by_rep'
+          and not exists (
+            select 1 from cashier_shifts cs
+            where cs.tenant_id = ${tenantId} and cs.opened_by = s.created_by
+              and s.created_at >= cs.created_at
+              and (cs.closed_at is null or s.created_at <= cs.closed_at)
+              and (cs.branch_id is null or s.branch_id is null or cs.branch_id = s.branch_id)
+              and (cs.location_id is null or s.location_id is null or cs.location_id = s.location_id)
+          )
+          and (
+            select count(*) from cashier_shifts cs2
+            where cs2.tenant_id = ${tenantId} and cs2.status = 'open'
+              and s.created_at >= cs2.created_at
+              and (cs2.branch_id is null or s.branch_id is null or cs2.branch_id = s.branch_id)
+              and (cs2.location_id is null or s.location_id is null or cs2.location_id = s.location_id)
+          ) = 1
+        )`
+      : sql<boolean>`or false`;
+    return sql<boolean>`(
+        s.created_by = ${openerId}
+        ${fallback}
+      )
+      and s.created_at >= ${shift.created_at}
+      and (${shift.closed_at || null}::timestamptz is null or s.created_at <= ${shift.closed_at || null})
+      and (${shift.branch_id || null}::int is null or s.branch_id is null or s.branch_id = ${Number(shift.branch_id || 0) || null})
+      and (${shift.location_id || null}::int is null or s.location_id is null or s.location_id = ${Number(shift.location_id || 0) || null})`;
+  }
+
   private async computeShiftSalesBreakdown(shift: ShiftRow, auth: AuthContext, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<ShiftSalesBreakdown> {
     const openerId = Number(shift.opened_by || 0); const scope = this.scope(auth);
     const empty: ShiftSalesBreakdown = {
@@ -341,10 +390,7 @@ export class CashDrawerService {
                coalesce(s.delivery_fee_mode, 'freelance_courier') as delivery_fee_mode,
                coalesce(s.tip_amount, 0) as tip_amount
         from sales s
-        where s.tenant_id = ${scope.tenantId} and s.status = 'posted' and s.created_by = ${openerId} and s.created_at >= ${shift.created_at}
-          and (${shift.closed_at || null}::timestamptz is null or s.created_at <= ${shift.closed_at || null})
-          and (${shift.branch_id || null}::int is null or s.branch_id is null or s.branch_id = ${Number(shift.branch_id || 0) || null})
-          and (${shift.location_id || null}::int is null or s.location_id is null or s.location_id = ${Number(shift.location_id || 0) || null})
+        where s.tenant_id = ${scope.tenantId} and s.status = 'posted' and ${this.shiftSaleCashAttribution(scope.tenantId, shift, openerId)}
       ), payment_rows as (
         select sp.sale_id, sp.payment_channel, sp.amount from sale_payments sp inner join shift_sales ss on ss.id = sp.sale_id where sp.tenant_id = ${scope.tenantId} and coalesce(ss.collection_status, '') != 'cod'
         union all
@@ -468,12 +514,57 @@ export class CashDrawerService {
         having count(*) > 0
       ) sp on true
       where s.tenant_id = ${scope.tenantId} and s.status = 'cancelled'
-        and s.created_by = ${openerId} and s.created_at >= ${shift.created_at}
-        and (${shift.closed_at || null}::timestamptz is null or s.created_at <= ${shift.closed_at || null})
-        and (${shift.branch_id || null}::int is null or s.branch_id is null or s.branch_id = ${Number(shift.branch_id || 0) || null})
-        and (${shift.location_id || null}::int is null or s.location_id is null or s.location_id = ${Number(shift.location_id || 0) || null})
+        and ${this.shiftSaleCashAttribution(scope.tenantId, shift, openerId)}
     `.execute(queryable ?? this.db);
     return this.toBookMoney(result.rows?.[0]?.total || 0, bookDigits);
+  }
+
+  /**
+   * INV-SHIFT-SALE-CASH-ATTRIBUTION: the sale-cash rows of this
+   * shift's attributed sales, for the drawer movement view only.
+   * The same attribution key as the breakdown, over the
+   * sale-linked treasury rows (reference_type 'sale'). Cancelled
+   * sales are excluded (their receipt is restored separately and
+   * their refund is a shift-linked movement); COD sales never
+   * wrote a sale treasury row. This total is DISPLAY ONLY: the
+   * expected-cash computation still reads the sales breakdown, so
+   * showing the rows here can never double-count the cash.
+   */
+  private async computeShiftAttributedSaleCash(shift: ShiftRow, auth: AuthContext, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<{
+    total: number;
+    items: Array<{ id: string; kind: 'cash_in' | 'cash_out'; kindLabel: string; amount: number; note: string; createdAt: string }>;
+  }> {
+    const openerId = Number(shift.opened_by || 0); const scope = this.scope(auth);
+    if (!(openerId > 0) || !shift.created_at) return { total: 0, items: [] };
+    const bookDigits = digits ?? currencyMoneyDigits(await tenantBaseCurrency(queryable ?? this.db, scope.tenantId));
+    const result = await sql<{
+      id?: number | string | null; amount?: number | string | null; note?: string | null;
+      txn_type?: string | null; created_at?: string | Date | null; sale_id?: number | string | null;
+    }>`
+      select tt.id, tt.amount, tt.note, tt.txn_type, tt.created_at, s.id as sale_id
+      from treasury_transactions tt
+      inner join sales s on s.id = tt.reference_id and s.tenant_id = tt.tenant_id
+      where tt.tenant_id = ${scope.tenantId} and tt.reference_type = 'sale'
+        and s.status = 'posted' and coalesce(s.collection_status, '') != 'cod'
+        and coalesce(tt.payment_channel, 'cash') = 'cash'
+        and ${this.shiftSaleCashAttribution(scope.tenantId, shift, openerId)}
+      order by tt.id asc
+    `.execute(queryable ?? this.db);
+    let total = 0;
+    const items: Array<{ id: string; kind: 'cash_in' | 'cash_out'; kindLabel: string; amount: number; note: string; createdAt: string }> = [];
+    for (const row of result.rows || []) {
+      const amount = Number(row.amount || 0);
+      total += amount;
+      items.push({
+        id: `sale-tt-${row.id}`,
+        kind: amount >= 0 ? 'cash_in' : 'cash_out',
+        kindLabel: amount >= 0 ? 'مبيعات نقدية' : 'عكس نقدية فاتورة بيع',
+        amount: Math.abs(amount),
+        note: String(row.note || '').trim() || `فاتورة بيع S-${row.sale_id}`,
+        createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+      });
+    }
+    return { total: this.toBookMoney(total, bookDigits), items };
   }
 
   private async computeShiftExpectedCashFromShift(shift: ShiftRow, auth: AuthContext, salesBreakdown?: ShiftSalesBreakdown, serviceBreakdown?: ShiftServiceBreakdown, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<number> {
@@ -655,6 +746,12 @@ export class CashDrawerService {
       }
     }
 
+    // INV-SHIFT-SALE-CASH-ATTRIBUTION: the day's sale cash, under
+    // the same key as the breakdown, so the movement list a cashier
+    // reviews finally shows the sales themselves.
+    const attributedSaleCash = await this.computeShiftAttributedSaleCash(shift, auth);
+    for (const item of attributedSaleCash.items) items.push(item);
+
     return items;
   }
 
@@ -668,6 +765,7 @@ export class CashDrawerService {
     const supplierPaymentsTotal = await this.computeShiftSupplierPaymentsTotal(row, auth);
     const expensesTotal = await this.computeShiftExpensesTotal(row, auth);
     const movementItems = await this.fetchShiftMovementItems(shiftId, row, auth);
+    const attributedSaleCash = await this.computeShiftAttributedSaleCash(row, auth);
     const expectedCash = String(row.status || 'open') === 'open' ? await this.computeShiftExpectedCashFromShift(row, auth, salesBreakdown, serviceBreakdown) : Number(row.expected_cash || 0);
     return {
       ...row,
@@ -694,6 +792,7 @@ export class CashDrawerService {
       cash_drawer_delivery_cash_in_total: movements.deliveryCashInTotal,
       cash_drawer_manual_cash_in_total: movements.manualCashInTotal,
       cash_drawer_cash_out_total: movements.cashOutTotal,
+      sale_cash_total: attributedSaleCash.total,
       supplier_payments_total: supplierPaymentsTotal,
       expenses_total: expensesTotal,
       service_cash_total: serviceBreakdown.serviceCashTotal,
@@ -743,6 +842,7 @@ export class CashDrawerService {
         cashDrawerDeliveryCashInTotal: 0,
         cashDrawerManualCashInTotal: 0,
         cashDrawerCashOutTotal: 0,
+        saleCashTotal: 0,
         supplierPaymentsTotal: 0,
         expensesTotal: 0,
         serviceCashTotal: 0,

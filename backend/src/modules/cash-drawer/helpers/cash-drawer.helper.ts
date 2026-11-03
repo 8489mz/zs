@@ -33,6 +33,7 @@ type CashDrawerShiftSource = {
   cash_drawer_delivery_cash_in_total?: number | string | null;
   cash_drawer_manual_cash_in_total?: number | string | null;
   cash_drawer_cash_out_total?: number | string | null;
+  sale_cash_total?: number | string | null;
   supplier_payments_total?: number | string | null;
   expenses_total?: number | string | null;
   service_cash_total?: number | string | null;
@@ -239,6 +240,7 @@ export function mapCashDrawerShiftRow(row: CashDrawerShiftSource): CashDrawerMap
     cashDrawerDeliveryCashInTotal: Number(row.cash_drawer_delivery_cash_in_total || 0),
     cashDrawerManualCashInTotal: Number(row.cash_drawer_manual_cash_in_total || 0),
     cashDrawerCashOutTotal: Number(row.cash_drawer_cash_out_total || 0),
+    saleCashTotal: Number(row.sale_cash_total || 0),
     supplierPaymentsTotal: Number(row.supplier_payments_total || 0),
     expensesTotal: Number(row.expenses_total || 0),
     serviceCashTotal: Number(row.service_cash_total || 0),
