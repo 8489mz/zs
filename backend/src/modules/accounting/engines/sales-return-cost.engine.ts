@@ -11,8 +11,25 @@ export interface OriginalSaleCostLine {
   cost_price: number | string | null;
 }
 
-/** Match each return to its original sale line; never guess when legacy lines are ambiguous. */
-export function calculateSalesReturnCost(returns: ReturnCostLine[], saleItems: OriginalSaleCostLine[]): number {
+export interface ResolvedSalesReturnCostLine {
+  productId: number;
+  saleItemId: number | null;
+  qty: number;
+  /** Effective per-sold-unit cost: the return line's saved cost when present, else the original sale line's frozen cost. */
+  unitCost: number;
+}
+
+/**
+ * Resolve each return line to its original sale line and effective unit
+ * cost, with the same provenance and ambiguity rules calculateSalesReturnCost
+ * has always enforced. Pure: no I/O, no rounding — callers that need the
+ * residual basis (the return COGS mirror) build their groups from these
+ * resolved lines instead of re-implementing the matching.
+ */
+export function resolveSalesReturnCostLines(
+  returns: ReturnCostLine[],
+  saleItems: OriginalSaleCostLine[],
+): ResolvedSalesReturnCostLine[] {
   const byId = new Map(saleItems.map((item) => [Number(item.id), item]));
   const byProduct = new Map<number, OriginalSaleCostLine[]>();
   for (const item of saleItems) {
@@ -21,7 +38,7 @@ export function calculateSalesReturnCost(returns: ReturnCostLine[], saleItems: O
     byProduct.get(productId)!.push(item);
   }
 
-  let total = 0;
+  const resolved: ResolvedSalesReturnCostLine[] = [];
   for (const line of returns) {
     const productId = Number(line.product_id);
     const qty = Number(line.qty);
@@ -38,7 +55,7 @@ export function calculateSalesReturnCost(returns: ReturnCostLine[], saleItems: O
     if (line.cost_price != null) {
       const savedCost = Number(line.cost_price);
       if (!Number.isFinite(savedCost) || savedCost < 0) throw new Error(`Invalid saved return cost for product ${productId}`);
-      total += qty * savedCost;
+      resolved.push({ productId, saleItemId: hasSaleItemLink ? Number(line.sale_item_id) : null, qty, unitCost: savedCost });
       continue;
     }
     const candidates = original ? [original] : (byProduct.get(productId) || []);
@@ -50,7 +67,18 @@ export function calculateSalesReturnCost(returns: ReturnCostLine[], saleItems: O
       costs.some((cost) => !Number.isFinite(cost) || cost < 0) || new Set(costs).size !== 1) {
       throw new Error(`Ambiguous original cost for returned product ${productId}; sale item id is required`);
     }
-    total += qty * costs[0];
+    resolved.push({
+      productId,
+      saleItemId: hasSaleItemLink ? Number(line.sale_item_id) : (candidates.length === 1 ? Number(candidates[0].id) : null),
+      qty,
+      unitCost: costs[0],
+    });
   }
-  return total;
+  return resolved;
+}
+
+/** Match each return to its original sale line; never guess when legacy lines are ambiguous. */
+export function calculateSalesReturnCost(returns: ReturnCostLine[], saleItems: OriginalSaleCostLine[]): number {
+  return resolveSalesReturnCostLines(returns, saleItems)
+    .reduce((total, line) => total + line.qty * line.unitCost, 0);
 }

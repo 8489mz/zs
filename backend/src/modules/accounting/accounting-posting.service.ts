@@ -10,7 +10,7 @@ import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { AccountingTenantFoundationService } from './accounting-tenant-foundation.service';
 import { AppError } from '../../common/errors/app-error';
-import { calculateSalesReturnCost } from './engines/sales-return-cost.engine';
+import { calculateSalesReturnCost, resolveSalesReturnCostLines } from './engines/sales-return-cost.engine';
 import { cogsResidualAmount, type CogsResidualGroup } from './engines/cogs-residual.engine';
 import { allocatePayrollAccrual } from '../hr/engines/payroll-accrual-allocation.engine';
 import { assertAutomatedJournalPeriodOpen, lockAccountingPeriod } from './accounting-period-lock';
@@ -927,16 +927,52 @@ export class AccountingPostingService {
     saleId: number,
     bookDigits: MoneyDigits,
   ): Promise<number> {
-    const saleItems = await queryable
+    const saleItems = await this.readSaleResidualLines(queryable, tenantId, saleId);
+    const groups = await this.residualCogsGroups(queryable, tenantId, saleItems, null);
+    return cogsResidualAmount(groups, bookDigits);
+  }
+
+  private async readSaleResidualLines(
+    queryable: Transaction<Database>,
+    tenantId: string,
+    saleId: number,
+  ): Promise<Array<{ id: number; product_id: number | null; qty: number | string; cost_price: number | string | null; unit_multiplier: number | string | null; modifiers: unknown }>> {
+    return queryable
       .selectFrom('sale_items')
-      .select(['product_id', 'qty', 'cost_price', 'unit_multiplier', 'modifiers'])
+      .select(['id', 'product_id', 'qty', 'cost_price', 'unit_multiplier', 'modifiers'])
       .where('sale_id', '=', saleId)
       .where(sql<boolean>`tenant_id = ${tenantId}`)
       // Deterministic line order: the remaining quantity of a product is
       // assigned to its first product-and-cost group, so the anchor must
       // not depend on the database's unspecified row order.
       .orderBy('id')
-      .execute();
+      .execute() as Promise<Array<{ id: number; product_id: number | null; qty: number | string; cost_price: number | string | null; unit_multiplier: number | string | null; modifiers: unknown }>>;
+  }
+
+  /*
+   * Shared residual grouping for sale COGS and the sales-return mirror
+   * (INV-SALES-RETURN-COGS-RESIDUAL-MIRROR). One grouping rule, two
+   * quantities: in sale mode (qtySoldBySaleItemId null) each line
+   * contributes its sold quantity and the anchor is the remaining
+   * quantity read after the sale's stock movement. In return mode the
+   * map holds the returned quantity per sale line (sold units); only
+   * lines in the map participate, and the anchor is the post-sale
+   * remaining quantity reconstructed as the current remaining stock
+   * (read after the return's restock, on the same transaction) minus
+   * the restocked base quantity of the group — so the reversal is
+   * exactly the residual the sale would have posted for the returned
+   * portion, and sequential returns telescope to the posted COGS.
+   * Modifier anchoring, the per-group rule, and the deterministic
+   * order are identical in both modes: soldProductIds and the
+   * component pool are computed over ALL sale lines, while only
+   * participating lines create groups.
+   */
+  private async residualCogsGroups(
+    queryable: Transaction<Database>,
+    tenantId: string,
+    saleItems: Array<{ id: number; product_id: number | null; qty: number | string; cost_price: number | string | null; unit_multiplier: number | string | null; modifiers: unknown }>,
+    qtySoldBySaleItemId: Map<number, number> | null,
+  ): Promise<CogsResidualGroup[]> {
     const soldProductIds = new Set<number>();
     for (const item of saleItems) {
       const id = Number(item.product_id || 0);
@@ -962,12 +998,31 @@ export class AccountingPostingService {
         remainingByProduct.set(id, (remainingByProduct.get(id) || 0) + Number(row.qty || 0));
       }
     }
+    // Restocked base quantity per product-and-cost group (return mode
+    // only): returned sold units converted back to base units through
+    // each line's own multiplier, so the reconstructed post-sale
+    // remaining quantity is in the same base units the stock read
+    // reports. Sale mode contributes nothing here.
+    const restockedBaseByGroup = new Map<string, number>();
+    if (qtySoldBySaleItemId) {
+      for (const item of saleItems) {
+        const returned = qtySoldBySaleItemId.get(Number(item.id));
+        if (!(returned! > 0)) continue;
+        const rawMultiplier = Number((item as any).unit_multiplier ?? 1);
+        const multiplier = Number.isFinite(rawMultiplier) && rawMultiplier > 0 ? rawMultiplier : 1;
+        const key = `${Number(item.product_id || 0)}|${Number(item.cost_price || 0)}`;
+        restockedBaseByGroup.set(key, (restockedBaseByGroup.get(key) || 0) + returned! * multiplier);
+      }
+    }
     const anchoredModifierProducts = new Set<number>();
     const grouped = new Map<string, CogsResidualGroup>();
     saleItems.forEach((item, index) => {
       const productId = Number(item.product_id || 0);
       const unitCost = Number(item.cost_price || 0);
-      const qtySold = Number(item.qty || 0);
+      const qtySold = qtySoldBySaleItemId
+        ? (qtySoldBySaleItemId.get(Number(item.id)) || 0)
+        : Number(item.qty || 0);
+      if (qtySoldBySaleItemId && !(qtySold > 0)) return;
       const key = `${productId}|${unitCost}`;
       const existing = grouped.get(key);
       if (existing) {
@@ -982,7 +1037,9 @@ export class AccountingPostingService {
         qtyRemaining: residualSoldUnitRemaining({
           unitCost,
           multiplier,
-          remainingBaseQty: productId > 0 ? (remainingByProduct.get(productId) || 0) : 0,
+          remainingBaseQty: productId > 0
+            ? (remainingByProduct.get(productId) || 0) - (restockedBaseByGroup.get(key) || 0)
+            : 0,
           modifiers: modifierLists[index],
           remainingByProduct,
           soldProductIds,
@@ -991,7 +1048,64 @@ export class AccountingPostingService {
         }),
       });
     });
-    return cogsResidualAmount([...grouped.values()], bookDigits);
+    return [...grouped.values()];
+  }
+
+  /*
+   * INV-SALES-RETURN-COGS-RESIDUAL-MIRROR: a return reverses COGS on the
+   * same residual basis the sale posted it. The plain qty x frozen cost
+   * product ignores the anchor remainder the sale's COGS carries, so a
+   * return stranded one minor unit in 1140 per affected return. The
+   * mirror feeds the returned quantity through the shared residual
+   * grouping with the post-sale remaining quantity reconstructed from
+   * the post-restock stock read, so GL equals physical after sale +
+   * return in the worked case and a full return nets COGS to zero.
+   * Eligibility is deliberately narrow: every return line must resolve
+   * to one original sale line at that line's frozen cost (a saved cost
+   * of zero means a prepared composite whose COGS stays expensed and
+   * contributes nothing; a differing nonzero saved cost keeps the
+   * pinned plain-product override instead of inventing an anchor).
+   * Anything else — no linked sale, an unresolvable line, a differing
+   * saved cost — falls back to the legacy plain computation, which
+   * keeps every previously pinned behaviour intact.
+   */
+  private async salesReturnCogsResidual(
+    queryable: Transaction<Database>,
+    tenantId: string,
+    saleId: number,
+    bookDigits: MoneyDigits,
+    returnedQtyBySaleItemId: Map<number, number>,
+  ): Promise<number> {
+    const saleItems = await this.readSaleResidualLines(queryable, tenantId, saleId);
+    const groups = await this.residualCogsGroups(queryable, tenantId, saleItems, returnedQtyBySaleItemId);
+    return cogsResidualAmount(groups, bookDigits);
+  }
+
+  private async salesReturnCogsAmount(
+    queryable: Transaction<Database>,
+    tenantId: string,
+    sale: { id: number } | null,
+    returnItems: Array<{ product_id: number | null; sale_item_id: number | null; qty: number | string; cost_price?: number | string | null }>,
+    saleItems: Array<{ id: number; product_id: number | null; cost_price: number | string | null }>,
+    bookDigits: MoneyDigits,
+  ): Promise<number> {
+    const legacy = calculateSalesReturnCost(returnItems, saleItems);
+    if (!sale) return legacy;
+    const saleCostById = new Map(saleItems.map((item) => [Number(item.id), Number(item.cost_price || 0)]));
+    const returnedQtyBySaleItemId = new Map<number, number>();
+    for (const line of resolveSalesReturnCostLines(returnItems, saleItems)) {
+      if (line.saleItemId == null) return legacy;
+      const saleCost = saleCostById.get(line.saleItemId);
+      if (saleCost == null) return legacy;
+      if (line.unitCost === 0) continue;
+      if (Math.abs(line.unitCost - saleCost) > 0.0000001) return legacy;
+      returnedQtyBySaleItemId.set(
+        line.saleItemId,
+        (returnedQtyBySaleItemId.get(line.saleItemId) || 0) + line.qty,
+      );
+    }
+    if (returnedQtyBySaleItemId.size === 0) return 0;
+    return this.salesReturnCogsResidual(queryable, tenantId, Number(sale.id), bookDigits, returnedQtyBySaleItemId);
   }
 
   async postSale(queryable: Transaction<Database>, saleId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number }> {
@@ -1968,13 +2082,19 @@ export class AccountingPostingService {
     const saleItems = sale?.id
       ? await queryable
         .selectFrom('sale_items')
-        .select(['id', 'product_id', 'cost_price'])
+        .select(['id', 'product_id', 'cost_price', 'unit_multiplier', 'modifiers'])
         .where('sale_id', '=', Number(sale.id))
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .execute()
       : [];
 
-    const inventoryReversalAmount = toBookMoney(calculateSalesReturnCost(returnItems, saleItems));
+    // INV-SALES-RETURN-COGS-RESIDUAL-MIRROR: reverse COGS on the same
+    // residual basis the sale posted it; the legacy plain product is
+    // kept for every shape the mirror does not cover (see
+    // salesReturnCogsAmount).
+    const inventoryReversalAmount = toBookMoney(await this.salesReturnCogsAmount(
+      queryable, scope.tenantId, sale ? { id: Number(sale.id) } : null, returnItems, saleItems, bookDigits,
+    ));
 
     if (inventoryReversalAmount > 0) {
       addBookLine({
