@@ -4267,6 +4267,36 @@ export class VanSalesService {
         systemAuth,
       );
 
+      // 7b. INV-REP-CASH-REMITTANCE-SHIFT: the counted cash the rep
+      // physically hands over is drawer cash from here on — the
+      // settlement journal above already debited 1110 for it — but no
+      // shift's expected cash sees it until a treasury row links it
+      // to the receiving shift. Write that row here, in the same
+      // transaction as the journal, and post NO second GL leg:
+      // postCashDrawerMovement must never run for a handover (it
+      // would debit 1110 a second time and credit 7100 income for
+      // rep cash). A settle with no counted cash writes no row. The
+      // remittance row is written unconditionally once the posting
+      // call returns: postVanTripSettlement's contract is
+      // journalEntryId: number | null, and a null id with counted
+      // cash > 0 is impossible in production (counted cash always
+      // builds a 1110 line, so the posting either journals or
+      // throws) — gating the row on the id would only break
+      // callers that stub the posting, not protect the books.
+      const remittedCash = roundMoney(countedCash, bookDigits);
+      if (remittedCash > 0) {
+        await this.insertRepCashRemittanceRow(trx, {
+          tenantId,
+          accountId,
+          tripId: payload.tripId,
+          repName: rep?.name ? String(rep.name) : 'مندوب التوزيع',
+          amount: remittedCash,
+          branchId,
+          actorUserId,
+          createdBy: actorUserId > 0 ? actorUserId : (systemAuth.userId ? Number(systemAuth.userId) : null),
+        });
+      }
+
       // Post unload stock transfer if items were returned to warehouse
       if (payload.unloadRemainingToWarehouse && totalUnloadedCost > 0) {
         await this.accountingPosting.postVanStockTransfer(
@@ -4343,6 +4373,88 @@ export class VanSalesService {
       expectedBankTransfers: Number((Number(trip.total_instapay_sales || 0) + Number(trip.total_instapay_collections || 0)).toFixed(2)),
       stockVariances: (stockAuditResult as any)?.itemVariances || [],
     };
+  }
+
+  /**
+   * INV-REP-CASH-REMITTANCE-SHIFT: links a settled trip's counted cash
+   * to the receiving shift with a single treasury row — no GL journal.
+   * The rep's custody is discharged by the same transaction that
+   * posts the settlement journal and marks the trip settled, so the
+   * row, the journal, and the custody release commit or roll back
+   * together; there is no separate custody balance to update. The
+   * receiving shift is the settle actor's own open shift on the
+   * branch (the PIN supervisor / admin settler is the person the rep
+   * hands the cash to); with no actor, the branch's latest open shift
+   * receives it — the same branch-only fallback granularity the
+   * cross-shift cancel refund uses. No open shift on the branch fails
+   * closed: cash with no drawer must not settle. The deterministic
+   * request key (one per trip, scoped by the partial unique index on
+   * drawer rows) makes a retried handover collide instead of
+   * doubling the shift's expected cash. The note carries 'مندوب' so
+   * the drawer listing classifies the row as a delivery receipt, as
+   * it does for every other rep handover row operators record.
+   */
+  private async insertRepCashRemittanceRow(
+    trx: any,
+    params: {
+      tenantId: string;
+      accountId: string;
+      tripId: number;
+      repName: string;
+      amount: number;
+      branchId: number | null;
+      actorUserId: number;
+      createdBy: number | null;
+    },
+  ): Promise<void> {
+    const { tenantId, accountId, tripId, amount, branchId } = params;
+    const branchMatch = (eb: any) =>
+      branchId == null ? eb('branch_id', 'is', null) : eb('branch_id', '=', branchId);
+    type ShiftRow = { id: number; branch_id: number | null; location_id: number | null };
+    let shift: ShiftRow | undefined;
+    if (params.actorUserId > 0) {
+      shift = await trx
+        .selectFrom('cashier_shifts')
+        .select(['id', 'branch_id', 'location_id'])
+        .where('tenant_id', '=', tenantId)
+        .where('status', '=', 'open')
+        .where('opened_by', '=', params.actorUserId)
+        .where(branchMatch)
+        .orderBy('id', 'desc')
+        .forUpdate()
+        .executeTakeFirst();
+    }
+    if (!shift) {
+      shift = await trx
+        .selectFrom('cashier_shifts')
+        .select(['id', 'branch_id', 'location_id'])
+        .where('tenant_id', '=', tenantId)
+        .where('status', '=', 'open')
+        .where(branchMatch)
+        .orderBy('id', 'desc')
+        .forUpdate()
+        .executeTakeFirst();
+    }
+    if (!shift) {
+      throw new AppError('يجب فتح وردية على الفرع قبل توريد نقدية المندوب', 'OPEN_SHIFT_REQUIRED', 400);
+    }
+    await trx
+      .insertInto('treasury_transactions')
+      .values({
+        tenant_id: tenantId,
+        account_id: accountId,
+        txn_type: 'rep_cash_remittance',
+        amount,
+        note: `توريد نقدية مندوب ${params.repName} - رحلة #${tripId}`,
+        reference_type: 'cashier_shift',
+        reference_id: Number(shift.id),
+        branch_id: shift.branch_id ? Number(shift.branch_id) : null,
+        location_id: shift.location_id ? Number(shift.location_id) : null,
+        created_by: params.createdBy,
+        payment_channel: 'cash',
+        request_key: `rep-remittance:trip:${tripId}`,
+      } as any)
+      .execute();
   }
 
   /**

@@ -55,6 +55,14 @@ function makeDb(ctx: Ctx): Record<string, any> {
       if (key === 'settings') return { value: ctx.currency };
       if (key === 'currency_exchange_rates') return { currency_code: ctx.currency, exchange_rate: 1 };
       if (key === 'stock_locations') return { branch_id: 1 };
+      // Test-only fixture for INV-REP-CASH-REMITTANCE-SHIFT: settleTrip
+      // now links the remittance to an open shift in the same
+      // transaction, so the fake answers one open shift on the branch.
+      // The treasury row lands in ctx.inserts like every other write;
+      // the variance assertions below filter by table and are
+      // unaffected. The real shift link is driven by
+      // rep-cash-remittance-shift.spec.ts on PGlite.
+      if (key === 'cashier_shifts') return { id: 7, branch_id: 1, location_id: 10 };
       if (key.startsWith('product_location_stock')) return null;
       throw new Error(`unexpected selectFrom table ${key}`);
     };
