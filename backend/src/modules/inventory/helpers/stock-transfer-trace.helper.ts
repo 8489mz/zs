@@ -23,6 +23,25 @@ function parseTrace<T>(value: unknown): T[] {
   return decoded as T[];
 }
 
+/**
+ * INV-TRANSFER-DISPATCH-FEFO: the sale path's FEFO rule,
+ * shared verbatim. A batch may be dispatched only while it
+ * is 'active' and unexpired: a 7-char expiry (YYYY-MM) must
+ * not precede the current month, a full date must not
+ * precede today, and a missing expiry never dispatches --
+ * exactly the predicate deductPharmacyBatchesFefo applies
+ * at sale time. The previous dispatch ordering (id asc,
+ * no status or expiry filter) shipped the oldest-created
+ * lots first, including expired ones.
+ */
+function isDispatchableBatch(batch: { expiry_date?: unknown; status?: unknown }, todayIso: string, currentMonthIso: string): boolean {
+  if (batch.status !== 'active') return false;
+  const exp = String(batch.expiry_date || '').trim().slice(0, 10);
+  if (!exp) return false;
+  if (exp.length === 7) return exp >= currentMonthIso;
+  return exp >= todayIso;
+}
+
 /** Called after the product row has been locked, and before any quantity movement. */
 export async function dispatchTrackedStock(
   trx: Kysely<Database>, scope: Scope,
@@ -78,16 +97,20 @@ export async function dispatchTrackedStock(
 
   const batchTracking: TransferBatchTrace[] = [];
   if (batchTracked) {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const currentMonthIso = todayIso.slice(0, 7);
     const candidates = await trx.selectFrom('pharmacy_batches').selectAll()
       .where('tenant_id', '=', scope.tenantId).where('product_id', '=', productId)
       .where('location_id', '=', fromLocationId).where('quantity', '>', 0)
-      .orderBy('id', 'asc').forUpdate().execute();
+      .where('status', '=', 'active')
+      .orderBy('expiry_date', 'asc').orderBy('id', 'asc').forUpdate().execute();
     let allocations = input.batchAllocations || [];
     if (!allocations.length) {
       let remaining = qty;
       allocations = [];
       for (const candidate of candidates) {
         if (remaining <= 0) break;
+        if (!isDispatchableBatch(candidate, todayIso, currentMonthIso)) continue;
         const availableInBatch = Number(candidate.quantity || 0);
         if (availableInBatch > 0) {
           const take = Math.min(availableInBatch, remaining);
@@ -104,7 +127,10 @@ export async function dispatchTrackedStock(
     for (const allocation of [...allocations].sort((a, b) => a.batchId - b.batchId)) {
       const batch = candidates.find(candidate => Number(candidate.id) === Number(allocation.batchId));
       const amount = preciseQty(allocation.qty);
-      if (!batch || amount <= 0 || Number(batch.quantity) + 1e-7 < amount) {
+      // Explicit allocations are held to the same FEFO rule:
+      // naming an expired or non-active batch must not bypass
+      // it, or the guard is only a default, not a rule.
+      if (!batch || amount <= 0 || Number(batch.quantity) + 1e-7 < amount || !isDispatchableBatch(batch, todayIso, currentMonthIso)) {
         throw new AppError('تشغيلة غير موجودة أو رصيدها غير كافٍ في المصدر', 'TRANSFER_BATCH_NOT_AVAILABLE', 409);
       }
       await trx.updateTable('pharmacy_batches')
