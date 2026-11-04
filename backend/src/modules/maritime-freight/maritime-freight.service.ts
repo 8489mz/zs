@@ -1400,6 +1400,14 @@ export class MaritimeFreightService {
 
     if (!rfq) throw new NotFoundException('RFQ not found');
 
+    // INV-MARITIME-RFQ-TERMINAL-STATE: the staff bid path carries the
+    // same terminal-state guard as the public magic-link path
+    // (submitPublicCarrierBid) -- no new bids on an awarded, closed or
+    // cancelled RFQ. Message kept identical to the public path.
+    if (['awarded', 'closed', 'cancelled'].includes(rfq.status)) {
+      throw new BadRequestException('طلب عروض الأسعار مغلق أو تم ترسيته بالفعل ولا يمكن تقديم عروض إضافية');
+    }
+
     // A public magic-link bid may name a carrier but cannot attach a
     // shipping_line record from another tenant, even if its global ID leaks.
     if (dto?.shippingLineId != null && String(dto.shippingLineId).trim()) {
@@ -1474,6 +1482,24 @@ export class MaritimeFreightService {
 
       // Lock RFQ row to prevent concurrent race conditions
       await sql`SELECT id FROM maritime_rfqs WHERE tenant_id = ${tenantId} AND id = ${bid.rfq_id} FOR UPDATE`.execute(trx);
+
+      // INV-MARITIME-RFQ-TERMINAL-STATE: a closed or cancelled RFQ
+      // never gains or changes a winner. The row is already locked
+      // above, so the status read here is the decision-time status.
+      // Re-award within an open or already-awarded RFQ stays allowed:
+      // no un-award endpoint exists, and a carrier backing out must
+      // not strand the RFQ -- that choice is flagged in the invariant
+      // for reversal. A bid whose RFQ row is gone fails closed.
+      const rfqRow = await trx
+        .selectFrom('maritime_rfqs')
+        .select('status')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', bid.rfq_id as any)
+        .executeTakeFirst();
+      if (!rfqRow) throw new NotFoundException('RFQ not found');
+      if (rfqRow.status === 'closed' || rfqRow.status === 'cancelled') {
+        throw new BadRequestException('طلب عروض الأسعار مغلق أو ملغى ولا يمكن ترسية عروض عليه');
+      }
 
       // Un-award any previous bids on the same RFQ
       await trx
