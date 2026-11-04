@@ -30,7 +30,6 @@ const DEFAULT_CONFIG: MaritimePipelineConfig = {
   defaultMarginType: 'fixed',
   defaultMarginValue: 200,
   marginFloor: 150,
-  defaultExchangeRate: 48.5,
   rfqCutOffHoursStandard: 24,
   rfqCutOffHoursUrgent: 6,
   earlyAwardingEnabled: true,
@@ -559,21 +558,10 @@ export function MaritimePipelineSettingsTab() {
             />
           </Field>
 
-          <Field label={(
-            <span>
-              {t('maritime_freight.maritime_pipeline_settings_tab.s38', "سعر الصرف الافتراضي")}
-              <span className="desktop-only-inline"> (USD / EGP)</span> *
-            </span>
-          )}>
-            <input
-              type="number"
-              step="0.1"
-              min={1}
-              value={config.defaultExchangeRate}
-              onChange={(e) => setConfig({ ...config, defaultExchangeRate: parseFloat(e.target.value) || 48.5 })}
-              style={{ width: '100%', height: '38px', borderRadius: '8px', border: '1px solid #cbd5e1', padding: '0 12px', fontSize: '0.85rem' }}
-            />
-          </Field>
+          <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.78rem', color: '#475569', alignSelf: 'end' }}>
+            <strong>{t('maritime_freight.maritime_pipeline_settings_tab.exchange_rate_note_title', "سعر الصرف للعروض الآلية:")}</strong>{' '}
+            {t('maritime_freight.maritime_pipeline_settings_tab.exchange_rate_note', "يُحلّ تلقائياً من سعر الصرف الحي المسجل في النظام عبر المحلل المشترك؛ لا يوجد سعر افتراضي ثابت، وإذا لم يكن السعر مسجلاً لا يصدر عرض آلي لذلك الطلب.")}
+          </div>
         </div>
 
         <div style={{ marginTop: '12px', background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.78rem', color: '#475569' }}>

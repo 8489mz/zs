@@ -204,6 +204,21 @@ export class MaritimeFreightService {
   }
 
   /**
+   * INV-MARITIME-AUTOQUOTE-SHARED-RESOLVER: the rate an automated
+   * quotation converts at. It is always the live registered rate
+   * from the shared resolver -- the base currency resolves to 1,
+   * and a currency with no registered rate fails closed. There is
+   * deliberately no default, no fallback and no hardcoded rate:
+   * the old 48.5 default priced real quotes at a rate that moved
+   * to 56 while the config still said 48.5. Callers that cannot
+   * afford a throw (the automated pipeline) catch it and skip
+   * that RFQ with a recorded reason instead of quoting blind.
+   */
+  async resolveAutoQuoteExchangeRate(tenantId: string, bidCurrency: string): Promise<number> {
+    return this.resolveFreightExchangeRate(tenantId, bidCurrency);
+  }
+
+  /**
    * Ensures hardcoded master catalog (14 shipping lines, 27 overseas agents, 18 ports)
    * is seeded for the specified tenant. If records are missing, it safely seeds them
    * without overwriting existing client modifications.
@@ -3927,7 +3942,11 @@ export class MaritimeFreightService {
 
     try {
       const parsed = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
-      return { ...DEFAULT_PIPELINE_CONFIG, ...parsed };
+      // A stored config may still carry the removed defaultExchangeRate
+      // key (auto-quotes used to read a hardcoded 48.5 from it); the
+      // key is dropped here so it can never resurface as a rate.
+      const { defaultExchangeRate: _legacyDefaultExchangeRate, ...rest } = parsed || {};
+      return { ...DEFAULT_PIPELINE_CONFIG, ...rest };
     } catch {
       return { ...DEFAULT_PIPELINE_CONFIG };
     }
@@ -3942,6 +3961,10 @@ export class MaritimeFreightService {
     const { tenantId } = requireTenantScope(auth);
     const current = await this.getTenantPipelineConfig(tenantId);
     const updated: MaritimePipelineConfig = { ...current, ...dto };
+    // Never persist the removed defaultExchangeRate key again, even
+    // if an old client still sends it: auto-quotes resolve the live
+    // rate through the shared resolver, never a stored default.
+    delete (updated as any).defaultExchangeRate;
 
     const existing = await this.db
       .selectFrom('settings')
@@ -4067,6 +4090,19 @@ export class MaritimeFreightService {
       const bestBid = earlyBid || sortedBids[0];
       if (!bestBid) continue;
 
+      // The quote's exchange rate is resolved BEFORE any award or
+      // quote write, through the shared resolver. A missing rate
+      // skips this RFQ only, with a recorded reason -- it never
+      // aborts the remaining RFQs and never falls back to a
+      // hardcoded rate.
+      let exchangeRate: number;
+      try {
+        exchangeRate = await this.resolveAutoQuoteExchangeRate(tenantId, bidCurrency);
+      } catch {
+        details.push(`طلب ${rfq.rfq_number}: لا يوجد سعر صرف مسجل لعملة العرض (${bidCurrency})؛ لم يصدر عرض آلي، سجّل السعر ثم أعد التشغيل`);
+        continue;
+      }
+
       try {
         // 1. Award bid
         await this.awardBid(auth, String(bestBid.id));
@@ -4107,7 +4143,7 @@ export class MaritimeFreightService {
           currency: bestBid.currency || 'USD',
           marginType,
           marginValue: marginType === 'percentage' ? config.defaultMarginValue : profit,
-          exchangeRate: bidCurrency === systemCurrency ? 1 : Number(config.defaultExchangeRate || 48.5),
+          exchangeRate,
           notes: `عرض صادر آلياً وفقاً لمسار الأتمتة (${config.automationMode === 'full_autonomous' ? 'أتمتة كاملة' : 'هجين ذكي'}). العرض الفائز من ${bestBid.shipping_line_name}`,
         });
         quotesGenerated++;

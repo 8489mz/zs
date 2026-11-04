@@ -115,7 +115,6 @@ export interface MaritimePipelineConfig {
   defaultMarginType: 'fixed' | 'percentage';
   defaultMarginValue: number;
   marginFloor: number;
-  defaultExchangeRate: number;
   rfqCutOffHoursStandard: number;
   rfqCutOffHoursUrgent: number;
   earlyAwardingEnabled: boolean;
@@ -135,7 +134,6 @@ export const DEFAULT_PIPELINE_CONFIG: MaritimePipelineConfig = {
   defaultMarginType: 'fixed',
   defaultMarginValue: 200,
   marginFloor: 150,
-  defaultExchangeRate: 48.5,
   rfqCutOffHoursStandard: 24,
   rfqCutOffHoursUrgent: 6,
   earlyAwardingEnabled: true,
