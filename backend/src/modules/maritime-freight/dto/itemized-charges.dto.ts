@@ -44,6 +44,10 @@ export class QuotationChargeDto {
 }
 
 export class JobChargeDto {
+  @IsNumber()
+  @IsOptional()
+  id?: number;
+
   @IsString()
   @IsNotEmpty()
   chargeCode!: string;

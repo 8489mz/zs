@@ -39,7 +39,7 @@ export function JobChargesTab({ job, onUpdated }: Props) {
     sellAmount: '',
     taxRatePercent: '0',
     isLocalCharge: false,
-    isInvoiced: true,
+    isInvoiced: false,
   });
 
   useEffect(() => {
@@ -57,6 +57,27 @@ export function JobChargesTab({ job, onUpdated }: Props) {
       setLoading(false);
     }
   };
+
+  // INV-MARITIME-CHARGE-GRID-LINE-UPDATES: the grid sends the
+  // backend's own DTO shape -- stored rows keep their id so the
+  // backend updates line by line and preserves invoiced rows,
+  // and rows arrive snake_case from getJobCharges, so both
+  // casings are mapped. A new row never claims isInvoiced: the
+  // flag comes only from the invoicing flow.
+  const toChargePayload = (c: any) => ({
+    id: c.id,
+    chargeCode: c.charge_code || c.chargeCode,
+    chargeNameAr: c.charge_name_ar || c.chargeNameAr,
+    chargeNameEn: c.charge_name_en || c.chargeNameEn,
+    currency: c.currency,
+    costAmount: Number(c.cost_amount ?? c.costAmount ?? 0),
+    sellAmount: Number(c.sell_amount ?? c.sellAmount ?? 0),
+    profitAmount: Number(c.profit_amount ?? c.profitAmount ?? 0),
+    isLocalCharge: Boolean(c.is_local_charge ?? c.isLocalCharge),
+    taxRatePercent: Number(c.tax_rate_percent ?? c.taxRatePercent ?? 0),
+    taxAmount: Number(c.tax_amount ?? c.taxAmount ?? 0),
+    isInvoiced: Boolean(c.is_invoiced ?? c.isInvoiced ?? false),
+  });
 
   const handleAddCharge = async () => {
     const cost = Number(form.costAmount || 0);
@@ -79,7 +100,7 @@ export function JobChargesTab({ job, onUpdated }: Props) {
       isInvoiced: form.isInvoiced,
     };
 
-    const updatedList = [...charges, newCharge];
+    const updatedList = [...charges, newCharge].map(toChargePayload);
     try {
       setIsSaving(true);
       await maritimeApi.updateJobCharges(job.id, updatedList);
@@ -94,7 +115,7 @@ export function JobChargesTab({ job, onUpdated }: Props) {
         sellAmount: '',
         taxRatePercent: '0',
         isLocalCharge: false,
-        isInvoiced: true,
+        isInvoiced: false,
       });
       fetchCharges();
       onUpdated();
@@ -106,7 +127,7 @@ export function JobChargesTab({ job, onUpdated }: Props) {
   };
 
   const handleDeleteCharge = async (index: number) => {
-    const updatedList = charges.filter((_, idx) => idx !== index);
+    const updatedList = charges.filter((_, idx) => idx !== index).map(toChargePayload);
     try {
       await maritimeApi.updateJobCharges(job.id, updatedList);
       toast.success('تم حذف بند الرسوم');

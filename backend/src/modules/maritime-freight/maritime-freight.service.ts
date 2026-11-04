@@ -5931,6 +5931,25 @@ export class MaritimeFreightService {
       .execute();
   }
 
+  /**
+   * INV-MARITIME-CHARGE-GRID-LINE-UPDATES: the charge grid updates
+   * line by line, keyed by the stored row id -- never
+   * delete-all + reinsert, which destroyed invoiced history on
+   * every save. The stored is_invoiced flag is authoritative:
+   * a caller-supplied isInvoiced is IGNORED on existing rows
+   * (an invoiced row is left byte-untouched however the payload
+   * revalues it, so a round-tripped float can never rewrite
+   * invoiced history) and REJECTED on new rows (a new row
+   * cannot invent invoiced history). Rows with an id that does
+   * not belong to this job, and duplicate ids in one payload,
+   * are rejected. Stored rows absent from the payload are
+   * deleted EXCEPT invoiced rows, which survive omission. The
+   * marked-total guard runs over the STORED invoiced rows after
+   * the update (converted through the shared resolver on the
+   * transaction handle -- never the pool handle inside the
+   * transaction), against the posted maritime_job revenue.
+   * A completed job still rejects the whole update first.
+   */
   async updateJobCharges(auth: AuthContext, jobId: string | number, dto: UpdateJobChargesDto) {
     const { tenantId } = requireTenantScope(auth);
     const job = await this.getJobById(auth, String(jobId));
@@ -5938,8 +5957,101 @@ export class MaritimeFreightService {
       throw new BadRequestException('أعد فتح الشحنة قبل تعديل مصروفاتها ورسومها');
     }
     return await this.db.transaction().execute(async (trx) => {
-      const invoicedCharges = dto.charges.filter((charge) => charge.isInvoiced);
-      if (invoicedCharges.length > 0) {
+      const stored = await trx
+        .selectFrom('maritime_job_charges')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('job_id', '=', String(jobId))
+        .forUpdate()
+        .execute();
+      const storedById = new Map(stored.map((row) => [String(row.id), row]));
+
+      const seenIds = new Set<string>();
+      for (const charge of dto.charges) {
+        if (charge.id == null) continue;
+        const key = String(charge.id);
+        if (seenIds.has(key)) {
+          throw new BadRequestException('بند التكلفة مكرر في نفس الحفظ؛ كل بند يظهر مرة واحدة فقط');
+        }
+        seenIds.add(key);
+        if (!storedById.has(key)) {
+          throw new NotFoundException('بند التكلفة غير موجود في هذه الشحنة');
+        }
+      }
+
+      const computeValues = (chg: JobChargeDto) => {
+        const cost = Number(chg.costAmount || 0);
+        const sell = Number(chg.sellAmount || 0);
+        const profit = Number(chg.profitAmount ?? (sell - cost));
+        const taxPct = Number(chg.taxRatePercent || 0);
+        const taxAmt = Number(chg.taxAmount ?? (sell * taxPct / 100));
+        return {
+          charge_code: chg.chargeCode || 'CHG',
+          charge_name_ar: chg.chargeNameAr || 'رسوم نولون / خدمات',
+          charge_name_en: chg.chargeNameEn || 'Freight / Logistics Charge',
+          currency: chg.currency || 'USD',
+          cost_amount: cost,
+          sell_amount: sell,
+          profit_amount: profit,
+          is_local_charge: Boolean(chg.isLocalCharge),
+          tax_rate_percent: taxPct,
+          tax_amount: taxAmt,
+        };
+      };
+
+      const keptIds = new Set<string>();
+      for (const chg of dto.charges) {
+        if (chg.id != null) {
+          const key = String(chg.id);
+          keptIds.add(key);
+          const row = storedById.get(key)!;
+          // Invoiced rows are frozen: the stored flag stands and
+          // the row is left byte-untouched whatever the payload
+          // claims about its amounts or its invoiced flag.
+          if (row.is_invoiced) continue;
+          await trx
+            .updateTable('maritime_job_charges')
+            .set(computeValues(chg))
+            .where('tenant_id', '=', tenantId)
+            .where('job_id', '=', String(jobId))
+            .where('id', '=', String(chg.id))
+            .execute();
+        } else {
+          // A new row cannot arrive already invoiced: the flag
+          // comes only from the invoicing flow itself.
+          if (chg.isInvoiced) {
+            throw new BadRequestException('لا يمكن إنشاء بند جديد موسوماً كمفوتر؛ الوسم يأتي من الفوترة فقط');
+          }
+          await trx
+            .insertInto('maritime_job_charges')
+            .values({
+              tenant_id: tenantId,
+              job_id: String(jobId),
+              ...computeValues(chg),
+              is_invoiced: false,
+            })
+            .execute();
+        }
+      }
+
+      const omitted = stored.filter((row) => !keptIds.has(String(row.id)) && !row.is_invoiced);
+      if (omitted.length > 0) {
+        await trx
+          .deleteFrom('maritime_job_charges')
+          .where('tenant_id', '=', tenantId)
+          .where('job_id', '=', String(jobId))
+          .where('id', 'in', omitted.map((row) => String(row.id)))
+          .execute();
+      }
+
+      const invoicedRows = await trx
+        .selectFrom('maritime_job_charges')
+        .select(['sell_amount', 'currency'])
+        .where('tenant_id', '=', tenantId)
+        .where('job_id', '=', String(jobId))
+        .where('is_invoiced', '=', true)
+        .execute();
+      if (invoicedRows.length > 0) {
         const posted = await trx.selectFrom('journal_entries as je')
           .innerJoin('journal_entry_lines as jl', (join: any) => join.onRef('jl.journal_entry_id', '=', 'je.id').onRef('jl.tenant_id', '=', 'je.tenant_id'))
           .select(sql<number>`COALESCE(SUM(jl.credit), 0)`.as('amount'))
@@ -5947,48 +6059,16 @@ export class MaritimeFreightService {
           .where('je.source_type', '=', 'maritime_job').where('je.status', '=', 'posted')
           .executeTakeFirst();
         let markedTotal = 0;
-        for (const charge of invoicedCharges) {
-          if (Number(charge.sellAmount || 0) <= 0) {
+        for (const row of invoicedRows) {
+          if (Number(row.sell_amount || 0) <= 0) {
             throw new BadRequestException('لا يمكن وسم بند تكلفة مفوتر دون مبلغ بيع للعميل');
           }
-          markedTotal += Number(charge.sellAmount) *
-            await this.resolveFreightExchangeRate(tenantId, charge.currency || 'USD');
+          markedTotal += Number(row.sell_amount) *
+            await resolveFxRate(trx, tenantId, row.currency || 'USD');
         }
         if (markedTotal > Number(posted?.amount || 0) + 0.01) {
           throw new BadRequestException('البنود الموسومة مفوترة تتجاوز فواتير العميل المرحلة فعلياً');
         }
-      }
-      await trx
-        .deleteFrom('maritime_job_charges')
-        .where('tenant_id', '=', tenantId)
-        .where('job_id', '=', String(jobId))
-        .execute();
-
-      for (const chg of dto.charges) {
-        const cost = Number(chg.costAmount || 0);
-        const sell = Number(chg.sellAmount || 0);
-        const profit = Number(chg.profitAmount ?? (sell - cost));
-        const taxPct = Number(chg.taxRatePercent || 0);
-        const taxAmt = Number(chg.taxAmount ?? (sell * taxPct / 100));
-
-        await trx
-          .insertInto('maritime_job_charges')
-          .values({
-            tenant_id: tenantId,
-            job_id: String(jobId),
-            charge_code: chg.chargeCode || 'CHG',
-            charge_name_ar: chg.chargeNameAr || 'رسوم نولون / خدمات',
-            charge_name_en: chg.chargeNameEn || 'Freight / Logistics Charge',
-            currency: chg.currency || 'USD',
-            cost_amount: cost,
-            sell_amount: sell,
-            profit_amount: profit,
-            is_local_charge: Boolean(chg.isLocalCharge),
-            tax_rate_percent: taxPct,
-            tax_amount: taxAmt,
-            is_invoiced: Boolean(chg.isInvoiced),
-          })
-          .execute();
       }
 
       return await trx
