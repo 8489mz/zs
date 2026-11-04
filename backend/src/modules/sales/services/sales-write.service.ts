@@ -2368,6 +2368,8 @@ export class SalesWriteService {
     if (!isAdmin && !managerPin) throw new AppError('رمز اعتماد المدير مطلوب قبل تعديل الفاتورة.', 'MANAGER_AUTH_REQUIRED', 400);
     if (!isAdmin || managerPin) await this.authz.authorizeDiscountOverride(managerPin, auth, this.db);
 
+    let postCloseEdit = false;
+    let postCloseShiftId: number | null = null;
     await this.tx.runInTransaction(this.db, async (trx) => {
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
       const sale = await trx
@@ -2406,7 +2408,19 @@ export class SalesWriteService {
         ? shiftBase.where('branch_id', 'is', null)
         : shiftBase.where('branch_id', '=', sale.branch_id))
         .orderBy('id', 'desc').forUpdate().executeTakeFirst();
-      if (originalShift && (originalShift.status !== 'open' || Number(originalShift.opened_by) !== auth.userId)) {
+      // INV-SPIRIT-POST-CLOSE-EDIT: editing after the original shift closed
+      // (closed or pending_review) is allowed with manager PIN/password +
+      // reason, and is recorded as post-close below; the closed shift's
+      // stored expected cash is frozen and never restated. An OPEN shift
+      // belonging to another cashier still blocks the edit, and a missing
+      // original shift for a POS sale still blocks it (fail closed).
+      postCloseEdit = originalShift ? String(originalShift.status || '') !== 'open' : false;
+      postCloseShiftId = postCloseEdit && originalShift ? Number(originalShift.id) : null;
+      if (postCloseEdit) {
+        if (!managerPin) throw new AppError('رمز اعتماد المدير مطلوب قبل تعديل فاتورة بعد إغلاق ورديتها.', 'MANAGER_AUTH_REQUIRED', 400);
+        await this.authz.authorizeDiscountOverride(managerPin, auth, trx);
+      }
+      if (originalShift && !postCloseEdit && Number(originalShift.opened_by) !== auth.userId) {
         throw new AppError(
           'لا يمكن تعديل فاتورة تخص وردية مقفولة أو وردية كاشير آخر؛ استخدم مستند مرتجع أو تسوية',
           'SALE_EDIT_ORIGINAL_SHIFT_LOCKED', 422,
@@ -3482,10 +3496,18 @@ export class SalesWriteService {
         await this.finance.addTreasuryTransaction(trx, payment.amount, `تعديل فاتورة بيع S-${saleId}`, saleId, auth, normalized.branchId, normalized.locationId);
       }
 
+      if (postCloseEdit) {
+        await trx.insertInto('pos_audit_events').values({
+          tenant_id: scope.tenantId, account_id: scope.accountId, event_type: 'sale_edit_post_close',
+          user_id: auth.userId, sale_id: saleId, product_id: null, amount: Number(sale.total || 0),
+          reason: editReason, metadata: { postClose: true, originalShiftId: postCloseShiftId, managerApproved: true },
+        }).execute();
+      }
+
       await this.accountingPosting.postSaleEdit(trx, saleId, auth, editReason, preparedWasteEdit ? { preparedWaste: preparedWasteEdit } : undefined);
     });
 
-    await this.audit.log('تعديل فاتورة بيع', `تم تعديل الفاتورة S-${saleId} بواسطة ${auth.username} | السبب: ${editReason}`, auth);
+    await this.audit.log('تعديل فاتورة بيع', `تم تعديل الفاتورة S-${saleId} بواسطة ${auth.username} | السبب: ${editReason}${postCloseEdit ? ` | تعديل بعد إغلاق الوردية الأصلية #${postCloseShiftId}` : ''}`, auth);
     const sale = await this.query.getSaleById(saleId, auth);
     return { ok: true, sale: sale.sale };
   }
@@ -3565,6 +3587,20 @@ export class SalesWriteService {
       if (sale.exchange_return_id) throw new AppError('فاتورة استبدال مترابطة؛ استخدم مرتجعاً بدلاً من إلغائها', 'EXCHANGE_IMMUTABLE', 422);
       if (sale.status === 'cancelled') throw new AppError('Sale already cancelled', 'SALE_ALREADY_CANCELLED', 400);
       if (sale.status !== 'posted') throw new AppError('Only posted sales can be cancelled', 'SALE_CANCEL_STATUS_FORBIDDEN', 400);
+      // INV-SPIRIT-POST-CLOSE-EDIT: cancelling after the original shift
+      // closed was never blocked; the post-close fact is recorded in the
+      // audit event below so the closed shift's history is never silently
+      // rewritten. Cash attribution for a closed original shift already
+      // falls back to the cancelling user's open shift (see below).
+      const cancelOriginalShift = await trx.selectFrom('cashier_shifts').select(['id', 'status'])
+        .where('tenant_id', '=', scope.tenantId)
+        .where('opened_by', '=', Number(sale.created_by || 0))
+        .where('created_at', '<=', sale.created_at)
+        .where(sql<boolean>`(closed_at is null or closed_at >= ${sale.created_at})`)
+        .where(sql<boolean>`(${sale.branch_id}::int is null or branch_id is null or branch_id = ${sale.branch_id})`)
+        .orderBy('id', 'desc').executeTakeFirst();
+      const postCloseCancel = cancelOriginalShift ? String(cancelOriginalShift.status || '') !== 'open' : false;
+      const postCloseCancelShiftId = postCloseCancel && cancelOriginalShift ? Number(cancelOriginalShift.id) : null;
       // Same immutability as the edit path: cancelling a signed invoice
       // would reverse books the signed attestation still describes.
       assertSaleNotZatcaSigned((sale as any).zatca_status);
@@ -3904,7 +3940,7 @@ export class SalesWriteService {
       await trx.insertInto('pos_audit_events').values({
         tenant_id: scope.tenantId, account_id: scope.accountId, event_type: 'invoice_cancel',
         user_id: auth.userId, sale_id: saleId, product_id: null, amount: Number(sale.total || 0),
-        reason: String(reason || '').trim(), metadata: { managerApproved: true },
+        reason: String(reason || '').trim(), metadata: { managerApproved: true, ...(postCloseCancel ? { postClose: true, originalShiftId: postCloseCancelShiftId } : {}) },
       }).execute();
 
       try {
