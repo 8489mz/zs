@@ -1,4 +1,5 @@
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { lockAccountingPeriod } from '../../accounting/accounting-period-lock';
 import { BadRequestException, Inject, Injectable, Logger, NotFoundException, Optional, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
@@ -1544,9 +1545,8 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     const scope = requireTenantScope(auth);
     if (!input.settlementId?.trim() || !['amazon', 'noon'].includes(input.marketplace)) throw new BadRequestException('معرف الكشف والمنصة مطلوبان.');
     const amounts = [input.grossSales, input.referralFees || 0, input.fulfillmentFees || 0, input.refunds || 0, input.storageOrOtherFees || 0, input.netPayout].map(Number);
-    if (amounts.some(value => !Number.isFinite(value) || value < 0 || Math.abs(value * 100 - Math.round(value * 100)) > 0.000001) || amounts[0] <= 0) throw new BadRequestException('مبالغ الكشف يجب أن تكون موجبة وبمنزلتين عشريتين.');
+    if (amounts.some(value => !Number.isFinite(value) || value < 0) || amounts[0] <= 0) throw new BadRequestException('مبالغ الكشف يجب أن تكون موجبة.');
     const [gross, referral, fulfillment, refunds, other, net] = amounts;
-    if (Math.round(gross * 100) !== Math.round((referral + fulfillment + refunds + other + net) * 100)) throw new BadRequestException('إجمالي المبيعات لا يطابق صافي التحويل والرسوم والمرتجعات.');
     const bankId = await this.resolveAccountingAccount(scope.tenantId, input.bankAccountId, ['1120', '1110'], 'asset');
     const referralId = await this.resolveAccountingAccount(scope.tenantId, input.referralFeesAccountId, ['6400', '6700'], 'expense');
     const fulfillmentId = await this.resolveAccountingAccount(scope.tenantId, input.fulfillmentFeesAccountId, ['6400', '6700'], 'expense');
@@ -1557,6 +1557,16 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
       await lockAccountingPeriod(trx, scope.tenantId);
       const base = await tenantBaseCurrency(trx, scope.tenantId);
       if (input.currency && input.currency !== base) throw new BadRequestException('يجب تسوية الكشف بقيم عملة الأساس؛ لا يجوز خلط العملات دون مستند تحويل.');
+      // INV-MARKETPLACE-SETTLEMENT-BOOK-DIGITS: the precision
+      // gate and the gross-vs-parts identity are checked at the
+      // tenant's book digits (3 for KWD/OMR/BHD/JOD/TND/IQD/LYD,
+      // 2 otherwise), inside the transaction once the base
+      // currency is known. A hardcoded 2-decimal gate rejected
+      // every 3-decimal settlement outright.
+      const digits = currencyMoneyDigits(base);
+      const scale = 10 ** digits;
+      if (amounts.some(value => Math.abs(value * scale - Math.round(value * scale)) > 0.000001)) throw new BadRequestException('مبالغ الكشف يجب أن تكون بدقة عملة الأساس.');
+      if (Math.round(gross * scale) !== Math.round((referral + fulfillment + refunds + other + net) * scale)) throw new BadRequestException('إجمالي المبيعات لا يطابق صافي التحويل والرسوم والمرتجعات.');
       const prior = await sql<{ payload: MarketplaceSettlementRecord }>`select payload from accounting_marketplace_settlements
         where tenant_id = ${scope.tenantId} and marketplace = ${input.marketplace} and settlement_key = ${input.settlementId} for update`.execute(trx);
       if (prior.rows[0]) {
