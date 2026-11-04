@@ -6,7 +6,7 @@ import { lockAccountingPeriod } from '../accounting/accounting-period-lock';
 import { resolveFxRate } from '../accounting/fx-rate-resolution';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { convertFxAmount } from '../accounting/engines/fx-conversion.engine';
-import { currencyMoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { Inject, Injectable, Logger, NotFoundException, BadRequestException, UnprocessableEntityException } from '@nestjs/common';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Kysely, sql } from '../../database/kysely';
@@ -3394,12 +3394,67 @@ export class MaritimeFreightService {
     await assertBusinessAccountingDate(trx, tenantId, entryDate);
   }
 
+  /**
+   * INV-MARITIME-CUSTOMER-LEDGER-ON-INVOICE: a job sales invoice
+   * maintains the customer subledger in the same transaction as its
+   * journal, on the sales pattern (customers.balance plus one
+   * customer_ledger row, entry_type 'sale_credit', the posted
+   * base-currency amount at book digits). Without this the settle
+   * guard's GL-vs-balance equality could never hold after a
+   * maritime invoice, so settle-from-balance could never succeed.
+   * Deliberately no credit-limit/block gating: the sales helper's
+   * gating is a further behavioural choice that was not decided
+   * here, so issuing an invoice never newly blocks on it. A job
+   * with no linked customer writes nothing (settle requires a
+   * customer anyway); a linked customer that does not exist fails
+   * closed and rolls the journal back with it. Supplier-ledger
+   * writes are NOT added here: they were not decided.
+   */
+  private async maintainCustomerLedgerForInvoice(
+    trx: any,
+    tenantId: string,
+    accountId: string,
+    job: { id: number | string; customer_id?: number | string | null; job_number?: string | null },
+    baseInvoiceAmount: number,
+    digits: MoneyDigits,
+    auth: AuthContext,
+  ): Promise<void> {
+    if (!job.customer_id) return;
+    const customerId = Number(job.customer_id);
+    const [updated] = await trx
+      .updateTable('customers')
+      .set({ balance: sql`COALESCE(balance, 0) + ${baseInvoiceAmount}`, updated_at: sql`NOW()` })
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', customerId)
+      .returning(['balance'])
+      .execute();
+    if (!updated) {
+      throw new BadRequestException('تعذر إصدار فاتورة المبيعات: العميل المرتبط بالشحنة غير موجود.');
+    }
+    const balanceAfter = roundMoney(Number(updated.balance), digits);
+    await trx
+      .insertInto('customer_ledger')
+      .values({
+        tenant_id: tenantId,
+        account_id: accountId,
+        customer_id: customerId,
+        entry_type: 'sale_credit',
+        amount: baseInvoiceAmount,
+        balance_after: balanceAfter,
+        note: `فاتورة مبيعات ملاحية - العملية #${job.job_number || job.id}`,
+        reference_type: 'maritime_job',
+        reference_id: Number(job.id),
+        created_by: auth.userId ? Number(auth.userId) : null,
+      } as any)
+      .execute();
+  }
+
   async issueJobSalesInvoice(
     auth: AuthContext,
     jobId: string,
     dto?: { amount?: number; notes?: string; exchangeRate?: number; currency?: string },
   ) {
-    const { tenantId } = requireTenantScope(auth);
+    const { tenantId, accountId } = requireTenantScope(auth);
     let job = await this.getJobById(auth, jobId);
 
     // 1. Ensure cost center exists
@@ -3499,6 +3554,12 @@ export class MaritimeFreightService {
         .where('id', '=', job.id as any)
         .returningAll()
         .execute();
+
+      // INV-MARITIME-CUSTOMER-LEDGER-ON-INVOICE: the same
+      // transaction maintains the customer subledger, so the
+      // posted GL partner sum and customers.balance can never
+      // diverge on an issued invoice.
+      await this.maintainCustomerLedgerForInvoice(trx, tenantId, accountId, job, baseInvoiceAmount, digits, auth);
 
       return { updatedJob: updated, entryId: newEntryId, entryNo: newEntryNo };
     });
