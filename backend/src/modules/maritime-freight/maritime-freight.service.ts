@@ -3103,6 +3103,108 @@ export class MaritimeFreightService {
     });
   }
 
+  /**
+   * INV-MARITIME-DEMURRAGE-AUTO-PLUS-MANUAL: the demurrage
+   * scan creates ONE auto DEM charge per overdue container
+   * at the live shared-resolver rate, and staff may also
+   * enter demurrage manually -- both coexist, never
+   * double-charging the same container. The container rate
+   * is USD/day (the import module treats the same column as
+   * ratePerDayUsd, and the column carries no currency); the
+   * charge is converted to the tenant base currency at book
+   * digits through the shared resolver, failing closed (no
+   * charge, exposure amount still updated by the scan) when
+   * no live USD rate is registered. A DEM/DETENTION charge
+   * whose name already carries this container number
+   * suppresses creation: a manual row stands untouched, an
+   * invoiced auto row stays frozen, and an uninvoiced auto
+   * row is re-derived to the new converted amount as
+   * overdue days grow. Completed jobs get no charge. A
+   * zero/unset rate creates no charge and invents no rate.
+   * Staff override path: delete the uninvoiced auto row in
+   * the charge grid and add a manual DEM row naming the
+   * container -- the next scan then leaves it alone.
+   */
+  async syncDemurrageChargeForContainer(
+    tenantId: string,
+    jobId: string | number,
+    containerNumber: string,
+    amountUsd: number,
+  ): Promise<'created' | 'updated' | 'skipped'> {
+    const jobIdStr = String(jobId);
+    const numberKey = String(containerNumber || '').trim().toUpperCase();
+    if (!(amountUsd > 0) || !numberKey) return 'skipped';
+    const job = await this.db
+      .selectFrom('maritime_jobs')
+      .select(['status'])
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', jobIdStr)
+      .executeTakeFirst();
+    if (!job || job.status === 'completed') return 'skipped';
+
+    const baseCurrency = await tenantBaseCurrency(this.db, tenantId);
+    let rate: number;
+    try {
+      rate = await resolveFxRate(this.db, tenantId, 'USD');
+    } catch (err: any) {
+      this.logger.warn(`Demurrage auto-charge skipped for container ${containerNumber} (job ${jobIdStr}): no live USD rate -- ${err?.message}`);
+      return 'skipped';
+    }
+    const converted = convertFxAmount(amountUsd, rate, currencyMoneyDigits(baseCurrency));
+
+    const existing = await this.db
+      .selectFrom('maritime_job_charges')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .where('job_id', '=', jobIdStr)
+      .execute();
+    const match = existing.find((row) => {
+      const names = `${row.charge_name_en || ''} ${row.charge_name_ar || ''}`.toUpperCase();
+      return /DEM|DETENTION/i.test(`${row.charge_code || ''} ${names}`) && names.includes(numberKey);
+    });
+    if (match) {
+      const isAutoRow = String(match.charge_name_en || '').startsWith('Demurrage (auto)');
+      if (isAutoRow && !match.is_invoiced) {
+        await this.db
+          .updateTable('maritime_job_charges')
+          .set({
+            currency: baseCurrency,
+            cost_amount: converted,
+            sell_amount: converted,
+            profit_amount: 0,
+            tax_rate_percent: 0,
+            tax_amount: 0,
+          })
+          .where('tenant_id', '=', tenantId)
+          .where('job_id', '=', jobIdStr)
+          .where('id', '=', String(match.id))
+          .execute();
+        return 'updated';
+      }
+      return 'skipped';
+    }
+
+    await this.db
+      .insertInto('maritime_job_charges')
+      .values({
+        tenant_id: tenantId,
+        job_id: jobIdStr,
+        charge_code: 'DEM',
+        charge_name_ar: `غرامة تأخير تلقائية — ${containerNumber}`,
+        charge_name_en: `Demurrage (auto) — ${containerNumber}`,
+        currency: baseCurrency,
+        cost_amount: converted,
+        sell_amount: converted,
+        profit_amount: 0,
+        is_local_charge: false,
+        tax_rate_percent: 0,
+        tax_amount: 0,
+        is_invoiced: false,
+      })
+      .execute();
+    return 'created';
+  }
+
   async updateContainer(auth: AuthContext, containerId: string, dto: UpdateMaritimeContainerDto) {
     const { tenantId } = requireTenantScope(auth);
     return await this.db.transaction().execute(async (trx) => {

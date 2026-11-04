@@ -162,9 +162,11 @@ export class MaritimeAutomationSchedulerService implements OnApplicationBootstra
         const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
         if (daysRemaining < 0) {
-          // Overdue
+          // Overdue. The container rate is USD/day and a
+          // zero/unset rate means no charge is invented: the
+          // exposure amount is 0 and no DEM row is created.
           const overdueDays = Math.abs(daysRemaining);
-          const rate = Number(c.demurrage_rate_per_day || 50);
+          const rate = Number(c.demurrage_rate_per_day || 0);
           const demurrageAmount = overdueDays * rate;
 
           await this.db
@@ -178,6 +180,22 @@ export class MaritimeAutomationSchedulerService implements OnApplicationBootstra
             .where('id', '=', c.id as any)
             .where('tenant_id', '=', c.tenant_id)
             .execute();
+
+          // INV-MARITIME-DEMURRAGE-AUTO-PLUS-MANUAL: one auto
+          // DEM charge per overdue container at the live rate,
+          // coexisting with manual rows. Isolated per
+          // container so one failure never aborts the scan;
+          // the exposure amount above is already updated.
+          try {
+            await this.freightService.syncDemurrageChargeForContainer(
+              c.tenant_id,
+              c.job_id as any,
+              c.container_number,
+              demurrageAmount,
+            );
+          } catch (err: any) {
+            this.logger.warn(`Demurrage auto-charge failed for container ${c.container_number} (job ${c.job_id}): ${err?.message}`);
+          }
         } else {
           // Within safe or warning window
           if (c.is_overdue) {
