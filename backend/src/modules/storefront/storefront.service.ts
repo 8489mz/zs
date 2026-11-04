@@ -3148,7 +3148,16 @@ export class StorefrontService {
       .executeTakeFirst();
 
     const branchId = targetBranchId;
-    const locationId = order.reserved_location_id || branch?.default_stock_location_id || 1;
+    // INV-STOREFRONT-LOCATION-FALLBACK-FAIL-CLOSED: never fall
+    // back to location id 1. With no reserved location and no
+    // branch default, conversion used to deduct silently from
+    // whatever location 1 is -- a false shortage there and a
+    // false surplus at the real location. Fail closed instead,
+    // naming the branch default as the remedy.
+    const locationId = order.reserved_location_id || branch?.default_stock_location_id;
+    if (!locationId) {
+      throw new BadRequestException('لا يمكن تحويل الطلب إلى فاتورة: الفرع ليس له مكان مخزون افتراضي ولم يتم حجز مكان للطلب — حدد مكان المخزون الافتراضي للفرع أولاً');
+    }
 
     const isDineIn = order.order_type === 'dine_in' || order.fulfillment_type === 'dine_in';
     const isPickup = order.fulfillment_type === 'pickup' || order.order_type === 'pickup';
