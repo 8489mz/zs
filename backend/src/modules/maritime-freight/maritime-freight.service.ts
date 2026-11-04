@@ -4491,6 +4491,13 @@ export class MaritimeFreightService {
   // value, and duty amounts a real place to live and be totalled, so a shipment's
   // landed cost is complete. Government EDI filing needs a broker/authority
   // integration and credentials this session does not have (O18).
+  //
+  // INV-MARITIME-CUSTOMS-DUTY-BOOK-DIGITS: the status machine is
+  // permissive-forward and strict-backward. 'cleared' is terminal
+  // because clearance posts money to the ledger; a cleared
+  // declaration can never move again. Same-status transitions
+  // are not listed: a retried request gets a clear error naming
+  // both states instead of a silent no-op.
 
   private mapCustomsDeclarationRow(r: any) {
     return {
@@ -4577,10 +4584,15 @@ export class MaritimeFreightService {
       const items = dto.items || [];
       let totalCustomsValue = 0;
       let totalDutyAmount = 0;
+      // INV-MARITIME-CUSTOMS-DUTY-BOOK-DIGITS: every line duty is
+      // rounded once at the tenant's book digits -- never the
+      // hardcoded 2dp the code used to apply -- and the header
+      // total is the sum of the rounded lines.
+      const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
       const computedItems = items.map((item) => {
         const customsValue = Number(item.customsValue || 0);
         const dutyRatePercent = Number(item.dutyRatePercent || 0);
-        const dutyAmount = Math.round(customsValue * (dutyRatePercent / 100) * 100) / 100;
+        const dutyAmount = roundMoney(customsValue * (dutyRatePercent / 100), digits);
         totalCustomsValue += customsValue;
         totalDutyAmount += dutyAmount;
         return { ...item, dutyAmount };
@@ -4648,7 +4660,8 @@ export class MaritimeFreightService {
 
       const customsValue = Number(dto.customsValue || 0);
       const dutyRatePercent = Number(dto.dutyRatePercent || 0);
-      const dutyAmount = Math.round(customsValue * (dutyRatePercent / 100) * 100) / 100;
+      const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
+      const dutyAmount = roundMoney(customsValue * (dutyRatePercent / 100), digits);
 
       const itemRow = await trx
         .insertInto('maritime_customs_declaration_items')
@@ -4682,23 +4695,134 @@ export class MaritimeFreightService {
     });
   }
 
-  async updateCustomsDeclarationStatus(auth: AuthContext, id: string, dto: UpdateCustomsDeclarationStatusDto) {
-    const { tenantId } = requireTenantScope(auth);
-    const updatePayload: any = { status: dto.status, updated_at: sql`NOW()` };
-    if (dto.declarationNumber) updatePayload.declaration_number = dto.declarationNumber;
-    if (dto.status === 'submitted') updatePayload.submitted_date = new Date().toISOString().slice(0, 10);
-    if (dto.status === 'cleared') updatePayload.cleared_date = new Date().toISOString().slice(0, 10);
-
-    const [updated] = await this.db
-      .updateTable('maritime_customs_declarations')
-      .set(updatePayload)
+  /**
+   * INV-MARITIME-CUSTOMS-DUTY-BOOK-DIGITS: the duty posted when a
+   * declaration clears. The stored total duty converts from the
+   * declaration currency through the shared resolver at book
+   * digits (fail closed when no rate is registered -- money tier
+   * strict), posts Dr 6400 (fallback 5100) / Cr 2110 with the
+   * job's cost center and partnerType 'none' (the supplier
+   * subledger is not written: not decided), and rolls into the
+   * job's other_costs_total / net_profit by the same formula
+   * the carrier-invoice and close postings use. A posted
+   * clearance journal for the same declaration is never posted
+   * twice, and a zero duty posts nothing. Runs inside the
+   * caller's transaction, so a failed posting rolls the status
+   * change back with it: a declaration is never 'cleared' with
+   * no journal behind it.
+   */
+  private async postCustomsDutyAtClearance(
+    trx: any,
+    tenantId: string,
+    accountId: string,
+    declaration: any,
+    auth: AuthContext,
+  ): Promise<number | null> {
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
+    const totalDuty = roundMoney(Number(declaration.total_duty_amount || 0), digits);
+    if (!(totalDuty > 0)) return null;
+    if (await this.hasPostedCloseJournal(trx, tenantId, 'maritime_customs_declaration', Number(declaration.id))) {
+      return null;
+    }
+    const rate = await resolveFxRate(trx, tenantId, declaration.currency || undefined);
+    const baseDuty = convertFxAmount(totalDuty, rate, digits);
+    if (!(baseDuty > 0)) return null;
+    const expenseId = await this.resolveMaritimeAccountIdOn(trx, tenantId, '6400', '5100');
+    const payableId = await this.resolveMaritimeAccountIdOn(trx, tenantId, '2110');
+    if (!expenseId || !payableId) {
+      throw new BadRequestException('تعذر ترحيل الرسوم الجمركية عند التخليص: حساب المصروف (6400/5100) أو الذمم الدائنة (2110) غير متاح.');
+    }
+    const job = await trx
+      .selectFrom('maritime_jobs')
+      .select(['cost_center_id', 'client_invoiced_total', 'carrier_cost_total', 'other_costs_total'])
       .where('tenant_id', '=', tenantId)
-      .where('id', '=', id as any)
-      .returningAll()
-      .execute();
+      .where('id', '=', declaration.job_id as any)
+      .executeTakeFirst();
+    const description = `رسوم جمركية عند التخليص - البيان ${declaration.declaration_number || declaration.id}`;
+    const entryId = await this.accountingPosting.postDomainJournal(trx, {
+      tenantId,
+      accountId,
+      entryDate: new Date(),
+      description,
+      sourceType: 'maritime_customs_declaration',
+      sourceId: Number(declaration.id),
+      createdBy: auth.userId || null,
+      lines: [
+        {
+          accountId: expenseId,
+          debit: baseDuty,
+          credit: 0,
+          costCenterId: job?.cost_center_id ? Number(job.cost_center_id) : null,
+          description,
+          partnerType: 'none' as const,
+          partnerId: null,
+        },
+        {
+          accountId: payableId,
+          debit: 0,
+          credit: baseDuty,
+          costCenterId: job?.cost_center_id ? Number(job.cost_center_id) : null,
+          description,
+          partnerType: 'none' as const,
+          partnerId: null,
+        },
+      ],
+    });
+    if (job) {
+      const newOther = roundMoney(Number(job.other_costs_total || 0) + baseDuty, digits);
+      const newNet = roundMoney(Number(job.client_invoiced_total || 0) - (Number(job.carrier_cost_total || 0) + newOther), digits);
+      await trx
+        .updateTable('maritime_jobs')
+        .set({ other_costs_total: newOther, net_profit: newNet, updated_at: sql`NOW()` })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', declaration.job_id as any)
+        .execute();
+    }
+    return entryId;
+  }
 
-    if (!updated) throw new NotFoundException('البيان الجمركي غير موجود');
-    return this.mapCustomsDeclarationRow(updated);
+  async updateCustomsDeclarationStatus(auth: AuthContext, id: string, dto: UpdateCustomsDeclarationStatusDto) {
+    const { tenantId, accountId } = requireTenantScope(auth);
+    const allowedTransitions: Record<string, string[]> = {
+      pending: ['submitted', 'cleared', 'held', 'rejected'],
+      submitted: ['cleared', 'held', 'rejected'],
+      held: ['submitted', 'cleared', 'rejected'],
+      cleared: [],
+      rejected: ['submitted', 'pending'],
+    };
+
+    return this.db.transaction().execute(async (trx) => {
+      const declaration = await trx
+        .selectFrom('maritime_customs_declarations')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', id as any)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!declaration) throw new NotFoundException('البيان الجمركي غير موجود');
+      const allowed = allowedTransitions[String(declaration.status)] ?? [];
+      if (!allowed.includes(dto.status)) {
+        throw new BadRequestException(`لا يمكن نقل البيان الجمركي من الحالة ${declaration.status} إلى الحالة ${dto.status}.`);
+      }
+      const updatePayload: any = { status: dto.status, updated_at: sql`NOW()` };
+      if (dto.declarationNumber) updatePayload.declaration_number = dto.declarationNumber;
+      if (dto.status === 'submitted') updatePayload.submitted_date = new Date().toISOString().slice(0, 10);
+      if (dto.status === 'cleared') updatePayload.cleared_date = new Date().toISOString().slice(0, 10);
+
+      const [updated] = await trx
+        .updateTable('maritime_customs_declarations')
+        .set(updatePayload)
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', id as any)
+        .returningAll()
+        .execute();
+
+      if (!updated) throw new NotFoundException('البيان الجمركي غير موجود');
+      if (dto.status === 'cleared') {
+        await this.postCustomsDutyAtClearance(trx, tenantId, accountId, updated, auth);
+      }
+      return this.mapCustomsDeclarationRow(updated);
+    });
   }
 
   // --------------------------------------------------------------------------
