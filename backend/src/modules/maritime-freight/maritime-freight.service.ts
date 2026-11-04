@@ -1929,6 +1929,69 @@ export class MaritimeFreightService {
   // --------------------------------------------------------------------------
   // 6. Shipment Jobs Engine (Operations & Cost Centers)
   // --------------------------------------------------------------------------
+
+  /**
+   * INV-MARITIME-CONSOLIDATION-TOTALS-REAL: a consolidation
+   * parent's totals are DERIVED from its children, recomputed on
+   * every child change. The parent row's gross_weight_kg,
+   * total_cbm and package_count are the sums of the child jobs'
+   * values (3dp, matching the air engine's own CBM rounding);
+   * for an air parent the volumetric and chargeable weights are
+   * recomputed from the summed gross/CBM through the same pure
+   * engine every air job uses. A parent with no children keeps
+   * whatever totals were entered manually -- an empty sum must
+   * never wipe them. A missing parent (deleted concurrently) is
+   * a no-op, not an error. All reads/writes go through the
+   * caller-supplied queryable, so the sync runs inside the
+   * caller's transaction.
+   */
+  async syncConsolidationParentTotals(
+    queryable: any,
+    tenantId: string,
+    parentJobId: string | number,
+  ): Promise<{ synced: boolean; grossWeightKg: number; totalCbm: number; packageCount: number }> {
+    const children = await queryable
+      .selectFrom('maritime_jobs')
+      .select(['gross_weight_kg', 'total_cbm', 'package_count'])
+      .where('tenant_id', '=', tenantId)
+      .where('parent_job_id', '=', String(parentJobId))
+      .execute();
+    const round3 = (value: number): number => Math.round(value * 1000) / 1000;
+    const grossWeightKg = round3(children.reduce((sum: number, row: any) => sum + Number(row.gross_weight_kg || 0), 0));
+    const totalCbm = round3(children.reduce((sum: number, row: any) => sum + Number(row.total_cbm || 0), 0));
+    const packageCount = children.reduce((sum: number, row: any) => sum + Number(row.package_count || 0), 0);
+    if (children.length === 0) {
+      return { synced: false, grossWeightKg: 0, totalCbm: 0, packageCount: 0 };
+    }
+    const parent = await queryable
+      .selectFrom('maritime_jobs')
+      .select(['transport_mode'])
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', String(parentJobId) as any)
+      .executeTakeFirst();
+    if (!parent) {
+      return { synced: false, grossWeightKg, totalCbm, packageCount };
+    }
+    const patch: any = {
+      gross_weight_kg: grossWeightKg,
+      total_cbm: totalCbm,
+      package_count: packageCount,
+      updated_at: sql`NOW()`,
+    };
+    if (parent.transport_mode === 'air') {
+      const airCalc = calculateAirChargeableWeight({ grossWeightKg, cbm: totalCbm });
+      patch.volumetric_weight_kg = airCalc.volumetricWeightKg;
+      patch.chargeable_weight_kg = airCalc.chargeableWeightKg;
+    }
+    await queryable
+      .updateTable('maritime_jobs')
+      .set(patch)
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', String(parentJobId) as any)
+      .execute();
+    return { synced: true, grossWeightKg, totalCbm, packageCount };
+  }
+
   async createJob(auth: AuthContext, dto: CreateMaritimeJobDto) {
     const { tenantId } = requireTenantScope(auth);
     const trackingToken = crypto.randomBytes(16).toString('hex');
@@ -2045,6 +2108,10 @@ export class MaritimeFreightService {
           .where('id', '=', dto.parentJobId as any)
           .where('tenant_id', '=', tenantId)
           .execute();
+        // INV-MARITIME-CONSOLIDATION-TOTALS-REAL: the new child
+        // counts in the parent's derived totals immediately, in
+        // the same transaction.
+        await this.syncConsolidationParentTotals(trx, tenantId, dto.parentJobId);
       }
 
       if (dto.charges && Array.isArray(dto.charges) && dto.charges.length > 0) {
@@ -2560,6 +2627,15 @@ export class MaritimeFreightService {
     // path when the milestone path failed.
     if (dto.status === 'completed') {
       await this.postStoredMoneyAtClose(trx, tenantId, id, auth);
+    }
+
+    // INV-MARITIME-CONSOLIDATION-TOTALS-REAL: editing a child
+    // re-derives its parent's totals in the same transaction, so
+    // the parent can never drift from its line items. Editing a
+    // parent directly (no parent_job_id) leaves its totals as
+    // edited until the next child change re-derives them.
+    if ((updatedJob as any)?.parent_job_id) {
+      await this.syncConsolidationParentTotals(trx, tenantId, (updatedJob as any).parent_job_id);
     }
 
     return updatedJob;
