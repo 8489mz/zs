@@ -4636,12 +4636,40 @@ export class MaritimeFreightService {
     const entryDate = dto.invoiceDate ? new Date(dto.invoiceDate) : new Date();
     const shouldPostJournal = ['matched', 'undercharge', 'no_contract'].includes(auditStatus);
 
+    // INV-MARITIME-CARRIER-INVOICE-NUMBER-UNIQUE: there is NO unique
+    // constraint on maritime_carrier_invoices.invoice_number, so the
+    // duplicate check inside the transaction below is the only thing
+    // stopping the same carrier invoice number from posting a second
+    // journal and doubling the carrier cost. The advisory lock
+    // serialises concurrent creates of the same number; the existence
+    // check runs before any journal is posted, on the effective
+    // shipping line (the DTO line, else the job's line) with a
+    // null-safe line comparison -- two different lines may legitimately
+    // reuse a number, the same line may not.
+    const normalizedInvoiceNumber = dto.invoiceNumber.trim().toUpperCase();
+    const effectiveShippingLineId = dto.shippingLineId
+      ? Number(dto.shippingLineId)
+      : (job.shipping_line_id ? Number(job.shipping_line_id) : null);
+
     // Everything below is one atomic unit: the journal (header + lines), the job cost roll-up,
     // and the invoice record itself. Previously these were five independent statements on
-    // `this.db` directly — a failure partway (e.g. a duplicate invoice_number constraint violation
-    // on the final insert) left an orphaned journal entry and an inflated job cost with no invoice
-    // record to explain either.
+    // `this.db` directly — a failure partway left an orphaned journal entry and an inflated
+    // job cost with no invoice record to explain either.
     const insertedInvoice = await this.db.transaction().execute(async (trx: any) => {
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${tenantId}), hashtext(${normalizedInvoiceNumber}))`.execute(trx);
+      const duplicateQuery = trx
+        .selectFrom('maritime_carrier_invoices')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where(sql<string>`UPPER(TRIM(invoice_number))`, '=', normalizedInvoiceNumber);
+      const duplicateInvoice = await (effectiveShippingLineId == null
+        ? duplicateQuery.where('shipping_line_id', 'is', null)
+        : duplicateQuery.where('shipping_line_id', '=', effectiveShippingLineId))
+        .executeTakeFirst();
+      if (duplicateInvoice) {
+        throw new BadRequestException('رقم فاتورة الخط الملاحي مستخدم من قبل ولا يمكن تسجيله مرتين لنفس الخط الملاحي');
+      }
+
       let entryId: number | null = null;
 
       if (shouldPostJournal) {
