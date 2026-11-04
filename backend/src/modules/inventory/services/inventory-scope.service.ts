@@ -337,9 +337,14 @@ export class InventoryScopeService {
       await lockStockProducts(trx, { tenantId, accountId, productIds });
       for (const pid of [...new Set(productIds.map(Number))].sort((a, b) => a - b)) {
         // Zero delta provisions the location through the same locked ledger path.
+        // INV-LOCATION-ASSIGN-NO-DRAIN: disableAutoDrain, so provisioning
+        // never re-homes the floating (unassigned) pool into the new
+        // location -- assigning a product must only make it visible
+        // there, at quantity zero, with no movement, journal or audit
+        // trace for stock that was never physically moved.
         await applyStockDelta(trx, {
           tenantId, accountId, productId: pid, branchId: location.branch_id,
-          locationId, delta: 0, skipGlobalUpdate: true,
+          locationId, delta: 0, skipGlobalUpdate: true, disableAutoDrain: true,
         });
       }
     });
