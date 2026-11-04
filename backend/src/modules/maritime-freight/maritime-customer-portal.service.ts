@@ -775,6 +775,23 @@ export class MaritimeCustomerPortalService {
       };
     }
 
+    // INV-MARITIME-PORTAL-REJECTED-QUOTE-GUARD: a staff-rejected
+    // quote can never be approved from the portal. There is no
+    // rejected_by column, so 'rejected' is the only signal -- and
+    // it covers a customer who rejected via the portal and changed
+    // their mind too: a rejected quote is a closed financial
+    // commitment either way, and only staff re-opening it (re-send
+    // / status change) can make it approvable again. The guard
+    // runs before any status write or auto-conversion attempt, so
+    // a rejected quote stays rejected, byte for byte.
+    if (quote.status === 'rejected') {
+      throw new AppError(
+        'هذا العرض مرفوض ولا يمكن اعتماده من البوابة؛ اطلب من فريق الشحن إعادة إرسال العرض أو فتحه للاعتماد.',
+        'QUOTATION_REJECTED_CANNOT_APPROVE',
+        403,
+      );
+    }
+
     // Update Quotation Status to 'approved' with approval audit
     await this.db
       .updateTable('maritime_quotations')
