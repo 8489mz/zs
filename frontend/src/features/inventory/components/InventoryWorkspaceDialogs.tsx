@@ -12,10 +12,10 @@ type ReceiptLine = {
 };
 type ReceiptRows = Record<string, ReceiptLine[]>;
 type ReceiptDraft = { receivedQty: string; serials: string; batches: string };
-/** Variance reason per transfer, keyed by String(transfer.id). The backend
- *  requires one reason of at least 8 characters per short receipt
- *  (TRANSFER_VARIANCE_REASON_REQUIRED) and stores it on each shortfall
- *  item; a full receipt sends none. */
+/** Variance reason per transfer, keyed by String(transfer.id). The
+ *  reason is optional: a shortfall receipt completes without one and
+ *  the shortage is recorded pending a reason; a supplied reason is
+ *  stored as-is on each shortfall item. A full receipt sends none. */
 type TransferVarianceReasons = Record<string, string>;
 
 function transferHasShortfall(transfer: StockTransfer, draft: Record<string, ReceiptDraft>): boolean {
@@ -35,10 +35,7 @@ function varianceReasonsFromDraft(
   for (const transfer of transfers) {
     if (!transferHasShortfall(transfer, draft)) continue;
     const reason = (reasons[String(transfer.id)] || '').trim();
-    if (reason.length < 8) {
-      throw new Error(`اكتب سبب فرق الكمية للتحويل ${transfer.docNo || transfer.id} بوضوح في 8 أحرف على الأقل قبل الاستلام`);
-    }
-    collected[String(transfer.id)] = reason;
+    if (reason) collected[String(transfer.id)] = reason;
   }
   return collected;
 }
@@ -145,7 +142,7 @@ export function InventoryTransferActionDialog({
             })}
                 {transferHasShortfall(transfer, receiptDraft) ? (
                   <div style={{ padding: '8px 0', borderBottom: '1px solid #e2e8f0' }}>
-                    <label>سبب فرق الكمية للتحويل {transfer.docNo || transfer.id} (مطلوب عند وجود فاقد — 8 أحرف على الأقل)
+                    <label>سبب فرق الكمية للتحويل {transfer.docNo || transfer.id} (اختياري — الفاقد يُسجَّل بانتظار السبب)
                       <textarea rows={2} value={varianceReasonDraft[String(transfer.id)] ?? ''}
                         onChange={e => setVarianceReasonDraft(current => ({ ...current, [String(transfer.id)]: e.target.value }))}
                         placeholder="مثال: نقصت وحدتان أثناء النقل" disabled={isBusy}/>

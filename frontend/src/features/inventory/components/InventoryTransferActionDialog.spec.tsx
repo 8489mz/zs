@@ -7,18 +7,21 @@
  * less than dispatched had to falsely receive 100% (phantom stock, no
  * shrinkage journal) or cancel the whole transfer.
  *
- * WHAT THIS PINS, driving the REAL dialog and the REAL api wrapper:
+ * WHAT THIS PINS, driving the REAL dialog and the REAL api wrapper
+ * (revised by the spirit-of-law decision Q4, INV-SPIRIT-TRANSFER-RECEIPT-PARTIAL):
  * - typing a received quantity below dispatched reveals a per-transfer
- *   variance-reason field; confirming without a reason, or with a reason
- *   under 8 characters, never calls onConfirm.
- * - a valid reason is passed to onConfirm keyed by transfer id, alongside
- *   the receipt rows; a full receipt needs no reason and sends none.
- * - with two transfers in one batch, only the short one requires (and
- *   carries) a reason.
+ *   variance-reason field, but the reason is OPTIONAL: confirming
+ *   without one calls onConfirm with no reason, and the shortage is
+ *   recorded pending a reason; a short one-word reason is sent as-is.
+ * - a supplied reason is passed to onConfirm keyed by transfer id,
+ *   alongside the receipt rows; a full receipt needs no reason and
+ *   sends none.
+ * - with two transfers in one batch, only the short one shows (and
+ *   carries) a reason field.
  * - inventoryApi.receiveStockTransfer serialises varianceReason into the
  *   POST body the backend already accepts.
  * The backend gate itself stays pinned by transfer-receipt-pinned.spec.ts;
- * this spec pins the UI/API half that was missing.
+ * this spec pins the UI/API half.
  */
 
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -55,25 +58,25 @@ function renderDialog(transfers: StockTransfer[], onConfirm = vi.fn()) {
 }
 
 describe('short transfer receipt variance reason', () => {
-  it('blocks confirm until a valid reason is typed for a short receipt', () => {
+  it('confirms a short receipt without a reason, and sends a short reason as-is', () => {
     const onConfirm = renderDialog([makeTransfer('7', 'TR-260104-0007', 10)]);
     const qtyInput = screen.getByLabelText(/الكمية المستلمة/);
     fireEvent.change(qtyInput, { target: { value: '8' } });
 
     const reasonInput = screen.getByLabelText(/سبب فرق الكمية/);
     fireEvent.click(screen.getByRole('button', { name: /تأكيد الاستلام/ }));
-    expect(onConfirm).not.toHaveBeenCalled();
-
-    fireEvent.change(reasonInput, { target: { value: 'ناقص' } });
-    fireEvent.click(screen.getByRole('button', { name: /تأكيد الاستلام/ }));
-    expect(onConfirm).not.toHaveBeenCalled();
-
-    fireEvent.change(reasonInput, { target: { value: 'نقصت وحدتان أثناء النقل' } });
-    fireEvent.click(screen.getByRole('button', { name: /تأكيد الاستلام/ }));
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onConfirm).toHaveBeenCalledWith(
       { '7': [{ itemId: 71, receivedQty: 8 }] },
-      { '7': 'نقصت وحدتان أثناء النقل' },
+      {},
+    );
+
+    fireEvent.change(reasonInput, { target: { value: 'ناقص' } });
+    fireEvent.click(screen.getByRole('button', { name: /تأكيد الاستلام/ }));
+    expect(onConfirm).toHaveBeenCalledTimes(2);
+    expect(onConfirm).toHaveBeenCalledWith(
+      { '7': [{ itemId: 71, receivedQty: 8 }] },
+      { '7': 'ناقص' },
     );
   });
 
@@ -88,7 +91,7 @@ describe('short transfer receipt variance reason', () => {
     );
   });
 
-  it('requires a reason only for the short transfer in a batch', () => {
+  it('collects a reason only for the short transfer in a batch', () => {
     const onConfirm = renderDialog([
       makeTransfer('7', 'TR-260104-0007', 10),
       makeTransfer('8', 'TR-260104-0008', 5),

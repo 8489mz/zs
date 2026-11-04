@@ -277,24 +277,27 @@ export class InventoryTransferService {
         receivedByItemId.set(itemId, receivedQty);
       }
 
-      // INV-TRANSFER-RECEIPT-PINNED: a receipt must name an explicit
-      // received quantity for EVERY item. An omitted item used to be
-      // silently booked as fully received, so a lost shipment could
-      // be received with an empty payload and booked as arrived.
-      if (!receiptPayload?.items?.length || receivedByItemId.size !== items.length) {
-        throw new AppError('يجب تحديد كمية مستلمة لكل بند من بنود التحويل قبل الاستلام؛ لا يُفترض وصول البنود غير المذكورة', 'TRANSFER_RECEIPT_INVALID', 400);
+      // INV-SPIRIT-TRANSFER-RECEIPT-PARTIAL: a receipt names the
+      // quantities that actually arrived; an item the receiver does not
+      // name defaults to 0 received and its full dispatched quantity is
+      // recorded as a shortage pending a reason (variance_reason null),
+      // so the receipt never waits for every item to be named. Only a
+      // receipt with no items at all is still rejected: it carries no
+      // evidence that anything was checked.
+      if (!receiptPayload?.items?.length) {
+        throw new AppError('يجب تحديد كمية مستلمة واحدة على الأقل قبل الاستلام', 'TRANSFER_RECEIPT_INVALID', 400);
       }
-      // Plan the whole receipt before any write, so a missing variance
-      // reason fails closed with nothing half-moved.
+      // Plan the whole receipt before any write, so an invalid row fails
+      // closed with nothing half-moved.
       const receiptPlan = items.map((item) => {
         const dispatched = dispatchedQty(item);
-        const received = receivedByItemId.get(Number(item.id))!;
+        const received = receivedByItemId.get(Number(item.id)) ?? 0;
         return { item, dispatched, received, shortfall: Number((dispatched - received).toFixed(3)) };
       });
+      // A shortfall no longer waits for a written variance reason: the
+      // reason, when supplied, is stored as-is on each shortfall item,
+      // and a missing reason stays null (pending) on the item row.
       const varianceReason = String(receiptPayload?.varianceReason || '').trim();
-      if (receiptPlan.some((row) => row.shortfall > 0.0001) && varianceReason.length < 8) {
-        throw new AppError(`استلام التحويل TR-${transferId} فيه فرق كمية؛ اكتب سبب الفرق بوضوح في 8 أحرف على الأقل قبل الاستلام`, 'TRANSFER_VARIANCE_REASON_REQUIRED', 400);
-      }
 
       let inTransitLocationId: number | null = null;
       const inTransitRow = await trx.selectFrom('stock_locations').select('id').where('location_type', '=', 'in_transit').where('tenant_id', '=', scope.tenantId).executeTakeFirst();
@@ -408,7 +411,7 @@ export class InventoryTransferService {
 
           await trx
             .updateTable('stock_transfer_items')
-            .set({ dispatched_qty: dispatched, received_qty: received, variance_qty: shortfall, variance_reason: shortfall > 0.0001 ? varianceReason : null, batch_tracking: JSON.stringify(reconciledBatches) } as any)
+            .set({ dispatched_qty: dispatched, received_qty: received, variance_qty: shortfall, variance_reason: shortfall > 0.0001 ? (varianceReason || null) : null, batch_tracking: JSON.stringify(reconciledBatches) } as any)
             .where('id', '=', Number(item.id))
             .where(this.tenantPredicate(auth))
             .execute();

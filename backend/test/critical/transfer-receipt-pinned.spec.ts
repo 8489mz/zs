@@ -13,22 +13,30 @@ loss. The schema already had the columns to record all of this
 (variance_reason on the item, transit_variance_journal_entry_id
 on the header); nothing ever wrote them.
 
-THE RULE: a receipt must name an explicit received quantity for
-EVERY item (no default-full-receipt); any shortfall requires a
-written variance reason of at least 8 characters, stored on each
-shortfall item, with the first shrinkage journal id stored on the
-header; shrinkage is valued at the cost FROZEN at dispatch (the
-transfer_send movement's unit_cost), never re-read at receipt.
+THE RULE (as revised by the spirit-of-law decision Q4, INV-SPIRIT-TRANSFER-RECEIPT-PARTIAL):
+a receipt names the quantities that actually arrived; an item the
+receiver does not name defaults to 0 received and its full
+dispatched quantity is recorded as a shortage pending a reason
+(variance_reason null), so the receipt never waits for every item
+to be named or for a written variance reason. A supplied reason is
+stored as-is on each shortfall item, with the first shrinkage
+journal id stored on the header; shrinkage is valued at the cost
+FROZEN at dispatch (the transfer_send movement's unit_cost), never
+re-read at receipt. Only a receipt with no items at all is still
+rejected with TRANSFER_RECEIPT_INVALID: it carries no evidence
+that anything was checked.
 
 WHAT THIS PINS, driving the REAL createStockTransfer and
 receiveStockTransfer on PGlite:
 - receipt with no items, or an empty items array, is rejected
   with TRANSFER_RECEIPT_INVALID and the transfer stays 'sent'
   with transit stock intact.
-- receipt omitting one item of two is rejected the same way.
-- a shortfall with no reason, or a reason under 8 characters, is
-  rejected with TRANSFER_VARIANCE_REASON_REQUIRED and nothing
-  moves; retrying the same transfer with a valid reason succeeds.
+- receipt naming one item of two succeeds: the omitted item is
+  received 0, its 5 units are written off as a pending-reason
+  shortage, and the named item is immediately available at the
+  destination.
+- a shortfall with no reason succeeds and stores variance_reason
+  null (pending); a short one-word reason is stored as-is.
 - cost_price changed between ship (10) and receive (25): the
   shrinkage movement and journal stay at the dispatch cost
   (unit 10, total 20 for 2 units); the reason and the journal id
@@ -141,37 +149,39 @@ async function main(): Promise<void> {
     assert.equal(await transferStatus(db, t1), 'sent');
     assert.equal(await transitQty(db, 1), 10);
 
-    // Case 2: omitted item -> rejected, then a complete receipt succeeds.
+    // Case 2: an omitted item defaults to 0 received -- the receipt
+    // succeeds, the omitted item is a pending-reason shortage, and the
+    // named item is immediately available at the destination.
     await seedProduct(db, 2, 100, 10);
     await seedProduct(db, 3, 100, 10);
     const t2 = await makeTransfer(service, [{ productId: 2, qty: 5 }, { productId: 3, qty: 5 }]);
     const t2item1 = await transferItemId(db, t2, 2);
-    await assert.rejects(
-      service.receiveStockTransfer(t2, AUTH, { items: [{ itemId: t2item1, receivedQty: 5 }] } as never),
-      /TRANSFER_RECEIPT_INVALID/,
-    );
-    assert.equal(await transferStatus(db, t2), 'sent');
-    const t2item2 = await transferItemId(db, t2, 3);
-    await service.receiveStockTransfer(t2, AUTH, { items: [{ itemId: t2item1, receivedQty: 5 }, { itemId: t2item2, receivedQty: 5 }] } as never);
+    await service.receiveStockTransfer(t2, AUTH, { items: [{ itemId: t2item1, receivedQty: 5 }] } as never);
     assert.equal(await transferStatus(db, t2), 'received');
+    const omitted2 = await sql<{ received_qty: string; variance_qty: string; variance_reason: string | null }>`SELECT received_qty, variance_qty, variance_reason FROM stock_transfer_items WHERE transfer_id = ${t2} AND product_id = 3`.execute(db);
+    assert.equal(Number(omitted2.rows[0].received_qty), 0);
+    assert.equal(Number(omitted2.rows[0].variance_qty), 5);
+    assert.equal(omitted2.rows[0].variance_reason, null);
+    const dest2 = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = 2 AND location_id = 2`.execute(db);
+    assert.equal(Number(dest2.rows[0].qty), 5);
+    assert.equal(await transitQty(db, 2), 0);
+    assert.equal(await transitQty(db, 3), 0);
 
-    // Case 3: shortfall without a reason -> rejected; short reason -> rejected;
-    // retry with a valid reason succeeds with nothing half-moved.
+    // Case 3: a shortfall with no reason succeeds and stays pending
+    // (variance_reason null); a short one-word reason is stored as-is.
     await seedProduct(db, 4, 100, 10);
     const t3 = await makeTransfer(service, [{ productId: 4, qty: 10 }]);
     const t3item = await transferItemId(db, t3, 4);
-    await assert.rejects(
-      service.receiveStockTransfer(t3, AUTH, { items: [{ itemId: t3item, receivedQty: 8 }] } as never),
-      /TRANSFER_VARIANCE_REASON_REQUIRED/,
-    );
-    await assert.rejects(
-      service.receiveStockTransfer(t3, AUTH, { items: [{ itemId: t3item, receivedQty: 8 }], varianceReason: 'lost' } as never),
-      /TRANSFER_VARIANCE_REASON_REQUIRED/,
-    );
-    assert.equal(await transferStatus(db, t3), 'sent');
-    assert.equal(await transitQty(db, 4), 10);
-    await service.receiveStockTransfer(t3, AUTH, { items: [{ itemId: t3item, receivedQty: 8 }], varianceReason: REASON } as never);
+    await service.receiveStockTransfer(t3, AUTH, { items: [{ itemId: t3item, receivedQty: 8 }] } as never);
     assert.equal(await transferStatus(db, t3), 'received');
+    const item3 = await sql<{ variance_reason: string | null }>`SELECT variance_reason FROM stock_transfer_items WHERE id = ${t3item}`.execute(db);
+    assert.equal(item3.rows[0].variance_reason, null);
+    await seedProduct(db, 8, 100, 10);
+    const t3b = await makeTransfer(service, [{ productId: 8, qty: 10 }]);
+    const t3bitem = await transferItemId(db, t3b, 8);
+    await service.receiveStockTransfer(t3b, AUTH, { items: [{ itemId: t3bitem, receivedQty: 8 }], varianceReason: 'lost' } as never);
+    const item3b = await sql<{ variance_reason: string | null }>`SELECT variance_reason FROM stock_transfer_items WHERE id = ${t3bitem}`.execute(db);
+    assert.equal(item3b.rows[0].variance_reason, 'lost');
 
     // Case 4: cost moves between ship and receive -- shrinkage stays at dispatch cost.
     await seedProduct(db, 5, 100, 10);
