@@ -6,6 +6,7 @@ import { lockAccountingPeriod } from '../accounting/accounting-period-lock';
 import { resolveFxRate } from '../accounting/fx-rate-resolution';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { convertFxAmount } from '../accounting/engines/fx-conversion.engine';
+import { forexOffsetCode } from '../accounting/engines/forex-difference.engine';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { Inject, Injectable, Logger, NotFoundException, BadRequestException, UnprocessableEntityException } from '@nestjs/common';
 import { KYSELY_DB } from '../../database/database.constants';
@@ -2535,6 +2536,16 @@ export class MaritimeFreightService {
       .returningAll()
       .execute();
 
+    // INV-MARITIME-STORED-MONEY-POST-AT-CLOSE: closing the job
+    // posts its stored money in the same transaction, so a failed
+    // posting rolls the close back with it. A re-close of an
+    // already-completed job re-runs the (idempotent) posting, so
+    // a RETN-completed job can still post here as the recovery
+    // path when the milestone path failed.
+    if (dto.status === 'completed') {
+      await this.postStoredMoneyAtClose(trx, tenantId, id, auth);
+    }
+
     return updatedJob;
     });
   }
@@ -2647,6 +2658,15 @@ export class MaritimeFreightService {
           updated_at: sql`NOW()`,
         }).where('tenant_id', '=', tenantId).where('id', '=', container.id as any).execute();
       }
+    }
+
+    // INV-MARITIME-STORED-MONEY-POST-AT-CLOSE: the RETN milestone
+    // closes the job, so its stored money posts here, BEFORE the
+    // status update below -- a failed posting leaves the job open
+    // and loud, and the idempotent posting can be recovered by a
+    // re-close through updateJob.
+    if (milestoneKey === 'RETN') {
+      await this.postStoredMoneyAtClose(this.db, tenantId, jobId, auth);
     }
 
     const [updatedJob] = await this.db
@@ -5726,6 +5746,343 @@ export class MaritimeFreightService {
       .execute();
 
     return updated;
+  }
+
+  /**
+   * INV-MARITIME-STORED-MONEY-POST-AT-CLOSE: account resolution on a
+   * caller-supplied queryable (transaction handle or pool), mirroring
+   * resolveAccountId, so close postings never read this.db from
+   * inside an open transaction.
+   */
+  private async resolveMaritimeAccountIdOn(queryable: any, tenantId: string, code: string, fallbackCode?: string): Promise<number | null> {
+    const acc = await queryable
+      .selectFrom('accounting_accounts')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('code', '=', code)
+      .where('is_active', '=', true)
+      .executeTakeFirst();
+    if (acc) return Number(acc.id);
+    if (fallbackCode) {
+      const fallback = await queryable
+        .selectFrom('accounting_accounts')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('code', '=', fallbackCode)
+        .where('is_active', '=', true)
+        .executeTakeFirst();
+      if (fallback) return Number(fallback.id);
+    }
+    return null;
+  }
+
+  /**
+   * The chart's shared FX offset account (7180 gain / 7280 loss,
+   * forexOffsetCode), created on demand EXACTLY as the forex
+   * revaluation service creates it (same parent 7100/7200, same
+   * names, same flags) when the tenant chart does not have it yet.
+   * The name is the chart's name for this code; forking a second
+   * code for the same difference would split one difference across
+   * two accounts and break the revaluation service's own name
+   * check on the shared code. A missing parent fails closed.
+   */
+  private async resolveMaritimeFxOffsetAccountOn(queryable: any, tenantId: string, accountId: string, gain: boolean): Promise<number> {
+    const code = forexOffsetCode(gain ? 1 : -1);
+    const nameEn = gain ? 'Unrealized FX Gains' : 'Unrealized FX Losses';
+    const existing = await queryable
+      .selectFrom('accounting_accounts')
+      .select(['id', 'is_active', 'account_type', 'name_en'])
+      .where('tenant_id', '=', tenantId)
+      .where('code', '=', code)
+      .executeTakeFirst();
+    if (existing) {
+      const expectedType = gain ? 'revenue' : 'expense';
+      if (!existing.is_active || existing.account_type !== expectedType || existing.name_en !== nameEn) {
+        throw new BadRequestException('حساب فروق العملة غير نشط أو تصنيفه غير صحيح.');
+      }
+      return Number(existing.id);
+    }
+    const parentCode = gain ? '7100' : '7200';
+    const parent = await queryable
+      .selectFrom('accounting_accounts')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('code', '=', parentCode)
+      .executeTakeFirst();
+    if (!parent) throw new BadRequestException('حساب الإيرادات أو المصروفات الأخرى غير موجود؛ لا يمكن إنشاء حساب فروق العملة.');
+    await queryable
+      .insertInto('accounting_accounts')
+      .values({
+        tenant_id: tenantId,
+        account_id: accountId,
+        code,
+        name_ar: gain ? 'أرباح فروق عملة غير محققة' : 'خسائر فروق عملة غير محققة',
+        name_en: nameEn,
+        account_type: gain ? 'revenue' : 'expense',
+        normal_balance: gain ? 'credit' : 'debit',
+        account_group: gain ? 'income' : 'operating_expenses',
+        parent_id: Number(parent.id),
+        is_active: true,
+        is_system: true,
+        allow_manual_entries: false,
+        is_control_account: false,
+        is_cash_bank: false,
+        is_receivable: false,
+        is_payable: false,
+        is_inventory: false,
+        is_tax: false,
+        description_ar: '',
+        sort_order: Number(code),
+      } as any)
+      .onConflict((oc: any) => oc.columns(['tenant_id', 'code']).doNothing())
+      .execute();
+    const created = await queryable
+      .selectFrom('accounting_accounts')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('code', '=', code)
+      .executeTakeFirst();
+    if (!created) throw new BadRequestException('حساب فروق العملة غير موجود؛ لا يمكن ترحيل فرق العملة عند الإغلاق.');
+    return Number(created.id);
+  }
+
+  private async hasPostedCloseJournal(queryable: any, tenantId: string, sourceType: string, sourceId: number): Promise<boolean> {
+    const existing = await queryable
+      .selectFrom('journal_entries')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('source_type', '=', sourceType)
+      .where('source_id', '=', sourceId)
+      .where('status', '=', 'posted')
+      .executeTakeFirst();
+    return Boolean(existing);
+  }
+
+  /**
+   * INV-MARITIME-STORED-MONEY-POST-AT-CLOSE: stored-only maritime
+   * money posts automatically when a job closes, to explicit
+   * accounts, with no extra staff work. Every slice reads and
+   * writes through the caller-supplied queryable only (a
+   * transaction handle from updateJob, the pool handle from the
+   * RETN milestone path), converts through the shared resolver at
+   * book digits, and is idempotent per source row: a posted close
+   * journal for the same (sourceType, sourceId) is never posted
+   * twice, so reopening and re-closing a job posts only genuinely
+   * new rows. Slices:
+   * - forex gain/loss: the stored spread adjusts the carrier
+   *   payable (2110) against the shared offset account (7180 gain /
+   *   7280 loss), only when a posted carrier invoice exists to
+   *   adjust; a spread with no posted invoice is skipped, never
+   *   invented into a payable movement.
+   * - inland trucking: COMPLETED trips only (delivered /
+   *   empty_returned) post their cost as expense (6400, fallback
+   *   5100) against 2110. The sell side is NOT posted: billing
+   *   the customer stays in the job-charges/invoice flow, and
+   *   posting it here too would double the revenue.
+   * - cargo insurance: active policies post their premium as
+   *   expense (6400, fallback 5100) against 2110. Claims stay
+   *   stored-only (contingent, separate decision).
+   * - container demurrage_amount is DELIBERATELY NOT posted here:
+   *   demurrage is billed as DEM charges through the normal
+   *   invoice flow (the close guard already demands one), and
+   *   posting the stored amount too would double-count it.
+   * Trucking + insurance costs roll into the job's
+   * other_costs_total / net_profit by the same formula the
+   * carrier-invoice and expense paths use. Missing expense or
+   * payable accounts fail closed; nothing is silently skipped.
+   * The supplier subledger is not written (not decided): the
+   * payable legs use partnerType 'none'.
+   */
+  async postStoredMoneyAtClose(
+    queryable: any,
+    tenantId: string,
+    jobId: string | number,
+    auth: AuthContext,
+  ): Promise<{
+    posted: boolean;
+    journalEntryIds: number[];
+    forex: { posted: boolean; amount: number; reason: string | null };
+    trucking: { postedCount: number; amount: number };
+    insurance: { postedCount: number; amount: number };
+  }> {
+    const { accountId } = requireTenantScope(auth);
+    const job = await queryable
+      .selectFrom('maritime_jobs')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', String(jobId) as any)
+      .executeTakeFirst();
+    if (!job) throw new NotFoundException('Job not found');
+    const baseCurrency = await tenantBaseCurrency(queryable, tenantId);
+    const digits = currencyMoneyDigits(baseCurrency);
+    const costCenterId = job.cost_center_id ? Number(job.cost_center_id) : null;
+    const entryDate = new Date();
+    const journalEntryIds: number[] = [];
+    let postedCosts = 0;
+
+    const postCloseJournal = async (
+      sourceType: string,
+      sourceId: number,
+      description: string,
+      lines: Array<{ accountId: number; debit: number; credit: number }>,
+    ): Promise<number> => {
+      return this.accountingPosting.postDomainJournal(queryable, {
+        tenantId,
+        accountId,
+        entryDate,
+        description,
+        sourceType,
+        sourceId,
+        createdBy: auth.userId || null,
+        lines: lines.map((line) => ({
+          ...line,
+          costCenterId,
+          description,
+          partnerType: 'none' as const,
+          partnerId: null,
+        })),
+      });
+    };
+
+    // 1. Forex gain/loss against the carrier payable.
+    let forex: { posted: boolean; amount: number; reason: string | null } = { posted: false, amount: 0, reason: null };
+    const spread = roundMoney(Number(job.forex_gain_loss || 0), digits);
+    if (spread !== 0) {
+      const postedInvoice = await queryable
+        .selectFrom('maritime_carrier_invoices')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('job_id', '=', String(jobId))
+        .where('journal_entry_id', 'is not', null)
+        .executeTakeFirst();
+      if (!postedInvoice) {
+        forex = { posted: false, amount: spread, reason: 'no posted carrier invoice to adjust' };
+      } else if (await this.hasPostedCloseJournal(queryable, tenantId, 'maritime_job_forex_close', Number(job.id))) {
+        forex = { posted: false, amount: spread, reason: 'already posted at an earlier close' };
+      } else {
+        const payableId = await this.resolveMaritimeAccountIdOn(queryable, tenantId, '2110');
+        if (!payableId) throw new BadRequestException('تعذر ترحيل فرق العملة عند الإغلاق: حساب الذمم الدائنة (2110) غير متاح في شجرة الحسابات.');
+        const gain = spread > 0;
+        const offsetId = await this.resolveMaritimeFxOffsetAccountOn(queryable, tenantId, accountId, gain);
+        const amount = Math.abs(spread);
+        const entryId = await postCloseJournal(
+          'maritime_job_forex_close',
+          Number(job.id),
+          `فرق عملة عند إغلاق الشحنة #${job.job_number}`,
+          gain
+            ? [
+                { accountId: payableId, debit: amount, credit: 0 },
+                { accountId: offsetId, debit: 0, credit: amount },
+              ]
+            : [
+                { accountId: offsetId, debit: amount, credit: 0 },
+                { accountId: payableId, debit: 0, credit: amount },
+              ],
+        );
+        journalEntryIds.push(entryId);
+        forex = { posted: true, amount: spread, reason: null };
+      }
+    }
+
+    // 2. Completed trucking trips: cost only.
+    let truckingCount = 0;
+    let truckingAmount = 0;
+    const trips = await queryable
+      .selectFrom('maritime_inland_trucking_trips')
+      .select(['id', 'trip_number', 'trip_status', 'cost_amount', 'currency'])
+      .where('tenant_id', '=', tenantId)
+      .where('job_id', '=', String(jobId))
+      .execute();
+    for (const trip of trips) {
+      if (!['delivered', 'empty_returned'].includes(String(trip.trip_status))) continue;
+      const cost = Number(trip.cost_amount || 0);
+      if (!(cost > 0)) continue;
+      if (await this.hasPostedCloseJournal(queryable, tenantId, 'maritime_trucking_close', Number(trip.id))) continue;
+      const rate = await resolveFxRate(queryable, tenantId, trip.currency || undefined);
+      const baseCost = convertFxAmount(cost, rate, digits);
+      if (!(baseCost > 0)) continue;
+      const expenseId = await this.resolveMaritimeAccountIdOn(queryable, tenantId, '6400', '5100');
+      const payableId = await this.resolveMaritimeAccountIdOn(queryable, tenantId, '2110');
+      if (!expenseId || !payableId) {
+        throw new BadRequestException('تعذر ترحيل تكلفة النقل البري عند الإغلاق: حساب المصروف (6400/5100) أو الذمم الدائنة (2110) غير متاح.');
+      }
+      const entryId = await postCloseJournal(
+        'maritime_trucking_close',
+        Number(trip.id),
+        `تكلفة نقل بري عند إغلاق الشحنة #${job.job_number} - الرحلة ${trip.trip_number}`,
+        [
+          { accountId: expenseId, debit: baseCost, credit: 0 },
+          { accountId: payableId, debit: 0, credit: baseCost },
+        ],
+      );
+      journalEntryIds.push(entryId);
+      truckingCount++;
+      truckingAmount = roundMoney(truckingAmount + baseCost, digits);
+    }
+
+    // 3. Active cargo-insurance premiums.
+    let insuranceCount = 0;
+    let insuranceAmount = 0;
+    const policies = await queryable
+      .selectFrom('maritime_cargo_insurances')
+      .select(['id', 'policy_number', 'premium_amount', 'currency', 'status'])
+      .where('tenant_id', '=', tenantId)
+      .where('job_id', '=', String(jobId) as any)
+      .execute();
+    for (const policy of policies) {
+      if (String(policy.status) !== 'active') continue;
+      const premium = Number(policy.premium_amount || 0);
+      if (!(premium > 0)) continue;
+      if (await this.hasPostedCloseJournal(queryable, tenantId, 'maritime_insurance_close', Number(policy.id))) continue;
+      const rate = await resolveFxRate(queryable, tenantId, policy.currency || undefined);
+      const basePremium = convertFxAmount(premium, rate, digits);
+      if (!(basePremium > 0)) continue;
+      const expenseId = await this.resolveMaritimeAccountIdOn(queryable, tenantId, '6400', '5100');
+      const payableId = await this.resolveMaritimeAccountIdOn(queryable, tenantId, '2110');
+      if (!expenseId || !payableId) {
+        throw new BadRequestException('تعذر ترحيل قسط التأمين عند الإغلاق: حساب المصروف (6400/5100) أو الذمم الدائنة (2110) غير متاح.');
+      }
+      const entryId = await postCloseJournal(
+        'maritime_insurance_close',
+        Number(policy.id),
+        `قسط تأمين بضائع عند إغلاق الشحنة #${job.job_number} - الوثيقة ${policy.policy_number}`,
+        [
+          { accountId: expenseId, debit: basePremium, credit: 0 },
+          { accountId: payableId, debit: 0, credit: basePremium },
+        ],
+      );
+      journalEntryIds.push(entryId);
+      insuranceCount++;
+      insuranceAmount = roundMoney(insuranceAmount + basePremium, digits);
+    }
+
+    // 4. Roll the posted costs into the job P&L by the same formula
+    // the carrier-invoice and expense paths use.
+    postedCosts = roundMoney(truckingAmount + insuranceAmount, digits);
+    if (postedCosts > 0) {
+      const fresh = await queryable
+        .selectFrom('maritime_jobs')
+        .select(['client_invoiced_total', 'carrier_cost_total', 'other_costs_total'])
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(jobId) as any)
+        .executeTakeFirstOrThrow();
+      const newOther = roundMoney(Number(fresh.other_costs_total || 0) + postedCosts, digits);
+      const newNet = roundMoney(Number(fresh.client_invoiced_total || 0) - (Number(fresh.carrier_cost_total || 0) + newOther), digits);
+      await queryable
+        .updateTable('maritime_jobs')
+        .set({ other_costs_total: newOther, net_profit: newNet, updated_at: sql`NOW()` })
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', String(jobId) as any)
+        .execute();
+    }
+
+    return {
+      posted: journalEntryIds.length > 0,
+      journalEntryIds,
+      forex,
+      trucking: { postedCount: truckingCount, amount: truckingAmount },
+      insurance: { postedCount: insuranceCount, amount: insuranceAmount },
+    };
   }
 
   // ==========================================
