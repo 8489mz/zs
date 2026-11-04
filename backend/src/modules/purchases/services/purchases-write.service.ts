@@ -11,6 +11,7 @@ import { purchaseReceiptBaseUnitCost } from '../engines/purchase-receipt-cost.en
 import { advancePurchaseOrderReceipt } from '../engines/purchase-order-receipt.engine';
 import { revalueStockReturn, valueStockReceipt } from '../../accounting/inventory-valuation';
 import { ensureNonNegativeStock, ensureUniqueFlowItems } from '../../../common/utils/financial-integrity';
+import { authorizeManagerSecret } from '../../../common/utils/manager-approval';
 import { applyStockDelta, lockStockProducts, previewConsumableStockQty } from '../../../common/utils/location-stock-ledger';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
@@ -80,6 +81,25 @@ export class PurchasesWriteService {
 
   private hasPermission(auth: AuthContext, permission: string): boolean {
     return auth.role === 'super_admin' || auth.permissions.includes(permission);
+  }
+
+  /*
+   * INV-SPIRIT-PURCHASE-MANAGER-APPROVAL: editing or cancelling a
+   * purchase reverses stock, supplier and journal balances, so the
+   * manager secret the dialogs already collect is actually verified
+   * here — it used to travel to the server and be discarded. The rule
+   * mirrors sale edit: a non-admin must supply the shared manager PIN
+   * or a manager account password; an admin bypasses unless a secret
+   * was supplied, in which case it is verified too.
+   */
+  private async assertManagerApprovalForPurchaseChange(secret: string, auth: AuthContext): Promise<void> {
+    const isAdmin = auth.role === 'admin' || auth.role === 'super_admin';
+    if (!isAdmin && !secret) {
+      throw new AppError('رمز اعتماد المدير مطلوب قبل تعديل أو إلغاء فاتورة المشتريات.', 'MANAGER_AUTH_REQUIRED', 400);
+    }
+    if (!isAdmin || secret) {
+      await authorizeManagerSecret(this.db, auth, secret);
+    }
   }
 
   private roundCurrency(value: number, digits: 2 | 3 = 2): number {
@@ -657,6 +677,7 @@ export class PurchasesWriteService {
     const scope = requireTenantScope(auth);
     const editReason = String(payload.editReason || '').trim();
     if (!editReason) throw new AppError('سبب التعديل مطلوب.', 'PURCHASE_EDIT_REASON_REQUIRED', 400);
+    await this.assertManagerApprovalForPurchaseChange(String(payload.managerPin || '').trim(), auth);
 
     const updated = await this.tx.runInTransaction(this.db, async (trx) => {
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
@@ -1004,8 +1025,9 @@ export class PurchasesWriteService {
     return this.buildPurchaseMutationResponse(purchaseId, auth, { repricingInsights: updated.repricingInsights });
   }
 
-  async cancelPurchase(purchaseId: number, reason: string, auth: AuthContext): Promise<Record<string, unknown>> {
+  async cancelPurchase(purchaseId: number, reason: string, auth: AuthContext, managerPin?: string): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
+    await this.assertManagerApprovalForPurchaseChange(String(managerPin || '').trim(), auth);
     await this.tx.runInTransaction(this.db, async (trx) => {
       const purchase = await trx.selectFrom('purchases').selectAll().where('id', '=', purchaseId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).forUpdate().executeTakeFirst();
       if (!purchase) throw new AppError('Purchase not found', 'PURCHASE_NOT_FOUND', 404);

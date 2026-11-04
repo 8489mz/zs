@@ -1,23 +1,12 @@
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { Kysely, sql, Transaction } from '../../../database/kysely';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
-import { verifyPassword } from '../../../core/auth/utils/password-hasher';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
-import { AppError } from '../../../common/errors/app-error';
+import { authorizeManagerSecret } from '../../../common/utils/manager-approval';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 
 type DbOrTx = Kysely<Database> | Transaction<Database>;
-
-type ManagerUserRow = {
-  id?: number | string | null;
-  username?: string | null;
-  role?: 'super_admin' | 'admin' | 'cashier' | string | null;
-  password_hash?: string | null;
-  password_salt?: string | null;
-};
-
-type SettingsRow = { key?: string | null; value?: string | null };
 
 @Injectable()
 export class SalesAuthorizationService {
@@ -62,66 +51,15 @@ export class SalesAuthorizationService {
     return Boolean(row?.id);
   }
 
-  private async getManagerPin(queryable: DbOrTx, auth: AuthContext): Promise<string> {
-    const { tenantId } = requireTenantScope(auth);
-    const result = await sql<SettingsRow>`
-      select key, value from settings
-      where key in ('managerPin', 'managerApprovalPin', 'manager_pin')
-        and tenant_id = ${tenantId}
-    `.execute(queryable);
-
-    const value = result.rows?.find((row) => String(row.key || '').length > 0)?.value;
-    if (typeof value === 'string' && value.trim()) {
-      try {
-        const parsed = JSON.parse(value);
-        if (typeof parsed === 'string' && parsed.trim()) return parsed.trim();
-      } catch {
-        return value.trim();
-      }
-    }
-
-    return '';
-  }
-
   async authorizeDiscountOverride(
     secret: string,
     auth: AuthContext,
     queryable: DbOrTx = this.db,
   ): Promise<{ mode: 'pin' | 'account' | 'bypass'; authorizedByName: string; authorizedById?: number }> {
-    const { tenantId } = requireTenantScope(auth);
-
-    const normalizedSecret = String(secret || '').trim();
-    if (!normalizedSecret) {
-      throw new AppError('أدخل رمز المدير أو كلمة المرور', 'MANAGER_AUTH_REQUIRED', 400);
-    }
-
-    const managerPin = await this.getManagerPin(queryable, auth);
-    if (managerPin && normalizedSecret === managerPin) {
-      return { mode: 'pin', authorizedByName: 'اعتماد المدير' };
-    }
-
-    const managerUsers = await queryable
-      .selectFrom('users')
-      .select(['id', 'username', 'role', 'password_hash', 'password_salt'])
-      .where('is_active', '=', true)
-      .where(sql<boolean>`tenant_id = ${tenantId}`)
-      .where((eb) => eb.or([eb('role', '=', 'admin'), eb('role', '=', 'super_admin')]))
-      .execute() as ManagerUserRow[];
-
-    for (const managerUser of managerUsers) {
-      const passwordCheck = await verifyPassword(
-        normalizedSecret,
-        String(managerUser.password_hash || ''),
-        String(managerUser.password_salt || ''),
-      );
-      if (!passwordCheck.valid) continue;
-      return {
-        mode: 'account',
-        authorizedById: Number(managerUser.id || 0) || undefined,
-        authorizedByName: String(managerUser.username || 'المدير'),
-      };
-    }
-
-    throw new AppError('رمز المدير أو كلمة المرور غير صحيحة', 'MANAGER_AUTH_INVALID', 400);
+    // INV-SPIRIT-MANAGER-APPROVAL-SHARED: the one shared check. The
+    // 'bypass' mode is kept in the return type for callers that
+    // short-circuit super_admin before calling; this method itself
+    // never bypasses — an empty or wrong secret always throws.
+    return authorizeManagerSecret(queryable, auth, secret);
   }
 }

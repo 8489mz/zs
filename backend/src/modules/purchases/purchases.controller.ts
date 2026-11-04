@@ -84,8 +84,8 @@ export class PurchasesController {
 
   @Post('purchases/:id/cancel')
   @RequirePermissions('canEditInvoices')
-  cancelPurchase(@Param('id', ParseIntPipe) id: number, @Body() body: { reason?: string }, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
-    return this.purchasesService.cancelPurchase(id, String(body?.reason || ''), req.authContext!);
+  cancelPurchase(@Param('id', ParseIntPipe) id: number, @Body() body: { reason?: string; managerPin?: string }, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+    return this.purchasesService.cancelPurchase(id, String(body?.reason || ''), req.authContext!, String(body?.managerPin || ''));
   }
 
   @Post('purchases/:id/receive-goods')

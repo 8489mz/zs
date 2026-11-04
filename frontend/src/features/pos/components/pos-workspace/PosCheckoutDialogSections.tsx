@@ -1282,7 +1282,7 @@ export function PosCheckoutPaymentSection({
 
       {managerApprovalOpen && isDiscountLocked && !pos.discountApprovalGranted ? (
         <div className="pos-checkout-manager-approval" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onInlineManagerApproval(); } }}>
-          <label className="field field-wide"><span>PIN المدير</span><input ref={managerPinInputRef} type="text" className="secure-password-field" inputMode="numeric" autoComplete="off" value={managerPinDraft} onChange={(event) => { onManagerPinDraftChange(event.target.value); if (managerPinError) onManagerPinErrorChange(''); }} placeholder="اكتب PIN المدير" disabled={pos.discountAuthorizationMutation.isPending} /></label>
+          <label className="field field-wide"><span>رمز اعتماد المدير أو كلمة مرور المدير</span><input ref={managerPinInputRef} type="text" className="secure-password-field" inputMode="numeric" autoComplete="off" value={managerPinDraft} onChange={(event) => { onManagerPinDraftChange(event.target.value); if (managerPinError) onManagerPinErrorChange(''); }} placeholder="أدخل رمز اعتماد المدير أو كلمة مرور المدير" disabled={pos.discountAuthorizationMutation.isPending} /></label>
           <div className="surface-note">يُستخدم PIN للتحقق فقط داخل هذه الفاتورة، ثم يتم مسحه ولا يُحفظ في المسودة.</div>
           {managerPinError ? <div className="error-box">{managerPinError}</div> : null}
           <div className="actions compact-actions">
