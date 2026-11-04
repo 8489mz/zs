@@ -283,38 +283,56 @@ export class InventoryCountService {
     });
   }
 
-  async postStockCountSession(sessionId: number, auth: AuthContext, adminPassword?: string): Promise<Record<string, unknown>> {
-    const isManager = auth.role === 'admin' || auth.role === 'super_admin';
-    if (!isManager) {
-      const normalizedPassword = String(adminPassword || '').trim();
-      if (!normalizedPassword) {
-        throw new AppError('كلمة مرور مدير النظام (الأدمن) مطلوبة لاعتماد وترحيل جلسة الجرد', 'ADMIN_PASSWORD_REQUIRED', 403);
-      }
-      const managerUsers = await this.db
-        .selectFrom('users')
-        .select(['id', 'username', 'role', 'password_hash', 'password_salt'])
-        .where('is_active', '=', true)
-        .where(this.tenantPredicate(auth))
-        .where((eb) => eb.or([eb('role', '=', 'admin'), eb('role', '=', 'super_admin')]))
-        .execute();
-
-      let passwordValid = false;
-      for (const managerUser of managerUsers) {
-        const check = await verifyPassword(
-          normalizedPassword,
-          String(managerUser.password_hash || ''),
-          String(managerUser.password_salt || ''),
-        );
-        if (check.valid) {
-          passwordValid = true;
-          break;
-        }
-      }
-      if (!passwordValid) {
-        throw new AppError('كلمة مرور مدير النظام (الأدمن) غير صحيحة', 'ADMIN_PASSWORD_INVALID', 403);
+  // INV-SPIRIT-COUNT-POSTING: manager approval (manager PIN or a
+  // manager password) is required only when the session posts a
+  // variance or a serial/batch trace; a zero-variance session posts
+  // without any approval credential.
+  private async getManagerPin(db: Kysely<Database>, auth: AuthContext): Promise<string> {
+    const { tenantId } = requireTenantScope(auth);
+    const result = await sql<{ key?: string; value?: string }>`
+      select key, value from settings
+      where key in ('managerPin', 'managerApprovalPin', 'manager_pin')
+        and tenant_id = ${tenantId}
+    `.execute(db);
+    const value = result.rows?.find((row) => String(row.key || '').length > 0)?.value;
+    if (typeof value === 'string' && value.trim()) {
+      try {
+        const parsed = JSON.parse(value);
+        if (typeof parsed === 'string' && parsed.trim()) return parsed.trim();
+      } catch {
+        return value.trim();
       }
     }
+    return '';
+  }
 
+  private async assertCountVarianceApproval(credential: string | undefined, auth: AuthContext): Promise<void> {
+    if (auth.role === 'admin' || auth.role === 'super_admin') return;
+    const normalized = String(credential || '').trim();
+    if (!normalized) {
+      throw new AppError('اعتماد فروقات الجرد يتطلب رمز اعتماد المدير أو كلمة مرور المدير', 'ADMIN_PASSWORD_REQUIRED', 403);
+    }
+    const managerPin = await this.getManagerPin(this.db, auth);
+    if (managerPin && normalized === managerPin) return;
+    const managerUsers = await this.db
+      .selectFrom('users')
+      .select(['id', 'username', 'role', 'password_hash', 'password_salt'])
+      .where('is_active', '=', true)
+      .where(this.tenantPredicate(auth))
+      .where((eb) => eb.or([eb('role', '=', 'admin'), eb('role', '=', 'super_admin')]))
+      .execute();
+    for (const managerUser of managerUsers) {
+      const check = await verifyPassword(
+        normalized,
+        String(managerUser.password_hash || ''),
+        String(managerUser.password_salt || ''),
+      );
+      if (check.valid) return;
+    }
+    throw new AppError('رمز اعتماد المدير أو كلمة مرور المدير غير صحيحة', 'ADMIN_PASSWORD_INVALID', 403);
+  }
+
+  async postStockCountSession(sessionId: number, auth: AuthContext, adminPassword?: string): Promise<Record<string, unknown>> {
     const tenantScope = this.tenantScope(auth);
     const idemCtx = idempotencyStorage.getStore();
     if (idemCtx?.idempotencyKey) {
@@ -322,7 +340,41 @@ export class InventoryCountService {
       if (cached) return cached.response;
     }
 
+    // Decide the approval need from the items that would actually
+    // post: an item whose stock moved since the count started is
+    // skipped (see below), so a stale variance never demands approval
+    // for a posting that will not happen. The per-chunk check inside
+    // the transaction stays authoritative for the skip itself.
+    const approvalSession = await this.db.selectFrom('stock_count_sessions').select(['id', 'branch_id', 'location_id', 'status'])
+      .where('id', '=', sessionId).where(this.tenantPredicate(auth)).executeTakeFirst();
+    if (approvalSession && (approvalSession.status === 'draft' || approvalSession.status === 'posting')) {
+      const unposted = await this.db.selectFrom('stock_count_items')
+        .select(['id', 'product_id', 'expected_qty', 'variance_qty', 'counted_serials', 'batch_counts'])
+        .where('session_id', '=', sessionId).where(this.tenantPredicate(auth))
+        .where('posted_at', 'is', null).execute();
+      let needsApproval = false;
+      for (const item of unposted) {
+        const serialData = typeof item.counted_serials === 'string' ? JSON.parse(item.counted_serials) : item.counted_serials;
+        const batchData = typeof item.batch_counts === 'string' ? JSON.parse(item.batch_counts) : item.batch_counts;
+        const hasTrace = (Array.isArray(serialData) && serialData.length > 0) || (Array.isArray(batchData) && batchData.length > 0);
+        if (Math.abs(Number(item.variance_qty || 0)) < 0.001 && !hasTrace) continue;
+        const currentQty = await previewAssignedLocationStockQty(this.db, {
+          productId: Number(item.product_id), branchId: approvalSession.branch_id, locationId: approvalSession.location_id,
+          tenantId: tenantScope.tenantId, accountId: tenantScope.accountId,
+        });
+        if (Math.abs(currentQty - Number(item.expected_qty || 0)) < 0.001) { needsApproval = true; break; }
+      }
+      if (needsApproval) await this.assertCountVarianceApproval(adminPassword, auth);
+    }
+
     const chunkSize = 64;
+    // INV-SPIRIT-COUNT-POSTING: an item whose stock moved since the
+    // count started is skipped, never blocking the session: it stays
+    // unposted for a standalone recount (recountPendingStockCountItem
+    // refreshes its expected quantity), while every unchanged item
+    // posts. Skipped ids are carried across chunks so the loop cannot
+    // re-read the same stale item forever.
+    const skippedItemIds: number[] = [];
     while (true) {
       const hasMore = await this.tx.runInTransaction(this.db, async (trx) => {
         const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantScope.tenantId));
@@ -335,11 +387,16 @@ export class InventoryCountService {
         if (session.status !== 'draft' && session.status !== 'posting') {
           throw new AppError('Stock count session cannot be posted', 'SESSION_STATUS_INVALID', 409);
         }
-        const pending = await trx.selectFrom('stock_count_items').selectAll()
+        let pendingQuery = trx.selectFrom('stock_count_items').selectAll()
           .where('session_id', '=', sessionId).where(this.tenantPredicate(auth))
-          .where('posted_at', 'is', null).orderBy('product_id', 'asc').orderBy('id', 'asc')
-          .limit(chunkSize + 1).execute();
+          .where('posted_at', 'is', null).orderBy('product_id', 'asc').orderBy('id', 'asc');
+        if (skippedItemIds.length) pendingQuery = pendingQuery.where('id', 'not in', skippedItemIds) as typeof pendingQuery;
+        const pending = await pendingQuery.limit(chunkSize + 1).execute();
         if (!pending.length) {
+          if (skippedItemIds.length) {
+            await this.audit.logWithExecutor(trx, 'تأجيل بنود جرد متغيرة لإعادة جرد مستقلة', JSON.stringify({ sessionId, skippedItemIds }), auth);
+            return false;
+          }
           if (session.status === 'draft') throw new AppError('Stock count session has no items', 'SESSION_EMPTY', 400);
           await trx.updateTable('stock_count_sessions').set({ status: 'posted', posted_at: sql`NOW()`, updated_at: sql`NOW()` })
             .where('id', '=', sessionId).where(this.tenantPredicate(auth)).execute();
@@ -347,6 +404,8 @@ export class InventoryCountService {
         }
         const items = pending.slice(0, chunkSize);
         await lockStockProducts(trx, { ...tenantScope, productIds: items.map((item) => Number(item.product_id)) });
+        const postableItems: typeof items = [];
+        const chunkSkippedIds: number[] = [];
         for (const item of items) {
           const expectedQty = Number(item.expected_qty || 0);
           const currentQty = await previewAssignedLocationStockQty(trx, {
@@ -354,8 +413,11 @@ export class InventoryCountService {
             tenantId: tenantScope.tenantId, accountId: tenantScope.accountId,
           });
           if (Math.abs(currentQty - expectedQty) >= 0.001) {
-            throw new AppError(`Stock count item ${item.id} is stale; reconcile this item before resuming`, 'STOCK_COUNT_STALE', 409);
+            skippedItemIds.push(Number(item.id));
+            chunkSkippedIds.push(Number(item.id));
+            continue;
           }
+          postableItems.push(item);
           const variance = Number(item.variance_qty || 0);
           const serialData = typeof item.counted_serials === 'string' ? JSON.parse(item.counted_serials) : item.counted_serials;
           const batchData = typeof item.batch_counts === 'string' ? JSON.parse(item.batch_counts) : item.batch_counts;
@@ -429,28 +491,39 @@ export class InventoryCountService {
             }
           }
         }
+        const hasMoreChunks = pending.length > chunkSize;
+        if (!postableItems.length) {
+          // This chunk held only moved items: nothing posts, and the
+          // session stays open for their standalone recounts. The next
+          // chunk (if any) is still examined.
+          if (!hasMoreChunks) {
+            await this.audit.logWithExecutor(trx, 'تأجيل بنود جرد متغيرة لإعادة جرد مستقلة', JSON.stringify({ sessionId, skippedItemIds }), auth);
+            return false;
+          }
+          return true;
+        }
         await trx.updateTable('stock_count_sessions').set({
-          status: pending.length > chunkSize ? 'posting' : 'posted',
+          status: hasMoreChunks ? 'posting' : (skippedItemIds.length ? 'draft' : 'posted'),
           approved_by: auth.userId,
-          ...(pending.length > chunkSize ? {} : { posted_at: sql`NOW()` }),
+          ...(hasMoreChunks || skippedItemIds.length ? {} : { posted_at: sql`NOW()` }),
           updated_at: sql`NOW()`,
         }).where('id', '=', sessionId).where(this.tenantPredicate(auth)).execute();
-        const posting = await this.accountingPosting.postStockCount(trx, sessionId, auth, items.map((item) => Number(item.id)));
+        const posting = await this.accountingPosting.postStockCount(trx, sessionId, auth, postableItems.map((item) => Number(item.id)));
         if (posting.hasFinancialImpact && !posting.journalEntryId) {
           throw new AppError(`Stock count ${sessionId} chunk has no journal entry`, 'LEDGER_POSTING_MISSING', 500);
         }
         await trx.updateTable('stock_count_items').set({ posted_at: sql`NOW()` })
-          .where('id', 'in', items.map((item) => Number(item.id))).where(this.tenantPredicate(auth)).execute();
+          .where('id', 'in', postableItems.map((item) => Number(item.id))).where(this.tenantPredicate(auth)).execute();
         await this.audit.logWithExecutor(trx, 'ترحيل دفعة جرد', JSON.stringify({
-          sessionId, firstItemId: items[0].id, itemCount: items.length,
-          journalEntryId: posting.journalEntryId, remaining: pending.length > chunkSize,
+          sessionId, firstItemId: postableItems[0].id, itemCount: postableItems.length,
+          journalEntryId: posting.journalEntryId, remaining: hasMoreChunks, skippedItemIds: chunkSkippedIds,
         }), auth);
-        return pending.length > chunkSize;
+        return hasMoreChunks;
       });
       if (!hasMore) break;
     }
-    await this.audit.log('اعتماد جلسة جرد', JSON.stringify({ actorUserId: auth.userId, after: { sessionId, status: 'posted' } }), auth);
-    const responsePayload = { ok: true, stockCountSessions: (await this.listStockCountSessions({}, auth)).stockCountSessions, products: (await this.db.selectFrom('products').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(auth)).execute()).map((p) => ({ id: String(p.id), name: p.name })), stockMovements: (await this.listStockMovements({}, auth)).stockMovements, damagedStockRecords: (await this.listDamagedStock({}, auth)).damagedStockRecords };
+    await this.audit.log(skippedItemIds.length ? 'اعتماد جزئي لجلسة جرد' : 'اعتماد جلسة جرد', JSON.stringify({ actorUserId: auth.userId, after: { sessionId, status: skippedItemIds.length ? 'draft' : 'posted', skippedItemIds } }), auth);
+    const responsePayload = { ok: true, skippedStockCountItemIds: skippedItemIds, stockCountSessions: (await this.listStockCountSessions({}, auth)).stockCountSessions, products: (await this.db.selectFrom('products').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(auth)).execute()).map((p) => ({ id: String(p.id), name: p.name })), stockMovements: (await this.listStockMovements({}, auth)).stockMovements, damagedStockRecords: (await this.listDamagedStock({}, auth)).damagedStockRecords };
     if (idemCtx && idemCtx.idempotencyKey && idemCtx.operationType) {
       const idKey = idemCtx.idempotencyKey;
       const opType = idemCtx.operationType;

@@ -187,6 +187,14 @@ export function InventoryPostSessionDialog({
   const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const isAdmin = isAdminUser(user);
+  // Manager approval is required only when a selected session posts a
+  // variance or a serial/batch trace; a zero-variance session posts
+  // without any approval credential (backend enforces the same rule).
+  const hasVariance = sessions.some((session) => session.items.some((item) =>
+    Math.abs(Number(item.varianceQty || 0)) >= 0.001 ||
+    (Array.isArray(item.countedSerials) && item.countedSerials.length > 0) ||
+    Boolean(String(item.batchCountsText || '').trim()),
+  ));
 
   return (
     <ActionConfirmDialog
@@ -195,10 +203,10 @@ export function InventoryPostSessionDialog({
       description={sessions.length ? (sessions.length === 1 ? <>{t('inventory.inventory_workspace_dialogs.s13', "سيتم اعتماد الجلسة")} <strong>{sessions[0].docNo || sessions[0].id}</strong> {t('inventory.inventory_workspace_dialogs.s14', "وتسجيل فروقاتها على المخزون بشكل نهائي.")}</> : <>{t('inventory.inventory_workspace_dialogs.s15', "سيتم اعتماد")} <strong>{sessions.length}</strong> {t('inventory.inventory_workspace_dialogs.s16', "جلسات جرد محددة وتسجيل فروقاتها على المخزون بشكل نهائي.")}</>) : ''}
       confirmLabel={t('inventory.inventory_workspace_dialogs.s17', "اعتماد الجلسة")}
       confirmVariant="primary"
-      managerPinRequired={!isAdmin}
-      managerPinLabel="كلمة مرور مدير النظام (الأدمن)"
-      managerPinHint="أدخل كلمة مرور حساب الأدمن لاعتماد الجلسة وتسوية الفروقات المخزنية."
-      managerPinPlaceholder="أدخل كلمة مرور الأدمن"
+      managerPinRequired={!isAdmin && hasVariance}
+      managerPinLabel="رمز اعتماد المدير أو كلمة مرور المدير"
+      managerPinHint="أدخل رمز اعتماد المدير أو كلمة مرور حساب مدير لاعتماد فروقات الجلسة وتسوية الفروقات المخزنية."
+      managerPinPlaceholder="أدخل رمز اعتماد المدير أو كلمة مرور المدير"
       managerPinInputType="password"
       isBusy={isBusy}
       onCancel={onCancel}
