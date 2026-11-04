@@ -39,6 +39,7 @@ import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway
 import { CashierFraudRadarService } from './cashier-fraud-radar.service';
 import { PlanFeatureService } from '../../../core/auth/services/plan-feature.service';
 import { ReturnsService, type ExchangeReturnContext } from '../../returns/returns.service';
+import { CashDrawerService } from '../../cash-drawer/cash-drawer.service';
 import { allocateSaleFromImportLots, isAnomalousImportLotShortfall, restoreImportLotsFromCancelledSale } from '../../import-sales/helpers/import-lot-allocation.helper';
 
 /**
@@ -122,6 +123,11 @@ export class SalesWriteService {
     private readonly returnsService: ReturnsService,
     @Optional() private readonly whatsappService?: WhatsAppGatewayService,
     @Optional() private readonly fraudRadarService?: CashierFraudRadarService,
+    // INV-CLOSED-SHIFT-POST-CLOSE-REFRESH: the drawer service refreshes
+    // a closed shift's stored figures after a post-close edit/cancel.
+    // Optional so existing manual constructions keep compiling; the
+    // refresh helper below refuses loudly when it is absent.
+    @Optional() private readonly cashDrawerService?: CashDrawerService,
   ) {}
 
 
@@ -2431,9 +2437,11 @@ export class SalesWriteService {
       // INV-SPIRIT-POST-CLOSE-EDIT: editing after the original shift closed
       // (closed or pending_review) is allowed with manager PIN/password +
       // reason, and is recorded as post-close below; the closed shift's
-      // stored expected cash is frozen and never restated. An OPEN shift
-      // belonging to another cashier still blocks the edit, and a missing
-      // original shift for a POS sale still blocks it (fail closed).
+      // stored figures are then refreshed (recompute + stamp, see
+      // refreshClosedShiftForPostCloseChange) while the posted variance
+      // journal is never restated. An OPEN shift belonging to another
+      // cashier still blocks the edit, and a missing original shift for
+      // a POS sale still blocks it (fail closed).
       postCloseEdit = originalShift ? String(originalShift.status || '') !== 'open' : false;
       postCloseShiftId = postCloseEdit && originalShift ? Number(originalShift.id) : null;
       if (postCloseEdit) {
@@ -3525,6 +3533,10 @@ export class SalesWriteService {
       }
 
       await this.accountingPosting.postSaleEdit(trx, saleId, auth, editReason, preparedWasteEdit ? { preparedWaste: preparedWasteEdit } : undefined);
+
+      if (postCloseEdit && postCloseShiftId) {
+        await this.refreshClosedShiftForPostCloseChange(trx, postCloseShiftId, saleId, 'edit', editReason, auth);
+      }
     });
 
     await this.audit.log('تعديل فاتورة بيع', `تم تعديل الفاتورة S-${saleId} بواسطة ${auth.username} | السبب: ${editReason}${postCloseEdit ? ` | تعديل بعد إغلاق الوردية الأصلية #${postCloseShiftId}` : ''}`, auth);
@@ -3589,6 +3601,35 @@ export class SalesWriteService {
     return isPreparedWaste;
   }
 
+  /**
+   * INV-CLOSED-SHIFT-POST-CLOSE-REFRESH: after a post-close edit or
+   * cancel has written the sale's final state in this transaction,
+   * refresh the original closed shift's stored figures through the
+   * drawer service (recompute + stamp; a no-op when the figures are
+   * unchanged). Must run inside the caller's transaction so a failed
+   * refresh rolls the sale change back. Refuses loudly when the drawer
+   * service was not wired: a post-close change must never silently
+   * leave the closed shift stale.
+   */
+  private async refreshClosedShiftForPostCloseChange(
+    trx: Kysely<Database> | Transaction<Database>,
+    shiftId: number,
+    saleId: number,
+    kind: 'edit' | 'cancel',
+    reason: string,
+    auth: AuthContext,
+  ): Promise<void> {
+    if (!this.cashDrawerService) {
+      throw new AppError('تعذر تحديث أرقام الوردية المغلقة: خدمة الورديات غير موصولة.', 'SHIFT_REFRESH_UNAVAILABLE', 500);
+    }
+    await this.cashDrawerService.refreshClosedShiftSummary(trx as Kysely<Database>, shiftId, {
+      saleId,
+      kind,
+      reason,
+      auth,
+    });
+  }
+
   async cancelSale(saleId: number, reason: string, managerPin: string, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     if (!managerPin) throw new AppError('رمز اعتماد المدير مطلوب لإلغاء الفاتورة.', 'MANAGER_AUTH_REQUIRED', 400);
@@ -3609,9 +3650,11 @@ export class SalesWriteService {
       if (sale.status !== 'posted') throw new AppError('Only posted sales can be cancelled', 'SALE_CANCEL_STATUS_FORBIDDEN', 400);
       // INV-SPIRIT-POST-CLOSE-EDIT: cancelling after the original shift
       // closed was never blocked; the post-close fact is recorded in the
-      // audit event below so the closed shift's history is never silently
-      // rewritten. Cash attribution for a closed original shift already
-      // falls back to the cancelling user's open shift (see below).
+      // audit event below, and the closed shift's stored figures are
+      // refreshed (recompute + stamp) below — a cancel normally nets to
+      // the same figures, so the refresh writes nothing. Cash attribution
+      // for a closed original shift already falls back to the cancelling
+      // user's open shift (see below).
       const cancelOriginalShift = await trx.selectFrom('cashier_shifts').select(['id', 'status'])
         .where('tenant_id', '=', scope.tenantId)
         .where('opened_by', '=', Number(sale.created_by || 0))
@@ -3805,11 +3848,12 @@ export class SalesWriteService {
         // the drawer that took the cash) — so that shift nets the
         // restored receipt (computeShiftCancelledSaleCashReceipts)
         // against the refund and the cancelling shift is untouched.
-        // Only when that original shift is closed (its stored
-        // expected cash is frozen and never restated) does the refund
+        // Only when that original shift is closed does the refund
         // fall back to the cancelling user's latest open shift on the
-        // branch, as before; admins with no open shift keep the
-        // sale-linked row.
+        // branch, as before; the closed shift's stored figures are
+        // refreshed separately by the stamped recompute below (a
+        // cancel normally nets to the same figures), and admins with
+        // no open shift keep the sale-linked row.
         const originalCashShift = Number(sale.created_by || 0) > 0 && sale.created_at
           ? await trx.selectFrom('cashier_shifts').select(['id', 'status'])
             .where('tenant_id', '=', scope.tenantId)
@@ -3968,6 +4012,10 @@ export class SalesWriteService {
       } catch (error) {
         this.logger.error(`Failed to post reversal accounting journal for cancelled sale ${saleId}`, error instanceof Error ? error.stack : String(error));
         throw error;
+      }
+
+      if (postCloseCancel && postCloseCancelShiftId) {
+        await this.refreshClosedShiftForPostCloseChange(trx, postCloseCancelShiftId, saleId, 'cancel', String(reason || '').trim(), auth);
       }
     });
 

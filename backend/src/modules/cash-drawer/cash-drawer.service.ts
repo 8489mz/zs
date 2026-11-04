@@ -93,7 +93,27 @@ type ShiftSalesBreakdown = {
 };
 type ShiftSaleReturnTotals = { saleReturnCashRefundTotal: number; saleReturnCardRefundTotal: number; saleReturnTotal: number };
 type CloseOperationDetailInput = { amount?: number; reference?: string };
-type BlindCloseMetadata = { blindClose: true; declared: { cash: number; cardTotal: number; cardCount: number; walletTotal: number; walletCount: number; instapayTotal: number; instapayCount: number }; detailTotals: { card: number; wallet: number; instapay: number }; details: { card: Array<{ amount: number; reference?: string }>; wallet: Array<{ amount: number; reference?: string }>; instapay: Array<{ amount: number; reference?: string }> }; managerReview?: { note: string; reviewedById: number; reviewedByName: string; reviewedAt: string }; reconciliation?: BlindCloseReconciliation; note: string };
+type BlindCloseMetadata = { blindClose: true; declared: { cash: number; cardTotal: number; cardCount: number; walletTotal: number; walletCount: number; instapayTotal: number; instapayCount: number }; detailTotals: { card: number; wallet: number; instapay: number }; details: { card: Array<{ amount: number; reference?: string }>; wallet: Array<{ amount: number; reference?: string }>; instapay: Array<{ amount: number; reference?: string }> }; managerReview?: { note: string; reviewedById: number; reviewedByName: string; reviewedAt: string }; reconciliation?: BlindCloseReconciliation; postCloseCorrections?: Array<PostCloseCorrectionStamp>; note: string };
+
+/**
+ * One stamped post-close correction (INV-CLOSED-SHIFT-POST-CLOSE-REFRESH):
+ * the recomputed summary for a closed shift after a sale edit/cancel,
+ * with the original figures preserved so the close record is never
+ * silently overwritten. Stored inside the blind-close JSON for blind
+ * closes; rendered as a text line for ordinary close notes.
+ */
+export type PostCloseCorrectionStamp = {
+  at: string;
+  saleId: number;
+  kind: 'edit' | 'cancel';
+  previousExpectedCash: number;
+  correctedExpectedCash: number;
+  previousVariance: number;
+  correctedVariance: number;
+  reason: string;
+  byUserId: number | null;
+  byUsername: string;
+};
 
 const BLIND_CLOSE_NOTE_PREFIX = 'BLIND_CLOSE::';
 
@@ -891,6 +911,96 @@ export class CashDrawerService {
   async computeShiftExpectedCash(shiftId: number, auth: AuthContext, queryable?: Kysely<Database>): Promise<number> {
     const shift = await this.getShift(shiftId, auth, queryable);
     return shift ? this.computeShiftExpectedCashFromShift(shift, auth, undefined, undefined, queryable) : 0;
+  }
+
+  /**
+   * INV-CLOSED-SHIFT-POST-CLOSE-REFRESH: refresh the STORED summary of
+   * a closed or pending_review shift after a post-close sale edit or
+   * cancel, inside the caller's transaction. The correction recomputes
+   * exactly what close would compute — the same
+   * computeShiftExpectedCashFromShift over the same stored closed_at
+   * window — and rewrites expected_cash/variance only when the
+   * recomputation differs, stamping the original figures onto
+   * close_note. Open shifts return refreshed=false (their figures
+   * recompute on read); a recomputation equal to the stored figures
+   * (the usual cancel outcome) also writes nothing. The POSTED
+   * variance journal from close is never restated or re-posted here.
+   * The caller must hold the sale mutation in the same transaction so
+   * a failed refresh rolls the sale change back with it.
+   */
+  async refreshClosedShiftSummary(
+    queryable: Kysely<Database>,
+    shiftId: number,
+    stamp: { saleId: number; kind: 'edit' | 'cancel'; reason: string; auth: AuthContext },
+  ): Promise<{
+    refreshed: boolean;
+    previousExpectedCash: number;
+    correctedExpectedCash: number;
+    previousVariance: number;
+    correctedVariance: number;
+  }> {
+    const auth = stamp.auth;
+    const scope = this.scope(auth);
+    const locked = await queryable
+      .selectFrom('cashier_shifts')
+      .selectAll()
+      .where('id', '=', shiftId)
+      .where('tenant_id', '=', scope.tenantId)
+      .forUpdate()
+      .executeTakeFirst();
+    const previousExpectedCash = Number((locked as ShiftRow | undefined)?.expected_cash || 0);
+    const previousVariance = Number((locked as ShiftRow | undefined)?.variance || 0);
+    const noChange = {
+      refreshed: false,
+      previousExpectedCash,
+      correctedExpectedCash: previousExpectedCash,
+      previousVariance,
+      correctedVariance: previousVariance,
+    };
+    if (!locked || String((locked as ShiftRow).status || '') === 'open') return noChange;
+
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
+    const correctedExpectedCash = await this.computeShiftExpectedCashFromShift(
+      locked as ShiftRow, auth, undefined, undefined, queryable, digits,
+    );
+    const countedCash = Number((locked as ShiftRow).counted_cash || 0);
+    const correctedVariance = computeCashDrawerVariance(countedCash, correctedExpectedCash, digits);
+    if (correctedExpectedCash === previousExpectedCash && correctedVariance === previousVariance) {
+      return noChange;
+    }
+
+    const correction: PostCloseCorrectionStamp = {
+      at: new Date().toISOString(),
+      saleId: Number(stamp.saleId),
+      kind: stamp.kind,
+      previousExpectedCash,
+      correctedExpectedCash,
+      previousVariance,
+      correctedVariance,
+      reason: String(stamp.reason || '').trim().slice(0, 200),
+      byUserId: Number(auth.userId || 0) || null,
+      byUsername: String(auth.username || ''),
+    };
+    const closeNote = this.appendPostCloseCorrectionNote((locked as ShiftRow).close_note, correction);
+    await sql`update cashier_shifts set expected_cash = ${correctedExpectedCash}, variance = ${correctedVariance}, close_note = ${closeNote} where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(queryable);
+    return {
+      refreshed: true,
+      previousExpectedCash,
+      correctedExpectedCash,
+      previousVariance,
+      correctedVariance,
+    };
+  }
+
+  private appendPostCloseCorrectionNote(rawNote: unknown, stamp: PostCloseCorrectionStamp): string {
+    const parsed = this.parseBlindCloseNote(rawNote);
+    if (parsed) {
+      const corrections = [...(parsed.postCloseCorrections || []), stamp];
+      return this.serializeBlindCloseNote({ ...parsed, postCloseCorrections: corrections });
+    }
+    const line = `تصحيح بعد الإغلاق [${stamp.at}]: فاتورة S-${stamp.saleId} (${stamp.kind === 'edit' ? 'تعديل' : 'إلغاء'}) — المتوقع من ${stamp.previousExpectedCash} إلى ${stamp.correctedExpectedCash}، الفرق من ${stamp.previousVariance} إلى ${stamp.correctedVariance}، السبب: ${stamp.reason}، بواسطة ${stamp.byUsername}.`;
+    const existing = String(rawNote || '').trim();
+    return existing ? `${existing}\n\n${line}` : line;
   }
 
   async listCashierShifts(query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {

@@ -164,11 +164,12 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
   const audit = new AuditService(db);
   const planFeatures = { hasFeature: () => false };
   const returnsStub = {};
+  const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   const sales = new SalesWriteService(
     db, tx, audit, authz, finance, query, posting, idempotency,
     planFeatures as never, returnsStub as never,
+    undefined, undefined, drawer,
   );
-  const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   return { sales, drawer, posting };
 }
 

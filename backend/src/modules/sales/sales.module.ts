@@ -5,6 +5,7 @@ import { AuditModule } from '../../core/audit/audit.module';
 import { AuthFoundationModule } from '../../core/auth/auth.module';
 import { DatabaseModule } from '../../database/database.module';
 import { SettingsModule } from '../settings/settings.module';
+import { CashDrawerModule } from '../cash-drawer/cash-drawer.module';
 import { SalesController } from './sales.controller';
 import { SalesService } from './sales.service';
 import { SalesAuthorizationService } from './services/sales-authorization.service';
@@ -44,7 +45,7 @@ import { RestaurantAdvancedFnbController } from './controllers/restaurant-advanc
 import { RestaurantAdvancedFnbService } from './services/restaurant-advanced-fnb.service';
 
 @Module({
-  imports: [DatabaseModule, AuditModule, AuthFoundationModule, AccountingModule, SettingsModule, ReturnsModule],
+  imports: [DatabaseModule, AuditModule, AuthFoundationModule, AccountingModule, SettingsModule, ReturnsModule, CashDrawerModule],
   controllers: [
     PriceListsController,
     PosTerminalController,

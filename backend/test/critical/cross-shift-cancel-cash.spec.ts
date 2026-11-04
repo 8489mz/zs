@@ -24,11 +24,13 @@ refund row lands on A's shift: A nets to zero and B is untouched.
 THE FIX: cancelSale first looks up the original shift (opened_by
 = sale.created_by, created_at <= sale.created_at <= closed_at,
 same branch/location). If that shift is still open, the refund
-links to it. Only when it is closed — its stored expected cash is
-frozen and never restated — does the refund keep the previous
-fallback (the cancelling user's latest open shift on the branch,
-or a sale-linked row for an admin with no open shift). Same-shift
-cancels and the admin no-shift exemption are unchanged.
+links to it. Only when it is closed does the refund keep the
+previous fallback (the cancelling user's latest open shift on the
+branch, or a sale-linked row for an admin with no open shift). The
+closed shift's stored figures are refreshed separately by the
+stamped recompute (INV-CLOSED-SHIFT-POST-CLOSE-REFRESH); a cancel
+normally nets to the same figures, so the stored row is unchanged.
+Same-shift cancels and the admin no-shift exemption are unchanged.
 
 HOW THIS IS DRIVEN: the real createSale + real cancelSale on
 PGlite, with the real authorization, finance, query, posting,
@@ -123,7 +125,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE fleet_vehicles (id bigint PRIMARY KEY, tenant_id text, assigned_rep_id bigint, van_location_id bigint, current_odometer numeric);
     CREATE TABLE pos_audit_events (id bigserial PRIMARY KEY, tenant_id text, account_id text, event_type text, user_id bigint, sale_id bigint, product_id bigint, amount numeric, reason text, metadata jsonb, created_at timestamptz DEFAULT NOW());
     CREATE TABLE payment_allocations (id bigserial PRIMARY KEY, tenant_id text, invoice_type text, invoice_id bigint);
-    CREATE TABLE cashier_shifts (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, opened_by bigint, status text, branch_id bigint, location_id bigint, opening_cash numeric, expected_cash numeric, created_at timestamptz DEFAULT NOW(), closed_at timestamptz);
+    CREATE TABLE cashier_shifts (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, opened_by bigint, status text, branch_id bigint, location_id bigint, opening_cash numeric, opening_note text, expected_cash numeric, counted_cash numeric, variance numeric, close_note text, closed_by bigint, created_at timestamptz DEFAULT NOW(), closed_at timestamptz);
     CREATE TABLE treasury_transactions (id bigserial PRIMARY KEY, tenant_id text, account_id text, txn_type text, amount numeric, note text, reference_type text, reference_id bigint, created_by bigint, branch_id bigint, location_id bigint, payment_channel text, return_document_id bigint, created_at timestamptz DEFAULT NOW());
     CREATE TABLE audit_logs (id bigserial PRIMARY KEY, action text, details text, event_code text, target_tenant_id text, created_by bigint, impersonated_by bigint, tenant_id text, account_id text, created_at timestamptz DEFAULT NOW());
     CREATE TABLE operation_executions (id bigserial PRIMARY KEY, tenant_id text, account_id text, idempotency_key text, operation_type text, status text, document_id text, response_payload text, created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW());
@@ -196,11 +198,12 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
   const audit = new AuditService(db);
   const planFeatures = { hasFeature: () => false };
   const returnsStub = {};
+  const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   const sales = new SalesWriteService(
     db, tx, audit, authz, finance, query, posting, idempotency,
     planFeatures as never, returnsStub as never,
+    undefined, undefined, drawer,
   );
-  const drawer = new CashDrawerService(db, new TransactionHelper(), posting);
   return { sales, drawer, posting };
 }
 
@@ -293,7 +296,7 @@ async function main(): Promise<void> {
       const closed = await (db as any).selectFrom('cashier_shifts').select(['status', 'expected_cash'])
         .where('id', '=', 1).executeTakeFirstOrThrow();
       assert.equal(closed.status, 'closed', 'the original shift stays closed');
-      assert.equal(Number(closed.expected_cash), 100, 'the closed shift stored expected cash is never restated');
+      assert.equal(Number(closed.expected_cash), 100, 'the closed shift refreshes to the same figure: cancel nets to zero, row unchanged');
       assert.equal(await drawer.computeShiftExpectedCash(2, adminAuth), -100, 'the current drawer bears the fallback refund');
     } finally {
       await db.destroy();
