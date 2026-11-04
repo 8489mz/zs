@@ -10,10 +10,11 @@ C silently recovered C's components into stock and posted
 the wrong journal. The mismatch now throws
 BOM_PRODUCT_MISMATCH before any stock or journal write.
 
-THE 5190 CAP/ALERT PART OF THE SAME FINDING IS LEFT OPEN:
-this package enforces the binding only; the uncapped
-variance difference is recorded as an open item in the
-batch report, not assumed fixed.
+THE 5190 CAP/ALERT PART OF THE SAME FINDING IS NOW ENFORCED
+(INV-MANUFACTURING-UNBUILD-5190-CAP-ALERT): a variance over one
+minor unit fails the whole unbuild closed with a review alert.
+This spec's match case therefore uses a balanced fixture, so
+the binding stays the subject under test.
 
 THE CASES, WORKED ONCE (EGP, 2 book digits):
 (a) MISMATCH: product A (finished, cost 20, stock 10)
@@ -22,8 +23,8 @@ unit) throws BOM_PRODUCT_MISMATCH, creates no unbuild
 order, moves no stock, posts no journal.
 (b) MATCH: the same unbuild with A's own BOM (component B,
 2 per unit) succeeds: A 10 -> 8, B 0 -> 4, and the posted
-journal balances (finished cost 40 recovered 20, the 20
-difference on the variance account).
+journal balances (finished cost 40, recovered 40, no
+variance line).
 
 HOW THIS IS DRIVEN: the real ManufacturingService over the
 real AccountingPostingService on PGlite. Stock and journal
@@ -89,8 +90,9 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
   // A: finished product, cost 20, stock 10 at location 1.
   await anyDb.insertInto('products').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, name: 'Meal A', cost_price: 20, default_location_id: 1, is_active: true, stock_qty: 10 }).execute();
   await anyDb.insertInto('product_location_stock').values({ tenant_id: TENANT, account_id: ACCOUNT, product_id: 10, location_id: 1, branch_id: null, qty: 10 }).execute();
-  // B: component, cost 5, no stock.
-  await anyDb.insertInto('products').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Component B', cost_price: 5, default_location_id: 1, is_active: true, stock_qty: 0 }).execute();
+  // B: component, cost 10 (equal to the finished value per
+  // recovered unit, so the match case is balanced), no stock.
+  await anyDb.insertInto('products').values({ id: 20, tenant_id: TENANT, account_id: ACCOUNT, name: 'Component B', cost_price: 10, default_location_id: 1, is_active: true, stock_qty: 0 }).execute();
   // C: a different finished product whose BOM must never unbuild A.
   await anyDb.insertInto('products').values({ id: 30, tenant_id: TENANT, account_id: ACCOUNT, name: 'Meal C', cost_price: 30, default_location_id: 1, is_active: true, stock_qty: 5 }).execute();
   // BOM of C: 2 x B per unit.
@@ -161,6 +163,7 @@ async function main(): Promise<void> {
       const credit = lines.reduce((s: number, r: any) => s + Number(r.credit || 0), 0);
       assert.equal(debit, credit, 'the unbuild journal balances');
       assert.equal(debit, 40, 'the journal equals the finished cost (2 x 20)');
+      assert.equal(lines.length, 2, 'no variance line posts for a balanced unbuild');
     } finally {
       await db.destroy();
     }

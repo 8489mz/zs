@@ -17,21 +17,33 @@ the same transaction -- Dr inventory for the recovered value,
 Cr inventory for the consumed finished-goods value, and the
 difference to the price-variance account 5190 (debit when the
 finished goods were worth more than what came back, credit
-when the recovery is worth more). A zero-cost unbuild posts
-nothing and does not throw; a missing 5190 with a nonzero
-difference fails the whole unbuild closed.
+when the recovery is worth more). INV-MANUFACTURING-UNBUILD-
+5190-CAP-ALERT: the 5190 difference is capped at one minor
+unit -- the codebase's own rounding tolerance. A larger
+difference is real WAC drift, not rounding, and must never be
+buried in the variance account: the whole unbuild fails closed
+(no stock move, no order, no journal) and a review alert is
+left in the audit log naming the figures, so staff investigate
+the drift and retry. A zero-cost unbuild posts nothing and
+does not throw; a missing 5190 with a within-cap difference is
+auto-created by the system-account resolver (the same
+treatment GRN price variance gets) and the journal posts.
 
 WHAT THIS PINS, driving the REAL createUnbuildOrder on PGlite:
-- stale BOM expected_cost (99) is ignored: recovery values at
-  the live WAC (6), the journal is Dr 1140 12 / Cr 1140 20 /
-  Dr 5190 8 for 2 units, and the order total is 12.
+- a variance of 8 (2 units: finished 20, recovered 12) is OVER
+  the one-minor-unit cap: the unbuild is rejected with
+  MANUFACTURING_UNBUILD_VARIANCE_REVIEW_REQUIRED, no stock
+  moves, no order row, no journal -- and exactly one review
+  alert is left in the audit log naming the figures.
 - an exactly-balanced unbuild posts no 5190 line.
-- recovery worth more than the finished goods credits 5190.
+- a variance of -4 (recovery worth more) is likewise rejected
+  with a second review alert; nothing posts.
 - a zero-cost unbuild succeeds, moves stock, and posts no
   journal instead of throwing.
-- a missing 5190 account is auto-created by the system-account
-  resolver (the same treatment GRN price variance gets) and the
-  journal posts to it.
+- a WITHIN-CAP variance of 0.01 posts to 5190 (and a within-cap
+  -0.01 credits it), and a missing 5190 account is auto-created
+  by the system-account resolver (the same treatment GRN price
+  variance gets) and the journal posts to it.
 - an inactive BOM or an inactive finished product is rejected
   before any stock moves.
 */
@@ -113,26 +125,29 @@ async function main(): Promise<void> {
       CREATE TABLE audit_logs (id bigserial PRIMARY KEY, action text, details text, event_code text, target_tenant_id text, created_by bigint, impersonated_by bigint, tenant_id text, account_id text, created_at timestamptz DEFAULT NOW());
     `);
 
-    // Case 1: stale BOM cost ignored; difference goes to 5190.
+    // Case 1: variance 8 is over the one-minor-unit cap -- the
+    // whole unbuild fails closed and leaves a review alert.
+    // Stale BOM expected_cost (99) is still ignored by the
+    // valuation itself (recovery at live WAC 6), but the drift
+    // is reported, never buried in 5190.
     await seedProduct(db, 1, 10, 10);
     await seedProduct(db, 2, 0, 6);
     await seedBom(db, 1, 1, [{ compId: 2, qty: 1, expectedCost: 99 }]);
-    const res1 = await service.createUnbuildOrder({ productId: 1, bomId: 1, quantity: 2, warehouseId: 1 } as never, AUTH) as any;
-    assert.equal(await scopedQty(db, 1), 8);
-    assert.equal(await scopedQty(db, 2), 2);
-    const fgMov1 = await sql<{ unit_cost: string; total_cost: string }>`SELECT unit_cost, total_cost FROM stock_movements WHERE reference_id = ${Number(res1.unbuildId)} AND movement_type = 'manufacturing_unbuild'`.execute(db);
-    assert.equal(Number(fgMov1.rows[0].unit_cost), 10);
-    assert.equal(Number(fgMov1.rows[0].total_cost), 20);
-    const recMov1 = await sql<{ unit_cost: string; total_cost: string }>`SELECT unit_cost, total_cost FROM stock_movements WHERE reference_id = ${Number(res1.unbuildId)} AND movement_type = 'manufacturing_unbuild_recovery'`.execute(db);
-    assert.equal(Number(recMov1.rows[0].unit_cost), 6);
-    assert.equal(Number(recMov1.rows[0].total_cost), 12);
-    const order1 = await sql<{ total_cost: string }>`SELECT total_cost FROM manufacturing_unbuild_orders WHERE id = ${Number(res1.unbuildId)}`.execute(db);
-    assert.equal(Number(order1.rows[0].total_cost), 12);
-    assert.deepEqual(await journalLines(db, Number(res1.unbuildId)), [
-      { code: '1140', debit: 12, credit: 0 },
-      { code: '1140', debit: 0, credit: 20 },
-      { code: '5190', debit: 8, credit: 0 },
-    ]);
+    await assert.rejects(
+      service.createUnbuildOrder({ productId: 1, bomId: 1, quantity: 2, warehouseId: 1 } as never, AUTH),
+      (err: any) => err && err.code === 'MANUFACTURING_UNBUILD_VARIANCE_REVIEW_REQUIRED' && err.statusCode === 409,
+    );
+    assert.equal(await scopedQty(db, 1), 10, 'finished stock is untouched');
+    assert.equal(await scopedQty(db, 2), 0, 'no component is recovered');
+    const orders1 = await sql<{ id: number }>`SELECT id FROM manufacturing_unbuild_orders`.execute(db);
+    assert.equal(orders1.rows.length, 0, 'no unbuild order survives the rollback');
+    const journals1 = await sql<{ id: number }>`SELECT id FROM journal_entries`.execute(db);
+    assert.equal(journals1.rows.length, 0, 'no journal is posted');
+    const alerts1 = await sql<{ details: string; event_code: string }>`SELECT details, event_code FROM audit_logs WHERE event_code = 'MANUFACTURING_UNBUILD_VARIANCE_REVIEW_REQUIRED'`.execute(db);
+    assert.equal(alerts1.rows.length, 1, 'exactly one review alert is left behind');
+    assert.match(alerts1.rows[0].details, /8\.00/, 'the alert names the variance');
+    assert.match(alerts1.rows[0].details, /20\.00/, 'the alert names the finished-goods cost');
+    assert.match(alerts1.rows[0].details, /12\.00/, 'the alert names the recovered cost');
 
     // Case 2: exactly balanced -- no 5190 line.
     await seedProduct(db, 3, 10, 10);
@@ -144,16 +159,19 @@ async function main(): Promise<void> {
       { code: '1140', debit: 0, credit: 20 },
     ]);
 
-    // Case 3: recovery worth more -- 5190 is credited.
+    // Case 3: recovery worth more by 4 -- likewise over the cap:
+    // rejected, rolled back, second review alert.
     await seedProduct(db, 5, 10, 10);
     await seedProduct(db, 6, 0, 12);
     await seedBom(db, 3, 5, [{ compId: 6, qty: 1, expectedCost: 12 }]);
-    const res3 = await service.createUnbuildOrder({ productId: 5, bomId: 3, quantity: 2, warehouseId: 1 } as never, AUTH) as any;
-    assert.deepEqual(await journalLines(db, Number(res3.unbuildId)), [
-      { code: '1140', debit: 24, credit: 0 },
-      { code: '1140', debit: 0, credit: 20 },
-      { code: '5190', debit: 0, credit: 4 },
-    ]);
+    await assert.rejects(
+      service.createUnbuildOrder({ productId: 5, bomId: 3, quantity: 2, warehouseId: 1 } as never, AUTH),
+      (err: any) => err && err.code === 'MANUFACTURING_UNBUILD_VARIANCE_REVIEW_REQUIRED' && err.statusCode === 409,
+    );
+    assert.equal(await scopedQty(db, 5), 10, 'finished stock is untouched');
+    assert.equal(await scopedQty(db, 6), 0, 'no component is recovered');
+    const alerts3 = await sql<{ id: number }>`SELECT id FROM audit_logs WHERE event_code = 'MANUFACTURING_UNBUILD_VARIANCE_REVIEW_REQUIRED'`.execute(db);
+    assert.equal(alerts3.rows.length, 2, 'one alert per rejected unbuild');
 
     // Case 4: zero-cost unbuild posts nothing and does not throw.
     await seedProduct(db, 7, 10, 0);
@@ -165,21 +183,32 @@ async function main(): Promise<void> {
     assert.deepEqual(await journalLines(db, Number(res4.unbuildId)), []);
 
     // Case 5: a missing 5190 is auto-created by the system-account
-    // resolver (the same treatment GRN price variance gets), so the
-    // unbuild succeeds and the journal posts to the fresh account.
+    // resolver (the same treatment GRN price variance gets), and a
+    // WITHIN-CAP variance of 0.01 posts to it.
     await sql`DELETE FROM accounting_accounts WHERE code = '5190'`.execute(db);
     await seedProduct(db, 9, 10, 10);
-    await seedProduct(db, 10, 0, 6);
-    await seedBom(db, 5, 9, [{ compId: 10, qty: 1, expectedCost: 6 }]);
-    const res5 = await service.createUnbuildOrder({ productId: 9, bomId: 5, quantity: 2, warehouseId: 1 } as never, AUTH) as any;
+    await seedProduct(db, 10, 0, 9.99);
+    await seedBom(db, 5, 9, [{ compId: 10, qty: 1, expectedCost: 9.99 }]);
+    const res5 = await service.createUnbuildOrder({ productId: 9, bomId: 5, quantity: 1, warehouseId: 1 } as never, AUTH) as any;
     const recreated = await sql<{ is_system: boolean; account_type: string }>`SELECT is_system, account_type FROM accounting_accounts WHERE tenant_id = 't1' AND code = '5190'`.execute(db);
     assert.equal(recreated.rows.length, 1);
     assert.equal(recreated.rows[0].is_system, true);
     assert.equal(recreated.rows[0].account_type, 'expense');
     assert.deepEqual(await journalLines(db, Number(res5.unbuildId)), [
-      { code: '1140', debit: 12, credit: 0 },
-      { code: '1140', debit: 0, credit: 20 },
-      { code: '5190', debit: 8, credit: 0 },
+      { code: '1140', debit: 9.99, credit: 0 },
+      { code: '1140', debit: 0, credit: 10 },
+      { code: '5190', debit: 0.01, credit: 0 },
+    ]);
+
+    // Case 5b: a within-cap variance the other way credits 5190.
+    await seedProduct(db, 15, 10, 10);
+    await seedProduct(db, 16, 0, 10.01);
+    await seedBom(db, 8, 15, [{ compId: 16, qty: 1, expectedCost: 10.01 }]);
+    const res5b = await service.createUnbuildOrder({ productId: 15, bomId: 8, quantity: 1, warehouseId: 1 } as never, AUTH) as any;
+    assert.deepEqual(await journalLines(db, Number(res5b.unbuildId)), [
+      { code: '1140', debit: 10.01, credit: 0 },
+      { code: '1140', debit: 0, credit: 10 },
+      { code: '5190', debit: 0, credit: 0.01 },
     ]);
 
     // Case 6: inactive BOM / inactive product are rejected before any move.

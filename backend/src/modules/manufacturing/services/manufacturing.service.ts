@@ -677,189 +677,212 @@ export class ManufacturingService {
     let unbuildNumber = '';
     let unbuildId = 0;
 
-    await this.tx.runInTransaction(this.db, async (trx) => {
-      const product = await trx
-        .selectFrom('products')
-        .select(['id', 'name', 'cost_price', 'default_location_id'])
-        .where('id', '=', payload.productId)
-        .where('is_active', '=', true)
-        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
-        .executeTakeFirst();
+    // INV-MANUFACTURING-UNBUILD-5190-CAP-ALERT: the transaction is
+    // wrapped so a variance over the one-minor-unit cap leaves a
+    // review alert behind even though the transaction itself rolls
+    // back. The catch is scoped to that one error code only and the
+    // alert write is itself guarded: a failed alert must never mask
+    // the fail-closed error. The alert goes through the pool-backed
+    // audit log, so it survives the rollback.
+    try {
+      await this.tx.runInTransaction(this.db, async (trx) => {
+        const product = await trx
+          .selectFrom('products')
+          .select(['id', 'name', 'cost_price', 'default_location_id'])
+          .where('id', '=', payload.productId)
+          .where('is_active', '=', true)
+          .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+          .executeTakeFirst();
 
-      if (!product) {
-        throw new AppError('المنتج المراد تفكيكه غير موجود', 'PRODUCT_NOT_FOUND', 404);
-      }
+        if (!product) {
+          throw new AppError('المنتج المراد تفكيكه غير موجود', 'PRODUCT_NOT_FOUND', 404);
+        }
 
-      const bom = await trx
-        .selectFrom('manufacturing_boms')
-        .selectAll()
-        .where('id', '=', payload.bomId)
-        .where('is_active', '=', true)
-        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
-        .executeTakeFirst();
+        const bom = await trx
+          .selectFrom('manufacturing_boms')
+          .selectAll()
+          .where('id', '=', payload.bomId)
+          .where('is_active', '=', true)
+          .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+          .executeTakeFirst();
 
-      if (!bom) {
-        throw new AppError('شجرة المكونات (BOM) غير موجودة', 'BOM_NOT_FOUND', 404);
-      }
+        if (!bom) {
+          throw new AppError('شجرة المكونات (BOM) غير موجودة', 'BOM_NOT_FOUND', 404);
+        }
 
-      // INV-MANUFACTURING-UNBUILD-BOM-BINDING: an unbuild may
-      // only use a BOM that belongs to the product being
-      // unbuilt. Any active BOM previously satisfied this
-      // fetch, so a BOM written for another product silently
-      // recovered the wrong components into stock.
-      if (Number(bom.product_id) !== Number(payload.productId)) {
-        throw new AppError('شجرة المكونات لا تخص المنتج المراد تفكيكه', 'BOM_PRODUCT_MISMATCH', 400);
-      }
+        // INV-MANUFACTURING-UNBUILD-BOM-BINDING: an unbuild may
+        // only use a BOM that belongs to the product being
+        // unbuilt. Any active BOM previously satisfied this
+        // fetch, so a BOM written for another product silently
+        // recovered the wrong components into stock.
+        if (Number(bom.product_id) !== Number(payload.productId)) {
+          throw new AppError('شجرة المكونات لا تخص المنتج المراد تفكيكه', 'BOM_PRODUCT_MISMATCH', 400);
+        }
 
-      const bomLines = await trx
-        .selectFrom('manufacturing_bom_lines as l')
-        .innerJoin('products as p', 'p.id', 'l.component_product_id')
-        .select([
-          'l.id',
-          'l.component_product_id',
-          'l.quantity',
-          'l.unit_multiplier',
-          'l.expected_cost',
-          'p.name as component_name',
-          'p.default_location_id as comp_location_id',
-        ])
-        .where('l.bom_id', '=', payload.bomId)
-        .execute();
+        const bomLines = await trx
+          .selectFrom('manufacturing_bom_lines as l')
+          .innerJoin('products as p', 'p.id', 'l.component_product_id')
+          .select([
+            'l.id',
+            'l.component_product_id',
+            'l.quantity',
+            'l.unit_multiplier',
+            'l.expected_cost',
+            'p.name as component_name',
+            'p.default_location_id as comp_location_id',
+          ])
+          .where('l.bom_id', '=', payload.bomId)
+          .execute();
 
-      if (!bomLines.length) {
-        throw new AppError('شجرة المكونات لا تحتوي على بنود صالحة للتفكيك', 'EMPTY_BOM', 400);
-      }
+        if (!bomLines.length) {
+          throw new AppError('شجرة المكونات لا تحتوي على بنود صالحة للتفكيك', 'EMPTY_BOM', 400);
+        }
 
-      await lockStockProducts(trx, {
-        ...scope,
-        productIds: [Number(payload.productId), ...bomLines.map((line) => Number(line.component_product_id))],
-      });
+        await lockStockProducts(trx, {
+          ...scope,
+          productIds: [Number(payload.productId), ...bomLines.map((line) => Number(line.component_product_id))],
+        });
 
-      // INV-MANUFACTURING-UNBUILD-JOURNAL: both legs are valued at the
-      // LIVE weighted-average cost (products.cost_price), the same
-      // source completeWorkOrder uses -- never at the BOM line's stale
-      // expected_cost, which is a planning estimate frozen at BOM
-      // authoring time. Money is rounded once at book digits.
-      const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
-      const valuedProducts = await trx.selectFrom('products').select(['id', 'cost_price'])
-        .where('tenant_id', '=', scope.tenantId)
-        .where('id', 'in', [Number(payload.productId), ...bomLines.map((line) => Number(line.component_product_id))])
-        .execute();
-      const costByProduct = new Map(valuedProducts.map((row) => [Number(row.id), Number(row.cost_price)]));
-      const liveUnitCost = (productId: number): number => {
-        const cost = costByProduct.get(Number(productId));
-        if (cost == null || !Number.isFinite(cost) || cost < 0) throw new AppError('Invalid manufacturing cost', 'MANUFACTURING_COST_INVALID', 409);
-        return cost;
-      };
+        // INV-MANUFACTURING-UNBUILD-JOURNAL: both legs are valued at the
+        // LIVE weighted-average cost (products.cost_price), the same
+        // source completeWorkOrder uses -- never at the BOM line's stale
+        // expected_cost, which is a planning estimate frozen at BOM
+        // authoring time. Money is rounded once at book digits.
+        const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+        const valuedProducts = await trx.selectFrom('products').select(['id', 'cost_price'])
+          .where('tenant_id', '=', scope.tenantId)
+          .where('id', 'in', [Number(payload.productId), ...bomLines.map((line) => Number(line.component_product_id))])
+          .execute();
+        const costByProduct = new Map(valuedProducts.map((row) => [Number(row.id), Number(row.cost_price)]));
+        const liveUnitCost = (productId: number): number => {
+          const cost = costByProduct.get(Number(productId));
+          if (cost == null || !Number.isFinite(cost) || cost < 0) throw new AppError('Invalid manufacturing cost', 'MANUFACTURING_COST_INVALID', 409);
+          return cost;
+        };
 
-      const locationId = payload.warehouseId || product.default_location_id || null;
-      const qtyToUnbuild = Number(payload.quantity);
-      const bomQty = Number(bom.quantity || 1);
-      const fgUnitCost = liveUnitCost(Number(payload.productId));
-      const fgTotalCost = roundMoney(qtyToUnbuild * fgUnitCost, moneyDigits);
+        const locationId = payload.warehouseId || product.default_location_id || null;
+        const qtyToUnbuild = Number(payload.quantity);
+        const bomQty = Number(bom.quantity || 1);
+        const fgUnitCost = liveUnitCost(Number(payload.productId));
+        const fgTotalCost = roundMoney(qtyToUnbuild * fgUnitCost, moneyDigits);
 
-      // Insert unbuild order first with temporary number to acquire identity
-      const tempUnbuildNumber = `UB-TMP-${Date.now()}`;
-      const inserted = await trx
-        .insertInto('manufacturing_unbuild_orders')
-        .values({
-          tenant_id: scope.tenantId,
-          account_id: scope.accountId,
-          unbuild_number: tempUnbuildNumber,
-          product_id: payload.productId,
-          product_name: product.name,
-          bom_id: payload.bomId,
-          quantity: qtyToUnbuild,
-          warehouse_id: locationId || 0,
-          status: 'completed',
-          total_cost: 0,
-          notes: payload.notes || null,
-          created_by: auth.userId ? Number(auth.userId) : null,
-        } as any)
-        .returning('id')
-        .executeTakeFirstOrThrow();
+        // Insert unbuild order first with temporary number to acquire identity
+        const tempUnbuildNumber = `UB-TMP-${Date.now()}`;
+        const inserted = await trx
+          .insertInto('manufacturing_unbuild_orders')
+          .values({
+            tenant_id: scope.tenantId,
+            account_id: scope.accountId,
+            unbuild_number: tempUnbuildNumber,
+            product_id: payload.productId,
+            product_name: product.name,
+            bom_id: payload.bomId,
+            quantity: qtyToUnbuild,
+            warehouse_id: locationId || 0,
+            status: 'completed',
+            total_cost: 0,
+            notes: payload.notes || null,
+            created_by: auth.userId ? Number(auth.userId) : null,
+          } as any)
+          .returning('id')
+          .executeTakeFirstOrThrow();
 
-      unbuildId = Number(inserted.id);
-      unbuildNumber = formatDailyDocumentNumber('UB', unbuildId);
+        unbuildId = Number(inserted.id);
+        unbuildNumber = formatDailyDocumentNumber('UB', unbuildId);
 
-      const fgStockScope = { tenantId: scope.tenantId, accountId: scope.accountId, productId: Number(payload.productId), branchId: null, locationId };
-      const fgStockChange = await applyStockDelta(trx, {
-        ...fgStockScope,
-        delta: -qtyToUnbuild,
-        errorCode: 'INSUFFICIENT_FINISHED_PRODUCT',
-        errorMessage: `لا يتوفر رصيد كافٍ من المنتج التام: ${product.name} للتفكيك`,
-      });
-
-      await trx.insertInto('stock_movements').values({
-        product_id: Number(payload.productId),
-        movement_type: 'manufacturing_unbuild',
-        qty: -qtyToUnbuild,
-        before_qty: fgStockChange.scopeBefore,
-        after_qty: fgStockChange.scopeAfter,
-        reason: 'تفكيك منتج تام',
-        note: `أمر تفكيك #${unbuildNumber}`,
-        reference_type: 'manufacturing_unbuild_order',
-        reference_id: unbuildId,
-        location_id: locationId,
-        created_by: auth.userId,
-        tenant_id: scope.tenantId,
-        account_id: scope.accountId,
-        unit_cost: fgUnitCost,
-        total_cost: fgTotalCost,
-      }).execute();
-
-      let totalRecoveredCost = 0;
-      for (const line of [...bomLines].sort((a, b) => Number(a.component_product_id) - Number(b.component_product_id))) {
-        const lineMultiplier = Number(line.unit_multiplier || 1);
-        const returnQty = Number((Number(line.quantity) * (qtyToUnbuild / bomQty) * lineMultiplier).toFixed(3));
-        // Live WAC, not the stale BOM expected_cost; rounded once at
-        // book digits like every other manufacturing money line.
-        const compUnitCost = liveUnitCost(Number(line.component_product_id));
-        const lineCost = roundMoney(returnQty * compUnitCost, moneyDigits);
-        totalRecoveredCost += lineCost;
-
-        const compLoc = line.comp_location_id || locationId;
-        const compScope = { tenantId: scope.tenantId, accountId: scope.accountId, productId: Number(line.component_product_id), branchId: null, locationId: compLoc };
-        const compStockChange = await applyStockDelta(trx, {
-          ...compScope,
-          delta: returnQty,
+        const fgStockScope = { tenantId: scope.tenantId, accountId: scope.accountId, productId: Number(payload.productId), branchId: null, locationId };
+        const fgStockChange = await applyStockDelta(trx, {
+          ...fgStockScope,
+          delta: -qtyToUnbuild,
+          errorCode: 'INSUFFICIENT_FINISHED_PRODUCT',
+          errorMessage: `لا يتوفر رصيد كافٍ من المنتج التام: ${product.name} للتفكيك`,
         });
 
         await trx.insertInto('stock_movements').values({
-          product_id: Number(line.component_product_id),
-          movement_type: 'manufacturing_unbuild_recovery',
-          qty: returnQty,
-          before_qty: compStockChange.scopeBefore,
-          after_qty: compStockChange.scopeAfter,
-          reason: 'استرجاع مواد خام من تفكيك',
-          note: `أمر تفكيك #${unbuildNumber} - استرجاع ${line.component_name}`,
+          product_id: Number(payload.productId),
+          movement_type: 'manufacturing_unbuild',
+          qty: -qtyToUnbuild,
+          before_qty: fgStockChange.scopeBefore,
+          after_qty: fgStockChange.scopeAfter,
+          reason: 'تفكيك منتج تام',
+          note: `أمر تفكيك #${unbuildNumber}`,
           reference_type: 'manufacturing_unbuild_order',
           reference_id: unbuildId,
-          location_id: compLoc,
+          location_id: locationId,
           created_by: auth.userId,
           tenant_id: scope.tenantId,
           account_id: scope.accountId,
-          unit_cost: compUnitCost,
-          total_cost: lineCost,
+          unit_cost: fgUnitCost,
+          total_cost: fgTotalCost,
         }).execute();
+
+        let totalRecoveredCost = 0;
+        for (const line of [...bomLines].sort((a, b) => Number(a.component_product_id) - Number(b.component_product_id))) {
+          const lineMultiplier = Number(line.unit_multiplier || 1);
+          const returnQty = Number((Number(line.quantity) * (qtyToUnbuild / bomQty) * lineMultiplier).toFixed(3));
+          // Live WAC, not the stale BOM expected_cost; rounded once at
+          // book digits like every other manufacturing money line.
+          const compUnitCost = liveUnitCost(Number(line.component_product_id));
+          const lineCost = roundMoney(returnQty * compUnitCost, moneyDigits);
+          totalRecoveredCost += lineCost;
+
+          const compLoc = line.comp_location_id || locationId;
+          const compScope = { tenantId: scope.tenantId, accountId: scope.accountId, productId: Number(line.component_product_id), branchId: null, locationId: compLoc };
+          const compStockChange = await applyStockDelta(trx, {
+            ...compScope,
+            delta: returnQty,
+          });
+
+          await trx.insertInto('stock_movements').values({
+            product_id: Number(line.component_product_id),
+            movement_type: 'manufacturing_unbuild_recovery',
+            qty: returnQty,
+            before_qty: compStockChange.scopeBefore,
+            after_qty: compStockChange.scopeAfter,
+            reason: 'استرجاع مواد خام من تفكيك',
+            note: `أمر تفكيك #${unbuildNumber} - استرجاع ${line.component_name}`,
+            reference_type: 'manufacturing_unbuild_order',
+            reference_id: unbuildId,
+            location_id: compLoc,
+            created_by: auth.userId,
+            tenant_id: scope.tenantId,
+            account_id: scope.accountId,
+            unit_cost: compUnitCost,
+            total_cost: lineCost,
+          }).execute();
+        }
+
+        await trx
+          .updateTable('manufacturing_unbuild_orders')
+          .set({
+            unbuild_number: unbuildNumber,
+            total_cost: roundMoney(totalRecoveredCost, moneyDigits),
+            updated_at: sql`NOW()`,
+          })
+          .where('id', '=', unbuildId)
+          .where('tenant_id', '=', scope.tenantId)
+          .execute();
+
+        // The stock move alone used to leave no general-ledger trace.
+        // Post the balanced unbuild journal in the SAME transaction, so
+        // a missing variance account rolls the whole unbuild back.
+        await this.accountingPosting.postManufacturingUnbuildOrder(trx, unbuildId, auth);
+      });
+    } catch (error: any) {
+      if (error instanceof AppError && error.code === 'MANUFACTURING_UNBUILD_VARIANCE_REVIEW_REQUIRED') {
+        try {
+          await this.audit.log(
+            'مراجعة فرق تفكيك مطلوبة',
+            `رفض أمر تفكيك المنتج #${payload.productId} (الكمية ${payload.quantity}): ${error.message}`,
+            auth,
+            { eventCode: 'MANUFACTURING_UNBUILD_VARIANCE_REVIEW_REQUIRED' },
+          );
+        } catch {
+          // The review alert must never mask the fail-closed error.
+        }
       }
-
-      await trx
-        .updateTable('manufacturing_unbuild_orders')
-        .set({
-          unbuild_number: unbuildNumber,
-          total_cost: roundMoney(totalRecoveredCost, moneyDigits),
-          updated_at: sql`NOW()`,
-        })
-        .where('id', '=', unbuildId)
-        .where('tenant_id', '=', scope.tenantId)
-        .execute();
-
-      // The stock move alone used to leave no general-ledger trace.
-      // Post the balanced unbuild journal in the SAME transaction, so
-      // a missing variance account rolls the whole unbuild back.
-      await this.accountingPosting.postManufacturingUnbuildOrder(trx, unbuildId, auth);
-    });
+      throw error;
+    }
 
     await this.audit.log('أمر تفكيك منتج', `تم تفكيك ${payload.quantity} من المنتج #${payload.productId} بنجاح (${unbuildNumber})`, auth);
     return { ok: true, unbuildId, unbuildNumber, message: 'تم تفكيك المنتج واسترجاع المواد الخام للمخزن بنجاح' };

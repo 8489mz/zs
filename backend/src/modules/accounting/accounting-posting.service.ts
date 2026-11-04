@@ -4626,7 +4626,9 @@ export class AccountingPostingService {
   // more than the recovery, credit when the recovery is worth more.
   // A zero-cost unbuild posts nothing; 5190 is resolved through the
   // system-account resolver, which auto-creates it as a known system
-  // account when absent.
+  // account when absent. INV-MANUFACTURING-UNBUILD-5190-CAP-ALERT:
+  // the 5190 difference is capped at one minor unit (see the guard
+  // below); anything larger fails closed and is never posted.
   async postManufacturingUnbuildOrder(queryable: DbOrTx, unbuildId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     await this.ensureTenantFoundation(queryable, auth);
@@ -4672,6 +4674,23 @@ export class AccountingPostingService {
     }
 
     const difference = roundMoney(fgCost - recoveredCost, bookDigits);
+    // INV-MANUFACTURING-UNBUILD-5190-CAP-ALERT: the variance to 5190
+    // is capped at one minor unit -- the same rounding tolerance the
+    // work-order poster fails closed on. A larger difference means
+    // real WAC drift, not rounding, and must never be buried in the
+    // variance account: fail closed BEFORE any posting or 5190
+    // resolution, so the whole unbuild (stock, order, journal)
+    // rolls back. The caller records the review alert and the
+    // operator investigates the drift and retries; nothing posts
+    // until the variance is within the cap.
+    const varianceCap = this.maxAllowedDifference(bookDigits);
+    if (Math.abs(difference) > varianceCap) {
+      throw new AppError(
+        `Unbuild variance ${difference.toFixed(bookDigits)} exceeds the one-minor-unit review cap ${varianceCap.toFixed(bookDigits)} for unbuild order #${unbuildId} (finished-goods cost ${fgCost.toFixed(bookDigits)}, recovered cost ${recoveredCost.toFixed(bookDigits)}); review the WAC drift before retrying -- nothing was posted.`,
+        'MANUFACTURING_UNBUILD_VARIANCE_REVIEW_REQUIRED',
+        409,
+      );
+    }
     // The system resolver auto-creates 5190 as a known system account
     // when it is absent (the same treatment GRN price variance gets);
     // it throws only when the accounting foundation itself is missing.
