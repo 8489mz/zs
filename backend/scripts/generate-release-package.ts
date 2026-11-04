@@ -99,7 +99,9 @@ async function main() {
     passcode: passcode,
     requiresPasscode: true,
     changelog: changelogMarkdown,
-    patchUrl: `https://github.com/8489mx/zs/releases/download/v${targetVersion}/patch-${targetVersion}.zip`,
+    // Update channel: the public releases-only repo (source of truth:
+    // OFFLINE_UPDATE_REPO_DEFAULT in offline-releases.service.ts).
+    patchUrl: `https://github.com/8489mx/zsupdates/releases/download/v${targetVersion}/patch-${targetVersion}.zip`,
   };
 
   const outputDir = path.resolve(__dirname, '../runtime/releases');

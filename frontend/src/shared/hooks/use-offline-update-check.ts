@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { http } from '@/lib/http';
 
 export function getOfflineUpdateApiBaseUrl(): string {
-  return import.meta.env.VITE_OFFLINE_UPDATE_API_BASE_URL || 'https://raw.githubusercontent.com/8489mx/zs/main';
+  return import.meta.env.VITE_OFFLINE_UPDATE_API_BASE_URL || 'https://raw.githubusercontent.com/8489mx/zsupdates/main';
 }
 
 function parseSemver(v: string) {
@@ -73,9 +73,11 @@ export function useOfflineUpdateCheck(deploymentMode: string | null | undefined)
         return fallback;
       }
 
-      // 2. Direct GitHub raw manifest fallback
+      // 2. Direct GitHub raw manifest fallback (honours the
+      // VITE_OFFLINE_UPDATE_API_BASE_URL override via the helper).
       try {
-        const rawRes = await fetch('https://raw.githubusercontent.com/8489mx/zs/main/releases/manifest-latest.json', {
+        const baseUrl = getOfflineUpdateApiBaseUrl().replace(/\/+$/, '');
+        const rawRes = await fetch(`${baseUrl}/releases/manifest-latest.json`, {
           headers: { 'Accept': 'application/json' },
           signal: AbortSignal.timeout(4000)
         });
@@ -87,7 +89,7 @@ export function useOfflineUpdateCheck(deploymentMode: string | null | undefined)
               updateAvailable: hasUpdate,
               currentVersion,
               latestVersion: manifest.version,
-              patchUrl: manifest.patchUrl || `https://github.com/8489mx/zs/releases/download/v${manifest.version}/patch-${manifest.version}.zip`,
+              patchUrl: manifest.patchUrl || `https://github.com/8489mx/zsupdates/releases/download/v${manifest.version}/patch-${manifest.version}.zip`,
               changelog: manifest.changelog || 'تحديث شامل للنظام متوفر على GitHub.',
               requiresPasscode: manifest.requiresPasscode ?? true,
               passcode: manifest.passcode,

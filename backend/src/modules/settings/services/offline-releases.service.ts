@@ -33,6 +33,36 @@ export function assertTrustedOfflineUpdatePackage(buffer: Buffer, expectedDigest
   }
 }
 
+/**
+ * Update channel (INV-OFFLINE-UPDATE-CHANNEL-ZSUPDATES): desktop
+ * clients read the PUBLIC releases-only repository 8489mx/zsupdates,
+ * because the zs source repository went private and is unreachable
+ * unauthenticated. Every channel URL is built from the single repo
+ * value below so a future channel move touches one place. Operators
+ * may re-point the channel with ZS_OFFLINE_UPDATE_REPO; the SHA-256
+ * pin above is unaffected by the channel value. The manifest is
+ * expected on the `main` branch of the channel repo.
+ */
+export const OFFLINE_UPDATE_REPO_DEFAULT = '8489mx/zsupdates';
+
+export function offlineUpdateRepo(): string {
+  const override = String(process.env.ZS_OFFLINE_UPDATE_REPO || '').trim();
+  return override || OFFLINE_UPDATE_REPO_DEFAULT;
+}
+
+export function offlineUpdateManifestUrl(): string {
+  return `https://raw.githubusercontent.com/${offlineUpdateRepo()}/main/releases/manifest-latest.json`;
+}
+
+export function offlineUpdateReleasesApiUrl(): string {
+  return `https://api.github.com/repos/${offlineUpdateRepo()}/releases/latest`;
+}
+
+export function offlineUpdateReleaseDownloadUrl(version: string, fileName: string): string {
+  const clean = String(version || '').replace(/^v/, '');
+  return `https://github.com/${offlineUpdateRepo()}/releases/download/v${clean}/${fileName}`;
+}
+
 export function compareSemver(v1: string, v2: string): number {
   const p1 = (v1 || '0.0.0').replace(/^[vV]/, '').split('.').map(Number);
   const p2 = (v2 || '0.0.0').replace(/^[vV]/, '').split('.').map(Number);
@@ -176,8 +206,8 @@ export class OfflineReleasesService implements OnModuleInit {
     passcode?: string;
   } | null> {
     try {
-      // 1. Try raw manifest-latest.json from GitHub repo
-      const rawUrl = 'https://raw.githubusercontent.com/8489mx/zs/main/releases/manifest-latest.json';
+      // 1. Try raw manifest-latest.json from the update-channel repo
+      const rawUrl = offlineUpdateManifestUrl();
       const rawRes = await fetch(rawUrl, {
         headers: { 'User-Agent': 'Z-ERP-Desktop-Client' },
         signal: AbortSignal.timeout(4000),
@@ -189,7 +219,7 @@ export class OfflineReleasesService implements OnModuleInit {
           return {
             version: manifest.version,
             changelog: manifest.changelog || 'تحديث شامل للنظام متوفر على GitHub.',
-            patchUrl: manifest.patchUrl || `https://github.com/8489mx/zs/releases/download/v${manifest.version}/Z-ERP-Patch-v${manifest.version}.zip`,
+            patchUrl: manifest.patchUrl || offlineUpdateReleaseDownloadUrl(manifest.version, `Z-ERP-Patch-v${manifest.version}.zip`),
             passcode: manifest.passcode,
           };
         }
@@ -200,7 +230,7 @@ export class OfflineReleasesService implements OnModuleInit {
 
     try {
       // 2. Fallback to GitHub Releases API
-      const apiUrl = 'https://api.github.com/repos/8489mx/zs/releases/latest';
+      const apiUrl = offlineUpdateReleasesApiUrl();
       const apiRes = await fetch(apiUrl, {
         headers: {
           Accept: 'application/vnd.github.v3+json',
@@ -221,7 +251,7 @@ export class OfflineReleasesService implements OnModuleInit {
             changelog: data.body || 'تحديث جديد عبر GitHub Releases.',
             patchUrl:
               zipAsset?.browser_download_url ||
-              `https://github.com/8489mx/zs/releases/download/v${tag}/patch-${tag}.zip`,
+              offlineUpdateReleaseDownloadUrl(tag, `patch-${tag}.zip`),
           };
         }
       }
