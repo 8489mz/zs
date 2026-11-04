@@ -130,6 +130,10 @@ export function ReturnsWorkspace() {
   const selectedItemsCount = selectedReturnItems.length;
   const selectedQtyTotal = selectedReturnItems.reduce((sum, entry) => sum + Number(entry.qty || 0), 0);
   const expectedReturnValue = selectedReturnItems.reduce((sum, entry) => sum + Number(entry.lineTotal || 0), 0);
+  // Manager approval is required only for a large cash refund; the
+  // backend enforces the same threshold authoritatively.
+  const largeCashRefundThreshold = Number((settingsQuery.data as any)?.posLargeCashRefundThreshold ?? 500);
+  const needsManagerApprovalForReturn = !canDirectReturn && form.settlementMode === 'refund' && form.refundMethod === 'cash' && expectedReturnValue >= largeCashRefundThreshold;
 
   const summary = query.data?.summary;
   const salesReturns = Number(summary?.salesReturns || 0);
@@ -509,9 +513,9 @@ export function ReturnsWorkspace() {
         reasonPlaceholder={t('returns.reason_placeholder', 'اكتب سبب المرتجع')}
         reasonHint={t('returns.reason_hint', 'هذا السبب سيظهر في السجل ويُستخدم للمراجعة لاحقًا.')}
         minReasonLength={1}
-        managerPinRequired={!canDirectReturn}
+        managerPinRequired={needsManagerApprovalForReturn}
         managerPinLabel={t('returns.manager_pin_label', 'رمز اعتماد المشرف / كلمة المرور')}
-        managerPinHint={!canDirectReturn ? t('returns.manager_pin_hint', 'يتطلب حساب هذا الكاشير اعتماد المشرف أو إدخال رمز المدير لإتمام المرتجع.') : undefined}
+        managerPinHint={needsManagerApprovalForReturn ? t('returns.manager_pin_hint', 'المرتجع النقدي الكبير يتطلب اعتماد المشرف أو إدخال رمز المدير لإتمام المرتجع.') : undefined}
         isBusy={createMutation.isPending}
         onCancel={() => setConfirmReturn(false)}
         onConfirm={({ reason, managerPin }) => {

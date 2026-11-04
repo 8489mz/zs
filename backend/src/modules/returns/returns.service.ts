@@ -302,6 +302,25 @@ export class ReturnsService {
     return '';
   }
 
+  // INV-SPIRIT-LARGE-CASH-REFUND: the manager-approval threshold
+  // for cash refunds, in tenant currency units. Coordinator-chosen
+  // default 500, owner-set via the posLargeCashRefundThreshold
+  // setting; 0 means every cash refund needs approval.
+  private async getLargeCashRefundThreshold(auth: AuthContext): Promise<number> {
+    const { tenantId } = requireTenantScope(auth);
+    const row = await sql<{ value?: string }>`select value from settings where key = 'posLargeCashRefundThreshold' and tenant_id = ${tenantId}`.execute(this.db);
+    const raw = String(row.rows?.[0]?.value || '').trim();
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed === 'number' && Number.isFinite(parsed) && parsed >= 0) return parsed;
+      } catch { /* fall through to the plain-number parse */ }
+      const plain = Number(raw);
+      if (Number.isFinite(plain) && plain >= 0) return plain;
+    }
+    return 500;
+  }
+
   private async verifyManagerAuthorization(trx: Kysely<Database>, secret: string, auth: AuthContext): Promise<string> {
     const { tenantId } = requireTenantScope(auth);
     const normalizedSecret = String(secret || '').trim();
@@ -340,19 +359,29 @@ export class ReturnsService {
     const scope = this.scope(auth);
     const idemCtx = idempotencyStorage.getStore();
 
-    // Verify manager permission if cashier doesn't have direct return privileges
+    // Verify manager permission if cashier doesn't have direct return privileges.
+    // A refund-override still always needs manager approval (unchanged).
+    // Otherwise the approval decision is deferred into the transaction,
+    // where the real cash-refund amount is known: manager PIN/password
+    // is required only for a LARGE cash refund (see
+    // INV-SPIRIT-LARGE-CASH-REFUND). Small returns proceed with the
+    // recorded reason and no approval credential.
     const isPrivileged = auth.role === 'super_admin' || auth.role === 'admin' || (auth.permissions && auth.permissions.includes('canDirectReturn'));
     let approvedByName: string | undefined;
+    const overrideRequested = Boolean(String(payload.refundOverrideReason || '').trim());
 
-    if (!isPrivileged || (payload.refundOverrideReason && !['admin', 'super_admin'].includes(auth.role))) {
+    if (overrideRequested && !['admin', 'super_admin'].includes(auth.role)) {
       approvedByName = await this.verifyManagerAuthorization(this.db, payload.managerPin || '', auth);
     }
+    const approvalRequest = !isPrivileged && approvedByName === undefined
+      ? { secret: payload.managerPin || '', threshold: await this.getLargeCashRefundThreshold(auth) }
+      : undefined;
 
     const result = await this.tx.runInTransaction(this.db, async (trx) => {
       const normalizedItems = normalizeReturnItems(payload);
       const returnIds = payload.type === 'sale'
-        ? await this.createSaleReturn(trx, payload, normalizedItems, auth, approvedByName)
-        : await this.createPurchaseReturn(trx, payload, normalizedItems, auth);
+        ? await this.createSaleReturn(trx, payload, normalizedItems, auth, approvedByName, undefined, approvalRequest)
+        : await this.createPurchaseReturn(trx, payload, normalizedItems, auth, approvalRequest);
 
       const res = { ok: true, createdIds: returnIds, id: returnIds[0], returnDocumentId: returnIds[0] };
 
@@ -440,7 +469,7 @@ export class ReturnsService {
   }
 
   private async createSaleReturn(trx: Transaction<Database>, payload: CreateReturnDto, items: ReturnInputItem[], auth: AuthContext, approvedByName?: string,
-    exchangePrepared?: (context: ExchangeReturnContext) => void): Promise<number[]> {
+    exchangePrepared?: (context: ExchangeReturnContext) => void, approvalRequest?: { secret: string; threshold: number }): Promise<number[]> {
     const scope = this.scope(auth);
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
     const sale = await trx.selectFrom('sales').selectAll().where('id', '=', Number(payload.invoiceId)).where('status', '=', 'posted').where(this.tenantPredicate(auth)).forUpdate().executeTakeFirst();
@@ -734,6 +763,18 @@ export class ReturnsService {
       hasCustomer: Boolean(sale.customer_id),
       override: overrideRequested, overrideReason: payload.refundOverrideReason,
     });
+    // INV-SPIRIT-LARGE-CASH-REFUND: only a large cash refund needs
+    // manager approval. The check runs inside this same transaction,
+    // before any document or treasury write, so a rejection rolls
+    // back the restock work above with nothing half-posted.
+    if (approvalRequest && approvedByName === undefined) {
+      const cashRefund = refundAllocations
+        .filter((allocation) => allocation.tender === 'cash')
+        .reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0);
+      if (cashRefund >= approvalRequest.threshold) {
+        approvedByName = await this.verifyManagerAuthorization(trx, approvalRequest.secret, auth);
+      }
+    }
     const returnNote = overrideRequested
       ? `${String(payload.note || '').trim()} | اعتماد تجاوز وسيلة الاسترداد: ${String(payload.refundOverrideReason).trim()}`.trim()
       : `${String(payload.note || '').trim()}${exchangePrepared && approvedByName ? ` | اعتماد المشرف: ${approvedByName}` : ''}`.trim();
@@ -893,7 +934,7 @@ export class ReturnsService {
     return [returnDocumentId];
   }
 
-  private async createPurchaseReturn(trx: Transaction<Database>, payload: CreateReturnDto, items: ReturnInputItem[], auth: AuthContext): Promise<number[]> {
+  private async createPurchaseReturn(trx: Transaction<Database>, payload: CreateReturnDto, items: ReturnInputItem[], auth: AuthContext, approvalRequest?: { secret: string; threshold: number }): Promise<number[]> {
     const scope = this.scope(auth);
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
     const purchase = await trx.selectFrom('purchases').selectAll().where('id', '=', Number(payload.invoiceId)).where('status', '=', 'posted').where(this.tenantPredicate(auth)).forUpdate().executeTakeFirst();
@@ -1151,6 +1192,14 @@ export class ReturnsService {
     const allocations: Array<{ tender: 'payable' | 'cash' | 'card'; amount: number }> = [];
     if (payableCents > 0) allocations.push({ tender: 'payable', amount: payableCents / scale });
     if (refundCents > 0) allocations.push({ tender: refundMethod, amount: refundCents / scale });
+    // INV-SPIRIT-LARGE-CASH-REFUND: same threshold as sale returns --
+    // only a large cash refund from the supplier needs approval.
+    if (approvalRequest) {
+      const cashRefund = refundMethod === 'cash' ? refundCents / scale : 0;
+      if (cashRefund >= approvalRequest.threshold) {
+        await this.verifyManagerAuthorization(trx, approvalRequest.secret, auth);
+      }
+    }
     const { id: returnDocumentId, docNo: returnDocNo } = await this.insertReturnDocument(trx, {
       returnType: 'purchase', invoiceId: Number(payload.invoiceId), settlementMode: 'refund',
       refundMethod: allocations.length > 1 ? 'mixed' : allocations[0].tender,

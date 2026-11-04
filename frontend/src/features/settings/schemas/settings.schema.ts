@@ -100,6 +100,7 @@ export const settingsFormSchema = z.object({
   posMaxDiscountThresholdType: z.enum(['percentage', 'fixed']).default('percentage'),
   posMaxDiscountThresholdValue: z.coerce.number().min(0).default(10),
   posSmallDiscountFlatAllowance: z.coerce.number().min(0).default(2),
+  posLargeCashRefundThreshold: z.coerce.number().min(0).default(500),
   posKitchenPrinterEnabled: z.boolean().default(false),
   posKitchenPrinterAuto: z.boolean().default(false),
   posKitchenPrinterMode: z.enum(['detailed', 'mini']).optional().default('detailed'),

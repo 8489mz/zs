@@ -1851,6 +1851,25 @@ export const SalesInventorySettingsTab = memo(function SalesInventorySettingsTab
                   </small>
                 </div>
 
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    {__t('settings.forms.tabs.sales_inventory_settings_tab.s145', "حد المرتجع النقدي الكبير الذي يتطلب اعتماد المدير")} {`(${getGlobalCurrencySymbol()})`}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    className="purchase-prototype-field-input"
+                    {...form.register('posLargeCashRefundThreshold')}
+                    disabled={disabled}
+                    placeholder={__t('settings.forms.tabs.sales_inventory_settings_tab.s146', "مثال: 500")}
+                    style={fieldControlStyle}
+                  />
+                  <small style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                    {__t('settings.forms.tabs.sales_inventory_settings_tab.s147', "المرتجع النقدي الأصغر من المبلغ ده يتم من غير رمز مدير؛ الأكبر أو المساوي له يتطلب رمز اعتماد المدير أو كلمة مرور المدير.")}
+                  </small>
+                </div>
+
                 {form.watch('posMaxDiscountThresholdEnabled') && (
                   <>
                     <div>

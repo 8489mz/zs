@@ -279,6 +279,9 @@ export function buildSettingsUpdatePayload(
     posSmallDiscountFlatAllowance: values.posSmallDiscountFlatAllowance !== undefined
       ? Math.max(0, Number(values.posSmallDiscountFlatAllowance ?? 2))
       : Math.max(0, Number(current?.posSmallDiscountFlatAllowance ?? 2)),
+    posLargeCashRefundThreshold: values.posLargeCashRefundThreshold !== undefined
+      ? Math.max(0, Number(values.posLargeCashRefundThreshold ?? 500))
+      : Math.max(0, Number(current?.posLargeCashRefundThreshold ?? 500)),
     posKitchenPrinterEnabled: values.posKitchenPrinterEnabled !== undefined
       ? values.posKitchenPrinterEnabled === true
       : current?.posKitchenPrinterEnabled === true,
