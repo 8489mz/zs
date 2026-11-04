@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException, BadRequestException, UnauthorizedException, Optional, Logger } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, BadRequestException, UnauthorizedException, ServiceUnavailableException, Optional, Logger } from '@nestjs/common';
 import { Kysely, sql, type Transaction, type Selectable } from 'kysely';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
@@ -18,7 +18,7 @@ import { StorefrontMediaService } from './storefront-media.service';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
 import { CustomerOrderRefDto } from './dto/customer-order-lookup.dto';
 import { resolveOrderLinePrice, formatVariantLineName } from './engines/online-order-pricing.engine';
-import { computeTableBillPaymentTotal, computeTableBillTotals } from './engines/table-bill.engine';
+import { computeTableBillTotals } from './engines/table-bill.engine';
 import { maskGatewaySecret, isMaskedGatewaySecret } from './engines/gateway-secret-mask.engine';
 import { buildStorePublicBase, isReservedStoreSlug } from './engines/store-public-url.engine';
 import {
@@ -4615,80 +4615,30 @@ export class StorefrontService {
   }
 
   /**
-   * Next-Gen F&B: Pay active table check / bill via QR online checkout
+   * Next-Gen F&B: Pay active table check / bill via QR online checkout.
+   *
+   * INV-TABLE-BILL-PAY-CLOSED: this endpoint is CLOSED until a verified
+   * gateway capture exists. It used to mark the bill paid_online with a
+   * generated TAB-PAY reference and no payment of any kind, on a public
+   * route anyone could call with a shop slug and a table number — a
+   * guest could close a check and walk out with the food unpaid. The
+   * throw below runs before any read or write, so no bill state and no
+   * service-call row can ever be produced from this route. Re-enable
+   * only through a gateway charge plus webhook-verified capture; never
+   * by restoring the generated-reference marking. Viewing the bill
+   * (getActiveTableBill) is unchanged.
    */
   async payActiveTableBill(
     slug: string,
     tableNumber: string,
     dto: { tipAmount?: number; paymentMethod?: string; guestName?: string; guestPhone?: string },
   ) {
-    const cleanSlug = String(slug || '').trim().toLowerCase();
-    const cleanTable = String(tableNumber || '').trim();
-    const tenant = await this.getTenantBySlug(cleanSlug);
-
-    const bill = await this.getActiveTableBill(cleanSlug, cleanTable);
-    if (!bill.hasActiveBill) {
-      throw new BadRequestException('لا يوجد شيك مفتوح حالياً لهذه الطاولة');
-    }
-
-    const tipAmount = Math.max(0, Number(dto?.tipAmount || 0));
-    const billAmount = Number(bill.total || 0);
-    // Book digits from the bill's own currency (the bill already carries
-    // the tenant currency; an unreadable code keeps the historical
-    // 2-decimal total instead of failing a public payment, mirroring
-    // storefrontMoneyDigits' lenient fallback).
-    let billDigits: MoneyDigits = 2;
-    try {
-      billDigits = currencyMoneyDigits(String(bill.currency || 'SAR'));
-    } catch {
-      billDigits = 2;
-    }
-    const totalWithTip = computeTableBillPaymentTotal(billAmount, tipAmount, billDigits);
-    const paymentRef = `TAB-PAY-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    if (bill.source === 'held_draft' && bill.billId) {
-      await this.db
-        .updateTable('held_sales')
-        .set({
-          paid_online: true,
-          paid_online_amount: totalWithTip,
-          paid_online_ref: paymentRef,
-          note: sql`COALESCE(note, '') || ${' [مسدد إلكترونياً بالكامل - مرجع: ' + paymentRef + ']'}` as any,
-        })
-        .where('id', '=', bill.billId)
-        .where(sql<boolean>`tenant_id = ${tenant.id}`)
-        .execute();
-    }
-
-    // Insert or update resolved table service call for floor plan and waiter station
-    await this.db
-      .insertInto('restaurant_table_service_calls')
-      .values({
-        tenant_id: tenant.id,
-        table_number: cleanTable,
-        call_type: 'bill_paid',
-        status: 'resolved',
-        bill_amount: billAmount,
-        tip_amount: tipAmount,
-        payment_reference: paymentRef,
-        payment_status: 'paid',
-        resolved_at: new Date(),
-      })
-      .execute();
-
-    return {
-      success: true,
-      paidOnline: true,
-      tableNumber: cleanTable,
-      billAmount,
-      tipAmount,
-      totalPaid: totalWithTip,
-      paymentReference: paymentRef,
-      guestName: dto?.guestName || '',
-      currency: bill.currency || 'SAR',
-      paidAt: new Date().toISOString(),
-      message: 'تم سداد حساب الطاولة بنجاح! شكراً لزيارتكم ونتمنى لكم وقتاً ممتعاً.',
-    };
+    void slug;
+    void tableNumber;
+    void dto;
+    throw new ServiceUnavailableException(
+      'الدفع الإلكتروني لفاتورة الطاولة غير متاح حالياً — ادفع عند الكاشير.',
+    );
   }
 }
 

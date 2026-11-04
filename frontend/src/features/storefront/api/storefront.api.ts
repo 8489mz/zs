@@ -109,39 +109,27 @@ export const storefrontApi = {
     tableNumber: string,
     payload: { tipAmount?: number; paymentMethod?: string; guestName?: string; guestPhone?: string }
   ) => {
-    try {
-      return await http<{
-        success: boolean;
-        paidOnline: boolean;
-        tableNumber: string;
-        billAmount: number;
-        tipAmount: number;
-        totalPaid: number;
-        paymentReference: string;
-        guestName?: string;
-        currency: string;
-        paidAt: string;
-        message: string;
-      }>(`/api/storefront/${encodeURIComponent(slug)}/table/${encodeURIComponent(tableNumber)}/pay-bill`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-    } catch {
-      const tip = Number(payload.tipAmount) || 0;
-      return {
-        success: true,
-        paidOnline: true,
-        tableNumber,
-        billAmount: 0,
-        tipAmount: tip,
-        totalPaid: tip,
-        paymentReference: `REF-${Date.now().toString().slice(-6)}`,
-        guestName: payload.guestName,
-        currency: DEMO_STOREFRONT_INFO.currency || 'EGP',
-        paidAt: new Date().toISOString(),
-        message: 'تم السداد بنجاح',
-      };
-    }
+    // INV-TABLE-BILL-PAY-CLOSED: never fabricate a paid result. The old
+    // catch returned success + a generated reference for ANY error, so
+    // the guest modal showed "paid" even when the backend refused or
+    // the network failed. Errors now propagate to the caller's onError
+    // handler, which shows the failure instead of a paid screen.
+    return await http<{
+      success: boolean;
+      paidOnline: boolean;
+      tableNumber: string;
+      billAmount: number;
+      tipAmount: number;
+      totalPaid: number;
+      paymentReference: string;
+      guestName?: string;
+      currency: string;
+      paidAt: string;
+      message: string;
+    }>(`/api/storefront/${encodeURIComponent(slug)}/table/${encodeURIComponent(tableNumber)}/pay-bill`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 
   // Order-scoped public routes carry the order's access token (invariant SF-1).
