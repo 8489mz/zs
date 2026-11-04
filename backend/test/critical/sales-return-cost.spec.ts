@@ -205,7 +205,7 @@ const overrideSuccess = allocateRefundTenders({
 });
 assert.deepEqual(overrideSuccess, [{ tender: 'cash', amount: 100 }]);
 
-// حظر التجاوز إن كان السبب أقل من 10 أحرف
+// حظر التجاوز إن كان السبب فارغاً؛ كلمة واحدة واضحة تُقبل
 assert.throws(() => allocateRefundTenders({
   requested: 'cash',
   amount: 100,
@@ -217,8 +217,23 @@ assert.throws(() => allocateRefundTenders({
   previousDebtReversed: 0,
   hasCustomer: false,
   override: true,
-  overrideReason: 'قصير',
+  overrideReason: '',
 }), /REFUND_OVERRIDE_REASON_REQUIRED/);
+
+// كلمة واحدة واضحة تُقبل سبباً للتجاوز
+assert.deepEqual(allocateRefundTenders({
+  requested: 'cash',
+  amount: 100,
+  originalCashPaid: 0,
+  originalNonCashPaid: 100,
+  originalDebt: 0,
+  previousCashRefunded: 0,
+  previousNonCashRefunded: 0,
+  previousDebtReversed: 0,
+  hasCustomer: false,
+  override: true,
+  overrideReason: 'قصير',
+}), [{ tender: 'cash', amount: 100 }]);
 
 console.log('✓ 3. اختبارات حماية وسائل الاسترداد والاعتماد الإداري (allocateRefundTenders) اجتازت بنجاح');
 

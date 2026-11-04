@@ -1008,8 +1008,8 @@ export class GoodsReceiptService {
           'صلاحيتك لا تسمح بتجاوز نتيجة المطابقة الثلاثية بهذا النطاق. تجاوز فروق الكميات يتطلب اعتماد الإدارة.',
         );
       }
-      if (String(dto.overrideReason || '').trim().length < 10) {
-        throw new BadRequestException('يجب توثيق سبب تفصيلي (10 أحرف على الأقل) لتجاوز المطابقة الثلاثية.');
+      if (!String(dto.overrideReason || '').trim()) {
+        throw new BadRequestException('يجب توثيق سبب لتجاوز المطابقة الثلاثية.');
       }
     }
 

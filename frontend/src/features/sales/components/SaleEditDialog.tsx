@@ -160,7 +160,7 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
       setLocalError(t('sales.ca9c8e'));
       return;
     }
-    if (String(editReason || '').trim().length < 8) {
+    if (!String(editReason || '').trim()) {
       setLocalError(t('sales.bee06e'));
       return;
     }

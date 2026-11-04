@@ -411,7 +411,7 @@ export function computeThreeWayMatch(input: ThreeWayMatchInput): ThreeWayMatchRe
   // received is a different decision from accepting a price variance, and must not share a switch.
   // A reconciliation discrepancy is an arithmetic failure and is never overridable.
   let isValidForPosting = blockingIssues.length === 0;
-  if (!isValidForPosting && input.allowOverride && String(input.overrideReason || '').trim().length >= 10) {
+  if (!isValidForPosting && input.allowOverride && String(input.overrideReason || '').trim()) {
     const scope: OverrideScope = input.overrideScope === 'full' ? 'full' : 'price_only';
     const overridable = codes.every((c) =>
       c === 'RECONCILIATION_DISCREPANCY' || c === 'INVALID_PO_LINE' || c === 'INVALID_GRN_LINE'

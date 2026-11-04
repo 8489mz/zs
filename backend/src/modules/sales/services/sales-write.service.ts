@@ -2383,7 +2383,7 @@ export class SalesWriteService {
     if (!normalized.items.length) throw new AppError('Sale must include at least one item', 'SALE_ITEMS_REQUIRED', 400);
     ensureUniqueFlowItems(normalized.items, 'SALE_DUPLICATE_PRODUCT', 'Sale must not contain duplicate product rows with the same unit');
     if (normalized.discount < 0) throw new AppError('Discount cannot be negative', 'INVALID_DISCOUNT', 400);
-    if (editReason.length < 5) throw new AppError('سبب التعديل مطلوب بشكل واضح.', 'SALE_EDIT_REASON_REQUIRED', 400);
+    if (!editReason) throw new AppError('سبب التعديل مطلوب.', 'SALE_EDIT_REASON_REQUIRED', 400);
     const isAdmin = auth.role === 'admin' || auth.role === 'super_admin';
     if (!isAdmin && !managerPin) throw new AppError('رمز اعتماد المدير مطلوب قبل تعديل الفاتورة.', 'MANAGER_AUTH_REQUIRED', 400);
     if (!isAdmin || managerPin) await this.authz.authorizeDiscountOverride(managerPin, auth, this.db);

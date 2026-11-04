@@ -214,12 +214,12 @@ export function validateMakerCheckerOverride(ctx: MakerCheckerContext): {
     };
   }
 
-  // 3. Minimum substantive rationale length >= 10 chars
+  // 3. A rationale is required (any non-empty reason); the role gate above stays.
   const reason = (ctx.reason || '').trim();
-  if (reason.length < 10) {
+  if (!reason) {
     return {
       valid: false,
-      error: 'يجب تقديم مبرر مالي تفصيلي لاعتماد التجاوز لا يقل عن 10 أحرف يوضح سبب قبول الزيادة عن التعرفة.',
+      error: 'يجب تقديم مبرر مالي لاعتماد التجاوز يوضح سبب قبول الزيادة عن التعرفة.',
     };
   }
 

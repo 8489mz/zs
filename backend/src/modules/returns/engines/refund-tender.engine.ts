@@ -46,8 +46,8 @@ export function allocateRefundTenders(input: {
     return result;
   }
   if (input.override) {
-    if (String(input.overrideReason || '').trim().length < 10) {
-      throw new AppError('سبب تجاوز وسيلة الاسترداد يجب أن يكون 10 أحرف على الأقل', 'REFUND_OVERRIDE_REASON_REQUIRED', 400);
+    if (!String(input.overrideReason || '').trim()) {
+      throw new AppError('سبب تجاوز وسيلة الاسترداد مطلوب', 'REFUND_OVERRIDE_REASON_REQUIRED', 400);
     }
     apply(input.requested, remaining);
     return result;

@@ -48,7 +48,7 @@ export function PurchaseComposer({ products, suppliers, categories, branches, lo
   const isAdmin = isAdminUser(user);
   const isBlockedByDuplicate = Boolean(
     duplicateCheck.result?.hasBlockingDuplicates &&
-      (!duplicateCheck.allowOverride || duplicateCheck.overrideReason.trim().length < 10),
+      (!duplicateCheck.allowOverride || !duplicateCheck.overrideReason.trim()),
   );
 
   const supplierOptions = useMemo(() => [

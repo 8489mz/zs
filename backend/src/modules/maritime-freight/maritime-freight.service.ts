@@ -3309,8 +3309,8 @@ export class MaritimeFreightService {
     if (originalDemurrage > Number(updatePayload.demurrage_amount || 0) + 0.01) {
       const reason = (dto.notes || '').trim();
       if (!['admin', 'super_admin', 'finance_manager'].includes(auth.role.toLowerCase()) ||
-        reason.length < 10 || reason === (container.notes || '').trim()) {
-        throw new BadRequestException('خفض غرامة التأخير يتطلب اعتماد مدير مالي وسبباً موثقاً لا يقل عن 10 أحرف');
+        !reason || reason === (container.notes || '').trim()) {
+        throw new BadRequestException('خفض غرامة التأخير يتطلب اعتماد مدير مالي وسبباً موثقاً');
       }
       updatePayload.notes = `${container.notes || ''}\nاعتماد خفض الغرامة من ${originalDemurrage} إلى ${updatePayload.demurrage_amount}: ${reason} (مستخدم ${auth.userId})`;
     }

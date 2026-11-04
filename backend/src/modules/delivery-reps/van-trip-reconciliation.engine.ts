@@ -619,12 +619,12 @@ export function evaluateTripExpenseGovernance(params: TripExpenseGovernanceParam
     };
   }
 
-  if (trimmedNotes.length < 3) {
+  if (!trimmedNotes) {
     return {
       allowed: false,
       requiresSupervisorPin: false,
       reasonCode: 'EXPENSE_NOTES_REQUIRED',
-      errorMessageAr: 'يجب تدوين البيان التفصيلي أو رقم الفاتورة/الإيصال لكل مصروف ميداني (3 أحرف على الأقل) لضبط الرقابة المالية',
+      errorMessageAr: 'يجب تدوين البيان التفصيلي أو رقم الفاتورة/الإيصال لكل مصروف ميداني لضبط الرقابة المالية',
       projectedTripExpenses,
     };
   }

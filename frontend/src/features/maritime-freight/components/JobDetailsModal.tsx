@@ -731,8 +731,8 @@ export function JobDetailsModal({ open, jobId, onClose, onUpdated }: JobDetailsM
       return;
     }
 
-    if (overrideReasonInput.trim().length < 10) {
-      toast.warning('يجب إدخال مبرر مالي تفصيلي لاعتماد التجاوز لا يقل عن 10 أحرف');
+    if (!overrideReasonInput.trim()) {
+      toast.warning('يجب إدخال مبرر مالي لاعتماد التجاوز');
       return;
     }
 

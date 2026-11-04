@@ -106,7 +106,7 @@ const r8 = computeThreeWayMatch({
   vatRate: 0.14,
   ...qtyBlocked,
   allowOverride: true,
-  overrideReason: '.', // too short
+  overrideReason: '', // undocumented: an empty reason must not pass
   overrideScope: 'full',
 });
 assert.equal(r8.isValidForPosting, false, 'سبب تجاوز غير مُوثّق يجب ألا يُقبل');

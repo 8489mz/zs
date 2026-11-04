@@ -63,7 +63,8 @@ import {
   assert.equal(damagedWrite.damagedRecord.qty, 1.25);
   assert.equal(damagedWrite.damagedRecord.location_id, 6);
 
-  assert.throws(() => assertDamagedStockNote('short'), /DAMAGE_NOTE_REQUIRED/);
+  assert.throws(() => assertDamagedStockNote('   '), /DAMAGE_NOTE_REQUIRED/);
+  assert.doesNotThrow(() => assertDamagedStockNote('short'));
   assert.doesNotThrow(() => assertDamagedStockNote('سبب تالف واضح'));
 
   assert.throws(() => assertInventoryLocationBranchMatch(10, 11), /LOCATION_BRANCH_MISMATCH/);

@@ -2806,8 +2806,8 @@ export class ImportSalesService {
     if (!dto.approvalRequestId?.trim()) {
       throw new BadRequestException('عكس استلام الشحنة يتطلب موافقة Maker-Checker معتمدة.');
     }
-    if (!dto.reason?.trim() || dto.reason.trim().length < 10) {
-      throw new BadRequestException('عكس الاستلام يتطلب سبباً موثقاً لا يقل عن 10 أحرف.');
+    if (!dto.reason?.trim()) {
+      throw new BadRequestException('عكس الاستلام يتطلب سبباً موثقاً.');
     }
     return await this.inventoryDb.transaction().execute(async (trx) => {
       const state = await this.lockShipment(trx, tenantId, shipmentId);
@@ -3037,8 +3037,8 @@ export class ImportSalesService {
     if (!dto.approvalRequestId?.trim()) {
       throw new BadRequestException('مراجعة الاستلام القديم تتطلب موافقة Maker-Checker معتمدة.');
     }
-    if (!dto.reason?.trim() || dto.reason.trim().length < 10) {
-      throw new BadRequestException('مراجعة الاستلام القديم تتطلب سبباً موثقاً لا يقل عن 10 أحرف.');
+    if (!dto.reason?.trim()) {
+      throw new BadRequestException('مراجعة الاستلام القديم تتطلب سبباً موثقاً.');
     }
     return await this.inventoryDb.transaction().execute(async (trx) => {
       const state = await this.lockShipment(trx, tenantId, shipmentId);

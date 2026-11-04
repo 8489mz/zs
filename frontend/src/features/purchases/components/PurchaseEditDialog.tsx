@@ -137,7 +137,7 @@ export function PurchaseEditDialog({ open, purchase, isBusy = false, errorMessag
       setLocalError('الخصم لا يمكن أن يكون سالبًا');
       return;
     }
-    if (String(editReason || '').trim().length < 8) {
+    if (!String(editReason || '').trim()) {
       setLocalError('سبب التعديل يجب أن يكون واضحًا');
       return;
     }

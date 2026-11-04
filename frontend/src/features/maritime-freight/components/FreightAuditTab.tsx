@@ -69,8 +69,8 @@ export function FreightAuditTab({ onOpenJobModal }: FreightAuditTabProps) {
 
   const handleConfirmOverride = async () => {
     if (!overrideTarget) return;
-    if (!overrideReason.trim() || overrideReason.trim().length < 10) {
-      toast.warning('يجب كتابة سبب اعتماد التجاوز المالي بالتفصيل (10 أحرف كحد أدنى)');
+    if (!overrideReason.trim()) {
+      toast.warning('يجب كتابة سبب اعتماد التجاوز المالي');
       return;
     }
 

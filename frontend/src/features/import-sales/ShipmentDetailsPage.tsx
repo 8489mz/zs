@@ -365,8 +365,8 @@ export default function ShipmentDetailsPage() {
 
   const handleReverseReceipt = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reversalApprovalId.trim() || reversalReason.trim().length < 10) {
-      toast.error('عكس الاستلام يتطلب معرف اعتماد معتمد وسبباً لا يقل عن 10 أحرف');
+    if (!reversalApprovalId.trim() || !reversalReason.trim()) {
+      toast.error('عكس الاستلام يتطلب معرف اعتماد معتمد وسبباً موثقاً');
       return;
     }
     const confirmed = await systemConfirm({
@@ -387,8 +387,8 @@ export default function ShipmentDetailsPage() {
 
   const handleResolveLegacy = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resolveApprovalId.trim() || resolveReason.trim().length < 10) {
-      toast.error('مراجعة الاستلام القديم تتطلب معرف اعتماد معتمد وسبباً لا يقل عن 10 أحرف');
+    if (!resolveApprovalId.trim() || !resolveReason.trim()) {
+      toast.error('مراجعة الاستلام القديم تتطلب معرف اعتماد معتمد وسبباً موثقاً');
       return;
     }
     try {

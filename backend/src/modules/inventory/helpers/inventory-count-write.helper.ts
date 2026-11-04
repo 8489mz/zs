@@ -118,8 +118,8 @@ export function buildDamageRecordFromCount(item: StockCountStoredItem, session: 
 }
 
 export function assertDamagedStockNote(note: string | null | undefined): void {
-  if (String(note || '').trim().length < 8) {
-    throw new AppError('اكتب سبب التالف بوضوح في 8 أحرف على الأقل', 'DAMAGE_NOTE_REQUIRED', 400);
+  if (!String(note || '').trim()) {
+    throw new AppError('اكتب سبب التالف', 'DAMAGE_NOTE_REQUIRED', 400);
   }
 }
 

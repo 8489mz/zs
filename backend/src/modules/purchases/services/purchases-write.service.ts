@@ -340,9 +340,9 @@ export class PurchasesWriteService {
             );
           }
           const reason = String(payload.duplicateOverrideReason || '').trim();
-          if (reason.length < 10) {
+          if (!reason) {
             throw new AppError(
-              'يجب إدخال سبب معتمد ومفصل لا يقل عن 10 أحرف لتجاوز حظر الفاتورة المكررة',
+              'يجب إدخال سبب لتجاوز حظر الفاتورة المكررة',
               'DUPLICATE_OVERRIDE_REASON_REQUIRED',
               422,
             );
@@ -656,7 +656,7 @@ export class PurchasesWriteService {
   async updatePurchase(purchaseId: number, payload: UpsertPurchaseDto, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
     const editReason = String(payload.editReason || '').trim();
-    if (editReason.length < 5) throw new AppError('سبب التعديل مطلوب بشكل واضح.', 'PURCHASE_EDIT_REASON_REQUIRED', 400);
+    if (!editReason) throw new AppError('سبب التعديل مطلوب.', 'PURCHASE_EDIT_REASON_REQUIRED', 400);
 
     const updated = await this.tx.runInTransaction(this.db, async (trx) => {
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
@@ -930,9 +930,9 @@ export class PurchasesWriteService {
             );
           }
           const reason = String(payload.duplicateOverrideReason || '').trim();
-          if (reason.length < 10) {
+          if (!reason) {
             throw new AppError(
-              'يجب إدخال سبب معتمد ومفصل لا يقل عن 10 أحرف لتجاوز حظر الفاتورة المكررة',
+              'يجب إدخال سبب لتجاوز حظر الفاتورة المكررة',
               'DUPLICATE_OVERRIDE_REASON_REQUIRED',
               422,
             );

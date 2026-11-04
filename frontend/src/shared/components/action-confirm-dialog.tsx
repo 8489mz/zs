@@ -53,7 +53,7 @@ export function ActionConfirmDialog({
   reasonLabel,
   reasonHint,
   reasonPlaceholder,
-  minReasonLength = 8,
+  minReasonLength = 1,
   overlayClassName = '',
   shellClassName = '',
   onConfirm,
@@ -151,7 +151,7 @@ export function ActionConfirmDialog({
               />
             </label>
             <div className="muted small" style={{ marginTop: 8 }}>
-              {reasonHint || `اكتب سببًا واضحًا لا يقل عن ${minReasonLength} أحرف.`}
+              {reasonHint || (minReasonLength > 1 ? `اكتب سببًا واضحًا لا يقل عن ${minReasonLength} أحرف.` : 'اكتب سببًا واضحًا.')}
             </div>
           </div>
         ) : null}

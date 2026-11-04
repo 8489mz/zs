@@ -202,7 +202,7 @@ export class InventoryCountService {
     }
     const reason = String(payload.reason || '').trim();
     const countedQty = Number(payload.countedQty);
-    if (reason.length < 8 || !Number.isFinite(countedQty) || countedQty < 0 ||
+    if (!reason || !Number.isFinite(countedQty) || countedQty < 0 ||
       Math.abs(countedQty * 1000 - Math.round(countedQty * 1000)) > 0.000001) {
       throw new AppError('A valid recount quantity and reason are required', 'INVALID_STOCK_RECOUNT', 400);
     }
@@ -604,7 +604,7 @@ export class InventoryCountService {
 
     const location = await this.scope.assertLocationScope(payload.locationId, auth, false, 'write');
     const effectiveNote = String(payload.note || '').trim() || String(payload.reason || '').trim();
-    if (effectiveNote.length < 8) throw new AppError('اكتب سبب التالف بوضوح في 8 أحرف على الأقل', 'DAMAGE_NOTE_REQUIRED', 400);
+    if (!effectiveNote) throw new AppError('اكتب سبب التالف', 'DAMAGE_NOTE_REQUIRED', 400);
     payload.note = effectiveNote;
     await this.tx.runInTransaction(this.db, async (trx) => {
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantScope.tenantId));

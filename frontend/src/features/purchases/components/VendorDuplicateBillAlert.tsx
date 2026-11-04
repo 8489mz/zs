@@ -151,11 +151,7 @@ export function VendorDuplicateBillAlert({
                       boxSizing: 'border-box',
                     }}
                   />
-                  {overrideReason.trim().length > 0 && overrideReason.trim().length < 10 && (
-                    <small style={{ color: '#ef4444' }}>
-                      {t('purchases.vendor_duplicate_bill_alert.s9', "السبب قصير جداً (")}{overrideReason.trim().length}{t('purchases.vendor_duplicate_bill_alert.s10', "/10 أحرف مطلوبة).")}
-                    </small>
-                  )}
+
                 </div>
               )}
             </>
