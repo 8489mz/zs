@@ -13,12 +13,12 @@ import { allocateGrnAccrual, allocateGrniBillPortion } from '../engines/grni-set
 import { valueStockReceipt } from '../../accounting/inventory-valuation';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, fromMinorUnits, roundMoney, toMinorUnits } from '../../accounting/engines/money-minor-units.engine';
-import { assertAutomatedJournalPeriodOpen } from '../../accounting/accounting-period-lock';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { PurchasesFinanceService } from './purchases-finance.service';
 import { advancePurchaseOrderReceipt } from '../engines/purchase-order-receipt.engine';
 import { normalizeBillNumber } from '../engines/duplicate-bill-detector.engine';
 import { assertGrnRequestedLocationScope } from '../engines/grn-location-policy.engine';
+import { stockMovementTotal } from '../../catalog/engines/stock-movement-total.engine';
 
 @Injectable()
 export class GoodsReceiptService {
@@ -528,7 +528,12 @@ export class GoodsReceiptService {
               before_qty: stockChange.scopeBefore,
               after_qty: stockChange.scopeAfter,
               unit_cost: lineUnitCost,
-              total_cost: Number((accepted * lineUnitCost).toFixed(4)),
+              // INV-GRN-JOURNAL-CENTRAL-POSTING: the stored movement total
+              // is the single book-digits computation (stockMovementTotal),
+              // so it can never diverge from the posted GRNI leg by
+              // rounding. The old toFixed(4) stored 100.125 for a 2dp
+              // tenant while the journal leg rounded to 100.13.
+              total_cost: stockMovementTotal(accepted, lineUnitCost, moneyDigits),
               reason: 'goods_receipt',
               note: `إذن استلام مخزني GRN - ${grn.docNo}`,
               reference_type: 'goods_receipt',
@@ -668,64 +673,60 @@ export class GoodsReceiptService {
           );
         }
 
-        await assertAutomatedJournalPeriodOpen(trx, scope.tenantId, entryDate, [Number(grniAccount), Number(invAccount)]);
-
-        // Insert with a collision-proof temporary number, then rename by id.
-        // COUNT(*)+1 made two concurrent postings on the same day generate the same entry_no.
-        const [entry] = await trx
-          .insertInto('journal_entries')
-          .values({
-            tenant_id: scope.tenantId,
-            account_id: scope.accountId || scope.tenantId,
-            entry_no: `JRN-TMP-GRN-${grn.id}-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-            entry_date: entryDate,
-            description: `إثبات استلام بضاعة مخزنية GRNI - إذن رقم ${grn.docNo}`,
-            source_type: 'goods_receipt',
-            source_id: grn.id,
-            status: 'posted',
-            created_by: auth.userId,
-          })
-          .returning(['id'])
-          .execute();
-
-        grniEntryId = Number(entry.id);
-
-        await trx
-          .updateTable('journal_entries')
-          .set({ entry_no: formatDailyDocumentNumber('JRN', grniEntryId), updated_at: new Date() })
-          .where('id', '=', grniEntryId)
-          .where('tenant_id', '=', scope.tenantId)
-          .execute();
-
         const grniAmount = roundMoney(totalGrniAmount, moneyDigits);
 
-        await trx
-          .insertInto('journal_entry_lines')
-          .values([
+        // INV-GRN-JOURNAL-CENTRAL-POSTING: the GRNI journal posts only
+        // through the central boundary on this same transaction. The
+        // boundary stamps posted_by/posted_at, numbers the entry JE-<id>,
+        // re-rounds both legs at book digits, validates branch/location/
+        // partner references against this tenant, and asserts the period
+        // is open — the old direct inserts carried none of that, and
+        // branch/location reporting missed every GRN journal. The
+        // pre-resolved accounts above are kept: resolveAccountByCode
+        // creates 1140/2125 when the tenant's chart lacks them, and the
+        // boundary would fail closed instead. Double-posting is still
+        // guarded by the GRN row lock + posted-status check above;
+        // 'goods_receipt' is not a dedup-key source in the boundary.
+        grniEntryId = await this.accountingPosting.postDomainJournal(trx, {
+          sourceType: 'goods_receipt',
+          sourceId: grn.id,
+          tenantId: scope.tenantId,
+          accountId: scope.accountId || scope.tenantId,
+          entryDate,
+          description: `إثبات استلام بضاعة مخزنية GRNI - إذن رقم ${grn.docNo}`,
+          branchId: grnBranchId,
+          locationId: grn.locationId,
+          createdBy: auth.userId,
+          postedBy: auth.userId,
+          lines: [
             {
-              journal_entry_id: grniEntryId,
-              tenant_id: scope.tenantId,
-              account_id: Number(invAccount),
+              accountId: Number(invAccount),
               description: `إضافة مخزون مستلم - ${grn.docNo}`,
               debit: grniAmount,
               credit: 0,
               // Inventory is not a supplier sub-ledger account. Tagging it with the supplier
               // polluted supplier statements and aging with inventory debits.
-              partner_type: 'none',
-              partner_id: null,
+              partnerType: 'none',
+              partnerId: null,
+              branchId: grnBranchId,
+              locationId: grn.locationId,
             },
             {
-              journal_entry_id: grniEntryId,
-              tenant_id: scope.tenantId,
-              account_id: Number(grniAccount),
+              accountId: Number(grniAccount),
               description: `استحقاق بضاعة مستلمة غير مفوترة GRNI - ${grn.docNo}`,
               debit: 0,
               credit: grniAmount,
-              partner_type: 'supplier',
-              partner_id: grn.supplierId,
+              // postPurchase convention: a supplier partner only when the
+              // document carries a real supplier id; a supplier-less
+              // receipt posts the liability untagged instead of failing
+              // the boundary's partner validation on id 0.
+              partnerType: Number(grn.supplierId) > 0 ? 'supplier' : 'none',
+              partnerId: Number(grn.supplierId) > 0 ? Number(grn.supplierId) : null,
+              branchId: grnBranchId,
+              locationId: grn.locationId,
             },
-          ])
-          .execute();
+          ],
+        });
       }
 
       await trx
