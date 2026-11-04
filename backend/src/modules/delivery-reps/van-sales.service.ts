@@ -6420,6 +6420,15 @@ export class VanSalesService {
 
   /**
    * Settle a specific representative financial shortage/variance via cash receipt or administrative waiver.
+   *
+   * INV-REP-SHORTAGE-CASH-SETTLE: a cash settle is a real cash receipt, so
+   * the journal, the drawer row and the status flip commit or roll back in
+   * ONE transaction. The item is re-read under lock inside the transaction
+   * and the status flip carries a status predicate, so a concurrent second
+   * settle waits, then fails closed instead of collecting the same cash
+   * twice. Cash is available only for shortage items: bonuses and
+   * commissions leave through payroll, never through this cash receipt.
+   * A waiver stays record-only, exactly as before.
    */
   async settleRepFinancialItem(
     tenantId: string,
@@ -6431,50 +6440,247 @@ export class VanSalesService {
     },
     authContext: AuthContext,
   ) {
-    const item = await this.anyDb
-      .selectFrom('van_rep_financial_settlements')
-      .selectAll()
-      .where('id', '=', id)
-      .where('tenant_id', '=', tenantId)
-      .executeTakeFirst();
-
-    if (!item) {
-      throw new AppError('بند التسوية غير موجود', 'SETTLEMENT_NOT_FOUND', 404);
+    if (payload.method !== 'cash' && payload.method !== 'waiver') {
+      throw new AppError('طريقة التسوية غير معروفة', 'SETTLEMENT_METHOD_INVALID', 400);
     }
-
-    if (item.status !== 'pending') {
-      throw new AppError('تمت تسوية هذا البند أو إعفاؤه مسبقاً', 'ALREADY_SETTLED', 400);
-    }
-
     const actorUserId = authContext.userId ? Number(authContext.userId) : null;
-    let receiptVoucherNo: string | null = null;
-    if (payload.method === 'cash') {
-      receiptVoucherNo = formatDailyDocumentNumber('REC', Math.floor(1000 + Math.random() * 9000));
+    return this.db.transaction().execute(async (trx) => {
+      const trxAny = trx as any;
+      const item = await trxAny
+        .selectFrom('van_rep_financial_settlements')
+        .selectAll()
+        .where('id', '=', id)
+        .where('tenant_id', '=', tenantId)
+        .forUpdate()
+        .executeTakeFirst();
+
+      if (!item) {
+        throw new AppError('بند التسوية غير موجود', 'SETTLEMENT_NOT_FOUND', 404);
+      }
+
+      if (item.status !== 'pending') {
+        throw new AppError('تمت تسوية هذا البند أو إعفاؤه مسبقاً', 'ALREADY_SETTLED', 400);
+      }
+
+      const notes = payload.notes
+        ? `${item.notes ? item.notes + ' | ' : ''}${payload.notes}`
+        : item.notes;
+
+      if (payload.method === 'waiver') {
+        const waived = await trxAny
+          .updateTable('van_rep_financial_settlements')
+          .set({
+            status: 'waived',
+            settlement_method: 'waiver',
+            settled_at: sql`NOW()`,
+            settled_by: actorUserId,
+            receipt_voucher_no: null,
+            notes,
+            updated_at: sql`NOW()`,
+          })
+          .where('id', '=', id)
+          .where('tenant_id', '=', tenantId)
+          .where('status', '=', 'pending')
+          .returning('id')
+          .execute();
+        if (waived.length !== 1) {
+          throw new AppError('تمت تسوية هذا البند أو إعفاؤه مسبقاً', 'ALREADY_SETTLED', 400);
+        }
+        return {
+          ok: true,
+          id,
+          status: 'waived',
+          receiptVoucherNo: null,
+        };
+      }
+
+      const entryType = String(item.entry_type || '');
+      if (entryType !== 'cash_shortage' && entryType !== 'stock_shortage') {
+        throw new AppError(
+          'السداد النقدي متاح لبنود العجز فقط؛ المكافآت والعمولات تُرحَّل للرواتب أو تُعفى إدارياً',
+          'SETTLEMENT_CASH_UNSUPPORTED',
+          422,
+        );
+      }
+
+      const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(trxAny, tenantId));
+      const amount = roundMoney(Number(item.amount || 0), bookDigits);
+      if (!(amount > 0)) {
+        throw new AppError('مبلغ بند التسوية يجب أن يكون أكبر من صفر', 'SETTLEMENT_AMOUNT_INVALID', 400);
+      }
+
+      const shift = await this.resolveRepShortageReceivingShift(trxAny, {
+        tenantId,
+        actorUserId,
+        tripId: item.trip_id ? Number(item.trip_id) : null,
+      });
+
+      const journalEntryId = await this.accountingPosting.postRepShortageCashCollection(
+        trx,
+        id,
+        {
+          amount,
+          entryType,
+          branchId: shift.branch_id ? Number(shift.branch_id) : null,
+          locationId: shift.location_id ? Number(shift.location_id) : null,
+        },
+        authContext,
+      );
+
+      const rep = item.rep_id
+        ? await trxAny
+          .selectFrom('delivery_representatives')
+          .select(['name'])
+          .where('id', '=', Number(item.rep_id))
+          .where('tenant_id', '=', tenantId)
+          .executeTakeFirst()
+        : null;
+      await this.insertRepShortageCashRow(trxAny, {
+        tenantId,
+        accountId,
+        settlementItemId: id,
+        repName: rep?.name ? String(rep.name) : 'مندوب التوزيع',
+        amount,
+        shift,
+        createdBy: actorUserId,
+      });
+
+      // Deterministic voucher: the settlement item id is the sequence, so a
+      // retried settle can never mint a second voucher number for one item.
+      // The day part keeps the host-local behaviour this endpoint always
+      // had; tenant-timezone day resolution is recorded remaining work.
+      const receiptVoucherNo = formatDailyDocumentNumber('REC', id);
+
+      const settled = await trxAny
+        .updateTable('van_rep_financial_settlements')
+        .set({
+          status: 'settled',
+          settlement_method: 'cash',
+          settled_at: sql`NOW()`,
+          settled_by: actorUserId,
+          receipt_voucher_no: receiptVoucherNo,
+          notes,
+          updated_at: sql`NOW()`,
+        })
+        .where('id', '=', id)
+        .where('tenant_id', '=', tenantId)
+        .where('status', '=', 'pending')
+        .returning('id')
+        .execute();
+      if (settled.length !== 1) {
+        throw new AppError('تمت تسوية هذا البند أو إعفاؤه مسبقاً', 'ALREADY_SETTLED', 400);
+      }
+
+      return {
+        ok: true,
+        id,
+        status: 'settled',
+        receiptVoucherNo,
+        journalEntryId,
+      };
+    });
+  }
+
+  /**
+   * Receiving shift for a rep shortage cash collection, in the order the
+   * drawer truth requires: the settler's own open shift first — the
+   * cashier who took the cash is the one whose drawer must grow — then,
+   * when the settler holds no shift, the latest open shift on the branch
+   * of the trip's van location (the same branch-only fallback granularity
+   * the trip-remittance row uses). No open shift anywhere fails closed:
+   * cash with no drawer must not settle.
+   */
+  private async resolveRepShortageReceivingShift(
+    trx: any,
+    params: {
+      tenantId: string;
+      actorUserId: number | null;
+      tripId: number | null;
+    },
+  ): Promise<{ id: number; branch_id: number | null; location_id: number | null }> {
+    if (params.actorUserId && params.actorUserId > 0) {
+      const own = await trx
+        .selectFrom('cashier_shifts')
+        .select(['id', 'branch_id', 'location_id'])
+        .where('tenant_id', '=', params.tenantId)
+        .where('status', '=', 'open')
+        .where('opened_by', '=', params.actorUserId)
+        .orderBy('id', 'desc')
+        .forUpdate()
+        .executeTakeFirst();
+      if (own) return own;
     }
+    if (params.tripId) {
+      const trip = await trx
+        .selectFrom('van_sales_trips')
+        .select(['van_location_id'])
+        .where('id', '=', params.tripId)
+        .where('tenant_id', '=', params.tenantId)
+        .executeTakeFirst();
+      const vanLocationId = trip?.van_location_id ? Number(trip.van_location_id) : 0;
+      if (vanLocationId > 0) {
+        const location = await trx
+          .selectFrom('stock_locations')
+          .select(['branch_id'])
+          .where('id', '=', vanLocationId)
+          .where('tenant_id', '=', params.tenantId)
+          .executeTakeFirst();
+        const branchId = location?.branch_id ? Number(location.branch_id) : null;
+        const branchMatch = (eb: any) =>
+          branchId == null ? eb('branch_id', 'is', null) : eb('branch_id', '=', branchId);
+        const branchShift = await trx
+          .selectFrom('cashier_shifts')
+          .select(['id', 'branch_id', 'location_id'])
+          .where('tenant_id', '=', params.tenantId)
+          .where('status', '=', 'open')
+          .where(branchMatch)
+          .orderBy('id', 'desc')
+          .forUpdate()
+          .executeTakeFirst();
+        if (branchShift) return branchShift;
+      }
+    }
+    throw new AppError('يجب فتح وردية قبل تحصيل نقدية عجز المندوب', 'OPEN_SHIFT_REQUIRED', 400);
+  }
 
-    await this.anyDb
-      .updateTable('van_rep_financial_settlements')
-      .set({
-        status: payload.method === 'cash' ? 'settled' : 'waived',
-        settlement_method: payload.method,
-        settled_at: sql`NOW()`,
-        settled_by: actorUserId,
-        receipt_voucher_no: receiptVoucherNo,
-        notes: payload.notes
-          ? `${item.notes ? item.notes + ' | ' : ''}${payload.notes}`
-          : item.notes,
-        updated_at: sql`NOW()`,
-      })
-      .where('id', '=', id)
-      .where('tenant_id', '=', tenantId)
+  /**
+   * The drawer row for a rep shortage cash collection. It reuses the
+   * trip-remittance txn_type on purpose — drawer math keys off the signed
+   * amount and the 'مندوب' note, so the row lands in delivery cash-in
+   * exactly like every other rep handover — with its own deterministic
+   * request key, one per settlement item, under the same partial unique
+   * index, so a retried collection collides instead of doubling the
+   * shift's expected cash.
+   */
+  private async insertRepShortageCashRow(
+    trx: any,
+    params: {
+      tenantId: string;
+      accountId: string;
+      settlementItemId: number;
+      repName: string;
+      amount: number;
+      shift: { id: number; branch_id: number | null; location_id: number | null };
+      createdBy: number | null;
+    },
+  ): Promise<void> {
+    await trx
+      .insertInto('treasury_transactions')
+      .values({
+        tenant_id: params.tenantId,
+        account_id: params.accountId,
+        txn_type: 'rep_cash_remittance',
+        amount: params.amount,
+        note: `توريد نقدية مندوب ${params.repName} - تسوية عجز #${params.settlementItemId}`,
+        reference_type: 'cashier_shift',
+        reference_id: Number(params.shift.id),
+        branch_id: params.shift.branch_id ? Number(params.shift.branch_id) : null,
+        location_id: params.shift.location_id ? Number(params.shift.location_id) : null,
+        created_by: params.createdBy,
+        payment_channel: 'cash',
+        request_key: `rep-shortage-cash:${params.settlementItemId}`,
+      } as any)
       .execute();
-
-    return {
-      ok: true,
-      id,
-      status: payload.method === 'cash' ? 'settled' : 'waived',
-      receiptVoucherNo,
-    };
   }
 
   /**
