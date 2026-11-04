@@ -5,6 +5,9 @@ export type FlowItem = {
   qty: number;
   unitMultiplier?: number;
   lineId?: number;
+  /** Selling price (sale lines) or unit cost (purchase lines, as `cost`). */
+  price?: number;
+  cost?: number;
 };
 
 export type PaymentEntry = {
@@ -36,12 +39,31 @@ export function roundQty(value: number): number {
   return sign * (Math.round((Math.abs(n) + Number.EPSILON) * 1000) / 1000);
 }
 
+/*
+ * INV-SPIRIT-DUPLICATE-LINES: two lines for the same product and unit
+ * at DIFFERENT prices are two lines, not a duplicate — only an exact
+ * duplicate (same product, unit and price) is rejected. The price
+ * segment reads the caller's own field: `price` on normalized sale
+ * lines, `cost` on purchase lines; callers without a price (stock
+ * transfers, line-id returns) keep the previous product-and-unit
+ * identity. The COGS remainder grouping is unaffected: it groups by
+ * product and FROZEN COST (sale_items.cost_price), never by selling
+ * price, so two price lines for one product aggregate into one cost
+ * group exactly as two same-price lines do.
+ */
 export function ensureUniqueFlowItems(items: FlowItem[], code: string, message: string): void {
   const seen = new Set<string>();
   for (const item of items) {
-    const key = item.lineId 
-      ? `line::${item.lineId}` 
-      : `${Number(item.productId)}::${Number(item.unitMultiplier || 1)}`;
+    if (item.lineId) {
+      const key = `line::${item.lineId}`;
+      if (seen.has(key)) throw new AppError(message, code, 400);
+      seen.add(key);
+      continue;
+    }
+    const price = item.price != null ? Number(item.price) : item.cost != null ? Number(item.cost) : null;
+    const key = price == null
+      ? `${Number(item.productId)}::${Number(item.unitMultiplier || 1)}`
+      : `${Number(item.productId)}::${Number(item.unitMultiplier || 1)}::${price}`;
     if (seen.has(key)) throw new AppError(message, code, 400);
     seen.add(key);
   }

@@ -215,7 +215,7 @@ export class PurchasesWriteService {
 
       const items = payload.items || [];
       if (!items.length) throw new AppError('Purchase must include at least one item', 'PURCHASE_ITEMS_REQUIRED', 400);
-      ensureUniqueFlowItems(items, 'PURCHASE_DUPLICATE_PRODUCT', 'Purchase must not contain duplicate product rows with the same unit');
+      ensureUniqueFlowItems(items, 'PURCHASE_DUPLICATE_PRODUCT', 'Purchase must not contain duplicate product rows with the same unit and cost');
       await lockStockProducts(trx, { ...scope, productIds: items.map((item) => item.productId) });
 
       const normalizedItems = [];

@@ -1117,7 +1117,7 @@ export class SalesWriteService {
     }
     const normalized = normalizeSalePayload(isExchange ? { ...payload, items: payload.items.filter((item) => Number(item.qty) >= 0) } : payload);
     if (!normalized.items.length) throw new AppError('Sale must include at least one item', 'SALE_ITEMS_REQUIRED', 400);
-    ensureUniqueFlowItems(normalized.items, 'SALE_DUPLICATE_PRODUCT', 'Sale must not contain duplicate product rows with the same unit');
+    ensureUniqueFlowItems(normalized.items, 'SALE_DUPLICATE_PRODUCT', 'Sale must not contain duplicate product rows with the same unit and price');
 
     const txStartedAt = Date.now();
     const saleId = await this.tx.runInTransaction(this.db, async (trx) => {
@@ -2381,7 +2381,7 @@ export class SalesWriteService {
     const managerPin = String((payload as unknown as { managerPin?: string })?.managerPin || '').trim();
 
     if (!normalized.items.length) throw new AppError('Sale must include at least one item', 'SALE_ITEMS_REQUIRED', 400);
-    ensureUniqueFlowItems(normalized.items, 'SALE_DUPLICATE_PRODUCT', 'Sale must not contain duplicate product rows with the same unit');
+    ensureUniqueFlowItems(normalized.items, 'SALE_DUPLICATE_PRODUCT', 'Sale must not contain duplicate product rows with the same unit and price');
     if (normalized.discount < 0) throw new AppError('Discount cannot be negative', 'INVALID_DISCOUNT', 400);
     if (!editReason) throw new AppError('سبب التعديل مطلوب.', 'SALE_EDIT_REASON_REQUIRED', 400);
     const isAdmin = auth.role === 'admin' || auth.role === 'super_admin';
