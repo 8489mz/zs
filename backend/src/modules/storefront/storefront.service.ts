@@ -64,6 +64,26 @@ function assertValidCustomerPhone(rawPhone: string | undefined, countryCode: str
   }
 }
 
+/*
+ * INV-SPIRIT-STOREFRONT-CONTACT-MINIMA: a recipient name needs at
+ * least two letters (a two-letter name is a real name); a delivery
+ * address needs only to be non-empty after trimming. The phone rule
+ * above is deliberately unchanged — Egypt keeps 11 digits starting
+ * 010/011/012/015, other countries keep 7-16 digits.
+ */
+function assertValidCustomerName(cleanName: string): void {
+  const letters = (cleanName.match(/[\p{L}\p{M}]/gu) || []).length;
+  if (letters < 2) {
+    throw new BadRequestException('يرجى إدخال اسم مستلم صحيح لا يقل عن حرفين');
+  }
+}
+
+function assertValidCustomerAddress(cleanAddress: string): void {
+  if (!cleanAddress) {
+    throw new BadRequestException('يرجى إدخال عنوان توصيل');
+  }
+}
+
 function offerTimezone(settings: Map<string, string>): string {
   const configured = settings.get('timezone') || process.env.BUSINESS_TIMEZONE || 'Africa/Cairo';
   return isValidTimezone(configured) ? configured : 'Africa/Cairo';
@@ -1465,10 +1485,7 @@ export class StorefrontService {
     }
 
     const cleanCustomerName = (dto.customerName || (isDineIn ? `عميل طاولة ${dto.tableNumber}` : '')).trim();
-    const nameLetters = (cleanCustomerName.match(/[\p{L}\p{M}]/gu) || []).length;
-    if (cleanCustomerName.length < 3 || nameLetters < 3) {
-      throw new BadRequestException('يرجى إدخال اسم مستلم صحيح لا يقل عن 3 أحرف (مثال: علي، مازن، محمد)');
-    }
+    assertValidCustomerName(cleanCustomerName);
 
     let cleanCustomerAddress = isDineIn
       ? `طاولة رقم ${dto.tableNumber}`
@@ -1476,11 +1493,11 @@ export class StorefrontService {
       ? 'استلام ذاتي من الفرع'
       : (dto.customerAddress || '').trim();
 
-    if (!isDineIn && !isPickup && cleanCustomerAddress) {
-      const addressLetters = (cleanCustomerAddress.match(/[\p{L}\p{M}]/gu) || []).length;
-      if (cleanCustomerAddress.length < 5 || addressLetters < 3) {
-        throw new BadRequestException('يرجى إدخال عنوان توصيل واضح ومفصل لا يقل عن 5 أحرف');
-      }
+    // An address that was provided must be non-empty after trimming;
+    // no length or letter minimum beyond that. An absent address keeps
+    // its previous treatment (optional at the DTO level).
+    if (!isDineIn && !isPickup && dto.customerAddress != null && String(dto.customerAddress).length > 0) {
+      assertValidCustomerAddress(cleanCustomerAddress);
     }
 
     const minOrder = isDineIn ? 0 : Number(settings.get('storefront_min_order') || 0);
@@ -2220,19 +2237,11 @@ export class StorefrontService {
     }
 
     if (dto.customerName) {
-      const cleanCustomerName = dto.customerName.trim();
-      const nameLetters = (cleanCustomerName.match(/[\p{L}\p{M}]/gu) || []).length;
-      if (cleanCustomerName.length < 3 || nameLetters < 3) {
-        throw new BadRequestException('يرجى إدخال اسم مستلم صحيح لا يقل عن 3 أحرف (مثال: علي، مازن، محمد)');
-      }
+      assertValidCustomerName(dto.customerName.trim());
     }
 
     if (dto.customerAddress) {
-      const cleanCustomerAddress = dto.customerAddress.trim();
-      const addressLetters = (cleanCustomerAddress.match(/[\p{L}\p{M}]/gu) || []).length;
-      if (cleanCustomerAddress.length < 5 || addressLetters < 3) {
-        throw new BadRequestException('يرجى إدخال عنوان توصيل واضح ومفصل لا يقل عن 5 أحرف');
-      }
+      assertValidCustomerAddress(dto.customerAddress.trim());
     }
 
     const rawProductIds = dto.items.map((i) => Number(i.productId)).filter(Boolean);

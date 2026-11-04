@@ -23,7 +23,7 @@ export class OnlineOrderItemDto {
 }
 
 export class CreateOnlineOrderDto {
-  @MinLength(3, { message: 'اسم المستلم يجب ألا يقل عن 3 أحرف' })
+  @MinLength(2, { message: 'اسم المستلم يجب ألا يقل عن حرفين' })
   @IsString({ message: 'اسم المستلم يجب أن يكون نصاً' })
   @IsNotEmpty({ message: 'يرجى إدخال اسم المستلم' })
   customerName!: string;

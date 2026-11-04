@@ -123,8 +123,8 @@ export function getCustomerNameValidation(name: string, isEn = false): { isValid
   const trimmed = name.trim();
   if (!trimmed) return { isValid: false, message: '' };
   const lettersCount = (trimmed.match(/[\p{L}\p{M}]/gu) || []).length;
-  if (trimmed.length < 3 || lettersCount < 3) {
-    return { isValid: false, message: isEn ? 'Name must be at least 3 characters' : 'الاسم يجب ألا يقل عن 3 أحرف' };
+  if (lettersCount < 2) {
+    return { isValid: false, message: isEn ? 'Name must be at least 2 letters' : 'الاسم يجب ألا يقل عن حرفين' };
   }
   return { isValid: true, message: isEn ? 'Name complete' : 'الاسم مكتمل' };
 }
@@ -132,10 +132,6 @@ export function getCustomerNameValidation(name: string, isEn = false): { isValid
 export function getCustomerAddressValidation(address: string, isEn = false): { isValid: boolean; message: string } {
   const trimmed = address.trim();
   if (!trimmed) return { isValid: false, message: '' };
-  const lettersCount = (trimmed.match(/[\p{L}\p{M}]/gu) || []).length;
-  if (trimmed.length < 5 || lettersCount < 3) {
-    return { isValid: false, message: isEn ? 'Address must be at least 5 characters' : 'العنوان يجب ألا يقل عن 5 أحرف بالتفصيل' };
-  }
   return { isValid: true, message: isEn ? 'Address complete' : 'العنوان مكتمل' };
 }
 
@@ -624,8 +620,8 @@ export function StorefrontCheckoutModal({
 
     const trimmedName = customerName.trim();
     const nameLetters = (trimmedName.match(/[\p{L}\p{M}]/gu) || []).length;
-    if (trimmedName.length < 3 || nameLetters < 3) {
-      showError(isEn ? 'Please enter a valid full name (at least 3 characters)' : 'يرجى إدخال اسم مستلم صحيح لا يقل عن 3 أحرف (مثال: علي، مازن، محمد)');
+    if (nameLetters < 2) {
+      showError(isEn ? 'Please enter a valid recipient name (at least 2 letters)' : 'يرجى إدخال اسم مستلم صحيح لا يقل عن حرفين');
       return;
     }
 
@@ -642,9 +638,8 @@ export function StorefrontCheckoutModal({
           return;
         }
       }
-      const addressLetters = (trimmedAddress.match(/[\p{L}\p{M}]/gu) || []).length;
-      if (trimmedAddress.length < 5 || addressLetters < 3) {
-        showError(isEn ? 'Please enter a detailed delivery address (at least 5 characters)' : 'يرجى إدخال عنوان توصيل واضح ومفصل لا يقل عن 5 أحرف (المنطقة، الشارع، رقم العقار)');
+      if (!trimmedAddress) {
+        showError(isEn ? 'Please enter a delivery address' : 'يرجى إدخال عنوان توصيل');
         return;
       }
     }
