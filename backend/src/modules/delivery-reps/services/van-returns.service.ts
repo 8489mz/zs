@@ -820,7 +820,7 @@ export class VanReturnsService {
         if (damagedLoc?.id) targetLocationId = Number(damagedLoc.id);
       }
 
-      const itemsWithCost: { productId: number; qty: number; costPrice: number }[] = [];
+      const itemsWithCost: { productId: number; qty: number; costPrice: number; saleItemId: number | null }[] = [];
       const sortedReturnItems: any[] = sortItemsByProductId(
         (items || []).map((i: any) => ({ ...i, productId: Number(i.productId) })),
       );
@@ -854,7 +854,7 @@ export class VanReturnsService {
           unitCost: price,
         });
 
-        itemsWithCost.push({ productId: pid, qty, costPrice: Number(prod?.cost_price || 0) });
+        itemsWithCost.push({ productId: pid, qty, costPrice: Number(prod?.cost_price || 0), saleItemId: item.saleItemId != null ? Number(item.saleItemId) : null });
       }
 
       if (refundMethod === 'credit') {
@@ -961,6 +961,14 @@ export class VanReturnsService {
           totalAmount,
           refundMethod,
           items: itemsWithCost,
+          // INV-VAN-FIELD-RETURN-COGS-RESIDUAL-MIRROR: the sale link,
+          // per-item sale-line link, and damaged flag decide whether
+          // the reversal uses the shared residual basis or the legacy
+          // plain computation; the posting method reads the frozen
+          // costs itself and never trusts the caller cost for the
+          // mirror path.
+          saleId: ret.sale_id ? Number(ret.sale_id) : null,
+          isDamaged,
           branchId,
           locationId: targetLocationId,
         },
