@@ -607,7 +607,7 @@ async function testOnlinePaidOrderSaleConversion(): Promise<void> {
   const actor: any = { userId: 1, username: 'admin', role: 'admin', tenantId: 'tenant-1', accountId: 'tenant-1:main' };
   const res = await storefrontService.convertToSale(10, actor);
   assert.equal(res.ok, true);
-  assert.equal(capturedSalePayload.collectionStatus, 'collected', 'Online paid orders must have collectionStatus = collected');
+  assert.equal(capturedSalePayload.collectionStatus, 'prepaid_online', 'Online paid orders must have collectionStatus = prepaid_online (createSale rejects collected)');
   assert.equal(capturedSalePayload.paidAmount, 500, 'Online paid orders must have paidAmount equal to order total');
   // Was asserting 'paymob' — but normalizeSalePayload maps every channel outside
   // cash|card|wallet|instapay to 'cash', so that value booked card money into the cash drawer.
@@ -617,7 +617,7 @@ async function testOnlinePaidOrderSaleConversion(): Promise<void> {
   assert.ok(String(capturedSalePayload.note).includes('paymob'), 'The gateway is recorded on the invoice note');
   assert.equal(capturedSalePayload.discount, 0, 'An order without a coupon carries no discount');
 
-  console.log('  -> Storefront convertToSale: online paid order sets collectionStatus = collected and paidAmount.');
+  console.log('  -> Storefront convertToSale: online paid order sets collectionStatus = prepaid_online and paidAmount.');
 }
 
 async function testLatePaymentAndAmountVerification(): Promise<void> {

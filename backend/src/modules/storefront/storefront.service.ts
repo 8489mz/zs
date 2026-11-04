@@ -3209,7 +3209,7 @@ export class StorefrontService {
       tableNumber: isDineIn ? (order.table_number || undefined) : undefined,
       deliveryRepId: repId,
       deliveryStatus: effectiveOrderType === 'delivery' ? 'pending' : null,
-      collectionStatus: isPaidOnline ? 'collected' : (effectiveOrderType === 'delivery' ? 'cod' : null),
+      collectionStatus: isPaidOnline ? 'prepaid_online' : (effectiveOrderType === 'delivery' ? 'cod' : null),
       deliveryFeeMode: effectiveOrderType === 'delivery' ? 'store_fleet' : null,
       branchId,
       locationId,
@@ -3222,7 +3222,12 @@ export class StorefrontService {
         provider ? `مسدد عبر ${provider === 'manual' ? 'تحويل مؤكد يدوياً' : provider}` : '',
       ].filter(Boolean).join(' - '),
       paidAmount: isPaidOnline ? order.totalAmount : 0,
-      tenderedAmount: isPaidOnline ? order.totalAmount : 0,
+      // Cash tender only: the tender engine rejects a cash tender
+      // with no cash payment line, and a gateway-paid order has
+      // only a card line. Sending the total here used to fail
+      // every paid conversion with CASH_TENDER_WITHOUT_CASH
+      // before the collection-status gate was ever reached.
+      tenderedAmount: 0,
       payments: isPaidOnline
         ? [
             {

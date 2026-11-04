@@ -17,7 +17,8 @@ WHAT THIS PINS:
   as COD (SF-2), and gateway-paid orders still resolve as collected.
 - End to end through the real convertToSale with the mock harness from
   storefront-payment-webhooks.spec.ts: the sale payload for a synced
-  Amazon order carries collectionStatus 'collected', the full paidAmount,
+  Amazon order carries collectionStatus 'prepaid_online' (the canonical value createSale accepts;
+  'collected' was rejected with DELIVERY_COLLECTION_STATUS_INVALID), the full paidAmount,
   and a card payment — never 'cod' with an empty payments list.
 */
 
@@ -116,9 +117,9 @@ async function testConversion(): Promise<void> {
       payment_method: 'marketplace_prepaid', customer_name: 'Amazon Customer', customer_phone: '01012345678',
     });
     assert.equal(result.ok, true);
-    assert.equal(payload.collectionStatus, 'collected', 'Marketplace-prepaid orders must not convert as COD');
+    assert.equal(payload.collectionStatus, 'prepaid_online', 'Marketplace-prepaid orders must not convert as COD');
     assert.equal(payload.paidAmount, 500);
-    assert.equal(payload.tenderedAmount, 500);
+    assert.equal(payload.tenderedAmount, 0, 'Cash tender is 0: a card-only payment has no cash line');
     assert.equal(payload.paymentChannel, 'card');
     assert.equal(payload.payments.length, 1);
     assert.equal(payload.payments[0].paymentChannel, 'card');
@@ -132,7 +133,7 @@ async function testConversion(): Promise<void> {
       payment_status: 'paid', status: 'confirmed', gateway_provider: 'noon',
       payment_method: 'marketplace_prepaid', customer_name: 'Noon Customer', customer_phone: '01012345678',
     });
-    assert.equal(payload.collectionStatus, 'collected');
+    assert.equal(payload.collectionStatus, 'prepaid_online');
     assert.equal(payload.paidAmount, 500);
     assert.ok(String(payload.note).includes('noon'));
   }
