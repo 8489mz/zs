@@ -974,12 +974,15 @@ export class SalesWriteService {
     };
     if (payload.eventType === 'no_sale') {
       const branchId = Number(payload.branchId);
-      if (!branchId || reason.length < 10) throw new AppError('حدد الفرع وسبب فتح الدرج في 10 أحرف على الأقل', 'NO_SALE_REASON_REQUIRED', 400);
+      // INV-SPIRIT-NO-SALE-DRAWER: a no-sale opening needs only a
+      // short recorded reason (non-empty) and an open shift; no
+      // manager PIN. The opening itself is logged below (pos_audit
+      // event with shiftId + username, and the audit log entry).
+      if (!branchId || !reason) throw new AppError('حدد الفرع وسبب فتح الدرج', 'NO_SALE_REASON_REQUIRED', 400);
       await this.tx.runInTransaction(this.db, async (trx) => {
         if (!await this.authz.hasOpenCashierShift(trx, auth, branchId)) {
           throw new AppError('وردية كاشير مفتوحة مطلوبة لفتح الدرج', 'OPEN_SHIFT_REQUIRED', 400);
         }
-        await this.authz.authorizeDiscountOverride(String(payload.managerPin || '').trim(), auth, trx);
         const shift = await trx.selectFrom('cashier_shifts').select('id')
           .where('tenant_id', '=', scope.tenantId).where('opened_by', '=', auth.userId)
           .where('branch_id', '=', branchId).where('status', '=', 'open')

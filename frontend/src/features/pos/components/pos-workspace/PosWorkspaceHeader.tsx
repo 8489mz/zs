@@ -101,7 +101,6 @@ function PosWorkspaceHeaderComponent({
   const [isNoSaleOpen, setIsNoSaleOpen] = useState(false);
   const [isExchangeOpen, setIsExchangeOpen] = useState(false);
   const [noSaleReason, setNoSaleReason] = useState('');
-  const [noSaleManagerPin, setNoSaleManagerPin] = useState('');
   const [isNoSalePending, setIsNoSalePending] = useState(false);
   const [isOnlineOrdersOpen, setIsOnlineOrdersOpen] = useState(false);
   const [isTablesOpen, setIsTablesOpen] = useState(false);
@@ -174,16 +173,15 @@ function PosWorkspaceHeaderComponent({
       toast.error('افتح وردية على الفرع الحالي أولاً');
       return;
     }
-    if (noSaleReason.trim().length < 10 || !noSaleManagerPin.trim()) {
-      toast.error('أدخل سبباً من 10 أحرف على الأقل ورمز اعتماد المشرف');
+    if (!noSaleReason.trim()) {
+      toast.error('أدخل سبب فتح الدرج');
       return;
     }
     setIsNoSalePending(true);
     try {
-      await posApi.logSecurityEvent({ eventType: 'no_sale', branchId, note: noSaleReason.trim(), managerPin: noSaleManagerPin.trim() });
+      await posApi.logSecurityEvent({ eventType: 'no_sale', branchId, note: noSaleReason.trim() });
       setIsNoSaleOpen(false);
       setNoSaleReason('');
-      setNoSaleManagerPin('');
       const printer = (window as Window & { electronPrinter?: { kickCashDrawer: (device?: string) => Promise<unknown> } }).electronPrinter;
       if (printer?.kickCashDrawer) {
         try {
@@ -210,7 +208,7 @@ function PosWorkspaceHeaderComponent({
     } finally {
       setIsNoSalePending(false);
     }
-  }, [isNoSalePending, noSaleManagerPin, noSaleReason, pos.branchId, pos.ownOpenShift, settings?.posElectronCashierPrinter]);
+  }, [isNoSalePending, noSaleReason, pos.branchId, pos.ownOpenShift, settings?.posElectronCashierPrinter]);
 
 
 
@@ -777,7 +775,7 @@ function PosWorkspaceHeaderComponent({
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                       <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>{t('pos.pos_workspace.pos_workspace_header.s45', "فتح الدرج يدوياً (No-Sale)")}</span>
-                      <span style={{ fontSize: '10.5px', color: '#64748b' }}>{t('pos.pos_workspace.pos_workspace_header.s46', "فتح الدرج للجرد أو الصرف بعد اعتماد المشرف")}</span>
+                      <span style={{ fontSize: '10.5px', color: '#64748b' }}>{t('pos.pos_workspace.pos_workspace_header.s46', "فتح الدرج للجرد أو الصرف مع تسجيل السبب")}</span>
                     </div>
                   </button>
 
@@ -986,10 +984,8 @@ function PosWorkspaceHeaderComponent({
         <p>{t('pos.pos_workspace.pos_workspace_header.s54', "سيُحفظ اسم المستخدم والوردية والسبب في سجل التدقيق قبل إرسال أمر فتح الدرج.")}</p>
         <label htmlFor="pos-no-sale-reason">{t('pos.pos_workspace.pos_workspace_header.s55', "سبب فتح الدرج")}</label>
         <textarea id="pos-no-sale-reason" value={noSaleReason} onChange={(event) => setNoSaleReason(event.target.value)} maxLength={500} rows={3} style={{ width: '100%', marginBottom: 12 }} disabled={isNoSalePending} />
-        <label htmlFor="pos-no-sale-pin">{t('pos.pos_workspace.pos_workspace_header.s56', "رمز اعتماد المشرف")}</label>
-        <input id="pos-no-sale-pin" type="password" autoComplete="off" value={noSaleManagerPin} onChange={(event) => setNoSaleManagerPin(event.target.value)} style={{ width: '100%', marginBottom: 18 }} disabled={isNoSalePending} />
-        <Button type="button" variant="primary" onClick={() => { void handleNoSaleDrawerKick(); }} disabled={isNoSalePending || noSaleReason.trim().length < 10 || !noSaleManagerPin.trim()}>
-          {isNoSalePending ? t('pos.pos_workspace.pos_workspace_header.s57', "جاري الاعتماد...") : t('pos.pos_workspace.pos_workspace_header.s58', "اعتماد وفتح الدرج")}
+        <Button type="button" variant="primary" onClick={() => { void handleNoSaleDrawerKick(); }} disabled={isNoSalePending || !noSaleReason.trim()}>
+          {isNoSalePending ? t('pos.pos_workspace.pos_workspace_header.s57', "جاري فتح الدرج...") : t('pos.pos_workspace.pos_workspace_header.s58', "فتح الدرج")}
         </Button>
       </div>
     </DialogShell>
