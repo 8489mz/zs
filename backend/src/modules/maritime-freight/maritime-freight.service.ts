@@ -59,6 +59,7 @@ import { checkInsuranceClaim } from './engines/cargo-insurance.engine';
 import { QuotationChargeDto, JobChargeDto, UpdateJobChargesDto } from './dto/itemized-charges.dto';
 import { CreateJobDocumentDto } from './dto/job-document.dto';
 import { CreateAgentSettlementDto, UpdateAgentSettlementStatusDto } from './dto/agent-settlement.dto';
+import { ReleaseDeliveryOrderDto } from './dto/release-delivery-order.dto';
 import { CreateInlandTruckingTripDto, UpdateInlandTruckingTripStatusDto } from './dto/inland-trucking.dto';
 import { CarrierTrackingEventDto } from './dto/carrier-tracking.dto';
 
@@ -2705,23 +2706,68 @@ export class MaritimeFreightService {
     return updatedJob;
   }
 
-  async releaseDeliveryOrder(auth: AuthContext, jobId: string) {
+  /**
+   * INV-MARITIME-DELIVERY-ORDER-RELEASE-GATES: releasing a delivery
+   * order runs two tiers. PAYMENT is a strict precondition (money
+   * tier): when the job has been invoiced, the client must have
+   * paid within the same 0.01 full-payment band settle uses, or the
+   * release is rejected before any milestone is written; an
+   * uninvoiced job has nothing due and releases freely. DOCUMENTS
+   * only warn (workflow tier, spirit of the law): a sea job with
+   * no cleared customs declaration, or a caller-flagged incomplete
+   * set on any mode, still releases -- but the warning and its
+   * reason are recorded in the milestone notes and returned, so
+   * the gap is visible instead of silently waived. A caller flag
+   * can never mark documents complete: the customs check is
+   * derived from the stored declarations, never trusted from the
+   * request. Air/road keep their existing milestone checks.
+   */
+  async releaseDeliveryOrder(auth: AuthContext, jobId: string, dto?: ReleaseDeliveryOrderDto) {
     const { tenantId } = requireTenantScope(auth);
     const job = await this.getJobById(auth, jobId);
+    const invoiced = Number(job?.client_invoiced_total || 0);
+    const paid = Number(job?.client_paid_total || 0);
+    if (invoiced > 0 && paid < invoiced - 0.01) {
+      throw new BadRequestException(
+        `لا يمكن إصدار إذن التسليم قبل اكتمال السداد: إجمالي الفواتير ${invoiced} والمسدد ${paid}.`,
+      );
+    }
     const isAir = job?.transport_mode === 'air';
     const isRoad = job?.transport_mode === 'road';
+    const isSea = !isAir && !isRoad;
+    let documentsWarning: string | null = null;
+    if (isSea) {
+      const cleared = await this.db
+        .selectFrom('maritime_customs_declarations')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('job_id', '=', jobId as any)
+        .where('status', '=', 'cleared')
+        .executeTakeFirst();
+      if (!cleared) {
+        documentsWarning = 'لا يوجد بيان جمركي مُخَلَّص (cleared) لهذه الشحنة';
+      }
+    }
+    if (dto?.documentsComplete === false) {
+      documentsWarning = 'أبلغ الموظف أن المستندات غير مكتملة';
+    }
+    if (documentsWarning && dto?.documentReason?.trim()) {
+      documentsWarning = dto.documentReason.trim();
+    }
     const milestoneKey = isAir ? 'AWD' : isRoad ? 'TRK_POD' : 'GTO';
     const milestoneTitle = isAir
       ? 'تم اعتماد وإصدار إذن التسليم الجوي وبوليصة الشحن (Air Cargo Delivery Order) للعميل'
       : isRoad
       ? 'توقيع بوليصة الشحن البري وتأكيد استلام وتسليم البضاعة (Signed Waybill / POD)'
       : 'تم اعتماد وإصدار إذن التسليم الملاحي الرسمي (Delivery Order D/O) للعميل';
-    return await this.addJobMilestone(
+    const notes = documentsWarning ? `${milestoneTitle}\nتنبيه مستندات: ${documentsWarning}` : milestoneTitle;
+    const released = await this.addJobMilestone(
       auth,
       jobId,
       milestoneKey,
-      milestoneTitle
+      notes,
     );
+    return { ...released, paymentVerified: true, documentsWarning };
   }
 
   async sendMilestoneWhatsApp(auth: AuthContext, jobId: string, milestoneKey: ShipmentMilestoneKey, targetPhone?: string) {

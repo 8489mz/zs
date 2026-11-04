@@ -20,6 +20,7 @@ import { CreateWarehouseReceiptDto, ReleaseWarehouseReceiptDto } from './dto/war
 import { UpdateJobChargesDto } from './dto/itemized-charges.dto';
 import { CreateJobDocumentDto } from './dto/job-document.dto';
 import { CreateAgentSettlementDto, UpdateAgentSettlementStatusDto } from './dto/agent-settlement.dto';
+import { ReleaseDeliveryOrderDto } from './dto/release-delivery-order.dto';
 import { CreateInlandTruckingTripDto, UpdateInlandTruckingTripStatusDto } from './dto/inland-trucking.dto';
 import { CarrierTrackingEventDto, CarrierTrackingSyncDto } from './dto/carrier-tracking.dto';
 import { DcsaMilestoneKey, ShipmentMilestoneKey } from './maritime-freight.types';
@@ -242,8 +243,8 @@ export class MaritimeFreightController {
   }
 
   @Post('jobs/:id/release-do')
-  async releaseDeliveryOrder(@Param('id') id: string, @Req() req: RequestWithAuth) {
-    return this.freightService.releaseDeliveryOrder(req.authContext!, id);
+  async releaseDeliveryOrder(@Param('id') id: string, @Body() body: ReleaseDeliveryOrderDto | undefined, @Req() req: RequestWithAuth) {
+    return this.freightService.releaseDeliveryOrder(req.authContext!, id, body);
   }
 
   @Get('jobs/:id/whatsapp-alert')
