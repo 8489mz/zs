@@ -1832,6 +1832,25 @@ export const SalesInventorySettingsTab = memo(function SalesInventorySettingsTab
                   )}
                 </div>
 
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    {__t('settings.forms.tabs.sales_inventory_settings_tab.s142', "الخصم الصغير المسموح لأي كاشير بدون اعتماد")} {`(${getGlobalCurrencySymbol()})`}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    className="purchase-prototype-field-input"
+                    {...form.register('posSmallDiscountFlatAllowance')}
+                    disabled={disabled}
+                    placeholder={__t('settings.forms.tabs.sales_inventory_settings_tab.s143', "مثال: 2")}
+                    style={fieldControlStyle}
+                  />
+                  <small style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                    {__t('settings.forms.tabs.sales_inventory_settings_tab.s144', "أي كاشير، حتى بدون صلاحية خصم، يقدر يخصم لحد المبلغ ده من غير رمز مدير (تقريب الفكة، مثال: 232 تبقى 230).")}
+                  </small>
+                </div>
+
                 {form.watch('posMaxDiscountThresholdEnabled') && (
                   <>
                     <div>

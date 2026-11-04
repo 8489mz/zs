@@ -17,7 +17,7 @@ interface PosWorkspaceDerivedParams {
   openShiftRows: Array<{ id: string | number; docNo?: string; openedById?: string | number; openedByName?: string }>;
   authUserId?: string | number | null;
   authPermissions?: string[];
-  settings?: { taxRate?: number | string; taxMode?: string; allowNegativeStockSales?: unknown; allowSellingBelowStock?: unknown; posMaxDiscountThresholdEnabled?: boolean; posMaxDiscountThresholdType?: string; posMaxDiscountThresholdValue?: number; loyaltyPointRedeemValue?: number; loyaltyPointsPer100Egp?: number; loyaltyMinRedeemPoints?: number; loyaltyMaxDiscountPercentage?: number; loyaltyEnabled?: boolean; restaurantServiceChargeEnabled?: boolean; restaurantServiceChargePercent?: number } | null;
+  settings?: { taxRate?: number | string; taxMode?: string; allowNegativeStockSales?: unknown; allowSellingBelowStock?: unknown; posMaxDiscountThresholdEnabled?: boolean; posMaxDiscountThresholdType?: string; posMaxDiscountThresholdValue?: number; posSmallDiscountFlatAllowance?: number; loyaltyPointRedeemValue?: number; loyaltyPointsPer100Egp?: number; loyaltyMinRedeemPoints?: number; loyaltyMaxDiscountPercentage?: number; loyaltyEnabled?: boolean; restaurantServiceChargeEnabled?: boolean; restaurantServiceChargePercent?: number } | null;
   heldDrafts: Array<unknown>;
   recentProductIds: string[];
   productFilter: PosProductFilter;
@@ -221,7 +221,11 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
   const subtotalVal = Number(totals.subTotal || 0);
   const isThresholdEnabled = Boolean(params.settings?.posMaxDiscountThresholdEnabled);
   const thresholdType = params.settings?.posMaxDiscountThresholdType || 'percentage';
-  const thresholdValue = Number(params.settings?.posMaxDiscountThresholdValue ?? 15);
+  const thresholdValue = Number(params.settings?.posMaxDiscountThresholdValue ?? 10);
+  // INV-SPIRIT-DISCOUNT-TIERS (frontend mirror of the backend guard): any
+  // cashier may discount up to the flat allowance without approval.
+  const flatAllowance = Number(params.settings?.posSmallDiscountFlatAllowance ?? 2);
+  const withinFlatAllowance = discountVal > 0.0001 && discountVal <= flatAllowance + 0.0001;
 
   let exceedsDiscountThreshold = false;
   if (isThresholdEnabled && discountVal > 0.0001 && thresholdValue > 0) {
@@ -237,12 +241,12 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
   const isSuperAdmin = authPermissionSet.has('*');
   const hasBaseDiscountPermission = authPermissionSet.has('canDiscount') || isSuperAdmin;
 
-  const hasDiscountPermissionViolation = discountVal > 0.0001 && (
+  const hasDiscountPermissionViolation = discountVal > 0.0001 && !withinFlatAllowance && (
     (!hasBaseDiscountPermission && !isApprovedByManager) ||
     (exceedsDiscountThreshold && !isSuperAdmin && !isApprovedByManager)
   );
 
-  const canApplyDiscount = (hasBaseDiscountPermission && !exceedsDiscountThreshold) || isSuperAdmin || isApprovedByManager;
+  const canApplyDiscount = withinFlatAllowance || (hasBaseDiscountPermission && !exceedsDiscountThreshold) || isSuperAdmin || isApprovedByManager;
   const canEditPrice = authPermissionSet.has('canEditPrice') || authPermissionSet.has('*');
   const canSellWholesale = authPermissionSet.has('canSellWholesale') || authPermissionSet.has('*') || Boolean(params.wholesaleApprovalGranted);
   const hasOperationalSetup = Boolean(branchList.length > 0 && locationList.length > 0);

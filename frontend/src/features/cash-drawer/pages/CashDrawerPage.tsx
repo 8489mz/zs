@@ -121,7 +121,7 @@ export function CashDrawerPage() {
       : 'سيتم إغلاق وردية نقطة البيع الحالية وتسجيل المبلغ المعدود والفرق النهائي بعد تأكيد المستخدم الحالي.');
 
   const confirmBusy = controller.movementMutation.isPending || controller.closeMutation.isPending;
-  const managerPinLabel = isCashOut ? 'رمز اعتماد المدير' : 'كلمة مرور المستخدم الحالي';
+  const managerPinLabel = isCashOut ? 'رمز اعتماد المدير أو كلمة مرور المدير' : 'كلمة مرور المستخدم الحالي';
   const managerPinHint = isCashOut
     ? 'صرف النقدية يحتاج اعتماد المدير إذا كان المستخدم الحالي ليس مديرًا أو أدمن.'
     : 'أدخل كلمة مرور المستخدم الحالي لتأكيد العملية.';

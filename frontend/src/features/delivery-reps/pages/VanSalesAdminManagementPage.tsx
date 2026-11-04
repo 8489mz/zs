@@ -62,7 +62,6 @@ export default function VanSalesAdminManagementPage() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [requireSupervisorPinDraft, setRequireSupervisorPinDraft] = useState(false);
   const [blindSettlementDraft, setBlindSettlementDraft] = useState(false);
-  const [managerPinDraft, setManagerPinDraft] = useState('');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const settingsQuery = useQuery({
@@ -74,7 +73,6 @@ export default function VanSalesAdminManagementPage() {
     if (settingsQuery.data) {
       setRequireSupervisorPinDraft(Boolean(settingsQuery.data.vanSettlementRequireSupervisorPin));
       setBlindSettlementDraft(Boolean(settingsQuery.data.vanSettlementBlindMode));
-      setManagerPinDraft(String(settingsQuery.data.managerPin || ''));
     }
   }, [settingsQuery.data]);
 
@@ -900,7 +898,8 @@ export default function VanSalesAdminManagementPage() {
               />
             </div>
 
-            {/* Setting 2: Manager Approval PIN */}
+            {/* Manager Approval PIN: single place is Settings > Security.
+                This modal no longer edits it; it only points there. */}
             <div
               style={{
                 display: 'flex',
@@ -913,31 +912,11 @@ export default function VanSalesAdminManagementPage() {
               }}
             >
               <label style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>
-                {t('delivery_reps.van_sales_admin_management_page.s57', "الرمز السري العام للمشرفين (Manager Approval PIN):")}
+                {t('delivery_reps.van_sales_admin_management_page.s57', "رمز اعتماد المدير (Manager Approval PIN):")}
               </label>
               <div style={{ fontSize: '10.5px', color: '#64748b' }}>
-                {t('delivery_reps.van_sales_admin_management_page.s58', "يستخدم لاعتماد التصفية الميدانية أو تجاوز سقف الائتمان الاستثنائي")}
+                {t('delivery_reps.van_sales_admin_management_page.s58', "يستخدم لاعتماد التصفية الميدانية أو تجاوز سقف الائتمان الاستثنائي، ويتم ضبطه من مكان واحد فقط: الإعدادات > الأمان والنسخ الاحتياطي > رمز اعتماد المدير.")}
               </div>
-              <input
-                type="password"
-                maxLength={6}
-                value={managerPinDraft}
-                onChange={(e) => setManagerPinDraft(e.target.value)}
-                placeholder={t('delivery_reps.van_sales_admin_management_page.s59', "مثال: 1234")}
-                style={{
-                  width: '140px',
-                  height: '36px',
-                  borderRadius: '8px',
-                  border: '1.5px solid #cbd5e1',
-                  fontSize: '14px',
-                  fontWeight: 800,
-                  textAlign: 'center',
-                  letterSpacing: '2px',
-                  outline: 'none',
-                  marginTop: '4px',
-                  backgroundColor: '#f8fafc',
-                }}
-              />
             </div>
 
             {/* Actions */}
@@ -957,7 +936,6 @@ export default function VanSalesAdminManagementPage() {
                     await settingsApi.update({
                       vanSettlementRequireSupervisorPin: requireSupervisorPinDraft,
                       vanSettlementBlindMode: blindSettlementDraft,
-                      managerPin: managerPinDraft.trim() || undefined,
                     });
                     await queryClient.invalidateQueries({ queryKey: ['van-settlement-settings'] });
                     await queryClient.invalidateQueries({ queryKey: ['van-sales-active-trip'] });

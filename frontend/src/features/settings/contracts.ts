@@ -274,8 +274,11 @@ export function buildSettingsUpdatePayload(
       ? (values.posMaxDiscountThresholdType === 'fixed' ? 'fixed' : 'percentage')
       : (current?.posMaxDiscountThresholdType === 'fixed' ? 'fixed' : 'percentage'),
     posMaxDiscountThresholdValue: values.posMaxDiscountThresholdValue !== undefined
-      ? Math.max(0, Number(values.posMaxDiscountThresholdValue ?? 15))
-      : Math.max(0, Number(current?.posMaxDiscountThresholdValue ?? 15)),
+      ? Math.max(0, Number(values.posMaxDiscountThresholdValue ?? 10))
+      : Math.max(0, Number(current?.posMaxDiscountThresholdValue ?? 10)),
+    posSmallDiscountFlatAllowance: values.posSmallDiscountFlatAllowance !== undefined
+      ? Math.max(0, Number(values.posSmallDiscountFlatAllowance ?? 2))
+      : Math.max(0, Number(current?.posSmallDiscountFlatAllowance ?? 2)),
     posKitchenPrinterEnabled: values.posKitchenPrinterEnabled !== undefined
       ? values.posKitchenPrinterEnabled === true
       : current?.posKitchenPrinterEnabled === true,

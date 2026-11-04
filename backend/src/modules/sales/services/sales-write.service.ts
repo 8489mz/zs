@@ -229,6 +229,7 @@ export class SalesWriteService {
   // pool connection while every cashier holds a transaction can exhaust the whole pool.
   private static readonly SALE_SETTING_KEYS = [
     'posMaxDiscountThresholdEnabled', 'posMaxDiscountThresholdType', 'posMaxDiscountThresholdValue',
+    'posSmallDiscountFlatAllowance',
     'taxRate', 'tax_rate', 'allowNegativeStockSales', 'allowSellingBelowStock', 'loyaltyEnabled',
     'loyaltyPointsPer100Egp', 'loyaltyPointRedeemValue', 'loyaltyMinRedeemPoints',
     'loyaltyMaxDiscountPercentage', 'requireCashierShiftForSales', 'deliveryFeeMode',
@@ -290,10 +291,24 @@ export class SalesWriteService {
     const discountVal = Math.abs(Number(discount || 0));
     if (discountVal <= 0.0001) return;
 
+    // INV-SPIRIT-DISCOUNT-TIERS: tier 1 -- any cashier, even without the
+    // discount permission, may discount up to a small flat allowance
+    // (settings-configurable, default 2 tenant currency units: the
+    // rounding/faka case, e.g. 232 taken as 230). Tier 2 -- a cashier WITH
+    // the discount permission may discount up to the owner-set percentage
+    // cap (default 10%). Above the applicable tier, manager PIN/password
+    // approval is required. The cost/min-price floor below still always
+    // requires manager approval; it is enforced separately in createSale.
+    let flatAllowance = 2;
     let exceedsThreshold = false;
     try {
       const scope = requireTenantScope(auth);
       const settingsMap = await this.getTenantSettingsMap(trx, scope.tenantId);
+
+      const configuredAllowance = Number(settingsMap.get('posSmallDiscountFlatAllowance'));
+      if (Number.isFinite(configuredAllowance) && configuredAllowance >= 0) {
+        flatAllowance = configuredAllowance;
+      }
 
       const isThresholdEnabled = settingsMap.get('posMaxDiscountThresholdEnabled') === true || settingsMap.get('posMaxDiscountThresholdEnabled') === 'true';
       const thresholdType = settingsMap.get('posMaxDiscountThresholdType') || 'percentage';
@@ -311,6 +326,8 @@ export class SalesWriteService {
     } catch {
       // fallback to permission check
     }
+
+    if (discountVal <= flatAllowance + 0.0001) return;
 
     const isSuperAdmin = this.authz.hasPermission(auth, '*');
     if (isSuperAdmin) return;

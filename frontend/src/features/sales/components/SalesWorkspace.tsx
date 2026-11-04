@@ -208,6 +208,7 @@ export function SalesWorkspace() {
         description={cancelDescription}
         confirmLabel={t('sales.5b8465')}
         managerPinRequired
+        managerPinLabel={t('sales.manager_pin_label', 'رمز اعتماد المدير أو كلمة مرور المدير')}
         managerPinHint={t('sales.3bec5f')}
         reasonRequired
         reasonLabel={t('sales.06667e')}
