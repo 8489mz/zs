@@ -2162,6 +2162,21 @@ export class MaritimeFreightService {
 
   async autoConvertQuotationToJob(auth: AuthContext, quotationId: string) {
     const { tenantId } = requireTenantScope(auth);
+    // INV-MARITIME-AUTOCONVERT-ROLLBACK-STATUS: capture the status the
+    // quote had BEFORE the flip, so a failed conversion restores
+    // exactly that status. Restoring a hardcoded 'approved' rewrote
+    // history: a failed conversion of a 'sent', 'draft' or 'rejected'
+    // quote left it 'approved'. The flip below stays the single
+    // atomic predicate UPDATE it always was, so a concurrent
+    // conversion still loses the race and reports already-converted
+    // without restoring anything it did not flip.
+    const priorQuote = await this.db
+      .selectFrom('maritime_quotations')
+      .select('status')
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', quotationId as any)
+      .executeTakeFirst();
+    const priorStatus = priorQuote?.status ?? null;
     const quote = await this.db
       .updateTable('maritime_quotations')
       .set({ status: 'converted_to_job', updated_at: sql`NOW()` })
@@ -2250,12 +2265,19 @@ export class MaritimeFreightService {
         notes: `أمر تشغيل تم تحويله وتفعيله آلياً من عرض السعر ${quote.quotation_number}`,
       });
     } catch (err) {
-      await this.db
-        .updateTable('maritime_quotations')
-        .set({ status: 'approved', updated_at: sql`NOW()` })
-        .where('tenant_id', '=', tenantId)
-        .where('id', '=', quote.id as any)
-        .execute();
+      // Restore the status captured before the flip -- never a
+      // hardcoded value (see INV-MARITIME-AUTOCONVERT-ROLLBACK-STATUS).
+      // The flip only happened when priorStatus was read, so a missing
+      // row (priorStatus null) restores nothing: the flip already
+      // reported not-found / already-converted before the try block.
+      if (priorStatus !== null) {
+        await this.db
+          .updateTable('maritime_quotations')
+          .set({ status: priorStatus, updated_at: sql`NOW()` })
+          .where('tenant_id', '=', tenantId)
+          .where('id', '=', quote.id as any)
+          .execute();
+      }
       throw err;
     }
   }
