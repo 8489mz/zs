@@ -118,6 +118,11 @@ export class SettingsService {
     'backupEncryptionKey',
     'cloudBackupSecret',
     'developerMasterPassword',
+    // Bcrypt hash of the developer master password: readable only by
+    // settings managers, writable ONLY via the guarded developer
+    // endpoint (INV-DEVELOPER-MASTER-PASSWORD). Never written back
+    // through the generic settings save path.
+    'developerMasterPasswordHash',
   ]);
 
   async getSettings(actor: AuthContext): Promise<Record<string, unknown>> {
@@ -640,6 +645,13 @@ export class SettingsService {
     // object would otherwise write it straight back — and a crafted value would steer what
     // the next sync switches off.
     delete normalizedPayload[PLAN_MANAGED_MODULES_SETTING_KEY];
+
+    // The developer master-password hash is set ONLY through the
+    // guarded POST /api/developer/master-password endpoint, by the
+    // super_admin, as a bcrypt hash. A generic settings payload must
+    // never create or overwrite it — a settings manager writing a
+    // chosen hash here would take over the developer panel.
+    delete normalizedPayload['developerMasterPasswordHash'];
 
     await this.db.transaction().execute(async trx => {
       if ('currency' in normalizedPayload) {

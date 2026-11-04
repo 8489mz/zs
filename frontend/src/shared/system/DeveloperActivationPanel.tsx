@@ -150,6 +150,9 @@ export function DeveloperActivationPanel() {
   
   const [masterPassword, setMasterPassword] = useState('');
   const [planId, setPlanId] = useState('');
+  const [newMasterPassword, setNewMasterPassword] = useState('');
+  const [confirmMasterPassword, setConfirmMasterPassword] = useState('');
+  const isSuperAdmin = user?.role === 'super_admin';
   const [extraFeatures, setExtraFeatures] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -161,6 +164,8 @@ export function DeveloperActivationPanel() {
       setError('');
       setSuccessMsg('');
       setMasterPassword('');
+      setNewMasterPassword('');
+      setConfirmMasterPassword('');
     }
   }, [open, tenant]);
 
@@ -224,6 +229,37 @@ export function DeveloperActivationPanel() {
       setSuccessMsg('');
     },
   });
+
+  const setMasterPasswordMutation = useMutation({
+    mutationFn: () => http<{ ok: boolean }>('/api/developer/master-password', {
+      method: 'POST',
+      body: JSON.stringify({ newMasterPassword }),
+    }),
+    onSuccess: () => {
+      setSuccessMsg('تم حفظ كلمة مرور المطور الجديدة بنجاح!');
+      setError('');
+      setNewMasterPassword('');
+      setConfirmMasterPassword('');
+    },
+    onError: (err) => {
+      setError(getFriendlyApiErrorMessage(err, 'تعذر حفظ كلمة مرور المطور'));
+      setSuccessMsg('');
+    },
+  });
+
+  const saveMasterPassword = () => {
+    if (newMasterPassword.length < 12) {
+      setError('كلمة مرور المطور يجب أن تكون 12 حرفاً على الأقل');
+      setSuccessMsg('');
+      return;
+    }
+    if (newMasterPassword !== confirmMasterPassword) {
+      setError('تأكيد كلمة المرور غير مطابق');
+      setSuccessMsg('');
+      return;
+    }
+    setMasterPasswordMutation.mutate();
+  };
 
   if (!open || !canAccessDeveloperPanel) return null;
 
@@ -620,6 +656,85 @@ export function DeveloperActivationPanel() {
             </div>
           </div>
         </div>
+
+        {/* Master Password Setting (super_admin only, ONE clear place) */}
+        {isSuperAdmin && (
+          <div style={{ background: '#f8fafc', padding: '14px 16px', borderRadius: '10px', border: '1px solid #e2e8f0', marginTop: '18px' }}>
+            <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 800, color: '#0f172a', marginBottom: '6px' }}>
+              {t('shared.system.developer_activation_panel.s20', "تعيين كلمة مرور المطور (12 حرفاً على الأقل)")}
+            </label>
+            <input
+              type="password"
+              className="secure-password-field"
+              name="developer_master_new_nosave"
+              autoComplete="new-password"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-form-type="other"
+              value={newMasterPassword}
+              onChange={(e) => setNewMasterPassword(e.target.value)}
+              placeholder={t('shared.system.developer_activation_panel.s21', "كلمة المرور الجديدة...")}
+              style={{
+                width: '100%',
+                padding: '9px 14px',
+                borderRadius: '7px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.9rem',
+                outline: 'none',
+                background: '#ffffff',
+                boxSizing: 'border-box',
+                marginBottom: '10px',
+              }}
+            />
+            <input
+              type="password"
+              className="secure-password-field"
+              name="developer_master_confirm_nosave"
+              autoComplete="new-password"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-form-type="other"
+              value={confirmMasterPassword}
+              onChange={(e) => setConfirmMasterPassword(e.target.value)}
+              placeholder={t('shared.system.developer_activation_panel.s22', "تأكيد كلمة المرور الجديدة...")}
+              style={{
+                width: '100%',
+                padding: '9px 14px',
+                borderRadius: '7px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.9rem',
+                outline: 'none',
+                background: '#ffffff',
+                boxSizing: 'border-box',
+                marginBottom: '10px',
+              }}
+            />
+            <button
+              type="button"
+              onClick={saveMasterPassword}
+              disabled={setMasterPasswordMutation.isPending || !newMasterPassword || !confirmMasterPassword}
+              style={{
+                padding: '8px 20px',
+                fontSize: '0.84rem',
+                fontWeight: 700,
+                borderRadius: '7px',
+                border: '1px solid #0f172a',
+                background: '#0f172a',
+                color: '#ffffff',
+                cursor: setMasterPasswordMutation.isPending || !newMasterPassword || !confirmMasterPassword ? 'not-allowed' : 'pointer',
+                opacity: setMasterPasswordMutation.isPending || !newMasterPassword || !confirmMasterPassword ? 0.6 : 1,
+              }}
+            >
+              {setMasterPasswordMutation.isPending ? t('shared.system.developer_activation_panel.s23', "جاري الحفظ...") : t('shared.system.developer_activation_panel.s24', "حفظ كلمة مرور المطور")}
+            </button>
+          </div>
+        )}
 
         {/* Footer Actions */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>

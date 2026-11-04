@@ -18,7 +18,10 @@ import { SettingsDemoDataService } from '../settings/services/settings-demo-data
 import { SettingsService } from '../settings/settings.service';
 import { PLAN_MANAGED_MODULES_SETTING_KEY } from '../../common/constants/platform-settings-keys';
 import { normalizeIndustryProfileKey, getIndustryProfile } from '../../core/tenant/industry-profiles';
-import { isPlatformTenantId } from '../../core/auth/utils/tenant-boundary';
+import { isPlatformTenantId, requireTenantScope } from '../../core/auth/utils/tenant-boundary';
+
+/** Settings key holding the bcrypt hash of the developer master password. */
+export const DEVELOPER_MASTER_PASSWORD_HASH_KEY = 'developerMasterPasswordHash';
 
 type TenantStatus = 'trial' | 'active' | 'expired' | 'suspended';
 
@@ -1183,6 +1186,61 @@ export class SaasAdminService {
     }
 
     return { ok: true };
+  }
+
+  /**
+   * Developer master password (INV-DEVELOPER-MASTER-PASSWORD): the
+   * bcrypt hash of the secret that guards plan/package changes, stored
+   * as ONE settings row for the installation's own (first-created)
+   * tenant — never plaintext, never the super_admin login password.
+   * The hash belongs to the installation, not to the tenant being
+   * edited, so the tenantId in an update-plan body never re-scopes it.
+   */
+  async getDeveloperMasterPasswordHash(): Promise<string | null> {
+    const tenant = await this.db
+      .selectFrom('tenants')
+      .select('id')
+      .orderBy('created_at', 'asc')
+      .limit(1)
+      .executeTakeFirst();
+    if (!tenant) return null;
+    const row = await this.db
+      .selectFrom('settings')
+      .select('value')
+      .where('tenant_id', '=', tenant.id)
+      .where('key', '=', DEVELOPER_MASTER_PASSWORD_HASH_KEY)
+      .limit(1)
+      .executeTakeFirst();
+    const value = String((row as { value?: unknown } | undefined)?.value ?? '').trim();
+    return value || null;
+  }
+
+  /**
+   * Stores a super_admin-set master-password hash. The caller (the
+   * guarded controller endpoint) hashes with createPasswordRecord and
+   * enforces the 12-character admin floor; this method only writes the
+   * hash row, scoped to the setter's own tenant scope. The generic
+   * settings save path is forbidden from writing this key (see
+   * SettingsService.saveSettings), so this endpoint is the ONE place
+   * the secret can be set or changed.
+   */
+  async setDeveloperMasterPasswordHash(hash: string, auth: AuthContext): Promise<void> {
+    const scope = requireTenantScope(auth);
+    await this.db
+      .insertInto('settings')
+      .values({
+        tenant_id: scope.tenantId,
+        account_id: scope.accountId,
+        key: DEVELOPER_MASTER_PASSWORD_HASH_KEY,
+        value: hash,
+      } as never)
+      .onConflict((oc) =>
+        oc.columns(['tenant_id', 'key'] as never).doUpdateSet({
+          value: hash,
+          account_id: scope.accountId,
+        } as never),
+      )
+      .execute();
   }
 
   public async syncTenantModuleSettingsForPlan(tenantId: string, planId?: string | null, extraFeatures?: string[]): Promise<void> {

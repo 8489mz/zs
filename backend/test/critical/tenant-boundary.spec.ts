@@ -54,7 +54,11 @@ async function runDeveloperBoundary(): Promise<void> {
     process.env.PORTABLE_MODE = 'true';
     process.env.IS_ELECTRON = 'true';
     let writes = 0;
-    const service = { developerUpdateTenantPlan: async () => { writes++; return { ok: true }; } };
+    const service = {
+      developerUpdateTenantPlan: async () => { writes++; return { ok: true }; },
+      // No super_admin-set hash in this boundary check: the env fallback applies.
+      getDeveloperMasterPasswordHash: async () => null,
+    };
     const cloud = new DeveloperController(service as any, {
       get: (key: string) => key === 'APP_MODE' ? 'CLOUD_SAAS' : 'configured-test-secret',
     } as any);
@@ -64,8 +68,16 @@ async function runDeveloperBoundary(): Promise<void> {
     const desktop = new DeveloperController(service as any, {
       get: (key: string) => key === 'APP_MODE' ? 'SELF_CONTAINED' : 'configured-test-secret',
     } as any);
-    await desktop.updatePlan({ masterPassword: 'infoadmin' });
-    assert.equal(writes, 1, 'the explicitly retained desktop password must keep working');
+    // The fixed fallback password was removed by owner decision
+    // (2026-11-04): it must be rejected even in desktop mode. Only the
+    // configured env secret (until a super_admin-set hash exists) works.
+    await assert.rejects(
+      () => desktop.updatePlan({ masterPassword: 'infoadmin' }),
+      (error: unknown) => error instanceof Error && /Invalid master password/.test(error.message),
+    );
+    assert.equal(writes, 0, 'The removed fixed password must not reach the service');
+    await desktop.updatePlan({ masterPassword: 'configured-test-secret' });
+    assert.equal(writes, 1, 'the configured env secret must keep working until a hash is set');
   } finally {
     if (originalPortable === undefined) delete process.env.PORTABLE_MODE;
     else process.env.PORTABLE_MODE = originalPortable;
