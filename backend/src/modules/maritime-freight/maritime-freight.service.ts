@@ -2825,7 +2825,7 @@ export class MaritimeFreightService {
       `تحديث جديد بخصوص شحنتكم ${modeName} [${job.job_number}]:\n` +
       `المرحلة الحالية: ${title}\n` +
       `${actionContext}\n\n` +
-      `يمكنكم متابعة خط سير الشحنة لحظة بلحظة عبر رابط التتبع المباشر:\n` +
+      `يمكنكم متابعة معالم الشحنة المجدولة عبر رابط التتبع (الأحداث تقديرية وليست قراءة مباشرة من الناقل):\n` +
       `${trackingUrl}\n\n` +
       `فريق العمليات واللوجستيات — Z-Systems`;
 
@@ -3110,7 +3110,7 @@ export class MaritimeFreightService {
   }
 
   // --------------------------------------------------------------------------
-  // 8. Public Live Tracking for Clients (Flexport Standard)
+  // 8. Public Tracking for Clients (estimated/scheduled milestones, no live carrier feed)
   // --------------------------------------------------------------------------
   async getPublicTrackingByToken(token: string) {
     if (!token || token.trim().length === 0) {
@@ -6144,20 +6144,26 @@ export class MaritimeFreightService {
   }
 
   // ==========================================
-  // 6. Carrier Live Tracking Hub & API Events
+  // 6. Carrier Tracking Hub & API Events (estimated/scheduled only)
   // ==========================================
 
   async syncCarrierTracking(auth: AuthContext, carrierCode: string, trackingNumber: string) {
     const { tenantId } = requireTenantScope(auth);
 
-    const simulatedEvents = [
+    // INV-MARITIME-TRACKING-HONEST-LABELLING: there is NO live
+    // carrier integration anywhere in this module (zero fetch calls):
+    // these are estimated, scheduled timeline events derived from
+    // fixed offsets, labelled as such in the stored payload, the
+    // returned status and the frontend copy. They must never be
+    // presented as a live carrier synchronisation.
+    const estimatedEvents = [
       { eventType: 'BOOK', eventLocation: 'Port Origin', hoursAgo: 72, label: 'Booking Confirmed with Carrier' },
       { eventType: 'GTI', eventLocation: 'Terminal Gate-in', hoursAgo: 48, label: 'Container Gate-in at POL' },
       { eventType: 'LOAD', eventLocation: 'Vessel Berth', hoursAgo: 24, label: 'Loaded on Vessel' },
       { eventType: 'DEPT', eventLocation: 'En Route Sea', hoursAgo: 12, label: 'Vessel Departed Origin Port' },
     ];
 
-    for (const evt of simulatedEvents) {
+    for (const evt of estimatedEvents) {
       const eventTime = new Date(Date.now() - evt.hoursAgo * 3600 * 1000);
       await this.db
         .insertInto('maritime_carrier_api_events')
@@ -6168,7 +6174,7 @@ export class MaritimeFreightService {
           event_type: evt.eventType,
           event_location: evt.eventLocation,
           event_time: eventTime,
-          raw_payload: JSON.stringify({ source: 'CARRIER_API_HUB', note: evt.label }),
+          raw_payload: JSON.stringify({ source: 'ESTIMATED_SCHEDULE', estimated: true, note: evt.label }),
         })
         .execute();
     }
@@ -6176,9 +6182,10 @@ export class MaritimeFreightService {
     return {
       carrierCode: carrierCode.toUpperCase(),
       trackingNumber,
-      status: 'synced',
-      eventsCount: simulatedEvents.length,
-      lastEvent: simulatedEvents[simulatedEvents.length - 1],
+      status: 'estimated',
+      estimated: true,
+      eventsCount: estimatedEvents.length,
+      lastEvent: estimatedEvents[estimatedEvents.length - 1],
     };
   }
 

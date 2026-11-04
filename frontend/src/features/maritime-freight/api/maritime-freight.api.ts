@@ -1020,7 +1020,7 @@ export const maritimeApi = {
       }),
     }),
 
-  // Carrier Live Tracking
+  // Carrier tracking (estimated/scheduled events only; no live carrier integration)
   syncCarrierTracking: (carrierCode: string, trackingNumber: string) =>
     http<any>(`/api/maritime-freight/carrier-tracking/sync`, {
       method: 'POST',

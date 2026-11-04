@@ -33,9 +33,9 @@ export function CarrierTrackingHubTab() {
 
       const events = await maritimeApi.listCarrierApiEvents(trackingNumber.trim().toUpperCase());
       setTrackingEvents(events);
-      toast.success(`تمت المزامنة اللحظية بنجاح مع خوادم الخط الملاحي (${res.eventsCount} أحداث مسجلة)`);
+      toast.success(`تم عرض الأحداث التقديرية المجدولة (${res.eventsCount} أحداث) — لا يوجد اتصال مباشر مع الخط الملاحي`);
     } catch (err: any) {
-      toast.error(err.message || 'فشل الاتصال بالخط الملاحي');
+      toast.error(err.message || 'تعذر عرض الأحداث التقديرية');
     } finally {
       setIsSyncing(false);
     }
@@ -48,17 +48,17 @@ export function CarrierTrackingHubTab() {
         <div>
           <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#170e5e', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <AppIcons.Globe size={20} />
-            <span>{t('maritime_freight.carrier_tracking_hub_tab.s0', "بوابة وتكامل التتبع اللحظي للنواقل والخطوط الملاحية (Carrier Live Tracking Hub)")}</span>
+            <span>{t('maritime_freight.carrier_tracking_hub_tab.s0', "سجل الأحداث التقديرية المجدولة للنواقل والخطوط الملاحية (Carrier Estimated Tracking)")}</span>
           </div>
           <div style={{ fontSize: '0.8125rem', color: '#64748b', marginTop: '4px' }}>
-            {t('maritime_freight.carrier_tracking_hub_tab.s1', "الربط المباشر مع واجهات API وأنظمة تتبع كبرى الخطوط الملاحية العالمية وفق معايير DCSA Track & Trace")}
+            {t('maritime_freight.carrier_tracking_hub_tab.s1', "الأحداث المعروضة تقديرية ومجدولة من بيانات الشحنة، وليست قراءة مباشرة من أنظمة الخط الملاحي — لا يوجد ربط مباشر مع الناقل")}
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', background: '#dcfce7', color: '#166534', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 700 }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />
-            DCSA API Gateway Active
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', background: '#fef3c7', color: '#92400e', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 700 }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#d97706', display: 'inline-block' }} />
+            أحداث تقديرية — بلا ربط مباشر
           </span>
         </div>
       </div>
@@ -157,7 +157,7 @@ export function CarrierTrackingHubTab() {
             }}
           >
             <AppIcons.RefreshCw size={16} />
-            <span>{isSyncing ? t('maritime_freight.carrier_tracking_hub_tab.s4', "جاري الاتصال بالسيرفر...") : t('maritime_freight.carrier_tracking_hub_tab.s5', "مزامنة لحظية من الخط")}</span>
+            <span>{isSyncing ? t('maritime_freight.carrier_tracking_hub_tab.s4', "جاري تجهيز الأحداث التقديرية...") : t('maritime_freight.carrier_tracking_hub_tab.s5', "عرض الأحداث التقديرية")}</span>
           </button>
         </div>
       </div>
@@ -171,11 +171,11 @@ export function CarrierTrackingHubTab() {
                 {t('maritime_freight.carrier_tracking_hub_tab.s6', "سجل الأحداث والمحطات اللوجستية للحاوية:")} <span style={{ fontFamily: 'monospace' }}>{trackingNumber}</span>
               </div>
               <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
-                {t('maritime_freight.carrier_tracking_hub_tab.s7', "الخط الملاحي الناقل:")} {SUPPORTED_CARRIERS.find((c) => c.code === carrierCode)?.name} {t('maritime_freight.carrier_tracking_hub_tab.s8', "| معيار DCSA v2.2")}
+                {t('maritime_freight.carrier_tracking_hub_tab.s7', "الخط الملاحي الناقل:")} {SUPPORTED_CARRIERS.find((c) => c.code === carrierCode)?.name} {t('maritime_freight.carrier_tracking_hub_tab.s8', "| أحداث تقديرية مجدولة")}
               </div>
             </div>
             <span style={{ padding: '3px 8px', borderRadius: '6px', background: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: '0.75rem' }}>
-              {t('maritime_freight.carrier_tracking_hub_tab.s9', "تم استلام")} {trackingEvents.length} {t('maritime_freight.carrier_tracking_hub_tab.s10', "أحداث")}
+              {t('maritime_freight.carrier_tracking_hub_tab.s9', "أحداث تقديرية معروضة:")} {trackingEvents.length}
             </span>
           </div>
 

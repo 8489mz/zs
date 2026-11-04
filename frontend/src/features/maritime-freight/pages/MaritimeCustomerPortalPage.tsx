@@ -320,7 +320,7 @@ export function MaritimeCustomerPortalPage() {
             </div>
             <h1 style={{ fontSize: '19px', fontWeight: 800, color: '#0f172a', margin: '0 0 6px' }}>{t('maritime_freight.maritime_customer_portal_page.s2', "بوابة الخدمة الذاتية لعملاء الشحن")}</h1>
             <p style={{ fontSize: '13px', color: '#64748b', margin: 0, lineHeight: 1.5 }}>
-              {t('maritime_freight.maritime_customer_portal_page.s3', "متابعة الشحنات اللحظية، طلبات التسعير، واعتماد العروض والمستندات إلكترونياً")}
+              {t('maritime_freight.maritime_customer_portal_page.s3', "متابعة الشحنات والأحداث التقديرية المجدولة، طلبات التسعير، واعتماد العروض والمستندات إلكترونياً")}
             </p>
           </div>
 
@@ -559,7 +559,7 @@ export function MaritimeCustomerPortalPage() {
         {/* Tab Navigation Bar */}
         <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', padding: '6px', display: 'flex', gap: '6px', marginBottom: '20px', overflowX: 'auto' }}>
           {[
-            { id: 'shipments', label: t('maritime_freight.maritime_customer_portal_page.s30', "الشحنات الجارية والتتبع اللحظي"), icon: ShipIcon },
+            { id: 'shipments', label: t('maritime_freight.maritime_customer_portal_page.s30', "الشحنات الجارية والتتبع التقديري"), icon: ShipIcon },
             { id: 'request_quote', label: t('maritime_freight.maritime_customer_portal_page.s31', "طلب تسعير جديد (RFQ)"), icon: PlusCircleIcon },
             { id: 'quotes', label: t('maritime_freight.maritime_customer_portal_page.s32', "عروض الأسعار والتعميد"), icon: FileTextIcon },
             { id: 'documents', label: t('maritime_freight.maritime_customer_portal_page.s33', "مركز المستندات والبوالص"), icon: FileCheckIcon },
@@ -756,7 +756,7 @@ export function MaritimeCustomerPortalPage() {
                     {/* DCSA Milestones Radar Progression */}
                     <div style={{ marginBottom: '14px' }}>
                       <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
-                        {t('maritime_freight.maritime_customer_portal_page.s58', "مراحل الشحنة اللحظية (DCSA Milestones)")}
+                        {t('maritime_freight.maritime_customer_portal_page.s58', "مراحل الشحنة المجدولة (DCSA Milestones)")}
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '4px', textAlign: 'center' }}>
                         {[

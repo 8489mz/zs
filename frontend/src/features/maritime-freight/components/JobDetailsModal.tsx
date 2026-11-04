@@ -1384,7 +1384,7 @@ export function JobDetailsModal({ open, jobId, onClose, onUpdated }: JobDetailsM
                 >
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#1e40af' }}>
-                      {t('maritime_freight.job_details_modal.s64', "رابط التتبع المباشر للعميل (Client Live Tracking Link):")}
+                      {t('maritime_freight.job_details_modal.s64', "رابط تتبع الشحنة للعميل (أحداث تقديرية مجدولة):")}
                     </div>
                     <div style={{ fontSize: '0.76rem', color: '#475569', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', direction: 'ltr', textAlign: 'right' }}>
                       {trackingUrl || t('maritime_freight.job_details_modal.s65', "جاري توليد الرابط...")}
