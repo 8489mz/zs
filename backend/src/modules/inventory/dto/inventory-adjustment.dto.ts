@@ -2,15 +2,31 @@ import { Type } from 'class-transformer';
 import { IsIn, IsNumber, IsArray, IsOptional, IsString, Min, ValidateIf, ValidateNested } from 'class-validator';
 
 class AdjustmentBatchAllocationDto {
+  // Optional: a new-batch increase names batchNumber + expiryDate
+  // instead of an existing batchId (INV-SPIRIT-TRACKED-INCREASE).
+  // The decrease path still requires a batchId and rejects a
+  // missing one in its helper.
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(1)
-  batchId!: number;
+  batchId?: number;
 
   @Type(() => Number)
   @IsNumber()
   @Min(0.001)
   qty!: number;
+
+  // INV-SPIRIT-TRACKED-INCREASE: naming a NEW batch for a documented
+  // increase. Only read by the increase path; the decrease/dispatch
+  // path keeps using batchId + qty and ignores these fields.
+  @IsOptional()
+  @IsString()
+  batchNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  expiryDate?: string;
 }
 
 export class InventoryAdjustmentDto {

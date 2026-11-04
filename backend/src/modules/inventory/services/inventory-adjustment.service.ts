@@ -12,6 +12,7 @@ import { Database } from '../../../database/database.types';
 import { InventoryAdjustmentDto } from '../dto/inventory-adjustment.dto';
 import { InventoryCountService } from './inventory-count.service';
 import { dispatchTrackedStock } from '../helpers/stock-transfer-trace.helper';
+import { recordTrackedStockIncrease } from '../helpers/tracked-stock-increase.helper';
 import { InventoryScopeService } from './inventory-scope.service';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { IdempotencyService } from '../../../core/idempotency/idempotency.service';
@@ -97,14 +98,26 @@ export class InventoryAdjustmentService {
         if (!payload.locationId || !Number.isSafeInteger(Number(payload.locationId))) {
           throw new AppError('يجب تحديد المخزن عند تسوية صنف متتبع', 'ADJUSTMENT_TRACKED_LOCATION_REQUIRED', 422);
         }
-        if (deltaRequested >= 0) {
+        if (deltaRequested > 0) {
+          // INV-SPIRIT-TRACKED-INCREASE: a documented increase naming
+          // the specific serials/batches is recorded directly; no full
+          // tracked count is required. Serial/batch uniqueness and
+          // duplicate guards stay inside the helper.
+          await recordTrackedStockIncrease(trx, scope, {
+            productId: Number(payload.productId), qty: deltaRequested, unitCost,
+            serials: payload.serials, batchAllocations: payload.batchAllocations,
+            reason: payload.reason,
+          }, Number(payload.locationId), effectiveBranchId);
+        } else if (deltaRequested === 0) {
           throw new AppError('زيادة الأصناف المتتبعة أو تغييرها بدون توثيق الاستلام يتم من خلال الجرد المتتبع',
             'ADJUSTMENT_TRACKED_INCREASE_REQUIRES_COUNT', 409);
+        } else {
+          await dispatchTrackedStock(trx, scope, {
+            productId: Number(payload.productId), qty: -deltaRequested,
+            serials: payload.serials,
+            batchAllocations: payload.batchAllocations?.map((a) => ({ batchId: Number(a.batchId), qty: Number(a.qty) })),
+          }, Number(payload.locationId), effectiveBranchId, null, Number(payload.productId));
         }
-        await dispatchTrackedStock(trx, scope, {
-          productId: Number(payload.productId), qty: -deltaRequested,
-          serials: payload.serials, batchAllocations: payload.batchAllocations,
-        }, Number(payload.locationId), effectiveBranchId, null, Number(payload.productId));
       }
 
       if (payload.actionType === 'adjust') {
