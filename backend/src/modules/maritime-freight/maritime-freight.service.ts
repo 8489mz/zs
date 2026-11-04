@@ -55,6 +55,7 @@ import { MaritimeMailService } from './maritime-mail.service';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
 import { calculateFreightAudit, validateMakerCheckerOverride } from './engines/freight-audit.engine';
+import { evaluateAcidNumber } from './engines/acid-number.engine';
 import { checkInsuranceClaim } from './engines/cargo-insurance.engine';
 import { QuotationChargeDto, JobChargeDto, UpdateJobChargesDto } from './dto/itemized-charges.dto';
 import { CreateJobDocumentDto } from './dto/job-document.dto';
@@ -2004,6 +2005,26 @@ export class MaritimeFreightService {
         throw new BadRequestException(mawbValidation.error);
       }
       formattedMawb = mawbValidation.formattedAwb || dto.mawbNumber;
+    }
+
+    // INV-MARITIME-ACID-GATE-REQUIRED-ONLY: the ACID format gate is
+    // strict ONLY on shipments that require the number (imports
+    // into Egyptian ports, UN/LOCODE EG prefix, direction
+    // defaulting to 'import' exactly as the insert below does).
+    // It runs BEFORE any database access, so a rejected draft
+    // costs nothing and leaves nothing behind. Anywhere else a
+    // malformed supplied value only warns in the server log and
+    // the job proceeds -- the number is stored as supplied and
+    // the gate at conversion time is this same check, since
+    // every creation path funnels through createJob.
+    const acidCheck = evaluateAcidNumber(dto.direction || 'import', dto.podCode, dto.acidNumber);
+    if (acidCheck.required && !acidCheck.valid) {
+      throw new BadRequestException('رقم ACID مطلوب للشحنات الواردة إلى الموانئ المصرية ويجب أن يتكون من 19 رقماً بالضبط.');
+    }
+    if (!acidCheck.required && dto.acidNumber && !acidCheck.valid) {
+      this.logger.warn(
+        `ACID number supplied for a shipment that does not require one is malformed and will be stored as supplied (direction=${dto.direction || 'import'}, pod=${dto.podCode}).`,
+      );
     }
 
     let grossWeightKg = Number(dto.grossWeightKg || 0);
