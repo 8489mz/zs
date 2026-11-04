@@ -5806,33 +5806,53 @@ export class MaritimeFreightService {
     // or the registered rate — fail closed when none exists.
     const currency = dto.currency || 'USD';
     const rate = await this.resolveFreightExchangeRate(tenantId, currency, dto.exchangeRate);
-    const localEq = amount * rate;
+    // INV-MARITIME-AGENT-SETTLEMENT-RECORD-INTEGRITY: the local
+    // equivalent converts at the tenant's book digits through the
+    // shared engine -- the raw float product stored 4856.0625 for a
+    // KWD tenant, a fourth decimal the books cannot hold.
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+    const localEq = convertFxAmount(amount, rate, digits);
 
-    const refNum = dto.referenceNumber || formatDailyDocumentNumber(
-      dto.settlementType === 'debit_note' ? 'ADN' : dto.settlementType === 'credit_note' ? 'ACN' : 'APS',
-      Math.floor(Math.random() * 9000) + 1000
-    );
+    const settlementPrefix = dto.settlementType === 'debit_note' ? 'ADN' : dto.settlementType === 'credit_note' ? 'ACN' : 'APS';
+    const suppliedRef = dto.referenceNumber?.trim() || null;
 
-    const [settlement] = await this.db
-      .insertInto('maritime_agent_settlements')
-      .values({
-        tenant_id: tenantId,
-        agent_id: dto.agentId ? String(dto.agentId) : null,
-        agent_name: dto.agentName,
-        job_id: dto.jobId ? String(dto.jobId) : null,
-        job_number: dto.jobNumber || null,
-        settlement_type: dto.settlementType,
-        currency: currency,
-        amount: amount,
-        profit_share_percent: dto.profitSharePercent !== undefined ? Number(dto.profitSharePercent) : 50,
-        local_equivalent_amount: localEq,
-        exchange_rate: rate,
-        reference_number: refNum,
-        status: 'pending',
-        notes: dto.notes || null,
-      })
-      .returningAll()
-      .execute();
+    // The generated reference number follows the module-wide
+    // collision-proof pattern (insert with a temp value, rename by
+    // the returned identity in the same transaction): the previous
+    // random 4-digit sequence could repeat on the same day. A
+    // caller-supplied number is kept verbatim.
+    const settlement = await this.db.transaction().execute(async (trx: any) => {
+      const [row] = await trx
+        .insertInto('maritime_agent_settlements')
+        .values({
+          tenant_id: tenantId,
+          agent_id: dto.agentId ? String(dto.agentId) : null,
+          agent_name: dto.agentName,
+          job_id: dto.jobId ? String(dto.jobId) : null,
+          job_number: dto.jobNumber || null,
+          settlement_type: dto.settlementType,
+          currency: currency,
+          amount: amount,
+          profit_share_percent: dto.profitSharePercent !== undefined ? Number(dto.profitSharePercent) : 50,
+          local_equivalent_amount: localEq,
+          exchange_rate: rate,
+          reference_number: suppliedRef || `AST-TMP-${crypto.randomUUID()}`,
+          status: 'pending',
+          notes: dto.notes || null,
+        })
+        .returningAll()
+        .execute();
+
+      if (suppliedRef) return row;
+      const [renamed] = await trx
+        .updateTable('maritime_agent_settlements')
+        .set({ reference_number: formatDailyDocumentNumber(settlementPrefix, Number(row.id)) })
+        .where('id', '=', row.id)
+        .where('tenant_id', '=', tenantId)
+        .returningAll()
+        .execute();
+      return renamed;
+    });
 
     return settlement;
   }
