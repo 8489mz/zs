@@ -17,6 +17,7 @@ export interface GoodsReceiptLineItem {
   unitCost?: number;
   quarantineLocationId?: number | null;
   coaDocumentId?: number | null;
+  overReceivedQty?: number;
   notes?: string | null;
 }
 
@@ -30,6 +31,8 @@ export interface GoodsReceiptRecord {
   locationId: number;
   receivedAt: string;
   status: 'draft' | 'posted' | 'cancelled';
+  pendingReview?: boolean;
+  pendingReviewReason?: string | null;
   supplierDeliveryNoteRef?: string | null;
   grniJournalEntryId?: number | null;
   notes?: string | null;

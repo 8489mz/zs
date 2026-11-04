@@ -173,11 +173,13 @@ export const GoodsReceiptsListModal: React.FC<GoodsReceiptsListModalProps> = ({
                             fontWeight: 700,
                             padding: '2px 8px',
                             borderRadius: '10px',
-                            backgroundColor: r.status === 'posted' ? '#dcfce7' : '#fef3c7',
-                            color: r.status === 'posted' ? '#166534' : '#92400e',
+                            backgroundColor: r.pendingReview ? '#fef3c7' : r.status === 'posted' ? '#dcfce7' : '#fef3c7',
+                            color: r.pendingReview ? '#92400e' : r.status === 'posted' ? '#166534' : '#92400e',
                           }}
                         >
-                          {r.status === 'posted' ? t('purchases.goods_receipts_list_modal.s11', "مرحل") : t('purchases.goods_receipts_list_modal.s12', "مسودة")}
+                          {r.pendingReview
+                            ? t('purchases.goods_receipts_list_modal.s23', "مرحل — قيد المراجعة")
+                            : r.status === 'posted' ? t('purchases.goods_receipts_list_modal.s11', "مرحل") : t('purchases.goods_receipts_list_modal.s12', "مسودة")}
                         </span>
                       </td>
                       <td style={{ padding: '8px 10px', textAlign: 'center' }}>
@@ -239,13 +241,21 @@ export const GoodsReceiptsListModal: React.FC<GoodsReceiptsListModalProps> = ({
                     fontWeight: 700,
                     padding: '2px 8px',
                     borderRadius: '10px',
-                    backgroundColor: selectedReceipt.status === 'posted' ? '#dcfce7' : '#fef3c7',
-                    color: selectedReceipt.status === 'posted' ? '#166534' : '#92400e',
+                    backgroundColor: selectedReceipt.pendingReview ? '#fef3c7' : selectedReceipt.status === 'posted' ? '#dcfce7' : '#fef3c7',
+                    color: selectedReceipt.pendingReview ? '#92400e' : selectedReceipt.status === 'posted' ? '#166534' : '#92400e',
                   }}
                 >
-                  {selectedReceipt.status === 'posted' ? t('purchases.goods_receipts_list_modal.s16', "مرحل ومقيد محاسبياً") : t('purchases.goods_receipts_list_modal.s17', "مسودة غير مرحلة")}
+                  {selectedReceipt.pendingReview
+                    ? t('purchases.goods_receipts_list_modal.s24', "مرحل — قيد المراجعة")
+                    : selectedReceipt.status === 'posted' ? t('purchases.goods_receipts_list_modal.s16', "مرحل ومقيد محاسبياً") : t('purchases.goods_receipts_list_modal.s17', "مسودة غير مرحلة")}
                 </span>
               </div>
+
+              {selectedReceipt.pendingReview && selectedReceipt.pendingReviewReason && (
+                <div style={{ fontSize: '11.5px', color: '#92400e', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: '6px', padding: '8px 10px' }}>
+                  <strong>{t('purchases.goods_receipts_list_modal.s25', "سبب المراجعة:")}</strong> {selectedReceipt.pendingReviewReason}
+                </div>
+              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11.5px' }}>
                 <div><strong>{t('purchases.goods_receipts_list_modal.s18', "المورد:")}</strong> {selectedReceipt.supplierName}</div>

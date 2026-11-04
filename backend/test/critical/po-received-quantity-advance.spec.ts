@@ -172,12 +172,13 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE goods_receipt_notes (id bigint PRIMARY KEY, tenant_id text, account_id text, doc_no text,
       purchase_order_id bigint, supplier_id bigint, location_id bigint, received_at timestamptz,
       received_by bigint, supplier_delivery_note_ref text, status text DEFAULT 'draft', notes text,
-      grni_journal_entry_id bigint, created_at timestamptz DEFAULT '2026-10-01', updated_at timestamptz DEFAULT '2026-10-01');
+      grni_journal_entry_id bigint, pending_review boolean NOT NULL DEFAULT FALSE, pending_review_reason text,
+      created_at timestamptz DEFAULT '2026-10-01', updated_at timestamptz DEFAULT '2026-10-01');
     CREATE TABLE goods_receipt_lines (id bigint PRIMARY KEY, tenant_id text, account_id text, grn_id bigint,
       purchase_order_item_id bigint, product_id bigint, ordered_qty numeric, received_qty numeric,
       accepted_qty numeric, rejected_qty numeric, rejection_reason text, batch_number text,
       expiry_date date, manufacturing_date date, unit_cost numeric, quarantine_location_id bigint,
-      coa_document_id bigint, notes text, created_at timestamptz DEFAULT '2026-10-01');
+      coa_document_id bigint, over_received_qty numeric NOT NULL DEFAULT 0, notes text, created_at timestamptz DEFAULT '2026-10-01');
     CREATE TABLE return_documents (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, return_type text,
       invoice_id bigint, settlement_mode text, refund_method text, refund_allocations jsonb, total numeric, note text,
       branch_id bigint, location_id bigint, created_by bigint DEFAULT 1, created_at timestamptz DEFAULT '2026-10-02');

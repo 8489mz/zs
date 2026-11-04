@@ -60,11 +60,19 @@ export function computePoReceiptStatus(
 
 const RECEIVABLE_PO_STATUSES = ['confirmed', 'partially_received', 'received', 'converted_to_bill'];
 
+// INV-SPIRIT-GRN-PENDING-REVIEW: a GRN may post against a draft
+// (unapproved) purchase order as a pending-review receipt. The GRN path
+// passes allowUnapproved, so the helper advances received_quantity but
+// leaves the order status 'draft' — receiving must not approve the
+// order by side effect. Every other caller (the legacy receipt path)
+// keeps the strict rule: a draft order fails closed here.
+
 export async function advancePurchaseOrderReceipt(
   trx: any,
   tenantId: string,
   orderId: number,
   received: PoReceiptAdvanceLine[],
+  options?: { allowUnapproved?: boolean },
 ): Promise<'partially_received' | 'received' | null> {
   const aggregated = new Map<number, number>();
   for (const line of received) {
@@ -92,7 +100,8 @@ export async function advancePurchaseOrderReceipt(
     throw new AppError('أمر الشراء المرتبط بالاستلام غير موجود', 'PURCHASE_ORDER_NOT_FOUND', 404);
   }
   const currentStatus = String(order.status);
-  if (!RECEIVABLE_PO_STATUSES.includes(currentStatus)) {
+  const unapprovedReceipt = currentStatus === 'draft' && options?.allowUnapproved === true;
+  if (!unapprovedReceipt && !RECEIVABLE_PO_STATUSES.includes(currentStatus)) {
     throw new AppError(
       'لا يجوز الاستلام على أمر شراء في حالته الحالية',
       'PO_RECEIPT_NOT_ALLOWED',
@@ -140,7 +149,7 @@ export async function advancePurchaseOrderReceipt(
     nextStates.push({ id: Number(item.id), quantity: state.quantity, receivedQuantity: nextReceived });
   }
 
-  const nextStatus = computePoReceiptStatus(nextStates, currentStatus);
+  const nextStatus = unapprovedReceipt ? null : computePoReceiptStatus(nextStates, currentStatus);
   if (nextStatus && nextStatus !== currentStatus) {
     await trx
       .updateTable('purchase_orders')

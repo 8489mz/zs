@@ -168,7 +168,12 @@ export class GoodsReceiptService {
       if (!order || Number(order.supplier_id) !== Number(dto.supplierId)) {
         throw new BadRequestException('أمر الشراء لا يتبع المورد المحدد في المنشأة.');
       }
-      if (!['confirmed', 'partially_received', 'received', 'converted_to_bill'].includes(String(order.status))) {
+      // INV-SPIRIT-GRN-PENDING-REVIEW: a draft (unapproved) order may
+      // receive as a pending-review receipt — the draft is recorded at
+      // post time and billing stays blocked until the order is
+      // approved. Only a cancelled order (a deliberate stop) still
+      // blocks receipt creation.
+      if (!['draft', 'confirmed', 'partially_received', 'received', 'converted_to_bill'].includes(String(order.status))) {
         throw new BadRequestException('لا يجوز الاستلام على أمر شراء ملغي أو غير معتمد');
       }
       const orderItemIds = [...new Set(dto.lines.map((line) => Number(line.purchaseOrderItemId || 0)).filter((id) => id > 0))];
@@ -263,6 +268,8 @@ export class GoodsReceiptService {
         'g.location_id',
         'g.received_at',
         'g.status',
+        'g.pending_review',
+        'g.pending_review_reason',
         'g.supplier_delivery_note_ref',
         'g.grni_journal_entry_id',
         'g.created_at',
@@ -297,6 +304,8 @@ export class GoodsReceiptService {
       locationId: Number(r.location_id),
       receivedAt: r.received_at,
       status: r.status,
+      pendingReview: Boolean(r.pending_review),
+      pendingReviewReason: r.pending_review_reason,
       supplierDeliveryNoteRef: r.supplier_delivery_note_ref,
       grniJournalEntryId: r.grni_journal_entry_id ? Number(r.grni_journal_entry_id) : null,
       createdAt: r.created_at,
@@ -322,6 +331,8 @@ export class GoodsReceiptService {
         'g.location_id',
         'g.received_at',
         'g.status',
+        'g.pending_review',
+        'g.pending_review_reason',
         'g.supplier_delivery_note_ref',
         'g.grni_journal_entry_id',
         'g.notes',
@@ -349,6 +360,7 @@ export class GoodsReceiptService {
         'gl.accepted_qty',
         'gl.rejected_qty',
         'gl.rejection_reason',
+        'gl.over_received_qty',
         'gl.batch_number',
         'gl.expiry_date',
         'gl.manufacturing_date',
@@ -370,6 +382,8 @@ export class GoodsReceiptService {
       locationId: Number(grn.location_id),
       receivedAt: grn.received_at,
       status: grn.status,
+      pendingReview: Boolean(grn.pending_review),
+      pendingReviewReason: grn.pending_review_reason,
       supplierDeliveryNoteRef: grn.supplier_delivery_note_ref,
       grniJournalEntryId: grn.grni_journal_entry_id ? Number(grn.grni_journal_entry_id) : null,
       notes: grn.notes,
@@ -385,6 +399,7 @@ export class GoodsReceiptService {
         acceptedQty: Number(l.accepted_qty || 0),
         rejectedQty: Number(l.rejected_qty || 0),
         rejectionReason: l.rejection_reason,
+        overReceivedQty: Number(l.over_received_qty || 0),
         batchNumber: l.batch_number,
         expiryDate: l.expiry_date,
         manufacturingDate: l.manufacturing_date,
@@ -412,7 +427,10 @@ export class GoodsReceiptService {
         const lockedOrder = await trx.selectFrom('purchase_orders').select(['id', 'status'])
           .where('id', '=', Number(receiptLink.purchase_order_id))
           .where('tenant_id', '=', scope.tenantId).forUpdate().executeTakeFirstOrThrow();
-        if (!['confirmed', 'partially_received', 'received', 'converted_to_bill'].includes(String(lockedOrder.status))) {
+        // INV-SPIRIT-GRN-PENDING-REVIEW: a draft order posts as a
+        // pending-review receipt (flagged below); only a cancelled
+        // order blocks posting.
+        if (!['draft', 'confirmed', 'partially_received', 'received', 'converted_to_bill'].includes(String(lockedOrder.status))) {
           throw new BadRequestException('تم رفض ترحيل الاستلام: أمر الشراء غير معتمد أو ملغي');
         }
       }
@@ -562,11 +580,43 @@ export class GoodsReceiptService {
         }
       }
 
-      // INV-PO-RECEIVED-QUANTITY-ADVANCE: reflect this receipt on its
+      // INV-SPIRIT-GRN-PENDING-REVIEW: reflect this receipt on its
       // purchase order in the same transaction, after every stock write
       // above succeeded, so a failed receipt advances nothing. Rejected
       // quantities never advance: only accepted stock counts as received.
+      // Over-receipt is measured against the ordered quantity still
+      // unreceived BEFORE this receipt advances it, in GRN line order,
+      // so a second line for the same PO item only counts the part past
+      // what the first line already filled. A draft order advances its
+      // received quantities but keeps status 'draft' — receiving must
+      // not approve the order by side effect.
+      let pendingReview = false;
+      let pendingReviewReason: string | null = null;
       if (grn.purchaseOrderId) {
+        const poRow = await trx.selectFrom('purchase_orders').select(['status'])
+          .where('id', '=', Number(grn.purchaseOrderId))
+          .where('tenant_id', '=', scope.tenantId).executeTakeFirst();
+        const poUnapproved = String(poRow?.status || '') === 'draft';
+        const poItemStates = await trx.selectFrom('purchase_order_items')
+          .select(['id', 'quantity', 'received_quantity'])
+          .where('purchase_order_id', '=', Number(grn.purchaseOrderId))
+          .where('tenant_id', '=', scope.tenantId)
+          .forUpdate().execute();
+        const remainingByItem = new Map<number, number>();
+        for (const item of poItemStates) {
+          remainingByItem.set(Number(item.id), Math.max(0, Number(item.quantity || 0) - Number(item.received_quantity || 0)));
+        }
+        const overReceivedByLineId = new Map<number, number>();
+        for (const line of grn.lines) {
+          const poItemId = line.purchaseOrderItemId ? Number(line.purchaseOrderItemId) : 0;
+          const accepted = Number(line.acceptedQty || 0);
+          if (poItemId > 0 && accepted > 0 && remainingByItem.has(poItemId)) {
+            const remaining = remainingByItem.get(poItemId) || 0;
+            const excess = Math.max(0, Number((accepted - remaining).toFixed(3)));
+            if (excess > 0) overReceivedByLineId.set(Number(line.id), excess);
+            remainingByItem.set(poItemId, Math.max(0, Number((remaining - accepted).toFixed(3))));
+          }
+        }
         const receivedByItem = new Map<number, number>();
         for (const line of grn.lines) {
           const accepted = Number(line.acceptedQty || 0);
@@ -581,8 +631,21 @@ export class GoodsReceiptService {
             scope.tenantId,
             Number(grn.purchaseOrderId),
             [...receivedByItem.entries()].map(([poItemId, quantity]) => ({ poItemId, quantity })),
+            { allowUnapproved: true },
           );
         }
+        for (const [lineId, excess] of overReceivedByLineId) {
+          await trx.updateTable('goods_receipt_lines')
+            .set({ over_received_qty: excess })
+            .where('id', '=', lineId)
+            .where('tenant_id', '=', scope.tenantId)
+            .execute();
+        }
+        const reasonParts: string[] = [];
+        if (poUnapproved) reasonParts.push('أمر الشراء غير معتمد بعد');
+        if (overReceivedByLineId.size > 0) reasonParts.push('كمية مستلمة زائدة عن الكمية المطلوبة في أمر الشراء');
+        pendingReview = reasonParts.length > 0;
+        pendingReviewReason = pendingReview ? `استلام قيد المراجعة: ${reasonParts.join('؛ ')}` : null;
       }
 
       // 3. Generate GRNI Journal Entry (Dr. Inventory Asset 1140 / Cr. GRNI 2125)
@@ -669,6 +732,8 @@ export class GoodsReceiptService {
         .updateTable('goods_receipt_notes')
         .set({
           status: 'posted',
+          pending_review: pendingReview,
+          pending_review_reason: pendingReviewReason,
           grni_journal_entry_id: grniEntryId,
           updated_at: new Date(),
         })
@@ -681,6 +746,8 @@ export class GoodsReceiptService {
         grnId: id,
         docNo: grn.docNo,
         status: 'posted',
+        pendingReview,
+        pendingReviewReason,
         grniJournalEntryId: grniEntryId,
         totalGrniAmount: roundMoney(totalGrniAmount, moneyDigits),
       };
@@ -700,11 +767,18 @@ export class GoodsReceiptService {
     }
     return this.db.transaction().execute(async (trx) => {
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
-      const po = await trx.selectFrom('purchase_orders').select(['id', 'supplier_id'])
+      const po = await trx.selectFrom('purchase_orders').select(['id', 'supplier_id', 'status'])
         .where('id', '=', dto.purchaseOrderId).where('tenant_id', '=', scope.tenantId)
         .forUpdate().executeTakeFirst();
       if (!po || Number(po.supplier_id) !== Number(dto.supplierId)) {
         throw new BadRequestException('أمر الشراء لا يتبع المورد والمنشأة المحددين');
+      }
+      // INV-SPIRIT-GRN-PENDING-REVIEW: supplier billing stays pending
+      // until the order is approved. A pending-review receipt already
+      // posted its stock and GRNI journal; invoicing it would settle
+      // the liability against an order nobody approved.
+      if (String(po.status) === 'draft') {
+        throw new UnprocessableEntityException('لا يمكن فوترة محضر استلام قيد المراجعة: أمر الشراء غير معتمد بعد');
       }
       const supplier = await trx.selectFrom('suppliers').select('id')
         .where('id', '=', dto.supplierId).where('tenant_id', '=', scope.tenantId)

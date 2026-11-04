@@ -1621,6 +1621,8 @@ export interface GoodsReceiptNoteTable {
   supplier_delivery_note_ref: string | null;
   status: string;
   grni_journal_entry_id: number | null;
+  pending_review: boolean;
+  pending_review_reason: string | null;
   notes: string | null;
   created_at: ColumnType<Date, Date | string | undefined, never>;
   updated_at: ColumnType<Date, Date | string | undefined, Date | string>;
@@ -1643,6 +1645,7 @@ export interface GoodsReceiptLineTable {
   unit_cost: number | string;
   quarantine_location_id: number | null;
   coa_document_id: number | null;
+  over_received_qty: number | string;
   notes: string | null;
   created_at: ColumnType<Date, Date | string | undefined, never>;
 }
