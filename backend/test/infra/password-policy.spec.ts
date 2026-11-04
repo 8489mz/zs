@@ -3,9 +3,11 @@ import { assertStrongPassword, assertSecurePasscode, MIN_PASSWORD_LENGTH } from 
 
 assert.throws(() => assertStrongPassword(''), /PASSWORD_REQUIRED/);
 assert.throws(() => assertStrongPassword('   '), /PASSWORD_REQUIRED/);
-assert.doesNotThrow(() => assertStrongPassword('1'));
-assert.doesNotThrow(() => assertStrongPassword('a'));
-assert.equal(MIN_PASSWORD_LENGTH, 1);
+assert.throws(() => assertStrongPassword('1'), /PASSWORD_TOO_WEAK/);
+assert.throws(() => assertStrongPassword('a'), /PASSWORD_TOO_WEAK/);
+assert.throws(() => assertStrongPassword('1234567'), /PASSWORD_TOO_WEAK/);
+assert.doesNotThrow(() => assertStrongPassword('12345678'));
+assert.equal(MIN_PASSWORD_LENGTH, 8);
 
 // Test assertSecurePasscode
 assert.throws(() => assertSecurePasscode(''), /PASSCODE_REQUIRED/);

@@ -141,7 +141,8 @@ function runDtoValidation(): void {
   assertInvalid(ValidatePasswordResetTokenDto, { token: 'short' }, 'validate/short token');
   assertInvalid(ValidatePasswordResetTokenDto, {}, 'validate/missing token');
 
-  assertValid(ConfirmPasswordResetDto, { token, newPassword: '1' }, 'confirm');
+  assertValid(ConfirmPasswordResetDto, { token, newPassword: 'NewPass12' }, 'confirm');
+  assertInvalid(ConfirmPasswordResetDto, { token, newPassword: '1234567' }, 'confirm/short password');
   assertInvalid(ConfirmPasswordResetDto, { token, newPassword: '' }, 'confirm/empty password');
   assertInvalid(ConfirmPasswordResetDto, { token: 'short', newPassword: 'x' }, 'confirm/short token');
 }

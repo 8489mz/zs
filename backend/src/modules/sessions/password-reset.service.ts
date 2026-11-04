@@ -289,8 +289,10 @@ export class PasswordResetService {
     const limit = await this.rateLimit.hit(`password-reset:confirm:ip:${ip}`, 20, 3600);
     if (!limit.allowed) this.tooManyRequests();
 
-    assertStrongPassword(dto.newPassword);
-
+    // The role-aware minimum is enforced inside the transaction, after
+    // the target account is resolved: the reset token alone does not
+    // carry the account role, and a weak password must never be set
+    // for an admin account. The token is untouched on rejection.
     const tokenHash = hashPasswordResetToken(dto.token);
     const passwordRecord = await createPasswordRecord(dto.newPassword);
 
@@ -307,13 +309,15 @@ export class PasswordResetService {
       const tenantId = String(tokenRow.tenant_id || '').trim();
       const user = await trx
         .selectFrom('users')
-        .select(['id', 'username', 'tenant_id', 'account_id'])
+        .select(['id', 'username', 'tenant_id', 'account_id', 'role'])
         .where('id', '=', tokenRow.user_id)
         .where('tenant_id', '=', tenantId)
         .where('is_active', '=', true)
         .executeTakeFirst();
 
       if (!user) return null;
+
+      assertStrongPassword(dto.newPassword, { role: user.role });
 
       await trx
         .updateTable('users')

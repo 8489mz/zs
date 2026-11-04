@@ -33,14 +33,14 @@ function run(): void {
     role: 'admin',
   });
 
-  assertValid(UpsertUserDto, {
+  assertInvalid(UpsertUserDto, {
     username: 'cashier1',
     phone: '01000000001',
     password: '1',
     role: 'cashier',
   });
 
-  assertValid(UpsertUserDto, {
+  assertInvalid(UpsertUserDto, {
     username: 'admin1',
     phone: '01000000002',
     password: 'a',
@@ -66,9 +66,14 @@ function run(): void {
     newPassword: strongPassword,
   });
 
-  assertValid(ChangePasswordDto, {
+  assertInvalid(ChangePasswordDto, {
     currentPassword: 'CurrentPass123!',
     newPassword: '1',
+  });
+
+  assertInvalid(ChangePasswordDto, {
+    currentPassword: 'CurrentPass123!',
+    newPassword: '1234567',
   });
 
   assertInvalid(ChangePasswordDto, {
@@ -81,8 +86,8 @@ function run(): void {
     newPassword: '',
   });
 
-  if (MIN_PASSWORD_LENGTH !== 1) {
-    throw new Error('Password policy minimum should allow one-character passwords');
+  if (MIN_PASSWORD_LENGTH !== 8) {
+    throw new Error('Password policy minimum should be 8 characters for login passwords');
   }
 
   process.stdout.write('auth.dto.spec.ts passed\n');

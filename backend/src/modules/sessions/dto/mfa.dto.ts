@@ -1,5 +1,4 @@
 import { IsString, Length, MinLength } from 'class-validator';
-import { MIN_PASSWORD_LENGTH } from '../../../core/auth/utils/password-policy';
 
 /** رمز من تطبيق المصادقة (6 أرقام) أو رمز استرداد (19 محرفاً بالشُّرَط). */
 export class MfaCodeDto {
@@ -20,7 +19,10 @@ export class MfaLoginDto {
 
 export class DisableMfaDto {
   @IsString()
-  @MinLength(MIN_PASSWORD_LENGTH)
+  // Verification of an EXISTING credential, not a new password: keep
+  // the presence floor at 1 so legacy weak accounts can still
+  // authenticate to reach the password-change flow.
+  @MinLength(1)
   currentPassword!: string;
 
   @IsString()

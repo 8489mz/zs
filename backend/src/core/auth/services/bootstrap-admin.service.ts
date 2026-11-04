@@ -57,6 +57,10 @@ export class BootstrapAdminService implements OnApplicationBootstrap {
       return;
     }
 
+    // The single insertion point for bootstrap users: enforce the
+    // role-aware minimum here so no caller can seed a weak password.
+    assertStrongPassword(input.password, { role: input.role });
+
     const passwordRecord = await createPasswordRecord(input.password);
 
     const platformTenantId = String(this.configService.get<string>('PLATFORM_TENANT_ID') || 'zs').trim();
@@ -129,10 +133,10 @@ export class BootstrapAdminService implements OnApplicationBootstrap {
           this.logger.warn(`Platform Root Administrator 'zs' is missing in tenant '${targetTenantId}'. Set PLATFORM_SUPERADMIN_PASSWORD in environment to provision.`);
         } else {
           const FORBIDDEN_PASSWORDS = ['ZsAdmin2026', 'ChangeMe123!', 'Admin123!', 'Password123!', '12345678', 'admin', 'password', 'weak'];
-          if (FORBIDDEN_PASSWORDS.includes(operatorPassword) || operatorPassword.length < 10) {
-            throw new Error('Platform super-admin provisioning refuses to use published, default, or weak passwords (minimum 10 characters required)');
+          if (FORBIDDEN_PASSWORDS.includes(operatorPassword) || operatorPassword.length < 12) {
+            throw new Error('Platform super-admin provisioning refuses to use published, default, or weak passwords (minimum 12 characters required)');
           }
-          assertStrongPassword(operatorPassword, { minLength: 10 });
+          assertStrongPassword(operatorPassword, { role: 'super_admin' });
 
           const passwordRecord = await createPasswordRecord(operatorPassword);
           await this.db
@@ -254,7 +258,7 @@ export class BootstrapAdminService implements OnApplicationBootstrap {
       throw new Error('Bootstrap admin seeding refuses to start with the default administrator password or published credentials');
     }
 
-    assertStrongPassword(bootstrapSuperAdminPassword);
+    assertStrongPassword(bootstrapSuperAdminPassword, { role: 'super_admin' });
 
     await this.ensureBootstrapUser({
       username: bootstrapSuperAdminUsername,

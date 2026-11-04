@@ -478,7 +478,7 @@ export class UsersService {
     }
     const cleanPhone = this.normalizePhone(payload.phone, payload.countryCode);
     await this.ensureUniquePhone(cleanPhone, actor);
-    assertStrongPassword(payload.password);
+    assertStrongPassword(payload.password, { role: payload.role });
 
     const isPlatformTenant = isPlatformTenantId(scope.tenantId);
     const isPlatformAdmin = actor.role === 'super_admin' && isPlatformTenant;
@@ -648,7 +648,10 @@ export class UsersService {
     }
 
     if (payload.password) {
-      assertStrongPassword(payload.password);
+      // Role falls back to the stored role when the update does not
+      // carry one; the admin/super_admin demotion in non-platform
+      // tenants does not matter here (both require 12).
+      assertStrongPassword(payload.password, { role: payload.role ?? existing.role });
       const passwordRecord = await createPasswordRecord(payload.password);
       updates.password_hash = passwordRecord.hash;
       updates.password_salt = passwordRecord.salt;
@@ -714,7 +717,7 @@ export class UsersService {
       throw new AppError('كلمة المرور القديمة غير صحيحة', 'INVALID_OLD_PASSWORD', 400);
     }
 
-    assertStrongPassword(payload.newPassword);
+    assertStrongPassword(payload.newPassword, { role: existing.role });
     const passwordRecord = await createPasswordRecord(payload.newPassword);
 
     await this.tx.runInTransaction(this.db, async (trx) => {

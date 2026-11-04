@@ -374,8 +374,8 @@ async function run(): Promise<void> {
     await service.changePassword(auth, password, '   ');
   }, /PASSWORD_REQUIRED/);
 
-  await service.changePassword(auth, password, '1');
-  await service.changePassword(auth, '1', 'AdminEvenStronger123!');
+  await service.changePassword(auth, password, 'TempPass1234');
+  await service.changePassword(auth, 'TempPass1234', 'AdminEvenStronger123!');
 
   // Verify that any user belonging to a non-platform tenant CAN NEVER have super_admin role
   const tenantUser: UserRow = {

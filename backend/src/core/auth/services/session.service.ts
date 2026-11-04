@@ -916,7 +916,7 @@ export class SessionService {
     if (!user) throw new Error('User not found');
     const currentPasswordCheck = await verifyPassword(currentPassword, user.password_hash, user.password_salt);
     if (!currentPasswordCheck.valid) throw new Error('Current password is incorrect');
-    assertStrongPassword(newPassword);
+    assertStrongPassword(newPassword, { role: auth.role });
     const nextPassword = await createPasswordRecord(newPassword);
     await this.db.transaction().execute(async (trx) => {
       await trx.updateTable('users').set({ password_hash: nextPassword.hash, password_salt: nextPassword.salt, must_change_password: false, failed_login_count: 0, locked_until: null }).where('id', '=', auth.userId).where(sql<boolean>`tenant_id = ${tenantId}`).execute();

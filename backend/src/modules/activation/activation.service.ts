@@ -256,7 +256,9 @@ export class ActivationService {
     const userCount = await this.getUserCount();
     if (userCount > 0) throw new ForbiddenException('تمت التهيئة الاولى مسبقا.');
 
-    assertStrongPassword(dto.adminPassword);
+    // The first portable user is an admin/super_admin account, so the
+    // admin minimum (12) applies to both platform and tenant scopes.
+    assertStrongPassword(dto.adminPassword, { role: 'admin' });
     const passwordRecord = await createPasswordRecord(dto.adminPassword);
     const scope = this.getPortableScope();
 

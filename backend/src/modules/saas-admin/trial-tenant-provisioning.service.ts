@@ -340,7 +340,8 @@ export class TrialTenantProvisioningService {
    * would silently have missed tenant provisioning.
    */
   private assertStrongTrialPassword(password: string): void {
-    assertStrongPassword(password);
+    // Trial tenants are provisioned with an admin account.
+    assertStrongPassword(password, { role: 'admin' });
   }
 
   private generatePassword(): string {

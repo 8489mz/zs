@@ -1,6 +1,22 @@
 import { AppError } from '../../../common/errors/app-error';
 
-export const MIN_PASSWORD_LENGTH = 1;
+export const MIN_PASSWORD_LENGTH = 8;
+
+/** Minimum login-password length for admin/super_admin accounts. */
+export const ADMIN_MIN_PASSWORD_LENGTH = 12;
+
+/**
+ * Role-aware login-password minimum. Admin and super_admin accounts
+ * guard tenant-wide money and settings, so they require 12 characters;
+ * every other role requires 8. Unknown or missing roles fail to the
+ * ordinary 8-character floor, never to the old one-character rule.
+ */
+export function passwordMinLengthForRole(role: unknown): number {
+  const normalized = String(role ?? '').trim().toLowerCase();
+  return normalized === 'admin' || normalized === 'super_admin'
+    ? ADMIN_MIN_PASSWORD_LENGTH
+    : MIN_PASSWORD_LENGTH;
+}
 
 /**
  * Common trivial/weak passcodes that should be rejected across portals and field credentials.
@@ -53,9 +69,9 @@ export function assertSecurePasscode(
 
 export function assertStrongPassword(
   password: string,
-  options?: { minLength?: number; code?: string; message?: string },
+  options?: { minLength?: number; role?: unknown; code?: string; message?: string },
 ): void {
-  const minLength = options?.minLength ?? MIN_PASSWORD_LENGTH;
+  const minLength = options?.minLength ?? passwordMinLengthForRole(options?.role);
   const normalized = String(password ?? '');
   const trimmed = normalized.trim();
 
