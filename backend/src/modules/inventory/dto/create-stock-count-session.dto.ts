@@ -104,6 +104,6 @@ export class RecountStockCountItemDto {
   batchCounts?: StockCountBatchDto[];
 
   @IsString()
-  @MinLength(8)
+  @MinLength(1)
   reason!: string;
 }
