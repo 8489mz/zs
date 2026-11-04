@@ -702,6 +702,15 @@ export class ManufacturingService {
         throw new AppError('شجرة المكونات (BOM) غير موجودة', 'BOM_NOT_FOUND', 404);
       }
 
+      // INV-MANUFACTURING-UNBUILD-BOM-BINDING: an unbuild may
+      // only use a BOM that belongs to the product being
+      // unbuilt. Any active BOM previously satisfied this
+      // fetch, so a BOM written for another product silently
+      // recovered the wrong components into stock.
+      if (Number(bom.product_id) !== Number(payload.productId)) {
+        throw new AppError('شجرة المكونات لا تخص المنتج المراد تفكيكه', 'BOM_PRODUCT_MISMATCH', 400);
+      }
+
       const bomLines = await trx
         .selectFrom('manufacturing_bom_lines as l')
         .innerJoin('products as p', 'p.id', 'l.component_product_id')
