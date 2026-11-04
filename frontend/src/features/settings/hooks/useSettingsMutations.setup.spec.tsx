@@ -107,6 +107,11 @@ const baseSettingsMutationValues = {
   posMaxDiscountThresholdEnabled: false,
   posMaxDiscountThresholdType: 'percentage' as const,
   posMaxDiscountThresholdValue: 15,
+  // INV-SETTINGS-SPEC-FIXTURE-FIELDS: the Q3/Q6 settings are required
+  // SettingsFormOutput fields (schema defaults 2 / 500); the fixture
+  // must carry them or frontend typecheck fails on both mutate calls.
+  posSmallDiscountFlatAllowance: 2,
+  posLargeCashRefundThreshold: 500,
   requireCashierShiftForSales: true,
   requirePasswordOnShiftOpen: false,
   restaurantServiceChargeEnabled: false,
