@@ -918,6 +918,10 @@ export class CashDrawerService {
         throw new AppError('أدخل كلمة المرور لتأكيد فتح الوردية', 'CURRENT_USER_PASSWORD_REQUIRED', 400);
       }
       await this.assertCurrentUserPassword(password, auth);
+    } else if (password) {
+      // A supplied password is never silently ignored: the shift-open modal
+      // always shows the confirmation field, so a typed password must verify.
+      await this.assertCurrentUserPassword(password, auth);
     }
 
     await this.tx.runInTransaction(this.db, async (trx) => {

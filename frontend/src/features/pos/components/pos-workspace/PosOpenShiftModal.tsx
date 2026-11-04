@@ -7,6 +7,7 @@ import { SubmitButton } from '@/shared/components/submit-button';
 import { MutationFeedback } from '@/shared/components/mutation-feedback';
 import { cashDrawerApi } from '@/lib/api/cash-drawer';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
+import { useAuthStore } from '@/stores/auth-store';
 import { SINGLE_STORE_MODE } from '@/config/product-scope';
 import type { Branch, Location } from '@/types/domain';
 
@@ -33,6 +34,7 @@ export function PosOpenShiftModal(props: PosOpenShiftModalProps) {
   const { t } = useTranslation();
   const { open, onClose, branches, locations, defaultBranchId, defaultLocationId, requirePassword, onShiftOpened } = props;
   const { data: settings } = useSettingsQuery();
+  const opener = useAuthStore((state) => state.user);
   const isPasswordRequired = requirePassword ?? Boolean(settings?.requirePasswordOnShiftOpen);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -112,7 +114,15 @@ export function PosOpenShiftModal(props: PosOpenShiftModalProps) {
   return (
     <DialogShell open={open} onClose={onClose} width="min(600px, 100%)">
       <div style={{ background: '#fff', padding: '24px', borderRadius: '8px' }}>
-        <h2 style={{ marginTop: 0, marginBottom: '24px' }}>{t('pos.pos_workspace.pos_open_shift_modal.s0', "فتح وردية نقطة بيع")}</h2>
+        <h2 style={{ marginTop: 0, marginBottom: '12px' }}>{t('pos.pos_workspace.pos_open_shift_modal.s0', "فتح وردية نقطة بيع")}</h2>
+        <div
+          data-testid="shift-opener-identity"
+          style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', marginBottom: '16px', fontSize: '0.85rem' }}
+        >
+          {t('pos.pos_workspace.pos_open_shift_modal.opener_label', 'سيتم فتح الوردية باسم:')}{' '}
+          <strong>{opener?.displayName || opener?.username || ''}</strong>
+          {opener?.username ? ` (${opener.username})` : ''}
+        </div>
         <form className="form-grid" onSubmit={handleSubmit(onSubmit)}>
           <Field label={t('pos.pos_workspace.pos_open_shift_modal.s1', "رصيد الفتح")}>
             <input
@@ -166,19 +176,19 @@ export function PosOpenShiftModal(props: PosOpenShiftModalProps) {
             </Field>
           )}
 
-          {isPasswordRequired ? (
-            <Field label={t('pos.pos_workspace.pos_open_shift_modal.password_label', "كلمة مرور المستخدم الحالي (تأكيد الفتح)")}>
-              <input
-                type="password"
-                placeholder={t('pos.pos_workspace.pos_open_shift_modal.password_placeholder', "أدخل كلمة المرور لتأكيد فتح الوردية")}
-                required
-                {...register('password', { required: isPasswordRequired })}
-                disabled={isPending}
-                autoComplete="off"
-                data-lpignore="true"
-              />
-            </Field>
-          ) : null}
+          <Field label={t('pos.pos_workspace.pos_open_shift_modal.password_label', "كلمة مرور المستخدم الحالي (تأكيد الفتح)")}>
+            <input
+              type="password"
+              placeholder={isPasswordRequired
+                ? t('pos.pos_workspace.pos_open_shift_modal.password_placeholder', "أدخل كلمة المرور لتأكيد فتح الوردية")
+                : t('pos.pos_workspace.pos_open_shift_modal.password_placeholder_optional', "أدخل كلمة المرور لتأكيد فتح الوردية (اختياري)")}
+              required={isPasswordRequired}
+              {...register('password', { required: isPasswordRequired })}
+              disabled={isPending}
+              autoComplete="off"
+              data-lpignore="true"
+            />
+          </Field>
 
           <Field label={t('pos.pos_workspace.pos_open_shift_modal.s9', "ملاحظة الافتتاح")}>
             <textarea rows={2} {...register('note')} disabled={isPending} />
