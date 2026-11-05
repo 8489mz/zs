@@ -5,6 +5,7 @@ import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../common/errors/app-error';
 import { paginateRows } from '../../common/utils/pagination';
+import { getTenantTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { TransactionHelper } from '../../database/helpers/transaction.helper';
@@ -116,7 +117,19 @@ export class ServicesService {
 
     const search = String(query.search || '').trim().toLowerCase();
     const filter = String(query.filter || 'all').trim().toLowerCase();
-    const today = new Date().toISOString().slice(0, 10);
+    // INV-SERVICES-TODAY-COUNT: "today" is the TENANT-local day, and a row
+    // counts when its service_date falls on that day. The old code compared
+    // String(row.serviceDate).slice(0, 10) with a UTC ISO date -- but
+    // service_date is TIMESTAMPTZ, which pg returns as a JS Date, so
+    // String(date) is "Wed Nov 05 ..." and the comparison could never
+    // match (todayCount was always 0); and the UTC day itself was wrong
+    // for 00:00-02:00 Cairo. Format the row's date in the tenant timezone.
+    const businessTz = await getTenantTimezone(db, scope.tenantId);
+    const today = todayTenantDate(businessTz);
+    const isToday = (value: unknown): boolean => {
+      const date = value instanceof Date ? value : new Date(String(value ?? ''));
+      return Number.isFinite(date.getTime()) && todayTenantDate(businessTz, date) === today;
+    };
 
     let rows = result.rows.map((row) => ({
       id: String(row.id),
@@ -132,7 +145,7 @@ export class ServicesService {
       createdByName: row.created_by_name || '',
     }));
 
-    if (filter === 'today') rows = rows.filter((row) => String(row.serviceDate || '').slice(0, 10) === today);
+    if (filter === 'today') rows = rows.filter((row) => isToday(row.serviceDate));
     else if (filter === 'high') rows = rows.filter((row) => Number(row.amount || 0) >= 100);
     else if (filter === 'notes') rows = rows.filter((row) => String(row.notes || '').trim().length > 0);
 
@@ -144,7 +157,7 @@ export class ServicesService {
     const totalAmount = Number(rows.reduce((sum, row) => sum + Number(row.amount || 0), 0).toFixed(2));
     const cashAmount = Number(rows.filter((row) => row.paymentChannel === 'cash').reduce((sum, row) => sum + Number(row.amount || 0), 0).toFixed(2));
     const cardAmount = Number(rows.filter((row) => row.paymentChannel === 'card').reduce((sum, row) => sum + Number(row.amount || 0), 0).toFixed(2));
-    const todayRows = rows.filter((row) => String(row.serviceDate || '').slice(0, 10) === today);
+    const todayRows = rows.filter((row) => isToday(row.serviceDate));
     const highestAmount = rows.length ? Math.max(...rows.map((row) => Number(row.amount || 0))) : 0;
     const latest = rows[0] || null;
 
