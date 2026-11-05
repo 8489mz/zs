@@ -419,7 +419,17 @@ export class InventoryTransferService {
       }
       // INV-TRANSFER-RECEIPT-PINNED: the first shrinkage journal id is
       // stamped on the header; the dead column now records the write-off.
-      await trx.updateTable('stock_transfers').set({ status: 'received', to_location_id: effectiveToLocationId, received_by: auth.userId, received_at: sql`NOW()`, has_transit_variance: anyVariance, transit_variance_journal_entry_id: shrinkageJournalIds[0] ?? null, updated_at: sql`NOW()` } as any).where('id', '=', transferId).where(this.tenantPredicate(auth)).execute();
+      // INV-TRANSFER-SAME-BRANCH-RECEIPT: a branch -> same-branch transfer
+      // resolves its destination to the source location itself. Stamping
+      // that equal value into to_location_id would violate the
+      // stock_transfers_location_diff CHECK (from_location_id <>
+      // to_location_id) and fail the whole receipt with a generic error
+      // after every named check passed. Leave the header's
+      // to_location_id as stored (NULL) in that case; the stock legs
+      // and the status still post normally.
+      const headerUpdate: Record<string, unknown> = { status: 'received', received_by: auth.userId, received_at: sql`NOW()`, has_transit_variance: anyVariance, transit_variance_journal_entry_id: shrinkageJournalIds[0] ?? null, updated_at: sql`NOW()` };
+      if (Number(effectiveToLocationId) !== Number(transfer.from_location_id)) headerUpdate.to_location_id = effectiveToLocationId;
+      await trx.updateTable('stock_transfers').set(headerUpdate as any).where('id', '=', transferId).where(this.tenantPredicate(auth)).execute();
 
       await this.audit.logWithExecutor(trx, 'استلام تحويل مخزون', `تم استلام التحويل TR-${transferId}`, auth);
 

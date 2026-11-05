@@ -303,13 +303,13 @@ function mapKnownCode(code: KnownPgCode, error: PgErrorLike, message: string, de
   if (code === '23502') return mapNotNullViolation(error, message, detail);
   if (code === '23505') return mapUniqueViolation(error, message, detail);
   if (code === '23503') return mapForeignKeyViolation(error, message, detail);
-  if (code === '23514') return new AppError(MSG_INVALID_FIELD, 'DB_CHECK_VIOLATION', 400);
+  if (code === '23514') return new AppError(MSG_INVALID_FIELD, 'DB_CHECK_VIOLATION', 400, { constraint: asText(error.constraint) || null });
   if (code === '42703') return new AppError(MSG_UNDEFINED_COLUMN, 'DB_UNDEFINED_COLUMN', 500);
   if (code === '42P01') return new AppError(MSG_UNDEFINED_TABLE, 'DB_UNDEFINED_TABLE', 500);
   if (code === '22001') return new AppError(MSG_TEXT_TOO_LONG, 'DB_STRING_TOO_LONG', 400);
   if (code === '40P01') return new AppError('تعذّر إتمام العملية بسبب تعارض مع عملية متزامنة، يرجى إعادة المحاولة.', 'STOCK_CONFLICT', 409);
   if (code === '40001') return new AppError('تعذّر إتمام العملية بسبب تعارض في البيانات، يرجى إعادة المحاولة.', 'STOCK_CONFLICT', 409);
-  return new AppError(MSG_INVALID_FIELD, 'DB_INVALID_TEXT_REPRESENTATION', 400);
+  return new AppError(MSG_INVALID_FIELD, 'DB_INVALID_TEXT_REPRESENTATION', 400, { message: message || null });
 }
 
 function mapByRawMessage(error: PgErrorLike, message: string, detail: string): AppError | null {

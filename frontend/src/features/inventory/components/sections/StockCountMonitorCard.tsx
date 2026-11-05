@@ -529,7 +529,7 @@ export function StockCountMonitorCard({
           </div>
         </FormSection>
 
-        <MutationFeedback isError={Boolean(transferError) || Boolean(postError)} isSuccess={transferSuccess || postSuccess} error={transferError || postError} errorFallback={t('inventory.sections.stock_count_monitor_card.s62', "تعذر تنفيذ العملية")} successText={t('inventory.sections.stock_count_monitor_card.s63', "تم تنفيذ العملية بنجاح.")} />
+        <MutationFeedback isError={Boolean(transferError) || Boolean(postError)} isSuccess={transferSuccess || postSuccess} error={transferError || postError} showErrorCode errorFallback={t('inventory.sections.stock_count_monitor_card.s62', "تعذر تنفيذ العملية")} successText={t('inventory.sections.stock_count_monitor_card.s63', "تم تنفيذ العملية بنجاح.")} />
       </>
     );
   }
@@ -793,7 +793,7 @@ export function StockCountMonitorCard({
           </div>
         </QueryFeedback>
 
-        <MutationFeedback isError={Boolean(transferError) || Boolean(postError)} isSuccess={transferSuccess || postSuccess} error={transferError || postError} errorFallback={t('inventory.sections.stock_count_monitor_card.s62', "تعذر تنفيذ العملية")} successText={t('inventory.sections.stock_count_monitor_card.s63', "تم تنفيذ العملية بنجاح.")} />
+        <MutationFeedback isError={Boolean(transferError) || Boolean(postError)} isSuccess={transferSuccess || postSuccess} error={transferError || postError} showErrorCode errorFallback={t('inventory.sections.stock_count_monitor_card.s62', "تعذر تنفيذ العملية")} successText={t('inventory.sections.stock_count_monitor_card.s63', "تم تنفيذ العملية بنجاح.")} />
       </div>
     </FormSection>
   );

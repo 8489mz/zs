@@ -50,6 +50,28 @@ function run(): void {
     code: 'DB_FOREIGN_KEY_VIOLATION',
     details: null,
   });
+  const check = mapToHttpException({
+    code: '23514',
+    constraint: 'stock_transfers_location_diff',
+    message: 'new row for relation "stock_transfers" violates check constraint "stock_transfers_location_diff"',
+  });
+  assert.equal(check.getStatus(), 400);
+  assert.deepEqual(check.getResponse(), {
+    message: 'قيمة غير صحيحة في أحد الحقول.',
+    code: 'DB_CHECK_VIOLATION',
+    details: { constraint: 'stock_transfers_location_diff' },
+  });
+
+  const invalidText = mapToHttpException({
+    code: '22P02',
+    message: 'invalid input syntax for type numeric: "NaN"',
+  });
+  assert.equal(invalidText.getStatus(), 400);
+  assert.deepEqual(invalidText.getResponse(), {
+    message: 'قيمة غير صحيحة في أحد الحقول.',
+    code: 'DB_INVALID_TEXT_REPRESENTATION',
+    details: { message: 'invalid input syntax for type numeric: "NaN"' },
+  });
 }
 
 run();
