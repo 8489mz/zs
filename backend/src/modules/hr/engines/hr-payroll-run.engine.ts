@@ -85,11 +85,21 @@ export function calculateHrPayrollRunLine(input: HrPayrollRunLineInput) {
   const taxableWage = Math.max(0, money(
     taxableBeforeInsurance - (input.policy.taxDeductEmployeeInsurance ? insurance.employeeInsurance : 0), minorUnits,
   ));
+  // D3 (INV-JOINER-TAX-FULL-MONTH-EQUIVALENT): tax is annualised on the
+  // full-month-equivalent wage, not on prorated earnings. The statutory
+  // engine annualises its input, so a partial-month employee's taxable
+  // wage is grossed up by the employment fraction first. A fraction of 1,
+  // absent, or outside (0, 1) leaves the wage unchanged: the guard can
+  // only ever raise the tax base, never lower it, and never divides by 0.
+  const employmentFraction = input.employmentMonthFraction ?? 1;
+  const fullMonthEquivalentTaxableWage = employmentFraction > 0 && employmentFraction < 1
+    ? money(taxableWage / employmentFraction, minorUnits)
+    : taxableWage;
   const tax = calculateHrStatutoryAmounts(
     { ...input.policy, hrSocialInsuranceEnabled: false },
     input.period,
     { insured: false, taxable: input.eligibility.taxable,
-      insuranceWage: 0, taxableMonthlyWage: taxableWage },
+      insuranceWage: 0, taxableMonthlyWage: fullMonthEquivalentTaxableWage },
     minorUnits,
   );
 
