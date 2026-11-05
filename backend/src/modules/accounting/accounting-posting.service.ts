@@ -6392,17 +6392,12 @@ export class AccountingPostingService {
     const expenseAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '6200'); // Salaries & EOS Expense
     const advancesAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1160'); // Employee Advances
     const otherIncomeAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7100'); // Other Income / Custody Recovery
-
-    let paymentAccountId: number;
-    if (treasuryAccountId && Number(treasuryAccountId) > 0) {
-      paymentAccountId = Number(treasuryAccountId);
-    } else {
-      const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
-      paymentAccountId = Number(settings?.cash_account_id || 0);
-      if (!(paymentAccountId > 0)) {
-        paymentAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1110');
-      }
-    }
+    // D1 (INV-EOS-SETTLEMENT-PAYABLE-FIRST): the settlement journal credits
+    // the payroll payable (2140) for the net payable. It never credits cash
+    // or a treasury account: cash moves only on a separate, evidenced payout
+    // step. The treasuryAccountId argument is accepted for that future payout
+    // step and is deliberately not used by this journal.
+    const payableAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '2140'); // Payroll Payable
 
     const lines: JournalLineDraft[] = [];
 
@@ -6460,11 +6455,11 @@ export class AccountingPostingService {
       });
     }
 
-    // 5. Credit: Net settlement payable / payout
+    // 5. Credit: Net settlement payable (2140) — payable first, never cash
     if (netPayable > 0) {
       addBookLine({
-        accountId: paymentAccountId,
-        description: `صرف مستحقات مخالصة نهاية الخدمة #${settlement.settlement_no}`,
+        accountId: payableAccountId,
+        description: `مستحقات مخالصة نهاية خدمة مستحقة الدفع #${settlement.settlement_no}`,
         debit: 0,
         credit: netPayable,
         partnerType: 'employee',
