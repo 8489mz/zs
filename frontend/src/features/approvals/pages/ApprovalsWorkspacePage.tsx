@@ -252,7 +252,10 @@ export const ApprovalsWorkspacePage: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'rules' && <ApprovalRulesManager />}
+      {/* INV-APPROVALS-SUMMARY-COUNT: reload the summary counts whenever the
+          manager mutates a rule, otherwise rulesCount stays a mount-time
+          snapshot (0 after a rule is created) until a full page reload. */}
+      {activeTab === 'rules' && <ApprovalRulesManager onRulesChanged={() => loadData()} />}
 
       <ApprovalActionModal
         isOpen={actionModalOpen}

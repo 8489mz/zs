@@ -14,7 +14,17 @@ import { StandardDialog } from '@/shared/components/StandardDialog';
 import { systemConfirm } from '@/shared/components/system-alert';
 import { PlusIcon, TrashIcon, CheckIcon, ShieldAlertIcon } from '@/shared/components/icons/AppIcons';
 
-export const ApprovalRulesManager: React.FC = () => {
+export interface ApprovalRulesManagerProps {
+  /**
+   * INV-APPROVALS-SUMMARY-COUNT: called after every rules mutation
+   * (create / toggle / delete) so the parent page can refresh its summary
+   * counts. The manager used to reload only itself, leaving the parent's
+   * mount-time rulesCount stale until a full page reload.
+   */
+  onRulesChanged?: () => void;
+}
+
+export const ApprovalRulesManager: React.FC<ApprovalRulesManagerProps> = ({ onRulesChanged }) => {
   const { t } = useTranslation();
   const [rules, setRules] = useState<ApprovalRule[]>([]);
   const [loading, setLoading] = useState(false);
@@ -61,6 +71,7 @@ export const ApprovalRulesManager: React.FC = () => {
       });
       setModalOpen(false);
       loadRules();
+      onRulesChanged?.();
     } catch (err: any) {
       setErrorMessage(err?.response?.data?.message || err?.message || 'فشل حفظ قاعدة الموافقة.');
     } finally {
@@ -72,6 +83,7 @@ export const ApprovalRulesManager: React.FC = () => {
     try {
       await updateApprovalRule(rule.id, { isActive: !rule.is_active });
       loadRules();
+      onRulesChanged?.();
     } catch {
       // Resilience
     }
@@ -82,6 +94,7 @@ export const ApprovalRulesManager: React.FC = () => {
     try {
       await deleteApprovalRule(id);
       loadRules();
+      onRulesChanged?.();
     } catch {
       // Resilience
     }
