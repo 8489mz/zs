@@ -156,6 +156,13 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
+    # CI runner Node heap (~2 GB) is too small for this frontend's `tsc -b`:
+    # the build dies with "JavaScript heap out of memory", exit 134, while
+    # the same build passes on a dev machine in 43 s. Raise the heap for
+    # this job only -- local builds are fine without it. If CI still OOMs,
+    # raise to 6144/8192; do not change frontend code for a runner limit.
+    env:
+      NODE_OPTIONS: '--max-old-space-size=4096'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
