@@ -10,6 +10,9 @@
  * 6. احتساب الرصيد التراكمي (Running Balance) والمركز المالي (دائن / مدين / خالص).
  */
 
+import { MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+
+
 export interface EmployeeFinancialProfile {
   id: number | string;
   employeeNo?: string;
@@ -134,10 +137,6 @@ export interface FinancialStatementResult {
   monthlyBreakdown: MonthlyBreakdownItem[];
 }
 
-function round2(num: number): number {
-  return Number(Math.round(Number(num + 'e+2')) + 'e-2');
-}
-
 export function buildEmployeeFinancialStatement(params: {
   employee: EmployeeFinancialProfile;
   payrollItems: FinancialPayrollItem[];
@@ -145,8 +144,12 @@ export function buildEmployeeFinancialStatement(params: {
   adjustments: FinancialAdjustmentRecord[];
   ledger: FinancialLedgerRecord[];
   filter?: StatementFilter;
+  /** Tenant book digits (REQUIRED): statement money is rounded at book precision, never a silent 2dp. */
+  minorUnits: MoneyDigits;
 }): FinancialStatementResult {
-  const { employee, payrollItems, loans, adjustments, ledger, filter } = params;
+  const { employee, payrollItems, loans, adjustments, ledger, filter, minorUnits } = params;
+  // Settled band is half a minor unit: at 3dp a 0.004 remainder is a credit, not settled.
+  const halfMinor = 1 / (2 * (10 ** minorUnits));
 
   const rawTxns: Array<{
     id: string;
@@ -187,7 +190,7 @@ export function buildEmployeeFinancialStatement(params: {
       referenceId: String(loan.id),
       actorName: loan.createdByName || '',
       channel: loan.notes?.includes('وردية كاشير') ? 'وردية كاشير' : 'خزينة / بنك',
-      debit: round2(Number(loan.principalAmount || 0)),
+      debit: roundMoney(Number(loan.principalAmount || 0), minorUnits),
       credit: 0,
     });
   }
@@ -211,7 +214,7 @@ export function buildEmployeeFinancialStatement(params: {
         actorName: entry.createdByName || '',
         channel: 'نقدية',
         debit: 0,
-        credit: round2(amount),
+        credit: roundMoney(amount, minorUnits),
       });
     }
   }
@@ -234,12 +237,12 @@ export function buildEmployeeFinancialStatement(params: {
     const netTimestamp = item.paidAt || `${defaultDate} 12:00`;
 
     // 3.A Gross Earnings (Credit - استحقاق الراتب)
-    const grossPay = round2(Number(item.grossPay || 0));
+    const grossPay = roundMoney(Number(item.grossPay || 0), minorUnits);
     // A loan withheld from payroll offsets the employee's existing advance,
     // but tax/insurance, attendance reductions and asset recoveries are NOT
     // liabilities owed to the employee. Their gross amount is informational.
-    const employeeEntitlement = round2(Number(item.netPay || 0) + Number(item.loanDeductionAmount || 0));
-    if (employeeEntitlement < 0 || employeeEntitlement > grossPay + 0.01) {
+    const employeeEntitlement = roundMoney(Number(item.netPay || 0) + Number(item.loanDeductionAmount || 0), minorUnits);
+    if (employeeEntitlement < 0 || employeeEntitlement > grossPay + halfMinor) {
       throw new RangeError('Employee payroll settlement exceeds gross accrued wage');
     }
     if (grossPay > 0) {
@@ -249,7 +252,7 @@ export function buildEmployeeFinancialStatement(params: {
         timestamp: grossTimestamp,
         category: 'salary_entitlement',
         typeLabel: `استحقاق راتب شهر ${monthStr}`,
-        description: `إجمالي المرتب: ${grossPay} | صافٍ مستحق نقديًا: ${round2(item.netPay)} | سلفة مقاصة: ${round2(item.loanDeductionAmount)}`,
+        description: `إجمالي المرتب: ${grossPay} | صافٍ مستحق نقديًا: ${roundMoney(item.netPay, minorUnits)} | سلفة مقاصة: ${roundMoney(item.loanDeductionAmount, minorUnits)}`,
         referenceType: 'hr_payroll_run_item',
         referenceId: String(item.id),
         actorName: item.paidByName || '',
@@ -261,7 +264,7 @@ export function buildEmployeeFinancialStatement(params: {
 
     // 3.B Salary Actual Payout (Debit - قبض المرتب الفعلي)
     if (isItemPaid) {
-      const netPay = round2(Number(item.netPay || 0));
+      const netPay = roundMoney(Number(item.netPay || 0), minorUnits);
       if (netPay > 0) {
         rawTxns.push({
           id: `payroll-net-${item.id}`,
@@ -288,7 +291,7 @@ export function buildEmployeeFinancialStatement(params: {
     if (adj.status === 'cancelled') continue;
     const date = (adj.date || '').slice(0, 10);
     const timestamp = date ? `${date} 11:00` : new Date().toISOString();
-    const amount = round2(Number(adj.amount || 0));
+    const amount = roundMoney(Number(adj.amount || 0), minorUnits);
 
     // If applied in an approved/paid run, it's already accounted in grossPay or deductions,
     // so we label it as unapplied or applied. For unapplied adjustments:
@@ -332,7 +335,7 @@ export function buildEmployeeFinancialStatement(params: {
   let running = 0;
   const transactionsWithBalance: UnifiedTransaction[] = rawTxns.map((tx) => {
     // Balance formula: Credit (له / استحقاق) - Debit (عليه / مسحوب وقبض)
-    running = round2(running + tx.credit - tx.debit);
+    running = roundMoney(running + tx.credit - tx.debit, minorUnits);
     return {
       ...tx,
       runningBalance: running,
@@ -340,56 +343,56 @@ export function buildEmployeeFinancialStatement(params: {
   });
 
   // Calculate Global Totals
-  const totalGrossEarnings = round2(
+  const totalGrossEarnings = roundMoney(
     payrollItems
       .filter((i) => (['approved', 'partially_paid', 'paid'].includes(i.runStatus) || i.itemStatus === 'paid') && i.itemStatus !== 'excluded')
       .reduce((sum, i) => sum + Number(i.grossPay || 0), 0)
-  );
+  , minorUnits);
 
-  const totalPaidSalaries = round2(
+  const totalPaidSalaries = roundMoney(
     payrollItems
       .filter((i) => (i.itemStatus === 'paid' || i.runStatus === 'paid') && i.itemStatus !== 'excluded')
       .reduce((sum, i) => sum + Number(i.netPay || 0), 0)
-  );
+  , minorUnits);
 
-  const totalWithdrawals = round2(
+  const totalWithdrawals = roundMoney(
     loans
       .filter((l) => ['paid', 'partially_repaid', 'repaid', 'disbursed'].includes(l.status))
       .reduce((sum, l) => sum + Number(l.principalAmount || 0), 0)
-  );
+  , minorUnits);
 
-  const totalRepayments = round2(
+  const totalRepayments = roundMoney(
     loans
       .filter((l) => ['paid', 'partially_repaid', 'repaid', 'disbursed'].includes(l.status))
       .reduce((sum, l) => sum + Number(l.paidAmount || 0), 0)
-  );
+  , minorUnits);
 
-  const remainingLoanDebt = round2(
+  const remainingLoanDebt = roundMoney(
     loans
       .filter((l) => ['paid', 'partially_repaid', 'disbursed'].includes(l.status))
       .reduce((sum, l) => sum + Number(l.remainingAmount || 0), 0)
-  );
+  , minorUnits);
 
-  const totalPenalties = round2(
+  const totalPenalties = roundMoney(
     payrollItems
       .filter((i) => ['approved', 'paid'].includes(i.runStatus) && i.itemStatus !== 'excluded')
       .reduce((sum, i) => sum + Number(i.penaltyDeduction || 0), 0)
-  );
+  , minorUnits);
 
-  const totalAllowances = round2(
+  const totalAllowances = roundMoney(
     payrollItems
       .filter((i) => ['approved', 'paid'].includes(i.runStatus) && i.itemStatus !== 'excluded')
       .reduce((sum, i) => sum + Number(i.allowanceAmount || 0), 0)
-  );
+  , minorUnits);
 
   // Net Balance: Total Gross - Total Paid - Remaining Debt - Unapplied Penalties
   // If positive: Company owes employee (Credit)
   // If negative: Employee owes company (Debit / Over-withdrawn)
   const netFinancialBalance = running;
   let balanceStatus: 'credit' | 'debit' | 'settled' = 'settled';
-  if (netFinancialBalance > 0.009) {
+  if (netFinancialBalance > halfMinor) {
     balanceStatus = 'credit';
-  } else if (netFinancialBalance < -0.009) {
+  } else if (netFinancialBalance < -halfMinor) {
     balanceStatus = 'debit';
   }
 
@@ -427,28 +430,28 @@ export function buildEmployeeFinancialStatement(params: {
   const monthlyBreakdown: MonthlyBreakdownItem[] = sortedMonths.map((m) => {
     const mPayrolls = payrollItems.filter((p) => p.periodMonth === m
       && (['approved', 'partially_paid', 'paid'].includes(p.runStatus) || p.itemStatus === 'paid') && p.itemStatus !== 'excluded');
-    const gross = round2(mPayrolls.reduce((sum, p) => sum + Number(p.grossPay || 0), 0));
-    const paid = round2(mPayrolls.filter((p) => p.itemStatus === 'paid' || p.runStatus === 'paid').reduce((sum, p) => sum + Number(p.netPay || 0), 0));
+    const gross = roundMoney(mPayrolls.reduce((sum, p) => sum + Number(p.grossPay || 0), 0), minorUnits);
+    const paid = roundMoney(mPayrolls.filter((p) => p.itemStatus === 'paid' || p.runStatus === 'paid').reduce((sum, p) => sum + Number(p.netPay || 0), 0), minorUnits);
 
     const mLoans = loans.filter((l) => {
       const d = (l.disbursedAt || l.createdAt || l.issueDate || '').slice(0, 7);
       return d === m && ['paid', 'partially_repaid', 'repaid', 'disbursed'].includes(l.status);
     });
-    const withdrawals = round2(mLoans.reduce((sum, l) => sum + Number(l.principalAmount || 0), 0));
+    const withdrawals = roundMoney(mLoans.reduce((sum, l) => sum + Number(l.principalAmount || 0), 0), minorUnits);
     // Repayments belong to the month they were actually recorded, not the
     // disbursement month of a now-partially-repaid loan.
-    const repayments = round2(ledger.filter(l =>
+    const repayments = roundMoney(ledger.filter(l =>
       l.entryType === 'loan_repayment' && (l.createdAt || '').slice(0, 7) === m
-    ).reduce((sum, l) => sum + Math.abs(Number(l.amount || 0)), 0));
+    ).reduce((sum, l) => sum + Math.abs(Number(l.amount || 0)), 0), minorUnits);
 
-    const mPenalties = round2(mPayrolls.reduce((sum, p) => sum + Number(p.penaltyDeduction || 0), 0));
+    const mPenalties = roundMoney(mPayrolls.reduce((sum, p) => sum + Number(p.penaltyDeduction || 0), 0), minorUnits);
 
     // Monthly net is the actual movement in this statement's running balance.
     // Re-deriving it from gross ignores statutory withholdings and duplicates
     // applied adjustments; use the same normalized transactions as the ledger.
-    const netMonth = round2(rawTxns
+    const netMonth = roundMoney(rawTxns
       .filter(tx => tx.date.slice(0, 7) === m)
-      .reduce((sum, tx) => sum + tx.credit - tx.debit, 0));
+      .reduce((sum, tx) => sum + tx.credit - tx.debit, 0), minorUnits);
 
     return {
       month: m,

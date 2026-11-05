@@ -1,4 +1,5 @@
 import { summarizeHourlyAttendance, prorateMonthlyWage, WorkPunch } from './hourly-attendance-pay.engine';
+import { MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
 export interface EmployeeWithdrawalContext {
   employee: {
@@ -49,6 +50,8 @@ export interface EmployeeWithdrawalContext {
     grossPay: number;
   }>;
   todayDate: string;
+  /** Tenant book digits (REQUIRED): preview money is rounded at book precision, never a silent 2dp. */
+  minorUnits: MoneyDigits;
 }
 
 export interface EmployeeWithdrawalBalanceResult {
@@ -102,11 +105,15 @@ export interface EmployeeWithdrawalBalanceResult {
   maxDirectDisbursement: number;
 }
 
-function round2(val: number): number {
+function roundHours(val: number): number {
+  // Hours are a quantity, not money: 2dp is the unit of hours, not book digits.
   return Number((Math.round(Number(val + 'e+2')) + 'e-2'));
 }
 
 export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContext): EmployeeWithdrawalBalanceResult {
+  const minorUnits = ctx.minorUnits;
+  // Settled band is half a minor unit: at 3dp a 0.004 balance is a credit, not settled.
+  const halfMinor = 1 / (2 * (10 ** minorUnits));
   const isHourly = ctx.employee.compensationType === 'hourly';
   const payFreq = ctx.employee.payFrequency || 'monthly';
   const baseSalary = Number(ctx.contract?.baseSalary || 0);
@@ -136,27 +143,27 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
   // 1. Accrual Calculation
   if (isHourly) {
     accrualSource = 'attendance_records';
-    const work = summarizeHourlyAttendance(ctx.punches, hourlyRate, 2); // Withdrawal previews stay 2dp: separate package
-    workedHours = round2(work.workedMinutes / 60);
+    const work = summarizeHourlyAttendance(ctx.punches, hourlyRate, minorUnits);
+    workedHours = roundHours(work.workedMinutes / 60);
     completedDays = work.completedDays;
-    accruedEarnings = round2(work.baseWage);
+    accruedEarnings = roundMoney(work.baseWage, minorUnits);
     calculationText = `${workedHours} س عمل × ${hourlyRate} ج.م/س`;
     isProrated = false;
   } else if (payFreq === 'daily') {
     accrualSource = 'attendance_records';
     const presentRecords = ctx.punches.filter(p => String(p.status || '').toLowerCase() === 'present');
     completedDays = presentRecords.length > 0 ? presentRecords.length : Math.max(1, daysElapsed);
-    const dailyWage = baseSalary > 0 ? round2(baseSalary / 30) : 0;
-    accruedEarnings = round2(completedDays * dailyWage);
+    const dailyWage = baseSalary > 0 ? roundMoney(baseSalary / 30, minorUnits) : 0;
+    accruedEarnings = roundMoney(completedDays * dailyWage, minorUnits);
     calculationText = `${completedDays} يوم استحقاق × ${dailyWage} ج.م/يوم`;
     isProrated = false;
   } else if (ctx.activePayrollItem) {
     accrualSource = 'payroll_item';
     const item = ctx.activePayrollItem;
     // Gross pay minus attendance deductions (before loan deduction)
-    const rawEarned = round2(Number(item.grossPay || item.baseSalary || 0) - Number(item.deductionAmount || 0));
-    const fullCyclePay = rawEarned > 0 ? rawEarned : round2(Number(item.netPay || 0) + Number(item.loanDeductionAmount || 0));
-    const normalizedFullPay = fullCyclePay > 0 ? fullCyclePay : round2(Number(item.baseSalary || 0));
+    const rawEarned = roundMoney(Number(item.grossPay || item.baseSalary || 0) - Number(item.deductionAmount || 0), minorUnits);
+    const fullCyclePay = rawEarned > 0 ? rawEarned : roundMoney(Number(item.netPay || 0) + Number(item.loanDeductionAmount || 0), minorUnits);
+    const normalizedFullPay = fullCyclePay > 0 ? fullCyclePay : roundMoney(Number(item.baseSalary || 0), minorUnits);
 
     // If employee item was already disbursed/paid, cycle accrual is fully settled
     if (item.itemStatus === 'paid') {
@@ -173,14 +180,14 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
     } else {
       // In-progress cycle or draft/reviewed run: strictly prorate by elapsed days in cycle!
       const prorationFactor = Math.min(1, Math.max(0, daysElapsed / totalCycleDays));
-      accruedEarnings = round2(normalizedFullPay * prorationFactor);
+      accruedEarnings = roundMoney(normalizedFullPay * prorationFactor, minorUnits);
       completedDays = daysElapsed;
       calculationText = `استحقاق نسبي (${daysElapsed} من ${totalCycleDays} يوم) - مسودة كشف الرواتب`;
       isProrated = true;
     }
   } else {
     accrualSource = 'contract_prorated';
-    accruedEarnings = round2(prorateMonthlyWage(baseSalary, cycleStart, ctx.todayDate, 2)); // Withdrawal previews stay 2dp: separate package
+    accruedEarnings = roundMoney(prorateMonthlyWage(baseSalary, cycleStart, ctx.todayDate, minorUnits), minorUnits);
     completedDays = daysElapsed;
     calculationText = `استحقاق نسبي عن ${completedDays} يوم (من راتب ${baseSalary} ج.م)`;
     isProrated = true;
@@ -194,7 +201,7 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
   for (const loan of ctx.priorLoans) {
     const st = String(loan.status || '');
     if (!['paid', 'partially_repaid', 'disbursed'].includes(st)) continue;
-    const remaining = round2(Number(loan.remainingAmount || 0));
+    const remaining = roundMoney(Number(loan.remainingAmount || 0), minorUnits);
     if (remaining <= 0) continue;
 
     activeLoanCount++;
@@ -202,37 +209,37 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
     const isAdvance = loan.loanType === 'advance';
 
     if (isAdvance && issue >= cycleStart) {
-      currentCycleWithdrawals = round2(currentCycleWithdrawals + remaining);
+      currentCycleWithdrawals = roundMoney(currentCycleWithdrawals + remaining, minorUnits);
     } else {
-      priorOutstandingDebt = round2(priorOutstandingDebt + remaining);
+      priorOutstandingDebt = roundMoney(priorOutstandingDebt + remaining, minorUnits);
     }
   }
 
-  const totalDebt = round2(currentCycleWithdrawals + priorOutstandingDebt);
+  const totalDebt = roundMoney(currentCycleWithdrawals + priorOutstandingDebt, minorUnits);
 
   // 3. Unpaid past approved payroll items (if any prior run approved and not paid)
   let unpaidApprovedPayroll = 0;
   for (const item of ctx.unpaidApprovedPayrollItems) {
     // If activePayrollItem is already counted, do not duplicate
     if (ctx.activePayrollItem && Number(item.id) === Number(ctx.activePayrollItem.id)) continue;
-    unpaidApprovedPayroll = round2(unpaidApprovedPayroll + Number(item.netPay || 0));
+    unpaidApprovedPayroll = roundMoney(unpaidApprovedPayroll + Number(item.netPay || 0), minorUnits);
   }
 
   // 4. Net Available Balance: (Accrued + Unpaid Payroll) - Total Debt
-  const netAvailableBalance = round2((unpaidApprovedPayroll + accruedEarnings) - totalDebt);
+  const netAvailableBalance = roundMoney((unpaidApprovedPayroll + accruedEarnings) - totalDebt, minorUnits);
 
   let balanceStatus: 'credit' | 'debit' | 'settled' = 'settled';
-  if (netAvailableBalance > 0.009) {
+  if (netAvailableBalance > halfMinor) {
     balanceStatus = 'credit';
-  } else if (netAvailableBalance < -0.009) {
+  } else if (netAvailableBalance < -halfMinor) {
     balanceStatus = 'debit';
   }
 
   // 5. Governance Ceilings: Direct Cashier Advance Cap (50% max of net available, capped at 2,000 EGP)
   const directAdvanceCeilingPct = 50;
   const directAdvanceCashCap = 2000;
-  const maxDirectAdvance = netAvailableBalance > 0.009
-    ? round2(Math.min(directAdvanceCashCap, netAvailableBalance * (directAdvanceCeilingPct / 100)))
+  const maxDirectAdvance = netAvailableBalance > halfMinor
+    ? roundMoney(Math.min(directAdvanceCashCap, netAvailableBalance * (directAdvanceCeilingPct / 100)), minorUnits)
     : 0;
 
   return {
@@ -274,7 +281,7 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
     maxDirectAdvance,
     directAdvanceCeilingPct,
     directAdvanceCashCap,
-    canDisburseDirectly: maxDirectAdvance > 0.009,
+    canDisburseDirectly: maxDirectAdvance > halfMinor,
     maxDirectDisbursement: maxDirectAdvance,
   };
 }

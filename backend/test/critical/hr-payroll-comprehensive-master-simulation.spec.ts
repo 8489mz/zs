@@ -69,6 +69,7 @@ function testEmployeeAdvanceAndPayrollSettlement() {
   // فحص كشف الحساب بعد السلفة وقبل مسير الرواتب:
   // الموظف مديون بـ 1,000 ج.م (debit)، رصيده بالسالب (-1,000)
   const stmtBeforePayroll = buildEmployeeFinancialStatement({
+    minorUnits: 2,
     employee: emp,
     payrollItems: [],
     loans,
@@ -124,6 +125,7 @@ function testEmployeeAdvanceAndPayrollSettlement() {
   // كشف الحساب بعد الاعتماد وقبل الصرف النقدي:
   // استحقاق الراتب (+6000 credit) - السلفة (-1000 debit) = باقي للموظف 5000 دائن
   const stmtApproved = buildEmployeeFinancialStatement({
+    minorUnits: 2,
     employee: emp,
     payrollItems: [payrollItemApproved],
     loans,
@@ -162,6 +164,7 @@ function testEmployeeAdvanceAndPayrollSettlement() {
   };
 
   const stmtAfterPayout = buildEmployeeFinancialStatement({
+    minorUnits: 2,
     employee: emp,
     payrollItems: [payrollItemPaid],
     loans,
@@ -251,6 +254,7 @@ function testIndividualEarlyPayoutVsPending() {
 
   // 1. فحص كشف حساب الموظف الأول (الذي قبض مبكراً)
   const stmt1 = buildEmployeeFinancialStatement({
+    minorUnits: 2,
     employee: emp1,
     payrollItems: [item1],
     loans: [],
@@ -269,6 +273,7 @@ function testIndividualEarlyPayoutVsPending() {
 
   // 2. فحص كشف حساب الموظف الثاني (الذي لم يقبض بعد)
   const stmt2 = buildEmployeeFinancialStatement({
+    minorUnits: 2,
     employee: emp2,
     payrollItems: [item2],
     loans: [],
@@ -285,6 +290,7 @@ function testIndividualEarlyPayoutVsPending() {
 
   // 3. فحص سحب النقدية للموظف الثاني: هل يُحسب له المبلغ المعلق في المسير؟
   const balanceCheckEmp2 = calculateEmployeeWithdrawalBalance({
+    minorUnits: 2,
     employee: {
       id: 102,
       displayName: 'سعيد ابراهيم',
@@ -387,6 +393,7 @@ function testPayFrequenciesAndSchedules() {
 
   // فحص استحقاق الأجر اليومي لموظف براتب 3000 (أجر اليوم 100 ج.م)
   const dailyBalance = calculateEmployeeWithdrawalBalance({
+    minorUnits: 2,
     employee: {
       id: 105,
       displayName: 'عامل يومية',
@@ -516,6 +523,7 @@ function testMonteCarlo50000Cases() {
 
     // 5. فحص كشف الحساب المالي بعد الصرف:
     const stmt = buildEmployeeFinancialStatement({
+    minorUnits: 2,
       employee: {
         id: i,
         displayName: `موظف محاكاة #${i}`,

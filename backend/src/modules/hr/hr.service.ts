@@ -2239,6 +2239,7 @@ export class HrService {
     }
     await this.assertEmployeeBelongsToTenant(employeeId, auth);
     const { tenantId } = requireTenantScope(auth);
+    const bookDigits = await tenantBookDigits(this.db, tenantId);
 
     const empRes = await sql<Record<string, unknown>>`
       SELECT e.*, d.name AS department_name, j.name AS job_title_name
@@ -2375,6 +2376,7 @@ export class HrService {
         to: clean(query.to),
         month: clean(query.month),
       },
+      minorUnits: bookDigits,
     });
 
     return result as unknown as Record<string, unknown>;
@@ -6640,6 +6642,7 @@ export class HrService {
     if (!employeeId || employeeId <= 0) throw new AppError('Employee ID is required', 'HR_EMPLOYEE_ID_REQUIRED', 400);
 
     const tenantTimezone = await getTenantTimezone(this.db, tenantId);
+    const bookDigits = await tenantBookDigits(this.db, tenantId);
     const today = todayTenantDate(tenantTimezone);
     const currentMonthPrefix = today.slice(0, 7);
     const monthStart = `${currentMonthPrefix}-01`;
@@ -6767,6 +6770,7 @@ export class HrService {
       priorLoans: loansRes.rows || [],
       unpaidApprovedPayrollItems: unpaidItemsRes.rows || [],
       todayDate: today,
+      minorUnits: bookDigits,
     });
 
     return result;
