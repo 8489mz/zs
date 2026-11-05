@@ -124,7 +124,7 @@ async function resolveTenantPrimaryLocationName(): Promise<string> {
 export async function downloadSettingsTemplate(kind: 'products' | 'customers' | 'customers-retail' | 'customers-van' | 'suppliers' | 'opening-stock') {
   if (kind === 'products') {
     const defaultLocationName = await resolveTenantPrimaryLocationName();
-    downloadExcelFile('products-template.xlsx', ['اسم الصنف (إجباري)', 'الباركود', 'القسم', 'المورد', 'سعر التكلفة', 'سعر البيع', 'سعر الجملة', 'الحد الأدنى', 'الكمية', 'المخزن', 'وحدة القياس الأساسية', 'وحدة البيع', 'وحدة الشراء', 'اسم وحدة إضافية', 'معامل الوحدة الإضافية', 'باركود الوحدة الإضافية', 'ملاحظات'], [['منتج جديد', '123456789012', 'عام', 'مورد تجريبي', 50, 70, 60, 5, 24, defaultLocationName, 'قطعة', 'قطعة', 'كرتونة', 'كرتونة', 12, '123456789013', 'ملاحظات']]);
+    downloadExcelFile('products-template.xlsx', ['اسم الصنف (إجباري)', 'اسم الصنف (إنجليزي)', 'الباركود', 'القسم', 'المورد', 'سعر التكلفة', 'سعر البيع', 'سعر الجملة', 'الحد الأدنى', 'الكمية', 'المخزن', 'وحدة القياس الأساسية', 'وحدة البيع', 'وحدة الشراء', 'اسم وحدة إضافية', 'معامل الوحدة الإضافية', 'باركود الوحدة الإضافية', 'ملاحظات'], [['منتج جديد', 'New product', '123456789012', 'عام', 'مورد تجريبي', 50, 70, 60, 5, 24, defaultLocationName, 'قطعة', 'قطعة', 'كرتونة', 'كرتونة', 12, '123456789013', 'ملاحظات']]);
     return;
   }
   if (kind === 'customers' || kind === 'customers-retail') {
@@ -240,6 +240,7 @@ export async function exportSettingsData(kind: 'products' | 'customers' | 'suppl
 
         allRows.push([
           p.name || '',
+          p.nameEn || p.name_en || '',
           p.barcode || '',
           p.category?.name || p.categoryName || '',
           p.supplier?.name || p.supplierName || '',
@@ -264,8 +265,8 @@ export async function exportSettingsData(kind: 'products' | 'customers' | 'suppl
 
     downloadExcelFile(
       `products-export-${dateStr}.xlsx`,
-      ['اسم الصنف (إجباري)', 'الباركود', 'القسم', 'المورد', 'سعر التكلفة', 'سعر البيع', 'سعر الجملة', 'الحد الأدنى', 'الكمية', 'المخزن', 'وحدة القياس الأساسية', 'وحدة البيع', 'وحدة الشراء', 'اسم وحدة إضافية', 'معامل الوحدة الإضافية', 'باركود الوحدة الإضافية', 'ملاحظات'],
-      allRows.length ? allRows : [['لا توجد أصناف مسجلة', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']],
+      ['اسم الصنف (إجباري)', 'اسم الصنف (إنجليزي)', 'الباركود', 'القسم', 'المورد', 'سعر التكلفة', 'سعر البيع', 'سعر الجملة', 'الحد الأدنى', 'الكمية', 'المخزن', 'وحدة القياس الأساسية', 'وحدة البيع', 'وحدة الشراء', 'اسم وحدة إضافية', 'معامل الوحدة الإضافية', 'باركود الوحدة الإضافية', 'ملاحظات'],
+      allRows.length ? allRows : [['لا توجد أصناف مسجلة', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']],
     );
     return;
   }

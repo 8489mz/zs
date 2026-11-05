@@ -21,6 +21,7 @@ import { requestValidationPipe } from './common/pipes/request-validation.pipe';
 import { isPublicApiPath, resolvePublicApiCorsOrigin } from './common/utils/public-cors-origin.util';
 import { LoggerService } from './core/logging/logger.service';
 import { isDesktopRuntimeMode } from './config/app-mode';
+import { JSON_BODY_LIMIT } from './config/http-limits';
 
 function formatErrorDetails(error: unknown): string {
   if (error instanceof Error) {
@@ -120,7 +121,7 @@ async function bootstrap(): Promise<void> {
   });
 
   app.use(json({
-    limit: '2mb',
+    limit: JSON_BODY_LIMIT,
     verify: (req: any, _res, buf) => {
       req.rawBody = buf;
     },

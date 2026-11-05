@@ -8,6 +8,7 @@ import { applyStockDelta, setScopedStockQty } from '../../../common/utils/locati
 import { formatBranchStockLocationName } from '../../../common/utils/branch-stock.util';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
+import { resolveImportProductNames } from './settings-import.utils';
 
 type DbExecutor = Kysely<Database>;
 type TenantScope = { tenantId: string; accountId: string };
@@ -455,8 +456,11 @@ export class SettingsImportService {
         const row = rawRow as Record<string, unknown>;
         const lookup = this.buildRowLookup(row);
 
-        const name = cleanString(row.name) || this.pickCell(lookup, ['اسم الصنف (إجباري)', 'اسم الصنف', 'name', 'اسم الخدمة', 'اسم البند']);
-        if (!name) continue;
+        const arabicName = cleanString(row.name) || this.pickCell(lookup, ['اسم الصنف (إجباري)', 'اسم الصنف', 'name', 'اسم الخدمة', 'اسم البند']);
+        const englishName = cleanString(row.nameEn) || this.pickCell(lookup, ['اسم الصنف (إنجليزي)', 'الاسم الإنجليزي', 'English name', 'nameEn', 'name_en']);
+        const resolvedNames = resolveImportProductNames(arabicName, englishName);
+        if (!resolvedNames) continue;
+        const name = resolvedNames.name;
 
         const categoryName = cleanString(row.categoryName || row.category || '') || this.pickCell(lookup, ['القسم', 'التصنيف', 'category', 'categoryName']);
         const categoryId = await this.ensureCategory(trx, categoryName, actor);
@@ -488,6 +492,7 @@ export class SettingsImportService {
         
         const payload = {
           name,
+          name_en: resolvedNames.nameEn,
           barcode,
           category_id: categoryId,
           supplier_id: supplierId,

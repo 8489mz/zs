@@ -2,18 +2,11 @@ import { useTranslation } from 'react-i18next';
 import { useMemo, useState } from 'react';
 import { Button } from '@/shared/ui/button';
 import { parseImportFile } from '@/lib/browser';
+import { normalizeImportRows, type CsvRow, type ImportFieldMapping } from './import-workbench.utils';
 
 export function normalizeHeader(value: string) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, '');
 }
-
-type CsvRow = Record<string, string>;
-interface ImportFieldMapping {
-  key: string;
-  label: string;
-  aliases?: string[];
-}
-
 
 export function summarizeImportResult(result: unknown, rowCount: number, fileName: string): { kind: 'success' | 'warning'; text: string } {
   const payload = (result && typeof result === 'object' ? result : {}) as Record<string, unknown>;
@@ -149,15 +142,7 @@ export function ImportWorkbench({
     try {
       if (!rows.length) throw new Error('اختر ملفًا أولًا.');
       if (missingRequiredFields.length) throw new Error(`العمود المطلوب غير موجود: ${missingRequiredFields.map((field) => field.label).join('، ')}`);
-      const normalizedRows = rows.map((row) => {
-        const nextRow: CsvRow = { ...row };
-        for (const field of normalizedFieldMappings) {
-          const actualHeader = resolvedHeaderByFieldKey[field.key];
-          if (!actualHeader) continue;
-          nextRow[field.key] = String(row[actualHeader] || '').trim();
-        }
-        return nextRow;
-      });
+      const normalizedRows = normalizeImportRows(rows, normalizedFieldMappings, resolvedHeaderByFieldKey);
       const result = await onImportRows(normalizedRows);
       setStatus(summarizeImportResult(result, rows.length, fileName || 'الملف المحدد'));
     } catch (error) {
