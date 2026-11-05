@@ -2091,6 +2091,11 @@ export class AccountingService {
       const result = await trx.insertInto('accounting_accounts')
         .values({
           tenant_id: scope.tenantId,
+          // INV-ACCOUNT-CREATE-ACCOUNT-ID: account_id is TEXT NOT NULL with
+          // no default (tenant-scope migration 20260531000200), so omitting
+          // it failed every account creation with 23502. Same scope the
+          // rest of this module already stores.
+          account_id: scope.accountId,
           code: dto.code,
           name_ar: dto.nameAr,
           name_en: dto.nameEn || '',
