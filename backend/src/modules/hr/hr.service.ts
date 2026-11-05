@@ -1484,6 +1484,27 @@ export class HrService {
       if (latestBookedEnd && !safeFutureClose) {
         throw new AppError('العقد يغيّر فترة سبق اعتماد رواتبها؛ سجّل تعديلًا أو عقدًا مستقبليًا بدل تعديل التاريخ المالي', 'HR_CONTRACT_APPROVED_PERIOD_LOCKED', 409);
       }
+      // F7 (INV-CONTRACT-OVERLAP-ENTRY-TIME-CHECK): overlapping contracts
+      // surface HERE, at entry — not only fail-closed at payroll time.
+      // Two covering contracts for one employee risk double pay. Spans
+      // are inclusive days: sharing even one day IS an overlap (the
+      // payroll history check throws unless segments abut exactly).
+      // The contract being updated is excluded, and cancelled siblings
+      // are dead spans that never pay; every other saved span counts,
+      // whatever its status — any saved span can become active through
+      // this same write path.
+      const overlap = await sql<{ id: number }>`
+        SELECT id FROM hr_employment_contracts
+        WHERE tenant_id = ${tenantId} AND employee_id = ${employeeId}
+          AND status <> 'cancelled'
+          ${id ? sql`AND id <> ${id}` : sql``}
+          AND start_date <= COALESCE(${endDate}::date, 'infinity'::date)
+          AND COALESCE(end_date, 'infinity'::date) >= ${startDate}::date
+        LIMIT 1
+      `.execute(trx);
+      if (overlap.rows.length) {
+        throw new AppError('يوجد عقد آخر يتداخل مع فترة هذا العقد لنفس الموظف؛ عدّل التواريخ أو أغلق العقد السابق أولًا', 'HR_CONTRACT_OVERLAP', 409);
+      }
       if (id) {
         await sql`
           UPDATE hr_employment_contracts
