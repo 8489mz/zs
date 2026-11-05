@@ -1,6 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateCatalogDomain } from '@/app/query-invalidation';
-import { queryKeys } from '@/app/query-keys';
 import { productsApi } from '@/features/products/api/products.api';
 import { normalizeProductUnits } from '@/features/products/components/ProductUnitsEditor';
 import type { Product, ProductCustomerPrice, ProductOffer, ProductUnit } from '@/types/domain';
@@ -144,6 +143,13 @@ export function buildUpdatePayload(
 
 export async function refetchAndSelectProduct(queryClient: ReturnType<typeof useQueryClient>, productId: string) {
   await invalidateCatalogDomain(queryClient, { includeProducts: true });
-  const nextProducts = await queryClient.fetchQuery({ queryKey: queryKeys.products, queryFn: productsApi.list });
-  return nextProducts.find((product) => String(product.id) === String(productId)) || null;
+  // INV-PRODUCTS-WORKSPACE-SAVE: fetch the one product by id. The old code
+  // ran productsApi.list() here — listAll loops pageSize 1000 until
+  // totalPages, i.e. 11 sequential GETs of the full catalog (each re-running
+  // the server-side full-catalog listProducts) just to find one row.
+  try {
+    return await productsApi.get(productId);
+  } catch {
+    return null;
+  }
 }

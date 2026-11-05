@@ -52,7 +52,7 @@ function buildFashionVariants(values: ProductFormValues) {
   return normalizedColors.flatMap((color) => normalizedSizes.map((size) => ({ color, size, barcode: '', stock: defaultStock }))).filter((row) => row.color || row.size);
 }
 
-function buildProductPayload(values: ProductFormValues) {
+export function buildProductPayload(values: ProductFormValues) {
   const itemKind = values.itemKind === 'fashion' ? 'fashion' : 'standard';
   const groupedEntryEnabled = Boolean(values.groupedEntryEnabled || itemKind === 'fashion');
   const units = groupedEntryEnabled
@@ -70,6 +70,11 @@ function buildProductPayload(values: ProductFormValues) {
 
   return {
     name: normalizeArabicInput(values.name),
+    // INV-PRODUCTS-WORKSPACE-SAVE: the English name must travel with the
+    // create payload — this builder used to rebuild the body field-by-field
+    // and never copy values.nameEn, so the backend stored NULL and the field
+    // came back empty on first edit (and an edit-save then wiped it).
+    nameEn: values.nameEn?.trim() || undefined,
     barcode: groupedEntryEnabled ? '' : (values.barcode || ''),
     itemType: values.itemType || 'product',
     itemKind,
@@ -123,12 +128,20 @@ export function useCreateProductMutation(onSuccess?: (productId: string, name: s
 
       return result;
     },
-    onSuccess: async (result, variables) => {
-      await invalidateCatalogDomain(queryClient, { includeProducts: true, includeCategories: true });
-      await queryClient.invalidateQueries({ queryKey: ['storefront-catalog'], refetchType: 'all' });
-      await queryClient.invalidateQueries({ queryKey: ['storefront-info'], refetchType: 'all' });
-      await queryClient.invalidateQueries({ queryKey: ['products'], refetchType: 'all' });
-      await queryClient.invalidateQueries({ queryKey: ['products', 'pos'], refetchType: 'all' });
+    onSuccess: (result, variables) => {
+      // INV-PRODUCTS-WORKSPACE-SAVE: never await the invalidations here.
+      // In TanStack Query v5 isPending stays true through onSuccess, so the
+      // save button kept showing "جارٍ الحفظ..." while five refetchType:
+      // 'all' invalidations re-ran the full-catalog list (11 sequential
+      // pageSize-1000 GETs) in the background. Fire-and-forget with the
+      // default refetchType ('active') instead: mounted queries refetch now,
+      // the list is stale-marked and refetches on remount, and the spinner
+      // ends with the save itself.
+      void invalidateCatalogDomain(queryClient, { includeProducts: true, includeCategories: true });
+      void queryClient.invalidateQueries({ queryKey: ['storefront-catalog'] });
+      void queryClient.invalidateQueries({ queryKey: ['storefront-info'] });
+      void queryClient.invalidateQueries({ queryKey: ['products'] });
+      void queryClient.invalidateQueries({ queryKey: ['products', 'pos'] });
       const productId = extractCreatedEntityId(result);
       if (productId) {
         onSuccess?.(productId, variables.name);

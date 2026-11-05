@@ -252,11 +252,15 @@ export function EditProductForm({
     },
     onSuccess: async (updatedProduct) => {
       if (!product) return;
-      await invalidateCatalogDomain(queryClient, { includeProducts: true, includeCategories: true });
-      await queryClient.invalidateQueries({ queryKey: ['storefront-catalog'], refetchType: 'all' });
-      await queryClient.invalidateQueries({ queryKey: ['storefront-info'], refetchType: 'all' });
-      await queryClient.invalidateQueries({ queryKey: ['products'], refetchType: 'all' });
-      await queryClient.invalidateQueries({ queryKey: ['products', 'pos'], refetchType: 'all' });
+      // INV-PRODUCTS-WORKSPACE-SAVE: the invalidations are fire-and-forget
+      // (see useCreateProductMutation — awaiting refetchType: 'all' here kept
+      // the save spinner up through a full-catalog refetch). Only the
+      // single-product refetch below is awaited.
+      void invalidateCatalogDomain(queryClient, { includeProducts: true, includeCategories: true });
+      void queryClient.invalidateQueries({ queryKey: ['storefront-catalog'] });
+      void queryClient.invalidateQueries({ queryKey: ['storefront-info'] });
+      void queryClient.invalidateQueries({ queryKey: ['products'] });
+      void queryClient.invalidateQueries({ queryKey: ['products', 'pos'] });
       const refreshed = await refetchAndSelectProduct(queryClient, product.id);
       const finalProduct = refreshed || updatedProduct || product;
       if (onSuccess) {

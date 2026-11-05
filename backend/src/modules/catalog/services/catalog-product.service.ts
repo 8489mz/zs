@@ -1590,7 +1590,13 @@ export class CatalogProductService {
     }
 
     const rawName = normalizeArabicInput(payload.name);
-    const rawNameEn = payload.nameEn ? String(payload.nameEn).trim() : null;
+    // INV-PRODUCTS-WORKSPACE-SAVE: keep nameEn undefined when the caller
+    // omits the key, so updateProduct's preserve branch can tell "leave it"
+    // (omitted) from "clear it" (''). Without this the branch was
+    // unreachable — the normalizer always assigned a string-or-null — so every
+    // update that did not carry nameEn (barcode/offer/price cards, partial
+    // edits) silently wiped the stored English name to NULL.
+    const rawNameEn = payload.nameEn === undefined ? undefined : (payload.nameEn ? String(payload.nameEn).trim() : null);
     const resolvedName = rawName || rawNameEn || '';
 
     return {
@@ -2616,7 +2622,12 @@ export class CatalogProductService {
       : `تم إضافة الصنف ${normalized.name} بواسطة ${actor.username}`;
     await this.audit.log('إضافة صنف', auditLabel, actor);
     (await import('../../storefront/storefront.service')).StorefrontService.invalidateGlobalCatalogCache();
-    return { ok: true, id: firstProductId, products: (await this.listProducts({}, actor)).products };
+    // INV-PRODUCTS-WORKSPACE-SAVE: return only the saved product. The old
+    // response re-ran the full-catalog listProducts (10,001 rows x ~40 cols,
+    // no LIMIT/OFFSET) on every save, so a create/edit paid for a whole
+    // catalog scan — and a multi-megabyte payload — that no caller used.
+    if (firstProductId === null) throw new AppError('Product creation failed', 'PRODUCT_CREATE_FAILED', 500);
+    return { ok: true, id: firstProductId, product: await this.getProduct(firstProductId, actor) };
   }
 
   async updateProduct(id: number, payload: UpsertProductDto, actor: AuthContext): Promise<Record<string, unknown>> {
@@ -2713,7 +2724,9 @@ export class CatalogProductService {
 
     (await import('../../storefront/storefront.service')).StorefrontService.invalidateGlobalCatalogCache();
     await this.audit.log('تعديل صنف', `تم تحديث الصنف #${id} بواسطة ${actor.username}`, actor);
-    return { ok: true, products: (await this.listProducts({}, actor)).products };
+    // INV-PRODUCTS-WORKSPACE-SAVE: return only the saved product (see
+    // createProduct — the full-catalog listProducts response is gone).
+    return { ok: true, product: await this.getProduct(id, actor) };
   }
 
   async deleteProduct(id: number, actor: AuthContext): Promise<Record<string, unknown>> {
@@ -2749,7 +2762,9 @@ export class CatalogProductService {
     }
     (await import('../../storefront/storefront.service')).StorefrontService.invalidateGlobalCatalogCache();
     await this.audit.log('حذف صنف', `تم حذف الصنف #${id} نهائياً بواسطة ${actor.username}`, actor);
-    return { ok: true, products: (await this.listProducts({}, actor)).products };
+    // INV-PRODUCTS-WORKSPACE-SAVE: no product to return (the row is gone)
+    // and no full-catalog listProducts response (see createProduct).
+    return { ok: true };
   }
 
   async toggleProductArchive(
