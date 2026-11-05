@@ -4,7 +4,13 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  aggregateImportResults,
+  ChunkImportError,
+  chunkImportRows,
+  IMPORT_CHUNK_SIZE,
+  importRowsInChunks,
   normalizeImportRows,
+  summarizeImportResult,
   type CsvRow,
   type ImportFieldMapping,
 } from './import-workbench.utils';
@@ -123,5 +129,113 @@ describe('normalizeImportRows', () => {
     const bodyBytes = new TextEncoder().encode(JSON.stringify({ rows: normalizedRows })).byteLength;
     expect(bodyBytes).toBeLessThan(10 * 1024 * 1024);
     expect(bodyBytes).toBeGreaterThan(2 * 1024 * 1024);
+  });
+});
+
+/*
+ * Chunked import (INV-IMPORT-CHUNKED-1000): one request carries at most 1,000
+ * rows, so a 10,000-row file never runs as one minutes-long transaction that
+ * the edge answers with a 504.
+ */
+describe('import workbench chunking', () => {
+  const makeRows = (count: number): CsvRow[] =>
+    Array.from({ length: count }, (_, i) => ({ name: `product-${i}`, barcode: `${i}` }));
+
+  it('splits 10,000 rows into ten 1,000-row chunks in order', () => {
+    const rows = makeRows(10000);
+    const chunks = chunkImportRows(rows);
+    expect(chunks).toHaveLength(10);
+    for (const chunk of chunks) expect(chunk).toHaveLength(1000);
+    expect(chunks[0][0]).toEqual({ name: 'product-0', barcode: '0' });
+    expect(chunks[9][999]).toEqual({ name: 'product-9999', barcode: '9999' });
+    expect(IMPORT_CHUNK_SIZE).toBe(1000);
+  });
+
+  it('keeps a remainder chunk and handles small inputs', () => {
+    expect(chunkImportRows(makeRows(2500)).map((c) => c.length)).toEqual([1000, 1000, 500]);
+    expect(chunkImportRows(makeRows(1000))).toHaveLength(1);
+    expect(chunkImportRows(makeRows(1))).toHaveLength(1);
+    expect(chunkImportRows([])).toEqual([]);
+    expect(chunkImportRows(makeRows(1001)).map((c) => c.length)).toEqual([1000, 1]);
+  });
+
+  it('aggregates per-chunk counts and dedups repeated warnings', () => {
+    const aggregate = aggregateImportResults([
+      { ok: true, inserted: 1000, updated: 0, warnings: ['same warning'] },
+      { ok: true, inserted: 800, updated: 200, skipped: 3, warnings: ['same warning', 'other warning'] },
+      { ok: true, inserted: 0, updated: 0 },
+    ]);
+    expect(aggregate).toEqual({
+      inserted: 1800,
+      updated: 200,
+      skipped: 3,
+      warnings: ['same warning', 'other warning'],
+    });
+    expect(aggregateImportResults([])).toEqual({ inserted: 0, updated: 0, skipped: 0, warnings: [] });
+  });
+
+  it('sends each chunk in order and reports progress per chunk', async () => {
+    const rows = makeRows(2500);
+    const sent: CsvRow[][] = [];
+    const progress: Array<{ doneRows: number; chunkIndex: number; chunkCount: number }> = [];
+    const aggregate = await importRowsInChunks(
+      rows,
+      async (chunk) => {
+        sent.push(chunk);
+        return { inserted: chunk.length, updated: 0 };
+      },
+      (p) => progress.push({ doneRows: p.doneRows, chunkIndex: p.chunkIndex, chunkCount: p.chunkCount }),
+    );
+    expect(sent.map((c) => c.length)).toEqual([1000, 1000, 500]);
+    expect(sent[0][0]).toEqual({ name: 'product-0', barcode: '0' });
+    expect(sent[2][0]).toEqual({ name: 'product-2000', barcode: '2000' });
+    expect(progress).toEqual([
+      { doneRows: 1000, chunkIndex: 1, chunkCount: 3 },
+      { doneRows: 2000, chunkIndex: 2, chunkCount: 3 },
+      { doneRows: 2500, chunkIndex: 3, chunkCount: 3 },
+    ]);
+    expect(aggregate.inserted).toBe(2500);
+  });
+
+  it('stops at the first failed chunk and keeps the completed part', async () => {
+    const rows = makeRows(2500);
+    const sent: CsvRow[][] = [];
+    let caught: unknown;
+    try {
+      await importRowsInChunks(rows, async (chunk) => {
+        sent.push(chunk);
+        if (sent.length === 2) throw new Error('network down');
+        return { inserted: chunk.length, updated: 0 };
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ChunkImportError);
+    const failure = caught as ChunkImportError;
+    expect(failure.partial).toEqual({ inserted: 1000, updated: 0, skipped: 0, warnings: [] });
+    expect(failure.doneRows).toBe(1000);
+    expect(failure.totalRows).toBe(2500);
+    expect(failure.chunkIndex).toBe(2);
+    expect(failure.chunkCount).toBe(3);
+    expect(sent).toHaveLength(2);
+  });
+
+  it('sends nothing for an empty file', async () => {
+    const sendChunk = () => {
+      throw new Error('must not be called');
+    };
+    await expect(importRowsInChunks([], sendChunk)).resolves.toEqual({
+      inserted: 0,
+      updated: 0,
+      skipped: 0,
+      warnings: [],
+    });
+  });
+
+  it('summarizes the aggregated result including skipped rows', () => {
+    expect(summarizeImportResult({ inserted: 9000, updated: 800, skipped: 200 }, 10000, 'products.xlsx'))
+      .toEqual({ kind: 'success', text: 'تمت العملية بنجاح (إضافة 9000، تحديث 800، تخطي 200) من products.xlsx.' });
+    expect(summarizeImportResult({ inserted: 5, updated: 0, warnings: ['w1'] }, 5, 'f.csv').kind).toBe('warning');
+    expect(summarizeImportResult({}, 10, 'f.csv').text).toContain('معالجة 10');
   });
 });

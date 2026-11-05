@@ -356,6 +356,50 @@ async function run(): Promise<void> {
     assert.ok(locStock, 'Stock must be placed in primary location 1');
   }
 
+  {
+    // INV-IMPORT-CHUNKED-1000: one request carries at most 1,000 rows — a
+    // single-shot 10,000-row call must fail closed instead of running one
+    // minutes-long transaction that the edge answers with a 504.
+    const { service } = createService();
+    const tooMany = Array.from({ length: 1001 }, (_, i) => ({ name: `Product ${i}`, barcode: `B${i}` }));
+    try {
+      await service.importProducts(tooMany, actor);
+      assert.fail('expected the 1000-row cap to reject');
+    } catch (error) {
+      assert.equal((error as { code?: string }).code, 'IMPORT_ROWS_TOO_MANY');
+    }
+    // The same cap guards the other import routes.
+    try {
+      await service.importCustomers(tooMany, actor);
+      assert.fail('expected the 1000-row cap to reject');
+    } catch (error) {
+      assert.equal((error as { code?: string }).code, 'IMPORT_ROWS_TOO_MANY');
+    }
+  }
+
+  {
+    // INV-IMPORT-CHUNKED-1000: nameless rows are counted as skipped instead of
+    // silently dropped, so the chunked summary stays honest.
+    const { db, service } = createService();
+    const result = await service.importProducts([
+      { name: '', barcode: '' },
+      { name: 'Real Product', barcode: 'REAL-1', 'سعر البيع': 10 },
+    ], actor);
+    assert.equal(result.ok, true);
+    assert.equal(result.inserted, 1);
+    assert.equal(result.skipped, 1);
+    assert.equal(db.state.products.length, 1);
+
+    const customerResult = await service.importCustomers([
+      { name: '', phone: '' },
+      { name: 'Alice', phone: '1' },
+    ], actor);
+    assert.equal(customerResult.ok, true);
+    assert.equal(customerResult.inserted, 1);
+    assert.equal(customerResult.skipped, 1);
+    assert.equal(db.state.customers.length, 1);
+  }
+
   console.log('settings-import.service.spec: ok');
 }
 

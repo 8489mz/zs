@@ -2,34 +2,22 @@ import { useTranslation } from 'react-i18next';
 import { useMemo, useState } from 'react';
 import { Button } from '@/shared/ui/button';
 import { parseImportFile } from '@/lib/browser';
-import { normalizeImportRows, type CsvRow, type ImportFieldMapping } from './import-workbench.utils';
+import {
+  ChunkImportError,
+  IMPORT_CHUNK_SIZE,
+  importRowsInChunks,
+  normalizeImportRows,
+  summarizeImportResult,
+  type CsvRow,
+  type ImportChunkProgress,
+  type ImportFieldMapping,
+} from './import-workbench.utils';
+
+// Re-exported so existing import sites keep working (settings ImportWorkbench re-export).
+export { summarizeImportResult } from './import-workbench.utils';
 
 export function normalizeHeader(value: string) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, '');
-}
-
-export function summarizeImportResult(result: unknown, rowCount: number, fileName: string): { kind: 'success' | 'warning'; text: string } {
-  const payload = (result && typeof result === 'object' ? result : {}) as Record<string, unknown>;
-  const inserted = Number(payload.inserted || 0);
-  const updated = Number(payload.updated || 0);
-  const warnings = Array.isArray(payload.warnings)
-    ? payload.warnings.map((entry) => String(entry || '').trim()).filter(Boolean)
-    : [];
-
-  const summaryParts: string[] = [];
-  if (inserted > 0) summaryParts.push(`إضافة ${inserted}`);
-  if (updated > 0) summaryParts.push(`تحديث ${updated}`);
-  if (!summaryParts.length) summaryParts.push(`معالجة ${rowCount}`);
-
-  const baseText = `تمت العملية بنجاح (${summaryParts.join('، ')}) من ${fileName || 'الملف المحدد'}.`;
-  if (!warnings.length) {
-    return { kind: 'success', text: baseText };
-  }
-
-  return {
-    kind: 'warning',
-    text: `${baseText} تحذيرات: ${warnings.join(' ')}`,
-  };
 }
 
 export interface ImportTemplateOption {
@@ -73,6 +61,7 @@ export function ImportWorkbench({
   const [rows, setRows] = useState<CsvRow[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [status, setStatus] = useState<{ kind: 'success' | 'warning' | 'error' | ''; text: string }>({ kind: '', text: '' });
+  const [importProgress, setImportProgress] = useState<ImportChunkProgress | null>(null);
 
   const normalizedHeaderMap = useMemo(() => {
     return headers.reduce<Record<string, string>>((acc, header) => {
@@ -143,9 +132,23 @@ export function ImportWorkbench({
       if (!rows.length) throw new Error('اختر ملفًا أولًا.');
       if (missingRequiredFields.length) throw new Error(`العمود المطلوب غير موجود: ${missingRequiredFields.map((field) => field.label).join('، ')}`);
       const normalizedRows = normalizeImportRows(rows, normalizedFieldMappings, resolvedHeaderByFieldKey);
-      const result = await onImportRows(normalizedRows);
-      setStatus(summarizeImportResult(result, rows.length, fileName || 'الملف المحدد'));
+      // One request carries at most IMPORT_CHUNK_SIZE rows: a whole 10,000-row
+      // file in a single POST runs one minutes-long server transaction and the
+      // edge answers 504 while the server keeps working. Chunks run
+      // sequentially so a failed chunk rolls back cleanly and the user can
+      // re-run the same file to complete it (upsert: no duplicates).
+      const totalRows = normalizedRows.length;
+      const chunkCount = Math.max(1, Math.ceil(totalRows / IMPORT_CHUNK_SIZE));
+      setImportProgress({ doneRows: 0, totalRows, chunkIndex: 1, chunkCount });
+      const aggregate = await importRowsInChunks(normalizedRows, onImportRows, setImportProgress);
+      setImportProgress(null);
+      setStatus(summarizeImportResult(aggregate, rows.length, fileName || 'الملف المحدد'));
     } catch (error) {
+      setImportProgress(null);
+      if (error instanceof ChunkImportError) {
+        setStatus({ kind: 'error', text: `توقف الاستيراد عند الشريحة ${error.chunkIndex} من ${error.chunkCount} بعد استيراد ${error.doneRows} من ${error.totalRows} صفًا: ${error.message}` });
+        return;
+      }
       setStatus({ kind: 'error', text: error instanceof Error ? error.message : 'تعذر استيراد الملف.' });
     }
   }
@@ -407,6 +410,18 @@ export function ImportWorkbench({
             </div>
           )}
 
+          {importProgress && (
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '10px 14px', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>
+                <span>{t('shared.import_workbench.s17', "جارٍ الاستيراد...")}</span>
+                <span>{importProgress.doneRows} / {importProgress.totalRows} {t('shared.import_workbench.s7', "صف")} — {t('shared.import_workbench.s18', "الشريحة")} {importProgress.chunkIndex} / {importProgress.chunkCount}</span>
+              </div>
+              <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden', marginTop: '8px' }}>
+                <div style={{ height: '100%', width: `${importProgress.totalRows ? Math.round((importProgress.doneRows / importProgress.totalRows) * 100) : 0}%`, background: '#0f172a', transition: 'width 0.2s ease' }} />
+              </div>
+            </div>
+          )}
+
           {/* Preview Table if file loaded */}
           {previewRows.length > 0 && (
             <div style={{ borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden', maxHeight: '180px', overflowY: 'auto' }}>
@@ -442,6 +457,7 @@ export function ImportWorkbench({
                 type="button"
                 variant="secondary"
                 onClick={() => { setFileName(''); setRows([]); setHeaders([]); setStatus({ kind: '', text: '' }); }}
+                disabled={importProgress != null}
                 style={{ fontSize: '0.82rem', padding: '6px 14px' }}
               >
                 {t('shared.import_workbench.s14', "مسح المعاينة")}
@@ -451,7 +467,7 @@ export function ImportWorkbench({
             <Button
               type="button"
               onClick={() => void handleImport()}
-              disabled={isPending || !rows.length || !!missingRequiredFields.length}
+              disabled={isPending || importProgress != null || !rows.length || !!missingRequiredFields.length}
               style={{
                 fontSize: '0.82rem',
                 padding: '7px 20px',
@@ -460,7 +476,7 @@ export function ImportWorkbench({
                 color: rows.length && !missingRequiredFields.length ? '#ffffff' : undefined,
               }}
             >
-              {isPending ? t('shared.import_workbench.s15', "جارٍ الاستيراد...") : t('shared.import_workbench.s16', "استيراد الآن")}
+              {importProgress != null || isPending ? t('shared.import_workbench.s15', "جارٍ الاستيراد...") : t('shared.import_workbench.s16', "استيراد الآن")}
             </Button>
           </div>
         </>

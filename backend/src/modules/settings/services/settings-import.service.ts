@@ -13,6 +13,15 @@ import { resolveImportProductNames } from './settings-import.utils';
 type DbExecutor = Kysely<Database>;
 type TenantScope = { tenantId: string; accountId: string };
 
+/**
+ * INV-IMPORT-CHUNKED-1000: one import request carries at most 1,000 rows.
+ * A 10,000-row file sent as a single request runs one minutes-long
+ * transaction and the edge answers 504 while the server keeps working, so
+ * the workbench sends 1,000-row chunks (frontend ImportWorkbench) and the
+ * server enforces the same cap here so no caller can re-create the 504.
+ */
+const MAX_IMPORT_ROWS_PER_REQUEST = 1000;
+
 function cleanString(value: unknown): string {
   return String(value ?? '').trim();
 }
@@ -445,10 +454,12 @@ export class SettingsImportService {
 
   async importProducts(rows: unknown[], actor: AuthContext): Promise<Record<string, unknown>> {
     if (!Array.isArray(rows)) throw new AppError('rows must be an array', 'IMPORT_ROWS_INVALID', 400);
+    if (rows.length > MAX_IMPORT_ROWS_PER_REQUEST) throw new AppError('rows exceed the 1000-row per-request limit', 'IMPORT_ROWS_TOO_MANY', 400);
     const scope = this.scope(actor);
     const result = await this.db.transaction().execute(async (trx) => {
       let inserted = 0;
       let updated = 0;
+      let skipped = 0;
       let stockQtyIgnoredOnUpdate = 0;
       const locationsCache = new Map<string, { locationId: number; branchId: number | null }>();
 
@@ -459,7 +470,7 @@ export class SettingsImportService {
         const arabicName = cleanString(row.name) || this.pickCell(lookup, ['اسم الصنف (إجباري)', 'اسم الصنف', 'name', 'اسم الخدمة', 'اسم البند']);
         const englishName = cleanString(row.nameEn) || this.pickCell(lookup, ['اسم الصنف (إنجليزي)', 'الاسم الإنجليزي', 'English name', 'nameEn', 'name_en']);
         const resolvedNames = resolveImportProductNames(arabicName, englishName);
-        if (!resolvedNames) continue;
+        if (!resolvedNames) { skipped += 1; continue; }
         const name = resolvedNames.name;
 
         const categoryName = cleanString(row.categoryName || row.category || '') || this.pickCell(lookup, ['القسم', 'التصنيف', 'category', 'categoryName']);
@@ -539,11 +550,11 @@ export class SettingsImportService {
         await this.syncProductUnitsFromImport(trx, productId, row, lookup, barcode, Boolean(existing), actor);
       }
 
-      return { inserted, updated, stockQtyIgnoredOnUpdate };
+      return { inserted, updated, skipped, stockQtyIgnoredOnUpdate };
     });
 
     await this.audit.log('استيراد أصناف', `تم استيراد/تحديث ${result.inserted + result.updated} صنف على يد ${actor.username}`, actor);
-    return { ok: true, inserted: result.inserted, updated: result.updated, warnings: result.stockQtyIgnoredOnUpdate > 0 ? [`تم إهمال stockQty لعدد ${result.stockQtyIgnoredOnUpdate} من الأصناف الموجودة مسبقًا. استخدم إدخال الرصيد الأولي أو تعديل المخزون بدلًا من هذا.`] : [] };
+    return { ok: true, inserted: result.inserted, updated: result.updated, skipped: result.skipped, warnings: result.stockQtyIgnoredOnUpdate > 0 ? [`تم إهمال stockQty لعدد ${result.stockQtyIgnoredOnUpdate} من الأصناف الموجودة مسبقًا. استخدم إدخال الرصيد الأولي أو تعديل المخزون بدلًا من هذا.`] : [] };
   }
 
   private normalizeImportUnitName(name: unknown): string {
@@ -714,15 +725,17 @@ export class SettingsImportService {
 
   async importCustomers(rows: unknown[], actor: AuthContext): Promise<Record<string, unknown>> {
     if (!Array.isArray(rows)) throw new AppError('rows must be an array', 'IMPORT_ROWS_INVALID', 400);
+    if (rows.length > MAX_IMPORT_ROWS_PER_REQUEST) throw new AppError('rows exceed the 1000-row per-request limit', 'IMPORT_ROWS_TOO_MANY', 400);
     const scope = this.scope(actor);
     const result = await this.db.transaction().execute(async (trx) => {
       let inserted = 0;
       let updated = 0;
+      let skipped = 0;
 
       for (const rawRow of rows) {
         const row = rawRow as Record<string, unknown>;
         const name = cleanString(row.name || row['اسم العميل'] || row['اسم العميل (إجباري)'] || row['اسم المحل'] || row['اسم العميل / المحل (إجباري)']);
-        if (!name) continue;
+        if (!name) { skipped += 1; continue; }
         const phone = normalizePhoneText(row.phone || row['رقم الموبايل'] || row['الموبايل'] || row['الهاتف']);
         const existing = phone
           ? await trx.selectFrom('customers').select(['id', 'balance', 'metadata']).where(sql<boolean>`tenant_id = ${scope.tenantId}`).where('phone', '=', phone).where('is_active', '=', true).executeTakeFirst()
@@ -865,24 +878,26 @@ export class SettingsImportService {
         }
       }
 
-      return { inserted, updated };
+      return { inserted, updated, skipped };
     });
 
     await this.audit.log('استيراد عملاء', `تم استيراد/تحديث ${result.inserted + result.updated} عميل على يد ${actor.username}`, actor);
-    return { ok: true, inserted: result.inserted, updated: result.updated };
+    return { ok: true, inserted: result.inserted, updated: result.updated, skipped: result.skipped };
   }
 
   async importSuppliers(rows: unknown[], actor: AuthContext): Promise<Record<string, unknown>> {
     if (!Array.isArray(rows)) throw new AppError('rows must be an array', 'IMPORT_ROWS_INVALID', 400);
+    if (rows.length > MAX_IMPORT_ROWS_PER_REQUEST) throw new AppError('rows exceed the 1000-row per-request limit', 'IMPORT_ROWS_TOO_MANY', 400);
     const scope = this.scope(actor);
     const result = await this.db.transaction().execute(async (trx) => {
       let inserted = 0;
       let updated = 0;
+      let skipped = 0;
 
       for (const rawRow of rows) {
         const row = rawRow as Record<string, unknown>;
         const name = cleanString(row.name);
-        if (!name) continue;
+        if (!name) { skipped += 1; continue; }
         const phone = cleanString(row.phone);
         const existing = phone
           ? await trx.selectFrom('suppliers').select(['id']).where(sql<boolean>`tenant_id = ${scope.tenantId}`).where('phone', '=', phone).where('is_active', '=', true).executeTakeFirst()
@@ -900,15 +915,16 @@ export class SettingsImportService {
         }
       }
 
-      return { inserted, updated };
+      return { inserted, updated, skipped };
     });
 
     await this.audit.log('استيراد موردين', `تم استيراد/تحديث ${result.inserted + result.updated} مورد على يد ${actor.username}`, actor);
-    return { ok: true, inserted: result.inserted, updated: result.updated };
+    return { ok: true, inserted: result.inserted, updated: result.updated, skipped: result.skipped };
   }
 
   async importOpeningStock(rows: unknown[], actor: AuthContext): Promise<Record<string, unknown>> {
     if (!Array.isArray(rows)) throw new AppError('rows must be an array', 'IMPORT_ROWS_INVALID', 400);
+    if (rows.length > MAX_IMPORT_ROWS_PER_REQUEST) throw new AppError('rows exceed the 1000-row per-request limit', 'IMPORT_ROWS_TOO_MANY', 400);
     const scope = this.scope(actor);
     const result = await this.db.transaction().execute(async (trx) => {
       let updated = 0;
@@ -975,6 +991,7 @@ export class SettingsImportService {
 
   async importEmployees(rows: unknown[], actor: AuthContext): Promise<Record<string, unknown>> {
     if (!Array.isArray(rows)) throw new AppError('rows must be an array', 'IMPORT_ROWS_INVALID', 400);
+    if (rows.length > MAX_IMPORT_ROWS_PER_REQUEST) throw new AppError('rows exceed the 1000-row per-request limit', 'IMPORT_ROWS_TOO_MANY', 400);
     const scope = this.scope(actor);
 
     const result = await this.db.transaction().execute(async (trx) => {
