@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Product, Purchase } from '@/types/domain';
@@ -188,7 +189,7 @@ export function PurchaseDetailCard({ purchase, isLoading = false, onEdit, onCanc
       {!isCancelled && (
         <div className="invoice-detail-actions-bar" style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
           gap: '8px',
           marginBottom: '14px',
         }}>
@@ -215,6 +216,13 @@ export function PurchaseDetailCard({ purchase, isLoading = false, onEdit, onCanc
           >
             {t('purchases.purchase_detail_card.s15', "تكلفة الوصول (Landed Costs)")}
           </Button>
+          <Link
+            className="button button-secondary"
+            to={`/accounts?supplierId=${encodeURIComponent(purchase.supplierId)}`}
+            style={{ fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center', borderColor: '#170e5e', color: '#170e5e', fontWeight: 800, display: 'inline-flex', alignItems: 'center' }}
+          >
+            {t('purchases.purchase_detail_card.pay_supplier_link', "دفع لمورد")}
+          </Link>
           <Button
             variant="secondary"
             style={{ fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center', borderColor: '#170e5e', color: '#170e5e', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '6px' }}

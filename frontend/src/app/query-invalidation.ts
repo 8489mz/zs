@@ -130,12 +130,14 @@ export async function invalidatePurchasesDomain(
   options?: { purchaseId?: string; includeDashboard?: boolean }
 ) {
   const { purchaseId, includeDashboard = false } = options || {};
-  const immediateTasks = [queryClient.invalidateQueries({ queryKey: queryKeys.purchases, refetchType: 'active' })];
+  const immediateTasks = [
+    queryClient.invalidateQueries({ queryKey: queryKeys.purchases, refetchType: 'active' }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.suppliers, refetchType: 'active' }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.supplierBalances, refetchType: 'active' }),
+  ];
   if (purchaseId) immediateTasks.push(queryClient.invalidateQueries({ queryKey: queryKeys.purchaseDetail(purchaseId) }));
 
   const deferredTasks = [
-    queryClient.invalidateQueries({ queryKey: queryKeys.suppliers, refetchType: 'none' }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.supplierBalances, refetchType: 'none' }),
     queryClient.invalidateQueries({ queryKey: queryKeys.products, refetchType: 'none' }),
     queryClient.invalidateQueries({ queryKey: ['catalogProducts'], refetchType: 'none' }),
     queryClient.invalidateQueries({ queryKey: queryKeys.inventoryReport, refetchType: 'none' }),

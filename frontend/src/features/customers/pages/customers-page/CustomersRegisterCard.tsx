@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { DataTable } from '@/shared/ui/data-table';
 import { Button } from '@/shared/ui/button';
 import { SearchToolbar } from '@/shared/components/search-toolbar';
@@ -181,6 +182,9 @@ export function CustomersRegisterCard(props: CustomersRegisterCardProps) {
               {i18n.language === 'en' ? 'Loyalty' : __t('customers.customers_page.customers_register_card.s6', "نقاط الولاء")}
             </Button>
           )}
+          <Link className="button button-secondary" to={`/accounts?customerId=${encodeURIComponent(customer.id)}`} onClick={(event) => { event.stopPropagation(); }}>
+            {i18n.language === 'en' ? 'Statement' : __t('customers.customers_page.customers_register_card.statement_link', "كشف الحساب")}
+          </Link>
           <Button variant="secondary" onClick={(event) => { event.stopPropagation(); props.setSelectedCustomer(customer); }}>
             {t('common.edit', 'تعديل')}
           </Button>

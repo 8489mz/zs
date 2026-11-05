@@ -27,7 +27,7 @@ export class PurchasesQueryService {
       .leftJoin('users as u', (j) => j.onRef('u.id', '=', 'p.created_by').onRef('u.tenant_id', '=', 'p.tenant_id'))
       .select([
         'p.id', 'p.doc_no', 'p.supplier_id', 's.name as supplier_name', 'p.payment_type', 'p.subtotal', 'p.discount', 'p.tax_rate', 'p.tax_amount',
-        'p.prices_include_tax', 'p.total', 'p.note', 'p.status', 'p.branch_id', 'p.location_id', 'p.created_at', 'b.name as branch_name', 'l.name as location_name', 'u.username as created_by_name',
+        'p.prices_include_tax', 'p.total', 'p.note', 'p.status', 'p.lifecycle_status', 'p.matched_status', 'p.branch_id', 'p.location_id', 'p.created_at', 'b.name as branch_name', 'l.name as location_name', 'u.username as created_by_name',
         'p.required_date', 'p.currency', 'p.company_name', 'p.contact_id', 'p.shipping_address_id', 'p.cost_center_id', 'p.project_id', 'p.import_project_id', 'p.terms_template'
       ])
       .where(this.tenantPredicate(auth, 'p'))
@@ -38,7 +38,7 @@ export class PurchasesQueryService {
     const purchaseIds = purchases.map((row) => Number(row.id || 0)).filter((id) => id > 0);
     const items = purchaseIds.length ? await this.db
       .selectFrom('purchase_items')
-      .select(['id', 'purchase_id', 'product_id', 'product_name', 'qty', 'unit_cost', 'line_total', 'unit_name', 'unit_multiplier'])
+      .select(['id', 'purchase_id', 'product_id', 'product_name', 'qty', 'received_qty', 'unit_cost', 'line_total', 'unit_name', 'unit_multiplier'])
       .where('purchase_id', 'in', purchaseIds)
       .where(this.tenantPredicate(auth))
       .orderBy('purchase_id', 'asc')
@@ -73,7 +73,7 @@ export class PurchasesQueryService {
       .leftJoin('users as u', (j) => j.onRef('u.id', '=', 'p.created_by').onRef('u.tenant_id', '=', 'p.tenant_id'))
       .select([
         'p.id', 'p.doc_no', 'p.supplier_id', 's.name as supplier_name', 'p.payment_type', 'p.subtotal', 'p.discount', 'p.tax_rate', 'p.tax_amount',
-        'p.prices_include_tax', 'p.total', 'p.note', 'p.status', 'p.branch_id', 'p.location_id', 'p.created_at', 'b.name as branch_name', 'l.name as location_name', 'u.username as created_by_name',
+        'p.prices_include_tax', 'p.total', 'p.note', 'p.status', 'p.lifecycle_status', 'p.matched_status', 'p.branch_id', 'p.location_id', 'p.created_at', 'b.name as branch_name', 'l.name as location_name', 'u.username as created_by_name',
         'p.required_date', 'p.currency', 'p.company_name', 'p.contact_id', 'p.shipping_address_id', 'p.cost_center_id', 'p.project_id', 'p.import_project_id', 'p.terms_template',
         sql<number>`COUNT(*) OVER()`.as('total_count'),
         sql<number>`COALESCE(SUM(p.total) OVER(), 0)`.as('agg_total_amount'),
@@ -125,7 +125,7 @@ export class PurchasesQueryService {
       ? await Promise.all([
           this.db
             .selectFrom('purchase_items')
-            .select(['id', 'purchase_id', 'product_id', 'product_name', 'qty', 'unit_cost', 'line_total', 'unit_name', 'unit_multiplier'])
+            .select(['id', 'purchase_id', 'product_id', 'product_name', 'qty', 'received_qty', 'unit_cost', 'line_total', 'unit_name', 'unit_multiplier'])
             .where('purchase_id', 'in', pagedIds)
             .where(this.tenantPredicate(auth))
             .orderBy('purchase_id', 'asc')
@@ -176,7 +176,7 @@ export class PurchasesQueryService {
       .leftJoin('users as u', (j) => j.onRef('u.id', '=', 'p.created_by').onRef('u.tenant_id', '=', 'p.tenant_id'))
       .select([
         'p.id', 'p.doc_no', 'p.supplier_id', 's.name as supplier_name', 'p.payment_type', 'p.subtotal', 'p.discount', 'p.tax_rate', 'p.tax_amount',
-        'p.prices_include_tax', 'p.total', 'p.note', 'p.status', 'p.branch_id', 'p.location_id', 'p.created_at', 'b.name as branch_name', 'l.name as location_name', 'u.username as created_by_name',
+        'p.prices_include_tax', 'p.total', 'p.note', 'p.status', 'p.lifecycle_status', 'p.matched_status', 'p.branch_id', 'p.location_id', 'p.created_at', 'b.name as branch_name', 'l.name as location_name', 'u.username as created_by_name',
         'p.required_date', 'p.currency', 'p.company_name', 'p.contact_id', 'p.shipping_address_id', 'p.cost_center_id', 'p.project_id', 'p.import_project_id', 'p.terms_template'
       ])
       .where('p.id', '=', id)
@@ -188,7 +188,7 @@ export class PurchasesQueryService {
     const [items, attachments] = await Promise.all([
       this.db
         .selectFrom('purchase_items')
-        .select(['id', 'purchase_id', 'product_id', 'product_name', 'qty', 'unit_cost', 'line_total', 'unit_name', 'unit_multiplier'])
+        .select(['id', 'purchase_id', 'product_id', 'product_name', 'qty', 'received_qty', 'unit_cost', 'line_total', 'unit_name', 'unit_multiplier'])
         .where('purchase_id', '=', id)
         .where(this.tenantPredicate(auth))
         .orderBy('id', 'asc')
