@@ -2200,7 +2200,11 @@ export class HrService {
       // A loan repayment must settle EXACTLY into its installment subledger.
       // Posting only the parent loan and treasury amount would leave the
       // pending installments inconsistent and permit repeat deductions.
-      if (remainingRepayment > 0.001) {
+      // The undistributed tolerance follows tenant book digits (half a
+      // minor unit, the same form as the installment-status line above):
+      // at 3dp a 0.001 remainder is ONE minor unit and must fail closed,
+      // never strand silently while the loan is marked repaid.
+      if (remainingRepayment > 1 / (2 * (10 ** repayBookDigits))) {
         throw new AppError(
           'تعذر توزيع مبلغ السداد كاملًا على أقساط السلفة؛ راجع الرصيد وجدول التقسيط',
           'HR_LOAN_REPAYMENT_INSTALLMENT_MISMATCH', 409,
