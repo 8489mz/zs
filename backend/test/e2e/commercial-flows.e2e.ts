@@ -68,6 +68,22 @@ async function main() {
   const location = createLocationRes.location || createLocationRes;
   assert.ok(location?.id, 'at least one location must exist after creation');
 
+  // The cash sale below requires an open cashier shift (Q1 shift gate:
+  // POST /api/sales returns 400 OPEN_SHIFT_REQUIRED with no open shift
+  // for the cashier). Open one at the sale's location first and assert
+  // it opened, so the flow tests the sale instead of the gate. The same
+  // open shift also covers the cash sale return below (cash refunds need
+  // an open shift unless the caller is admin/super_admin).
+  const openShiftRes = await client.post('/api/cashier-shifts/open', {
+    openingCash: 0,
+    locationId: Number(location.id),
+    note: 'E2E commercial flow shift',
+  }, 201);
+  const openedShifts = expectArray(openShiftRes.cashierShifts, 'cashierShifts');
+  const openedShift = openedShifts.find((shift) =>
+    Number(shift.locationId) === Number(location.id) && shift.status === 'open');
+  assert.ok(openedShift?.id, 'cashier shift must be open before the cash sale');
+
   const purchase = await client.post('/api/purchases', {
     locationId: Number(location.id),
     supplierId: Number(supplier.id),
