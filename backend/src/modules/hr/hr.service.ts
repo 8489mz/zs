@@ -2725,7 +2725,7 @@ export class HrService {
     // Read all punches for the run once, then share the exact same totals with payroll review.
     const hourlyWorkByEmployee = new Map<number, ReturnType<typeof summarizeHourlyAttendance>>();
     const punches = empIds.length ? await sql<Record<string, unknown>>`
-      SELECT employee_id, status, check_in_at, check_out_at,
+      SELECT employee_id, status, check_in_at, check_out_at, prior_sessions_minutes,
         to_char(work_date, 'YYYY-MM-DD') AS work_date_text
       FROM hr_attendance_records
       WHERE tenant_id = ${tenantId}
@@ -4698,7 +4698,7 @@ export class HrService {
           COALESCE(SUM(CASE WHEN a.check_in_at IS NOT NULL AND a.check_out_at IS NOT NULL
               AND a.check_out_at > a.check_in_at AND a.check_out_at <= a.check_in_at + INTERVAL '24 hours'
               AND a.status NOT IN ('absent', 'leave')
-              THEN FLOOR(EXTRACT(EPOCH FROM (a.check_out_at - a.check_in_at)) / 60) ELSE 0 END), 0)::text AS minutes,
+              THEN FLOOR(EXTRACT(EPOCH FROM (a.check_out_at - a.check_in_at)) / 60) + COALESCE(a.prior_sessions_minutes, 0) ELSE 0 END), 0)::text AS minutes,
           COALESCE(SUM(CASE WHEN e.compensation_type = 'hourly'
               AND a.check_in_at IS NOT NULL AND a.check_out_at IS NOT NULL
               AND a.check_out_at > a.check_in_at AND a.check_out_at <= a.check_in_at + INTERVAL '24 hours'
@@ -5036,8 +5036,8 @@ export class HrService {
     const auditEntry = await this.db.transaction().execute(async (trx) => {
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
       await this.assertAttendanceDayNotPosted(trx, employeeId, workDate, auth.tenantId || '');
-      const existingCheck = await sql<{ check_in_at: Date | null; check_out_at: Date | null; notes: string | null }>`
-        SELECT check_in_at, check_out_at, notes FROM hr_attendance_records
+      const existingCheck = await sql<{ check_in_at: Date | null; check_out_at: Date | null; notes: string | null; prior_sessions_minutes: number | null }>`
+        SELECT check_in_at, check_out_at, notes, prior_sessions_minutes FROM hr_attendance_records
         WHERE employee_id = ${employeeId} AND work_date = ${workDate}::date AND tenant_id = ${auth.tenantId}
         FOR UPDATE
       `.execute(trx);
@@ -5069,6 +5069,16 @@ export class HrService {
         const prevCheckOut = formatTimeInTimezone(existingRow!.check_out_at, tenantTimezone);
         const sessionNote = `وردية سابقة (${prevCheckIn} إلى ${prevCheckOut})`;
         const combinedNotes = combineNotes(existingRow!.notes, sessionNote);
+        // D2: accumulate the completed session's minutes on the day row
+        // instead of losing them. Only a valid session (positive minutes,
+        // at most 24h — the same validity rule hourly pay applies) counts;
+        // an invalid prior session contributes 0 and still starts the new
+        // session, as before.
+        const prevStartMs = existingRow!.check_in_at ? new Date(existingRow!.check_in_at).getTime() : NaN;
+        const prevEndMs = existingRow!.check_out_at ? new Date(existingRow!.check_out_at).getTime() : NaN;
+        const prevElapsed = Math.floor((prevEndMs - prevStartMs) / 60000);
+        const prevMinutes = Number.isFinite(prevElapsed) && prevElapsed > 0 && prevElapsed <= 1440 ? prevElapsed : 0;
+        const accumulatedPriorMinutes = Math.max(0, Math.floor(Number(existingRow!.prior_sessions_minutes || 0))) + prevMinutes;
 
         await sql`
           UPDATE hr_attendance_records
@@ -5077,6 +5087,7 @@ export class HrService {
             check_out_at = NULL,
             status = 'present',
             notes = ${combinedNotes},
+            prior_sessions_minutes = ${accumulatedPriorMinutes},
             source = ${normalizeAttendanceSource(payload.source)},
             updated_by = ${auth.userId},
             updated_at = NOW()

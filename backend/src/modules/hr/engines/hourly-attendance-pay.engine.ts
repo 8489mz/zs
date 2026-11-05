@@ -14,6 +14,8 @@ export type WorkPunch = {
   checkIn?: unknown;
   checkOut?: unknown;
   workDate?: unknown;
+  /** Completed minutes of earlier sessions stored on the day row (D2). */
+  prior_sessions_minutes?: unknown;
 };
 export function summarizeHourlyAttendance(punches: WorkPunch[], hourlyRate: number, minorUnits: MoneyDigits) {
   let workedMinutes = 0;
@@ -23,6 +25,10 @@ export function summarizeHourlyAttendance(punches: WorkPunch[], hourlyRate: numb
   for (const punch of punches) {
     const status = String(punch.status || '');
     if (status === 'absent' || status === 'leave') continue;
+    // D2: minutes of earlier completed sessions stored on the day row
+    // count toward the day's pay even while the current session is open.
+    const priorMinutes = Math.max(0, Math.floor(Number(punch.prior_sessions_minutes || 0)));
+    workedMinutes += priorMinutes;
     const start = punch.check_in_at;
     const finish = punch.check_out_at;
     if (!start && !finish) continue;
