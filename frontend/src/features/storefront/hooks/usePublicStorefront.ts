@@ -38,7 +38,9 @@ export function usePublicStorefront(cleanSlug: string) {
     queryFn: () => storefrontApi.getInfo(cleanSlug),
     enabled: Boolean(cleanSlug),
     staleTime: 30 * 1000,
-    refetchOnWindowFocus: true,
+    // INV-PWA-UPDATE-PROMPT: no refetchOnWindowFocus here — the public page
+    // inherits the global false (providers.tsx), so focusing the window never
+    // re-fetches the full catalog or silently re-prices the cart mid-checkout.
   });
 
   const catalogQuery = useQuery({
@@ -46,7 +48,7 @@ export function usePublicStorefront(cleanSlug: string) {
     queryFn: () => storefrontApi.getCatalog(cleanSlug),
     enabled: Boolean(cleanSlug),
     staleTime: 30 * 1000,
-    refetchOnWindowFocus: true,
+    // INV-PWA-UPDATE-PROMPT: no refetchOnWindowFocus here — see infoQuery above.
   });
 
   // State

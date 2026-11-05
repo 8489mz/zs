@@ -55,4 +55,63 @@ describe('INV-NO-FORCED-UPDATE-RELOAD', () => {
     expect(content.match(/INV-NO-FORCED-UPDATE-RELOAD/g) || []).toHaveLength(1);
     expect(content).toContain('no-forced-reload.spec.ts');
   });
+
+  it('registers the service worker for prompt updates only, with one registration owner', () => {
+    const configPath = path.join(frontendDir, 'vite.config.ts');
+    expect(fs.existsSync(configPath)).toBe(true);
+    const config = fs.readFileSync(configPath, 'utf8');
+
+    // 'autoUpdate' let the plugin self-activate the new worker AND inject a
+    // second registration that reloaded the page the moment it activated —
+    // the white-screen reload main.tsx alone could never cause.
+    expect(config).toContain("registerType: 'prompt'");
+    expect(config).not.toContain('autoUpdate');
+    expect(config).toContain('injectRegister: false');
+
+    // The single owner is the manual registration in main.tsx: a waiting
+    // worker only announces itself; the banner decides, never this file.
+    const mainPath = path.join(frontendDir, 'src/main.tsx');
+    const main = fs.readFileSync(mainPath, 'utf8');
+    expect(main).toContain("addEventListener('waiting'");
+    expect(main).toContain('pwa-update-available');
+    expect(main).not.toContain('messageSkipWaiting');
+    expect(main).not.toContain('location.reload');
+  });
+
+  it('never refetches the public storefront catalog on window focus', () => {
+    const hookPath = path.join(frontendDir, 'src/features/storefront/hooks/usePublicStorefront.ts');
+    expect(fs.existsSync(hookPath)).toBe(true);
+    const hook = fs.readFileSync(hookPath, 'utf8');
+
+    // Both queries used to opt back into focus refetch, re-fetching the full
+    // catalog (and silently re-pricing the cart) every time the window was
+    // focused. Removing the flag inherits the global false.
+    expect(hook).not.toContain('refetchOnWindowFocus: true');
+    expect(hook).toContain('storefront-info');
+    expect(hook).toContain('storefront-catalog');
+
+    const providersPath = path.join(frontendDir, 'src/app/providers.tsx');
+    const providers = fs.readFileSync(providersPath, 'utf8');
+    expect(providers).toContain('refetchOnWindowFocus: false');
+  });
+
+  it('takes over only from the banner button, never on its own', () => {
+    const bannerPath = path.join(frontendDir, 'src/app/pwa-update-banner.tsx');
+    expect(fs.existsSync(bannerPath)).toBe(true);
+    const banner = fs.readFileSync(bannerPath, 'utf8');
+
+    expect(banner).toContain('pwa-update-available');
+    expect(banner).toContain('pwa-updated');
+    // Exactly one takeover call and one reload, both behind the user's click.
+    expect(banner.match(/messageSkipWaiting/g) || []).toHaveLength(1);
+    expect(banner.match(/location\.reload/g) || []).toHaveLength(1);
+    expect(banner).toContain('onClick={handleApplyUpdate}');
+  });
+
+  it('records the prompt invariant exactly once', () => {
+    const invariantsPath = path.join(frontendDir, '..', 'ARCHITECTURE_INVARIANTS.md');
+    const content = fs.readFileSync(invariantsPath, 'utf8');
+    expect(content.match(/INV-PWA-UPDATE-PROMPT/g) || []).toHaveLength(1);
+    expect(content).toContain('pwa-update-banner.tsx');
+  });
 });

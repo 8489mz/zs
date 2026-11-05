@@ -32,7 +32,19 @@ export default defineConfig(({ mode }) => {
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // INV-PWA-UPDATE-PROMPT: 'prompt', never the automatic registration
+      // type. With the automatic type the plugin enables skipWaiting +
+      // clientsClaim in the generated worker AND injects its own registration
+      // script that reloads the page the moment the new worker activates — a
+      // white-screen reload mid-sale or mid-form, even though main.tsx itself
+      // never forces an update.
+      // injectRegister: false leaves the manual Workbox registration in
+      // src/main.tsx as the single owner: a waiting worker only dispatches
+      // 'pwa-update-available', the banner offers the update, and only the
+      // user's click takes over. (PERF-11: index.html is served no-cache, so
+      // the next fresh navigation still picks up the new build.)
+      registerType: 'prompt',
+      injectRegister: false,
       devOptions: { enabled: false },
       manifest: {
         name: 'Z-ERP - منظومة إدارة الأعمال',

@@ -39,6 +39,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 import { ActivationGuard } from '@/shared/components/ActivationGuard';
 import { SilentErrorBoundary } from '@/core/components/SilentErrorBoundary';
+import { PwaUpdateBanner } from '@/app/pwa-update-banner';
 import { initProductIconTheme } from '@/shared/components/icons/product-icon-theme';
 import { initUniversalHorizontalScroll } from '@/shared/utils/horizontal-scroll';
 
@@ -86,6 +87,16 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator && !window.loc
         // applies on the next fresh navigation or on a user-initiated reload
         // (including a hard refresh), never on its own in front of a cashier,
         // a form, or a storefront popup.
+        // INV-PWA-UPDATE-PROMPT: the waiting worker is only OFFERED. The
+        // 'waiting' event dispatches 'pwa-update-available' (carrying this
+        // Workbox instance) for PwaUpdateBanner to show; only the user's
+        // click in that banner asks the waiting worker to take over, and the
+        // reload happens on 'controlling' (pwa-updated) after that click —
+        // never here.
+        wb.addEventListener('waiting', () => {
+          window.dispatchEvent(new CustomEvent('pwa-update-available', { detail: { workbox: wb } }));
+        });
+
         wb.addEventListener('controlling', () => {
           // Broadcast update event silently without refreshing the window
           window.dispatchEvent(new CustomEvent('pwa-updated'));
@@ -209,6 +220,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <ActivationGuard>
           <AppRouter />
         </ActivationGuard>
+        <PwaUpdateBanner />
       </AppProviders>
     </SilentErrorBoundary>
   </React.StrictMode>
