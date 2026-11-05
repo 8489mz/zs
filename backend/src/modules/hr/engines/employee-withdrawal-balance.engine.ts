@@ -1,4 +1,4 @@
-import { summarizeHourlyAttendance, prorateMonthlyWage, WorkPunch } from './hourly-attendance-pay.engine';
+import { summarizeHourlyAttendance, prorateMonthlyWage, daysInCalendarMonth, WorkPunch } from './hourly-attendance-pay.engine';
 import { MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
 /** Default direct-advance cash cap when no per-currency value is configured (N2: current behaviour, preserved). */
@@ -209,7 +209,9 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
     accrualSource = 'attendance_records';
     const presentRecords = ctx.punches.filter(p => String(p.status || '').toLowerCase() === 'present');
     completedDays = presentRecords.length > 0 ? presentRecords.length : Math.max(1, daysElapsed);
-    const dailyWage = baseSalary > 0 ? roundMoney(baseSalary / 30, minorUnits) : 0;
+    // D4: the daily wage is the monthly wage over the days of the preview
+    // month (the month containing today) — never a fixed 30.
+    const dailyWage = baseSalary > 0 ? roundMoney(baseSalary / daysInCalendarMonth(ctx.todayDate || cycleStart), minorUnits) : 0;
     accruedEarnings = roundMoney(completedDays * dailyWage, minorUnits);
     calculationText = `${completedDays} يوم استحقاق × ${dailyWage} ${currencyLabel}/يوم`;
     isProrated = false;

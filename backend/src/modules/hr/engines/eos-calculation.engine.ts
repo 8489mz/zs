@@ -75,7 +75,10 @@ const toMoney = (v: number, minorUnits: MoneyDigits): number => roundMoney(Numbe
 export function calculateGratuity(params: GratuityCalculationParams): GratuityCalculationResult {
   const serviceYears = Math.max(0, Number(params.serviceYearsDecimal || 0));
   const totalSalary = Math.max(0, Number(params.totalSalary || 0));
-  const dailyWage = Math.max(0, Number(params.dailyWage || (totalSalary / 30)));
+  // D4: no /30 fallback. A daily wage is caller-supplied at the
+  // calendar-month basis (termination month); the custom law throws
+  // without an explicit positive daily wage instead of guessing one.
+  const dailyWage = Math.max(0, Number(params.dailyWage || 0));
   const lawType = params.lawType;
   const reason = params.reason || 'resignation';
 
@@ -118,6 +121,9 @@ export function calculateGratuity(params: GratuityCalculationParams): GratuityCa
     const daysPerYear = Number(params.customGratuityDaysPerYear);
     if (!Number.isFinite(daysPerYear) || daysPerYear < 0 || daysPerYear > 365) {
       throw new RangeError('Custom EOS days per year must be expressly provided between 0 and 365');
+    }
+    if (!(dailyWage > 0)) {
+      throw new RangeError('Custom EOS gratuity requires an explicit positive daily wage at the calendar-month basis');
     }
     baseGratuity = daysPerYear * dailyWage * serviceYears;
     gratuityPercentage = 100;

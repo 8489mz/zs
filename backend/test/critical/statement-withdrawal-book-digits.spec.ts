@@ -107,8 +107,9 @@ function main(): void {
     punches: [{ status: 'present' } as never],
     minorUnits: 3,
   });
-  // Daily: 1 present day x (3103.875 / 30 = 103.4625 -> 103.463 at 3dp).
-  assert.equal(dailyPath.accrual.accruedEarnings, 103.463, 'daily-path preview at 3dp (103.463, not 103.46)');
+  // D4: daily wage divides by the preview month's days (March = 31):
+  // 1 present day x (3103.875 / 31 = 100.125 exactly at 3dp).
+  assert.equal(dailyPath.accrual.accruedEarnings, 100.125, 'daily-path preview at 3dp (100.125, March 31-day month)');
 
   // A 0.004 net balance is a credit at 3dp on the withdrawal preview too.
   const tiny = calculateEmployeeWithdrawalBalance({
@@ -135,7 +136,7 @@ function main(): void {
   });
   assert.equal(hourly.accrual.workedHours, 3.33, 'worked hours stay 2dp (3.33h) at 3dp digits');
 
-  console.log('statement-withdrawal-book-digits.spec: ok (100.125 / credit-0.004 / 103.463 / 3.33h)');
+  console.log('statement-withdrawal-book-digits.spec: ok (100.125 / credit-0.004 / daily-100.125-Mar31 / 3.33h)');
 }
 
 main();

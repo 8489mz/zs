@@ -14,6 +14,7 @@ import {
 } from '../engines/eos-calculation.engine';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { requireStoredHrMoney } from '../engines/hr-payroll-run.engine';
+import { daysInCalendarMonth } from '../engines/hourly-attendance-pay.engine';
 
 export interface SettlementCalculateInput {
   employeeId: number;
@@ -189,7 +190,10 @@ export class EndOfServiceService {
     if (!Number.isFinite(totalSalary) || totalSalary <= 0 || !Number.isFinite(basicSalary) || basicSalary < 0) {
       throw new BadRequestException('يجب مراجعة عقد الموظف وتحديد أجر موجب قبل احتساب المخالصة');
     }
-    const dailyWage = totalSalary / 30;
+    // D4: the daily wage is the monthly wage over the days of the
+    // termination calendar month — never a fixed 30. The same wage
+    // prices the custom gratuity and the leave encashment below.
+    const dailyWage = totalSalary / daysInCalendarMonth(endDate);
 
     // Determine gratuity via pure engine
     if (!input.lawType) throw new BadRequestException('يجب تحديد قانون العمل؛ لا يجوز افتراض قانون دولة');

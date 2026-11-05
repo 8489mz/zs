@@ -53,7 +53,7 @@ import { MoneyDigits, currencyMoneyDigits, roundMoney } from '../accounting/engi
 import { calculateOvertime, calculateHourlyOvertimePremium } from './engines/payroll-calculation.engine';
 import { calculateHrPayrollRunLine, requirePayrollMonetaryCurrency, requireStoredHrMoney, requireBankPayrollPaymentReference, canReincludeAutoExcludedPayrollItem, AUTO_PAYROLL_EXCLUSION_NOTE, MANUAL_PAYROLL_EXCLUSION_NOTE } from './engines/hr-payroll-run.engine';
 import { validateHrStatutoryPolicy, requireHrPayrollJurisdictionCurrency, inferStatutoryCountry, STATUTORY_COUNTRIES, type HrStatutoryPolicy } from './engines/hr-statutory-policy.engine';
-import { summarizeHourlyAttendance, calculateEffectiveContractPay, calculateEffectiveCompensationPay, calculateHistoricalOvertimePay, calculateDatedPayrollAdjustment, payrollCalendarMonthFraction, calculatePayableMinutes, resolveExpectedDailyMinutes, type EffectiveSalaryContract, type EffectiveCompensationPackage, type ApprovedOvertimeDay } from './engines/hourly-attendance-pay.engine';
+import { summarizeHourlyAttendance, calculateEffectiveContractPay, calculateEffectiveCompensationPay, calculateHistoricalOvertimePay, calculateDatedPayrollAdjustment, payrollCalendarMonthFraction, calculatePayableMinutes, resolveExpectedDailyMinutes, daysInCalendarMonth, type EffectiveSalaryContract, type EffectiveCompensationPackage, type ApprovedOvertimeDay } from './engines/hourly-attendance-pay.engine';
 import { calculateAttendancePenalty } from './engines/attendance-penalty.engine';
 import { buildEmployeeFinancialStatement } from './engines/employee-financial-statement.engine';
 import { calculateEmployeeWithdrawalBalance, resolveDirectAdvanceCashCap, type EmployeeWithdrawalBalanceResult } from './engines/employee-withdrawal-balance.engine';
@@ -3276,7 +3276,11 @@ export class HrService {
       
       const baseSalary = Number(baseSalaryByEmployeeId.get(employeeId) || 0);
       const contractedBase = Number(contractualMonthlySalary?.get(employeeId) ?? baseSalary);
-      const dailyRate = isHourly ? (hourlyRate * expectedHours) : (contractedBase > 0 ? roundMoney(contractedBase / 30, reviewDigits) : 0);
+      // D4: the daily rate is the monthly wage over the days of the review
+      // period's calendar month — never a fixed 30. Delay/leave deductions
+      // use this period rate (their incidents carry no per-day dates);
+      // absence itself is priced per absent day below, at ITS month's rate.
+      const dailyRate = isHourly ? (hourlyRate * expectedHours) : (contractedBase > 0 ? roundMoney(contractedBase / daysInCalendarMonth(range.from), reviewDigits) : 0);
       const calculatedHourlyRate = isHourly ? hourlyRate : (dailyRate / expectedHours);
 
       // Determine Delay Policy Deduction
@@ -3308,7 +3312,21 @@ export class HrService {
         delayDeduction = 0;
       }
 
-      const suggestedAttendanceDeductionAmount = roundMoney((dailyRate * attendanceAbsentDays) + delayDeduction, reviewDigits);
+      // D4: each absent day is priced at ITS calendar month's daily rate
+      // (identical to the period rate for single-month reviews; correct
+      // across a month boundary too). Hourly staff keep the old full-day
+      // equivalent (hourly rate x expected hours) per absent day.
+      let absentDeduction = 0;
+      for (const rec of attendance.records) {
+        if (rec.status !== 'absent') continue;
+        const dt = new Date(String(rec.work_date_text));
+        const dayName = dayNames[dt.getUTCDay()];
+        if (hrWeekendDays.includes(dayName) || isHoliday(String(rec.work_date_text))) continue;
+        absentDeduction += isHourly
+          ? hourlyRate * expectedHours
+          : (contractedBase > 0 ? contractedBase / daysInCalendarMonth(String(rec.work_date_text)) : 0);
+      }
+      const suggestedAttendanceDeductionAmount = roundMoney(absentDeduction + delayDeduction, reviewDigits);
       const suggestedLeaveDeductionAmount = roundMoney(dailyRate * unpaidLeaveDays, reviewDigits);
       let suggestedOvertimeAllowanceAmount: number;
       try {
@@ -5521,6 +5539,7 @@ export class HrService {
 
   async listAttendanceExceptions(query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
     const { tenantId } = requireTenantScope(auth);
+    const exceptionDigits = await tenantBookDigits(this.db, tenantId);
     const workDate = normalizeDateOnly(query.date) || normalizeDateOnly(query.workDate);
     const month = clean(query.month);
     const status = clean(query.status).toLowerCase();
@@ -5604,6 +5623,8 @@ export class HrService {
           globalFourthTimeDeduction: Number(globalPolicies.hrDelayPolicyFourthTimeDeduction || 1.00),
           graceMinutes: Number(row.grace_minutes || 0),
           overtimeMultiplier: Number.isFinite(Number(globalPolicies.overtimeMultiplier)) && Number(globalPolicies.overtimeMultiplier) >= 1 ? Number(globalPolicies.overtimeMultiplier) : 1,
+          referenceDate: clean(row.work_date_text),
+          minorUnits: exceptionDigits,
         });
 
         return {

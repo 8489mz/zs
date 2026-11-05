@@ -111,7 +111,9 @@ async function main(): Promise<void> {
     assert.equal(withPackage.salaries.basicSalary, 3000);
     assert.equal(withPackage.salaries.allowanceAmount, 1000);
     assert.equal(withPackage.salaries.totalSalary, 4000);
-    assert.equal(withPackage.salaries.dailyWage, 133.33);
+    // D4: the daily wage divides by the termination month's days
+    // (January = 31): 4000 / 31 = 129.03, never a fixed 30.
+    assert.equal(withPackage.salaries.dailyWage, 129.03);
     const expected = calculateGratuity({
       serviceYearsDecimal: withPackage.servicePeriod.totalYearsDecimal,
       totalSalary: 4000,

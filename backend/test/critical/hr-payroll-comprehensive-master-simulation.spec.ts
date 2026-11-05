@@ -410,9 +410,11 @@ function testPayFrequenciesAndSchedules() {
     unpaidApprovedPayrollItems: [],
     todayDate: '2026-10-26',
   });
-  assert.equal(dailyBalance.accrual.accruedEarnings, 100, 'أجر يوم العمل هو 100 ج.م');
+  // D4: the daily wage divides by the preview month's days
+  // (October = 31): 3000 / 31 = 96.77, never a fixed 30.
+  assert.equal(dailyBalance.accrual.accruedEarnings, 96.77, 'أجر يوم العمل هو 96.77 ج.م');
   assert.equal(dailyBalance.schedule.isPayoutDue, true);
-  console.log('  ✔ الدورة اليومية: استحقاق فوري للأجر اليومي (100 ج.م) وصلاحية صرف فورية\n');
+  console.log('  ✔ الدورة اليومية: استحقاق فوري للأجر اليومي (96.77 ج.م) وصلاحية صرف فورية\n');
 }
 
 // ==============================================================================

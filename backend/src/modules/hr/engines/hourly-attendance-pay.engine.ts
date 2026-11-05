@@ -4,6 +4,28 @@ import { MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-un
 const money = (v: number, minorUnits: MoneyDigits): number => roundMoney(v, minorUnits);
 
 /**
+ * Days in the calendar month containing a YYYY-MM-DD date (D4,
+ * INV-CALENDAR-MONTH-DAY-COUNT-ALIGNMENT). The single day-count basis
+ * for the whole system: a daily wage is the monthly wage divided by the
+ * days of ITS month — never a fixed 30. Throws on a malformed date:
+ * a day-count basis must never be guessed.
+ */
+export function daysInCalendarMonth(date: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new RangeError('Invalid calendar date for day-count basis');
+  }
+  const parsed = new Date(date + 'T00:00:00Z');
+  if (!Number.isFinite(parsed.getTime())) {
+    throw new RangeError('Invalid calendar date for day-count basis');
+  }
+  return daysInUtcMonth(parsed.getUTCFullYear(), parsed.getUTCMonth());
+}
+
+function daysInUtcMonth(year: number, monthZeroBased: number): number {
+  return new Date(Date.UTC(year, monthZeroBased + 1, 0)).getUTCDate();
+}
+
+/**
  * HR payment calculations: hourly staff are paid for completed, valid recorded
  * work sessions, not for a theoretical 30-day attendance schedule.
  */
@@ -62,8 +84,7 @@ export function prorateMonthlyWage(monthlySalary: number, from: string, to: stri
   if ((end.getTime() - start.getTime()) / 86400000 > 366) return 0;
   let portion = 0;
   for (let day = new Date(start); day <= end; day.setUTCDate(day.getUTCDate() + 1)) {
-    const daysInMonth = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth() + 1, 0)).getUTCDate();
-    portion += 1 / daysInMonth;
+    portion += 1 / daysInUtcMonth(day.getUTCFullYear(), day.getUTCMonth());
   }
   return money(Math.max(0, monthlySalary) * portion, minorUnits);
 }
@@ -88,9 +109,12 @@ export function payrollCalendarMonthFraction(from: string, to: string): number {
   if (!Number.isFinite(span) || span > 366) throw new RangeError('Payroll period exceeds supported 366-day range');
   let fraction = 0;
   for (let day = new Date(start); day <= end; day.setUTCDate(day.getUTCDate() + 1)) {
-    fraction += 1 / new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth() + 1, 0)).getUTCDate();
+    fraction += 1 / daysInUtcMonth(day.getUTCFullYear(), day.getUTCMonth());
   }
-  return fraction;
+  // O1: float accumulation over whole months yields 0.9999999999999997
+  // instead of 1. Round the day-count sum: 1e-9 is far below any money
+  // precision the fraction feeds, and a full month must read exactly 1.
+  return Math.round(fraction * 1e9) / 1e9;
 }
 
 export function calculateEffectiveContractPay(
@@ -209,7 +233,7 @@ export function calculateDatedPayrollAdjustment(params: {
     if (effective.length !== 1 || !Number.isFinite(effective[0].baseSalary) || effective[0].baseSalary <= 0) {
       throw new RangeError('Adjustment date must match exactly one salary contract');
     }
-    dailyWage = effective[0].baseSalary / 30;
+    dailyWage = effective[0].baseSalary / daysInCalendarMonth(date);
   }
   return money(amount * (amountType === 'hours' ? dailyWage / expectedDailyHours : dailyWage), params.minorUnits);
 }
@@ -244,7 +268,7 @@ export function calculateHistoricalOvertimePay(
     }
     total += calculateOvertime({
       minorUnits,
-      calculatedHourlyRate: matches[0].baseSalary / 30 / expectedDailyHours,
+      calculatedHourlyRate: matches[0].baseSalary / daysInCalendarMonth(day.date) / expectedDailyHours,
       overtimeMinutes: day.minutes,
       overtimeMultiplier: multiplier,
     });
