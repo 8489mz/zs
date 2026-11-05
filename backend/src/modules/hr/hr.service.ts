@@ -56,7 +56,7 @@ import { validateHrStatutoryPolicy, requireHrPayrollJurisdictionCurrency, inferS
 import { summarizeHourlyAttendance, calculateEffectiveContractPay, calculateEffectiveCompensationPay, calculateHistoricalOvertimePay, calculateDatedPayrollAdjustment, payrollCalendarMonthFraction, calculatePayableMinutes, resolveExpectedDailyMinutes, type EffectiveSalaryContract, type EffectiveCompensationPackage, type ApprovedOvertimeDay } from './engines/hourly-attendance-pay.engine';
 import { calculateAttendancePenalty } from './engines/attendance-penalty.engine';
 import { buildEmployeeFinancialStatement } from './engines/employee-financial-statement.engine';
-import { calculateEmployeeWithdrawalBalance, type EmployeeWithdrawalBalanceResult } from './engines/employee-withdrawal-balance.engine';
+import { calculateEmployeeWithdrawalBalance, resolveDirectAdvanceCashCap, type EmployeeWithdrawalBalanceResult } from './engines/employee-withdrawal-balance.engine';
 import { createPasswordRecord, verifyPassword } from '../../core/auth/utils/password-hasher';
 import { assertSecurePasscode } from '../../core/auth/utils/password-policy';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
@@ -165,6 +165,11 @@ function money(value: unknown, minorUnits: MoneyDigits): number {
  * missing or malformed currency fails closed instead of defaulting to 2.
  */
 async function tenantBookDigits(db: Kysely<Database>, tenantId: string): Promise<MoneyDigits> {
+  const currency = await tenantCurrencyCode(db, tenantId);
+  return currencyMoneyDigits(currency);
+}
+
+async function tenantCurrencyCode(db: Kysely<Database>, tenantId: string): Promise<string> {
   const setting = await sql<{ value: string }>`
     SELECT value FROM settings WHERE tenant_id = ${tenantId} AND key = 'currency' LIMIT 1
   `.execute(db);
@@ -172,7 +177,7 @@ async function tenantBookDigits(db: Kysely<Database>, tenantId: string): Promise
   if (!/^[A-Z]{3}$/.test(currency)) {
     throw new AppError('حدد عملة منشأتك قبل حساب المرتبات', 'HR_TENANT_CURRENCY_REQUIRED', 400);
   }
-  return currencyMoneyDigits(currency);
+  return currency;
 }
 
 function combineNotes(...notes: Array<string | null | undefined>): string {
@@ -6668,6 +6673,8 @@ export class HrService {
 
     const tenantTimezone = await getTenantTimezone(this.db, tenantId);
     const bookDigits = await tenantBookDigits(this.db, tenantId);
+    const tenantCurrency = await tenantCurrencyCode(this.db, tenantId);
+    const payrollPolicies = await this.getPayrollPolicies(this.db, tenantId);
     const today = todayTenantDate(tenantTimezone);
     const currentMonthPrefix = today.slice(0, 7);
     const monthStart = `${currentMonthPrefix}-01`;
@@ -6796,6 +6803,7 @@ export class HrService {
       unpaidApprovedPayrollItems: unpaidItemsRes.rows || [],
       todayDate: today,
       minorUnits: bookDigits,
+      directAdvanceCashCap: resolveDirectAdvanceCashCap(payrollPolicies, contract?.currency || tenantCurrency),
     });
 
     return result;
@@ -6864,13 +6872,13 @@ export class HrService {
           }
           if (isAdvanceOverDirectCap && !isOverdraft) {
             throw new AppError(
-              `قيمة السلفة (${amount} ج.م) تتجاوز الحد الأقصى للصرف المباشر للكاشير (${withdrawalBalance.maxDirectAdvance} ج.م - 50% من الرصيد)؛ يلزم إدخال رمز أو كلمة مرور المدير للاعتماد الاستثنائي`,
+              `قيمة السلفة (${amount} ${withdrawalBalance.currencyLabel}) تتجاوز الحد الأقصى للصرف المباشر للكاشير (${withdrawalBalance.maxDirectAdvance} ${withdrawalBalance.currencyLabel} - 50% من الرصيد)؛ يلزم إدخال رمز أو كلمة مرور المدير للاعتماد الاستثنائي`,
               'HR_ADVANCE_OVER_DIRECT_CAP_REQUIRES_MANAGER_APPROVAL',
               403,
             );
           }
           throw new AppError(
-            `المبلغ المطلوب (${amount} ج.م) يتجاوز الرصيد المستحق للموظف (${withdrawalBalance.netAvailableBalance} ج.م)؛ يلزم إدخال رمز أو كلمة مرور المدير لاعتماد سلفة على المكشوف`,
+            `المبلغ المطلوب (${amount} ${withdrawalBalance.currencyLabel}) يتجاوز الرصيد المستحق للموظف (${withdrawalBalance.netAvailableBalance} ${withdrawalBalance.currencyLabel})؛ يلزم إدخال رمز أو كلمة مرور المدير لاعتماد سلفة على المكشوف`,
             'HR_ADVANCE_MANAGER_APPROVAL_REQUIRED',
             403,
           );

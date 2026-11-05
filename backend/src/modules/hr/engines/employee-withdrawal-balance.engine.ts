@@ -1,6 +1,48 @@
 import { summarizeHourlyAttendance, prorateMonthlyWage, WorkPunch } from './hourly-attendance-pay.engine';
 import { MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
+/** Default direct-advance cash cap when no per-currency value is configured (N2: current behaviour, preserved). */
+export const DEFAULT_DIRECT_ADVANCE_CASH_CAP = 2000;
+
+/**
+ * Resolve the direct-advance cash cap for a currency from the payroll
+ * policies (N2, INV-ADVANCE-CAP-PER-CURRENCY-SETTING). Resolution order:
+ * per-currency map entry, then the single scalar `directAdvanceCashCap`
+ * (the settings-UI control, which has no currency context), then the
+ * 2000 default. Anything non-finite or non-positive is treated as
+ * unconfigured — a zero cap must never silently block all advances.
+ */
+export function resolveDirectAdvanceCashCap(
+  policies: { directAdvanceCashCap?: unknown; directAdvanceCashCapByCurrency?: unknown } | null | undefined,
+  currency: string | undefined,
+): number {
+  const byCurrency = (policies?.directAdvanceCashCapByCurrency || {}) as Record<string, unknown>;
+  const wanted = String(currency || '').toUpperCase();
+  const mappedKey = Object.keys(byCurrency).find((key) => key.toUpperCase() === wanted);
+  const mapped = Number(mappedKey === undefined ? NaN : byCurrency[mappedKey]);
+  if (Number.isFinite(mapped) && mapped > 0) return mapped;
+  const scalar = Number(policies?.directAdvanceCashCap);
+  if (Number.isFinite(scalar) && scalar > 0) return scalar;
+  return DEFAULT_DIRECT_ADVANCE_CASH_CAP;
+}
+
+/**
+ * Currency display label, following the established codebase idiom
+ * (KWD 'د.ك', SAR 'ر.س', AED 'د.إ', QAR 'ر.ق', BHD 'د.ب', OMR 'ر.ع',
+ * anything else 'ج.م'). Currencies outside the mapped set fall back to
+ * 'ج.م' exactly as the existing call sites do.
+ */
+export function currencyDisplayLabel(currency: string | undefined): string {
+  const code = String(currency || '').toUpperCase();
+  return code === 'KWD' ? 'د.ك'
+    : code === 'SAR' ? 'ر.س'
+    : code === 'AED' ? 'د.إ'
+    : code === 'QAR' ? 'ر.ق'
+    : code === 'BHD' ? 'د.ب'
+    : code === 'OMR' ? 'ر.ع'
+    : 'ج.م';
+}
+
 export interface EmployeeWithdrawalContext {
   employee: {
     id: number;
@@ -52,6 +94,13 @@ export interface EmployeeWithdrawalContext {
   todayDate: string;
   /** Tenant book digits (REQUIRED): preview money is rounded at book precision, never a silent 2dp. */
   minorUnits: MoneyDigits;
+  /**
+   * Configured direct-advance cash cap for the employee's currency
+   * (resolved from payroll policies by the caller). Optional: defaults
+   * to DEFAULT_DIRECT_ADVANCE_CASH_CAP (2,000) when omitted, preserving
+   * current behaviour for callers that do not configure it.
+   */
+  directAdvanceCashCap?: number;
 }
 
 export interface EmployeeWithdrawalBalanceResult {
@@ -103,6 +152,8 @@ export interface EmployeeWithdrawalBalanceResult {
   directAdvanceCashCap: number;
   canDisburseDirectly: boolean;
   maxDirectDisbursement: number;
+  /** Display label for the employee's currency (follows the tenant currency, N2). */
+  currencyLabel: string;
 }
 
 function roundHours(val: number): number {
@@ -114,6 +165,11 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
   const minorUnits = ctx.minorUnits;
   // Settled band is half a minor unit: at 3dp a 0.004 balance is a credit, not settled.
   const halfMinor = 1 / (2 * (10 ** minorUnits));
+  const currencyLabel = currencyDisplayLabel(ctx.contract?.currency);
+  const configuredCap = Number(ctx.directAdvanceCashCap);
+  const directAdvanceCashCap = Number.isFinite(configuredCap) && configuredCap > 0
+    ? configuredCap
+    : DEFAULT_DIRECT_ADVANCE_CASH_CAP;
   const isHourly = ctx.employee.compensationType === 'hourly';
   const payFreq = ctx.employee.payFrequency || 'monthly';
   const baseSalary = Number(ctx.contract?.baseSalary || 0);
@@ -147,7 +203,7 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
     workedHours = roundHours(work.workedMinutes / 60);
     completedDays = work.completedDays;
     accruedEarnings = roundMoney(work.baseWage, minorUnits);
-    calculationText = `${workedHours} س عمل × ${hourlyRate} ج.م/س`;
+    calculationText = `${workedHours} س عمل × ${hourlyRate} ${currencyLabel}/س`;
     isProrated = false;
   } else if (payFreq === 'daily') {
     accrualSource = 'attendance_records';
@@ -155,7 +211,7 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
     completedDays = presentRecords.length > 0 ? presentRecords.length : Math.max(1, daysElapsed);
     const dailyWage = baseSalary > 0 ? roundMoney(baseSalary / 30, minorUnits) : 0;
     accruedEarnings = roundMoney(completedDays * dailyWage, minorUnits);
-    calculationText = `${completedDays} يوم استحقاق × ${dailyWage} ج.م/يوم`;
+    calculationText = `${completedDays} يوم استحقاق × ${dailyWage} ${currencyLabel}/يوم`;
     isProrated = false;
   } else if (ctx.activePayrollItem) {
     accrualSource = 'payroll_item';
@@ -189,7 +245,7 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
     accrualSource = 'contract_prorated';
     accruedEarnings = roundMoney(prorateMonthlyWage(baseSalary, cycleStart, ctx.todayDate, minorUnits), minorUnits);
     completedDays = daysElapsed;
-    calculationText = `استحقاق نسبي عن ${completedDays} يوم (من راتب ${baseSalary} ج.م)`;
+    calculationText = `استحقاق نسبي عن ${completedDays} يوم (من راتب ${baseSalary} ${currencyLabel})`;
     isProrated = true;
   }
 
@@ -235,9 +291,8 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
     balanceStatus = 'debit';
   }
 
-  // 5. Governance Ceilings: Direct Cashier Advance Cap (50% max of net available, capped at 2,000 EGP)
+  // 5. Governance Ceilings: Direct Cashier Advance Cap (50% max of net available, capped at the configured per-currency cap)
   const directAdvanceCeilingPct = 50;
-  const directAdvanceCashCap = 2000;
   const maxDirectAdvance = netAvailableBalance > halfMinor
     ? roundMoney(Math.min(directAdvanceCashCap, netAvailableBalance * (directAdvanceCeilingPct / 100)), minorUnits)
     : 0;
@@ -283,6 +338,7 @@ export function calculateEmployeeWithdrawalBalance(ctx: EmployeeWithdrawalContex
     directAdvanceCashCap,
     canDisburseDirectly: maxDirectAdvance > halfMinor,
     maxDirectDisbursement: maxDirectAdvance,
+    currencyLabel,
   };
 }
 

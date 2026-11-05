@@ -363,6 +363,7 @@ export function HrSettingsPayrollSection({ navigate }: { navigate: NavigateTo })
     taxBrackets: [] as Array<{ max: number | null; rate: number }>,
     insuranceConfig: { employeePct: 0, employerPct: 0, minSalary: 0, maxSalary: 0 },
     hrWeekendDays: 'friday,saturday',
+    directAdvanceCashCap: '',
   });
   const [statutoryDraft, setStatutoryDraft] = useState({
     statutoryCountry: '',
@@ -414,12 +415,19 @@ export function HrSettingsPayrollSection({ navigate }: { navigate: NavigateTo })
         taxBrackets: (policiesQuery.data as any).taxBrackets || [],
         insuranceConfig: (policiesQuery.data as any).insuranceConfig || { employeePct: 0, employerPct: 0, minSalary: 0, maxSalary: 0 },
         hrWeekendDays: String((policiesQuery.data as any).hrWeekendDays || 'friday,saturday'),
+        directAdvanceCashCap: String((policiesQuery.data as any).directAdvanceCashCap ?? ''),
       });
     }
   }, [policiesQuery.data]);
 
   async function handleSave() {
     setStatutoryInputError('');
+    const rawCap = String(draft.directAdvanceCashCap || '').trim();
+    const capValue = rawCap === '' ? null : Number(rawCap);
+    if (capValue !== null && (!Number.isFinite(capValue) || capValue <= 0)) {
+      setStatutoryInputError('سقف السلفة المباشرة يجب أن يكون رقمًا موجبًا، أو اتركه فارغًا للسقف الافتراضي (2,000).');
+      return;
+    }
     let taxBrackets: Array<{ max: number | null; rate: number }> = [];
     try {
       const parsed = JSON.parse(taxBracketsText);
@@ -456,6 +464,12 @@ export function HrSettingsPayrollSection({ navigate }: { navigate: NavigateTo })
         statutoryLegalReference: statutoryDraft.statutoryLegalReference || 'اللائحة الداخلية للمنشأة',
         statutoryReviewed: true,
         hrWeekendDays: draft.hrWeekendDays,
+        // N2: the scalar cap is this tenant's control; an empty field omits
+        // the key so the per-currency map (or the 2,000 default) applies.
+        // The map itself is preserved verbatim: this form rebuilds its
+        // payload and must not wipe entries configured per currency.
+        ...(capValue !== null ? { directAdvanceCashCap: capValue } : {}),
+        directAdvanceCashCapByCurrency: (policiesQuery.data as any)?.directAdvanceCashCapByCurrency,
       });
       toast.success('تم حفظ واعتماد سياسات وقواعد المرتبات بنجاح');
     } catch (error) {
@@ -646,6 +660,18 @@ export function HrSettingsPayrollSection({ navigate }: { navigate: NavigateTo })
                 </label>
               </div>
             )}
+          </div>
+
+          {/* Card 4: Direct cashier advance cap (N2, per-currency setting) */}
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 14px' }}>
+            <strong style={{ display: 'block', fontSize: '0.85rem', color: '#0f172a', marginBottom: '8px' }}>سقف السلفة المباشرة للكاشير</strong>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
+              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <span>السقف (بعملة المنشأة) — فارغ = الافتراضي 2,000</span>
+                <input type="number" min="0" step="any" value={draft.directAdvanceCashCap} onChange={(e) => setDraft({ ...draft, directAdvanceCashCap: e.target.value })} placeholder="2000" style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} />
+              </label>
+            </div>
+            <p style={{ fontSize: '0.75rem', color: '#64748b', margin: '8px 0 0' }}>الحد الأقصى الذي يصرفه الكاشير مباشرة دون اعتماد المدير (بجانب قاعدة 50% من الرصيد). يمكن ضبط سقف مختلف لكل عملة عبر واجهة السياسات؛ ويُحفظ أي سقف مضبوط لكل عملة عند الحفظ من هنا.</p>
           </div>
 
           {statutoryInputError && <p role="alert" style={{ color: '#b91c1c', fontSize: 12, margin: 0 }}>{statutoryInputError}</p>}

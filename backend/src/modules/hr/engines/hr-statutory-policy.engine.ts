@@ -24,6 +24,14 @@ export interface HrStatutoryPolicy {
   insuranceProratePartialEmployment?: boolean;
   /** Progressive annual taxable-income bracket upper bounds; rate in percent. */
   taxBrackets?: { max: number | null; rate: number }[];
+  /**
+   * Direct-advance cash cap (N2, INV-ADVANCE-CAP-PER-CURRENCY-SETTING):
+   * a single scalar for the tenant's currency (the settings-UI control),
+   * and/or a per-currency map. Resolution: map entry, then scalar, then
+   * the 2,000 default. Non-finite/non-positive values are unconfigured.
+   */
+  directAdvanceCashCap?: number;
+  directAdvanceCashCapByCurrency?: Record<string, number>;
 }
 
 export const STATUTORY_COUNTRIES = ['EG', 'SA', 'KW', 'QA', 'OM'] as const;
