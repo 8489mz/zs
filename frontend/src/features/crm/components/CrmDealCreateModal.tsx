@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { Field } from '@/shared/ui/field';
@@ -24,6 +24,10 @@ export function CrmDealCreateModal({ open, onClose, onSuccess }: CrmDealCreateMo
   const queryClient = useQueryClient();
   const systemCurrency = useSystemCurrency();
 
+  // INV-CRM-OPPORTUNITY-FORM-RESET: depend on the stable currencyCode
+  // string, never on the hook's return object -- the hook used to return a
+  // fresh object on every render, so this memo (and the reset effect below)
+  // re-ran on every render and wiped the form while the user was typing.
   const initialDealForm: CreateDealPayload = useMemo(() => ({
     title: '',
     expectedAmount: 0,
@@ -41,17 +45,21 @@ export function CrmDealCreateModal({ open, onClose, onSuccess }: CrmDealCreateMo
     customerId: null,
     lostReason: '',
     notes: '',
-  }), [systemCurrency]);
+  }), [systemCurrency.currencyCode]);
 
   const [dealForm, setDealForm] = useState<CreateDealPayload>(initialDealForm);
   const [selectedCustomerValue, setSelectedCustomerValue] = useState<string>('');
 
-  // Reset form when modal opens
+  // Reset form when modal opens -- only on the closed -> open transition.
+  // Resetting on every render (the old effect ran whenever initialDealForm
+  // changed identity) discarded whatever the user had typed.
+  const prevOpenRef = useRef(false);
   useEffect(() => {
-    if (open) {
+    if (open && !prevOpenRef.current) {
       setDealForm(initialDealForm);
       setSelectedCustomerValue('');
     }
+    prevOpenRef.current = open;
   }, [open, initialDealForm]);
 
   // Load registered customers for selection
