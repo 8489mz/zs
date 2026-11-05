@@ -9,6 +9,8 @@ import type { AuthContext } from '../../src/core/auth/interfaces/auth-context.in
 import type { AuditService } from '../../src/core/audit/audit.service';
 import type { DeliveryRepsService } from '../../src/modules/delivery-reps/delivery-reps.service';
 import { VanSalesService } from '../../src/modules/delivery-reps/van-sales.service';
+import { CashDrawerService } from '../../src/modules/cash-drawer/cash-drawer.service';
+import { TransactionHelper } from '../../src/database/helpers/transaction.helper';
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 
@@ -50,6 +52,8 @@ async function cleanup(db: Kysely<Database>): Promise<void> {
     'sale_items',
     'sales',
     'van_sales_trips',
+    'cashier_shifts',
+    'treasury_transactions',
     'stock_movements',
     'product_location_stock',
     'customers',
@@ -154,6 +158,7 @@ async function main(): Promise<void> {
       {} as DeliveryRepsService,
       accountingPosting,
     );
+    const drawer = new CashDrawerService(db, new TransactionHelper(), accountingPosting);
 
     const repId = Number(rep.id);
 
@@ -260,6 +265,15 @@ async function main(): Promise<void> {
     assert.equal(Number(collCreditLine?.partner_id), Number(customer.id));
 
     // --- 5. Settle the trip with a deliberate cash shortage ---------------------------------
+    // INV-E2E-VAN-SALES-OPEN-SHIFT: settleTrip remits the counted cash to the
+    // receiving shift — insertRepCashRemittanceRow throws OPEN_SHIFT_REQUIRED
+    // when no open shift exists on the trip's branch (the van location's
+    // branch, here the fixture branch), so open that branch's shift first.
+    const openedShift = await drawer.openCashierShift(
+      { openingCash: 0, branchId: Number(branch.id), note: 'E2E van sales shift' },
+      systemAuth,
+    );
+    assert.equal(openedShift.ok, true, 'branch shift must open before settleTrip');
     // Rep should be holding: 75 (cash sale) + 10 (field collection) = 85. Hands over only 80.
     const tripBeforeSettle = await dbAny.selectFrom('van_sales_trips').select(['cash_collected']).where('id', '=', loadResult.tripId).executeTakeFirstOrThrow();
     assert.equal(Number(tripBeforeSettle.cash_collected), 85);
