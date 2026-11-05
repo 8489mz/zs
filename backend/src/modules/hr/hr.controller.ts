@@ -285,7 +285,7 @@ export class HrController {
   }
 
   @Post('payroll-runs/:id/wps')
-  @RequirePermissions('hrPayrollView')
+  @RequirePermissions('hrPayrollManage')
   generatePayrollWps(@Param('id', ParseIntPipe) id: number, @Body() payload: GenerateWpsDto, @Req() req: RequestWithAuth) {
     return this.hr.generatePayrollWps(id, payload, req.authContext!);
   }

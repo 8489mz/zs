@@ -4410,6 +4410,11 @@ export class HrService {
 
   async generatePayrollWps(id: number, payload: GenerateWpsDto, auth: AuthContext): Promise<Record<string, unknown>> {
     requireTenantScope(auth);
+    // D5 (INV-WPS-PAID-RUN-EXPORT): exporting bank details (IBANs, national
+    // IDs) requires payroll-manage permission, not view-only.
+    if (!hasHrPermission(auth, 'hrPayrollManage')) {
+      throw new AppError('تصدير البيانات البنكية يتطلب صلاحية إدارة المرتبات', 'HR_PAYROLL_EXPORT_FORBIDDEN', 403);
+    }
     const runResult = await sql<Record<string, unknown>>`
       SELECT r.*,
         to_char(r.start_date, 'YYYY-MM-DD') AS start_date_text,
@@ -4444,6 +4449,9 @@ export class HrService {
       throw new AppError('لا يوجد قيد استحقاق مرحل لهذا المسير، لا يمكن تصدير ملف بنكي', 'HR_PAYROLL_EXPORT_ACCRUAL_MISSING', 409);
     }
 
+    // D5: the review CSV may export paid runs too — the run-status gate
+    // allows 'paid', so the items query must select paid items as well.
+    // Certified SIF generation stays disabled (sifContent is always '').
     const itemsResult = await sql<Record<string, unknown>>`
       SELECT
         i.*,
@@ -4456,11 +4464,11 @@ export class HrService {
         e.bank_swift_code
       FROM hr_payroll_run_items i
       JOIN hr_employees e ON e.id = i.employee_id AND e.tenant_id = i.tenant_id
-      WHERE i.run_id = ${id} AND i.status = 'approved' AND i.tenant_id = ${auth.tenantId}
+      WHERE i.run_id = ${id} AND i.status IN ('approved', 'paid') AND i.tenant_id = ${auth.tenantId}
       ORDER BY e.employee_no ASC, e.display_name ASC
     `.execute(this.db);
 
-    if (!itemsResult.rows.length) throw new AppError('لا توجد مرتبات معتمدة للتصدير', 'HR_PAYROLL_EXPORT_EMPTY', 400);
+    if (!itemsResult.rows.length) throw new AppError('لا توجد مرتبات معتمدة أو مدفوعة للتصدير', 'HR_PAYROLL_EXPORT_EMPTY', 400);
     const badRow = itemsResult.rows.find((row) => {
       return !clean(row.employee_no) || !clean(row.display_name) || !clean(row.national_id)
         || !clean(row.bank_name) || (!clean(row.iban) && !clean(row.bank_account_number));

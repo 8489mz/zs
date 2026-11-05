@@ -21,6 +21,10 @@ WHAT THIS PINS, driving the REAL generatePayrollWps on PGlite:
   employee and the net pay at book precision.
 - No accrual journal: the export rejects and emits nothing.
 - Reversed accrual: the export rejects with the reversal code.
+
+CALLER PRECONDITION (D5, INV-WPS-PAID-RUN-EXPORT): the caller holds
+hrPayrollManage — exporting bank details is manage-only. This spec pins
+the accrual gate, not the permission gate.
 */
 
 import 'reflect-metadata';
@@ -36,7 +40,7 @@ import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interfa
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
-  const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
+  const auth = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, permissions: ['hrPayrollManage'] } as unknown as AuthContext;
   const service = new HrService(
     db,
     new TransactionHelper(),
