@@ -9,6 +9,8 @@ import { extractCreatedEntityId } from '@/lib/api/extract-created-entity-id';
 import { storefrontApi } from '@/features/storefront/api/storefront.api';
 import { queryClient } from '@/app/providers';
 import { getFriendlyApiErrorMessage } from '@/lib/api-error-message';
+import { getSubmitSaleErrorMessage } from '@/features/pos/lib/pos-submit-error';
+import { stripSaleItemNameFields } from '@/features/pos/contracts';
 
 function getSaleKey(sale: Sale | null) {
   if (!sale) return '';
@@ -19,31 +21,6 @@ interface SubmitOptions {
   fastCash?: boolean;
   managerPin?: string;
   tenderedAmount?: number;
-}
-
-function getSubmitSaleErrorMessage(error: unknown) {
-  const raw = error instanceof Error ? String(error.message || '').trim() : '';
-  if (!raw) return 'تعذر حفظ الفاتورة';
-
-  // If the server provided our detailed, dynamic stock message, display it directly!
-  if (
-    raw.includes('رصيد الصنف')
-    || raw.includes('غير كافٍ')
-    || raw.includes('متوفر في:')
-  ) {
-    return raw;
-  }
-
-  const normalized = raw.toLowerCase();
-  if (
-    normalized.includes('الكمية المطلوبة أكبر من المخزون المتاح')
-    || normalized.includes('insufficient stock')
-    || normalized.includes('stock')
-    || normalized.includes('inventory')
-  ) {
-    return 'الكمية المطلوبة أكبر من المخزون المتاح في المخزن الحالي. راجع الكميات في السلة قبل إتمام البيع.';
-  }
-  return raw;
 }
 
 function matchesCreatedCustomer(customer: Customer, name: string, phone: string) {
@@ -404,7 +381,10 @@ export function createPosWorkspaceAsyncActions(
           deliveryRepId: Number(params.deliveryRepId),
           collectionStatus: params.collectionStatus || 'cod',
         } : {}),
-        items: sanitizedItems,
+        // HeldSaleItemDto has no nameEn / name_en and the validation pipe forbids
+        // non-whitelisted fields, so strip them from the server payload. The kitchen
+        // print below keeps the full sanitized items (it shows the English name).
+        items: stripSaleItemNameFields(sanitizedItems),
       });
       if (params.settings?.restaurantModuleEnabled && params.settings?.posAutoPrintKitchenReceipt) {
         try {

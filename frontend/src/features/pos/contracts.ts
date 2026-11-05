@@ -69,12 +69,25 @@ function normalizeCartQty(item: PosItem) {
   return Math.max(1, Math.round(qty));
 }
 
+/*
+ * The sale DTOs (SaleItemDto / HeldSaleItemDto) have no nameEn / name_en field and the
+ * request validation pipe runs with forbidNonWhitelisted, so sending either key makes
+ * the server reject the whole payload with a 400 VALIDATION_ERROR. The English name
+ * is display-only (cart, kitchen ticket); strip both keys before any server payload.
+ */
+export function stripSaleItemNameFields<T extends object>(items: T[]): T[] {
+  return items.map((item) => {
+    const copy = { ...(item as Record<string, unknown>) };
+    delete copy.nameEn;
+    delete copy.name_en;
+    return copy as T;
+  });
+}
+
 function normalizeCart(items: PosItem[]) {
   return items.map((item) => ({
     productId: item.productId,
     name: item.name,
-    nameEn: item.nameEn || (item as any).name_en || undefined,
-    name_en: (item as any).name_en || item.nameEn || undefined,
     qty: normalizeCartQty(item),
     unitName: item.unitName,
     unitMultiplier: Number.isFinite(Number(item.unitMultiplier)) && Number(item.unitMultiplier) > 0 ? Number(item.unitMultiplier) : 1,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildLegacyPosSalePayload, buildMinimalPosSalePayload, buildPosSalePayload, validatePosSaleInput } from './contracts';
+import { buildLegacyPosSalePayload, buildMinimalPosSalePayload, buildPosSalePayload, stripSaleItemNameFields, validatePosSaleInput } from './contracts';
 import type { PosItem } from '@/features/pos/types/pos.types';
 
 const cart: PosItem[] = [
@@ -142,5 +142,78 @@ describe('POS sale contracts', () => {
     for (const build of [buildPosSalePayload, buildLegacyPosSalePayload, buildMinimalPosSalePayload]) {
       expect('onlineOrderId' in (build(withoutOrder) as object)).toBe(false);
     }
+  });
+
+  it('never sends nameEn / name_en in any POS sale payload (English-only, Arabic-only, bilingual)', () => {
+    // The sale DTOs have no nameEn / name_en field and the validation pipe forbids
+    // non-whitelisted fields, so sending either key rejects the whole sale with a
+    // 400 VALIDATION_ERROR. The English name is display-only; the server resolves
+    // names from productId.
+    const namedCart: PosItem[] = [
+      { ...cart[0], productId: '1', name: 'Test Product', nameEn: 'Test Product', price: 25 },
+      { ...cart[0], productId: '2', name: 'منتج عربي', price: 25 },
+      { ...cart[0], productId: '3', name: 'منتج ثنائي', nameEn: 'Bilingual Product', price: 25 },
+    ];
+    const input = {
+      cart: namedCart,
+      customerId: '',
+      paymentType: 'cash' as const,
+      paymentChannel: 'cash' as const,
+      discount: 0,
+      deliveryFee: 0,
+      note: '',
+      paidAmount: 75,
+      tenderedAmount: 75,
+      payments: [{ paymentChannel: 'cash' as const, amount: 75 }],
+      taxRate: 0,
+      pricesIncludeTax: false,
+      expectedTotal: 75,
+    };
+    for (const build of [buildPosSalePayload, buildLegacyPosSalePayload, buildMinimalPosSalePayload]) {
+      const payload = build(input) as any;
+      expect(payload.items).toHaveLength(3);
+      for (const item of payload.items) {
+        expect('nameEn' in item).toBe(false);
+        expect('name_en' in item).toBe(false);
+      }
+      expect(payload.items.map((item: any) => item.productId)).toEqual(['1', '2', '3']);
+      expect(payload.items.map((item: any) => item.qty)).toEqual([1, 1, 1]);
+    }
+    // The main payload keeps the display name; the fallback builders never carried it.
+    expect((buildPosSalePayload(input) as any).items.map((item: any) => item.name))
+      .toEqual(['Test Product', 'منتج عربي', 'منتج ثنائي']);
+  });
+
+  it('strips a snake_case name_en coming from the catalog shape as well', () => {
+    const input = {
+      cart: [{ ...cart[0], ...({ name_en: 'Snake Product' } as any), price: 25 }],
+      customerId: '',
+      paymentType: 'cash' as const,
+      paymentChannel: 'cash' as const,
+      discount: 0,
+      deliveryFee: 0,
+      note: '',
+      paidAmount: 25,
+      tenderedAmount: 25,
+      payments: [{ paymentChannel: 'cash' as const, amount: 25 }],
+      taxRate: 0,
+      pricesIncludeTax: false,
+      expectedTotal: 25,
+    };
+    const item = (buildPosSalePayload(input) as any).items[0];
+    expect('nameEn' in item).toBe(false);
+    expect('name_en' in item).toBe(false);
+    expect(item.name).toBe('صنف اختبار');
+  });
+
+  it('stripSaleItemNameFields removes both name keys and keeps everything else', () => {
+    const items = [
+      { productId: 1, name: 'منتج', nameEn: 'Product', name_en: 'Product', qty: 2, seatNumber: 3, course: 'main' },
+    ];
+    expect(stripSaleItemNameFields(items)).toEqual([
+      { productId: 1, name: 'منتج', qty: 2, seatNumber: 3, course: 'main' },
+    ]);
+    // The input is not mutated: the kitchen print still gets the English name.
+    expect(items[0]).toHaveProperty('nameEn', 'Product');
   });
 });
