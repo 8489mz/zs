@@ -169,7 +169,7 @@ export async function invalidateReturnsDomain(queryClient: QueryClient) {
 export async function invalidateTreasuryDomain(queryClient: QueryClient) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: queryKeys.treasury, refetchType: 'active' }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.expenses, refetchType: 'none' }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.expenses, refetchType: 'active' }),
     queryClient.invalidateQueries({ queryKey: queryKeys.cashierShifts, refetchType: 'none' }),
     queryClient.invalidateQueries({ queryKey: queryKeys.cashierShiftsPage('open:pos'), refetchType: 'active' }),
   ]);

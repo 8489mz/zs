@@ -102,10 +102,12 @@ export class TreasuryService {
     const totalAmount = result.rows.length > 0 ? Number(result.rows[0].total_amount) : 0;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     const nextCursor = result.rows.length === pageSize ? String(result.rows[result.rows.length - 1].id) : null;
+    const rangeStart = totalItems > 0 ? (page - 1) * pageSize + 1 : 0;
+    const rangeEnd = totalItems > 0 ? Math.min(page * pageSize, totalItems) : 0;
 
     return {
       expenses: rows,
-      pagination: { page, pageSize, totalItems, totalPages, nextCursor },
+      pagination: { page, pageSize, totalItems, totalPages, rangeStart, rangeEnd, nextCursor },
       summary: {
         totalItems,
         totalAmount: roundMoney(totalAmount, moneyDigits),
