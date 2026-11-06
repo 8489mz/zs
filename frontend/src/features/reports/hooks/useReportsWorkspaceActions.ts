@@ -3,7 +3,7 @@ import { downloadExcelFile, escapeHtml, printHtmlDocument } from '@/lib/browser'
 import { formatCurrency } from '@/lib/format';
 import { reportsApi, type ReportInventoryRow } from '@/features/reports/api/reports.api';
 import type { Customer, ReportSummary } from '@/types/domain';
-import { formatPercent, integerFormatter } from '@/features/reports/lib/reports-format';
+import { formatPercent, integerFormatter, inventoryStatusLabel } from '@/features/reports/lib/reports-format';
 
 export function useReportsWorkspaceActions({
   report,
@@ -58,7 +58,7 @@ export function useReportsWorkspaceActions({
         item.category || '',
         item.supplier || '',
         selectedLocation ? selectedLocation.name : (item.topLocationName || ''),
-        item.status === 'ok' ? 'سليم' : item.status === 'low' ? 'منخفض' : item.status === 'out' ? 'نافد' : item.status,
+        inventoryStatusLabel(item.status),
       ])
     );
   };

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { formatCurrency } from '@/lib/format';
 import { InventoryReportSection } from '@/features/reports/components/sections/InventoryReportSection';
@@ -211,5 +211,58 @@ describe('InventoryReportSection', () => {
     // appear as the summary totals.
     expect(deadStockCardValue('إجمالي الوحدات المعطلة')).not.toBe('20 وحدة');
     expect(deadStockCardValue('رأس المال المجمد التقديري')).not.toBe(formatCurrency(5340));
+  });
+
+  /*
+  Pins the status labels (INV-INVENTORY-REPORT-OUT-CODE). The status column
+  rendered the backend's raw code as-is, so an out-of-stock item showed the
+  literal word "out" in the الحالة column. Known codes now show their
+  understandable label ('out' -> نافد, 'low' -> منخفض, 'ok' -> سليم) and
+  an unknown code passes through unchanged instead of rendering blank.
+  Restoring the raw `row.status || 'ok'` cell fails this test (the table
+  would contain "out" again). Assertions are scoped to the table because
+  the same labels also appear on the metric cards and the filter select.
+  */
+  it('shows status labels in the status column, never the raw out/low/ok codes', () => {
+    const rows = [
+      { id: 'p-out', name: 'صنف نافد', category: 'بقالة', supplier: 'المورد أ', stock: 0, minStock: 5, status: 'out', topLocationName: 'المخزن الرئيسي', topLocationQty: 0, locationsLabel: '—' },
+      { id: 'p-low', name: 'صنف منخفض', category: 'بقالة', supplier: 'المورد أ', stock: 2, minStock: 5, status: 'low', topLocationName: 'المخزن الرئيسي', topLocationQty: 2, locationsLabel: 'المخزن الرئيسي (الفرع الأول): 2' },
+      { id: 'p-ok', name: 'صنف سليم', category: 'بقالة', supplier: 'المورد أ', stock: 20, minStock: 5, status: 'ok', topLocationName: 'المخزن الرئيسي', topLocationQty: 20, locationsLabel: 'المخزن الرئيسي (الفرع الأول): 20' },
+      { id: 'p-unknown', name: 'صنف بحالة جديدة', category: 'بقالة', supplier: 'المورد أ', stock: 3, minStock: 5, status: 'archived', topLocationName: 'المخزن الرئيسي', topLocationQty: 3, locationsLabel: 'المخزن الرئيسي (الفرع الأول): 3' },
+    ];
+    render(
+      <InventoryReportSection
+        inventoryQuery={{
+          isLoading: false,
+          isError: false,
+          error: null,
+          data: {
+            rows,
+            summary: { totalItems: 4, outOfStock: 1, lowStock: 1, healthy: 1, trackedLocations: 1, locationHighlights: [] },
+            pagination: { page: 1, pageSize: 20, totalItems: 4, totalPages: 1, rangeStart: 1, rangeEnd: 4 },
+          },
+        }}
+        exportLowStock={vi.fn()}
+        printInventoryValueReport={vi.fn()}
+        printInventoryMovementsReport={vi.fn()}
+        locationId="all"
+        inventorySearch=""
+        onInventorySearchChange={vi.fn()}
+        inventoryFilter="attention"
+        onInventoryFilterChange={vi.fn()}
+        onInventoryPageChange={vi.fn()}
+        onInventoryPageSizeChange={vi.fn()}
+        onInventoryFiltersReset={vi.fn()}
+      />,
+    );
+
+    const table = within(screen.getByRole('table'));
+    expect(table.getByText('نافد')).toBeInTheDocument();
+    expect(table.getByText('منخفض')).toBeInTheDocument();
+    expect(table.getByText('سليم')).toBeInTheDocument();
+    expect(table.getByText('archived')).toBeInTheDocument();
+    expect(table.queryByText('out')).not.toBeInTheDocument();
+    expect(table.queryByText('low')).not.toBeInTheDocument();
+    expect(table.queryByText('ok')).not.toBeInTheDocument();
   });
 });

@@ -5,7 +5,7 @@ import { ReportPrintMenu } from '@/shared/components/ReportPrintMenu';
 import { DataTable } from '@/shared/ui/data-table';
 import { Field } from '@/shared/ui/field';
 import { ReportMetricCard } from '@/features/reports/components/ReportMetricCard';
-import { relativePercent } from '@/features/reports/lib/reports-format';
+import { inventoryStatusLabel, relativePercent } from '@/features/reports/lib/reports-format';
 import { formatCurrency } from '@/lib/format';
 import { getCurrencyDecimals } from '@/lib/currencies';
 import type { ReportsSectionContentProps } from '@/features/reports/components/reports-section.types';
@@ -218,7 +218,7 @@ export function InventoryReportSection({
                 { key: 'warehouses', header: t('reports.sections.inventory_report_section.s72', "توزيع المخازن"), cell: (row) => row.stockLocationExcessQty && row.stockLocationExcessQty > 0.001
                   ? <span role="alert" style={{ color: '#b91c1c', fontWeight: 700 }}>{row.locationsLabel}</span>
                   : row.locationsLabel || '—' },
-                { key: 'status', header: t('reports.sections.inventory_report_section.s73', "الحالة"), cell: (row) => row.status || 'ok' },
+                { key: 'status', header: t('reports.sections.inventory_report_section.s73', "الحالة"), cell: (row) => inventoryStatusLabel(row.status, isEn) },
               ]
         }
         rows={rows}

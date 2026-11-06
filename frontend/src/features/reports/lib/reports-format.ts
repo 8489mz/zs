@@ -53,3 +53,17 @@ export function relativePercent(value: number, values: number[]) {
 }
 
 export const integerFormatter = (value: number) => new Intl.NumberFormat('ar-EG', { maximumFractionDigits: 0 }).format(value || 0);
+
+/* INV-INVENTORY-REPORT-OUT-CODE: the inventory report's status column
+rendered the backend's raw status code ('out' / 'low' / 'ok') as-is, so an
+out-of-stock item showed the literal word "out". One shared label map for
+every surface that shows a row status (on-screen table, Excel export):
+known codes get their understandable label, unknown codes pass through
+unchanged so a new backend code never renders blank. */
+export function inventoryStatusLabel(status: string | null | undefined, isEn = false): string {
+  if (!status) return isEn ? 'Healthy' : 'سليم';
+  if (status === 'out') return isEn ? 'Out of stock' : 'نافد';
+  if (status === 'low') return isEn ? 'Low stock' : 'منخفض';
+  if (status === 'ok') return isEn ? 'Healthy' : 'سليم';
+  return status;
+}
