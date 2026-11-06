@@ -17,6 +17,7 @@ export function mapSaleRows(
   items: Array<Record<string, unknown>>,
   payments: Array<Record<string, unknown>>,
   canViewCostPrice: boolean = false,
+  linkedReturns: Array<Record<string, unknown>> = [],
 ): SaleRow[] {
   const itemsBySale = new Map<string, Array<Record<string, unknown>>>();
   for (const item of items) {
@@ -61,6 +62,20 @@ export function mapSaleRows(
     });
   }
 
+  const returnsBySale = new Map<string, Array<Record<string, unknown>>>();
+  for (const ret of linkedReturns) {
+    const key = String(ret.invoice_id);
+    if (!returnsBySale.has(key)) returnsBySale.set(key, []);
+    returnsBySale.get(key)!.push({
+      id: String(ret.id),
+      docNo: ret.doc_no || '',
+      createdAt: ret.created_at || null,
+      total: Number(ret.total || 0),
+      settlementMode: ret.settlement_mode || null,
+      refundMethod: ret.refund_method || null,
+    });
+  }
+
   return sales.map((sale) => ({
     id: String(sale.id),
     docNo: sale.doc_no || sale.docNo || `Z-${sale.id}`,
@@ -101,6 +116,7 @@ export function mapSaleRows(
     locationName: sale.location_name || sale.locationName || '',
     items: itemsBySale.get(String(sale.id)) || [],
     payments: paymentsBySale.get(String(sale.id)) || [],
+    linkedReturns: returnsBySale.get(String(sale.id)) || [],
   }));
 }
 

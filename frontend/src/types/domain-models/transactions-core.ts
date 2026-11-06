@@ -25,6 +25,15 @@ export interface SalePayment {
   amount: number;
 }
 
+export interface SaleLinkedReturn {
+  id: string;
+  docNo: string;
+  createdAt: string | null;
+  total: number;
+  settlementMode?: string | null;
+  refundMethod?: string | null;
+}
+
 export interface Sale {
   id: string;
   docNo: string;
@@ -51,6 +60,7 @@ export interface Sale {
   collectionStatus?: string | null;
   deliveryStatus?: string | null;
   payments?: SalePayment[];
+  linkedReturns?: SaleLinkedReturn[];
   status: string;
   note: string;
   createdBy: string;

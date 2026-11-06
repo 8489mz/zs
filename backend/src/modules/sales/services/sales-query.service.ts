@@ -157,7 +157,7 @@ export class SalesQueryService {
     const saleIds = sales.map((sale) => Number(sale.id)).filter((id) => Number.isFinite(id) && id > 0);
     if (!saleIds.length) return [];
 
-    const [items, payments] = await Promise.all([
+    const [items, payments, linkedReturns] = await Promise.all([
       this.db
         .selectFrom('sale_items')
         .select(['id', 'sale_id', 'product_id', 'product_name', 'product_name_en', 'qty', 'unit_price', 'line_total', 'net_line_total', 'allocated_tax', 'unit_name', 'unit_multiplier', 'cost_price', 'price_type', 'modifiers', 'serials'])
@@ -174,6 +174,14 @@ export class SalesQueryService {
         .orderBy('sale_id', 'asc')
         .orderBy('id', 'asc')
         .execute(),
+      this.db
+        .selectFrom('return_documents')
+        .select(['id', 'doc_no', 'invoice_id', 'total', 'created_at', 'settlement_mode', 'refund_method'])
+        .where('invoice_id', 'in', saleIds)
+        .where('return_type', '=', 'sale')
+        .where(this.tenantPredicate(auth))
+        .orderBy('id', 'desc')
+        .execute(),
     ]);
 
     const canViewCostPrice = auth.role === 'super_admin'
@@ -185,6 +193,7 @@ export class SalesQueryService {
       items as unknown as Array<Record<string, unknown>>,
       payments as unknown as Array<Record<string, unknown>>,
       Boolean(canViewCostPrice),
+      linkedReturns as unknown as Array<Record<string, unknown>>,
     );
   }
 

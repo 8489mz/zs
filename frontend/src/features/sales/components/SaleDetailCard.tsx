@@ -1,7 +1,9 @@
 import type { Sale } from '@/types/domain';
+import { Link } from 'react-router-dom';
 import { FormSection } from '@/shared/components/form-section';
 import { Button } from '@/shared/ui/button';
 import { formatCurrency, formatDate } from '@/lib/format';
+import { formatSalePaymentText } from '@/lib/pos-printing/shared';
 import { useTranslation } from "react-i18next";
 import { shareSaleViaWhatsApp } from '@/features/sales/utils/whatsappShare';
 import { useAuthStore } from '@/stores/auth-store';
@@ -125,12 +127,27 @@ export function SaleDetailCard({ sale, isLoading = false, onEdit, onCancel, onPr
       <div className="stats-grid compact-grid invoice-detail-summary-grid" style={{ marginBottom: '14px' }}>
         <div className="stat-card"><span>{__t('sales.sale_detail_card.s1', "العميل")}</span><strong>{sale.customerName || __t('sales.sale_detail_card.s2', "عميل نقدي")}</strong></div>
         <div className="stat-card"><span>{__t('sales.sale_detail_card.s3', "الكاشير")}</span><strong>{sale.cashierName || __t('sales.sale_detail_card.s4', "كاشير عام")}</strong></div>
-        <div className="stat-card"><span>{__t('sales.sale_detail_card.s5', "طريقة الدفع")}</span><strong>{sale.paymentType === 'credit' ? __t('sales.sale_detail_card.s6', "آجل") : sale.paymentType === 'card' ? __t('sales.sale_detail_card.s7', "بطاقة / فيزا") : __t('sales.sale_detail_card.s8', "نقدي")}</strong></div>
+        <div className="stat-card"><span>{__t('sales.sale_detail_card.s5', "طريقة الدفع")}</span><strong>{sale.paymentType === 'credit' ? __t('sales.sale_detail_card.s6', "آجل") : formatSalePaymentText(sale.paymentType, sale.paymentChannel, paidAmount, sale.total, sale.orderType, sale.collectionStatus)}</strong></div>
         <div className="stat-card"><span>{__t('sales.sale_detail_card.s9', "التاريخ")}</span><strong style={{ fontSize: '11.5px' }}><bdi dir="ltr">{formatDate(sale.createdAt || sale.date || '')}</bdi></strong></div>
         <div className="stat-card"><span>{__t('sales.sale_detail_card.s10', "الإجمالي")}</span><strong style={{ color: 'var(--primary, #0f172a)' }}>{formatCurrency(sale.total)}</strong></div>
         <div className="stat-card"><span>{__t('sales.sale_detail_card.s11', "المدفوع")}</span><strong>{formatCurrency(paidAmount)}</strong></div>
         {remaining > 0 && <div className="stat-card"><span>{__t('sales.sale_detail_card.s12', "المتبقي")}</span><strong style={{ color: '#dc2626' }}>{formatCurrency(remaining)}</strong></div>}
       </div>
+
+      {/* Linked returns */}
+      {(sale.linkedReturns || []).length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <FormSection title={__t('sales.sale_detail_card.s15', "المرتجعات المرتبطة")}>
+            {(sale.linkedReturns || []).map((ret) => (
+              <div key={ret.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '6px 0', borderBottom: '1px solid #f1f5f9' }}>
+                <Link to="/returns" style={{ fontWeight: 700, color: '#0284c7', textDecoration: 'none' }}>{ret.docNo}</Link>
+                <span style={{ color: '#64748b', fontSize: '12px' }}>{formatDate(ret.createdAt || '')}</span>
+                <strong>{formatCurrency(ret.total)}</strong>
+              </div>
+            ))}
+          </FormSection>
+        </div>
+      )}
 
       {/* Desktop Table */}
       <div className="table-wrap invoice-detail-table-wrap invoice-desktop-table" style={{ marginTop: 16 }}>
