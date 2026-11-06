@@ -5,6 +5,10 @@ export interface HrLeaveType {
   description?: string;
   isPaid?: boolean;
   isActive?: boolean;
+  // INV-LEAVE-BALANCE-DEDUCTION: the settings table shows this flag, and
+  // listLeaveTypes already returns it (hr.service.ts), so the type must
+  // declare it; the normalizer passes it through via the row spread.
+  deductsFromBalance?: boolean;
 }
 
 export interface HrLeaveRequest {

@@ -61,6 +61,8 @@ const renderModal = (previewValue: SettlementPreview | null) =>
       onOtherDeductionsChange={vi.fn()}
       custodyCleared={false}
       onCustodyClearedChange={vi.fn()}
+      clearanceNotes=""
+      onClearanceNotesChange={vi.fn()}
       confirmTermination={false}
       onConfirmTerminationChange={vi.fn()}
       preview={previewValue}
