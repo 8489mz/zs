@@ -696,12 +696,19 @@ export class CatalogProductService {
 
   private async findPosProductsByBarcode(barcode: string, limit: number, actor: AuthContext): Promise<PosProductLookupRow[]> {
     if (!barcode) return [];
+    // INV-POS-BARCODE-DASH: barcode lookup is case-insensitive. The POS
+    // frontend matches barcodes case-insensitively (trim + lowercase) and a
+    // cashier may type a dashed code in lowercase while the stored value is
+    // uppercase (or scan a supplier label whose case differs from the stored
+    // value). A case-sensitive `=` missed those rows entirely, while
+    // digits-only barcodes always worked because digits have no case.
+    const lookupCode = barcode.trim().toLowerCase();
     let productMatches = await this.db
       .selectFrom('products as p')
       .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true))
       .select(['p.id', 'p.name', 'p.name_en', 'p.barcode', 'p.sku', 'p.item_type', 'p.item_kind', 'p.style_code', 'p.color', 'p.size', 'p.retail_price', 'p.wholesale_price', 'p.credit_price', 'p.consumer_price', 'p.stock_qty', 'p.min_stock_qty', 'b.id as bom_id', 'p.category_id', 'p.track_serials', 'p.metadata'])
       .where('p.is_active', '=', true)
-      .where('p.barcode', '=', barcode)
+      .where(sql<boolean>`LOWER(p.barcode) = ${lookupCode}`)
       .where(this.tenantPredicate(actor, 'p'))
       .orderBy('p.id', 'asc')
       .limit(limit)
@@ -718,7 +725,7 @@ export class CatalogProductService {
           'p.credit_price', 'p.consumer_price', 'p.stock_qty', 'p.min_stock_qty',
           'b.id as bom_id', 'p.category_id', 'p.track_serials', 'p.metadata'])
         .where('p.is_active', '=', true)
-        .where('p.sku', '=', barcode)
+        .where(sql<boolean>`LOWER(p.sku) = ${lookupCode}`)
         .where(this.tenantPredicate(actor, 'p'))
         .orderBy('p.id', 'asc').limit(limit).execute() as PosProductLookupRow[];
     }
@@ -761,8 +768,8 @@ export class CatalogProductService {
         .where(this.tenantPredicate(actor, 'ps'))
         .where((eb) =>
           eb.or([
-            sql<boolean>`LOWER(ps.serial_number) = ${barcode.trim().toLowerCase()}`,
-            sql<boolean>`LOWER(ps.imei_2) = ${barcode.trim().toLowerCase()}`,
+            sql<boolean>`LOWER(ps.serial_number) = ${lookupCode}`,
+            sql<boolean>`LOWER(ps.imei_2) = ${lookupCode}`,
           ]),
         )
         .limit(remaining)
@@ -806,7 +813,7 @@ export class CatalogProductService {
         'pu.barcode as matched_unit_barcode',
       ])
       .where('p.is_active', '=', true)
-      .where('pu.barcode', '=', barcode)
+      .where(sql<boolean>`LOWER(pu.barcode) = ${lookupCode}`)
       .where(this.tenantPredicate(actor, 'p'));
 
     if (seenProductIds.length) unitQuery = unitQuery.where('p.id', 'not in', seenProductIds);

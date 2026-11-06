@@ -45,7 +45,7 @@ const cashier: AuthContext = {
 };
 
 class FakeSelectBuilder {
-  private filters: Array<{ column: string; op: string; value: unknown }> = [];
+  private filters: Array<{ column: string; op: string; value: unknown; lower?: boolean }> = [];
   private hasExpressionFilter = false;
   private rowLimit = 1000;
 
@@ -59,9 +59,22 @@ class FakeSelectBuilder {
   where(columnOrExpression: unknown, op?: string, value?: unknown): this {
     if (typeof columnOrExpression === 'string') {
       this.filters.push({ column: columnOrExpression, op: String(op || ''), value });
-    } else {
-      this.hasExpressionFilter = true;
+      return this;
     }
+    // Kysely sql`LOWER(<column>) = ${value}` templates (INV-POS-BARCODE-DASH):
+    // production compares barcodes/SKUs case-insensitively, so model that by
+    // extracting the column and the bound value from the template node. Any
+    // other template (tenant predicate, search expression) stays an opaque
+    // expression filter exactly as before.
+    const node = (columnOrExpression as any)?.toOperationNode?.();
+    const fragments: string[] = node?.sqlFragments || [];
+    const parameters: Array<{ value?: unknown }> = node?.parameters || [];
+    const lowerMatch = fragments.join(' ').match(/LOWER\(\s*(p\.barcode|p\.sku|pu\.barcode)\s*\)/i);
+    if (lowerMatch && parameters.length > 0) {
+      this.filters.push({ column: lowerMatch[1].toLowerCase(), op: '=', value: parameters[0]?.value, lower: true });
+      return this;
+    }
+    this.hasExpressionFilter = true;
     return this;
   }
 
@@ -82,9 +95,17 @@ class FakeSelectBuilder {
   private executeProductLookup(): Array<Record<string, unknown>> {
     const barcodeFilter = this.filters.find((filter) => filter.column === 'p.barcode' && filter.op === '=');
     let rows = this.db.products.filter((product) => product.is_active);
-    if (barcodeFilter) rows = rows.filter((product) => product.barcode === barcodeFilter.value);
+    if (barcodeFilter) {
+      rows = rows.filter((product) => barcodeFilter.lower
+        ? String(product.barcode || '').toLowerCase() === String(barcodeFilter.value || '').toLowerCase()
+        : product.barcode === barcodeFilter.value);
+    }
     const skuFilter = this.filters.find((filter) => filter.column === 'p.sku' && filter.op === '=');
-    if (skuFilter) rows = rows.filter((product) => product.sku === skuFilter.value);
+    if (skuFilter) {
+      rows = rows.filter((product) => skuFilter.lower
+        ? String(product.sku || '').toLowerCase() === String(skuFilter.value || '').toLowerCase()
+        : product.sku === skuFilter.value);
+    }
     if (!barcodeFilter && this.hasExpressionFilter && this.db.searchNeedle) {
       const needle = this.db.searchNeedle.toLowerCase();
       rows = rows.filter((product) => {
@@ -110,7 +131,9 @@ class FakeSelectBuilder {
     const excludedIds = this.filters.find((filter) => filter.column === 'p.id' && filter.op === 'not in')?.value;
     const excluded = Array.isArray(excludedIds) ? excludedIds.map(Number) : [];
     const matchingUnits = this.db.productUnits
-      .filter((unit) => !barcodeFilter || unit.barcode === barcodeFilter.value)
+      .filter((unit) => !barcodeFilter || (barcodeFilter.lower
+        ? String(unit.barcode || '').toLowerCase() === String(barcodeFilter.value || '').toLowerCase()
+        : unit.barcode === barcodeFilter.value))
       .filter((unit) => !excluded.includes(Number(unit.product_id)))
       .slice(0, this.rowLimit);
 
