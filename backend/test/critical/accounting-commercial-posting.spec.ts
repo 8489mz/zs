@@ -63,7 +63,8 @@ async function main() {
         amount numeric, balance_after numeric, note text, reference_type text, reference_id bigint, branch_id bigint, location_id bigint, created_by bigint);
       CREATE TABLE accounting_posting_failures (id bigserial PRIMARY KEY, tenant_id text, source_type text, source_id bigint, resolved_at timestamptz);
       CREATE TABLE products (id bigint PRIMARY KEY,tenant_id text,account_id text,name text,
-        stock_qty numeric DEFAULT 0,reserved_qty numeric DEFAULT 0,cost_price numeric DEFAULT 0,updated_at timestamptz);
+        stock_qty numeric DEFAULT 0,reserved_qty numeric DEFAULT 0,cost_price numeric DEFAULT 0,updated_at timestamptz,
+        item_type text);
       CREATE TABLE product_location_stock (id bigserial PRIMARY KEY,tenant_id text,account_id text,product_id bigint,
         branch_id bigint,location_id bigint,qty numeric DEFAULT 0,reserved_qty numeric DEFAULT 0,updated_at timestamptz);
       CREATE TABLE customers (id bigint,tenant_id text,balance numeric DEFAULT 0);
@@ -80,11 +81,12 @@ async function main() {
       CREATE TABLE sale_payments (tenant_id text, sale_id bigint, payment_channel text, amount numeric);
       CREATE TABLE sale_items (id bigint PRIMARY KEY, tenant_id text, sale_id bigint, product_id bigint, qty numeric, cost_price numeric, unit_multiplier numeric, modifiers jsonb);
       CREATE TABLE purchases (id bigint PRIMARY KEY, tenant_id text, doc_no text, supplier_id bigint,
-        payment_type text, subtotal numeric, discount numeric DEFAULT 0, tax_amount numeric, total numeric,
+        payment_type text, subtotal numeric, discount numeric DEFAULT 0, tax_rate numeric DEFAULT 14,
+        tax_amount numeric, total numeric, prices_include_tax boolean DEFAULT true,
         branch_id bigint, location_id bigint, created_by bigint DEFAULT 1, created_at timestamptz DEFAULT '2026-10-01',
         grn_id bigint, po_id bigint, lifecycle_status text, three_way_match_status text, status text DEFAULT 'posted');
       CREATE TABLE purchase_items (tenant_id text, purchase_id bigint, qty numeric, unit_cost numeric,
-        grn_line_id bigint, grni_amount numeric);
+        grn_line_id bigint, grni_amount numeric, product_id bigint, line_total numeric);
       CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text, doc_no text, return_type text,
         invoice_id bigint, settlement_mode text, refund_method text, refund_allocations jsonb, total numeric,
         branch_id bigint, location_id bigint, created_by bigint DEFAULT 1, created_at timestamptz DEFAULT '2026-10-02');
@@ -357,10 +359,10 @@ async function main() {
 
     // Exercise delayed receipt end to end: cartons, recoverable VAT, WAC, AP and journal.
     await pg.exec(`
-      ALTER TABLE purchases ADD COLUMN IF NOT EXISTS status text DEFAULT 'posted', ADD COLUMN tax_rate numeric DEFAULT 14,
-        ADD COLUMN prices_include_tax boolean DEFAULT true, ADD COLUMN matched_status text, ADD COLUMN updated_at timestamptz;
-      ALTER TABLE purchase_items ADD COLUMN id bigserial, ADD COLUMN product_id bigint,
-        ADD COLUMN unit_multiplier numeric DEFAULT 1, ADD COLUMN received_qty numeric DEFAULT 0, ADD COLUMN location_id bigint;
+      ALTER TABLE purchases ADD COLUMN IF NOT EXISTS status text DEFAULT 'posted', ADD COLUMN IF NOT EXISTS tax_rate numeric DEFAULT 14,
+        ADD COLUMN IF NOT EXISTS prices_include_tax boolean DEFAULT true, ADD COLUMN IF NOT EXISTS matched_status text, ADD COLUMN IF NOT EXISTS updated_at timestamptz;
+      ALTER TABLE purchase_items ADD COLUMN IF NOT EXISTS id bigserial, ADD COLUMN IF NOT EXISTS product_id bigint,
+        ADD COLUMN IF NOT EXISTS unit_multiplier numeric DEFAULT 1, ADD COLUMN IF NOT EXISTS received_qty numeric DEFAULT 0, ADD COLUMN IF NOT EXISTS location_id bigint;
       CREATE TABLE IF NOT EXISTS products (id bigint PRIMARY KEY,tenant_id text,account_id text,name text,
         stock_qty numeric,reserved_qty numeric DEFAULT 0,cost_price numeric,updated_at timestamptz);
       CREATE TABLE IF NOT EXISTS product_location_stock (id bigserial PRIMARY KEY,tenant_id text,account_id text,product_id bigint,

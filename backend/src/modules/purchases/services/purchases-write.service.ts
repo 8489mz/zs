@@ -707,8 +707,9 @@ export class PurchasesWriteService {
       // INV-SERVICE-ITEM-QUICK-CREATE: service lines never posted stock, so
       // an edit has nothing to reverse for them. Look their type up once.
       const oldServiceProductIds = new Set<number>();
-      if (oldItems.length) {
-        const oldProducts = await trx.selectFrom('products').select(['id', 'item_type']).where('id', 'in', oldItems.map((item) => Number(item.product_id)).filter((id) => id > 0)).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+      const oldLookupIds = oldItems.map((item) => Number(item.product_id)).filter((id) => id > 0);
+      if (oldLookupIds.length) {
+        const oldProducts = await trx.selectFrom('products').select(['id', 'item_type']).where('id', 'in', oldLookupIds).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
         for (const row of oldProducts) if (row.item_type === 'service') oldServiceProductIds.add(Number(row.id));
       }
       if (!(payload.items || []).length) throw new AppError('Purchase must include at least one item', 'PURCHASE_ITEMS_REQUIRED', 400);
@@ -1107,8 +1108,9 @@ export class PurchasesWriteService {
       // INV-SERVICE-ITEM-QUICK-CREATE: service lines never posted stock, so
       // a cancel has nothing to reverse for them.
       const cancelServiceProductIds = new Set<number>();
-      if (items.length) {
-        const cancelProducts = await trx.selectFrom('products').select(['id', 'item_type']).where('id', 'in', items.map((item) => Number(item.product_id)).filter((id) => id > 0)).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+      const cancelLookupIds = items.map((item) => Number(item.product_id)).filter((id) => id > 0);
+      if (cancelLookupIds.length) {
+        const cancelProducts = await trx.selectFrom('products').select(['id', 'item_type']).where('id', 'in', cancelLookupIds).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
         for (const row of cancelProducts) if (row.item_type === 'service') cancelServiceProductIds.add(Number(row.id));
       }
       await lockStockProducts(trx, { ...scope, productIds: items.map((item) => Number(item.product_id)) });

@@ -2277,11 +2277,15 @@ export class AccountingPostingService {
     // expenses 6950). A purchased service must never be capitalised as
     // inventory. Line totals are the discount-allocated effective totals.
     const serviceProductIds = new Set<number>();
-    if (purchaseItems.length) {
+    // A purchase_items row without a product_id carries no service flag;
+    // skip the lookup entirely when no positive id exists, because an
+    // empty `in (...)` list is invalid SQL.
+    const serviceLookupIds = purchaseItems.map((item) => Number(item.product_id)).filter((id) => id > 0);
+    if (serviceLookupIds.length) {
       const itemProducts = await queryable
         .selectFrom('products')
         .select(['id', 'item_type'])
-        .where('id', 'in', purchaseItems.map((item) => Number(item.product_id)).filter((id) => id > 0))
+        .where('id', 'in', serviceLookupIds)
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .execute();
       for (const row of itemProducts) if (row.item_type === 'service') serviceProductIds.add(Number(row.id));
