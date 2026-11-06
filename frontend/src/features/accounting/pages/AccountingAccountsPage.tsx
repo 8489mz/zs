@@ -9,6 +9,7 @@ import { FormSection } from '@/shared/components/form-section';
 import { accountingApi, type AccountingAccount } from '@/features/accounting/api/accounting.api';
 import { AccountingAccountForm } from '../components/AccountingAccountForm';
 import { translateUiText } from '@/lib/auto-translator';
+import { formatCurrency } from '@/lib/format';
 
 const typeLabel: Record<string, string> = {
   asset: 'أصل',
@@ -351,6 +352,18 @@ export function AccountingAccountsPage() {
                 sortable: true,
                 sortValue: (row) => (isEn ? balanceLabelEn[row.normalBalance] : balanceLabel[row.normalBalance]) || row.normalBalance || '',
                 width: 90,
+              },
+              {
+                id: 'balance',
+                header: t('accounting.accounting_accounts_page.s27', "الرصيد"),
+                render: (row) => (
+                  <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
+                    {formatCurrency(Number(row.balance || 0))}
+                  </span>
+                ),
+                sortable: true,
+                sortValue: (row) => Number(row.balance || 0),
+                width: 130,
               },
               {
                 id: 'flags',

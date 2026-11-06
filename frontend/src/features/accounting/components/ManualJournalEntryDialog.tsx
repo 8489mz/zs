@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useState, useMemo } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { Button } from '@/shared/ui/button';
 import { Field } from '@/shared/ui/field';
@@ -59,6 +59,7 @@ export function ManualJournalEntryDialog({ open, onClose, onSuccess }: ManualJou
   const [reference, setReference] = useState('');
   const [cashFlowCategory, setCashFlowCategory] = useState<'' | 'operating' | 'investing' | 'financing'>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const [lines, setLines] = useState<JournalLineRow[]>([
     createEmptyRow(),
@@ -137,6 +138,9 @@ export function ManualJournalEntryDialog({ open, onClose, onSuccess }: ManualJou
       });
     },
     onSuccess: (res) => {
+      // The accounts page reads ['accounting', 'accounts']; without this
+      // invalidation its balances column would stay stale until a reload.
+      queryClient.invalidateQueries({ queryKey: ['accounting', 'accounts'] });
       onSuccess(res.entry);
       handleReset();
       onClose();

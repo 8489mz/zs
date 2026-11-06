@@ -10,6 +10,8 @@ export type AccountingAccount = {
   parentId: string;
   depth: number;
   normalBalance: string;
+  // Posted-lines balance, oriented by normalBalance (0 when no lines).
+  balance: number;
   isActive: boolean;
   isSystem: boolean;
   allowManualEntries: boolean;

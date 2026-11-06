@@ -159,6 +159,15 @@ export class AccountingService {
     return null;
   }
 
+  /** Balance oriented by the account's normal balance: a debit-normal
+   * account shows debit minus credit, a credit-normal one the reverse;
+   * an account with no posted lines is zero. */
+  private orientAccountBalance(normalBalance: string, totals?: { debit: number; credit: number }): number {
+    const debit = Number(totals?.debit || 0);
+    const credit = Number(totals?.credit || 0);
+    return normalBalance === 'credit' ? credit - debit : debit - credit;
+  }
+
   async listAccounts(auth: AuthContext): Promise<Record<string, unknown>> {
     this.assertAccountingAccess(auth);
     await this.accountingTenantFoundation.ensureForAuth(this.db, auth);
@@ -189,6 +198,25 @@ export class AccountingService {
       .where(this.tenantPredicate(auth))
       .orderBy('code', 'asc')
       .execute();
+
+    // Posted-lines balances, one query for all accounts: a draft or
+    // cancelled entry never moves a balance, so only 'posted' lines count.
+    const balanceRows = await this.db
+      .selectFrom('journal_entry_lines as l')
+      .innerJoin('journal_entries as je', (join: any) => join.onRef('je.id', '=', 'l.journal_entry_id').onRef('je.tenant_id', '=', 'l.tenant_id'))
+      .select([
+        'l.account_id as account_id',
+        sql<number>`COALESCE(SUM(l.debit), 0)`.as('debit'),
+        sql<number>`COALESCE(SUM(l.credit), 0)`.as('credit'),
+      ])
+      .where('je.status', '=', 'posted')
+      .where(this.tenantPredicate(auth, 'je'))
+      .where(this.tenantPredicate(auth, 'l'))
+      .groupBy('l.account_id')
+      .execute();
+    const balanceByAccountId = new Map<number, { debit: number; credit: number }>(
+      balanceRows.map((row) => [Number(row.account_id), { debit: Number(row.debit || 0), credit: Number(row.credit || 0) }]),
+    );
 
     const rowsById = new Map(rows.map((row) => [String(row.id), row]));
     const depthById = new Map<string, number>();
@@ -224,6 +252,7 @@ export class AccountingService {
         parentId: row.parent_id ? String(row.parent_id) : '',
         depth: depthById.get(String(row.id)) || 0,
         normalBalance: row.normal_balance,
+        balance: this.orientAccountBalance(row.normal_balance, balanceByAccountId.get(Number(row.id))),
         isActive: Boolean(row.is_active),
         isSystem: Boolean(row.is_system),
         allowManualEntries: Boolean(row.allow_manual_entries),
