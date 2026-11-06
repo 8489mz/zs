@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { formatCurrency } from '@/lib/format';
 import { InventoryReportSection } from '@/features/reports/components/sections/InventoryReportSection';
 
 function cardValue(label: string): string {
@@ -8,6 +9,15 @@ function cardValue(label: string): string {
   const value = card.querySelector('.report-metric-value');
   if (!value) throw new Error(`${label} value not found`);
   return value.textContent ?? '';
+}
+
+/* Dead-stock summary cards render as plain label/value div pairs (no
+metric-card classes): the value div is the label div's next sibling. */
+function deadStockCardValue(label: string): string {
+  const labelEl = screen.getByText(label);
+  const valueEl = labelEl.parentElement?.children[1];
+  if (!valueEl) throw new Error(`${label} value not found`);
+  return valueEl.textContent ?? '';
 }
 
 describe('InventoryReportSection', () => {
@@ -125,5 +135,81 @@ describe('InventoryReportSection', () => {
 
     await waitFor(() => expect(cardValue('قيمة المخزون')).toBe('162,080,152.80'), { timeout: 5000 });
     await waitFor(() => expect(cardValue('قيمة البيع التقديرية')).toBe('200,000,000.10'), { timeout: 5000 });
+  });
+
+  /*
+  Pins the full-set dead-stock totals (INV-DEAD-STOCK-FULL-TOTALS).
+  Live on test10k, 10,499 dead items each holding 2 units showed "20 units /
+  5,340.00 tied capital" — the reduce() over the visible 10-row page only.
+  The cards must show the full-set summary from the dedicated dead-stock
+  endpoint (20,998 units / 5,340,000.00) on every page, regardless of the
+  page size or the visible rows. Restoring the rows.reduce() code fails
+  this test (it would render 20 / 5,340.00 again).
+  */
+  it('shows full-set dead-stock totals from the dead-stock summary, not the visible-page sums', () => {
+    const pageRows = Array.from({ length: 10 }, (_, i) => ({
+      id: `p-${i + 1}`,
+      name: `صنف ${i + 1}`,
+      category: 'بقالة',
+      supplier: 'المورد أ',
+      stock: 2,
+      minStock: 0,
+      costPrice: 267,
+      retailPrice: 400,
+      status: 'dead',
+      topLocationName: 'المخزن الرئيسي',
+      topLocationQty: 2,
+    }));
+    render(
+      <InventoryReportSection
+        inventoryQuery={{
+          isLoading: false,
+          isError: false,
+          error: null,
+          data: {
+            rows: pageRows,
+            summary: { totalItems: 10499, outOfStock: 0, lowStock: 0, healthy: 0 },
+            pagination: { page: 1, pageSize: 10, totalItems: 10499, totalPages: 1050, rangeStart: 1, rangeEnd: 10 },
+          },
+        }}
+        deadStockQuery={{
+          isLoading: false,
+          isError: false,
+          error: null,
+          data: {
+            items: [],
+            pagination: { page: 1, pageSize: 20, totalItems: 10499, totalPages: 525, rangeStart: 1, rangeEnd: 20 },
+            summary: {
+              totalDeadProducts: 10499,
+              totalDeadStockUnits: 20998,
+              totalTiedCapital: 5340000,
+              cutoffDays: 60,
+            },
+          },
+        }}
+        exportLowStock={vi.fn()}
+        printInventoryValueReport={vi.fn()}
+        printInventoryMovementsReport={vi.fn()}
+        locationId="all"
+        inventorySearch=""
+        onInventorySearchChange={vi.fn()}
+        inventoryFilter="dead"
+        onInventoryFilterChange={vi.fn()}
+        deadStockDays={60}
+        onDeadStockDaysChange={vi.fn()}
+        onInventoryPageChange={vi.fn()}
+        onInventoryPageSizeChange={vi.fn()}
+        onInventoryFiltersReset={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('أصناف راكدة')).toBeInTheDocument();
+    expect(deadStockCardValue('أصناف راكدة')).toBe('10499 صنف');
+    expect(deadStockCardValue('إجمالي الوحدات المعطلة')).toBe('20998 وحدة');
+    expect(deadStockCardValue('رأس المال المجمد التقديري')).toBe(formatCurrency(5340000));
+    // The visible-page sums (10 rows x 2 units, 5,340.00 capital) must not
+    // appear as the summary totals.
+    expect(deadStockCardValue('إجمالي الوحدات المعطلة')).not.toBe('20 وحدة');
+    expect(deadStockCardValue('رأس المال المجمد التقديري')).not.toBe(formatCurrency(5340));
   });
 });

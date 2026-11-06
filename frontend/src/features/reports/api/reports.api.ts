@@ -329,7 +329,7 @@ export const reportsApi = {
   products: async () => unwrapArray<Product>(await http<Product[] | { products: Product[] }>('/api/products'), 'products'),
   debtAging: () => http<DebtAgingResponse>('/api/reports/debt-aging'),
   demandForecasting: () => http<DemandForecastingResponse>('/api/reports/demand-forecasting'),
-  deadStock: (params: DeadStockQueryParams = {}) => {
+  deadStock: async (params: DeadStockQueryParams = {}): Promise<DeadStockResponse> => {
     const query: Record<string, string | number | undefined | null> = {
       ...(params.days ? { days: params.days } : {}),
       ...(params.locationId ? { locationId: params.locationId } : {}),
@@ -337,7 +337,37 @@ export const reportsApi = {
       ...(params.page ? { page: params.page } : {}),
       ...(params.pageSize ? { pageSize: params.pageSize } : {}),
     };
-    return http<DeadStockResponse>(`/api/reports/inventory/dead-stock${buildQueryString(query)}`);
+    const response = await http<DeadStockBackendResponse>(`/api/reports/inventory/dead-stock${buildQueryString(query)}`);
+    const summary = response.summary ?? {};
+    return {
+      items: Array.isArray(response.items) ? response.items.map((item) => ({
+        id: String(item.id ?? ''),
+        name: item.name ?? '',
+        barcode: item.barcode ?? '',
+        category: item.categoryName ?? '',
+        supplier: item.supplierName ?? '',
+        stockQty: Number(item.stock ?? 0),
+        costPrice: Number(item.costPrice ?? 0),
+        retailPrice: Number(item.retailPrice ?? 0),
+        tiedCapital: Number(item.tiedCapital ?? 0),
+        daysSinceLastSale: item.daysWithoutSale ?? null,
+        lastSaleAt: item.lastSaleDate ?? null,
+      })) : [],
+      pagination: response.pagination || {
+        page: Number(params.page || 1),
+        pageSize: Number(params.pageSize || 20),
+        totalItems: Number(summary.totalDeadItems ?? 0),
+        totalPages: 1,
+        rangeStart: 0,
+        rangeEnd: 0,
+      },
+      summary: {
+        totalDeadProducts: Number(summary.totalDeadItems ?? 0),
+        totalTiedCapital: Number(summary.totalTiedCapital ?? 0),
+        totalDeadStockUnits: Number(summary.totalDeadStockQty ?? 0),
+        cutoffDays: Number(summary.daysThreshold ?? params.days ?? 60),
+      },
+    };
   },
   customerRfm: (params: { search?: string; segment?: string } = {}) => {
     const query: Record<string, string | number | undefined | null> = {
@@ -446,6 +476,37 @@ export interface DeadStockItem {
   tiedCapital: number;
   daysSinceLastSale: number | null;
   lastSaleAt: string | null;
+}
+
+/* Raw shape of GET /api/reports/inventory/dead-stock (INV-DEAD-STOCK-FULL-TOTALS).
+   The backend names the summary fields totalDeadItems / totalDeadStockQty /
+   daysThreshold and the item fields categoryName / supplierName / stock /
+   daysWithoutSale / lastSaleDate; deadStock() below maps them onto the
+   frontend DeadStockResponse names so callers never read undefined. */
+export interface DeadStockBackendItem {
+  id?: number | string;
+  name?: string;
+  barcode?: string;
+  categoryName?: string;
+  supplierName?: string;
+  stock?: number;
+  costPrice?: number;
+  retailPrice?: number;
+  tiedCapital?: number;
+  daysWithoutSale?: number | null;
+  lastSaleDate?: string | null;
+}
+
+export interface DeadStockBackendResponse {
+  items?: DeadStockBackendItem[];
+  pagination?: DeadStockResponse['pagination'];
+  summary?: {
+    totalDeadItems?: number;
+    totalDeadStockQty?: number;
+    totalTiedCapital?: number;
+    totalRetailValue?: number;
+    daysThreshold?: number;
+  };
 }
 
 export interface DeadStockResponse {

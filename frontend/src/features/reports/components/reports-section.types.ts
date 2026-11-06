@@ -1,6 +1,6 @@
 import type { Customer, ReportSummary } from '@/types/domain';
 import type { CashMovementResponse, FinancialSummaryResponse, InventoryValueResponse, ReceivablesPayablesResponse } from '@/shared/api/accounting-reports';
-import type { EmployeeReportRow, EmployeeReportsSummary, ReportInventoryRow } from '@/features/reports/api/reports.api';
+import type { EmployeeReportRow, EmployeeReportsSummary, ReportInventoryRow, DeadStockResponse } from '@/features/reports/api/reports.api';
 import type { ReportsSectionKey } from '@/features/reports/pages/reports.page-config';
 
 export type PagedQuery<TSummary, TRow> = {
@@ -55,6 +55,15 @@ export type ReportsSectionContentProps = {
   onInventoryFilterChange: (value: 'all' | 'attention' | 'low' | 'out' | 'dead') => void;
   deadStockDays?: number;
   onDeadStockDaysChange?: (days: number) => void;
+  /* Full-set dead-stock totals from GET /api/reports/inventory/dead-stock
+  (INV-DEAD-STOCK-FULL-TOTALS). Present only when the dead filter is active;
+  the section shows '—' while it has no data instead of a page reduce(). */
+  deadStockQuery?: {
+    isLoading: boolean;
+    isError: boolean;
+    error: unknown;
+    data?: DeadStockResponse;
+  };
   onInventoryPageChange: (page: number) => void;
   onInventoryPageSizeChange: (pageSize: number) => void;
   balancesSearch: string;

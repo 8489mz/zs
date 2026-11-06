@@ -68,6 +68,7 @@ export function ReportsWorkspace({ currentSection }: { currentSection: ReportsSe
         accountingReceivablesPayables={controller.accountingReceivablesPayables}
         accountingInventoryValue={controller.accountingInventoryValue}
         inventoryQuery={controller.inventoryQuery}
+        deadStockQuery={controller.deadStockQuery}
         balancesQuery={controller.balancesQuery}
         employeesQuery={controller.employeesQuery}
         executiveRows={controller.executiveRows}

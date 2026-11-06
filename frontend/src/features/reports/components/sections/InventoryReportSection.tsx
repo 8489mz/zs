@@ -12,6 +12,7 @@ import type { ReportsSectionContentProps } from '@/features/reports/components/r
 
 export function InventoryReportSection({
   inventoryQuery,
+  deadStockQuery,
   accountingInventoryValue,
   exportLowStock,
   printInventoryValueReport,
@@ -26,7 +27,7 @@ export function InventoryReportSection({
   onInventoryPageChange,
   onInventoryPageSizeChange,
   onInventoryFiltersReset
-}: Pick<ReportsSectionContentProps, 'inventoryQuery' | 'accountingInventoryValue' | 'exportLowStock' | 'printInventoryValueReport' | 'printInventoryMovementsReport' | 'locationId' | 'inventorySearch' | 'onInventorySearchChange' | 'inventoryFilter' | 'onInventoryFilterChange' | 'deadStockDays' | 'onDeadStockDaysChange' | 'onInventoryPageChange' | 'onInventoryPageSizeChange' | 'onInventoryFiltersReset'>) {
+}: Pick<ReportsSectionContentProps, 'inventoryQuery' | 'deadStockQuery' | 'accountingInventoryValue' | 'exportLowStock' | 'printInventoryValueReport' | 'printInventoryMovementsReport' | 'locationId' | 'inventorySearch' | 'onInventorySearchChange' | 'inventoryFilter' | 'onInventoryFilterChange' | 'deadStockDays' | 'onDeadStockDaysChange' | 'onInventoryPageChange' | 'onInventoryPageSizeChange' | 'onInventoryFiltersReset'>) {
   const { t, i18n } = useTranslation();
   const isEn = i18n.language === 'en';
   const rows = inventoryQuery.data?.rows || [];
@@ -35,8 +36,15 @@ export function InventoryReportSection({
   const inventoryTotals = accountingInventoryValue?.totals;
   const isDeadStock = inventoryFilter === 'dead';
 
-  const tiedCapital = rows.reduce((sum, r) => sum + (r.stock * (r.costPrice || 0)), 0);
-  const deadStockUnits = rows.reduce((sum, r) => sum + (r.stock || 0), 0);
+  /* INV-DEAD-STOCK-FULL-TOTALS: the dead-stock cards show the full-set
+  totals from the dedicated dead-stock endpoint (summary aggregated without
+  pagination). They must never be a reduce() over `rows` — that is only the
+  visible page (10 rows) and understated the true totals (20 units /
+  5,340.00 instead of 20,998 units / millions). While the dead-stock query
+  has no data yet the cards show '—' instead of a misleading page sum. */
+  const deadStockSummary = deadStockQuery?.data?.summary;
+  const deadStockUnits = deadStockSummary?.totalDeadStockUnits;
+  const tiedCapital = deadStockSummary?.totalTiedCapital;
 
   const values = [
     summary?.totalItems || 0,
@@ -108,16 +116,16 @@ export function InventoryReportSection({
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', marginBottom: '16px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '12px' }}>
             <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
-              <div style={{ fontSize: '0.85em', color: '#64748b', marginBottom: '4px' }}>{t('reports.sections.inventory_report_section.s11', "أصناف راكدة (الصفحة الحالية)")}</div>
+              <div style={{ fontSize: '0.85em', color: '#64748b', marginBottom: '4px' }}>{t('reports.sections.inventory_report_section.s11', "أصناف راكدة")}</div>
               <div style={{ fontSize: '1.4em', fontWeight: 'bold', color: '#dc2626' }}>{summary?.totalItems || rows.length} {isEn ? 'Items' : t('reports.sections.inventory_report_section.s12', "صنف")}</div>
             </div>
             <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
               <div style={{ fontSize: '0.85em', color: '#64748b', marginBottom: '4px' }}>{t('reports.sections.inventory_report_section.s13', "إجمالي الوحدات المعطلة")}</div>
-              <div style={{ fontSize: '1.4em', fontWeight: 'bold', color: '#d97706' }}>{deadStockUnits} {isEn ? 'Units' : t('reports.sections.inventory_report_section.s14', "وحدة")}</div>
+              <div style={{ fontSize: '1.4em', fontWeight: 'bold', color: '#d97706' }}>{deadStockUnits ?? '—'} {isEn ? 'Units' : t('reports.sections.inventory_report_section.s14', "وحدة")}</div>
             </div>
             <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
               <div style={{ fontSize: '0.85em', color: '#64748b', marginBottom: '4px' }}>{t('reports.sections.inventory_report_section.s15', "رأس المال المجمد التقديري")}</div>
-              <div style={{ fontSize: '1.4em', fontWeight: 'bold', color: '#170e5e' }}>{formatCurrency(tiedCapital)}</div>
+              <div style={{ fontSize: '1.4em', fontWeight: 'bold', color: '#170e5e' }}>{tiedCapital === undefined ? '—' : formatCurrency(tiedCapital)}</div>
             </div>
           </div>
           <div style={{ fontSize: '0.85em', color: '#475569', lineHeight: 1.6 }}>

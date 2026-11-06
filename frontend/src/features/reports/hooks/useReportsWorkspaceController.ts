@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/app/query-keys';
 import { referenceDataApi } from '@/services/reference-data.api';
 import { accountingReportsApi } from '@/shared/api/accounting-reports';
+import { reportsApi } from '@/features/reports/api/reports.api';
 import { useReportsOverview } from '@/features/reports/hooks/useReportsOverview';
 import { useReportInventoryPage } from '@/features/reports/hooks/useReportInventoryPage';
 import { useCustomerBalancesPage } from '@/features/reports/hooks/useCustomerBalancesPage';
@@ -46,14 +47,27 @@ export function useReportsWorkspaceController(currentSection: ReportsSectionKey)
     enabled: currentSection === 'inventory',
     retry: false,
   });
-  const inventoryQuery = useReportInventoryPage({ 
-    page: state.inventoryPage, 
-    pageSize: state.inventoryPageSize, 
-    search: state.inventorySearch, 
+  const inventoryQuery = useReportInventoryPage({
+    page: state.inventoryPage,
+    pageSize: state.inventoryPageSize,
+    search: state.inventorySearch,
     filter: state.inventoryFilter,
     days: state.deadStockDays,
     ...(state.locationId !== 'all' ? { locationId: state.locationId } : {})
   }, { enabled: ['overview', 'inventory'].includes(currentSection) });
+  /* INV-DEAD-STOCK-FULL-TOTALS: full-set dead-stock totals come from the
+  dedicated dead-stock endpoint (summary aggregated without pagination),
+  never from a reduce() over the visible inventory page. Fetched only
+  while the dead filter is active, on the same days/location scope. */
+  const deadStockQuery = useQuery({
+    queryKey: ['reports', 'dead-stock', state.deadStockDays, state.locationId],
+    queryFn: () => reportsApi.deadStock({
+      days: state.deadStockDays,
+      ...(state.locationId !== 'all' ? { locationId: state.locationId } : {}),
+    }),
+    enabled: currentSection === 'inventory' && state.inventoryFilter === 'dead',
+    retry: false,
+  });
   const balancesQuery = useCustomerBalancesPage({ page: state.balancesPage, pageSize: state.balancesPageSize, search: state.balancesSearch, filter: state.balancesFilter }, { enabled: ['overview', 'balances'].includes(currentSection) });
   const employeesQuery = useEmployeeReportsPage({
     page: state.employeesPage,
@@ -102,6 +116,7 @@ export function useReportsWorkspaceController(currentSection: ReportsSectionKey)
     accountingReceivablesPayables: accountingReceivablesPayablesQuery.data ?? null,
     accountingInventoryValue: accountingInventoryValueQuery.data ?? null,
     inventoryQuery,
+    deadStockQuery,
     balancesQuery,
     employeesQuery,
     from: state.from,
