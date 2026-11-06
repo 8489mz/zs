@@ -24577,7 +24577,7 @@
         "s94": "Auto-copy and save folder settings",
         "s100": "Cloud / Quick Shortcuts:",
         "s102": "Note: When selecting a cloud sync folder for (Google Drive, OneDrive, or Dropbox), copies are automatically uploaded to the cloud as soon as they are created to protect your data from any hard disk failure.",
-        "s103": "Periodic backup copies of the organization's database are automatically saved and secured on encrypted cloud servers to ensure business continuity and data protection.",
+        "s103": "Scheduled automatic backup runs on the desktop app only and does not run for this cloud tenant — use the “Download backup” button to make a copy now.",
         "s110": "Copy time",
         "s112": "Last successful version:",
         "s121": "Restore from file",

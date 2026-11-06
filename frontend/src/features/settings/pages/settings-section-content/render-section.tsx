@@ -161,6 +161,7 @@ export function renderBackupSection(props: SharedSettingsSectionProps) {
       snapshots={props.snapshots}
       autoBackupEnabled={props.settings?.autoBackup !== 'off'}
       canManageBackups={props.canManageBackups}
+      canDownloadSupportBundle={props.canManageBackups || props.canManageSettings}
       backupBusy={props.backupBusy}
       backupConfigQuery={props.backupConfigQuery}
       backupFolderPathDraft={props.backupFolderPathDraft}

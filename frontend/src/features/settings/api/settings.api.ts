@@ -56,6 +56,9 @@ export interface BackupSnapshotRecord {
 }
 
 export interface BackupAutomationConfig {
+  // False on cloud: the scheduler only ever runs on desktop (see
+  // SettingsBackupService.onModuleInit). Optional so older payloads still type-check.
+  schedulerAvailable?: boolean;
   enabled: boolean;
   frequency: 'daily' | 'weekly';
   time: string;

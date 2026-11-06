@@ -25,6 +25,9 @@ interface SettingsBackupImportSectionProps {
   snapshots: BackupSnapshotRecord[];
   autoBackupEnabled: boolean;
   canManageBackups: boolean;
+  // Settings permission also unlocks the support-bundle download (the
+  // endpoint accepts settings / canManageSettings, not just canManageBackups).
+  canDownloadSupportBundle?: boolean;
   backupBusy: boolean;
   backupConfigQuery: BackupConfigQueryState;
   backupFolderPathDraft: string;
@@ -1177,6 +1180,7 @@ export function SettingsBackupImportSection({
   snapshots,
   autoBackupEnabled,
   canManageBackups,
+  canDownloadSupportBundle: canDownloadSupportBundleProp,
   backupBusy,
   backupConfigQuery,
   backupFolderPathDraft,
@@ -1228,6 +1232,13 @@ export function SettingsBackupImportSection({
   const summaryPairs = formatSummaryPairs(backupResult);
   const resolvedFolder = backupFolderPathDraft || backupConfigQuery.data?.folderPath || backupConfigQuery.data?.defaultFolderPath || 'D:\\ZS Backups';
   const autoState = backupConfigQuery.data?.automation;
+  // The stored "on" flag alone must never render as an active schedule: the
+  // scheduler only ever runs on desktop (SettingsBackupService.onModuleInit
+  // returns early on cloud). Fall back to the local runtime check when an
+  // older backend payload omits the field.
+  const schedulerAvailable = autoState?.schedulerAvailable ?? isDesktopOffline;
+  const pillActive = schedulerAvailable && autoBackupEnabled;
+  const canDownloadSupportBundle = canDownloadSupportBundleProp ?? canManageBackups;
   const weeklyDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
   return (
@@ -1238,8 +1249,8 @@ export function SettingsBackupImportSection({
         title={t('settings.workspace_sections.settings_backup_import_section.s86', "النسخ الاحتياطي والأمان")}
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="nav-pill" style={{ background: autoBackupEnabled ? '#ecfdf5' : '#f1f5f9', color: autoBackupEnabled ? '#047857' : '#64748b', border: autoBackupEnabled ? '1px solid #a7f3d0' : '1px solid #e2e8f0', fontSize: '0.74rem', fontWeight: 700 }}>
-              {t('settings.workspace_sections.settings_backup_import_section.s87', "النسخ التلقائي:")} {autoBackupEnabled ? t('settings.workspace_sections.settings_backup_import_section.s88', "مفعّل") : t('settings.workspace_sections.settings_backup_import_section.s89', "متوقف")}
+            <span className="nav-pill" style={{ background: pillActive ? '#ecfdf5' : '#f1f5f9', color: pillActive ? '#047857' : '#64748b', border: pillActive ? '1px solid #a7f3d0' : '1px solid #e2e8f0', fontSize: '0.74rem', fontWeight: 700 }}>
+              {t('settings.workspace_sections.settings_backup_import_section.s87', "النسخ التلقائي:")} {schedulerAvailable ? (autoBackupEnabled ? t('settings.workspace_sections.settings_backup_import_section.s88', "مفعّل") : t('settings.workspace_sections.settings_backup_import_section.s89', "متوقف")) : t('settings.workspace_sections.settings_backup_import_section.s332', "غير متاح على السحابة")}
             </span>
           </div>
         }
@@ -1273,7 +1284,7 @@ export function SettingsBackupImportSection({
                 type="button"
                 variant="secondary"
                 onClick={handleSupportBundleDownload}
-                disabled={backupBusy || !canManageBackups}
+                disabled={backupBusy || !canDownloadSupportBundle}
                 style={{ fontSize: '0.80rem', padding: '7px 12px', flex: '1 1 auto' }}
               >
                 {t('settings.workspace_sections.settings_backup_import_section.s92', "حزمة الدعم")}
@@ -1351,11 +1362,12 @@ export function SettingsBackupImportSection({
                 </div>
               ) : (
                 <div style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.6, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px' }}>
-                  {t('settings.workspace_sections.settings_backup_import_section.s103', "يتم حفظ وتأمين نسخ احتياطية دورية لقاعدة بيانات المنشأة تلقائياً على خوادم السحابة المشفرة لضمان استمرارية الأعمال وحماية البيانات.")}
+                  {t('settings.workspace_sections.settings_backup_import_section.s103', "النسخ التلقائي المجدول يعمل على نسخة الديسكتوب فقط ولا يعمل على هذا المستأجر السحابي — لعمل نسخة الآن استخدم زر «تنزيل نسخة احتياطية».")}
                 </div>
               )}
 
-              {/* Automation Schedule Grid */}
+              {/* Automation Schedule Grid — desktop only: the scheduler never runs on cloud */}
+              {schedulerAvailable && (
               <div style={{ display: 'grid', gridTemplateColumns: backupFrequencyDraft === 'weekly' ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr', gap: '8px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>{t('settings.workspace_sections.settings_backup_import_section.s104', "الحالة")}</label>
@@ -1408,6 +1420,7 @@ export function SettingsBackupImportSection({
                   </div>
                 )}
               </div>
+              )}
 
               {/* Status Row */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.76rem', color: '#64748b', background: '#ffffff', border: '1px solid #f1f5f9', borderRadius: '6px', padding: '6px 10px', marginTop: 'auto' }}>
