@@ -14,6 +14,7 @@ import { HrLoanCreateForm } from '@/features/hr/pages/loans/HrLoanCreateForm';
 import { HrLoanRepaymentForm } from '@/features/hr/pages/loans/HrLoanRepaymentForm';
 import {
   addMonths,
+  buildCreateLoanPayload,
   createInitialLoanDraft,
   fallbackText,
   installmentStatusLabel,
@@ -164,16 +165,9 @@ export function HrLoansPage() {
 
     try {
       await mutations.saveLoan.mutateAsync({
-        payload: {
-          employeeId,
-          loanType: String(loanDraft.loanType || 'advance').trim() || 'advance',
-          principalAmount,
-          installmentCount,
-          repaymentMode: isInstallments ? 'monthly_salary_installment' : 'deduct_next_salary',
-          issueDate,
-          firstDueDate: planPreview.firstDueDate || undefined,
-          notes: String(loanDraft.notes || '').trim() || undefined,
-        },
+        // INV-LOAN-INSTANT-DISBURSE: the payload is built by the shared
+        // helper so the instant-disburse checkbox reaches the backend.
+        payload: buildCreateLoanPayload(loanDraft, planPreview),
       });
       setLoanDraft(createInitialLoanDraft());
       setShowCreate(false);
@@ -512,4 +506,5 @@ export function HrLoansPage() {
     </div>
   );
 }
+
 

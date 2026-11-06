@@ -63,6 +63,47 @@ export function createInitialLoanDraft(): LoanDraft {
   };
 }
 
+export interface CreateLoanPayload {
+  employeeId: string;
+  loanType: string;
+  principalAmount: number;
+  installmentCount: number;
+  repaymentMode: 'monthly_salary_installment' | 'deduct_next_salary';
+  issueDate: string;
+  firstDueDate?: string;
+  notes?: string;
+  autoDisburse: boolean;
+}
+
+export interface LoanPlanPreview {
+  installmentCount: number;
+  firstDueDate: string;
+}
+
+/*
+ * INV-LOAN-INSTANT-DISBURSE: the create-loan payload is built in exactly
+ * one place so the instant-disburse checkbox cannot be dropped again.
+ * A checked box sends autoDisburse: true (the backend approves and
+ * disburses in the same transaction: cash moves, salary deduction is
+ * armed); an unchecked box sends autoDisburse: false and the loan stays
+ * a draft, as before. Every other field is exactly what the page sent
+ * before, so the old behaviour is unchanged apart from the flag.
+ */
+export function buildCreateLoanPayload(draft: LoanDraft, plan: LoanPlanPreview): CreateLoanPayload {
+  const isInstallments = draft.repaymentMethod === 'installments';
+  return {
+    employeeId: String(draft.employeeId || '').trim(),
+    loanType: String(draft.loanType || 'advance').trim() || 'advance',
+    principalAmount: parsePositiveNumber(draft.principalAmount),
+    installmentCount: isInstallments ? plan.installmentCount : 1,
+    repaymentMode: isInstallments ? 'monthly_salary_installment' : 'deduct_next_salary',
+    issueDate: String(draft.issueDate || '').trim(),
+    firstDueDate: plan.firstDueDate || undefined,
+    notes: String(draft.notes || '').trim() || undefined,
+    autoDisburse: Boolean(draft.autoDisburse),
+  };
+}
+
 export function money(value: unknown) {
   const amount = Number(value || 0);
   if (!Number.isFinite(amount)) return `0.00 ${getGlobalCurrencySymbol()}`;
