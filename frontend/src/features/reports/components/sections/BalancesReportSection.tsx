@@ -22,7 +22,7 @@ export function BalancesReportSection({
   onBalancesFilterChange,
   onBalancesPageChange,
   onBalancesPageSizeChange,
-  onBalancesFiltersReset
+  onBalancesFiltersReset,
   accountingReceivablesPayablesLoading,
 }: Pick<ReportsSectionContentProps, 'balancesQuery' | 'accountingReceivablesPayables' | 'accountingReceivablesPayablesLoading' | 'exportCustomerBalances' | 'printCustomerBalances' | 'balancesSearch' | 'onBalancesSearchChange' | 'balancesFilter' | 'onBalancesFilterChange' | 'onBalancesPageChange' | 'onBalancesPageSizeChange' | 'onBalancesFiltersReset'>) {
   const { t } = useTranslation();
