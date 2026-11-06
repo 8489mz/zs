@@ -14,6 +14,7 @@ export function SalesReportSection({
   report,
   reportQuery,
   accountingFinancialSummary,
+  accountingFinancialSummaryLoading,
   salesDailyAverage,
   purchaseDailyAverage,
   returnRatePercent,
@@ -23,7 +24,7 @@ export function SalesReportSection({
   printTopProducts,
   printSalesRegisterReport,
   formatPercent
-}: Pick<ReportsSectionContentProps, 'report' | 'reportQuery' | 'accountingFinancialSummary' | 'salesDailyAverage' | 'purchaseDailyAverage' | 'returnRatePercent' | 'rangeDays' | 'topProducts' | 'exportTopProducts' | 'printTopProducts' | 'printSalesRegisterReport' | 'formatPercent'>) {
+}: Pick<ReportsSectionContentProps, 'report' | 'reportQuery' | 'accountingFinancialSummary' | 'accountingFinancialSummaryLoading' | 'salesDailyAverage' | 'purchaseDailyAverage' | 'returnRatePercent' | 'rangeDays' | 'topProducts' | 'exportTopProducts' | 'printTopProducts' | 'printSalesRegisterReport' | 'formatPercent'>) {
   const { t } = useTranslation();
   const financial = accountingFinancialSummary?.cards;
   const salesTotal = report?.sales.total ?? financial?.grossSales ?? 0;
@@ -33,6 +34,11 @@ export function SalesReportSection({
   const grossProfit = report?.commercial.grossProfit ?? financial?.grossProfit ?? 0;
   const netProfit = report?.commercial.netOperatingProfit ?? financial?.netProfit ?? 0;
   const values = [salesTotal, netSales, returnsAndDiscounts, cogs, grossProfit, netProfit];
+  /* INV-REPORTS-PARTIAL-TOTALS: the money cards read the report summary
+  AND the financial summary through `??` fallback chains, so they are
+  ready only when both have loaded; the delivery cards read the report
+  summary only. */
+  const moneyCardsLoading = reportQuery.isLoading || accountingFinancialSummaryLoading;
 
   return (
     <div className="page-stack">
@@ -65,12 +71,12 @@ export function SalesReportSection({
         emptyHint={t('reports.sections.sales_report_section.s7', "غيّر النطاق أو أضف مبيعات جديدة.")}
       >
         <div className="reports-spotlight-grid section-spotlight-grid">
-          <ReportMetricCard label={t('reports.sections.sales_report_section.s8', "عدد الفواتير")} value={report?.sales.count || 0} helper={t('reports.sections.sales_report_section.s9', "إجمالي البيع المسجل")} tone="primary" progress={relativePercent(report?.sales.count || 0, [report?.sales.count || 0, 1])} />
-          <ReportMetricCard label={t('reports.sections.sales_report_section.s10', "إجمالي البيع")} value={salesTotal} helper={t('reports.sections.sales_report_section.s11', "قبل المرتجعات والخصومات")} tone="primary" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(salesTotal, values)} />
-          <ReportMetricCard label={t('reports.sections.sales_report_section.s12', "صافي البيع")} value={netSales} helper={t('reports.sections.sales_report_section.s13', "أفضل رقم للمتابعة اليومية")} tone="success" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(netSales, values)} />
-          <ReportMetricCard label={t('reports.sections.sales_report_section.s14', "مردودات وخصومات")} value={returnsAndDiscounts} helper={t('reports.sections.sales_report_section.s15', "الأثر على البيع")} tone="danger" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(returnsAndDiscounts, values)} />
-          <ReportMetricCard label={t('reports.sections.sales_report_section.s16', "تكلفة البضاعة")} value={cogs} helper={t('reports.sections.sales_report_section.s17', "تكلفة البضاعة المباعة")} tone="warning" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(cogs, values)} />
-          <ReportMetricCard label={t('reports.sections.sales_report_section.s18', "مجمل الربح")} value={grossProfit} helper={t('reports.sections.sales_report_section.s19', "بعد تكلفة البضاعة")} tone="success" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(grossProfit, values)} />
+          <ReportMetricCard isLoading={moneyCardsLoading} label={t('reports.sections.sales_report_section.s8', "عدد الفواتير")} value={report?.sales.count || 0} helper={t('reports.sections.sales_report_section.s9', "إجمالي البيع المسجل")} tone="primary" progress={relativePercent(report?.sales.count || 0, [report?.sales.count || 0, 1])} />
+          <ReportMetricCard isLoading={moneyCardsLoading} label={t('reports.sections.sales_report_section.s10', "إجمالي البيع")} value={salesTotal} helper={t('reports.sections.sales_report_section.s11', "قبل المرتجعات والخصومات")} tone="primary" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(salesTotal, values)} />
+          <ReportMetricCard isLoading={moneyCardsLoading} label={t('reports.sections.sales_report_section.s12', "صافي البيع")} value={netSales} helper={t('reports.sections.sales_report_section.s13', "أفضل رقم للمتابعة اليومية")} tone="success" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(netSales, values)} />
+          <ReportMetricCard isLoading={moneyCardsLoading} label={t('reports.sections.sales_report_section.s14', "مردودات وخصومات")} value={returnsAndDiscounts} helper={t('reports.sections.sales_report_section.s15', "الأثر على البيع")} tone="danger" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(returnsAndDiscounts, values)} />
+          <ReportMetricCard isLoading={moneyCardsLoading} label={t('reports.sections.sales_report_section.s16', "تكلفة البضاعة")} value={cogs} helper={t('reports.sections.sales_report_section.s17', "تكلفة البضاعة المباعة")} tone="warning" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(cogs, values)} />
+          <ReportMetricCard isLoading={moneyCardsLoading} label={t('reports.sections.sales_report_section.s18', "مجمل الربح")} value={grossProfit} helper={t('reports.sections.sales_report_section.s19', "بعد تكلفة البضاعة")} tone="success" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(grossProfit, values)} />
         </div>
         <div className="two-column-grid" style={{ marginTop: 16 }}>
           <FormSection title={t('reports.sections.sales_report_section.s20', "قراءة يومية سريعة")} description={t('reports.sections.sales_report_section.s21', "أرقام مختصرة لصاحب النشاط بدون فتح جداول إضافية.")}>
@@ -115,21 +121,21 @@ export function SalesReportSection({
             description={t('reports.sections.sales_report_section.s37', "فصل دقيق بين مستحقات المناديب الحرة (طياري) وإيرادات أسطول المتجر ونسبة الطيارين وصافي أرباح المحل.")}
           >
             <div className="reports-spotlight-grid delivery-spotlight-grid">
-              <ReportMetricCard
+              <ReportMetricCard isLoading={reportQuery.isLoading}
                 label={t('reports.sections.sales_report_section.s38', "إجمالي رسوم التوصيل")}
                 value={report?.delivery?.total || 0}
                 helper={`${report?.delivery?.count || 0} رحلة توصيل إجمالية`}
                 tone="primary"
                 formatter={formatCurrency} decimals={getCurrencyDecimals()}
               />
-              <ReportMetricCard
+              <ReportMetricCard isLoading={reportQuery.isLoading}
                 label={t('reports.sections.sales_report_section.s39', "مناديب حرة (طياري)")}
                 value={report?.delivery?.freelanceTotal || 0}
                 helper={`${report?.delivery?.freelanceCount || 0} رحلة (مستحقات للمناديب لا تدخل الخزينة)`}
                 tone="warning"
                 formatter={formatCurrency} decimals={getCurrencyDecimals()}
               />
-              <ReportMetricCard
+              <ReportMetricCard isLoading={reportQuery.isLoading}
                 label={t('reports.sections.sales_report_section.s40', "أسطول المتجر (إجمالي محصل)")}
                 value={report?.delivery?.storeFleetTotal || 0}
                 helper={`${report?.delivery?.storeFleetCount || 0} رحلة توصيل داخلي`}
@@ -137,7 +143,7 @@ export function SalesReportSection({
                 formatter={formatCurrency} decimals={getCurrencyDecimals()}
               />
               {Number(report?.delivery?.commissionRate || 0) > 0 ? (
-                <ReportMetricCard
+                <ReportMetricCard isLoading={reportQuery.isLoading}
                   label={`عمولة طياري الأسطول (${report?.delivery?.commissionRate || 0}%)`}
                   value={report?.delivery?.storeFleetCourierShare || 0}
                   helper={t('reports.sections.sales_report_section.s41', "مستحقات للطيارين من التوصيل الداخلي")}
@@ -145,7 +151,7 @@ export function SalesReportSection({
                   formatter={formatCurrency} decimals={getCurrencyDecimals()}
                 />
               ) : null}
-              <ReportMetricCard
+              <ReportMetricCard isLoading={reportQuery.isLoading}
                 label={t('reports.sections.sales_report_section.s42', "صافي ربح المحل من التوصيل")}
                 value={report?.delivery?.storeProfit || 0}
                 helper={Number(report?.delivery?.commissionRate || 0) > 0 ? `بعد خصم ${report?.delivery?.commissionRate}% نسبة الطيارين` : t('reports.sections.sales_report_section.s43', "الأرباح المضافة لدخل النشاط")}

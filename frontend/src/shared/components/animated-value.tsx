@@ -8,8 +8,14 @@ interface AnimatedValueProps {
 }
 
 export function AnimatedValue({ value, durationMs = 850, decimals = 0, formatter }: AnimatedValueProps) {
-  const [displayValue, setDisplayValue] = useState(0);
-  const previousValueRef = useRef(0);
+  /* INV-REPORTS-PARTIAL-TOTALS: the first paint shows the final value.
+  Starting from 0 and sweeping to the value over 850ms displayed numbers
+  that were never real totals in the first seconds (a reader, a print or
+  an export taken then got a fake total). Animate only when the value
+  CHANGES after mount, from the previous real value. */
+  const initialValue = Number.isFinite(value) ? value : 0;
+  const [displayValue, setDisplayValue] = useState(initialValue);
+  const previousValueRef = useRef(initialValue);
 
   useEffect(() => {
     const target = Number.isFinite(value) ? value : 0;

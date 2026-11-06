@@ -14,6 +14,7 @@ export function InventoryReportSection({
   inventoryQuery,
   deadStockQuery,
   accountingInventoryValue,
+  accountingInventoryValueLoading,
   exportLowStock,
   printInventoryValueReport,
   printInventoryMovementsReport,
@@ -27,7 +28,7 @@ export function InventoryReportSection({
   onInventoryPageChange,
   onInventoryPageSizeChange,
   onInventoryFiltersReset
-}: Pick<ReportsSectionContentProps, 'inventoryQuery' | 'deadStockQuery' | 'accountingInventoryValue' | 'exportLowStock' | 'printInventoryValueReport' | 'printInventoryMovementsReport' | 'locationId' | 'inventorySearch' | 'onInventorySearchChange' | 'inventoryFilter' | 'onInventoryFilterChange' | 'deadStockDays' | 'onDeadStockDaysChange' | 'onInventoryPageChange' | 'onInventoryPageSizeChange' | 'onInventoryFiltersReset'>) {
+}: Pick<ReportsSectionContentProps, 'inventoryQuery' | 'deadStockQuery' | 'accountingInventoryValue' | 'accountingInventoryValueLoading' | 'exportLowStock' | 'printInventoryValueReport' | 'printInventoryMovementsReport' | 'locationId' | 'inventorySearch' | 'onInventorySearchChange' | 'inventoryFilter' | 'onInventoryFilterChange' | 'deadStockDays' | 'onDeadStockDaysChange' | 'onInventoryPageChange' | 'onInventoryPageSizeChange' | 'onInventoryFiltersReset'>) {
   const { t, i18n } = useTranslation();
   const isEn = i18n.language === 'en';
   const rows = inventoryQuery.data?.rows || [];
@@ -135,12 +136,12 @@ export function InventoryReportSection({
       ) : (
         <>
           <div className="reports-spotlight-grid section-spotlight-grid compact-spotlight-grid">
-            <ReportMetricCard label={t('reports.sections.inventory_report_section.s19', "إجمالي النتائج")} value={summary?.totalItems || 0} helper={t('reports.sections.inventory_report_section.s20', "ضمن الفلتر الحالي")} tone="primary" progress={relativePercent(summary?.totalItems || 0, values)} />
-            <ReportMetricCard label={t('reports.sections.inventory_report_section.s21', "نافد")} value={summary?.outOfStock || 0} helper={t('reports.sections.inventory_report_section.s22', "يحتاج شراء فورًا")} tone="danger" progress={relativePercent(summary?.outOfStock || 0, values)} />
-            <ReportMetricCard label={t('reports.sections.inventory_report_section.s23', "منخفض")} value={summary?.lowStock || 0} helper={t('reports.sections.inventory_report_section.s24', "قريب من الحد الأدنى")} tone="warning" progress={relativePercent(summary?.lowStock || 0, values)} />
-            <ReportMetricCard label={t('reports.sections.inventory_report_section.s25', "سليم")} value={summary?.healthy || 0} helper={isEn ? `Tracked Locations: ${summary?.trackedLocations || 0}` : `مواقع مرصودة: ${summary?.trackedLocations || 0}`} tone="success" progress={relativePercent(summary?.healthy || 0, values)} />
-            <ReportMetricCard label={t('reports.sections.inventory_report_section.s26', "قيمة المخزون")} value={inventoryTotals?.totalInventoryValue || 0} helper={t('reports.sections.inventory_report_section.s27', "حسب تكلفة الشراء الحالية")} tone="primary" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(inventoryTotals?.totalInventoryValue || 0, values)} />
-            <ReportMetricCard label={t('reports.sections.inventory_report_section.s28', "قيمة البيع التقديرية")} value={inventoryTotals?.totalRetailPotentialValue || 0} helper={t('reports.sections.inventory_report_section.s29', "ليست ربحًا محققًا")} tone="success" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(inventoryTotals?.totalRetailPotentialValue || 0, values)} />
+            <ReportMetricCard isLoading={inventoryQuery.isLoading} label={t('reports.sections.inventory_report_section.s19', "إجمالي النتائج")} value={summary?.totalItems || 0} helper={t('reports.sections.inventory_report_section.s20', "ضمن الفلتر الحالي")} tone="primary" progress={relativePercent(summary?.totalItems || 0, values)} />
+            <ReportMetricCard isLoading={inventoryQuery.isLoading} label={t('reports.sections.inventory_report_section.s21', "نافد")} value={summary?.outOfStock || 0} helper={t('reports.sections.inventory_report_section.s22', "يحتاج شراء فورًا")} tone="danger" progress={relativePercent(summary?.outOfStock || 0, values)} />
+            <ReportMetricCard isLoading={inventoryQuery.isLoading} label={t('reports.sections.inventory_report_section.s23', "منخفض")} value={summary?.lowStock || 0} helper={t('reports.sections.inventory_report_section.s24', "قريب من الحد الأدنى")} tone="warning" progress={relativePercent(summary?.lowStock || 0, values)} />
+            <ReportMetricCard isLoading={inventoryQuery.isLoading} label={t('reports.sections.inventory_report_section.s25', "سليم")} value={summary?.healthy || 0} helper={isEn ? `Tracked Locations: ${summary?.trackedLocations || 0}` : `مواقع مرصودة: ${summary?.trackedLocations || 0}`} tone="success" progress={relativePercent(summary?.healthy || 0, values)} />
+            <ReportMetricCard isLoading={accountingInventoryValueLoading} label={t('reports.sections.inventory_report_section.s26', "قيمة المخزون")} value={inventoryTotals?.totalInventoryValue || 0} helper={t('reports.sections.inventory_report_section.s27', "حسب تكلفة الشراء الحالية")} tone="primary" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(inventoryTotals?.totalInventoryValue || 0, values)} />
+            <ReportMetricCard isLoading={accountingInventoryValueLoading} label={t('reports.sections.inventory_report_section.s28', "قيمة البيع التقديرية")} value={inventoryTotals?.totalRetailPotentialValue || 0} helper={t('reports.sections.inventory_report_section.s29', "ليست ربحًا محققًا")} tone="success" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(inventoryTotals?.totalRetailPotentialValue || 0, values)} />
           </div>
           {inventoryTotals ? (
             <div className="metric-list reports-metric-list">

@@ -26,9 +26,17 @@ export type ReportsSectionContentProps = {
   report: ReportSummary | null | undefined;
   reportQuery: { isLoading: boolean; isError: boolean; error: unknown };
   accountingFinancialSummary?: FinancialSummaryResponse | null;
+  /* INV-REPORTS-PARTIAL-TOTALS: whether each accounting source behind the
+  report cards is still loading. The sections gate their cards on these
+  flags (together with reportQuery.isLoading) so no card shows a number
+  until every source its value reads from has loaded. */
+  accountingFinancialSummaryLoading?: boolean;
   accountingCashMovement?: CashMovementResponse | null;
+  accountingCashMovementLoading?: boolean;
   accountingReceivablesPayables?: ReceivablesPayablesResponse | null;
+  accountingReceivablesPayablesLoading?: boolean;
   accountingInventoryValue?: InventoryValueResponse | null;
+  accountingInventoryValueLoading?: boolean;
   inventoryQuery: PagedQuery<{ totalItems: number; outOfStock: number; lowStock: number; healthy: number; trackedLocations?: number; locationHighlights?: Array<{ locationId: string; locationName: string; branchId?: string; branchName?: string; totalQty: number; trackedProducts: number; attentionItems: number; lowStockItems: number; outOfStockItems: number }> }, ReportInventoryRow>;
   balancesQuery: PagedQuery<{ totalItems: number; totalBalance: number; overLimit: number; highBalance: number }, Customer>;
   executiveRows: Array<[string, number]>;

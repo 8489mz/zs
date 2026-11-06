@@ -8,6 +8,7 @@ import { FormSection } from '@/shared/components/form-section';
 import { ReportMetricCard } from '@/features/reports/components/ReportMetricCard';
 import { relativePercent } from '@/features/reports/lib/reports-format';
 import { formatCurrency } from '@/lib/format';
+import { getCurrencyDecimals } from '@/lib/currencies';
 import type { ReportsSectionContentProps } from '@/features/reports/components/reports-section.types';
 
 export function BalancesReportSection({
@@ -22,7 +23,8 @@ export function BalancesReportSection({
   onBalancesPageChange,
   onBalancesPageSizeChange,
   onBalancesFiltersReset
-}: Pick<ReportsSectionContentProps, 'balancesQuery' | 'accountingReceivablesPayables' | 'exportCustomerBalances' | 'printCustomerBalances' | 'balancesSearch' | 'onBalancesSearchChange' | 'balancesFilter' | 'onBalancesFilterChange' | 'onBalancesPageChange' | 'onBalancesPageSizeChange' | 'onBalancesFiltersReset'>) {
+  accountingReceivablesPayablesLoading,
+}: Pick<ReportsSectionContentProps, 'balancesQuery' | 'accountingReceivablesPayables' | 'accountingReceivablesPayablesLoading' | 'exportCustomerBalances' | 'printCustomerBalances' | 'balancesSearch' | 'onBalancesSearchChange' | 'balancesFilter' | 'onBalancesFilterChange' | 'onBalancesPageChange' | 'onBalancesPageSizeChange' | 'onBalancesFiltersReset'>) {
   const { t } = useTranslation();
   const rows = balancesQuery.data?.rows || [];
   const pagination = balancesQuery.data?.pagination;
@@ -31,6 +33,11 @@ export function BalancesReportSection({
   const suppliers = accountingReceivablesPayables?.suppliers || [];
   const netPosition = totals?.netPosition ?? 0;
   const netPositionLabel = netPosition >= 0 ? 'صافي لصالحك' : 'صافي التزامات عليك';
+  /* INV-REPORTS-PARTIAL-TOTALS: the money cards read the receivables /
+  payables source AND the balances summary through `??` fallbacks, so
+  they are ready only when both have loaded; the count card reads the
+  balances summary only. */
+  const cardsLoading = balancesQuery.isLoading || accountingReceivablesPayablesLoading;
   const values = [
     summary?.totalItems || 0,
     totals?.customerReceivables ?? summary?.totalBalance ?? 0,
@@ -67,10 +74,10 @@ export function BalancesReportSection({
         emptyAction={<Button variant="secondary" onClick={onBalancesFiltersReset}>{t('reports.sections.balances_report_section.s7', "إعادة الضبط")}</Button>}
       >
         <div className="reports-spotlight-grid section-spotlight-grid compact-spotlight-grid balances-spotlight-grid">
-          <ReportMetricCard label={t('reports.sections.balances_report_section.s8', "مستحق من العملاء")} value={totals?.customerReceivables ?? summary?.totalBalance ?? 0} helper={t('reports.sections.balances_report_section.s9', "مبالغ لم تحصل بعد")} tone="warning" formatter={formatCurrency} progress={relativePercent(totals?.customerReceivables ?? summary?.totalBalance ?? 0, values)} />
-          <ReportMetricCard label={t('reports.sections.balances_report_section.s10', "مستحق للموردين")} value={totals?.supplierPayables || 0} helper={t('reports.sections.balances_report_section.s11', "التزامات على المنشأة")} tone="danger" formatter={formatCurrency} progress={relativePercent(totals?.supplierPayables || 0, values)} />
-          <ReportMetricCard label={netPositionLabel} value={Math.abs(netPosition)} helper={t('reports.sections.balances_report_section.s12', "الفرق بين مستحقات العملاء والموردين")} tone={netPosition >= 0 ? 'success' : 'danger'} formatter={formatCurrency} progress={relativePercent(Math.abs(netPosition), values)} />
-          <ReportMetricCard label={t('reports.sections.balances_report_section.s13', "عدد العملاء")} value={summary?.totalItems || 0} helper={t('reports.sections.balances_report_section.s14', "ضمن النطاق الحالي")} tone="primary" progress={relativePercent(summary?.totalItems || 0, values)} />
+          <ReportMetricCard isLoading={cardsLoading} label={t('reports.sections.balances_report_section.s8', "مستحق من العملاء")} value={totals?.customerReceivables ?? summary?.totalBalance ?? 0} helper={t('reports.sections.balances_report_section.s9', "مبالغ لم تحصل بعد")} tone="warning" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(totals?.customerReceivables ?? summary?.totalBalance ?? 0, values)} />
+          <ReportMetricCard isLoading={cardsLoading} label={t('reports.sections.balances_report_section.s10', "مستحق للموردين")} value={totals?.supplierPayables || 0} helper={t('reports.sections.balances_report_section.s11', "التزامات على المنشأة")} tone="danger" formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(totals?.supplierPayables || 0, values)} />
+          <ReportMetricCard isLoading={cardsLoading} label={netPositionLabel} value={Math.abs(netPosition)} helper={t('reports.sections.balances_report_section.s12', "الفرق بين مستحقات العملاء والموردين")} tone={netPosition >= 0 ? 'success' : 'danger'} formatter={formatCurrency} decimals={getCurrencyDecimals()} progress={relativePercent(Math.abs(netPosition), values)} />
+          <ReportMetricCard isLoading={balancesQuery.isLoading} label={t('reports.sections.balances_report_section.s13', "عدد العملاء")} value={summary?.totalItems || 0} helper={t('reports.sections.balances_report_section.s14', "ضمن النطاق الحالي")} tone="primary" progress={relativePercent(summary?.totalItems || 0, values)} />
         </div>
         <div className="toolbar-grid compact-toolbar-grid">
           <Field label={t('reports.sections.balances_report_section.s15', "بحث")}><input value={balancesSearch} onChange={(event) => onBalancesSearchChange(event.target.value)} placeholder={t('reports.sections.balances_report_section.s16', "اسم العميل / الهاتف")} /></Field>

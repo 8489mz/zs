@@ -64,9 +64,13 @@ export function ReportsWorkspace({ currentSection }: { currentSection: ReportsSe
         report={controller.report}
         reportQuery={controller.reportQuery}
         accountingFinancialSummary={controller.accountingFinancialSummary}
+        accountingFinancialSummaryLoading={controller.accountingFinancialSummaryLoading}
         accountingCashMovement={controller.accountingCashMovement}
+        accountingCashMovementLoading={controller.accountingCashMovementLoading}
         accountingReceivablesPayables={controller.accountingReceivablesPayables}
+        accountingReceivablesPayablesLoading={controller.accountingReceivablesPayablesLoading}
         accountingInventoryValue={controller.accountingInventoryValue}
+        accountingInventoryValueLoading={controller.accountingInventoryValueLoading}
         inventoryQuery={controller.inventoryQuery}
         deadStockQuery={controller.deadStockQuery}
         balancesQuery={controller.balancesQuery}

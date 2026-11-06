@@ -10,6 +10,11 @@ interface ReportMetricCardProps {
   formatter?: (value: number) => string;
   decimals?: number;
   progress?: number;
+  /* INV-REPORTS-PARTIAL-TOTALS: while any source behind `value` is still
+  loading, the card shows a loading state instead of a number. A card must
+  never display a partial total (a `?? 0` fallback or a value from only
+  one of several sources) as if it were final. */
+  isLoading?: boolean;
 }
 
 const TONE_ICONS: Record<string, React.ReactNode> = {
@@ -27,8 +32,9 @@ export function ReportMetricCard({
   formatter,
   decimals = 0,
   progress,
+  isLoading = false,
 }: ReportMetricCardProps) {
-  const normalizedProgress = Math.max(0, Math.min(100, Number(progress || 0)));
+  const normalizedProgress = isLoading ? 0 : Math.max(0, Math.min(100, Number(progress || 0)));
 
   return (
     <article className={`report-metric-card tone-${tone}`}>
@@ -38,8 +44,17 @@ export function ReportMetricCard({
           <span className="rmc-icon" aria-hidden="true">{TONE_ICONS[tone] || <BarChartIcon size={16} />}</span>
           <span className="report-metric-label">{label}</span>
         </div>
-        <strong className="report-metric-value">
-          <AnimatedValue value={value} formatter={formatter} decimals={decimals} />
+        <strong className="report-metric-value" aria-busy={isLoading || undefined}>
+          {isLoading ? (
+            <span
+              className="report-metric-value-loading"
+              role="status"
+              aria-label="جاري تحميل البيانات..."
+              style={{ display: 'inline-block', width: '84px', height: '1em', borderRadius: '6px', background: '#e2e8f0', verticalAlign: 'middle' }}
+            />
+          ) : (
+            <AnimatedValue value={value} formatter={formatter} decimals={decimals} />
+          )}
         </strong>
         {helper ? <small className="report-metric-helper">{helper}</small> : null}
         <div className="report-progress-track" aria-hidden="true">
