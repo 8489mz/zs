@@ -47,7 +47,7 @@ export const AUDIT_EVENT_CODES = {
 
 export type AuditEventCode = (typeof AUDIT_EVENT_CODES)[keyof typeof AUDIT_EVENT_CODES];
 
-type AuditLogOptions = { targetTenantId?: string; eventCode?: AuditEventCode | string };
+type AuditLogOptions = { targetTenantId?: string; eventCode?: AuditEventCode | string; idempotencyKey?: string };
 
 @Injectable()
 export class AuditService {
@@ -59,23 +59,43 @@ export class AuditService {
 
   async logWithExecutor(executor: Kysely<Database>, action: string, details: string, actor: AuditActor, options?: AuditLogOptions): Promise<void> {
     const scope = requireTenantScope(actor as AuthContext);
-    await executor
-      .insertInto('audit_logs')
-      .values({
-        action,
-        details,
-        // Stable machine-readable discriminator. Detection logic must key off this, never off the
-        // human-facing `action` text, which is free to be reworded or translated.
-        event_code: options?.eventCode ?? null,
-        target_tenant_id: options?.targetTenantId ?? null,
-        created_by: actor.userId ?? null,
-        // `created_by` is whose identity the action ran under; this is who actually took
-        // it. They differ only during platform impersonation, which is exactly the case
-        // that used to be invisible here (O34).
-        impersonated_by: actor.impersonatedBy ?? null,
-        tenant_id: scope.tenantId,
-        account_id: scope.accountId,
-      } as any)
-      .execute();
+    // A caller-supplied idempotency key deduplicates its own audit row:
+    // the same business save replayed (double-click, two UI paths calling
+    // the same POST) must not write a second identical row. The key is
+    // derived from the saved payload, so a genuine correction (different
+    // payload, different key) still logs. Without a key the insert is
+    // unchanged — legacy NULL keys never conflict (unique indexes treat
+    // NULLs as distinct).
+    const idempotencyKey = options?.idempotencyKey ? String(options.idempotencyKey) : null;
+    const base = {
+      action,
+      details,
+      // Stable machine-readable discriminator. Detection logic must key off this, never off the
+      // human-facing `action` text, which is free to be reworded or translated.
+      event_code: options?.eventCode ?? null,
+      target_tenant_id: options?.targetTenantId ?? null,
+      created_by: actor.userId ?? null,
+      // `created_by` is whose identity the action ran under; this is who actually took
+      // it. They differ only during platform impersonation, which is exactly the case
+      // that used to be invisible here (O34).
+      impersonated_by: actor.impersonatedBy ?? null,
+      tenant_id: scope.tenantId,
+      account_id: scope.accountId,
+    };
+    if (idempotencyKey) {
+      await executor
+        .insertInto('audit_logs')
+        .values({ ...base, idempotency_key: idempotencyKey } as any)
+        .onConflict((oc) => oc.columns(['tenant_id', 'idempotency_key']).doNothing())
+        .execute();
+    } else {
+      // Keyless callers keep the exact pre-0293 insert: schemas that have
+      // not run the migration (older specs, pre-migration databases) must
+      // not see the new column at all.
+      await executor
+        .insertInto('audit_logs')
+        .values(base as any)
+        .execute();
+    }
   }
 }

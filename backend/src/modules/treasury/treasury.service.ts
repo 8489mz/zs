@@ -258,7 +258,11 @@ export class TreasuryService {
       // would retry, and the retry is exactly the double posting this
       // idempotency key exists to prevent. Log the failure and succeed.
       try {
-        await this.audit.log('تسجيل مصروف', 'تم تسجيل مصروف بواسطة ' + auth.username, auth);
+        await this.audit.log(
+          'تسجيل مصروف',
+          `تم تسجيل مصروف #${result.expenseId} — ${title} — ${amount.toFixed(digits)} بواسطة ${auth.username}`,
+          auth,
+        );
       } catch (auditError) {
         this.logger.error(`Expense ${result.expenseId} committed but audit log failed: ${(auditError as Error)?.message || auditError}`);
       }

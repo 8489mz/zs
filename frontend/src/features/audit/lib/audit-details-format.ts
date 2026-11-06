@@ -10,11 +10,28 @@ const FIELD_LABELS: Record<string, string> = {
   reason: 'السبب',
   note: 'ملاحظات',
   locationId: 'المخزن',
+  locationName: 'المخزن',
   branchId: 'الفرع',
+  branchName: 'الفرع',
+  sessionId: 'رقم الجلسة',
+  status: 'الحالة',
   fromQty: 'من',
   toQty: 'إلى',
   oldQty: 'من',
   newQty: 'إلى',
+};
+
+// Stored enum values are English ('draft', 'posted', ...); the general
+// tab shows their Arabic meaning, never the raw code.
+const STATUS_LABELS: Record<string, string> = {
+  draft: 'مسودة',
+  posted: 'مرحّلة',
+  approved: 'معتمدة',
+  cancelled: 'ملغاة',
+  canceled: 'ملغاة',
+  pending: 'قيد الانتظار',
+  completed: 'مكتملة',
+  rejected: 'مرفوضة',
 };
 
 function stringifyDetailValue(value: unknown): string {
@@ -30,7 +47,19 @@ function readDetail(details: AuditDetailsObject, key: string): string {
 
 function parseAuditDetails(rawDetails?: string): AuditDetailsObject | null {
   const raw = String(rawDetails || '').trim();
-  if (!raw || (!raw.startsWith('{') && !raw.startsWith('['))) return null;
+  if (!raw) return null;
+
+  // Prefixed JSON: "after: {...}" — a snapshot stored under a key prefix
+  // instead of a bare object. The prefix is the key; the object is the
+  // value. Without this the whole text falls through verbatim as raw JSON.
+  if (!raw.startsWith('{') && !raw.startsWith('[')) {
+    const prefixed = raw.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(\{[\s\S]*\}|\[[\s\S]*\])$/);
+    if (prefixed) {
+      const inner = parseAuditDetails(prefixed[2]);
+      if (inner) return { [prefixed[1]]: inner };
+    }
+    return null;
+  }
 
   try {
     const parsed = JSON.parse(raw);
@@ -62,17 +91,47 @@ function formatDamagedStockDetails(details: AuditDetailsObject): string {
   return `تم تسجيل تالف: ${parts.join(' — ')}`;
 }
 
-function formatGenericObjectDetails(details: AuditDetailsObject): string {
-  return Object.entries(details)
-    .map(([key, value]) => {
-      const formattedValue = stringifyDetailValue(value);
-      if (!formattedValue) return '';
+function formatGenericObjectDetails(details: AuditDetailsObject, depth = 0): string {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(details)) {
+    // A resolved name beside its id replaces the raw id: 'الفرع: المخزن
+    // الرئيسي', never the id next to the name. Legacy rows with ids only
+    // keep the labelled '#31' fallback below.
+    if ((key === 'branchId' && details.branchName) || (key === 'locationId' && details.locationName)) continue;
+    // 'after' / 'before' wrap a snapshot; they are not fields to display.
+    // Their children render inline with their own labels.
+    if ((key === 'after' || key === 'before') && value && typeof value === 'object' && !Array.isArray(value)) {
+      const nested = formatGenericObjectDetails(value as AuditDetailsObject, depth + 1);
+      if (nested) parts.push(nested);
+      continue;
+    }
+    if (Array.isArray(value)) {
+      const joined = value.map((item) => stringifyDetailValue(item)).filter(Boolean).join('، ');
+      if (!joined) continue;
       const label = FIELD_LABELS[key] || key;
-      const displayValue = key === 'productId' ? `#${formattedValue}` : formattedValue;
-      return `${label}: ${displayValue}`;
-    })
-    .filter(Boolean)
-    .join(' — ');
+      parts.push(`${label}: ${joined}`);
+      continue;
+    }
+    if (value && typeof value === 'object') {
+      // Nested objects recurse with their own labels instead of being
+      // JSON.stringify'd raw into the output. Depth is capped so a
+      // pathological payload can never render raw JSON.
+      if (depth >= 2) continue;
+      const nested = formatGenericObjectDetails(value as AuditDetailsObject, depth + 1);
+      if (!nested) continue;
+      const label = FIELD_LABELS[key] || key;
+      parts.push(`${label}: ${nested}`);
+      continue;
+    }
+    const formattedValue = stringifyDetailValue(value);
+    if (!formattedValue) continue;
+    const label = FIELD_LABELS[key] || key;
+    let displayValue = formattedValue;
+    if (key === 'productId' || key === 'branchId' || key === 'locationId') displayValue = `#${formattedValue}`;
+    else if (key === 'status') displayValue = STATUS_LABELS[formattedValue.toLowerCase()] || formattedValue;
+    parts.push(`${label}: ${displayValue}`);
+  }
+  return parts.join(' — ');
 }
 
 function looksLikeRawDetails(value?: string): boolean {

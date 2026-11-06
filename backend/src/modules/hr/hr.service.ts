@@ -1,4 +1,5 @@
 import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { CashDrawerService } from '../cash-drawer/cash-drawer.service';
 import { Kysely, sql } from '../../database/kysely';
 import { AppError } from '../../common/errors/app-error';
@@ -230,6 +231,32 @@ function normalizeAttendanceSource(value: unknown): 'manual' | 'import' | 'mobil
   if (c === 'import') return 'import';
   if (c === 'mobile_gps') return 'mobile_gps';
   return 'manual';
+}
+
+// Deterministic audit key for one saved attendance day: the same payload
+// replayed (double-click, row-save + save-all racing on the same POST)
+// hashes to the same key and writes one audit row; a genuine correction
+// (any field different) hashes differently and still logs. Rows are
+// sorted by employee so row order cannot change the key.
+function buildAttendanceDayAuditKey(
+  tenantId: string,
+  workDate: string,
+  rows: Array<{ employeeId?: unknown; status?: unknown; checkInAt?: unknown; checkOutAt?: unknown; source?: unknown; notes?: unknown }>,
+): string {
+  const canonical = [...rows]
+    .map((row) => ({
+      employeeId: toId(row.employeeId),
+      status: normalizeAttendanceStatus(row.status),
+      checkInAt: row.checkInAt ? new Date(String(row.checkInAt)).toISOString() : null,
+      checkOutAt: row.checkOutAt ? new Date(String(row.checkOutAt)).toISOString() : null,
+      source: normalizeAttendanceSource(row.source),
+      notes: clean(row.notes) || null,
+    }))
+    .sort((a, b) => Number(a.employeeId || 0) - Number(b.employeeId || 0));
+  const digest = createHash('sha256')
+    .update(JSON.stringify({ tenantId, workDate, rows: canonical }))
+    .digest('hex');
+  return `hr-attendance-day:${tenantId}:${workDate}:${digest}`;
 }
 
 function normalizeTimeOnly(value: unknown): string | null {
@@ -5061,7 +5088,12 @@ export class HrService {
       }
     });
 
-    await this.audit.log('Save HR attendance day', `Attendance saved for ${workDate} by ${auth.username}`, auth);
+    await this.audit.log(
+      'Save HR attendance day',
+      `Attendance saved for ${workDate} by ${auth.username}`,
+      auth,
+      { idempotencyKey: buildAttendanceDayAuditKey(auth.tenantId || '', workDate, payload.rows) },
+    );
     return this.listAttendance({ date: workDate }, auth);
   }
 

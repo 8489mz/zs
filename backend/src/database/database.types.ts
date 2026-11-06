@@ -292,6 +292,7 @@ export interface AuditLogTable {
   id: Generated<number>;
   action: string;
   event_code?: string | null;
+  idempotency_key: ColumnType<string | null, string | null | undefined, string | null | undefined>;
   details: string;
   target_tenant_id: string | null;
   created_by: number | null;

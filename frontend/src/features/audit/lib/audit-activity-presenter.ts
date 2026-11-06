@@ -24,6 +24,13 @@ const ACTION_PATTERNS: Array<{ pattern: RegExp; label: string; labelEn: string }
   { pattern: /(login|user login|تسجيل دخول)/i, label: 'تسجيل دخول', labelEn: 'User Login' },
   { pattern: /(logout|تسجيل خروج)/i, label: 'تسجيل خروج', labelEn: 'User Logout' },
   { pattern: /(failed login|تسجيل دخول فاشل)/i, label: 'تسجيل دخول فاشل', labelEn: 'Failed Login' },
+  // The dismiss branch logs a DISTINCT action ('تخطي تغيير كلمة المرور'
+  // / 'continue with current password'): it must be matched BEFORE the
+  // password-change pattern below, whose 'تغيير كلمة المرور' also matches
+  // inside the dismiss text — and before the reset-password pattern
+  // further down, whose bare 'كلمة مرور' matches it too. First match
+  // wins in getAuditActionLabel, so order is the fix.
+  { pattern: /(تخطي تغيير كلمة المرور|تخطي.*كلمة المرور|المتابعة بكلمة المرور الحالية|skip.*password|dismiss.*password|continue with current password)/i, label: 'تخطي تغيير كلمة المرور', labelEn: 'Skipped Password Change' },
   { pattern: /(password change|change password|تغيير كلمة المرور)/i, label: 'تغيير كلمة المرور', labelEn: 'Password Change' },
   
   // Maintenance tickets

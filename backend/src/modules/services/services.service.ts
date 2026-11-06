@@ -13,6 +13,8 @@ import { AccountingPostingService } from '../accounting/accounting-posting.servi
 import { UpsertServiceDto } from './dto/upsert-service.dto';
 import { IdempotencyService } from '../../core/idempotency/idempotency.service';
 import { idempotencyStorage } from '../../core/idempotency/idempotency.context';
+import { tenantBaseCurrency } from '../accounting/accounting-currency';
+import { currencyMoneyDigits } from '../accounting/engines/money-minor-units.engine';
 
 type ServicePaymentChannel = 'cash' | 'card';
 
@@ -65,7 +67,7 @@ export class ServicesService {
     service: { name?: string; amount?: number; date?: string; paymentChannel?: ServicePaymentChannel },
     auth: AuthContext,
     scope: ServiceFinanceScope,
-  ): Promise<void> {
+  ): Promise<number | null> {
     const tenantScope = requireTenantScope(auth);
     await sql`
       delete from treasury_transactions
@@ -77,17 +79,19 @@ export class ServicesService {
     const amount = Number(service.amount || 0);
     const paymentChannel = this.normalizePaymentChannel(service.paymentChannel);
     if (paymentChannel !== 'cash' || !(amount > 0)) {
-      return;
+      return null;
     }
 
     const serviceDate = service.date ? new Date(service.date) : new Date();
-    await sql`
+    const inserted = await sql<{ id: number }>`
       insert into treasury_transactions (
         txn_type, amount, note, reference_type, reference_id, branch_id, location_id, created_by, created_at, tenant_id, account_id
       ) values (
         'cash_in', ${amount}, ${`خدمة نقدي: ${String(service.name || '').trim()}`}, 'service', ${serviceId}, ${scope.branchId}, ${scope.locationId}, ${auth.userId}, ${serviceDate}, ${tenantScope.tenantId}, ${tenantScope.accountId}
       )
+      returning id
     `.execute(db);
+    return Number(inserted.rows?.[0]?.id || 0) || null;
   }
 
   async listServices(query: Record<string, unknown>, auth: AuthContext, db: Kysely<Database> = this.db): Promise<Record<string, unknown>> {
@@ -196,6 +200,18 @@ export class ServicesService {
       paymentChannel: this.normalizePaymentChannel(service.paymentChannel),
     };
 
+    // Captured inside the transaction and logged only after it commits, so
+    // the audit entry names the journal entry and treasury transaction
+    // that really exist — never a number from a rolled-back attempt.
+    // A holder object (not plain `let`s): TS narrows a `let` initialized
+    // to null to `never` past a callback assignment, a property does not
+    // narrow that way.
+    const capture: {
+      serviceId: number;
+      postingResult: { posted: boolean; journalEntryId: number | null } | null;
+      treasuryTransactionId: number | null;
+    } = { serviceId: 0, postingResult: null, treasuryTransactionId: null };
+
     const finalResponse = await this.tx.runInTransaction(this.db, async (trx) => {
       const financeScope = await this.getOpenShiftFinanceScope(trx, auth);
       const inserted = await sql<{ id?: number }>`
@@ -204,11 +220,11 @@ export class ServicesService {
         returning id
       `.execute(trx);
 
-      const serviceId = Number(inserted.rows?.[0]?.id || 0);
-      if (!(serviceId > 0)) throw new AppError('Service could not be saved', 'SERVICE_SAVE_FAILED', 400);
+      capture.serviceId = Number(inserted.rows?.[0]?.id || 0);
+      if (!(capture.serviceId > 0)) throw new AppError('Service could not be saved', 'SERVICE_SAVE_FAILED', 400);
 
-      await this.syncServiceTreasuryTransaction(trx, serviceId, normalizedService, auth, financeScope);
-      await this.accountingPosting.postService(trx, serviceId, 1, auth);
+      capture.treasuryTransactionId = await this.syncServiceTreasuryTransaction(trx, capture.serviceId, normalizedService, auth, financeScope);
+      capture.postingResult = await this.accountingPosting.postService(trx, capture.serviceId, 1, auth);
 
       const responsePayload = { ok: true, ...(await this.listServices({}, auth, trx)) };
       if (idemCtx && idemCtx.idempotencyKey && idemCtx.operationType) {
@@ -221,7 +237,14 @@ export class ServicesService {
       return responsePayload;
     });
 
-    await this.audit.log('إضافة خدمة', 'تمت إضافة خدمة بواسطة ' + auth.username, auth);
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantScope.tenantId));
+    const journalPart = capture.postingResult?.journalEntryId ? ` — قيد #${capture.postingResult.journalEntryId}` : '';
+    const treasuryPart = capture.treasuryTransactionId ? ` — خزينة #${capture.treasuryTransactionId}` : '';
+    await this.audit.log(
+      'إضافة خدمة',
+      `تمت إضافة خدمة #${capture.serviceId} — ${normalizedService.name} — ${normalizedService.amount.toFixed(digits)} بواسطة ${auth.username}${journalPart}${treasuryPart}`,
+      auth,
+    );
     return finalResponse;
   }
 

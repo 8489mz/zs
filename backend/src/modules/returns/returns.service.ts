@@ -400,21 +400,29 @@ export class ReturnsService {
 
     const returnIds = result.createdIds;
     const label = payload.type === 'purchase' ? 'purchase return' : 'sale return';
+    // The document row exists only after the commit above, so it is read
+    // here — before the audit entry — and not after it: the entry must
+    // name the real document number and total, never a bare sentence.
+    const doc = returnIds[0]
+      ? await this.db
+          .selectFrom('return_documents')
+          .select(['doc_no', 'total'])
+          .where('id', '=', returnIds[0])
+          .where('tenant_id', '=', scope.tenantId)
+          .executeTakeFirst()
+      : undefined;
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
+    const totalText = doc ? Number(doc.total || 0).toFixed(moneyDigits) : '';
+    const docPart = doc?.doc_no ? ` (${doc.doc_no})` : '';
     const auditText = approvedByName
-      ? `Created ${label} by ${auth.username} (Approved by: ${approvedByName})`
-      : `Created ${label} by ${auth.username}`;
+      ? `Created ${label} #${returnIds[0]}${docPart} — ${totalText} by ${auth.username} (Approved by: ${approvedByName})`
+      : `Created ${label} #${returnIds[0]}${docPart} — ${totalText} by ${auth.username}`;
     await this.audit.log('إنشاء مرتجع', auditText, auth);
 
     // WhatsApp refund notification to owner (post-commit reliable notification)
     if (payload.type === 'sale' && this.whatsappService && returnIds[0]) {
       void (async () => {
         try {
-          const doc = await this.db
-            .selectFrom('return_documents')
-            .select(['doc_no', 'total'])
-            .where('id', '=', returnIds[0])
-            .where('tenant_id', '=', scope.tenantId)
-            .executeTakeFirst();
           if (doc) {
             void this.whatsappService?.sendRefundNotification(
               doc.doc_no || String(returnIds[0]),

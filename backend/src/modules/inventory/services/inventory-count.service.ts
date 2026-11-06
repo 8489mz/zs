@@ -188,7 +188,14 @@ export class InventoryCountService {
 
       return id;
     });
-    await this.audit.log('جلسة جرد مخزون', JSON.stringify({ actorUserId: auth.userId, after: { sessionId: finalResponse, branchId: location.branchId, locationId: location.id, status: 'draft' } }), auth);
+    // Resolved names are stored beside the ids: the general-tab formatter
+    // renders human labels with real branch/location names, and a pure
+    // formatter cannot resolve ids to names on its own. Ids stay in the
+    // stored JSON for machines and for legacy rows that carry ids only.
+    const branchName = location.branchId
+      ? (await this.db.selectFrom('branches').select('name').where('id', '=', location.branchId).where(this.tenantPredicate(auth)).executeTakeFirst())?.name ?? null
+      : null;
+    await this.audit.log('جلسة جرد مخزون', JSON.stringify({ actorUserId: auth.userId, after: { sessionId: finalResponse, branchId: location.branchId, branchName, locationId: location.id, locationName: location.name, status: 'draft' } }), auth);
     const responsePayload = { ok: true, sessionId: String(finalResponse), stockCountSessions: (await this.listStockCountSessions({}, auth)).stockCountSessions, damagedStockRecords: (await this.listDamagedStock({}, auth)).damagedStockRecords };
     return responsePayload;
   }
