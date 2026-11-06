@@ -5,7 +5,7 @@
  * desktop-gated inside the section: on cloud the backend always 400s
  * apply, so the page never offers a dead apply button.
  */
-import { SystemUpdatesSection } from '@/features/settings/components/workspace-sections/SystemUpdatesSection';
+import { SystemUpdatesSection } from '@/features/settings';
 
 export function UpdatesPage() {
   return (
