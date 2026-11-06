@@ -5,12 +5,28 @@ import { Button } from '@/shared/ui/button';
 import { PageHeader } from '@/shared/components/page-header';
 import { StatsGrid } from '@/shared/components/stats-grid';
 import { formatCurrency } from '@/lib/format';
+import { ApiError } from '@/lib/http';
 import { vatDeclarationApi, type VatDeclarationData } from '@/features/sales/api/vat-declaration.api';
 import { PrinterIcon } from '@/shared/components/icons/AppIcons';
 import { VatPeriodSelector, type PeriodPreset } from '../components/vat-declaration/VatPeriodSelector';
 import { VatSalesTable } from '../components/vat-declaration/VatSalesTable';
 import { VatPurchasesTable } from '../components/vat-declaration/VatPurchasesTable';
 import { VatSummaryBox } from '../components/vat-declaration/VatSummaryBox';
+
+// INV-VAT-DECLARATION-HEADER-ERROR: a failed declaration query must surface
+// the server's real error (message + status + code) in the header instead of
+// silently showing "-" and empty dates. The 409
+// VAT_DECLARATION_TAX_ID_MISSING (no registered tax number) is the common
+// case: the server message already says so in Arabic.
+function declarationErrorInfo(error: unknown): { message: string; status?: number; code?: string } | null {
+  if (!error) return null;
+  if (error instanceof ApiError) {
+    return { message: error.message, status: error.status, code: error.code };
+  }
+  if (error instanceof Error) return { message: error.message };
+  if (typeof error === 'string' && error.trim()) return { message: error.trim() };
+  return null;
+}
 
 export function VatDeclarationPage() {
   const { t } = useTranslation();
@@ -60,6 +76,14 @@ export function VatDeclarationPage() {
   });
 
   const data: VatDeclarationData | undefined = declarationQuery.data;
+
+  // The period is the selector's requested range, not server data: it must
+  // always display, even when the query fails and there is no `data.period`.
+  const periodFrom = data?.period.from ?? dateRange.from;
+  const periodTo = data?.period.to ?? dateRange.to;
+  const declarationError = declarationQuery.isError
+    ? declarationErrorInfo(declarationQuery.error)
+    : null;
 
   const copyToClipboard = (text: string | number, key: string) => {
     navigator.clipboard.writeText(String(text));
@@ -163,7 +187,33 @@ export function VatDeclarationPage() {
               <div style={{ textAlign: 'left', fontSize: '13px', color: '#475569', lineHeight: '1.6' }}>
                 <div><strong>{t('sales.vat_declaration_page.s11', "المنشأة:")}</strong> {data?.entity.business_name || '-'}</div>
                 <div><strong>{t('sales.vat_declaration_page.s12', "الرقم الضريبي:")}</strong> <span style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{data?.entity.tax_id || '-'}</span></div>
-                <div><strong>{t('sales.vat_declaration_page.s13', "الفترة الضريبية:")}</strong> {t('sales.vat_declaration_page.s14', "من")} {data?.period.from} {t('sales.vat_declaration_page.s15', "إلى")} {data?.period.to}</div>
+                <div><strong>{t('sales.vat_declaration_page.s13', "الفترة الضريبية:")}</strong> {t('sales.vat_declaration_page.s14', "من")} {periodFrom} {t('sales.vat_declaration_page.s15', "إلى")} {periodTo}</div>
+                {declarationError && (
+                  <div
+                    role="alert"
+                    style={{
+                      marginTop: '8px',
+                      backgroundColor: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      color: '#991b1b',
+                      lineHeight: 1.6,
+                      textAlign: 'right',
+                    }}
+                  >
+                    <div style={{ fontWeight: 800 }}>{t('sales.vat_declaration_page.s16', "تعذر إصدار الإقرار:")}</div>
+                    <div>{declarationError.message}</div>
+                    {(declarationError.code || declarationError.status != null) && (
+                      <div style={{ fontFamily: 'monospace', fontSize: '11px', direction: 'ltr', textAlign: 'left' }}>
+                        {declarationError.code}
+                        {declarationError.code && declarationError.status != null ? ' · ' : ''}
+                        {declarationError.status != null ? String(declarationError.status) : ''}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
