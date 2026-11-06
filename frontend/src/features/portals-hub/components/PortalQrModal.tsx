@@ -15,7 +15,12 @@ export function PortalQrModal({ portal, onClose, copied, onCopy }: PortalQrModal
   if (!portal) return null;
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const fullUrl = `${origin}${portal.path}`;
+  // INV-HUB-DEAD-END: a resolved destination can already be absolute (the
+  // tenant's public store URL), so only prepend the origin for in-app paths.
+  const fullUrl =
+    portal.path.startsWith('http://') || portal.path.startsWith('https://')
+      ? portal.path
+      : `${origin}${portal.path}`;
   const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(fullUrl)}`;
 
   return (

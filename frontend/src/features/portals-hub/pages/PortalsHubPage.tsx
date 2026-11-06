@@ -1,16 +1,26 @@
 import { useTranslation } from 'react-i18next';
 import { useState, useMemo, useRef } from 'react';
 import { SearchIcon, CompassIcon } from '@/shared/components/icons/AppIcons';
-import { PORTALS_LIST, type PortalItem } from '../components/portals-data';
+import { useAuthStore } from '@/stores/auth-store';
+import { PORTALS_LIST, resolvePortalDestination, type PortalItem } from '../components/portals-data';
 import { PortalCard } from '../components/PortalCard';
 import { PortalQrModal } from '../components/PortalQrModal';
 
 export function PortalsHubPage() {
   const { t } = useTranslation();
+  const tenantSlug = useAuthStore((s) => s.tenant?.slug);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activeQrPortal, setActiveQrPortal] = useState<PortalItem | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // INV-HUB-DEAD-END: render every card at its resolved destination, so no
+  // card links to a path that matches no route (the storefront card used to
+  // link to the bare `/store`, which lands on NotFound).
+  const resolvedPortals = useMemo(
+    () => PORTALS_LIST.map((portal) => ({ ...portal, path: resolvePortalDestination(portal, tenantSlug) })),
+    [tenantSlug],
+  );
 
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
@@ -40,7 +50,7 @@ export function PortalsHubPage() {
   };
 
   const filteredPortals = useMemo(() => {
-    return PORTALS_LIST.filter((portal) => {
+    return resolvedPortals.filter((portal) => {
       const matchCat = selectedCategory === 'all' || portal.category === selectedCategory;
       if (!matchCat) return false;
 
@@ -53,7 +63,7 @@ export function PortalsHubPage() {
         portal.keywords.some((k) => k.toLowerCase().includes(q))
       );
     });
-  }, [search, selectedCategory]);
+  }, [search, selectedCategory, resolvedPortals]);
 
   const handleCopyLink = (url: string) => {
     navigator.clipboard.writeText(url);
@@ -259,7 +269,7 @@ export function PortalsHubPage() {
               }}
             >
               {[
-                { id: 'all', label: `الكل (${PORTALS_LIST.length})` },
+                { id: 'all', label: `الكل (${resolvedPortals.length})` },
                 { id: 'logistics', label: t('portals_hub.portals_hub_page.s5', "شحن ولوجستيات") },
                 { id: 'projects', label: t('portals_hub.portals_hub_page.s6', "مشاريع ومقاولات") },
                 { id: 'staff', label: t('portals_hub.portals_hub_page.s7', "خدمة ذاتية") },

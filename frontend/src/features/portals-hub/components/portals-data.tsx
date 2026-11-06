@@ -1,4 +1,5 @@
 import React from 'react';
+import { buildStorePublicUrl } from '@/lib/store-public-url';
 import {
   UsersIcon,
   SmartphoneIcon,
@@ -31,8 +32,7 @@ export interface PortalItem {
   keywords: string[];
 }
 
-export const PORTALS_LIST: PortalItem[] = [
-  // 1. Employee Self-Service
+export const PORTALS_LIST: PortalItem[] = [  // 1. Employee Self-Service
   {
     id: 'employee-portal',
     title: 'بوابة الموظف الذاتية',
@@ -239,3 +239,22 @@ export const PORTALS_LIST: PortalItem[] = [
     keywords: ['متجر', 'أونلاين', 'كتالوج', 'سلة', 'طلبات', 'store', 'ecommerce'],
   },
 ];
+
+/**
+ * INV-HUB-DEAD-END: resolve the real destination of a hub portal.
+ *
+ * The storefront card used to link to the bare `/store` path, which matches
+ * no route (only `/store/:slug`, `/st/:slug` and `/shop/:slug` exist), so
+ * opening it landed on the NotFound page — a dead end inside the hub. The
+ * public store lives at the tenant's public URL, derived from the tenant
+ * slug with the same helper the storefront settings tab uses
+ * (`buildStorePublicUrl`, SF-10 mirror of the backend engine). When no
+ * tenant slug is known, fall back to the shared `/st/store` destination —
+ * the same fallback `MerchantOnlineOrdersPage` uses — never the bare
+ * `/store`. Every other portal keeps its own in-app path unchanged.
+ */
+export function resolvePortalDestination(portal: PortalItem, tenantSlug?: string | null): string {
+  if (portal.id !== 'storefront') return portal.path;
+  const slug = tenantSlug?.trim() ? tenantSlug.trim() : 'store';
+  return buildStorePublicUrl(slug);
+}
