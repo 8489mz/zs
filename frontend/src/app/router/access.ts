@@ -220,6 +220,8 @@ export const routePermissionMap: Record<string, RoutePermissionRequirement> = {
   '/saas-admin/tenants': null,
   settings: ['settings', 'canManageSettings'],
   '/settings': ['settings', 'canManageSettings'],
+  updates: ['settings', 'canManageSettings'],
+  '/updates': ['settings', 'canManageSettings'],
   apps: ['settings', 'canManageSettings'],
   '/apps': ['settings', 'canManageSettings'],
   'apps-store': ['settings', 'canManageSettings'],

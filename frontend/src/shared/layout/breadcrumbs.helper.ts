@@ -113,6 +113,7 @@ const STATIC_ROUTE_RULES: RouteBreadcrumbRule[] = [
   { prefix: '/audit', crumbs: [{ label: 'الرئيسية', to: '/' }, { label: 'التقارير والمراجعة', to: '/reports' }, { label: 'سجل التدقيق والمراجعة' }] },
 
   // Settings & Profile
+  { prefix: '/updates', crumbs: [{ label: 'الرئيسية', to: '/' }, { label: 'الإدارة والنظام' }, { label: 'تحديثات النظام' }] },
   { prefix: '/settings/system-updates', crumbs: [{ label: 'الرئيسية', to: '/' }, { label: 'الإعدادات', to: '/settings' }, { label: 'تحديثات النظام' }] },
   { prefix: '/settings', exact: true, crumbs: [{ label: 'الرئيسية', to: '/' }, { label: 'الإعدادات', to: '/settings' }, { label: 'إعدادات النظام العامة' }] },
   { prefix: '/saas-admin/tenants', crumbs: [{ label: 'الرئيسية', to: '/' }, { label: 'إدارة المنظومة', to: '/saas-admin/tenants' }, { label: 'إدارة النسخ والمستأجرين' }] },

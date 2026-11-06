@@ -269,7 +269,7 @@ export function GlobalAppToolbar() {
             <button
               type="button"
               className="system-update-toolbar-alert"
-              onClick={() => navigate('/settings/system-updates')}
+              onClick={() => navigate('/updates')}
               title={`يتوفر تحديث جديد للمنظومة (v${updateInfo.latestVersion}) — اضغط للترقية`}
             >
               <span className="system-update-pulse-dot" />

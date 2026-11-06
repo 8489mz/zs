@@ -26,6 +26,10 @@ export function SystemUpdatesSection({ deploymentMode }: { deploymentMode?: stri
   const { t } = useTranslation();
   const authDeploymentMode = useAuthStore((state) => state.activationStatus?.deploymentMode);
   const effectiveDeploymentMode = deploymentMode ?? authDeploymentMode;
+  // Apply is desktop-only: the backend 400s both apply endpoints on cloud
+  // (OfflineReleasesService.applyLocalUpdate / applyLocalZipUpdate), so the
+  // apply affordances are hidden for server tenants instead of dead buttons.
+  const canApplyUpdates = effectiveDeploymentMode === 'desktop';
 
   // Direct releases history query from backend
   const { data: directHistory = [], isLoading: isHistoryLoading } = useQuery<any[]>({
@@ -280,14 +284,14 @@ export function SystemUpdatesSection({ deploymentMode }: { deploymentMode?: stri
           </div>
 
           <div className="system-update-hero-actions">
-            <button 
+            {canApplyUpdates && (<button
               type="button" 
               className="system-update-btn-glass" 
               onClick={() => fileInputRef.current?.click()}
             >
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
               <span>{t('settings.workspace_sections.system_updates_section.s6', "تحديث يدوي من ملف ZIP")}</span>
-            </button>
+            </button>)}
             <button 
               type="button" 
               className="system-update-btn-primary" 
@@ -351,7 +355,7 @@ export function SystemUpdatesSection({ deploymentMode }: { deploymentMode?: stri
               </div>
             </div>
           </div>
-          <Button 
+          {canApplyUpdates ? (<Button
             variant="primary" 
             onClick={() => {
               setUpdateCheckResult({ open: true, type: 'available', data: updateInfo });
@@ -359,7 +363,7 @@ export function SystemUpdatesSection({ deploymentMode }: { deploymentMode?: stri
             style={{ background: '#d97706', borderColor: '#b45309', color: '#ffffff', fontWeight: 800, padding: '8px 20px', borderRadius: '8px' }}
           >
             {t('settings.workspace_sections.system_updates_section.s20', "تطبيق الترقية الآن")}
-          </Button>
+          </Button>) : (<span style={{ fontSize: '12px', color: '#92400e', fontWeight: 700 }}>{t('settings.workspace_sections.system_updates_section.s98', "تطبيق الترقية متاح على نسخة الديسكتوب فقط.")}</span>)}
         </div>
       )}
 
@@ -609,7 +613,7 @@ export function SystemUpdatesSection({ deploymentMode }: { deploymentMode?: stri
 
               <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                 <Button variant="secondary" onClick={() => setSelectedReleaseIndex(null)}>{t('settings.workspace_sections.system_updates_section.s54', "إغلاق")}</Button>
-                {selectedRelease.version !== currentVersion && (
+                {selectedRelease.version !== currentVersion && canApplyUpdates && (
                   <Button variant="primary" onClick={() => {
                     if (selectedRelease.version && selectedRelease.patchUrl) {
                       handleApplyOnlineUpdate(selectedRelease.version, selectedRelease.patchUrl, selectedRelease.changelog ?? undefined);
@@ -804,7 +808,7 @@ export function SystemUpdatesSection({ deploymentMode }: { deploymentMode?: stri
 
                     {/* Action Buttons */}
                     <div style={{ display: 'flex', gap: '10px' }}>
-                      <Button
+                      {canApplyUpdates && (<Button
                         variant="primary"
                         style={{
                           flex: 1,
@@ -827,11 +831,12 @@ export function SystemUpdatesSection({ deploymentMode }: { deploymentMode?: stri
                         }}
                       >
                         {t('settings.workspace_sections.system_updates_section.s74', "تطبيق الترقية الآن")}
-                      </Button>
+                      </Button>)}
                       <Button variant="secondary" style={{ height: '44px', borderRadius: '10px' }} onClick={() => setUpdateCheckResult(null)}>
                         {t('settings.workspace_sections.system_updates_section.s75', "لاحقاً")}
                       </Button>
                     </div>
+                    {!canApplyUpdates && (<div style={{ fontSize: '12px', color: '#92400e', marginTop: '10px' }}>{t('settings.workspace_sections.system_updates_section.s98', "تطبيق الترقية متاح على نسخة الديسكتوب فقط.")}</div>)}
                   </div>
                 )}
               </div>

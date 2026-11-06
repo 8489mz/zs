@@ -1270,7 +1270,7 @@ export function AppShell({ children }: PropsWithChildren) {
         {
           key: 'admin-group',
           label: t('sidebar.admin-group', 'الإدارة والنظام'),
-          itemKeys: ['audit', 'settings'],
+          itemKeys: ['audit', 'settings', 'updates'],
           iconKey: 'admin',
         },
       ];
@@ -1344,7 +1344,7 @@ export function AppShell({ children }: PropsWithChildren) {
         {
           key: 'admin-group',
           label: t('sidebar.admin-group', 'الإدارة والنظام'),
-          itemKeys: ['audit', 'settings'],
+          itemKeys: ['audit', 'settings', 'updates'],
           iconKey: 'admin',
         },
       ];
@@ -1404,7 +1404,7 @@ export function AppShell({ children }: PropsWithChildren) {
         {
           key: 'admin-group',
           label: t('sidebar.admin-group', 'الإدارة والنظام'),
-          itemKeys: ['audit', 'settings'],
+          itemKeys: ['audit', 'settings', 'updates'],
           iconKey: 'admin',
         },
       ];
@@ -1478,7 +1478,7 @@ export function AppShell({ children }: PropsWithChildren) {
         {
           key: 'admin-group',
           label: t('sidebar.admin-group', 'الإدارة والنظام'),
-          itemKeys: ['hr', 'audit', 'settings'],
+          itemKeys: ['hr', 'audit', 'settings', 'updates'],
           iconKey: 'admin',
         },
       ];
@@ -1527,7 +1527,7 @@ export function AppShell({ children }: PropsWithChildren) {
         {
           key: 'admin-group',
           label: t('sidebar.admin-group', 'الإدارة والنظام'),
-          itemKeys: ['hr', 'audit', 'settings'],
+          itemKeys: ['hr', 'audit', 'settings', 'updates'],
           iconKey: 'admin',
         },
       ];
@@ -1585,7 +1585,7 @@ export function AppShell({ children }: PropsWithChildren) {
         {
           key: 'admin-group',
           label: t('sidebar.admin-group', 'الإدارة والنظام'),
-          itemKeys: ['audit', 'settings'],
+          itemKeys: ['audit', 'settings', 'updates'],
           iconKey: 'admin',
         },
       ];
@@ -1666,7 +1666,7 @@ export function AppShell({ children }: PropsWithChildren) {
         {
           key: 'admin-group',
           label: t('sidebar.admin-group', 'الإدارة والنظام'),
-          itemKeys: ['audit', 'settings'],
+          itemKeys: ['audit', 'settings', 'updates'],
           iconKey: 'admin',
         },
       ];
@@ -1780,7 +1780,7 @@ export function AppShell({ children }: PropsWithChildren) {
         itemKeys: ['saas-admin-tenants', 'saas-admin-plans'],
         iconKey: 'saas-admin-tenants',
       }] : []),
-      { key: 'admin-group', label: t('sidebar.admin-group', 'الإدارة والنظام'), itemKeys: ['hr', 'audit', 'settings'], iconKey: 'admin' },
+      { key: 'admin-group', label: t('sidebar.admin-group', 'الإدارة والنظام'), itemKeys: ['hr', 'audit', 'settings', 'updates'], iconKey: 'admin' },
     ];
   }, [t, settings?.businessIndustry, settings?.activityType, settings?.maintenanceProfile, settings?.restaurantModuleEnabled, settings?.enableMobileStoreFeatures, settings?.enablePharmacyModule, settings?.importModuleEnabled, settings?.manufacturingModuleEnabled, settings?.enableEnterpriseFeatures, settings?.maritimeFreightModuleEnabled, settings?.contractingModuleEnabled, settings?.posModuleEnabled, settings?.purchasesModuleEnabled, settings?.inventoryModuleEnabled, settings?.installmentsModuleEnabled, tenant?.features, tenant?.activityType, tenant?.pillar, user]);
 

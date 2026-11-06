@@ -630,10 +630,10 @@ financial logic.
 - Files in this directory: `index.ts`, `routes.tsx`
 - Subdirectories: `api`, `components`, `hooks`, `lib`, `pages`
 
-### `frontend/src/features/updates/` (3 files)
+### `frontend/src/features/updates/` (6 files)
 
-- Files in this directory: (none)
-- Subdirectories: `hooks`, `utils`
+- Files in this directory: `routes.tsx`
+- Subdirectories: `hooks`, `pages`, `utils`
 
 ## Source of truth
 

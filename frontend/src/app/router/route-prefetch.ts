@@ -36,6 +36,9 @@ export function prefetchRouteData(to: string) {
         case 'settings':
           void import('@/features/settings/pages/SettingsPage');
           break;
+        case 'updates':
+          void import('@/features/updates/pages/UpdatesPage');
+          break;
         case 'sales': {
           void import('@/features/sales/pages/SalesPage');
           const salesParams = { page: 1, pageSize: 30, search: '', filter: 'all' as const, cashier: 'all' };

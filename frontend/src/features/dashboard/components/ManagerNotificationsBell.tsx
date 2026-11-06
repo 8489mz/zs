@@ -246,7 +246,7 @@ export function ManagerNotificationsBell() {
           }}
           onClick={() => {
             setIsOpen(false);
-            navigate('/settings/system-updates');
+            navigate('/updates');
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
