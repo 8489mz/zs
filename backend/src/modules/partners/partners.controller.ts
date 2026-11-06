@@ -4,6 +4,7 @@ import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.in
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { PartnersService } from './partners.service';
+import { resolveLoyaltyAdjustActionType } from './helpers/loyalty-adjust-action.helper';
 import { UpsertCustomerDto } from './dto/upsert-customer.dto';
 import { UpsertSupplierDto } from './dto/upsert-supplier.dto';
 import { UpsertContactDto } from './dto/upsert-contact.dto';
@@ -61,7 +62,10 @@ export class PartnersController {
     @Body() payload: { pointsChange: number; actionType?: 'earn' | 'redeem' | 'manual_adjust'; notes?: string },
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
-    const action = payload.actionType || (payload.pointsChange >= 0 ? 'earn' : 'redeem');
+    // The manual-adjust endpoint records a manual adjustment. An explicit
+    // earn / redeem is honoured; an unspecified action is 'manual_adjust',
+    // never silently a purchase earn or a discount redemption.
+    const action = resolveLoyaltyAdjustActionType(payload.actionType);
     return this.partnersService.adjustCustomerLoyaltyPoints(id, Number(payload.pointsChange), action, payload.notes, req.authContext!);
   }
 

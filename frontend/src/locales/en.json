@@ -3147,7 +3147,9 @@
       "s11": "Execute operation",
       "s18": "Balance after",
       "s22": "Deduction for return",
-      "s23": "Return points refund"
+      "s23": "Return points refund",
+      "s25": "Manual add",
+      "s26": "Manual deduction"
     },
     "customer_visit_days_picker": {
       "s2": "Deselect All",

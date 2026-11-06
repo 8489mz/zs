@@ -1,9 +1,15 @@
 import { useTranslation } from 'react-i18next';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { Button } from '@/shared/ui/button';
 import { customersApi } from '@/shared/api/customers.api';
+import {
+  getLoyaltyMovementLabel,
+  resolveDisplayedLoyaltyBalance,
+  summarizeLoyaltyLogs,
+  type LoyaltyMovementTone,
+} from '@/features/customers/lib/loyalty-movement-labels';
 import { toast } from '@/shared/components/system-alert';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
 import type { Customer } from '@/types/domain';
@@ -19,6 +25,15 @@ export function CustomerLoyaltyModal({ customer, onClose }: CustomerLoyaltyModal
   const [pointsChange, setPointsChange] = useState<number>(50);
   const [isDeduction, setIsDeduction] = useState(false);
   const [notes, setNotes] = useState('');
+  // Server-confirmed balance from the last operation in this dialog. The
+  // customer prop is a snapshot taken when the dialog opened and never
+  // refreshes while it is open, so the card must not read it after an
+  // operation or it stays stale until the dialog is closed and reopened.
+  const [confirmedBalance, setConfirmedBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    setConfirmedBalance(null);
+  }, [customer?.id]);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['customer-loyalty-history', customer?.id],
@@ -30,12 +45,13 @@ export function CustomerLoyaltyModal({ customer, onClose }: CustomerLoyaltyModal
     mutationFn: () => {
       if (!customer?.id) return Promise.reject();
       const change = isDeduction ? -Math.abs(pointsChange) : Math.abs(pointsChange);
-      return customersApi.adjustLoyaltyPoints(customer.id, change, notes.trim() || undefined);
+      return customersApi.adjustLoyaltyPoints(customer.id, change, notes.trim() || undefined, 'manual_adjust');
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['customer-loyalty-history', customer?.id] });
       refetch();
+      if (result && typeof result.balance === 'number') setConfirmedBalance(result.balance);
       setNotes('');
       toast.success('تم تحديث رصيد نقاط الولاء بنجاح.');
     },
@@ -47,7 +63,8 @@ export function CustomerLoyaltyModal({ customer, onClose }: CustomerLoyaltyModal
   if (!customer) return null;
 
   const logs = data?.logs || [];
-  const currentBalance = Number((customer as any).loyaltyPoints || 0);
+  const { totalEarned, totalRedeemed } = summarizeLoyaltyLogs(logs);
+  const currentBalance = resolveDisplayedLoyaltyBalance(confirmedBalance, Number((customer as any).loyaltyPoints || 0));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,13 +97,13 @@ export function CustomerLoyaltyModal({ customer, onClose }: CustomerLoyaltyModal
           <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 14px' }}>
             <div style={{ fontSize: '0.75rem', color: '#166534', fontWeight: 700 }}>{t('customers.customer_loyalty_modal.s2', "إجمالي النقاط المكتسبة")}</div>
             <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#15803d', marginTop: '3px' }}>
-              +{logs.filter((l: any) => Number(l.points_change) > 0).reduce((s: number, l: any) => s + Number(l.points_change), 0).toLocaleString()}
+              +{totalEarned.toLocaleString()}
             </div>
           </div>
           <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px' }}>
             <div style={{ fontSize: '0.75rem', color: '#991b1b', fontWeight: 700 }}>{t('customers.customer_loyalty_modal.s3', "إجمالي النقاط المستبدلة")}</div>
             <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#b91c1c', marginTop: '3px' }}>
-              {logs.filter((l: any) => l.action_type === 'redeem').reduce((s: number, l: any) => s + Math.abs(Number(l.points_change)), 0).toLocaleString()}
+              {totalRedeemed.toLocaleString()}
             </div>
           </div>
           <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 14px' }}>
@@ -222,20 +239,20 @@ export function CustomerLoyaltyModal({ customer, onClose }: CustomerLoyaltyModal
                 </thead>
                 <tbody>
                   {logs.map((log: any) => {
-                    const actionBadge = (() => {
-                      switch (log.action_type) {
-                        case 'earn':
-                          return <span style={{ background: '#dcfce7', color: '#15803d', padding: '2px 7px', borderRadius: '4px', fontWeight: 700 }}>{t('customers.customer_loyalty_modal.s20', "اكتساب مشتريات")}</span>;
-                        case 'redeem':
-                          return <span style={{ background: '#fee2e2', color: '#b91c1c', padding: '2px 7px', borderRadius: '4px', fontWeight: 700 }}>{t('customers.customer_loyalty_modal.s21', "استبدال بخصم")}</span>;
-                        case 'return_clawback':
-                          return <span style={{ background: '#fef3c7', color: '#b45309', padding: '2px 7px', borderRadius: '4px', fontWeight: 700 }}>{t('customers.customer_loyalty_modal.s22', "خصم لمرتجع")}</span>;
-                        case 'return_refund':
-                          return <span style={{ background: '#e0e7ff', color: '#4338ca', padding: '2px 7px', borderRadius: '4px', fontWeight: 700 }}>{t('customers.customer_loyalty_modal.s23', "رد نقاط مرتجع")}</span>;
-                        default:
-                          return <span style={{ background: '#f1f5f9', color: '#475569', padding: '2px 7px', borderRadius: '4px', fontWeight: 700 }}>{t('customers.customer_loyalty_modal.s24', "تعديل يدوي")}</span>;
-                      }
-                    })();
+                    const label = getLoyaltyMovementLabel(log.action_type, Number(log.points_change));
+                    const toneStyle: Record<LoyaltyMovementTone, { background: string; color: string }> = {
+                      earn: { background: '#dcfce7', color: '#15803d' },
+                      redeem: { background: '#fee2e2', color: '#b91c1c' },
+                      clawback: { background: '#fef3c7', color: '#b45309' },
+                      refund: { background: '#e0e7ff', color: '#4338ca' },
+                      neutral: { background: '#f1f5f9', color: '#475569' },
+                    };
+                    const badgeStyle = toneStyle[label.tone];
+                    const actionBadge = (
+                      <span style={{ background: badgeStyle.background, color: badgeStyle.color, padding: '2px 7px', borderRadius: '4px', fontWeight: 700 }}>
+                        {t(`customers.customer_loyalty_modal.${label.key}`, label.fallback)}
+                      </span>
+                    );
 
                     return (
                       <tr key={log.id} style={{ borderBottom: '1px solid #f1f5f9' }}>

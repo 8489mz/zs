@@ -41,10 +41,10 @@ export const customersApi = {
   ledger: (id: string) => http<CustomerLedger>(`/api/reports/customers/${id}/ledger`),
   addresses: (id: string) => http<string[]>(`/api/customers/${id}/addresses`),
   getLoyaltyHistory: (id: string | number) => http<{ ok: boolean; logs: any[] }>(`/api/customers/${id}/loyalty/history`),
-  adjustLoyaltyPoints: (id: string | number, pointsChange: number, notes?: string) =>
+  adjustLoyaltyPoints: (id: string | number, pointsChange: number, notes?: string, actionType?: 'earn' | 'redeem' | 'manual_adjust') =>
     http<{ ok: boolean; balance: number }>(`/api/customers/${id}/loyalty/adjust`, {
       method: 'POST',
-      body: JSON.stringify({ pointsChange, notes }),
+      body: JSON.stringify({ pointsChange, notes, actionType }),
     }),
   getInactiveMarketing: (days = 30) =>
     http<{
