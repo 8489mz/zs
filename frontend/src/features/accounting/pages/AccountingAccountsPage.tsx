@@ -14,7 +14,7 @@ import { formatCurrency } from '@/lib/format';
 const typeLabel: Record<string, string> = {
   asset: 'أصل',
   contra_asset: 'أصل عكسي',
-  liability: 'خصم',
+  liability: 'خصوم',
   equity: 'حقوق ملكية',
   revenue: 'إيراد',
   contra_revenue: 'إيراد عكسي',

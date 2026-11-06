@@ -29,7 +29,7 @@ type FormValues = {
 
 const ACCOUNT_TYPE_OPTIONS = [
   { value: 'asset', label: 'أصل (Assets)' },
-  { value: 'liability', label: 'خصم / التزام (Liabilities)' },
+  { value: 'liability', label: 'خصوم / التزام (Liabilities)' },
   { value: 'equity', label: 'حقوق ملكية (Equity)' },
   { value: 'revenue', label: 'إيراد (Revenue)' },
   { value: 'expense', label: 'مصروف (Expenses)' },
