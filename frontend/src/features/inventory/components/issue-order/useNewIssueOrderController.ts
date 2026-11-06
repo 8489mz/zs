@@ -9,6 +9,13 @@ import { referenceDataApi } from '@/services/reference-data.api';
 import { queryKeys } from '@/app/query-keys';
 import { useFormDraft } from '@/shared/hooks/use-form-draft';
 import { toast } from '@/shared/components/system-alert';
+import {
+  buildIssueOrderPayloadIdentity,
+  buildTransferDestinationOptions,
+  resolveTransferDestination,
+  type IssueOrderDestinationKind,
+  type IssueOrderDestinationOption,
+} from './issue-order-destination.helpers';
 import { LineItem } from './types';
 
 export function useNewIssueOrderController() {
@@ -23,6 +30,10 @@ export function useNewIssueOrderController() {
   const [fromLocationQuery, setFromLocationQuery] = useState('كل المخازن');
   const [toLocationId, setToLocationId] = useState('');
   const [toLocationQuery, setToLocationQuery] = useState('');
+  // INV-TRANSFER-WAREHOUSE-DESTINATION: the destination may be a branch
+  // (sent as toBranchId) or a warehouse (sent as toLocationId). The kind
+  // travels with the chosen id so submit can build the right payload.
+  const [toDestinationKind, setToDestinationKind] = useState<IssueOrderDestinationKind>('branch');
   const [recipientName, setRecipientName] = useState('');
   const [note, setNote] = useState('');
   const [lines, setLines] = useState<LineItem[]>([{ id: Date.now(), productId: '', qty: 1, fromLocationId: '' }]);
@@ -44,11 +55,12 @@ export function useNewIssueOrderController() {
     fromLocationQuery,
     toLocationId,
     toLocationQuery,
+    toDestinationKind,
     recipientName,
     note,
     issueMode,
     lines,
-  }), [fromLocationId, fromLocationQuery, toLocationId, toLocationQuery, recipientName, note, issueMode, lines]);
+  }), [fromLocationId, fromLocationQuery, toLocationId, toLocationQuery, toDestinationKind, recipientName, note, issueMode, lines]);
 
   const { clearDraft, isDraftRestored, dismissRestoredNotice } = useFormDraft({
     key: 'z_draft_inventory_issue_order',
@@ -63,6 +75,7 @@ export function useNewIssueOrderController() {
       if (saved.fromLocationQuery) setFromLocationQuery(saved.fromLocationQuery);
       if (saved.toLocationId) setToLocationId(saved.toLocationId);
       if (saved.toLocationQuery) setToLocationQuery(saved.toLocationQuery);
+      if (saved.toDestinationKind === 'warehouse' || saved.toDestinationKind === 'branch') setToDestinationKind(saved.toDestinationKind);
       if (saved.recipientName) setRecipientName(saved.recipientName);
       if (saved.note) setNote(saved.note);
       if (saved.issueMode) setIssueMode(saved.issueMode);
@@ -77,6 +90,7 @@ export function useNewIssueOrderController() {
     setLines([{ id: Date.now(), productId: '', qty: 1, fromLocationId: '' }]);
     setToLocationId('');
     setToLocationQuery('');
+    setToDestinationKind('branch');
     setRecipientName('');
     setNote('');
   };
@@ -197,6 +211,23 @@ export function useNewIssueOrderController() {
     name: b.name,
     searchTerms: b.name.toLowerCase(),
   }));
+
+  // INV-TRANSFER-WAREHOUSE-DESTINATION: the destination list holds branches
+  // AND warehouses, so a warehouse can be chosen as the destination.
+  const destinationOptions = useMemo(
+    () => buildTransferDestinationOptions(branches, locations),
+    [branches, locations],
+  );
+
+  const handleSelectDestination = (option: IssueOrderDestinationOption) => {
+    setToLocationId(option.id);
+    setToDestinationKind(option.kind);
+  };
+
+  const handleClearDestination = () => {
+    setToLocationId('');
+    setToDestinationKind('branch');
+  };
 
   const addLine = () => {
     const newLineId = Date.now();
@@ -376,7 +407,7 @@ export function useNewIssueOrderController() {
   const handleSubmit = async () => {
     setErrorMsg('');
     if (!fromLocationId || !toLocationId) {
-      setErrorMsg('يرجى تحديد مخزن الصرف والفرع المستلم');
+      setErrorMsg('يرجى تحديد مخزن الصرف والوجهة (فرع أو مخزن)');
       return;
     }
     const validLines = lines.filter(l => {
@@ -389,18 +420,20 @@ export function useNewIssueOrderController() {
       return;
     }
 
-    const toBranchIdNum = Number(toLocationId);
-    if (!Number.isSafeInteger(toBranchIdNum) || toBranchIdNum <= 0) {
-      setErrorMsg('يرجى تحديد فرع المستلم بشكل صحيح');
+    // INV-TRANSFER-WAREHOUSE-DESTINATION: resolve the destination into
+    // the payload legs. A branch keeps the old toBranchId path (with its
+    // branch_stock requirement in transfer mode); a warehouse is sent as
+    // toLocationId and the backend receives the transfer into that exact
+    // location.
+    const destination = resolveTransferDestination({
+      kind: toDestinationKind,
+      destinationId: toLocationId,
+      locations,
+      issueMode,
+    });
+    if (!destination.ok) {
+      setErrorMsg(destination.error);
       return;
-    }
-
-    if (issueMode === 'transfer_to_branch_stock') {
-      const branchLocs = locations.filter((l: any) => String(l.branchId) === String(toLocationId) && l.locationType === 'branch_stock');
-      if (branchLocs.length === 0) {
-        setErrorMsg('لا يوجد رصيد مخزون مرتبط بهذا الفرع. أنشئ رصيد فرع أولًا من أماكن المخزون.');
-        return;
-      }
     }
 
     const seenProducts = new Map<string, string>();
@@ -422,9 +455,14 @@ export function useNewIssueOrderController() {
 
     setIsSubmitting(true);
     try {
-      const payloadString = JSON.stringify({
+      // INV-TRANSFER-WAREHOUSE-DESTINATION: the kind is part of the
+      // payload identity — the same numeric id can be both a branch and
+      // a warehouse, and reusing the key across kinds would replay the
+      // wrong destination's committed response.
+      const payloadString = buildIssueOrderPayloadIdentity({
         fromLocationId,
         toLocationId,
+        toDestinationKind,
         recipientName,
         note,
         issueMode,
@@ -461,7 +499,8 @@ export function useNewIssueOrderController() {
           return withIdempotency(
             (headers) => inventoryApi.createStockTransfer({
               fromLocationId: Number(locId),
-              toBranchId: toBranchIdNum,
+              ...(destination.toBranchId != null ? { toBranchId: destination.toBranchId } : {}),
+              ...(destination.toLocationId != null ? { toLocationId: destination.toLocationId } : {}),
               recipientName,
               note,
               issueMode,
@@ -583,6 +622,7 @@ export function useNewIssueOrderController() {
     setLines([{ id: Date.now(), productId: '', qty: 1, fromLocationId: '' }]);
     setToLocationId('');
     setToLocationQuery('');
+    setToDestinationKind('branch');
     setRecipientName('');
     setNote('');
   };
@@ -630,6 +670,9 @@ export function useNewIssueOrderController() {
     products,
     locationOptions,
     branchOptions,
+    destinationOptions,
+    handleSelectDestination,
+    handleClearDestination,
     stocks,
     productOptions,
     fetchProductOptions,

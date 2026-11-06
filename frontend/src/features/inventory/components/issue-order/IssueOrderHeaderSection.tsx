@@ -3,6 +3,7 @@ import React from 'react';
 import { SearchableCombobox } from '@/shared/ui/searchable-combobox';
 import { Field } from '@/shared/ui/field';
 import { CustomSelect } from '@/shared/ui/custom-select';
+import type { IssueOrderDestinationOption } from './issue-order-destination.helpers';
 
 const ISSUE_MODE_OPTIONS = [
   { value: 'final_issue', label: 'صرف نهائي (يتم خصم الرصيد فوراً)' },
@@ -15,9 +16,10 @@ interface IssueOrderHeaderSectionProps {
   setFromLocationId: (id: string) => void;
   toLocationQuery: string;
   setToLocationQuery: (q: string) => void;
-  setToLocationId: (id: string) => void;
+  onSelectDestination: (option: IssueOrderDestinationOption) => void;
+  onClearDestination: () => void;
   locationOptions: { id: string; name: string; searchTerms: string }[];
-  branchOptions: { id: string; name: string; searchTerms: string }[];
+  destinationOptions: IssueOrderDestinationOption[];
   issueMode: 'final_issue' | 'transfer_to_branch_stock';
   setIssueMode: (mode: 'final_issue' | 'transfer_to_branch_stock') => void;
   dispatcherName: string;
@@ -31,9 +33,10 @@ export const IssueOrderHeaderSection: React.FC<IssueOrderHeaderSectionProps> = (
   setFromLocationId,
   toLocationQuery,
   setToLocationQuery,
-  setToLocationId,
+  onSelectDestination,
+  onClearDestination,
   locationOptions,
-  branchOptions,
+  destinationOptions,
   issueMode,
   setIssueMode,
   dispatcherName,
@@ -68,15 +71,15 @@ export const IssueOrderHeaderSection: React.FC<IssueOrderHeaderSectionProps> = (
           />
 
           <SearchableCombobox
-            label={t('inventory.issue_order.issue_order_header_section.s3', "إلى فرع / محل (المستلم)")}
-            placeholder={t('inventory.issue_order.issue_order_header_section.s4', "اختر الفرع...")}
+            label={t('inventory.issue_order.issue_order_header_section.s3', "إلى فرع أو مخزن (المستلم)")}
+            placeholder={t('inventory.issue_order.issue_order_header_section.s4', "اختر الفرع أو المخزن...")}
             value={toLocationQuery}
             onChange={(q) => {
               setToLocationQuery(q);
-              if (!q) setToLocationId('');
+              if (!q) onClearDestination();
             }}
-            onSelect={(l) => setToLocationId(l.id)}
-            options={branchOptions}
+            onSelect={(l) => onSelectDestination(l)}
+            options={destinationOptions}
             search={(l, q) => l.searchTerms.includes(q.toLowerCase())}
             getLabel={(l) => l.name}
             createLabel={(q) => `إضافة "${q}"`}

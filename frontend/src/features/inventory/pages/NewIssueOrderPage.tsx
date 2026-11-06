@@ -19,7 +19,6 @@ export function NewIssueOrderPage() {
     setFromLocationId,
     fromLocationQuery,
     setFromLocationQuery,
-    setToLocationId,
     toLocationQuery,
     setToLocationQuery,
     recipientName,
@@ -42,7 +41,9 @@ export function NewIssueOrderPage() {
     dismissRestoredNotice,
     products,
     locationOptions,
-    branchOptions,
+    destinationOptions,
+    handleSelectDestination,
+    handleClearDestination,
     stocks,
     productOptions,
     fetchProductOptions,
@@ -141,9 +142,10 @@ export function NewIssueOrderPage() {
           setFromLocationId={setFromLocationId}
           toLocationQuery={toLocationQuery}
           setToLocationQuery={setToLocationQuery}
-          setToLocationId={setToLocationId}
+          onSelectDestination={handleSelectDestination}
+          onClearDestination={handleClearDestination}
           locationOptions={locationOptions}
-          branchOptions={branchOptions}
+          destinationOptions={destinationOptions}
           issueMode={issueMode}
           setIssueMode={setIssueMode}
           dispatcherName={user?.displayName || user?.username || ''}
