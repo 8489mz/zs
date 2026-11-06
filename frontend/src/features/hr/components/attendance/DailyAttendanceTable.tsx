@@ -25,26 +25,39 @@ export const DailyAttendanceTable: React.FC<DailyAttendanceTableProps> = ({
 }) => {
   const { t } = useTranslation();
 
-  const getRowMinutes = (row: HrAttendanceRecord): number => {
+  // INV-ATTENDANCE-EQUAL-TIMES-ZERO: equal check-in/check-out times mean zero
+  // worked minutes. The midnight wrap applies only when end < start (a real
+  // night shift); with `<=` an instant "now/now" pair wrapped to a full 1440
+  // minutes (24 h). Time-only values cannot express a true 24 h span, and
+  // the backend pay engine (real timestamps) is unaffected.
+  const getRowTimes = (row: HrAttendanceRecord): { start: number; end: number } | null => {
     const draft = draftByEmployeeId[String(row.employeeId)];
     const status = String(draft?.status || row.status || '');
-    if (!status || ['absent', 'leave'].includes(status)) return 0;
+    if (!status || ['absent', 'leave'].includes(status)) return null;
 
     const checkIn = draft?.checkInAt || row.checkInAt?.slice(11, 16) || '';
     const checkOut = draft?.checkOutAt || row.checkOutAt?.slice(11, 16) || '';
-    if (!checkIn || !checkOut) return 0;
+    if (!checkIn || !checkOut) return null;
     const [ih, im] = checkIn.split(':').map(Number);
     const [oh, om] = checkOut.split(':').map(Number);
-    if (![ih, im, oh, om].every(Number.isFinite)) return 0;
-    const start = ih * 60 + im, end = oh * 60 + om;
-    const minutes = end <= start ? end + 1440 - start : end - start;
+    if (![ih, im, oh, om].every(Number.isFinite)) return null;
+    return { start: ih * 60 + im, end: oh * 60 + om };
+  };
+
+  const getRowMinutes = (row: HrAttendanceRecord): number => {
+    const times = getRowTimes(row);
+    if (!times) return 0;
+    const minutes = times.end < times.start ? times.end + 1440 - times.start : times.end - times.start;
     return minutes > 0 && minutes <= 1440 ? minutes : 0;
   };
 
   const workedHours = (row: HrAttendanceRecord) => {
     const minutes = getRowMinutes(row);
-    if (minutes <= 0) return '—';
-    return `${Math.floor(minutes / 60)} س ${minutes % 60} د`;
+    if (minutes > 0) return `${Math.floor(minutes / 60)} س ${minutes % 60} د`;
+    // Both times are present and valid but equal: a real zero-hour day,
+    // not a missing record.
+    if (getRowTimes(row)) return '0 س 0 د';
+    return '—';
   };
 
   const setNowTime = (employeeId: string, field: 'checkInAt' | 'checkOutAt') => {
