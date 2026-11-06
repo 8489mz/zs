@@ -1,4 +1,5 @@
 [
+  "features/accounting/pages/accounts-balances-column.spec.tsx imports another page module (./AccountingAccountsPage)",
   "features/contracting/pages/ContractingLayout.tsx imports another page module (./ContractingBoqPage)",
   "features/contracting/pages/ContractingLayout.tsx imports another page module (./ContractingCloseoutPage)",
   "features/contracting/pages/ContractingLayout.tsx imports another page module (./ContractingFieldPage)",
@@ -55,5 +56,6 @@
   "features/settings/components/forms/tabs/ModulesSettingsTab.tsx imports app layer directly (@/app/router/access)",
   "features/settings/components/user-management-panels/UserManagementEditorCard.tsx imports app layer directly (@/app/router/access)",
   "features/settings/components/user-management/UserManagementListControls.tsx imports app layer directly (@/app/router/access)",
-  "features/settings/components/workspace-sections/SettingsDemoDataWizardSection.tsx imports app layer directly (@/app/router/access)"
+  "features/settings/components/workspace-sections/SettingsDemoDataWizardSection.tsx imports app layer directly (@/app/router/access)",
+  "features/updates/pages/UpdatesPage.spec.tsx imports another page module (./UpdatesPage)"
 ]
