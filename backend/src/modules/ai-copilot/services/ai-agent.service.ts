@@ -163,6 +163,38 @@ export class AiAgentService {
   }
 
   /**
+   * Pulls the product name out of a stock question ('سماعات بلوتوث مخزونها
+   * كام؟' -> 'سماعات بلوتوث') by dropping question/trigger words. Returns
+   * null when nothing name-like remains, so the lookup simply does not run.
+   */
+  private extractProductSearchTerm(query: string): string | null {
+    const stopWords = new Set([
+      'مخزون', 'مخزونها', 'مخزونه', 'مخزونهم', 'مخزوني', 'مخزن', 'مخزنها',
+      'صنف', 'أصناف', 'اصناف', 'بضاعة', 'كمية', 'نواقص',
+      'سعر', 'سعرها', 'سعره', 'رصيد', 'رصيدها', 'رصيده', 'منتج', 'بيع',
+      'مبيعات', 'بديل', 'عندي', 'عندنا', 'كام', 'كم',
+      'ايه', 'إيه', 'ما', 'هو', 'هي', 'في', 'فيه', 'فيها', 'من', 'على',
+      'هل', 'يوجد', 'باقي', 'متبقي', 'الحالي', 'حاليا', 'لو', 'سمحت',
+      'عايز', 'عاوز', 'اعرف', 'أعرف', 'شوف', 'قولي', 'قول', 'اديني',
+      'بتاع', 'بتاعة', 'ده', 'دي', 'دا', 'ال', 'و', 'ليه', 'ازاي',
+      'يوم', 'اليوم', 'النهاردة', 'امبارح', 'نهارده',
+    ]);
+    const term = String(query || '')
+      .toLowerCase()
+      .replace(/[؟?.,!،:;()"'`]/g, ' ')
+      .split(/\s+/)
+      .map((token) => token.trim())
+      // Arabic conjunction 'و' and article 'ال' attach to the word:
+      // 'والسماعات' -> 'سماعات', so the name matches the catalog.
+      .map((token) => (token.startsWith('و') && token.length > 3 ? token.slice(1) : token))
+      .map((token) => (token.startsWith('ال') && token.length > 4 ? token.slice(2) : token))
+      .filter((token) => token.length >= 2 && !stopWords.has(token))
+      .join(' ')
+      .trim();
+    return term.length >= 2 ? term : null;
+  }
+
+  /**
    * Autonomous Tool Orchestrator: selects and runs tools based on user inquiry
    */
   private async gatherContextualData(
@@ -198,30 +230,89 @@ export class AiAgentService {
     }
 
     // Tool B: Inventory & Product Lookup
-    const isInventoryQuery = q.includes('مخزن') || q.includes('صنف') || q.includes('بضاعة') || q.includes('كمية') || q.includes('نواقص') || q.includes('سعر') || q.includes('رصيد');
+    // 'مخزون' is its own word: the old trigger listed 'مخزن' only, so a
+    // question about 'مخزون' never ran this tool at all.
+    const isInventoryQuery = q.includes('مخزن') || q.includes('مخزون') || q.includes('منتج') || q.includes('صنف') || q.includes('بضاعة') || q.includes('كمية') || q.includes('نواقص') || q.includes('سعر') || q.includes('رصيد');
     if (isInventoryQuery || q.includes('بيع') || q.includes('بديل')) {
       try {
-        const lowStock = await this.db
+        // Page definition (catalog): out-of-stock is stock <= 0, low is
+        // stock <= min_stock_qty (default 0); low INCLUDES out-of-stock.
+        // Real COUNTs, never a capped list: a 6-row sample cannot say
+        // whether stock is stable, and an absent tool run must not be
+        // read as stability either (see synthesizeLocalStrategicResponse).
+        const counts = await this.db
+          .selectFrom('products')
+          .select([
+            sql<number>`COUNT(*) FILTER (WHERE COALESCE(stock_qty, 0) <= 0)`.as('out_of_stock'),
+            sql<number>`COUNT(*) FILTER (WHERE COALESCE(stock_qty, 0) <= COALESCE(min_stock_qty, 0))`.as('low_stock'),
+          ])
+          .where('tenant_id', '=', tenantId)
+          .where('is_active', '=', true)
+          .executeTakeFirst();
+        const lowSample = await this.db
           .selectFrom('products')
           .select(['id', 'name', 'stock_qty', 'min_stock_qty', 'retail_price', 'cost_price'])
           .where('tenant_id', '=', tenantId)
           .where('is_active', '=', true)
-          .where(sql<boolean>`COALESCE(stock_qty, 0) <= COALESCE(min_stock_qty, 5)`)
+          .where(sql<boolean>`COALESCE(stock_qty, 0) <= COALESCE(min_stock_qty, 0)`)
+          .orderBy('stock_qty', 'asc')
           .limit(6)
           .execute();
 
-        context.lowStockItems = lowStock.map((p) => ({
+        context.stockCounts = {
+          ran: true,
+          outOfStock: Number(counts?.out_of_stock || 0),
+          lowStock: Number(counts?.low_stock || 0),
+        };
+        context.lowStockItems = lowSample.map((p) => ({
           name: p.name,
           stock: Number(p.stock_qty || 0),
-          min: Number(p.min_stock_qty || 5),
+          min: Number(p.min_stock_qty || 0),
           price: Number(p.retail_price || 0),
         }));
 
         toolsUsed.push('check_inventory_levels');
         reasoningSteps.push({
           step: 'فحص مستويات المخزون وحالة الأصناف الحرجة',
-          observation: `تم رصد ${lowStock.length} أصناف وصلت لحد الطلب الأدنى وتحتاج متابعة.`,
+          observation: `تم رصد ${Number(counts?.low_stock || 0)} أصناف منخفضة المخزون، منها ${Number(counts?.out_of_stock || 0)} نافدة تماماً.`,
         });
+
+        // Product-by-name lookup: a question naming a product ('سماعات
+        // بلوتوث مخزونها كام؟') is answered with that product's actual
+        // stock, not with a low-stock list that never mentions it.
+        const searchTerm = this.extractProductSearchTerm(query);
+        if (searchTerm) {
+          const matches = await this.db
+            .selectFrom('products')
+            .select(['id', 'name', 'stock_qty', 'min_stock_qty', 'retail_price'])
+            .where('tenant_id', '=', tenantId)
+            .where('is_active', '=', true)
+            .where((eb) =>
+              eb.or([
+                eb('name', 'ilike', `%${searchTerm}%`),
+                eb('name_en', 'ilike', `%${searchTerm}%`),
+              ]),
+            )
+            .orderBy('stock_qty', 'asc')
+            .limit(3)
+            .execute();
+          if (matches.length > 0) {
+            context.productLookup = {
+              term: searchTerm,
+              items: matches.map((p) => ({
+                name: p.name,
+                stock: Number(p.stock_qty || 0),
+                min: Number(p.min_stock_qty || 0),
+                price: Number(p.retail_price || 0),
+              })),
+            };
+            toolsUsed.push('lookup_product_stock');
+            reasoningSteps.push({
+              step: 'البحث عن صنف بالاسم',
+              observation: `تم العثور على ${matches.length} صنف مطابق لـ "${searchTerm}".`,
+            });
+          }
+        }
       } catch (err: any) {
         this.logger.warn(`Inventory tool error: ${err.message}`);
       }
@@ -299,6 +390,55 @@ export class AiAgentService {
       }
     }
 
+    // Tool F: Supplier Payables. Mirrors the reports dashboard: the debt is
+    // the sum of ALL supplier_ledger rows for the tenant, and the top
+    // suppliers are the ledger balances per supplier — NOT the
+    // suppliers.balance column, which the dashboard does not use.
+    const isSupplierQuery = q.includes('مورد') || q.includes('توريد');
+    if (isSupplierQuery) {
+      try {
+        const totalRow = await this.db
+          .selectFrom('supplier_ledger')
+          .select(sql<number>`COALESCE(SUM(amount), 0)`.as('total'))
+          .where('tenant_id', '=', tenantId)
+          .executeTakeFirst();
+        const topRows = await this.db
+          .selectFrom('suppliers as s')
+          .innerJoin(
+            (eb) =>
+              eb
+                .selectFrom('supplier_ledger')
+                .select(['supplier_id', sql<number>`COALESCE(SUM(amount), 0)`.as('bal')])
+                .where('tenant_id', '=', tenantId)
+                .groupBy('supplier_id')
+                .as('l'),
+            (join) => join.onRef('l.supplier_id', '=', 's.id'),
+          )
+          .select(['s.id as id', 's.name as name', 'l.bal as balance'])
+          .where('s.is_active', '=', true)
+          .where('s.tenant_id', '=', tenantId)
+          .where(sql<boolean>`l.bal > 0`)
+          .orderBy('l.bal', 'desc')
+          .limit(5)
+          .execute();
+
+        context.supplierPayables = {
+          totalDebt: Number(totalRow?.total || 0),
+          topSuppliers: topRows.map((s) => ({
+            name: s.name,
+            debt: Number(s.balance || 0),
+          })),
+        };
+        toolsUsed.push('get_supplier_payables');
+        reasoningSteps.push({
+          step: 'استعلام مستحقات الموردين',
+          observation: `إجمالي المستحقات على المنشأة ${Number(totalRow?.total || 0)} ج.م عبر ${topRows.length} موردين.`,
+        });
+      } catch (err: any) {
+        this.logger.warn(`Supplier tool error: ${err.message}`);
+      }
+    }
+
     // Tool E: Live Financial Snapshot (Sales, Treasury, Expenses)
     try {
       const now = new Date();
@@ -309,12 +449,56 @@ export class AiAgentService {
         .select([
           sql<number>`COUNT(*)`.as('count'),
           sql<number>`COALESCE(SUM(total), 0)`.as('total_sales'),
-          sql<number>`COALESCE(SUM(paid_amount), 0)`.as('cash_collected'),
         ])
         .where('tenant_id', '=', tenantId)
         .where('created_at', '>=', startOfToday)
         .where('status', '!=', 'cancelled')
         .executeTakeFirst();
+
+      // Cash vs card is split from sale_payments exactly like the posting
+      // engine (cash channel vs every other channel) and the reports
+      // dashboard: tender rows first; a sale with no tender row at all
+      // falls back to its own payment_channel (payment_type = 'cash'
+      // only — a credit sale contributes to neither). Summing
+      // sales.paid_amount as 'cash_collected' counted card payments as
+      // cash; a card-only day used to report its card total as cash.
+      const tenderRows = await sql<{ payment_channel: string; total: number }>`
+        SELECT payment_channel, COALESCE(SUM(amount), 0) as total
+        FROM sale_payments
+        WHERE tenant_id = ${tenantId}
+          AND sale_id IN (
+            SELECT id FROM sales
+            WHERE tenant_id = ${tenantId}
+              AND created_at >= ${startOfToday}
+              AND status != 'cancelled'
+          )
+        GROUP BY payment_channel
+      `.execute(this.db);
+      const fallbackRows = await sql<{ channel: string; total: number }>`
+        SELECT s.payment_channel as channel, COALESCE(SUM(s.paid_amount), 0) as total
+        FROM sales s
+        WHERE s.tenant_id = ${tenantId}
+          AND s.created_at >= ${startOfToday}
+          AND s.status != 'cancelled'
+          AND s.payment_type = 'cash'
+          AND NOT EXISTS (
+            SELECT 1 FROM sale_payments sp
+            WHERE sp.tenant_id = ${tenantId} AND sp.sale_id = s.id
+          )
+        GROUP BY s.payment_channel
+      `.execute(this.db);
+      const tenderCash = tenderRows.rows
+        .filter((r) => String(r.payment_channel || '') === 'cash')
+        .reduce((sum, r) => sum + Number(r.total || 0), 0);
+      const tenderCard = tenderRows.rows
+        .filter((r) => String(r.payment_channel || '') !== 'cash')
+        .reduce((sum, r) => sum + Number(r.total || 0), 0);
+      const fallbackCash = fallbackRows.rows
+        .filter((r) => ['cash', 'mixed'].includes(String(r.channel || '')))
+        .reduce((sum, r) => sum + Number(r.total || 0), 0);
+      const fallbackCard = fallbackRows.rows
+        .filter((r) => ['card', 'wallet', 'instapay'].includes(String(r.channel || '')))
+        .reduce((sum, r) => sum + Number(r.total || 0), 0);
 
       const treasuryRow = await sql<{ total: number }>`
         SELECT COALESCE(SUM(amount), 0) as total FROM treasury_transactions WHERE tenant_id = ${tenantId}
@@ -323,7 +507,8 @@ export class AiAgentService {
       context.todayFinancials = {
         salesAmount: Number(salesToday?.total_sales || 0),
         invoicesCount: Number(salesToday?.count || 0),
-        cashCollected: Number(salesToday?.cash_collected || 0),
+        cashCollected: tenderCash + fallbackCash,
+        cardCollected: tenderCard + fallbackCard,
         treasuryBalance: Number(treasuryRow.rows[0]?.total || 0),
       };
       toolsUsed.push('get_today_financial_kpi');
@@ -369,6 +554,7 @@ ${JSON.stringify(reasoningSteps, null, 2)}
 3. الاعتماد على مستندات المنشأة (RAG): إذا توافرت بيانات من knowledgeBase، استند إليها واذكر المرجع بدقة وثقة.
 4. اللهجة: لغة عربية احترافية، راقية، وذكية تعكس خبرة مستشار تجاري وتنفيذي موثوق.
 5. الإيجاز المركز: الإجابة محددة ومباشرة في نقاط أنيقة دون حشو ولا إطالة مفرطة.
+6. أجب على السؤال المطروح فقط: استخدم من بيانات الأدوات ما يتصل بالسؤال مباشرة، ولا تسرد لقطة يومية كاملة (مبيعات/خزينة/مخزون) إلا إذا سأل عنها صراحة، ولا تذكر رقماً من أداة لم تُطلب.
 
 أجب بصيغة JSON فقط:
 {
@@ -440,7 +626,7 @@ ${JSON.stringify(reasoningSteps, null, 2)}
 ${JSON.stringify(toolContext, null, 2)}
 خطوات تحليلك:
 ${JSON.stringify(reasoningSteps, null, 2)}
-قدم تشخيصاً تحليلياً دقيقاً وحلولاً ابتكارية لتعظيم الربحية وحل المشكلات بصيغة JSON: {"answer": "...", "suggestedQuestions": ["..."]}`;
+قدم تشخيصاً تحليلياً دقيقاً وحلولاً ابتكارية لتعظيم الربحية وحل المشكلات، وأجب على السؤال المطروح فقط (لا تسرد لقطة يومية كاملة إلا إذا سُئلت عنها صراحة)، بصيغة JSON: {"answer": "...", "suggestedQuestions": ["..."]}`;
 
       const messages: any[] = [{ role: 'system', content: systemPrompt }];
       for (const h of history) {
@@ -486,8 +672,11 @@ ${JSON.stringify(reasoningSteps, null, 2)}
     reasoningSteps: Array<{ step: string; observation: string }>,
   ): { answer: string; suggestedQuestions: string[] } {
     const q = query.toLowerCase();
-    const fin = (context.todayFinancials as any) || { salesAmount: 0, cashCollected: 0, invoicesCount: 0, treasuryBalance: 0 };
+    const fin = (context.todayFinancials as any) || { salesAmount: 0, cashCollected: 0, cardCollected: 0, invoicesCount: 0, treasuryBalance: 0 };
     const lowStock = (context.lowStockItems as any[]) || [];
+    const stockCounts = (context.stockCounts as { ran?: boolean; outOfStock?: number; lowStock?: number } | undefined) || undefined;
+    const productLookup = (context.productLookup as { term: string; items: Array<{ name: string; stock: number; min: number; price: number }> } | undefined) || undefined;
+    const supplierPayables = (context.supplierPayables as { totalDebt: number; topSuppliers: Array<{ name: string; debt: number }> } | undefined) || undefined;
     const debtors = (context.debtors as any[]) || [];
     const bundling = context.bundlingOpportunities as any;
     const kb = (context.knowledgeBase as any[]) || [];
@@ -497,6 +686,29 @@ ${JSON.stringify(reasoningSteps, null, 2)}
       return {
         answer: `استناداً إلى مستندات ولوائح المنشأة المرجعية (**${kb[0].title}**):\n\n${kb[0].content}\n\nنصيحة استراتيجية: يمكنك تحديث هذه السياسة أو إضافة كتالوجات جديدة من لوحة إدارة المعرفة في أي وقت.`,
         suggestedQuestions: ['ما هي سياسة الائتمان للعملاء؟', 'هل يوجد أصناف بديلة؟', 'فحص حركة المبيعات اليوم'],
+      };
+    }
+
+    // Supplier Payables: answer only the supplier question — never paste
+    // the daily snapshot under it.
+    if ((q.includes('مورد') || q.includes('توريد')) && supplierPayables) {
+      const topList = supplierPayables.topSuppliers
+        .map((s, i) => `${i + 1}. **${s.name}**: ${s.debt.toLocaleString()} ج.م`)
+        .join('\n');
+      return {
+        answer: `مستحقات الموردين على المنشأة:\n\n- **إجمالي المستحقات: ${supplierPayables.totalDebt.toLocaleString()} ج.م**.\n${topList ? `\nأكبر الموردين مستحقاً:\n${topList}` : '\nلا توجد مستحقات مسجلة على الموردين حالياً.'}`,
+        suggestedQuestions: ['ما هو رصيد الخزينة المتاح حالياً؟', 'من هم أكبر العملاء مديونية؟', 'كم مبيعات اليوم؟'],
+      };
+    }
+
+    // Product-by-name stock: answer with that product's actual stock.
+    if (productLookup && productLookup.items.length > 0) {
+      const lines = productLookup.items
+        .map((p) => `- **${p.name}**: متبقي **${p.stock}** قطعة (حد الطلب ${p.min}) — سعر البيع ${p.price.toLocaleString()} ج.م.`)
+        .join('\n');
+      return {
+        answer: `مخزون "${productLookup.term}":\n\n${lines}`,
+        suggestedQuestions: ['ما هي الأصناف الأكثر مبيعاً؟', 'ما هي الأصناف الحرجة بالمخزن؟', 'كم مبيعات اليوم؟'],
       };
     }
 
@@ -519,9 +731,17 @@ ${JSON.stringify(reasoningSteps, null, 2)}
       };
     }
 
-    // Default intelligent operational summary
+    // Default intelligent operational summary. The stock sentence is built
+    // from the real counts and only when the stock tool actually ran for
+    // this question: when it did not run there is no stock sentence at all
+    // — an absent tool run is not evidence that stock is stable.
+    const stockLine = !stockCounts?.ran
+      ? ''
+      : (stockCounts.lowStock || 0) > 0
+        ? `تنبيه مبكر: يوجد **${stockCounts.lowStock}** أصناف منخفضة المخزون، منها **${stockCounts.outOfStock || 0}** نافدة تماماً${lowStock.length > 0 ? ` (مثال: **${lowStock[0].name}** متبقي ${lowStock[0].stock} قطع)` : ''}.`
+        : 'المخزون مستقر ولا توجد نواقص حرجة اليوم.';
     return {
-      answer: `الموقف التشغيلي المباشر لنشاطك اليوم:\n\n- إجمالي المبيعات: **${fin.salesAmount.toLocaleString()} ج.م** عبر **${fin.invoicesCount}** فاتورة.\n- النقدية المحصلة: **${fin.cashCollected.toLocaleString()} ج.م**.\n- رصيد الخزينة الحالي: **${fin.treasuryBalance.toLocaleString()} ج.م**.\n\n${lowStock.length > 0 ? `تنبيه مبكر: يوجد **${lowStock.length}** أصناف قاربت على النفاد، منها (**${lowStock[0].name}** متبقي ${lowStock[0].stock} قطع).` : 'المخزون مستقر ولا توجد نواقص حرجة اليوم.'}`,
+      answer: `الموقف التشغيلي المباشر لنشاطك اليوم:\n\n- إجمالي المبيعات: **${fin.salesAmount.toLocaleString()} ج.م** عبر **${fin.invoicesCount}** فاتورة.\n- النقدية المحصلة: **${fin.cashCollected.toLocaleString()} ج.م**.\n- البطاقات المحصلة: **${(fin.cardCollected || 0).toLocaleString()} ج.م**.\n- رصيد الخزينة الحالي: **${fin.treasuryBalance.toLocaleString()} ج.م**.${stockLine ? `\n\n${stockLine}` : ''}`,
       suggestedQuestions: ['كيف أزيد أرباحي اليوم؟', 'من هم أكبر العملاء مديونية؟', 'اقتراح عروض ترويجية للأصناف الراكدة'],
     };
   }
