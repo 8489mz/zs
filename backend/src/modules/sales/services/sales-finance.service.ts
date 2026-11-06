@@ -7,6 +7,7 @@ import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { formatCreditLimitExceededMessage } from './credit-limit-message';
 
 type DbOrTx = Kysely<Database> | Transaction<Database>;
 
@@ -44,11 +45,24 @@ export class SalesFinanceService {
       .forUpdate()
       .executeTakeFirst();
     if (!customer) throw new AppError('Customer not found', 'CUSTOMER_NOT_FOUND', 404);
+    // INV-POS-CREDIT-LIMIT: the digits are resolved once here so both
+    // limit rejections below name the same four numbers as the
+    // SalesWriteService sites (limit, balance, amount, excess).
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, this.tenantScope(auth).tenantId));
     if (amount > 0) {
       if (customer.is_credit_blocked) throw new AppError('Customer credit is blocked', 'CUSTOMER_CREDIT_BLOCKED', 400);
       if (Number(customer.credit_limit || 0) > 0
         && Number(customer.balance || 0) + amount > Number(customer.credit_limit) + 0.001) {
-        throw new AppError('Customer credit limit exceeded', 'CUSTOMER_CREDIT_LIMIT', 400);
+        throw new AppError(
+          formatCreditLimitExceededMessage({
+            creditLimit: Number(customer.credit_limit || 0),
+            currentBalance: Number(customer.balance || 0),
+            requestedAmount: amount,
+            digits: moneyDigits,
+          }),
+          'CUSTOMER_CREDIT_LIMIT',
+          400,
+        );
       }
     }
     const updatedCustomer = await queryable
@@ -60,9 +74,19 @@ export class SalesFinanceService {
         AND (COALESCE(credit_limit, 0) <= 0 OR COALESCE(balance, 0) + ${amount} <= credit_limit + 0.001)))`)
       .returning(['balance'])
       .executeTakeFirst();
-    if (!updatedCustomer) throw new AppError('Customer credit limit exceeded', 'CUSTOMER_CREDIT_LIMIT', 400);
-    const nextBalance = roundMoney(Number(updatedCustomer.balance),
-      currencyMoneyDigits(await tenantBaseCurrency(queryable, this.tenantScope(auth).tenantId)));
+    if (!updatedCustomer) {
+      throw new AppError(
+        formatCreditLimitExceededMessage({
+          creditLimit: Number(customer.credit_limit || 0),
+          currentBalance: Number(customer.balance || 0),
+          requestedAmount: amount,
+          digits: moneyDigits,
+        }),
+        'CUSTOMER_CREDIT_LIMIT',
+        400,
+      );
+    }
+    const nextBalance = roundMoney(Number(updatedCustomer.balance), moneyDigits);
     await queryable
       .insertInto('customer_ledger')
       .values({

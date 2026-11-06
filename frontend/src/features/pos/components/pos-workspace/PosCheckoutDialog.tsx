@@ -16,6 +16,7 @@ import {
   type PaymentPreset,
 } from '@/features/pos/components/pos-workspace/PosCheckoutDialogSections';
 import { PosCheckoutExpressSection } from './PosCheckoutExpressSection';
+import { PosCreditLimitNotice } from './PosCreditLimitNotice';
 import { summarizeCartQuantities } from '@/features/pos/lib/pos.domain';
 import { toast } from '@/shared/components/system-alert';
 import { useAuthStore } from '@/stores/auth-store';
@@ -377,6 +378,7 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
               isNotesOpen={isNotesOpen}
               cartQtySummaries={cartQtySummaries}
             />
+            <PosCreditLimitNotice customerId={pos.customerId} total={pos.totals.total} paidAmount={pos.paidAmount} />
             <Button
               type="button"
               variant="secondary"
@@ -510,6 +512,7 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
               </div>
             </div>
 
+            <PosCreditLimitNotice customerId={pos.customerId} total={pos.totals.total} paidAmount={pos.paidAmount} />
             <div className="actions compact-actions pos-checkout-dialog-actions" style={{ marginTop: '8px' }}>
               <Button type="button" variant="secondary" onClick={handleDialogClose} disabled={pos.createSale.isPending}>{t('pos.back_to_cart', 'رجوع للسلة')}</Button>
               {isRestaurant && onOpenSplitBill && pos.cart.length > 0 && (

@@ -32,6 +32,7 @@ import { diffContributions, negateContribution, tripSaleContribution, type TripS
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { SalesAuthorizationService } from './sales-authorization.service';
 import { SalesFinanceService } from './sales-finance.service';
+import { formatCreditLimitExceededMessage } from './credit-limit-message';
 import { SalesQueryService } from './sales-query.service';
 import { IdempotencyService } from '../../../core/idempotency/idempotency.service';
 import { idempotencyStorage } from '../../../core/idempotency/idempotency.context';
@@ -1637,7 +1638,16 @@ export class SalesWriteService {
         }
         const nextBalance = Number(customer.balance || 0) + remainingDebt;
         if (Number(customer.credit_limit || 0) > 0 && nextBalance > Number(customer.credit_limit || 0) + 0.001) {
-          throw new AppError('Customer credit limit exceeded', 'CUSTOMER_CREDIT_LIMIT', 400);
+          throw new AppError(
+            formatCreditLimitExceededMessage({
+              creditLimit: Number(customer.credit_limit || 0),
+              currentBalance: Number(customer.balance || 0),
+              requestedAmount: remainingDebt,
+              digits: moneyDigits,
+            }),
+            'CUSTOMER_CREDIT_LIMIT',
+            400,
+          );
         }
       }
 
@@ -3120,7 +3130,16 @@ export class SalesWriteService {
         if (!customer) throw new AppError('Credit sale requires a customer', 'CUSTOMER_REQUIRED_FOR_CREDIT', 400);
         if (Number(customer.balance || 0) + newDebt > Number(customer.credit_limit || 0) + 0.001
           && Number(customer.credit_limit || 0) > 0) {
-          throw new AppError('Customer credit limit exceeded', 'CUSTOMER_CREDIT_LIMIT', 400);
+          throw new AppError(
+            formatCreditLimitExceededMessage({
+              creditLimit: Number(customer.credit_limit || 0),
+              currentBalance: Number(customer.balance || 0),
+              requestedAmount: newDebt,
+              digits: moneyDigits,
+            }),
+            'CUSTOMER_CREDIT_LIMIT',
+            400,
+          );
         }
         if (customer.is_credit_blocked) throw new AppError('Customer credit is blocked', 'CUSTOMER_CREDIT_BLOCKED', 400);
       }
