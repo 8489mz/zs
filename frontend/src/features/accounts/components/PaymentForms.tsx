@@ -302,8 +302,16 @@ export function SupplierPaymentForm({ suppliers, activeSupplierId, disabled = fa
   const { t } = useTranslation();
   const form = useForm<SupplierPaymentInput, undefined, SupplierPaymentOutput>({
     resolver: zodResolver(supplierPaymentSchema),
-    defaultValues: { supplierId: '', amount: 0, note: '' }
+    defaultValues: { supplierId: activeSupplierId || '', amount: 0, note: '' }
   });
+  // Mirror CustomerPaymentForm: a deep link (?supplierId=) must preselect
+  // the supplier even when the id arrives after mount. Without this the
+  // "pay supplier" link lands on an empty supplier field.
+  useEffect(() => {
+    if (activeSupplierId) {
+      form.setValue('supplierId', activeSupplierId);
+    }
+  }, [activeSupplierId, form]);
   const mutation = useSupplierPaymentMutation(activeSupplierId, () => form.reset({ supplierId: '', amount: 0, note: '' }));
 
   const supplierOptions = suppliers.map((s) => ({

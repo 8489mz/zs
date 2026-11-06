@@ -127,6 +127,18 @@ export function useAccountsWorkspaceController() {
     [mergedSupplierLedgerOptions, selectedSupplierId]
   );
 
+  // The payment form must offer the deep-linked supplier even when its
+  // balance is zero (e.g. a contractual advance, which the card itself
+  // advertises): payableSuppliers alone would leave the form without its
+  // target and the card would render its empty state instead of the form.
+  const supplierPaymentSuppliers = useMemo(() => {
+    if (!selectedSupplier) return payableSuppliers;
+    if (payableSuppliers.some((supplier) => String((supplier as BalanceCarrier).id || '') === String((selectedSupplier as BalanceCarrier).id || ''))) {
+      return payableSuppliers;
+    }
+    return [...payableSuppliers, selectedSupplier];
+  }, [payableSuppliers, selectedSupplier]);
+
   const accountsNextStep = useMemo(() => {
     if (selectedCustomer) return `راجع كشف ${selectedCustomer.name} ثم سجّل التحصيل أو صدّر الكشف.`;
     if (selectedSupplier) return `راجع كشف ${selectedSupplier.name} ثم سجّل الدفع أو اطبع الحركة.`;
@@ -262,6 +274,7 @@ export function useAccountsWorkspaceController() {
     suppliers,
     collectableCustomers,
     payableSuppliers,
+    supplierPaymentSuppliers,
     customerBalanceOptions: mergedCustomerLedgerOptions,
     supplierBalanceOptions: mergedSupplierLedgerOptions,
     customerEntries,

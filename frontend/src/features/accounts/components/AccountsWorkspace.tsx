@@ -193,7 +193,7 @@ export function AccountsWorkspace() {
               isLoading={controller.supplierBalancesQuery.isLoading}
               isError={controller.supplierBalancesQuery.isError}
               error={controller.supplierBalancesQuery.error}
-              isEmpty={!controller.payableSuppliers.length}
+              isEmpty={!controller.supplierPaymentSuppliers.length}
               loadingText={t('accounts.accounts_workspace.s44', "جاري تحميل الموردين...")}
               emptyTitle={t('accounts.accounts_workspace.s45', "لا يوجد موردون عليهم رصيد حالياً")}
               emptyHint={t('accounts.accounts_workspace.s46', "سيظهر الموردون هنا بمجرد وجود رصيد مستحق للسداد.")}
@@ -208,7 +208,7 @@ export function AccountsWorkspace() {
               quickSubmitLabel={t('accounts.accounts_workspace.s48', "إضافة المورد فوراً")}
               permissionHint={t('accounts.accounts_workspace.s49', "هذا الحساب لا يملك صلاحية إنشاء مورد جديد من شاشة الحسابات.")}
             >
-              <SupplierPaymentForm suppliers={controller.payableSuppliers as Supplier[]} activeSupplierId={controller.selectedSupplierId} disabled={!canManageAccounts} />
+              <SupplierPaymentForm suppliers={controller.supplierPaymentSuppliers as Supplier[]} activeSupplierId={controller.selectedSupplierId} disabled={!canManageAccounts} />
             </AccountsPartyCard>
           </div>
 
