@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState, type CSSProperties } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Product, Purchase } from '@/types/domain';
 import { FormSection } from '@/shared/components/form-section';
@@ -72,6 +72,17 @@ export function PurchaseDetailCard({ purchase, isLoading = false, onEdit, onCanc
   const isMatched = purchase.matchedStatus === 'matched' || (!purchase.matchedStatus && purchase.status === 'posted');
   const isCancelled = purchase.status === 'cancelled';
   const isGrn = purchase.lifecycleStatus === 'grn_received';
+
+  // The global button rule forces `white-space: nowrap`; in this fixed
+  // 3-column bar that lets long labels overflow their cell and overlap
+  // neighbours at narrow widths. Each control opts back into wrapping
+  // inside its own cell (local override; the global rule is untouched).
+  const actionControlWrap: CSSProperties = {
+    whiteSpace: 'normal',
+    overflowWrap: 'anywhere',
+    textAlign: 'center',
+    lineHeight: 1.35,
+  };
 
 
   return (
@@ -195,7 +206,7 @@ export function PurchaseDetailCard({ purchase, isLoading = false, onEdit, onCanc
         }}>
           <Button
             variant="primary"
-            style={{ fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center', background: '#0284c7', borderColor: '#0284c7' }}
+            style={{ ...actionControlWrap, fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center', background: '#0284c7', borderColor: '#0284c7' }}
             onClick={() => setShowThreeWayMatchModal(true)}
           >
             {t('purchases.purchase_detail_card.s13', "فحص واعتماد المطابقة (3-Way Match)")}
@@ -203,7 +214,7 @@ export function PurchaseDetailCard({ purchase, isLoading = false, onEdit, onCanc
           {!isMatched && (
             <Button
               variant="primary"
-              style={{ fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center', background: '#059669', borderColor: '#059669' }}
+              style={{ ...actionControlWrap, fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center', background: '#059669', borderColor: '#059669' }}
               onClick={() => setShowReceiveModal(true)}
             >
               {t('purchases.purchase_detail_card.s14', "استلام بضاعة (GRN)")}
@@ -211,7 +222,7 @@ export function PurchaseDetailCard({ purchase, isLoading = false, onEdit, onCanc
           )}
           <Button
             variant="secondary"
-            style={{ fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center', borderColor: '#170e5e', color: '#170e5e', fontWeight: 800 }}
+            style={{ ...actionControlWrap, fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center', borderColor: '#170e5e', color: '#170e5e', fontWeight: 800 }}
             onClick={() => setShowLandedCostsModal(true)}
           >
             {t('purchases.purchase_detail_card.s15', "تكلفة الوصول (Landed Costs)")}
@@ -219,22 +230,22 @@ export function PurchaseDetailCard({ purchase, isLoading = false, onEdit, onCanc
           <Link
             className="button button-secondary"
             to={`/accounts?supplierId=${encodeURIComponent(purchase.supplierId)}`}
-            style={{ fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center', borderColor: '#170e5e', color: '#170e5e', fontWeight: 800, display: 'inline-flex', alignItems: 'center' }}
+            style={{ ...actionControlWrap, fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center', borderColor: '#170e5e', color: '#170e5e', fontWeight: 800, display: 'inline-flex', alignItems: 'center' }}
           >
             {t('purchases.purchase_detail_card.pay_supplier_link', "دفع لمورد")}
           </Link>
           <Button
             variant="secondary"
-            style={{ fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center', borderColor: '#170e5e', color: '#170e5e', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            style={{ ...actionControlWrap, fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center', borderColor: '#170e5e', color: '#170e5e', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             onClick={() => setShowBarcodeModal(true)}
             title={t('purchases.purchase_detail_card.s16', "طباعة ملصقات الباركود واستيكرات الرفوف لبنود هذه الفاتورة بالكميات المستلمة أو المطلوبة")}
           >
             <AppIcons.Printer size={15} />
             <span>{t('purchases.purchase_detail_card.s17', "طباعة باركود البنود (")}{(purchase.items || []).length})</span>
           </Button>
-          {onPrint ? <Button variant="secondary" style={{ fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center' }} onClick={onPrint}>{t('purchases.purchase_detail_card.s18', "طباعة الفاتورة")}</Button> : null}
-          {onEdit ? <Button variant="secondary" style={{ fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center' }} onClick={onEdit}>{t('purchases.purchase_detail_card.s19', "تعديل الفاتورة")}</Button> : null}
-          {onCancel ? <Button variant="danger" style={{ fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center' }} onClick={onCancel}>{t('purchases.purchase_detail_card.s20', "إلغاء الفاتورة")}</Button> : null}
+          {onPrint ? <Button variant="secondary" style={{ ...actionControlWrap, fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center' }} onClick={onPrint}>{t('purchases.purchase_detail_card.s18', "طباعة الفاتورة")}</Button> : null}
+          {onEdit ? <Button variant="secondary" style={{ ...actionControlWrap, fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center' }} onClick={onEdit}>{t('purchases.purchase_detail_card.s19', "تعديل الفاتورة")}</Button> : null}
+          {onCancel ? <Button variant="danger" style={{ ...actionControlWrap, fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center' }} onClick={onCancel}>{t('purchases.purchase_detail_card.s20', "إلغاء الفاتورة")}</Button> : null}
         </div>
       )}
 
