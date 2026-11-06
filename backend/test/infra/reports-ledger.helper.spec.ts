@@ -38,12 +38,38 @@ assert.deepEqual(entries[0], {
   id: '9',
   type: 'invoice',
   amount: 120,
+  debit: 120,
+  credit: 0,
   balanceAfter: 300,
   note: 'posted',
   referenceType: 'sale',
   referenceId: '88',
   createdAt: '2026-04-09T00:00:00.000Z',
 });
+
+// INV-CUSTOMER-SUPPLIER-STATEMENTS: supplier amounts use the opposite
+// sign convention -- a positive amount is a purchase owed (credit),
+// a negative amount is a payment (debit). An unpaid credit purchase
+// must map to debit 0 / credit 90, never to a phantom payment.
+const supplierEntries = mapLedgerEntries([
+  { id: 10, entry_type: 'bill', amount: 90, balance_after: 90, note: 'open', reference_type: 'purchase', reference_id: 7, created_at: '2026-04-09T00:00:00.000Z' },
+  { id: 11, entry_type: 'supplier_payment', amount: -40, balance_after: 50, note: 'paid', reference_type: 'supplier_payment', reference_id: 3, created_at: '2026-04-10T00:00:00.000Z' },
+], 'supplier');
+assert.deepEqual(supplierEntries[0], {
+  id: '10',
+  type: 'bill',
+  amount: 90,
+  debit: 0,
+  credit: 90,
+  balanceAfter: 90,
+  note: 'open',
+  referenceType: 'purchase',
+  referenceId: '7',
+  createdAt: '2026-04-09T00:00:00.000Z',
+});
+assert.equal(supplierEntries[1].debit, 40);
+assert.equal(supplierEntries[1].credit, 0);
+assert.equal(supplierEntries[1].balanceAfter, 50);
 
 assert.deepEqual(buildLedgerSummary(3, { debits_total: 125, credits_total: -25 }), {
   totalEntries: 3,
@@ -72,6 +98,10 @@ const supplierLedgerPayload = buildSupplierLedgerPayload({
 });
 assert.equal((supplierLedgerPayload.supplier as any).balance, 90);
 assert.equal(((supplierLedgerPayload.entries as any[])?.[0] || {}).type, 'bill');
+assert.equal(((supplierLedgerPayload.entries as any[])?.[0] || {}).debit, 0);
+assert.equal(((supplierLedgerPayload.entries as any[])?.[0] || {}).credit, 90);
+assert.equal((supplierLedgerPayload.summary as any).totalDebits, 0);
+assert.equal((supplierLedgerPayload.summary as any).totalCredits, 90);
 
 console.log('reports-ledger.helper.spec: ok');
 

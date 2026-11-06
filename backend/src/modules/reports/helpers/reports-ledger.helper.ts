@@ -88,17 +88,39 @@ export function buildSupplierBalancesPayload(
   };
 }
 
-export function mapLedgerEntries(rows: PartnerLedgerEntryRow[]) {
-  return rows.map((row) => ({
-    id: String(row.id ?? ''),
-    type: row.entry_type || '',
-    amount: Number(row.amount || 0),
-    balanceAfter: Number(row.balance_after || 0),
-    note: row.note || '',
-    referenceType: row.reference_type || '',
-    referenceId: row.reference_id ? String(row.reference_id) : '',
-    createdAt: row.created_at || '',
-  }));
+export type LedgerDirection = 'customer' | 'supplier';
+
+export function mapLedgerEntries(rows: PartnerLedgerEntryRow[], direction: LedgerDirection = 'customer') {
+  return rows.map((row) => {
+    const amount = Number(row.amount || 0);
+    // INV-CUSTOMER-SUPPLIER-STATEMENTS: the two partner ledgers use
+    // opposite sign conventions. A positive customer amount is a
+    // charge (debit); a positive supplier amount is a purchase owed
+    // (credit), and a supplier payment is a negative amount (debit).
+    // Deriving debit/credit from the amount with the customer
+    // convention for both made an unpaid credit purchase show a
+    // phantom 1,000.00 payment in the supplier schedule (and in the
+    // statement panel). The explicit debit/credit below is what the
+    // frontend renders; the signed amount stays the source of truth.
+    const debit = direction === 'supplier'
+      ? (amount < 0 ? Math.abs(amount) : 0)
+      : (amount > 0 ? amount : 0);
+    const credit = direction === 'supplier'
+      ? (amount > 0 ? amount : 0)
+      : (amount < 0 ? Math.abs(amount) : 0);
+    return {
+      id: String(row.id ?? ''),
+      type: row.entry_type || '',
+      amount,
+      debit,
+      credit,
+      balanceAfter: Number(row.balance_after || 0),
+      note: row.note || '',
+      referenceType: row.reference_type || '',
+      referenceId: row.reference_id ? String(row.reference_id) : '',
+      createdAt: row.created_at || '',
+    };
+  });
 }
 
 export function buildLedgerSummary(
@@ -161,6 +183,13 @@ export function buildSupplierLedgerPayload(args: {
   digits?: MoneyDigits;
 }) {
   const { supplier, rows, page, pageSize, totalItems, totalsRow, openingBalance, digits = 2 } = args;
+  const summary = buildLedgerSummary(totalItems, totalsRow, openingBalance, digits);
+  // INV-CUSTOMER-SUPPLIER-STATEMENTS: the raw totals are sums by
+  // amount sign (positive = purchases, negative = payments). For a
+  // supplier those are credits and debits respectively, so the two
+  // labels are swapped; closingBalance is left as computed from the
+  // raw amounts (opening + purchases - payments = final balance).
+  const orientedSummary = { ...summary, totalDebits: summary.totalCredits, totalCredits: summary.totalDebits };
   return {
     supplier: {
       id: String(supplier.id),
@@ -168,8 +197,8 @@ export function buildSupplierLedgerPayload(args: {
       phone: supplier.phone || '',
       balance: Number(supplier.balance || 0),
     },
-    entries: mapLedgerEntries(rows),
+    entries: mapLedgerEntries(rows, 'supplier'),
     pagination: buildPagination(page, pageSize, totalItems),
-    summary: buildLedgerSummary(totalItems, totalsRow, openingBalance, digits),
+    summary: orientedSummary,
   };
 }

@@ -794,10 +794,28 @@ export class ReturnsService {
     }, auth);
     for (const line of normalizedLines) await this.insertReturnItem(trx, { returnDocumentId, productId: line.productId, productName: line.productName, qty: line.qty, unitTotal: line.unitTotal, lineTotal: line.lineTotal, allocatedTax: line.allocatedTax, costPrice: line.costPrice, saleItemId: line.saleItemId }, auth);
     const customerId = sale.customer_id ? Number(sale.customer_id) : null;
+    let postedReceivableLeg = false;
     for (const allocation of refundAllocations) {
       if (allocation.tender === 'store_credit' && customerId) await this.addStoreCredit(trx, customerId, allocation.amount, auth);
-      else if (allocation.tender === 'receivable' && customerId) await this.addCustomerLedgerEntry(trx, customerId, -allocation.amount, 'sale_return', 'sale return ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id);
+      else if (allocation.tender === 'receivable' && customerId) {
+        await this.addCustomerLedgerEntry(trx, customerId, -allocation.amount, 'sale_return', 'sale return ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id);
+        postedReceivableLeg = true;
+      }
       else if (allocation.tender === 'cash') await this.addTreasuryTransaction(trx, 'sale_return_refund', -allocation.amount, 'sale return ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id, true);
+    }
+    // INV-CUSTOMER-SUPPLIER-STATEMENTS: a return of a fully-settled
+    // sale allocates no 'receivable' tender (there is no recorded debt
+    // to reverse -- the original sale posted a net-zero charge /
+    // settlement pair, not a debt leg), and the 'card' tender writes
+    // no ledger row at all, so the return document vanished from the
+    // customer statement. When this return posted no receivable leg,
+    // post the reversal and its refund as a pair netting to zero, so
+    // the return stays visible while the customer balance stays
+    // exactly unchanged. 'sale_return_refund' is a distinct type so
+    // no reader mistakes the refund leg for another reversal.
+    if (customerId && !postedReceivableLeg && total > 0) {
+      await this.addCustomerLedgerEntry(trx, customerId, -total, 'sale_return', 'sale return ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id);
+      await this.addCustomerLedgerEntry(trx, customerId, total, 'sale_return_refund', 'sale return refund ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id);
     }
 
     // Reconcile Customer Loyalty Points on Return (ZS-070)

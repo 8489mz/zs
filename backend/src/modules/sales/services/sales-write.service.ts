@@ -2216,6 +2216,24 @@ export class SalesWriteService {
           id,
           auth,
         );
+      } else if (customer && remainingDebt === 0) {
+        // INV-CUSTOMER-SUPPLIER-STATEMENTS: a fully-settled sale used to
+        // write no customer-ledger row at all, so the invoice (and a
+        // later return of it) vanished from the customer statement even
+        // though the final balance was right. Post the charge and its
+        // settlement as a pair netting to zero, so the document stays
+        // visible while the balance stays exactly unchanged. The pair
+        // must not go through createCustomerLedgerEntry: its limit gate
+        // would block a settled sale for a customer near the limit.
+        // 'sale_paid' (not 'sale_credit') keeps the van split-sale and
+        // trip-counter readers, which take the latest 'sale_credit'
+        // row as the unpaid portion, from mistaking this charge for
+        // a debt.
+        const settled = roundMoney(collectibleTotal - remainingDebt, moneyDigits);
+        if (settled > 0) {
+          await this.finance.addCustomerLedgerLeg(trx, customer.id, settled, 'sale_paid', `فاتورة بيع S-${id}`, 'sale', id, auth);
+          await this.finance.addCustomerPaymentLedgerEntry(trx, customer.id, -settled, `سداد فاتورة بيع S-${id}`, 'sale', id, auth, normalized.branchId, normalized.locationId);
+        }
       }
 
       if (!isCodDelivery) {
@@ -3517,6 +3535,18 @@ export class SalesWriteService {
           saleId,
           auth,
         );
+      } else if (customer && remainingDebt === 0) {
+        // INV-CUSTOMER-SUPPLIER-STATEMENTS: same fully-settled pair as
+        // createSale above -- a settled edit must leave the invoice
+        // visible in the statement instead of writing no row. Net zero,
+        // so the balance is unchanged; 'sale_paid' keeps the
+        // 'sale_credit' readers (van split sales, trip counters) from
+        // mistaking this charge for a debt.
+        const settled = roundMoney(collectibleTotal - remainingDebt, moneyDigits);
+        if (settled > 0) {
+          await this.finance.addCustomerLedgerLeg(trx, customer.id, settled, 'sale_paid', `تعديل فاتورة بيع S-${saleId}`, 'sale', saleId, auth);
+          await this.finance.addCustomerPaymentLedgerEntry(trx, customer.id, -settled, `سداد تعديل فاتورة بيع S-${saleId}`, 'sale', saleId, auth, normalized.branchId, normalized.locationId);
+        }
       }
 
       for (const payment of payments) {
