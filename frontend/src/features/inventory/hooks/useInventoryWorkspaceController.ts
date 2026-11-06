@@ -217,9 +217,18 @@ export function useInventoryWorkspaceController(currentSection: InventorySection
     if (!state.postSessionConfirm) return;
     const pin = context?.managerPin || state.postingPin;
     try {
-      await mutations.postCountMutation.mutateAsync({ sessionIds: state.postSessionConfirm.sessionIds, managerPin: pin });
+      const results = (await mutations.postCountMutation.mutateAsync({ sessionIds: state.postSessionConfirm.sessionIds, managerPin: pin })) as Array<{ skippedStockCountItemIds?: unknown }> | undefined;
       state.setPostSessionConfirm(null);
-      toast.success('تم اعتماد وترحيل جلسة الجرد وتسوية الفروقات بنجاح.');
+      // INV-STOCK-COUNT-ADJUSTMENT: never claim "posted and settled"
+      // when the posting really moved nothing for a displayed
+      // variance. Items whose stock moved since the count are
+      // deferred for a standalone recount, and the toast must say so.
+      const hasSkipped = (results || []).some((result) => Array.isArray(result?.skippedStockCountItemIds) && result.skippedStockCountItemIds.length > 0);
+      if (hasSkipped) {
+        toast.warning('تم اعتماد الجلسة جزئيًا؛ بنود تغيّر مخزونها منذ العد بقيت بانتظار إعادة جرد مستقلة.');
+      } else {
+        toast.success('تم اعتماد وترحيل جلسة الجرد وتسوية الفروقات بنجاح.');
+      }
     } catch (err: any) {
       toast.error(err?.message || 'تعذر اعتماد وترحيل جلسة الجرد.');
       throw err;

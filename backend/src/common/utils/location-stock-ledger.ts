@@ -358,6 +358,27 @@ export async function previewAssignedLocationStockQty(db: Kysely<Database>, para
   return Math.min(locationAvail, globalAvailable);
 }
 
+// INV-STOCK-COUNT-ADJUSTMENT: the physical count basis. A stock count
+// counts what is physically on the shelf, reservations included: a
+// unit reserved for a store order is still on hand until it leaves.
+// previewAssignedLocationStockQty nets reservations off by design
+// (it answers "how much may I sell or consume"), so freezing a count
+// on it shows a reserved unit as a phantom surplus -- the session
+// displays a variance and a financial effect while the posting
+// (setScopedStockQty, INV-STOCK-COUNT-ACTUAL-DELTA) moves nothing
+// and books no journal. The count basis is the raw scoped quantity
+// capped by the raw global counter: the same basis the stock write
+// uses, so the displayed book quantity, the frozen variance and the
+// posted delta can never disagree again.
+export async function previewAssignedLocationOnHandQty(db: Kysely<Database>, params: StockScopeParams): Promise<number> {
+  const state = await loadLockedState(db, params);
+  const globalOnHand = roundStockQty(Math.max(0, Number(state.product.stock_qty || 0)));
+  if (!params.locationId) return globalOnHand;
+  const location = await ensureLocationBalance(db, state, params.locationId, params.branchId ?? null);
+  const locationOnHand = roundStockQty(Math.max(0, Number(location.qty || 0)));
+  return Math.min(locationOnHand, globalOnHand);
+}
+
 export async function applyStockDelta(db: Kysely<Database>, params: StockDeltaParams): Promise<StockDeltaResult> {
   const delta = roundStockQty(params.delta);
   const state = await loadLockedState(db, params);

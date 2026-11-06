@@ -6,7 +6,7 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../../common/errors/app-error';
 import { paginateRows } from '../../../common/utils/pagination';
-import { applyStockDelta, lockStockProducts, previewAssignedLocationStockQty, previewConsumableStockQty, setScopedStockQty } from '../../../common/utils/location-stock-ledger';
+import { applyStockDelta, lockStockProducts, previewAssignedLocationOnHandQty, previewAssignedLocationStockQty, previewConsumableStockQty, setScopedStockQty } from '../../../common/utils/location-stock-ledger';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { Database } from '../../../database/database.types';
@@ -167,7 +167,11 @@ export class InventoryCountService {
       for (const item of [...payload.items].sort((a, b) => a.productId - b.productId)) {
         const product = await trx.selectFrom('products').select(['id', 'name', 'stock_qty']).where('id', '=', item.productId).where('is_active', '=', true).where(this.tenantPredicate(auth)).executeTakeFirst();
         if (!product) throw new AppError('Product not found in stock count session', 'PRODUCT_NOT_FOUND', 404);
-        const expectedQty = await previewAssignedLocationStockQty(trx, { productId: item.productId, branchId: location.branchId, locationId: location.id, tenantId: tenantScope.tenantId, accountId: tenantScope.accountId });
+        // INV-STOCK-COUNT-ADJUSTMENT: the frozen book quantity is the
+        // physical on-hand quantity at the counted location,
+        // reservations included. Freezing the available basis here
+        // showed every reserved unit as a phantom surplus.
+        const expectedQty = await previewAssignedLocationOnHandQty(trx, { productId: item.productId, branchId: location.branchId, locationId: location.id, tenantId: tenantScope.tenantId, accountId: tenantScope.accountId });
         await trx.insertInto('stock_count_items').values({
           ...buildStockCountItemValues({ ...product, stock_qty: expectedQty }, item, id),
           counted_serials: JSON.stringify(item.countedSerials || []),
@@ -224,7 +228,7 @@ export class InventoryCountService {
         .where('posted_at', 'is', null).where(this.tenantPredicate(auth)).forUpdate().executeTakeFirst();
       if (!item) throw new AppError('Pending stock count item not found', 'STOCK_COUNT_ITEM_NOT_FOUND', 404);
       await lockStockProducts(trx, { ...tenantScope, productIds: [Number(item.product_id)] });
-      const expectedQty = await previewAssignedLocationStockQty(trx, {
+      const expectedQty = await previewAssignedLocationOnHandQty(trx, {
         productId: Number(item.product_id), branchId: session.branch_id, locationId: session.location_id,
         tenantId: tenantScope.tenantId, accountId: tenantScope.accountId,
       });
@@ -365,11 +369,25 @@ export class InventoryCountService {
         const batchData = typeof item.batch_counts === 'string' ? JSON.parse(item.batch_counts) : item.batch_counts;
         const hasTrace = (Array.isArray(serialData) && serialData.length > 0) || (Array.isArray(batchData) && batchData.length > 0);
         if (Math.abs(Number(item.variance_qty || 0)) < 0.001 && !hasTrace) continue;
-        const currentQty = await previewAssignedLocationStockQty(this.db, {
+        // INV-STOCK-COUNT-ADJUSTMENT: staleness is judged on the
+        // physical on-hand basis new sessions freeze -- a pure
+        // reservation change moves no physical stock, so it neither
+        // demands approval nor blocks the posting below. Frozen rows
+        // predate this fix (available basis), so a row counts as
+        // unchanged when it matches EITHER basis: the stored row
+        // carries no basis marker, and a real physical move changes
+        // both bases, so it still fails both. A recount re-freezes
+        // any pre-fix row on the on-hand basis.
+        const currentOnHand = await previewAssignedLocationOnHandQty(this.db, {
           productId: Number(item.product_id), branchId: approvalSession.branch_id, locationId: approvalSession.location_id,
           tenantId: tenantScope.tenantId, accountId: tenantScope.accountId,
         });
-        if (Math.abs(currentQty - Number(item.expected_qty || 0)) < 0.001) { needsApproval = true; break; }
+        const currentAvailable = await previewAssignedLocationStockQty(this.db, {
+          productId: Number(item.product_id), branchId: approvalSession.branch_id, locationId: approvalSession.location_id,
+          tenantId: tenantScope.tenantId, accountId: tenantScope.accountId,
+        });
+        const expectedQty = Number(item.expected_qty || 0);
+        if (Math.abs(currentOnHand - expectedQty) < 0.001 || Math.abs(currentAvailable - expectedQty) < 0.001) { needsApproval = true; break; }
       }
       if (needsApproval) await this.assertCountVarianceApproval(adminPassword, auth);
     }
@@ -415,11 +433,23 @@ export class InventoryCountService {
         const chunkSkippedIds: number[] = [];
         for (const item of items) {
           const expectedQty = Number(item.expected_qty || 0);
-          const currentQty = await previewAssignedLocationStockQty(trx, {
+          // INV-STOCK-COUNT-ADJUSTMENT: the moved-stock skip compares
+          // the frozen book quantity against the current stock on
+          // EITHER basis -- on-hand for rows frozen by this fix,
+          // available for pre-fix rows (see the approval check above:
+          // a stored row carries no basis marker, and a real physical
+          // move changes both bases). Reserving or releasing a unit
+          // changes only the available basis, so it must not defer an
+          // item frozen on the on-hand basis.
+          const currentOnHand = await previewAssignedLocationOnHandQty(trx, {
             productId: Number(item.product_id), branchId: session.branch_id, locationId: session.location_id,
             tenantId: tenantScope.tenantId, accountId: tenantScope.accountId,
           });
-          if (Math.abs(currentQty - expectedQty) >= 0.001) {
+          const currentAvailable = await previewAssignedLocationStockQty(trx, {
+            productId: Number(item.product_id), branchId: session.branch_id, locationId: session.location_id,
+            tenantId: tenantScope.tenantId, accountId: tenantScope.accountId,
+          });
+          if (Math.abs(currentOnHand - expectedQty) >= 0.001 && Math.abs(currentAvailable - expectedQty) >= 0.001) {
             skippedItemIds.push(Number(item.id));
             chunkSkippedIds.push(Number(item.id));
             continue;

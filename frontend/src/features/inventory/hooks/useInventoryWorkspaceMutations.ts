@@ -189,9 +189,14 @@ export function useInventoryWorkspaceMutations({
 
   const postCountMutation = useMutation({
     mutationFn: async ({ sessionIds, managerPin }: { sessionIds: string[]; managerPin?: string }) => {
+      // INV-STOCK-COUNT-ADJUSTMENT: keep the per-session results. The
+      // caller must know whether items were deferred for a standalone
+      // recount instead of toasting a blanket "posted and settled".
+      const results: unknown[] = [];
       for (const sessionId of sessionIds) {
-        await inventoryApi.postStockCountSession(sessionId, { adminPassword: managerPin, managerPin });
+        results.push(await inventoryApi.postStockCountSession(sessionId, { adminPassword: managerPin, managerPin }));
       }
+      return results;
     },
     onSuccess: async () => {
       await refreshInventoryQueries();
