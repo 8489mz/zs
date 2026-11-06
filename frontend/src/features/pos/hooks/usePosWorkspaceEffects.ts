@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { normalizePaymentChannel } from '@/features/pos/lib/pos-workspace.helpers';
+import { toMoney } from '@/features/pos/hooks/pos-workspace-actions/createPosWorkspaceBaseActions.helpers';
 import { buildDraftState, persistDraftSnapshot, persistLastSale, persistRecentProductIds } from '@/features/pos/lib/pos.persistence';
 import { isNegativeStockSalesAllowed, syncPosCartStock } from '@/features/pos/lib/pos.domain';
 import type { PosItem, PosPriceType } from '@/features/pos/types/pos.types';
@@ -11,6 +12,7 @@ export function usePosWorkspaceEffects({
   customerId,
   discount,
   paidAmount,
+  total,
   cashAmount,
   setCashAmount,
   cardAmount,
@@ -56,6 +58,7 @@ export function usePosWorkspaceEffects({
   quickCustomerAddress?: string;
   discount: number;
   paidAmount: number;
+  total?: number;
   cashAmount: number;
   setCashAmount: (value: number) => void;
   cardAmount: number;
@@ -157,6 +160,30 @@ export function usePosWorkspaceEffects({
     if (typeof window === 'undefined') return;
     persistLastSale(lastSale);
   }, [lastSale]);
+
+  // INV-INVOICE-DETAIL-AMOUNTS: the cash field follows the grand total when
+  // the discount changes — but ONLY when the cash field was simply tracking
+  // the total (single cash payment, exactly filled to the previous total via
+  // the preset / 'كامل' fill). A manually tendered amount (cash != old total)
+  // or a split payment (card / transfer present) is real money the cashier
+  // already holds, so it is left untouched; a credit sale never has cash.
+  // Total changes from anything else (items added/removed, delivery fee)
+  // deliberately do NOT move the cash field.
+  const prevDiscountRef = useRef(discount);
+  const prevTotalRef = useRef(total ?? 0);
+  useEffect(() => {
+    const prevDiscount = prevDiscountRef.current;
+    const prevTotal = prevTotalRef.current;
+    prevDiscountRef.current = discount;
+    prevTotalRef.current = total ?? 0;
+    if (total === undefined) return;
+    if (discount === prevDiscount) return;
+    if (Number(total) === Number(prevTotal)) return;
+    if (paymentType === 'credit') return;
+    if (Number(cardAmount || 0) !== 0 || Number(transferAmount || 0) !== 0) return;
+    if (Number(cashAmount || 0) !== toMoney(Number(prevTotal || 0))) return;
+    setCashAmount(toMoney(Number(total)));
+  }, [discount, total, paymentType, cardAmount, transferAmount, cashAmount, setCashAmount]);
 
 
 

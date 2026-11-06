@@ -28,6 +28,25 @@ export function SaleDetailCard({ sale, isLoading = false, onEdit, onCancel, onPr
   const paidAmount = Number(sale.paidAmount ?? sale.total ?? 0);
   const remaining = Math.max(0, Number(sale.total || 0) - paidAmount);
 
+  // Amounts breakdown (INV-INVOICE-DETAIL-AMOUNTS): the GET already returns
+  // subTotal / taxAmount / taxRate / discount — the card just never read them.
+  const taxAmount = Number(sale.taxAmount || 0);
+  const discountAmount = Number(sale.discount || 0);
+  const subTotalAmount = Number(sale.subTotal || 0);
+  const hasTax = taxAmount > 0.0001;
+  const hasDiscount = Math.abs(discountAmount) > 0.0001;
+  const taxRate = Number(sale.taxRate || 0);
+  // Discount percent mirrors the printed receipt: shown only when the rounded
+  // percent reconstructs the stored discount within 0.02.
+  let discountPercentSuffix = '';
+  if (hasDiscount && subTotalAmount > 0) {
+    const rawPercent = (discountAmount / subTotalAmount) * 100;
+    const cleanPercent = Math.round(rawPercent);
+    if (cleanPercent > 0 && Math.abs((cleanPercent / 100) * subTotalAmount - discountAmount) <= 0.02) {
+      discountPercentSuffix = ` (${cleanPercent}%)`;
+    }
+  }
+
   const handleWhatsAppShare = () => {
     shareSaleViaWhatsApp(sale, { storeName });
   };
@@ -133,6 +152,32 @@ export function SaleDetailCard({ sale, isLoading = false, onEdit, onCancel, onPr
         <div className="stat-card"><span>{__t('sales.sale_detail_card.s11', "المدفوع")}</span><strong>{formatCurrency(paidAmount)}</strong></div>
         {remaining > 0 && <div className="stat-card"><span>{__t('sales.sale_detail_card.s12', "المتبقي")}</span><strong style={{ color: '#dc2626' }}>{formatCurrency(remaining)}</strong></div>}
       </div>
+
+      {/* Amounts breakdown: subtotal / collected tax / discount — shown only
+          when the invoice actually carries tax or a discount, so a plain
+          invoice shows no empty rows. */}
+      {(hasTax || hasDiscount) && (
+        <div className="invoice-detail-totals-breakdown" style={{ marginTop: 12 }}>
+          {subTotalAmount > 0.0001 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '6px 0', borderBottom: '1px solid #f1f5f9' }}>
+              <span style={{ color: '#64748b', fontSize: '12.5px' }}>{__t('sales.sale_detail_card.s16', 'المجموع الفرعي')}</span>
+              <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(subTotalAmount)}</strong>
+            </div>
+          )}
+          {hasTax && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '6px 0', borderBottom: '1px solid #f1f5f9' }}>
+              <span style={{ color: '#64748b', fontSize: '12.5px' }}>{__t('sales.sale_detail_card.s17', 'الضريبة')}{taxRate > 0 ? ` (${taxRate}%)` : ''}</span>
+              <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(taxAmount)}</strong>
+            </div>
+          )}
+          {hasDiscount && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '6px 0', borderBottom: '1px solid #f1f5f9' }}>
+              <span style={{ color: '#64748b', fontSize: '12.5px' }}>{__t('sales.sale_detail_card.s18', 'الخصم')}{discountPercentSuffix}</span>
+              <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(discountAmount)}</strong>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Linked returns */}
       {(sale.linkedReturns || []).length > 0 && (

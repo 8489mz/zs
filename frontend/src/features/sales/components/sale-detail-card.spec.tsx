@@ -74,3 +74,71 @@ describe('Sale detail card payment + linked returns', () => {
     expect(screen.queryByText('المرتجعات المرتبطة')).toBeNull();
   });
 });
+
+/* Invoice detail amounts (INV-INVOICE-DETAIL-AMOUNTS): the detail card
+ * itemises the collected tax and the discount the GET already returns —
+ * a taxed invoice shows its tax row, a discounted invoice shows its
+ * discount row with the percent, and a plain invoice shows no empty rows.
+ */
+describe('Sale detail card tax and discount rows', () => {
+  const baseSale: Sale = {
+    ...cardSale,
+    docNo: 'Z-261105-16309',
+    linkedReturns: [],
+  };
+
+  it('shows the collected tax row for a taxed invoice', async () => {
+    renderCard({
+      ...baseSale,
+      subTotal: 150,
+      discount: 0,
+      taxRate: 14,
+      taxAmount: 21,
+      total: 171,
+      paidAmount: 171,
+      items: [
+        { id: 'i1', productId: '10', name: 'صنف تجريبي', qty: 1, price: 150, total: 150, unitName: 'قطعة', unitMultiplier: 1, cost: 80, priceType: 'retail' },
+      ],
+    });
+
+    expect(await screen.findByText('الضريبة (14%)')).toBeTruthy();
+    expect(screen.getByText('21.00')).toBeTruthy();
+    expect(screen.getByText('المجموع الفرعي')).toBeTruthy();
+  });
+
+  it('shows the discount row with its percent for a discounted invoice', async () => {
+    renderCard({
+      ...baseSale,
+      docNo: 'Z-261105-16311',
+      subTotal: 150,
+      discount: 15,
+      taxRate: 0,
+      taxAmount: 0,
+      total: 135,
+      paidAmount: 135,
+      items: [
+        { id: 'i1', productId: '10', name: 'صنف تجريبي', qty: 1, price: 150, total: 150, unitName: 'قطعة', unitMultiplier: 1, cost: 80, priceType: 'retail' },
+      ],
+    });
+
+    expect(await screen.findByText('الخصم (10%)')).toBeTruthy();
+    expect(screen.getByText('15.00')).toBeTruthy();
+  });
+
+  it('shows no tax, discount or subtotal rows for a plain invoice', async () => {
+    renderCard({
+      ...baseSale,
+      subTotal: 150,
+      discount: 0,
+      taxRate: 0,
+      taxAmount: 0,
+      total: 150,
+      paidAmount: 150,
+    });
+
+    expect((await screen.findAllByText('150.00')).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/الضريبة/)).toBeNull();
+    expect(screen.queryByText(/الخصم/)).toBeNull();
+    expect(screen.queryByText('المجموع الفرعي')).toBeNull();
+  });
+});

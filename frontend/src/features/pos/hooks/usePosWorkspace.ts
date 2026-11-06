@@ -137,6 +137,7 @@ export function usePosWorkspace() {
     customerId: state.customerId,
     discount: state.discount,
     paidAmount,
+    total: derived.totals.total,
     cashAmount: state.cashAmount,
     setCashAmount: state.setCashAmount,
     cardAmount: state.cardAmount,

@@ -22,16 +22,20 @@ export function getSalesTableColumns() {
         return <span className="status-badge status-posted">{sale.status || i18n.t('sales.status_posted', 'معتمدة')}</span>;
       },
     },
-    { 
-      key: 'etaStatus', 
-      header: i18n.t('sales.tax', 'الضرائب'), 
-      cell: (sale: any) => {
-        if (!sale.etaStatus || sale.etaStatus === 'none') return <span className="muted small">—</span>;
-        if (sale.etaStatus === 'pending') return <span className="badge badge-warning">{i18n.t('sales.status_pending', 'معلقة')}</span>;
-        if (sale.etaStatus === 'submitted') return <span className="badge badge-success">{i18n.t('sales.status_submitted', 'تم الإرسال')}</span>;
-        if (sale.etaStatus === 'failed') return <span className="badge badge-danger">{i18n.t('sales.status_failed', 'فشل')}</span>;
-        return <span className="muted small">{sale.etaStatus}</span>;
-      }
+    {
+      // INV-INVOICE-DETAIL-AMOUNTS: this column used to render the e-invoice
+      // ETA status (key 'etaStatus') under the 'الضرائب' header — but etaStatus
+      // is never populated anywhere (no backend field, no Sale type field), so
+      // the column could only ever render '—'. It now shows the collected tax
+      // amount stored on the sale.
+      key: 'tax',
+      header: i18n.t('sales.tax', 'الضرائب'),
+      cell: (sale: Sale) => formatCurrency(sale.taxAmount ?? 0),
+    },
+    {
+      key: 'discount',
+      header: i18n.t('sales.discount', 'الخصم'),
+      cell: (sale: Sale) => formatCurrency(sale.discount ?? 0),
     },
     { key: 'payment', header: i18n.t('sales.4ee631', 'الدفع'), cell: (sale: Sale) => getSalePaymentLabel(sale) },
     { key: 'total', header: i18n.t('pos.total', 'الإجمالي'), cell: (sale: Sale) => formatCurrency(sale.total) },
