@@ -58,6 +58,7 @@ import { summarizeHourlyAttendance, calculateEffectiveContractPay, calculateEffe
 import { calculateAttendancePenalty } from './engines/attendance-penalty.engine';
 import { buildEmployeeFinancialStatement } from './engines/employee-financial-statement.engine';
 import { calculateEmployeeWithdrawalBalance, resolveDirectAdvanceCashCap, type EmployeeWithdrawalBalanceResult } from './engines/employee-withdrawal-balance.engine';
+import { shouldDeductLeaveFromBalance } from './engines/leave-balance.engine';
 import { createPasswordRecord, verifyPassword } from '../../core/auth/utils/password-hasher';
 import { assertSecurePasscode } from '../../core/auth/utils/password-policy';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
@@ -5756,6 +5757,9 @@ export class HrService {
       code: clean(row.code),
       description: clean(row.description),
       isPaid: row.is_paid !== false,
+      // INV-LEAVE-BALANCE-DEDUCTION: the settings form shows this flag,
+      // so an admin can see and change whether the type deducts.
+      deductsFromBalance: row.deducts_from_balance === true,
       isActive: row.is_active !== false,
     }));
     if (search) {
@@ -5946,6 +5950,8 @@ export class HrService {
         end_date_text: string;
         leave_type_id: number | null;
         leave_type: string | null;
+        leave_type_code: string | null;
+        leave_type_name: string | null;
         deducts_from_balance: boolean | null;
         annual_leave_balance: number | null;
         used_annual_leaves: number | null;
@@ -5959,6 +5965,8 @@ export class HrService {
           to_char(r.end_date, 'YYYY-MM-DD') AS end_date_text,
           r.leave_type_id,
           r.leave_type,
+          t.code AS leave_type_code,
+          t.name AS leave_type_name,
           t.deducts_from_balance,
           e.annual_leave_balance,
           e.used_annual_leaves
@@ -5988,12 +5996,18 @@ export class HrService {
         throw new AppError('إجازة تقع ضمن مسير مرتبات معتمد؛ يلزم تسوية مالية مستقلة',
           'HR_LEAVE_POSTED_PAYROLL_LOCKED', 409);
       }
-      const deductsFromBalance = row.deducts_from_balance === true || (
-        row.leave_type_id == null && (
-          !row.leave_type ||
-          ['annual', 'paid', 'سنوية', 'اعتيادية'].includes(clean(row.leave_type).toLowerCase())
-        )
-      );
+      // INV-LEAVE-BALANCE-DEDUCTION: one shared rule (leave-balance.engine)
+      // decides whether the approval moves the stored balance, so the
+      // profile and end-of-service can never disagree again. An annual
+      // leave deducts even when its type row still stores the false flag
+      // the old settings form could never set.
+      const deductsFromBalance = shouldDeductLeaveFromBalance({
+        deductsFromBalance: row.deducts_from_balance,
+        leaveTypeId: row.leave_type_id,
+        leaveTypeCode: row.leave_type_code,
+        leaveTypeName: row.leave_type_name,
+        leaveTypeText: row.leave_type,
+      });
 
       const requestedDays = Number(row.days_count || 0);
       if (deductsFromBalance && requestedDays > 0) {
@@ -6074,6 +6088,8 @@ export class HrService {
         end_date_text: string;
         leave_type_id: number | null;
         leave_type: string | null;
+        leave_type_code: string | null;
+        leave_type_name: string | null;
         deducts_from_balance: boolean | null;
       }>`
         SELECT
@@ -6085,6 +6101,8 @@ export class HrService {
           to_char(r.end_date, 'YYYY-MM-DD') AS end_date_text,
           r.leave_type_id,
           r.leave_type,
+          t.code AS leave_type_code,
+          t.name AS leave_type_name,
           t.deducts_from_balance
         FROM hr_leave_requests r
         LEFT JOIN hr_leave_types t ON t.id = r.leave_type_id AND t.tenant_id = r.tenant_id
@@ -6113,12 +6131,15 @@ export class HrService {
             'HR_LEAVE_POSTED_PAYROLL_LOCKED', 409);
         }
       }
-      const deductsFromBalance = row.deducts_from_balance === true || (
-        row.leave_type_id == null && (
-          !row.leave_type ||
-          ['annual', 'paid', 'سنوية', 'اعتيادية'].includes(clean(row.leave_type).toLowerCase())
-        )
-      );
+      // INV-LEAVE-BALANCE-DEDUCTION: the same shared rule as approval,
+      // so a cancellation releases exactly the days its approval deducted.
+      const deductsFromBalance = shouldDeductLeaveFromBalance({
+        deductsFromBalance: row.deducts_from_balance,
+        leaveTypeId: row.leave_type_id,
+        leaveTypeCode: row.leave_type_code,
+        leaveTypeName: row.leave_type_name,
+        leaveTypeText: row.leave_type,
+      });
 
       const requestedDays = Number(row.days_count || 0);
       if (wasApproved && deductsFromBalance && requestedDays > 0) {
