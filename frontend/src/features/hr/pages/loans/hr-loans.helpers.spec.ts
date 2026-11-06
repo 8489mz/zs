@@ -12,7 +12,7 @@ import {
   createInitialLoanDraft,
   type LoanDraft,
   type LoanPlanPreview,
-} from './hr-loans.helpers';
+} from '@/features/hr/pages/loans/hr-loans.helpers';
 
 const plan: LoanPlanPreview = { installmentCount: 2, firstDueDate: '2026-11-01' };
 
