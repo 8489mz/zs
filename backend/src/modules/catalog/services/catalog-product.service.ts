@@ -1597,10 +1597,8 @@ export class CatalogProductService {
     // update that did not carry nameEn (barcode/offer/price cards, partial
     // edits) silently wiped the stored English name to NULL.
     const rawNameEn = payload.nameEn === undefined ? undefined : (payload.nameEn ? String(payload.nameEn).trim() : null);
-    const resolvedName = rawName || rawNameEn || '';
-
     return {
-      name: resolvedName,
+      name: rawName || '',
       nameEn: rawNameEn,
       barcode: String(payload.barcode || '').trim(),
       sku: String(payload.sku || '').trim(),
@@ -2428,7 +2426,9 @@ export class CatalogProductService {
 
   async createProduct(payload: UpsertProductDto, actor: AuthContext): Promise<Record<string, unknown>> {
     const normalized = this.normalizeProductPayload(payload);
-    if (!normalized.name) throw new AppError('اسم الصنف الأساسي مطلوب (بالعربية أو الإنجليزية).', 'PRODUCT_NAME_REQUIRED', 400);
+    // Either language satisfies the name requirement: the Arabic field
+    // stays empty for an English-only product (no write-time copy).
+    if (!normalized.name && !normalized.nameEn) throw new AppError('اسم الصنف الأساسي مطلوب (بالعربية أو الإنجليزية).', 'PRODUCT_NAME_REQUIRED', 400);
     normalized.styleCode = this.coerceNewStyleCode(normalized.styleCode);
     const shouldExpandVariants = normalized.fashionVariants.length > 0 && (normalized.itemKind === 'fashion' || Boolean(normalized.styleCode));
     const drafts = shouldExpandVariants
@@ -2634,7 +2634,9 @@ export class CatalogProductService {
     const existing = await this.db.selectFrom('products').selectAll().where('id', '=', id).where(this.tenantPredicate(actor)).executeTakeFirst();
     if (!existing) throw new AppError('Product not found', 'PRODUCT_NOT_FOUND', 404);
     const normalized = this.normalizeProductPayload(payload);
-    if (!normalized.name) throw new AppError('اسم الصنف الأساسي مطلوب (بالعربية أو الإنجليزية).', 'PRODUCT_NAME_REQUIRED', 400);
+    // Either language satisfies the name requirement: the Arabic field
+    // stays empty for an English-only product (no write-time copy).
+    if (!normalized.name && !normalized.nameEn) throw new AppError('اسم الصنف الأساسي مطلوب (بالعربية أو الإنجليزية).', 'PRODUCT_NAME_REQUIRED', 400);
 
     const existingStyleCode = String(existing.style_code || '').trim();
     const requestedStyleCode = String(normalized.styleCode || '').trim();

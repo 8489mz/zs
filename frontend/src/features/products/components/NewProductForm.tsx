@@ -18,6 +18,7 @@ import { buildFashionVariantDrafts, splitFashionTokens, type FashionVariantDraft
 import { invalidateCatalogDomain } from '@/app/query-invalidation';
 import { useAppToolbar } from '@/stores/toolbar-store';
 import { normalizeArabicSearchKey } from '@/lib/arabic-normalization';
+import { resolveProductSubmitNames } from '@/features/products/utils/product-submit.utils';
 import { ComboboxSelect } from '@/shared/ui/ComboboxSelect';
 import { ProductNameField } from '@/features/products/components/ProductNameField';
 import { ProductIconPicker } from '@/shared/components/icons/ProductIconPicker';
@@ -364,12 +365,11 @@ export function NewProductForm({
       toast.error(`مضاعف الوحدة "${invalidMultiplierUnit.name || 'الإضافية'}" يجب أن يكون أكبر من 1 مقارنة بالوحدة الأساسية`);
       return;
     }
-    const resolvedName = values.name?.trim() || values.nameEn?.trim() || '';
-    const resolvedNameEn = values.nameEn?.trim() || (values.name?.trim() ? '' : resolvedName);
+    const { name, nameEn } = resolveProductSubmitNames(values);
     mutation.mutate({
       ...values,
-      name: resolvedName,
-      nameEn: resolvedNameEn,
+      name,
+      nameEn,
       itemKind: watchedItemKind,
       units,
       fashionVariantRows,

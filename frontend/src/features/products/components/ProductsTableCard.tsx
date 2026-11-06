@@ -13,6 +13,7 @@ import { guessProductIcon } from '@/features/products/lib/product-smart-matcher'
 import { invalidateCatalogDomain } from '@/app/query-invalidation';
 
 import { getProductLocationDisplayName } from '../utils/product-location.utils';
+import { displayProductName } from '../utils/product-submit.utils';
 import { ProductsMatrixView } from './ProductsMatrixView';
 import { ProductIcon } from '@/shared/components/icons/product-svg-catalog';
 import { ProductIconStudioModal } from '@/shared/components/icons/ProductIconStudioModal';
@@ -76,7 +77,9 @@ function variantLabel(product: Product) {
 }
 
 function deriveBaseName(product: Product) {
-  const raw = String(product.name || '').trim();
+  // Display fallback only: an English-only product shows its English name
+  // here, but the stored Arabic name stays empty (no write-time copy).
+  const raw = displayProductName(product);
   const label = variantLabel(product);
   if (!label || label === '—') return raw;
   const suffix = ` - ${label}`;
@@ -615,7 +618,7 @@ export function ProductsTableCard(props: ProductsTableCardProps) {
                   return (
                     <tr key={group.key} className={props.selectedProduct?.id === product.id ? 'table-row-selected' : undefined} onClick={() => props.onSelectProduct(product)} style={{ cursor: 'pointer' }}>
                       <td className="table-selection-cell" onClick={(event) => event.stopPropagation()}>
-                        <input type="checkbox" aria-label={`تحديد الصنف ${product.name}`} checked={props.selectedIds.includes(String(product.id))} onChange={(event) => toggleGroupSelection(group, event.target.checked)} />
+                        <input type="checkbox" aria-label={`تحديد الصنف ${displayProductName(product)}`} checked={props.selectedIds.includes(String(product.id))} onChange={(event) => toggleGroupSelection(group, event.target.checked)} />
                       </td>
                       <td style={{ textAlign: 'start', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
@@ -623,16 +626,16 @@ export function ProductsTableCard(props: ProductsTableCardProps) {
                             <ProductThumbnail
                               imageUrl={product.imageUrl}
                               icon={product.icon}
-                              name={product.name}
+                              name={displayProductName(product)}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setPreviewImage({ url: product.imageUrl!, title: product.name });
+                                setPreviewImage({ url: product.imageUrl!, title: displayProductName(product) });
                               }}
                             />
                           ) : null}
                           <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                              <strong style={{ color: '#0f172a', fontSize: '0.86rem', lineHeight: 1.35, display: 'block', wordBreak: 'break-word', whiteSpace: 'normal' }}>{product.name}</strong>
+                              <strong style={{ color: '#0f172a', fontSize: '0.86rem', lineHeight: 1.35, display: 'block', wordBreak: 'break-word', whiteSpace: 'normal' }}>{displayProductName(product)}</strong>
                               {product.isActive === false ? (
                                 <span className="status-badge" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '0.68rem', padding: '1px 5px', whiteSpace: 'nowrap' }}>{__t('products.products_table_card.s11', "مؤرشف")}</span>
                               ) : null}
@@ -695,7 +698,7 @@ export function ProductsTableCard(props: ProductsTableCardProps) {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setActiveNoteModal({ productName: product.name, note: product.notes! });
+                              setActiveNoteModal({ productName: displayProductName(product), note: product.notes! });
                             }}
                             title={product.notes}
                             style={{
@@ -942,7 +945,7 @@ export function ProductsTableCard(props: ProductsTableCardProps) {
                     {isExpanded ? group.children.map((product) => (
                       <tr key={`child-${product.id}`} className={`products-group-child-row ${props.selectedProduct?.id === product.id ? 'table-row-selected' : ''}`} onClick={() => props.onSelectProduct(product)} style={{ cursor: 'pointer' }}>
                         <td className="table-selection-cell" onClick={(event) => event.stopPropagation()}>
-                          <input type="checkbox" aria-label={`تحديد الصنف ${product.name}`} checked={props.selectedIds.includes(String(product.id))} onChange={(event) => {
+                          <input type="checkbox" aria-label={`تحديد الصنف ${displayProductName(product)}`} checked={props.selectedIds.includes(String(product.id))} onChange={(event) => {
                             const next = new Set(props.selectedIds);
                             if (event.target.checked) next.add(String(product.id));
                             else next.delete(String(product.id));
@@ -955,11 +958,11 @@ export function ProductsTableCard(props: ProductsTableCardProps) {
                               <ProductThumbnail
                                 imageUrl={product.imageUrl}
                                 icon={product.icon}
-                                name={product.name}
+                                name={displayProductName(product)}
                                 size={22}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setPreviewImage({ url: product.imageUrl!, title: `${product.name} (${variantLabel(product)})` });
+                                  setPreviewImage({ url: product.imageUrl!, title: `${displayProductName(product)} (${variantLabel(product)})` });
                                 }}
                               />
                             ) : null}
@@ -970,7 +973,7 @@ export function ProductsTableCard(props: ProductsTableCardProps) {
                                   <span className="status-badge" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: '0.68rem', padding: '1px 5px' }}>{__t('products.products_table_card.s57', "مؤرشف")}</span>
                                 ) : null}
                               </div>
-                              <div className="muted small" style={{ fontSize: '0.74rem', lineHeight: 1.3 }}>{product.name}</div>
+                              <div className="muted small" style={{ fontSize: '0.74rem', lineHeight: 1.3 }}>{displayProductName(product)}</div>
                             </div>
                           </div>
                         </td>

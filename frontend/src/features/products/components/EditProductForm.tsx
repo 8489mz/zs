@@ -18,6 +18,7 @@ import type { Product, ProductCustomerPrice, ProductUnit } from '@/types/domain'
 import { ProductCustomerPricesCard } from '@/features/products/components/workspace-sections/ProductCustomerPricesCard';
 import { buildUpdatePayload, normalizeCustomerPrices, refetchAndSelectProduct, toProductFormValues } from '@/features/products/components/workspace-sections/product-workspace.utils';
 import { normalizeNumericStyleCode } from '@/features/products/lib/style-code';
+import { resolveProductSubmitNames } from '@/features/products/utils/product-submit.utils';
 import { bomsApi } from '@/shared/api/boms.api';
 import { ComboComponentsEditor } from '@/features/products/components/ComboComponentsEditor';
 import { ProductIconPicker } from '@/shared/components/icons/ProductIconPicker';
@@ -293,12 +294,11 @@ export function EditProductForm({
       toast.error(`مضاعف الوحدة "${invalidMultiplierUnit.name || 'الإضافية'}" يجب أن يكون أكبر من 1 مقارنة بالوحدة الأساسية`);
       return;
     }
-    const resolvedName = values.name?.trim() || values.nameEn?.trim() || '';
-    const resolvedNameEn = values.nameEn?.trim() || (values.name?.trim() ? '' : resolvedName);
+    const { name, nameEn } = resolveProductSubmitNames(values);
     mutation.mutate({
       ...omitStock(values as any),
-      name: resolvedName,
-      nameEn: resolvedNameEn,
+      name,
+      nameEn,
       itemKind: watchedItemKind,
       isCombo: (values as any).isCombo,
       comboComponents: (values as any).comboComponents,
