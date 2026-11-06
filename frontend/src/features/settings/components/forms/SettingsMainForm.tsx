@@ -14,6 +14,7 @@ import { BranchForm } from '@/features/settings/components/forms/BranchForm';
 import { normalizeText, type SettingsMainFormProps } from '@/features/settings/components/forms/settings-forms.shared';
 import { useLocalePreference } from '@/shared/locale/LocaleProvider';
 import { useSettingsUpdateMutation } from '@/features/settings/hooks/useSettingsMutations';
+import { buildZPayFormValues } from '@/features/settings/contracts';
 import { DraftStateNotice } from '@/shared/components/draft-state-notice';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -347,6 +348,7 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
       importAutoLinkBankExpenses: 'auto_link',
       servicesBillingMethod: 'deliverable',
       servicesContractRenewalNoticeDays: 30,
+      ...buildZPayFormValues(undefined),
     },
   });
 
@@ -658,6 +660,7 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
       importAutoLinkBankExpenses: ((settings as any).importAutoLinkBankExpenses as any) || 'auto_link',
       servicesBillingMethod: ((settings as any).servicesBillingMethod as any) || 'deliverable',
       servicesContractRenewalNoticeDays: Number((settings as any).servicesContractRenewalNoticeDays ?? 30),
+      ...buildZPayFormValues(settings),
     });
   }, [settings, form, branches]);
 

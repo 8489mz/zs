@@ -507,6 +507,39 @@ export function buildSettingsUpdatePayload(
   return { settings };
 }
 
+export type ZPayFormValues = Pick<
+  SettingsFormOutput,
+  | 'instapayAddress'
+  | 'walletNumber'
+  | 'walletProviderName'
+  | 'paymentLinkBaseUrl'
+  | 'enableDynamicPaymentQr'
+  | 'printPaymentQrOnReceipt'
+  | 'taxComplianceMode'
+>;
+
+/* Z-Pay Smart Payment Hub: map the saved settings back into the settings
+ * form. The main form's reset() maps every field by hand, and these seven
+ * fields were missing from that mapping, so a saved InstaPay IPA rendered
+ * empty after reload and the next save overwrote it with the schema
+ * default. Keep the fallbacks identical to settings.schema.ts. */
+export function buildZPayFormValues(settings: AppSettings | undefined): ZPayFormValues {
+  const current = settings as Record<string, any> | undefined;
+  const taxComplianceMode = current?.taxComplianceMode;
+  return {
+    instapayAddress: cleanText(current?.instapayAddress, '01018017523'),
+    walletNumber: cleanText(current?.walletNumber, '01018017523'),
+    walletProviderName: cleanText(current?.walletProviderName, 'فودافون كاش'),
+    paymentLinkBaseUrl: cleanText(current?.paymentLinkBaseUrl, ''),
+    enableDynamicPaymentQr: current?.enableDynamicPaymentQr !== false,
+    printPaymentQrOnReceipt: current?.printPaymentQrOnReceipt === true,
+    taxComplianceMode:
+      taxComplianceMode === 'optional_eta' || taxComplianceMode === 'mandatory' || taxComplianceMode === 'disabled'
+        ? taxComplianceMode
+        : 'disabled',
+  };
+}
+
 export function buildBranchPayload(values: BranchFormOutput) {
   return {
     name: cleanText(values.name),
