@@ -16,6 +16,9 @@ interface CreateInstallmentPlanModalProps {
     interestRatePercent: number;
     installmentCount: number;
     startDate: string;
+    // INV-INSTALLMENT-FIRST-DUE-DATE: the "first installment due
+    // date" field the user entered; the schedule starts on it.
+    firstDueDate: string;
     notes: string;
   }) => void;
   isPending: boolean;
@@ -74,6 +77,11 @@ export const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProp
       interestRatePercent: Number(newPlan.interestRatePercent || 0),
       installmentCount: Number(newPlan.installmentCount || 1),
       startDate: newPlan.startDate,
+      // INV-INSTALLMENT-FIRST-DUE-DATE: the date field above is
+      // labelled "first installment due date", so send it as the
+      // schedule anchor; without this the backend keeps the old
+      // one-month-later first due date.
+      firstDueDate: newPlan.startDate,
       notes: newPlan.notes,
     });
   };

@@ -66,6 +66,9 @@ export interface CreateInstallmentPlanPayload {
   interestRatePercent?: number;
   installmentCount: number;
   startDate?: string;
+  // INV-INSTALLMENT-FIRST-DUE-DATE: the entered first-installment due
+  // date; the schedule starts on it when supplied.
+  firstDueDate?: string;
   notes?: string;
   branchId?: number | null;
 }

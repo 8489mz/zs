@@ -6,6 +6,10 @@ export interface CreateInstallmentPlanDto {
   interestRatePercent?: number;
   installmentCount: number;
   startDate?: string;
+  // INV-INSTALLMENT-FIRST-DUE-DATE: the entered first-installment due
+  // date. When supplied, the schedule starts on it; when absent, the
+  // schedule keeps the old shape (first due one month after start).
+  firstDueDate?: string;
   notes?: string;
   branchId?: number | null;
 }

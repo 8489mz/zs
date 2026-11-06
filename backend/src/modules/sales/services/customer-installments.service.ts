@@ -64,6 +64,16 @@ export class CustomerInstallmentsService {
 
     const startDate = dto.startDate ? new Date(dto.startDate) : new Date();
 
+    // INV-INSTALLMENT-FIRST-DUE-DATE: the create form labels this
+    // field "first installment due date". The schedule anchor is the
+    // entered first due date when the caller supplies firstDueDate;
+    // without it the schedule keeps the old shape (first due one
+    // month after the plan start).
+    const firstDueDate = dto.firstDueDate ? new Date(dto.firstDueDate) : null;
+    if (firstDueDate && Number.isNaN(firstDueDate.getTime())) {
+      throw new AppError('Invalid first due date', 'INVALID_FIRST_DUE_DATE', 400);
+    }
+
     return await this.tx.runInTransaction(this.db, async (trx: Kysely<Database>) => {
       // INV-CUSTOMER-INSTALLMENTS-MINOR-UNITS: book digits resolve on
       // the caller's own transaction handle, never the pool handle
@@ -137,8 +147,8 @@ export class CustomerInstallmentsService {
       // the principal plus interest at book digits.
       const installmentsToInsert = [];
       for (let i = 1; i <= installmentCount; i++) {
-        const dueDate = new Date(startDate);
-        dueDate.setMonth(dueDate.getMonth() + i);
+        const dueDate = new Date(firstDueDate ?? startDate);
+        dueDate.setMonth(dueDate.getMonth() + (firstDueDate ? i - 1 : i));
 
         const currentAmount = scheduleAmounts[i - 1];
 
