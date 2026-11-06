@@ -10,7 +10,7 @@ import { currencyMoneyDigits } from '../accounting/engines/money-minor-units.eng
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
 import { getTenantTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
 import { LoginAttemptLimiter } from '../../common/utils/login-attempt-limiter';
-import { verifyPassword } from '../../core/auth/utils/password-hasher';
+import { createPasswordRecord, verifyPassword } from '../../core/auth/utils/password-hasher';
 import {
   PORTAL_TOKEN_TTL_MS,
   signPortalToken,
@@ -78,7 +78,7 @@ export class EmployeePortalService {
    * أن الموظف ما زال موجوداً ونشطاً **داخل نفس المستأجر المذكور في الرمز**. بدون هذا
    * الفحص يظل موظف مفصول (أو مستأجر موقوف) قادراً على قراءة الرواتب والسلف لمدة شهر.
    */
-  async verifyToken(authHeader?: string): Promise<PortalEmployeeUser> {
+  async verifyToken(authHeader?: string): Promise<PortalEmployeeUser & { mustChangePin: boolean }> {
     const payload = verifyPortalToken<Record<string, any>>(authHeader, PORTAL_TOKEN_ERRORS);
 
     const employeeId = Number(payload.employeeId || 0);
@@ -91,7 +91,7 @@ export class EmployeePortalService {
 
     const employee = await this.anyDb
       .selectFrom('hr_employees')
-      .select(['id', 'status', 'tenant_id', 'account_id'])
+      .select(['id', 'status', 'tenant_id', 'account_id', 'pin_hash', 'pin_salt'])
       .where('id', '=', employeeId)
       .where('tenant_id', '=', tenantId)
       .executeTakeFirst();
@@ -103,6 +103,13 @@ export class EmployeePortalService {
     // INV-PORTAL-TENANT-STATUS-ENFORCED: the token is stateless, so
     // every request re-checks the tenant status, not just the row.
     await assertPortalTenantAllowed(this.db as any, this.authCache, tenantId);
+
+    // INV-PORTAL-DEFAULT-PIN-FORCED-CHANGE: the flag is re-derived from the
+    // live stored hash on every request, never trusted from the token. A
+    // changed PIN unflags the session immediately, even on an old token.
+    const mustChangePin = employee.pin_hash
+      ? (await verifyPassword('1234', String(employee.pin_hash), String(employee.pin_salt || ''))).valid
+      : false;
 
     return {
       employeeId,
@@ -117,6 +124,7 @@ export class EmployeePortalService {
       status: String(employee.status),
       tenantId: String(employee.tenant_id),
       accountId: String(employee.account_id || accountId),
+      mustChangePin,
     };
   }
 
@@ -126,6 +134,7 @@ export class EmployeePortalService {
   async login(payload: { identifier: string; pinCode: string; companyCode?: string; tenantId?: string }): Promise<{
     token: string;
     employee: PortalEmployeeUser;
+    mustChangePin: boolean;
   }> {
     const rawIdentifier = String(payload?.identifier || '').trim();
     const rawPin = String(payload?.pinCode || '').trim();
@@ -151,7 +160,7 @@ export class EmployeePortalService {
     payload: { identifier: string; pinCode: string; companyCode?: string; tenantId?: string },
     rawIdentifier: string,
     rawPin: string,
-  ): Promise<{ token: string; employee: PortalEmployeeUser }> {
+  ): Promise<{ token: string; employee: PortalEmployeeUser; mustChangePin: boolean }> {
     const cleanDigits = rawIdentifier.replace(/\D/g, '');
     const cleanNoCountry = cleanDigits.startsWith('20')
       ? cleanDigits.slice(2)
@@ -333,11 +342,89 @@ export class EmployeePortalService {
     // suspended / expired / trial-expired tenant, even with a valid PIN.
     await assertPortalTenantAllowed(this.db as any, this.authCache, String(matched.tenant_id));
 
+    // INV-PORTAL-DEFAULT-PIN-FORCED-CHANGE: a PIN that is still the public
+    // default must be changed at first login. Detection is a real password
+    // check against the stored hash — never a comparison with a stored
+    // value — and the default itself is never returned or displayed.
+    const mustChangePin = matched.pin_hash
+      ? (await verifyPassword('1234', String(matched.pin_hash), String(matched.pin_salt || ''))).valid
+      : false;
+
     const rateLimitKey = `employee-portal:${rawIdentifier.toLowerCase()}:${(payload?.companyCode || payload?.tenantId || '').toLowerCase()}`;
     this.loginLimiter.recordSuccess(rateLimitKey);
 
     const token = this.generateToken(employeeUser);
-    return { token, employee: employeeUser };
+    return { token, employee: employeeUser, mustChangePin };
+  }
+
+  /**
+   * INV-PORTAL-DEFAULT-PIN-FORCED-CHANGE: no portal data is served while the
+   * employee still uses the default PIN. The change-PIN endpoint is the only
+   * escape hatch and does not call this guard.
+   */
+  assertPinChanged(user: { mustChangePin?: boolean }): void {
+    if (user?.mustChangePin) {
+      throw new AppError('يجب تغيير رمز الدخول الافتراضي قبل المتابعة', 'PIN_CHANGE_REQUIRED', 403);
+    }
+  }
+
+  /**
+   * Employee self-service PIN change. The current PIN must verify first;
+   * the new credential must be at least 4 characters, never a trivial value
+   * (0000 / 1234), and different from the current one. Returns a fresh
+   * token: once the PIN is no longer the default the session is unflagged
+   * and the dashboard opens.
+   */
+  async changePin(
+    user: PortalEmployeeUser & { mustChangePin: boolean },
+    body: { currentPin?: string; newPin?: string },
+  ): Promise<{ token: string; employee: PortalEmployeeUser; mustChangePin: false }> {
+    const currentPin = String(body?.currentPin || '').trim();
+    const newPin = String(body?.newPin || '').trim();
+    if (!currentPin || !newPin) {
+      throw new AppError('يرجى إدخال الرمز الحالي والرمز الجديد', 'INVALID_PIN', 400);
+    }
+
+    const employee = await this.anyDb
+      .selectFrom('hr_employees')
+      .select(['id', 'status', 'tenant_id', 'account_id', 'pin_hash', 'pin_salt'])
+      .where('id', '=', user.employeeId)
+      .where('tenant_id', '=', user.tenantId)
+      .executeTakeFirst();
+
+    if (!employee || employee.status !== 'active') {
+      throw new AppError('تم إيقاف حساب الموظف. يرجى مراجعة إدارة الموارد البشرية', 'EMPLOYEE_INACTIVE', 401);
+    }
+    if (
+      !employee.pin_hash ||
+      !(await verifyPassword(currentPin, String(employee.pin_hash), String(employee.pin_salt || ''))).valid
+    ) {
+      throw new AppError('رمز الدخول الحالي غير صحيح', 'INVALID_PIN', 401);
+    }
+    if (
+      newPin.length < 4 ||
+      newPin.length > 64 ||
+      newPin === '0000' ||
+      newPin === '1234' ||
+      (await verifyPassword(newPin, String(employee.pin_hash), String(employee.pin_salt || ''))).valid
+    ) {
+      throw new AppError(
+        'الرمز الجديد ضعيف: يجب أن يكون 4 أحرف على الأقل، وأن يختلف عن الرمز الحالي',
+        'WEAK_PIN',
+        400,
+      );
+    }
+
+    const record = await createPasswordRecord(newPin);
+    await this.anyDb
+      .updateTable('hr_employees')
+      .set({ pin_hash: record.hash, pin_salt: record.salt })
+      .where('id', '=', user.employeeId)
+      .where('tenant_id', '=', user.tenantId)
+      .execute();
+
+    const { mustChangePin: _ignored, ...employeeUser } = user;
+    return { token: this.generateToken(employeeUser), employee: employeeUser, mustChangePin: false };
   }
 
   /**

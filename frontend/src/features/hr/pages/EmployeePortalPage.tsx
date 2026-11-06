@@ -20,6 +20,7 @@ import {
   SmartphoneIcon,
 } from '@/shared/components/icons/AppIcons';
 import { EmployeePortalLogin } from '../components/portal/EmployeePortalLogin';
+import { EmployeePinChangeScreen } from '../components/portal/EmployeePinChangeScreen';
 import { PortalLeaveModal } from '../components/portal/PortalLeaveModal';
 import { PortalAdvanceModal } from '../components/portal/PortalAdvanceModal';
 import { PortalPayslipModal } from '../components/portal/PortalPayslipModal';
@@ -38,6 +39,11 @@ export default function EmployeePortalPage() {
   const [user, setUser] = useState<PortalEmployeeUser | null>(() => {
     return employeePortalApi.getCurrentUser();
   });
+
+  // INV-PORTAL-DEFAULT-PIN-FORCED-CHANGE: set from the login response, or
+  // from a PIN_CHANGE_REQUIRED answer to a data call (stored session). While
+  // true the dashboard never renders and no data call is made.
+  const [mustChangePin, setMustChangePin] = useState(false);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<'overview' | 'payslips' | 'leaves' | 'attendance' | 'loans'>('overview');
@@ -60,10 +66,10 @@ export default function EmployeePortalPage() {
 
   // Load data when logged in
   useEffect(() => {
-    if (token) {
+    if (token && !mustChangePin) {
       loadDashboard();
     }
-  }, [token]);
+  }, [token, mustChangePin]);
 
   useEffect(() => {
     if (!token) return;
@@ -87,7 +93,9 @@ export default function EmployeePortalPage() {
       const data = await employeePortalApi.getDashboard();
       setDashboard(data);
     } catch (err: any) {
-      if (err?.response?.status === 401) {
+      if (err?.code === 'PIN_CHANGE_REQUIRED' || err?.response?.data?.code === 'PIN_CHANGE_REQUIRED') {
+        setMustChangePin(true);
+      } else if (err?.response?.status === 401) {
         handleLogout();
       } else {
         setErrorMsg('تعذر تحميل بيانات لوحة الموظف');
@@ -148,10 +156,25 @@ export default function EmployeePortalPage() {
   if (!token) {
     return (
       <EmployeePortalLogin
-        onLoginSuccess={(tok, u) => {
+        onLoginSuccess={(tok, u, mustChange) => {
           setToken(tok);
           setUser(u);
+          setMustChangePin(mustChange === true);
         }}
+      />
+    );
+  }
+
+  if (mustChangePin) {
+    return (
+      <EmployeePinChangeScreen
+        user={user}
+        onChanged={(newTok, newUser) => {
+          setToken(newTok);
+          setUser(newUser);
+          setMustChangePin(false);
+        }}
+        onLogout={handleLogout}
       />
     );
   }

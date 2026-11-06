@@ -355,7 +355,7 @@ export function MaritimeCustomerPortalPage() {
                 type="password"
                 value={loginPin}
                 onChange={(e) => setLoginPin(e.target.value)}
-                placeholder={t('maritime_freight.maritime_customer_portal_page.s7', "الرمز السري (الافتراضي: 1234)")}
+                placeholder={t('maritime_freight.maritime_customer_portal_page.s7', "الرمز السري الخاص بك")}
                 dir="ltr"
                 required
                 style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '13.5px', boxSizing: 'border-box', outline: 'none' }}

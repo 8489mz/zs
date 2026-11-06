@@ -33,7 +33,7 @@ function ChevronLeftIcon() {
 
 
 export interface EmployeePortalLoginProps {
-  onLoginSuccess: (token: string, user: PortalEmployeeUser) => void;
+  onLoginSuccess: (token: string, user: PortalEmployeeUser, mustChangePin: boolean) => void;
 }
 
 export function EmployeePortalLogin({ onLoginSuccess }: EmployeePortalLoginProps) {
@@ -65,7 +65,7 @@ export function EmployeePortalLogin({ onLoginSuccess }: EmployeePortalLoginProps
       if (companyCode) {
         localStorage.setItem('zs_last_company_code', companyCode);
       }
-      onLoginSuccess(res.token, res.employee);
+      onLoginSuccess(res.token, res.employee, res.mustChangePin === true);
     } catch (err: any) {
       const details = err?.details || err?.response?.data?.details || err?.response?.data || err;
       const tenants = details?.tenants || details?.error?.tenants || err?.tenants;
@@ -92,7 +92,7 @@ export function EmployeePortalLogin({ onLoginSuccess }: EmployeePortalLoginProps
       });
       localStorage.setItem('zs_last_company_code', tenantId);
       setDisambiguationTenants(null);
-      onLoginSuccess(res.token, res.employee);
+      onLoginSuccess(res.token, res.employee, res.mustChangePin === true);
     } catch (err: any) {
       setLoginError(err?.response?.data?.message || err?.message || 'تعذر تسجيل الدخول للمنشأة المحددة');
     } finally {
@@ -263,7 +263,7 @@ export function EmployeePortalLogin({ onLoginSuccess }: EmployeePortalLoginProps
               textAlign: 'center',
             }}
           >
-            {__t('hr.portal.employee_portal_login.s7', "لأول تسجيل دخول: يمكنك استخدام رمز PIN الافتراضي")} <strong style={{ color: '#170e5e' }}>1234</strong> {__t('hr.portal.employee_portal_login.s8', "أو التواصل مع قسم الموارد البشرية.")}
+            {__t('hr.portal.employee_portal_login.s15', "لأول تسجيل دخول: تواصل مع الموارد البشرية.")}
           </div>
 
           <div style={{ marginTop: '16px', textAlign: 'center' }}>

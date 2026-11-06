@@ -152,13 +152,39 @@ export const employeePortalApi = {
   async login(payload: { identifier: string; pinCode: string; companyCode?: string; tenantId?: string }): Promise<{
     token: string;
     employee: PortalEmployeeUser;
+    mustChangePin: boolean;
   }> {
     const res = await http<{
       token: string;
       employee: PortalEmployeeUser;
+      mustChangePin: boolean;
     }>('/api/hr/portal/login', {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+    if (res?.token) {
+      localStorage.setItem('zs_emp_portal_token', res.token);
+      localStorage.setItem('zs_emp_portal_user', JSON.stringify(res.employee));
+    }
+    return res;
+  },
+
+  // INV-PORTAL-DEFAULT-PIN-FORCED-CHANGE: the only portal call allowed while
+  // the employee still uses the default PIN. Returns a fresh token; the
+  // caller stores it exactly like a login.
+  async changePin(payload: { currentPin: string; newPin: string }): Promise<{
+    token: string;
+    employee: PortalEmployeeUser;
+    mustChangePin: boolean;
+  }> {
+    const res = await http<{
+      token: string;
+      employee: PortalEmployeeUser;
+      mustChangePin: boolean;
+    }>('/api/hr/portal/pin/change', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: getAuthHeader(),
     });
     if (res?.token) {
       localStorage.setItem('zs_emp_portal_token', res.token);
