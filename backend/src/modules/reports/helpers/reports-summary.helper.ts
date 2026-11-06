@@ -100,10 +100,15 @@ export function buildCommercialSummary(counts: SummaryCounts, totals: SummaryTot
 
   return {
     sales: {
-      count: counts.salesCount + counts.servicesCount,
+      // INV-REPORTS-OVERVIEW-FIGURES: the overview "sales movement" card must
+      // count and total merchandise sales invoices only. Services are their own
+      // revenue line (services.total); folding them into sales.count and
+      // sales.total counted the 75.00 services invoice twice (5 invoices
+      // instead of 4, 1,000.80 instead of 925.80) on /reports/overview.
+      count: counts.salesCount,
       invoiceCount: counts.salesCount,
       servicesCount: counts.servicesCount,
-      total: revenueTotal,
+      total: merchandiseSalesTotal,
       merchandiseTotal: merchandiseSalesTotal,
       servicesTotal,
       netSales,
