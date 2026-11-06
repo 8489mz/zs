@@ -27,6 +27,7 @@ import {
 } from './dto/accounting.dto';
 
 import { BalanceSheetService } from './services/balance-sheet.service';
+import { TrialBalanceService } from './services/trial-balance.service';
 import { CashFlowService } from './services/cash-flow.service';
 import { AgedDebtsService } from './services/aged-debts.service';
 import { PdcChequesService, CreatePdcChequeDto, UpdateChequeStatusDto } from './services/pdc-cheques.service';
@@ -56,6 +57,7 @@ export class AccountingController {
   constructor(
     private readonly accountingService: AccountingService,
     private readonly balanceSheetService: BalanceSheetService,
+    private readonly trialBalanceService: TrialBalanceService,
     private readonly cashFlowService: CashFlowService,
     private readonly agedDebtsService: AgedDebtsService,
     private readonly pdcChequesService: PdcChequesService,
@@ -171,6 +173,20 @@ export class AccountingController {
     return this.balanceSheetService.getBalanceSheet(req.authContext!, {
       asOfDate: asOfDate || undefined,
       compareDate: compareDate || undefined,
+      branchId: branchId ? Number(branchId) : undefined,
+    });
+  }
+
+  // Trial balance (INV-TRIAL-BALANCE-PAGE): the dedicated debit/credit
+  // balance page. Same AccountingAccessGuard as the balance sheet above.
+  @Get('reports/trial-balance')
+  getTrialBalance(
+    @Query('asOfDate') asOfDate: string,
+    @Query('branchId') branchId: string,
+    @Req() req: RequestWithAuth,
+  ): Promise<any> {
+    return this.trialBalanceService.getTrialBalance(req.authContext!, {
+      asOfDate: asOfDate || undefined,
       branchId: branchId ? Number(branchId) : undefined,
     });
   }

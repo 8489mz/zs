@@ -7,6 +7,7 @@ import { AccountingPostingService } from './accounting-posting.service';
 import { AccountingService } from './accounting.service';
 import { AccountingTenantFoundationService } from './accounting-tenant-foundation.service';
 import { BalanceSheetService } from './services/balance-sheet.service';
+import { TrialBalanceService } from './services/trial-balance.service';
 import { CashFlowService } from './services/cash-flow.service';
 import { AgedDebtsService } from './services/aged-debts.service';
 import { PdcChequesService } from './services/pdc-cheques.service';
@@ -30,6 +31,7 @@ import { ArCollectionsService } from './services/ar-collections.service';
     AccountingPostingService,
     AccountingTenantFoundationService,
     BalanceSheetService,
+    TrialBalanceService,
     CashFlowService,
     AgedDebtsService,
     PdcChequesService,
@@ -48,6 +50,7 @@ import { ArCollectionsService } from './services/ar-collections.service';
     AccountingPostingService,
     AccountingTenantFoundationService,
     BalanceSheetService,
+    TrialBalanceService,
     CashFlowService,
     AgedDebtsService,
     PdcChequesService,

@@ -535,6 +535,30 @@ export interface BalanceSheetReportData {
   compareTotalLiabilitiesAndEquity?: number;
 }
 
+// --- Trial Balance (INV-TRIAL-BALANCE-PAGE): one debit column and one
+// credit column per account; zero-balance accounts are included with
+// 0.00 / 0.00 so the whole chart is visible.
+export interface TrialBalanceRow {
+  id: number;
+  code: string;
+  nameAr: string;
+  nameEn: string;
+  accountType: string;
+  totalDebit: number;
+  totalCredit: number;
+  debit: number;
+  credit: number;
+}
+
+export interface TrialBalanceReportData {
+  asOfDate: string;
+  rows: TrialBalanceRow[];
+  totalDebit: number;
+  totalCredit: number;
+  difference: number;
+  isBalanced: boolean;
+}
+
 export interface CashFlowLine {
   labelAr: string;
   labelEn: string;
@@ -605,6 +629,14 @@ export const financialReportsApi = {
     if (params?.branchId) sp.set('branchId', String(params.branchId));
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return http<BalanceSheetReportData>(`/api/accounting/reports/balance-sheet${qs}`);
+  },
+
+  trialBalance: (params?: { asOfDate?: string; branchId?: number }) => {
+    const sp = new URLSearchParams();
+    if (params?.asOfDate) sp.set('asOfDate', params.asOfDate);
+    if (params?.branchId) sp.set('branchId', String(params.branchId));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return http<TrialBalanceReportData>(`/api/accounting/reports/trial-balance${qs}`);
   },
 
   cashFlow: (params?: { dateFrom?: string; dateTo?: string; branchId?: number }) => {

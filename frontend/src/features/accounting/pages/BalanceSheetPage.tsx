@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { translateUiText } from '@/lib/auto-translator';
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
@@ -16,6 +17,7 @@ import {
 export function BalanceSheetPage() {
   const { t, i18n } = useTranslation();
   const isEn = i18n.language === 'en';
+  const navigate = useNavigate();
   const today = new Date().toISOString().slice(0, 10);
   const oneYearAgo = new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString().slice(0, 10);
 
@@ -82,6 +84,9 @@ export function BalanceSheetPage() {
           badge={<span className="nav-pill">{t('accounting.balance_sheet_page.s2', "القوائم المالية المعتمدة")}</span>}
           actions={
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <Button type="button" variant="secondary" onClick={() => navigate('/accounting/trial-balance')}>
+                {t('accounting.balance_sheet_page.s37', 'ميزان المراجعة')}
+              </Button>
               <Button type="button" variant="secondary" onClick={handleExportCsv} disabled={!report}>
                 <DownloadIcon size={14} style={{ marginInlineEnd: '6px' }} />
                 {t('accounting.balance_sheet_page.s3', "تصدير CSV")}

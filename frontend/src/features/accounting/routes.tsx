@@ -60,6 +60,10 @@ export const accountingRouteModule: FeatureRouteModule = {
       element: createLazyRoute(() => import('@/features/accounting/pages/BalanceSheetPage').then((module) => ({ default: withAccountingGate(module.BalanceSheetPage) }))),
     },
     {
+      path: 'accounting/trial-balance',
+      element: createLazyRoute(() => import('@/features/accounting/pages/TrialBalancePage').then((module) => ({ default: withAccountingGate(module.TrialBalancePage) }))),
+    },
+    {
       path: 'accounting/cash-flow',
       element: createLazyRoute(() => import('@/features/accounting/pages/CashFlowStatementPage').then((module) => ({ default: withAccountingGate(module.CashFlowStatementPage) }))),
     },
@@ -105,7 +109,8 @@ export const accountingRouteModule: FeatureRouteModule = {
     { key: 'accounting-withholding-tax', label: 'الخصم والإضافة (نموذج 41)', to: '/accounting/withholding-tax' },
     { key: 'accounting-fiscal-years', label: 'إقفال السنوات المالية', to: '/accounting/fiscal-years' },
     { key: 'accounting-forex', label: 'تقييم العملات وفروق الصرف (IAS 21)', to: '/accounting/forex' },
-    { key: 'accounting-balance-sheet', label: 'التقارير والقوائم المالية', to: '/accounting/balance-sheet', activePaths: ['/accounting/balance-sheet', '/accounting/financial-summary'] },
+    { key: 'accounting-balance-sheet', label: 'التقارير والقوائم المالية', to: '/accounting/balance-sheet', activePaths: ['/accounting/balance-sheet', '/accounting/financial-summary', '/accounting/trial-balance'] },
+    { key: 'accounting-trial-balance', label: 'ميزان المراجعة', to: '/accounting/trial-balance', activePaths: ['/accounting/trial-balance'] },
     { key: 'accounting-cash-flow', label: 'قائمة التدفقات النقدية', to: '/accounting/cash-flow' },
     { key: 'accounting-collections', label: 'مركز التحصيل والمطالبات (AR Collections)', to: '/accounting/collections' },
     { key: 'accounting-aged-debts', label: 'أعمار الديون', to: '/accounting/aged-debts' },
