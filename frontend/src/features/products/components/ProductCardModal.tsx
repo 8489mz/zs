@@ -17,7 +17,12 @@ import {
   CheckShieldIcon,
   RefreshCwIcon,
 } from '@/shared/components/icons/AppIcons';
-import { formatCurrency, formatDate } from '@/lib/format';
+import { formatCurrency, formatDate, formatDateOnly } from '@/lib/format';
+import {
+  evaluateProductExpiryStatus,
+  getProductExpiryDate,
+  productExpiryAlertLabel,
+} from '../utils/product-expiry.utils';
 import { downloadExcelFile, escapeHtml, printHtmlDocument } from '@/lib/browser';
 import { inventoryApi } from '@/shared/api/inventory.api';
 import type { Product, StockMovementRecord } from '@/types/domain';
@@ -195,6 +200,21 @@ export function ProductCardModal({
   const isOutOfStock = product.stock <= 0;
   const isLowStock = !isOutOfStock && product.stock <= (product.minStock || 5);
 
+  // INV-EXPIRY-ALERT: the recorded expiry date (top-level or metadata) and
+  // its alert status under the canonical 60-day rule. A dateless product
+  // yields no_expiry here and the card simply shows '—'.
+  const expiryDate = getProductExpiryDate(product);
+  const expiryInfo = evaluateProductExpiryStatus(expiryDate);
+  const expiryAlert = productExpiryAlertLabel(expiryInfo);
+  const expiryTone =
+    expiryInfo.status === 'expired'
+      ? { border: '#fecaca', color: '#dc2626' }
+      : expiryInfo.status === 'near_expiry'
+        ? { border: '#fed7aa', color: '#d97706' }
+        : expiryInfo.status === 'valid'
+          ? { border: '#bbf7d0', color: '#16a34a' }
+          : { border: '#e2e8f0', color: '#334155' };
+
   async function fetchAllMovementsForExport() {
     if (!product?.id) return [];
     const first = await inventoryApi.stockMovementsPage({
@@ -241,6 +261,10 @@ export function ProductCardModal({
   const printCard = async () => {
     const allRows = await fetchAllMovementsForExport();
     if (!allRows.length) return;
+    // INV-EXPIRY-ALERT: the printed card carries the same expiry date/alert as the screen card.
+    const printExpiry = getProductExpiryDate(product);
+    const printExpiryInfo = evaluateProductExpiryStatus(printExpiry);
+    const printExpiryAlert = productExpiryAlertLabel(printExpiryInfo);
     printHtmlDocument(
       `كارت حركة صنف - ${product.name}`,
       `
@@ -250,7 +274,7 @@ export function ProductCardModal({
             <h2 style="margin: 0 0 6px; color: #170e5e; font-size: 1.3rem;">كارت حركة ومخزون الصنف</h2>
             <div style="font-size: 1.1rem; font-weight: 800; color: #0f172a;">${escapeHtml(product.name)}</div>
             <div style="font-size: 0.85rem; color: #64748b; margin-top: 4px;">
-              كود: ${product.id} · باركود: ${escapeHtml(product.barcode || '—')} · القسم: ${escapeHtml(categoryName || '—')}
+              كود: ${product.id} · باركود: ${escapeHtml(product.barcode || '—')} · القسم: ${escapeHtml(categoryName || '—')}${printExpiryInfo.earliestExpiryDate ? ` · تاريخ الصلاحية: ${escapeHtml(formatDateOnly(printExpiryInfo.earliestExpiryDate))}${printExpiryAlert ? ` (${escapeHtml(printExpiryAlert)})` : ''}` : ''}
             </div>
           </div>
           <div style="text-align: left; background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 16px; border-radius: 8px;">
@@ -418,7 +442,46 @@ export function ProductCardModal({
               <span style={{ fontSize: '0.72rem', color: '#64748b' }}>({formatCurrency(marginVal)})</span>
             </div>
           </div>
+
+          {/* Expiry Date (INV-EXPIRY-ALERT) */}
+          <div
+            style={{
+              background: '#ffffff',
+              border: `1px solid ${expiryTone.border}`,
+              borderRadius: '8px',
+              padding: '8px 12px',
+            }}
+          >
+            <span style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600 }}>تاريخ انتهاء الصلاحية</span>
+            <div style={{ fontSize: '1.05rem', fontWeight: 800, color: expiryTone.color, marginTop: '2px' }}>
+              {expiryInfo.earliestExpiryDate ? formatDateOnly(expiryInfo.earliestExpiryDate) : '—'}
+            </div>
+            <span style={{ fontSize: '0.72rem', color: expiryTone.color }}>
+              {expiryAlert ||
+                (expiryInfo.status === 'valid' && expiryInfo.daysRemaining !== null
+                  ? `صالحة (باقي ${expiryInfo.daysRemaining} يوم)`
+                  : 'لا يوجد تاريخ صلاحية مسجل')}
+            </span>
+          </div>
         </div>
+
+        {/* Expiry alert banner (INV-EXPIRY-ALERT): shown only when the item is expired or inside the 60-day window */}
+        {expiryAlert ? (
+          <div
+            role="alert"
+            style={{
+              background: expiryInfo.status === 'expired' ? '#fef2f2' : '#fffbeb',
+              border: `1px solid ${expiryTone.border}`,
+              borderRadius: '10px',
+              padding: '10px 14px',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+              color: expiryTone.color,
+            }}
+          >
+            {`تنبيه: ${expiryAlert} — تاريخ الصلاحية ${expiryInfo.earliestExpiryDate ? formatDateOnly(expiryInfo.earliestExpiryDate) : '—'}`}
+          </div>
+        ) : null}
 
         {/* 2. Operations & Actions Strip (مركز الإجراءات الموحد) */}
         <div
