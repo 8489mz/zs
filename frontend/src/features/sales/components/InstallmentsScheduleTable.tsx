@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { Button } from '@/shared/ui/button';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatDateOnly } from '@/lib/format';
 import { CustomerInstallmentItem } from '@/features/sales/api/installments.api';
 import { MessageSquareIcon, CheckIcon } from '@/shared/components/icons/AppIcons';
 
@@ -76,7 +76,7 @@ export const InstallmentsScheduleTable: React.FC<InstallmentsScheduleTableProps>
                     </span>
                   </td>
                   <td style={{ padding: '12px 16px', color: inst.status === 'overdue' ? '#dc2626' : '#0f172a', fontWeight: inst.status === 'overdue' ? '700' : 'normal' }}>
-                    {inst.due_date}
+                    {formatDateOnly(inst.due_date)}
                   </td>
                   <td style={{ padding: '12px 16px', fontWeight: '600' }}>
                     {formatCurrency(inst.amount)}

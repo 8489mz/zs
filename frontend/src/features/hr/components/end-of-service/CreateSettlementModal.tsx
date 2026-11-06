@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { Button } from '@/shared/ui/button';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatDateOnly } from '@/lib/format';
 import { XIcon, AlertCircleIcon } from '@/shared/components/icons/AppIcons';
 import type { SettlementPreview } from '../../api/end-of-service.api';
 
@@ -292,7 +292,7 @@ export function CreateSettlementModal({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 14 }}>
               <div>
                 <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>{t('hr.end_of_service.create_settlement_modal.s25', "تاريخ التعيين")}</span>
-                <strong style={{ fontSize: '0.85rem', color: '#0f172a' }}>{preview.employee.hireDate || t('hr.end_of_service.create_settlement_modal.s26', "غير مسجل")}</strong>
+                <strong style={{ fontSize: '0.85rem', color: '#0f172a' }}>{preview.employee.hireDate ? formatDateOnly(preview.employee.hireDate) : t('hr.end_of_service.create_settlement_modal.s26', "غير مسجل")}</strong>
               </div>
               <div>
                 <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>{t('hr.end_of_service.create_settlement_modal.s27', "مدة الخدمة الفعلية")}</span>
