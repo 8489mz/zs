@@ -30,8 +30,8 @@ export function CashierFraudRadarSection() {
   });
 
   const eventsQuery = useQuery({
-    queryKey: ['cashier-fraud-radar-events'],
-    queryFn: () => cashierFraudRadarApi.getEvents(50),
+    queryKey: ['cashier-fraud-radar-events', timeframe],
+    queryFn: () => cashierFraudRadarApi.getEvents(50, timeframe),
     refetchInterval: 30000,
   });
 
@@ -135,6 +135,12 @@ export function CashierFraudRadarSection() {
         return (
           <span style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, background: '#ede9fe', color: '#6b21a8' }}>
             {t('audit.cashier_fraud_radar_section.s6', "تجاوز خصم")}
+          </span>
+        );
+      case 'sale_return':
+        return (
+          <span style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, background: '#fef9c3', color: '#854d0e' }}>
+            {t('audit.cashier_fraud_radar_section.s46', "مرتجع")}
           </span>
         );
       default:
@@ -377,7 +383,7 @@ export function CashierFraudRadarSection() {
             {summary?.totalSuspiciousEvents ?? 0}
           </div>
           <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '4px' }}>
-            {t('audit.cashier_fraud_radar_section.s22', "حذف أصناف + إلغاء فواتير + خصومات")}
+            {t('audit.cashier_fraud_radar_section.s22', "حذف أصناف + إلغاء فواتير + خصومات + مرتجعات")}
           </div>
         </div>
 
@@ -555,7 +561,7 @@ export function CashierFraudRadarSection() {
                     <div
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(4, 1fr)',
+                        gridTemplateColumns: 'repeat(5, 1fr)',
                         gap: '6px',
                         background: '#f8fafc',
                         padding: '8px',
@@ -587,6 +593,12 @@ export function CashierFraudRadarSection() {
                         <div style={{ color: '#64748b', fontSize: '10.5px' }}>{t('audit.cashier_fraud_radar_section.s38', "تجاوز خصم")}</div>
                         <div style={{ fontWeight: 800, color: c.discountOverridesCount > 0 ? '#6b21a8' : '#334155' }}>
                           {c.discountOverridesCount}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ color: '#64748b', fontSize: '10.5px' }}>{t('audit.cashier_fraud_radar_section.s47', "مرتجعات")}</div>
+                        <div style={{ fontWeight: 800, color: c.saleReturnsCount > 0 ? '#854d0e' : '#334155' }}>
+                          {c.saleReturnsCount}
                         </div>
                       </div>
                     </div>

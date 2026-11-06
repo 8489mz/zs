@@ -47,6 +47,7 @@ export interface CashierRiskProfile {
   draftCancelsCount: number;
   cancelledSalesCount: number;
   discountOverridesCount: number;
+  saleReturnsCount: number;
   totalSuspiciousEvents: number;
   totalSalesCount: number;
   riskScore: number; // 0 to 100
@@ -72,7 +73,7 @@ export interface FraudRadarEventItem {
   id: number;
   cashierId: number;
   cashierName: string;
-  eventType: 'cart_remove' | 'draft_cancel' | 'sale_cancelled' | 'discount_override';
+  eventType: 'cart_remove' | 'draft_cancel' | 'sale_cancelled' | 'discount_override' | 'sale_return';
   eventTitle: string;
   details: string;
   amount?: number;
@@ -149,7 +150,8 @@ export class CashierFraudRadarService {
         sql<number>`count(*) filter (where ${eventKind} = 'cart_remove')::int`.as('cart_voids'),
         sql<number>`count(*) filter (where ${eventKind} = 'draft_cancel')::int`.as('draft_cancels'),
         sql<number>`count(*) filter (where ${eventKind} = 'discount_override')::int`.as('discount_overrides'),
-        sql<Date | null>`max(created_at) filter (where ${eventKind} in ('cart_remove', 'draft_cancel', 'discount_override'))`.as('last_suspicious_at'),
+        sql<number>`count(*) filter (where ${eventKind} = 'sale_return')::int`.as('sale_returns'),
+        sql<Date | null>`max(created_at) filter (where ${eventKind} in ('cart_remove', 'draft_cancel', 'discount_override', 'sale_return'))`.as('last_suspicious_at'),
       ]).groupBy('created_by').execute(),
     ]);
 
@@ -191,6 +193,7 @@ export class CashierFraudRadarService {
       cartVoids: number;
       draftCancels: number;
       discountOverrides: number;
+      saleReturns: number;
       cancelledSales: number;
       lastSuspiciousAt?: string;
     }>();
@@ -200,6 +203,7 @@ export class CashierFraudRadarService {
         cartVoids: 0,
         draftCancels: 0,
         discountOverrides: 0,
+        saleReturns: 0,
         cancelledSales: 0,
       });
     }
@@ -211,14 +215,14 @@ export class CashierFraudRadarService {
       const uid = Number(row.created_by || 0);
       let stats = cashierStatsMap.get(uid);
       if (!stats) {
-        stats = { cartVoids: 0, draftCancels: 0, discountOverrides: 0, cancelledSales: 0 };
+        stats = { cartVoids: 0, draftCancels: 0, discountOverrides: 0, saleReturns: 0, cancelledSales: 0 };
         cashierStatsMap.set(uid, stats);
       }
       stats.cartVoids = Number(row.cart_voids);
       stats.draftCancels = Number(row.draft_cancels);
       stats.discountOverrides = Number(row.discount_overrides);
+      stats.saleReturns = Number(row.sale_returns);
       stats.lastSuspiciousAt = row.last_suspicious_at ? new Date(row.last_suspicious_at).toISOString() : undefined;
-      totalSuspiciousEvents += Number(row.event_count);
     }
     for (const log of auditRows.slice(0, maxDetailedEvents)) {
       // Extract amount if present in details
@@ -232,11 +236,10 @@ export class CashierFraudRadarService {
       const uid = Number(cs.created_by || 0);
       let stats = cashierStatsMap.get(uid);
       if (!stats) {
-        stats = { cartVoids: 0, draftCancels: 0, discountOverrides: 0, cancelledSales: 0 };
+        stats = { cartVoids: 0, draftCancels: 0, discountOverrides: 0, saleReturns: 0, cancelledSales: 0 };
         cashierStatsMap.set(uid, stats);
       }
       stats.cancelledSales = Number(cs.cancelled_count);
-      totalSuspiciousEvents += Number(cs.cancelled_count);
       estimatedProtectedLoss += Number(cs.cancelled_total || 0);
       const cancelledAt = cs.latest_cancelled_at ? new Date(cs.latest_cancelled_at).toISOString() : undefined;
       if (cancelledAt && (!stats.lastSuspiciousAt || cancelledAt > stats.lastSuspiciousAt)) stats.lastSuspiciousAt = cancelledAt;
@@ -246,14 +249,22 @@ export class CashierFraudRadarService {
     let highRiskCount = 0;
     let mediumRiskCount = 0;
 
-    for (const c of cashiers) {
-      const uid = Number(c.id);
-      const stats = cashierStatsMap.get(uid) || { cartVoids: 0, draftCancels: 0, discountOverrides: 0, cancelledSales: 0 };
+    // One shared aggregation: the header below is the sum of the
+    // per-cashier detail counts, so it can never drift from the detail
+    // again. Profiles cover every user with events in the window, not
+    // just active cashiers — an event by an inactive/unknown user used
+    // to inflate the header while having no detail row at all.
+    const cashierById = new Map<number, { username: string }>();
+    for (const c of cashiers) cashierById.set(Number(c.id), { username: c.username });
+    const profileUids = new Set<number>([...cashierById.keys(), ...cashierStatsMap.keys()]);
+
+    for (const uid of profileUids) {
+      const stats = cashierStatsMap.get(uid) || { cartVoids: 0, draftCancels: 0, discountOverrides: 0, saleReturns: 0, cancelledSales: 0 };
       const salesCount = salesCountMap.get(uid) || 0;
-      const totalEvents = stats.cartVoids + stats.draftCancels + stats.cancelledSales + stats.discountOverrides;
+      const totalEvents = stats.cartVoids + stats.draftCancels + stats.cancelledSales + stats.discountOverrides + stats.saleReturns;
 
       // Risk score algorithm (0 - 100)
-      let rawScore = (stats.cartVoids * 12) + (stats.draftCancels * 18) + (stats.cancelledSales * 25) + (stats.discountOverrides * 8);
+      let rawScore = (stats.cartVoids * 12) + (stats.draftCancels * 18) + (stats.cancelledSales * 25) + (stats.discountOverrides * 8) + (stats.saleReturns * 10);
       if (salesCount > 10) {
         rawScore = rawScore / Math.max(1, (salesCount / 20));
       }
@@ -270,11 +281,12 @@ export class CashierFraudRadarService {
 
       profiles.push({
         cashierId: uid,
-        cashierName: c.username || `مستخدم #${uid}`,
+        cashierName: cashierById.get(uid)?.username || `مستخدم #${uid}`,
         cartVoidsCount: stats.cartVoids,
         draftCancelsCount: stats.draftCancels,
         cancelledSalesCount: stats.cancelledSales,
         discountOverridesCount: stats.discountOverrides,
+        saleReturnsCount: stats.saleReturns,
         totalSuspiciousEvents: totalEvents,
         totalSalesCount: salesCount,
         riskScore,
@@ -282,6 +294,9 @@ export class CashierFraudRadarService {
         lastSuspiciousAt: stats.lastSuspiciousAt,
       });
     }
+
+    // The header IS the sum of the detail counts — by construction.
+    totalSuspiciousEvents = profiles.reduce((sum, p) => sum + p.totalSuspiciousEvents, 0);
 
     // Sort cashiers by riskScore descending
     profiles.sort((a, b) => b.riskScore - a.riskScore);
@@ -301,9 +316,10 @@ export class CashierFraudRadarService {
     };
   }
 
-  async getEvents(limit = 40, auth: AuthContext): Promise<FraudRadarEventItem[]> {
+  async getEvents(limit = 40, auth: AuthContext, timeframe: 'today' | '7days' | '30days' = 'today'): Promise<FraudRadarEventItem[]> {
     const scope = requireTenantScope(auth);
     const safeLimit = Math.min(100, Math.max(5, limit));
+    const timeSql = this.getTimeFilter(timeframe);
 
     const auditRows = await this.db
       .selectFrom('audit_logs as a')
@@ -318,6 +334,7 @@ export class CashierFraudRadarService {
         'u.username as cashier_name',
       ])
       .where('a.tenant_id', '=', scope.tenantId)
+      .where(sql<boolean>`a.created_at >= ${sql.raw(timeSql)}`)
       .where((eb) =>
         eb.or([
           eb('a.event_code', 'in', [...RADAR_EVENT_CODES]),
@@ -328,6 +345,7 @@ export class CashierFraudRadarService {
               eb('a.action', 'like', '%حذف عنصر من السلة%'),
               eb('a.action', 'like', '%إلغاء/حذف فاتورة%'),
               eb('a.action', 'like', '%خصم%'),
+              eb('a.action', 'like', '%مرتجع%'),
             ]),
           ]),
         ]),
@@ -336,11 +354,33 @@ export class CashierFraudRadarService {
       .limit(safeLimit)
       .execute();
 
-    return auditRows.map((row) => {
+    // Cancelled sales are the second source of the summary counts (same
+    // window), so the strip lists them too — otherwise a cancelled sale
+    // counts in the header and the detail but never appears in the strip.
+    const cancelledRows = await this.db
+      .selectFrom('sales as s')
+      .leftJoin('users as u', 'u.id', 's.created_by')
+      .select([
+        's.id',
+        's.doc_no',
+        's.total',
+        's.created_by',
+        's.created_at',
+        'u.username as cashier_name',
+      ])
+      .where('s.tenant_id', '=', scope.tenantId)
+      .where('s.status', '=', 'cancelled')
+      .where(sql<boolean>`s.created_at >= ${sql.raw(timeSql)}`)
+      .orderBy('s.id', 'desc')
+      .limit(safeLimit)
+      .execute();
+
+    const items: FraudRadarEventItem[] = auditRows.map((row) => {
       const kind = classifyRadarEvent(row);
       let eventType: FraudRadarEventItem['eventType'] = 'cart_remove';
       if (kind === 'draft_cancel') eventType = 'draft_cancel';
       else if (kind === 'discount_override') eventType = 'discount_override';
+      else if (kind === 'sale_return') eventType = 'sale_return';
 
       let amount: number | undefined;
       const match = String(row.details || '').match(/(?:الإجمالي|المبلغ|القيمة):\s*([\d.]+)/);
@@ -359,6 +399,26 @@ export class CashierFraudRadarService {
         createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
       };
     });
+
+    for (const sale of cancelledRows) {
+      items.push({
+        // Negative id: a cancelled sale has no audit_logs row, and the
+        // id must never collide with an audit event id (React key).
+        id: -Number(sale.id),
+        cashierId: Number(sale.created_by || 0),
+        cashierName: sale.cashier_name || `مستخدم #${sale.created_by || 0}`,
+        eventType: 'sale_cancelled',
+        eventTitle: 'فاتورة ملغاة',
+        details: `فاتورة ملغاة${sale.doc_no ? ` ${sale.doc_no}` : ''} — الإجمالي: ${Number(sale.total || 0)}`,
+        amount: Number(sale.total || 0),
+        createdAt: sale.created_at ? new Date(sale.created_at).toISOString() : new Date().toISOString(),
+      });
+    }
+
+    items.sort((a, b) =>
+      a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : b.id - a.id,
+    );
+    return items.slice(0, safeLimit);
   }
 
   async checkAndAlertAnomaly(

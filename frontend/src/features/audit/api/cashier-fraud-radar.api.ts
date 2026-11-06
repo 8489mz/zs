@@ -9,6 +9,7 @@ export interface CashierRiskProfile {
   draftCancelsCount: number;
   cancelledSalesCount: number;
   discountOverridesCount: number;
+  saleReturnsCount: number;
   totalSuspiciousEvents: number;
   totalSalesCount: number;
   riskScore: number; // 0 to 100
@@ -33,7 +34,7 @@ export interface FraudRadarEventItem {
   id: number;
   cashierId: number;
   cashierName: string;
-  eventType: 'cart_remove' | 'draft_cancel' | 'sale_cancelled' | 'discount_override';
+  eventType: 'cart_remove' | 'draft_cancel' | 'sale_cancelled' | 'discount_override' | 'sale_return';
   eventTitle: string;
   details: string;
   amount?: number;
@@ -45,7 +46,7 @@ export const cashierFraudRadarApi = {
     return http<FraudRadarSummaryResponse>(`/api/sales/fraud-radar/summary?timeframe=${timeframe}`);
   },
 
-  getEvents: async (limit = 40): Promise<FraudRadarEventItem[]> => {
-    return http<FraudRadarEventItem[]>(`/api/sales/fraud-radar/events?limit=${limit}`);
+  getEvents: async (limit = 40, timeframe: 'today' | '7days' | '30days' = 'today'): Promise<FraudRadarEventItem[]> => {
+    return http<FraudRadarEventItem[]>(`/api/sales/fraud-radar/events?limit=${limit}&timeframe=${timeframe}`);
   },
 };

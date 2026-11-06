@@ -20,9 +20,11 @@ export class CashierFraudRadarController {
   @Get('events')
   async getEvents(
     @Query('limit') limit: string,
+    @Query('timeframe') timeframe: 'today' | '7days' | '30days' = 'today',
     @Req() req: RequestWithAuth,
   ): Promise<FraudRadarEventItem[]> {
     const parsedLimit = limit ? parseInt(limit, 10) : 40;
-    return this.fraudRadarService.getEvents(parsedLimit, req.authContext!);
+    const validTimeframe = ['today', '7days', '30days'].includes(timeframe) ? timeframe : 'today';
+    return this.fraudRadarService.getEvents(parsedLimit, req.authContext!, validTimeframe);
   }
 }
