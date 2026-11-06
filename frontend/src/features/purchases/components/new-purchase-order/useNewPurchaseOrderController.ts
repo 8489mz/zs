@@ -16,6 +16,7 @@ import {
   normalizeSearchText,
   includesNormalized,
   parseLocalizedNumber,
+  mapPurchaseProductType,
 } from './newPurchaseOrder.helpers';
 import type {
   PrototypeLine,
@@ -149,7 +150,7 @@ export function useNewPurchaseOrderController() {
           warehouseId: p.defaultLocationId ? String(p.defaultLocationId) : undefined,
           category: cat ? cat.name : '',
           categoryId: p.categoryId ? String(p.categoryId) : undefined,
-          type: p.itemKind === 'service' ? 'service' : 'stock',
+          type: mapPurchaseProductType(p),
           defaultLocationId: p.defaultLocationId ? String(p.defaultLocationId) : undefined,
           defaultLocationName: p.defaultLocationName || loc?.name,
           activeLocationIds: Array.isArray(p.activeLocationIds) ? p.activeLocationIds.map(String) : [],
@@ -522,7 +523,7 @@ export function useNewPurchaseOrderController() {
           englishName: p.englishName,
           categoryId: p.categoryId?.toString(),
           category: cat?.name || '',
-          type: p.productType === 'service' || p.itemKind === 'service' ? 'service' : 'stock',
+          type: mapPurchaseProductType(p),
           price: p.purchasePrice ?? p.costPrice ?? 0,
           warehouseId: p.defaultLocationId?.toString(),
           warehouse: loc?.name || p.defaultLocationName || '',
@@ -864,7 +865,7 @@ export function useNewPurchaseOrderController() {
       name: product.name,
       price: safePrice,
       code: product.styleCode || product.sku || product.barcode || `PRD-${product.id}`,
-      type: product.itemKind === 'service' || product.productType === 'service' ? 'service' : 'stock',
+      type: mapPurchaseProductType(product),
       costPrice: product.costPrice
     };
     if (productCreateModalState.lineId !== null) {

@@ -86,3 +86,21 @@ export const searchProject = (project: ProjectOption, query: string) => {
 };
 
 export const createEntityId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
+/**
+ * Map a catalog product to the purchase-order line kind
+ * (INV-SERVICE-ITEM-QUICK-CREATE). The service axis is `itemType`
+ * ('product' | 'raw_material' | 'service') as returned by the catalog
+ * API — NOT `itemKind`, which is the fashion axis ('standard' |
+ * 'fashion') and is never 'service'. Reading the wrong axis made every
+ * service item load as a stocked product, so a service line always
+ * demanded a warehouse and quick-created services came back as stock.
+ * `productType` is accepted as a legacy alias; unknown/missing reads
+ * as stock, the previous behaviour for stocked products.
+ */
+export const mapPurchaseProductType = (product: {
+  itemType?: string | null;
+  productType?: string | null;
+  itemKind?: string | null;
+}): 'stock' | 'service' =>
+  product.itemType === 'service' || product.productType === 'service' ? 'service' : 'stock';

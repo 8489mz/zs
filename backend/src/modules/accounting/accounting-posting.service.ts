@@ -19,6 +19,7 @@ import { randomUUID } from 'node:crypto';
 import { tenantBaseCurrency } from './accounting-currency';
 import { currencyMoneyDigits, roundMoney, toMinorUnits, fromMinorUnits, MoneyDigits } from './engines/money-minor-units.engine';
 import { scaledBomOverhead } from '../manufacturing/engines/manufacturing-overhead.engine';
+import { partitionPurchaseLineTotals } from '../purchases/helpers/purchases-write.helper';
 
 type DbOrTx = Kysely<Database> | Transaction<Database>;
 
@@ -2242,9 +2243,9 @@ export class AccountingPostingService {
     const purchase = await queryable
       .selectFrom('purchases')
       .select([
-        'id', 'doc_no', 'payment_type', 'subtotal', 'discount', 'tax_amount', 'total',
+        'id', 'doc_no', 'payment_type', 'subtotal', 'discount', 'tax_rate', 'tax_amount', 'total',
         'branch_id', 'location_id', 'created_by', 'created_at', 'supplier_id',
-        'grn_id', 'po_id', 'lifecycle_status', 'three_way_match_status',
+        'grn_id', 'po_id', 'lifecycle_status', 'three_way_match_status', 'prices_include_tax',
       ])
       .where('id', '=', purchaseId)
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
@@ -2266,22 +2267,44 @@ export class AccountingPostingService {
     // Reliable inventory value source: purchase_items qty * unit_cost from the purchase document.
     const purchaseItems = await queryable
       .selectFrom('purchase_items')
-      .select(['qty', 'unit_cost', 'grn_line_id', 'grni_amount'])
+      .select(['product_id', 'qty', 'unit_cost', 'line_total', 'grn_line_id', 'grni_amount'])
       .where('purchase_id', '=', purchaseId)
       .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
       .execute();
 
-    const lineCostTotal = toBookMoney(
-      purchaseItems.reduce((sum, item) => sum + (Number(item.qty || 0) * Number(item.unit_cost || 0)), 0),
+    // INV-SERVICE-ITEM-QUICK-CREATE: split the net purchase amount into
+    // the stocked share (inventory 1140) and the service share (other
+    // expenses 6950). A purchased service must never be capitalised as
+    // inventory. Line totals are the discount-allocated effective totals.
+    const serviceProductIds = new Set<number>();
+    if (purchaseItems.length) {
+      const itemProducts = await queryable
+        .selectFrom('products')
+        .select(['id', 'item_type'])
+        .where('id', 'in', purchaseItems.map((item) => Number(item.product_id)).filter((id) => id > 0))
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .execute();
+      for (const row of itemProducts) if (row.item_type === 'service') serviceProductIds.add(Number(row.id));
+    }
+    const { serviceNet, stockedNet } = partitionPurchaseLineTotals(
+      purchaseItems.map((item) => ({
+        lineTotal: Number(item.line_total ?? Number(item.qty || 0) * Number(item.unit_cost || 0)),
+        isService: serviceProductIds.has(Number(item.product_id)),
+      })),
+      Number(purchase.tax_rate || 0),
+      Boolean(purchase.prices_include_tax),
+      bookDigits,
     );
 
     const taxAmount = toBookMoney(purchase.tax_amount);
     const total = toBookMoney(purchase.total);
     // Prefer header-consistent net purchase amount (total - tax) to keep discounts/tax aligned.
     // Fallback to summed item cost when header fields are not reliable.
-    const inventoryDebit = toBookMoney(Math.max(0, total - taxAmount)) > 0
-      ? toBookMoney(Math.max(0, total - taxAmount))
-      : lineCostTotal;
+    const headerNet = toBookMoney(Math.max(0, total - taxAmount));
+    // Clamp the service share to the header net so the split journal stays
+    // balanced to the fil when per-line rounding differs from the header.
+    const serviceDebit = headerNet > 0 ? toBookMoney(Math.min(serviceNet, headerNet)) : serviceNet;
+    const inventoryDebit = headerNet > 0 ? toBookMoney(Math.max(0, headerNet - serviceNet)) : stockedNet;
     const payableCredit = purchase.payment_type === 'credit' ? total : 0;
     const cashOrBankCredit = purchase.payment_type === 'credit' ? 0 : total;
 
@@ -2383,6 +2406,23 @@ export class AccountingPostingService {
           accountId: inventoryAccountId,
           description: 'إثبات تكلفة شراء للمخزون',
           debit: inventoryDebit,
+          credit: 0,
+          partnerType: 'none',
+          partnerId: null,
+          branchId,
+          locationId,
+        });
+      }
+      // INV-SERVICE-ITEM-QUICK-CREATE: purchased services are an operating
+      // expense (6950, resolved by code like postService resolves 4200),
+      // never inventory. The line names the service so it can be
+      // reclassified to a more specific expense account later.
+      if (serviceDebit > 0) {
+        const serviceExpenseAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '6950');
+        addBookLine({
+          accountId: serviceExpenseAccountId,
+          description: 'إثبات تكلفة خدمة مشتراة',
+          debit: serviceDebit,
           credit: 0,
           partnerType: 'none',
           partnerId: null,

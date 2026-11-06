@@ -15,6 +15,7 @@ assert.deepEqual(normalized, {
   unitName: 'علبة',
   unitMultiplier: 3,
   total: 15,
+  isService: false,
   categoryId: null,
   locationId: null,
   batchNumber: null,

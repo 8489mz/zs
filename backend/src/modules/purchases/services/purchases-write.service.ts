@@ -263,8 +263,11 @@ export class PurchasesWriteService {
         if (Number(item.cost || 0) <= 0 && !allowZeroPurchaseCost) {
           throw new AppError('Purchase item cost must be greater than zero', 'INVALID_PURCHASE_COST', 400);
         }
-        const product = await trx.selectFrom('products').select(['id', 'name', 'item_kind', 'style_code', 'cost_price', 'retail_price', 'wholesale_price', 'default_location_id']).where('id', '=', item.productId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).where('is_active', '=', true).executeTakeFirst();
+        const product = await trx.selectFrom('products').select(['id', 'name', 'item_type', 'item_kind', 'style_code', 'cost_price', 'retail_price', 'wholesale_price', 'default_location_id']).where('id', '=', item.productId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).where('is_active', '=', true).executeTakeFirst();
         if (!product) throw new AppError(`Product #${item.productId} not found`, 'PRODUCT_NOT_FOUND', 404);
+        // INV-SERVICE-ITEM-QUICK-CREATE: a service line needs no receiving
+        // location and posts no stock; only its amount is expensed.
+        const isServiceLine = product.item_type === 'service';
         let finalLocationId = item.locationId ? Number(item.locationId) : null;
         if (!finalLocationId && payload.locationId) {
           finalLocationId = Number(payload.locationId);
@@ -290,7 +293,7 @@ export class PurchasesWriteService {
             finalLocationId = Number(stockRows[0].location_id);
           }
         }
-        if (!finalLocationId) {
+        if (!finalLocationId && !isServiceLine) {
           throw new AppError(`يجب تحديد مكان الاستلام للسطر الخاص بالصنف ${product.name}`, 'LOCATION_REQUIRED', 400);
         }
         item.locationId = finalLocationId ?? undefined;
@@ -466,7 +469,8 @@ export class PurchasesWriteService {
 
         const itemLocationId = item.locationId!;
         const isPurchaseOrderOnly = payload.lifecycleStatus === 'purchase_order';
-        if (itemSerials.length > 0 && !isPurchaseOrderOnly) {
+        // INV-SERVICE-ITEM-QUICK-CREATE: services have no serials and no stock.
+        if (itemSerials.length > 0 && !isPurchaseOrderOnly && !item.isService) {
           const serialRows = itemSerials.map((s: any) => {
             const serialNumber = typeof s === 'string' ? s.trim() : (s?.serialNumber || s?.serial || '').trim();
             const imei2 = typeof s === 'object' ? s?.imei2 || null : null;
@@ -492,7 +496,10 @@ export class PurchasesWriteService {
           }
         }
 
-        if (!isPurchaseOrderOnly) {
+        // INV-SERVICE-ITEM-QUICK-CREATE: a service line posts no stock at
+        // all — no receipt, no WAC blend, no stock movement, no pharmacy
+        // batch. Its amount is expensed by postPurchase instead.
+        if (!isPurchaseOrderOnly && !item.isService) {
           const { increasedQty } = calculatePurchaseStockIncrease(item.qty, item.unitMultiplier, 0);
           const stockChange = await applyStockDelta(trx, {
             productId: item.productId,
@@ -697,12 +704,20 @@ export class PurchasesWriteService {
       if (purchase.lifecycle_status === 'grn_bill') throw new AppError('فاتورة GRN مرحّلة؛ يلزم إشعار دائن محاسبي للتعديل', 'GRNI_BILL_IMMUTABLE', 422);
 
       const oldItems = await trx.selectFrom('purchase_items').selectAll().where('purchase_id', '=', purchaseId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+      // INV-SERVICE-ITEM-QUICK-CREATE: service lines never posted stock, so
+      // an edit has nothing to reverse for them. Look their type up once.
+      const oldServiceProductIds = new Set<number>();
+      if (oldItems.length) {
+        const oldProducts = await trx.selectFrom('products').select(['id', 'item_type']).where('id', 'in', oldItems.map((item) => Number(item.product_id)).filter((id) => id > 0)).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+        for (const row of oldProducts) if (row.item_type === 'service') oldServiceProductIds.add(Number(row.id));
+      }
       if (!(payload.items || []).length) throw new AppError('Purchase must include at least one item', 'PURCHASE_ITEMS_REQUIRED', 400);
       if (!(Number(payload.supplierId || 0) > 0)) throw new AppError('Supplier is required', 'SUPPLIER_REQUIRED', 400);
       await lockStockProducts(trx, { ...scope, productIds: [...oldItems.map((item) => Number(item.product_id)), ...(payload.items || []).map((item) => item.productId)] });
       oldItems.sort((a, b) => Number(a.product_id || 0) - Number(b.product_id || 0));
       for (const item of oldItems) {
         if (!item.product_id) continue;
+        if (oldServiceProductIds.has(Number(item.product_id))) continue;
         const itemLocationId = item.location_id ?? purchase.location_id;
         const availableQty = await previewConsumableStockQty(trx, { productId: Number(item.product_id), branchId: purchase.branch_id, locationId: itemLocationId, tenantId: scope.tenantId, accountId: scope.accountId });
         const { removedQty: removeQty, beforeQty } = calculatePurchaseStockDecrease(item.qty, item.unit_multiplier, availableQty);
@@ -711,6 +726,7 @@ export class PurchasesWriteService {
 
       for (const item of oldItems) {
         if (!item.product_id) continue;
+        if (oldServiceProductIds.has(Number(item.product_id))) continue;
         const itemLocationId = item.location_id ?? purchase.location_id;
         const availableQty = await previewConsumableStockQty(trx, { productId: Number(item.product_id), branchId: purchase.branch_id, locationId: itemLocationId, tenantId: scope.tenantId, accountId: scope.accountId });
         const { removedQty: removeQty, afterQty } = calculatePurchaseStockDecrease(item.qty, item.unit_multiplier, availableQty);
@@ -785,8 +801,11 @@ export class PurchasesWriteService {
         if (Number(item.cost || 0) <= 0 && !allowZeroPurchaseCost) {
           throw new AppError('Purchase item cost must be greater than zero', 'INVALID_PURCHASE_COST', 400);
         }
-        const product = await trx.selectFrom('products').select(['id', 'name', 'stock_qty', 'item_kind', 'style_code', 'cost_price', 'retail_price', 'wholesale_price', 'default_location_id']).where('id', '=', item.productId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).where('is_active', '=', true).executeTakeFirst();
+        const product = await trx.selectFrom('products').select(['id', 'name', 'stock_qty', 'item_type', 'item_kind', 'style_code', 'cost_price', 'retail_price', 'wholesale_price', 'default_location_id']).where('id', '=', item.productId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).where('is_active', '=', true).executeTakeFirst();
         if (!product) throw new AppError(`Product #${item.productId} not found`, 'PRODUCT_NOT_FOUND', 404);
+        // INV-SERVICE-ITEM-QUICK-CREATE: a service line needs no receiving
+        // location and posts no stock; only its amount is expensed.
+        const isServiceLine = product.item_type === 'service';
         const incomingCost = Number(item.cost || 0);
         const originalCost = oldByProduct.has(Number(item.productId)) ? Number(oldByProduct.get(Number(item.productId)) || 0) : incomingCost;
         if (Math.abs(incomingCost - originalCost) > 0.0001 && !this.hasPermission(auth, 'canEditPrice')) {
@@ -814,7 +833,7 @@ export class PurchasesWriteService {
             finalLocationId = Number(stockRows[0].location_id);
           }
         }
-        if (!finalLocationId) {
+        if (!finalLocationId && !isServiceLine) {
           throw new AppError(`يجب تحديد مكان الاستلام للسطر الخاص بالصنف ${product.name}`, 'LOCATION_REQUIRED', 400);
         }
         item.locationId = finalLocationId ?? undefined;
@@ -855,41 +874,45 @@ export class PurchasesWriteService {
           account_id: scope.accountId,
         }).execute();
 
-        const { increasedQty: increaseQty } = calculatePurchaseStockIncrease(normalizedItem.qty, normalizedItem.unitMultiplier, 0);
-        const itemLocationId = normalizedItem.locationId!;
-        const stockChange = await applyStockDelta(trx, {
-          productId: normalizedItem.productId,
-          delta: increaseQty,
-          branchId,
-          locationId: itemLocationId,
-          tenantId: scope.tenantId,
-          accountId: scope.accountId,
-        });
+        // INV-SERVICE-ITEM-QUICK-CREATE: a service line posts no stock on
+        // edit-apply either — only its purchase_items row above is written.
+        if (!normalizedItem.isService) {
+          const { increasedQty: increaseQty } = calculatePurchaseStockIncrease(normalizedItem.qty, normalizedItem.unitMultiplier, 0);
+          const itemLocationId = normalizedItem.locationId!;
+          const stockChange = await applyStockDelta(trx, {
+            productId: normalizedItem.productId,
+            delta: increaseQty,
+            branchId,
+            locationId: itemLocationId,
+            tenantId: scope.tenantId,
+            accountId: scope.accountId,
+          });
 
-        const baseUnitCost = netRepricedCost / normalizedItem.unitMultiplier;
-        // INV-WAC-SINGLE-WRITER: every receipt blends through the one
-        // writer (quantity recovery + algebraic blend + write). A
-        // zero-quantity line writes nothing: no receipt to blend and
-        // the stored cost is unchanged.
-        if (increaseQty > 0) {
-          await valueStockReceipt(trx, scope.tenantId, normalizedItem.productId, stockChange.globalAfter, increaseQty, increaseQty * baseUnitCost);
+          const baseUnitCost = netRepricedCost / normalizedItem.unitMultiplier;
+          // INV-WAC-SINGLE-WRITER: every receipt blends through the one
+          // writer (quantity recovery + algebraic blend + write). A
+          // zero-quantity line writes nothing: no receipt to blend and
+          // the stored cost is unchanged.
+          if (increaseQty > 0) {
+            await valueStockReceipt(trx, scope.tenantId, normalizedItem.productId, stockChange.globalAfter, increaseQty, increaseQty * baseUnitCost);
+          }
+          await trx.insertInto('stock_movements').values({
+            product_id: normalizedItem.productId,
+            movement_type: 'purchase_edit_apply',
+            qty: increaseQty,
+            before_qty: stockChange.scopeBefore,
+            after_qty: stockChange.scopeAfter,
+            reason: 'purchase_edit_apply',
+            note: buildPurchaseReferenceNote('Edit apply', purchase),
+            reference_type: 'purchase',
+            reference_id: purchaseId,
+            branch_id: branchId,
+            location_id: itemLocationId,
+            created_by: auth.userId,
+            tenant_id: scope.tenantId,
+            account_id: scope.accountId,
+          }).execute();
         }
-        await trx.insertInto('stock_movements').values({
-          product_id: normalizedItem.productId,
-          movement_type: 'purchase_edit_apply',
-          qty: increaseQty,
-          before_qty: stockChange.scopeBefore,
-          after_qty: stockChange.scopeAfter,
-          reason: 'purchase_edit_apply',
-          note: buildPurchaseReferenceNote('Edit apply', purchase),
-          reference_type: 'purchase',
-          reference_id: purchaseId,
-          branch_id: branchId,
-          location_id: itemLocationId,
-          created_by: auth.userId,
-          tenant_id: scope.tenantId,
-          account_id: scope.accountId,
-        }).execute();
       }
 
       if (paymentType === 'credit') {
@@ -1081,9 +1104,17 @@ export class PurchasesWriteService {
       // transaction handle like every other purchase posting path.
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
       const items = await trx.selectFrom('purchase_items').selectAll().where('purchase_id', '=', purchaseId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+      // INV-SERVICE-ITEM-QUICK-CREATE: service lines never posted stock, so
+      // a cancel has nothing to reverse for them.
+      const cancelServiceProductIds = new Set<number>();
+      if (items.length) {
+        const cancelProducts = await trx.selectFrom('products').select(['id', 'item_type']).where('id', 'in', items.map((item) => Number(item.product_id)).filter((id) => id > 0)).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
+        for (const row of cancelProducts) if (row.item_type === 'service') cancelServiceProductIds.add(Number(row.id));
+      }
       await lockStockProducts(trx, { ...scope, productIds: items.map((item) => Number(item.product_id)) });
       for (const item of [...items].sort((a, b) => Number(a.product_id || 0) - Number(b.product_id || 0))) {
         if (!item.product_id) continue;
+        if (cancelServiceProductIds.has(Number(item.product_id))) continue;
         // Traceable intake must be reversed with the stock movement and journal.
         const itemLocationId = item.location_id ?? purchase.location_id;
         const availableQty = await previewConsumableStockQty(trx, { productId: Number(item.product_id), branchId: purchase.branch_id, locationId: itemLocationId, tenantId: scope.tenantId, accountId: scope.accountId });

@@ -225,6 +225,7 @@ export function NewProductForm({
         onSuccess({
           id: productId,
           name,
+          itemType: form.getValues('itemType'),
           retailPrice: Number(form.getValues('retailPrice') || 0),
           barcode: form.getValues('barcode') || '',
           units,

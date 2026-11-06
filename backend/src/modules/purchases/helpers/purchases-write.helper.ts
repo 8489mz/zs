@@ -15,6 +15,7 @@ export type PurchaseProductRow = {
   id?: number | string | null;
   name?: string | null;
   stock_qty?: number | string | null;
+  item_type?: string | null;
 };
 
 export type NormalizedPurchaseItem = {
@@ -26,6 +27,9 @@ export type NormalizedPurchaseItem = {
   unitName: string;
   unitMultiplier: number;
   total: number;
+  // INV-SERVICE-ITEM-QUICK-CREATE: a service line carries no stock and
+  // its amount is expensed, never capitalised as inventory.
+  isService: boolean;
   categoryId?: number | null;
   locationId?: number | null;
   serials?: any;
@@ -80,6 +84,7 @@ export function buildNormalizedPurchaseItem(
     unitName: String(item.unitName || 'قطعة').trim() || 'قطعة',
     unitMultiplier,
     total: roundCurrency(qty * cost, digits),
+    isService: (product as any)?.item_type === 'service',
     categoryId: item.categoryId ? Number(item.categoryId) : null,
     locationId: item.locationId ? Number(item.locationId) : null,
     ...(item.serials !== undefined ? { serials: item.serials } : {}),
@@ -176,6 +181,38 @@ export function allocatePurchaseInvoiceDiscount(items: NormalizedPurchaseItem[],
       effectiveUnitCost: item.qty > 0 ? Number((effectiveLineTotal / item.qty).toFixed(6)) : 0,
     };
   });
+}
+
+export type PurchaseLineTotalInput = {
+  lineTotal: number | string | null | undefined;
+  isService?: boolean | null;
+};
+
+/**
+ * Split a purchase invoice's discount-allocated line totals into the
+ * service share and the stocked share, both net of recoverable VAT
+ * (INV-SERVICE-ITEM-QUICK-CREATE). postPurchase debits the stocked
+ * share to inventory (1140) and the service share to other expenses
+ * (6950): a purchased service must never be capitalised as inventory.
+ * VAT is stripped per line, mirroring the create path's per-line net
+ * purchase unit cost. Pure: no I/O.
+ */
+export function partitionPurchaseLineTotals(
+  lines: PurchaseLineTotalInput[],
+  taxRate: number | string | null | undefined,
+  pricesIncludeTax: boolean,
+  digits: MoneyDigits = 2,
+): { serviceNet: number; stockedNet: number } {
+  const rate = Number(taxRate || 0);
+  const divisor = pricesIncludeTax && rate > 0 ? 1 + rate / 100 : 1;
+  let serviceNet = 0;
+  let stockedNet = 0;
+  for (const line of lines) {
+    const net = roundCurrency(Number(line.lineTotal || 0) / divisor, digits);
+    if (line.isService) serviceNet = roundCurrency(serviceNet + net, digits);
+    else stockedNet = roundCurrency(stockedNet + net, digits);
+  }
+  return { serviceNet, stockedNet };
 }
 
 export function calculatePurchaseStockIncrease(itemQty: number | string | null | undefined, unitMultiplier: number | string | null | undefined, currentStockQty: number | string | null | undefined) {

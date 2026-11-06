@@ -26,6 +26,7 @@ const DEFAULT_QUICK_CREATE_DRAFT: PurchaseQuickCreateDraft = {
   retailPrice: 0,
   wholesalePrice: 0,
   minStock: 0,
+  itemType: 'product',
 };
 
 function buildDefaultHeaderValues(branches: Branch[], locations: Location[]): PurchaseHeaderInput {
@@ -57,6 +58,9 @@ function createProductPayload(draft: PurchaseQuickCreateDraft) {
   return {
     name: draft.name.trim(),
     barcode: draft.barcode.trim(),
+    // INV-SERVICE-ITEM-QUICK-CREATE: quick-create used to hardcode a
+    // stocked product; the dialog's type choice is honoured here.
+    itemType: draft.itemType === 'service' ? 'service' : 'product',
     itemKind: 'standard',
     costPrice: Number(draft.costPrice || 0),
     retailPrice: Number(draft.retailPrice || 0),

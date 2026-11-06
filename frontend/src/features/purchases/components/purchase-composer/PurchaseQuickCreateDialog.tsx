@@ -16,6 +16,9 @@ export interface PurchaseQuickCreateDraft {
   retailPrice: number;
   wholesalePrice: number;
   minStock: number;
+  // INV-SERVICE-ITEM-QUICK-CREATE: the quick-create used to lock every new
+  // item to a stocked product; a service item can now be created here too.
+  itemType: 'product' | 'service';
 }
 
 interface PurchaseQuickCreateDialogProps {
@@ -57,6 +60,11 @@ export function PurchaseQuickCreateDialog({
     ...suppliers.map((s) => ({ value: s.id, label: s.name })),
   ], [suppliers]);
 
+  const itemTypeOptions = useMemo(() => [
+    { value: 'product', label: 'منتج مخزّن' },
+    { value: 'service', label: 'خدمة (بدون مخزون)' },
+  ], []);
+
   return (
     <StandardDialog
       open={open}
@@ -96,6 +104,15 @@ export function PurchaseQuickCreateDialog({
               onChange={(event) => onDraftChange({ ...draft, barcode: event.target.value })}
               disabled={isPending}
               placeholder={t('purchases.purchase_composer.purchase_quick_create_dialog.s7', "اختياري")}
+            />
+          </Field>
+          <Field label={t('purchases.purchase_composer.purchase_quick_create_dialog.s17', "نوع الصنف")}>
+            <CustomSelect
+              value={draft.itemType || 'product'}
+              onChange={(val) => onDraftChange({ ...draft, itemType: val === 'service' ? 'service' : 'product' })}
+              options={itemTypeOptions}
+              disabled={isPending}
+              searchable={false}
             />
           </Field>
           <Field label={t('purchases.purchase_composer.purchase_quick_create_dialog.s8', "المجموعة")}>
