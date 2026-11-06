@@ -70,7 +70,7 @@ export function AppsKpiHeader({
       return { title: 'باقة الشحن الدولي', tier: 'All-Inclusive', note: 'موديولات الملاحة مدمجة' };
     }
     if (currentPlanName.includes('Ultimate') || currentPlanName.includes('المتكاملة')) {
-      return { title: 'الباقة المتكاملة', tier: 'Ultimate ERP', note: 'شاملة كافة الوحدات المتقدمة' };
+      return { title: 'الباقة المتكاملة', tier: 'Ultimate ERP', note: 'تشمل كافة الوحدات المتقدمة عدا المتجر الإلكتروني' };
     }
     if (currentPlanName.includes('Pro') || currentPlanName.includes('المتقدمة')) {
       return { title: 'الباقة المتقدمة', tier: 'Pro ERP', note: 'إدارة الأعمال الشاملة' };

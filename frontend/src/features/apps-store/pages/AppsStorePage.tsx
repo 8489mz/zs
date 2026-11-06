@@ -194,7 +194,7 @@ export function AppsStorePage() {
   const handleToggle = async (app: AppItemDefinition, currentStatus: boolean) => {
     if (updateMutation.isPending) return;
 
-    if (!isSuperAdmin) {
+    if (!isSuperAdmin && (currentStatus || !isAppAllowedByPlan(app))) {
       toast.warning('إدارة وتثبيت الموديولات مخصصة حصرياً لإدارة المنصة (السوبر أدمن). يرجى التواصل لترقية باقتك وتفعيل الموديول المطلوب.');
       return;
     }

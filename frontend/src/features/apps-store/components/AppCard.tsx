@@ -98,7 +98,7 @@ export function AppCard({
                 <CheckIcon size={12} color="#047857" />
                 <span>{isSuperAdmin ? t('apps_store.app_card.s0', "مُثبت ونشط") : t('apps_store.app_card.s1', "مُفعّل ضمن باقتك")}</span>
               </span>
-            ) : isSuperAdmin && isAllowedByPlan ? (
+            ) : isAllowedByPlan ? (
               <span
                 style={{
                   fontSize: '0.72rem',
@@ -302,7 +302,7 @@ export function AppCard({
                 <span>{t('apps_store.app_card.s6', "مُدرج بالاشتراك")}</span>
               </span>
             )
-          ) : isSuperAdmin ? (
+          ) : isAllowedByPlan ? (
             <button
               type="button"
               disabled={isPending}
