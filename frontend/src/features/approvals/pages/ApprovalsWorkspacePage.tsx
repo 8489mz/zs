@@ -1,14 +1,12 @@
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { PageHeader } from '@/shared/components/page-header';
 import { StatsGrid, type StatsGridItem } from '@/shared/components/stats-grid';
 import { Button } from '@/shared/ui/button';
 import {
-  ApprovalRequest,
-  getApprovalRequests,
-  getPendingApprovalsCount,
-  getApprovalRules,
-} from '../api/approvals.api';
+  useApprovalsWorkspace,
+  type ApprovalRequest,
+} from '../hooks/useApprovalsWorkspace';
 import { ApprovalRequestsTable } from '../components/ApprovalRequestsTable';
 import { ApprovalRulesManager } from '../components/ApprovalRulesManager';
 import { ApprovalActionModal } from '../components/ApprovalActionModal';
@@ -17,52 +15,23 @@ import { ClockIcon, ShieldAlertIcon, RefreshCwIcon } from '@/shared/components/i
 export const ApprovalsWorkspacePage: React.FC = () => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'requests' | 'rules'>('requests');
-  const [requests, setRequests] = useState<ApprovalRequest[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const [moduleFilter, setModuleFilter] = useState<string>('');
-  const [loading, setLoading] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<ApprovalRequest | null>(null);
   const [actionModalOpen, setActionModalOpen] = useState(false);
 
-  // KPIs
-  const [pendingCount, setPendingCount] = useState<number>(0);
-  const [approvedCount, setApprovedCount] = useState<number>(0);
-  const [rejectedCount, setRejectedCount] = useState<number>(0);
-  const [rulesCount, setRulesCount] = useState<number>(0);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [reqData, pendingRes, rulesData] = await Promise.all([
-        getApprovalRequests({
-          status: statusFilter || undefined,
-          module: moduleFilter || undefined,
-        }),
-        getPendingApprovalsCount(),
-        getApprovalRules(),
-      ]);
-
-      setRequests(reqData.items || []);
-      setPendingCount(pendingRes.count || 0);
-      setRulesCount(rulesData.filter((r) => r.is_active).length);
-
-      // Load counts for stats
-      const [apprRes, rejRes] = await Promise.all([
-        getApprovalRequests({ status: 'approved', limit: 1 }),
-        getApprovalRequests({ status: 'rejected', limit: 1 }),
-      ]);
-      setApprovedCount(apprRes.total || 0);
-      setRejectedCount(rejRes.total || 0);
-    } catch {
-      // Resilience
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [statusFilter, moduleFilter]);
+  // KPIs + requests come from the feature hook (page-composition rule: pages
+  // never call the api layer directly). reload() is the old loadData: the
+  // refresh button, the rules manager and the action modal all call it.
+  const {
+    requests,
+    loading,
+    pendingCount,
+    approvedCount,
+    rejectedCount,
+    rulesCount,
+    reload,
+  } = useApprovalsWorkspace(statusFilter, moduleFilter);
 
   const stats: StatsGridItem[] = [
     {
@@ -103,7 +72,7 @@ export const ApprovalsWorkspacePage: React.FC = () => {
         title={t('approvals.approvals_workspace_page.s0', "مركز الموافقات وسير العمل الهرمي (Approval Workflow Center)")}
         description={t('approvals.approvals_workspace_page.s1', "حوكمة المعاملات المالية والمشتريات والمصروفات وفق مصفوفة الصلاحيات وسقف المبالغ المعتمدة.")}
         actions={
-          <Button variant="secondary" onClick={loadData} disabled={loading}>
+          <Button variant="secondary" onClick={reload} disabled={loading}>
             <RefreshCwIcon size={16} />
             {t('approvals.approvals_workspace_page.s2', "تحديث البيانات")}
           </Button>
@@ -255,13 +224,13 @@ export const ApprovalsWorkspacePage: React.FC = () => {
       {/* INV-APPROVALS-SUMMARY-COUNT: reload the summary counts whenever the
           manager mutates a rule, otherwise rulesCount stays a mount-time
           snapshot (0 after a rule is created) until a full page reload. */}
-      {activeTab === 'rules' && <ApprovalRulesManager onRulesChanged={() => loadData()} />}
+      {activeTab === 'rules' && <ApprovalRulesManager onRulesChanged={reload} />}
 
       <ApprovalActionModal
         isOpen={actionModalOpen}
         onClose={() => setActionModalOpen(false)}
         request={selectedRequest}
-        onSuccess={() => loadData()}
+        onSuccess={reload}
       />
     </div>
   );

@@ -16,20 +16,29 @@ THE RULE: the manager notifies the parent after every rules mutation
 (create / toggle / delete) via onRulesChanged, and the parent reloads its
 data, so the summary card reflects the new count without a page reload.
 
-WHAT THIS PINS, driving the REAL ApprovalsWorkspacePage (api module
-mocked with a mutable rules list, so refetches see the mutation):
+WHAT THIS PINS, driving the REAL ApprovalsWorkspacePage (the page's data
+hook mocked with a mutable rules list, so refetches see the mutation):
 - creating a rule moves the card 0 -> 1 with no reload.
 - deactivating a rule moves the card 1 -> 0 with no reload.
 - deleting a rule moves the card 1 -> 0 with no reload.
+
+MOCKING (page-composition rule): the page reads its data through the
+useApprovalsWorkspace feature hook, never the api layer, so the spec mocks
+the hook for the page. The rules manager and the action modal still call
+the api module directly (components, not pages), so the api module is
+mocked too, with the same mutable rules list behind both mocks. The spec
+imports no api path anywhere -- the ApprovalRule type comes from the hook
+module, which re-exports it.
 */
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { PropsWithChildren } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApprovalsWorkspacePage } from '@/features/approvals/pages/ApprovalsWorkspacePage';
-import type { ApprovalRule } from '@/features/approvals/api/approvals.api';
+import type { ApprovalRule } from '@/features/approvals/hooks/useApprovalsWorkspace';
 
 const {
   getApprovalRulesMock,
@@ -57,6 +66,28 @@ vi.mock('@/features/approvals/api/approvals.api', () => ({
   getApprovalRequestDetails: vi.fn(),
   approveApprovalRequest: vi.fn(),
   rejectApprovalRequest: vi.fn(),
+}));
+
+vi.mock('@/features/approvals/hooks/useApprovalsWorkspace', () => ({
+  useApprovalsWorkspace: () => {
+    const [rulesCount, setRulesCount] = useState(0);
+    const reload = useCallback(async () => {
+      const data = (await getApprovalRulesMock()) as ApprovalRule[];
+      setRulesCount(data.filter((r) => r.is_active).length);
+    }, []);
+    useEffect(() => {
+      void reload();
+    }, [reload]);
+    return {
+      requests: [],
+      loading: false,
+      pendingCount: 0,
+      approvedCount: 0,
+      rejectedCount: 0,
+      rulesCount,
+      reload,
+    };
+  },
 }));
 
 let rules: ApprovalRule[] = [];

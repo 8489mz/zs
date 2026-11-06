@@ -36,7 +36,6 @@
   "src/features/accounting/pages/WithholdingTaxPage.tsx contains direct React Query calls. Move data access into feature hooks.",
   "src/features/accounting/pages/WithholdingTaxPage.tsx imports feature api directly. Page files must go through hooks.",
   "src/features/activation/pages/SaaSOnboardingPage.tsx imports feature api directly. Page files must go through hooks.",
-  "src/features/approvals/pages/ApprovalsWorkspacePage.tsx imports feature api directly. Page files must go through hooks.",
   "src/features/apps-store/pages/AppsStorePage.tsx contains direct React Query calls. Move data access into feature hooks.",
   "src/features/apps-store/pages/AppsStorePage.tsx imports feature api directly. Page files must go through hooks.",
   "src/features/audit/pages/AuditPage.tsx contains direct React Query calls. Move data access into feature hooks.",
