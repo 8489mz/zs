@@ -157,7 +157,16 @@ export class PurchaseOrdersService {
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const totals = calculatePurchaseOrderTotals(payload.items, payload.discountAmount, digits);
 
-    return this.db.transaction().execute(async (trx) => {
+    // The approval outcome is decided inside the same transaction so a
+    // create-with-approve can never land as a draft (and a draft create
+    // never claims approval). The check is the same gate confirmOrder
+    // runs; the pending-approval notification is sent after commit,
+    // exactly as confirmOrder does. The outcome travels out via the
+    // transaction's return value (never via outer lets: assignments
+    // inside the callback are invisible to the caller's narrowing).
+    const created = await this.db.transaction().execute(async (trx) => {
+    let approval: { requiresApproval: boolean } | null = null;
+    let finalStatus: 'draft' | 'confirmed' | 'pending_approval' = 'draft';
     await this.assertOrderReferences(trx, scope.tenantId, payload.supplierId, payload.warehouseId,
       payload.items.map((item) => item.productId));
     const insertedOrder = await trx
@@ -210,13 +219,34 @@ export class PurchaseOrdersService {
         .execute();
     }
 
+    if (payload.submitForApproval) {
+      approval = await this.approvals.checkAndInitiateApproval({
+        module: 'purchase_orders', recordId: orderId, recordRef: orderNumber,
+        amount: totals.totalAmount,
+      }, auth, trx);
+      finalStatus = approval.requiresApproval ? 'pending_approval' : 'confirmed';
+      await trx.updateTable('purchase_orders').set({ status: finalStatus, updated_at: new Date() })
+        .where('id', '=', orderId).where('tenant_id', '=', scope.tenantId)
+        .where('account_id', '=', scope.accountId).execute();
+    }
+
+    return { orderId, orderNumber, approval, finalStatus };
+    });
+    if (created.approval?.requiresApproval) {
+      this.approvals.notifyPendingApproval(scope.tenantId, created.orderNumber, totals.totalAmount);
+    }
+
     return {
       success: true,
-      id: orderId,
-      orderNumber,
-      message: 'تم إنشاء أمر الشراء بنجاح',
+      id: created.orderId,
+      orderNumber: created.orderNumber,
+      status: created.finalStatus,
+      message: created.finalStatus === 'confirmed'
+        ? 'تم اعتماد أمر الشراء بنجاح'
+        : created.finalStatus === 'pending_approval'
+          ? 'أمر الشراء بانتظار موافقة مدير آخر'
+          : 'تم إنشاء أمر الشراء بنجاح',
     };
-    });
   }
 
   async updateOrder(id: number, payload: UpdatePurchaseOrderDto, auth: AuthContext): Promise<Record<string, unknown>> {

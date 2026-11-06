@@ -117,6 +117,7 @@ export function CreatePurchaseOrderPage() {
     suppliers,
     products,
     createPurchaseOrder,
+    saveDraftPurchaseOrder,
     isSubmitting,
   } = useCreatePurchaseOrderForm({
     onSuccess: () => {
@@ -305,20 +306,23 @@ export function CreatePurchaseOrderPage() {
     );
   };
 
-  const handleSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  // Shared payload builder for both actions (INV-PURCHASE-ORDER-DRAFT-APPROVE):
+  // "save as draft" and "approve" validate the same way and send the same
+  // order; only the intent differs (the hook adds submitForApproval on
+  // the approve path). Returns null when the form is not submittable.
+  const buildPayload = () => {
     if (!supplierName.trim()) {
       toast.warning('يرجى تحديد اسم المورد');
-      return;
+      return null;
     }
 
     const validItems = items.filter((it) => it.productName.trim() && Number(it.quantity) > 0);
     if (!validItems.length) {
       toast.warning('يرجى إضافة صنف واحد على الأقل وتحديد كميته');
-      return;
+      return null;
     }
 
-    createPurchaseOrder({
+    return {
       supplierId: selectedSupplierId || undefined,
       supplierName: supplierName.trim(),
       supplierPhone: supplierPhone.trim() || undefined,
@@ -340,7 +344,18 @@ export function CreatePurchaseOrderPage() {
         discount: Number(it.discount || 0),
         total: Number(it.total),
       })),
-    });
+    };
+  };
+
+  const handleSaveDraft = () => {
+    const payload = buildPayload();
+    if (payload) saveDraftPurchaseOrder(payload);
+  };
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const payload = buildPayload();
+    if (payload) createPurchaseOrder(payload);
   };
 
   return (
@@ -373,9 +388,8 @@ export function CreatePurchaseOrderPage() {
                 variant="secondary"
                 type="button"
                 className="purchase-prototype-toolbar-action purchase-prototype-toolbar-action-secondary"
-                onClick={() => {
-                  toast.success(t('purchases.create_purchase_order_page.s4', "تم حفظ مسودة أمر الشراء بنجاح"));
-                }}
+                onClick={handleSaveDraft}
+                disabled={isSubmitting}
               >
                 <span>{t('purchases.create_purchase_order_page.s5', "حفظ كمسودة")}</span>
               </Button>

@@ -57,6 +57,12 @@ export interface CreatePurchaseOrderPayload {
   expectedDeliveryDate?: string | null;
   notes?: string;
   termsConditions?: string;
+  /**
+   * When true, the server creates the order and runs the approval check
+   * in the same call (INV-PURCHASE-ORDER-DRAFT-APPROVE). When omitted
+   * the order is created as a server-side draft.
+   */
+  submitForApproval?: boolean;
   items: Array<{
     productId?: number;
     productName: string;
@@ -97,7 +103,7 @@ export const purchaseOrdersApi = {
   getById: (id: number) => http<{ order: PurchaseOrderRecord; items: PurchaseOrderItem[] }>(`/api/purchase-orders/${id}`),
 
   create: (data: CreatePurchaseOrderPayload) =>
-    http<{ success: boolean; id: number; orderNumber: string; message: string }>('/api/purchase-orders', {
+    http<{ success: boolean; id: number; orderNumber: string; status?: PurchaseOrderRecord['status']; message: string }>('/api/purchase-orders', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -109,7 +115,7 @@ export const purchaseOrdersApi = {
     }),
 
   confirm: (id: number) =>
-    http<{ success: boolean; message: string }>(`/api/purchase-orders/${id}/confirm`, {
+    http<{ success: boolean; status?: PurchaseOrderRecord['status']; message: string }>(`/api/purchase-orders/${id}/confirm`, {
       method: 'POST',
     }),
 

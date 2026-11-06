@@ -83,6 +83,18 @@ export function PurchaseOrdersPage() {
       queryClient.invalidateQueries({ queryKey: ['purchase-orders-list'] });
       if (selectedOrder?.id) {
         queryClient.invalidateQueries({ queryKey: ['purchase-order-details', selectedOrder.id] });
+        // INV-PURCHASE-ORDER-DRAFT-APPROVE: the open details dialog
+        // renders its badge and buttons from `selectedOrder` (the row
+        // snapshot taken when it opened), not from the refetched
+        // details query -- so the snapshot itself must move to the
+        // status the server just returned, or the dialog keeps showing
+        // "مسودة" and the approve button until it is reopened.
+        if (res.status) {
+          const nextStatus = res.status;
+          setSelectedOrder((prev) =>
+            prev && prev.id === selectedOrder.id ? { ...prev, status: nextStatus } : prev,
+          );
+        }
       }
     },
     onError: (err: any) => {
