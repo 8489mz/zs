@@ -50,7 +50,11 @@ export function isInvoiceBarcodeQuery(raw: string): boolean {
 
   // Matches invoice patterns like Z-260825-0011, Z/260825/0011, INV-1234, 260825-0011, Z2608250011, 2608206
   if (/^Z[-/_.]?\d+/i.test(remapped) || /^INV[-/_.]?\d+/i.test(remapped)) return true;
-  if (/^\d{6,}[-/_.]\d+/.test(remapped)) return true;
+  // A bare numeric dashed code is an invoice only when its 6-digit prefix is
+  // a valid YYMMDD date (e.g. 260825-0011). A numeric product barcode such as
+  // 622123-456789 (month 21) must go straight to barcode lookup instead of
+  // taking the invoice-search detour.
+  if (/^(\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])[-/_.]\d+/.test(remapped)) return true;
   if (/^Z/i.test(remapped) && remapped.length >= 5) return true;
   if (/^ZL\d+/i.test(remapped) && remapped.length >= 5) return true;
   // Also check if raw contained Arabic 'ئ' or 'ظ' (mapped to Z)
@@ -63,6 +67,22 @@ export function isInvoiceBarcodeQuery(raw: string): boolean {
   }
 
   return false;
+}
+
+/**
+ * Routing decision for a numeric dashed product barcode (INV-BARCODE-HIJACK-FIX):
+ * returns true when the query must skip the invoice search entirely and go
+ * straight to barcode lookup. True only for a digits-and-separators code
+ * (e.g. 622123-456789) that is NOT an invoice code. Bare digits (e.g. 123,
+ * which can be an invoice sequence number), plain barcodes without a
+ * separator, and alphanumeric codes keep today's invoice-first order.
+ */
+export function shouldSkipInvoiceSearch(raw: string): boolean {
+  const query = String(raw || '').trim();
+  if (!query) return false;
+  const remapped = remapArabicKeyboardToEnglish(query).trim().toUpperCase();
+  if (!/^\d+(?:[-/_.]\d+)+$/.test(remapped)) return false;
+  return !isInvoiceBarcodeQuery(query);
 }
 
 export function getNormalizedInvoiceSearchTerms(raw: string): string[] {

@@ -14,6 +14,7 @@ import { parseQuantityPrefixQuery } from '@/features/pos/lib/pos-quantity-prefix
 import {
   isInvoiceBarcodeQuery,
   sanitizeSearchInputLive,
+  shouldSkipInvoiceSearch,
 } from '@/features/pos/lib/pos-barcode-normalizer';
 
 function product(barcode: string, sku = '') {
@@ -50,5 +51,41 @@ describe('pos-barcode-dash frontend contract', () => {
   it('does not treat a dashed alphanumeric product code as an invoice barcode', () => {
     expect(isInvoiceBarcodeQuery('ABC-123-456')).toBe(false);
     expect(isInvoiceBarcodeQuery('abc-123-456')).toBe(false);
+  });
+
+  it('sends a numeric dashed barcode straight to barcode lookup, not the invoice route (INV-BARCODE-HIJACK-FIX)', () => {
+    // 622123 is not a valid YYMMDD date (month 21), so this is a product
+    // barcode, not an invoice code — the invoice gate must stay closed.
+    expect(isInvoiceBarcodeQuery('622123-456789')).toBe(false);
+    expect(isInvoiceBarcodeQuery('622123/456789')).toBe(false);
+    // A plain numeric barcode without a separator never was an invoice code.
+    expect(isInvoiceBarcodeQuery('622123456789')).toBe(false);
+    // A real invoice code still takes the invoice route: 260825 is a valid
+    // YYMMDD date (26/08/25), with or without the Z prefix or separator.
+    expect(isInvoiceBarcodeQuery('260825-0011')).toBe(true);
+    expect(isInvoiceBarcodeQuery('260825/0011')).toBe(true);
+    expect(isInvoiceBarcodeQuery('Z-260825-0011')).toBe(true);
+    expect(isInvoiceBarcodeQuery('2608250011')).toBe(true);
+    // The dashed barcode still reaches barcode lookup directly.
+    expect(isLikelyBarcodeQuery('622123-456789')).toBe(true);
+  });
+
+  it('routes a numeric dashed barcode straight to barcode lookup, skipping the invoice search (INV-BARCODE-HIJACK-FIX)', () => {
+    // Routing decision used by the POS submit path and the remote-lookup
+    // fallback: only a numeric dashed code that is not an invoice code
+    // skips the invoice search.
+    expect(shouldSkipInvoiceSearch('622123-456789')).toBe(true);
+    expect(shouldSkipInvoiceSearch('622123/456789')).toBe(true);
+    expect(shouldSkipInvoiceSearch('622123-456-789')).toBe(true);
+    // A real invoice code still takes the invoice route first.
+    expect(shouldSkipInvoiceSearch('260825-0011')).toBe(false);
+    expect(shouldSkipInvoiceSearch('Z-260825-0011')).toBe(false);
+    // Bare digits can be an invoice sequence number: invoice-first stays.
+    expect(shouldSkipInvoiceSearch('123')).toBe(false);
+    // A plain barcode without a separator keeps today's invoice-first order.
+    expect(shouldSkipInvoiceSearch('622123456789')).toBe(false);
+    // An alphanumeric dashed code is not a numeric dashed barcode.
+    expect(shouldSkipInvoiceSearch('ABC-123-456')).toBe(false);
+    expect(shouldSkipInvoiceSearch('')).toBe(false);
   });
 });

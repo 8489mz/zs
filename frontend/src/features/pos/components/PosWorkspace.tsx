@@ -42,6 +42,7 @@ import {
   getNormalizedInvoiceSearchTerms,
   matchesSaleDocNo,
   remapArabicKeyboardToEnglish,
+  shouldSkipInvoiceSearch,
 } from '@/features/pos/lib/pos-barcode-normalizer';
 import type { PosPriceType } from '@/features/pos/types/pos.types';
 import type { Product, Sale } from '@/types/domain';
@@ -399,9 +400,15 @@ export function PosWorkspace() {
           return;
         }
 
-        // Fallback check invoice again
-        const fallbackInvoice = await resolveScannedInvoice(rawQuery);
-        if (fallbackInvoice) return;
+        // Fallback check invoice again, only for invoice-shaped queries:
+        // a numeric dashed product barcode already went straight to barcode
+        // lookup, and an invoice code was already tried above (the 800ms
+        // dedup in resolveScannedInvoice makes a repeat a no-op), so for a
+        // non-invoice query this call can only burn sales searches.
+        if (isInvoiceBarcodeQuery(rawQuery)) {
+          const fallbackInvoice = await resolveScannedInvoice(rawQuery);
+          if (fallbackInvoice) return;
+        }
 
         if (remoteMatch.status === 'ambiguous') {
           pos.setSubmitMessage('هذا الباركود غير واضح أو مرتبط بأكثر من نتيجة. راجع الصنف أو الوحدة أولًا.');
@@ -503,6 +510,15 @@ export function PosWorkspace() {
 
     // If query is a numeric barcode (not a product text search)
     if (isLikelyBarcodeQuery(query) || /^\d+$/.test(query)) {
+      // A numeric dashed product barcode (e.g. 622123-456789) goes straight
+      // to barcode lookup: it is not an invoice code, so the invoice search
+      // must not run before the remote barcode lookup (INV-BARCODE-HIJACK-FIX).
+      // Anything else keeps today's invoice-first order (bare digits can be
+      // an invoice sequence number; plain barcodes keep prior behavior).
+      if (shouldSkipInvoiceSearch(query) || shouldSkipInvoiceSearch(raw)) {
+        resolveRemoteBarcodeMatch(raw);
+        return true;
+      }
       void (async () => {
         const isInvoice = await resolveScannedInvoice(query || raw);
         if (!isInvoice) {
