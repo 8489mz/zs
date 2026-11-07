@@ -12,7 +12,7 @@ import { formatCurrency, formatDate } from '@/lib/format';
 import { getCurrencyDecimals } from '@/lib/currencies';
 import type { ReportsSectionContentProps } from '@/features/reports/components/reports-section.types';
 import { reportsApi } from '@/features/reports/api/reports.api';
-import { formatEmployeeActivityDetails } from '@/features/audit/lib/audit-details-format';
+import { formatEmployeeActivityDetails } from '@/features/audit';
 import { userDirectoryApi } from '@/shared/api/user-directory';
 
 const roleLabel: Record<string, string> = {
