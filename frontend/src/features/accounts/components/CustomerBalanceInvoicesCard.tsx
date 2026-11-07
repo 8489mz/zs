@@ -198,6 +198,10 @@ export function CustomerBalanceInvoicesCard({ customer, disabled = false }: Cust
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentNote, setPaymentNote] = useState('');
   const [paymentChannel, setPaymentChannel] = useState<'cash'|'bank'|'card'|'wallet'|'instapay'>('cash');
+  /* INV-INSTAPAY-FIELD-MISSING: the customer InstaPay account number
+   * (IPA) this receipt came from; sent only when the channel is
+   * InstaPay. */
+  const [paymentInstapayAddress, setPaymentInstapayAddress] = useState('');
   const [successReceipt, setSuccessReceipt] = useState<{
     customer: Customer;
     amountPaid: number;
@@ -257,6 +261,7 @@ export function CustomerBalanceInvoicesCard({ customer, disabled = false }: Cust
         customerId: Number(customer.id),
         amount,
         paymentChannel,
+        instapayAddress: paymentChannel === 'instapay' ? paymentInstapayAddress.trim() : undefined,
         note: paymentNote || `تحصيل سريع من العميل ${customerName}`,
       });
     },
@@ -276,6 +281,7 @@ export function CustomerBalanceInvoicesCard({ customer, disabled = false }: Cust
       refreshAccounts();
       setPaymentAmount('');
       setPaymentNote('');
+      setPaymentInstapayAddress('');
     },
   });
 
@@ -509,6 +515,17 @@ export function CustomerBalanceInvoicesCard({ customer, disabled = false }: Cust
                 <option value="instapay">إنستاباي</option>
               </select>
             </Field>
+            {paymentChannel === 'instapay' && (
+              <Field label={t('accounts.customer_balance_invoices_card.s49', "رقم حساب إنستاباي (IPA)")}>
+                <input
+                  type="text"
+                  value={paymentInstapayAddress}
+                  onChange={(event) => setPaymentInstapayAddress(event.target.value)}
+                  placeholder={t('accounts.customer_balance_invoices_card.s50', "مثال: name@instapay")}
+                  disabled={paymentMutation.isPending || disabled}
+                />
+              </Field>
+            )}
             <Field label={t('accounts.customer_balance_invoices_card.s44', "ملاحظات التحصيل (اختياري)")}>
               <textarea
                 rows={2}
@@ -534,6 +551,7 @@ export function CustomerBalanceInvoicesCard({ customer, disabled = false }: Cust
               onClick={() => {
                 setPaymentAmount('');
                 setPaymentNote('');
+                setPaymentInstapayAddress('');
               }}
               disabled={paymentMutation.isPending}
             >

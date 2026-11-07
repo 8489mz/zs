@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsIn, IsInt, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class CreateSupplierPaymentScheduleDto {
   @IsIn(['count', 'amount'])
@@ -46,6 +46,14 @@ export class PaySupplierScheduleInstallmentDto {
   @IsOptional()
   @IsIn(['cash','bank','card','wallet','instapay'])
   paymentChannel?: 'cash'|'bank'|'card'|'wallet'|'instapay';
+
+  /* INV-INSTAPAY-FIELD-MISSING: the supplier InstaPay account number
+   * (IPA) this installment was sent to. Stored only when the channel
+   * is 'instapay' (see normalizeInstapayAddress). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  instapayAddress?: string;
 
   @Type(() => Number)
   @IsOptional()

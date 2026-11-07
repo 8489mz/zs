@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsIn, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class CreateSupplierPaymentDto {
   @Type(() => Number)
@@ -19,6 +19,16 @@ export class CreateSupplierPaymentDto {
   @IsOptional()
   @IsIn(['cash', 'bank', 'card', 'wallet', 'instapay'])
   paymentChannel?: 'cash' | 'bank' | 'card' | 'wallet' | 'instapay';
+
+  /* INV-INSTAPAY-FIELD-MISSING: the counterparty InstaPay account number
+   * (IPA) this payment was sent to. Stored only when the channel is
+   * 'instapay' (see normalizeInstapayAddress); the global validation
+   * pipe is whitelist + forbidNonWhitelisted, so without this field
+   * the value could never reach the service. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  instapayAddress?: string;
 
   @Type(() => Number)
   @IsOptional()
@@ -51,6 +61,14 @@ export class CreateCustomerPaymentDto {
   @IsOptional()
   @IsIn(['cash', 'bank', 'card', 'wallet', 'instapay'])
   paymentChannel?: 'cash' | 'bank' | 'card' | 'wallet' | 'instapay';
+
+  /* INV-INSTAPAY-FIELD-MISSING: the customer InstaPay account number
+   * (IPA) this receipt came from. Stored only when the channel is
+   * 'instapay' (see normalizeInstapayAddress). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  instapayAddress?: string;
 
   @Type(() => Number)
   @IsOptional()

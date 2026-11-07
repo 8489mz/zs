@@ -19,7 +19,7 @@ import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { CreateCustomerPaymentDto, CreateSupplierPaymentDto } from '../dto/create-party-payment.dto';
 import { UpsertPurchaseDto } from '../dto/upsert-purchase.dto';
-import { allocatePurchaseInvoiceDiscount, buildHistoricCostMap, buildNormalizedPurchaseItem, buildPurchaseReferenceNote, calculatePurchaseStockDecrease, calculatePurchaseStockIncrease, calculatePurchaseSubtotal, normalizeOptionalNote, normalizePurchaseScope, type DiscountAllocatedPurchaseItem } from '../helpers/purchases-write.helper';
+import { allocatePurchaseInvoiceDiscount, buildHistoricCostMap, buildNormalizedPurchaseItem, buildPurchaseReferenceNote, calculatePurchaseStockDecrease, calculatePurchaseStockIncrease, calculatePurchaseSubtotal, normalizeInstapayAddress, normalizeOptionalNote, normalizePurchaseScope, type DiscountAllocatedPurchaseItem } from '../helpers/purchases-write.helper';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { PurchasesFinanceService } from './purchases-finance.service';
 import { PurchasesQueryService } from './purchases-query.service';
@@ -1410,6 +1410,7 @@ export class PurchasesWriteService {
           supplier_id: supplier.id,
           amount,
           payment_channel: payload.paymentChannel || 'cash',
+          instapay_address: normalizeInstapayAddress(payload.paymentChannel, payload.instapayAddress),
           note: normalizeOptionalNote(payload.note),
           branch_id: branchId,
           location_id: locationId,
@@ -1537,6 +1538,7 @@ export class PurchasesWriteService {
           customer_id: customer.id,
           amount,
           payment_channel: payload.paymentChannel || 'cash',
+          instapay_address: normalizeInstapayAddress(payload.paymentChannel, payload.instapayAddress),
           note: normalizeOptionalNote(payload.note),
           branch_id: branchId,
           location_id: locationId,

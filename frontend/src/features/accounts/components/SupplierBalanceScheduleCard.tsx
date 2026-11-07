@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/app/query-keys';
@@ -12,7 +12,8 @@ import { EmptyState } from '@/shared/ui/empty-state';
 import { MutationFeedback } from '@/shared/components/mutation-feedback';
 import { accountsApi } from '@/features/accounts/api/accounts.api';
 import { purchasesApi } from '@/features/purchases/api/purchases.api';
-import { supplierBalanceScheduleApi, type SupplierPaymentScheduleItem } from '@/features/accounts/api/supplier-balance-schedule.api';
+import { supplierBalanceScheduleApi, buildSettleSupplierPaymentSchedulePayload, type SupplierPaymentScheduleItem } from '@/features/accounts/api/supplier-balance-schedule.api';
+import { readSupplierInstapayAddress } from '@/features/accounts/contracts';
 import { formatCurrency, formatDateOnly, formatDateTimeArabic, formatWhatsAppNumber } from '@/lib/format';
 import { openWhatsApp } from '@/lib/whatsapp';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
@@ -259,7 +260,14 @@ export function SupplierBalanceScheduleCard({ supplier, disabled = false }: Supp
   const [directPaymentAmount, setDirectPaymentAmount] = useState('');
   const [directPaymentNote, setDirectPaymentNote] = useState('');
   const [directPaymentChannel, setDirectPaymentChannel] = useState<'cash'|'bank'|'card'|'wallet'|'instapay'>('cash');
+  /* INV-INSTAPAY-FIELD-MISSING: the supplier InstaPay account number
+   * (IPA) a direct payment was sent to; sent only when the channel is
+   * InstaPay. */
+  const [directPaymentInstapayAddress, setDirectPaymentInstapayAddress] = useState('');
   const [schedulePaymentChannel, setSchedulePaymentChannel] = useState<'cash'|'bank'|'card'|'wallet'|'instapay'>('cash');
+  /* INV-INSTAPAY-FIELD-MISSING: the supplier InstaPay account number
+   * (IPA) an installment settlement was sent to. */
+  const [schedulePaymentInstapayAddress, setSchedulePaymentInstapayAddress] = useState('');
   const [directSuccessReceipt, setDirectSuccessReceipt] = useState<{
     amountPaid: number;
     remainingBalance: number;
@@ -295,6 +303,20 @@ export function SupplierBalanceScheduleCard({ supplier, disabled = false }: Supp
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [paymentTarget, successReceipt, directSuccessReceipt]);
+
+  /* INV-INSTAPAY-FIELD-MISSING: when InstaPay is picked for a direct
+   * payment, prefill the IPA saved on the supplier record — once per
+   * switch to InstaPay and only into an empty field, never over a value
+   * the merchant typed or deliberately cleared. */
+  const prevDirectChannelRef = useRef<'cash'|'bank'|'card'|'wallet'|'instapay'>('cash');
+  useEffect(() => {
+    const prev = prevDirectChannelRef.current;
+    prevDirectChannelRef.current = directPaymentChannel;
+    if (directPaymentChannel === 'instapay' && prev !== 'instapay' && !directPaymentInstapayAddress.trim()) {
+      const saved = readSupplierInstapayAddress(supplier);
+      if (saved) setDirectPaymentInstapayAddress(saved);
+    }
+  }, [directPaymentChannel, directPaymentInstapayAddress, supplier]);
 
   function refreshAccounts() {
     queryClient.invalidateQueries({ queryKey: queryKeys.supplierBalances });
@@ -353,6 +375,7 @@ export function SupplierBalanceScheduleCard({ supplier, disabled = false }: Supp
         supplierId: Number(supplier.id),
         amount,
         paymentChannel: directPaymentChannel,
+        instapayAddress: directPaymentChannel === 'instapay' ? directPaymentInstapayAddress.trim() : undefined,
         note: directPaymentNote || `صرف مستحقات للمورد ${supplierName}`,
       });
     },
@@ -369,6 +392,7 @@ export function SupplierBalanceScheduleCard({ supplier, disabled = false }: Supp
       refreshAccounts();
       setDirectPaymentAmount('');
       setDirectPaymentNote('');
+      setDirectPaymentInstapayAddress('');
     },
   });
 
@@ -400,11 +424,12 @@ export function SupplierBalanceScheduleCard({ supplier, disabled = false }: Supp
   });
 
   const settleMutation = useMutation({
-    mutationFn: ({ row, amount, paymentNote: noteText }: { row: SupplierPaymentScheduleItem; amount?: number; paymentNote?: string }) => supplierBalanceScheduleApi.settle(row.id, {
+    mutationFn: ({ row, amount, paymentNote: noteText }: { row: SupplierPaymentScheduleItem; amount?: number; paymentNote?: string }) => supplierBalanceScheduleApi.settle(row.id, buildSettleSupplierPaymentSchedulePayload({
       amount,
       paymentChannel: schedulePaymentChannel,
+      instapayAddress: schedulePaymentInstapayAddress,
       note: noteText || `تسجيل دفع دفعة ${row.installmentNo} من مستحقات ${supplierName}`,
-    }, String(row.supplierId)),
+    }), String(row.supplierId)),
     onSuccess: (nextRows, variables) => {
       queryClient.setQueryData(queryKeys.supplierPaymentSchedule(supplierId), nextRows);
       refreshAccounts();
@@ -418,6 +443,7 @@ export function SupplierBalanceScheduleCard({ supplier, disabled = false }: Supp
       setPaymentTarget(null);
       setPaymentAmount('');
       setPaymentNote('');
+      setSchedulePaymentInstapayAddress('');
     },
   });
 
@@ -442,6 +468,9 @@ export function SupplierBalanceScheduleCard({ supplier, disabled = false }: Supp
     setPaymentTarget(row);
     setPaymentAmount(String(row.remainingAmount || row.amount || ''));
     setPaymentNote('');
+    /* INV-INSTAPAY-FIELD-MISSING: a fresh settlement dialog starts
+     * from the IPA saved on the supplier record. */
+    setSchedulePaymentInstapayAddress(readSupplierInstapayAddress(supplier));
   }
 
   function toggleRow(rowId: string) {
@@ -696,6 +725,17 @@ export function SupplierBalanceScheduleCard({ supplier, disabled = false }: Supp
                     <option value="instapay">إنستاباي</option>
                   </select>
                 </Field>
+                {directPaymentChannel === 'instapay' && (
+                  <Field label={t('accounts.supplier_balance_schedule_card.s113', "رقم حساب إنستاباي (IPA)")}>
+                    <input
+                      type="text"
+                      value={directPaymentInstapayAddress}
+                      onChange={(event) => setDirectPaymentInstapayAddress(event.target.value)}
+                      placeholder={t('accounts.supplier_balance_schedule_card.s114', "مثال: name@instapay")}
+                      disabled={directPaymentMutation.isPending || disabled}
+                    />
+                  </Field>
+                )}
                 <Field label={t('accounts.supplier_balance_schedule_card.s47', "ملاحظات الصرف (اختياري)")}>
                   <textarea
                     rows={2}
@@ -721,6 +761,7 @@ export function SupplierBalanceScheduleCard({ supplier, disabled = false }: Supp
                   onClick={() => {
                     setDirectPaymentAmount('');
                     setDirectPaymentNote('');
+                    setDirectPaymentInstapayAddress('');
                   }}
                   disabled={directPaymentMutation.isPending}
                 >
@@ -917,6 +958,11 @@ export function SupplierBalanceScheduleCard({ supplier, disabled = false }: Supp
                        <option value="instapay">إنستاباي</option>
                      </select>
                    </Field>
+                   {schedulePaymentChannel === 'instapay' && (
+                     <Field label={t('accounts.supplier_balance_schedule_card.s115', "رقم حساب إنستاباي (IPA)")}>
+                       <input type="text" value={schedulePaymentInstapayAddress} onChange={(event) => setSchedulePaymentInstapayAddress(event.target.value)} placeholder={t('accounts.supplier_balance_schedule_card.s116', "مثال: name@instapay")} disabled={settleMutation.isPending} />
+                     </Field>
+                   )}
                    <Field label={t('accounts.supplier_balance_schedule_card.s99', "ملاحظات اختيارية")}>
                     <textarea rows={3} value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} placeholder={t('accounts.supplier_balance_schedule_card.s100', "مثال: تم التسليم لمندوب المورد / رقم إيصال / ملاحظة داخلية")} />
                   </Field>

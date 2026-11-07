@@ -1,17 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { invalidateCatalogDomain } from '@/app/query-invalidation';
 import { suppliersApi } from '@/features/suppliers/api/suppliers.api';
+import { buildSupplierPayload } from '@/features/suppliers/schemas/supplier.schema';
 import type { SupplierFormOutput } from '@/features/suppliers/schemas/supplier.schema';
-
-function buildSupplierPayload(values: SupplierFormOutput) {
-  return {
-    name: values.name,
-    phone: values.phone || '',
-    address: values.address || '',
-    balance: Number(values.balance || 0),
-    notes: values.notes || ''
-  };
-}
 
 export function useUpdateSupplierMutation(supplierId?: string, onSuccess?: () => void) {
   const queryClient = useQueryClient();

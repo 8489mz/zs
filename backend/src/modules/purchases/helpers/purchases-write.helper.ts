@@ -257,6 +257,28 @@ export function normalizeOptionalNote(note: unknown): string {
   return String(note || '').trim();
 }
 
+/*
+ * INV-INSTAPAY-FIELD-MISSING: the InstaPay account number (IPA) of a
+ * party payment. The IPA belongs to the payment only when the payment
+ * actually travels over InstaPay: a trimmed value is kept exactly when
+ * the channel is 'instapay', and any other channel stores NULL so a
+ * stray IPA can never be read as the destination of a cash/bank/card
+ * payment. Blank input is NULL, never an empty string; over-long input
+ * is rejected with the named error rather than silently truncated.
+ */
+export function normalizeInstapayAddress(
+  paymentChannel: unknown,
+  rawAddress: unknown,
+): string | null {
+  if (paymentChannel !== 'instapay') return null;
+  const address = String(rawAddress || '').trim();
+  if (!address) return null;
+  if (address.length > 100) {
+    throw new AppError('InstaPay account number must be at most 100 characters', 'INVALID_INSTAPAY_ADDRESS', 400);
+  }
+  return address;
+}
+
 export function normalizePositiveAmount(amount: unknown, errorCode = 'INVALID_AMOUNT', message = 'Amount must be greater than zero'): number {
   const normalized = roundCurrency(Number(amount || 0));
   if (!(normalized > 0)) {

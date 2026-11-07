@@ -28,6 +28,7 @@ import {
   type SupplierPaymentInput,
   type SupplierPaymentOutput
 } from '@/features/accounts/schemas/payment.schema';
+import { readSupplierInstapayAddress } from '@/features/accounts/contracts';
 
 export function CustomerPaymentForm({ customers, activeCustomerId, disabled = false }: { customers: Customer[]; activeCustomerId: string; disabled?: boolean }) {
   const { t } = useTranslation();
@@ -37,10 +38,11 @@ export function CustomerPaymentForm({ customers, activeCustomerId, disabled = fa
 
   const form = useForm<CustomerPaymentInput, undefined, CustomerPaymentOutput>({
     resolver: zodResolver(customerPaymentSchema),
-    defaultValues: { customerId: activeCustomerId || '', amount: 0, note: '', jobId: '' }
+    defaultValues: { customerId: activeCustomerId || '', amount: 0, note: '', jobId: '', paymentChannel: 'cash', instapayAddress: '' }
   });
 
   const watchedCustomerId = useWatch({ control: form.control, name: 'customerId' });
+  const watchedChannel = useWatch({ control: form.control, name: 'paymentChannel' });
   const selectedCust = customers.find((c) => String(c.id) === String(watchedCustomerId));
   const currentBal = Number(selectedCust?.balance || 0);
   const [customerJobs, setCustomerJobs] = useState<any[]>([]);
@@ -86,7 +88,7 @@ export function CustomerPaymentForm({ customers, activeCustomerId, disabled = fa
       createdAt: res?.createdAt || new Date().toISOString(),
     };
     setLastReceipt(receiptData);
-    form.reset({ customerId: watchedCustomerId, amount: 0, note: '', jobId: '' });
+    form.reset({ customerId: watchedCustomerId, amount: 0, note: '', jobId: '', paymentChannel: 'cash', instapayAddress: '' });
   });
 
   const partyLabel =
@@ -233,6 +235,42 @@ export function CustomerPaymentForm({ customers, activeCustomerId, disabled = fa
           />
         </Field>
 
+        <Field label={t('accounts.payment_forms.s27', "وسيلة الدفع")} error={form.formState.errors.paymentChannel?.message}>
+          <Controller
+            name="paymentChannel"
+            control={form.control}
+            render={({ field }) => (
+              <CustomSelect
+                value={field.value || 'cash'}
+                onChange={field.onChange}
+                options={[
+                  { value: 'cash', label: 'نقدي (درج الكاشير)' },
+                  { value: 'bank', label: 'تحويل بنكي' },
+                  { value: 'card', label: 'بطاقة' },
+                  { value: 'wallet', label: 'محفظة إلكترونية' },
+                  { value: 'instapay', label: 'إنستاباي' },
+                ]}
+                disabled={mutation.isPending || disabled}
+              />
+            )}
+          />
+        </Field>
+
+        {watchedChannel === 'instapay' && (
+          <Field
+            label={t('accounts.payment_forms.s28', "رقم حساب إنستاباي (IPA)")}
+            hint={t('accounts.payment_forms.s29', "حساب إنستاباي الذي وصل منه التحصيل")}
+            error={form.formState.errors.instapayAddress?.message}
+          >
+            <input
+              type="text"
+              {...form.register('instapayAddress')}
+              disabled={mutation.isPending || disabled}
+              placeholder={t('accounts.payment_forms.s30', "مثال: name@instapay")}
+            />
+          </Field>
+        )}
+
         <Field
           label={t('accounts.payment_forms.s6', "البيان / رقم الشيك أو الحوالة أو البوليصة أو المشروع")}
           className="field-full-span"
@@ -302,7 +340,7 @@ export function SupplierPaymentForm({ suppliers, activeSupplierId, disabled = fa
   const { t } = useTranslation();
   const form = useForm<SupplierPaymentInput, undefined, SupplierPaymentOutput>({
     resolver: zodResolver(supplierPaymentSchema),
-    defaultValues: { supplierId: activeSupplierId || '', amount: 0, note: '' }
+    defaultValues: { supplierId: activeSupplierId || '', amount: 0, note: '', paymentChannel: 'cash', instapayAddress: '' }
   });
   // Mirror CustomerPaymentForm: a deep link (?supplierId=) must preselect
   // the supplier even when the id arrives after mount. Without this the
@@ -312,7 +350,19 @@ export function SupplierPaymentForm({ suppliers, activeSupplierId, disabled = fa
       form.setValue('supplierId', activeSupplierId);
     }
   }, [activeSupplierId, form]);
-  const mutation = useSupplierPaymentMutation(activeSupplierId, () => form.reset({ supplierId: '', amount: 0, note: '' }));
+  const watchedSupplierId = useWatch({ control: form.control, name: 'supplierId' });
+  const watchedChannel = useWatch({ control: form.control, name: 'paymentChannel' });
+  const selectedSupplier = suppliers.find((s) => String(s.id) === String(watchedSupplierId));
+  const savedSupplierIpa = readSupplierInstapayAddress(selectedSupplier);
+  /* INV-INSTAPAY-FIELD-MISSING: when InstaPay is picked, prefill the
+   * IPA saved on the supplier record — but only into an empty field,
+   * never over a value the merchant already typed. */
+  useEffect(() => {
+    if (watchedChannel === 'instapay' && savedSupplierIpa && !String(form.getValues('instapayAddress') || '').trim()) {
+      form.setValue('instapayAddress', savedSupplierIpa);
+    }
+  }, [watchedChannel, savedSupplierIpa, form]);
+  const mutation = useSupplierPaymentMutation(activeSupplierId, () => form.reset({ supplierId: '', amount: 0, note: '', paymentChannel: 'cash', instapayAddress: '' }));
 
   const supplierOptions = suppliers.map((s) => ({
     value: String(s.id),
@@ -339,6 +389,35 @@ export function SupplierPaymentForm({ suppliers, activeSupplierId, disabled = fa
       <Field label={`المبلغ المدفوع (${getGlobalCurrencySymbol()}) *`} error={form.formState.errors.amount?.message}>
         <input type="number" step="0.01" min="0.01" {...form.register('amount')} disabled={mutation.isPending || disabled} placeholder="0.00" />
       </Field>
+      <Field label={t('accounts.payment_forms.s27', "وسيلة الدفع")} error={form.formState.errors.paymentChannel?.message}>
+        <Controller
+          name="paymentChannel"
+          control={form.control}
+          render={({ field }) => (
+            <CustomSelect
+              value={field.value || 'cash'}
+              onChange={field.onChange}
+              options={[
+                { value: 'cash', label: 'نقدي (درج الكاشير)' },
+                { value: 'bank', label: 'تحويل بنكي' },
+                { value: 'card', label: 'بطاقة' },
+                { value: 'wallet', label: 'محفظة إلكترونية' },
+                { value: 'instapay', label: 'إنستاباي' },
+              ]}
+              disabled={mutation.isPending || disabled}
+            />
+          )}
+        />
+      </Field>
+      {watchedChannel === 'instapay' && (
+        <Field
+          label={t('accounts.payment_forms.s28', "رقم حساب إنستاباي (IPA)")}
+          hint={t('accounts.payment_forms.s31', "حساب إنستاباي الذي أُرسل إليه الدفع — يُعبَّأ تلقائيًا من بيانات المورد إن وُجد")}
+          error={form.formState.errors.instapayAddress?.message}
+        >
+          <input type="text" {...form.register('instapayAddress')} disabled={mutation.isPending || disabled} placeholder={t('accounts.payment_forms.s30', "مثال: name@instapay")} />
+        </Field>
+      )}
       <Field label={t('accounts.payment_forms.s16', "البيان / ملاحظات السداد")}><input type="text" {...form.register('note')} disabled={mutation.isPending || disabled} placeholder={t('accounts.payment_forms.s17', "تفاصيل الدفع أو رقم الحوالة...")} /></Field>
       {disabled ? <div className="muted small" style={{ gridColumn: '1 / -1' }}>{t('accounts.payment_forms.s18', "هذا الحساب يملك متابعة كشوف الحساب فقط بدون تسجيل سندات صرف جديدة.")}</div> : null}
       <MutationFeedback isError={mutation.isError} isSuccess={mutation.isSuccess} error={mutation.error} errorFallback={t('accounts.payment_forms.s19', "تعذر حفظ الدفع")} successText={t('accounts.payment_forms.s20', "تم حفظ الدفع بنجاح.")} />

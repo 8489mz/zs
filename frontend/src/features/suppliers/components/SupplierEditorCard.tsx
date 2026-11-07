@@ -63,6 +63,23 @@ export function SupplierEditorCard({ supplier, onSaved }: { supplier?: Supplier;
         />
       </Field>
 
+      {/* INV-INSTAPAY-FIELD-MISSING: the supplier's own InstaPay
+        account number. It is saved on the supplier record
+        (metadata.instapayAddress) and the payment forms prefill from
+        it when InstaPay is picked. The edit reset already loads the
+        saved metadata back into the form. */}
+      <Field
+        label={t('suppliers.supplier_editor_card.s27', "رقم حساب إنستاباي (IPA)")}
+        hint={t('suppliers.supplier_editor_card.s28', "حساب إنستاباي الذي تُرسَل إليه دفعات هذا المورد")}
+      >
+        <input
+          type="text"
+          {...form.register('metadata.instapayAddress')}
+          disabled={mutation.isPending}
+          placeholder={t('suppliers.supplier_editor_card.s29', "مثال: name@instapay")}
+        />
+      </Field>
+
       <Field 
         label={`الرصيد الافتتاحي (${getGlobalCurrencySymbol()})`} 
         hint={t('suppliers.supplier_editor_card.s7', "المبلغ المستحق للمورد عند بداية التسجيل (إن وجد)")}

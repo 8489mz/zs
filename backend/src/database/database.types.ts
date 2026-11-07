@@ -1273,6 +1273,8 @@ export interface CustomerPaymentTable {
   job_id?: number | null;
   created_by: number | null;
   transfer_reference?: string | null;
+  /** InstaPay account number (IPA) of this receipt; set only when payment_channel is 'instapay'. */
+  instapay_address?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
   transfer_receipt_url?: string | null;
   van_trip_id?: number | null;
   rep_id?: number | null;
@@ -1699,6 +1701,8 @@ export interface SupplierPaymentTable {
   payment_date: ColumnType<Date, string | undefined, string | undefined>;
   created_by: number | null;
   created_at: ColumnType<Date, string | undefined, never>;
+  /** InstaPay account number (IPA) of this payment; set only when payment_channel is 'instapay'. */
+  instapay_address?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
   currency?: ColumnType<string, string | undefined, string | undefined>;
   exchange_rate?: ColumnType<number, number | undefined, number | undefined>;
   forex_variance_egp?: ColumnType<number, number | undefined, number | undefined>;
@@ -1752,6 +1756,8 @@ export interface SupplierPaymentScheduleLogTable {
   note: string;
   created_by: number | null;
   created_by_name: string;
+  /** InstaPay account number (IPA) of this installment payment; set only when payment_channel is 'instapay'. */
+  instapay_address?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
   tenant_id: ColumnType<string | null, string | null | undefined, string | null | undefined>;
   account_id: ColumnType<string | null, string | null | undefined, string | null | undefined>;
   created_at: ColumnType<Date, string | undefined, never>;

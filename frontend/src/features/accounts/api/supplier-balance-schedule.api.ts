@@ -42,9 +42,30 @@ export interface CreateSupplierBalanceSchedulePayload {
 export interface SettleSupplierPaymentSchedulePayload {
   amount?: number;
   paymentChannel?: 'cash'|'bank'|'card'|'wallet'|'instapay';
+  /* INV-INSTAPAY-FIELD-MISSING: the supplier InstaPay account number
+   * (IPA) this installment was sent to; carried only when the channel
+   * is 'instapay'. */
+  instapayAddress?: string;
   note?: string;
   branchId?: number;
   locationId?: number;
+}
+
+/* INV-INSTAPAY-FIELD-MISSING: build the installment-settlement
+ * payload the same way the party-payment builders do — the IPA travels
+ * only for an InstaPay settlement, trimmed; any other channel (or a
+ * blank value) sends nothing. */
+export function buildSettleSupplierPaymentSchedulePayload(input: SettleSupplierPaymentSchedulePayload): SettleSupplierPaymentSchedulePayload {
+  const channel = input.paymentChannel || 'cash';
+  const address = channel === 'instapay' ? String(input.instapayAddress || '').trim() : '';
+  return {
+    amount: input.amount,
+    paymentChannel: channel,
+    instapayAddress: address ? address : undefined,
+    note: input.note,
+    branchId: input.branchId,
+    locationId: input.locationId,
+  };
 }
 
 interface SupplierPaymentScheduleResponse {

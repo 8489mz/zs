@@ -14,7 +14,7 @@ import { useCreateSupplierMutation } from '@/features/suppliers/hooks/useCreateS
 import { supplierFormSchema, type SupplierFormInput, type SupplierFormOutput } from '@/features/suppliers/schemas/supplier.schema';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 
-const DEFAULT_VALUES = { name: '', phone: '', address: '', balance: 0, notes: '', metadata: { currency: 'USD', supplierType: 'factory' } };
+const DEFAULT_VALUES = { name: '', phone: '', address: '', balance: 0, notes: '', metadata: { currency: 'USD', supplierType: 'factory', instapayAddress: '' } };
 
 export function SupplierForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   const { t } = useTranslation();
@@ -66,6 +66,22 @@ export function SupplierForm({ onSuccess }: { onSuccess?: () => void } = {}) {
           {...form.register('phone')} 
           disabled={mutation.isPending} 
           placeholder={t('suppliers.supplier_form.s5', "مثال: 010xxxxxxxx")}
+        />
+      </Field>
+
+      {/* INV-INSTAPAY-FIELD-MISSING: the supplier's own InstaPay
+        account number. It is saved on the supplier record
+        (metadata.instapayAddress) and the payment forms prefill from
+        it when InstaPay is picked. */}
+      <Field
+        label={t('suppliers.supplier_form.s27', "رقم حساب إنستاباي (IPA)")}
+        hint={t('suppliers.supplier_form.s28', "حساب إنستاباي الذي تُرسَل إليه دفعات هذا المورد")}
+      >
+        <input
+          type="text"
+          {...form.register('metadata.instapayAddress')}
+          disabled={mutation.isPending}
+          placeholder={t('suppliers.supplier_form.s29', "مثال: name@instapay")}
         />
       </Field>
 
