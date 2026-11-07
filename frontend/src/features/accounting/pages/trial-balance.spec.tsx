@@ -29,11 +29,14 @@ const balancedReport = {
   isBalanced: true,
 };
 
-const mockTrialBalance = vi.fn(() => Promise.resolve(balancedReport));
+const mockTrialBalance = vi.fn((_params?: { asOfDate?: string; branchId?: number }) => Promise.resolve(balancedReport));
 
 vi.mock('@/features/accounting/api/accounting.api', () => ({
   financialReportsApi: {
-    trialBalance: (...args: unknown[]) => mockTrialBalance(...args),
+    // Lazy wrapper (not a direct assignment): vi.mock factories are hoisted
+    // above the mock const, so the reference must only be read at call time.
+    // The tuple-typed rest keeps the spread legal for tsc (TS2556).
+    trialBalance: (...args: Parameters<typeof mockTrialBalance>) => mockTrialBalance(...args),
   },
 }));
 
