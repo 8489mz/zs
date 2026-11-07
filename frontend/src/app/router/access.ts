@@ -456,9 +456,12 @@ export const routeFeatureMap: Record<string, string | null> = {
   'settings/reference': null,
   'settings/tax-integration': 'taxIntegration',
 
-  // Online Storefront
-  'online-orders': 'storefront',
-  '/online-orders': 'storefront',
+  // Online Storefront (the store itself and its settings stay feature-gated).
+  // INV-STOREFRONT-ORDERS: the recorded-orders list is NOT a storefront feature —
+  // it is the tenant's own order record, and the backend list endpoint already
+  // allows it to 'sales'. A tenant whose storefront is off (or was never on)
+  // must still reach its recorded orders here, so this route carries no feature
+  // requirement; the 'sales' permission in routePermissionMap still applies.
   storefront: 'storefront',
   '/storefront': 'storefront',
   'settings/storefront': 'storefront',

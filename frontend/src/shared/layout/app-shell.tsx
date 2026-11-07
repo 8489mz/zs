@@ -979,7 +979,7 @@ export function AppShell({ children }: PropsWithChildren) {
 
         // Strict bidirectional vertical isolation:
         if (isContractingVertical) {
-          if (['pos', 'cash-drawer', 'online-orders', 'kds', 'displays', 'signage', 'product-modifiers', 'delivery-reps', 'trade-in', 'imei-history', 'maintenance', 'sales', 'returns', 'sales-orders', 'price-lists'].includes(item.key)) return false;
+          if (['pos', 'cash-drawer', 'kds', 'displays', 'signage', 'product-modifiers', 'delivery-reps', 'trade-in', 'imei-history', 'maintenance', 'sales', 'returns', 'sales-orders', 'price-lists'].includes(item.key)) return false;
           if (item.key?.startsWith('maritime-') || item.key === 'maritime' || item.key === 'maritime-freight' || item.key?.startsWith('pharmacy-') || item.key?.startsWith('manufacturing-') || (item.key?.startsWith('import-') && settings?.importModuleEnabled !== true)) return false;
         }
 
@@ -987,7 +987,6 @@ export function AppShell({ children }: PropsWithChildren) {
           const maritimeDisallowed = [
             'pos',
             'cash-drawer',
-            'online-orders',
             'kds',
             'displays',
             'signage',
@@ -1035,27 +1034,27 @@ export function AppShell({ children }: PropsWithChildren) {
         }
 
         if (isManufacturingVertical) {
-          if (['pos', 'cash-drawer', 'online-orders', 'kds', 'displays', 'signage', 'product-modifiers', 'delivery-reps', 'trade-in', 'imei-history', 'maintenance', 'clothing'].includes(item.key)) return false;
+          if (['pos', 'cash-drawer', 'kds', 'displays', 'signage', 'product-modifiers', 'delivery-reps', 'trade-in', 'imei-history', 'maintenance', 'clothing'].includes(item.key)) return false;
           if ((item.key?.startsWith('contracting-') && settings?.contractingModuleEnabled !== true) || (item.key?.startsWith('maritime-') && settings?.maritimeFreightModuleEnabled !== true) || item.key?.startsWith('pharmacy-') || (item.key?.startsWith('import-') && settings?.importModuleEnabled !== true)) return false;
         }
 
         if (isImportVertical) {
-          if (['online-orders', 'kds', 'displays', 'signage', 'product-modifiers', 'delivery-reps', 'trade-in', 'imei-history', 'maintenance'].includes(item.key)) return false;
+          if (['kds', 'displays', 'signage', 'product-modifiers', 'delivery-reps', 'trade-in', 'imei-history', 'maintenance'].includes(item.key)) return false;
           if ((item.key?.startsWith('contracting-') && settings?.contractingModuleEnabled !== true) || (item.key?.startsWith('maritime-') && settings?.maritimeFreightModuleEnabled !== true) || item.key?.startsWith('pharmacy-') || item.key?.startsWith('manufacturing-')) return false;
         }
 
         if (isServicesVertical) {
-          if (['pos', 'cash-drawer', 'online-orders', 'kds', 'displays', 'signage', 'product-modifiers', 'products', 'product-categories', 'inventory', 'inventory-warehouses', 'inventory-bins', 'inventory-tree', 'inventory-issue-orders', 'inventory-issue-order-new', 'reports-inventory', 'delivery-reps', 'trade-in', 'imei-history', 'maintenance', 'purchases-reorder'].includes(item.key)) return false;
+          if (['pos', 'cash-drawer', 'kds', 'displays', 'signage', 'product-modifiers', 'products', 'product-categories', 'inventory', 'inventory-warehouses', 'inventory-bins', 'inventory-tree', 'inventory-issue-orders', 'inventory-issue-order-new', 'reports-inventory', 'delivery-reps', 'trade-in', 'imei-history', 'maintenance', 'purchases-reorder'].includes(item.key)) return false;
           if ((item.key?.startsWith('contracting-') && settings?.contractingModuleEnabled !== true) || (item.key?.startsWith('maritime-') && settings?.maritimeFreightModuleEnabled !== true) || item.key?.startsWith('pharmacy-') || item.key?.startsWith('manufacturing-') || (item.key?.startsWith('import-') && settings?.importModuleEnabled !== true)) return false;
         }
 
         if (isWholesaleVanVertical) {
-          if (['pos', 'cash-drawer', 'online-orders', 'kds', 'displays', 'signage', 'product-modifiers', 'trade-in', 'imei-history', 'maintenance', 'clothing'].includes(item.key)) return false;
+          if (['pos', 'cash-drawer', 'kds', 'displays', 'signage', 'product-modifiers', 'trade-in', 'imei-history', 'maintenance', 'clothing'].includes(item.key)) return false;
           if (item.key?.startsWith('contracting-') || item.key === 'contracting' || item.key?.startsWith('maritime-') || item.key === 'maritime' || item.key?.startsWith('pharmacy-') || item.key?.startsWith('manufacturing-') || (item.key?.startsWith('import-') && settings?.importModuleEnabled !== true)) return false;
         }
 
         if (isWarehousingVertical) {
-          if (['pos', 'cash-drawer', 'online-orders', 'kds', 'displays', 'signage', 'product-modifiers', 'trade-in', 'imei-history', 'maintenance', 'clothing', 'delivery-reps', 'van-sales-admin'].includes(item.key)) return false;
+          if (['pos', 'cash-drawer', 'kds', 'displays', 'signage', 'product-modifiers', 'trade-in', 'imei-history', 'maintenance', 'clothing', 'delivery-reps', 'van-sales-admin'].includes(item.key)) return false;
           if (item.key?.startsWith('contracting-') || item.key === 'contracting' || item.key?.startsWith('maritime-') || item.key === 'maritime' || item.key?.startsWith('pharmacy-') || item.key?.startsWith('manufacturing-') || (item.key?.startsWith('import-') && settings?.importModuleEnabled !== true)) return false;
         }
 
@@ -1065,7 +1064,11 @@ export function AppShell({ children }: PropsWithChildren) {
         if (item.key?.startsWith('pharmacy-') && (settings?.enablePharmacyModule !== true || !hasFeature('pharmacy'))) return false;
         if (item.key?.startsWith('manufacturing-') && (settings?.manufacturingModuleEnabled !== true || !hasFeature('manufacturing'))) return false;
         if (item.key === 'services' && (settings?.servicesModuleEnabled !== true || (!hasFeature('purchases') && !hasFeature('services')))) return false;
-        if (item.key === 'online-orders' && (!hasFeature('storefront') || settings?.storefrontModuleEnabled === false)) return false;
+        // INV-STOREFRONT-ORDERS: no feature/settings gate on the recorded-orders list —
+        // it is the tenant's own order record, not a storefront feature. 'online-orders'
+        // is removed from every per-vertical disallowed list above for the same reason,
+        // so an admin can always reach orders recorded while the storefront was on.
+        // The 'sales' permission still gates the item via canAccessNavigationItem.
         if (item.key === 'installments' && (!hasFeature('installments') || settings?.installmentsModuleEnabled === false)) return false;
         if (item.key === 'vat-declaration' && !isContractingVertical && !isMaritimeVertical && !isManufacturingVertical && !isImportVertical && (!hasFeature('vat_declaration') || settings?.taxDeclarationModuleEnabled === false)) return false;
         // Delivery Reps (Retail / Stores / Last-Mile Courier):
@@ -1137,52 +1140,55 @@ export function AppShell({ children }: PropsWithChildren) {
   const navigationMap = useMemo(() => new Map(visibleNavigationItems.map((item) => [item.key, item])), [visibleNavigationItems]);
   const primaryNavigationKeys = useMemo(() => {
     const isPlatformAdminUser = isPlatformAdmin(user);
-    const hasStorefront = isPlatformAdminUser || Boolean(tenant?.features?.includes('storefront'));
-    const storefrontActive = hasStorefront && settings?.storefrontModuleEnabled !== false;
     const hasReports = isPlatformAdminUser || Boolean(tenant?.features?.includes('reports'));
     const dashKeys = hasReports ? ['dashboard'] : [];
 
     const currentVertical = resolveCurrentVertical(tenant, settings);
     const isWholesaleVanVertical = currentVertical === 'wholesale_van';
 
+    // INV-STOREFRONT-ORDERS: 'online-orders' is the tenant's own recorded-orders
+    // list, not a storefront feature — it is a primary shortcut in every vertical
+    // (and unconditional below), so an admin can always reach orders recorded
+    // while the storefront was on. The 'sales' permission still gates it in the
+    // sidebar filter, and the route itself is permission-gated too.
     if (currentVertical === 'contracting') {
-      return [...dashKeys, 'contracting-projects', 'contracting-boq'];
+      return [...dashKeys, 'online-orders', 'contracting-projects', 'contracting-boq'];
     }
 
     if (currentVertical === 'maritime') {
-      return dashKeys;
+      return [...dashKeys, 'online-orders'];
     }
 
     if (currentVertical === 'manufacturing') {
-      return [...dashKeys, 'manufacturing-work-orders', 'manufacturing-boms'];
+      return [...dashKeys, 'online-orders', 'manufacturing-work-orders', 'manufacturing-boms'];
     }
 
     if (currentVertical === 'import_export') {
       const hasPos = settings?.posModuleEnabled !== false;
-      return [...dashKeys, ...(hasPos ? ['pos', 'cash-drawer'] : [])];
+      return [...dashKeys, 'online-orders', ...(hasPos ? ['pos', 'cash-drawer'] : [])];
     }
 
     if (isWholesaleVanVertical) {
-      return [...dashKeys, 'van-sales-admin'];
+      return [...dashKeys, 'online-orders', 'van-sales-admin'];
     }
 
     if (currentVertical === 'warehousing') {
-      return [...dashKeys, 'inventory', 'inventory-warehouses', 'purchases'];
+      return [...dashKeys, 'online-orders', 'inventory', 'inventory-warehouses', 'purchases'];
     }
 
     if (currentVertical === 'services') {
       const hasPos = Boolean(tenant?.features?.includes('pos'));
-      return [...dashKeys, 'services', ...(hasPos ? ['pos', 'cash-drawer'] : [])];
+      return [...dashKeys, 'online-orders', 'services', ...(hasPos ? ['pos', 'cash-drawer'] : [])];
     }
 
     if (settings?.posModuleEnabled === false) {
       return [
         ...dashKeys,
-        ...(storefrontActive ? ['online-orders'] : []),
+        'online-orders',
         ...(settings?.purchasesModuleEnabled ? ['purchases'] : []),
       ];
     }
-    return [...dashKeys, 'pos', ...(storefrontActive ? ['online-orders'] : []), 'cash-drawer'];
+    return [...dashKeys, 'pos', 'online-orders', 'cash-drawer'];
   }, [settings?.businessIndustry, settings?.activityType, settings?.contractingModuleEnabled, settings?.maritimeFreightModuleEnabled, settings?.importModuleEnabled, settings?.posModuleEnabled, settings?.purchasesModuleEnabled, settings?.storefrontModuleEnabled, settings?.deliveryRepsModuleEnabled, settings?.vanSalesModuleEnabled, settings?.deliveryFleetModuleEnabled, tenant?.features, tenant?.activityType, tenant?.pillar, tenant?.businessName, user]);
 
   const sidebarGroups = useMemo<SidebarGroupDefinition[]>(() => {

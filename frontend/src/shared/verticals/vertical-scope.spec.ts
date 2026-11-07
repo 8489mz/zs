@@ -185,7 +185,10 @@ describe('Vertical Scope & Enterprise Isolation Constitution', () => {
     expect(vertical).toBe('warehousing');
     expect(isRouteAllowedInVertical(vertical, '/pos')).toBe(false);
     expect(isRouteAllowedInVertical(vertical, '/cash-drawer')).toBe(false);
-    expect(isRouteAllowedInVertical(vertical, '/online-orders')).toBe(false);
+    // INV-STOREFRONT-ORDERS: the recorded-orders list stays reachable even for a
+    // warehousing tenant, so an admin can see orders recorded while the storefront
+    // was on; the store itself stays out of this vertical.
+    expect(isRouteAllowedInVertical(vertical, '/online-orders')).toBe(true);
     expect(isRouteAllowedInVertical(vertical, '/inventory-warehouses')).toBe(true);
   });
 
@@ -226,7 +229,8 @@ describe('Vertical Scope & Enterprise Isolation Constitution', () => {
     expect(isRouteAllowedInVertical(vertical, '/pos')).toBe(false);
     expect(isRouteAllowedInVertical(vertical, 'pos')).toBe(false);
     expect(isRouteAllowedInVertical(vertical, '/cash-drawer')).toBe(false);
-    expect(isRouteAllowedInVertical(vertical, '/online-orders')).toBe(false);
+    // INV-STOREFRONT-ORDERS: same recorded-orders carve-out as above.
+    expect(isRouteAllowedInVertical(vertical, '/online-orders')).toBe(true);
     expect(isRouteAllowedInVertical(vertical, '/kds')).toBe(false);
     expect(isRouteAllowedInVertical(vertical, '/displays')).toBe(false);
     expect(isRouteAllowedInVertical(vertical, '/inventory')).toBe(true);

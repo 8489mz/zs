@@ -288,6 +288,15 @@ function normalizeKey(target: string): string {
 export function isRouteAllowedInVertical(vertical: BusinessVertical, target: string, settings?: any): boolean {
   const key = normalizeKey(target);
 
+  // INV-STOREFRONT-ORDERS: the recorded-orders list is the tenant's own order record,
+  // not a storefront feature — every vertical allows it so an admin can always reach
+  // orders recorded while the storefront was on. The store itself, its settings and
+  // marketplaces stay blocked per vertical below. The page is still permission-gated
+  // to 'sales' by the router (routePermissionMap).
+  if (key === 'online-orders') {
+    return true;
+  }
+
   // Specific settings routes that belong exclusively to retail e-commerce or retail warehouse management
   if (
     key === 'settings/storefront' ||

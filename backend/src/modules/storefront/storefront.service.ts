@@ -16,6 +16,11 @@ import { SalesService } from '../sales/sales.service';
 import { KdsService } from '../sales/services/kds.service';
 import { StorefrontMediaService } from './storefront-media.service';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
+import { PlanFeatureService } from '../../core/auth/services/plan-feature.service';
+import {
+  isStorefrontEntitledForOrders,
+  STOREFRONT_NOT_ENTITLED_MESSAGE,
+} from './engines/storefront-entitlement.engine';
 import { CustomerOrderRefDto } from './dto/customer-order-lookup.dto';
 import { resolveOrderLinePrice, formatVariantLineName } from './engines/online-order-pricing.engine';
 import { computeTableBillTotals } from './engines/table-bill.engine';
@@ -181,6 +186,10 @@ export class StorefrontService {
     private readonly kdsService: KdsService,
     private readonly media: StorefrontMediaService,
     @Optional() private readonly whatsappService?: WhatsAppGatewayService,
+    // Optional only so hand-built test doubles (4-arg construction) keep compiling;
+    // under Nest DI the global AuthFoundationModule always provides it, and the gate
+    // below fails closed when it is absent.
+    @Optional() private readonly planFeatureService?: PlanFeatureService,
   ) {}
 
   /**
@@ -1425,6 +1434,15 @@ export class StorefrontService {
 
     if (settings.get('storefront_enabled') === 'false') {
       throw new BadRequestException('المتجر الإلكتروني متوقف حالياً عن استقبال الطلبات');
+    }
+
+    // INV-STOREFRONT-ORDERS: the toggle above is tenant-controlled and never proved
+    // the storefront app is part of this tenant's plan/activity — a warehousing tenant
+    // took orders while its plan excludes the storefront. New orders are refused here,
+    // before the idempotency replay and before any stock or money moves. Already-recorded
+    // orders are untouched and stay visible to admin in /online-orders.
+    if (!this.planFeatureService || !isStorefrontEntitledForOrders(tenant, this.planFeatureService)) {
+      throw new BadRequestException(STOREFRONT_NOT_ENTITLED_MESSAGE);
     }
 
     const isDineIn = dto.orderType === 'dine_in' || Boolean(dto.tableNumber);

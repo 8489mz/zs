@@ -266,7 +266,7 @@ describe('AppShell', () => {
     unmountL2();
   });
 
-  it('strictly isolates warehousing mode: hides POS, cash drawer, and online orders even if slug is almhnds', () => {
+  it('strictly isolates warehousing mode: hides POS and cash drawer even if slug is almhnds', () => {
     useAuthStore.setState({
       user: { ...buildUser(), id: '1', username: 'admin', role: 'admin', permissions: ['*'], displayName: 'Admin' },
       tenant: {
@@ -297,7 +297,10 @@ describe('AppShell', () => {
     const keys = Array.from(document.querySelectorAll('.sidebar-nav a[data-key]')).map((el) => el.getAttribute('data-key'));
     expect(keys).not.toContain('pos');
     expect(keys).not.toContain('cash-drawer');
-    expect(keys).not.toContain('online-orders');
+    // INV-STOREFRONT-ORDERS: the recorded-orders list stays in the nav even for a
+    // warehousing tenant, so an admin can reach orders recorded while the
+    // storefront was on; POS and the cash drawer stay hidden.
+    expect(keys).toContain('online-orders');
     expect(keys).toContain('inventory-warehouses');
     expect(keys).toContain('purchases');
     unmount();
