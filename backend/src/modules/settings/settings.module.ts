@@ -24,9 +24,10 @@ import { TenantTransferService } from './services/tenant-transfer.service';
 import { TenantTransferController } from './controllers/tenant-transfer.controller';
 import { DiagnosticsSchedulerService } from './services/diagnostics-scheduler.service';
 import { AiCopilotModule } from '../ai-copilot/ai-copilot.module';
+import { AccountingModule } from '../accounting/accounting.module';
 
 @Module({
-  imports: [AiCopilotModule],
+  imports: [AiCopilotModule, AccountingModule],
   controllers: [
     SettingsController,
     SettingsAdminController,

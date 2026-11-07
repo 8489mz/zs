@@ -1,4 +1,4 @@
-import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, Optional } from '@nestjs/common';
 import { Kysely, sql } from '../../../database/kysely';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -9,6 +9,10 @@ import { formatBranchStockLocationName } from '../../../common/utils/branch-stoc
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { resolveImportProductNames } from './settings-import.utils';
+import { AccountingPostingService } from '../../accounting/accounting-posting.service';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { stockMovementTotal } from '../../catalog/engines/stock-movement-total.engine';
 
 type DbExecutor = Kysely<Database>;
 type TenantScope = { tenantId: string; accountId: string };
@@ -110,6 +114,7 @@ export class SettingsImportService {
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly audit: AuditService,
+    @Optional() private readonly accountingPosting?: AccountingPostingService,
   ) {}
 
   assertAdmin(auth?: AuthContext | null): asserts auth is AuthContext {
@@ -452,6 +457,62 @@ export class SettingsImportService {
     await db.updateTable('suppliers').set({ balance: amount, updated_at: sql`NOW()` }).where('id', '=', supplierId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
   }
 
+  /**
+   * INV-GL-INVENTORY-VALUE: imported opening stock is a real acquisition
+   * of inventory value, so it posts the same opening-stock journal the
+   * single-product create path posts (Dr inventory 1140 / Cr opening
+   * capital 3100, at the tenant's book digits) inside the import's own
+   * transaction. Before this fix both import entry points wrote stock
+   * with no journal at all: importProducts created products with an
+   * initial stock_qty and importOpeningStock re-set scoped quantities,
+   * so the stock value on hand (sum stock_qty x cost_price) grew while
+   * the GL inventory balance only moved on purchases and sales — the
+   * live test10k gap (GL 232.71 against 24,050.00 in the main
+   * warehouse). A decrease posts the mirror entry (Dr 3100 / Cr 1140).
+   * Zero-value stock posts nothing, exactly like the single-create
+   * path. Prospective only: stock imported before this fix stays unposted.
+   */
+  private async postImportedOpeningStock(
+    trx: DbExecutor,
+    opts: {
+      productId: number;
+      signedQty: number;
+      unitCost: number;
+      locationId: number | null;
+      branchId: number | null;
+      sourceType: string;
+      sourceId: number;
+      actor: AuthContext;
+    },
+  ): Promise<void> {
+    if (!this.accountingPosting) {
+      throw new AppError('Accounting services are required for opening stock', 'OPENING_STOCK_LEDGER_UNAVAILABLE', 500);
+    }
+    const scope = this.scope(opts.actor);
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+    const amount = stockMovementTotal(opts.signedQty, opts.unitCost, digits);
+    if (amount === 0) return;
+    const accounts = await trx.selectFrom('accounting_accounts').select(['id', 'code'])
+      .where('tenant_id', '=', scope.tenantId).where('code', 'in', ['1140', '3100'])
+      .where('is_active', '=', true).execute();
+    const byCode = new Map(accounts.map((account) => [account.code, Number(account.id)]));
+    if (!byCode.get('1140') || !byCode.get('3100')) {
+      throw new AppError('Inventory or opening capital account is unavailable', 'OPENING_STOCK_ACCOUNT_MISSING', 422);
+    }
+    const value = Math.abs(amount);
+    const increase = opts.signedQty > 0;
+    await this.accountingPosting.postDomainJournal(trx, {
+      sourceType: opts.sourceType, sourceId: opts.sourceId,
+      tenantId: scope.tenantId, accountId: scope.accountId, entryDate: new Date(),
+      description: increase ? `رصيد افتتاحي مستورد للصنف ${opts.productId}` : `تخفيض رصيد افتتاحي مستورد للصنف ${opts.productId}`,
+      branchId: opts.branchId, locationId: opts.locationId, createdBy: opts.actor.userId,
+      lines: [
+        { accountId: increase ? byCode.get('1140')! : byCode.get('3100')!, debit: value, credit: 0, description: increase ? 'إثبات مخزون افتتاحي مستورد' : 'تخفيض مقابل المخزون الافتتاحي المستورد', partnerType: 'none', partnerId: null, branchId: opts.branchId, locationId: opts.locationId },
+        { accountId: increase ? byCode.get('3100')! : byCode.get('1140')!, debit: 0, credit: value, description: increase ? 'مقابل المخزون الافتتاحي ضمن رأس المال' : 'تخفيض مخزون افتتاحي مستورد', partnerType: 'none', partnerId: null, branchId: opts.branchId, locationId: opts.locationId },
+      ],
+    });
+  }
+
   async importProducts(rows: unknown[], actor: AuthContext): Promise<Record<string, unknown>> {
     if (!Array.isArray(rows)) throw new AppError('rows must be an array', 'IMPORT_ROWS_INVALID', 400);
     if (rows.length > MAX_IMPORT_ROWS_PER_REQUEST) throw new AppError('rows exceed the 1000-row per-request limit', 'IMPORT_ROWS_TOO_MANY', 400);
@@ -543,6 +604,36 @@ export class SettingsImportService {
           productId = Number(insertedProduct.id);
           if (initialStockQty > 0 && locationId != null) {
             await trx.insertInto('product_location_stock').values({ product_id: productId, branch_id: locationBranchId, location_id: locationId, qty: initialStockQty, ...this.tenantFields(actor) }).execute();
+          }
+          if (initialStockQty > 0) {
+            // Opening stock must appear in the perpetual ledger, otherwise
+            // the stock value and the GL inventory balance diverge from the
+            // first imported row (INV-GL-INVENTORY-VALUE). Same movement +
+            // journal as the single-product create path.
+            const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+            const openingTotal = stockMovementTotal(initialStockQty, costPrice, bookDigits);
+            await trx.insertInto('stock_movements').values({
+              product_id: productId,
+              movement_type: 'opening_balance',
+              qty: initialStockQty,
+              before_qty: 0,
+              after_qty: initialStockQty,
+              unit_cost: costPrice,
+              total_cost: openingTotal,
+              reason: 'opening_balance',
+              note: 'رصيد افتتاحي عند استيراد الصنف',
+              reference_type: 'product',
+              reference_id: productId,
+              branch_id: locationBranchId,
+              location_id: locationId,
+              created_by: actor.userId,
+              ...this.tenantFields(actor),
+            } as any).execute();
+            await this.postImportedOpeningStock(trx, {
+              productId, signedQty: initialStockQty, unitCost: costPrice,
+              locationId, branchId: locationBranchId,
+              sourceType: 'catalog_opening_stock', sourceId: productId, actor,
+            });
           }
           inserted += 1;
         }
@@ -939,7 +1030,7 @@ export class SettingsImportService {
 
         const barcode = normalizeBarcodeText(row.barcode);
 
-        let productQuery = trx.selectFrom('products').select(['id', 'name', 'stock_qty'])
+        let productQuery = trx.selectFrom('products').select(['id', 'name', 'stock_qty', 'cost_price'])
           .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
           .where('is_active', '=', true);
 
@@ -963,12 +1054,24 @@ export class SettingsImportService {
         const actualDelta = stockChange.scopeAfter - stockChange.scopeBefore;
         if (actualDelta === 0) continue;
 
-        await trx.insertInto('stock_movements').values({
+        // The movement carries the SIGNED delta at the product's cost, so
+        // the stored total and the posted journal leg agree, and the WAC
+        // pool (stockMovementGlobalDelta) moves in the right direction:
+        // the old Math.abs(delta) inflated the pool on a decrease.
+        // INV-GL-INVENTORY-VALUE: the opening-stock re-set posts the same
+        // Dr 1140 / Cr 3100 journal (mirrored on a decrease) as a new
+        // product's opening stock, so GL inventory tracks the stock value.
+        const openingDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+        const openingUnitCost = Number(product.cost_price || 0);
+        const openingTotal = stockMovementTotal(actualDelta, openingUnitCost, openingDigits);
+        const insertedMovement = await trx.insertInto('stock_movements').values({
           product_id: Number(product.id),
           movement_type: 'opening_stock',
-          qty: Math.abs(actualDelta),
+          qty: actualDelta,
           before_qty: stockChange.scopeBefore,
           after_qty: stockChange.scopeAfter,
+          unit_cost: openingUnitCost,
+          total_cost: openingTotal,
           reason: 'inventory_adjustment',
           note: 'تسوية مخزون',
           reference_type: 'product',
@@ -978,7 +1081,12 @@ export class SettingsImportService {
           branch_id: branchId,
           location_id: locationId,
           ...this.tenantFields(actor),
-        }).execute();
+        }).returning('id').executeTakeFirstOrThrow();
+        await this.postImportedOpeningStock(trx, {
+          productId: Number(product.id), signedQty: actualDelta, unitCost: openingUnitCost,
+          locationId, branchId, sourceType: 'import_opening_stock',
+          sourceId: Number(insertedMovement.id), actor,
+        });
         updated += 1;
       }
 

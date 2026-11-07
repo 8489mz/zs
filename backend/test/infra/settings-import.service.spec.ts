@@ -52,6 +52,12 @@ class FakeSelectBuilder {
     if (this.table === 'stock_locations') {
       return this.state.stock_locations.filter((row) => row.tenant_id === tenantId && row.is_active !== false);
     }
+    if (this.table === 'accounting_accounts') {
+      return [
+        { id: 1140, code: '1140', is_active: true },
+        { id: 3100, code: '3100', is_active: true },
+      ];
+    }
     return [];
   }
   async executeTakeFirst() {
@@ -178,8 +184,15 @@ class FakeDb {
 function createService(failOnCustomerNumber: number | null = null) {
   const db = new FakeDb(createState(), failOnCustomerNumber);
   const auditCalls: string[] = [];
-  const service = new SettingsImportService(db as any, { log: async (action: string) => { auditCalls.push(action); } } as any);
-  return { db, service, auditCalls };
+  const journals: Array<Record<string, any>> = [];
+  const postingStub = {
+    postDomainJournal: async (_trx: unknown, params: Record<string, any>) => {
+      journals.push(params);
+      return 999;
+    },
+  };
+  const service = new SettingsImportService(db as any, { log: async (action: string) => { auditCalls.push(action); } } as any, postingStub as any);
+  return { db, service, auditCalls, journals };
 }
 
 const actor = { userId: 7, username: 'owner', role: 'super_admin', permissions: ['settings'], tenantId, accountId } as any;
@@ -261,7 +274,7 @@ async function run(): Promise<void> {
 
   {
     // Test importProducts with units (Piece + Carton) from Excel columns
-    const { db, service } = createService();
+    const { db, service, journals } = createService();
     const result = await service.importProducts([
       {
         'اسم الصنف (إجباري)': 'شاحن سامسونج أصلي',
@@ -286,6 +299,17 @@ async function run(): Promise<void> {
     assert.equal(Number(db.state.products[0]?.cost_price), 500);
     assert.equal(Number(db.state.products[0]?.retail_price), 750);
     assert.equal(Number(db.state.products[0]?.wholesale_price), 600);
+
+    // INV-GL-INVENTORY-VALUE: the 24 units at cost 500 above must post
+    // the opening-stock journal Dr 1140 / Cr 3100 for 12,000 — the
+    // fixture that used to create stock with no journal at all.
+    assert.equal(journals.length, 1, 'imported opening stock posts one journal');
+    assert.equal(journals[0].sourceType, 'catalog_opening_stock', 'journal source is the product opening stock');
+    assert.deepEqual(
+      (journals[0].lines as Array<Record<string, unknown>>).map((line) => [line.accountId, line.debit, line.credit]),
+      [[1140, 12000, 0], [3100, 0, 12000]],
+      '24 units at 500.00 debit 1140 12,000.00 and credit 3100 12,000.00',
+    );
 
     // Verify units created
     assert.equal(db.state.product_units.length, 2);
@@ -329,6 +353,8 @@ async function run(): Promise<void> {
     assert.ok(updatedExtraUnit);
     assert.equal(updatedExtraUnit.multiplier, 24);
     assert.equal(updatedExtraUnit.is_purchase_unit_default, true);
+    // The existing-product update posts no new journal.
+    assert.equal(journals.length, 1, 'updating an existing product posts no journal');
 
     // Test location alias: When tenant has "رصيد الفرع الرئيسي", importing with "المخزن الرئيسي" maps to it without duplicate location
     db.state.stock_locations = [
@@ -347,6 +373,8 @@ async function run(): Promise<void> {
 
     assert.equal(locImportResult.ok, true);
     assert.equal(locImportResult.inserted, 1);
+    // The zero-cost mouse posts no opening-stock journal.
+    assert.equal(journals.length, 1, 'zero-cost import posts no journal');
     // Assert no second location was created!
     assert.equal(db.state.stock_locations.length, 1, 'Must NOT create duplicate location when alias or single location matches');
     assert.equal(db.state.stock_locations[0]?.name, 'رصيد الفرع الرئيسي');
