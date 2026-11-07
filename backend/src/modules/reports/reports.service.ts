@@ -165,6 +165,9 @@ export class ReportsService {
           sql<number>`count(*)`.as('sales_count'),
           sql<number>`coalesce(sum(total), 0)`.as('sales_total'),
           sql<number>`coalesce(sum(tax_amount), 0)`.as('sales_tax_total'),
+          // INV-SALES-REPORT-RETURNS-CARD: invoice discounts granted on
+          // posted sales in the period feed the returns-and-discounts card.
+          sql<number>`coalesce(sum(discount), 0)`.as('sales_discounts_total'),
           sql<number>`count(*) filter (where ${freelanceCondition})`.as('freelance_count'),
           sql<number>`coalesce(sum(delivery_fee) filter (where ${freelanceCondition}), 0)`.as('freelance_total'),
           sql<number>`count(*) filter (where ${storeFleetCondition})`.as('store_fleet_count'),
@@ -406,6 +409,7 @@ export class ReportsService {
       operatingMaterialsTotal: Number((operatingMaterialsRow as any)?.materials_total || 0),
       salesReturnsTotal,
       purchaseReturnsTotal,
+      salesDiscountsTotal: Number((salesAggRow as any)?.sales_discounts_total || 0),
       cashIn: Number((treasuryAggRow as any)?.cash_in || 0),
       cashOut: Number((treasuryAggRow as any)?.cash_out || 0),
       cogs: cogsOverride,

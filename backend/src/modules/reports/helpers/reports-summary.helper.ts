@@ -18,6 +18,12 @@ export type SummaryTotals = {
   operatingMaterialsTotal?: number;
   salesReturnsTotal: number;
   purchaseReturnsTotal: number;
+  // INV-SALES-REPORT-RETURNS-CARD: the sales-report "returns and discounts"
+  // card is sales returns + sales discounts. Purchase returns must never
+  // enter it (they are a purchase-side figure, exposed separately as
+  // returns.purchasesTotal). Optional so direct buildCommercialSummary
+  // callers that predate the discount total keep compiling.
+  salesDiscountsTotal?: number;
   salesTaxTotal?: number;
   salesReturnTaxTotal?: number;
   cashIn: number;
@@ -49,6 +55,9 @@ type SummaryReturnRow = {
 
 type SummaryMoneyRow = {
   total?: string | number | null;
+  // Invoice-level discount granted on a posted sale (sales.discount).
+  // Only sales rows carry it; summed into salesDiscountsTotal.
+  discount?: string | number | null;
 };
 
 type SummaryExpenseRow = {
@@ -84,7 +93,13 @@ export function buildTopProducts(rows: TopProductAccumulatorRow[], limit = 10): 
 }
 
 export function buildCommercialSummary(counts: SummaryCounts, totals: SummaryTotals) {
-  const returnsTotal = toMoney(totals.salesReturnsTotal + totals.purchaseReturnsTotal);
+  // INV-SALES-REPORT-RETURNS-CARD: the returns-and-discounts card is sales
+  // returns + sales discounts only. Adding purchase returns here showed
+  // 250.00 (150.00 sale returns + 100.00 purchase returns) for a card whose
+  // correct value is 165.00 (150.00 + 15.00 discounts). Purchase returns
+  // stay visible separately as returns.purchasesTotal.
+  const salesDiscountsTotal = toMoney(totals.salesDiscountsTotal || 0);
+  const returnsTotal = toMoney(totals.salesReturnsTotal + salesDiscountsTotal);
   const merchandiseSalesTotal = toMoney(totals.salesTotal);
   const servicesTotal = toMoney(totals.servicesTotal);
   const revenueTotal = toMoney(merchandiseSalesTotal + servicesTotal);
@@ -133,6 +148,7 @@ export function buildCommercialSummary(counts: SummaryCounts, totals: SummaryTot
       salesCount: counts.salesReturnCount,
       purchasesCount: counts.purchaseReturnCount,
       salesTotal: totals.salesReturnsTotal,
+      discountsTotal: salesDiscountsTotal,
       purchasesTotal: totals.purchaseReturnsTotal,
     },
     treasury: {
@@ -214,6 +230,10 @@ export function buildReportSummaryPayload(args: {
   const expensesTotal = totalsOverride?.expensesTotal != null ? toMoney(totalsOverride.expensesTotal) : sumMoney(expensesRows, (row) => row.amount);
   const salesReturnsTotal = totalsOverride?.salesReturnsTotal != null ? toMoney(totalsOverride.salesReturnsTotal) : sumMoney(splitReturns.sales, (row) => row.total);
   const purchaseReturnsTotal = totalsOverride?.purchaseReturnsTotal != null ? toMoney(totalsOverride.purchaseReturnsTotal) : sumMoney(splitReturns.purchases, (row) => row.total);
+  // INV-SALES-REPORT-RETURNS-CARD: sum the invoice discount granted on
+  // posted sales in the period (sales.discount, already selected by the
+  // row-evaluation path). The aggregate path supplies it via override.
+  const salesDiscountsTotal = totalsOverride?.salesDiscountsTotal != null ? toMoney(totalsOverride.salesDiscountsTotal) : sumMoney(salesRows, (row) => row.discount);
   
   const salesTaxTotal = totalsOverride?.salesTaxTotal != null
     ? toMoney(totalsOverride.salesTaxTotal)
@@ -262,6 +282,7 @@ export function buildReportSummaryPayload(args: {
       operatingMaterialsTotal: totalsOverride?.operatingMaterialsTotal ?? 0,
       salesReturnsTotal,
       purchaseReturnsTotal,
+      salesDiscountsTotal,
       salesTaxTotal,
       salesReturnTaxTotal,
       cashIn,

@@ -26,7 +26,7 @@ class FakeDb {
   const service = new ReportsService(new FakeDb({
     sales: [
       { id: 1, total: 1000, discount: 0, branch_id: 1, location_id: 1, created_at: '2026-04-01T10:00:00.000Z' },
-      { id: 2, total: 500, discount: 0, branch_id: 1, location_id: 1, created_at: '2026-04-02T10:00:00.000Z' },
+      { id: 2, total: 500, discount: 20, branch_id: 1, location_id: 1, created_at: '2026-04-02T10:00:00.000Z' },
     ],
     purchases: [
       { id: 1, total: 700, branch_id: 1, location_id: 1, created_at: '2026-04-01T10:00:00.000Z' },
@@ -61,7 +61,11 @@ class FakeDb {
   assert.equal((summary.purchases as any).netPurchases, 650);
   assert.equal((summary.expenses as any).total, 150);
   assert.equal((summary.expenses as any).count, 2);
-  assert.equal((summary.returns as any).total, 130);
+  // INV-SALES-REPORT-RETURNS-CARD: the card is sales returns (80) + sales
+  // discounts (20) = 100. The old expectation, 130, folded the 50.00
+  // purchase return into a sales card; purchase returns stay visible only
+  // as returns.purchasesTotal below.
+  assert.equal((summary.returns as any).total, 100);
   assert.equal((summary.returns as any).salesTotal, 80);
   assert.equal((summary.returns as any).purchasesTotal, 50);
   assert.equal((summary.returns as any).salesCount, 1);
