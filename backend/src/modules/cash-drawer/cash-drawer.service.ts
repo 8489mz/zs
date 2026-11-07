@@ -862,13 +862,18 @@ export class CashDrawerService {
     }
     query = sql<ShiftRow>`${query} order by s.id desc`;
     const result = await query.execute(this.db);
+    // INV-CLOSED-SHIFT-ROW: every row is hydrated, not only open
+    // ones. Closed and pending_review rows used to be returned as
+    // the raw database row, and this SELECT does not select the
+    // sales-total columns at all, so the row showed sales 0.00 and
+    // the frontend recomputed the difference from the zeroed cash
+    // sales (the reported +625.80). hydrateShiftRow already keeps a
+    // non-open shift's stored expected_cash, so the frozen close
+    // figure is preserved; only the sales breakdown is computed
+    // live, over the same frozen [created_at, closed_at] window the
+    // close itself used.
     const hydratedRows = await Promise.all(
-      (result.rows ?? []).map((row) => {
-        if (String(row.status || 'open') === 'open') {
-          return this.hydrateShiftRow(row, auth);
-        }
-        return row;
-      }),
+      (result.rows ?? []).map((row) => this.hydrateShiftRow(row, auth)),
     );
     const mapped = hydratedRows.map((row) => mapCashDrawerShiftRow(row));
     if (auth.role === 'cashier') {
