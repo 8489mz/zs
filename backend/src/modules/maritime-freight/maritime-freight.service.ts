@@ -6,6 +6,7 @@ import { lockAccountingPeriod } from '../accounting/accounting-period-lock';
 import { resolveFxRate } from '../accounting/fx-rate-resolution';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { convertFxAmount } from '../accounting/engines/fx-conversion.engine';
+import { resolveSaleTaxRate } from '../sales/engines/sale-tax-rate.engine';
 import { forexOffsetCode } from '../accounting/engines/forex-difference.engine';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { Inject, Injectable, Logger, NotFoundException, BadRequestException, UnprocessableEntityException } from '@nestjs/common';
@@ -74,6 +75,38 @@ export class MaritimeFreightService {
     private readonly whatsAppGatewayService: WhatsAppGatewayService,
     private readonly accountingPosting: AccountingPostingService,
   ) {}
+
+  /**
+   * T2: the tenant's configured tax rate for freight charges, read
+   * on the caller-supplied queryable (the transaction handle inside
+   * createQuotation / createJob / updateJobCharges -- never the pool
+   * handle inside an open transaction). Mirrors the sale flow's
+   * `taxRate` first, legacy `tax_rate` fallback, with the same
+   * JSON-parse-with-raw-fallback read as the settings rows are
+   * JSON-encoded. Returns unknown: resolveSaleTaxRate coerces and
+   * treats an absent / unparseable configured rate as 0, so only
+   * an exempt (0) charge passes until the tenant configures a rate.
+   */
+  private async resolveTenantConfiguredTaxRate(
+    queryable: Kysely<Database>,
+    tenantId: string,
+  ): Promise<unknown> {
+    const rows = await queryable
+      .selectFrom('settings')
+      .select(['key', 'value'])
+      .where('tenant_id', '=', tenantId)
+      .where('key', 'in', ['taxRate', 'tax_rate'])
+      .execute();
+    const byKey = new Map<string, unknown>();
+    for (const row of rows) {
+      try {
+        byKey.set(row.key, JSON.parse(row.value));
+      } catch {
+        byKey.set(row.key, row.value);
+      }
+    }
+    return byKey.get('taxRate') ?? byKey.get('tax_rate');
+  }
 
   private async assertJobCanClose(tenantId: string, jobId: string) {
     const [unbilledCharge, unpostedCarrierInvoice, journals, containers, invoicedCharges] = await Promise.all([
@@ -1848,11 +1881,16 @@ export class MaritimeFreightService {
         .execute();
 
       if (dto.charges && Array.isArray(dto.charges) && dto.charges.length > 0) {
+        // T2: the charge tax rate is the tenant's configured rate
+        // (or 0 = exempt) through the canonical engine -- never
+        // whatever the client sent. Resolved once per quotation on
+        // the transaction handle; the cost basis (tot) is unchanged.
+        const configuredTaxRate = await this.resolveTenantConfiguredTaxRate(trx, tenantId);
         for (const chg of dto.charges) {
           const qty = Number(chg.quantity || 1);
           const rate = Number(chg.unitRate || 0);
           const tot = Number(chg.totalAmount || (qty * rate));
-          const taxPct = Number(chg.taxRatePercent || 0);
+          const taxPct = resolveSaleTaxRate(chg.taxRatePercent, configuredTaxRate);
           const taxAmt = Number(chg.taxAmount ?? (tot * taxPct / 100));
           await trx
             .insertInto('maritime_quotation_charges')
@@ -2136,11 +2174,16 @@ export class MaritimeFreightService {
       }
 
       if (dto.charges && Array.isArray(dto.charges) && dto.charges.length > 0) {
+        // T2: same canonical gate as createQuotation, on the sell
+        // basis -- the charge rate must be the tenant's configured
+        // rate or 0 (exempt); any other client-sent rate throws
+        // SALE_TAX_RATE_MISMATCH and rolls the job back.
+        const configuredTaxRate = await this.resolveTenantConfiguredTaxRate(trx, tenantId);
         for (const chg of dto.charges) {
           const cost = Number(chg.costAmount || 0);
           const sell = Number(chg.sellAmount || 0);
           const profit = Number(chg.profitAmount ?? (sell - cost));
-          const taxPct = Number(chg.taxRatePercent || 0);
+          const taxPct = resolveSaleTaxRate(chg.taxRatePercent, configuredTaxRate);
           const taxAmt = Number(chg.taxAmount ?? (sell * taxPct / 100));
           await trx
             .insertInto('maritime_job_charges')
@@ -6081,11 +6124,16 @@ export class MaritimeFreightService {
         }
       }
 
+      // T2: same canonical gate as createQuotation / createJob, on
+      // the sell basis -- re-saving a charge re-validates its rate
+      // against the tenant's configured rate (or 0 = exempt).
+      // Invoiced rows stay frozen above and never reach this.
+      const configuredTaxRate = await this.resolveTenantConfiguredTaxRate(trx, tenantId);
       const computeValues = (chg: JobChargeDto) => {
         const cost = Number(chg.costAmount || 0);
         const sell = Number(chg.sellAmount || 0);
         const profit = Number(chg.profitAmount ?? (sell - cost));
-        const taxPct = Number(chg.taxRatePercent || 0);
+        const taxPct = resolveSaleTaxRate(chg.taxRatePercent, configuredTaxRate);
         const taxAmt = Number(chg.taxAmount ?? (sell * taxPct / 100));
         return {
           charge_code: chg.chargeCode || 'CHG',
