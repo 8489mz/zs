@@ -20,6 +20,11 @@ const FIELD_LABELS: Record<string, string> = {
   oldQty: 'من',
   newQty: 'إلى',
   itemId: 'رقم البند',
+  firstItemId: 'رقم أول بند',
+  itemCount: 'عدد البنود',
+  journalEntryId: 'رقم القيد',
+  remaining: 'بنود متبقية',
+  skippedItemIds: 'البنود المؤجلة',
   countedSerials: 'السيريالات',
   batchCounts: 'التشغيلات',
   batchId: 'التشغيلة',
@@ -149,7 +154,9 @@ function formatGenericObjectDetails(details: AuditDetailsObject, depth = 0): str
     if (!formattedValue) continue;
     const label = FIELD_LABELS[key] || key;
     let displayValue = formattedValue;
-    if (key === 'productId' || key === 'branchId' || key === 'locationId') displayValue = `#${formattedValue}`;
+    // `remaining` is a boolean: render its meaning, never true/false.
+    if (key === 'remaining' && typeof value === 'boolean') displayValue = value ? 'يوجد' : 'لا يوجد';
+    else if (key === 'productId' || key === 'branchId' || key === 'locationId' || key === 'firstItemId' || key === 'journalEntryId') displayValue = `#${formattedValue}`;
     else if (key === 'status') displayValue = STATUS_LABELS[formattedValue.toLowerCase()] || formattedValue;
     parts.push(`${label}: ${displayValue}`);
   }
@@ -177,4 +184,15 @@ export function formatAuditDetails(row: AuditLog): string {
   if (row.detailsSummary && !looksLikeRawDetails(row.detailsSummary)) return row.detailsSummary;
   if (row.details && !looksLikeRawDetails(row.details)) return row.details;
   return '—';
+}
+
+// The employee activity log (Reports → employee reports → user details)
+// receives the same audit rows through a different shape: the audit
+// action arrives as `title` and the raw details as `details`. It renders
+// through this adapter so both renderers call the SAME formatter —
+// formatAuditDetails above — and a count-session event reads identically
+// on /audit and in the activity log. Non-audit activities never reach
+// this adapter; their notes stay verbatim in the caller.
+export function formatEmployeeActivityDetails(activity: { title: string; details: string }): string {
+  return formatAuditDetails({ id: '', action: activity.title, details: activity.details, createdAt: '' });
 }

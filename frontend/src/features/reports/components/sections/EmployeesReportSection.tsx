@@ -12,6 +12,7 @@ import { formatCurrency, formatDate } from '@/lib/format';
 import { getCurrencyDecimals } from '@/lib/currencies';
 import type { ReportsSectionContentProps } from '@/features/reports/components/reports-section.types';
 import { reportsApi } from '@/features/reports/api/reports.api';
+import { formatEmployeeActivityDetails } from '@/features/audit/lib/audit-details-format';
 import { userDirectoryApi } from '@/shared/api/user-directory';
 
 const roleLabel: Record<string, string> = {
@@ -211,7 +212,7 @@ export function EmployeesReportSection({
                 columns={[
                   { key: 'type', header: t('reports.sections.employees_report_section.s64', "النوع"), cell: (row) => activityLabel[row.activityType] || row.activityType },
                   { key: 'title', header: t('reports.sections.employees_report_section.s65', "العنوان"), cell: (row) => row.title },
-                  { key: 'details', header: t('reports.sections.employees_report_section.s66', "التفاصيل"), cell: (row) => row.details || '—' },
+                  { key: 'details', header: t('reports.sections.employees_report_section.s66', "التفاصيل"), cell: (row) => row.activityType === 'audit' ? formatEmployeeActivityDetails(row) : row.details || '—' },
                   { key: 'amount', header: t('reports.sections.employees_report_section.s67', "القيمة"), cell: (row) => row.amount == null ? '—' : formatCurrency(row.amount || 0) },
                   { key: 'date', header: t('reports.sections.employees_report_section.s68', "التاريخ والوقت"), cell: (row) => formatDate(row.createdAt) },
                   { key: 'ref', header: t('reports.sections.employees_report_section.s69', "المرجع"), cell: (row) => row.referenceLabel || '—' },
