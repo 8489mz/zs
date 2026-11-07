@@ -163,6 +163,56 @@ export class AiAgentService {
   }
 
   /**
+   * Top-seller intent: 'أكثر/أكتر منتجات مبيعاً', 'بست سيلر'. Bare
+   * 'مبيعات' (e.g. 'مبيعات اليوم كام؟') is deliberately NOT an intent
+   * — that question wants today's totals, not a ranked list.
+   */
+  private isTopSellerIntent(query: string): boolean {
+    const q = String(query || '').toLowerCase();
+    if (
+      q.includes('أكثر') ||
+      q.includes('اكثر') ||
+      q.includes('أكتر') ||
+      q.includes('اكتر') ||
+      q.includes('بست سيلر') ||
+      q.includes('best seller')
+    ) {
+      return true;
+    }
+    // 'مبيعاً' as a whole word only: a bare substring also matches
+    // 'مبيعات' ('مبيعات اليوم كام؟' wants today's totals, not a
+    // ranked list), so tokenize and compare after stripping tanwin.
+    const tokens = q
+      .replace(/[؟?.,!،:;()"'`]/g, ' ')
+      .split(/\s+/)
+      .map((t) => t.replace(/[\u064B-\u0652]/g, ''));
+    return tokens.includes('مبيعا');
+  }
+
+  /**
+   * Product-stock intent: the question is actually asking about a
+   * product (stock/price/balance/name). Used to gate the not-found
+   * answer — other questions leave leftover tokens (e.g. 'النقدية
+   * المحصلة') that are not a product name and must reach their own
+   * answers instead.
+   */
+  private isProductStockIntent(query: string): boolean {
+    const q = String(query || '').toLowerCase();
+    return (
+      q.includes('مخزون') ||
+      q.includes('مخزن') ||
+      q.includes('سعر') ||
+      q.includes('رصيد') ||
+      q.includes('صنف') ||
+      q.includes('منتج') ||
+      q.includes('بضاعة') ||
+      q.includes('كمية') ||
+      q.includes('نواقص') ||
+      q.includes('بديل')
+    );
+  }
+
+  /**
    * Pulls the product name out of a stock question ('سماعات بلوتوث مخزونها
    * كام؟' -> 'سماعات بلوتوث') by dropping question/trigger words. Returns
    * null when nothing name-like remains, so the lookup simply does not run.
@@ -296,16 +346,20 @@ export class AiAgentService {
             .orderBy('stock_qty', 'asc')
             .limit(3)
             .execute();
+          // Always report the lookup, even on zero matches: an absent
+          // key was read downstream as "no lookup happened" and the
+          // question fell through to the unrelated daily summary.
+          context.productLookup = {
+            term: searchTerm,
+            found: matches.length > 0,
+            items: matches.map((p) => ({
+              name: p.name,
+              stock: Number(p.stock_qty || 0),
+              min: Number(p.min_stock_qty || 0),
+              price: Number(p.retail_price || 0),
+            })),
+          };
           if (matches.length > 0) {
-            context.productLookup = {
-              term: searchTerm,
-              items: matches.map((p) => ({
-                name: p.name,
-                stock: Number(p.stock_qty || 0),
-                min: Number(p.min_stock_qty || 0),
-                price: Number(p.retail_price || 0),
-              })),
-            };
             toolsUsed.push('lookup_product_stock');
             reasoningSteps.push({
               step: 'البحث عن صنف بالاسم',
@@ -315,6 +369,43 @@ export class AiAgentService {
         }
       } catch (err: any) {
         this.logger.warn(`Inventory tool error: ${err.message}`);
+      }
+    }
+
+    // Tool B2: Top sellers (last 30 days). The modal never calls the
+    // legacy ask() that owns the only top-seller query, so the agent
+    // had no real top-seller data and the LLM invented product names.
+    // Mirrors legacy AiCopilotService.ask(): sale_items ⨝ sales,
+    // tenant-scoped, status != 'cancelled', GROUP BY product_name
+    // ORDER BY SUM(qty) DESC LIMIT 5 — keyed on top-seller intent only.
+    if (this.isTopSellerIntent(query)) {
+      try {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const rows = await this.db
+          .selectFrom('sale_items as si')
+          .innerJoin('sales as s', 's.id', 'si.sale_id')
+          .select([
+            'si.product_name',
+            sql<number>`COALESCE(SUM(si.qty), 0)`.as('total_qty'),
+          ])
+          .where('s.tenant_id', '=', tenantId)
+          .where('s.created_at', '>=', thirtyDaysAgo)
+          .where('s.status', '!=', 'cancelled')
+          .groupBy('si.product_name')
+          .orderBy(sql`SUM(si.qty)`, 'desc')
+          .limit(5)
+          .execute();
+        context.topProducts = {
+          ran: true,
+          items: rows.map((r) => ({ name: r.product_name, qty: Number(r.total_qty || 0) })),
+        };
+        toolsUsed.push('get_top_selling_products');
+        reasoningSteps.push({
+          step: 'استخراج الأصناف الأكثر مبيعاً خلال آخر 30 يوماً',
+          observation: `تم العثور على ${rows.length} أصناف أكثر مبيعاً.`,
+        });
+      } catch (err: any) {
+        this.logger.warn(`Top sellers tool error: ${err.message}`);
       }
     }
 
@@ -555,6 +646,7 @@ ${JSON.stringify(reasoningSteps, null, 2)}
 4. اللهجة: لغة عربية احترافية، راقية، وذكية تعكس خبرة مستشار تجاري وتنفيذي موثوق.
 5. الإيجاز المركز: الإجابة محددة ومباشرة في نقاط أنيقة دون حشو ولا إطالة مفرطة.
 6. أجب على السؤال المطروح فقط: استخدم من بيانات الأدوات ما يتصل بالسؤال مباشرة، ولا تسرد لقطة يومية كاملة (مبيعات/خزينة/مخزون) إلا إذا سأل عنها صراحة، ولا تذكر رقماً من أداة لم تُطلب.
+7. لا تخترع أسماء أصناف أبداً: إذا لم تكن topProducts أو productLookup موجودة في بيانات الأدوات أو كانت فارغة، فقل إنه لا توجد بيانات أو لم يتم العثور على الصنف — ولا تذكر اسم أي صنف غير موجود في بيانات الأدوات.
 
 أجب بصيغة JSON فقط:
 {
@@ -626,7 +718,7 @@ ${JSON.stringify(reasoningSteps, null, 2)}
 ${JSON.stringify(toolContext, null, 2)}
 خطوات تحليلك:
 ${JSON.stringify(reasoningSteps, null, 2)}
-قدم تشخيصاً تحليلياً دقيقاً وحلولاً ابتكارية لتعظيم الربحية وحل المشكلات، وأجب على السؤال المطروح فقط (لا تسرد لقطة يومية كاملة إلا إذا سُئلت عنها صراحة)، بصيغة JSON: {"answer": "...", "suggestedQuestions": ["..."]}`;
+قدم تشخيصاً تحليلياً دقيقاً وحلولاً ابتكارية لتعظيم الربحية وحل المشكلات، وأجب على السؤال المطروح فقط (لا تسرد لقطة يومية كاملة إلا إذا سُئلت عنها صراحة)، ولا تخترع أسماء أصناف أبداً: إذا لم تكن topProducts أو productLookup موجودة في بيانات الأدوات أو كانت فارغة، فقل إنه لا توجد بيانات أو لم يتم العثور على الصنف، ولا تذكر اسم أي صنف غير موجود في بيانات الأدوات، بصيغة JSON: {"answer": "...", "suggestedQuestions": ["..."]}`;
 
       const messages: any[] = [{ role: 'system', content: systemPrompt }];
       for (const h of history) {
@@ -675,7 +767,8 @@ ${JSON.stringify(reasoningSteps, null, 2)}
     const fin = (context.todayFinancials as any) || { salesAmount: 0, cashCollected: 0, cardCollected: 0, invoicesCount: 0, treasuryBalance: 0 };
     const lowStock = (context.lowStockItems as any[]) || [];
     const stockCounts = (context.stockCounts as { ran?: boolean; outOfStock?: number; lowStock?: number } | undefined) || undefined;
-    const productLookup = (context.productLookup as { term: string; items: Array<{ name: string; stock: number; min: number; price: number }> } | undefined) || undefined;
+    const productLookup = (context.productLookup as { term: string; found?: boolean; items: Array<{ name: string; stock: number; min: number; price: number }> } | undefined) || undefined;
+    const topProducts = (context.topProducts as { ran?: boolean; items?: Array<{ name: string; qty: number }> } | undefined) || undefined;
     const supplierPayables = (context.supplierPayables as { totalDebt: number; topSuppliers: Array<{ name: string; debt: number }> } | undefined) || undefined;
     const debtors = (context.debtors as any[]) || [];
     const bundling = context.bundlingOpportunities as any;
@@ -686,6 +779,22 @@ ${JSON.stringify(reasoningSteps, null, 2)}
       return {
         answer: `استناداً إلى مستندات ولوائح المنشأة المرجعية (**${kb[0].title}**):\n\n${kb[0].content}\n\nنصيحة استراتيجية: يمكنك تحديث هذه السياسة أو إضافة كتالوجات جديدة من لوحة إدارة المعرفة في أي وقت.`,
         suggestedQuestions: ['ما هي سياسة الائتمان للعملاء؟', 'هل يوجد أصناف بديلة؟', 'فحص حركة المبيعات اليوم'],
+      };
+    }
+
+    // Top sellers: answer from the real 30-day query only — never
+    // invent a product name. Empty means no sales in the window.
+    if (this.isTopSellerIntent(query) && topProducts?.ran) {
+      if (topProducts.items && topProducts.items.length > 0) {
+        const lines = topProducts.items.map((p, i) => `${i + 1}. **${p.name}**: ${p.qty} قطعة`).join('\n');
+        return {
+          answer: `الأصناف الأكثر مبيعاً خلال آخر 30 يوماً:\n\n${lines}`,
+          suggestedQuestions: ['ما هي الأصناف الحرجة بالمخزن؟', 'كم مبيعات اليوم؟', 'كيف أزيد أرباحي اليوم؟'],
+        };
+      }
+      return {
+        answer: `لا توجد مبيعات مسجلة خلال آخر 30 يوماً — لا يوجد صنف أكثر مبيعاً بعد`,
+        suggestedQuestions: ['كم مبيعات اليوم؟', 'ما هي الأصناف الحرجة بالمخزن؟', 'كيف أزيد أرباحي اليوم؟'],
       };
     }
 
@@ -708,6 +817,18 @@ ${JSON.stringify(reasoningSteps, null, 2)}
         .join('\n');
       return {
         answer: `مخزون "${productLookup.term}":\n\n${lines}`,
+        suggestedQuestions: ['ما هي الأصناف الأكثر مبيعاً؟', 'ما هي الأصناف الحرجة بالمخزن؟', 'كم مبيعات اليوم؟'],
+      };
+    }
+
+    // Product-by-name with zero matches: say so by name instead of
+    // falling through to the daily summary (an unrelated snapshot).
+    // Gated on a product-stock question: other questions leave
+    // leftover tokens (e.g. 'النقدية المحصلة') that are not a product
+    // name, and must still reach their own answers.
+    if (productLookup && productLookup.found === false && this.isProductStockIntent(query)) {
+      return {
+        answer: `لا يوجد صنف باسم «${productLookup.term}» في الكتالوج`,
         suggestedQuestions: ['ما هي الأصناف الأكثر مبيعاً؟', 'ما هي الأصناف الحرجة بالمخزن؟', 'كم مبيعات اليوم؟'],
       };
     }
