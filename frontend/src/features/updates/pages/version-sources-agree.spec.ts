@@ -85,7 +85,8 @@ describe('version sources agree (INV-VERSION-DISPLAY-STALE)', () => {
   it('manifest-latest is the newest release and no release is newer than the app', () => {
     const manifests = versionedManifests();
     expect(manifests.length).toBeGreaterThan(0);
-    const newest = [...manifests].sort(compareSemver).at(-1)!;
+    const sortedManifests = [...manifests].sort(compareSemver);
+    const newest = sortedManifests[sortedManifests.length - 1]!;
     expect(String(readJson('releases/manifest-latest.json').version)).toBe(newest);
     for (const v of manifests) {
       expect(compareSemver(v, appVersion()), `release ${v} must not be newer than the running app ${appVersion()}`).toBeLessThanOrEqual(0);

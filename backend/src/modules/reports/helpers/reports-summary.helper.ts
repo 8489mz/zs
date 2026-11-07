@@ -1,3 +1,7 @@
+import { type Kysely, sql } from '../../../database/kysely';
+import { Database } from '../../../database/database.types';
+import { ReportRangeQueryDto } from '../dto/report-query.dto';
+import { applyReportScopeFilter, buildTenantPredicate } from './reports-query.helper';
 import { sumMoney, toMoney } from './reports-math.helper';
 
 export type SummaryCounts = {
@@ -301,6 +305,293 @@ export function buildReportSummaryPayload(args: {
     }),
     topProducts: topProductsOverride != null ? topProductsOverride : buildTopProducts(saleItemsRows, topProductsLimit),
   };
+}
+
+export async function buildReportSummaryAggregates(args: {
+  db: Kysely<Database>;
+  query: ReportRangeQueryDto;
+  fromDate: Date;
+  toDate: Date;
+  tenantId: string;
+  deliveryFeeMode: string;
+}): Promise<{
+  countsOverride: SummaryCounts;
+  totalsOverride: SummaryTotals;
+  cogsOverride: number;
+  topProductsOverride: Array<{ name: string; qty: number; revenue: number; total: number }>;
+}> {
+  const { db, query, fromDate, toDate, tenantId, deliveryFeeMode } = args;
+
+  const isStoreFleetDefault = deliveryFeeMode === 'store_fleet';
+  const freelanceCondition = isStoreFleetDefault
+    ? sql<boolean>`delivery_fee > 0 and delivery_fee_mode = 'freelance_courier'`
+    : sql<boolean>`delivery_fee > 0 and (delivery_fee_mode = 'freelance_courier' or delivery_fee_mode is null)`;
+  const storeFleetCondition = isStoreFleetDefault
+    ? sql<boolean>`delivery_fee > 0 and (delivery_fee_mode = 'store_fleet' or delivery_fee_mode is null)`
+    : sql<boolean>`delivery_fee > 0 and delivery_fee_mode = 'store_fleet'`;
+
+  const salesAggQuery = applyReportScopeFilter(
+    db
+      .selectFrom('sales')
+      .select([
+        sql<number>`count(*)`.as('sales_count'),
+        sql<number>`coalesce(sum(total), 0)`.as('sales_total'),
+        sql<number>`coalesce(sum(tax_amount), 0)`.as('sales_tax_total'),
+        // INV-SALES-REPORT-RETURNS-CARD: invoice discounts granted on
+        // posted sales in the period feed the returns-and-discounts card.
+        sql<number>`coalesce(sum(discount), 0)`.as('sales_discounts_total'),
+        sql<number>`count(*) filter (where ${freelanceCondition})`.as('freelance_count'),
+        sql<number>`coalesce(sum(delivery_fee) filter (where ${freelanceCondition}), 0)`.as('freelance_total'),
+        sql<number>`count(*) filter (where ${storeFleetCondition})`.as('store_fleet_count'),
+        sql<number>`coalesce(sum(delivery_fee) filter (where ${storeFleetCondition}), 0)`.as('store_fleet_total'),
+      ])
+      .where('status', '=', 'posted')
+      .where('created_at', '>=', fromDate)
+      .where('created_at', '<=', toDate)
+      .where(buildTenantPredicate(tenantId)),
+    query,
+  );
+
+  const purchasesAggQuery = applyReportScopeFilter(
+    db
+      .selectFrom('purchases')
+      .select([
+        sql<number>`count(*)`.as('purchases_count'),
+        sql<number>`coalesce(sum(total), 0)`.as('purchases_total'),
+      ])
+      .where('status', '=', 'posted')
+      .where('created_at', '>=', fromDate)
+      .where('created_at', '<=', toDate)
+      .where(buildTenantPredicate(tenantId)),
+    query,
+  );
+
+  const servicesAggQuery = applyReportScopeFilter(
+    (db as any)
+      .selectFrom('services')
+      .select([
+        sql<number>`count(*)`.as('services_count'),
+        sql<number>`coalesce(sum(amount), 0)`.as('services_total'),
+      ])
+      .where('is_active', '=', true)
+      .where('service_date', '>=', fromDate)
+      .where('service_date', '<=', toDate)
+      .where(buildTenantPredicate(tenantId)),
+    query,
+  );
+
+  const expensesAggQuery = applyReportScopeFilter(
+    db
+      .selectFrom('expenses')
+      .select([
+        sql<number>`count(*)`.as('expenses_count'),
+        sql<number>`coalesce(sum(amount), 0)`.as('expenses_total'),
+      ])
+      .where('expense_date', '>=', fromDate)
+      .where('expense_date', '<=', toDate)
+      .where(buildTenantPredicate(tenantId)),
+    query,
+  );
+
+  // Stock issued permanently for operations is expensed to account 6900,
+  // without a row in the standalone expenses table. Excluding it from this
+  // summary overstates operating profit compared with the general ledger.
+  const operatingMaterialsQuery = applyReportScopeFilter(
+    db.selectFrom('stock_movements as m')
+      .select(sql<number>`coalesce(sum(m.total_cost), 0)`.as('materials_total'))
+      .where('m.movement_type', '=', 'transfer_final_issue')
+      .where('m.reason', '=', 'final_issue')
+      .where('m.created_at', '>=', fromDate)
+      .where('m.created_at', '<=', toDate)
+      .where(buildTenantPredicate(tenantId, 'm')),
+    query, 'm',
+  );
+
+  const returnsAggQuery = applyReportScopeFilter(
+    db
+      .selectFrom('return_documents')
+      .select([
+        'return_type',
+        sql<number>`count(*)`.as('count'),
+        sql<number>`coalesce(sum(total), 0)`.as('total'),
+      ])
+      .where('created_at', '>=', fromDate)
+      .where('created_at', '<=', toDate)
+      .where(buildTenantPredicate(tenantId))
+      .groupBy('return_type'),
+    query,
+  );
+
+  const salesReturnTaxQuery = applyReportScopeFilter(
+    db.selectFrom('return_items as ri')
+      .innerJoin('return_documents as rd', (join) => join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'))
+      .select(sql<number>`coalesce(sum(ri.allocated_tax), 0)`.as('tax_total'))
+      .where('rd.return_type', '=', 'sale')
+      .where('rd.created_at', '>=', fromDate)
+      .where('rd.created_at', '<=', toDate)
+      .where(buildTenantPredicate(tenantId, 'rd'))
+      .where(buildTenantPredicate(tenantId, 'ri')),
+    query,
+    'rd',
+  );
+
+  const treasuryAggQuery = applyReportScopeFilter(
+    db
+      .selectFrom('treasury_transactions')
+      .select([
+        sql<number>`coalesce(sum(case when amount > 0 then amount else 0 end), 0)`.as('cash_in'),
+        sql<number>`coalesce(abs(sum(case when amount < 0 then amount else 0 end)), 0)`.as('cash_out'),
+      ])
+      .where('created_at', '>=', fromDate)
+      .where('created_at', '<=', toDate)
+      .where(buildTenantPredicate(tenantId)),
+    query,
+  );
+
+  const rawCogsQuery = applyReportScopeFilter(
+    db
+      .selectFrom('sale_items as si')
+      .innerJoin('sales as s', (join) => join.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id'))
+      .select(sql<number>`coalesce(sum(si.qty * si.cost_price), 0)`.as('raw_cogs'))
+      .where('s.status', '=', 'posted')
+      .where('s.created_at', '>=', fromDate)
+      .where('s.created_at', '<=', toDate)
+      .where(buildTenantPredicate(tenantId, 's'))
+      .where(buildTenantPredicate(tenantId, 'si')),
+    query,
+    's',
+  );
+
+  const returnedCogsQuery = applyReportScopeFilter(
+    db
+      .selectFrom('return_items as ri')
+      .innerJoin('return_documents as rd', (join) => join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'))
+      .leftJoin('sale_items as si', (join) =>
+        join.onRef('si.id', '=', 'ri.sale_item_id').onRef('si.tenant_id', '=', 'ri.tenant_id'),
+      )
+      .leftJoin('products as p', (join) => join.onRef('p.id', '=', 'ri.product_id').onRef('p.tenant_id', '=', 'ri.tenant_id'))
+      .select(
+        sql<number>`coalesce(sum(ri.qty * coalesce(ri.cost_price, si.cost_price, p.cost_price, 0)), 0)`.as('returned_cogs'),
+      )
+      .where('rd.return_type', '=', 'sale')
+      .where('rd.created_at', '>=', fromDate!)
+      .where('rd.created_at', '<=', toDate!)
+      .where(buildTenantPredicate(tenantId, 'rd'))
+      .where(buildTenantPredicate(tenantId, 'ri')),
+    query,
+    'rd',
+  );
+
+  const topProductsQuery = applyReportScopeFilter(
+    db
+      .selectFrom('sale_items as si')
+      .innerJoin('sales as s', (join) => join.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id'))
+      .select([
+        sql<string>`coalesce(si.product_name, 'صنف غير محدد')`.as('name'),
+        sql<number>`coalesce(sum(si.qty), 0)`.as('qty'),
+        sql<number>`coalesce(sum(si.line_total), 0)`.as('revenue'),
+        sql<number>`coalesce(sum(si.line_total), 0)`.as('total'),
+      ])
+      .where('s.status', '=', 'posted')
+      .where('s.created_at', '>=', fromDate)
+      .where('s.created_at', '<=', toDate)
+      .where(buildTenantPredicate(tenantId, 's'))
+      .where(buildTenantPredicate(tenantId, 'si'))
+      .where('si.product_name', 'is not', null)
+      .groupBy('si.product_name')
+      .orderBy(sql`sum(si.line_total)`, 'desc')
+      .limit(10),
+    query,
+    's',
+  );
+
+  const [
+    salesAggRow,
+    purchasesAggRow,
+    servicesAggRow,
+    expensesAggRow,
+    operatingMaterialsRow,
+    returnsAggRows,
+    salesReturnTaxRow,
+    treasuryAggRow,
+    rawCogsRow,
+    returnedCogsRow,
+    topProductsRows,
+  ] = await Promise.all([
+    salesAggQuery.executeTakeFirst(),
+    purchasesAggQuery.executeTakeFirst(),
+    servicesAggQuery.executeTakeFirst(),
+    expensesAggQuery.executeTakeFirst(),
+    operatingMaterialsQuery.executeTakeFirst(),
+    returnsAggQuery.execute(),
+    salesReturnTaxQuery.executeTakeFirst(),
+    treasuryAggQuery.executeTakeFirst(),
+    rawCogsQuery.executeTakeFirst(),
+    returnedCogsQuery.executeTakeFirst(),
+    topProductsQuery.execute(),
+  ]);
+
+  let returnsCount = 0;
+  let salesReturnCount = 0;
+  let purchaseReturnCount = 0;
+  let salesReturnsTotal = 0;
+  let purchaseReturnsTotal = 0;
+  for (const r of returnsAggRows || []) {
+    const c = Number((r as any).count || 0);
+    const t = Number((r as any).total || 0);
+    returnsCount += c;
+    if (r.return_type === 'sale') {
+      salesReturnCount += c;
+      salesReturnsTotal += t;
+    } else if (r.return_type === 'purchase') {
+      purchaseReturnCount += c;
+      purchaseReturnsTotal += t;
+    }
+  }
+
+  const rawCogs = Number((rawCogsRow as any)?.raw_cogs || 0);
+  const returnedCogs = Number((returnedCogsRow as any)?.returned_cogs || 0);
+  // Return COGS can exceed new-sale COGS in a quiet period; do not clamp it away.
+  const cogsOverride = rawCogs - returnedCogs;
+
+  const topProductsOverride = (topProductsRows || []).map((r: any) => ({
+    name: String(r.name || 'صنف غير محدد'),
+    qty: Number(r.qty || 0),
+    revenue: Number(r.revenue || 0),
+    total: Number(r.total || 0),
+  }));
+
+  const countsOverride = {
+    salesCount: Number((salesAggRow as any)?.sales_count || 0),
+    servicesCount: Number((servicesAggRow as any)?.services_count || 0),
+    purchasesCount: Number((purchasesAggRow as any)?.purchases_count || 0),
+    expensesCount: Number((expensesAggRow as any)?.expenses_count || 0),
+    returnsCount,
+    salesReturnCount,
+    purchaseReturnCount,
+  };
+
+  const totalsOverride = {
+    salesTotal: Number((salesAggRow as any)?.sales_total || 0),
+    salesTaxTotal: Number((salesAggRow as any)?.sales_tax_total || 0),
+    salesReturnTaxTotal: Number((salesReturnTaxRow as any)?.tax_total || 0),
+    servicesTotal: Number((servicesAggRow as any)?.services_total || 0),
+    purchasesTotal: Number((purchasesAggRow as any)?.purchases_total || 0),
+    expensesTotal: Number((expensesAggRow as any)?.expenses_total || 0) + Number((operatingMaterialsRow as any)?.materials_total || 0),
+    operatingMaterialsTotal: Number((operatingMaterialsRow as any)?.materials_total || 0),
+    salesReturnsTotal,
+    purchaseReturnsTotal,
+    salesDiscountsTotal: Number((salesAggRow as any)?.sales_discounts_total || 0),
+    cashIn: Number((treasuryAggRow as any)?.cash_in || 0),
+    cashOut: Number((treasuryAggRow as any)?.cash_out || 0),
+    cogs: cogsOverride,
+    freelanceCount: Number((salesAggRow as any)?.freelance_count || 0),
+    freelanceTotal: Number((salesAggRow as any)?.freelance_total || 0),
+    storeFleetCount: Number((salesAggRow as any)?.store_fleet_count || 0),
+    storeFleetTotal: Number((salesAggRow as any)?.store_fleet_total || 0),
+  };
+
+  return { countsOverride, totalsOverride, cogsOverride, topProductsOverride };
 }
 
 export interface CustomerRfmRow {

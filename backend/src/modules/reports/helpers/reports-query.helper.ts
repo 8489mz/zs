@@ -30,6 +30,17 @@ export function applyReportScopeFilter<T extends object>(queryBuilder: T, query:
   return qb;
 }
 
+// Single source of truth for the reports tenant predicate (extracted
+// from ReportsService.tenantPredicate when the financial-summary
+// aggregates moved to reports-summary.helper.ts, so the tenant
+// scoping rule is defined once and shared by the service and the
+// helper instead of being duplicated in two places).
+export function buildTenantPredicate(tenantId: string, alias?: string) {
+  return alias
+    ? sql<boolean>`${sql.ref(`${alias}.tenant_id`)} = ${tenantId}`
+    : sql<boolean>`tenant_id = ${tenantId}`;
+}
+
 export type ReportListState = {
   range?: { from: string; to: string };
   fromDate?: Date;
