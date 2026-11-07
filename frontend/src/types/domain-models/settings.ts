@@ -112,6 +112,7 @@ export interface AppSettings {
   posMaxDiscountThresholdType?: 'percentage' | 'fixed';
   posMaxDiscountThresholdValue?: number;
   posKitchenPrinterEnabled?: boolean;
+  posCashDrawerPrinterEnabled?: boolean;
   posKitchenPrinterAuto?: boolean;
   posAutoPrintKitchenReceipt?: boolean;
   posKitchenPrinterMode?: 'detailed' | 'mini';

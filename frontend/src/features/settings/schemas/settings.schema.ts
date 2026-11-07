@@ -102,6 +102,7 @@ export const settingsFormSchema = z.object({
   posSmallDiscountFlatAllowance: z.coerce.number().min(0).default(2),
   posLargeCashRefundThreshold: z.coerce.number().min(0).default(500),
   posKitchenPrinterEnabled: z.boolean().default(false),
+  posCashDrawerPrinterEnabled: z.boolean().default(false),
   posKitchenPrinterAuto: z.boolean().default(false),
   posKitchenPrinterMode: z.enum(['detailed', 'mini']).optional().default('detailed'),
   posKitchenLanguage: z.enum(['dual', 'en', 'ar']).optional().default('dual'),

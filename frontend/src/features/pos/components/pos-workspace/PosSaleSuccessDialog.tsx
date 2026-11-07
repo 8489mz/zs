@@ -125,7 +125,11 @@ export function PosSaleSuccessDialog({
       lastKickedSaleId.current = saleKey;
       if (typeof window !== 'undefined' && (window as any).electronPrinter?.kickCashDrawer) {
         void (window as any).electronPrinter.kickCashDrawer(settings?.posElectronCashierPrinter).catch(() => {});
-      } else {
+      } else if (settings?.posCashDrawerPrinterEnabled === true) {
+        // INV-DRAWER-KICK-500: the bridge being up does not mean a printer
+        // is attached — kicking with no printer configured returns 500
+        // from the bridge. Only kick when the merchant has set a cash
+        // drawer printer as connected in Settings (printing tab).
         HardwareBridgeClient.isAvailable().then((avail) => {
           if (avail) {
             void HardwareBridgeClient.kickDrawer({ ip: (settings as any)?.posNetworkPrinterIp || '127.0.0.1' }).catch(() => {});

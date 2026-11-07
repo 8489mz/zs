@@ -431,6 +431,24 @@ export const PrintingSettingsTab = memo(function PrintingSettingsTab({
         </div>
       </FormSection>
 
+      {/* ===== 2b. طابعة الكاشير وفتح الدرج ===== */}
+      {showPosSettings && (
+        <FormSection
+          title={t('settings.forms.tabs.printing_settings_tab.s173', "طابعة الكاشير وفتح الدرج")}
+          description={t('settings.forms.tabs.printing_settings_tab.s174', "حدد ما إذا كانت هناك طابعة متصلة بدرج نقدية ليفتح الدرج تلقائياً بعد البيع النقدي.")}
+        >
+          <div className="document-prototype-grid compact-grid-2">
+            <label style={premiumCardStyle}>
+              <div style={premiumCardTextStyle}>
+                <strong>{t('settings.forms.tabs.printing_settings_tab.s175', "طابعة كاشير متصلة بدرج نقدية")}</strong>
+                <small className="muted">{t('settings.forms.tabs.printing_settings_tab.s176', "عند التفعيل يفتح الدرج تلقائياً بعد البيع النقدي عبر جهاز الجسر المحلي؛ أوقفها إذا لم تكن هناك طابعة متصلة.")}</small>
+              </div>
+              <input type="checkbox" style={premiumCheckboxInputStyle} {...form.register('posCashDrawerPrinterEnabled')} disabled={disabled} />
+            </label>
+          </div>
+        </FormSection>
+      )}
+
       {/* ===== 3. طابعة وشيت المطبخ ومناداة العميل (KOT) ===== */}
       {(isRestaurantVertical || posKitchenPrinterEnabled) && (
         <FormSection

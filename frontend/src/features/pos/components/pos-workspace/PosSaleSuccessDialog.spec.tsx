@@ -1,9 +1,21 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PosSaleSuccessDialog } from './PosSaleSuccessDialog';
 import type { Sale } from '@/types/domain';
+
+const { mockIsAvailable, mockKickDrawer } = vi.hoisted(() => ({
+  mockIsAvailable: vi.fn(),
+  mockKickDrawer: vi.fn(),
+}));
+
+vi.mock('@/features/pos/lib/hardware-bridge-client', () => ({
+  HardwareBridgeClient: {
+    isAvailable: mockIsAvailable,
+    kickDrawer: mockKickDrawer,
+  },
+}));
 
 const sale = {
   id: 'sale-1',
@@ -35,6 +47,73 @@ function renderDialog(overrides: Partial<Parameters<typeof PosSaleSuccessDialog>
     </MemoryRouter>,
   );
 }
+
+/* INV-DRAWER-KICK-500: the bridge being up does not mean a printer is
+ * attached — kicking with no printer configured returns 500 from the
+ * bridge (127.0.0.1:18181/api/printer/kick-drawer). The dialog now kicks
+ * the bridge drawer only when the merchant has set a cash drawer
+ * printer as connected (settings.posCashDrawerPrinterEnabled). These
+ * cases drive the REAL dialog with a mocked HardwareBridgeClient.
+ * The fixture MUST carry status 'posted': the kick runs only for posted
+ * cash sales, so a fixture without it would pass vacuously. */
+describe('drawer kick (INV-DRAWER-KICK-500)', () => {
+  const postedCashSale = { ...sale, status: 'posted' } as unknown as Sale;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockIsAvailable.mockResolvedValue(true);
+    mockKickDrawer.mockResolvedValue({ ok: true });
+  });
+
+  it('skips the bridge drawer kick quietly when no printer is configured', async () => {
+    renderDialog({ sale: postedCashSale, settings: { storeName: 'متجر تجريبي' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('تم البيع بنجاح')).toBeInTheDocument();
+    });
+    expect(mockIsAvailable).not.toHaveBeenCalled();
+    expect(mockKickDrawer).not.toHaveBeenCalled();
+  });
+
+  it('sends the bridge drawer kick when a printer is configured', async () => {
+    renderDialog({
+      sale: postedCashSale,
+      settings: { storeName: 'متجر تجريبي', posCashDrawerPrinterEnabled: true },
+    });
+
+    await waitFor(() => {
+      expect(mockKickDrawer).toHaveBeenCalledTimes(1);
+    });
+    expect(mockKickDrawer).toHaveBeenCalledWith({ ip: '127.0.0.1' });
+  });
+
+  it('does not kick when the bridge reports unavailable even if a printer is configured', async () => {
+    mockIsAvailable.mockResolvedValue(false);
+    renderDialog({
+      sale: postedCashSale,
+      settings: { storeName: 'متجر تجريبي', posCashDrawerPrinterEnabled: true },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('تم البيع بنجاح')).toBeInTheDocument();
+    });
+    expect(mockIsAvailable).toHaveBeenCalledTimes(1);
+    expect(mockKickDrawer).not.toHaveBeenCalled();
+  });
+
+  it('does not kick a sale that is not posted even if a printer is configured', async () => {
+    renderDialog({
+      sale: { ...sale, status: 'draft' } as unknown as Sale,
+      settings: { storeName: 'متجر تجريبي', posCashDrawerPrinterEnabled: true },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('تم البيع بنجاح')).toBeInTheDocument();
+    });
+    expect(mockIsAvailable).not.toHaveBeenCalled();
+    expect(mockKickDrawer).not.toHaveBeenCalled();
+  });
+});
 
 describe('PosSaleSuccessDialog', () => {
   it('shows sale success details and print hint', () => {
