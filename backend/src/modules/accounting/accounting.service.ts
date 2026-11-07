@@ -44,6 +44,7 @@ import { resolveBusinessDateKey } from './engines/accounting-date.engine';
 import { accountingDateKey, assertTaxPeriodOpen } from './accounting-tax-lock';
 import { nextAccountingDay } from './engines/accounting-date.engine';
 import { calculateAssetDepreciation, validateFixedAssetTerms } from './engines/fixed-asset-depreciation.engine';
+import { allocateJournalNumber, formatJournalEntryNo, readJournalEntryNo } from './engines/journal-number.engine';
 import { randomUUID } from 'node:crypto';
 
 type PartnerType = 'none' | 'customer' | 'supplier';
@@ -1184,6 +1185,11 @@ export class AccountingService {
         .where('id', 'in', Array.from(new Set(lockedLines.map((line) => Number(line.account_id)))).sort((a, b) => a - b))
         .orderBy('id', 'asc').forUpdate().execute();
 
+      // Gapless numbering (INV-JE-NUMBERING-GAP): allocate before the
+      // insert (and after every check above) so a failure below leaves
+      // no gap behind -- the number is computed from visible rows, never
+      // from a consumable sequence.
+      const reversalJournalNo = await allocateJournalNumber(trx);
       const tempEntryNo = `JE-TMP-${randomUUID()}`;
       const inserted = await trx
         .insertInto('journal_entries')
@@ -1208,7 +1214,7 @@ export class AccountingService {
         .executeTakeFirstOrThrow();
 
       const revId = Number(inserted.id);
-      const officialEntryNo = `JE-${String(revId).padStart(8, '0')}`;
+      const officialEntryNo = formatJournalEntryNo(reversalJournalNo);
 
       await trx
         .updateTable('journal_entries')
@@ -1934,6 +1940,11 @@ export class AccountingService {
         ...line, branchId: line.branchId ?? input.branchId ?? null,
         locationId: line.locationId ?? input.locationId ?? null,
       })));
+      // Gapless numbering (INV-JE-NUMBERING-GAP): allocate before the
+      // insert (and after every check above) so a failure below leaves
+      // no gap behind -- the number is computed from visible rows, never
+      // from a consumable sequence.
+      const draftJournalNo = await allocateJournalNumber(trx);
       const entry = await trx
         .insertInto('journal_entries')
         .values({
@@ -1953,7 +1964,7 @@ export class AccountingService {
         .executeTakeFirstOrThrow();
 
       await trx.updateTable('journal_entries')
-        .set({ entry_no: `JE-${String(entry.id).padStart(8, '0')}`, updated_at: sql`NOW()` } as any)
+        .set({ entry_no: formatJournalEntryNo(draftJournalNo), updated_at: sql`NOW()` } as any)
         .where('id', '=', Number(entry.id)).where('tenant_id', '=', scope.tenantId).execute();
 
       for (const line of validation.lines) {
@@ -2583,7 +2594,13 @@ export class AccountingService {
           },
         ],
       });
-      finalEntryNo = `JE-${String(journalEntryId).padStart(8, '0')}`;
+      // Gapless numbering (INV-JE-NUMBERING-GAP): the number no longer
+      // equals the identity id -- read the stored number back instead of
+      // deriving it. A missing row here is an internal inconsistency:
+      // fail closed rather than reporting a fabricated number.
+      const postedEntryNo = await readJournalEntryNo(trx, scope.tenantId, journalEntryId);
+      if (!postedEntryNo) throw new Error('Depreciation journal entry number is missing after posting');
+      finalEntryNo = postedEntryNo;
 
       // 4. Update Fixed Asset Record
       await trx

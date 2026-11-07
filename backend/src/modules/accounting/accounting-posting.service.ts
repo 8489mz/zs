@@ -1,4 +1,5 @@
 import { allocateInstallmentInterest } from './engines/installment-interest.engine';
+import { allocateJournalNumber, formatJournalEntryNo } from './engines/journal-number.engine';
 import { areOppositeJournalLines } from './engines/journal-reversal.engine';
 import { syncPostedPartnerLedger } from './partner-subledger';
 import { pdcBookAmount } from './engines/pdc-transition.engine';
@@ -826,6 +827,14 @@ export class AccountingPostingService {
       }
     }
 
+    // Gapless numbering (INV-JE-NUMBERING-GAP): the visible number comes
+    // from the highest visible number under the advisory lock, not the
+    // identity column -- a failed insert or a rolled-back posting must
+    // not burn a number. Allocation happens after every validation above
+    // and BEFORE the insert, so a validation failure consumes nothing
+    // and nothing is ever "used up": a duplicate-posting race that fails
+    // on the unique index leaves no gap behind.
+    const journalNo = await allocateJournalNumber(queryable);
     const tempEntryNo = `JE-TMP-${randomUUID()}`;
     const insertPayload: Record<string, any> = {
       entry_no: tempEntryNo,
@@ -859,7 +868,7 @@ export class AccountingPostingService {
     const entryId = Number(inserted.id);
     await queryable
       .updateTable('journal_entries')
-      .set({ entry_no: `JE-${String(entryId).padStart(8, '0')}`, updated_at: sql`NOW()` } as any)
+      .set({ entry_no: formatJournalEntryNo(journalNo), updated_at: sql`NOW()` } as any)
       .where('id', '=', entryId)
       .where('tenant_id', '=', params.tenantId)
       .execute();

@@ -7,6 +7,7 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { AccountingPostingService } from '../accounting-posting.service';
 import { tenantBaseCurrency } from '../accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
+import { readJournalEntryNo } from '../engines/journal-number.engine';
 
 export interface WithholdingTaxRecord {
   id: number;
@@ -498,7 +499,14 @@ export class WithholdingTaxService {
           auth,
         );
         if (!postRes.journalEntryId) throw new BadRequestException('تعذر ترحيل قيد سداد ضريبة الاستقطاع.');
-        paymentRef = paymentRef || `JE-${postRes.journalEntryId}`;
+        // Gapless numbering (INV-JE-NUMBERING-GAP): the number no longer
+        // equals the identity id -- read the stored number back instead
+        // of deriving it.
+        if (!paymentRef) {
+          const postedEntryNo = await readJournalEntryNo(trx, tenantId, postRes.journalEntryId);
+          if (!postedEntryNo) throw new BadRequestException('تعذر ترحيل قيد سداد ضريبة الاستقطاع.');
+          paymentRef = postedEntryNo;
+        }
         if (postRes.posted && existing.partner_id) {
           await this.syncPartnerSubLedger(trx, auth, existing);
         }

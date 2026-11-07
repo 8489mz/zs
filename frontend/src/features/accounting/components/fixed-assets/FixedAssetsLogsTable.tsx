@@ -49,7 +49,8 @@ export const FixedAssetsLogsTable: React.FC<FixedAssetsLogsTableProps> = ({ logs
                   <td style={{ padding: '10px 12px', color: '#16a34a', fontWeight: 700 }}>{formatCurrency(Number(l.book_value))}</td>
                   <td style={{ padding: '10px 12px' }}>
                     <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '3px 8px', borderRadius: '6px', fontWeight: 700, fontSize: '12px' }}>
-                      {l.journal_entry_no || `JE-${l.journal_entry_id}`}
+                      {/* Never fabricate a journal number from the row id: since INV-JE-NUMBERING-GAP the number comes from the gapless allocator, not the identity column. */}
+                      {l.journal_entry_no || '—'}
                     </span>
                   </td>
                   <td style={{ padding: '10px 12px', color: '#64748b', fontSize: '13px' }}>{l.note}</td>
