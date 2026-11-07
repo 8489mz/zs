@@ -117,6 +117,8 @@ export class PurchasesQueryService {
     const firstRow = (purchases[0] || {}) as Record<string, unknown>;
     const totalItems = purchases.length > 0 ? Number(firstRow.total_count || 0) : 0;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const rangeStart = totalItems > 0 ? (page - 1) * pageSize + 1 : 0;
+    const rangeEnd = totalItems > 0 ? Math.min(page * pageSize, totalItems) : 0;
     const nextCursor = purchases.length === pageSize ? String(purchases[purchases.length - 1].id) : null;
 
     const pagedIds = purchases.map((r) => Number(r.id || 0)).filter((id) => id > 0);
@@ -160,7 +162,7 @@ export class PurchasesQueryService {
 
     return {
       purchases: hydratedRows,
-      pagination: { page, pageSize, totalItems, totalPages, nextCursor },
+      pagination: { page, pageSize, totalItems, totalPages, rangeStart, rangeEnd, nextCursor },
       summary,
       scope
     };
