@@ -1,6 +1,9 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { formatCurrency } from '@/lib/format';
+import ar from '@/locales/ar.json';
+import en from '@/locales/en.json';
+import uiDict from '@/lib/ui-dictionary.json';
 import { InventoryReportSection } from '@/features/reports/components/sections/InventoryReportSection';
 
 function cardValue(label: string): string {
@@ -203,14 +206,105 @@ describe('InventoryReportSection', () => {
       />,
     );
 
-    expect(screen.getByText('أصناف راكدة')).toBeInTheDocument();
-    expect(deadStockCardValue('أصناف راكدة')).toBe('10499 صنف');
+    expect(screen.getByText('أصناف راكدة (كل المجموعة)')).toBeInTheDocument();
+    expect(deadStockCardValue('أصناف راكدة (كل المجموعة)')).toBe('10499 صنف');
     expect(deadStockCardValue('إجمالي الوحدات المعطلة')).toBe('20998 وحدة');
     expect(deadStockCardValue('رأس المال المجمد التقديري')).toBe(formatCurrency(5340000));
     // The visible-page sums (10 rows x 2 units, 5,340.00 capital) must not
     // appear as the summary totals.
     expect(deadStockCardValue('إجمالي الوحدات المعطلة')).not.toBe('20 وحدة');
     expect(deadStockCardValue('رأس المال المجمد التقديري')).not.toBe(formatCurrency(5340));
+  });
+
+  /*
+  Pins the dead-stock header scope (INV-SLOW-MOVING-HEADER).
+  The summary cards show whole-set totals (10,499 dead items) on every
+  page, but the first card's label still said "(الصفحة الحالية)" — a
+  leftover from when the cards were a reduce() over the visible 10-row
+  page. The label must state the whole-set scope the numbers actually
+  cover, on any page, and must never say "(current page)" again.
+  Restoring the old "(الصفحة الحالية)" label fails this test.
+  */
+  it('labels the dead-stock count as the whole set on any page, never the current page', () => {
+    const pageRows = Array.from({ length: 10 }, (_, i) => ({
+      id: `p-${i + 11}`,
+      name: `صنف ${i + 11}`,
+      category: 'بقالة',
+      supplier: 'المورد أ',
+      stock: 2,
+      minStock: 0,
+      costPrice: 267,
+      retailPrice: 400,
+      status: 'dead',
+      topLocationName: 'المخزن الرئيسي',
+      topLocationQty: 2,
+    }));
+    render(
+      <InventoryReportSection
+        inventoryQuery={{
+          isLoading: false,
+          isError: false,
+          error: null,
+          data: {
+            rows: pageRows,
+            summary: { totalItems: 10499, outOfStock: 0, lowStock: 0, healthy: 0 },
+            pagination: { page: 2, pageSize: 10, totalItems: 10499, totalPages: 1050, rangeStart: 11, rangeEnd: 20 },
+          },
+        }}
+        deadStockQuery={{
+          isLoading: false,
+          isError: false,
+          error: null,
+          data: {
+            items: [],
+            pagination: { page: 1, pageSize: 20, totalItems: 10499, totalPages: 525, rangeStart: 1, rangeEnd: 20 },
+            summary: {
+              totalDeadProducts: 10499,
+              totalDeadStockUnits: 20998,
+              totalTiedCapital: 5340000,
+              cutoffDays: 60,
+            },
+          },
+        }}
+        exportLowStock={vi.fn()}
+        printInventoryValueReport={vi.fn()}
+        printInventoryMovementsReport={vi.fn()}
+        locationId="all"
+        inventorySearch=""
+        onInventorySearchChange={vi.fn()}
+        inventoryFilter="dead"
+        onInventoryFilterChange={vi.fn()}
+        deadStockDays={60}
+        onDeadStockDaysChange={vi.fn()}
+        onInventoryPageChange={vi.fn()}
+        onInventoryPageSizeChange={vi.fn()}
+        onInventoryFiltersReset={vi.fn()}
+      />,
+    );
+
+    // Whole-set label on page 2, next to the whole-set count.
+    expect(screen.getByText('أصناف راكدة (كل المجموعة)')).toBeInTheDocument();
+    expect(deadStockCardValue('أصناف راكدة (كل المجموعة)')).toBe('10499 صنف');
+    expect(screen.queryByText(/الصفحة الحالية/)).not.toBeInTheDocument();
+  });
+
+  /*
+  Pins the live locale strings (INV-SLOW-MOVING-HEADER). In tests i18next
+  has no instance, so t() returns the component fallback — which is why
+  the stale "(الصفحة الحالية)" text in ar.json / en.json shipped live
+  while the component spec stayed green. Both locales and the
+  auto-translator dictionary must carry the whole-set wording.
+  */
+  it('carries the whole-set dead-stock label in both locales and the dictionary', () => {
+    const arSection = (ar as unknown as { reports: { sections: { inventory_report_section: Record<string, string> } } }).reports.sections.inventory_report_section;
+    const enSection = (en as unknown as { reports: { sections: { inventory_report_section: Record<string, string> } } }).reports.sections.inventory_report_section;
+    const dict = uiDict as unknown as Record<string, string>;
+    expect(arSection.s11).toBe('أصناف راكدة (كل المجموعة)');
+    expect(enSection.s11).toBe('Dormant items (whole set)');
+    expect(arSection.s11).not.toContain('الصفحة الحالية');
+    expect(enSection.s11).not.toContain('current page');
+    expect(dict['أصناف راكدة (كل المجموعة)']).toBe('Dormant items (whole set)');
+    expect(dict['أصناف راكدة (الصفحة الحالية)']).toBeUndefined();
   });
 
   /*

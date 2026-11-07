@@ -117,7 +117,7 @@ export function InventoryReportSection({
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', marginBottom: '16px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '12px' }}>
             <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
-              <div style={{ fontSize: '0.85em', color: '#64748b', marginBottom: '4px' }}>{t('reports.sections.inventory_report_section.s11', "أصناف راكدة")}</div>
+              <div style={{ fontSize: '0.85em', color: '#64748b', marginBottom: '4px' }}>{t('reports.sections.inventory_report_section.s11', "أصناف راكدة (كل المجموعة)")}</div>
               <div style={{ fontSize: '1.4em', fontWeight: 'bold', color: '#dc2626' }}>{summary?.totalItems || rows.length} {isEn ? 'Items' : t('reports.sections.inventory_report_section.s12', "صنف")}</div>
             </div>
             <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
