@@ -102,20 +102,20 @@ export class FiscalYearService {
     private readonly accountingPosting: AccountingPostingService,
   ) {}
 
-  private toMoney(value: unknown): number {
+  /* List/get shaping at the tenant's book digits (was hardcoded 2dp).
+   * Non-finite input still shapes to 0, as before. */
+  private toMoney(value: unknown, digits: MoneyDigits): number {
     const n = Number(value || 0);
-    return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
+    return Number.isFinite(n) ? roundMoney(n, digits) : 0;
   }
 
   /**
    * Close-path rounding: round once with the canonical engine at the
-   * tenant's book digits. Kept separate from toMoney (2dp display
-   * shaping for list/get) so the close computation can never silently
-   * fall back to two decimals.
+   * tenant's book digits. Kept separate from toMoney so the close
+   * computation can never silently fall back to display shaping.
    */
   private toBookMoney(value: unknown, digits: MoneyDigits): number {
-    const n = Number(value || 0);
-    return Number.isFinite(n) ? roundMoney(n, digits) : 0;
+    return this.toMoney(value, digits);
   }
 
   private formatDate(date: any): string {
@@ -145,6 +145,7 @@ export class FiscalYearService {
   }> {
     const tenantId = String(auth.tenantId || '');
     const today = new Date().toISOString().substring(0, 10);
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
 
     const years = await this.db
       .selectFrom('accounting_fiscal_years')
@@ -172,9 +173,9 @@ export class FiscalYearService {
         ...y,
         start_date: start,
         end_date: end,
-        net_profit_loss: this.toMoney(y.net_profit_loss),
-        total_revenue: this.toMoney(y.total_revenue),
-        total_expense: this.toMoney(y.total_expense),
+        net_profit_loss: this.toMoney(y.net_profit_loss, digits),
+        total_revenue: this.toMoney(y.total_revenue, digits),
+        total_expense: this.toMoney(y.total_expense, digits),
       };
     });
 
@@ -194,6 +195,7 @@ export class FiscalYearService {
    */
   async getFiscalYear(auth: AuthContext, id: number): Promise<any> {
     const tenantId = String(auth.tenantId || '');
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
     const fy = await this.db
       .selectFrom('accounting_fiscal_years')
       .selectAll()
@@ -219,9 +221,9 @@ export class FiscalYearService {
       ...fy,
       start_date: this.formatDate(fy.start_date),
       end_date: this.formatDate(fy.end_date),
-      net_profit_loss: this.toMoney(fy.net_profit_loss),
-      total_revenue: this.toMoney(fy.total_revenue),
-      total_expense: this.toMoney(fy.total_expense),
+      net_profit_loss: this.toMoney(fy.net_profit_loss, digits),
+      total_revenue: this.toMoney(fy.total_revenue, digits),
+      total_expense: this.toMoney(fy.total_expense, digits),
       closingEntry,
     };
   }

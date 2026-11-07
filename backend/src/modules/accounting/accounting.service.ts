@@ -104,22 +104,22 @@ export class AccountingService {
     throw new ForbiddenException('Missing required permissions');
   }
 
-  private toMoney(value: unknown): number {
+  /* Digits-aware rounding at the tenant's book digits (was hardcoded
+   * 2dp). Non-finite input still throws, as before. */
+  private toMoney(value: unknown, digits: MoneyDigits): number {
     const amount = Number(value ?? 0);
     if (!Number.isFinite(amount)) throw new BadRequestException('قيمة القيد يجب أن تكون رقمًا صالحًا.');
-    return Number(amount.toFixed(2));
+    return roundMoney(amount, digits);
   }
 
   /**
    * Opening-balance rounding: round once with the canonical engine at
-   * the tenant's book digits. Kept separate from toMoney (2dp display
-   * shaping) so the opening-balance computation can never silently
-   * fall back to two decimals. Mirrors toMoney's non-finite guard.
+   * the tenant's book digits. Same helper as toMoney; kept as a
+   * separate name so the opening-balance computation reads as the
+   * book-digits path.
    */
   private toBookMoney(value: unknown, digits: MoneyDigits): number {
-    const amount = Number(value ?? 0);
-    if (!Number.isFinite(amount)) throw new BadRequestException('قيمة القيد يجب أن تكون رقمًا صالحًا.');
-    return roundMoney(amount, digits);
+    return this.toMoney(value, digits);
   }
 
   private async assertJournalReferences(
@@ -704,6 +704,7 @@ export class AccountingService {
   async getJournalEntry(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
     this.assertAccountingAccess(auth);
     const { tenantId } = requireTenantScope(auth);
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
     const entry = await this.db
       .selectFrom('journal_entries')
       .selectAll()
@@ -740,8 +741,8 @@ export class AccountingService {
       .orderBy('l.id', 'asc')
       .execute();
 
-    const totalDebit = this.toMoney(lines.reduce((sum: number, line: any) => sum + Number(line.debit || 0), 0));
-    const totalCredit = this.toMoney(lines.reduce((sum: number, line: any) => sum + Number(line.credit || 0), 0));
+    const totalDebit = this.toMoney(lines.reduce((sum: number, line: any) => sum + Number(line.debit || 0), 0), digits);
+    const totalCredit = this.toMoney(lines.reduce((sum: number, line: any) => sum + Number(line.credit || 0), 0), digits);
 
     return {
       entry: {
@@ -775,8 +776,8 @@ export class AccountingService {
           costCenterCode: line.cost_center_code || null,
           costCenterName: line.cost_center_name || null,
           description: line.description || '',
-          debit: this.toMoney(line.debit),
-          credit: this.toMoney(line.credit),
+          debit: this.toMoney(line.debit, digits),
+          credit: this.toMoney(line.credit, digits),
           partnerType: line.partner_type,
           partnerId: line.partner_id ? String(line.partner_id) : '',
           branchId: line.branch_id ? String(line.branch_id) : '',
@@ -1270,6 +1271,7 @@ export class AccountingService {
 
   async getFinancialSummary(filters: FinancialSummaryQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
     this.assertAccountingAccess(auth);
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, String(auth.tenantId || '')));
 
     const dateFrom = filters.date_from ? new Date(filters.date_from) : null;
     const dateTo = filters.date_to ? new Date(filters.date_to) : null;
@@ -1336,70 +1338,70 @@ export class AccountingService {
       const accountNameAr = String(row.account_name_ar || '');
       const accountType = String(row.account_type || '');
       const accountGroup = String(row.account_group || '');
-      const debit = this.toMoney(row.debit);
-      const credit = this.toMoney(row.credit);
+      const debit = this.toMoney(row.debit, digits);
+      const credit = this.toMoney(row.credit, digits);
       const sourceType = String(row.source_type || '');
-      const revenueMovement = this.toMoney(credit - debit);
-      const expenseMovement = this.toMoney(debit - credit);
+      const revenueMovement = this.toMoney(credit - debit, digits);
+      const expenseMovement = this.toMoney(debit - credit, digits);
 
       if (this.inCodes(code, REVENUE_CODES) || accountType === 'revenue') {
         if (!this.inCodes(code, CONTRA_REVENUE_CODES) && accountType !== 'contra_revenue') {
-          grossSales = this.toMoney(grossSales + revenueMovement);
+          grossSales = this.toMoney(grossSales + revenueMovement, digits);
           const current = revenueBreakdown.get(code) || { accountCode: code, accountNameAr, amount: 0 };
-          current.amount = this.toMoney(current.amount + revenueMovement);
+          current.amount = this.toMoney(current.amount + revenueMovement, digits);
           revenueBreakdown.set(code, current);
         }
       }
 
       if (code === '4400') {
-        salesReturns = this.toMoney(salesReturns + expenseMovement);
+        salesReturns = this.toMoney(salesReturns + expenseMovement, digits);
       }
       if (code === '4300') {
-        salesDiscounts = this.toMoney(salesDiscounts + expenseMovement);
+        salesDiscounts = this.toMoney(salesDiscounts + expenseMovement, digits);
       }
       if (accountType === 'contra_revenue' && !this.inCodes(code, ['4300', '4400'])) {
-        salesReturns = this.toMoney(salesReturns + expenseMovement);
+        salesReturns = this.toMoney(salesReturns + expenseMovement, digits);
       }
 
       if (this.inCodes(code, COGS_CODES) || accountGroup === 'cogs') {
-        cogs = this.toMoney(cogs + expenseMovement);
+        cogs = this.toMoney(cogs + expenseMovement, digits);
       }
 
       const isOperatingExpense = (accountType === 'expense' || accountType === 'contra_expense' || accountGroup === 'operating_expenses')
         && !this.inCodes(code, COGS_CODES)
         && accountGroup !== 'cogs';
       if (isOperatingExpense) {
-        operatingExpenses = this.toMoney(operatingExpenses + expenseMovement);
+        operatingExpenses = this.toMoney(operatingExpenses + expenseMovement, digits);
         const current = expenseBreakdown.get(code) || { accountCode: code, accountNameAr, amount: 0 };
-        current.amount = this.toMoney(current.amount + expenseMovement);
+        current.amount = this.toMoney(current.amount + expenseMovement, digits);
         expenseBreakdown.set(code, current);
       }
 
       if (this.inCodes(code, CASH_BANK_CODES) || accountGroup === 'cash_bank') {
-        cashDebits = this.toMoney(cashDebits + Math.max(0, debit));
-        cashCredits = this.toMoney(cashCredits + Math.max(0, credit));
-        const movement = this.toMoney(debit - credit);
+        cashDebits = this.toMoney(cashDebits + Math.max(0, debit), digits);
+        cashCredits = this.toMoney(cashCredits + Math.max(0, credit), digits);
+        const movement = this.toMoney(debit - credit, digits);
         const current = cashBreakdown.get(code) || { accountCode: code, accountNameAr, amount: 0 };
-        current.amount = this.toMoney(current.amount + movement);
+        current.amount = this.toMoney(current.amount + movement, digits);
         cashBreakdown.set(code, current);
 
         if (sourceType === 'customer_payment' && debit > 0) {
-          customerCollections = this.toMoney(customerCollections + debit);
+          customerCollections = this.toMoney(customerCollections + debit, digits);
         }
         if ((sourceType === 'supplier_payment' || sourceType === 'supplier_payment_schedule_settlement') && credit > 0) {
-          supplierPayments = this.toMoney(supplierPayments + credit);
+          supplierPayments = this.toMoney(supplierPayments + credit, digits);
         }
         if ((sourceType === 'expense' || sourceType === 'treasury_expense') && credit > 0) {
-          treasuryExpenses = this.toMoney(treasuryExpenses + credit);
+          treasuryExpenses = this.toMoney(treasuryExpenses + credit, digits);
         }
       }
     }
 
-    const netSales = this.toMoney(grossSales - salesReturns - salesDiscounts);
-    const grossProfit = this.toMoney(netSales - cogs);
-    const netProfit = this.toMoney(grossProfit - operatingExpenses);
+    const netSales = this.toMoney(grossSales - salesReturns - salesDiscounts, digits);
+    const grossProfit = this.toMoney(netSales - cogs, digits);
+    const netProfit = this.toMoney(grossProfit - operatingExpenses, digits);
     // This is period movement only (not an opening/closing balance).
-    const netCashMovement = this.toMoney(cashDebits - cashCredits);
+    const netCashMovement = this.toMoney(cashDebits - cashCredits, digits);
 
     const asArray = (map: Map<string, { accountCode: string; accountNameAr: string; amount: number }>) =>
       Array.from(map.values()).sort((a, b) => Number(a.accountCode || 0) - Number(b.accountCode || 0));
@@ -1430,6 +1432,7 @@ export class AccountingService {
 
   async getReceivablesPayables(filters: ReceivablesPayablesQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
     this.assertAccountingAccess(auth);
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, String(auth.tenantId || '')));
     const dateTo = filters.date_to ? new Date(filters.date_to) : null;
     const branchId = Number(filters.branch_id || 0) > 0 ? Number(filters.branch_id) : null;
     const locationId = Number(filters.location_id || 0) > 0 ? Number(filters.location_id) : null;
@@ -1473,7 +1476,7 @@ export class AccountingService {
           customerId: String(row.id),
           customerName: row.name || '',
           phone: row.phone || '',
-          balance: this.toMoney(row.balance),
+          balance: this.toMoney(row.balance, digits),
           lastMovementDate: customerLastMap.get(String(row.id)) || '',
         }))
         .filter((row) => showZero || Math.abs(row.balance) > 0.0001);
@@ -1483,23 +1486,19 @@ export class AccountingService {
           supplierId: String(row.id),
           supplierName: row.name || '',
           phone: row.phone || '',
-          balance: this.toMoney(row.balance),
+          balance: this.toMoney(row.balance, digits),
           lastMovementDate: supplierLastMap.get(String(row.id)) || '',
         }))
         .filter((row) => showZero || Math.abs(row.balance) > 0.0001);
 
-      const customerReceivables = this.toMoney(
-        customerRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0),
-      );
-      const supplierPayables = this.toMoney(
-        supplierRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0),
-      );
+      const customerReceivables = this.toMoney(customerRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0), digits);
+      const supplierPayables = this.toMoney(supplierRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0), digits);
 
       return {
         totals: {
           customerReceivables,
           supplierPayables,
-          netPosition: this.toMoney(customerReceivables - supplierPayables),
+          netPosition: this.toMoney(customerReceivables - supplierPayables, digits),
         },
         customers: customerRows.sort((a, b) => b.balance - a.balance),
         suppliers: supplierRows.sort((a, b) => b.balance - a.balance),
@@ -1554,7 +1553,7 @@ export class AccountingService {
           customerId: String(row.customer_id || ''),
           customerName: customer?.name || '',
           phone: customer?.phone || '',
-          balance: this.toMoney(row.balance_total || 0),
+          balance: this.toMoney(row.balance_total || 0, digits),
           lastMovementDate: row.last_movement_at ? String(row.last_movement_at) : '',
         };
       })
@@ -1569,7 +1568,7 @@ export class AccountingService {
           supplierId: String(row.supplier_id || ''),
           supplierName: supplier?.name || '',
           phone: supplier?.phone || '',
-          balance: this.toMoney(row.balance_total || 0),
+          balance: this.toMoney(row.balance_total || 0, digits),
           lastMovementDate: row.last_movement_at ? String(row.last_movement_at) : '',
         };
       })
@@ -1577,18 +1576,14 @@ export class AccountingService {
       .filter((row) => showZero || Math.abs(row.balance) > 0.0001)
       .sort((a, b) => b.balance - a.balance);
 
-    const customerReceivables = this.toMoney(
-      customerRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0),
-    );
-    const supplierPayables = this.toMoney(
-      supplierRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0),
-    );
+    const customerReceivables = this.toMoney(customerRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0), digits);
+    const supplierPayables = this.toMoney(supplierRows.reduce((sum, row) => sum + (row.balance > 0 ? row.balance : 0), 0), digits);
 
     return {
       totals: {
         customerReceivables,
         supplierPayables,
-        netPosition: this.toMoney(customerReceivables - supplierPayables),
+        netPosition: this.toMoney(customerReceivables - supplierPayables, digits),
       },
       customers: customerRows,
       suppliers: supplierRows,
@@ -1597,6 +1592,7 @@ export class AccountingService {
 
   async getCashMovement(filters: CashMovementQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
     this.assertAccountingAccess(auth);
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, String(auth.tenantId || '')));
     const dateFrom = filters.date_from ? new Date(filters.date_from) : null;
     const dateTo = filters.date_to ? new Date(filters.date_to) : null;
     const branchId = Number(filters.branch_id || 0) > 0 ? Number(filters.branch_id) : null;
@@ -1633,25 +1629,25 @@ export class AccountingService {
     const bySource = new Map<string, { sourceType: string; debit: number; credit: number; net: number }>();
 
     for (const row of rows) {
-      const debit = this.toMoney(row.debit);
-      const credit = this.toMoney(row.credit);
+      const debit = this.toMoney(row.debit, digits);
+      const credit = this.toMoney(row.credit, digits);
       const sourceType = String(row.source_type || 'other');
       const accountCode = String(row.account_code || '');
       const accountNameAr = String(row.account_name_ar || '');
 
-      totalDebit = this.toMoney(totalDebit + debit);
-      totalCredit = this.toMoney(totalCredit + credit);
+      totalDebit = this.toMoney(totalDebit + debit, digits);
+      totalCredit = this.toMoney(totalCredit + credit, digits);
 
       const accountItem = byAccount.get(accountCode) || { accountCode, accountNameAr, debit: 0, credit: 0, net: 0 };
-      accountItem.debit = this.toMoney(accountItem.debit + debit);
-      accountItem.credit = this.toMoney(accountItem.credit + credit);
-      accountItem.net = this.toMoney(accountItem.debit - accountItem.credit);
+      accountItem.debit = this.toMoney(accountItem.debit + debit, digits);
+      accountItem.credit = this.toMoney(accountItem.credit + credit, digits);
+      accountItem.net = this.toMoney(accountItem.debit - accountItem.credit, digits);
       byAccount.set(accountCode, accountItem);
 
       const sourceItem = bySource.get(sourceType) || { sourceType, debit: 0, credit: 0, net: 0 };
-      sourceItem.debit = this.toMoney(sourceItem.debit + debit);
-      sourceItem.credit = this.toMoney(sourceItem.credit + credit);
-      sourceItem.net = this.toMoney(sourceItem.debit - sourceItem.credit);
+      sourceItem.debit = this.toMoney(sourceItem.debit + debit, digits);
+      sourceItem.credit = this.toMoney(sourceItem.credit + credit, digits);
+      sourceItem.net = this.toMoney(sourceItem.debit - sourceItem.credit, digits);
       bySource.set(sourceType, sourceItem);
     }
 
@@ -1660,7 +1656,7 @@ export class AccountingService {
       totals: {
         totalIn: totalDebit,
         totalOut: totalCredit,
-        netMovement: this.toMoney(totalDebit - totalCredit),
+        netMovement: this.toMoney(totalDebit - totalCredit, digits),
       },
       accounts: Array.from(byAccount.values()).sort((a, b) => Number(a.accountCode || 0) - Number(b.accountCode || 0)),
       sources: Array.from(bySource.values()).sort((a, b) => b.net - a.net),
@@ -1669,6 +1665,7 @@ export class AccountingService {
 
   async getInventoryValue(filters: InventoryValueQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
     this.assertAccountingAccess(auth);
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, String(auth.tenantId || '')));
 
     const categoryId = Number(filters.category_id || 0) > 0 ? Number(filters.category_id) : null;
     const supplierId = Number(filters.supplier_id || 0) > 0 ? Number(filters.supplier_id) : null;
@@ -1721,8 +1718,8 @@ export class AccountingService {
     if (lowStockOnly) query = query.where(sql<boolean>`ROUND(${stockQty}, 2) > 0 AND ROUND(${stockQty}, 2) <= ROUND(p.min_stock_qty, 2)`);
 
     const totalsRow = await query.clearSelect().select([
-      sql<number>`COALESCE(SUM(ROUND(${stockQty} * COALESCE(p.cost_price, 0), 2)), 0)`.as('total_inventory_value'),
-      sql<number>`COALESCE(SUM(ROUND(ROUND(${stockQty}, 2) * ROUND(COALESCE(p.retail_price, 0), 2), 2)), 0)`.as('total_retail_value'),
+      sql<number>`COALESCE(SUM(ROUND(${stockQty} * COALESCE(p.cost_price, 0), ${digits})), 0)`.as('total_inventory_value'),
+      sql<number>`COALESCE(SUM(ROUND(ROUND(${stockQty}, 2) * ROUND(COALESCE(p.retail_price, 0), ${digits}), ${digits})), 0)`.as('total_retail_value'),
       sql<number>`COUNT(*)::int`.as('item_count'),
       sql<number>`COUNT(*) FILTER (WHERE ROUND(${stockQty}, 2) > 0 AND ROUND(${stockQty}, 2) <= ROUND(p.min_stock_qty, 2))::int`.as('low_stock_count'),
       sql<number>`COUNT(*) FILTER (WHERE ROUND(${stockQty}, 2) = 0)::int`.as('zero_stock_count'),
@@ -1733,12 +1730,12 @@ export class AccountingService {
     const items = rows
       .map((row) => {
         const quantityOnHand = Number(row.stock_qty);
-        const minStockQty = this.toMoney(row.min_stock_qty);
+        const minStockQty = this.toMoney(row.min_stock_qty, digits);
         const unitCost = Number(row.cost_price);
-        const unitRetailPrice = this.toMoney(row.retail_price);
-        const inventoryValue = this.toMoney(quantityOnHand * unitCost);
-        const retailPotentialValue = this.toMoney(quantityOnHand * unitRetailPrice);
-        const potentialGrossMargin = this.toMoney(retailPotentialValue - inventoryValue);
+        const unitRetailPrice = this.toMoney(row.retail_price, digits);
+        const inventoryValue = this.toMoney(quantityOnHand * unitCost, digits);
+        const retailPotentialValue = this.toMoney(quantityOnHand * unitRetailPrice, digits);
+        const potentialGrossMargin = this.toMoney(retailPotentialValue - inventoryValue, digits);
 
         let status: 'available' | 'low_stock' | 'out_of_stock' | 'negative_stock' = 'available';
         if (quantityOnHand < 0) status = 'negative_stock';
@@ -1765,9 +1762,9 @@ export class AccountingService {
       });
 
     const totals = {
-      totalInventoryValue: this.toMoney(totalsRow?.total_inventory_value),
-      totalRetailPotentialValue: this.toMoney(totalsRow?.total_retail_value),
-      totalPotentialGrossMargin: this.toMoney(Number(totalsRow?.total_retail_value || 0) - Number(totalsRow?.total_inventory_value || 0)),
+      totalInventoryValue: this.toMoney(totalsRow?.total_inventory_value, digits),
+      totalRetailPotentialValue: this.toMoney(totalsRow?.total_retail_value, digits),
+      totalPotentialGrossMargin: this.toMoney(Number(totalsRow?.total_retail_value || 0) - Number(totalsRow?.total_inventory_value || 0), digits),
       itemCount: Number(totalsRow?.item_count || 0),
       lowStockCount: Number(totalsRow?.low_stock_count || 0),
       zeroStockCount: Number(totalsRow?.zero_stock_count || 0),
@@ -1990,13 +1987,17 @@ export class AccountingService {
   }
 
   async validateBalancedLines(lines: DraftJournalLineInput[], auth?: AuthContext): Promise<{ ok: true; lines: Array<Required<DraftJournalLineInput>> } | { ok: false; message: string }> {
+    // Book digits from the tenant when scoped; without a tenant there is
+    // no book to read, so the previous 2dp shaping is kept as fallback.
+    const digits: MoneyDigits = auth ? currencyMoneyDigits(await tenantBaseCurrency(this.db, requireTenantScope(auth).tenantId)) : 2;
+    const unit = 10 ** -digits;
     if (!Array.isArray(lines) || lines.length < 2) {
       return { ok: false, message: 'Journal entry must include at least two lines.' };
     }
 
     const normalized: Array<Required<DraftJournalLineInput>> = lines.map((line) => {
-      const debit = this.toMoney(line.debit);
-      const credit = this.toMoney(line.credit);
+      const debit = this.toMoney(line.debit, digits);
+      const credit = this.toMoney(line.credit, digits);
       const partnerType = this.normalizePartnerType(line.partnerType);
       if (!partnerType) {
         throw new ForbiddenException('Partner type must be one of: none, customer, supplier.');
@@ -2034,14 +2035,14 @@ export class AccountingService {
       if (!activeMap.get(line.accountId)) return { ok: false, message: 'Inactive accounts are not allowed in journal lines.' };
     }
 
-    const totalDebit = this.toMoney(normalized.reduce((sum, line) => sum + line.debit, 0));
-    const totalCredit = this.toMoney(normalized.reduce((sum, line) => sum + line.credit, 0));
-    const difference = this.toMoney(totalDebit - totalCredit);
-    if (Math.abs(difference) > 0.05) {
+    const totalDebit = this.toMoney(normalized.reduce((sum, line) => sum + line.debit, 0), digits);
+    const totalCredit = this.toMoney(normalized.reduce((sum, line) => sum + line.credit, 0), digits);
+    const difference = this.toMoney(totalDebit - totalCredit, digits);
+    if (Math.abs(difference) > 5 * unit) {
       return { ok: false, message: 'Total debit must equal total credit.' };
     }
 
-    if (Math.abs(difference) >= 0.001) {
+    if (Math.abs(difference) >= unit) {
       if (!auth) return { ok: false, message: 'Tenant scope is required to resolve the rounding account.' };
       const scope = requireTenantScope(auth);
       const roundingAccount = await this.db.selectFrom('accounting_accounts').select(['id', 'is_active'])
@@ -2495,6 +2496,7 @@ export class AccountingService {
     if (!posting) throw new Error('Accounting posting service is required for depreciation');
 
     return await this.db.transaction().execute(async (trx) => {
+      const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
       const asset = await trx
         .selectFrom('fixed_assets')
         .selectAll()
@@ -2534,8 +2536,8 @@ export class AccountingService {
         throw new BadRequestException('لا يوجد إهلاك مستحق لهذا الأصل حتى تاريخ الترحيل أو وصل إلى قيمة الخردة.');
       }
 
-      const newAccumulated = this.toMoney(currentAccumulated + depreciationAmount);
-      const newBookValue = this.toMoney(Math.max(0, cost - newAccumulated));
+      const newAccumulated = this.toMoney(currentAccumulated + depreciationAmount, digits);
+      const newBookValue = this.toMoney(Math.max(0, cost - newAccumulated), digits);
       const isFullyDepreciated = newAccumulated >= depreciableBase;
 
       // 1. Resolve Accounts
@@ -2646,6 +2648,7 @@ export class AccountingService {
 
   async depreciateAllFixedAssets(body: { months?: number; note?: string }, actor: AuthContext): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(actor);
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const activeAssets = await this.db
       .selectFrom('fixed_assets')
       .selectAll()
@@ -2667,7 +2670,7 @@ export class AccountingService {
       try {
         const res = await this.depreciateFixedAsset(Number(asset.id), body, actor);
         processedCount++;
-        totalDepreciation = this.toMoney(totalDepreciation + Number(res.depreciationAmount || 0));
+        totalDepreciation = this.toMoney(totalDepreciation + Number(res.depreciationAmount || 0), digits);
         results.push({ id: asset.id, name: asset.name, code: asset.code, amount: res.depreciationAmount, entryNo: res.entryNo });
       } catch (e: any) {
         results.push({ id: asset.id, name: asset.name, code: asset.code, error: e?.message || 'Failed' });
@@ -3564,6 +3567,7 @@ export class AccountingService {
     this.assertAccountingAccess(auth);
     const scope = requireTenantScope(auth);
     return this.db.transaction().execute(async (trx) => {
+      const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
       const sLine = await (trx as any)
         .selectFrom('bank_statement_lines as bsl')
         .innerJoin('bank_statements as bs', (join: any) => join.onRef('bs.id', '=', 'bsl.statement_id').onRef('bs.tenant_id', '=', 'bsl.tenant_id'))
@@ -3579,7 +3583,7 @@ export class AccountingService {
       if (!Number.isFinite(signedAmount) || signedAmount >= 0) {
         throw new BadRequestException('عمولة البنك يجب أن تكون حركة خصم سالبة.');
       }
-      const feeAmount = this.toMoney(Math.abs(signedAmount));
+      const feeAmount = this.toMoney(Math.abs(signedAmount), digits);
       if (feeAmount <= 0) throw new BadRequestException('مبلغ العمولة غير صالح.');
 
       const entryResult = await this.createManualJournalEntry({

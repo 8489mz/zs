@@ -4,6 +4,8 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
+import { tenantBaseCurrency } from '../accounting-currency';
+import { currencyMoneyDigits } from '../engines/money-minor-units.engine';
 import {
   buildTrialBalance,
   TrialBalanceReportData,
@@ -27,6 +29,11 @@ export class TrialBalanceService {
     // Fail closed when the caller carries no tenant scope: a trial balance
     // must never run unscoped (it would leak or silently empty the book).
     const { tenantId } = requireTenantScope(auth);
+    // D1: the live trial balance passes the tenant's book digits to the
+    // engine — without this the engine's digits = 2 default applies and
+    // the live page stays 2dp on a 3dp book. Fail-closed on a base
+    // currency / settings mismatch, like the other D1 read paths.
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
     const targetDate = params.asOfDate ? new Date(params.asOfDate) : new Date();
     targetDate.setHours(23, 59, 59, 999);
 
@@ -78,6 +85,7 @@ export class TrialBalanceService {
         totalDebit: Number(row.total_debit),
         totalCredit: Number(row.total_credit),
       })),
+      digits,
     );
   }
 }

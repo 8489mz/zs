@@ -1,3 +1,5 @@
+import { roundMoney, type MoneyDigits } from './money-minor-units.engine';
+
 /* Trial balance engine (INV-TRIAL-BALANCE-PAGE): a trial balance lists EVERY
  * tenant account (ordered by code) with its posted debit/credit totals and
  * shows the balance in a single debit column or a single credit column.
@@ -43,21 +45,25 @@ export interface TrialBalanceReportData {
   isBalanced: boolean;
 }
 
-function toMoney(value: unknown): number {
+/* Digits-aware rounding: the caller passes the tenant's book digits
+ * (2dp default preserves the old shaping for callers that do not pass
+ * digits yet). Non-finite input still shapes to 0, as before. */
+function toMoney(value: unknown, digits: MoneyDigits = 2): number {
   const n = Number(value || 0);
-  return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
+  return Number.isFinite(n) ? roundMoney(n, digits) : 0;
 }
 
 export function buildTrialBalance(
   asOfDate: string,
   accounts: TrialBalanceAccountInput[],
   sums: TrialBalanceSumsInput[],
+  digits: MoneyDigits = 2,
 ): TrialBalanceReportData {
   const sumsByAccountId = new Map<number, { debit: number; credit: number }>();
   for (const row of sums) {
     sumsByAccountId.set(Number(row.accountId), {
-      debit: toMoney(row.totalDebit),
-      credit: toMoney(row.totalCredit),
+      debit: toMoney(row.totalDebit, digits),
+      credit: toMoney(row.totalCredit, digits),
     });
   }
 
@@ -65,7 +71,7 @@ export function buildTrialBalance(
     .sort((a, b) => String(a.code).localeCompare(String(b.code)))
     .map((acc) => {
       const s = sumsByAccountId.get(Number(acc.id)) || { debit: 0, credit: 0 };
-      const net = toMoney(s.debit - s.credit);
+      const net = toMoney(s.debit - s.credit, digits);
       return {
         id: Number(acc.id),
         code: String(acc.code),
@@ -75,22 +81,23 @@ export function buildTrialBalance(
         totalDebit: s.debit,
         totalCredit: s.credit,
         debit: net > 0 ? net : 0,
-        credit: net < 0 ? toMoney(-net) : 0,
+        credit: net < 0 ? toMoney(-net, digits) : 0,
       };
     });
 
-  const totalDebit = toMoney(rows.reduce((sum, r) => sum + r.debit, 0));
-  const totalCredit = toMoney(rows.reduce((sum, r) => sum + r.credit, 0));
-  const difference = toMoney(totalDebit - totalCredit);
+  const totalDebit = toMoney(rows.reduce((sum, r) => sum + r.debit, 0), digits);
+  const totalCredit = toMoney(rows.reduce((sum, r) => sum + r.credit, 0), digits);
+  const difference = toMoney(totalDebit - totalCredit, digits);
   return {
     asOfDate,
     rows,
     totalDebit,
     totalCredit,
     difference,
-    // Every money value is rounded to 2dp by toMoney before the difference
-    // is computed, so float dust is already gone: a real 0.01 difference is
-    // a real one-cent imbalance and must NOT read as balanced (money strict).
+    // Every money value is rounded at book digits by toMoney before the
+    // difference is computed, so float dust is already gone: a real
+    // one-minor-unit difference is a real imbalance and must NOT read
+    // as balanced (money strict).
     isBalanced: difference === 0,
   };
 }
