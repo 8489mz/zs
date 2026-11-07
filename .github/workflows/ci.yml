@@ -23,6 +23,14 @@ concurrency:
 
 jobs:
   backend:
+    # Sequential fail-fast (2026-11-07): the backend only runs after the
+    # frontend passes. A failed frontend skips the backend automatically
+    # (0 billable minutes) instead of both jobs burning minutes in
+    # parallel while the run is already doomed. Frontend first because it
+    # is the short job (~8m vs ~21m): a frontend failure saves the whole
+    # backend job, and the backend's own typecheck is already its first
+    # step, so backend-first would add no early signal.
+    needs: frontend
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -173,6 +181,13 @@ jobs:
       - name: Install frontend
         run: npm ci
         working-directory: frontend
+      # Fail-fast: the type-check + bundle runs FIRST, before the guards
+      # and specs. A type error (e.g. the TS1117 duplicate key that failed
+      # run #2813) used to surface only after ~8m of guards and tests;
+      # now it fails the job in ~1-2m and the backend never starts.
+      - name: Build frontend (type-check + bundle)
+        run: npm run build
+        working-directory: frontend
       - name: Frontend architecture and contract guards
         run: |
           npm run qa:functional
@@ -184,9 +199,6 @@ jobs:
         working-directory: frontend
       - name: Frontend regression guards (component and route specs)
         run: npm run test:run
-        working-directory: frontend
-      - name: Build frontend (type-check + bundle)
-        run: npm run build
         working-directory: frontend
 
       # PERF-5..PERF-8 can only be measured on a real build: this is the check that catches a heavy
