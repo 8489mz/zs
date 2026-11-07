@@ -62,6 +62,7 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
   const showBatchesAndExpiry = shouldShowExpiryDateField({ settings: settingsQuery.data });
   const [deliveryRef, setDeliveryRef] = useState('');
   const [notes, setNotes] = useState('');
+  const [freight, setFreight] = useState('');
   const [autoPost, setAutoPost] = useState(true);
   const [lines, setLines] = useState<LineState[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -111,6 +112,7 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
       );
       setDeliveryRef('');
       setNotes('');
+      setFreight('');
       setAutoPost(true);
     }
   }, [open, initialItems]);
@@ -140,6 +142,10 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
       return updated;
     });
   };
+
+  // INV-SHIPPING-ALLOCATION: freight the merchant pays on this
+  // receipt, allocated to item cost at posting time.
+  const freightAmount = Math.max(0, Number(freight) || 0);
 
   const handleSubmit = async () => {
     try {
@@ -178,6 +184,10 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
         locationId: finalLocationId,
         supplierDeliveryNoteRef: deliveryRef.trim() || null,
         notes: notes.trim() || null,
+        // INV-SHIPPING-ALLOCATION: freight entered on the receipt is
+        // sent only when > 0 — the backend then allocates it to item
+        // cost at posting; no freight means no key at all.
+        ...(freightAmount > 0 ? { freight: freightAmount } : {}),
         lines: validLines.map((l) => ({
           productId: l.productId,
           purchaseOrderItemId: l.purchaseOrderItemId || null,
@@ -210,7 +220,7 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
     }
   };
 
-  const totalAcceptedAmount = lines.reduce((sum, l) => sum + l.acceptedQty * l.unitCost, 0);
+      const totalAcceptedAmount = lines.reduce((sum, l) => sum + l.acceptedQty * l.unitCost, 0);
 
   return (
     <StandardDialog
@@ -291,8 +301,28 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
             />
           </div>
           <div>
-            <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>{t('purchases.goods_receipt_modal.s10', "قيمة البضاعة المقبولة المتوقعة")}</span>
-            <strong style={{ color: '#166534', fontSize: '13px' }}>{totalAcceptedAmount.toLocaleString()} {t('purchases.goods_receipt_modal.s11', "ج.م")}</strong>
+            <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>{t('purchases.goods_receipt_modal.freight', "الشحن (يُوزَّع على تكلفة الأصناف)")}</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0.00"
+              value={freight}
+              onChange={(e) => setFreight(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '4px 8px',
+                fontSize: '12px',
+                border: '1px solid #cbd5e1',
+                borderRadius: '6px',
+                marginTop: '3px',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+          <div>
+            <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>{freightAmount > 0 ? t('purchases.goods_receipt_modal.total_with_freight', "الإجمالي المتوقع مع الشحن") : t('purchases.goods_receipt_modal.s10', "قيمة البضاعة المقبولة المتوقعة")}</span>
+            <strong style={{ color: '#166534', fontSize: '13px' }}>{(totalAcceptedAmount + freightAmount).toLocaleString()} {t('purchases.goods_receipt_modal.s11', "ج.م")}</strong>
           </div>
         </div>
 

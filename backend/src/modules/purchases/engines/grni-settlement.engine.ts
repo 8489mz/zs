@@ -1,7 +1,20 @@
 import { AppError } from '../../../common/errors/app-error';
 import type { MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
-export type GrnAccrualLine = { id: number; acceptedQty: number; unitCost: number };
+export type GrnAccrualLine = {
+  id: number;
+  acceptedQty: number;
+  unitCost: number;
+  /*
+   * INV-SHIPPING-ALLOCATION: the exact landed line total (bare line
+   * total at book digits + the line's allocated freight) when the
+   * receipt carried freight. The GRN journal posts the landed total,
+   * so the accrual must reconcile to it — not to the bare
+   * acceptedQty x unitCost — or the freight would strand in 2125
+   * after the bill settles. When absent, the bare product is used.
+   */
+  landedLineTotal?: number;
+};
 
 /**
  * Minor-unit conversion for DERIVED amounts (qty x unit cost). Such products
@@ -29,15 +42,29 @@ function toMinorUnitsRounded(value: number, digits: MoneyDigits): number {
 export function allocateGrnAccrual(lines: GrnAccrualLine[], minorUnits: MoneyDigits): Map<number, number> {
   const sorted = [...lines].sort((a, b) => a.id - b.id);
   if (sorted.some((line) => !Number.isFinite(line.acceptedQty) || line.acceptedQty < 0 ||
-    !Number.isFinite(line.unitCost) || line.unitCost < 0)) {
+    !Number.isFinite(line.unitCost) || line.unitCost < 0 ||
+    (line.landedLineTotal != null && (!Number.isFinite(line.landedLineTotal) || line.landedLineTotal < 0)))) {
     throw new AppError('بنود الاستلام غير صالحة للتسوية', 'GRNI_LINE_INVALID', 422);
   }
-  let remaining = toMinorUnitsRounded(sorted.reduce((sum, line) => sum + line.acceptedQty * line.unitCost, 0), minorUnits);
+  // INV-SHIPPING-ALLOCATION: a line that carried freight reconciles to
+  // its landed total (already at book digits), never to the bare
+  // product — the journal total includes the freight. When NO line
+  // carries freight, the total keeps the original single-rounding of
+  // the float sum (pinned by canonical-rounding.spec.ts: the sum lands
+  // just above the half and the last line absorbs the residue); summing
+  // per-line minors instead would move that total by a minor.
+  const lineMinor = (line: GrnAccrualLine): number => line.landedLineTotal != null
+    ? toMinorUnitsRounded(line.landedLineTotal, minorUnits)
+    : toMinorUnitsRounded(line.acceptedQty * line.unitCost, minorUnits);
+  const hasLanded = sorted.some((line) => line.landedLineTotal != null);
+  let remaining = hasLanded
+    ? sorted.reduce((sum, line) => sum + lineMinor(line), 0)
+    : toMinorUnitsRounded(sorted.reduce((sum, line) => sum + line.acceptedQty * line.unitCost, 0), minorUnits);
   const result = new Map<number, number>();
   const lastBillableId = [...sorted].reverse().find((line) => line.acceptedQty > 0)?.id;
   sorted.forEach((line) => {
     const amount = line.acceptedQty <= 0 ? 0 : line.id === lastBillableId
-      ? remaining : Math.min(remaining, toMinorUnitsRounded(line.acceptedQty * line.unitCost, minorUnits));
+      ? remaining : Math.min(remaining, lineMinor(line));
     result.set(line.id, amount);
     remaining -= amount;
   });

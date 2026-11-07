@@ -95,10 +95,24 @@ export class CreateGoodsReceiptDto {
   @IsInt()
   supplierId!: number;
 
-  @Transform(({ value }) => (value !== undefined && value !== null && value !== '' ? Number(value) : undefined))
+  @Transform(({ value }) => (value !== undefined && value !== null ? Number(value) : undefined))
   @IsOptional()
   @IsInt()
   locationId?: number;
+
+  /*
+   * INV-SHIPPING-ALLOCATION: freight (shipping) paid on this receipt,
+   * allocated to item cost at posting time by the same canonical
+   * allocator the direct invoice uses, so the WAC reflects the true
+   * landed cost. Absent or 0 means no freight and the receipt posts
+   * exactly as before. The amount must match the tenant's book
+   * digits — postGoodsReceipt fails closed on a sub-minor amount.
+   */
+  @Transform(({ value }) => (value !== undefined && value !== null && value !== '' ? Number(value) : undefined))
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  freight?: number;
 
   @IsOptional()
   @IsDateString()

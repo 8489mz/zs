@@ -47,6 +47,10 @@ export interface CreateGoodsReceiptPayload {
   supplierDeliveryNoteRef?: string | null;
   receivedAt?: string;
   notes?: string | null;
+  // INV-SHIPPING-ALLOCATION: freight (shipping) on this receipt,
+  // allocated to item cost at posting time. Absent or 0 means no
+  // freight and the receipt posts exactly as before.
+  freight?: number;
   lines: Array<{
     productId: number;
     purchaseOrderItemId?: number | null;

@@ -1624,6 +1624,7 @@ export interface GoodsReceiptNoteTable {
   supplier_delivery_note_ref: string | null;
   status: string;
   grni_journal_entry_id: number | null;
+  freight_amount: number | string;
   pending_review: boolean;
   pending_review_reason: string | null;
   notes: string | null;
@@ -1646,6 +1647,8 @@ export interface GoodsReceiptLineTable {
   expiry_date: Date | string | null;
   manufacturing_date: Date | string | null;
   unit_cost: number | string;
+  allocated_landed_cost: number | string;
+  landed_unit_cost: number | string | null;
   quarantine_location_id: number | null;
   coa_document_id: number | null;
   over_received_qty: number | string;

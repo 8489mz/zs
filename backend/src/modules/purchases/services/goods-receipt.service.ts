@@ -10,6 +10,7 @@ import { CreateGoodsReceiptDto, CreateGrnBillDto, VerifyThreeWayMatchDto } from 
 import { computeThreeWayMatch, ThreeWayMatchInput } from '../three-way-match.engine';
 import { applyStockDelta, lockStockProducts } from '../../../common/utils/location-stock-ledger';
 import { allocateGrnAccrual, allocateGrniBillPortion } from '../engines/grni-settlement.engine';
+import { allocateLandedCosts } from '../engines/landed-cost-allocation.engine';
 import { valueStockReceipt } from '../../accounting/inventory-valuation';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, fromMinorUnits, roundMoney, toMinorUnits } from '../../accounting/engines/money-minor-units.engine';
@@ -81,12 +82,32 @@ export class GoodsReceiptService {
     return created ? Number(created.id) : null;
   }
 
+  /*
+   * INV-SHIPPING-ALLOCATION: freight on a receipt must be a
+   * book-digits amount — a sub-minor amount fails closed instead of
+   * rounding silently into the WAC. Absent freight is 0 and the
+   * receipt posts exactly as before.
+   */
+  private validateGrnFreight(freight: number | undefined, moneyDigits: 2 | 3): number {
+    if (freight == null || freight === 0) return 0;
+    try {
+      const minor = toMinorUnits(Number(freight), moneyDigits);
+      if (minor <= 0) throw new Error('Non-positive');
+      return fromMinorUnits(minor, moneyDigits);
+    } catch {
+      throw new BadRequestException('مبلغ الشحن لا يطابق دقة عملة الأساس.');
+    }
+  }
+
   async createGoodsReceipt(dto: CreateGoodsReceiptDto, auth: AuthContext): Promise<any> {
     const scope = requireTenantScope(auth);
 
     if (!dto.lines || dto.lines.length === 0) {
       throw new BadRequestException('يجب إدخال بند واحد على الأقل في إذن الاستلام.');
     }
+
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
+    const freight = this.validateGrnFreight(dto.freight, moneyDigits);
 
     // Verify supplier exists
     const supplier = await (this.db as any)
@@ -201,6 +222,7 @@ export class GoodsReceiptService {
           received_at: dto.receivedAt ? new Date(dto.receivedAt) : new Date(),
           received_by: auth.userId,
           supplier_delivery_note_ref: dto.supplierDeliveryNoteRef || null,
+          freight_amount: freight,
           status: 'draft',
           notes: dto.notes || null,
           created_at: new Date(),
@@ -335,6 +357,7 @@ export class GoodsReceiptService {
         'g.pending_review_reason',
         'g.supplier_delivery_note_ref',
         'g.grni_journal_entry_id',
+        'g.freight_amount',
         'g.notes',
         'g.created_at',
       ])
@@ -365,6 +388,8 @@ export class GoodsReceiptService {
         'gl.expiry_date',
         'gl.manufacturing_date',
         'gl.unit_cost',
+        'gl.allocated_landed_cost',
+        'gl.landed_unit_cost',
         'gl.quarantine_location_id',
         'gl.coa_document_id',
         'gl.notes',
@@ -386,6 +411,7 @@ export class GoodsReceiptService {
       pendingReviewReason: grn.pending_review_reason,
       supplierDeliveryNoteRef: grn.supplier_delivery_note_ref,
       grniJournalEntryId: grn.grni_journal_entry_id ? Number(grn.grni_journal_entry_id) : null,
+      freightAmount: Number(grn.freight_amount || 0),
       notes: grn.notes,
       createdAt: grn.created_at,
       lines: lines.map((l: any) => ({
@@ -404,6 +430,8 @@ export class GoodsReceiptService {
         expiryDate: l.expiry_date,
         manufacturingDate: l.manufacturing_date,
         unitCost: Number(l.unit_cost || 0),
+        allocatedLandedCost: Number(l.allocated_landed_cost || 0),
+        landedUnitCost: l.landed_unit_cost != null ? Number(l.landed_unit_cost) : null,
         quarantineLocationId: l.quarantine_location_id ? Number(l.quarantine_location_id) : null,
         coaDocumentId: l.coa_document_id ? Number(l.coa_document_id) : null,
         notes: l.notes,
@@ -471,6 +499,31 @@ export class GoodsReceiptService {
 
       const grn = await this.getGoodsReceipt(id, auth, trx);
       await lockStockProducts(trx, { ...scope, productIds: grn.lines.map((line: any) => Number(line.productId)) });
+
+      // INV-SHIPPING-ALLOCATION: freight on the receipt is allocated
+      // to item cost at posting time by the same canonical allocator
+      // the direct invoice uses (value proportion), so the WAC
+      // reflects the true landed cost instead of the bare item cost.
+      // Rejected quantities never carry freight: only accepted stock
+      // is valued, and a receipt with no accepted value fails closed
+      // instead of posting freight into nothing.
+      const freight = this.validateGrnFreight(grn.freightAmount, moneyDigits);
+      const acceptedLines = [...grn.lines]
+        .sort((a, b) => Number(a.productId) - Number(b.productId))
+        .filter((line: any) => Number(line.acceptedQty || 0) > 0);
+      if (freight > 0 && !acceptedLines.some((line: any) => Number(line.acceptedQty || 0) * Number(line.unitCost || 0) > 0)) {
+        throw new BadRequestException('الشحن يحتاج صنفاً مقبولاً واحداً على الأقل في إذن الاستلام؛ الكميات المرفوضة وحدها لا تحمل تكلفة وصول.');
+      }
+      const freightByLineId = new Map<number, number>();
+      if (freight > 0) {
+        const shares = allocateLandedCosts(
+          freight,
+          acceptedLines.map((line: any) => Math.max(0, Number(line.acceptedQty || 0) * Number(line.unitCost || 0))),
+          moneyDigits,
+        );
+        acceptedLines.forEach((line: any, i: number) => freightByLineId.set(Number(line.id), shares[i]));
+      }
+
       let totalGrniAmount = 0;
 
       // Stock movements must carry branch attribution like every other stock path does.
@@ -490,7 +543,17 @@ export class GoodsReceiptService {
           if (!Number.isFinite(lineUnitCost) || lineUnitCost <= 0 || roundMoney(accepted * lineUnitCost, moneyDigits) <= 0) {
             throw new BadRequestException(`لا يمكن ترحيل استلام الصنف ${line.productId} بدون تكلفة مالية صالحة.`);
           }
-          totalGrniAmount += accepted * lineUnitCost;
+          // INV-SHIPPING-ALLOCATION: this line's share of the receipt
+          // freight, by value. The landed line total is the bare line
+          // total at book digits plus the share, so the GRNI journal
+          // below (the sum of these totals) can never diverge from
+          // the stored movement totals by rounding.
+          const allocatedFreight = freightByLineId.get(Number(line.id)) || 0;
+          const landedUnitCost = allocatedFreight > 0
+            ? Number((lineUnitCost + allocatedFreight / accepted).toFixed(6))
+            : lineUnitCost;
+          const landedLineTotal = stockMovementTotal(accepted, lineUnitCost, moneyDigits) + allocatedFreight;
+          totalGrniAmount += landedLineTotal;
 
           // Route stock through the shared ledger helper instead of writing the two balance tables
           // by hand. Doing it by hand skipped the canonical lock order (products BEFORE
@@ -514,7 +577,22 @@ export class GoodsReceiptService {
           // cost, so the old non-negativity guard is subsumed. The
           // product row is locked by the stock delta above, so the
           // writer's read cannot miss it.
-          await valueStockReceipt(trx, scope.tenantId, Number(line.productId), stockChange.globalAfter, accepted, accepted * lineUnitCost);
+          // INV-SHIPPING-ALLOCATION: freight carried on the receipt
+          // blends into the receipt value, so the WAC reflects the true
+          // landed cost instead of the bare item cost — the same blend
+          // the direct invoice performs at its own receipt.
+          await valueStockReceipt(trx, scope.tenantId, Number(line.productId), stockChange.globalAfter, accepted, accepted * landedUnitCost);
+
+          // INV-SHIPPING-ALLOCATION: the landed line total is the proof
+          // the freight reached this line; unit_cost stays the net item
+          // cost on the pharmacy batch below, exactly as the
+          // post-posting step leaves it.
+          if (allocatedFreight > 0) {
+            await trx.updateTable('goods_receipt_lines').set({
+              allocated_landed_cost: allocatedFreight,
+              landed_unit_cost: landedUnitCost,
+            }).where('id', '=', Number(line.id)).where('tenant_id', '=', scope.tenantId).execute();
+          }
 
           // Record formal stock movement with the real running balances.
           await trx
@@ -527,13 +605,14 @@ export class GoodsReceiptService {
               qty: accepted,
               before_qty: stockChange.scopeBefore,
               after_qty: stockChange.scopeAfter,
-              unit_cost: lineUnitCost,
+              unit_cost: landedUnitCost,
               // INV-GRN-JOURNAL-CENTRAL-POSTING: the stored movement total
-              // is the single book-digits computation (stockMovementTotal),
-              // so it can never diverge from the posted GRNI leg by
-              // rounding. The old toFixed(4) stored 100.125 for a 2dp
-              // tenant while the journal leg rounded to 100.13.
-              total_cost: stockMovementTotal(accepted, lineUnitCost, moneyDigits),
+              // is the single book-digits computation (stockMovementTotal
+              // plus the line's allocated freight), so it can never
+              // diverge from the posted GRNI leg by rounding. The old
+              // toFixed(4) stored 100.125 for a 2dp tenant while the
+              // journal leg rounded to 100.13.
+              total_cost: landedLineTotal,
               reason: 'goods_receipt',
               note: `إذن استلام مخزني GRN - ${grn.docNo}`,
               reference_type: 'goods_receipt',
@@ -751,6 +830,7 @@ export class GoodsReceiptService {
         pendingReviewReason,
         grniJournalEntryId: grniEntryId,
         totalGrniAmount: roundMoney(totalGrniAmount, moneyDigits),
+        freightAmount: freight,
       };
     });
   }
@@ -817,7 +897,23 @@ export class GoodsReceiptService {
       const accrualByLine = new Map<number, number>();
       for (const grnId of grnIds) {
         const portions = allocateGrnAccrual(receiptLines.filter((line) => Number(line.grn_id) === grnId)
-          .map((line) => ({ id: Number(line.id), acceptedQty: Number(line.accepted_qty), unitCost: Number(line.unit_cost) })), moneyDigits);
+          .map((line) => {
+            // INV-SHIPPING-ALLOCATION: a receipt line that carried
+            // freight settles at its landed total (bare line total at
+            // book digits + allocated freight), so the bill clears the
+            // full GRNI journal — including the freight — instead of
+            // stranding it in 2125.
+            const acceptedQty = Number(line.accepted_qty);
+            const allocated = Number((line as any).allocated_landed_cost || 0);
+            return {
+              id: Number(line.id),
+              acceptedQty,
+              unitCost: Number(line.unit_cost),
+              ...(allocated > 0
+                ? { landedLineTotal: roundMoney(acceptedQty * Number(line.unit_cost), moneyDigits) + allocated }
+                : {}),
+            };
+          }), moneyDigits);
         for (const [lineId, minor] of portions) accrualByLine.set(lineId, minor);
       }
       const poItems = await trx.selectFrom('purchase_order_items').select(['id', 'product_id', 'product_name', 'unit_name', 'unit_cost'])
