@@ -11,6 +11,11 @@ const trx: any = {
           return { id: 1, amount: -50, line_date: '2026-10-21', description: 'Fee', account_id: 11, is_reconciled: false };
         }
         if (table === 'journal_entry_lines') return { id: 12 };
+        if (table === 'settings') return { value: 'EGP' };
+        throw new Error('Unexpected table ' + table);
+      },
+      async execute() {
+        if (table === 'currency_exchange_rates') return [];
         throw new Error('Unexpected table ' + table);
       },
     };
