@@ -1,6 +1,6 @@
 {
   "name": "backend",
-  "version": "1.1.40",
+  "version": "1.1.41",
   "private": true,
   "description": "Phase 1 NestJS backend scaffold for POS migration",
   "scripts": {
