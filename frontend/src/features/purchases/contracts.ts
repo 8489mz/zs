@@ -54,8 +54,29 @@ export function buildPurchasePayload(
   attachments?: any[],
 ) {
   const discount = Number(Math.max(0, Number(values.discount || 0)).toFixed(2));
+  // INV-LANDED-COST-ALLOCATION: freight entered on the invoice is sent as
+  // landedCosts (single 'freight' cost, vendor = the invoice supplier,
+  // which the backend requires) so it is allocated to item cost at
+  // posting. No freight means no landedCosts key at all — the backend
+  // then posts exactly as before.
+  const freight = Number(Math.max(0, Number(values.freight || 0)).toFixed(2));
   return {
     supplierId: Number(values.supplierId),
+    ...(freight > 0
+      ? {
+          landedCosts: {
+            allocationMethod: 'value' as const,
+            costs: [
+              {
+                costType: 'freight' as const,
+                description: 'شحن',
+                amount: freight,
+                vendorId: Number(values.supplierId),
+              },
+            ],
+          },
+        }
+      : {}),
     supplierInvoiceNo: values.supplierInvoiceNo ? String(values.supplierInvoiceNo).trim() : undefined,
     confirmedDuplicateWarning: Boolean(values.confirmedDuplicateWarning),
     allowDuplicateOverride: Boolean(values.allowDuplicateOverride),

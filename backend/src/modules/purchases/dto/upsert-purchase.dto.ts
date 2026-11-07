@@ -59,6 +59,38 @@ class PurchaseItemDto {
   expiryDate?: string;
 }
 
+export class PurchaseLandedCostInputDto {
+  @IsIn(['freight', 'customs', 'handling', 'insurance', 'other'])
+  costType!: 'freight' | 'customs' | 'handling' | 'insurance' | 'other';
+
+  @IsString()
+  description!: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  amount!: number;
+
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  vendorId?: number | null;
+}
+
+export class PurchaseLandedCostsInputDto {
+  @IsOptional()
+  @IsIn(['value', 'qty', 'equal'])
+  allocationMethod?: 'value' | 'qty' | 'equal';
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @ValidateNested({ each: true })
+  @Type(() => PurchaseLandedCostInputDto)
+  costs!: PurchaseLandedCostInputDto[];
+}
+
 export class UpsertPurchaseDto {
   @Type(() => Number)
   @IsNumber()
@@ -168,6 +200,20 @@ export class UpsertPurchaseDto {
   @IsOptional()
   @IsString()
   lifecycleStatus?: string;
+
+  /*
+   * INV-LANDED-COST-ALLOCATION: freight / landed costs carried on the
+   * invoice itself, allocated to item cost at posting time. Without
+   * this the invoice posted inventory at item cost only and the
+   * freight never reached the WAC; the only allocation was the
+   * separate post-posting step. Third-party freight (a vendor other
+   * than the invoice supplier) still belongs to that post-posting
+   * step — the invoice total is payable to this supplier alone.
+   */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PurchaseLandedCostsInputDto)
+  landedCosts?: PurchaseLandedCostsInputDto;
 
   @IsOptional()
   @IsString()

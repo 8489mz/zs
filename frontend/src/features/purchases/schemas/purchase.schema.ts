@@ -5,6 +5,11 @@ export const purchaseHeaderSchema = z.object({
   supplierInvoiceNo: z.string().trim().optional(),
   paymentType: z.enum(['cash', 'credit']),
   discount: z.coerce.number().min(0, 'الخصم لا يكون سالبًا').default(0),
+  // INV-LANDED-COST-ALLOCATION: freight entered on the invoice itself.
+  // Sent as landedCosts (single 'freight' cost, vendor = invoice
+  // supplier) so the backend allocates it to item cost at posting;
+  // 0 means no freight and no landedCosts key is sent at all.
+  freight: z.coerce.number().min(0, 'الشحن لا يكون سالبًا').default(0),
   branchId: z.string().trim().optional().default(''),
   locationId: z.string().trim().optional().default(''),
   note: z.string().trim().optional().default(''),

@@ -8,6 +8,7 @@ import { assertUntrackedStockMutation } from '../../inventory/helpers/inventory-
 import { reversePurchaseTrackedStock } from '../helpers/purchase-cancellation-trace.helper';
 import { computeInvoiceTotals } from '../../../common/utils/invoice-totals';
 import { purchaseReceiptBaseUnitCost } from '../engines/purchase-receipt-cost.engine';
+import { allocateLandedCosts } from '../engines/landed-cost-allocation.engine';
 import { advancePurchaseOrderReceipt } from '../engines/purchase-order-receipt.engine';
 import { revalueStockReturn, valueStockReceipt } from '../../accounting/inventory-valuation';
 import { ensureNonNegativeStock, ensureUniqueFlowItems } from '../../../common/utils/financial-integrity';
@@ -18,7 +19,7 @@ import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { CreateCustomerPaymentDto, CreateSupplierPaymentDto } from '../dto/create-party-payment.dto';
 import { UpsertPurchaseDto } from '../dto/upsert-purchase.dto';
-import { allocatePurchaseInvoiceDiscount, buildHistoricCostMap, buildNormalizedPurchaseItem, buildPurchaseReferenceNote, calculatePurchaseStockDecrease, calculatePurchaseStockIncrease, calculatePurchaseSubtotal, normalizeOptionalNote, normalizePurchaseScope } from '../helpers/purchases-write.helper';
+import { allocatePurchaseInvoiceDiscount, buildHistoricCostMap, buildNormalizedPurchaseItem, buildPurchaseReferenceNote, calculatePurchaseStockDecrease, calculatePurchaseStockIncrease, calculatePurchaseSubtotal, normalizeOptionalNote, normalizePurchaseScope, type DiscountAllocatedPurchaseItem } from '../helpers/purchases-write.helper';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { PurchasesFinanceService } from './purchases-finance.service';
 import { PurchasesQueryService } from './purchases-query.service';
@@ -26,7 +27,7 @@ import { IdempotencyService } from '../../../core/idempotency/idempotency.servic
 import { detectDuplicateBills, normalizeBillNumber, type HistoricalPurchaseRecord } from '../engines/duplicate-bill-detector.engine';
 import { assertCustomerPaymentJobOwnership } from '../helpers/customer-payment-job-ownership';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, fromMinorUnits, roundMoney, toMinorUnits } from '../../accounting/engines/money-minor-units.engine';
 
 type PurchaseRepricingCandidate = {
   productId: number;
@@ -194,6 +195,100 @@ export class PurchasesWriteService {
     return { ok: true, purchaseId, purchase: purchaseResult.purchase, purchases: purchases.purchases, ...extras };
   }
 
+  /*
+   * INV-LANDED-COST-ALLOCATION: freight carried on the invoice itself.
+   * The invoice total is payable to this supplier alone, so a landed
+   * cost naming any other vendor fails closed here — third-party
+   * freight (carrier, customs broker) still belongs to the
+   * post-posting landed-costs step, which credits each vendor
+   * separately. A purchase order carries no receipt yet, so freight
+   * on it is rejected too; the receipt is where the cost blends.
+   * Amounts must land exactly on the tenant's book digits.
+   */
+  private validateAtReceiptLandedCosts(
+    landedCosts: UpsertPurchaseDto['landedCosts'],
+    moneyDigits: 2 | 3,
+    supplierId: number,
+    lifecycleStatus?: string,
+  ): {
+    total: number;
+    allocationMethod: 'value' | 'qty' | 'equal';
+    notes: string;
+    costs: Array<{ costType: 'freight' | 'customs' | 'handling' | 'insurance' | 'other'; description: string; amount: number; vendorId: number | null }>;
+  } | null {
+    if (!landedCosts || !Array.isArray(landedCosts.costs) || !landedCosts.costs.length) return null;
+    if (lifecycleStatus === 'purchase_order') {
+      throw new AppError('لا يمكن تحميل شحن على أمر شراء قبل الاستلام؛ أضف الشحن عند إنشاء فاتورة الشراء.', 'PURCHASE_LANDED_COST_UNSUPPORTED_DOCUMENT', 400);
+    }
+    const allocationMethod = landedCosts.allocationMethod || 'value';
+    if (allocationMethod !== 'value' && allocationMethod !== 'qty' && allocationMethod !== 'equal') {
+      throw new AppError('طريقة توزيع الشحن غير صالحة.', 'PURCHASE_LANDED_COST_INVALID_METHOD', 400);
+    }
+    const costTypes = new Set(['freight', 'customs', 'handling', 'insurance', 'other']);
+    let totalMinor = 0;
+    const costs = landedCosts.costs.map((cost) => {
+      if (!costTypes.has(String(cost.costType))) {
+        throw new AppError('نوع تكلفة الوصول غير صالح.', 'PURCHASE_LANDED_COST_INVALID_TYPE', 400);
+      }
+      if (!String(cost.description || '').trim()) {
+        throw new AppError('وصف تكلفة الوصول مطلوب.', 'PURCHASE_LANDED_COST_INVALID', 400);
+      }
+      let minor: number;
+      try {
+        minor = toMinorUnits(Number(cost.amount), moneyDigits);
+        if (minor <= 0) throw new Error('Non-positive');
+      } catch {
+        throw new AppError('مبالغ الشحن لا تطابق دقة عملة الأساس.', 'PURCHASE_LANDED_COST_PRECISION', 400);
+      }
+      totalMinor += minor;
+      if (!Number.isSafeInteger(totalMinor)) {
+        throw new AppError('مبالغ الشحن لا تطابق دقة عملة الأساس.', 'PURCHASE_LANDED_COST_PRECISION', 400);
+      }
+      const vendorId = cost.vendorId == null ? null : Number(cost.vendorId);
+      if (vendorId != null && (!Number.isSafeInteger(vendorId) || vendorId <= 0)) {
+        throw new AppError('معرّف مورد الشحن غير صالح.', 'PURCHASE_LANDED_COST_INVALID_VENDOR', 400);
+      }
+      if (vendorId != null && vendorId !== Number(supplierId)) {
+        throw new AppError('الشحن في الفاتورة نفسها يكون من مورد الفاتورة؛ شحن مورد آخر يضاف بعد الترحيل من خطوة تكاليف الوصول.', 'PURCHASE_LANDED_COST_VENDOR_MISMATCH', 400);
+      }
+      return { costType: cost.costType, description: String(cost.description).trim(), amount: Number(cost.amount), vendorId };
+    });
+    const total = fromMinorUnits(totalMinor, moneyDigits);
+    if (!(total > 0)) {
+      throw new AppError('مبالغ الشحن لا تطابق دقة عملة الأساس.', 'PURCHASE_LANDED_COST_PRECISION', 400);
+    }
+    return { total, allocationMethod, notes: String(landedCosts.notes || '').trim(), costs };
+  }
+
+  /*
+   * Split at-receipt freight over the stocked lines only, by the same
+   * basis the post-posting step uses ('value' by default). Service
+   * lines never carry freight into stock: their amount is expensed
+   * by postPurchase, never capitalised. The canonical allocator sums
+   * exactly at book digits, so no penny is lost or invented.
+   */
+  private allocateAtReceiptLandedCosts(
+    items: DiscountAllocatedPurchaseItem[],
+    landed: { total: number; allocationMethod: 'value' | 'qty' | 'equal' },
+    moneyDigits: 2 | 3,
+  ): Map<number, number> {
+    const stocked = items
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => !item.isService);
+    if (!stocked.length) {
+      throw new AppError('الشحن يحتاج صنفاً مخزنياً واحداً على الأقل في الفاتورة؛ سطور الخدمة وحدها لا تحمل تكلفة وصول.', 'PURCHASE_LANDED_COST_NO_STOCKED_ITEMS', 400);
+    }
+    const weights = stocked.map(({ item }) => {
+      if (landed.allocationMethod === 'qty') return Math.max(0, Number(item.qty || 0) * Number(item.unitMultiplier || 1));
+      if (landed.allocationMethod === 'equal') return 1;
+      return Math.max(0, Number(item.effectiveLineTotal || 0));
+    });
+    const shares = allocateLandedCosts(landed.total, weights, moneyDigits);
+    const result = new Map<number, number>();
+    stocked.forEach(({ index }, i) => result.set(index, shares[i]));
+    return result;
+  }
+
   async createPurchase(payload: UpsertPurchaseDto, auth: AuthContext, idempotencyKey?: string): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
 
@@ -308,7 +403,13 @@ export class PurchasesWriteService {
         throw new AppError('Discount change is not allowed', 'DISCOUNT_NOT_ALLOWED', 403);
       }
       if (discount < 0 || discount > subtotal) throw new AppError('Discount is invalid', 'INVALID_DISCOUNT', 400);
-      const { taxAmount, total } = computeInvoiceTotals(subtotal, discount, Number(payload.taxRate || 0), Boolean(payload.pricesIncludeTax));
+      const { taxAmount, total: itemsTotal } = computeInvoiceTotals(subtotal, discount, Number(payload.taxRate || 0), Boolean(payload.pricesIncludeTax));
+      // INV-LANDED-COST-ALLOCATION: freight on the invoice is part of
+      // the supplier bill, so the invoice total — and the inventory
+      // debit postPurchase derives from it — includes it. Freight is
+      // never taxed: it is added after the tax computation.
+      const atReceiptLanded = this.validateAtReceiptLandedCosts(payload.landedCosts, moneyDigits, supplier.id, payload.lifecycleStatus);
+      const total = roundMoney(itemsTotal + (atReceiptLanded ? atReceiptLanded.total : 0), moneyDigits);
       const paymentType = payload.paymentType === 'credit' ? 'credit' : 'cash';
       const { branchId, locationId } = normalizePurchaseScope(payload);
 
@@ -443,12 +544,20 @@ export class PurchasesWriteService {
       await trx.updateTable('purchases').set({ doc_no: docNo, updated_at: sql`NOW()` }).where('id', '=', id).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
 
       const allocatedItems = allocatePurchaseInvoiceDiscount(normalizedItems, discount, moneyDigits);
-      for (const item of [...allocatedItems].sort((a, b) => a.productId - b.productId)) {
+      const sortedAllocatedItems = [...allocatedItems].sort((a, b) => a.productId - b.productId);
+      const landedBySortedIndex = atReceiptLanded
+        ? this.allocateAtReceiptLandedCosts(sortedAllocatedItems, atReceiptLanded, moneyDigits)
+        : new Map<number, number>();
+      for (const [sortedIndex, item] of sortedAllocatedItems.entries()) {
         const itemSerials = Array.isArray(item.serials) ? item.serials : [];
         // Recoverable input VAT is a separate asset, not inventory/COGS cost.
         const netPurchaseUnitCost = payload.pricesIncludeTax
           ? item.effectiveUnitCost / (1 + Number(payload.taxRate || 0) / 100)
           : item.effectiveUnitCost;
+        // INV-LANDED-COST-ALLOCATION: this line's share of the invoice
+        // freight, by value unless another basis was chosen. Zero for
+        // service lines and for invoices without freight.
+        const allocatedFreight = landedBySortedIndex.get(sortedIndex) || 0;
         const insertedItem = await trx.insertInto('purchase_items').values({
           purchase_id: id,
           product_id: item.productId,
@@ -465,6 +574,13 @@ export class PurchasesWriteService {
           batch_number: item.batchNumber || null,
           tenant_id: scope.tenantId,
           account_id: scope.accountId,
+          // INV-LANDED-COST-ALLOCATION: the landed unit cost is the
+          // proof the freight reached this line; unit_cost stays the
+          // net item cost, exactly as the post-posting step stores it.
+          ...(atReceiptLanded ? {
+            allocated_landed_cost: allocatedFreight,
+            landed_unit_cost: Number((netPurchaseUnitCost + (item.qty > 0 ? allocatedFreight / item.qty : 0)).toFixed(6)),
+          } : {}),
         } as any).returning('id').executeTakeFirst();
 
         const itemLocationId = item.locationId!;
@@ -512,19 +628,25 @@ export class PurchasesWriteService {
 
           // Inventory cost is per base stock unit, not per purchased carton.
           const baseUnitCost = netPurchaseUnitCost / item.unitMultiplier;
+          // INV-LANDED-COST-ALLOCATION: freight carried on the invoice
+          // blends into the receipt value, so the WAC reflects the true
+          // landed cost instead of the bare item cost.
+          const landedBaseUnitCost = allocatedFreight > 0 && increasedQty > 0
+            ? baseUnitCost + allocatedFreight / increasedQty
+            : baseUnitCost;
           // INV-WAC-SINGLE-WRITER: every receipt blends through the one
           // writer (quantity recovery + algebraic blend + write). A
           // zero-quantity line writes nothing: no receipt to blend and
           // the stored cost is unchanged.
           if (increasedQty > 0) {
-            await valueStockReceipt(trx, scope.tenantId, item.productId, stockChange.globalAfter, increasedQty, increasedQty * baseUnitCost);
+            await valueStockReceipt(trx, scope.tenantId, item.productId, stockChange.globalAfter, increasedQty, increasedQty * landedBaseUnitCost);
           }
           await trx.insertInto('stock_movements').values({
             product_id: item.productId,
             movement_type: 'purchase',
             qty: increasedQty,
-            unit_cost: Number(baseUnitCost.toFixed(6)),
-            total_cost: roundMoney(netPurchaseUnitCost * item.qty, moneyDigits),
+            unit_cost: Number(landedBaseUnitCost.toFixed(6)),
+            total_cost: roundMoney(netPurchaseUnitCost * item.qty, moneyDigits) + allocatedFreight,
             before_qty: stockChange.scopeBefore,
             after_qty: stockChange.scopeAfter,
             reason: 'purchase',
@@ -600,6 +722,29 @@ export class PurchasesWriteService {
               }
           }
         }
+      }
+
+      // INV-LANDED-COST-ALLOCATION: record the freight breakdown and
+      // stamp the header exactly as the post-posting step does, so the
+      // cancel guard and the detail view see the same applied state.
+      if (atReceiptLanded) {
+        await trx.insertInto('purchase_landed_costs').values(
+          atReceiptLanded.costs.map((cost) => ({
+            tenant_id: scope.tenantId,
+            purchase_id: id,
+            cost_type: cost.costType,
+            description: cost.description,
+            amount: cost.amount,
+            vendor_id: Number(cost.vendorId || supplier.id),
+            allocation_method: atReceiptLanded.allocationMethod,
+          })),
+        ).execute();
+        await trx.updateTable('purchases').set({
+          landed_cost_total: atReceiptLanded.total,
+          landed_cost_allocation_method: atReceiptLanded.allocationMethod,
+          landed_cost_notes: atReceiptLanded.notes || null,
+          landed_cost_applied_at: new Date(),
+        }).where('id', '=', id).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
       }
 
       if (payload.attachments && payload.attachments.length > 0) {

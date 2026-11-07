@@ -15,7 +15,7 @@ import { queryKeys } from '@/app/query-keys';
 import type { PurchaseQuickCreateDraft } from '@/features/purchases/components/purchase-composer/PurchaseQuickCreateDialog';
 import { extractCreatedEntityId } from '@/lib/api/extract-created-entity-id';
 
-const DEFAULT_HEADER_VALUES: PurchaseHeaderInput = { supplierId: '', supplierInvoiceNo: '', paymentType: 'cash', discount: 0, branchId: '', locationId: '', note: '' };
+const DEFAULT_HEADER_VALUES: PurchaseHeaderInput = { supplierId: '', supplierInvoiceNo: '', paymentType: 'cash', discount: 0, freight: 0, branchId: '', locationId: '', note: '' };
 const DEFAULT_QUICK_CREATE_DRAFT: PurchaseQuickCreateDraft = {
   name: '',
   barcode: '',
@@ -190,6 +190,9 @@ export function usePurchaseComposerController({
 
   const subTotal = useMemo(() => items.reduce((sum, item) => sum + item.total, 0), [items]);
   const discount = Math.max(0, Number(headerForm.watch('discount') || 0));
+  // INV-LANDED-COST-ALLOCATION: freight is added to the invoice total
+  // after tax (never taxed), matching the backend posting.
+  const freight = Math.max(0, Number(headerForm.watch('freight') || 0));
   const taxRate = Number(settings?.taxRate || 0);
   const pricesIncludeTax = String(settings?.taxMode || 'exclusive') === 'inclusive';
   const taxAmount = useMemo(() => {
@@ -200,8 +203,9 @@ export function usePurchaseComposerController({
   }, [discount, pricesIncludeTax, subTotal, taxRate]);
   const total = useMemo(() => {
     const taxable = Math.max(0, subTotal - discount);
-    return pricesIncludeTax ? Number(taxable.toFixed(2)) : Number((taxable + taxAmount).toFixed(2));
-  }, [discount, pricesIncludeTax, subTotal, taxAmount]);
+    const withoutFreight = pricesIncludeTax ? Number(taxable.toFixed(2)) : Number((taxable + taxAmount).toFixed(2));
+    return Number((withoutFreight + freight).toFixed(2));
+  }, [discount, freight, pricesIncludeTax, subTotal, taxAmount]);
 
   const [duplicateCheckResult, setDuplicateCheckResult] = useState<DuplicateBillCheckResult | null>(null);
   const [confirmedDuplicateWarning, setConfirmedDuplicateWarning] = useState<boolean>(false);
@@ -338,7 +342,7 @@ export function usePurchaseComposerController({
     mutation,
     repricingInsights,
     hasDraftChanges,
-    totals: { subTotal, discount, taxRate, pricesIncludeTax, taxAmount, total },
+    totals: { subTotal, discount, freight, taxRate, pricesIncludeTax, taxAmount, total },
     duplicateCheck: {
       result: duplicateCheckResult,
       confirmedWarning: confirmedDuplicateWarning,

@@ -186,6 +186,7 @@ export function PurchaseComposer({ products, suppliers, categories, branches, lo
             </>
           )}
           <Field label={t('purchases.purchase_composer.s16', "خصم الفاتورة")} error={headerForm.formState.errors.discount?.message}><input type="number" step="0.01" {...headerForm.register('discount')} disabled={mutation.isPending} /></Field>
+          <Field label={t('purchases.purchase_composer.s23', "الشحن (يُوزَّع على تكلفة الأصناف)")} error={headerForm.formState.errors.freight?.message}><input type="number" step="0.01" min="0" {...headerForm.register('freight')} disabled={mutation.isPending} /></Field>
           <Field label={t('purchases.purchase_composer.s17', "ملاحظات")}><textarea rows={3} {...headerForm.register('note')} disabled={mutation.isPending} /></Field>
 
           <div className="divider" style={{ gridColumn: '1 / -1' }} />
@@ -207,7 +208,7 @@ export function PurchaseComposer({ products, suppliers, categories, branches, lo
             onOpenQuickCreate={actions.openQuickCreateDialog}
           />
           <PurchaseItemsList items={items} isPending={mutation.isPending} onRemoveItem={actions.handleRemoveItem} />
-          <PurchaseTotals subTotal={totals.subTotal} discount={totals.discount} taxAmount={totals.taxAmount} total={totals.total} />
+          <PurchaseTotals subTotal={totals.subTotal} discount={totals.discount} freight={totals.freight} taxAmount={totals.taxAmount} total={totals.total} />
 
           <MutationFeedback
             isError={mutation.isError}

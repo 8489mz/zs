@@ -17,6 +17,7 @@ describe('Purchase Contracts - buildPurchasePayload', () => {
     projectId: null,
     termsTemplate: '',
     discount: 0,
+    freight: 0,
   };
 
   test('should retain locationId and categoryId in items', () => {
@@ -59,6 +60,45 @@ describe('Purchase Contracts - buildPurchasePayload', () => {
     expect(payload.items[0].categoryId).toBeUndefined();
   });
   
+  // INV-LANDED-COST-ALLOCATION: freight entered on the invoice must reach
+  // the backend as landedCosts, so createPurchase allocates it to item
+  // cost at posting (invoice 100 + freight 20 posts inventory 120).
+  test('should send freight as landedCosts with the invoice supplier as vendor', () => {
+    const items: PurchaseDraftItem[] = [
+      { productId: '10', name: 'صنف', qty: 1, cost: 100, total: 100, unitName: 'Piece', unitMultiplier: 1 },
+    ];
+
+    const payload = buildPurchasePayload({ ...defaultValues, freight: 20 }, items, 0, false);
+
+    expect(payload.landedCosts).toEqual({
+      allocationMethod: 'value',
+      costs: [{ costType: 'freight', description: 'شحن', amount: 20, vendorId: 1 }],
+    });
+  });
+
+  test('should send no landedCosts when freight is zero', () => {
+    const items: PurchaseDraftItem[] = [
+      { productId: '10', name: 'صنف', qty: 1, cost: 100, total: 100, unitName: 'Piece', unitMultiplier: 1 },
+    ];
+
+    const payload = buildPurchasePayload({ ...defaultValues, freight: 0 }, items, 0, false);
+
+    expect('landedCosts' in payload).toBe(false);
+  });
+
+  test('should coerce a string freight value to a number', () => {
+    const items: PurchaseDraftItem[] = [
+      { productId: '10', name: 'صنف', qty: 1, cost: 100, total: 100, unitName: 'Piece', unitMultiplier: 1 },
+    ];
+
+    const payload = buildPurchasePayload({ ...defaultValues, freight: '20' as unknown as number }, items, 0, false);
+
+    expect(payload.landedCosts).toEqual({
+      allocationMethod: 'value',
+      costs: [{ costType: 'freight', description: 'شحن', amount: 20, vendorId: 1 }],
+    });
+  });
+
   test('should parse string locationId and categoryId to numbers', () => {
     const items: PurchaseDraftItem[] = [
       {
