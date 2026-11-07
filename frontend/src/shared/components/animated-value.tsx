@@ -41,8 +41,16 @@ export function AnimatedValue({ value, durationMs = 850, decimals = 0, formatter
   }, [durationMs, value]);
 
   const rendered = useMemo(() => {
+    /* INV-USER-SALES-020-GAP: a formatter owns its own decimal policy
+    (formatCurrency renders at the tenant currency decimals, formatInteger
+    at 0), so it receives the raw value. Pre-rounding to `decimals`
+    (default 0) first destroyed the cents: a user-details sales total of
+    1,869.80 rounded to 1,870 and then formatted as 1,870.00, while the
+    sales register showed the true 1,869.80 via formatCurrency directly.
+    `decimals` still governs the no-formatter path, so count cards keep
+    rendering whole units. */
+    if (formatter) return formatter(displayValue);
     const rounded = Number(displayValue.toFixed(decimals));
-    if (formatter) return formatter(rounded);
     return new Intl.NumberFormat('ar-EG', {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
