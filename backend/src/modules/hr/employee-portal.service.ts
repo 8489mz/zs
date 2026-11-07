@@ -5,6 +5,7 @@ import { Database } from '../../database/database.types';
 import { AppError } from '../../common/errors/app-error';
 import { AuthCacheService } from '../../core/auth/services/auth-cache.service';
 import { assertPortalTenantAllowed } from '../../core/auth/utils/portal-tenant-status';
+import { deductibleApprovedLeaveDays, type ApprovedLeaveDeductionRow } from './engines/leave-balance.engine';
 import { calculateLoanInstallmentSchedule, addLoanInstallmentMonths, requireLoanMoney } from './payroll-loan-allocation.engine';
 import { currencyMoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
@@ -456,11 +457,43 @@ export class EmployeePortalService {
       .where(sql`LOWER(COALESCE(code, ''))`, '=', 'annual')
       .executeTakeFirst();
 
-    // HR approval/cancellation atomically updates this counter. Summing every
-    // approved request instead would count sick/unpaid leave as annual leave and
-    // disagree with the balance enforcement used by the HR approval endpoint.
+    // HR approval/cancellation atomically updates this counter, but
+    // approvals posted before the forward deduction existed never
+    // moved it — so the read reconciles the stored counter against
+    // the approved requests under the ONE shared rule
+    // (leave-balance.engine), taking the MAX. Summing every approved
+    // request would count sick/unpaid leave as annual leave; the
+    // shared rule filters to deductible requests only, so this agrees
+    // with the balance enforcement used by the HR approval endpoint.
+    // INV-LEAVE-BALANCE-NOT-DEDUCTING.
+    const approvedRows = await this.anyDb
+      .selectFrom('hr_leave_requests as req')
+      .leftJoin('hr_leave_types as t', (join: any) => join.onRef('t.id', '=', 'req.leave_type_id').onRef('t.tenant_id', '=', 'req.tenant_id'))
+      .select([
+        'req.days_count',
+        'req.leave_type_id',
+        'req.leave_type',
+        't.code as leave_type_code',
+        't.name as leave_type_name',
+        't.deducts_from_balance',
+      ])
+      .where('req.employee_id', '=', employeeId)
+      .where('req.tenant_id', '=', tenantId)
+      .where('req.status', '=', 'approved')
+      .execute();
+    const deductibleRows: ApprovedLeaveDeductionRow[] = (
+      approvedRows as Array<Record<string, unknown>>
+    ).map((row) => ({
+      daysCount: Number((row as { days_count?: unknown }).days_count || 0),
+      leaveTypeId: (row as { leave_type_id?: number | null }).leave_type_id ?? null,
+      leaveTypeCode: (row as { leave_type_code?: string | null }).leave_type_code ?? null,
+      leaveTypeName: (row as { leave_type_name?: string | null }).leave_type_name ?? null,
+      leaveTypeText: (row as { leave_type?: string | null }).leave_type ?? null,
+      deductsFromBalance: (row as { deducts_from_balance?: boolean | null }).deducts_from_balance ?? null,
+    }));
+    const deductibleDays = deductibleApprovedLeaveDays(deductibleRows);
     const totalDays = Math.max(0, Number(employee?.annual_leave_balance ?? 0));
-    const usedDays = Math.max(0, Number(employee?.used_annual_leaves || 0));
+    const usedDays = Math.max(0, Number(employee?.used_annual_leaves || 0), deductibleDays);
 
     return [{
       leave_type_id: annualType?.id != null ? Number(annualType.id) : null,

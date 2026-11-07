@@ -1,7 +1,7 @@
 import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { CashDrawerService } from '../cash-drawer/cash-drawer.service';
-import { Kysely, sql } from '../../database/kysely';
+import { Kysely, sql, type Transaction } from '../../database/kysely';
 import { AppError } from '../../common/errors/app-error';
 import { paginateRows } from '../../common/utils/pagination';
 import { AuditService } from '../../core/audit/audit.service';
@@ -58,7 +58,7 @@ import { summarizeHourlyAttendance, calculateEffectiveContractPay, calculateEffe
 import { calculateAttendancePenalty } from './engines/attendance-penalty.engine';
 import { buildEmployeeFinancialStatement } from './engines/employee-financial-statement.engine';
 import { calculateEmployeeWithdrawalBalance, resolveDirectAdvanceCashCap, type EmployeeWithdrawalBalanceResult } from './engines/employee-withdrawal-balance.engine';
-import { shouldDeductLeaveFromBalance } from './engines/leave-balance.engine';
+import { deductibleApprovedLeaveDays, shouldDeductLeaveFromBalance, type ApprovedLeaveDeductionRow } from './engines/leave-balance.engine';
 import { createPasswordRecord, verifyPassword } from '../../core/auth/utils/password-hasher';
 import { assertSecurePasscode } from '../../core/auth/utils/password-policy';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
@@ -696,6 +696,14 @@ export class HrService {
       ORDER BY e.id DESC
     `.execute(this.db);
     const search = clean(query.search).toLowerCase();
+    // INV-LEAVE-BALANCE-NOT-DEDUCTING: one batch reconcile for the
+    // listed employees, so the list shows the same used days as the
+    // profile (approvals posted before the forward deduction existed
+    // never moved the stored counter).
+    const reconciledUsedByEmployee = await this.deductibleApprovedLeaveDaysByEmployee(
+      result.rows.map((row) => Number(row.id)),
+      String(auth.tenantId || ''),
+    );
     let rows = result.rows.map((row) => ({
       id: String(row.id),
       employeeNo: clean(row.employee_no),
@@ -742,7 +750,12 @@ export class HrService {
       iban: clean(row.iban),
       bankSwiftCode: clean(row.bank_swift_code),
       annualLeaveBalance: row.annual_leave_balance == null ? 21 : Number(row.annual_leave_balance),
-      usedAnnualLeaves: row.used_annual_leaves == null ? 0 : Number(row.used_annual_leaves),
+      // INV-LEAVE-BALANCE-NOT-DEDUCTING: reconciled against the
+      // approved requests — never the stored counter raw.
+      usedAnnualLeaves: Math.max(
+        row.used_annual_leaves == null ? 0 : Number(row.used_annual_leaves),
+        reconciledUsedByEmployee.get(Number(row.id)) || 0,
+      ),
       notes: clean(row.notes),
     }));
     if (search) {
@@ -770,6 +783,14 @@ export class HrService {
     if (result.rows.length === 0) throw new AppError('Employee not found', 'HR_EMPLOYEE_NOT_FOUND', 404);
 
     const row = result.rows[0];
+    // INV-LEAVE-BALANCE-NOT-DEDUCTING: reconciled against the
+    // approved requests — never the stored counter raw.
+    const usedAnnualLeaves = await this.reconciledUsedAnnualLeaves(
+      this.db,
+      id,
+      String(auth.tenantId || ''),
+      Number(row.used_annual_leaves || 0),
+    );
     const employee = {
       id: String(row.id),
       employeeNo: clean(row.employee_no),
@@ -816,7 +837,7 @@ export class HrService {
       iban: clean(row.iban),
       bankSwiftCode: clean(row.bank_swift_code),
       annualLeaveBalance: row.annual_leave_balance == null ? 21 : Number(row.annual_leave_balance),
-      usedAnnualLeaves: row.used_annual_leaves == null ? 0 : Number(row.used_annual_leaves),
+      usedAnnualLeaves,
       notes: clean(row.notes),
     };
 
@@ -5872,6 +5893,116 @@ export class HrService {
     return { requests: paged.rows, pagination: paged.pagination, summary };
   }
 
+  /**
+   * INV-LEAVE-BALANCE-NOT-DEDUCTING: the deductible days inside an
+   * employee's APPROVED requests, under the one shared rule
+   * (leave-balance.engine). The stored `used_annual_leaves` counter
+   * alone cannot be trusted: approvals posted before the forward
+   * deduction existed never moved it. Reads take the MAX of the
+   * stored counter and this sum — never less, so a cancellation
+   * (which releases through its own decrement, and drops the request
+   * out of this sum at the same time) can never be resurrected.
+   * Runs on the caller's executor (open transaction or pool handle)
+   * so approval/cancellation read their own uncommitted state.
+   */
+  private async deductibleApprovedLeaveDays(
+    executor: Kysely<Database> | Transaction<Database>,
+    employeeId: number,
+    tenantId: string,
+  ): Promise<number> {
+    const result = await sql<{
+      days_count: number | null;
+      leave_type_id: number | null;
+      leave_type: string | null;
+      leave_type_code: string | null;
+      leave_type_name: string | null;
+      deducts_from_balance: boolean | null;
+    }>`
+      SELECT
+        lr.days_count,
+        lr.leave_type_id,
+        lr.leave_type,
+        t.code AS leave_type_code,
+        t.name AS leave_type_name,
+        t.deducts_from_balance
+      FROM hr_leave_requests lr
+      LEFT JOIN hr_leave_types t ON t.id = lr.leave_type_id AND t.tenant_id = lr.tenant_id
+      WHERE lr.employee_id = ${employeeId} AND lr.tenant_id = ${tenantId}
+        AND lr.status = 'approved'
+    `.execute(executor);
+    const rows: ApprovedLeaveDeductionRow[] = result.rows.map((row) => ({
+      daysCount: row.days_count,
+      leaveTypeId: row.leave_type_id,
+      leaveTypeCode: row.leave_type_code,
+      leaveTypeName: row.leave_type_name,
+      leaveTypeText: row.leave_type,
+      deductsFromBalance: row.deducts_from_balance,
+    }));
+    return deductibleApprovedLeaveDays(rows);
+  }
+
+  private async deductibleApprovedLeaveDaysByEmployee(
+    employeeIds: number[],
+    tenantId: string,
+  ): Promise<Map<number, number>> {
+    const totals = new Map<number, number>();
+    if (!employeeIds.length) return totals;
+    const result = await sql<{
+      employee_id: number;
+      days_count: number | null;
+      leave_type_id: number | null;
+      leave_type: string | null;
+      leave_type_code: string | null;
+      leave_type_name: string | null;
+      deducts_from_balance: boolean | null;
+    }>`
+      SELECT
+        lr.employee_id,
+        lr.days_count,
+        lr.leave_type_id,
+        lr.leave_type,
+        t.code AS leave_type_code,
+        t.name AS leave_type_name,
+        t.deducts_from_balance
+      FROM hr_leave_requests lr
+      LEFT JOIN hr_leave_types t ON t.id = lr.leave_type_id AND t.tenant_id = lr.tenant_id
+      WHERE lr.tenant_id = ${tenantId} AND lr.status = 'approved'
+    `.execute(this.db);
+    const byEmployee = new Map<number, ApprovedLeaveDeductionRow[]>();
+    for (const row of result.rows) {
+      const id = Number(row.employee_id);
+      if (!employeeIds.includes(id)) continue;
+      const list = byEmployee.get(id) || [];
+      list.push({
+        daysCount: row.days_count,
+        leaveTypeId: row.leave_type_id,
+        leaveTypeCode: row.leave_type_code,
+        leaveTypeName: row.leave_type_name,
+        leaveTypeText: row.leave_type,
+        deductsFromBalance: row.deducts_from_balance,
+      });
+      byEmployee.set(id, list);
+    }
+    for (const [id, rows] of byEmployee) totals.set(id, deductibleApprovedLeaveDays(rows));
+    return totals;
+  }
+
+  /**
+   * INV-LEAVE-BALANCE-NOT-DEDUCTING: the true used days for one
+   * employee — the stored counter reconciled against the approved
+   * requests. Every balance read and every approval/cancellation
+   * must use this, never the stored counter raw.
+   */
+  private async reconciledUsedAnnualLeaves(
+    executor: Kysely<Database> | Transaction<Database>,
+    employeeId: number,
+    tenantId: string,
+    storedUsed: number,
+  ): Promise<number> {
+    const approved = await this.deductibleApprovedLeaveDays(executor, employeeId, tenantId);
+    return Number(Math.max(Number(storedUsed || 0), approved).toFixed(2));
+  }
+
   async createLeaveRequest(payload: CreateLeaveRequestDto, auth: AuthContext): Promise<Record<string, unknown>> {
     const { tenantId } = requireTenantScope(auth);
     const employeeId = toId(payload.employeeId);
@@ -6012,7 +6143,16 @@ export class HrService {
       const requestedDays = Number(row.days_count || 0);
       if (deductsFromBalance && requestedDays > 0) {
         const totalEntitlement = Number(row.annual_leave_balance || 0);
-        const currentUsed = Number(row.used_annual_leaves || 0);
+        // INV-LEAVE-BALANCE-NOT-DEDUCTING: the guard and the
+        // increment both run on the reconciled used days — a stale
+        // stored counter must neither hide used days nor let an
+        // approval exceed the entitlement.
+        const currentUsed = await this.reconciledUsedAnnualLeaves(
+          trx,
+          row.employee_id,
+          String(auth.tenantId || ''),
+          Number(row.used_annual_leaves || 0),
+        );
         const remainingBalance = Number((totalEntitlement - currentUsed).toFixed(2));
 
         if (requestedDays > remainingBalance) {
@@ -6025,7 +6165,7 @@ export class HrService {
 
         await sql`
           UPDATE hr_employees
-          SET used_annual_leaves = COALESCE(used_annual_leaves, 0) + ${requestedDays},
+          SET used_annual_leaves = ${Number((currentUsed + requestedDays).toFixed(2))},
               updated_at = NOW()
           WHERE id = ${row.employee_id} AND tenant_id = ${auth.tenantId}
         `.execute(trx);
@@ -6143,9 +6283,25 @@ export class HrService {
 
       const requestedDays = Number(row.days_count || 0);
       if (wasApproved && deductsFromBalance && requestedDays > 0) {
+        // INV-LEAVE-BALANCE-NOT-DEDUCTING: release from the
+        // reconciled used days. The request is still 'approved'
+        // here, so the reconcile still counts it — subtracting its
+        // days yields exactly the post-cancellation balance, and the
+        // stored counter can never go below the true used days.
+        const stored = await sql<{ used_annual_leaves: number | null }>`
+          SELECT used_annual_leaves FROM hr_employees
+          WHERE id = ${row.employee_id} AND tenant_id = ${auth.tenantId}
+          FOR UPDATE
+        `.execute(trx);
+        const currentUsed = await this.reconciledUsedAnnualLeaves(
+          trx,
+          row.employee_id,
+          String(auth.tenantId || ''),
+          Number(stored.rows[0]?.used_annual_leaves || 0),
+        );
         await sql`
           UPDATE hr_employees
-          SET used_annual_leaves = GREATEST(0, COALESCE(used_annual_leaves, 0) - ${requestedDays}),
+          SET used_annual_leaves = ${Number(Math.max(0, currentUsed - requestedDays).toFixed(2))},
               updated_at = NOW()
           WHERE id = ${row.employee_id} AND tenant_id = ${auth.tenantId}
         `.execute(trx);
