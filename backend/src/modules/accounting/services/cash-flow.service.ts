@@ -1,4 +1,6 @@
 import { nextAccountingDay } from '../engines/accounting-date.engine';
+import { tenantBaseCurrency } from '../accounting-currency';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 import { classifyCashFlow } from '../engines/cash-flow-classification.engine';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { Kysely, sql } from 'kysely';
@@ -40,9 +42,9 @@ export interface CashFlowReportData {
 export class CashFlowService {
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
-  private toMoney(value: unknown): number {
+  private toMoney(value: unknown, digits: MoneyDigits): number {
     const n = Number(value || 0);
-    return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
+    return Number.isFinite(n) ? roundMoney(n, digits) : 0;
   }
 
   async getCashFlowStatement(
@@ -50,6 +52,7 @@ export class CashFlowService {
     params: { dateFrom?: string; dateTo?: string; branchId?: number },
   ): Promise<CashFlowReportData> {
     const tenantId = auth.tenantId;
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId ?? ''));
 
     // UTC calendar bounds include every database microsecond of the last day.
     const parseReportBoundary = (input?: string, isEnd = false): { date: Date; dateStr: string } => {
@@ -102,7 +105,7 @@ export class CashFlowService {
       begQuery = begQuery.where('jel.branch_id', '=', params.branchId);
     }
     const begRow = await begQuery.executeTakeFirst();
-    const beginningCash = this.toMoney(Number(begRow?.debit_sum || 0) - Number(begRow?.credit_sum || 0));
+    const beginningCash = this.toMoney(Number(begRow?.debit_sum || 0) - Number(begRow?.credit_sum || 0), digits);
 
     // 3. Ending cash balance (posted up to toDate)
     let endQuery = (this.db as any)
@@ -126,7 +129,7 @@ export class CashFlowService {
       endQuery = endQuery.where('jel.branch_id', '=', params.branchId);
     }
     const endRow = await endQuery.executeTakeFirst();
-    const endingCash = this.toMoney(Number(endRow?.debit_sum || 0) - Number(endRow?.credit_sum || 0));
+    const endingCash = this.toMoney(Number(endRow?.debit_sum || 0) - Number(endRow?.credit_sum || 0), digits);
 
     const flows = await sql<{ id: number; explicit_category: 'operating' | 'investing' | 'financing' | null; cash: number; operating: number; investing: number; financing: number }>`
       with legs as (
@@ -155,10 +158,10 @@ export class CashFlowService {
       for (const key of Object.keys(totals) as Array<keyof typeof totals>) totals[key] += amounts[key];
       if (amounts.unclassified !== 0) unclassifiedCount++;
     }
-    const section = (titleAr: string, titleEn: string, amount: number): CashFlowSection => ({ titleAr, titleEn, total: this.toMoney(amount),
-      lines: [{ labelAr: titleAr, labelEn: titleEn, amount: this.toMoney(amount) }],
+    const section = (titleAr: string, titleEn: string, amount: number): CashFlowSection => ({ titleAr, titleEn, total: this.toMoney(amount, digits),
+      lines: [{ labelAr: titleAr, labelEn: titleEn, amount: this.toMoney(amount, digits) }],
     });
-    const netCashFlow = this.toMoney(totals.operating + totals.investing + totals.financing + totals.unclassified);
+    const netCashFlow = this.toMoney(totals.operating + totals.investing + totals.financing + totals.unclassified, digits);
     return {
       dateFrom: fromDateStr, dateTo: toDateStr,
       operatingActivities: section('صافي التدفقات التشغيلية', 'Net Operating Cash Flows', totals.operating),
@@ -167,8 +170,13 @@ export class CashFlowService {
       unclassifiedActivities: section('تدفقات مختلطة تتطلب تصنيفاً محاسبياً', 'Mixed Cash Flows Requiring Attribution', totals.unclassified),
       isClassified: unclassifiedCount === 0,
       netCashFlow, beginningCash, endingCash,
-      reconciledCashActual: this.toMoney(endingCash - beginningCash),
-      isReconciled: Math.abs(this.toMoney(endingCash - beginningCash - netCashFlow)) < 0.01,
+      reconciledCashActual: this.toMoney(endingCash - beginningCash, digits),
+      // Tolerance stays 0.01: the section classifier
+      // (cash-flow-classification.engine.ts) still rounds to cents, so
+      // a half-minor-unit tolerance would false-flag 3dp tenants until
+      // that engine is digits-aware. The tolerance is a report flag,
+      // never a posting.
+      isReconciled: Math.abs(this.toMoney(endingCash - beginningCash - netCashFlow, digits)) < 0.01,
     };
   }
 }

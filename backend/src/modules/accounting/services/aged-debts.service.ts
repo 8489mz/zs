@@ -1,4 +1,6 @@
 import { nextAccountingDay } from '../engines/accounting-date.engine';
+import { tenantBaseCurrency } from '../accounting-currency';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { Kysely, sql } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
@@ -69,9 +71,9 @@ interface AgingSqlRow {
 export class AgedDebtsService {
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
-  private money(value: unknown): number {
+  private money(value: unknown, digits: MoneyDigits): number {
     const n = Number(value ?? 0);
-    return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
+    return Number.isFinite(n) ? roundMoney(n, digits) : 0;
   }
 
   getAgedReceivables(auth: AuthContext, params: { asOfDate?: string; branchId?: number; page?: number; pageSize?: number; search?: string; risk?: string }) {
@@ -88,6 +90,11 @@ export class AgedDebtsService {
     kind: 'receivables' | 'payables',
   ): Promise<AgedDebtsSummary> {
     const asOfDay = params.asOfDate ? params.asOfDate.slice(0, 10) : new Date().toISOString().slice(0, 10);
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, auth.tenantId ?? ''));
+    // Dust threshold: a balance that rounds to zero at book digits is
+    // dust. At 2dp this is exactly the old 0.01; at 3dp it is 0.001, so
+    // a real 0.005 KWD balance is aged instead of dropped.
+    const dust = 10 ** -digits;
     let asOfDate: Date;
     try { asOfDate = nextAccountingDay(asOfDay); }
     catch { throw new BadRequestException('Invalid asOfDate'); }
@@ -123,7 +130,7 @@ export class AgedDebtsService {
       ), partners as (
         select p.id, p.name, p.phone, b.balance, ${creditLimit} as credit_limit
         from ${partnerTable} p join balances b on b.partner_id = p.id
-        where p.tenant_id = ${auth.tenantId} and b.balance > 0.01
+        where p.tenant_id = ${auth.tenantId} and b.balance > ${dust}
       ), invoices as (
         select l.partner_id, l.created_at as invoice_date, l.amount as unpaid,
                coalesce(sum(l.amount) over (partition by l.partner_id order by l.created_at desc, l.id desc
@@ -146,12 +153,12 @@ export class AgedDebtsService {
         from allocated group by partner_id
       ), partner_rows as materialized (
         select p.id as partner_id, p.name as partner_name, p.phone, p.credit_limit,
-               round(p.balance, 2) as total_balance,
-               round(coalesce(b.current_amount, 0), 2) as current_amount,
-               round(coalesce(b.days_1_to_30, 0), 2) as days_1_to_30,
-               round(coalesce(b.days_31_to_60, 0), 2) as days_31_to_60,
-               round(coalesce(b.days_61_to_90, 0), 2) as days_61_to_90,
-               round(coalesce(b.days_91_plus, 0) + greatest(0, p.balance - coalesce(b.allocated_amount, 0)), 2) as days_91_plus,
+               round(p.balance, ${digits}) as total_balance,
+               round(coalesce(b.current_amount, 0), ${digits}) as current_amount,
+               round(coalesce(b.days_1_to_30, 0), ${digits}) as days_1_to_30,
+               round(coalesce(b.days_31_to_60, 0), ${digits}) as days_31_to_60,
+               round(coalesce(b.days_61_to_90, 0), ${digits}) as days_61_to_90,
+               round(coalesce(b.days_91_plus, 0) + greatest(0, p.balance - coalesce(b.allocated_amount, 0)), ${digits}) as days_91_plus,
                b.oldest_invoice_date,
                case when b.oldest_invoice_date is null then 0
                     else (${asOfDay}::date - (b.oldest_invoice_date at time zone 'UTC')::date) end as oldest_invoice_days,
@@ -182,22 +189,22 @@ export class AgedDebtsService {
     `.execute(this.db);
     const row = result.rows[0];
     const partners: AgedPartnerRow[] = (row?.partners || []).map((p) => {
-      const days1To30 = this.money(p.days_1_to_30);
-      const days31To60 = this.money(p.days_31_to_60);
-      const days61To90 = this.money(p.days_61_to_90);
-      const days91Plus = this.money(p.days_91_plus);
-      const balance = this.money(p.total_balance);
+      const days1To30 = this.money(p.days_1_to_30, digits);
+      const days31To60 = this.money(p.days_31_to_60, digits);
+      const days61To90 = this.money(p.days_61_to_90, digits);
+      const days91Plus = this.money(p.days_91_plus, digits);
+      const balance = this.money(p.total_balance, digits);
       const riskLevel: AgedPartnerRow['riskLevel'] = p.risk_weight === 4 ? 'critical'
         : p.risk_weight === 3 ? 'high' : p.risk_weight === 2 ? 'medium'
           : p.risk_weight === 1 ? 'low' : 'current';
       const cleanPhone = String(p.phone || '').replace(/[^\d+]/g, '');
-      const overdue = this.money(days1To30 + days31To60 + days61To90 + days91Plus);
+      const overdue = this.money(days1To30 + days31To60 + days61To90 + days91Plus, digits);
       const message = encodeURIComponent(`مرحباً ${p.partner_name}، نود تذكيركم بوجود رصيد مستحق بقيمة ${balance.toLocaleString('ar-EG')} ج.م (منها ${overdue.toLocaleString('ar-EG')} ج.م متأخرة). يرجى التكرم بالسداد في أقرب وقت. شاكرين حسن تعاونكم.`);
       return {
         partnerId: Number(p.partner_id), partnerName: p.partner_name,
         phone: p.phone || undefined,
-        creditLimit: p.credit_limit == null ? undefined : this.money(p.credit_limit),
-        totalBalance: balance, currentAmount: this.money(p.current_amount),
+        creditLimit: p.credit_limit == null ? undefined : this.money(p.credit_limit, digits),
+        totalBalance: balance, currentAmount: this.money(p.current_amount, digits),
         days1To30, days31To60, days61To90, days91Plus,
         oldestInvoiceDate: p.oldest_invoice_date ? new Date(p.oldest_invoice_date).toISOString().slice(0, 10) : undefined,
         oldestInvoiceDays: Number(p.oldest_invoice_days || 0),
@@ -211,9 +218,9 @@ export class AgedDebtsService {
       totalPartnersCount: Number(row?.total_partners_count || 0),
       filteredPartnersCount: Number(row?.filtered_partners_count || 0),
       overduePartnersCount: Number(row?.overdue_partners_count || 0),
-      totalBalance: this.money(row?.total_balance), totalCurrent: this.money(row?.total_current),
-      total1To30: this.money(row?.total_1_to_30), total31To60: this.money(row?.total_31_to_60),
-      total61To90: this.money(row?.total_61_to_90), total91Plus: this.money(row?.total_91_plus),
+      totalBalance: this.money(row?.total_balance, digits), totalCurrent: this.money(row?.total_current, digits),
+      total1To30: this.money(row?.total_1_to_30, digits), total31To60: this.money(row?.total_31_to_60, digits),
+      total61To90: this.money(row?.total_61_to_90, digits), total91Plus: this.money(row?.total_91_plus, digits),
       partners,
     };
   }

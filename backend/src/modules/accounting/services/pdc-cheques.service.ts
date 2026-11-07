@@ -1,7 +1,7 @@
 import { tenantBaseCurrency } from '../accounting-currency';
 import { assertPdcTransition, pdcBookAmount } from '../engines/pdc-transition.engine';
 import { pdcCurrencySnapshot } from '../pdc-currency';
-import { currencyMoneyDigits, toMinorUnits } from '../engines/money-minor-units.engine';
+import { currencyMoneyDigits, roundMoney, toMinorUnits, type MoneyDigits } from '../engines/money-minor-units.engine';
 import { lockAccountingPeriod } from '../accounting-period-lock';
 import { Inject, Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Kysely, sql } from 'kysely';
@@ -127,9 +127,9 @@ export class PdcChequesService {
     private readonly accountingPostingService: AccountingPostingService,
   ) {}
 
-  private toMoney(value: unknown): number {
+  private toMoney(value: unknown, digits: MoneyDigits): number {
     const n = Number(value || 0);
-    return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
+    return Number.isFinite(n) ? roundMoney(n, digits) : 0;
   }
 
   private formatDate(date: any): string {
@@ -147,6 +147,7 @@ export class PdcChequesService {
     filters: PdcChequesFilter = {},
   ): Promise<{ data: PdcChequeRecord[]; total: number; page: number; limit: number }> {
     const tenantId = String(authContext.tenantId || '');
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
     const page = Math.max(1, Number(filters.page || 1));
     const limit = Math.min(100, Math.max(1, Number(filters.limit || 25)));
     const offset = (page - 1) * limit;
@@ -218,7 +219,7 @@ export class PdcChequesService {
       partner_type: r.partner_type,
       partner_id: r.partner_id,
       partner_name: r.partner_name,
-      amount: this.toMoney(r.amount),
+      amount: this.toMoney(r.amount, currencyMoneyDigits(r.currency || 'EGP')),
       currency: r.currency || 'EGP',
       issue_date: this.formatDate(r.issue_date),
       due_date: this.formatDate(r.due_date),
@@ -228,7 +229,7 @@ export class PdcChequesService {
       cleared_date: r.cleared_date ? this.formatDate(r.cleared_date) : null,
       bounced_date: r.bounced_date ? this.formatDate(r.bounced_date) : null,
       bounced_reason: r.bounced_reason,
-      bounced_fee: this.toMoney(r.bounced_fee),
+      bounced_fee: this.toMoney(r.bounced_fee, bookDigits),
       flagged_rate_variance: Boolean(r.flagged_rate_variance),
       registered_exchange_rate: r.registered_exchange_rate == null ? null : Number(r.registered_exchange_rate),
       endorsed_to_supplier_id: r.endorsed_to_supplier_id,
@@ -296,64 +297,65 @@ export class PdcChequesService {
     };
 
     const base = await tenantBaseCurrency(this.db, tenantId);
+    const baseDigits = currencyMoneyDigits(base);
     if (rows.some((r: any) => r.base_amount == null && r.currency !== base)) throw new BadRequestException('إحصاءات الحافظة تتطلب مطابقة الشيكات الأجنبية القديمة أولاً.');
     for (const r of rows) {
-      const amount = this.toMoney(r.base_amount ?? r.amount);
+      const amount = this.toMoney(r.base_amount ?? r.amount, baseDigits);
       const dueDate = this.formatDate(r.due_date);
       const isReceivable = r.type === 'receivable';
 
       if (isReceivable) {
         stats.receivables.totalCount += 1;
-        stats.receivables.totalAmount = this.toMoney(stats.receivables.totalAmount + amount);
+        stats.receivables.totalAmount = this.toMoney(stats.receivables.totalAmount + amount, baseDigits);
 
         if (r.status === 'in_safe') {
           stats.receivables.inSafeCount += 1;
-          stats.receivables.inSafeAmount = this.toMoney(stats.receivables.inSafeAmount + amount);
+          stats.receivables.inSafeAmount = this.toMoney(stats.receivables.inSafeAmount + amount, baseDigits);
         } else if (r.status === 'under_collection') {
           stats.receivables.underCollectionCount += 1;
-          stats.receivables.underCollectionAmount = this.toMoney(stats.receivables.underCollectionAmount + amount);
+          stats.receivables.underCollectionAmount = this.toMoney(stats.receivables.underCollectionAmount + amount, baseDigits);
         } else if (r.status === 'collected') {
           stats.receivables.collectedCount += 1;
-          stats.receivables.collectedAmount = this.toMoney(stats.receivables.collectedAmount + amount);
+          stats.receivables.collectedAmount = this.toMoney(stats.receivables.collectedAmount + amount, baseDigits);
         } else if (r.status === 'bounced') {
           stats.receivables.bouncedCount += 1;
-          stats.receivables.bouncedAmount = this.toMoney(stats.receivables.bouncedAmount + amount);
+          stats.receivables.bouncedAmount = this.toMoney(stats.receivables.bouncedAmount + amount, baseDigits);
         }
 
         const isSettled = ['collected', 'cancelled', 'returned', 'endorsed'].includes(r.status);
         if (!isSettled) {
           if (dueDate < today) {
             stats.receivables.overdueCount += 1;
-            stats.receivables.overdueAmount = this.toMoney(stats.receivables.overdueAmount + amount);
+            stats.receivables.overdueAmount = this.toMoney(stats.receivables.overdueAmount + amount, baseDigits);
           } else if (dueDate >= today && dueDate <= in7Days) {
             stats.receivables.dueSoonCount += 1;
-            stats.receivables.dueSoonAmount = this.toMoney(stats.receivables.dueSoonAmount + amount);
+            stats.receivables.dueSoonAmount = this.toMoney(stats.receivables.dueSoonAmount + amount, baseDigits);
           }
         }
       } else {
         // Payable
         stats.payables.totalCount += 1;
-        stats.payables.totalAmount = this.toMoney(stats.payables.totalAmount + amount);
+        stats.payables.totalAmount = this.toMoney(stats.payables.totalAmount + amount, baseDigits);
 
         if (r.status === 'issued') {
           stats.payables.issuedCount += 1;
-          stats.payables.issuedAmount = this.toMoney(stats.payables.issuedAmount + amount);
+          stats.payables.issuedAmount = this.toMoney(stats.payables.issuedAmount + amount, baseDigits);
         } else if (r.status === 'cleared') {
           stats.payables.clearedCount += 1;
-          stats.payables.clearedAmount = this.toMoney(stats.payables.clearedAmount + amount);
+          stats.payables.clearedAmount = this.toMoney(stats.payables.clearedAmount + amount, baseDigits);
         } else if (r.status === 'bounced') {
           stats.payables.bouncedCount += 1;
-          stats.payables.bouncedAmount = this.toMoney(stats.payables.bouncedAmount + amount);
+          stats.payables.bouncedAmount = this.toMoney(stats.payables.bouncedAmount + amount, baseDigits);
         }
 
         const isSettled = ['cleared', 'cancelled'].includes(r.status);
         if (!isSettled) {
           if (dueDate < today) {
             stats.payables.overdueCount += 1;
-            stats.payables.overdueAmount = this.toMoney(stats.payables.overdueAmount + amount);
+            stats.payables.overdueAmount = this.toMoney(stats.payables.overdueAmount + amount, baseDigits);
           } else if (dueDate >= today && dueDate <= in7Days) {
             stats.payables.dueSoonCount += 1;
-            stats.payables.dueSoonAmount = this.toMoney(stats.payables.dueSoonAmount + amount);
+            stats.payables.dueSoonAmount = this.toMoney(stats.payables.dueSoonAmount + amount, baseDigits);
           }
         }
       }
@@ -488,6 +490,9 @@ export class PdcChequesService {
         }
       }
 
+      // The face amount is shaped in the CHEQUE's currency; the bounce
+      // fee is a book amount (validated and posted at book digits).
+      const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
       return {
         id: inserted.id,
         tenant_id: inserted.tenant_id,
@@ -500,7 +505,7 @@ export class PdcChequesService {
         partner_type: inserted.partner_type,
         partner_id: inserted.partner_id,
         partner_name: inserted.partner_name,
-        amount: this.toMoney(inserted.amount),
+        amount: this.toMoney(inserted.amount, currencyMoneyDigits(currency)),
         currency: inserted.currency,
         issue_date: this.formatDate(inserted.issue_date),
         due_date: this.formatDate(inserted.due_date),
@@ -510,7 +515,7 @@ export class PdcChequesService {
         cleared_date: inserted.cleared_date ? this.formatDate(inserted.cleared_date) : null,
         bounced_date: inserted.bounced_date ? this.formatDate(inserted.bounced_date) : null,
         bounced_reason: inserted.bounced_reason,
-        bounced_fee: this.toMoney(inserted.bounced_fee),
+        bounced_fee: this.toMoney(inserted.bounced_fee, bookDigits),
         endorsed_to_supplier_id: inserted.endorsed_to_supplier_id,
         endorsed_to_supplier_name: inserted.endorsed_to_supplier_name,
         flagged_rate_variance: Boolean(inserted.flagged_rate_variance),
@@ -894,7 +899,7 @@ export class PdcChequesService {
         partner_type: updated.partner_type,
         partner_id: updated.partner_id,
         partner_name: updated.partner_name,
-        amount: this.toMoney(updated.amount),
+        amount: this.toMoney(updated.amount, currencyMoneyDigits(updated.currency)),
         currency: updated.currency,
         issue_date: this.formatDate(updated.issue_date),
         due_date: this.formatDate(updated.due_date),
@@ -904,7 +909,7 @@ export class PdcChequesService {
         cleared_date: updated.cleared_date ? this.formatDate(updated.cleared_date) : null,
         bounced_date: updated.bounced_date ? this.formatDate(updated.bounced_date) : null,
         bounced_reason: updated.bounced_reason,
-        bounced_fee: this.toMoney(updated.bounced_fee),
+        bounced_fee: this.toMoney(updated.bounced_fee, bookDigits),
         endorsed_to_supplier_id: updated.endorsed_to_supplier_id,
         endorsed_to_supplier_name: updated.endorsed_to_supplier_name,
         flagged_rate_variance: Boolean(updated.flagged_rate_variance),

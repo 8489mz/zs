@@ -89,16 +89,17 @@ export class WithholdingTaxService {
     private readonly accountingPostingService: AccountingPostingService,
   ) {}
 
-  private toMoney(value: unknown): number {
+  private toMoney(value: unknown, digits: MoneyDigits): number {
     const n = Number(value || 0);
-    return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
+    return Number.isFinite(n) ? roundMoney(n, digits) : 0;
   }
 
   /**
    * Stored-amount rounding: round once with the canonical engine at
-   * the tenant's book digits. Kept separate from toMoney (2dp display
-   * shaping for report/return records) so stored creation and
-   * subledger amounts can never silently fall back to two decimals.
+   * the tenant's book digits. Kept separate from toMoney so stored
+   * creation and subledger amounts fail closed on a non-finite value,
+   * while toMoney (display shaping of stored rows) answers 0 instead.
+   * Both round through roundMoney at the tenant's book digits.
    */
   private toBookMoney(value: unknown, digits: MoneyDigits): number {
     const n = Number(value ?? 0);
@@ -133,6 +134,7 @@ export class WithholdingTaxService {
     params: { year?: number; quarter?: string; direction?: 'payable' | 'receivable' },
   ): Promise<Form41SummaryResponse> {
     const tenantId = String(auth.tenantId || '');
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
     const now = new Date();
     const currentQ = this.determineQuarterAndYear(now.toISOString().substring(0, 10));
     const taxYear = params.year ? Number(params.year) : currentQ.year;
@@ -167,8 +169,8 @@ export class WithholdingTaxService {
       partner_address: r.partner_address,
       wht_type: r.wht_type,
       wht_rate: Number(r.wht_rate),
-      base_amount: this.toMoney(r.base_amount),
-      tax_amount: this.toMoney(r.tax_amount),
+      base_amount: this.toMoney(r.base_amount, digits),
+      tax_amount: this.toMoney(r.tax_amount, digits),
       quarter: r.quarter,
       tax_year: r.tax_year,
       status: r.status,
@@ -189,25 +191,25 @@ export class WithholdingTaxService {
     };
 
     for (const t of transactions) {
-      totalBase = this.toMoney(totalBase + t.base_amount);
-      totalTax = this.toMoney(totalTax + t.tax_amount);
+      totalBase = this.toMoney(totalBase + t.base_amount, digits);
+      totalTax = this.toMoney(totalTax + t.tax_amount, digits);
 
       if (t.wht_type === 'goods') {
         breakdown.goods.count += 1;
-        breakdown.goods.base_amount = this.toMoney(breakdown.goods.base_amount + t.base_amount);
-        breakdown.goods.tax_amount = this.toMoney(breakdown.goods.tax_amount + t.tax_amount);
+        breakdown.goods.base_amount = this.toMoney(breakdown.goods.base_amount + t.base_amount, digits);
+        breakdown.goods.tax_amount = this.toMoney(breakdown.goods.tax_amount + t.tax_amount, digits);
       } else if (t.wht_type === 'services') {
         breakdown.services.count += 1;
-        breakdown.services.base_amount = this.toMoney(breakdown.services.base_amount + t.base_amount);
-        breakdown.services.tax_amount = this.toMoney(breakdown.services.tax_amount + t.tax_amount);
+        breakdown.services.base_amount = this.toMoney(breakdown.services.base_amount + t.base_amount, digits);
+        breakdown.services.tax_amount = this.toMoney(breakdown.services.tax_amount + t.tax_amount, digits);
       } else if (t.wht_type === 'professional') {
         breakdown.professional.count += 1;
-        breakdown.professional.base_amount = this.toMoney(breakdown.professional.base_amount + t.base_amount);
-        breakdown.professional.tax_amount = this.toMoney(breakdown.professional.tax_amount + t.tax_amount);
+        breakdown.professional.base_amount = this.toMoney(breakdown.professional.base_amount + t.base_amount, digits);
+        breakdown.professional.tax_amount = this.toMoney(breakdown.professional.tax_amount + t.tax_amount, digits);
       } else {
         breakdown.custom.count += 1;
-        breakdown.custom.base_amount = this.toMoney(breakdown.custom.base_amount + t.base_amount);
-        breakdown.custom.tax_amount = this.toMoney(breakdown.custom.tax_amount + t.tax_amount);
+        breakdown.custom.base_amount = this.toMoney(breakdown.custom.base_amount + t.base_amount, digits);
+        breakdown.custom.tax_amount = this.toMoney(breakdown.custom.tax_amount + t.tax_amount, digits);
       }
     }
 
@@ -314,8 +316,8 @@ export class WithholdingTaxService {
         partner_address: inserted.partner_address,
         wht_type: inserted.wht_type,
         wht_rate: Number(inserted.wht_rate),
-        base_amount: this.toMoney(inserted.base_amount),
-        tax_amount: this.toMoney(inserted.tax_amount),
+        base_amount: this.toMoney(inserted.base_amount, digits),
+        tax_amount: this.toMoney(inserted.tax_amount, digits),
         quarter: inserted.quarter,
         tax_year: inserted.tax_year,
         status: inserted.status,
@@ -512,6 +514,7 @@ export class WithholdingTaxService {
         }
       }
 
+      const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
       const updated = await trx
         .updateTable('withholding_tax_transactions')
         .set({
@@ -541,8 +544,8 @@ export class WithholdingTaxService {
         partner_address: updated.partner_address,
         wht_type: updated.wht_type,
         wht_rate: Number(updated.wht_rate),
-        base_amount: this.toMoney(updated.base_amount),
-        tax_amount: this.toMoney(updated.tax_amount),
+        base_amount: this.toMoney(updated.base_amount, digits),
+        tax_amount: this.toMoney(updated.tax_amount, digits),
         quarter: updated.quarter,
         tax_year: updated.tax_year,
         status: updated.status,

@@ -10,6 +10,8 @@ import { Kysely, sql } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
+import { tenantBaseCurrency } from '../accounting-currency';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { boundedPage } from '../../../common/utils/bounded-page';
 import {
@@ -44,9 +46,13 @@ export class ArCollectionsService {
     throw new ForbiddenException('Missing required permissions for AR Collections & Dunning Hub');
   }
 
-  private toMoney(value: unknown): number {
+  private toMoney(value: unknown, digits: MoneyDigits): number {
     const n = Number(value || 0);
-    return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
+    return Number.isFinite(n) ? roundMoney(n, digits) : 0;
+  }
+
+  private async bookDigits(tenantId: string): Promise<MoneyDigits> {
+    return currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
   }
 
   /**
@@ -63,6 +69,7 @@ export class ArCollectionsService {
     this.assertCollectionsAccess(auth);
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
+    const digits = await this.bookDigits(tenantId);
 
     const casesStats = await (this.db as any)
       .selectFrom('ar_collection_cases')
@@ -86,11 +93,11 @@ export class ArCollectionsService {
       .executeTakeFirst();
 
     return {
-      totalOverdue: this.toMoney(casesStats?.total_overdue),
+      totalOverdue: this.toMoney(casesStats?.total_overdue, digits),
       openCasesCount: Number(casesStats?.open_cases_count || 0),
       escalatedCasesCount: Number(casesStats?.escalated_cases_count || 0),
       promisedPaymentsCount: Number(casesStats?.promised_count || 0),
-      promisedAmountToday: this.toMoney(casesStats?.promised_amount_today),
+      promisedAmountToday: this.toMoney(casesStats?.promised_amount_today, digits),
       creditBlockedCount: Number(blockedStats?.blocked_count || 0),
     };
   }
@@ -105,6 +112,7 @@ export class ArCollectionsService {
     this.assertCollectionsAccess(auth);
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
+    const digits = await this.bookDigits(tenantId);
 
     let baseQuery = (this.db as any)
       .selectFrom('ar_collection_cases as c')
@@ -189,10 +197,10 @@ export class ArCollectionsService {
 
       return {
         ...item,
-        total_overdue: this.toMoney(item.total_overdue),
-        customer_balance: this.toMoney(item.customer_balance),
-        customer_credit_limit: this.toMoney(item.customer_credit_limit),
-        promised_amount: item.promised_amount ? this.toMoney(item.promised_amount) : null,
+        total_overdue: this.toMoney(item.total_overdue, digits),
+        customer_balance: this.toMoney(item.customer_balance, digits),
+        customer_credit_limit: this.toMoney(item.customer_credit_limit, digits),
+        promised_amount: item.promised_amount ? this.toMoney(item.promised_amount, digits) : null,
         reminderMessage,
         whatsAppUrl,
       };
@@ -212,6 +220,7 @@ export class ArCollectionsService {
     this.assertCollectionsAccess(auth);
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
+    const digits = await this.bookDigits(tenantId);
 
     const caseRecord = await (this.db as any)
       .selectFrom('ar_collection_cases as c')
@@ -303,23 +312,23 @@ export class ArCollectionsService {
     return {
       case: {
         ...caseRecord,
-        total_overdue: this.toMoney(caseRecord.total_overdue),
-        customer_balance: this.toMoney(caseRecord.customer_balance),
-        customer_credit_limit: this.toMoney(caseRecord.customer_credit_limit),
-        promised_amount: caseRecord.promised_amount ? this.toMoney(caseRecord.promised_amount) : null,
+        total_overdue: this.toMoney(caseRecord.total_overdue, digits),
+        customer_balance: this.toMoney(caseRecord.customer_balance, digits),
+        customer_credit_limit: this.toMoney(caseRecord.customer_credit_limit, digits),
+        promised_amount: caseRecord.promised_amount ? this.toMoney(caseRecord.promised_amount, digits) : null,
         reminderMessage,
         whatsAppUrl,
       },
       pagination: { page, pageSize, invoicesHasMore: sales.length > pageSize, logsHasMore: logs.length > pageSize },
       invoices: sales.slice(0, pageSize).map((s: any) => ({
         ...s,
-        total: this.toMoney(s.total),
-        paid_amount: this.toMoney(s.paid_amount),
-        unpaid_amount: this.toMoney(Math.max(0, Number(s.total || 0) - Number(s.paid_amount || 0))),
+        total: this.toMoney(s.total, digits),
+        paid_amount: this.toMoney(s.paid_amount, digits),
+        unpaid_amount: this.toMoney(Math.max(0, Number(s.total || 0) - Number(s.paid_amount || 0)), digits),
       })),
       logs: logs.slice(0, pageSize).map((l: any) => ({
         ...l,
-        promised_amount: l.promised_amount ? this.toMoney(l.promised_amount) : null,
+        promised_amount: l.promised_amount ? this.toMoney(l.promised_amount, digits) : null,
       })),
     };
   }
@@ -337,6 +346,7 @@ export class ArCollectionsService {
     this.assertCollectionsAccess(auth);
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
+    const digits = await this.bookDigits(tenantId);
 
     // 1. Fetch or ensure dunning levels
     let levels = await (this.db as any)
@@ -456,7 +466,7 @@ export class ArCollectionsService {
       `.execute(this.db);
       const overdueByCustomer = new Map(summaries.rows.map((row) => [
         Number(row.customer_id),
-        { totalOverdue: this.toMoney(row.total_overdue), oldestOverdueDays: Number(row.oldest_overdue_days) },
+        { totalOverdue: this.toMoney(row.total_overdue, digits), oldestOverdueDays: Number(row.oldest_overdue_days) },
       ]));
 
       const activeCases: Array<Record<string, unknown>> = [];
