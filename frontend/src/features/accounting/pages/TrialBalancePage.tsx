@@ -7,16 +7,12 @@ import { useTranslation } from 'react-i18next';
 import { translateUiText } from '@/lib/auto-translator';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
 import { formatCurrency } from '@/lib/format';
 import { CheckIcon, XIcon, DownloadIcon, PrinterIcon } from '@/shared/components/icons/AppIcons';
 import { PageHeader } from '@/shared/components/page-header';
-import {
-  financialReportsApi,
-  type TrialBalanceReportData,
-} from '@/features/accounting/api/accounting.api';
+import { useTrialBalance, type TrialBalanceReportData } from '../hooks/useTrialBalance';
 
 /* Local calendar date (never UTC toISOString: near midnight in UTC+2 the
  * UTC date is the previous day).
@@ -34,10 +30,7 @@ export function TrialBalancePage() {
   const navigate = useNavigate();
   const [asOfDate, setAsOfDate] = useState(() => localDateString(new Date()));
 
-  const query = useQuery({
-    queryKey: ['trial-balance', asOfDate],
-    queryFn: () => financialReportsApi.trialBalance({ asOfDate }),
-  });
+  const query = useTrialBalance(asOfDate);
 
   const report: TrialBalanceReportData | undefined = query.data;
 
