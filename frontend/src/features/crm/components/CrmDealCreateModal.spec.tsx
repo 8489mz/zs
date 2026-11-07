@@ -33,7 +33,7 @@ the wipe bug has regressed.
 */
 
 import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { PropsWithChildren } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -100,6 +100,10 @@ describe('CrmDealCreateModal', () => {
 
     const title = await screen.findByPlaceholderText(/توريد شحنة معدات/);
     await user.type(title, TITLE);
+    // INV-CRM-ERROR: the close date is required, so a submit must carry one.
+    fireEvent.change(screen.getByLabelText(/تاريخ الإغلاق المتوقع/), {
+      target: { value: '2026-12-01' },
+    });
     await user.click(screen.getByRole('button', { name: 'حفظ الفرصة البيعية' }));
 
     await waitFor(() =>
@@ -112,6 +116,21 @@ describe('CrmDealCreateModal', () => {
       ),
     );
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('does not submit when the close date is missing (INV-CRM-ERROR)', async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderModal();
+
+    const title = await screen.findByPlaceholderText(/توريد شحنة معدات/);
+    await user.type(title, TITLE);
+    await user.click(screen.getByRole('button', { name: 'حفظ الفرصة البيعية' }));
+
+    // The submit guard names the missing close date instead of posting
+    // an opportunity the backend would reject; no POST is issued.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(httpMock).not.toHaveBeenCalledWith('/api/crm/deals', expect.anything());
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('resets the form when the modal is closed and reopened', async () => {

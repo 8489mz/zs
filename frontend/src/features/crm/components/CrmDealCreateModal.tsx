@@ -172,6 +172,12 @@ export function CrmDealCreateModal({ open, onClose, onSuccess }: CrmDealCreateMo
       toast.warning('يرجى إدخال عنوان الفرصة البيعية.');
       return;
     }
+    // INV-CRM-ERROR: the close date is required -- name it before the
+    // round-trip, same as the title guard above.
+    if (!dealForm.expectedCloseDate) {
+      toast.warning('يرجى إدخال تاريخ الإغلاق المتوقع.');
+      return;
+    }
     createDealMutation.mutate(dealForm);
   };
 
@@ -396,7 +402,7 @@ export function CrmDealCreateModal({ open, onClose, onSuccess }: CrmDealCreateMo
               />
             </Field>
 
-            <Field label={t('crm.crm_deal_create_modal.s27', "تاريخ الإغلاق المتوقع")}>
+            <Field label={t('crm.crm_deal_create_modal.s27', "تاريخ الإغلاق المتوقع *")}>
               <input
                 type="date"
                 value={dealForm.expectedCloseDate ?? ''}

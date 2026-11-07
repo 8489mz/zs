@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsDateString, IsIn, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class ListDealsQueryDto {
@@ -49,6 +49,11 @@ export class CreateDealDto {
   @IsString()
   stage?: string;
 
+  // INV-CRM-ERROR: the create modal posts '' when the user leaves the date
+  // empty, and @IsOptional() skips only null/undefined -- '' used to die
+  // in the validation pipe as a date-format error instead of reaching the
+  // required-field check in the service. Normalise '' to missing here.
+  @Transform(({ value }) => (value === '' ? undefined : value))
   @IsOptional()
   @IsDateString()
   expectedCloseDate?: string | null;

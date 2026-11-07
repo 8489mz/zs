@@ -199,6 +199,17 @@ export class CrmService {
       throw new BadRequestException('عنوان الفرصة البيعية مطلوب.');
     }
 
+    // INV-CRM-ERROR: the close date is required. It used to be silently
+    // stored as null, while the create modal's '' died in the validation
+    // pipe as a date-format error whose field-naming message the frontend
+    // error mapper replaced with the generic 'البيانات المدخلة غير صحيحة.'.
+    // A plain BadRequestException with the field-naming Arabic message (no
+    // VALIDATION_ERROR code) survives the mapper and names the field.
+    const expectedCloseDate = String(input.expectedCloseDate || '').trim();
+    if (!expectedCloseDate) {
+      throw new BadRequestException('تاريخ الإغلاق مطلوب.');
+    }
+
     const inserted = await this.db
       .insertInto('crm_deals')
       .values({
@@ -208,7 +219,7 @@ export class CrmService {
         currency: input.currency || 'EGP',
         probability: input.probability !== undefined ? Number(input.probability) : 50,
         stage: input.stage || 'new',
-        expected_close_date: input.expectedCloseDate ? (input.expectedCloseDate as any) : null,
+        expected_close_date: expectedCloseDate as any,
         contact_name: input.contactName ? String(input.contactName).trim() : null,
         contact_phone: input.contactPhone ? String(input.contactPhone).trim() : null,
         contact_email: input.contactEmail ? String(input.contactEmail).trim() : null,
