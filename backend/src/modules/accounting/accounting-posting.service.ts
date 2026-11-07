@@ -423,9 +423,11 @@ export class AccountingPostingService {
       || title.includes('أجور') || title.includes('salary') || title.includes('wage') || title.includes('payroll')
     ) return '6200';
     if (
+      title.includes('انترنت') || title.includes('إنترنت') || title.includes('internet')
+    ) return '6700';
+    if (
       title.includes('كهرباء') || title.includes('مرافق') || title.includes('مياه')
-      || title.includes('انترنت') || title.includes('إنترنت') || title.includes('utilities')
-      || title.includes('utility')
+      || title.includes('utilities') || title.includes('utility')
     ) return '6300';
     if (
       title.includes('نقل') || title.includes('شحن') || title.includes('delivery')
