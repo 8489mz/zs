@@ -346,22 +346,242 @@ export class CatalogProductService {
     });
   }
 
+  // INV-SLOW-INITIAL-LOADS: the unfiltered products list used to fetch the
+  // whole tenant catalog on every page request and paginate in Node. The
+  // shared base query below is the single SELECT list both paths use; the
+  // fast path adds LIMIT/OFFSET in SQL, the slow path keeps the old
+  // full-fetch + JS-filter behaviour for filtered / sorted / grouped
+  // requests, where the filter semantics (Arabic-normalized search,
+  // scoped stock, fashion grouping) cannot move to SQL unchanged.
+  private listProductsBaseQuery(actor: AuthContext, view: string) {
+    return this.db
+      .selectFrom('products')
+      .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'products.id').onRef('b.tenant_id', '=', 'products.tenant_id').on('b.is_active', '=', true))
+      .leftJoin('stock_locations as sl', (join) => join.onRef('sl.id', '=', 'products.default_location_id').on(this.tenantPredicate(actor, 'sl')))
+      .select(['products.id', 'products.name', 'products.name_en', 'products.barcode', 'products.sku', 'products.catalog_updated_at', 'products.item_type', 'products.item_kind', 'products.style_code', 'products.color', 'products.size', 'products.bin_location', 'products.track_serials', 'products.category_id', 'products.supplier_id', 'products.cost_price', 'products.retail_price', 'products.wholesale_price', 'products.credit_price', 'products.consumer_price', 'products.min_selling_price', 'products.stock_qty', 'products.min_stock_qty', 'sl.id as default_location_id', 'products.notes', 'products.metadata', 'b.id as bom_id', 'sl.name as default_location_name', 'products.is_active', 'products.calories', 'products.allergens', 'products.is_spicy', 'products.is_vegetarian', 'products.is_gluten_free'])
+      .where(view === 'archived' ? sql<boolean>`products.is_active = false` : sql<boolean>`products.is_active = true`)
+      .where(this.tenantPredicate(actor, 'products'));
+  }
+
+  // INV-SLOW-INITIAL-LOADS: the per-page tail both list paths share —
+  // relations + movement existence for the page rows only, then the row
+  // mapping. The page rows are the only products it ever touches.
+  private async mapPagedListProducts(
+    pagedBaseRows: ProductRow[],
+    options: {
+      canViewCost: boolean;
+      scopedLocationId: number | null;
+      scopedStockByProduct: Map<string, number>;
+      activeLocationsByProduct?: Map<string, number[]>;
+      categoriesById: Record<string, string>;
+      suppliersById: Record<string, string>;
+      locationsById: Record<string, string>;
+      brief: boolean;
+      offerCapabilities: ProductOfferColumnCapabilities;
+      actor: AuthContext;
+    },
+  ): Promise<Record<string, unknown>[]> {
+    const pagedIds = pagedBaseRows.map((row) => Number(row.id));
+    const [relations, movementRows, importRows, purchaseRows, saleRows] = await Promise.all([
+      options.brief
+        ? Promise.resolve({ unitsByProduct: new Map(), offersByProduct: new Map(), pricesByProduct: new Map() })
+        : this.fetchListProductRelations(pagedIds, options.offerCapabilities.hasMinQty, options.actor),
+      pagedIds.length > 0
+        ? this.db
+            .selectFrom('stock_movements')
+            .select('product_id')
+            .where('product_id', 'in', pagedIds)
+            .where(this.tenantPredicate(options.actor))
+            .groupBy('product_id')
+            .execute()
+        : Promise.resolve([]),
+      pagedIds.length > 0
+        ? this.db
+            .selectFrom('import_shipment_items')
+            .select('product_id')
+            .where('product_id', 'in', pagedIds)
+            .where(sql<boolean>`tenant_id = ${this.tenantId(options.actor)}`)
+            .groupBy('product_id')
+            .execute()
+            .catch(() => [])
+        : Promise.resolve([]),
+      pagedIds.length > 0
+        ? this.db
+            .selectFrom('purchase_items')
+            .select('product_id')
+            .where('product_id', 'in', pagedIds)
+            .where(this.tenantPredicate(options.actor))
+            .groupBy('product_id')
+            .execute()
+            .catch(() => [])
+        : Promise.resolve([]),
+      pagedIds.length > 0
+        ? this.db
+            .selectFrom('sale_items')
+            .select('product_id')
+            .where('product_id', 'in', pagedIds)
+            .where(this.tenantPredicate(options.actor))
+            .groupBy('product_id')
+            .execute()
+            .catch(() => [])
+        : Promise.resolve([]),
+    ]);
+    const productIdsWithMovements = new Set([
+      ...(movementRows as any[]).map((r) => Number(r.product_id)),
+      ...(importRows as any[]).map((r) => Number(r.product_id)),
+      ...(purchaseRows as any[]).map((r) => Number(r.product_id)),
+      ...(saleRows as any[]).map((r) => Number(r.product_id)),
+    ]);
+    return this.mapListProducts(pagedBaseRows, {
+      canViewCost: options.canViewCost,
+      scopedLocationId: options.scopedLocationId,
+      scopedStockByProduct: options.scopedStockByProduct,
+      activeLocationsByProduct: options.activeLocationsByProduct,
+      categoriesById: options.categoriesById,
+      suppliersById: options.suppliersById,
+      locationsById: options.locationsById,
+      unitsByProduct: relations.unitsByProduct,
+      offersByProduct: relations.offersByProduct,
+      pricesByProduct: relations.pricesByProduct,
+      productIdsWithMovements,
+    });
+  }
+
+  // INV-SLOW-INITIAL-LOADS: the SQL-paged path for unfiltered lists.
+  // Totals + summary come from SQL aggregates over the whole unfiltered
+  // set, the page rows from LIMIT/OFFSET, and scoped stock / locations
+  // only for the page rows — so one page request reads one page, not the
+  // catalog. The coalesce()s mirror the JS oracle: Number(x || 0) treats
+  // NULL as 0, so a NULL stock counts as low / out of stock exactly as
+  // before, and brief requests report 0 offer / customer-price counts,
+  // as before.
+  private async listProductsPageInSql(options: {
+    page: number;
+    pageSize: number;
+    view: string;
+    brief: boolean;
+    canViewCost: boolean;
+    offerCapabilities: ProductOfferColumnCapabilities;
+    actor: AuthContext;
+  }): Promise<Record<string, unknown>> {
+    const { page, pageSize, view, brief, canViewCost, offerCapabilities, actor } = options;
+    const isActive = view !== 'archived';
+    const aggregates = await this.db
+      .selectFrom('products')
+      .select([
+        sql<number>`count(*)`.as('total'),
+        sql<number>`count(*) filter (where coalesce(stock_qty, 0) <= coalesce(min_stock_qty, 0))`.as('low_stock_count'),
+        sql<number>`count(*) filter (where coalesce(stock_qty, 0) <= 0)`.as('out_of_stock_count'),
+        sql<number>`coalesce(sum(coalesce(stock_qty, 0) * coalesce(cost_price, 0)), 0)`.as('inventory_cost'),
+        sql<number>`coalesce(sum(coalesce(stock_qty, 0) * coalesce(retail_price, 0)), 0)`.as('inventory_sale_value'),
+      ])
+      .where('products.is_active', '=', isActive)
+      .where(this.tenantPredicate(actor, 'products'))
+      .executeTakeFirstOrThrow();
+    const total = Number(aggregates.total || 0);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const start = (safePage - 1) * pageSize;
+
+    const [offerTotal, customerPriceTotal] = brief
+      ? [0, 0]
+      : await Promise.all([
+          this.db
+            .selectFrom('product_offers')
+            .select(sql<number>`count(*)`.as('n'))
+            .where('is_active', '=', true)
+            .where(this.tenantPredicate(actor))
+            .where('product_id', 'in', (eb) =>
+              eb.selectFrom('products').select('products.id')
+                .where('products.is_active', '=', isActive)
+                .where(this.tenantPredicate(actor, 'products')),
+            )
+            .executeTakeFirstOrThrow().then((row) => Number(row.n || 0)),
+          this.db
+            .selectFrom('product_customer_prices')
+            .select(sql<number>`count(*)`.as('n'))
+            .where(this.tenantPredicate(actor))
+            .where('product_id', 'in', (eb) =>
+              eb.selectFrom('products').select('products.id')
+                .where('products.is_active', '=', isActive)
+                .where(this.tenantPredicate(actor, 'products')),
+            )
+            .executeTakeFirstOrThrow().then((row) => Number(row.n || 0)),
+        ]);
+
+    const [pagedBaseRows, categories, suppliers, locations] = await Promise.all([
+      this.listProductsBaseQuery(actor, view).orderBy('id', 'desc').limit(pageSize).offset(start).execute() as Promise<ProductRow[]>,
+      this.db.selectFrom('product_categories').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(actor)).execute(),
+      this.db.selectFrom('suppliers').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(actor)).execute(),
+      this.db.selectFrom('stock_locations').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(actor)).execute(),
+    ]);
+    const pagedIds = pagedBaseRows.map((row) => Number(row.id));
+    const scopedStockResult = brief
+      ? { stock: new Map<string, number>(pagedBaseRows.map((p) => [String(p.id), Number(p.stock_qty || 0)])), locations: new Map<string, number[]>() }
+      : await this.resolveScopedStockByProduct(pagedIds, [], pagedBaseRows, actor);
+    const categoriesById = Object.fromEntries(categories.map((entry) => [String(entry.id), String(entry.name || '')]));
+    const suppliersById = Object.fromEntries(suppliers.map((entry) => [String(entry.id), String(entry.name || '')]));
+    const locationsById = Object.fromEntries(locations.map((entry) => [String(entry.id), String(entry.name || '')]));
+    const pagedRows = await this.mapPagedListProducts(pagedBaseRows, {
+      canViewCost,
+      scopedLocationId: null,
+      scopedStockByProduct: scopedStockResult.stock,
+      activeLocationsByProduct: scopedStockResult.locations,
+      categoriesById,
+      suppliersById,
+      locationsById,
+      brief,
+      offerCapabilities,
+      actor,
+    });
+    return {
+      products: pagedRows,
+      pagination: { page: safePage, pageSize, totalItems: total, totalPages },
+      summary: {
+        totalProducts: total,
+        lowStockCount: Number(aggregates.low_stock_count || 0),
+        outOfStockCount: Number(aggregates.out_of_stock_count || 0),
+        inventoryCost: canViewCost ? Number(aggregates.inventory_cost || 0) : null,
+        inventorySaleValue: Number(aggregates.inventory_sale_value || 0),
+        activeOffersCount: offerTotal,
+        customerPriceCount: customerPriceTotal,
+      },
+    };
+  }
+
   async listProducts(query: Record<string, unknown>, actor: AuthContext): Promise<Record<string, unknown>> {
     const { page, pageSize, q, view, requestedLocationId, categoryId, supplierId, brief, sortBy, sortDir } = this.parseListProductsQuery(query);
     const canViewCost = this.canViewCostPrice(actor);
     const offerCapabilities = await this.getProductOfferColumnCapabilities();
     const scopedLocation = requestedLocationId > 0 && actor ? await this.inventoryScope.assertLocationScope(requestedLocationId, actor).catch(() => null) : null;
 
+    // Sorting order determination (moved up: the fast-path decision needs it):
+    // 1. Explicit sort request takes highest precedence across the entire tenant catalog.
+    // 2. Otherwise:
+    //    - 'low' view defaults to least stock first (stock ASC).
+    //    - 'out' view defaults to category then name (category ASC, name ASC).
+    //    - 'all' and all other views default to newest products first (id DESC) as fetched from DB.
+    const effectiveSortBy = sortBy || (view === 'low' ? 'stock' : view === 'out' ? 'category' : 'id');
+    const effectiveSortDir = sortDir || (view === 'low' ? 'asc' : view === 'out' ? 'asc' : 'desc');
+    // Fashion pages are counted by models, never by individual sizes.
+    const groupedFashion = String(query.groupFashion || '') === 'true';
+
+    // INV-SLOW-INITIAL-LOADS: unfiltered requests (the default products
+    // page, the route prefetch, the frontend listAll() loop) page in SQL
+    // instead of re-reading the whole catalog per page request. Any
+    // filter, custom sort or fashion grouping keeps the old path below,
+    // whose JS filter/sort semantics are unchanged.
+    const canPageInSql =
+      !q && !categoryId && !supplierId && !scopedLocation &&
+      (view === 'all' || view === 'archived') &&
+      !groupedFashion &&
+      effectiveSortBy === 'id' && effectiveSortDir === 'desc';
+    if (canPageInSql) {
+      return this.listProductsPageInSql({ page, pageSize, view, brief, canViewCost, offerCapabilities, actor });
+    }
+
     const [products, categories, suppliers, locations] = await Promise.all([
-      this.db
-        .selectFrom('products')
-        .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'products.id').onRef('b.tenant_id', '=', 'products.tenant_id').on('b.is_active', '=', true))
-        .leftJoin('stock_locations as sl', (join) => join.onRef('sl.id', '=', 'products.default_location_id').on(this.tenantPredicate(actor, 'sl')))
-        .select(['products.id', 'products.name', 'products.name_en', 'products.barcode', 'products.sku', 'products.catalog_updated_at', 'products.item_type', 'products.item_kind', 'products.style_code', 'products.color', 'products.size', 'products.bin_location', 'products.track_serials', 'products.category_id', 'products.supplier_id', 'products.cost_price', 'products.retail_price', 'products.wholesale_price', 'products.credit_price', 'products.consumer_price', 'products.min_selling_price', 'products.stock_qty', 'products.min_stock_qty', 'sl.id as default_location_id', 'products.notes', 'products.metadata', 'b.id as bom_id', 'sl.name as default_location_name', 'products.is_active', 'products.calories', 'products.allergens', 'products.is_spicy', 'products.is_vegetarian', 'products.is_gluten_free'])
-        .where(view === 'archived' ? sql<boolean>`products.is_active = false` : sql<boolean>`products.is_active = true`)
-        .where(this.tenantPredicate(actor, 'products'))
-        .orderBy('id', 'desc')
-        .execute() as Promise<ProductRow[]>,
+      this.listProductsBaseQuery(actor, view).orderBy('id', 'desc').execute() as Promise<ProductRow[]>,
       this.db.selectFrom('product_categories').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(actor)).execute(),
       this.db.selectFrom('suppliers').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(actor)).execute(),
       this.db.selectFrom('stock_locations').select(['id', 'name']).where('is_active', '=', true).where(this.tenantPredicate(actor)).execute(),
@@ -382,15 +602,6 @@ export class CatalogProductService {
       supplierId,
       ...listContext,
     });
-
-    // Sorting order determination:
-    // 1. Explicit sort request takes highest precedence across the entire tenant catalog.
-    // 2. Otherwise:
-    //    - 'low' view defaults to least stock first (stock ASC).
-    //    - 'out' view defaults to category then name (category ASC, name ASC).
-    //    - 'all' and all other views default to newest products first (id DESC) as fetched from DB.
-    const effectiveSortBy = sortBy || (view === 'low' ? 'stock' : view === 'out' ? 'category' : 'id');
-    const effectiveSortDir = sortDir || (view === 'low' ? 'asc' : view === 'out' ? 'asc' : 'desc');
 
     if (effectiveSortBy !== 'id' || effectiveSortDir !== 'desc') {
       filteredBaseRows.sort((a, b) => {
@@ -428,7 +639,6 @@ export class CatalogProductService {
 
     // Fashion pages are counted by models, never by individual sizes.
     // Every selected model returns all of its tenant-scoped active variants.
-    const groupedFashion = String(query.groupFashion || '') === 'true';
     const pageGroups: ProductRow[][] = [];
     if (groupedFashion) {
       const groupByKey = new Map<string, ProductRow[]>();
@@ -464,60 +674,7 @@ export class CatalogProductService {
     const pagedBaseRows = groupedFashion
       ? pageGroups.slice(start, start + pageSize).flat()
       : filteredBaseRows.slice(start, start + pageSize);
-    const pagedIds = pagedBaseRows.map((row) => Number(row.id));
-
-    const [relations, movementRows, importRows, purchaseRows, saleRows] = await Promise.all([
-      brief
-        ? Promise.resolve({ unitsByProduct: new Map(), offersByProduct: new Map(), pricesByProduct: new Map() })
-        : this.fetchListProductRelations(pagedIds, offerCapabilities.hasMinQty, actor),
-      pagedIds.length > 0
-        ? this.db
-            .selectFrom('stock_movements')
-            .select('product_id')
-            .where('product_id', 'in', pagedIds)
-            .where(this.tenantPredicate(actor))
-            .groupBy('product_id')
-            .execute()
-        : Promise.resolve([]),
-      pagedIds.length > 0
-        ? this.db
-            .selectFrom('import_shipment_items')
-            .select('product_id')
-            .where('product_id', 'in', pagedIds)
-            .where(sql<boolean>`tenant_id = ${this.tenantId(actor)}`)
-            .groupBy('product_id')
-            .execute()
-            .catch(() => [])
-        : Promise.resolve([]),
-      pagedIds.length > 0
-        ? this.db
-            .selectFrom('purchase_items')
-            .select('product_id')
-            .where('product_id', 'in', pagedIds)
-            .where(this.tenantPredicate(actor))
-            .groupBy('product_id')
-            .execute()
-            .catch(() => [])
-        : Promise.resolve([]),
-      pagedIds.length > 0
-        ? this.db
-            .selectFrom('sale_items')
-            .select('product_id')
-            .where('product_id', 'in', pagedIds)
-            .where(this.tenantPredicate(actor))
-            .groupBy('product_id')
-            .execute()
-            .catch(() => [])
-        : Promise.resolve([]),
-    ]);
-    const productIdsWithMovements = new Set([
-      ...(movementRows as any[]).map((r) => Number(r.product_id)),
-      ...(importRows as any[]).map((r) => Number(r.product_id)),
-      ...(purchaseRows as any[]).map((r) => Number(r.product_id)),
-      ...(saleRows as any[]).map((r) => Number(r.product_id)),
-    ]);
-
-    const pagedRows = this.mapListProducts(pagedBaseRows, {
+    const pagedRows = await this.mapPagedListProducts(pagedBaseRows, {
       canViewCost,
       scopedLocationId: scopedLocation?.id || null,
       scopedStockByProduct: scopedStockResult.stock,
@@ -525,12 +682,10 @@ export class CatalogProductService {
       categoriesById: listContext.categoriesById,
       suppliersById: listContext.suppliersById,
       locationsById: listContext.locationsById,
-      unitsByProduct: relations.unitsByProduct,
-      offersByProduct: relations.offersByProduct,
-      pricesByProduct: relations.pricesByProduct,
-      productIdsWithMovements,
+      brief,
+      offerCapabilities,
+      actor,
     });
-
 
     return {
       products: pagedRows,
