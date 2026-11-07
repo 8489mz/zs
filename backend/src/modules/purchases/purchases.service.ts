@@ -46,6 +46,10 @@ export class PurchasesService {
     return this.queryService.listSupplierPayments(auth, query);
   }
 
+  getSupplierPaymentById(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
+    return this.queryService.getSupplierPaymentById(id, auth);
+  }
+
   createSupplierPayment(payload: CreateSupplierPaymentDto, auth: AuthContext, idempotencyKey?: string): Promise<Record<string, unknown>> {
     return this.writeService.createSupplierPayment(payload, auth, idempotencyKey);
   }

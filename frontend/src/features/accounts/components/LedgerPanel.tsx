@@ -11,7 +11,7 @@ import { AccountsInvoiceDetailCard } from '@/features/accounts/components/Accoun
 import { formatLedgerEntryType } from '@/features/accounts/utils/ledger-format.utils';
 
 type Entry = CustomerLedgerEntry | SupplierLedgerEntry;
-type SupportedDocumentType = 'sale' | 'purchase';
+type SupportedDocumentType = 'sale' | 'purchase' | 'supplier_payment';
 type SelectedLedgerDocument = { key: string; type: SupportedDocumentType; referenceId: string; label: string };
 
 function readEntryText(entry: Entry, keys: string[]) {
@@ -24,11 +24,17 @@ function readEntryText(entry: Entry, keys: string[]) {
   return '';
 }
 
-function inferDocumentType(entry: Entry): SupportedDocumentType | '' {
+export function inferDocumentType(entry: Entry): SupportedDocumentType | '' {
   const referenceType = readEntryText(entry, ['reference_type', 'referenceType']).toLowerCase();
+  const entryType = readEntryText(entry, ['entry_type', 'entryType', 'type']).toLowerCase();
+  /* INV-STATEMENT-PAYMENT-DETAILS: a supplier payment is its own document
+   * type, never a purchase. Without this early return the fallthrough
+   * below classified it 'purchase' ('supplier_payment'.includes('supplier')),
+   * and the payment id was then fed to purchaseById -- which 404s, or
+   * silently shows an unrelated invoice when the ids collide. */
+  if (referenceType === 'supplier_payment' || entryType === 'supplier_payment') return 'supplier_payment';
   if (referenceType === 'sale' || referenceType === 'purchase') return referenceType;
 
-  const entryType = readEntryText(entry, ['entry_type', 'entryType', 'type']).toLowerCase();
   const note = readEntryText(entry, ['note', 'description']);
   const docNo = readEntryText(entry, ['doc_no', 'docNo', 'documentNo']);
 
@@ -64,16 +70,16 @@ function inferDocumentId(entry: Entry, type: SupportedDocumentType | '') {
   return genericMatch?.[1] || '';
 }
 
-function getDocumentReference(entry: Entry): SelectedLedgerDocument | null {
+export function getDocumentReference(entry: Entry): SelectedLedgerDocument | null {
   const type = inferDocumentType(entry);
-  if (type !== 'sale' && type !== 'purchase') return null;
+  if (type !== 'sale' && type !== 'purchase' && type !== 'supplier_payment') return null;
 
   const referenceId = inferDocumentId(entry, type);
   if (!referenceId) return null;
 
   const docNo = readEntryText(entry, ['doc_no', 'docNo', 'documentNo']);
   const note = readEntryText(entry, ['note', 'description']);
-  const label = docNo || note || `${type === 'sale' ? 'فاتورة بيع' : 'فاتورة شراء'} #${referenceId}`;
+  const label = docNo || note || (type === 'sale' ? `فاتورة بيع #${referenceId}` : type === 'supplier_payment' ? `سند صرف #${referenceId}` : `فاتورة شراء #${referenceId}`);
 
   return {
     key: `${type}-${referenceId}`,
@@ -128,6 +134,12 @@ export function LedgerPanel({
     queryKey: ['accounts-ledger-purchase-detail', selectedDocument?.type, selectedDocument?.referenceId],
     queryFn: () => documentDetailsApi.purchaseById(String(selectedDocument?.referenceId || '')),
     enabled: selectedDocument?.type === 'purchase' && Boolean(selectedDocument?.referenceId),
+  });
+
+  const supplierPaymentDetailQuery = useQuery({
+    queryKey: ['accounts-ledger-supplier-payment-detail', selectedDocument?.type, selectedDocument?.referenceId],
+    queryFn: () => documentDetailsApi.supplierPaymentById(String(selectedDocument?.referenceId || '')),
+    enabled: selectedDocument?.type === 'supplier_payment' && Boolean(selectedDocument?.referenceId),
   });
 
   function toggleDocument(entry: Entry) {
@@ -198,7 +210,13 @@ export function LedgerPanel({
           if (!document) return undefined;
           return selectedDocument?.key === document.key ? 'table-row-selected table-row-clickable' : 'table-row-clickable';
         }}
-        rowTitle={(entry) => getDocumentReference(entry) ? t('accounts.ledger_panel.s18', "اضغط لعرض تفاصيل الفاتورة") : undefined}
+        rowTitle={(entry) => {
+          const document = getDocumentReference(entry);
+          if (!document) return undefined;
+          return document.type === 'supplier_payment'
+            ? t('accounts.ledger_panel.s20', "اضغط لعرض تفاصيل الدفع")
+            : t('accounts.ledger_panel.s18', "اضغط لعرض تفاصيل الفاتورة");
+        }}
         pagination={value ? {
           page: pagination?.page || 1,
           pageSize: pagination?.pageSize || 10,
@@ -212,10 +230,11 @@ export function LedgerPanel({
         <AccountsInvoiceDetailCard
           selectedLabel={selectedDocument?.label || ''}
           documentType={selectedDocument?.type || null}
-          isLoading={saleDetailQuery.isLoading || purchaseDetailQuery.isLoading}
-          error={saleDetailQuery.error || purchaseDetailQuery.error}
+          isLoading={saleDetailQuery.isLoading || purchaseDetailQuery.isLoading || supplierPaymentDetailQuery.isLoading}
+          error={saleDetailQuery.error || purchaseDetailQuery.error || supplierPaymentDetailQuery.error}
           sale={saleDetailQuery.data || null}
           purchase={purchaseDetailQuery.data || null}
+          supplierPayment={supplierPaymentDetailQuery.data || null}
         />
       </div>
     </div>

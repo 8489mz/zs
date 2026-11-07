@@ -161,6 +161,12 @@ export class PurchasesController {
     return this.purchasesService.listSupplierPayments(req.authContext!, query);
   }
 
+  @Get('supplier-payments/:id')
+  @RequirePermissions('accounts')
+  getSupplierPayment(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+    return this.purchasesService.getSupplierPaymentById(id, req.authContext!);
+  }
+
   @Post('supplier-payments')
   @RequirePermissions('accounts')
   createSupplierPayment(@Body() payload: CreateSupplierPaymentDto, @Req() req: RequestWithAuth, @Headers('x-idempotency-key') idempotencyKey?: string): Promise<Record<string, unknown>> {

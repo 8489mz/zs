@@ -9,7 +9,7 @@ function asRecord(value: unknown): AnyRecord | null {
   return value && typeof value === 'object' ? value as AnyRecord : null;
 }
 
-function unwrapByKey<T>(payload: unknown, key: 'sale' | 'purchase'): T {
+function unwrapByKey<T>(payload: unknown, key: string): T {
   const record = asRecord(payload);
   if (!record) return payload as T;
 
@@ -22,7 +22,33 @@ function unwrapByKey<T>(payload: unknown, key: 'sale' | 'purchase'): T {
   return payload as T;
 }
 
+export interface SupplierPaymentDetail {
+  id: string;
+  docNo: string;
+  supplierId: string;
+  supplierName: string;
+  amount: number;
+  note: string;
+  date: string;
+  paymentChannel: string;
+  instapayAddress: string;
+  branchId: string;
+  locationId: string;
+  branchName: string;
+  locationName: string;
+  createdBy: string;
+  journalEntryId: string;
+  journalNo: string;
+}
+
+type SupplierPaymentDetailPayload = SupplierPaymentDetail | { supplierPayment?: SupplierPaymentDetail | null; data?: unknown; result?: unknown };
+
 export const documentDetailsApi = {
   saleById: async (id: string) => unwrapByKey<Sale>(await http<SaleDetailPayload>(`/api/sales/${id}`), 'sale'),
   purchaseById: async (id: string) => unwrapByKey<Purchase>(await http<PurchaseDetailPayload>(`/api/purchases/${id}`), 'purchase'),
+  /* INV-STATEMENT-PAYMENT-DETAILS: a supplier statement payment row is a
+   * payment, not an invoice -- its details come from the single-payment
+   * read, never from purchaseById (a payment id fed to /api/purchases/:id
+   * either 404s or returns an unrelated invoice on an id collision). */
+  supplierPaymentById: async (id: string) => unwrapByKey<SupplierPaymentDetail>(await http<SupplierPaymentDetailPayload>(`/api/supplier-payments/${id}`), 'supplierPayment'),
 };

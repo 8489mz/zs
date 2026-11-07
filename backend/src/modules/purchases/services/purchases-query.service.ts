@@ -246,6 +246,8 @@ export class PurchasesQueryService {
         'sp.amount',
         'sp.note',
         'sp.payment_date',
+        'sp.payment_channel',
+        'sp.instapay_address',
         'sp.branch_id',
         'sp.location_id',
         'b.name as branch_name',
@@ -267,6 +269,8 @@ export class PurchasesQueryService {
         amount: Number(row.amount || 0),
         note: row.note || '',
         date: row.payment_date,
+        paymentChannel: row.payment_channel || 'cash',
+        instapayAddress: row.instapay_address || '',
         createdBy: row.created_by_name || '',
         branchId: row.branch_id ? String(row.branch_id) : '',
         locationId: row.location_id ? String(row.location_id) : '',
@@ -276,6 +280,80 @@ export class PurchasesQueryService {
       total,
       page,
       pageSize,
+      scope,
+    };
+  }
+
+  /* INV-STATEMENT-PAYMENT-DETAILS: single supplier-payment read for the
+   * supplier statement details button. The ledger row carries only the
+   * payment id (reference_type 'supplier_payment'); the ZPV number, the
+   * payment channel / IPA address and the journal number live on the
+   * payment row and its journal entry, never on the ledger row. The
+   * journal number is read from journal_entries.entry_no -- never
+   * fabricated from the journal id (gapless numbering, INV-JE-NUMBERING-GAP).
+   * A missing payment throws PAYMENT_NOT_FOUND, never PURCHASE_NOT_FOUND:
+   * the id is a payment id, and a purchase lookup on it would either fail
+   * with the wrong error or -- worse -- return an unrelated invoice whose
+   * id happened to collide. */
+  async getSupplierPaymentById(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
+    const scope = requireTenantScope(auth);
+    const row = await this.db
+      .selectFrom('supplier_payments as sp')
+      .leftJoin('suppliers as s', (j) => j.onRef('s.id', '=', 'sp.supplier_id').onRef('s.tenant_id', '=', 'sp.tenant_id'))
+      .leftJoin('branches as b', (j) => j.onRef('b.id', '=', 'sp.branch_id').onRef('b.tenant_id', '=', 'sp.tenant_id'))
+      .leftJoin('stock_locations as l', (j) => j.onRef('l.id', '=', 'sp.location_id').onRef('l.tenant_id', '=', 'sp.tenant_id'))
+      .leftJoin('users as u', (j) => j.onRef('u.id', '=', 'sp.created_by').onRef('u.tenant_id', '=', 'sp.tenant_id'))
+      .select([
+        'sp.id',
+        'sp.doc_no',
+        'sp.supplier_id',
+        's.name as supplier_name',
+        'sp.amount',
+        'sp.note',
+        'sp.payment_date',
+        'sp.payment_channel',
+        'sp.instapay_address',
+        'sp.branch_id',
+        'sp.location_id',
+        'b.name as branch_name',
+        'l.name as location_name',
+        'u.username as created_by_name',
+      ])
+      .where('sp.id', '=', id)
+      .where(this.tenantPredicate(auth, 'sp'))
+      .executeTakeFirst();
+
+    if (!row) throw new AppError('Supplier payment not found', 'PAYMENT_NOT_FOUND', 404);
+
+    const journal = await this.db
+      .selectFrom('journal_entries')
+      .select(['id', 'entry_no'])
+      .where('source_type', '=', 'supplier_payment')
+      .where('source_id', '=', id)
+      .where('tenant_id', '=', scope.tenantId)
+      .where('status', 'in', ['draft', 'posted'])
+      .orderBy('id', 'desc')
+      .executeTakeFirst();
+
+    return {
+      supplierPayment: {
+        id: String(row.id),
+        docNo: row.doc_no || `ZPV-${row.id}`,
+        supplierId: String(row.supplier_id),
+        supplierName: row.supplier_name || '',
+        amount: Number(row.amount || 0),
+        note: row.note || '',
+        date: row.payment_date,
+        paymentChannel: row.payment_channel || 'cash',
+        instapayAddress: row.instapay_address || '',
+        branchId: row.branch_id ? String(row.branch_id) : '',
+        locationId: row.location_id ? String(row.location_id) : '',
+        branchName: row.branch_name || '',
+        locationName: row.location_name || '',
+        createdBy: row.created_by_name || '',
+        journalEntryId: journal ? String(journal.id) : '',
+        journalNo: journal ? journal.entry_no || '' : '',
+      },
       scope,
     };
   }
