@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/app/query-keys';
 import { Button } from '@/shared/ui/button';
 import { Field } from '@/shared/ui/field';
 import { CustomSelect } from '@/shared/ui/custom-select';
@@ -16,6 +17,7 @@ import type { Customer } from '@/types/domain';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { useCustomerProfile } from '@/features/customers/constants/customer-profiles';
 import { deliveryRepsApi, type DeliveryRep } from '@/shared/api/delivery-reps.api';
+import { customersApi } from '@/shared/api/customers.api';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import { CustomerVisitDaysPicker } from './CustomerVisitDaysPicker';
 import { FreightPortalPinCard } from './FreightPortalPinCard';
@@ -59,6 +61,26 @@ export function CustomerEditorCard({
     staleTime: 60000,
   });
   const allReps: DeliveryRep[] = useMemo(() => ((repsQuery.data as any) || []) as DeliveryRep[], [repsQuery.data]);
+
+  // Ledger-derived current book balance (INV-EDIT-DIALOG-BALANCE-LABEL):
+  // the disabled input below shows the stored customers.balance column
+  // (the opening balance), which is NOT the current balance. The current
+  // book balance lives in the ledger (GET /api/reports/customer-balances,
+  // coalesce(sum(customer_ledger.amount), customers.balance, 0)), so fetch
+  // it the same useQuery way as the reps above and render it as a separate
+  // read-only line. The opening-balance input and its form wiring are
+  // deliberately untouched.
+  const ledgerBalanceQuery = useQuery({
+    queryKey: queryKeys.customerBalances,
+    queryFn: customersApi.balances,
+    staleTime: 60000,
+    enabled: Boolean(customer?.id),
+  });
+  const ledgerBalanceRow = useMemo(
+    () => (ledgerBalanceQuery.data || []).find((row) => String(row.id) === String(customer?.id)),
+    [ledgerBalanceQuery.data, customer?.id],
+  );
+  const ledgerBalance = ledgerBalanceRow ? Number(ledgerBalanceRow.balance || 0) : null;
 
   const [selectedRepIds, setSelectedRepIds] = useState<number[]>([]);
   const [useRepSpecificSchedules, setUseRepSpecificSchedules] = useState<boolean>(false);
@@ -317,6 +339,27 @@ export function CustomerEditorCard({
               disabled={true}
               style={{ height: '36px', fontSize: '13px', fontWeight: 800, backgroundColor: '#f8fafc', color: Number(customer.balance || 0) > 0 ? '#b91c1c' : '#0f172a' }}
             />
+            <div
+              data-testid="ledger-current-balance"
+              style={{ marginTop: '6px', fontSize: '12px', fontWeight: 700, color: '#0f172a', lineHeight: 1.5 }}
+            >
+              {ledgerBalanceQuery.isPending ? (
+                <span style={{ color: '#64748b' }}>
+                  {__t('customers.customer_editor_card.s43', "جارٍ تحميل الرصيد الدفتري الحالي…")}
+                </span>
+              ) : ledgerBalanceQuery.isError ? (
+                <span style={{ color: '#b91c1c' }}>
+                  {__t('customers.customer_editor_card.s44', "تعذّر تحميل الرصيد الدفتري الحالي من كشف الحساب — أعد فتح البطاقة وحاول مجددًا.")}
+                </span>
+              ) : (
+                <span>
+                  {__t('customers.customer_editor_card.s45', "الرصيد الدفتري الحالي:")}{' '}
+                  {ledgerBalance === null
+                    ? '—'
+                    : `${ledgerBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ${getGlobalCurrencySymbol()}`}
+                </span>
+              )}
+            </div>
           </Field>
 
           <Field
