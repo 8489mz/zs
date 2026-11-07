@@ -24,6 +24,7 @@ import {
   calculateSubscriptionLineTotals,
   evaluateSubscriptionBillingStatus,
 } from '../engines/subscription-billing.engine';
+import { resolveSaleTaxRate } from '../engines/sale-tax-rate.engine';
 
 @Injectable()
 export class CommercialSubscriptionService {
@@ -39,6 +40,32 @@ export class CommercialSubscriptionService {
       return;
     }
     throw new ForbiddenException('Missing required permissions for subscription management');
+  }
+
+  /**
+   * Reads the tenant's configured tax rate from settings, mirroring the
+   * sales-write read (`taxRate` with the legacy `tax_rate` spelling as
+   * fallback). Values are JSON-parsed like the sales settings map, so a
+   * stored `14` and a stored `"14"` resolve identically. Returns
+   * undefined when the tenant configured no rate; resolveSaleTaxRate
+   * then treats the configured rate as 0 (exempt-only) per its contract.
+   */
+  private async resolveConfiguredTaxRate(tenantId: string): Promise<unknown> {
+    const rows = await (this.db as any)
+      .selectFrom('settings')
+      .select(['key', 'value'])
+      .where('tenant_id', '=', tenantId)
+      .where('key', 'in', ['taxRate', 'tax_rate'])
+      .execute();
+    const map = new Map<string, any>();
+    for (const row of rows as Array<{ key: string; value: unknown }>) {
+      try {
+        map.set(row.key, JSON.parse(String(row.value)));
+      } catch {
+        map.set(row.key, row.value);
+      }
+    }
+    return map.get('taxRate') ?? map.get('tax_rate');
   }
 
   /**
@@ -78,7 +105,19 @@ export class CommercialSubscriptionService {
 
     // Calculate totals at the tenant's book precision (INV-SUBSCRIPTION-BILLING-DIGITS)
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
-    const totals = calculateSubscriptionTotals(dto.lines, digits);
+    // Tax F1 (same rule as createSale): a subscription line's tax rate is
+    // the tenant's configured rate or 0 (exempt) — never whatever the
+    // client sent. resolveSaleTaxRate throws SALE_TAX_RATE_MISMATCH
+    // before any totals or rows are written, and the resolved rate is
+    // what is stored and totalled, so the stored tax_rate and the
+    // computed totals agree exactly. Applied per line: each line's
+    // payload rate must equal the configured rate or 0.
+    const configuredTaxRate = await this.resolveConfiguredTaxRate(tenantId);
+    const resolvedLines = dto.lines.map((line) => ({
+      ...line,
+      taxRate: resolveSaleTaxRate(line.taxRate, configuredTaxRate),
+    }));
+    const totals = calculateSubscriptionTotals(resolvedLines, digits);
     const subscriptionId = `sub_${randomUUID()}`;
 
     // Execute in transaction
@@ -105,7 +144,7 @@ export class CommercialSubscriptionService {
         })
         .execute();
 
-      for (const line of dto.lines) {
+      for (const line of resolvedLines) {
         const lineTotals = calculateSubscriptionLineTotals(line.quantity, line.unitPrice, line.taxRate || 0, digits);
         await trx
           .insertInto('commercial_subscription_lines')
