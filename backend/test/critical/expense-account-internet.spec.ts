@@ -28,6 +28,17 @@
  * 4. An unknown expense title still falls through to 6900.
  * 5. Every posted journal balances: total debit equals total credit
  *    equals the expense amount.
+ *
+ * Batch 13 extension (INV-INTERNET-EXPENSE-WRONG-ACCOUNT): the live
+ * audit re-found the same pre-fix 250.00 journal JE-00014980 on 6300 --
+ * that journal stays untouched (prospective only), and no post-fix code
+ * path routes a covered title to 6300. The remaining live gap was the
+ * map's coverage: real merchant titles for an internet bill that the
+ * formal word misses ("فاتورة النت", ISP brands, wifi, DSL, the
+ * "انترنيت" spelling) fell through to 6900 instead of 6700. This pins
+ * those titles to 6700, and pins the word-boundary guard: "شراء منتجات"
+ * (which contains "نت" inside منتجات) must NOT be treated as internet
+ * and still falls through to 6900.
  */
 
 import 'reflect-metadata';
@@ -142,6 +153,34 @@ async function main(): Promise<void> {
     const unknown = await postAndRead('مصروف غريب', 30);
     assert.equal(unknown.debitCode, '6900', 'unknown expense title still falls through to 6900');
     assertBalanced('مصروف غريب', 30, unknown);
+
+    // 6. Batch 13: real merchant titles for an internet bill all debit 6700.
+    const colloquialTitles: Array<[string, number]> = [
+      ['فاتورة النت', 250],
+      ['اشتراك النت الشهري', 200],
+      ['فاتورة نت', 150],
+      ['انترنيت', 180],
+      ['فاتورة فودافون', 220],
+      ['Vodafone bill', 220],
+      ['فاتورة اتصالات', 190],
+      ['Orange bill', 210],
+      ['فاتورة أورنج', 210],
+      ['تي داتا', 175],
+      ['واي فاي', 160],
+      ['Wifi bill', 160],
+      ['ADSL subscription', 140],
+    ];
+    for (const [title, amount] of colloquialTitles) {
+      const read = await postAndRead(title, amount);
+      assert.equal(read.debitCode, '6700', `internet expense "${title}" posts to 6700 Administrative`);
+      assert.equal(read.creditCode, '1110', `internet expense "${title}" credits cash 1110`);
+      assertBalanced(title, amount, read);
+    }
+
+    // 7. Word-boundary guard: "منتجات" contains "نت" but is not internet.
+    const products = await postAndRead('شراء منتجات', 90);
+    assert.equal(products.debitCode, '6900', '"شراء منتجات" is not an internet expense and still falls through to 6900');
+    assertBalanced('شراء منتجات', 90, products);
 
     console.log('expense-account-internet: internet (ar/en) -> 6700, electricity/water -> 6300, rent -> 6100, unknown -> 6900, all journals balance');
   } finally {

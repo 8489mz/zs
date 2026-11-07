@@ -424,6 +424,19 @@ export class AccountingPostingService {
     ) return '6200';
     if (
       title.includes('انترنت') || title.includes('إنترنت') || title.includes('internet')
+      // Colloquial / brand spellings a merchant actually types for an internet
+      // bill: "النت" (not bare "نت" -- it sits inside منتج/منتجات/كانت), the
+      // "انترنيت" spelling, ISP brands, wifi, and DSL. All are internet, so
+      // all post to 6700 Administrative per the user's decision.
+      || title.includes('النت') || title.includes(' نت')
+      || title.includes('انترنيت') || title.includes('إنترنيت')
+      || title.includes('انتر نت') || title.includes('إنتر نت')
+      || title.includes('فودافون') || title.includes('vodafone')
+      || title.includes('اتصالات') || title.includes('etisalat')
+      || title.includes('اورنج') || title.includes('أورنج') || title.includes('orange')
+      || title.includes('تي داتا') || title.includes('tedata') || title.includes('te data')
+      || title.includes('واي فاي') || title.includes('وايفاي') || title.includes('wifi') || title.includes('wi-fi')
+      || title.includes('dsl')
     ) return '6700';
     if (
       title.includes('كهرباء') || title.includes('مرافق') || title.includes('مياه')
