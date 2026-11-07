@@ -19,6 +19,14 @@ const FIELD_LABELS: Record<string, string> = {
   toQty: 'إلى',
   oldQty: 'من',
   newQty: 'إلى',
+  itemId: 'رقم البند',
+  quantity: 'الكمية',
+  countedSerials: 'السيريالات',
+  batchCounts: 'التشغيلات',
+  batchId: 'التشغيلة',
+  batchNumber: 'رقم التشغيلة',
+  countedQty: 'الكمية المعدودة',
+  expiryDate: 'تاريخ الانتهاء',
 };
 
 // Stored enum values are English ('draft', 'posted', ...); the general
@@ -106,7 +114,22 @@ function formatGenericObjectDetails(details: AuditDetailsObject, depth = 0): str
       continue;
     }
     if (Array.isArray(value)) {
-      const joined = value.map((item) => stringifyDetailValue(item)).filter(Boolean).join('، ');
+      // Object items recurse with their own labels instead of being
+      // JSON.stringify'd raw into the output: the count-session trace
+      // event stores batchCounts as an array of {batchId, batchNumber,
+      // expiryDate, countedQty} objects, which used to render as
+      // `batchCounts: {"batchId":3,...}`. Same depth cap as nested
+      // objects below, so a pathological payload can never render JSON.
+      const joined = value
+        .map((item) => {
+          if (item && typeof item === 'object' && !Array.isArray(item)) {
+            if (depth >= 2) return '';
+            return formatGenericObjectDetails(item as AuditDetailsObject, depth + 1);
+          }
+          return stringifyDetailValue(item);
+        })
+        .filter(Boolean)
+        .join('، ');
       if (!joined) continue;
       const label = FIELD_LABELS[key] || key;
       parts.push(`${label}: ${joined}`);
