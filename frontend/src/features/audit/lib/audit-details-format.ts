@@ -20,7 +20,6 @@ const FIELD_LABELS: Record<string, string> = {
   oldQty: 'من',
   newQty: 'إلى',
   itemId: 'رقم البند',
-  quantity: 'الكمية',
   countedSerials: 'السيريالات',
   batchCounts: 'التشغيلات',
   batchId: 'التشغيلة',
