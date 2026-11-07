@@ -287,48 +287,24 @@ export const storefrontApi = {
     }
   },
 
+  /*
+   * INV-STOREFRONT-ORDER-PRICE: placing an order is a money action, so a
+   * failed POST must surface the real error — never a fabricated demo order.
+   * The old catch fallback invented a successful order (ORD-<timestamp>,
+   * demo-token-123) priced from the demo catalog: the live case ORD-180027
+   * showed the real product (id 16812, 131.60) as "منتج #16812 — 0 ج.م" with
+   * the demo delivery fee 35.00 despite free delivery, and the order never
+   * reached admin because nothing was ever persisted. The checkout modal
+   * already shows the thrown error message (setErrorMsg), so the shopper
+   * sees the real named reason instead of a fake success. Demo fallbacks
+   * stay for read-only browsing (getInfo/getCatalog/quote); only the order
+   * write loses its fabrication.
+   */
   createOrder: async (slug: string, payload: CreateOnlineOrderPayload): Promise<CreateOnlineOrderResponse> => {
-    try {
-      return await http<CreateOnlineOrderResponse>(`/api/storefront/${encodeURIComponent(slug)}/orders`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-    } catch {
-      const mappedItems = (payload.items || []).map((i: any) => {
-        const prod = DEMO_STOREFRONT_CATALOG.products.find((p) => p.id === Number(i.productId));
-        const unitPrice = Number(i.price ?? prod?.price ?? 0);
-        const quantity = Number(i.quantity ?? i.qty ?? 1);
-        return {
-          productId: Number(i.productId),
-          name: i.name || prod?.name || `منتج #${i.productId}`,
-          quantity,
-          unitPrice,
-          total: unitPrice * quantity,
-        };
-      });
-      const subtotal = mappedItems.reduce((s, i) => s + i.total, 0);
-      const deliveryFee = payload.orderType === 'dine_in' ? 0 : (DEMO_STOREFRONT_INFO.deliveryFee || 0);
-      const freeThreshold = DEMO_STOREFRONT_INFO.freeShippingMinOrder || 0;
-      const effectiveDeliveryFee = DEMO_STOREFRONT_INFO.freeShippingEnabled && freeThreshold > 0 && subtotal >= freeThreshold ? 0 : deliveryFee;
-      const total = subtotal + effectiveDeliveryFee;
-      const generatedOrderNumber = `ORD-${Date.now().toString().slice(-6)}`;
-      return {
-        ok: true,
-        orderId: Date.now(),
-        orderNumber: generatedOrderNumber,
-        accessToken: 'demo-token-123',
-        trackingUrl: null,
-        totalAmount: total,
-        subtotal,
-        deliveryFee: effectiveDeliveryFee,
-        discountAmount: 0,
-        couponCode: payload.couponCode || null,
-        items: mappedItems,
-        orderType: payload.orderType || 'delivery',
-        tableNumber: payload.tableNumber || null,
-        whatsappUrl: null,
-      };
-    }
+    return await http<CreateOnlineOrderResponse>(`/api/storefront/${encodeURIComponent(slug)}/orders`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 
   validateCoupon: async (slug: string, code: string, subtotal: number): Promise<ValidateCouponResponse> => {
