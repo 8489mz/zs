@@ -1158,6 +1158,9 @@ export function useNewPurchaseOrderController() {
       supplierId,
       paymentType,
       discount: discount || 0,
+      // INV-LANDED-COST-ALLOCATION: this screen has no freight input, so
+      // freight is 0 and no landedCosts key is sent (see buildPurchasePayload).
+      freight: 0,
       branchId: rawBranches[0]?.id?.toString() || '',
       locationId: rawLocations[0]?.id?.toString() || '',
       note: notes,
