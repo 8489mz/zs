@@ -37,7 +37,7 @@ export function HrLeavesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [quickFilter, setQuickFilter] = useState<QuickFilter>('pending');
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [leaveTypeFilter, setLeaveTypeFilter] = useState('all');
   const [fromDateFilter, setFromDateFilter] = useState('');
   const [toDateFilter, setToDateFilter] = useState('');
