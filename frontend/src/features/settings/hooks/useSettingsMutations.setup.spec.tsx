@@ -125,6 +125,7 @@ const baseSettingsMutationValues = {
   loyaltyMaxDiscountPercentage: 50,
   printShowLoyaltyPoints: true,
   posKitchenPrinterEnabled: false,
+  posCashDrawerPrinterEnabled: false,
   posKitchenPrinterAuto: false,
   posKitchenPrinterMode: 'detailed' as const,
   posKitchenLanguage: 'ar' as const,
