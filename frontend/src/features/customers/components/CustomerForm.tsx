@@ -261,6 +261,9 @@ export function CustomerForm({ onSuccess }: { onSuccess?: () => void } = {}) {
         </fieldset>
       )}
       <MutationFeedback isError={mutation.isError} isSuccess={mutation.isSuccess} error={mutation.error} errorFallback={__t('customers.customer_form.s24', "تعذر حفظ البيانات")} successText={__t('customers.customer_form.s25', "تم الحفظ بنجاح.")} />
+      {mutation.isSuccess && mutation.data?.phoneWarning ? (
+        <div className="warning-box">{mutation.data.phoneWarning.message}</div>
+      ) : null}
       <div className="actions sticky-form-actions">
         <FormResetButton onReset={handleReset} disabled={mutation.isPending || !form.formState.isDirty}>{__t('customers.customer_form.s26', "تفريغ النموذج")}</FormResetButton>
         <SubmitButton type="submit" isPending={mutation.isPending} idleText={profile.submitCreateText} pendingText={__t('customers.customer_form.s27', "جارٍ الحفظ...")} />

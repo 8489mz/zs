@@ -54,6 +54,29 @@ export class PartnersService {
     return Boolean(row && (!excludeId || Number(row.id) !== excludeId));
   }
 
+  private async findCustomerByPhone(phone: string, actor: AuthContext, excludeId?: number): Promise<{ id: number; name: string; phone: string } | null> {
+    const trimmed = String(phone || '').trim();
+    if (!trimmed) return null;
+    const variants = generatePhoneSearchVariants(trimmed);
+    let query = this.db
+      .selectFrom('customers')
+      .select(['id', 'name', 'phone'])
+      .where('is_active', '=', true)
+      .where(this.tenantPredicate(actor))
+      .where('phone', 'in', variants);
+    if (excludeId) query = query.where('id', '!=', excludeId);
+    const row = await query.orderBy('id', 'asc').executeTakeFirst();
+    if (!row) return null;
+    return { id: Number(row.id), name: row.name, phone: row.phone || '' };
+  }
+
+  private buildDuplicatePhoneWarning(existing: { id: number; name: string; phone: string }): Record<string, unknown> {
+    return {
+      message: `هذا الهاتف مسجل بالفعل للعميل ${existing.name}`,
+      existingCustomer: { id: String(existing.id), name: existing.name, phone: existing.phone },
+    };
+  }
+
   private async supplierNameExists(name: string, actor: AuthContext, excludeId?: number): Promise<boolean> {
     const row = await this.db
       .selectFrom('suppliers')
@@ -683,13 +706,14 @@ export class PartnersService {
     const name = String(payload.name || '').trim();
     if (!name) throw new AppError('Customer name is required', 'CUSTOMER_NAME_REQUIRED', 400);
     if (await this.customerNameExists(name, actor)) throw new AppError('Customer already exists', 'CUSTOMER_EXISTS', 400);
+    const phone = String(payload.phone || '').trim();
 
     const inserted = await this.db.transaction().execute(async (trx) => {
       const inserted = await trx
         .insertInto('customers')
         .values({
           name,
-          phone: String(payload.phone || '').trim(),
+          phone,
           address: String(payload.address || '').trim(),
           balance: 0,
           customer_type: ['vip', 'credit', 'wholesale'].includes(payload.type as string) ? (payload.type as any) : 'cash',
@@ -731,7 +755,8 @@ export class PartnersService {
     await this.audit.log('إضافة عميل', `تم إضافة العميل ${name} [${customerCode}] بواسطة ${actor.username}`, actor);
 
     const listing = await this.listCustomers({}, actor);
-    return { ok: true, id: String(inserted.id), customers: listing.customers };
+    const duplicate = await this.findCustomerByPhone(phone, actor, Number(inserted.id));
+    return { ok: true, id: String(inserted.id), customers: listing.customers, ...(duplicate ? { phoneWarning: this.buildDuplicatePhoneWarning(duplicate) } : {}) };
   }
 
   async updateCustomer(id: number, payload: UpsertCustomerDto, actor: AuthContext): Promise<Record<string, unknown>> {
@@ -748,6 +773,7 @@ export class PartnersService {
     const name = String(payload.name || '').trim();
     if (!name) throw new AppError('Customer name is required', 'CUSTOMER_NAME_REQUIRED', 400);
     if (await this.customerNameExists(name, actor, id)) throw new AppError('Customer already exists', 'CUSTOMER_EXISTS', 400);
+    const phone = String(payload.phone || '').trim();
 
     const requestedBalance = Number(payload.balance ?? existing.balance ?? 0);
     if (Math.abs(Number(existing.balance || 0) - requestedBalance) > 0.0001) {
@@ -772,7 +798,7 @@ export class PartnersService {
       .updateTable('customers')
       .set({
         name,
-        phone: String(payload.phone || '').trim(),
+        phone,
         address: String(payload.address || '').trim(),
         customer_type: ['vip', 'credit', 'wholesale'].includes(payload.type as string) ? (payload.type as any) : 'cash',
         credit_limit: Number(payload.creditLimit || 0),
@@ -787,7 +813,8 @@ export class PartnersService {
 
     await this.audit.log('تعديل عميل', `تم تحديث العميل #${id} بواسطة ${actor.username}`, actor);
     const listing = await this.listCustomers({}, actor);
-    return { ok: true, customers: listing.customers };
+    const duplicate = await this.findCustomerByPhone(phone, actor, id);
+    return { ok: true, customers: listing.customers, ...(duplicate ? { phoneWarning: this.buildDuplicatePhoneWarning(duplicate) } : {}) };
   }
 
   async deleteCustomer(id: number, actor: AuthContext): Promise<Record<string, unknown>> {

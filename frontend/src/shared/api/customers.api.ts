@@ -16,6 +16,18 @@ export interface CustomersPageResponse {
   summary: { totalCustomers: number; totalBalance: number; totalCredit: number; vipCount: number };
 }
 
+export interface CustomerPhoneWarning {
+  message: string;
+  existingCustomer: { id: string; name: string; phone: string };
+}
+
+export interface CustomerCreateResponse {
+  ok: boolean;
+  id?: string;
+  customers?: Customer[];
+  phoneWarning?: CustomerPhoneWarning;
+}
+
 export const customersApi = {
   list: async () => unwrapArray<Customer>(await http<Customer[] | { customers: Customer[] }>('/api/customers'), 'customers'),
   listPage: (params: CustomersListParams) => http<CustomersPageResponse>(`/api/customers${buildQueryString(params)}`),
@@ -34,7 +46,7 @@ export const customersApi = {
     }
     return { customers: rows, summary };
   },
-  create: (payload: unknown) => http<Customer>('/api/customers', { method: 'POST', body: JSON.stringify(payload) }),
+  create: (payload: unknown) => http<CustomerCreateResponse>('/api/customers', { method: 'POST', body: JSON.stringify(payload) }),
   update: (id: string, payload: unknown) => http<Customer>(`/api/customers/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   remove: (id: string) => http<{ ok: boolean }>(`/api/customers/${id}`, { method: 'DELETE' }),
   balances: async () => unwrapArray<Customer>(await http<Customer[] | { customers: Customer[] }>('/api/reports/customer-balances'), 'customers'),
