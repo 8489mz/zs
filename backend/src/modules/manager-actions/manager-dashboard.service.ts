@@ -35,7 +35,7 @@ export class ManagerDashboardService {
     const last30Start = new Date(now); last30Start.setUTCDate(last30Start.getUTCDate() - 30);
     const previous30Start = new Date(now); previous30Start.setUTCDate(previous30Start.getUTCDate() - 60);
     const oneYearAgo = new Date(now); oneYearAgo.setUTCFullYear(oneYearAgo.getUTCFullYear() - 1);
-    const [salesLast30, salesPrevious30, returnsLast30, returnTaxLast30, expensesLast30, issuedMaterialsLast30, profitRows, products, customers, settingsRows] = await Promise.all([
+    const [salesLast30, salesPrevious30, returnsLast30, returnTaxLast30, expensesLast30, issuedMaterialsLast30, servicesLast30, profitRows, products, customers, settingsRows] = await Promise.all([
       // Financial queries must fail visibly instead of falling back to zeros.
       this.salesTotals(last30Start, now, tenantId),
       this.salesTotals(previous30Start, last30Start, tenantId),
@@ -43,6 +43,7 @@ export class ManagerDashboardService {
       this.saleReturnTax(last30Start, now, tenantId),
       this.expenseTotals(last30Start, now, tenantId),
       this.issuedMaterialsTotal(last30Start, now, tenantId),
+      this.servicesTotals(last30Start, now, tenantId),
       this.profitRows(last30Start, now, tenantId),
       this.safeRows(() => this.productStockRows(last30Start, oneYearAgo, tenantId)),
       this.safeRows(() => this.customerDebtRows(tenantId)),
@@ -59,7 +60,15 @@ export class ManagerDashboardService {
     const salesReturnsTotal = m(n(returnsLast30.find((r) => r.return_type === 'sale')?.total));
     const salesTax = m(n(salesLast30?.tax));
     const returnedTax = m(n(returnTaxLast30?.tax));
-    const netSales = m(salesTotal - salesTax - salesReturnsTotal + returnedTax);
+    // INV-SERVICES-PROFIT: services are real collected revenue, so they
+    // count in the dashboard profit exactly as the sales report counts
+    // them (buildCommercialSummary adds servicesTotal to revenueTotal
+    // before tax/returns/COGS). Before this, the dashboard summed only
+    // the `sales` table, so a 75.00 services invoice showed 776.51 in
+    // the sales report and 701.51 on the dashboard. Services carry no
+    // COGS, so the same amount flows into gross and net profit.
+    const servicesTotal = m(n(servicesLast30?.total));
+    const netSales = m(salesTotal + servicesTotal - salesTax - salesReturnsTotal + returnedTax);
     const cogs = m(profitRows.reduce((total, row) => total + n(row.cost), 0));
     const grossProfit = m(netSales - cogs);
     const expenses = m(n(expensesLast30?.total) + n(issuedMaterialsLast30?.total));
@@ -86,6 +95,18 @@ export class ManagerDashboardService {
   private salesTotals(from: Date, to: Date, tenantId: string): Promise<Row | undefined> { return this.db.selectFrom('sales').select([sql<number>`count(*)`.as('count'), sql<number>`coalesce(sum(total), 0)`.as('total'), sql<number>`coalesce(sum(tax_amount), 0)`.as('tax')]).where('status', '=', 'posted').where('created_at', '>=', from).where('created_at', '<', to).where(this.tenantClause(tenantId)).executeTakeFirst(); }
   private returnTotals(from: Date, to: Date, tenantId: string): Promise<Row[]> { return this.db.selectFrom('return_documents').select(['return_type', sql<number>`coalesce(sum(total), 0)`.as('total')]).where('created_at', '>=', from).where('created_at', '<', to).where(this.tenantClause(tenantId)).groupBy('return_type').execute(); }
   private expenseTotals(from: Date, to: Date, tenantId: string): Promise<Row | undefined> { return this.db.selectFrom('expenses').select(sql<number>`coalesce(sum(amount), 0)`.as('total')).where('expense_date', '>=', from).where('expense_date', '<', to).where(this.tenantClause(tenantId)).executeTakeFirst(); }
+  // INV-SERVICES-PROFIT: same predicates as the sales-report aggregate
+  // (buildReportSummaryAggregates servicesAggQuery): active services only,
+  // service_date inside the window. `(db as any)` because the typed
+  // ServicesTable omits the real is_active column (migration
+  // 1710000001000), the same cast the reports helper already uses.
+  private servicesTotals(from: Date, to: Date, tenantId: string): Promise<Row | undefined> {
+    return (this.db as any).selectFrom('services')
+      .select(sql<number>`coalesce(sum(amount), 0)`.as('total'))
+      .where('is_active', '=', true)
+      .where('service_date', '>=', from).where('service_date', '<', to)
+      .where(this.tenantClause(tenantId)).executeTakeFirst();
+  }
   private saleReturnTax(from: Date, to: Date, tenantId: string): Promise<Row | undefined> {
     return this.db.selectFrom('return_items as ri')
       .innerJoin('return_documents as rd', (join) => join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'))
