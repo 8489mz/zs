@@ -492,6 +492,7 @@ export interface MaintenanceTicketTable {
   location_id: number | null;
   sale_id: number | null;
   warranty_days: number;
+  warranty_end: ColumnType<Date | null, string | Date | null | undefined, string | Date | null | undefined>;
   received_at: ColumnType<Date, string | Date | undefined, string | Date | undefined>;
   repaired_at: ColumnType<Date | null, string | Date | null | undefined, string | Date | null | undefined>;
   delivered_at: ColumnType<Date | null, string | Date | null | undefined, string | Date | null | undefined>;

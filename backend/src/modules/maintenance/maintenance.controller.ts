@@ -44,6 +44,15 @@ export class MaintenanceController {
     });
   }
 
+  // Counts MUST be registered before @Get(':id'): otherwise Nest
+  // matches 'counts' as an id. Aggregate SQL only — the page must
+  // never pull the table to count (review P2-4).
+  @Get('counts')
+  @RequireAnyPermission('services', 'sales')
+  getTicketCounts(@Req() req: RequestWithAuth) {
+    return this.maintenanceService.getTicketCounts(req.authContext!);
+  }
+
   @Get(':id')
   @RequireAnyPermission('services', 'sales')
   getTicket(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {

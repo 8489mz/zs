@@ -332,6 +332,170 @@ async function main() {
     await reconciliation(wf);
     pass('maintenance delivery settles when parts cost exceeds the final amount');
 
+    // M2-P5: warranty_end is computed at FIRST repair as repaired_at +
+    // the then-current warranty_days — editing warrantyDays before
+    // repair changes the value repair computes from (90 -> 45 here).
+    // Before repair the field is null; list/get expose it afterwards.
+    const wy = await fixture('maintwty');
+    const wTicket = await maintenance.createTicket({
+      customerName: 'Warranty repair', customerPhone: '01000000009',
+      deviceModel: 'Test device', problemDescription: 'Repair',
+      expectedCost: 100, finalCost: 100, advancePayment: 0, warrantyDays: 90,
+      branchId: wy.branchId, locationId: wy.locationId,
+    } as any, wy.auth);
+    const wId = Number(wTicket.id);
+    assert.equal((await maintenance.getTicket(wId, wy.auth)).ticket.warrantyEnd, null, 'no expiry before repair');
+    await maintenance.updateTicket(wId, { warrantyDays: 45 } as any, wy.auth);
+    await maintenance.updateTicketStatus(wId, { status: 'repaired' }, wy.auth);
+    const repairedTicket = (await maintenance.getTicket(wId, wy.auth)).ticket as any;
+    const repairedAtMs = new Date(repairedTicket.repairedAt).getTime();
+    const warrantyEndMs = new Date(repairedTicket.warrantyEnd).getTime();
+    assert.equal(warrantyEndMs - repairedAtMs, 45 * 24 * 60 * 60 * 1000, 'warranty_end is repaired_at + then-current warranty_days');
+    const listedWarranty = (await maintenance.listTickets(wy.auth, {})).tickets.find((t: any) => t.id === String(wId)) as any;
+    assert.ok(listedWarranty, 'repaired ticket is listed');
+    assert.equal(new Date(listedWarranty.warrantyEnd).getTime(), warrantyEndMs, 'listTickets exposes warranty_end');
+    await reconciliation(wy);
+    pass('maintenance warranty_end is computed at first repair from then-current warranty_days');
+
+    // M2-P5: intake links sale_id from a SOLD serial (serial_number or
+    // imei_2, case-insensitive); unknown / unsold serials stay null
+    // silently — the device may come from elsewhere.
+    const lf = await fixture('maintlink');
+    await db.insertInto('product_serials').values([
+      { tenant_id: lf.auth.tenantId, account_id: lf.auth.accountId, product_id: lf.productId, serial_number: 'SN-LINK-1', imei_2: null, status: 'sold', sale_id: 4242 },
+      { tenant_id: lf.auth.tenantId, account_id: lf.auth.accountId, product_id: lf.productId, serial_number: 'SN-OTHER', imei_2: 'IMEI-LINK-2', status: 'sold', sale_id: 4343 },
+      { tenant_id: lf.auth.tenantId, account_id: lf.auth.accountId, product_id: lf.productId, serial_number: 'SN-STOCK-1', imei_2: null, status: 'in_stock', sale_id: null },
+    ] as any).execute();
+    const linkedTicket = await maintenance.createTicket({
+      customerName: 'Linked repair', customerPhone: '01000000011',
+      deviceModel: 'Test device', problemDescription: 'Repair', serialNumber: 'sn-link-1',
+      expectedCost: 100, finalCost: 100, advancePayment: 0,
+      branchId: lf.branchId, locationId: lf.locationId,
+    } as any, lf.auth);
+    assert.equal((await maintenance.getTicket(Number(linkedTicket.id), lf.auth)).ticket.saleId, '4242', 'sold serial links, case-insensitive');
+    const imeiTicket = await maintenance.createTicket({
+      customerName: 'IMEI repair', customerPhone: '01000000012',
+      deviceModel: 'Test device', problemDescription: 'Repair', serialNumber: 'imei-link-2',
+      expectedCost: 100, finalCost: 100, advancePayment: 0,
+      branchId: lf.branchId, locationId: lf.locationId,
+    } as any, lf.auth);
+    assert.equal((await maintenance.getTicket(Number(imeiTicket.id), lf.auth)).ticket.saleId, '4343', 'second IMEI links the sale');
+    const stockTicket = await maintenance.createTicket({
+      customerName: 'Stock repair', customerPhone: '01000000013',
+      deviceModel: 'Test device', problemDescription: 'Repair', serialNumber: 'SN-STOCK-1',
+      expectedCost: 100, finalCost: 100, advancePayment: 0,
+      branchId: lf.branchId, locationId: lf.locationId,
+    } as any, lf.auth);
+    assert.equal((await maintenance.getTicket(Number(stockTicket.id), lf.auth)).ticket.saleId, null, 'unsold serial links nothing');
+    const unknownTicket = await maintenance.createTicket({
+      customerName: 'Unknown repair', customerPhone: '01000000014',
+      deviceModel: 'Test device', problemDescription: 'Repair', serialNumber: 'SN-NOPE',
+      expectedCost: 100, finalCost: 100, advancePayment: 0,
+      branchId: lf.branchId, locationId: lf.locationId,
+    } as any, lf.auth);
+    assert.equal((await maintenance.getTicket(Number(unknownTicket.id), lf.auth)).ticket.saleId, null, 'unknown serial links nothing, silently');
+    await reconciliation(lf);
+    pass('maintenance intake links sale_id from a sold serial and leaves unknown/unsold serials null');
+
+    // M2-P5: counts come from one SQL aggregate query in the exact
+    // package-6 shape; totalRemaining sums max(0, (final || expected)
+    // - advance) over open tickets only.
+    const cf = await fixture('maintcnt');
+    await maintenance.createTicket({
+      customerName: 'Count received', customerPhone: '01000000015',
+      deviceModel: 'Test device', problemDescription: 'Repair',
+      expectedCost: 100, finalCost: 100, advancePayment: 20,
+      branchId: cf.branchId, locationId: cf.locationId,
+    } as any, cf.auth);
+    await maintenance.createTicket({
+      customerName: 'Count inspecting', customerPhone: '01000000016',
+      deviceModel: 'Test device', problemDescription: 'Repair', status: 'inspecting',
+      expectedCost: 50, finalCost: 0, advancePayment: 0,
+      branchId: cf.branchId, locationId: cf.locationId,
+    } as any, cf.auth);
+    const repairedCountTicket = await maintenance.createTicket({
+      customerName: 'Count repaired', customerPhone: '01000000017',
+      deviceModel: 'Test device', problemDescription: 'Repair',
+      expectedCost: 300, finalCost: 300, advancePayment: 100,
+      branchId: cf.branchId, locationId: cf.locationId,
+    } as any, cf.auth);
+    await maintenance.updateTicketStatus(Number(repairedCountTicket.id), { status: 'repaired' }, cf.auth);
+    const deliveredCountTicket = await maintenance.createTicket({
+      customerName: 'Count delivered', customerPhone: '01000000018',
+      deviceModel: 'Test device', problemDescription: 'Repair',
+      expectedCost: 500, finalCost: 500, advancePayment: 100,
+      branchId: cf.branchId, locationId: cf.locationId,
+    } as any, cf.auth);
+    await maintenance.updateTicketStatus(Number(deliveredCountTicket.id), { status: 'delivered', finalCost: 500, collectedAmount: 400 }, cf.auth);
+    const counts = await maintenance.getTicketCounts(cf.auth);
+    assert.deepEqual(counts.counts, {
+      received: 1, inspecting: 1, in_progress: 0, waiting_parts: 0,
+      repaired: 1, delivered: 1, unrepairable: 0, cancelled: 0, total: 4,
+    });
+    assert.equal(counts.totalRemaining, 330, '80 received + 50 inspecting (final 0 falls back to estimate) + 200 repaired; delivered excluded');
+    await reconciliation(cf);
+    pass('maintenance counts aggregates and totalRemaining exclude closed tickets');
+
+    // M2-P5 / D-M2-1: non-financial corrections are allowed after an
+    // advance was taken (and after parts were issued is covered by the
+    // builder pins); omitted fields keep stored values. Financial
+    // changes still need the reversal flow, and delivered tickets
+    // stay fully frozen.
+    const ef = await fixture('maintedit');
+    const eTicket = await maintenance.createTicket({
+      customerName: 'Edit test', customerPhone: '01000000010',
+      deviceModel: 'Old model', problemDescription: 'Old problem',
+      expectedCost: 100, finalCost: 100, advancePayment: 20, customerId: ef.customerId,
+      branchId: ef.branchId, locationId: ef.locationId,
+    } as any, ef.auth);
+    const eId = Number(eTicket.id);
+    await maintenance.updateTicket(eId, {
+      customerPhone: '01111111111', deviceModel: 'New model', warrantyDays: 60,
+    } as any, ef.auth);
+    const edited = (await maintenance.getTicket(eId, ef.auth)).ticket as any;
+    assert.equal(edited.customerPhone, '01111111111');
+    assert.equal(edited.deviceModel, 'New model');
+    assert.equal(edited.warrantyDays, 60);
+    assert.equal(edited.customerId, String(ef.customerId), 'omitted customerId is preserved, not nulled');
+    assert.equal(edited.customerName, 'Edit test', 'omitted name is preserved, not reset to the default');
+    assert.equal(edited.advancePayment, 20, 'non-financial edit never moves money');
+    assert.equal(edited.finalCost, 100);
+    await assert.rejects(maintenance.updateTicket(eId, { advancePayment: 30 } as any, ef.auth),
+      (e: any) => e.code === 'MAINTENANCE_REVERSAL_REQUIRED');
+    await assert.rejects(maintenance.updateTicket(eId, { finalCost: 120 } as any, ef.auth),
+      (e: any) => e.code === 'MAINTENANCE_REVERSAL_REQUIRED');
+    await assert.rejects(maintenance.updateTicket(eId, { expectedCost: 90 } as any, ef.auth),
+      (e: any) => e.code === 'MAINTENANCE_REVERSAL_REQUIRED');
+    await assert.rejects(maintenance.updateTicket(eId, { status: 'repaired' } as any, ef.auth),
+      (e: any) => e.code === 'MAINTENANCE_REVERSAL_REQUIRED');
+    await maintenance.updateTicketStatus(eId, { status: 'delivered', finalCost: 100, collectedAmount: 80 }, ef.auth);
+    await assert.rejects(maintenance.updateTicket(eId, { customerPhone: '01222222222' } as any, ef.auth),
+      (e: any) => e.code === 'MAINTENANCE_REVERSAL_REQUIRED');
+    await reconciliation(ef);
+    pass('maintenance non-financial edit after advance is allowed, financial edit and delivered edit still need reversal');
+
+    // M2-P5: getTicket reports whether the advance was actually
+    // refunded; package 7 reads this flag to fix the cancelled-card text.
+    const rf2 = await fixture('maintrefund2');
+    const rTicket = await maintenance.createTicket({
+      customerName: 'Refunded repair', customerPhone: '01000000019',
+      deviceModel: 'Test device', problemDescription: 'Customer withdrew',
+      expectedCost: 20, finalCost: 20, advancePayment: 12,
+      branchId: rf2.branchId, locationId: rf2.locationId,
+    } as any, rf2.auth);
+    assert.equal((await maintenance.getTicket(Number(rTicket.id), rf2.auth)).ticket.refundedAdvance, false, 'advance taken but not refunded');
+    await maintenance.updateTicketStatus(Number(rTicket.id), { status: 'cancelled', refundAdvance: true }, rf2.auth);
+    assert.equal((await maintenance.getTicket(Number(rTicket.id), rf2.auth)).ticket.refundedAdvance, true, 'cancel + refund sets the flag');
+    const nTicket = await maintenance.createTicket({
+      customerName: 'Never refunded', customerPhone: '01000000020',
+      deviceModel: 'Test device', problemDescription: 'Repair',
+      expectedCost: 20, finalCost: 20, advancePayment: 0,
+      branchId: rf2.branchId, locationId: rf2.locationId,
+    } as any, rf2.auth);
+    assert.equal((await maintenance.getTicket(Number(nTicket.id), rf2.auth)).ticket.refundedAdvance, false);
+    await reconciliation(rf2);
+    pass('maintenance getTicket reports refundedAdvance from the refund treasury row');
+
     // The cancellation/refund command may ONLY release a real, unreversed
     // cash advance. A second request cannot refund twice or reopen the ticket.
     const refundFixture = await fixture('maintref');
