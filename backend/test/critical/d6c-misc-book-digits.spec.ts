@@ -10,8 +10,15 @@
  *   negative commercial exchange rate now FAILS CLOSED instead of
  *   silently pricing at the old hardcoded fallback 50 (F1).
  * - Import lot sale cost (pure) + lot allocation / cancel-restore on
- *   PGlite: gross margins stored at 3 digits (100.125, reversal
- *   -100.125); the allocation resolves digits on the transaction handle.
+ *   PGlite: the stored gross_margin_egp columns round at EGP digits (2)
+ *   — NOT tenant book digits — because the amount is EGP-denominated
+ *   (W3 policy correction, supersedes the D6c choice: a KWD tenant's
+ *   3 book digits on an EGP column would leave 3dp in EGP amounts
+ *   that are 2dp everywhere else). KWD tenant stores 100.13, reversal
+ *   -100.13; the helper no longer resolves digits on the transaction
+ *   handle. The pure calculateImportSaleCost moneyDigits param is
+ *   unchanged (Phase C still pins an explicit 3-digit call at 83.438);
+ *   its live caller passes no digits, so the live total stays EGP 2dp.
  * - Cash-drawer helpers + returns-listing summary (pure): 3-digit totals
  *   keep 100.125.
  * - Live service paths on PGlite (KWD vs EGP tenants): services list
@@ -379,7 +386,9 @@ async function main(): Promise<void> {
   }
 
   // Phase K: import lot allocation + cancel-restore store margins at
-  // book digits, resolving digits on the transaction handle.
+  // EGP digits (2) — the _egp denomination, not tenant book digits
+  // (W3 policy correction of the D6c choice). Even the KWD tenant
+  // stores 100.13, and the reversal stores -100.13.
   {
     const { pg, db } = await makeDb();
     try {
@@ -402,13 +411,13 @@ async function main(): Promise<void> {
       });
       const kwdAlloc = await db.selectFrom('import_sale_allocations').selectAll().where('tenant_id', '=', 't1').executeTakeFirstOrThrow();
       const egpAlloc = await db.selectFrom('import_sale_allocations').selectAll().where('tenant_id', '=', 't3').executeTakeFirstOrThrow();
-      assert.equal(Number(kwdAlloc.gross_margin_egp), 100.125);
+      assert.equal(Number(kwdAlloc.gross_margin_egp), 100.13);
       assert.equal(Number(egpAlloc.gross_margin_egp), 100.13);
       await db.transaction().execute(async (trx) => {
         await restoreImportLotsFromCancelledSale(trx as never, { tenantId: 't1', saleId: 1 });
       });
       const reversal = await db.selectFrom('import_sale_allocations').selectAll().where('tenant_id', '=', 't1').where('allocation_type', '=', 'cancellation').executeTakeFirstOrThrow();
-      assert.equal(Number(reversal.gross_margin_egp), -100.125);
+      assert.equal(Number(reversal.gross_margin_egp), -100.13);
       console.log('phase K lot allocation passed');
     } finally {
       await db.destroy();

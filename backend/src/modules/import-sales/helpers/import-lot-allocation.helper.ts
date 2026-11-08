@@ -1,8 +1,18 @@
 import { Kysely, Transaction, sql } from 'kysely';
 import { randomUUID } from 'crypto';
 import { Database } from '../../../database/database.types';
-import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+
+/**
+ * Gross-margin digits follow the DENOMINATION of the amount, not the
+ * tenant: gross_margin_egp is EGP-denominated (column name, and
+ * NUMERIC(15, 2) in migration 2040000000239), so it always rounds to
+ * EGP minor units (2) — even on a KWD tenant whose book digits are 3.
+ * A KWD tenant's 3 book digits here would leave 3dp in EGP amounts
+ * that are 2dp everywhere else. No tenant-currency lookup is needed
+ * (and none is made) for these margins.
+ */
+const GROSS_MARGIN_EGP_DIGITS = currencyMoneyDigits('EGP');
 
 /**
  * IMPORT LOT ALLOCATION & PROVENANCE ENGINE
@@ -121,7 +131,7 @@ export async function allocateSaleFromImportLots(
     }>;
   }
 ): Promise<ImportLotAllocationResult> {
-  const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, params.tenantId));
+  const moneyDigits = GROSS_MARGIN_EGP_DIGITS;
   const coverage: ImportLotAllocationCoverage[] = [];
   for (const item of params.items) {
     const pId = Number(item.productId);
@@ -235,7 +245,7 @@ export async function restoreImportLotsFromCancelledSale(
     saleId: number;
   }
 ): Promise<void> {
-  const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, params.tenantId));
+  const moneyDigits = GROSS_MARGIN_EGP_DIGITS;
   const allocations = await trx
     .selectFrom('import_sale_allocations')
     .selectAll()
@@ -304,7 +314,7 @@ export async function restoreImportLotsFromSalesReturn(
     returnQty: number;
   }
 ): Promise<void> {
-  const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, params.tenantId));
+  const moneyDigits = GROSS_MARGIN_EGP_DIGITS;
   let remainingReturnQty = Number(params.returnQty);
   if (!Number.isFinite(remainingReturnQty) || remainingReturnQty <= 0) return;
 
