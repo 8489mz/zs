@@ -13,7 +13,7 @@
  * G7 (U7) added the permanent-guard sections: the map rows are pinned
  * as the single source of truth (§12 — each row's status word must
  * match the verified state), new money-rounding code must go through
- * the canonical rounder (§7 money-path toFixed(2) ban, §10 private
+ * the canonical rounder (§7 repo-wide money-math scan, §10 private
  * rounders take digits), and the tax / FX / costing / payroll wiring
  * pins (§11) fail if a canonical call site is removed.
  *
@@ -167,51 +167,137 @@ async function main(): Promise<void> {
   assert.ok(usersService.includes('PASSWORD_RESET_TARGET_RANK_FORBIDDEN'));
   assert.ok(usersService.includes('STATUS_CHANGE_TARGET_RANK_FORBIDDEN'));
 
-  // 7. Money-path files never format money with toFixed(2). All money
-  // math in these files goes through roundMoney at book digits (or a
-  // digits-parameterised toFixed(digits) in the two rounder helpers).
-  // Files with a live, dispositioned toFixed(2) are NOT on this list:
-  // loyalty-points balances (sales-write, returns, partners — points,
-  // not money), report aggregates (import-sales command center, HR loan
-  // reports), message formatting, document XML, and the remaining
-  // import-sales.service.ts non-posting math named in the map's money
-  // row. Adding a file to this list is how a cleaned file is locked.
-  const moneyPathFiles = [
-    'backend/src/modules/accounting/accounting-posting.service.ts',
-    'backend/src/modules/accounting/accounting.service.ts',
-    'backend/src/modules/accounting/services/balance-sheet.service.ts',
-    'backend/src/modules/accounting/services/cash-flow.service.ts',
-    'backend/src/modules/accounting/services/fiscal-year.service.ts',
-    'backend/src/modules/accounting/services/ar-collections.service.ts',
-    'backend/src/modules/accounting/services/withholding-tax.service.ts',
-    'backend/src/modules/accounting/services/aged-debts.service.ts',
-    'backend/src/modules/accounting/engines/trial-balance.engine.ts',
-    'backend/src/modules/cash-drawer/cash-drawer.service.ts',
-    'backend/src/modules/reports/services/daily-commercial-rollup.service.ts',
-    'backend/src/modules/purchases/services/margin-protection.service.ts',
-    'backend/src/modules/tax-integration/services/vat-declaration/vat-declaration.service.ts',
-    'backend/src/modules/reports/helpers/reports-math.helper.ts',
-    'backend/src/modules/purchases/engines/landed-cost-allocation.engine.ts',
-    'backend/src/modules/purchases/engines/landed-cost-wac.engine.ts',
-    'backend/src/modules/purchases/services/purchase-landed-costs.service.ts',
-    'backend/src/modules/purchases/services/purchases-write.service.ts',
-    'backend/src/modules/import-sales/import-inventory-cost.engine.ts',
-    'backend/src/modules/accounting/engines/inventory-valuation.engine.ts',
-    'backend/src/modules/accounting/inventory-valuation.ts',
-    'backend/src/modules/sales/engines/subscription-billing.engine.ts',
-    'backend/src/modules/sales/services/commercial-subscription.service.ts',
-    'backend/src/modules/maritime-freight/maritime-freight.service.ts',
-    'backend/src/modules/accounting/fx-rate-resolution.ts',
-    'backend/src/modules/accounting/exchange-rate-history.ts',
-    'backend/src/modules/accounting/engines/fx-conversion.engine.ts',
-    'backend/src/modules/accounting/engines/forex-difference.engine.ts',
-    'backend/src/modules/hr/engines/payroll-calculation.engine.ts',
-    'backend/src/modules/hr/engines/eos-calculation.engine.ts',
-  ];
-  for (const file of moneyPathFiles) {
-    const stripped = stripComments(readFile(file));
-    assert.ok(!stripped.includes('toFixed(2)'), `${file} must not format money with toFixed(2)`);
+  // 7. Repo-wide money-math scan (INV-GUARD-REPO-WIDE-MONEY-SCAN).
+  // NO file under backend/src may format money with toFixed(2) or
+  // round it with inline Math.round(x*100)/100 (or the *1000/1000
+  // form): all money math goes through roundMoney at book digits (or
+  // a digits-parameterised toFixed(digits) in the two rounder
+  // helpers). This used to be a 30-file allowlist; the scan now
+  // covers every file, so a brand-new money-engine file can no
+  // longer slip past CI with a differently-named helper (e.g.
+  // private calcTotal) or inline math — the F2 gap from the 2026-11-08
+  // live re-check. Files with a live, dispositioned use are on the
+  // allowlist below with the EXACT count of each pattern: a NEW
+  // occurrence in an allowlisted file fails the count pin and must be
+  // re-dispositioned (or routed through roundMoney) in the same
+  // change. Percentages (Math.round(ratio*100) with no scale-down)
+  // and minor-unit conversions (Math.round(amount*100) with no
+  // scale-down) are NOT matches — only scale-down rounding counts.
+  const TOFIXED_2 = /\.toFixed\(\s*2\s*\)/g;
+  function countInlineMoneyRounding(source: string): number {
+    // A match is Math.(round|floor|ceil)( <arg containing *100 or
+    // *1000> ) / 100|1000, with balanced parens so nested calls such
+    // as Math.round((Math.abs(n) + Number.EPSILON) * 100) / 100 count.
+    let count = 0;
+    const head = /Math\.(round|floor|ceil)\s*\(/g;
+    let m: RegExpExecArray | null;
+    while ((m = head.exec(source)) !== null) {
+      let depth = 0;
+      let j = m.index + m[0].length - 1;
+      for (; j < source.length; j++) {
+        if (source[j] === '(') depth += 1;
+        else if (source[j] === ')') {
+          depth -= 1;
+          if (depth === 0) break;
+        }
+      }
+      if (depth !== 0) continue;
+      const arg = source.slice(m.index + m[0].length, j);
+      const scale = /\*\s*1000\b/.test(arg) ? 1000 : /\*\s*100\b/.test(arg) ? 100 : 0;
+      if (scale === 0) continue;
+      if (new RegExp(`^\\s*/\\s*${scale}\\b`).test(source.slice(j + 1, j + 12))) count += 1;
+    }
+    return count;
   }
+  const moneyMathAllowlist: Array<{ file: string; reason: string; toFixed2: number; inlineRound: number }> = [
+    { file: 'backend/src/common/utils/financial-integrity.ts', reason: 'legacy safety rounders roundCurrency2dp/roundCurrency3dp — deliberately kept duplicate (unification scope decision); canonical rounder is roundMoney, this file is the fail-closed legacy guard, not a posting path', toFixed2: 0, inlineRound: 2 },
+    { file: 'backend/src/core/health/health.controller.ts', reason: 'health metrics: uptime hours + memory MB, not money', toFixed2: 5, inlineRound: 0 },
+    { file: 'backend/src/modules/accounting/engines/fixed-asset-depreciation.engine.ts', reason: 'fixed-asset depreciation schedule (pure computation engine, no digits context; schedule rounds at 2dp, bounded 0.005/line; postings read the schedule)', toFixed2: 0, inlineRound: 1 },
+    { file: 'backend/src/modules/contracting/contracting.service.ts', reason: 'contracting module, set aside from retail unification (estimates, quantities, EVM indices, actuals; no retail journal posting reads these values)', toFixed2: 3, inlineRound: 24 },
+    { file: 'backend/src/modules/contracting/field-indirect-allocation.engine.ts', reason: 'contracting module, set aside (indirect-cost allocation at 3dp; no retail posting)', toFixed2: 0, inlineRound: 18 },
+    { file: 'backend/src/modules/contracting/guarantee-gateway.engine.ts', reason: 'contracting module, set aside (cumulative guarantee exposure; no retail posting)', toFixed2: 0, inlineRound: 2 },
+    { file: 'backend/src/modules/contracting/ipc-calculation.engine.ts', reason: 'contracting module, set aside (IPC amounts: work done, advance recovery, retention; no retail posting)', toFixed2: 0, inlineRound: 6 },
+    { file: 'backend/src/modules/delivery-reps/route-optimization.engine.ts', reason: 'route distances in km, not money', toFixed2: 5, inlineRound: 0 },
+    { file: 'backend/src/modules/delivery-reps/services/van-fleet.service.ts', reason: 'fuel consumption rate km/litre, not money', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/delivery-reps/services/van-fraud-radar.service.ts', reason: 'message text (amount formatted into a fraud alert), display only', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/delivery-reps/services/van-routes.service.ts', reason: 'fuel efficiency km/litre, not money', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/delivery-reps/services/van-transfers.service.ts', reason: 'van transfer retail value adjusting the sender trip loaded_amount (operational; transfers post no journal — stock movement only)', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/delivery-reps/van-sales.service.ts', reason: 'message text (invoice notes / settlement details), display only', toFixed2: 7, inlineRound: 0 },
+    { file: 'backend/src/modules/delivery-reps/van-trip-reconciliation.engine.ts', reason: 'message text (credit-block / expense / daily-summary messages) + trip distance, display only', toFixed2: 22, inlineRound: 0 },
+    { file: 'backend/src/modules/hr/engines/leave-balance.engine.ts', reason: 'leave-day balance, not money', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/hr/hr.service.ts', reason: 'leave-day counts + HR loan ledger listing (amounts read as stored; loan postings are payroll-engine values)', toFixed2: 11, inlineRound: 0 },
+    { file: 'backend/src/modules/import-sales/engines/import-feasibility.engine.ts', reason: 'feasibility analysis: weights, volumes, ROI/margin percentages — not postings', toFixed2: 11, inlineRound: 0 },
+    { file: 'backend/src/modules/import-sales/engines/import-landed-cost.engine.ts', reason: 'landed-cost shipment summary (USD total for display; per-item landed costs already route through roundMoney at book digits)', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/import-sales/import-sales.service.ts', reason: 'import-sales non-posting math (report/summary/message values; postings route through the canonical landed-cost/WAC engines per the engine map money row)', toFixed2: 109, inlineRound: 0 },
+    { file: 'backend/src/modules/inventory/engines/package-barcode.engine.ts', reason: 'package weight in kg at 3dp, not money', toFixed2: 0, inlineRound: 1 },
+    { file: 'backend/src/modules/inventory/engines/quality-control.engine.ts', reason: 'inspected/accepted/rejected quantities, not money', toFixed2: 0, inlineRound: 3 },
+    { file: 'backend/src/modules/inventory/helpers/stock-transfer-trace.helper.ts', reason: 'quantity rounding at 3dp (roundQty), not money', toFixed2: 0, inlineRound: 1 },
+    { file: 'backend/src/modules/inventory/helpers/tracked-stock-increase.helper.ts', reason: 'quantity rounding at 3dp (roundQty), not money', toFixed2: 0, inlineRound: 1 },
+    { file: 'backend/src/modules/manager-actions/helpers/manager-actions.helper.ts', reason: 'manager-action alert metrics (loss/margin/revenue/cost/balance values in alerts) + percentages, display only — no posting reads them', toFixed2: 0, inlineRound: 1 },
+    { file: 'backend/src/modules/manager-actions/manager-dashboard.service.ts', reason: 'manager dashboard display aggregates + percentages (read-only cached overview, no posting)', toFixed2: 0, inlineRound: 1 },
+    { file: 'backend/src/modules/maritime-freight/engines/air-freight.engine.ts', reason: 'maritime freight, set aside (volumetric weight kg + freight charges; not retail posting)', toFixed2: 0, inlineRound: 8 },
+    { file: 'backend/src/modules/maritime-freight/engines/road-freight.engine.ts', reason: 'maritime freight, set aside (freight/detention/fees; not retail posting)', toFixed2: 0, inlineRound: 11 },
+    { file: 'backend/src/modules/maritime-freight/maritime-freight.service.ts', reason: 'maritime freight, set aside (round3 3dp helper; not retail posting)', toFixed2: 0, inlineRound: 1 },
+    { file: 'backend/src/modules/partners/partners.service.ts', reason: 'loyalty-points balance, not money', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/pricing/pricing.service.ts', reason: 'pricing preview (inventory/margin summary, display) + user-selected price rounding (commercial price endings, not book-digits postings)', toFixed2: 7, inlineRound: 0 },
+    { file: 'backend/src/modules/purchases/engines/duplicate-bill-detector.engine.ts', reason: 'duplicate-bill comparison normalization (equality check only; no value is stored or posted from it)', toFixed2: 0, inlineRound: 2 },
+    { file: 'backend/src/modules/purchases/three-way-match.engine.ts', reason: 'price-delta percentage, not money', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/reports/engines/pivot-aggregation.engine.ts', reason: 'non-money metric display (money metrics already route through roundMoney)', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/reports/helpers/reports-menu-engineering.helper.ts', reason: 'menu-engineering report aggregates (read-only report; no posting)', toFixed2: 0, inlineRound: 13 },
+    { file: 'backend/src/modules/reports/services/reports-summary.service.ts', reason: 'daily burn rate (qty/day) + dead-stock quantity, not money', toFixed2: 2, inlineRound: 0 },
+    { file: 'backend/src/modules/returns/returns.service.ts', reason: 'loyalty-points balances, not money', toFixed2: 2, inlineRound: 0 },
+    { file: 'backend/src/modules/sales/services/restaurant-advanced-fnb.service.ts', reason: 'table minimum-spend deficit (pure calculation returned to the caller; any charge posts through the sale engines)', toFixed2: 0, inlineRound: 1 },
+    { file: 'backend/src/modules/sales/services/sales-write.service.ts', reason: 'loyalty-points balances, not money', toFixed2: 6, inlineRound: 0 },
+    { file: 'backend/src/modules/settings/services/whatsapp-gateway.service.ts', reason: 'message text (amount formatted into a WhatsApp message), display only', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/storefront/services/marketplace-sync.service.ts', reason: 'marketplace fee/payout estimator (commercial fee tables; estimate for display/decision — order postings route through the canonical sale engines)', toFixed2: 0, inlineRound: 7 },
+    { file: 'backend/src/modules/storefront/storefront-payment.service.ts', reason: 'payment-gateway signature string (gateway requires the 2dp format in the hash input; not a posting value)', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/storefront/storefront.service.ts', reason: 'storefront display formatter (digits-aware: 3dp when book digits are 3, else 2dp/whole-EGP; display only)', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/tax-integration/services/eta-serializer/eta-serializer.service.ts', reason: 'ETA e-invoice document serialization (amounts already computed by canonical engines; document format)', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/tax-integration/services/zatca/zatca-phase2.service.ts', reason: 'ZATCA e-invoice document XML (SAR amounts at the spec 2dp; amounts already computed by canonical engines)', toFixed2: 21, inlineRound: 0 },
+  ];
+  for (const file of srcFiles) {
+    const rel = path.relative(REPO_ROOT, file).replace(/\\/g, '/');
+    const stripped = stripComments(fs.readFileSync(file, 'utf8'));
+    const toFixed2 = (stripped.match(TOFIXED_2) || []).length;
+    const inlineRound = countInlineMoneyRounding(stripped);
+    const entry = moneyMathAllowlist.find((e) => e.file === rel);
+    if (entry) {
+      assert.equal(
+        toFixed2,
+        entry.toFixed2,
+        `${rel}: toFixed(2) count changed (${toFixed2} vs dispositioned ${entry.toFixed2}) — re-disposition the new site or route it through roundMoney`,
+      );
+      assert.equal(
+        inlineRound,
+        entry.inlineRound,
+        `${rel}: inline Math.round(x*100)/100 count changed (${inlineRound} vs dispositioned ${entry.inlineRound}) — re-disposition the new site or route it through roundMoney`,
+      );
+    } else {
+      assert.equal(
+        toFixed2,
+        0,
+        `${rel} must not format money with toFixed(2) — route through roundMoney at book digits or add a dispositioned allowlist entry`,
+      );
+      assert.equal(
+        inlineRound,
+        0,
+        `${rel} must not round money with inline Math.round(x*100)/100 — route through roundMoney at book digits or add a dispositioned allowlist entry`,
+      );
+    }
+  }
+  // Matcher self-checks: violating samples match, clean code and
+  // lookalikes (percentages, minor-unit conversions, calls) do not.
+  assert.equal(countInlineMoneyRounding('const x = Math.round(total * 100) / 100;'), 1);
+  assert.equal(countInlineMoneyRounding('const x = Math.round((Math.abs(n) + Number.EPSILON) * 1000) / 1000;'), 1);
+  assert.equal(countInlineMoneyRounding('const x = Math.floor(value * 100) / 100;'), 1);
+  assert.equal(countInlineMoneyRounding('const pct = Math.round(ratio * 100);'), 0);
+  assert.equal(countInlineMoneyRounding('const cents = Math.round(amount * 100);'), 0);
+  assert.equal(countInlineMoneyRounding('const q = Math.round(qty);'), 0);
+  assert.equal(countInlineMoneyRounding('const x = roundMoney(total, digits);'), 0);
+  assert.equal(countInlineMoneyRounding('const x = Math.round(a) + Math.round(b * 100) / 100;'), 1);
+  assert.ok('const s = value.toFixed(2);'.match(TOFIXED_2));
+  assert.ok(!'const s = value.toFixed(digits);'.match(TOFIXED_2));
+  assert.ok(!'const s = value.toFixed(3);'.match(TOFIXED_2));
 
   // 8. Closed invariants stay recorded.
   const invariants = readFile('ARCHITECTURE_INVARIANTS.md');
@@ -425,7 +511,7 @@ async function main(): Promise<void> {
     .map((line) => line.split(' ')[1]);
   assert.ok(invariantIds.length > 0, 'the invariants file must list INV- entries');
   assert.equal(new Set(invariantIds).size, invariantIds.length, 'invariant ids must be unique: no duplicated entry');
-  assert.equal(invariantIds[invariantIds.length - 1], 'INV-MAINT-INTAKE-ADVANCE-GUARD', 'the newest invariant entry must be the last INV- line');
+  assert.equal(invariantIds[invariantIds.length - 1], 'INV-GUARD-REPO-WIDE-MONEY-SCAN', 'the newest invariant entry must be the last INV- line');
 
   console.log('architecture guard checks passed');
 }
