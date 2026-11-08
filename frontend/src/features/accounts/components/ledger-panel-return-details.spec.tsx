@@ -35,7 +35,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 import { LedgerPanel, getDocumentReference, inferDocumentType } from './LedgerPanel';
 import { documentDetailsApi } from '@/shared/api/document-details';
-import type { Customer, CustomerLedgerEntry, Supplier, SupplierLedgerEntry } from '@/types/domain';
+import type { CustomerLedgerEntry, Supplier, SupplierLedgerEntry } from '@/types/domain';
 
 const { httpMock } = vi.hoisted(() => ({ httpMock: vi.fn() }));
 

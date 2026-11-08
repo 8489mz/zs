@@ -10,7 +10,7 @@ import { usePosCatalog } from './usePosCatalog';
 const { queryMock, current, lookupProductsMock } = vi.hoisted(() => ({
   queryMock: vi.fn(),
   current: { tenantId: 'tenant-a' },
-  lookupProductsMock: vi.fn(async () => []),
+  lookupProductsMock: vi.fn(async (_params: { categoryId?: string }) => []),
 }));
 vi.mock('@tanstack/react-query', () => ({ useQuery: queryMock }));
 vi.mock('@/stores/auth-store', () => ({
@@ -58,7 +58,7 @@ describe('POS catalog category filter', () => {
     const first = queryMock.mock.calls[queryMock.mock.calls.length - 1][0];
     expect(first.queryKey).not.toContain('7');
     await first.queryFn();
-    const params = lookupProductsMock.mock.calls[0][0];
-    expect(params.categoryId).toBeUndefined();
+    const params = lookupProductsMock.mock.calls[0]?.[0];
+    expect(params?.categoryId).toBeUndefined();
   });
 });
