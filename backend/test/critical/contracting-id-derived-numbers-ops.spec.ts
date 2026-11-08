@@ -76,6 +76,12 @@ async function main(): Promise<void> {
       CREATE TABLE contracting_boq_indirect_allocations (id bigserial PRIMARY KEY, tenant_id text, project_id bigint, batch_id bigint, pool_id bigint, boq_item_id bigint, driver_type text, driver_qty numeric, total_pool_driver_qty numeric, allocation_ratio numeric, pool_net_cost numeric, allocated_amount numeric);
       CREATE TABLE contracting_labor_attendance_records (id bigserial PRIMARY KEY, tenant_id text, project_id bigint, attendance_date text, boq_item_id bigint, status text, total_payable numeric);
       CREATE TABLE contracting_equipment_fuel_logs (id bigserial PRIMARY KEY, tenant_id text, project_id bigint, log_date text, boq_item_id bigint, operating_hours numeric, fuel_cost_total numeric);
+      CREATE TABLE settings (tenant_id text, key text, value text, PRIMARY KEY (tenant_id, key));
+      CREATE TABLE currency_exchange_rates (tenant_id text, currency_code text, is_base boolean, exchange_rate numeric);
+    `);
+    await pg.exec(`
+      INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'currency', 'EGP');
+      INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate) VALUES ('t1', 'EGP', true, 1);
     `);
 
     const service = new ContractingService(db as never, {} as never);

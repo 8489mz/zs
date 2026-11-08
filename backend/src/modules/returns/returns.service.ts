@@ -254,7 +254,8 @@ export class ReturnsService {
     const today = new Date().toISOString().slice(0, 10);
     const mapped = filterReturnRows(mapReturnRows(rows as Array<Record<string, unknown>>), query, today);
     const paged = paginateRows(mapped, query, { defaultSize: 20 });
-    return { returns: paged.rows, pagination: paged.pagination, summary: summarizeReturnRows(mapped, today), scope: this.scope(auth) };
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, this.scope(auth).tenantId));
+    return { returns: paged.rows, pagination: paged.pagination, summary: summarizeReturnRows(mapped, today, moneyDigits), scope: this.scope(auth) };
   }
 
   /** Unpaginated invoice-return history, used only to guide the UI.

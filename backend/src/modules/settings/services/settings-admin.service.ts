@@ -8,7 +8,7 @@ import { requireTenantScope, TenantScope } from '../../../core/auth/utils/tenant
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits, fromMinorUnits, toMinorUnits } from '../../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, fromMinorUnits, roundMoney, toMinorUnits } from '../../accounting/engines/money-minor-units.engine';
 
 @Injectable()
 export class SettingsAdminService {
@@ -85,6 +85,7 @@ export class SettingsAdminService {
   async getDiagnostics(actor: AuthContext): Promise<Record<string, unknown>> {
     this.assertAdmin(actor);
     const scope = this.scope(actor);
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const [
       users,
       activeUsers,
@@ -147,9 +148,9 @@ export class SettingsAdminService {
         auditLogs,
       },
       finance: {
-        customerBalance: Number(customerBalance.toFixed(2)),
-        supplierBalance: Number(supplierBalance.toFixed(2)),
-        treasuryNet: Number(treasuryNet.toFixed(2)),
+        customerBalance: roundMoney(customerBalance, moneyDigits),
+        supplierBalance: roundMoney(supplierBalance, moneyDigits),
+        treasuryNet: roundMoney(treasuryNet, moneyDigits),
       },
       scope,
     };

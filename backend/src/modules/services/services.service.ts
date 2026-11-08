@@ -14,7 +14,7 @@ import { UpsertServiceDto } from './dto/upsert-service.dto';
 import { IdempotencyService } from '../../core/idempotency/idempotency.service';
 import { idempotencyStorage } from '../../core/idempotency/idempotency.context';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
-import { currencyMoneyDigits } from '../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
 
 type ServicePaymentChannel = 'cash' | 'card';
 
@@ -96,6 +96,9 @@ export class ServicesService {
 
   async listServices(query: Record<string, unknown>, auth: AuthContext, db: Kysely<Database> = this.db): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
+    // Book digits once per call; `db` is the transaction handle when the
+    // caller runs inside runInTransaction, never the pool inside a txn.
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(db, scope.tenantId));
     const result = await sql<{
       id: number;
       name: string;
@@ -158,9 +161,9 @@ export class ServicesService {
     }
 
     const paged = paginateRows(rows, query, { defaultSize: 20 });
-    const totalAmount = Number(rows.reduce((sum, row) => sum + Number(row.amount || 0), 0).toFixed(2));
-    const cashAmount = Number(rows.filter((row) => row.paymentChannel === 'cash').reduce((sum, row) => sum + Number(row.amount || 0), 0).toFixed(2));
-    const cardAmount = Number(rows.filter((row) => row.paymentChannel === 'card').reduce((sum, row) => sum + Number(row.amount || 0), 0).toFixed(2));
+    const totalAmount = roundMoney(rows.reduce((sum, row) => sum + Number(row.amount || 0), 0), moneyDigits);
+    const cashAmount = roundMoney(rows.filter((row) => row.paymentChannel === 'cash').reduce((sum, row) => sum + Number(row.amount || 0), 0), moneyDigits);
+    const cardAmount = roundMoney(rows.filter((row) => row.paymentChannel === 'card').reduce((sum, row) => sum + Number(row.amount || 0), 0), moneyDigits);
     const todayRows = rows.filter((row) => isToday(row.serviceDate));
     const highestAmount = rows.length ? Math.max(...rows.map((row) => Number(row.amount || 0))) : 0;
     const latest = rows[0] || null;
@@ -174,7 +177,7 @@ export class ServicesService {
         cashAmount,
         cardAmount,
         todayCount: todayRows.length,
-        averageAmount: rows.length ? Number((totalAmount / rows.length).toFixed(2)) : 0,
+        averageAmount: rows.length ? roundMoney(totalAmount / rows.length, moneyDigits) : 0,
         highestAmount,
         latestServiceName: latest?.name || '',
         latestCreatedByName: latest?.createdByName || '',

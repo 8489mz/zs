@@ -3,6 +3,8 @@ import { Database } from '../../../database/database.types';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Kysely, sql } from 'kysely';
 import { AppError } from '../../../common/errors/app-error';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
 export interface TenantScope {
   tenantId: string;
@@ -193,9 +195,10 @@ export class RestaurantAdvancedFnbService {
   }
 
   async calculateAndSaveTipPool(scope: TenantScope, dto: CalculateTipPoolDto) {
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const cashTips = Number(dto.totalCashTips || 0);
     const cardTips = Number(dto.totalCardTips || 0);
-    const totalTips = Number((cashTips + cardTips).toFixed(2));
+    const totalTips = roundMoney(cashTips + cardTips, moneyDigits);
 
     if (totalTips <= 0) {
       throw new AppError('إجمالي مجمع الإكراميات يجب أن يكون أكبر من الصفر', 'INVALID_TIP_AMOUNT', 400);
@@ -242,11 +245,11 @@ export class RestaurantAdvancedFnbService {
     let allocatedSum = 0;
     const distributions = computedStaff.map((member, idx) => {
       // Last person gets the remainder to avoid 0.01 currency rounding discrepancies
-      let amount = Number(((member.score / totalScore) * totalTips).toFixed(2));
+      let amount = roundMoney((member.score / totalScore) * totalTips, moneyDigits);
       allocatedSum += amount;
       if (idx === computedStaff.length - 1) {
-        const delta = Number((totalTips - allocatedSum).toFixed(2));
-        amount = Number((amount + delta).toFixed(2));
+        const delta = roundMoney(totalTips - allocatedSum, moneyDigits);
+        amount = roundMoney(amount + delta, moneyDigits);
       }
       return {
         ...member,
@@ -620,6 +623,7 @@ export class RestaurantAdvancedFnbService {
   // ==========================================
 
   async getPlateCostFluctuations(scope: TenantScope) {
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     // Queries products that have BOM recipes and evaluates recent purchase costs vs standard recipe costs
     const productsWithBom = await sql<any>`
       SELECT 
@@ -662,7 +666,7 @@ export class RestaurantAdvancedFnbService {
 
       // Desired standard margin is 65% for restaurants
       const targetMargin = 0.65;
-      const suggestedPrice = Number((liveCost / (1 - targetMargin)).toFixed(2));
+      const suggestedPrice = roundMoney(liveCost / (1 - targetMargin), moneyDigits);
 
       return {
         productId: r.product_id,

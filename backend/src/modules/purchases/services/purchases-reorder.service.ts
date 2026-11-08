@@ -13,6 +13,8 @@ import {
   BuildReorderOptions,
 } from '../helpers/purchases-reorder.helper';
 import { PurchasesWriteService } from './purchases-write.service';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
 export interface GenerateDraftOrdersItemDto {
   productId: number;
@@ -43,6 +45,7 @@ export class PurchasesReorderService {
   async getReorderSuggestions(auth: AuthContext, query: Record<string, unknown>): Promise<ReorderAnalysisResult> {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
 
     const daysAnalysis = Math.max(1, Number(query.daysAnalysis || 30));
     const targetCoverageDays = Math.max(1, Number(query.targetCoverageDays || 30));
@@ -168,6 +171,7 @@ export class PurchasesReorderService {
       targetCoverageDays,
       defaultLeadTimeDays,
       urgencyFilter,
+      moneyDigits,
     });
 
     // 6. Optional search filter
@@ -200,7 +204,7 @@ export class PurchasesReorderService {
           group.criticalCount += 1;
         }
         group.totalSuggestedQty += item.suggestedQty;
-        group.totalEstimatedCost = Number((group.totalEstimatedCost + item.estimatedTotalCost).toFixed(2));
+        group.totalEstimatedCost = roundMoney(group.totalEstimatedCost + item.estimatedTotalCost, moneyDigits);
       }
 
       const filteredGroups = Array.from(groupsMap.values());

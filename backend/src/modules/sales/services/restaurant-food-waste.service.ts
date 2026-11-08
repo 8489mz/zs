@@ -6,6 +6,8 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
 export interface CreateFoodWasteLogDto {
   branchId: number;
@@ -39,6 +41,7 @@ export class RestaurantFoodWasteService {
     }
 
     return this.db.transaction().execute(async (trx) => {
+      const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
       // Never record a fictitious expense without an actual warehouse deduction.
       const branch = await trx.selectFrom('branches')
         .select(['default_stock_location_id'])
@@ -75,7 +78,7 @@ export class RestaurantFoodWasteService {
       if (!Number.isFinite(costPrice) || costPrice < 0) {
         throw new BadRequestException('تكلفة الصنف غير صالحة؛ لا يمكن تسجيل تالف بتكلفة وهمية');
       }
-      const totalCost = Number((costPrice * dto.quantity).toFixed(2));
+      const totalCost = roundMoney(costPrice * dto.quantity, moneyDigits);
       if (!Number.isFinite(totalCost)) throw new BadRequestException('قيمة التالف غير صالحة');
 
       // Check available stock at this location/branch
@@ -176,6 +179,7 @@ export class RestaurantFoodWasteService {
    */
   async reconcilePendingWaste(auth: AuthContext, logId: number) {
     const scope = requireTenantScope(auth);
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     return this.db.transaction().execute(async (trx) => {
       const log = await trx.selectFrom('restaurant_food_waste_logs')
         .selectAll()
@@ -234,7 +238,7 @@ export class RestaurantFoodWasteService {
       });
 
       const costPrice = Number(product.cost_price);
-      const totalCost = Number((costPrice * wasteQty).toFixed(2));
+      const totalCost = roundMoney(costPrice * wasteQty, moneyDigits);
 
       await trx.insertInto('stock_movements').values({
         product_id: Number(log.product_id),

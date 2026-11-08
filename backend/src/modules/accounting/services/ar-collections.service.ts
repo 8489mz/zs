@@ -498,7 +498,7 @@ export class ArCollectionsService {
             : null,
         };
 
-        const evalResult = evaluateCustomerDunning(evalInput, levels as DunningLevel[]);
+        const evalResult = evaluateCustomerDunning(evalInput, levels as DunningLevel[], undefined, digits);
 
         if (evalResult.totalOverdue > 0) {
           activeCasesCount++;

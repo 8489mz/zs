@@ -217,7 +217,7 @@ function normalizeBlindOperationList(value: unknown): BlindCloseOperationDetail[
   });
 }
 
-export function summarizeCashDrawerRows(rows: CashDrawerMappedRow[]): Record<string, unknown> {
+export function summarizeCashDrawerRows(rows: CashDrawerMappedRow[], moneyDigits: MoneyDigits = 2): Record<string, unknown> {
   const openRows = rows.filter((row) => String(row.status || '') === 'open');
   const pendingReviewRows = rows.filter((row) => String(row.status || '') === 'pending_review');
   return {
@@ -225,7 +225,7 @@ export function summarizeCashDrawerRows(rows: CashDrawerMappedRow[]): Record<str
     openShiftCount: openRows.length,
     pendingReviewCount: pendingReviewRows.length,
     openShiftDocNo: openRows[0] ? String(openRows[0].docNo || openRows[0].id || '') : '',
-    totalVariance: Number(rows.reduce((sum, row) => sum + Number(row.variance || 0), 0).toFixed(2)),
+    totalVariance: roundMoney(rows.reduce((sum, row) => sum + Number(row.variance || 0), 0), moneyDigits),
   };
 }
 
@@ -354,14 +354,14 @@ export function computeCashDrawerVariance(countedCash: number, expectedCash: num
 export function buildShiftCashReturnItem(row: {
   id: number; doc_no?: string | null; cash_refund?: number | string | null;
   note?: string | null; created_at?: string | Date | null;
-}): { id: string; kind: 'return'; kindLabel: string; amount: number; note: string; createdAt: string } | null {
+}, moneyDigits: MoneyDigits = 2): { id: string; kind: 'return'; kindLabel: string; amount: number; note: string; createdAt: string } | null {
   const amount = Number(row.cash_refund || 0);
   if (!Number.isFinite(amount) || amount <= 0) return null;
   return {
     id: `ret-${row.id}`,
     kind: 'return',
     kindLabel: 'مرتجع مبيعات (رد نقدي فعلي)',
-    amount: Number(amount.toFixed(2)),
+    amount: roundMoney(amount, moneyDigits),
     note: ['مرتجع نقدي', row.doc_no ? `#${row.doc_no}` : '', row.note].filter(Boolean).join(' - '),
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
   };

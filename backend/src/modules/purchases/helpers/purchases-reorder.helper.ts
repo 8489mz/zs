@@ -1,3 +1,5 @@
+import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+
 export interface ReorderProductInput {
   id: number;
   name: string;
@@ -83,6 +85,10 @@ export interface BuildReorderOptions {
   defaultLeadTimeDays?: number; // e.g. 3
   onlyNeedsReorder?: boolean;
   urgencyFilter?: 'all' | 'needs_reorder' | 'out_of_stock' | 'critical' | 'warning';
+  // Book digits of the tenant's base currency. Money outputs
+  // (cost/retail price, estimated totals) round at these digits;
+  // quantities and run rates stay at 2dp. Defaults to 2.
+  moneyDigits?: MoneyDigits;
 }
 
 function toNumber(value: unknown, fallback = 0): number {
@@ -105,6 +111,7 @@ export function calculateReorderItemSuggestion(
   const daysAnalysis = Math.max(1, options.daysAnalysis || 30);
   const targetCoverageDays = Math.max(1, options.targetCoverageDays || 30);
   const defaultLeadTimeDays = Math.max(1, options.defaultLeadTimeDays || 3);
+  const moneyDigits: MoneyDigits = options.moneyDigits ?? 2;
 
   const currentStock = toNumber(product.stock_qty, 0);
   const minStock = toNumber(product.min_stock_qty, 0);
@@ -150,7 +157,7 @@ export function calculateReorderItemSuggestion(
     suggestedQty = 1;
   }
 
-  const estimatedTotalCost = roundTo(suggestedQty * costPrice, 2);
+  const estimatedTotalCost = roundMoney(suggestedQty * costPrice, moneyDigits);
 
   return {
     productId: Number(product.id),
@@ -159,8 +166,8 @@ export function calculateReorderItemSuggestion(
     categoryName: product.category_name || '',
     currentStock: roundTo(currentStock, 2),
     minStock: roundTo(minStock, 2),
-    costPrice: roundTo(costPrice, 2),
-    retailPrice: roundTo(retailPrice, 2),
+    costPrice: roundMoney(costPrice, moneyDigits),
+    retailPrice: roundMoney(retailPrice, moneyDigits),
     qtySoldPeriod: roundTo(soldPeriod, 2),
     dailyRunRate,
     daysRemaining: Math.min(365, daysRemaining),
@@ -187,6 +194,7 @@ export function buildReorderAnalysis(
 ): ReorderAnalysisResult {
   const daysAnalysis = Math.max(1, options.daysAnalysis || 30);
   const targetCoverageDays = Math.max(1, options.targetCoverageDays || 30);
+  const moneyDigits: MoneyDigits = options.moneyDigits ?? 2;
 
   const allSuggestions: ReorderItemSuggestion[] = [];
 
@@ -267,7 +275,7 @@ export function buildReorderAnalysis(
       group.criticalCount += 1;
     }
     group.totalSuggestedQty += item.suggestedQty;
-    group.totalEstimatedCost = roundTo(group.totalEstimatedCost + item.estimatedTotalCost, 2);
+    group.totalEstimatedCost = roundMoney(group.totalEstimatedCost + item.estimatedTotalCost, moneyDigits);
   }
 
   // Sort groups: suppliers with critical items first, then by highest total estimated cost
@@ -280,7 +288,7 @@ export function buildReorderAnalysis(
 
   let totalEstimatedProcurementCost = 0;
   for (const g of supplierGroups) {
-    totalEstimatedProcurementCost = roundTo(totalEstimatedProcurementCost + g.totalEstimatedCost, 2);
+    totalEstimatedProcurementCost = roundMoney(totalEstimatedProcurementCost + g.totalEstimatedCost, moneyDigits);
   }
 
   return {

@@ -4,6 +4,8 @@ import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { KYSELY_DB } from '../../../database/database.constants';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
 export interface CreateRfqDto {
   title: string;
@@ -323,6 +325,7 @@ export class PurchaseRfqsService {
       .execute();
 
     return await this.db.transaction().execute(async (trx) => {
+      const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
       // 1. Mark winning bids
       await trx
         .updateTable('purchase_rfq_vendor_bids')
@@ -401,10 +404,10 @@ export class PurchaseRfqsService {
           supplier_id: supplierId,
           supplier_name: winnerName,
           supplier_phone: winnerPhone,
-          subtotal: Number(subtotal.toFixed(2)),
-          tax_amount: Number(taxAmount.toFixed(2)),
+          subtotal: roundMoney(subtotal, moneyDigits),
+          tax_amount: roundMoney(taxAmount, moneyDigits),
           discount_amount: 0,
-          total_amount: Number(totalAmount.toFixed(2)),
+          total_amount: roundMoney(totalAmount, moneyDigits),
           status: 'confirmed',
           expected_delivery_date: rfq.expected_delivery_date ? (rfq.expected_delivery_date as any) : null,
           notes: `تم توليده تلقائياً من طلب عرض السعر رقم: ${rfq.rfq_number} بعد المفاضلة واعتماد العرض الفائز.`,
@@ -429,7 +432,7 @@ export class PurchaseRfqsService {
             unit_cost: poItem.unit_cost,
             tax_rate: poItem.tax_rate,
             discount: 0,
-            total: Number(poItem.total.toFixed(2)),
+            total: roundMoney(poItem.total, moneyDigits),
           })
           .execute();
       }

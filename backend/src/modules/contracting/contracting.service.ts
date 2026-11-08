@@ -13,6 +13,8 @@ import {
   formatDailyDocumentNumber,
 } from '../../common/utils/document-number.util';
 import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
+import { tenantBaseCurrency } from '../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
 import {
   CreateProjectDto,
   UpdateProjectDto,
@@ -6368,7 +6370,8 @@ export class ContractingService {
     const tempNumber = `ESC-TMP-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const priceDifference = Math.max(0, dto.currentMarketPrice - dto.basePriceContract);
-    const totalCompensationAmount = Number((priceDifference * dto.executedQuantity).toFixed(2));
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+    const totalCompensationAmount = roundMoney(priceDifference * dto.executedQuantity, moneyDigits);
 
     const row = await this.db.transaction().execute(async (trx) => {
       const inserted = await (trx as any)
@@ -6689,6 +6692,7 @@ export class ContractingService {
     const project = await this.getProjectById(auth, projectId);
     const breakdown = await this.getProjectCostBreakdown(auth, projectId);
 
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
     const bac = project.revisedContractValue || project.contractValue || 1;
     const ev = Number(project.totalBilledClient || (bac * (project.completionRatePercent / 100)) || 0);
     const ac = Number(breakdown.totalActualCost || 0);
@@ -6704,12 +6708,12 @@ export class ContractingService {
       pv = Math.max(ev, bac * 0.5);
     }
 
-    const cv = Number((ev - ac).toFixed(2));
-    const sv = Number((ev - pv).toFixed(2));
+    const cv = roundMoney(ev - ac, moneyDigits);
+    const sv = roundMoney(ev - pv, moneyDigits);
     const cpi = ac > 0 ? Number((ev / ac).toFixed(2)) : 1.0;
     const spi = pv > 0 ? Number((ev / pv).toFixed(2)) : 1.0;
-    const eac = cpi > 0 ? Number((bac / cpi).toFixed(2)) : bac;
-    const vac = Number((bac - eac).toFixed(2));
+    const eac = cpi > 0 ? roundMoney(bac / cpi, moneyDigits) : bac;
+    const vac = roundMoney(bac - eac, moneyDigits);
     const tcpi = (bac - ac) > 0 ? Number(((bac - ev) / (bac - ac)).toFixed(2)) : 1.0;
 
     let healthIndicator: 'excellent' | 'good' | 'at_risk' | 'critical' = 'good';
@@ -6732,10 +6736,10 @@ export class ContractingService {
       projectId: project.id,
       projectCode: project.code,
       projectName: project.name,
-      plannedValue: Number(pv.toFixed(2)),
-      earnedValue: Number(ev.toFixed(2)),
-      actualCost: Number(ac.toFixed(2)),
-      budgetAtCompletion: Number(bac.toFixed(2)),
+      plannedValue: roundMoney(pv, moneyDigits),
+      earnedValue: roundMoney(ev, moneyDigits),
+      actualCost: roundMoney(ac, moneyDigits),
+      budgetAtCompletion: roundMoney(bac, moneyDigits),
       costVariance: cv,
       scheduleVariance: sv,
       cpi,

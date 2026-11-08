@@ -442,12 +442,13 @@ export class PartnersService {
 
     const balance = Number(customer.balance || 0);
     const creditLimit = Number(customer.credit_limit || 0);
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, this.tenantId(actor)));
 
     return {
       customerId: String(customer.id),
       balance,
       creditLimit,
-      remainingCredit: creditLimit > 0 ? Number((creditLimit - balance).toFixed(2)) : null,
+      remainingCredit: creditLimit > 0 ? roundMoney(creditLimit - balance, moneyDigits) : null,
       storeCreditBalance: Number(customer.store_credit_balance || 0),
       loyaltyPoints: Number(customer.loyalty_points || 0),
       customerType: customer.customer_type || 'cash',

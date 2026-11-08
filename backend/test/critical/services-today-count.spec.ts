@@ -81,6 +81,14 @@ async function createDb(): Promise<Kysely<Database>> {
     )
   `.execute(db);
   await sql`
+    CREATE TABLE currency_exchange_rates (
+      tenant_id TEXT NOT NULL,
+      currency_code TEXT NOT NULL,
+      is_base BOOLEAN NOT NULL DEFAULT FALSE,
+      exchange_rate NUMERIC NOT NULL DEFAULT 1
+    )
+  `.execute(db);
+  await sql`
     CREATE TABLE settings (
       tenant_id TEXT NOT NULL,
       key TEXT NOT NULL,
@@ -112,6 +120,8 @@ async function main(): Promise<void> {
   const db = await createDb();
   try {
     await sql`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'timezone', 'Africa/Cairo')`.execute(db);
+  await sql`INSERT INTO settings (tenant_id, key, value) VALUES ('t1', 'currency', 'EGP')`.execute(db);
+  await sql`INSERT INTO currency_exchange_rates (tenant_id, currency_code, is_base, exchange_rate) VALUES ('t1', 'EGP', true, 1)`.execute(db);
     await sql`INSERT INTO branches (id, tenant_id, name) VALUES (1, 't1', 'Main')`.execute(db);
     await sql`INSERT INTO stock_locations (id, tenant_id, branch_id, name) VALUES (1, 't1', 1, 'Store')`.execute(db);
     await sql`INSERT INTO users (id, tenant_id, username) VALUES (1, 't1', 'admin')`.execute(db);

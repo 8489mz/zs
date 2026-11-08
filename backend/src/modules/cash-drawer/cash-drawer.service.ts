@@ -632,6 +632,7 @@ export class CashDrawerService {
     createdAt: string;
   }>> {
     const scope = this.scope(auth);
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const openerId = Number(shift.opened_by || 0);
     const items: Array<{
       id: string;
@@ -785,7 +786,7 @@ export class CashDrawerService {
       `.execute(this.db);
 
       for (const ret of retRows.rows || []) {
-        const item = buildShiftCashReturnItem(ret);
+        const item = buildShiftCashReturnItem(ret, digits);
         if (item) items.push(item);
       }
     }
@@ -1013,7 +1014,8 @@ export class CashDrawerService {
     const mapped = await this.rawList(auth, filterStatus);
     const filtered = filterCashDrawerRows(mapped, { ...query, filter });
     const paged = paginateCashDrawerRows(filtered, query);
-    return { cashierShifts: paged.rows, pagination: paged.pagination, summary: summarizeCashDrawerRows(filtered), viewerRole: auth.role };
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, this.scope(auth).tenantId));
+    return { cashierShifts: paged.rows, pagination: paged.pagination, summary: summarizeCashDrawerRows(filtered, digits), viewerRole: auth.role };
   }
 
   async openCashierShift(payload: { openingCash?: number; note?: string; branchId?: number | string | null; locationId?: number | string | null; password?: string; managerPin?: string }, auth: AuthContext): Promise<Record<string, unknown>> {

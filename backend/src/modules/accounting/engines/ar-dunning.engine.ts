@@ -8,7 +8,13 @@
  * 4. Message templating & WhatsApp dispatch link generation.
  *
  * All functions are pure, side-effect free, and fully testable.
+ *
+ * Money amounts round at the caller's book digits (MoneyDigits), which
+ * defaults to 2 for callers that have not been wired to the tenant's
+ * currency yet; the live caller (ar-collections syncCollections) is
+ * wired to tenantBaseCurrency (D6c wiring follow-up, U3).
  */
+import { roundMoney, type MoneyDigits } from './money-minor-units.engine';
 
 export interface DunningLevel {
   id: string;
@@ -113,6 +119,7 @@ export function allocateCustomerOverdueFifo(
   invoices: InputInvoice[],
   asOfDate: Date,
   creditTermsDays = 0,
+  moneyDigits: MoneyDigits = 2,
 ): { overdueInvoices: OverdueInvoice[]; totalOverdue: number; oldestOverdueDays: number } {
   if (balance <= 0.01 || !invoices.length) {
     return { overdueInvoices: [], totalOverdue: 0, oldestOverdueDays: 0 };
@@ -123,7 +130,7 @@ export function allocateCustomerOverdueFifo(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
   );
 
-  let remainingBalance = Number(balance.toFixed(2));
+  let remainingBalance = roundMoney(balance, moneyDigits);
   const overdueInvoices: OverdueInvoice[] = [];
   let totalOverdue = 0;
   let maxOverdueDays = 0;
@@ -131,14 +138,14 @@ export function allocateCustomerOverdueFifo(
   for (const inv of sorted) {
     if (remainingBalance <= 0) break;
 
-    const invoiceUnpaid = Math.max(0, Number((inv.total - inv.paidAmount).toFixed(2)));
+    const invoiceUnpaid = Math.max(0, roundMoney(inv.total - inv.paidAmount, moneyDigits));
     if (invoiceUnpaid <= 0) continue;
 
     const allocated = Math.min(remainingBalance, invoiceUnpaid);
     const { daysOverdue, effectiveDueDate } = calculateInvoiceOverdueDays(inv, asOfDate, creditTermsDays);
 
     if (daysOverdue > 0 && allocated > 0) {
-      totalOverdue = Number((totalOverdue + allocated).toFixed(2));
+      totalOverdue = roundMoney(totalOverdue + allocated, moneyDigits);
       if (daysOverdue > maxOverdueDays) {
         maxOverdueDays = daysOverdue;
       }
@@ -148,21 +155,21 @@ export function allocateCustomerOverdueFifo(
         invoiceNumber: inv.invoiceNumber,
         createdAt: new Date(inv.createdAt).toISOString().slice(0, 10),
         dueDate: effectiveDueDate.toISOString().slice(0, 10),
-        total: Number(inv.total.toFixed(2)),
-        paidAmount: Number(inv.paidAmount.toFixed(2)),
+        total: roundMoney(inv.total, moneyDigits),
+        paidAmount: roundMoney(inv.paidAmount, moneyDigits),
         unpaidAmount: invoiceUnpaid,
-        allocatedOverdueAmount: Number(allocated.toFixed(2)),
+        allocatedOverdueAmount: roundMoney(allocated, moneyDigits),
         daysOverdue,
       });
     }
 
-    remainingBalance = Number((remainingBalance - allocated).toFixed(2));
+    remainingBalance = roundMoney(remainingBalance - allocated, moneyDigits);
   }
 
   // If there is still unallocated balance (e.g. opening balances or legacy debit notes),
   // and we had at least some overdue days, keep that exposure accounted for
   if (remainingBalance > 0 && maxOverdueDays > 0) {
-    totalOverdue = Number((totalOverdue + remainingBalance).toFixed(2));
+    totalOverdue = roundMoney(totalOverdue + remainingBalance, moneyDigits);
   }
 
   return {
@@ -245,9 +252,10 @@ export function evaluateCustomerDunning(
   input: CustomerDunningInput,
   levels: DunningLevel[],
   companyName?: string,
+  moneyDigits: MoneyDigits = 2,
 ): EvaluatedDunningResult {
   const asOfDate = input.asOfDate ? new Date(input.asOfDate) : new Date();
-  const totalBalance = Number((input.balance || 0).toFixed(2));
+  const totalBalance = roundMoney(input.balance || 0, moneyDigits);
 
   // If customer has zero or negative balance, any case is settled
   if (totalBalance <= 0.01) {
@@ -269,7 +277,7 @@ export function evaluateCustomerDunning(
   // 1. Allocate overdue amounts via FIFO
   const { overdueInvoices, totalOverdue, oldestOverdueDays } = input.overdueSummary
     ? { overdueInvoices: [], ...input.overdueSummary }
-    : allocateCustomerOverdueFifo(totalBalance, input.invoices, asOfDate, input.creditTermsDays ?? 0);
+    : allocateCustomerOverdueFifo(totalBalance, input.invoices, asOfDate, input.creditTermsDays ?? 0, moneyDigits);
 
   // 2. Identify active dunning level
   const activeLevel = determineDunningLevel(oldestOverdueDays, levels);

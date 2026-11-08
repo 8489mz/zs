@@ -1,7 +1,16 @@
 /**
  * Import Feasibility Engine (محرك دراسة الجدوى الاستيرادية المتقدم والتدقيق المحاسبي)
  * Pure functional calculation engine imported identically by production and test suites.
+ *
+ * Money outputs are EGP-denominated by design (every *Egp field), so the
+ * default book digits are EGP's via currencyMoneyDigits('EGP'); a caller
+ * pricing the study in another currency passes moneyDigits explicitly.
+ * The commercial exchange rate has NO fallback: a missing/invalid rate
+ * fails closed here instead of silently pricing at the old hardcoded 50
+ * (F1). The live caller must resolve the rate through resolveFxRate
+ * (supplied-rate path for a contractual rate) before calling.
  */
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
 export interface FeasibilityItemInput {
   name: string;
@@ -20,6 +29,8 @@ export interface FeasibilityItemInput {
 export interface FeasibilityCalculationInput {
   items: FeasibilityItemInput[];
   exchangeRateCommercial: number;
+  /** Book digits for the money outputs; defaults to EGP's (2). */
+  moneyDigits?: MoneyDigits;
   exchangeRateCustoms?: number;
   travelAndSourcingCostEgp?: number;
   internationalShippingUsd?: number;
@@ -127,7 +138,12 @@ export function resolveNumber(val: unknown, fallback: number): number {
 }
 
 export function calculateImportFeasibility(input: FeasibilityCalculationInput): FeasibilityCalculationResult {
-  const commRate = Math.max(0.0001, resolveNumber(input.exchangeRateCommercial, 50));
+  const digits = input.moneyDigits ?? currencyMoneyDigits('EGP');
+  const suppliedCommercialRate = resolveNumber(input.exchangeRateCommercial, NaN);
+  if (!Number.isFinite(suppliedCommercialRate) || suppliedCommercialRate <= 0) {
+    throw new Error('Import feasibility requires a caller-resolved commercial exchange rate; a missing rate must never silently fall back to a hardcoded rate.');
+  }
+  const commRate = Math.max(0.0001, suppliedCommercialRate);
   const custRate = Math.max(0.0001, resolveNumber(input.exchangeRateCustoms, commRate));
 
   const shippingUsd = Math.max(0, resolveNumber(input.internationalShippingUsd, 0));
@@ -199,23 +215,23 @@ export function calculateImportFeasibility(input: FeasibilityCalculationInput): 
     const retailMarkup = 1 + markupPercent / 100;
 
     const marketPrice = resolveNumber(item.expectedLocalMarketPriceEgp, 0);
-    const unitNetProfitVsMarketEgp = marketPrice > 0 ? Number((marketPrice - unitLanded).toFixed(2)) : undefined;
+    const unitNetProfitVsMarketEgp = marketPrice > 0 ? roundMoney(marketPrice - unitLanded, digits) : undefined;
     const marginVsMarketPercent =
       marketPrice > 0 ? Number((((marketPrice - unitLanded) / marketPrice) * 100).toFixed(1)) : undefined;
-    const totalProfitVsMarketEgp = marketPrice > 0 ? Number(((marketPrice - unitLanded) * qty).toFixed(2)) : undefined;
+    const totalProfitVsMarketEgp = marketPrice > 0 ? roundMoney((marketPrice - unitLanded) * qty, digits) : undefined;
 
     return {
       name: item.name,
       hsCode: item.hsCode,
       qty,
       factoryPriceUsd: unitPriceUsd,
-      totalFactoryUsd: Number(totalItemUsd.toFixed(2)),
-      factoryCostEgp: Number(itemFactoryCostEgp.toFixed(2)),
-      allocatedOverheadEgp: Number(itemCapitalizedOverhead.toFixed(2)),
-      unitLandedCostEgp: Number(unitLanded.toFixed(2)),
-      suggestedWholesalePriceEgp: Number((unitLanded * wholesaleMarkup).toFixed(2)),
-      suggestedRetailPriceEgp: Number((unitLanded * retailMarkup).toFixed(2)),
-      totalItemLandedEgp: Number(totalItemLanded.toFixed(2)),
+      totalFactoryUsd: roundMoney(totalItemUsd, digits),
+      factoryCostEgp: roundMoney(itemFactoryCostEgp, digits),
+      allocatedOverheadEgp: roundMoney(itemCapitalizedOverhead, digits),
+      unitLandedCostEgp: roundMoney(unitLanded, digits),
+      suggestedWholesalePriceEgp: roundMoney(unitLanded * wholesaleMarkup, digits),
+      suggestedRetailPriceEgp: roundMoney(unitLanded * retailMarkup, digits),
+      totalItemLandedEgp: roundMoney(totalItemLanded, digits),
       unitWeightKg: item.unitWeightKg,
       unitCbm: item.unitCbm,
       expectedLocalMarketPriceEgp: marketPrice > 0 ? marketPrice : undefined,
@@ -326,7 +342,7 @@ export function calculateImportFeasibility(input: FeasibilityCalculationInput): 
   }
 
   if (hasAnyMarketPrice) {
-    totalProfitVsMarketEgp = Number(aggregatedMarketProfit.toFixed(2));
+    totalProfitVsMarketEgp = roundMoney(aggregatedMarketProfit, digits);
   }
 
   const overallRoiVsMarketPercent =
@@ -371,31 +387,31 @@ export function calculateImportFeasibility(input: FeasibilityCalculationInput): 
     avgSellingPriceWorst > 0 ? Math.ceil(worstAccountingCost / avgSellingPriceWorst) : totalUnitsCount;
 
   return {
-    totalFactoryCostUsd: Number(totalFactoryCostUsd.toFixed(2)),
-    totalFactoryCostEgp: Number(totalFactoryCostEgp.toFixed(2)),
-    internationalShippingUsd: Number(shippingUsd.toFixed(2)),
-    internationalShippingEgp: Number(internationalShippingEgp.toFixed(2)),
-    insuranceUsd: Number(insuranceUsd.toFixed(2)),
-    insuranceEgp: Number(insuranceEgp.toFixed(2)),
-    cifValueUsd: Number(cifValueUsd.toFixed(2)),
-    cifValueEgp: Number(cifValueEgp.toFixed(2)),
-    customsDutyEgp: Number(customsDutyEgp.toFixed(2)),
-    customsVatEgp: Number(customsVatEgp.toFixed(2)),
-    vatRefundableEgp: Number((vatRefundable ? customsVatEgp : 0).toFixed(2)),
-    clearanceAndPortFeesEgp: Number(clearanceEgp.toFixed(2)),
-    internalTransportEgp: Number(transportEgp.toFixed(2)),
-    capitalizedOverheadEgp: Number(capitalizedOverheadEgp.toFixed(2)),
-    operatingExpensesEgp: Number(operatingExpensesEgp.toFixed(2)),
-    totalAccountingCostEgp: Number(totalAccountingCostEgp.toFixed(2)),
-    totalProjectInvestmentEgp: Number(totalProjectInvestmentEgp.toFixed(2)),
+    totalFactoryCostUsd: roundMoney(totalFactoryCostUsd, digits),
+    totalFactoryCostEgp: roundMoney(totalFactoryCostEgp, digits),
+    internationalShippingUsd: roundMoney(shippingUsd, digits),
+    internationalShippingEgp: roundMoney(internationalShippingEgp, digits),
+    insuranceUsd: roundMoney(insuranceUsd, digits),
+    insuranceEgp: roundMoney(insuranceEgp, digits),
+    cifValueUsd: roundMoney(cifValueUsd, digits),
+    cifValueEgp: roundMoney(cifValueEgp, digits),
+    customsDutyEgp: roundMoney(customsDutyEgp, digits),
+    customsVatEgp: roundMoney(customsVatEgp, digits),
+    vatRefundableEgp: roundMoney(vatRefundable ? customsVatEgp : 0, digits),
+    clearanceAndPortFeesEgp: roundMoney(clearanceEgp, digits),
+    internalTransportEgp: roundMoney(transportEgp, digits),
+    capitalizedOverheadEgp: roundMoney(capitalizedOverheadEgp, digits),
+    operatingExpensesEgp: roundMoney(operatingExpensesEgp, digits),
+    totalAccountingCostEgp: roundMoney(totalAccountingCostEgp, digits),
+    totalProjectInvestmentEgp: roundMoney(totalProjectInvestmentEgp, digits),
     totalUnitsCount,
     items: itemsOutput,
-    targetRevenueEgp: Number(baseRevenue.toFixed(2)),
-    expectedNetProfitEgp: Number(baseProfit.toFixed(2)),
+    targetRevenueEgp: roundMoney(baseRevenue, digits),
+    expectedNetProfitEgp: roundMoney(baseProfit, digits),
     roiPercentage: Number(baseRoi.toFixed(2)),
     markupPercentage: Number(markupPercent.toFixed(2)),
     grossMarginPercentage: Number(baseGrossMargin.toFixed(2)),
-    breakEvenRevenueEgp: Number(totalAccountingCostEgp.toFixed(2)),
+    breakEvenRevenueEgp: roundMoney(totalAccountingCostEgp, digits),
     breakEvenUnits: baseBreakEvenUnits,
     containerMetrics,
     totalProfitVsMarketEgp,
@@ -403,33 +419,33 @@ export function calculateImportFeasibility(input: FeasibilityCalculationInput): 
     scenarios: {
       base: {
         scenarioName: 'base',
-        totalInvestmentEgp: Number(totalProjectInvestmentEgp.toFixed(2)),
-        expectedRevenueEgp: Number(baseRevenue.toFixed(2)),
-        expectedNetProfitEgp: Number(baseProfit.toFixed(2)),
+        totalInvestmentEgp: roundMoney(totalProjectInvestmentEgp, digits),
+        expectedRevenueEgp: roundMoney(baseRevenue, digits),
+        expectedNetProfitEgp: roundMoney(baseProfit, digits),
         roiPercentage: Number(baseRoi.toFixed(2)),
         grossMarginPercentage: Number(baseGrossMargin.toFixed(2)),
         breakEvenUnits: baseBreakEvenUnits,
-        breakEvenRevenueEgp: Number(totalAccountingCostEgp.toFixed(2)),
+        breakEvenRevenueEgp: roundMoney(totalAccountingCostEgp, digits),
       },
       best: {
         scenarioName: 'best',
-        totalInvestmentEgp: Number(bestInvestment.toFixed(2)),
-        expectedRevenueEgp: Number(bestRevenue.toFixed(2)),
-        expectedNetProfitEgp: Number(bestProfit.toFixed(2)),
+        totalInvestmentEgp: roundMoney(bestInvestment, digits),
+        expectedRevenueEgp: roundMoney(bestRevenue, digits),
+        expectedNetProfitEgp: roundMoney(bestProfit, digits),
         roiPercentage: Number(bestRoi.toFixed(2)),
         grossMarginPercentage: Number(bestGrossMargin.toFixed(2)),
         breakEvenUnits: bestBreakEvenUnits,
-        breakEvenRevenueEgp: Number(bestAccountingCost.toFixed(2)),
+        breakEvenRevenueEgp: roundMoney(bestAccountingCost, digits),
       },
       worst: {
         scenarioName: 'worst',
-        totalInvestmentEgp: Number(worstInvestment.toFixed(2)),
-        expectedRevenueEgp: Number(worstRevenue.toFixed(2)),
-        expectedNetProfitEgp: Number(worstProfit.toFixed(2)),
+        totalInvestmentEgp: roundMoney(worstInvestment, digits),
+        expectedRevenueEgp: roundMoney(worstRevenue, digits),
+        expectedNetProfitEgp: roundMoney(worstProfit, digits),
         roiPercentage: Number(worstRoi.toFixed(2)),
         grossMarginPercentage: Number(worstGrossMargin.toFixed(2)),
         breakEvenUnits: worstBreakEvenUnits,
-        breakEvenRevenueEgp: Number(worstAccountingCost.toFixed(2)),
+        breakEvenRevenueEgp: roundMoney(worstAccountingCost, digits),
       },
     },
   };

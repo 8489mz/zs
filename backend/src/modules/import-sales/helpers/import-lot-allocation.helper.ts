@@ -1,6 +1,8 @@
 import { Kysely, Transaction, sql } from 'kysely';
 import { randomUUID } from 'crypto';
 import { Database } from '../../../database/database.types';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
 /**
  * IMPORT LOT ALLOCATION & PROVENANCE ENGINE
@@ -85,6 +87,8 @@ export function calculateImportSaleCost(params: {
   allocatedQty: number;
   allocCostEgp: number;
   fallbackUnitCostEgp: number;
+  /** Book digits for the EGP total; defaults to EGP's (2). */
+  moneyDigits?: MoneyDigits;
 }): { shortfallQty: number; shortfallCostEgp: number; totalCostEgp: number; unitCostEgp: number } {
   const qty = Number(params.qty);
   const allocatedQty = Number(params.allocatedQty);
@@ -97,7 +101,7 @@ export function calculateImportSaleCost(params: {
   if (!Number.isFinite(fallbackUnitCostEgp) || fallbackUnitCostEgp < 0) throw new Error('Import sale fallback unit cost must be finite and non-negative.');
   const shortfallQty = Number(Math.max(0, qty - allocatedQty).toFixed(4));
   const shortfallCostEgp = shortfallQty * fallbackUnitCostEgp;
-  const totalCostEgp = Number((allocCostEgp + shortfallCostEgp).toFixed(2));
+  const totalCostEgp = roundMoney(allocCostEgp + shortfallCostEgp, params.moneyDigits ?? currencyMoneyDigits('EGP'));
   const unitCostEgp = qty > 0 ? Number((totalCostEgp / qty).toFixed(6)) : 0;
   return { shortfallQty, shortfallCostEgp, totalCostEgp, unitCostEgp };
 }
@@ -117,6 +121,7 @@ export async function allocateSaleFromImportLots(
     }>;
   }
 ): Promise<ImportLotAllocationResult> {
+  const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, params.tenantId));
   const coverage: ImportLotAllocationCoverage[] = [];
   for (const item of params.items) {
     const pId = Number(item.productId);
@@ -186,7 +191,7 @@ export async function allocateSaleFromImportLots(
 
       const unitSalePrice = Number(item.netUnitPrice);
       const unitCost = Number(lot.unit_landed_cost_egp);
-      const grossMargin = Number(((unitSalePrice - unitCost) * allocQty).toFixed(2));
+      const grossMargin = roundMoney((unitSalePrice - unitCost) * allocQty, moneyDigits);
 
       await trx
         .insertInto('import_sale_allocations')
@@ -230,6 +235,7 @@ export async function restoreImportLotsFromCancelledSale(
     saleId: number;
   }
 ): Promise<void> {
+  const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, params.tenantId));
   const allocations = await trx
     .selectFrom('import_sale_allocations')
     .selectAll()
@@ -264,7 +270,7 @@ export async function restoreImportLotsFromCancelledSale(
 
     const unitSalePrice = Number(alloc.unit_sale_price_egp);
     const unitCost = Number(alloc.unit_cost_egp);
-    const grossMarginReversed = Number(((unitSalePrice - unitCost) * qtyToRestore).toFixed(2));
+    const grossMarginReversed = roundMoney((unitSalePrice - unitCost) * qtyToRestore, moneyDigits);
 
     await trx
       .insertInto('import_sale_allocations')
@@ -298,6 +304,7 @@ export async function restoreImportLotsFromSalesReturn(
     returnQty: number;
   }
 ): Promise<void> {
+  const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, params.tenantId));
   let remainingReturnQty = Number(params.returnQty);
   if (!Number.isFinite(remainingReturnQty) || remainingReturnQty <= 0) return;
 
@@ -344,7 +351,7 @@ export async function restoreImportLotsFromSalesReturn(
 
     const unitSalePrice = Number(alloc.unit_sale_price_egp);
     const unitCost = Number(alloc.unit_cost_egp);
-    const grossMarginReversed = Number(((unitSalePrice - unitCost) * restoreAmount).toFixed(2));
+    const grossMarginReversed = roundMoney((unitSalePrice - unitCost) * restoreAmount, moneyDigits);
 
     await trx
       .insertInto('import_sale_allocations')
