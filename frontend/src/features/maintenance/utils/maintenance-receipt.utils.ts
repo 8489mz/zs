@@ -49,7 +49,6 @@ export function printMaintenanceReceipt(ticket: MaintenanceTicket, settings?: Ap
           الجهاز: <strong style="font-weight: 700;">${escapeHtml(ticket.deviceBrand ? `${ticket.deviceBrand} - ` : '')}${escapeHtml(ticket.deviceModel)}</strong>
         </div>
         ${ticket.serialNumber ? `<div style="font-size: 9.5px; font-family: monospace;" dir="ltr">${escapeHtml(profile.serialLabel)}: ${escapeHtml(ticket.serialNumber)}</div>` : ''}
-        ${ticket.passcode ? `<div style="color: #000;">${escapeHtml(profile.passcodeLabel)}: <span dir="ltr" style="font-weight: 700;">${escapeHtml(ticket.passcode)}</span></div>` : ''}
       </div>
 
       <div style="border: 1px solid #000; border-radius: 4px; padding: 5px 6px; margin-bottom: 6px; font-size: 10px; color: #000; box-sizing: border-box;">
@@ -128,7 +127,6 @@ export function printMaintenanceDeviceSticker(ticket: MaintenanceTicket, setting
       <div class="sticker-body">
         <div class="sticker-row"><b>العميل:</b> ${escapeHtml(ticket.customerName)} (${escapeHtml(ticket.customerPhone)})</div>
         <div class="sticker-row"><b>الجهاز:</b> ${escapeHtml(ticket.deviceBrand ? `${ticket.deviceBrand} - ` : '')}${escapeHtml(ticket.deviceModel)}</div>
-        ${ticket.passcode ? `<div class="sticker-row"><b>الرمز:</b> <span dir="ltr">${escapeHtml(ticket.passcode)}</span></div>` : ''}
         <div class="sticker-row"><b>العطل:</b> ${escapeHtml(ticket.problemDescription)}</div>
       </div>
       <div class="sticker-footer">تاريخ الاستلام: ${escapeHtml(dateFormatted)}</div>
@@ -254,7 +252,6 @@ export async function exportMaintenanceReceiptPdf(ticket: MaintenanceTicket, set
           الجهاز: ${escapeHtml(ticket.deviceBrand ? `${ticket.deviceBrand} - ` : '')}${escapeHtml(ticket.deviceModel)}
         </div>
         ${ticket.serialNumber ? `<div style="font-size: 11px; color: #64748b; font-family: monospace;" dir="ltr">${escapeHtml(profile.serialLabel)}: ${escapeHtml(ticket.serialNumber)}</div>` : ''}
-        ${ticket.passcode ? `<div style="font-weight: 800; color: #2563eb; margin-top: 2px;">${escapeHtml(profile.passcodeLabel)}: <span dir="ltr">${escapeHtml(ticket.passcode)}</span></div>` : ''}
       </div>
 
       <div style="margin-bottom: 14px;">

@@ -239,7 +239,6 @@ export function MaintenanceReceiptModal({ open, ticket, settings, onClose }: Mai
                   {t('maintenance.maintenance_receipt_modal.s15', "الجهاز:")} <strong>{ticket.deviceBrand ? `${ticket.deviceBrand} - ` : ''}{ticket.deviceModel}</strong>
                 </div>
                 {ticket.serialNumber && <div style={{ gridColumn: 'span 2' }}>{profile.serialLabel}: <strong dir="ltr">{ticket.serialNumber}</strong></div>}
-                {ticket.passcode && <div style={{ gridColumn: 'span 2' }}>{profile.passcodeLabel}: <strong dir="ltr" style={{ color: '#2563eb' }}>{ticket.passcode}</strong></div>}
               </div>
             </div>
 
@@ -355,7 +354,6 @@ export function MaintenanceReceiptModal({ open, ticket, settings, onClose }: Mai
               <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px', padding: '6px 8px', textAlign: 'right', fontSize: '0.72rem', lineHeight: 1.4 }}>
                 <div>{t('maintenance.maintenance_receipt_modal.s38', "العميل:")} <strong>{ticket.customerName}</strong> ({ticket.customerPhone})</div>
                 <div>{t('maintenance.maintenance_receipt_modal.s39', "الجهاز:")} <strong>{ticket.deviceBrand ? `${ticket.deviceBrand} - ` : ''}{ticket.deviceModel}</strong></div>
-                {ticket.passcode && <div>{profile.passcodeLabel}: <strong dir="ltr" style={{ color: '#2563eb' }}>{ticket.passcode}</strong></div>}
                 <div style={{ color: '#dc2626', fontWeight: 700 }}>{t('maintenance.maintenance_receipt_modal.s40', "العطل:")} {ticket.problemDescription}</div>
               </div>
 
