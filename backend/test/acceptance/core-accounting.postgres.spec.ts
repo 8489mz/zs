@@ -186,6 +186,152 @@ async function main() {
     await reconciliation(mf);
     pass('maintenance cash advance liability / WAC spare part issue and return / exact service settlement / retry / GL');
 
+    // M1-P1: intake rejects an advance larger than the ticket total with a
+    // specific code, so the ticket can never be bricked at delivery. The
+    // total is the final cost when set, otherwise the estimate; an advance
+    // with no estimate at all (total 0) rejects the same way.
+    await assert.rejects(maintenance.createTicket({
+      customerName: 'Over-advanced repair', customerPhone: '01000000001',
+      deviceModel: 'Test device', problemDescription: 'Repair',
+      expectedCost: 300, finalCost: 300, advancePayment: 500,
+      branchId: mf.branchId, locationId: mf.locationId,
+    } as any, mf.auth), (e: any) => e.code === 'MAINTENANCE_ADVANCE_EXCEEDS_ESTIMATE');
+    await assert.rejects(maintenance.createTicket({
+      customerName: 'No-estimate repair', customerPhone: '01000000002',
+      deviceModel: 'Test device', problemDescription: 'Repair',
+      expectedCost: 0, finalCost: 0, advancePayment: 10,
+      branchId: mf.branchId, locationId: mf.locationId,
+    } as any, mf.auth), (e: any) => e.code === 'MAINTENANCE_ADVANCE_EXCEEDS_ESTIMATE');
+    pass('maintenance intake rejects advance above estimate with a specific code');
+
+    // M1-P1: delivery with no collectedAmount derives the remainder
+    // (finalCost - advance) and posts revenue equal to the final agreed
+    // amount; the estimate is reference only and never posted.
+    const df = await fixture('maintderiv');
+    const derivedTicket = await maintenance.createTicket({
+      customerName: 'Derived remainder', customerPhone: '01000000003',
+      deviceModel: 'Test device', problemDescription: 'Repair',
+      expectedCost: 100, finalCost: 100, advancePayment: 20,
+      branchId: df.branchId, locationId: df.locationId,
+    } as any, df.auth);
+    await maintenance.updateTicketStatus(Number(derivedTicket.id), {
+      status: 'delivered', finalCost: 100,
+    }, df.auth);
+    assert.equal(await postingAmount(df, '1110'), 100, 'advance 20 plus derived remainder 80');
+    assert.equal(await postingAmount(df, '2150'), 0);
+    assert.equal(await postingAmount(df, '4200'), -100, 'recorded revenue is the final agreed amount');
+    await reconciliation(df);
+    pass('maintenance delivery derives omitted collection and posts final cost as revenue');
+
+    // M1-P1: delivery with a final cost below the advance already collected
+    // rejects with its own specific code, not the generic settlement code,
+    // and rolls the ticket back to received with cash untouched.
+    const bf = await fixture('maintbelow');
+    const belowTicket = await maintenance.createTicket({
+      customerName: 'Below-advance repair', customerPhone: '01000000004',
+      deviceModel: 'Test device', problemDescription: 'Repair',
+      expectedCost: 100, finalCost: 100, advancePayment: 40,
+      branchId: bf.branchId, locationId: bf.locationId,
+    } as any, bf.auth);
+    await assert.rejects(maintenance.updateTicketStatus(Number(belowTicket.id), {
+      status: 'delivered', finalCost: 30,
+    }, bf.auth), (e: any) => e.code === 'MAINTENANCE_FINAL_BELOW_ADVANCE');
+    assert.equal(await postingAmount(bf, '1110'), 40, 'failed delivery must not collect or reverse cash');
+    assert.equal(await postingAmount(bf, '4200'), 0);
+    assert.equal((await db.selectFrom('maintenance_tickets').select('status')
+      .where('tenant_id', '=', bf.auth.tenantId!).where('id', '=', Number(belowTicket.id)).executeTakeFirstOrThrow()).status, 'received');
+    await reconciliation(bf);
+    pass('maintenance delivery below advance rejects with a specific code and rolls back');
+
+    // M1-P1: a non-cash delivery routes the remainder to the bank account
+    // (1120), not cash (1110); only the cash advance ever touches 1110.
+    const nf = await fixture('maintcard');
+    const cardTicket = await maintenance.createTicket({
+      customerName: 'Card repair', customerPhone: '01000000005',
+      deviceModel: 'Test device', problemDescription: 'Repair',
+      expectedCost: 100, finalCost: 100, advancePayment: 20,
+      branchId: nf.branchId, locationId: nf.locationId,
+    } as any, nf.auth);
+    await maintenance.updateTicketStatus(Number(cardTicket.id), {
+      status: 'delivered', finalCost: 100, collectedAmount: 80, paymentMethod: 'card',
+    }, nf.auth);
+    assert.equal(await postingAmount(nf, '1110'), 20, 'only the cash advance touches 1110');
+    assert.equal(await postingAmount(nf, '1120'), 80, 'card remainder posts to bank, not cash');
+    assert.equal(await postingAmount(nf, '2150'), 0);
+    assert.equal(await postingAmount(nf, '4200'), -100);
+    const cardTxns = await db.selectFrom('treasury_transactions').select(['amount', 'payment_channel'])
+      .where('tenant_id', '=', nf.auth.tenantId!).where('reference_type', '=', 'maintenance_ticket')
+      .where('reference_id', '=', Number(cardTicket.id)).execute();
+    assert.equal(cardTxns.filter((row) => Number(row.amount) === 80).length, 1);
+    assert.equal(cardTxns.find((row) => Number(row.amount) === 80)?.payment_channel, 'card');
+    await reconciliation(nf);
+    pass('maintenance non-cash delivery posts the remainder to bank 1120, not cash 1110');
+
+    // M1-P1: addPart seeds the ticket total from the part ONLY when both
+    // costs are still 0; with an estimate present the total never moves.
+    // A second part on a seeded ticket does not re-seed either.
+    const zf = await fixture('maintzero');
+    await purchase(zf, 8, 3);
+    const zeroTicket = await maintenance.createTicket({
+      customerName: 'Zero-estimate repair', customerPhone: '01000000006',
+      deviceModel: 'Test device', problemDescription: 'Repair',
+      expectedCost: 0, finalCost: 0, advancePayment: 0,
+      branchId: zf.branchId, locationId: zf.locationId,
+    } as any, zf.auth);
+    const seeded = await maintenance.addPart(Number(zeroTicket.id), {
+      productId: zf.productId, productName: 'Part', qty: 1,
+      unitPrice: 15, locationId: zf.locationId,
+    }, zf.auth);
+    assert.equal(seeded.newFinalCost, 15, 'first part seeds the total when both costs are 0');
+    assert.equal(Number((await db.selectFrom('maintenance_tickets').select('final_cost')
+      .where('tenant_id', '=', zf.auth.tenantId!).where('id', '=', Number(zeroTicket.id)).executeTakeFirstOrThrow()).final_cost), 15);
+    const reseeded = await maintenance.addPart(Number(zeroTicket.id), {
+      productId: zf.productId, productName: 'Part', qty: 1,
+      unitPrice: 15, locationId: zf.locationId,
+    }, zf.auth);
+    assert.equal(reseeded.newFinalCost, 15, 'a seeded total is not re-seeded by a second part');
+    const sf = await fixture('maintseed');
+    await purchase(sf, 8, 3);
+    const estimatedTicket = await maintenance.createTicket({
+      customerName: 'Estimated repair', customerPhone: '01000000007',
+      deviceModel: 'Test device', problemDescription: 'Repair',
+      expectedCost: 100, finalCost: 100, advancePayment: 0,
+      branchId: sf.branchId, locationId: sf.locationId,
+    } as any, sf.auth);
+    const unseeded = await maintenance.addPart(Number(estimatedTicket.id), {
+      productId: sf.productId, productName: 'Part', qty: 1,
+      unitPrice: 15, locationId: sf.locationId,
+    }, sf.auth);
+    assert.equal(unseeded.newFinalCost, 100, 'parts never move the total once an estimate exists');
+    assert.equal(Number((await db.selectFrom('maintenance_tickets').select('final_cost')
+      .where('tenant_id', '=', sf.auth.tenantId!).where('id', '=', Number(estimatedTicket.id)).executeTakeFirstOrThrow()).final_cost), 100);
+    await reconciliation(zf);
+    await reconciliation(sf);
+    pass('maintenance addPart seeds the total only when both costs are zero');
+
+    // M1-P1: no hard block when issued parts cost more than the final
+    // agreed amount — warranty jobs legitimately carry parts with little
+    // or no revenue, so delivery still settles at the agreed amount.
+    const wf = await fixture('maintwarr');
+    await purchase(wf, 20, 2);
+    const warrantyTicket = await maintenance.createTicket({
+      customerName: 'Warranty repair', customerPhone: '01000000008',
+      deviceModel: 'Test device', problemDescription: 'Warranty repair',
+      expectedCost: 10, finalCost: 10, advancePayment: 0,
+      branchId: wf.branchId, locationId: wf.locationId,
+    } as any, wf.auth);
+    await maintenance.addPart(Number(warrantyTicket.id), {
+      productId: wf.productId, productName: 'Part', qty: 1,
+      unitPrice: 5, locationId: wf.locationId,
+    }, wf.auth);
+    await maintenance.updateTicketStatus(Number(warrantyTicket.id), {
+      status: 'delivered', finalCost: 10, collectedAmount: 10,
+    }, wf.auth);
+    assert.equal(await postingAmount(wf, '4200'), -10, 'revenue stays the final agreed amount');
+    assert.equal(await postingAmount(wf, '5100'), 20, 'parts cost posts even above revenue');
+    await reconciliation(wf);
+    pass('maintenance delivery settles when parts cost exceeds the final amount');
+
     // The cancellation/refund command may ONLY release a real, unreversed
     // cash advance. A second request cannot refund twice or reopen the ticket.
     const refundFixture = await fixture('maintref');

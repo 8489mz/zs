@@ -193,6 +193,18 @@ export class MaintenanceService {
         Number(payload.finalCost ?? payload.expectedCost ?? 0) < 0 || payload.status === 'delivered') {
       throw new AppError('Invalid maintenance payment or initial state', 'MAINTENANCE_FINANCIAL_STATE_INVALID', 422);
     }
+    // An advance larger than the ticket total can never settle at delivery
+    // (delivery requires finalCost >= advance), so intake rejects it now
+    // instead of bricking the ticket. The total is the final cost when set,
+    // otherwise the estimate; an advance with no estimate at all also rejects.
+    const ticketTotal = Number(payload.finalCost ?? payload.expectedCost ?? 0);
+    if (advance > ticketTotal) {
+      throw new AppError(
+        `Maintenance advance ${advance} exceeds ticket total ${ticketTotal}; the advance cannot be larger than the ticket total`,
+        'MAINTENANCE_ADVANCE_EXCEEDS_ESTIMATE',
+        422,
+      );
+    }
     const advanceDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     try {
       toMinorUnits(advance, advanceDigits);
@@ -473,8 +485,20 @@ export class MaintenanceService {
         const remaining = payload.collectedAmount !== undefined
           ? Number(payload.collectedAmount)
           : Math.max(0, finalCost - advance);
+        // A final agreed amount below the advance already collected is a
+        // distinct, specific failure: the ticket can never settle, and the
+        // operator must fix the amount (or refund) instead of seeing the
+        // generic exact-settlement message. Checked before the generic
+        // settlement check below so the specific code always wins.
+        if (finalCost < advance) {
+          throw new AppError(
+            `Maintenance final cost ${finalCost} is below the advance already collected ${advance}; the final agreed amount cannot be less than the advance`,
+            'MAINTENANCE_FINAL_BELOW_ADVANCE',
+            422,
+          );
+        }
         if (!Number.isFinite(finalCost) || !Number.isFinite(advance) ||
-            !Number.isFinite(remaining) || finalCost < advance || finalCost < 0 ||
+            !Number.isFinite(remaining) || finalCost < 0 ||
             remaining < 0 || !this.isExactMaintenanceSettlement(remaining, advance, finalCost, currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId)))) {
           throw new AppError('Maintenance delivery must settle its full balance; refund/credit requires a separate flow',
             'MAINTENANCE_SETTLEMENT_MISMATCH', 422);
