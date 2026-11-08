@@ -12,6 +12,7 @@ import {
 } from '../contracting.types';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 interface ProjectHandoverModalProps {
   open: boolean;
@@ -27,7 +28,7 @@ export function ProjectHandoverModal({
   onRefreshProject,
 }: ProjectHandoverModalProps) {
   const { t: __t } = useTranslation();
-  const { currencySymbol } = useSystemCurrency();
+  const { currencySymbol, currencyCode } = useSystemCurrency();
   const [handovers, setHandovers] = useState<ContractingProjectHandover[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'protocols' | 'create'>('protocols');
@@ -71,9 +72,12 @@ export function ProjectHandoverModal({
     }
   }, [open, loadHandovers]);
 
-  // Calculate release amount
+  // Calculate release amount — INV-FE3-FRONTEND-BOOK-DIGITS: the release
+  // is money posted on the handover; the old Math.round rounded it to
+  // whole units (a 1,000.500 release posted as 1,001). It now rounds at
+  // the tenant's book digits.
   const totalHeld = Number(project.retentionTotalHeld || 0);
-  const calculatedReleaseAmount = Math.round((totalHeld * (Number(retentionReleasePercent) || 0)) / 100);
+  const calculatedReleaseAmount = roundMoneyValue((totalHeld * (Number(retentionReleasePercent) || 0)) / 100, currencyMoneyDigits(currencyCode));
 
   const handleCreateHandover = async (e: React.FormEvent) => {
     e.preventDefault();

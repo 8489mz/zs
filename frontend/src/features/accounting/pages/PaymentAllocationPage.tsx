@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { PageHeader } from '@/shared/components/page-header';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { formatCurrency } from '@/lib/format';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { customersApi } from '@/shared/api/customers.api';
 import { suppliersApi } from '@/shared/api/suppliers.api';
 import {
@@ -97,7 +99,9 @@ export const PaymentAllocationPage: React.FC = () => {
   const selectedPayment = unallocatedPayments.find((p) => p.id === selectedPaymentId) || null;
   const availableToAllocate = selectedPayment ? selectedPayment.unallocatedAmount : 0;
   const totalAllocating = Object.values(allocationInputs).reduce((sum, val) => sum + (Number(val) || 0), 0);
-  const remainingPaymentBalance = Number((availableToAllocate - totalAllocating).toFixed(2));
+  // INV-FE3-FRONTEND-BOOK-DIGITS: the remaining balance gates the
+  // allocation, so it rounds at the tenant's book digits, not 2dp.
+  const remainingPaymentBalance = roundMoneyValue(availableToAllocate - totalAllocating, currencyMoneyDigits(getGlobalSystemCurrency()));
 
   const handleAmountChange = (invoiceId: number, maxRemaining: number, valStr: string) => {
     const val = parseFloat(valStr) || 0;

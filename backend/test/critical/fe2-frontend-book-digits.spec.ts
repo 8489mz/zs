@@ -87,18 +87,21 @@ assert.equal(roundMoneyValue(100.125, 2), 100.13);
 assert.equal(roundMoneyValue(42.875, 3), 42.875);
 assert.equal(roundMoneyValue(42.875, 2), 42.88);
 
-// 3. The cart-pricing factor bug, pinned at runtime: the OLD
-// `isThreeDecimalCurrency` (still in lib/currencies.ts — FE3 owns
-// that fix) returns false for JOD/TND/IQD/LYD, so the old factor
-// rounded those stores at 2dp. The helper FE2 routes through
-// returns 3 for all four. Any cart line priced through the old
-// factor on a JOD tenant lost the third decimal.
+// 3. The cart-pricing factor bug, pinned at runtime: BEFORE FE3,
+// `isThreeDecimalCurrency` (lib/currencies.ts) returned false for
+// JOD/TND/IQD/LYD, so the old factor rounded those stores at 2dp
+// and any cart line priced through it on a JOD tenant lost the
+// third decimal. FE3 fixed it (getCurrencyDecimals now knows the
+// full 3dp set, and isThreeDecimalCurrency is getCurrencyDecimals
+// === 3) — so this section now asserts the FIXED behaviour and
+// agrees with FE3's spec §1: reverting currencies.ts to the old
+// KWD/BHD/OMR-only set fails here AND in FE3.
 for (const code of ['JOD', 'TND', 'IQD', 'LYD']) {
-  assert.equal(isThreeDecimalCurrency(code), false, `old helper still misses ${code} (FE3 owns it)`);
+  assert.equal(isThreeDecimalCurrency(code), true, `fixed helper must give ${code} 3dp (FE3)`);
   assert.equal(currencyMoneyDigits(code), 3, `canonical helper must give ${code} 3dp`);
 }
 for (const code of ['KWD', 'BHD', 'OMR']) {
-  assert.equal(isThreeDecimalCurrency(code), true, `old helper knew ${code}`);
+  assert.equal(isThreeDecimalCurrency(code), true, `helper knew ${code} and still does`);
 }
 
 // 4. Real call-site shapes — purchases. The old code used

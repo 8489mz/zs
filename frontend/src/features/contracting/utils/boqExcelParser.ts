@@ -17,6 +17,8 @@
 
 import * as XLSX from 'xlsx';
 import { matchEngineeringConstant } from './engineeringMasterPricingCore';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 export interface RawSheetInfo {
   name: string;
@@ -918,7 +920,9 @@ export function extractBoqRows(
         if (matched?.directCost && matched.directCost > 0) {
           finalEstimatedCost = matched.directCost;
         } else {
-          finalEstimatedCost = Math.round((finalUnitPrice / 1.30) * 100) / 100;
+          // INV-FE3-FRONTEND-BOOK-DIGITS: the baseline direct cost is a
+          // unit price (money); it rounds at the tenant's book digits.
+          finalEstimatedCost = roundMoneyValue(finalUnitPrice / 1.30, currencyMoneyDigits(getGlobalSystemCurrency()));
         }
       }
 

@@ -5,6 +5,7 @@ import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { contractingApi } from '../api/contracting.api';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
 import { ImportBoqModal } from './LazyImportBoqModal';
 import { ImportMasterBoqModal } from './ImportMasterBoqModal';
@@ -184,7 +185,12 @@ export function TenderEstimatorModal({
   onProjectCreated,
 }: TenderEstimatorModalProps) {
   const { t } = useTranslation();
-  const { formatCurrency } = useSystemCurrency();
+  const { formatCurrency, currencyCode } = useSystemCurrency();
+  // INV-FE3-FRONTEND-BOOK-DIGITS: every money rate/total in this
+  // estimator rounds at the tenant's book digits, not hardcoded 2dp.
+  // (Quantities — totalQtyForTender, sand/cement per m² — are not money
+  // and keep their own precision.)
+  const bookDigits = currencyMoneyDigits(currencyCode);
 
   // Basic Tender Information
   const [projectName, setProjectName] = useState('عطاء: مشروع إنشاء وتشطيب متكامل');
@@ -450,7 +456,7 @@ export function TenderEstimatorModal({
         ...c,
         unitDirectCost: compCost,
         totalQtyForTender: Math.round(totalComponentQty * 100) / 100,
-        totalCostForTender: Math.round(totalComponentCost * 100) / 100,
+        totalCostForTender: roundMoneyValue(totalComponentCost, bookDigits),
       };
     });
 
@@ -467,15 +473,15 @@ export function TenderEstimatorModal({
     const totalProfit = totalSellingPrice - totalTenderCost;
 
     return {
-      directCostPerUnit: Math.round(directCostPerUnit * 100) / 100,
-      costWithWaste: Math.round(costWithWaste * 100) / 100,
-      totalCostPerUnit: Math.round(totalCostPerUnit * 100) / 100,
-      profitAmountPerUnit: Math.round(profitAmountPerUnit * 100) / 100,
-      sellingPricePerUnit: Math.round(sellingPricePerUnit * 100) / 100,
-      totalDirectCost: Math.round(totalDirectCost * 100) / 100,
-      totalTenderCost: Math.round(totalTenderCost * 100) / 100,
-      totalSellingPrice: Math.round(totalSellingPrice * 100) / 100,
-      totalProfit: Math.round(totalProfit * 100) / 100,
+      directCostPerUnit: roundMoneyValue(directCostPerUnit, bookDigits),
+      costWithWaste: roundMoneyValue(costWithWaste, bookDigits),
+      totalCostPerUnit: roundMoneyValue(totalCostPerUnit, bookDigits),
+      profitAmountPerUnit: roundMoneyValue(profitAmountPerUnit, bookDigits),
+      sellingPricePerUnit: roundMoneyValue(sellingPricePerUnit, bookDigits),
+      totalDirectCost: roundMoneyValue(totalDirectCost, bookDigits),
+      totalTenderCost: roundMoneyValue(totalTenderCost, bookDigits),
+      totalSellingPrice: roundMoneyValue(totalSellingPrice, bookDigits),
+      totalProfit: roundMoneyValue(totalProfit, bookDigits),
       componentsDetail,
     };
   };
@@ -1321,7 +1327,7 @@ export function TenderEstimatorModal({
               const estimatedQty = r.contractQty > 0 ? r.contractQty : 1;
               const unitCost = r.estimatedUnitCost > 0
                 ? r.estimatedUnitCost
-                : (r.unitPrice > 0 ? Math.round((r.unitPrice / (1 + (globalProfitMargin + globalOverhead + globalWaste) / 100)) * 100) / 100 : 0);
+                : (r.unitPrice > 0 ? roundMoneyValue(r.unitPrice / (1 + (globalProfitMargin + globalOverhead + globalWaste) / 100), bookDigits) : 0);
 
               return {
                 id: `TND-${Math.random().toString(36).slice(2, 9)}`,
@@ -1336,7 +1342,7 @@ export function TenderEstimatorModal({
                     componentName: `خامات ومواد: ${r.description.slice(0, 35)}`,
                     unit,
                     qtyPerUnit: 1,
-                    unitRate: Math.round(unitCost * 0.7 * 100) / 100,
+                    unitRate: roundMoneyValue(unitCost * 0.7, bookDigits),
                     componentType: 'material',
                   },
                   {
@@ -1344,7 +1350,7 @@ export function TenderEstimatorModal({
                     componentName: `مصنعية وتنفيذ: ${r.description.slice(0, 35)}`,
                     unit,
                     qtyPerUnit: 1,
-                    unitRate: Math.round(unitCost * 0.3 * 100) / 100,
+                    unitRate: roundMoneyValue(unitCost * 0.3, bookDigits),
                     componentType: 'labor',
                   },
                 ],

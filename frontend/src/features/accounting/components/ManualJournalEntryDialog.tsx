@@ -6,6 +6,8 @@ import { Button } from '@/shared/ui/button';
 import { Field } from '@/shared/ui/field';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { formatCurrency } from '@/lib/format';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { accountingApi, type AccountingAccount } from '../api/accounting.api';
 import { costCentersApi, type CostCenterRecord } from '../api/cost-centers.api';
 import { PlusIcon, Trash2Icon, FileTextIcon, CalculatorIcon, ScaleIcon } from '@/shared/components/icons/AppIcons';
@@ -38,7 +40,9 @@ function parseMoney(value: string): number {
   if (!normalized) return 0;
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed < 0) return 0;
-  return Number(parsed.toFixed(2));
+  // INV-FE3-FRONTEND-BOOK-DIGITS: journal lines post to the ledger, so
+  // they round at the tenant's book digits, not hardcoded 2dp.
+  return roundMoneyValue(parsed, currencyMoneyDigits(getGlobalSystemCurrency()));
 }
 
 function createEmptyRow(): JournalLineRow {
@@ -105,15 +109,19 @@ export function ManualJournalEntryDialog({ open, onClose, onSuccess }: ManualJou
   }, [costCenters]);
 
   const totals = useMemo(() => {
+    // INV-FE3-FRONTEND-BOOK-DIGITS: the balance check must use the same
+    // book digits as the posted lines, or a 3-decimal tenant's balanced
+    // entry reads as a difference.
+    const bookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
     let debit = 0;
     let credit = 0;
     for (const line of lines) {
       debit += parseMoney(line.debit);
       credit += parseMoney(line.credit);
     }
-    debit = Number(debit.toFixed(2));
-    credit = Number(credit.toFixed(2));
-    const difference = Number(Math.abs(debit - credit).toFixed(2));
+    debit = roundMoneyValue(debit, bookDigits);
+    credit = roundMoneyValue(credit, bookDigits);
+    const difference = roundMoneyValue(Math.abs(debit - credit), bookDigits);
     const balanced = debit > 0 && credit > 0 && difference <= 0.0001;
     return { debit, credit, difference, balanced };
   }, [lines]);

@@ -1,3 +1,31 @@
+/**
+ * Returns the number of decimal fraction digits for a given currency code.
+ * KWD, OMR, BHD, JOD, TND, IQD and LYD use 3 decimals, everything else 2.
+ * The old inline list only knew KWD/BHD/OMR, so JOD/TND/IQD/LYD tenants
+ * formatted (and, through `useSystemCurrency`, rounded) at 2dp.
+ *
+ * NOTE: this set intentionally mirrors the canonical lists in
+ * `shared/utils/money.ts` (`currencyMoneyDigits`) and the backend
+ * `money-minor-units.engine.ts` instead of importing the helper — this
+ * module is imported by the FE3 plain-Node proof spec, and neither the
+ * `@/` alias nor a `.ts` extension survives both plain-Node ESM
+ * resolution and the frontend typecheck (`allowImportingTsExtensions:
+ * false`). The three lists must agree; the FE3 spec
+ * (`backend/test/critical/fe3-frontend-book-digits.spec.ts`) asserts
+ * `getCurrencyDecimals(code) === currencyMoneyDigits(code)` for every
+ * code in the set, so a drift fails the spec. Display formatting must
+ * never throw, so a malformed code falls back to 2 instead of the
+ * helper's fail-closed throw; missing/empty codes already mean 2
+ * (tenant settings still loading — 'EGP' default).
+ */
+const threeDecimalCurrencies = new Set(['KWD', 'OMR', 'BHD', 'JOD', 'TND', 'IQD', 'LYD']);
+
+export function getCurrencyDecimals(currencyCode?: string | null): number {
+  const code = currencyCode || getGlobalSystemCurrency();
+  const upper = String(code).trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(upper)) return 2;
+  return threeDecimalCurrencies.has(upper) ? 3 : 2;
+}
 /** Supported currencies across the system. Single source of truth used by Settings and Purchase Order pages. */
 export const SUPPORTED_CURRENCIES = [
   { code: 'SAR', label: 'SAR - ريال سعودي', symbol: 'ر.س', decimals: 2 },
@@ -70,19 +98,6 @@ export function getCurrencySymbol(currencyCode?: string | null): string {
  */
 export function getGlobalCurrencySymbol(): string {
   return getCurrencySymbol(getGlobalSystemCurrency());
-}
-
-/**
- * Returns the number of decimal fraction digits for a given currency code.
- * Currencies like KWD, BHD, and OMR use 3 decimals (1000 fils/baisa = 1 unit).
- */
-export function getCurrencyDecimals(currencyCode?: string | null): number {
-  const code = currencyCode || getGlobalSystemCurrency();
-  const upper = String(code).trim().toUpperCase();
-  if (upper === 'KWD' || upper === 'BHD' || upper === 'OMR') {
-    return 3;
-  }
-  return 2;
 }
 
 export function isThreeDecimalCurrency(currencyCode?: string | null): boolean {

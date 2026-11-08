@@ -5,6 +5,8 @@ import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { downloadExcelFile } from '@/lib/browser';
 import { getTextDirection } from '@/lib/arabic-normalization';
 import { contractingApi } from '../api/contracting.api';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import {
   parseBoqWorkbook,
   reExtractBoqWithCustomMapping,
@@ -63,6 +65,10 @@ export function ImportBoqModal({
 }: ImportBoqModalProps) {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // INV-FE3-FRONTEND-BOOK-DIGITS: row totals are money; they round at the
+  // tenant's book digits, not hardcoded 2dp. (Row prices/quantities keep
+  // their 4dp parse precision — they are unit prices, not money totals.)
+  const bookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
   const [importMode, setImportMode] = useState<'append' | 'replace'>('append');
   const [fileName, setFileName] = useState<string>('');
   const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null);
@@ -280,7 +286,7 @@ export function ImportBoqModal({
         if (r.index !== rowIndex) return r;
         const raw = isNaN(newPrice) ? 0 : Math.max(0, newPrice);
         const updatedPrice = Math.round((raw + Number.EPSILON) * 10000) / 10000;
-        const updatedTotal = Math.round((r.contractQty * updatedPrice + Number.EPSILON) * 100) / 100;
+        const updatedTotal = roundMoneyValue(r.contractQty * updatedPrice, bookDigits);
         let newStatus = r.status;
         let warning = r.warningMessage;
         let valid = r.isValid;
@@ -318,7 +324,7 @@ export function ImportBoqModal({
         if (r.index !== rowIndex) return r;
         const raw = isNaN(newQty) ? 0 : Math.max(0, newQty);
         const updatedQty = Math.round((raw + Number.EPSILON) * 10000) / 10000;
-        const updatedTotal = Math.round((updatedQty * r.unitPrice + Number.EPSILON) * 100) / 100;
+        const updatedTotal = roundMoneyValue(updatedQty * r.unitPrice, bookDigits);
         let newStatus = r.status;
         let warning = r.warningMessage;
 

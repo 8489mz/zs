@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { XIcon } from '@/shared/components/icons/AppIcons';
-import { getGlobalCurrencySymbol } from '@/lib/currencies';
+import { getGlobalCurrencySymbol, getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/shared/components/page-header';
@@ -91,8 +92,10 @@ export function HrAssetsPage() {
       if (needsReview(row)) result.needsReview += 1;
       if (isCashCustody(row)) {
         const amount = cashAmount(row);
-        result.cashTotalAmount = Number((result.cashTotalAmount + amount).toFixed(2));
-        if (status === 'assigned') result.cashOpenAmount = Number((result.cashOpenAmount + amount).toFixed(2));
+        // INV-FE3-FRONTEND-BOOK-DIGITS: cash totals are money; the
+        // running sum rounds at the tenant's book digits, not 2dp.
+        result.cashTotalAmount = roundMoneyValue(result.cashTotalAmount + amount, currencyMoneyDigits(getGlobalSystemCurrency()));
+        if (status === 'assigned') result.cashOpenAmount = roundMoneyValue(result.cashOpenAmount + amount, currencyMoneyDigits(getGlobalSystemCurrency()));
       }
     }
     return result;
@@ -147,12 +150,16 @@ export function HrAssetsPage() {
     const spent = parseAmount(settlementDraft.spentAmount);
     const returned = parseAmount(settlementDraft.returnedAmount);
     if (!(spent > 0) && !(returned > 0)) { setSettlementError('اكتب المصروف أو المرتجع على الأقل.'); return; }
-    const difference = Number((amount - spent - returned).toFixed(2));
-    const notes = [`مصروف: ${spent.toFixed(2)}`, `مرتجع: ${returned.toFixed(2)}`, `فرق: ${difference.toFixed(2)}`, text(settlementDraft.notes)].filter(Boolean).join(' | ');
+    // INV-FE3-FRONTEND-BOOK-DIGITS: the settlement difference is money
+    // at book digits; the note strings record the same rounded values,
+    // and any nonzero difference is a real fils-level difference.
+    const bookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
+    const difference = roundMoneyValue(amount - spent - returned, bookDigits);
+    const notes = [`مصروف: ${spent.toFixed(bookDigits)}`, `مرتجع: ${returned.toFixed(bookDigits)}`, `فرق: ${difference.toFixed(bookDigits)}`, text(settlementDraft.notes)].filter(Boolean).join(' | ');
     await mutations.returnEmployeeAsset.mutateAsync({ id: String(selectedSettlementRow.id), payload: { returnedAt: todayDate(), notes: selectedSettlementRow.notes || undefined, returnNotes: notes } });
     setSettlementId('');
     setSettlementDraft({ spentAmount: '', returnedAmount: '', notes: '' });
-    setStatusFilter(Math.abs(difference) > 0.009 ? 'needs_review' : 'returned');
+    setStatusFilter(Math.abs(difference) > 0 ? 'needs_review' : 'returned');
   };
 
   const setFilter = (filter: ReviewStatusFilter) => { setStatusFilter(filter); setPage(1); };

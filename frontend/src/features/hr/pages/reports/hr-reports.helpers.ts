@@ -1,5 +1,6 @@
 import type { HrEmployee } from '@/types/domain';
-import { getGlobalCurrencySymbol } from '@/lib/currencies';
+import { getGlobalCurrencySymbol, getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits } from '@/shared/utils/money';
 
 export type ReportType = 'all' | 'employees' | 'attendance' | 'leaves' | 'loans' | 'payroll' | 'assets' | 'alerts';
 
@@ -16,8 +17,10 @@ export const reportTypeOptions: Array<{ value: ReportType; label: string }> = [
 
 export function money(value: unknown) {
   const amount = Number(value || 0);
+  // INV-FE3-FRONTEND-BOOK-DIGITS: this formats money in the tenant's
+  // currency, so it shows book digits (see employee-profile.helpers).
   if (!Number.isFinite(amount)) return 'غير متاح';
-  return `${amount.toFixed(2)} ${getGlobalCurrencySymbol()}`;
+  return `${amount.toFixed(currencyMoneyDigits(getGlobalSystemCurrency()))} ${getGlobalCurrencySymbol()}`;
 }
 
 export function countText(value: unknown) {

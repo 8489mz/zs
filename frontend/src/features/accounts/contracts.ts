@@ -1,3 +1,6 @@
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+
 export interface CustomerPaymentPayloadInput {
   customerId: string;
   amount: number;
@@ -21,8 +24,11 @@ export interface SupplierPaymentPayloadInput {
   instapayAddress?: string;
 }
 
+// INV-FE3-FRONTEND-BOOK-DIGITS: customer/supplier payment amounts post
+// to the ledger, so they round at the tenant's book digits (a KWD
+// tenant's 0.125 must survive), not hardcoded 2dp.
 function normalizeMoney(value: number) {
-  return Number(Number(value || 0).toFixed(2));
+  return roundMoneyValue(Number(value || 0), currencyMoneyDigits(getGlobalSystemCurrency()));
 }
 
 /* INV-INSTAPAY-FIELD-MISSING: keep the IPA only for an InstaPay

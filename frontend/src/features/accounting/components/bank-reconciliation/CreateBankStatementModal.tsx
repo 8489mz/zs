@@ -4,6 +4,8 @@ import { DialogShell } from '@/shared/components/dialog-shell';
 import { AppIcons, XIcon } from '@/shared/components/icons/AppIcons';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { toast } from '@/shared/components/system-alert';
 import {
   parseBankStatementFile,
@@ -64,6 +66,11 @@ export const CreateBankStatementModal: React.FC<CreateBankStatementModalProps> =
   }, [bankAccounts, newStmtAccountId]);
 
   const { currencySymbol } = useSystemCurrency(selectedAccount?.currency);
+  // INV-FE3-FRONTEND-BOOK-DIGITS: statement balances are money in the
+  // ACCOUNT's currency (a KWD bank account on an EGP tenant still books
+  // at 3dp), so they round at the account currency's digits, not
+  // hardcoded 2dp. The balances feed the statement the parent posts.
+  const bookDigits = currencyMoneyDigits(selectedAccount?.currency || getGlobalSystemCurrency());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Tabs: 'smart_import' | 'manual'
@@ -106,12 +113,12 @@ export const CreateBankStatementModal: React.FC<CreateBankStatementModalProps> =
       );
 
       if (res.detectedStartBal !== undefined && newStmtStartBal === 0) {
-        setNewStmtStartBal(Number(res.detectedStartBal.toFixed(2)));
+        setNewStmtStartBal(roundMoneyValue(res.detectedStartBal, bookDigits));
       }
       if (res.detectedEndBal !== undefined) {
-        setNewStmtEndBal(Number(res.detectedEndBal.toFixed(2)));
+        setNewStmtEndBal(roundMoneyValue(res.detectedEndBal, bookDigits));
       } else if (autoUpdateEndingBalance) {
-        setNewStmtEndBal(Number((newStmtStartBal + res.netChange).toFixed(2)));
+        setNewStmtEndBal(roundMoneyValue(newStmtStartBal + res.netChange, bookDigits));
       }
 
       toast.success(`تم استخراج ${res.parsedLines.length} حركة بنكية بنجاح من الملف [${file.name}]`);
@@ -138,7 +145,7 @@ export const CreateBankStatementModal: React.FC<CreateBankStatementModalProps> =
       }))
     );
     if (autoUpdateEndingBalance) {
-      setNewStmtEndBal(Number((newStmtStartBal + netChange).toFixed(2)));
+      setNewStmtEndBal(roundMoneyValue(newStmtStartBal + netChange, bookDigits));
     }
     toast.info('تم تحديث مطابقة الأعمدة واستخراج الحركات بنجاح');
   };
@@ -166,7 +173,7 @@ export const CreateBankStatementModal: React.FC<CreateBankStatementModalProps> =
     );
     const net = lines.reduce((sum, l) => sum + l.amount, 0);
     if (autoUpdateEndingBalance) {
-      setNewStmtEndBal(Number((newStmtStartBal + net).toFixed(2)));
+      setNewStmtEndBal(roundMoneyValue(newStmtStartBal + net, bookDigits));
     }
     toast.success(`تم استخراج ${lines.length} حركة من النص المنسوخ بنجاح`);
     setShowPasteBox(false);
@@ -191,7 +198,7 @@ export const CreateBankStatementModal: React.FC<CreateBankStatementModalProps> =
 
     const net = stagedLines.reduce((sum, l) => sum + l.amount, 0);
     if (autoUpdateEndingBalance) {
-      setNewStmtEndBal(Number((newStmtStartBal + net).toFixed(2)));
+      setNewStmtEndBal(roundMoneyValue(newStmtStartBal + net, bookDigits));
     }
 
     toast.success(`تم اعتماد ${stagedLines.length} حركة وإدراجها بكشف الحساب`);
@@ -203,7 +210,7 @@ export const CreateBankStatementModal: React.FC<CreateBankStatementModalProps> =
       const updated = prev.filter((_, i) => i !== idx);
       const net = updated.reduce((sum, l) => sum + l.amount, 0);
       if (autoUpdateEndingBalance) {
-        setNewStmtEndBal(Number((newStmtStartBal + net).toFixed(2)));
+        setNewStmtEndBal(roundMoneyValue(newStmtStartBal + net, bookDigits));
       }
       return updated;
     });
@@ -313,7 +320,7 @@ export const CreateBankStatementModal: React.FC<CreateBankStatementModalProps> =
                     const val = Number(e.target.value);
                     setNewStmtStartBal(val);
                     if (autoUpdateEndingBalance && stagedLines.length > 0) {
-                      setNewStmtEndBal(Number((val + netStaged).toFixed(2)));
+                      setNewStmtEndBal(roundMoneyValue(val + netStaged, bookDigits));
                     }
                   }}
                   style={{ width: '100%', height: '36px', padding: '0 10px', fontSize: '0.86rem', fontWeight: 700, borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
@@ -652,7 +659,7 @@ export const CreateBankStatementModal: React.FC<CreateBankStatementModalProps> =
                           onChange={(e) => {
                             setAutoUpdateEndingBalance(e.target.checked);
                             if (e.target.checked) {
-                              setNewStmtEndBal(Number((newStmtStartBal + netStaged).toFixed(2)));
+                              setNewStmtEndBal(roundMoneyValue(newStmtStartBal + netStaged, bookDigits));
                             }
                           }}
                         />

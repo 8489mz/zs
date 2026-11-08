@@ -7,6 +7,8 @@ import { accountingApi, type OpeningBalancesPreviewResponse } from '@/features/a
 import { AccountingAccountsMapSection } from '../components/settings/AccountingAccountsMapSection';
 import { AccountingOpeningBalancesSection } from '../components/settings/AccountingOpeningBalancesSection';
 import { AccountingLockDatesSection } from '../components/settings/AccountingLockDatesSection';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 type AccountRef = { id?: string; code?: string; nameAr?: string; nameEn?: string } | null;
 type SettingsSection = 'accounts-map' | 'opening-balances' | 'lock-dates';
@@ -24,7 +26,9 @@ function parseMoneyInput(value: string): number {
   if (!normalized) return 0;
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed < 0) return 0;
-  return Number(parsed.toFixed(2));
+  // INV-FE3-FRONTEND-BOOK-DIGITS: cash/bank opening balances post to the
+  // ledger, so they round at the tenant's book digits, not hardcoded 2dp.
+  return roundMoneyValue(parsed, currencyMoneyDigits(getGlobalSystemCurrency()));
 }
 
 import { translateUiText } from '@/lib/auto-translator';

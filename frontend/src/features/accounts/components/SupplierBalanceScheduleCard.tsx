@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { getGlobalCurrencySymbol } from '@/lib/currencies';
+import { getGlobalCurrencySymbol, getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/app/query-keys';
 import { FormSection } from '@/shared/components/form-section';
@@ -460,7 +461,9 @@ export function SupplierBalanceScheduleCard({ supplier, disabled = false }: Supp
   }, { all: 0, pending: 0, partial: 0, paid: 0, overdue: 0 }), [rows]);
   const summary = useMemo(() => summarize(rows), [rows]);
   
-  const unscheduledBalance = Math.round((supplierBalance - summary.remaining) * 100) / 100;
+  // INV-FE3-FRONTEND-BOOK-DIGITS: the unscheduled balance gates
+  // scheduling, so it rounds at the tenant's book digits, not 2dp.
+  const unscheduledBalance = roundMoneyValue(supplierBalance - summary.remaining, currencyMoneyDigits(getGlobalSystemCurrency()));
   const canSchedule = Boolean(supplierId) && unscheduledBalance > 0 && !disabled;
   const nextDue = rows.find((row) => row.status !== 'paid' && row.status !== 'cancelled');
 

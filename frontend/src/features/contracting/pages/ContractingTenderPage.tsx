@@ -5,6 +5,7 @@ import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { getTextDirection } from '@/lib/arabic-normalization';
 import { contractingApi } from '../api/contracting.api';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
 import { ImportBoqModal } from '../components/LazyImportBoqModal';
 import { ImportMasterBoqModal } from '../components/ImportMasterBoqModal';
@@ -92,7 +93,13 @@ export function ContractingTenderPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const projectIdParam = searchParams.get('projectId');
-  const { formatCurrency } = useSystemCurrency();
+  const { formatCurrency, currencyCode } = useSystemCurrency();
+  // INV-FE3-FRONTEND-BOOK-DIGITS: every money rate/total built on this
+  // page rounds at the tenant's book digits, not hardcoded 2dp.
+  // (Quantities — netQty, sand/cement per m² — are not money and keep
+  // their own precision; calculateItemRates returns unrounded values and
+  // its call sites round.)
+  const bookDigits = currencyMoneyDigits(currencyCode);
   const { reloadProjects, setSelectedProjectId, projects } = useContracting();
 
   // Basic Tender Information
@@ -222,7 +229,7 @@ export function ContractingTenderPage() {
                   componentName: `خامات وتوريدات: ${b.description.slice(0, 40)}`,
                   unit: b.unit || 'item',
                   qtyPerUnit: 1,
-                  unitRate: Math.round(((b.estimatedUnitCost || b.unitPrice * 0.7) * 0.7) * 100) / 100,
+                  unitRate: roundMoneyValue((b.estimatedUnitCost || b.unitPrice * 0.7) * 0.7, bookDigits),
                   componentType: 'material',
                 },
                 {
@@ -230,7 +237,7 @@ export function ContractingTenderPage() {
                   componentName: `مصنعيات وتركيب: ${b.description.slice(0, 40)}`,
                   unit: b.unit || 'item',
                   qtyPerUnit: 1,
-                  unitRate: Math.round(((b.estimatedUnitCost || b.unitPrice * 0.7) * 0.3) * 100) / 100,
+                  unitRate: roundMoneyValue((b.estimatedUnitCost || b.unitPrice * 0.7) * 0.3, bookDigits),
                   componentType: 'labor',
                 },
               ],
@@ -2382,7 +2389,7 @@ export function ContractingTenderPage() {
               } else {
                 const calculatedCost = r.estimatedUnitCost > 0
                   ? r.estimatedUnitCost
-                  : (r.unitPrice > 0 ? Math.round((r.unitPrice / (1 + (globalProfitMargin + globalOverhead + globalWaste) / 100)) * 100) / 100 : 0);
+                  : (r.unitPrice > 0 ? roundMoneyValue(r.unitPrice / (1 + (globalProfitMargin + globalOverhead + globalWaste) / 100), bookDigits) : 0);
 
                 components = [
                   {
@@ -2390,7 +2397,7 @@ export function ContractingTenderPage() {
                     componentName: `خامات وتوريدات: ${r.description.slice(0, 45)}`,
                     unit,
                     qtyPerUnit: 1,
-                    unitRate: Math.round(calculatedCost * 0.7 * 100) / 100,
+                    unitRate: roundMoneyValue(calculatedCost * 0.7, bookDigits),
                     componentType: 'material',
                   },
                   {
@@ -2398,7 +2405,7 @@ export function ContractingTenderPage() {
                     componentName: `مصنعيات وتركيب: ${r.description.slice(0, 45)}`,
                     unit,
                     qtyPerUnit: 1,
-                    unitRate: Math.round(calculatedCost * 0.3 * 100) / 100,
+                    unitRate: roundMoneyValue(calculatedCost * 0.3, bookDigits),
                     componentType: 'labor',
                   },
                 ];

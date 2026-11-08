@@ -1,14 +1,14 @@
 import type { HrContact, HrEmployee } from '@/types/domain';
-import { getGlobalCurrencySymbol } from '@/lib/currencies';
-
-export function fallbackText(value: unknown) {
-  return String(value || '').trim() || '—';
-}
+import { getGlobalCurrencySymbol, getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 export function money(value: unknown) {
   const amount = Number(value || 0);
   if (!Number.isFinite(amount)) return '—';
-  return `${amount.toFixed(2)} ${getGlobalCurrencySymbol()}`;
+  // INV-FE3-FRONTEND-BOOK-DIGITS: this formats money in the tenant's
+  // currency, so it shows book digits (a 3-decimal tenant's 0.125 must
+  // display as 0.125, not as a 2dp-rounded 0.13/0.12).
+  return `${amount.toFixed(currencyMoneyDigits(getGlobalSystemCurrency()))} ${getGlobalCurrencySymbol()}`;
 }
 
 export function statusLabel(status: unknown) {

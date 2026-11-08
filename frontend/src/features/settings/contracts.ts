@@ -1,13 +1,21 @@
 import type { AppSettings } from '@/types/domain';
 import type { BranchFormOutput, LocationFormOutput, SettingsFormOutput } from '@/features/settings/schemas/settings.schema';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 function cleanText(value: unknown, fallback = '') {
   const text = String(value ?? '').trim();
   return text || fallback;
 }
 
-function normalizeMoney(value: number) {
+// INV-FE3-FRONTEND-BOOK-DIGITS: taxRate is a PERCENT, not money — it
+// keeps 2dp on purpose (renamed from normalizeMoney so the next reader
+// does not "fix" it into money rounding). Money below uses normalizeMoney.
+function normalizeRate(value: number) {
   return Number(Number(value || 0).toFixed(2));
+}
+
+function normalizeMoney(value: number, bookDigits: number) {
+  return roundMoneyValue(Number(value || 0), bookDigits);
 }
 
 export function buildSettingsUpdatePayload(
@@ -15,6 +23,15 @@ export function buildSettingsUpdatePayload(
   values: SettingsFormOutput | Record<string, any>
 ) {
   const current = currentSettings as Record<string, any> | undefined;
+
+  // INV-FE3-FRONTEND-BOOK-DIGITS: the currency being saved (new value if
+  // the merchant just changed it, otherwise the stored one) decides the
+  // book digits for the money fields in this payload. Computed once here
+  // because defaultDeliveryFee is built before the settings object below.
+  const currency = values.currency !== undefined
+    ? cleanText(values.currency, 'EGP').toUpperCase()
+    : cleanText(current?.currency, 'EGP').toUpperCase();
+  const bookDigits = currencyMoneyDigits(currency);
 
   // Preserve core branding and store identity safely
   const storeName = values.storeName !== undefined && cleanText(values.storeName)
@@ -43,8 +60,8 @@ export function buildSettingsUpdatePayload(
   const invoiceQR = values.invoiceQR !== undefined ? cleanText(values.invoiceQR) : cleanText(current?.invoiceQR);
   const taxNumber = values.taxNumber !== undefined ? cleanText(values.taxNumber) : cleanText(current?.taxNumber);
   const taxRate = values.taxRate !== undefined
-    ? normalizeMoney(Number(values.taxRate || 0))
-    : normalizeMoney(Number(current?.taxRate || 0));
+    ? normalizeRate(Number(values.taxRate || 0))
+    : normalizeRate(Number(current?.taxRate || 0));
   const taxMode = values.taxMode !== undefined
     ? (values.taxMode === 'inclusive' ? 'inclusive' : 'exclusive')
     : (current?.taxMode === 'inclusive' ? 'inclusive' : 'exclusive');
@@ -82,8 +99,8 @@ export function buildSettingsUpdatePayload(
     : Math.max(0, Math.min(100, Number(current?.storeFleetCommissionRate || 0)));
 
   const defaultDeliveryFee = values.defaultDeliveryFee !== undefined
-    ? Math.max(0, normalizeMoney(Number(values.defaultDeliveryFee || 0)))
-    : Math.max(0, normalizeMoney(Number(current?.defaultDeliveryFee || 0)));
+    ? Math.max(0, normalizeMoney(Number(values.defaultDeliveryFee || 0), bookDigits))
+    : Math.max(0, normalizeMoney(Number(current?.defaultDeliveryFee || 0), bookDigits));
 
   const settings = {
     ...(currentSettings || {}),
@@ -361,9 +378,7 @@ export function buildSettingsUpdatePayload(
     uiLanguage: values.uiLanguage !== undefined
       ? (values.uiLanguage === 'en' ? 'en' : 'ar')
       : (current?.uiLanguage === 'en' ? 'en' : 'ar'),
-    currency: values.currency !== undefined
-      ? cleanText(values.currency, 'EGP').toUpperCase()
-      : cleanText(current?.currency, 'EGP').toUpperCase(),
+    currency,
     timezone: values.timezone !== undefined
       ? cleanText(values.timezone, 'Africa/Cairo')
       : cleanText(current?.timezone, 'Africa/Cairo'),

@@ -5,6 +5,8 @@ import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { Field } from '@/shared/ui/field';
 import { contractingApi } from '../api/contracting.api';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import type {
   ContractingMaterialEscalation,
   MaterialEscalationType,
@@ -95,7 +97,11 @@ export function MaterialPriceEscalationModal({ open, onClose, projectId, project
   };
 
   const calculatedDifference = Math.max(0, currentMarketPrice - basePriceContract);
-  const calculatedTotalCompensation = Number((calculatedDifference * executedQuantity).toFixed(2));
+  // INV-FE3-FRONTEND-BOOK-DIGITS: the total compensation is money, so it
+  // rounds at the tenant's book digits, not hardcoded 2dp. (The
+  // per-unit difference above is a unit price, not a money total — it
+  // stays unrounded, like the other 4dp unit prices in contracting.)
+  const calculatedTotalCompensation = roundMoneyValue(calculatedDifference * executedQuantity, currencyMoneyDigits(getGlobalSystemCurrency()));
 
   const handleCreateClaim = async (e: React.FormEvent) => {
     e.preventDefault();

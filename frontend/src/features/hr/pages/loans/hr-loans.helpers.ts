@@ -1,4 +1,5 @@
-import { getGlobalCurrencySymbol } from '@/lib/currencies';
+import { getGlobalCurrencySymbol, getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits } from '@/shared/utils/money';
 export const monthNames = [
   'يناير',
   'فبراير',
@@ -106,8 +107,10 @@ export function buildCreateLoanPayload(draft: LoanDraft, plan: LoanPlanPreview):
 
 export function money(value: unknown) {
   const amount = Number(value || 0);
+  // INV-FE3-FRONTEND-BOOK-DIGITS: this formats money in the tenant's
+  // currency, so it shows book digits (see employee-profile.helpers).
   if (!Number.isFinite(amount)) return `0.00 ${getGlobalCurrencySymbol()}`;
-  return `${amount.toFixed(2)} ${getGlobalCurrencySymbol()}`;
+  return `${amount.toFixed(currencyMoneyDigits(getGlobalSystemCurrency()))} ${getGlobalCurrencySymbol()}`;
 }
 
 export function fallbackText(value: unknown) {

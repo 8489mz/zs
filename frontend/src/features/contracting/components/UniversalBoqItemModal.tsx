@@ -6,6 +6,7 @@ import { CustomSelect } from '@/shared/ui/custom-select';
 import { contractingApi } from '../api/contracting.api';
 import { MasterBoqItem, MasterBoqTrade, ContractingBoqItem } from '../contracting.types';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
 
 export const UNIT_OPTIONS = [
@@ -121,11 +122,16 @@ export const TRADE_LABELS: Record<string, string> = {
   other: 'أعمال عامة',
 };
 
-export function calculatePriceFromMargin(costNum: number, marginPercent: number): number {
+// INV-FE3-FRONTEND-BOOK-DIGITS: the selling price is money, so it rounds
+// at the tenant's book digits — passed in as a REQUIRED third param (no
+// silent 2dp default, U4 W2 lesson). Every caller passes the component's
+// bookDigits; CreateMasterBoqItemModal only re-exports this function and
+// makes no calls, so no other call site exists (repo-wide grep verified).
+export function calculatePriceFromMargin(costNum: number, marginPercent: number, bookDigits: number): number {
   if (costNum <= 0) return 0;
-  if (marginPercent <= 0) return costNum;
-  if (marginPercent >= 99) return Math.round(costNum * 100 * 100) / 100;
-  return Math.round((costNum / (1 - marginPercent / 100)) * 100) / 100;
+  if (marginPercent <= 0) return roundMoneyValue(costNum, bookDigits);
+  if (marginPercent >= 99) return roundMoneyValue(costNum * 100, bookDigits);
+  return roundMoneyValue(costNum / (1 - marginPercent / 100), bookDigits);
 }
 
 export function calculateMarginFromPrice(costNum: number, priceNum: number): number {
@@ -184,7 +190,8 @@ export function UniversalBoqItemModal({
   initialTradeCategory,
 }: UniversalBoqItemModalProps) {
   const { t: __t } = useTranslation();
-  const { currencySymbol } = useSystemCurrency();
+  const { currencySymbol, currencyCode } = useSystemCurrency();
+  const bookDigits = currencyMoneyDigits(currencyCode);
   const [internalTrades, setInternalTrades] = useState<MasterBoqTrade[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -286,7 +293,7 @@ export function UniversalBoqItemModal({
       const costNum = Number(formData.standardCost);
       let newPrice = formData.standardPrice;
       if (!isNaN(costNum) && costNum > 0) {
-        newPrice = String(calculatePriceFromMargin(costNum, suggestedMargin));
+        newPrice = String(calculatePriceFromMargin(costNum, suggestedMargin, bookDigits));
       }
       setFormData((prev) => ({
         ...prev,
@@ -310,7 +317,7 @@ export function UniversalBoqItemModal({
     let newPrice = formData.standardPrice;
 
     if (!isNaN(costNum) && costNum > 0 && !isNaN(marginNum) && marginNum >= 0 && marginNum < 100) {
-      newPrice = String(calculatePriceFromMargin(costNum, marginNum));
+      newPrice = String(calculatePriceFromMargin(costNum, marginNum, bookDigits));
     } else if (!cleaned || costNum === 0) {
       newPrice = '';
     }
@@ -329,7 +336,7 @@ export function UniversalBoqItemModal({
     const costNum = Number(formData.standardCost);
 
     if (!isNaN(costNum) && costNum > 0 && !isNaN(marginNum) && marginNum >= 0 && marginNum < 100) {
-      const calculated = calculatePriceFromMargin(costNum, marginNum);
+      const calculated = calculatePriceFromMargin(costNum, marginNum, bookDigits);
       setFormData((prev) => ({
         ...prev,
         standardPrice: String(calculated),

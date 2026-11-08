@@ -6,6 +6,8 @@ import { QueryFeedback } from '@/shared/components/query-feedback';
 import { Button } from '@/shared/ui/button';
 import { DataTable } from '@/shared/ui/data-table';
 import { useHasAnyPermission } from '@/shared/hooks/use-permission';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits } from '@/shared/utils/money';
 import type { HrAttendanceException, HrEmployee, HrEmployeeAsset, HrLeaveRequest, HrLoan, HrPayrollRun } from '@/types/domain';
 import {
   UsersIcon,
@@ -50,7 +52,9 @@ function text(value: unknown) {
 function money(value: unknown) {
   const amount = Number(value || 0);
   if (!Number.isFinite(amount)) return '0.00';
-  return amount.toFixed(2);
+  // INV-FE3-FRONTEND-BOOK-DIGITS: this formats a money KPI (due loan
+  // amount) on the HR overview, so it shows the tenant's book digits.
+  return amount.toFixed(currencyMoneyDigits(getGlobalSystemCurrency()));
 }
 
 function employeeName(row: HrEmployee) {

@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/shared/ui/button';
 import { StandardDialog } from '@/shared/components/StandardDialog';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import {
   costCentersApi,
   type CostCenterAllocation,
@@ -17,7 +18,7 @@ interface CostCenterAllocationsTabProps {
 
 export const CostCenterAllocationsTab: React.FC<CostCenterAllocationsTabProps> = ({ costCenters }) => {
   const { t } = useTranslation();
-  const { currencySymbol } = useSystemCurrency();
+  const { currencySymbol, currencyCode } = useSystemCurrency();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAllocation, setEditingAllocation] = useState<CostCenterAllocation | null>(null);
@@ -344,7 +345,9 @@ export const CostCenterAllocationsTab: React.FC<CostCenterAllocationsTabProps> =
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     {alloc.splits.map((s) => {
-                      const share = Math.round(((simulateAmount * s.percentage) / 100) * 100) / 100;
+                      // INV-FE3-FRONTEND-BOOK-DIGITS: simulated split
+                      // share is money; it rounds at book digits, not 2dp.
+                      const share = roundMoneyValue((simulateAmount * s.percentage) / 100, currencyMoneyDigits(currencyCode));
                       return (
                         <div
                           key={s.id}

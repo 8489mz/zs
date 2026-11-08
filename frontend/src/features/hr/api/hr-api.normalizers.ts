@@ -9,6 +9,8 @@ import type {
   HrWithdrawalRow,
 } from '@/types/domain';
 import type { HrApiDateRecord } from './hr-api.types';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 function apiText(value: unknown): string {
   return String(value || '').trim();
@@ -51,7 +53,9 @@ export function normalizeHrLoanRow(row: HrLoan | HrApiDateRecord): HrLoan {
         dueDate: normalizeApiDateOnly(apiPick(item, ['dueDate', 'due_date', 'due_date_text'])),
         amount: Number.isFinite(amount) ? amount : 0,
         paidAmount: Number.isFinite(paidAmount) ? paidAmount : 0,
-        remainingAmount: Number(((Number.isFinite(amount) ? amount : 0) - (Number.isFinite(paidAmount) ? paidAmount : 0)).toFixed(2)),
+        // INV-FE3-FRONTEND-BOOK-DIGITS: the unpaid remainder of a loan
+        // installment is money; it rounds at the tenant's book digits.
+        remainingAmount: roundMoneyValue((Number.isFinite(amount) ? amount : 0) - (Number.isFinite(paidAmount) ? paidAmount : 0), currencyMoneyDigits(getGlobalSystemCurrency())),
         status: apiPick(item, ['status']) || 'pending',
         paidAt: normalizeApiDateTime(apiPick(item, ['paidAt', 'paid_at', 'paid_at_text'])) || '',
         note: apiPick(item, ['note', 'notes']) || '',

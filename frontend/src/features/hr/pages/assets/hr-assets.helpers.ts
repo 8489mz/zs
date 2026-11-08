@@ -1,5 +1,6 @@
 import type { HrEmployee, HrEmployeeAsset } from '@/types/domain';
-import { getGlobalCurrencySymbol } from '@/lib/currencies';
+import { getGlobalCurrencySymbol, getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 export type CustodyTab = 'physical' | 'cash';
 
@@ -51,11 +52,16 @@ export function normalizeNumberText(value: unknown) {
 
 export function parseAmount(value: unknown) {
   const amount = Number(normalizeNumberText(value));
-  return Number.isFinite(amount) && amount > 0 ? Number(amount.toFixed(2)) : 0;
+  // INV-FE3-FRONTEND-BOOK-DIGITS: cash-custody amounts are money; they
+  // round at the tenant's book digits, not hardcoded 2dp. This feeds
+  // cashAmount/cashDifference/settlementParts and the page's totals.
+  return Number.isFinite(amount) && amount > 0 ? roundMoneyValue(amount, currencyMoneyDigits(getGlobalSystemCurrency())) : 0;
 }
 
 export function money(value: unknown) {
-  return `${parseAmount(value).toFixed(2)} ${getGlobalCurrencySymbol()}`;
+  // Same book digits as parseAmount: a 3-decimal tenant's 0.125 must
+  // display as 0.125, not as a 2dp-rounded 0.13/0.12.
+  return `${parseAmount(value).toFixed(currencyMoneyDigits(getGlobalSystemCurrency()))} ${getGlobalCurrencySymbol()}`;
 }
 
 export function text(value: unknown) {
@@ -106,7 +112,7 @@ export function cashAmount(row: HrEmployeeAsset) {
 export function cashDifference(row: HrEmployeeAsset) {
   const amount = cashAmount(row);
   const settled = settlementParts(row);
-  return Number((amount - settled.spentAmount - settled.returnedAmount).toFixed(2));
+  return roundMoneyValue(amount - settled.spentAmount - settled.returnedAmount, currencyMoneyDigits(getGlobalSystemCurrency()));
 }
 
 export function needsReview(row: HrEmployeeAsset) {
@@ -114,7 +120,9 @@ export function needsReview(row: HrEmployeeAsset) {
   if (status === 'damaged' || status === 'lost') return true;
   if (status === 'assigned' && !text(row.assignedAt)) return true;
   if (status === 'returned' && !text(row.returnedAt)) return true;
-  if (isCashCustody(row) && status === 'returned' && Math.abs(cashDifference(row)) > 0.009) return true;
+  // INV-FE3-FRONTEND-BOOK-DIGITS: every leg is already rounded at book
+  // digits, so any nonzero difference is a real fils-level difference.
+  if (isCashCustody(row) && status === 'returned' && Math.abs(cashDifference(row)) > 0) return true;
   return false;
 }
 

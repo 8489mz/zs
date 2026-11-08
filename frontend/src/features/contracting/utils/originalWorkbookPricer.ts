@@ -1,6 +1,8 @@
 import * as XLSX from 'xlsx';
 import { ColumnMapping } from './boqExcelParser';
 import { triggerDownload } from '@/lib/browser';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 export interface OriginalWorkbookEntry {
   fileName: string;
@@ -267,6 +269,13 @@ export async function exportPricedBoqWorkbook(
 ): Promise<boolean> {
   if (!items || items.length === 0) return false;
 
+  // INV-FE3-FRONTEND-BOOK-DIGITS: every price/total written into the
+  // exported workbook is money; it rounds at the tenant's book digits,
+  // not hardcoded 2dp. (The `currency` option is a display symbol, e.g.
+  // 'ج.م', and cannot yield digits — the tenant currency is resolved
+  // here. Cell number formats `#,##0.00` are display-only and unchanged.)
+  const bookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
+
   const options: ExportPricedOptions =
     typeof optionsOrProjectName === 'string'
       ? { projectName: optionsOrProjectName, includeCompanyHeader: false }
@@ -360,12 +369,12 @@ export async function exportPricedBoqWorkbook(
           }
 
           if (targetRow !== undefined && targetRow >= 0) {
-            const price = Math.round(Number(item.unitPrice || 0) * 100) / 100;
+            const price = roundMoneyValue(Number(item.unitPrice || 0), bookDigits);
             const qty = Number(item.contractQty || 0);
             const total =
               item.totalPrice !== undefined
-                ? Math.round(Number(item.totalPrice) * 100) / 100
-                : Math.round(price * qty * 100) / 100;
+                ? roundMoneyValue(Number(item.totalPrice), bookDigits)
+                : roundMoneyValue(price * qty, bookDigits);
 
             grandPricedSum += total;
 
@@ -405,7 +414,7 @@ export async function exportPricedBoqWorkbook(
                 worksheet[totalCellRef] = {
                   ...existingCell,
                   t: 'n',
-                  v: Math.round(grandPricedSum * 100) / 100,
+                  v: roundMoneyValue(grandPricedSum, bookDigits),
                   z: '#,##0.00',
                 };
                 break;
@@ -488,11 +497,11 @@ export async function exportPricedBoqWorkbook(
     }
 
     const qty = Number(item.contractQty || 0);
-    const unitPrice = Math.round(Number(item.unitPrice || 0) * 100) / 100;
+    const unitPrice = roundMoneyValue(Number(item.unitPrice || 0), bookDigits);
     const totalPrice =
       item.totalPrice !== undefined
-        ? Math.round(Number(item.totalPrice) * 100) / 100
-        : Math.round(qty * unitPrice * 100) / 100;
+        ? roundMoneyValue(Number(item.totalPrice), bookDigits)
+        : roundMoneyValue(qty * unitPrice, bookDigits);
     baseContractSum += totalPrice;
 
     aoaData.push([
@@ -510,7 +519,7 @@ export async function exportPricedBoqWorkbook(
   // 4. Financial Breakdown Rows
   aoaData.push([]); // Spacer
   const subtotalRowIdx = aoaData.length;
-  aoaData.push(['إجمالي قيمة الأعمال التنفيذية الأساسية', '', '', '', '', '', Math.round(baseContractSum * 100) / 100, currency]);
+  aoaData.push(['إجمالي قيمة الأعمال التنفيذية الأساسية', '', '', '', '', '', roundMoneyValue(baseContractSum, bookDigits), currency]);
   merges.push({ s: { r: subtotalRowIdx, c: 0 }, e: { r: subtotalRowIdx, c: 5 } });
 
   if (socialInsuranceAmount > 0) {
@@ -522,7 +531,7 @@ export async function exportPricedBoqWorkbook(
       '',
       '',
       '',
-      Math.round(socialInsuranceAmount * 100) / 100,
+      roundMoneyValue(socialInsuranceAmount, bookDigits),
       currency,
     ]);
     merges.push({ s: { r: insRowIdx, c: 0 }, e: { r: insRowIdx, c: 5 } });
@@ -537,7 +546,7 @@ export async function exportPricedBoqWorkbook(
       '',
       '',
       '',
-      Math.round(officeMarginAmount * 100) / 100,
+      roundMoneyValue(officeMarginAmount, bookDigits),
       currency,
     ]);
     merges.push({ s: { r: offRowIdx, c: 0 }, e: { r: offRowIdx, c: 5 } });
@@ -552,7 +561,7 @@ export async function exportPricedBoqWorkbook(
       '',
       '',
       '',
-      Math.round(vatAmount * 100) / 100,
+      roundMoneyValue(vatAmount, bookDigits),
       currency,
     ]);
     merges.push({ s: { r: vatRowIdx, c: 0 }, e: { r: vatRowIdx, c: 5 } });
@@ -560,8 +569,8 @@ export async function exportPricedBoqWorkbook(
 
   const finalSum =
     options.finalTotalAmount !== undefined
-      ? Math.round(options.finalTotalAmount * 100) / 100
-      : Math.round((baseContractSum + socialInsuranceAmount + officeMarginAmount + vatAmount) * 100) / 100;
+      ? roundMoneyValue(options.finalTotalAmount, bookDigits)
+      : roundMoneyValue(baseContractSum + socialInsuranceAmount + officeMarginAmount + vatAmount, bookDigits);
 
   const grandTotalRowIdx = aoaData.length;
   aoaData.push(['إجمالي قيمة العرض المالي النهائي المعروض للتعاقد', '', '', '', '', '', finalSum, currency]);

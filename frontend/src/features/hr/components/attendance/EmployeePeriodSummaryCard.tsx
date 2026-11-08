@@ -1,6 +1,8 @@
 import React from 'react';
 import type { HrAttendanceRecord } from '@/types/domain';
 import { calculateAttendancePayableMinutes } from './attendance-types';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 interface EmployeePeriodSummaryCardProps {
   employee?: {
@@ -75,7 +77,11 @@ export const EmployeePeriodSummaryCard: React.FC<EmployeePeriodSummaryCardProps>
 
   const payableHours = (totalPayableMinutes / 60).toFixed(2);
   const hourlyRate = Number(employee?.hourlyRate || rows[0]?.hourlyRate || 0);
-  const estimatedPay = hourlyRate > 0 ? (Number(payableHours) * hourlyRate).toFixed(2) : null;
+  // INV-FE3-FRONTEND-BOOK-DIGITS: estimated pay is money; it rounds at
+  // the tenant's book digits, not hardcoded 2dp. (payableHours/totalHours
+  // above are hours, not money — they stay at 2dp.)
+  const bookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
+  const estimatedPay = hourlyRate > 0 ? roundMoneyValue(Number(payableHours) * hourlyRate, bookDigits).toFixed(bookDigits) : null;
 
   return (
     <div

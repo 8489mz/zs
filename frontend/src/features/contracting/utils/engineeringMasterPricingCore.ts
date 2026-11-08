@@ -15,6 +15,9 @@
  * 9. Architectural Finishes (Plastering, Paints, Ceramic, Porcelain, Marble, Granite, Interlock, Gypsum Ceiling)
  */
 
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+
 export interface EngineeringConstantItem {
   itemCode: string;
   itemName: string;
@@ -1939,7 +1942,11 @@ function normalizeToStandardConstant(c: any): EngineeringConstantItem {
 
   const costWithWaste = directCost * (1 + waste / 100);
   const costWithOverhead = costWithWaste * (1 + overhead / 100);
-  const suggestedUnitPrice = Math.round((costWithOverhead * (1 + profit / 100) + Number.EPSILON) * 100) / 100;
+  // INV-FE3-FRONTEND-BOOK-DIGITS: the suggested unit price is money; it
+  // rounds at the tenant's book digits, not hardcoded 2dp. (The
+  // Number.EPSILON nudge is dropped: roundMoneyValue matches the backend
+  // half-up rule exactly, and the nudge diverged from it at .xx5.)
+  const suggestedUnitPrice = roundMoneyValue(costWithOverhead * (1 + profit / 100), currencyMoneyDigits(getGlobalSystemCurrency()));
 
   return {
     itemCode: c.item_code || c.itemCode || 'ENG-CONST',

@@ -6,6 +6,8 @@ import { SubmitButton } from '@/shared/components/submit-button';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { toast } from '@/shared/components/system-alert';
 import { formatDateTimeArabic } from '@/lib/format';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { translateUiText } from '@/lib/auto-translator';
 import {
   marketplaceSyncApi,
@@ -872,7 +874,10 @@ export const SettingsMarketplacesSection: React.FC = () => {
     settlementId: '',
     periodStart: new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0],
     periodEnd: new Date().toISOString().split('T')[0],
-    currency: 'EGP',
+    // INV-FE3-FRONTEND-BOOK-DIGITS: was hardcoded 'EGP' with no selector
+    // anywhere; the backend requires the tenant's base currency, so the
+    // form now defaults to it (see settlementBookDigits below).
+    currency: getGlobalSystemCurrency(),
     grossSales: 0,
     referralFees: 0,
     fulfillmentFees: 0,
@@ -885,6 +890,13 @@ export const SettingsMarketplacesSection: React.FC = () => {
     salesAccountId: undefined,
     notes: '',
   });
+
+  // INV-FE3-FRONTEND-BOOK-DIGITS: the backend (reconcileSettlement)
+  // REQUIRES input.currency === the tenant's base currency and checks
+  // precision at book digits (INV-MARKETPLACE-SETTLEMENT-BOOK-DIGITS).
+  // Every computed amount in this form rounds at the form currency's
+  // book digits, so the rounding always matches what is sent.
+  const settlementBookDigits = currencyMoneyDigits(settlementForm.currency || getGlobalSystemCurrency());
 
   // Bulk Import State
   const [showBulkImportModal, setShowBulkImportModal] = useState<boolean>(false);
@@ -5156,7 +5168,7 @@ export const SettingsMarketplacesSection: React.FC = () => {
                 onChange={(e) => {
                   const gross = parseFloat(e.target.value) || 0;
                   const net = gross - (settlementForm.referralFees || 0) - (settlementForm.fulfillmentFees || 0) - (settlementForm.refunds || 0) - (settlementForm.storageOrOtherFees || 0);
-                  setSettlementForm({ ...settlementForm, grossSales: gross, netPayout: Math.max(0, parseFloat(net.toFixed(2))) });
+                  setSettlementForm({ ...settlementForm, grossSales: gross, netPayout: Math.max(0, roundMoneyValue(net, settlementBookDigits)) });
                 }}
                 placeholder="0.00"
                 style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
@@ -5174,7 +5186,7 @@ export const SettingsMarketplacesSection: React.FC = () => {
                 onChange={(e) => {
                   const ref = parseFloat(e.target.value) || 0;
                   const net = (settlementForm.grossSales || 0) - ref - (settlementForm.fulfillmentFees || 0) - (settlementForm.refunds || 0) - (settlementForm.storageOrOtherFees || 0);
-                  setSettlementForm({ ...settlementForm, referralFees: ref, netPayout: Math.max(0, parseFloat(net.toFixed(2))) });
+                  setSettlementForm({ ...settlementForm, referralFees: ref, netPayout: Math.max(0, roundMoneyValue(net, settlementBookDigits)) });
                 }}
                 placeholder="0.00"
                 style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
@@ -5192,7 +5204,7 @@ export const SettingsMarketplacesSection: React.FC = () => {
                 onChange={(e) => {
                   const ful = parseFloat(e.target.value) || 0;
                   const net = (settlementForm.grossSales || 0) - (settlementForm.referralFees || 0) - ful - (settlementForm.refunds || 0) - (settlementForm.storageOrOtherFees || 0);
-                  setSettlementForm({ ...settlementForm, fulfillmentFees: ful, netPayout: Math.max(0, parseFloat(net.toFixed(2))) });
+                  setSettlementForm({ ...settlementForm, fulfillmentFees: ful, netPayout: Math.max(0, roundMoneyValue(net, settlementBookDigits)) });
                 }}
                 placeholder="0.00"
                 style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
@@ -5210,7 +5222,7 @@ export const SettingsMarketplacesSection: React.FC = () => {
                 onChange={(e) => {
                   const ref = parseFloat(e.target.value) || 0;
                   const net = (settlementForm.grossSales || 0) - (settlementForm.referralFees || 0) - (settlementForm.fulfillmentFees || 0) - ref - (settlementForm.storageOrOtherFees || 0);
-                  setSettlementForm({ ...settlementForm, refunds: ref, netPayout: Math.max(0, parseFloat(net.toFixed(2))) });
+                  setSettlementForm({ ...settlementForm, refunds: ref, netPayout: Math.max(0, roundMoneyValue(net, settlementBookDigits)) });
                 }}
                 placeholder="0.00"
                 style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
@@ -5228,7 +5240,7 @@ export const SettingsMarketplacesSection: React.FC = () => {
                 onChange={(e) => {
                   const oth = parseFloat(e.target.value) || 0;
                   const net = (settlementForm.grossSales || 0) - (settlementForm.referralFees || 0) - (settlementForm.fulfillmentFees || 0) - (settlementForm.refunds || 0) - oth;
-                  setSettlementForm({ ...settlementForm, storageOrOtherFees: oth, netPayout: Math.max(0, parseFloat(net.toFixed(2))) });
+                  setSettlementForm({ ...settlementForm, storageOrOtherFees: oth, netPayout: Math.max(0, roundMoneyValue(net, settlementBookDigits)) });
                 }}
                 placeholder="0.00"
                 style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
@@ -5337,9 +5349,15 @@ export const SettingsMarketplacesSection: React.FC = () => {
             const ful = Number(settlementForm.fulfillmentFees || 0);
             const rfd = Number(settlementForm.refunds || 0);
             const oth = Number(settlementForm.storageOrOtherFees || 0);
-            const totalDebit = Number((net + ref + ful + rfd + oth).toFixed(2));
-            const totalCredit = Number(Number(settlementForm.grossSales || 0).toFixed(2));
-            const isBalanced = Math.abs(totalDebit - totalCredit) < 0.05;
+            // INV-FE3-FRONTEND-BOOK-DIGITS: every leg is already rounded
+            // at book digits, so the check is exact equality — the old
+            // < 0.05 tolerance hid a real 0.001 (one fils) imbalance on
+            // a 3-decimal tenant, and the backend checks the same
+            // identity exactly. totalDebit/totalCredit round here so a
+            // hand-typed (unrounded) field still compares correctly.
+            const totalDebit = roundMoneyValue(net + ref + ful + rfd + oth, settlementBookDigits);
+            const totalCredit = roundMoneyValue(Number(settlementForm.grossSales || 0), settlementBookDigits);
+            const isBalanced = totalDebit === totalCredit;
 
             return (
               <div
@@ -5369,7 +5387,7 @@ export const SettingsMarketplacesSection: React.FC = () => {
                         color: isBalanced ? '#166534' : '#92400e',
                       }}
                     >
-                      {isBalanced ? t('settings.workspace_sections.settings_marketplaces_section.s558', "متزن محاسبياً 100%") : `فارق غير متزن: ${(totalDebit - totalCredit).toFixed(2)}`}
+                      {isBalanced ? t('settings.workspace_sections.settings_marketplaces_section.s558', "متزن محاسبياً 100%") : `فارق غير متزن: ${(totalDebit - totalCredit).toFixed(settlementBookDigits)}`}
                     </span>
                   </div>
                 </div>

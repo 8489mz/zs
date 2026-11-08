@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import type { ReportSummary } from '@/types/domain';
 import type { CashMovementResponse, FinancialSummaryResponse, InventoryValueResponse, ReceivablesPayablesResponse } from '@/shared/api/accounting-reports';
 import { formatCurrency } from '@/lib/format';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { reportsSections, type ReportsSectionKey } from '@/features/reports/pages/reports.page-config';
 import { formatPercent, relativePercent } from '@/features/reports/lib/reports-format';
 
@@ -145,8 +147,10 @@ export function useReportsWorkspaceMetrics({
   ]), [accountingGrossMarginPercent, financialCards, report]);
 
   const topProducts = useMemo(() => (Array.isArray(report?.topProducts) ? report.topProducts : []), [report]);
-  const salesDailyAverage = rangeDays > 0 ? Number((Number(report?.sales.netSales || 0) / rangeDays).toFixed(2)) : 0;
-  const purchaseDailyAverage = rangeDays > 0 ? Number((Number(report?.purchases.netPurchases || 0) / rangeDays).toFixed(2)) : 0;
+  // INV-FE3-FRONTEND-BOOK-DIGITS: daily averages are money; they round
+  // at the tenant's book digits, not hardcoded 2dp.
+  const salesDailyAverage = rangeDays > 0 ? roundMoneyValue(Number(report?.sales.netSales || 0) / rangeDays, currencyMoneyDigits(getGlobalSystemCurrency())) : 0;
+  const purchaseDailyAverage = rangeDays > 0 ? roundMoneyValue(Number(report?.purchases.netPurchases || 0) / rangeDays, currencyMoneyDigits(getGlobalSystemCurrency())) : 0;
   const returnRatePercent = Number(report?.sales.netSales || 0) > 0 ? Number(((Number(report?.returns.total || 0) / Math.max(1, Number(report?.sales.total || 0))) * 100).toFixed(2)) : 0;
 
   const spotlightValues = useMemo(() => ([

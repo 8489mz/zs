@@ -5,6 +5,8 @@ import { Button } from '@/shared/ui/button';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { XIcon } from '@/shared/components/icons/AppIcons';
 import type { PharmacyDrug } from '../types/pharmacy.types';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 interface PharmacyDrugFormModalProps {
   open: boolean;
@@ -49,10 +51,12 @@ export function PharmacyDrugFormModal({
   const handleBoxPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const bp = Number(e.target.value);
     const units = Number(formData.units_per_box || 1);
+    // INV-FE3-FRONTEND-BOOK-DIGITS: the strip price is money posted in
+    // the drug form; it rounds at the tenant's book digits, not 2dp.
     setFormData({
       ...formData,
       box_price: bp,
-      strip_price: units > 0 ? Number((bp / units).toFixed(2)) : bp,
+      strip_price: units > 0 ? roundMoneyValue(bp / units, currencyMoneyDigits(getGlobalSystemCurrency())) : bp,
     });
   };
 
@@ -62,7 +66,7 @@ export function PharmacyDrugFormModal({
     setFormData({
       ...formData,
       units_per_box: units,
-      strip_price: units > 0 ? Number((bp / units).toFixed(2)) : bp,
+      strip_price: units > 0 ? roundMoneyValue(bp / units, currencyMoneyDigits(getGlobalSystemCurrency())) : bp,
     });
   };
 

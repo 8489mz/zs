@@ -11,7 +11,8 @@ import type { PosTerminalDeviceConfig } from '@/types/domain-models/settings';
 import { FormSection } from '@/shared/components/form-section';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
-import { getGlobalCurrencySymbol, isKuwait, isSaudi } from '@/lib/currencies';
+import { getGlobalCurrencySymbol, getGlobalSystemCurrency, isKuwait, isSaudi } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 interface SalesInventoryTabProps {
   form: UseFormReturn<SettingsFormInput, undefined, SettingsFormOutput>;
@@ -819,6 +820,13 @@ export const SalesInventorySettingsTab = memo(function SalesInventorySettingsTab
   settings,
 }: SalesInventoryTabProps) {
   const { t: __t } = useTranslation();
+  // INV-FE3-FRONTEND-BOOK-DIGITS: the live loyalty preview (points ×
+  // redeem value) is money; it rounds at the tenant's book digits, not
+  // hardcoded 2dp. (The redeem rate % rendered with it is a percent and
+  // keeps 1dp.)
+  const loyaltyBookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
+  const loyaltyPreviewPoints = Math.floor((1000 / 100) * Number(form.watch('loyaltyPointsPer100Egp') || 10));
+  const loyaltyPreviewValue = roundMoneyValue(loyaltyPreviewPoints * Number(form.watch('loyaltyPointRedeemValue') || 0.1), loyaltyBookDigits);
   const rawActivity = String(form.watch('businessIndustry') || settings?.businessIndustry || (settings as any)?.activityType || 'retail_general').trim().toLowerCase();
   const isContractingVertical = rawActivity === 'contracting' || rawActivity === 'construction' || rawActivity === 'مقاولات' || Boolean(form.watch('contractingModuleEnabled'));
   const isMaritimeVertical = rawActivity === 'maritime_freight' || rawActivity === 'maritime' || rawActivity === 'freight' || rawActivity === 'shipping' || rawActivity === 'شحن' || Boolean(form.watch('maritimeFreightModuleEnabled'));
@@ -2981,11 +2989,11 @@ export const SalesInventorySettingsTab = memo(function SalesInventorySettingsTab
                 <span style={{ fontSize: '0.84rem', color: '#1e293b', fontWeight: 700 }}>
                   {__t('settings.forms.tabs.sales_inventory_settings_tab.s236', "معاينة حية للمحرك: مشتريات بقيمة")} <strong>1,000 <CurrencySymbol /></strong> {__t('settings.forms.tabs.sales_inventory_settings_tab.s237', "تمنح العميل")}{' '}
                   <strong style={{ color: '#170e5e' }}>
-                    {Math.floor((1000 / 100) * Number(form.watch('loyaltyPointsPer100Egp') || 10))} {__t('settings.forms.tabs.sales_inventory_settings_tab.s238', "نقطة")}
+                    {loyaltyPreviewPoints} {__t('settings.forms.tabs.sales_inventory_settings_tab.s238', "نقطة")}
                   </strong>{' '}
                   {__t('settings.forms.tabs.sales_inventory_settings_tab.s239', "قيمتها")}{' '}
                   <strong style={{ color: '#170e5e' }}>
-                    {(Math.floor((1000 / 100) * Number(form.watch('loyaltyPointsPer100Egp') || 10)) * Number(form.watch('loyaltyPointRedeemValue') || 0.1)).toFixed(2)} <CurrencySymbol />
+                    {loyaltyPreviewValue.toFixed(loyaltyBookDigits)} <CurrencySymbol />
                   </strong>{' '}
                   {__t('settings.forms.tabs.sales_inventory_settings_tab.s240', "خصم فوري في مشترياته القادمة (معدل استرجاع")}{' '}
                   <strong>

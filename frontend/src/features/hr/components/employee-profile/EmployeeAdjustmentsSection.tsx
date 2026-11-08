@@ -2,6 +2,8 @@ import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import type { HrEmployeeAdjustment } from '@/types/domain';
 import { money, fallbackText } from '@/features/hr/utils/employee-profile.helpers';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { Button } from '@/shared/ui/button';
 import { FormSection } from '@/shared/components/form-section';
 
@@ -35,12 +37,19 @@ export function EmployeeAdjustmentsSection({ adjustments, canManage, onAddAdjust
       setError('الرجاء إدخال التاريخ.');
       return;
     }
-    if (amountType === 'money' && (
-      !Number.isSafeInteger(Math.round(Number(amount) * 100))
-      || Math.abs(Number(amount) - Math.round(Number(amount) * 100) / 100) > 0.000001
-    )) {
-      setError('المبلغ النقدي لازم يكون بدقة منزلتين عشريتين، مثال 125.50.');
-      return;
+    // INV-FE3-FRONTEND-BOOK-DIGITS: a money adjustment must be exact at
+    // the tenant's book digits — the old check rejected every valid
+    // 3-decimal amount (0.125) on a 3-decimal tenant.
+    if (amountType === 'money') {
+      const bookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
+      const factor = 10 ** bookDigits;
+      if (
+        !Number.isSafeInteger(Math.round(Number(amount) * factor))
+        || Math.abs(Number(amount) - roundMoneyValue(Number(amount), bookDigits)) > 0.000001
+      ) {
+        setError(`المبلغ النقدي لازم يكون بدقة ${bookDigits} منازل عشرية، مثال ${(125.5).toFixed(bookDigits)}.`);
+        return;
+      }
     }
 
     try {

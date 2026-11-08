@@ -5,6 +5,8 @@ import { AppIcons } from '@/shared/components/icons/AppIcons';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { Field } from '@/shared/ui/field';
 import { contractingApi } from '../api/contracting.api';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import type {
   ContractingEquipmentFuelLog,
   ContractingBoqItem,
@@ -67,10 +69,12 @@ export function EquipmentFuelLogsModal({ open, onClose, projectId, projectName }
       ? Number((Number(endMeterHours) - Number(startMeterHours)).toFixed(2))
       : 0;
 
-  // Derived total fuel cost
+  // Derived total fuel cost — INV-FE3-FRONTEND-BOOK-DIGITS: money, so it
+  // rounds at the tenant's book digits, not hardcoded 2dp. (Operating
+  // hours above are hours, not money — they stay at 2dp.)
   const calculatedFuelCost =
     Number(fuelLitersAdded) > 0 && Number(fuelPricePerLiter) > 0
-      ? Number((Number(fuelLitersAdded) * Number(fuelPricePerLiter)).toFixed(2))
+      ? roundMoneyValue(Number(fuelLitersAdded) * Number(fuelPricePerLiter), currencyMoneyDigits(getGlobalSystemCurrency()))
       : 0;
 
   const handleCreateLog = async (e: React.FormEvent) => {

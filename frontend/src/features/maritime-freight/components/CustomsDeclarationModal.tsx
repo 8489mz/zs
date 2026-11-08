@@ -6,6 +6,8 @@ import { CustomSelect } from '@/shared/ui/custom-select';
 import { Field } from '@/shared/ui/field';
 import { maritimeApi, MaritimeCustomsDeclaration, MaritimeCustomsDeclarationItem } from '../api/maritime-freight.api';
 import { toast } from '@/shared/components/system-alert';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 interface CustomsDeclarationModalProps {
   open: boolean;
@@ -130,7 +132,9 @@ export function CustomsDeclarationModal({ open, onClose, jobId, jobNumber }: Cus
     }
   };
 
-  const estimatedDuty = Math.round(customsValue * (dutyRatePercent / 100) * 100) / 100;
+  // INV-FE3-FRONTEND-BOOK-DIGITS: the estimated duty is money; it rounds
+  // at the tenant's book digits, not hardcoded 2dp.
+  const estimatedDuty = roundMoneyValue(customsValue * (dutyRatePercent / 100), currencyMoneyDigits(getGlobalSystemCurrency()));
 
   if (detail) {
     const cfg = STATUS_CONFIG[detail.declaration.status] || STATUS_CONFIG.pending;

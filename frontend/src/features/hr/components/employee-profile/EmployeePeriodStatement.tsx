@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useHrAttendance } from '@/features/hr/hooks/useHr';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { useHasAnyPermission } from '@/shared/hooks/use-permission';
 import { hrApi } from '@/features/hr/api/hr.api';
 import { DataTable } from '@/shared/ui/data-table';
@@ -55,7 +57,10 @@ export function EmployeePeriodStatement({ employeeId, employee, canViewLoans, ca
   const payableHours = (Number(attendance.data?.summary?.payableMinutes || 0) / 60).toFixed(2);
   const hourly = employee.compensationType === 'hourly';
   const rate = Number(employee.hourlyRate || 0);
-  const indicativePay = Number((Number(payableHours) * rate).toFixed(2));
+  // INV-FE3-FRONTEND-BOOK-DIGITS: indicative pay is money; it rounds at
+  // the tenant's book digits, not hardcoded 2dp. (payableHours above is
+  // hours, not money — it stays at 2dp.)
+  const indicativePay = roundMoneyValue(Number(payableHours) * rate, currencyMoneyDigits(getGlobalSystemCurrency()));
   const rows = withdrawals.data?.rows || [];
 
   return (
