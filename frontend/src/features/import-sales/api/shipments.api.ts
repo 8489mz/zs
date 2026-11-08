@@ -1874,13 +1874,17 @@ export const useConvertFeasibilityToProjectMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (dto: any) => {
-      if (dto.projectId) {
-        return await http<any>(`/api/import-sales/projects/${dto.projectId}/convert-feasibility`, {
-          method: 'POST',
-          body: JSON.stringify(dto),
-        });
+      // I1-P2: approval transitions the EXISTING project only. The old
+      // fallback silently POSTed to /projects (create) whenever the
+      // caller forgot projectId — that is exactly how approving a
+      // feasibility study created a second project live (trial problem 2).
+      // A convert without a project id now fails closed instead.
+      if (!dto?.projectId) {
+        throw new Error(
+          'projectId is required to convert a feasibility study: approval must transition the existing project, never create a new one. [IMPORT_CONVERT_PROJECT_ID_REQUIRED]',
+        );
       }
-      return await http<any>('/api/import-sales/projects', {
+      return await http<any>(`/api/import-sales/projects/${dto.projectId}/convert-feasibility`, {
         method: 'POST',
         body: JSON.stringify(dto),
       });

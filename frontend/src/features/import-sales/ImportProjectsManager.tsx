@@ -6,6 +6,7 @@ import {
   useCreateImportProjectMutation,
   useCalculateFeasibilityMutation,
   useConvertFeasibilityToProjectMutation,
+  useUpdateImportProjectMutation,
   useCloseProjectMutation,
   useApprovalRequestsQuery,
   useCreateApprovalRequestMutation,
@@ -36,6 +37,11 @@ export default function ImportProjectsManager() {
   const createProjectMutation = useCreateImportProjectMutation();
   const calculateFeasibilityMutation = useCalculateFeasibilityMutation();
   const convertFeasibilityMutation = useConvertFeasibilityToProjectMutation();
+  // I1-P2: the project whose feasibility study is open in the engine dialog.
+  // Approval transitions THIS project; null when the engine was opened
+  // standalone (header button), where approval is not available.
+  const [feasibilityProjectId, setFeasibilityProjectId] = useState<string | null>(null);
+  const updateProjectMutation = useUpdateImportProjectMutation(feasibilityProjectId ?? '');
   const closeProjectMutation = useCloseProjectMutation();
   const { data: approvalRequests = [], refetch: refetchApprovals } = useApprovalRequestsQuery();
   const createApprovalMutation = useCreateApprovalRequestMutation();
@@ -475,22 +481,25 @@ export default function ImportProjectsManager() {
 
   const handleConvertFeasibilityToProject = async () => {
     if (!feasibilityResult) return;
+    // I1-P2: approval transitions the EXISTING project only. The engine
+    // can also be opened standalone (no project); approving there has no
+    // project to transition, so it is refused instead of creating one.
+    if (!feasibilityProjectId) {
+      toast.error('افتح دراسة الجدوى من صف المشروع لاعتمادها على المشروع نفسه');
+      return;
+    }
     try {
-      const baseScenario = feasibilityResult.scenarios?.base || {};
-      await convertFeasibilityMutation.mutateAsync({
-        title: `مشروع استيراد معتمد (${items[0]?.name || 'صفقة جديدة'})`,
-        targetMarket,
-        countryOrigin,
-        allocatedCapital: Number(baseScenario.totalInvestmentEgp || allocatedCapital),
-        targetRoiPercentage: Number(baseScenario.roiPercentage || targetMarkup),
-        feasibilityData: feasibilityResult,
-        notes: 'تم تحويله آلياً من محرك دراسة الجدوى الاستيرادية',
-      });
-      toast.success('تم تحويل دراسة الجدوى إلى مشروع استيراد فعلي بنجاح');
+      // The convert endpoint reads the feasibility stored on the project,
+      // so persist the study on screen first — otherwise an edited study
+      // would approve stale stored data (or fail on an empty study).
+      await updateProjectMutation.mutateAsync({ feasibilityData: feasibilityResult });
+      await convertFeasibilityMutation.mutateAsync({ projectId: feasibilityProjectId });
+      toast.success('تم اعتماد دراسة الجدوى وتحويل المشروع إلى مرحلة التوريد بنجاح');
       setIsFeasibilityOpen(false);
+      setFeasibilityProjectId(null);
       refetch();
     } catch (err: any) {
-      toast.error('فشل تحويل دراسة الجدوى: ' + (err.message || 'خطأ غير معروف'));
+      toast.error('فشل اعتماد دراسة الجدوى: ' + (err.message || 'خطأ غير معروف'));
     }
   };
 
@@ -538,6 +547,9 @@ export default function ImportProjectsManager() {
   };
 
   const handleOpenProjectFeasibility = (p: any) => {
+    // I1-P2: remember which existing project this study belongs to, so
+    // approving it transitions THIS project instead of creating a new one.
+    setFeasibilityProjectId(p.id);
     let data = p.feasibility_data;
     if (typeof data === 'string') {
       try {
@@ -844,7 +856,10 @@ export default function ImportProjectsManager() {
       {/* 3. Feasibility Study Engine Dialog */}
       <StandardDialog
         open={isFeasibilityOpen}
-        onClose={() => setIsFeasibilityOpen(false)}
+        onClose={() => {
+          setIsFeasibilityOpen(false);
+          setFeasibilityProjectId(null);
+        }}
         title="محرك دراسة الجدوى الاستيرادية والسيناريوهات الثلاثة (Feasibility Engine)"
         subtitle="حساب تكلفة الوحدة المتوقعة بالجنيه، الجمارك، الشحن، نقطة التعادل، ومقارنة السيناريوهات"
         width="1180px"
@@ -1641,11 +1656,17 @@ export default function ImportProjectsManager() {
               </div>
 
               {/* Conversion Button */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, paddingTop: 8 }}>
+                {!feasibilityProjectId && (
+                  <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#b45309' }}>
+                    الاعتماد متاح فقط عند فتح دراسة الجدوى من صف مشروع قائم — لن يتم إنشاء مشروع جديد من هنا.
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={handleConvertFeasibilityToProject}
-                  disabled={convertFeasibilityMutation.isPending}
+                  disabled={convertFeasibilityMutation.isPending || updateProjectMutation.isPending || !feasibilityProjectId}
+                  title={feasibilityProjectId ? 'اعتماد دراسة الجدوى على المشروع الحالي' : 'افتح دراسة الجدوى من صف المشروع لاعتمادها عليه'}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',

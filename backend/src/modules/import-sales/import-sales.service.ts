@@ -6148,6 +6148,16 @@ export class ImportSalesService {
         .forUpdate()
         .executeTakeFirstOrThrow();
 
+      // I1-P2: approving a feasibility study transitions the existing
+      // project only, once. A second approval must fail closed instead
+      // of re-running the conversion — re-running would rebuild the
+      // cash-flow schedule and mint a second proforma for the same study.
+      if (project.feasibility_converted_at) {
+        throw new BadRequestException(
+          `دراسة الجدوى للمشروع ${project.project_no} معتمدة بالفعل؛ لا يمكن اعتمادها مرة ثانية. [IMPORT_FEASIBILITY_ALREADY_CONVERTED]`,
+        );
+      }
+
       const feas = project.feasibility_data;
       if (!feas || !feas.items || !feas.items.length) {
         throw new BadRequestException('دراسة الجدوى لا تحتوي على أصناف صالحة للتحويل.');
