@@ -129,6 +129,21 @@ export class ProductSerialsService {
       .innerJoin('products as p', 'p.id', 'ps.product_id')
       .leftJoin('stock_locations as sl', 'sl.id', 'ps.location_id')
       .leftJoin('branches as b', 'b.id', 'ps.branch_id')
+      // R2-A: the sale/purchase document details the IMEI header reads.
+      // ps.sale_id is stamped by markSerialsSold, ps.purchase_id by the
+      // purchase intake; the doc numbers and partner names live on the
+      // joined rows (sales.doc_no, purchases.doc_no, suppliers.name).
+      // Customer name/phone: the sale row itself carries the sale-time
+      // snapshot (sales.customer_name / customer_phone) and the customers
+      // table carries the canonical record — snapshot wins, table is the
+      // fallback, exactly the dual-source pattern of
+      // sales-query.service.ts (s.customer_name + c.name as
+      // customer_name_ref). Nothing is invented: a missing join leaves
+      // null and the page keeps its honest fallback text.
+      .leftJoin('sales as s', 's.id', 'ps.sale_id')
+      .leftJoin('customers as c', 'c.id', 's.customer_id')
+      .leftJoin('purchases as pu', 'pu.id', 'ps.purchase_id')
+      .leftJoin('suppliers as sup', 'sup.id', 'pu.supplier_id')
       .select([
         'ps.id',
         'ps.product_id',
@@ -140,12 +155,21 @@ export class ProductSerialsService {
         'ps.cost_price',
         'ps.warranty_end_date',
         'ps.notes',
+        'ps.sale_id',
+        'ps.purchase_id',
         'p.name as product_name',
         'p.barcode as product_barcode',
         'p.retail_price as product_retail_price',
         'p.wholesale_price as product_wholesale_price',
         'sl.name as location_name',
         'b.name as branch_name',
+        's.doc_no as sale_doc_no',
+        's.customer_name as sale_customer_name',
+        's.customer_phone as sale_customer_phone',
+        'c.name as customer_name_ref',
+        'c.phone as customer_phone_ref',
+        'pu.doc_no as purchase_doc_no',
+        'sup.name as supplier_name',
       ])
       .where(this.tenantPredicate(actor, 'ps'))
       .where((eb) =>
@@ -184,6 +208,25 @@ export class ProductSerialsService {
         costPrice: Number(row.cost_price || 0),
         warrantyEndDate: row.warranty_end_date || null,
         notes: row.notes || '',
+        // R2-A: sale/purchase document details for the IMEI header
+        // (frontend/src/features/products/pages/ImeiHistoryPage.tsx reads
+        // exactly these fields; the type already declares them). Unsold
+        // serials keep saleDocNo null so the page keeps showing
+        // "لم يتم بيعه بعد"; a purchase with no doc/supplier keeps nulls
+        // so the page keeps its tradeins[0] waiver fallback. The Z-<id>
+        // fallback for a sale whose doc_no is null mirrors
+        // sales-query.service.ts: `docNo: sale.doc_no || \`Z-${sale.id}\``
+        // — derived from the real sale row, never invented.
+        saleId: row.sale_id ? String(row.sale_id) : null,
+        saleDocNo:
+          row.sale_doc_no || (row.sale_id ? `Z-${row.sale_id}` : null),
+        purchaseId: row.purchase_id ? String(row.purchase_id) : null,
+        purchaseDocNo: row.purchase_doc_no || null,
+        customerName:
+          row.sale_customer_name || row.customer_name_ref || null,
+        customerPhone:
+          row.sale_customer_phone || row.customer_phone_ref || null,
+        supplierName: row.supplier_name || null,
       },
     };
   }
