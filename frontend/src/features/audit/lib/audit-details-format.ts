@@ -1,4 +1,5 @@
 import type { AuditLog } from '@/types/domain';
+import { normalizeAuditDetailText } from '@/features/audit/lib/audit-activity-presenter';
 
 type AuditDetailsObject = Record<string, unknown>;
 
@@ -193,6 +194,15 @@ export function formatAuditDetails(row: AuditLog): string {
 // formatAuditDetails above — and a count-session event reads identically
 // on /audit and in the activity log. Non-audit activities never reach
 // this adapter; their notes stay verbatim in the caller.
+//
+// The adapter also runs the SAME sentence normaliser /audit runs
+// (normalizeAuditDetailText): a plain-English HR sentence such as
+// 'Employee loan created by muse' is not JSON, so formatAuditDetails
+// passes it through verbatim — without this step the activity logs
+// would keep showing the English sentence while /audit translates it.
+// One canonical pipeline, every path.
 export function formatEmployeeActivityDetails(activity: { title: string; details: string }): string {
-  return formatAuditDetails({ id: '', action: activity.title, details: activity.details, createdAt: '' });
+  return normalizeAuditDetailText(
+    formatAuditDetails({ id: '', action: activity.title, details: activity.details, createdAt: '' }),
+  );
 }

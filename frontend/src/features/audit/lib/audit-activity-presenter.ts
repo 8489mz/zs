@@ -451,6 +451,39 @@ export function normalizeAuditDetailText(detailText: string, isEn = false): stri
     return `تم ${actionMap[action.toLowerCase()] || action} مسير الرواتب #${id} بواسطة ${actor}`;
   }
 
+  // 11. HR leave request created for an employee (no request id — the
+  // create path logs 'Leave request created for employee #105 by
+  // muse', which the id-bearing pattern 9 never matches).
+  const leaveCreateMatch = raw.match(/Leave request created for employee\s*#?(\d+)\s*by\s*(.+)/i);
+  if (leaveCreateMatch) {
+    const [, employeeId, actor] = leaveCreateMatch;
+    return `تم تقديم طلب إجازة للموظف #${employeeId} بواسطة ${actor}`;
+  }
+
+  // 12. HR leave type saved (the backend logs the type NAME, not an
+  // id: 'Leave type Annual saved by muse').
+  const leaveTypeMatch = raw.match(/Leave type\s+(.+?)\s+saved by\s*(.+)/i);
+  if (leaveTypeMatch) {
+    const [, name, actor] = leaveTypeMatch;
+    return `تم حفظ نوع الإجازة ${name} بواسطة ${actor}`;
+  }
+
+  // 13. HR employee loan without an id (the create path logs
+  // 'Employee loan created by muse'; the id-bearing pattern 7 never
+  // matches it). The other verbs share the no-id shape if ever logged.
+  const loanNoIdMatch = raw.match(/Employee loan\s+(created|updated|approved|disbursed|repayment recorded)\s+by\s*(.+)/i);
+  if (loanNoIdMatch) {
+    const [, action, actor] = loanNoIdMatch;
+    const actionMap: Record<string, string> = {
+      created: 'إنشاء',
+      updated: 'تعديل',
+      approved: 'اعتماد',
+      disbursed: 'صرف',
+      'repayment recorded': 'سداد',
+    };
+    return `تم ${actionMap[action.toLowerCase()] || action} سلفة موظف بواسطة ${actor}`;
+  }
+
   // General string cleanup & translation replacements
   return raw
     .replace(/Upsert HR attendance record/gi, 'تسجيل أو تعديل حضور موظف')

@@ -30,6 +30,7 @@ import { DialogShell } from '@/shared/components/dialog-shell';
 import { DataTable } from '@/shared/ui/data-table';
 import { ReportMetricCard } from '@/shared/components/report-metric-card';
 import { employeeReportsApi } from '@/shared/api/employee-reports';
+import { formatEmployeeActivityDetails, getAuditActionLabel } from '@/features/audit';
 import { formatCurrency, formatDate } from '@/lib/format';
 import type { SetupStepKey } from '@/features/settings/hooks/useFirstRunSetupFlow';
 import { useAuthStore } from '@/stores/auth-store';
@@ -534,8 +535,8 @@ export function UserManagementSection({ branches, setupMode = false, setupStepKe
               ariaLabel={t('settings.user_management_section.s32', "نشاط المستخدم")}
               rows={detailsQuery.data.activities || []}
               columns={[
-                { key: 'title', header: t('settings.user_management_section.s33', "العنوان"), cell: (row) => row.title },
-                { key: 'details', header: t('settings.user_management_section.s34', "التفاصيل"), cell: (row) => row.details || '—' },
+                { key: 'title', header: t('settings.user_management_section.s33', "العنوان"), cell: (row) => row.activityType === 'audit' ? getAuditActionLabel(row.title) : row.title },
+                { key: 'details', header: t('settings.user_management_section.s34', "التفاصيل"), cell: (row) => row.activityType === 'audit' ? formatEmployeeActivityDetails(row) : row.details || '—' },
                 { key: 'amount', header: t('settings.user_management_section.s35', "القيمة"), cell: (row) => row.amount == null ? '—' : formatCurrency(row.amount || 0) },
                 { key: 'date', header: t('settings.user_management_section.s36', "التاريخ والوقت"), cell: (row) => formatDate(row.createdAt) },
                 { key: 'ref', header: t('settings.user_management_section.s37', "المرجع"), cell: (row) => row.referenceLabel || '—' },
