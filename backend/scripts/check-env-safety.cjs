@@ -8,7 +8,6 @@ const envExamplePath = path.join(backendRoot, '.env.example');
 const runtimeEnvPath = path.join(backendRoot, '.env');
 const composeFilePath = path.join(repoRoot, 'docker-compose.yml');
 const composeExamplePath = path.join(repoRoot, '.env.compose.example');
-const ciWorkflowPath = path.join(repoRoot, '.github', 'workflows', 'ci.yml');
 const saleReadyScriptPath = path.join(repoRoot, 'scripts', 'certify-sale-ready.sh');
 const localE2EScriptPath = path.join(repoRoot, 'scripts', 'run-backend-e2e-local.sh');
 const cleanReleaseScriptPath = path.join(repoRoot, 'scripts', 'package-clean-release.sh');
@@ -225,10 +224,23 @@ if (fs.existsSync(composeExamplePath)) {
   }
 }
 
-if (fs.existsSync(ciWorkflowPath)) {
-  const ciEnv = parseGithubJobEnv(fs.readFileSync(ciWorkflowPath, 'utf8'), 'backend');
-  assert(Object.keys(ciEnv).length > 0, 'Could not parse backend env from .github/workflows/ci.yml');
-  assertBootstrapEnv('.github/workflows/ci.yml backend job', ciEnv);
+// CI runs in two stages since the 2026-11-08 split: ci.yml carries the fast
+// backend-fast job, ci-full.yml carries the full backend job. The safety check
+// must cover the backend env in every CI workflow file that exists, trying the
+// pre-split job name first and the split name second.
+const ciWorkflowNames = ['ci.yml', 'ci-full.yml'];
+for (const ciName of ciWorkflowNames) {
+  const ciFile = path.join(repoRoot, '.github', 'workflows', ciName);
+  if (!fs.existsSync(ciFile)) continue;
+  const ciContent = fs.readFileSync(ciFile, 'utf8');
+  let ciEnv = parseGithubJobEnv(ciContent, 'backend');
+  let ciJob = 'backend';
+  if (Object.keys(ciEnv).length === 0) {
+    ciEnv = parseGithubJobEnv(ciContent, 'backend-fast');
+    ciJob = 'backend-fast';
+  }
+  assert(Object.keys(ciEnv).length > 0, `Could not parse backend env from .github/workflows/${ciName}`);
+  assertBootstrapEnv(`.github/workflows/${ciName} ${ciJob} job`, ciEnv);
 }
 
 assert(fs.existsSync(portableOfflineTemplatePath), 'Missing portable/config/.env.offline.template');
