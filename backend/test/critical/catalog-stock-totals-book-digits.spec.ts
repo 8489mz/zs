@@ -232,20 +232,16 @@ async function main(): Promise<void> {
     }
   }
 
-  // Case 6: source pin — the only remaining toFixed(2) line in the
-  // service is the combo display shaping; both consolidation legs
-  // use the single computation at book digits.
+  // Case 6: source pin — D6a removed the last toFixed(2) line in the
+  // service (the combo display shaping now rounds at the book digits
+  // via roundMoney); no 2-decimal cut remains anywhere in the file,
+  // and both consolidation legs still use the single computation at
+  // book digits.
   {
     const servicePath = resolve(__dirname, '../../src/modules/catalog/services/catalog-product.service.ts');
     const source = readFileSync(servicePath, 'utf8');
     const toFixedLines = source.split('\n').filter((line) => line.includes('toFixed(2)'));
-    assert.equal(toFixedLines.length, 1);
-    for (const line of toFixedLines) {
-      assert.ok(
-        line.includes('comboOriginalPrice'),
-        `unexpected toFixed(2) site: ${line.trim()}`,
-      );
-    }
+    assert.equal(toFixedLines.length, 0, `unexpected toFixed(2) site: ${toFixedLines.map((line) => line.trim()).join(' | ')}`);
     const helperCalls = source.match(/stockMovementTotal\(/g) ?? [];
     assert.ok(helperCalls.length >= 9, `expected at least 9 stockMovementTotal call sites, found ${helperCalls.length}`);
     assert.ok(!source.includes('roundCurrency'), 'no roundCurrency helper may remain in the catalog service');

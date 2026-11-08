@@ -1,5 +1,5 @@
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { lockAccountingPeriod } from '../../accounting/accounting-period-lock';
 import { BadRequestException, Inject, Injectable, Logger, NotFoundException, Optional, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
@@ -1696,6 +1696,11 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     auth?: AuthContext,
   ): Promise<RepricingBotResult> {
     const scope = auth ? requireTenantScope(auth) : { tenantId: 'default' };
+    // D6a: repriced prices are persisted as the mapping's customPrice,
+    // so the floor and the target round at the tenant's book digits
+    // (3 for KWD/OMR/BHD/JOD/TND/IQD/LYD), fail-closed on a
+    // base-currency/rate mismatch via tenantBaseCurrency.
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const mappings = await this.getSettingJson<MarketplaceSkuMapping[]>('marketplace_sku_mappings', scope.tenantId, []);
 
     const eligible = mappings.filter((m) => {
@@ -1728,7 +1733,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
         targetPrice = referencePrice - delta;
       }
 
-      const calculatedFloor = m.costPrice ? Number((m.costPrice * 1.05).toFixed(2)) : 10;
+      const calculatedFloor = m.costPrice ? roundMoney(m.costPrice * 1.05, bookDigits) : 10;
       const minPrice = m.minPrice && m.minPrice > 0 ? m.minPrice : calculatedFloor;
 
       let reason = `تطبيق قاعدة ${rule} بمقدار ${delta}`;
@@ -1742,7 +1747,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
         reason = `تم الالتزام بالحد الأقصى للسعر (${m.maxPrice} ج.م)`;
       }
 
-      targetPrice = Number(targetPrice.toFixed(2));
+      targetPrice = roundMoney(targetPrice, bookDigits);
 
       if (Math.abs(targetPrice - currentPrice) >= 0.25) {
         m.customPrice = targetPrice;
@@ -1883,6 +1888,10 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     auth: AuthContext,
   ): Promise<FbaInboundShipment> {
     const scope = requireTenantScope(auth);
+    // D6a: the persisted discrepancy loss rounds at the tenant's book
+    // digits (see runRepricingBot above); this method opens no
+    // transaction, so the pool handle is the caller's own handle.
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const shipments = await this.getInboundShipments(auth);
     const index = shipments.findIndex((s) => s.id === shipmentId);
     if (index === -1) {
@@ -1933,14 +1942,14 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     shipment.receivedAt = new Date().toISOString();
     shipment.totalReceivedUnits = totalReceived;
     shipment.totalDiscrepancyUnits = totalDiscrepancy;
-    shipment.discrepancyLossAmount = Number(lossAmount.toFixed(2));
+    shipment.discrepancyLossAmount = roundMoney(lossAmount, bookDigits);
 
     shipments[index] = shipment;
     await this.setSettingJson('marketplace_inbound_shipments', scope.tenantId, shipments);
 
     await this.audit.log(
       'تسجيل استلام إذن توريد المستودعات ومطابقة الفواقد',
-      `تم فحص إذن التوريد ${shipment.shipmentNumber} بمركز ${shipment.fulfillmentCenterId}. إجمالي المشحون: ${shipment.totalUnits}، المستلم: ${totalReceived}، الفاقد: ${totalDiscrepancy} قطعة (خسارة تقديرية: ${lossAmount.toFixed(2)} ج.م)`,
+      `تم فحص إذن التوريد ${shipment.shipmentNumber} بمركز ${shipment.fulfillmentCenterId}. إجمالي المشحون: ${shipment.totalUnits}، المستلم: ${totalReceived}، الفاقد: ${totalDiscrepancy} قطعة (خسارة تقديرية: ${shipment.discrepancyLossAmount.toFixed(bookDigits)} ج.م)`,
       auth,
     );
 
@@ -1952,6 +1961,9 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     auth: AuthContext,
   ): Promise<FbaDiscrepancyClaimReport> {
     const scope = requireTenantScope(auth);
+    // D6a: claim losses are money the tenant claims back, so each
+    // item loss and the claim total round at the book digits.
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const shipments = await this.getInboundShipments(auth);
     const shipment = shipments.find((s) => s.id === shipmentId);
     if (!shipment) {
@@ -1969,11 +1981,11 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
         quantityReceived: it.quantityReceived ?? it.quantityShipped,
         missingQuantity: it.discrepancy || 0,
         unitCost: it.costPrice || 0,
-        totalLoss: Number(((it.discrepancy || 0) * (it.costPrice || 0)).toFixed(2)),
+        totalLoss: roundMoney((it.discrepancy || 0) * (it.costPrice || 0), bookDigits),
       }));
 
     const totalMissing = missingItems.reduce((s, it) => s + it.missingQuantity, 0);
-    const totalLoss = Number(missingItems.reduce((s, it) => s + it.totalLoss, 0).toFixed(2));
+    const totalLoss = roundMoney(missingItems.reduce((s, it) => s + it.totalLoss, 0), bookDigits);
 
     const claimTitle =
       shipment.marketplace === 'amazon'
@@ -2064,6 +2076,11 @@ ${itemsSummaryAr}
     auth: AuthContext,
   ): Promise<MarketplaceAnalyticsSummary> {
     const scope = requireTenantScope(auth);
+    // D6a: the analytics sums aggregate stored settlement/order money,
+    // so the per-platform and grand totals round at the book digits
+    // instead of cutting a 3-decimal tenant's totals to cents. The
+    // toFixed(1) percentages in this method are rates, not money.
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
 
     const settlements = await this.getSettlements(auth);
     const orders = await this.db
@@ -2109,9 +2126,9 @@ ${itemsSummaryAr}
 
       return {
         marketplace: plt,
-        grossSales: Number(pltGross.toFixed(2)),
-        netPayout: Number(pltNet.toFixed(2)),
-        fees: Number(pltFee.toFixed(2)),
+        grossSales: roundMoney(pltGross, bookDigits),
+        netPayout: roundMoney(pltNet, bookDigits),
+        fees: roundMoney(pltFee, bookDigits),
         ordersCount: pltOrders.length,
         sharePercent,
         returnRatePercent: returnRate,
@@ -2124,16 +2141,16 @@ ${itemsSummaryAr}
       marketplace: m.marketplace,
       sku: m.marketplaceSku,
       unitsSold: Math.max(10, 85 - idx * 14),
-      totalRevenue: Number(((m.customPrice || m.retailPrice || 150) * Math.max(10, 85 - idx * 14)).toFixed(2)),
+      totalRevenue: roundMoney((m.customPrice || m.retailPrice || 150) * Math.max(10, 85 - idx * 14), bookDigits),
     }));
 
     const netMarginPercent = grossSales > 0 ? Number(((netPayout / grossSales) * 100).toFixed(1)) : 0;
 
     return {
       period,
-      totalGrossSales: Number(grossSales.toFixed(2)),
-      totalNetPayout: Number(netPayout.toFixed(2)),
-      totalFees: Number(totalFees.toFixed(2)),
+      totalGrossSales: roundMoney(grossSales, bookDigits),
+      totalNetPayout: roundMoney(netPayout, bookDigits),
+      totalFees: roundMoney(totalFees, bookDigits),
       totalOrders: orders.length,
       netMarginPercent,
       marketplaceBreakdown: breakdown,

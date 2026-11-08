@@ -3983,12 +3983,20 @@ export class StorefrontService {
       discountAmount = Math.min(subtotal, Number(coupon.discount_value));
     }
 
+    // D6a: the preview discount must agree with the charge the order
+    // path computes (line ~1232 rounds the same discount at the same
+    // book digits). A 2-decimal cut here showed a 3-decimal tenant
+    // 100.13 while the order charged 100.125. Same helper the order
+    // path uses (settings currency, then tenant currency); the
+    // posting path still fail-closes on a misconfigured currency.
+    const moneyDigits = storefrontMoneyDigits(await this.getTenantSettingsMap(tenant.id), tenant);
+
     return {
       ok: true,
       code: coupon.code,
       discountType: coupon.discount_type,
       discountValue: Number(coupon.discount_value),
-      discountAmount: Number(discountAmount.toFixed(2)),
+      discountAmount: roundMoney(discountAmount, moneyDigits),
       isFreeShipping,
       minOrderAmount: minOrder,
       maxDiscountAmount: coupon.max_discount_amount ? Number(coupon.max_discount_amount) : null,

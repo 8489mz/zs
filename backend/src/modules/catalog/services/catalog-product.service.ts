@@ -16,7 +16,7 @@ import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
 import { assertFashionExpectedStock, assertFashionRemovedStockSafe, fashionLocationAccessMode } from '../engines/fashion-stock-safety.engine';
 import { stockMovementTotal } from '../engines/stock-movement-total.engine';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits, MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { StorefrontMediaService } from '../../storefront/storefront-media.service';
 import { availableAcrossLocations } from '../../../common/engines/branch-sellable-locations.engine';
 
@@ -1207,8 +1207,17 @@ export class CatalogProductService {
       entry.componentsSummary = entry.componentsSummary ? `${entry.componentsSummary} + ${compLabel}` : compLabel;
     }
 
-    for (const [, entry] of result) {
-      entry.comboOriginalPrice = Number(entry.comboOriginalPrice.toFixed(2));
+    // D6a: the combo original price is a computed money value (sum of
+    // component retail prices x quantities) shown at POS, so it rounds
+    // at the tenant's book digits via the file's own bookDigits helper
+    // (fail-closed on a base-currency/rate mismatch). Digits resolve
+    // only when a combo actually exists, so plain-product lookups
+    // never pay for the settings read.
+    if (result.size > 0) {
+      const digits = await this.bookDigits(this.db, actor);
+      for (const [, entry] of result) {
+        entry.comboOriginalPrice = roundMoney(entry.comboOriginalPrice, digits);
+      }
     }
 
     return result;
