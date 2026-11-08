@@ -344,6 +344,38 @@ export default function ShipmentDetailsPage() {
         toast.error('يجب تحديد مخزن استلام الحاوية الفعلي قبل الترحيل إلى المخزون');
         return;
       }
+      // I1-P5 early payee pre-flight (INV-IMPORT-PAYEE-VALIDATION-EARLY):
+      // the payee problem must surface BEFORE the irreversible
+      // arrival confirm is shown, never after confirming it. The
+      // check mirrors the backend save-time rule on the values
+      // already loaded (form state falls back to the stored
+      // shipment): every nonzero cost component needs its payee or
+      // a recorded unallocable reason. The loaded shipment carries
+      // no broker-folded sums, so this uses raw bucket amounts and
+      // can ask for a payee on a fully broker-folded component the
+      // backend would post without one; assigning one there is
+      // harmless (a zero share creates no credit line), and the
+      // backend remains the authority on the confirm itself.
+      const effectiveCost = (formValue: string, stored: unknown): number => {
+        const n = formValue !== '' ? Number(formValue) : Number(stored || 0);
+        return Number.isFinite(n) ? n : 0;
+      };
+      const effectivePayee = (formValue: string, stored: unknown): number => {
+        const n = formValue !== '' ? Number(formValue) : Number(stored || 0);
+        return Number.isSafeInteger(n) && n > 0 ? n : 0;
+      };
+      const effectiveReason = (unallocableCostReason !== '' ? unallocableCostReason : String(data.unallocable_cost_reason || '')).trim();
+      const missingPayeeComponents: Array<{ label: string; amount: number; payeeId: number }> = [
+        { label: 'شحن بحري', amount: effectiveCost(shippingCost, data.shipping_cost_usd), payeeId: effectivePayee(freightSupplier, data.freight_supplier_id) },
+        { label: 'جمارك وتخليص', amount: effectiveCost(customsCost, data.customs_cost_egp), payeeId: effectivePayee(customsSupplier, data.customs_supplier_id) },
+        { label: 'نقل داخلي', amount: effectiveCost(transportCost, data.internal_transport_cost_egp), payeeId: effectivePayee(transportSupplier, data.transport_supplier_id) },
+        { label: 'غرامات تأخير وأرضيات', amount: effectiveCost('', data.actual_demurrage_fees), payeeId: effectivePayee(demurrageSupplier, data.demurrage_supplier_id) },
+      ];
+      const unattributed = missingPayeeComponents.find((c) => c.amount > 0 && !c.payeeId && !effectiveReason);
+      if (unattributed) {
+        toast.error(`لا يمكن ترحيل بند التكلفة (${unattributed.label}) بلا مورد محدد: حدد مورد البند أو سجل سبب عدم قابلية التخصيص قبل تأكيد الوصول. [IMPORT_COMPONENT_PAYEE_REQUIRED]`);
+        return;
+      }
       const confirmed = await systemConfirm({
         title: 'تأكيد وصول الحاوية وترحيل المخزون واليومية العامة',
         message: 'تنبيه محاسبي ومخزني: تغيير الحالة إلى (تم الوصول Arrived) سيقوم بإدخال الأصناف فوراً إلى رصيد المخزن المحدد، حساب متوسط التكلفة المرجح، إنشاء سند استلام نهائي، وإثبات قيد التكلفة المحملة في اليومية العامة. لا يمكن تعديل الكميات بعد الترحيل إلا بتسوية جردية معتمدة. هل ترغب في المتابعة؟',

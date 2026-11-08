@@ -2168,6 +2168,103 @@ export class ImportSalesService {
     });
   }
 
+  /**
+   * I1-P5 early payee validation (INV-IMPORT-PAYEE-VALIDATION-EARLY):
+   * the arrival path resolves a payee only for a nonzero overhead
+   * share, and a share is nonzero exactly when its net bucket
+   * weight is positive (bucket less the broker-folded portion of
+   * that bucket). This helper applies that SAME rule to the
+   * effective (post-save) cost state, so a cost save that would
+   * leave a postable component unattributed fails here — before
+   * any expense, landed-cost or journal write — instead of
+   * surfacing only after the irreversible arrival confirm. The
+   * one deliberate divergence: the arrival share also scales with
+   * the receipt's total overhead residual, which needs the grouped
+   * landed cost and is not computable before the save; a residual
+   * at or below zero cannot post at all (the arrival split fails
+   * closed on it), so requiring the payee there is fail-fast,
+   * never a mis-posting.
+   */
+  private async assertCostComponentPayees(
+    trx: Transaction<Database>,
+    tenantId: string,
+    shipmentId: string,
+    effective: {
+      shippingCostUsd: number;
+      customsCostEgp: number;
+      internalTransportCostEgp: number;
+      actualDemurrageFees: number;
+      exchangeRateAtArrival: number | null;
+      freightSupplierId: number;
+      customsSupplierId: number;
+      transportSupplierId: number;
+      demurrageSupplierId: number;
+      unallocableCostReason: string;
+    },
+  ): Promise<void> {
+    // The folded sums are only read when a foldable bucket is
+    // nonzero: freight has no folded bucket, and a zero bucket
+    // nets to zero either way. This keeps the validation usable
+    // on call paths (and minimal harnesses) that never touch
+    // broker capitalisation, instead of failing them on a table
+    // they never needed.
+    const needsFolded =
+      effective.customsCostEgp > 0 ||
+      effective.internalTransportCostEgp > 0 ||
+      effective.actualDemurrageFees > 0;
+    const foldedByBucket = new Map<string, number>();
+    if (needsFolded) {
+      const foldedRows = await trx.selectFrom('import_broker_capitalizations')
+        .select(['cost_bucket', sql<number>`coalesce(sum(amount_egp), 0)`.as('folded_total')])
+        .where('tenant_id', '=', tenantId).where('shipment_id', '=', shipmentId).where('state', '=', 'folded')
+        .groupBy('cost_bucket')
+        .execute();
+      for (const row of foldedRows) {
+        foldedByBucket.set(String((row as any).cost_bucket || ''), Number((row as any).folded_total || 0));
+      }
+    }
+    const rate = effective.exchangeRateAtArrival;
+    const components: Array<{ label: string; netAmount: number; payeeId: number }> = [
+      {
+        label: 'شحن بحري',
+        // Freight has no broker-folded bucket: its net weight is
+        // the USD cost converted at the effective arrival rate. A
+        // nonzero USD cost with no usable rate yet is still a real
+        // cost — the rate itself is guarded separately before arrival.
+        netAmount: rate !== null && Number.isFinite(rate) && rate > 0
+          ? effective.shippingCostUsd * rate
+          : effective.shippingCostUsd,
+        payeeId: effective.freightSupplierId,
+      },
+      {
+        label: 'جمارك وتخليص',
+        netAmount: Math.max(0, effective.customsCostEgp - (foldedByBucket.get('customs_cost_egp') || 0)),
+        payeeId: effective.customsSupplierId,
+      },
+      {
+        label: 'نقل داخلي',
+        netAmount: Math.max(0, effective.internalTransportCostEgp - (foldedByBucket.get('internal_transport_cost_egp') || 0)),
+        payeeId: effective.transportSupplierId,
+      },
+      {
+        label: 'غرامات تأخير وأرضيات',
+        netAmount: Math.max(0, effective.actualDemurrageFees - (foldedByBucket.get('actual_demurrage_fees') || 0)),
+        payeeId: effective.demurrageSupplierId,
+      },
+    ];
+    for (const component of components) {
+      if (!(component.netAmount > 0)) continue;
+      if (Number.isSafeInteger(component.payeeId) && component.payeeId > 0) {
+        const supplier = await trx.selectFrom('suppliers').select('id')
+          .where('tenant_id', '=', tenantId).where('id', '=', component.payeeId).executeTakeFirst();
+        if (supplier) continue;
+        throw new BadRequestException(`مورد بند التكلفة (${component.label}) غير موجود في هذه المنشأة؛ حدد مورداً حقيقياً قبل الترحيل. [IMPORT_COMPONENT_PAYEE_REQUIRED]`);
+      }
+      if (effective.unallocableCostReason) continue;
+      throw new BadRequestException(`لا يمكن ترحيل بند التكلفة (${component.label}) بلا مورد محدد: حدد مورد البند أو سجل سبب عدم قابلية التخصيص قبل الترحيل. [IMPORT_COMPONENT_PAYEE_REQUIRED]`);
+    }
+  }
+
   async updateShipmentCosts(tenantId: string, userId: number, shipmentId: string, dto: UpdateShipmentCostsDto) {
     await this.inventoryDb.transaction().execute(async (trx) => {
       const state = await this.lockShipment(trx, tenantId, shipmentId);
@@ -2249,6 +2346,63 @@ export class ImportSalesService {
         }
       }
       if (dto.unallocableCostReason !== undefined) payload.unallocable_cost_reason = dto.unallocableCostReason || null;
+
+      // I1-P5 early payee validation (INV-IMPORT-PAYEE-VALIDATION-EARLY):
+      // runs BEFORE any expense, landed-cost or journal write, on
+      // the effective (post-save) state. It fires when the call
+      // marks the shipment Arrived (the pre-flight for the
+      // irreversible confirm) or when it changes a cost amount, a
+      // payee, the unallocable reason or the arrival rate. An
+      // identical re-save is a no-op and skips validation, the
+      // same convention as the payee loop above and the broker
+      // floor (a below-floor change nets to zero here, so the
+      // floor error keeps its precedence). A posted receipt is
+      // immutable, so no validation runs once one exists.
+      if (!receipt) {
+        const numOrZero = (value: unknown): number => {
+          const n = Number(value ?? 0);
+          return Number.isFinite(n) ? n : 0;
+        };
+        const storedRate = shipment.exchange_rate_at_arrival === null || shipment.exchange_rate_at_arrival === undefined
+          ? null
+          : numOrZero(shipment.exchange_rate_at_arrival);
+        const costTouched =
+          (dto.shippingCostUsd !== undefined && numOrZero(dto.shippingCostUsd) !== numOrZero(shipment.shipping_cost_usd)) ||
+          (dto.customsCostEgp !== undefined && numOrZero(dto.customsCostEgp) !== numOrZero(shipment.customs_cost_egp)) ||
+          (dto.internalTransportCostEgp !== undefined && numOrZero(dto.internalTransportCostEgp) !== numOrZero(shipment.internal_transport_cost_egp)) ||
+          (dto.actualDemurrageFees !== undefined && numOrZero(dto.actualDemurrageFees) !== numOrZero(shipment.actual_demurrage_fees)) ||
+          (dto.exchangeRateAtArrival !== undefined && (storedRate === null || numOrZero(dto.exchangeRateAtArrival) !== storedRate)) ||
+          (dto.freightSupplierId !== undefined && numOrZero(dto.freightSupplierId) !== numOrZero((shipment as any).freight_supplier_id)) ||
+          (dto.customsSupplierId !== undefined && numOrZero(dto.customsSupplierId) !== numOrZero((shipment as any).customs_supplier_id)) ||
+          (dto.transportSupplierId !== undefined && numOrZero(dto.transportSupplierId) !== numOrZero((shipment as any).transport_supplier_id)) ||
+          (dto.demurrageSupplierId !== undefined && numOrZero(dto.demurrageSupplierId) !== numOrZero((shipment as any).demurrage_supplier_id)) ||
+          (dto.unallocableCostReason !== undefined && String(dto.unallocableCostReason ?? '').trim() !== String((shipment as any).unallocable_cost_reason ?? '').trim());
+        if (dto.status === 'Arrived' || costTouched) {
+          if (dto.status === 'Arrived') {
+            // The arrival rate keeps precedence over the payee
+            // check: an Arrived call without a rate must still fail
+            // on the rate, exactly as before.
+            const effectiveRate = dto.exchangeRateAtArrival !== undefined ? numOrZero(dto.exchangeRateAtArrival) : storedRate;
+            if (effectiveRate === null || !Number.isFinite(effectiveRate) || effectiveRate <= 0) {
+              throw new BadRequestException(
+                'لا يمكن تمييز الشحنة كواصلة بلا سعر صرف وصول حقيقي وموجب؛ حدد سعر الصرف عند الوصول أولاً. [IMPORT_ARRIVAL_RATE_REQUIRED]',
+              );
+            }
+          }
+          await this.assertCostComponentPayees(trx, tenantId, shipmentId, {
+            shippingCostUsd: dto.shippingCostUsd !== undefined ? numOrZero(dto.shippingCostUsd) : numOrZero(shipment.shipping_cost_usd),
+            customsCostEgp: dto.customsCostEgp !== undefined ? numOrZero(dto.customsCostEgp) : numOrZero(shipment.customs_cost_egp),
+            internalTransportCostEgp: dto.internalTransportCostEgp !== undefined ? numOrZero(dto.internalTransportCostEgp) : numOrZero(shipment.internal_transport_cost_egp),
+            actualDemurrageFees: dto.actualDemurrageFees !== undefined ? numOrZero(dto.actualDemurrageFees) : numOrZero(shipment.actual_demurrage_fees),
+            exchangeRateAtArrival: dto.exchangeRateAtArrival !== undefined ? numOrZero(dto.exchangeRateAtArrival) : storedRate,
+            freightSupplierId: dto.freightSupplierId !== undefined ? numOrZero(dto.freightSupplierId) : numOrZero((shipment as any).freight_supplier_id),
+            customsSupplierId: dto.customsSupplierId !== undefined ? numOrZero(dto.customsSupplierId) : numOrZero((shipment as any).customs_supplier_id),
+            transportSupplierId: dto.transportSupplierId !== undefined ? numOrZero(dto.transportSupplierId) : numOrZero((shipment as any).transport_supplier_id),
+            demurrageSupplierId: dto.demurrageSupplierId !== undefined ? numOrZero(dto.demurrageSupplierId) : numOrZero((shipment as any).demurrage_supplier_id),
+            unallocableCostReason: dto.unallocableCostReason !== undefined ? String(dto.unallocableCostReason ?? '').trim() : String((shipment as any).unallocable_cost_reason ?? '').trim(),
+          });
+        }
+      }
 
       const expenseInputs = [
         [dto.shippingAccountId, shipment.shipping_expense_id, shipment.shipping_cost_usd],
