@@ -7,6 +7,7 @@ import type { Response } from 'express';
 import { RequirePermissions } from '../../core/auth/decorators/permissions.decorator';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
+import { IdempotencyInterceptor } from '../../core/idempotency/idempotency.interceptor';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { CreateCustomerPaymentDto, CreateSupplierPaymentDto } from './dto/create-party-payment.dto';
 import { CreateSupplierPaymentScheduleDto, PaySupplierScheduleInstallmentDto } from './dto/supplier-payment-schedule.dto';
@@ -41,6 +42,7 @@ export class PurchasesController {
 
   @Post('purchases/reorder/generate-drafts')
   @RequirePermissions('purchases')
+  @UseInterceptors(IdempotencyInterceptor)
   generateDraftPurchaseOrders(@Body() payload: any, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.purchasesService.generateDraftPurchaseOrders(payload, req.authContext!);
   }
@@ -78,18 +80,21 @@ export class PurchasesController {
 
   @Put('purchases/:id')
   @RequirePermissions('canEditInvoices')
+  @UseInterceptors(IdempotencyInterceptor)
   updatePurchase(@Param('id', ParseIntPipe) id: number, @Body() payload: UpsertPurchaseDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.purchasesService.updatePurchase(id, payload, req.authContext!);
   }
 
   @Post('purchases/:id/cancel')
   @RequirePermissions('canEditInvoices')
+  @UseInterceptors(IdempotencyInterceptor)
   cancelPurchase(@Param('id', ParseIntPipe) id: number, @Body() body: { reason?: string; managerPin?: string }, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.purchasesService.cancelPurchase(id, String(body?.reason || ''), req.authContext!, String(body?.managerPin || ''));
   }
 
   @Post('purchases/:id/receive-goods')
   @RequirePermissions('purchases')
+  @UseInterceptors(IdempotencyInterceptor)
   receivePurchaseGoods(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { receivedItems: { itemId: number; receivedQty: number; serials?: any[] }[] },
@@ -106,6 +111,7 @@ export class PurchasesController {
 
   @Post('purchases/:id/payment-schedule')
   @RequirePermissions('accounts')
+  @UseInterceptors(IdempotencyInterceptor)
   createPurchasePaymentSchedule(@Param('id', ParseIntPipe) id: number, @Body() payload: CreateSupplierPaymentScheduleDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.scheduleService.createForPurchase(id, payload, req.authContext!);
   }
@@ -118,6 +124,7 @@ export class PurchasesController {
 
   @Post('suppliers/:id/payment-schedule')
   @RequirePermissions('accounts')
+  @UseInterceptors(IdempotencyInterceptor)
   createSupplierPaymentSchedule(@Param('id', ParseIntPipe) id: number, @Body() payload: CreateSupplierPaymentScheduleDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.scheduleService.createForSupplier(id, payload, req.authContext!);
   }
@@ -144,6 +151,7 @@ export class PurchasesController {
 
   @Post('purchases/:id/apply-repricing')
   @RequirePermissions('purchases')
+  @UseInterceptors(IdempotencyInterceptor)
   applyPurchaseRepricing(
     @Param('id', ParseIntPipe) id: number,
     @Body() payload: ApplyRepricingPayload,
@@ -252,6 +260,7 @@ export class PurchasesController {
 
   @Post('purchases/:id/landed-costs')
   @RequirePermissions('canEditInvoices')
+  @UseInterceptors(IdempotencyInterceptor)
   applyPurchaseLandedCosts(
     @Param('id', ParseIntPipe) id: number,
     @Body() payload: ApplyPurchaseLandedCostsDto,

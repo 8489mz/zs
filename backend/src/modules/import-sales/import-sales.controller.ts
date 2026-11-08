@@ -1,4 +1,5 @@
-import { Controller, Post, Body, Param, Get, Patch, Req, UseGuards, Query, Delete, Headers } from '@nestjs/common';
+import { Controller, Post, Body, Param, Get, Patch, Req, UseGuards, UseInterceptors, Query, Delete, Headers } from '@nestjs/common';
+import { IdempotencyInterceptor } from '../../core/idempotency/idempotency.interceptor';
 import { ImportSalesService } from './import-sales.service';
 import {
   CreateShipmentDto,
@@ -51,6 +52,7 @@ import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.in
 @Controller('api/import-sales')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireAnyPermission('purchases', 'inventory', 'accounting')
+@UseInterceptors(IdempotencyInterceptor)
 export class ImportSalesController {
   constructor(private readonly importSalesService: ImportSalesService) {}
 
