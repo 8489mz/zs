@@ -2,10 +2,10 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { PosLineSerialEntry } from './PosLineSerialEntry';
-import { productSerialsApi } from '@/features/products/api/product-serials.api';
+import { productSerialsApi } from '@/features/products';
 import type { PosItem } from '@/features/pos/types/pos.types';
 
-vi.mock('@/features/products/api/product-serials.api', () => ({
+vi.mock('@/features/products', () => ({
   productSerialsApi: { lookup: vi.fn() },
 }));
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SmartphoneIcon } from '@/shared/components/icons/AppIcons';
 import { toast } from '@/shared/components/system-alert';
-import { productSerialsApi } from '@/features/products/api/product-serials.api';
+import { productSerialsApi } from '@/features/products';
 import { getSerialEntryState, getSerialLookupError } from '@/features/pos/lib/pos.domain';
 import type { PosItem } from '@/features/pos/types/pos.types';
 
