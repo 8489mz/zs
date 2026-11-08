@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { StandardDialog } from '@/shared/components/StandardDialog';
 import { Button } from '@/shared/ui/button';
 import { vanSalesApi, VanStockItem } from '../api/van-sales.api';
+import { roundMoney } from '../utils/van-money.utils';
 import {
   CheckCircleIcon,
   XIcon,
@@ -75,9 +76,9 @@ export const VanDamagedSwapModal: React.FC<VanDamagedSwapModalProps> = ({
   const damagedUnitPrice = Number(damagedProduct?.retailPrice || damagedProduct?.costPrice || 0);
   const replacementUnitPrice = Number(replacementProduct?.retailPrice || replacementProduct?.costPrice || 0);
 
-  const damagedTotalValue = Number((damagedQty * damagedUnitPrice).toFixed(2));
-  const replacementTotalValue = Number((replacementQty * replacementUnitPrice).toFixed(2));
-  const priceDifference = Number((replacementTotalValue - damagedTotalValue).toFixed(2));
+  const damagedTotalValue = roundMoney(damagedQty * damagedUnitPrice);
+  const replacementTotalValue = roundMoney(replacementQty * replacementUnitPrice);
+  const priceDifference = roundMoney(replacementTotalValue - damagedTotalValue);
   const isEvenSwap = Math.abs(priceDifference) < 0.01;
 
   const availableVanStock = Number(replacementProduct?.qty || 0);

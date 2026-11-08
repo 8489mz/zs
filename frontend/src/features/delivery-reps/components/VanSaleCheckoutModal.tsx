@@ -15,6 +15,7 @@ import {
   SendIcon,
 } from '@/shared/components/icons/AppIcons';
 import { VanSignaturePadModal, RecipientSignatureData } from './VanSignaturePadModal';
+import { roundMoney } from '../utils/van-money.utils';
 
 export type VanPaymentMethod = 'cash' | 'credit' | 'card' | 'split' | 'instapay' | 'vodafone_cash';
 
@@ -253,18 +254,18 @@ export const VanSaleCheckoutModal: React.FC<VanSaleCheckoutModalProps> = ({
   }, [cashInput]);
 
   const netCashDue = useMemo(() => {
-    return Math.max(0, Number((cartTotal - cashDiscountAmount).toFixed(2)));
+    return Math.max(0, roundMoney(cartTotal - cashDiscountAmount));
   }, [cartTotal, cashDiscountAmount]);
 
   const changeDue = useMemo(() => {
     if (paymentMethod !== 'cash') return 0;
-    return Math.max(0, Number((cashPaid - netCashDue).toFixed(2)));
+    return Math.max(0, roundMoney(cashPaid - netCashDue));
   }, [paymentMethod, cashPaid, netCashDue]);
 
   const splitCreditDebt = useMemo(() => {
     if (paymentMethod === 'credit') return cartTotal;
     if (paymentMethod === 'cash' && cashPaid < netCashDue) {
-      return Math.max(0, Number((netCashDue - cashPaid).toFixed(2)));
+      return Math.max(0, roundMoney(netCashDue - cashPaid));
     }
     return 0;
   }, [paymentMethod, cashPaid, netCashDue, cartTotal]);
@@ -1045,7 +1046,7 @@ export const VanSaleCheckoutModal: React.FC<VanSaleCheckoutModalProps> = ({
                       }}
                     />
                     {[0.02, 0.05].map((pct) => {
-                      const discountVal = Number((cartTotal * pct).toFixed(2));
+                      const discountVal = roundMoney(cartTotal * pct);
                       return (
                         <button
                           key={pct}

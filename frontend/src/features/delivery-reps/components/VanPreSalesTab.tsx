@@ -23,6 +23,7 @@ import {
 } from '../api/van-sales.api';
 import { VanFloatingActionBar } from './VanFloatingActionBar';
 import { VanInvoiceReviewModal } from './VanInvoiceReviewModal';
+import { roundMoney } from '../utils/van-money.utils';
 
 interface CustomerOption {
   id: number;
@@ -417,7 +418,7 @@ export const VanPreSalesTab: React.FC<VanPreSalesTabProps> = ({
     const listPrice = Math.max(creditBasePrice, cashBasePrice);
 
     // Cash discount per unit is the difference between list/credit price and cash price
-    const cashDiscountPerUnit = isCredit ? 0 : Math.max(0, Number((listPrice - cashBasePrice).toFixed(2)));
+    const cashDiscountPerUnit = isCredit ? 0 : Math.max(0, roundMoney(listPrice - cashBasePrice));
 
     let effectivePrice = isCredit ? listPrice : cashBasePrice;
     let tierType: 'cash' | 'credit' | 'offer' = isCredit ? 'credit' : 'cash';
@@ -431,23 +432,23 @@ export const VanPreSalesTab: React.FC<VanPreSalesTabProps> = ({
     if (matchingOffer) {
       const offerVal = Number(matchingOffer.value || 0);
       if (matchingOffer.offerType === 'percent' && offerVal > 0) {
-        effectivePrice = Math.max(0, Number((effectivePrice * (1 - offerVal / 100)).toFixed(2)));
+        effectivePrice = Math.max(0, roundMoney(effectivePrice * (1 - offerVal / 100)));
         tierType = 'offer';
-        savings = Math.max(0, Number((listPrice - effectivePrice).toFixed(2)));
+        savings = Math.max(0, roundMoney(listPrice - effectivePrice));
       } else if (matchingOffer.offerType === 'fixed' && offerVal > 0) {
-        effectivePrice = Math.max(0, Number((effectivePrice - offerVal * multiplier).toFixed(2)));
+        effectivePrice = Math.max(0, roundMoney(effectivePrice - offerVal * multiplier));
         tierType = 'offer';
-        savings = Math.max(0, Number((listPrice - effectivePrice).toFixed(2)));
+        savings = Math.max(0, roundMoney(listPrice - effectivePrice));
       } else if (matchingOffer.offerType === 'price' && offerVal > 0) {
-        effectivePrice = Number((offerVal * multiplier).toFixed(2));
+        effectivePrice = roundMoney(offerVal * multiplier);
         tierType = 'offer';
-        savings = Math.max(0, Number((listPrice - effectivePrice).toFixed(2)));
+        savings = Math.max(0, roundMoney(listPrice - effectivePrice));
       }
     }
 
     const consumerPrice =
       item.consumerPrice != null && Number(item.consumerPrice) > 0
-        ? Number((Number(item.consumerPrice) * multiplier).toFixed(2))
+        ? roundMoney(Number(item.consumerPrice) * multiplier)
         : null;
 
     return { listPrice, cashDiscountPerUnit, effectivePrice, tierType, savings, consumerPrice };
@@ -576,7 +577,7 @@ export const VanPreSalesTab: React.FC<VanPreSalesTabProps> = ({
   }, [cart]);
 
   const cartDiscountAmount = useMemo(() => {
-    return Math.max(0, Number((cartGrossSubtotal - cartNetTotal).toFixed(2)));
+    return Math.max(0, roundMoney(cartGrossSubtotal - cartNetTotal));
   }, [cartGrossSubtotal, cartNetTotal]);
 
   const totalPieces = useMemo(() => {
@@ -1464,7 +1465,7 @@ export const VanPreSalesTab: React.FC<VanPreSalesTabProps> = ({
                     ? line.cartons * line.cartonListPrice + line.pieces * line.pieceListPrice
                     : line.quantity * line.pieceListPrice;
 
-                  const lineCashDiscount = Math.max(0, Number((lineGrossTotal - lineNetTotal).toFixed(2)));
+                  const lineCashDiscount = Math.max(0, roundMoney(lineGrossTotal - lineNetTotal));
 
                   return (
                     <div
