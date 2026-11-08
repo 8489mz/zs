@@ -21,6 +21,7 @@ import {
 import { printCashDrawerShiftReceipt } from '@/features/cash-drawer/utils/cash-drawer-receipt';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits } from '@/shared/utils/money';
 import type { CashierShift } from '@/types/domain';
 import {
   type ComparisonRow,
@@ -61,6 +62,9 @@ interface MovementGroup {
 
 export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
   const { t } = useTranslation();
+  // INV-FE1-FRONTEND-BOOK-DIGITS: all drawer review money rounds at
+  // the tenant's book digits (global system currency).
+  const bookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
   const shift = props.shift;
   const [expandedKinds, setExpandedKinds] = useState<Record<string, boolean>>({});
   const [showMovements, setShowMovements] = useState(false);
@@ -71,20 +75,20 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
   };
 
   const expected = useMemo(() => {
-    const rawCashSales = toMoney((shift?.cashSalesTotal || 0) + (shift?.serviceCashTotal || 0));
-    const expectedCard = toMoney((shift?.cardSalesTotal || 0) + (shift?.serviceCardTotal || 0) - (shift?.saleReturnCardRefundTotal || 0));
-    const expectedWallet = toMoney(shift?.walletSalesTotal || 0);
-    const expectedInstapay = toMoney(shift?.instapaySalesTotal || 0);
-    const expectedCredit = toMoney(shift?.creditSalesTotal || 0);
-    const expectedDelivery = toMoney(shift?.deliverySalesTotal || 0);
+    const rawCashSales = toMoney((shift?.cashSalesTotal || 0) + (shift?.serviceCashTotal || 0), bookDigits);
+    const expectedCard = toMoney((shift?.cardSalesTotal || 0) + (shift?.serviceCardTotal || 0) - (shift?.saleReturnCardRefundTotal || 0), bookDigits);
+    const expectedWallet = toMoney(shift?.walletSalesTotal || 0, bookDigits);
+    const expectedInstapay = toMoney(shift?.instapaySalesTotal || 0, bookDigits);
+    const expectedCredit = toMoney(shift?.creditSalesTotal || 0, bookDigits);
+    const expectedDelivery = toMoney(shift?.deliverySalesTotal || 0, bookDigits);
     return { rawCashSales, expectedCard, expectedWallet, expectedInstapay, expectedCredit, expectedDelivery };
   }, [shift]);
 
   const declared = useMemo(() => ({
-    cash: toMoney(shift?.declaredCash ?? shift?.countedCash ?? 0),
-    card: toMoney(shift?.declaredCardTotal || 0),
-    wallet: toMoney(shift?.declaredWalletTotal || 0),
-    instapay: toMoney(shift?.declaredInstapayTotal || 0),
+    cash: toMoney(shift?.declaredCash ?? shift?.countedCash ?? 0, bookDigits),
+    card: toMoney(shift?.declaredCardTotal || 0, bookDigits),
+    wallet: toMoney(shift?.declaredWalletTotal || 0, bookDigits),
+    instapay: toMoney(shift?.declaredInstapayTotal || 0, bookDigits),
   }), [shift]);
 
   const statusLabel = shift?.status === 'pending_review' ? 'في انتظار مراجعة المشرف' : (shift?.status || '—');
@@ -116,9 +120,9 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
     (declared.card - expected.expectedCard) +
     (declared.wallet - expected.expectedWallet) +
     (declared.instapay - expected.expectedInstapay)
-  );
+  , bookDigits);
 
-  const totalShiftDiscrepancy = toMoney(dynamicVariance + electronicDiff);
+  const totalShiftDiscrepancy = toMoney(dynamicVariance + electronicDiff, bookDigits);
 
   const isKwd = getGlobalSystemCurrency() === 'KWD';
 
@@ -129,7 +133,7 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
         label: isKwd ? 'مبيعات بطاقات (كي نت K-NET / فيزا)' : 'مبيعات بطاقات (فيزا / ماستركارد)',
         systemAmount: expected.expectedCard,
         declaredAmount: declared.card,
-        amountDiff: toMoney(declared.card - expected.expectedCard),
+        amountDiff: toMoney(declared.card - expected.expectedCard, bookDigits),
         systemCount: toCount(shift?.cardOperationCount || 0),
         declaredCount: toCount(shift?.declaredCardCount || 0),
         countDiff: toCount(shift?.declaredCardCount || 0) - toCount(shift?.cardOperationCount || 0)
@@ -139,7 +143,7 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
         label: isKwd ? 'محافظ وروابط رقمية (Apple Pay / روابط)' : 'محافظ إلكترونية (فودافون/اتصالات/أورنج/وي)',
         systemAmount: expected.expectedWallet,
         declaredAmount: declared.wallet,
-        amountDiff: toMoney(declared.wallet - expected.expectedWallet),
+        amountDiff: toMoney(declared.wallet - expected.expectedWallet, bookDigits),
         systemCount: toCount(shift?.walletOperationCount || 0),
         declaredCount: toCount(shift?.declaredWalletCount || 0),
         countDiff: toCount(shift?.declaredWalletCount || 0) - toCount(shift?.walletOperationCount || 0)
@@ -149,7 +153,7 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
         label: isKwd ? 'عمليات كي نت / روابط دفع (K-NET)' : 'تحويلات إنستاباي (InstaPay)',
         systemAmount: expected.expectedInstapay,
         declaredAmount: declared.instapay,
-        amountDiff: toMoney(declared.instapay - expected.expectedInstapay),
+        amountDiff: toMoney(declared.instapay - expected.expectedInstapay, bookDigits),
         systemCount: toCount(shift?.instapayOperationCount || 0),
         declaredCount: toCount(shift?.declaredInstapayCount || 0),
         countDiff: toCount(shift?.declaredInstapayCount || 0) - toCount(shift?.instapayOperationCount || 0)
@@ -183,13 +187,13 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
     }
 
     const electronicRows = rows.filter(r => r.key !== 'credit' && r.key !== 'delivery');
-    const systemAmountTotal = electronicRows.reduce((sum, row) => sum + toMoney(row.systemAmount), 0);
-    const declaredAmountTotal = electronicRows.reduce((sum, row) => sum + toMoney(row.declaredAmount), 0);
+    const systemAmountTotal = electronicRows.reduce((sum, row) => sum + toMoney(row.systemAmount, bookDigits), 0);
+    const declaredAmountTotal = electronicRows.reduce((sum, row) => sum + toMoney(row.declaredAmount, bookDigits), 0);
     const amountDiffTotal = electronicDiff;
     const systemOpsTotal = rows.reduce((sum, row) => sum + (row.systemCount == null ? 0 : row.systemCount), 0);
     const declaredOpsTotal = rows.reduce((sum, row) => sum + (row.declaredCount == null ? 0 : row.declaredCount), 0);
     const opsDiffTotal = declaredOpsTotal - systemOpsTotal;
-    const allInvoicesSystemTotal = toMoney(expected.rawCashSales + rows.reduce((sum, row) => sum + toMoney(row.systemAmount), 0));
+    const allInvoicesSystemTotal = toMoney(expected.rawCashSales + rows.reduce((sum, row) => sum + toMoney(row.systemAmount), 0), bookDigits);
 
     return {
       rows,
@@ -359,11 +363,11 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
                 <span>{reviewMatched ? t('cash_drawer.cash_drawer_review_dialog.s14', "الوردية متطابقة بالكامل مع إقرار الكاشير.") : t('cash_drawer.cash_drawer_review_dialog.s15', "تنبيه: يوجد عجز / فارق في إقرار الكاشير مقارنة بالنظام.")}</span>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 12px', color: reviewMatched ? '#166534' : '#991b1b' }}>
-                <span><strong>{t('cash_drawer.cash_drawer_review_dialog.s16', "إجمالي الفارق:")}</strong> <strong style={{ color: totalShiftDiscrepancy < 0 ? '#dc2626' : '#16a34a', fontSize: compactView ? '0.86rem' : '0.92rem' }}>{differenceLabel(totalShiftDiscrepancy)}</strong></span>
+                <span><strong>{t('cash_drawer.cash_drawer_review_dialog.s16', "إجمالي الفارق:")}</strong> <strong style={{ color: totalShiftDiscrepancy < 0 ? '#dc2626' : '#16a34a', fontSize: compactView ? '0.86rem' : '0.92rem' }}>{differenceLabel(totalShiftDiscrepancy, bookDigits)}</strong></span>
                 <span style={{ color: reviewMatched ? '#86efac' : '#fca5a5' }}>|</span>
-                <span><strong>{t('cash_drawer.cash_drawer_review_dialog.s17', "فارق نقدية الدرج:")}</strong> <strong style={{ color: dynamicVariance < 0 ? '#dc2626' : '#16a34a' }}>{differenceLabel(dynamicVariance)}</strong></span>
+                <span><strong>{t('cash_drawer.cash_drawer_review_dialog.s17', "فارق نقدية الدرج:")}</strong> <strong style={{ color: dynamicVariance < 0 ? '#dc2626' : '#16a34a' }}>{differenceLabel(dynamicVariance, bookDigits)}</strong></span>
                 <span style={{ color: reviewMatched ? '#86efac' : '#fca5a5' }}>|</span>
-                <span><strong>{t('cash_drawer.cash_drawer_review_dialog.s18', "فارق المدفوعات الإلكترونية:")}</strong> <strong style={{ color: electronicDiff < 0 ? '#dc2626' : '#16a34a' }}>{differenceLabel(electronicDiff)}</strong></span>
+                <span><strong>{t('cash_drawer.cash_drawer_review_dialog.s18', "فارق المدفوعات الإلكترونية:")}</strong> <strong style={{ color: electronicDiff < 0 ? '#dc2626' : '#16a34a' }}>{differenceLabel(electronicDiff, bookDigits)}</strong></span>
                 <span style={{ color: reviewMatched ? '#86efac' : '#fca5a5' }}>|</span>
                 <span><strong>{t('cash_drawer.cash_drawer_review_dialog.s19', "فرق العمليات:")}</strong> {formatSignedCount(comparison.opsDiffTotal)}</span>
               </div>
@@ -468,16 +472,16 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
                   fontSize: '0.76rem',
                   lineHeight: '1.4'
                 }}>
-                  <span>{t('cash_drawer.cash_drawer_review_dialog.s30', "العهدة (")}{formatMoney(shift.openingCash)})</span>
+                  <span>{t('cash_drawer.cash_drawer_review_dialog.s30', "العهدة (")}{formatMoney(shift.openingCash, bookDigits)})</span>
                   <span style={{ color: '#94a3b8' }}>+</span>
-                  <span>{t('cash_drawer.cash_drawer_review_dialog.s31', "مبيعات (")}{formatMoney(expected.rawCashSales)})</span>
+                  <span>{t('cash_drawer.cash_drawer_review_dialog.s31', "مبيعات (")}{formatMoney(expected.rawCashSales, bookDigits)})</span>
                   <span style={{ color: '#94a3b8' }}>+</span>
-                  <span>{t('cash_drawer.cash_drawer_review_dialog.s32', "إيداعات (")}{formatMoney(manualCashIn + deliveryCashIn)})</span>
+                  <span>{t('cash_drawer.cash_drawer_review_dialog.s32', "إيداعات (")}{formatMoney(manualCashIn + deliveryCashIn, bookDigits)})</span>
                   <span style={{ color: '#dc2626' }}>-</span>
-                  <span style={{ color: '#dc2626' }}>{t('cash_drawer.cash_drawer_review_dialog.s33', "منصرفات (")}{formatMoney(totalDeductions)})</span>
+                  <span style={{ color: '#dc2626' }}>{t('cash_drawer.cash_drawer_review_dialog.s33', "منصرفات (")}{formatMoney(totalDeductions, bookDigits)})</span>
                   <span style={{ color: '#475569' }}>=</span>
                   <strong style={{ color: '#0f172a', background: '#ffffff', padding: '1px 6px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
-                    {formatMoney(dynamicExpectedCash)}
+                    {formatMoney(dynamicExpectedCash, bookDigits)}
                   </strong>
                 </div>
 
@@ -504,7 +508,7 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
                   }}>
                     <div style={{ fontSize: '0.72rem', color: dynamicVariance < 0 ? '#dc2626' : '#15803d', fontWeight: 700 }}>{t('cash_drawer.cash_drawer_review_dialog.s36', "فارق نقدية الدرج")}</div>
                     <strong style={{ fontSize: '0.88rem', color: dynamicVariance < 0 ? '#dc2626' : '#15803d', display: 'block', marginTop: '2px' }}>
-                      {differenceLabel(dynamicVariance)}
+                      {differenceLabel(dynamicVariance, bookDigits)}
                     </strong>
                   </div>
                 </div>
@@ -557,7 +561,7 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
                     {comparison.rows.map((row) => (
                       <tr key={row.key}>
                         <td style={{ padding: compactView ? '5px 8px' : '8px 12px', textAlign: 'right' }}><strong>{row.label}</strong></td>
-                        <td style={{ padding: compactView ? '5px 8px' : '8px 12px', textAlign: 'center' }}>{formatMoney(row.systemAmount)}</td>
+                        <td style={{ padding: compactView ? '5px 8px' : '8px 12px', textAlign: 'center' }}>{formatMoney(row.systemAmount, bookDigits)}</td>
                         <td style={{ padding: compactView ? '5px 8px' : '8px 12px', textAlign: 'center' }}>
                           {row.key === 'credit' ? (
                             <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '3px', background: '#f1f5f9', color: '#475569', padding: compactView ? '1px 6px' : '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600 }}>
@@ -568,18 +572,18 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
                               <TruckIcon size={12} color="#64748b" /> {t('cash_drawer.cash_drawer_review_dialog.s47', "مع المناديب (دليفري)")}
                             </span>
                           ) : (
-                            formatMoney(row.declaredAmount)
+                            formatMoney(row.declaredAmount, bookDigits)
                           )}
                         </td>
                         <td style={{ fontWeight: 600, padding: compactView ? '5px 8px' : '8px 12px', textAlign: 'center' }}>
                           {row.key === 'credit' || row.key === 'delivery' ? (
                             <span style={{ color: '#94a3b8' }}>—</span>
                           ) : Math.abs(row.amountDiff) <= 0.009 ? (
-                            <span style={{ color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '1px 8px', borderRadius: '4px', fontSize: '0.76rem', fontWeight: 700 }}>{formatMoney(0)} {t('cash_drawer.cash_drawer_review_dialog.s48', "(مطابق)")}</span>
+                            <span style={{ color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '1px 8px', borderRadius: '4px', fontSize: '0.76rem', fontWeight: 700 }}>{formatMoney(0, bookDigits)} {t('cash_drawer.cash_drawer_review_dialog.s48', "(مطابق)")}</span>
                           ) : row.amountDiff < 0 ? (
-                            <span style={{ color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '1px 8px', borderRadius: '4px', fontSize: '0.76rem', fontWeight: 800 }}>{differenceLabel(row.amountDiff)} {t('cash_drawer.cash_drawer_review_dialog.s49', "(عجز)")}</span>
+                            <span style={{ color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '1px 8px', borderRadius: '4px', fontSize: '0.76rem', fontWeight: 800 }}>{differenceLabel(row.amountDiff, bookDigits)} {t('cash_drawer.cash_drawer_review_dialog.s49', "(عجز)")}</span>
                           ) : (
-                            <span style={{ color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '1px 8px', borderRadius: '4px', fontSize: '0.76rem', fontWeight: 700 }}>{differenceLabel(row.amountDiff)}</span>
+                            <span style={{ color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '1px 8px', borderRadius: '4px', fontSize: '0.76rem', fontWeight: 700 }}>{differenceLabel(row.amountDiff, bookDigits)}</span>
                           )}
                         </td>
                         <td style={{ padding: compactView ? '5px 8px' : '8px 12px', textAlign: 'center' }}>{toDisplayCount(row.systemCount)}</td>
@@ -589,15 +593,15 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
                     ))}
                     <tr className="cash-drawer-review-total-row" style={{ background: '#f8fafc', borderTop: '2px solid #cbd5e1' }}>
                       <td style={{ padding: compactView ? '6px 8px' : '9px 12px', textAlign: 'right' }}><strong>{t('cash_drawer.cash_drawer_review_dialog.s50', "إجمالي المدفوعات الإلكترونية")}</strong></td>
-                      <td style={{ padding: compactView ? '6px 8px' : '9px 12px', textAlign: 'center' }}><strong style={{ color: '#0f172a' }}>{formatMoney(comparison.systemAmountTotal)}</strong></td>
-                      <td style={{ padding: compactView ? '6px 8px' : '9px 12px', textAlign: 'center' }}><strong>{formatMoney(comparison.declaredAmountTotal)}</strong></td>
+                      <td style={{ padding: compactView ? '6px 8px' : '9px 12px', textAlign: 'center' }}><strong style={{ color: '#0f172a' }}>{formatMoney(comparison.systemAmountTotal, bookDigits)}</strong></td>
+                      <td style={{ padding: compactView ? '6px 8px' : '9px 12px', textAlign: 'center' }}><strong>{formatMoney(comparison.declaredAmountTotal, bookDigits)}</strong></td>
                       <td style={{ padding: compactView ? '6px 8px' : '9px 12px', textAlign: 'center' }}>
                         {comparison.amountDiffTotal === 0 ? (
-                          <strong style={{ color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '2px 8px', borderRadius: '4px' }}>{formatMoney(0)} {t('cash_drawer.cash_drawer_review_dialog.s51', "(مطابق)")}</strong>
+                          <strong style={{ color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '2px 8px', borderRadius: '4px' }}>{formatMoney(0, bookDigits)} {t('cash_drawer.cash_drawer_review_dialog.s51', "(مطابق)")}</strong>
                         ) : comparison.amountDiffTotal < 0 ? (
-                          <span style={{ color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '2px 8px', borderRadius: '4px', fontWeight: 800 }}>{differenceLabel(comparison.amountDiffTotal)} {t('cash_drawer.cash_drawer_review_dialog.s52', "(عجز)")}</span>
+                          <span style={{ color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '2px 8px', borderRadius: '4px', fontWeight: 800 }}>{differenceLabel(comparison.amountDiffTotal, bookDigits)} {t('cash_drawer.cash_drawer_review_dialog.s52', "(عجز)")}</span>
                         ) : (
-                          <strong style={{ color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '2px 8px', borderRadius: '4px' }}>{differenceLabel(comparison.amountDiffTotal)}</strong>
+                          <strong style={{ color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '2px 8px', borderRadius: '4px' }}>{differenceLabel(comparison.amountDiffTotal, bookDigits)}</strong>
                         )}
                       </td>
                       <td style={{ padding: compactView ? '6px 8px' : '9px 12px', textAlign: 'center' }}><strong>{formatCount(comparison.systemOpsTotal)}</strong></td>

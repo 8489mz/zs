@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { getGlobalCurrencySymbol, getGlobalSystemCurrency, getSystemCountryCode, isKuwait, isSaudi } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { useState, useEffect, useMemo, useRef, useCallback, type FormEvent, type RefObject } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { customersApi } from '@/shared/api/customers.api';
@@ -66,6 +67,9 @@ export function PosCheckoutCustomerSection({
   onManualOpen,
   isMobile: isMobileProp,
 }: PosCheckoutCustomerSectionProps) {
+  // INV-FE1-FRONTEND-BOOK-DIGITS: loyalty money values round at the
+  // tenant's book digits (settings currency, global fallback).
+  const bookDigits = currencyMoneyDigits(pos.settings?.currency || pos.settingsQuery?.data?.currency || getGlobalSystemCurrency());
   const isMobileHook = useIsMobile(860);
   const isMobile = isMobileProp ?? isMobileHook;
   const [addressDropdownOpen, setAddressDropdownOpen] = useState(false);
@@ -271,8 +275,8 @@ export function PosCheckoutCustomerSection({
         const pointValue = Number(pos.settings?.loyaltyPointRedeemValue ?? 0.1);
         const minPoints = Number(pos.settings?.loyaltyMinRedeemPoints ?? 50);
         const maxPct = Number(pos.settings?.loyaltyMaxDiscountPercentage ?? 50);
-        const discountInCurrency = Number(((pos.loyaltyPointsRedeemed || 0) * pointValue).toFixed(2));
-        const totalValueInCurrency = Number((loyaltyPoints * pointValue).toFixed(2));
+        const discountInCurrency = roundMoneyValue((pos.loyaltyPointsRedeemed || 0) * pointValue, bookDigits);
+        const totalValueInCurrency = roundMoneyValue(loyaltyPoints * pointValue, bookDigits);
         const subTotal = Number(pos.totals?.subTotal || 0);
 
         return (
@@ -396,6 +400,9 @@ export function PosCheckoutPaymentSection({
   onConfirmSale,
   isMobile: isMobileProp,
 }: PosCheckoutPaymentSectionProps) {
+  // INV-FE1-FRONTEND-BOOK-DIGITS: discount money values round at the
+  // tenant's book digits (settings currency, global fallback).
+  const bookDigits = currencyMoneyDigits(pos.settings?.currency || pos.settingsQuery?.data?.currency || getGlobalSystemCurrency());
   const isMobileHook = useIsMobile(860);
   const isMobile = isMobileProp ?? isMobileHook;
   const balance = getBalancePreview(pos);
@@ -829,7 +836,7 @@ export function PosCheckoutPaymentSection({
             onChange={(event) => {
               setPercentStr(event.target.value);
               const p = Number(event.target.value || 0);
-              pos.setDiscount(Number(((p / 100) * pos.totals.subTotal).toFixed(2)));
+              pos.setDiscount(roundMoneyValue((p / 100) * pos.totals.subTotal, bookDigits));
             }}
             disabled={isDiscountLocked || pos.totals.subTotal === 0}
             placeholder="0"
@@ -1337,13 +1344,12 @@ export function PosCheckoutPaymentSection({
               if (Math.abs(diff) < 0.0001) return;
 
               // Automatically adjust the active payment amount to keep paidAmount aligned with the new total
-              const decs = isKwdStore ? 3 : 2;
               if (pos.paymentChannel === 'card' || (!pos.cashAmount && pos.cardAmount > 0)) {
-                pos.setCardAmount(Math.max(0, Number(((pos.cardAmount || 0) + diff).toFixed(decs))));
+                pos.setCardAmount(Math.max(0, roundMoneyValue((pos.cardAmount || 0) + diff, bookDigits)));
               } else if (pos.paymentChannel === 'cash' || (pos.cashAmount > 0 && !pos.cardAmount)) {
-                pos.setCashAmount(Math.max(0, Number(((pos.cashAmount || 0) + diff).toFixed(decs))));
+                pos.setCashAmount(Math.max(0, roundMoneyValue((pos.cashAmount || 0) + diff, bookDigits)));
               } else if (pos.paymentChannel === 'wallet' || pos.paymentChannel === 'instapay') {
-                pos.setTransferAmount(Math.max(0, Number(((pos.transferAmount || 0) + diff).toFixed(decs))));
+                pos.setTransferAmount(Math.max(0, roundMoneyValue((pos.transferAmount || 0) + diff, bookDigits)));
               }
             };
             return (

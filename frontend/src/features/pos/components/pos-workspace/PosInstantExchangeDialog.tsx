@@ -11,6 +11,8 @@ import { normalizeExchangeReturnSerials } from './pos-exchange-serial-validation
 import { invalidateSalesDomain } from '@/app/query-invalidation';
 import { classifyExchangeRecovery, canResetExchangeRequest, type ExchangeOperationStatus } from './pos-exchange-recovery';
 import type { PosWorkspaceState } from './posWorkspace.helpers';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 type SourceSale = Awaited<ReturnType<typeof posApi.getSaleForExchange>>['sale'];
 
@@ -31,11 +33,14 @@ export function PosInstantExchangeDialog({ open, onClose, pos }: {
   const requestKey = useRef<string | null>(null);
   const submittedPayload = useRef<Record<string, unknown> | null>(null);
 
+  // INV-FE1-FRONTEND-BOOK-DIGITS: exchange estimates round at the
+  // tenant's book digits (settings currency, global fallback).
+  const bookDigits = currencyMoneyDigits(pos.settings?.currency || pos.settingsQuery?.data?.currency || getGlobalSystemCurrency());
   const returned = (source?.items || []).filter((item) => Number(quantities[item.id] || 0) > 0);
   const returnEstimate = returned.reduce((sum, item) => sum +
-    Math.round((Number(item.netLineTotal ?? item.total) + Number(item.allocatedTax || 0)) *
-      Number(quantities[item.id]) / Number(item.qty) * 100) / 100, 0);
-  const netEstimate = Number((Number(pos.totals.total || 0) - returnEstimate).toFixed(2));
+    roundMoneyValue((Number(item.netLineTotal ?? item.total) + Number(item.allocatedTax || 0)) *
+      Number(quantities[item.id]) / Number(item.qty), bookDigits), 0);
+  const netEstimate = roundMoneyValue(Number(pos.totals.total || 0) - returnEstimate, bookDigits);
 
   async function loadSource() {
     if (attempted) { toast.error('أعد محاولة نفس الطلب أولاً لمعرفة نتيجته قبل تحميل فاتورة أخرى'); return; }

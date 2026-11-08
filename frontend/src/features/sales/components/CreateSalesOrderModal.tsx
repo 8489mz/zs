@@ -14,6 +14,8 @@ import { useFormDraft } from '@/shared/hooks/use-form-draft';
 import { DraftRestoredBanner } from '@/shared/components/DraftRestoredBanner';
 import type { Product } from '@/types/domain';
 import { getProductPrice } from '@/features/pos';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits } from '@/shared/utils/money';
 import type { CreateSalesOrderPayload, SalesOrderItem } from '../api/sales-orders.api';
 
 interface SalesOrderItemFormRow extends SalesOrderItem {
@@ -107,7 +109,7 @@ export const CreateSalesOrderModal: React.FC<CreateSalesOrderModalProps> = ({
     if (field === 'quantity' && item.productId > 0) {
       const foundProd = catalogProducts?.find((p) => Number(p.id) === Number(item.productId));
       if (foundProd && foundProd.offers && foundProd.offers.length > 0) {
-        const promoPrice = getProductPrice(foundProd, 'retail', qty || 1);
+        const promoPrice = getProductPrice(foundProd, 'retail', qty || 1, 1, currencyMoneyDigits(getGlobalSystemCurrency()));
         if (promoPrice > 0) {
           item.unitPrice = promoPrice;
         }
@@ -125,7 +127,7 @@ export const CreateSalesOrderModal: React.FC<CreateSalesOrderModalProps> = ({
     const updated = [...items];
     const qty = Number(updated[index]?.quantity) || 1;
     const basePrice = Number(prod.retailPrice || prod.wholesalePrice || 0);
-    const promoPrice = prod.offers && prod.offers.length > 0 ? getProductPrice(prod, 'retail', qty) : basePrice;
+    const promoPrice = prod.offers && prod.offers.length > 0 ? getProductPrice(prod, 'retail', qty, 1, currencyMoneyDigits(getGlobalSystemCurrency())) : basePrice;
     const price = promoPrice > 0 ? promoPrice : basePrice;
     const discount = Number(updated[index]?.discount) || 0;
     const unit = prod.units?.[0]?.name || 'قطعة';

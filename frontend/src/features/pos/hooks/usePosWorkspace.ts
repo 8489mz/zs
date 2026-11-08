@@ -15,7 +15,8 @@ import type { PosItem, PosPriceType } from '@/features/pos/types/pos.types';
 import { usePosCustomerDisplayBroadcaster } from '@/features/pos/hooks/usePosCustomerDisplayBroadcaster';
 import { useAuthStore } from '@/stores/auth-store';
 import { loadPosWorkspaceStorage } from '@/features/pos/lib/pos.persistence';
-import { getCurrencyDecimals } from '@/lib/currencies';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 const posReferenceStaleTime = 45_000;
 
@@ -71,12 +72,15 @@ export function usePosWorkspace() {
   const branchesQuery = useQuery({ queryKey: queryKeys.posBranches, queryFn: posApi.branches, staleTime: posReferenceStaleTime });
   const locationsQuery = useQuery({ queryKey: queryKeys.posLocations, queryFn: posApi.locations, staleTime: posReferenceStaleTime });
 
-  const currencyDecimals = getCurrencyDecimals(settingsQuery.data?.currency);
-  const paidAmount = Number((
+  // INV-FE1-FRONTEND-BOOK-DIGITS: paidAmount rounds at the tenant's
+  // book digits (settings currency, global system currency fallback).
+  const currencyDecimals = currencyMoneyDigits(settingsQuery.data?.currency || getGlobalSystemCurrency());
+  const paidAmount = roundMoneyValue(
     state.paymentChannel === 'wallet' || state.paymentChannel === 'instapay'
       ? Number(state.cashAmount || 0) + Number(state.transferAmount || 0)
-      : Number(state.cashAmount || 0) + Number(state.cardAmount || 0)
-  ).toFixed(currencyDecimals));
+      : Number(state.cashAmount || 0) + Number(state.cardAmount || 0),
+    currencyDecimals,
+  );
 
   const operationalContext = usePosOperationalContext({
     settings: settingsQuery.data || null,
@@ -198,6 +202,7 @@ export function usePosWorkspace() {
     paymentChannel: state.paymentChannel,
     paidAmount,
     changeAmount: derived.changeAmount,
+    digits: currencyDecimals,
     lastSale: state.lastSale,
     postSaleSaleKey: state.postSaleSaleKey,
     storeName: authStoreName || (settingsQuery.data as any)?.storeName,

@@ -27,8 +27,13 @@ import {
 import type { PosPriceType } from '@/features/pos/types/pos.types';
 import type { Product } from '@/types/domain';
 import type { PosWorkspaceActionParams } from '@/features/pos/hooks/usePosWorkspaceActionGroups';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits } from '@/shared/utils/money';
 
 export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) {
+  // INV-FE1-FRONTEND-BOOK-DIGITS: cart pricing rounds at the tenant's
+  // book digits (settings currency, global system currency fallback).
+  const bookDigits = currencyMoneyDigits(params.settings?.currency || getGlobalSystemCurrency());
   function resolveUnitLineKey(product: Product, unitId?: string) {
     const unit = resolveSaleUnit(product, unitId);
     return `${product.id}::${unit?.id || unit?.name || ''}::${params.priceType}`;
@@ -90,6 +95,7 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
         try {
           return addPosItem(currentCart, product, {
             priceType: params.priceType,
+            digits: bookDigits,
             unitId,
             allowNegativeStockSales,
             quantity: options.quantity,
@@ -168,7 +174,7 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
             if (Number.isFinite(quantity) && quantity > 0) {
               try {
                 previewPrice = Number(addPosItem([], product, {
-                  priceType: params.priceType, unitId, allowNegativeStockSales: true, quantity, isWeighted: true,
+                  priceType: params.priceType, digits: bookDigits, unitId, allowNegativeStockSales: true, quantity, isWeighted: true,
                 })[0]?.price || 0);
               } catch {
                 previewPrice = 0;
@@ -243,7 +249,7 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
         ...item,
         priceType: nextPriceType,
         lineKey: `${item.productId}::${item.unitId || item.unitName}::${nextPriceType}`,
-      }, product, item.qty);
+      }, product, item.qty, bookDigits);
     }));
     if (selectedLine) {
       params.setSelectedLineKey(`${selectedLine.productId}::${selectedLine.unitId || selectedLine.unitName}::${nextPriceType}`);
@@ -255,6 +261,7 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
       const nextCart = updatePosItemQtyWithOptions(params.cart, lineKey, qty, params.products || [], {
         allowNegativeStockSales: isNegativeStockSalesAllowed(params.settings),
         quantityChunks: options.quantityChunks,
+        digits: bookDigits,
       });
       params.setSelectedLineKey(lineKey);
       params.setCart(nextCart);

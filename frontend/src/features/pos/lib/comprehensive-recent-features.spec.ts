@@ -21,28 +21,28 @@ describe('Comprehensive Verification of Recent Features (Human Simulation)', () 
         const basePrice = 100;
 
         // 1 item: No discount -> Total = 100
-        expect(getOfferAppliedPrice(basePrice, bogoOffer, 1)).toBe(100);
+        expect(getOfferAppliedPrice(basePrice, bogoOffer, 1, 2)).toBe(100);
 
         // 2 items: No discount -> Total = 200, unit price = 100
-        expect(getOfferAppliedPrice(basePrice, bogoOffer, 2)).toBe(100);
+        expect(getOfferAppliedPrice(basePrice, bogoOffer, 2, 2)).toBe(100);
 
         // 3 items: 1 full cycle (2 paid + 1 free) -> Total = 200, unit price = 200/3 = 66.67
-        const p3 = getOfferAppliedPrice(basePrice, bogoOffer, 3);
+        const p3 = getOfferAppliedPrice(basePrice, bogoOffer, 3, 2);
         expect(p3).toBe(66.67);
         expect(Math.round(p3 * 3)).toBe(200);
 
         // 4 items: 1 full cycle (2 paid + 1 free = 200) + 1 regular (100) -> Total = 300, unit price = 300/4 = 75
-        const p4 = getOfferAppliedPrice(basePrice, bogoOffer, 4);
+        const p4 = getOfferAppliedPrice(basePrice, bogoOffer, 4, 2);
         expect(p4).toBe(75);
         expect(p4 * 4).toBe(300);
 
         // 5 items: 1 cycle (200) + 2 regular (200) -> Total = 400, unit price = 400/5 = 80
-        const p5 = getOfferAppliedPrice(basePrice, bogoOffer, 5);
+        const p5 = getOfferAppliedPrice(basePrice, bogoOffer, 5, 2);
         expect(p5).toBe(80);
         expect(p5 * 5).toBe(400);
 
         // 6 items: 2 full cycles (4 paid + 2 free = 400) -> Total = 400, unit price = 400/6 = 66.67
-        const p6 = getOfferAppliedPrice(basePrice, bogoOffer, 6);
+        const p6 = getOfferAppliedPrice(basePrice, bogoOffer, 6, 2);
         expect(p6).toBe(66.67);
         expect(Math.round(p6 * 6)).toBe(400);
       });
@@ -59,15 +59,15 @@ describe('Comprehensive Verification of Recent Features (Human Simulation)', () 
         const basePrice = 200;
 
         // 1 item: 200
-        expect(getOfferAppliedPrice(basePrice, bogoHalfOff, 1)).toBe(200);
+        expect(getOfferAppliedPrice(basePrice, bogoHalfOff, 1, 2)).toBe(200);
 
         // 2 items: 1 paid (200) + 1 at 50% (100) = 300 total -> unit price = 150
-        const p2 = getOfferAppliedPrice(basePrice, bogoHalfOff, 2);
+        const p2 = getOfferAppliedPrice(basePrice, bogoHalfOff, 2, 2);
         expect(p2).toBe(150);
         expect(p2 * 2).toBe(300);
 
         // 3 items: 1 cycle (300) + 1 regular (200) = 500 total -> unit price = 500/3 = 166.67
-        const p3 = getOfferAppliedPrice(basePrice, bogoHalfOff, 3);
+        const p3 = getOfferAppliedPrice(basePrice, bogoHalfOff, 3, 2);
         expect(p3).toBe(166.67);
       });
     });

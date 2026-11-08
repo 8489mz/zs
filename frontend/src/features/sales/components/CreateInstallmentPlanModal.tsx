@@ -3,6 +3,8 @@ import React, { useState, useMemo } from 'react';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { formatCurrency } from '@/lib/format';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 interface CreateInstallmentPlanModalProps {
   open: boolean;
@@ -48,10 +50,13 @@ export const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProp
     const down = Number(newPlan.downPayment || 0);
     const financed = Math.max(0, total - down);
     const interestRate = Number(newPlan.interestRatePercent || 0);
-    const interest = Math.round(((financed * interestRate) / 100) * 100) / 100;
-    const totalWithInterest = Math.round((financed + interest) * 100) / 100;
+    // INV-FE1-FRONTEND-BOOK-DIGITS: plan preview rounds at the
+    // tenant's book digits (global system currency; no settings here).
+    const digits = currencyMoneyDigits(getGlobalSystemCurrency());
+    const interest = roundMoneyValue((financed * interestRate) / 100, digits);
+    const totalWithInterest = roundMoneyValue(financed + interest, digits);
     const count = Math.max(1, Math.floor(Number(newPlan.installmentCount) || 1));
-    const monthly = Math.round((totalWithInterest / count) * 100) / 100;
+    const monthly = roundMoneyValue(totalWithInterest / count, digits);
 
     return {
       total,

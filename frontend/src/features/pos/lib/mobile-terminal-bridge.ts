@@ -13,6 +13,7 @@
  */
 
 import { HardwareBridgeClient } from './hardware-bridge-client';
+import { currencyMoneyDigits } from '@/shared/utils/money';
 
 export type MobileTerminalProvider =
   | 'auto_detect'
@@ -326,7 +327,7 @@ export class MobileTerminalBridge {
       return new Promise<MobilePaymentResult>((resolve) => {
         try {
           win.SunmiPay.sale(
-            Math.round(request.amount * 100), // in cents / halalas / piastres
+            Math.round(request.amount * 10 ** currencyMoneyDigits(request.currency)), // in minor units (cents / halalas / piastres / fils)
             (res: any) => {
               const approved = res && (res.code === '00' || res.status === 'success');
               resolve({

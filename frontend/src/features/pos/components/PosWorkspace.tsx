@@ -28,6 +28,8 @@ import {
 } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import { posApi } from '@/features/pos/api/pos.api';
 import { isNegativeStockSalesAllowed, repriceCartLine, getProductItemCode, getSaleUnit, summarizeCartQuantities } from '@/features/pos/lib/pos.domain';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { isLikelyBarcodeQuery } from '@/features/pos/lib/pos-product-lookup';
 import { normalizePosSaleMode, usePosSaleMode } from '@/features/pos/lib/pos-sale-mode';
 import { matchProductByCode } from '@/features/pos/lib/pos-workspace.helpers';
@@ -190,7 +192,7 @@ export function PosWorkspace() {
             minStock: Number(updatedProduct.minStock || 0),
             itemCode: getProductItemCode(updatedProduct, unit) || line.itemCode,
           };
-          return repriceCartLine(nextLine, updatedProduct, line.qty);
+          return repriceCartLine(nextLine, updatedProduct, line.qty, currencyMoneyDigits(pos.settingsQuery.data?.currency || getGlobalSystemCurrency()));
         }
         return line;
       });
@@ -730,7 +732,8 @@ export function PosWorkspace() {
                 const modifiersTotal = (item.modifiers || []).reduce((modSum: number, mod: any) => modSum + Number(mod.price || 0), 0);
                 return sum + (item.qty * (item.price + modifiersTotal));
               }, 0);
-              const discount = Number(matchingDraft.discount || 0);
+              const bookDigits = currencyMoneyDigits(pos.settingsQuery.data?.currency || getGlobalSystemCurrency());
+              const discount = roundMoneyValue(Number(matchingDraft.discount || 0), bookDigits);
               const isServiceChargeActive = Boolean(
                 (pos.settingsQuery.data as any)?.restaurantServiceChargeEnabled && matchingDraft.orderType === 'dine_in'
               );
@@ -739,19 +742,19 @@ export function PosWorkspace() {
                 : 0;
               const discounted = Math.max(0, subtotal - discount);
               const serviceCharge = serviceChargePercent > 0
-                ? Number(((discounted * serviceChargePercent) / 100).toFixed(2))
+                ? roundMoneyValue((discounted * serviceChargePercent) / 100, bookDigits)
                 : 0;
               const taxRate = Number(pos.settingsQuery.data?.taxRate || 0);
-              const baseBeforeTax = discounted + serviceCharge;
+              const baseBeforeTax = roundMoneyValue(discounted + serviceCharge, bookDigits);
               let taxAmount = 0;
               let total = 0;
               if (taxRate > 0) {
                 if (String(pos.settingsQuery.data?.taxMode || 'exclusive') === 'inclusive') {
                   total = baseBeforeTax;
-                  taxAmount = Number((baseBeforeTax - (baseBeforeTax / (1 + taxRate / 100))).toFixed(2));
+                  taxAmount = roundMoneyValue(baseBeforeTax - (baseBeforeTax / (1 + taxRate / 100)), bookDigits);
                 } else {
-                  taxAmount = Number((baseBeforeTax * (taxRate / 100)).toFixed(2));
-                  total = Number((baseBeforeTax + taxAmount).toFixed(2));
+                  taxAmount = roundMoneyValue(baseBeforeTax * (taxRate / 100), bookDigits);
+                  total = roundMoneyValue(baseBeforeTax + taxAmount, bookDigits);
                 }
               } else {
                 total = baseBeforeTax;
@@ -760,7 +763,7 @@ export function PosWorkspace() {
               printGuestCheck({
                 tableNumber: tableNum,
                 items: matchingDraft.cart || [],
-                subtotal,
+                subtotal: roundMoneyValue(subtotal, bookDigits),
                 discount,
                 serviceCharge,
                 taxAmount,

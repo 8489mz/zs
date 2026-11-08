@@ -28,6 +28,8 @@ import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { usePosUiCustomization } from '@/features/pos/hooks/usePosUiCustomization';
 import { PosCustomizationDialog } from '@/features/pos/components/pos-workspace/PosCustomizationDialog';
 import { isNegativeStockSalesAllowed } from '@/features/pos/lib/pos.domain';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits } from '@/shared/utils/money';
 import { toast } from '@/shared/components/system-alert';
 
 interface PosProductsPanelProps {
@@ -702,7 +704,7 @@ function PosProductsPanelComponent({
     return daypartFilteredProducts.filter((p) => String(p.categoryId) === String(selectedCategoryId));
   }, [daypartFilteredProducts, selectedCategoryId]);
 
-  const groupedProducts = useMemo(() => buildPosProductGroups(categoryFilteredProducts, priceType), [priceType, categoryFilteredProducts]);
+  const groupedProducts = useMemo(() => buildPosProductGroups(categoryFilteredProducts, priceType, currencyMoneyDigits(settingsQuery.data?.currency || getGlobalSystemCurrency())), [priceType, categoryFilteredProducts, settingsQuery.data?.currency]);
   const recentGroupKeys = useMemo(
     () => (shelf === 'recent' ? buildRecentGroupKeys(recentProducts, groupedProducts) : []),
     [groupedProducts, recentProducts, shelf]

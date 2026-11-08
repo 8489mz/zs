@@ -2,6 +2,7 @@ import { getGlobalCurrencySymbol, getCurrencyDecimals, getGlobalSystemCurrency, 
 import { escapeHtml } from '@/lib/browser';
 import type { AppSettings, Sale } from '@/types/domain';
 import { getPrintOption, getReceiptNumberLocale, isCompactReceipt, getReceiptTheme, formatDateTime, type PosPrintPageSize } from '@/lib/pos-printing/shared';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { buildCode128Svg } from '@/lib/barcode';
 import { formatHijriDate } from '@/lib/hijri';
 import { buildInstaPayQrPayload, buildWalletQrPayload, buildPaymentLinkQrPayload } from '@/lib/payment-qr';
@@ -870,7 +871,10 @@ function renderLoyaltySummary(options: {
   }
 
   const pointValue = Number(options.settings?.loyaltyPointRedeemValue ?? 0.1);
-  const balanceCurrency = balance !== undefined ? Number((balance * pointValue).toFixed(2)) : null;
+  // INV-FE1-FRONTEND-BOOK-DIGITS: loyalty balance value rounds at
+  // the tenant's book digits (receipt settings currency, global
+  // fallback) — the old 2dp truncated 3dp tenants' balances.
+  const balanceCurrency = balance !== undefined ? roundMoneyValue(balance * pointValue, currencyMoneyDigits(options.settings?.currency || getGlobalSystemCurrency())) : null;
 
   return `
     <section class="invoice-card invoice-loyalty-card${options.compact ? ' compact' : ''}" style="margin: 4px 0; padding: 5px 7px; border: 1px dashed #000; border-radius: 4px; font-size: ${options.compact ? '9.5px' : '11px'}; color: #000; line-height: 1.4;">

@@ -6,6 +6,8 @@ import { toast } from '@/shared/components/system-alert';
 import { PlusCircleIcon, TrashIcon, CheckCircleIcon } from '@/shared/components/icons/AppIcons';
 import { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced-fnb.api';
 import { formatCurrency } from '@/lib/format';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 interface PosTipPoolModalProps {
   open: boolean;
@@ -58,7 +60,11 @@ export function PosTipPoolModal({
   const [newStaffRole, setNewStaffRole] = useState('waiter');
   const [newStaffHours] = useState(8);
 
-  const totalTips = Number((cashTips + cardTips).toFixed(2));
+  // INV-FE1-FRONTEND-BOOK-DIGITS: tip totals round at the tenant's
+  // book digits (global system currency; the `currency` prop is a
+  // display symbol like 'ج.م', not a currency code).
+  const bookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
+  const totalTips = roundMoneyValue(cashTips + cardTips, bookDigits);
 
   // Compute live preview of allocations
   const roleWeights: Record<string, number> = {
@@ -87,7 +93,7 @@ export function PosTipPoolModal({
     const amount = totalScore > 0 ? (s.score / totalScore) * totalTips : 0;
     return {
       ...s,
-      allocatedAmount: Number(amount.toFixed(2)),
+      allocatedAmount: roundMoneyValue(amount, bookDigits),
     };
   });
 

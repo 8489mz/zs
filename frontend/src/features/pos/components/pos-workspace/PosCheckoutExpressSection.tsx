@@ -5,6 +5,8 @@ import { formatCurrency } from '@/lib/format';
 import { CreditCardIcon, UserIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon } from '@/shared/components/icons/AppIcons';
 import { toast } from '@/shared/components/system-alert';
 import { isStandalonePosTerminal } from '@/features/pos/lib/pos-shell';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import type { PaymentPreset } from '@/features/pos/components/pos-workspace/PosCheckoutDialogSections';
 
@@ -38,6 +40,9 @@ export function PosCheckoutExpressSection({
   cartQtySummaries,
 }: PosCheckoutExpressSectionProps) {
   const { t } = useTranslation();
+  // INV-FE1-FRONTEND-BOOK-DIGITS: change/underpaid amounts round at the
+  // tenant's book digits (settings currency, global fallback).
+  const bookDigits = currencyMoneyDigits(pos.settings?.currency || pos.settingsQuery?.data?.currency || getGlobalSystemCurrency());
   const total = Number(pos.totals.total || 0);
   const [customCashInput, setCustomCashInput] = useState<string>('');
   const [showMoreOptions, setShowMoreOptions] = useState(false);
@@ -49,8 +54,8 @@ export function PosCheckoutExpressSection({
   const parsedCash = Number(customCashInput.trim());
   const hasCustomCash = customCashInput.trim() !== '' && !isNaN(parsedCash) && parsedCash >= 0;
   const effectiveReceivedCash = hasCustomCash ? parsedCash : total;
-  const changeDue = effectiveReceivedCash >= total ? Number((effectiveReceivedCash - total).toFixed(2)) : 0;
-  const underpaidAmount = effectiveReceivedCash < total ? Number((total - effectiveReceivedCash).toFixed(2)) : 0;
+  const changeDue = effectiveReceivedCash >= total ? roundMoneyValue(effectiveReceivedCash - total, bookDigits) : 0;
+  const underpaidAmount = effectiveReceivedCash < total ? roundMoneyValue(total - effectiveReceivedCash, bookDigits) : 0;
 
   const isTerminalHardwareManaged = useMemo(() => Boolean(
     isStandalonePosTerminal() ||

@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 import { formatCurrency } from '@/lib/format';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { paymentLabel } from '@/features/pos/lib/pos-workspace.helpers';
 import { getProductPrice, isNegativeStockSalesAllowed } from '@/features/pos/lib/pos.domain';
 import type { PaymentChannel, PaymentType, PosProductFilter } from '@/features/pos/hooks/usePosWorkspace';
@@ -17,7 +19,7 @@ interface PosWorkspaceDerivedParams {
   openShiftRows: Array<{ id: string | number; docNo?: string; openedById?: string | number; openedByName?: string }>;
   authUserId?: string | number | null;
   authPermissions?: string[];
-  settings?: { taxRate?: number | string; taxMode?: string; allowNegativeStockSales?: unknown; allowSellingBelowStock?: unknown; posMaxDiscountThresholdEnabled?: boolean; posMaxDiscountThresholdType?: string; posMaxDiscountThresholdValue?: number; posSmallDiscountFlatAllowance?: number; loyaltyPointRedeemValue?: number; loyaltyPointsPer100Egp?: number; loyaltyMinRedeemPoints?: number; loyaltyMaxDiscountPercentage?: number; loyaltyEnabled?: boolean; restaurantServiceChargeEnabled?: boolean; restaurantServiceChargePercent?: number } | null;
+  settings?: { currency?: string; taxRate?: number | string; taxMode?: string; allowNegativeStockSales?: unknown; allowSellingBelowStock?: unknown; posMaxDiscountThresholdEnabled?: boolean; posMaxDiscountThresholdType?: string; posMaxDiscountThresholdValue?: number; posSmallDiscountFlatAllowance?: number; loyaltyPointRedeemValue?: number; loyaltyPointsPer100Egp?: number; loyaltyMinRedeemPoints?: number; loyaltyMaxDiscountPercentage?: number; loyaltyEnabled?: boolean; restaurantServiceChargeEnabled?: boolean; restaurantServiceChargePercent?: number } | null;
   heldDrafts: Array<unknown>;
   recentProductIds: string[];
   productFilter: PosProductFilter;
@@ -90,6 +92,10 @@ function getShiftDisplayLabel(shift: { docNo?: string; openedByName?: string } |
 }
 
 export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
+  // INV-FE1-FRONTEND-BOOK-DIGITS: every money leg below rounds at the
+  // tenant's book digits (settings currency, global system currency
+  // as fallback) — never at hardcoded 2dp/3dp.
+  const bookDigits = currencyMoneyDigits(params.settings?.currency || getGlobalSystemCurrency());
   const productList = useMemo(() => (Array.isArray(params.products) ? params.products : []), [params.products]);
   const saleProductList = useMemo(() => (Array.isArray(params.saleProducts) ? params.saleProducts : []), [params.saleProducts]);
   const branchList = useMemo(() => (Array.isArray(params.branches) ? params.branches : []), [params.branches]);
@@ -107,8 +113,8 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
     [openShiftList],
   );
   const defaultPriceByProductId = useMemo(
-    () => new Map(productList.map((product) => [String(product.id), Number(getProductPrice(product, 'retail', 1) || 0)])),
-    [productList],
+    () => new Map(productList.map((product) => [String(product.id), Number(getProductPrice(product, 'retail', 1, 1, bookDigits) || 0)])),
+    [productList, bookDigits],
   );
 
   const recentProducts = useMemo(() => {
@@ -150,7 +156,7 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
     }, 0);
     const manualDiscount = Math.max(0, Number(params.discount || 0));
     const pointRedeemValue = Number(params.settings?.loyaltyPointRedeemValue ?? 0.1);
-    const loyaltyDiscount = Math.max(0, Number((Number(params.loyaltyPointsRedeemed || 0) * pointRedeemValue).toFixed(2)));
+    const loyaltyDiscount = Math.max(0, roundMoneyValue(Number(params.loyaltyPointsRedeemed || 0) * pointRedeemValue, bookDigits));
     const discountValue = manualDiscount + loyaltyDiscount;
     const deliveryFee = Math.max(0, Number(params.deliveryFee || 0));
     const tipAmount = Math.max(0, Number(params.tipAmount || 0));
@@ -164,43 +170,43 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
       : 0;
     const discounted = Math.max(0, subTotal - discountValue);
     const serviceCharge = serviceChargePercent > 0
-      ? Number(((discounted * serviceChargePercent) / 100).toFixed(2))
+      ? roundMoneyValue((discounted * serviceChargePercent) / 100, bookDigits)
       : 0;
 
-    const baseBeforeTax = Number((discounted + serviceCharge).toFixed(2));
+    const baseBeforeTax = roundMoneyValue(discounted + serviceCharge, bookDigits);
     const taxRate = Number(params.settings?.taxRate || 0);
     const pricesIncludeTax = String(params.settings?.taxMode || 'exclusive') === 'inclusive';
     let taxAmount = 0;
     let total = 0;
     if (taxRate > 0) {
       if (pricesIncludeTax) {
-        total = Number((baseBeforeTax + deliveryFee + tipAmount).toFixed(3));
-        taxAmount = Number((baseBeforeTax - (baseBeforeTax / (1 + taxRate / 100))).toFixed(3));
+        total = roundMoneyValue(baseBeforeTax + deliveryFee + tipAmount, bookDigits);
+        taxAmount = roundMoneyValue(baseBeforeTax - (baseBeforeTax / (1 + taxRate / 100)), bookDigits);
       } else {
-        taxAmount = Number((baseBeforeTax * (taxRate / 100)).toFixed(3));
-        total = Number((baseBeforeTax + taxAmount + deliveryFee + tipAmount).toFixed(3));
+        taxAmount = roundMoneyValue(baseBeforeTax * (taxRate / 100), bookDigits);
+        total = roundMoneyValue(baseBeforeTax + taxAmount + deliveryFee + tipAmount, bookDigits);
       }
     } else {
-      total = Number((baseBeforeTax + deliveryFee + tipAmount).toFixed(3));
+      total = roundMoneyValue(baseBeforeTax + deliveryFee + tipAmount, bookDigits);
     }
     return {
-      subTotal: Number(subTotal.toFixed(3)),
-      discountValue: Number(discountValue.toFixed(3)),
-      manualDiscount: Number(manualDiscount.toFixed(3)),
-      loyaltyDiscount: Number(loyaltyDiscount.toFixed(3)),
+      subTotal: roundMoneyValue(subTotal, bookDigits),
+      discountValue: roundMoneyValue(discountValue, bookDigits),
+      manualDiscount: roundMoneyValue(manualDiscount, bookDigits),
+      loyaltyDiscount: roundMoneyValue(loyaltyDiscount, bookDigits),
       serviceCharge,
       serviceChargePercent,
-      deliveryFee: Number(deliveryFee.toFixed(3)),
+      deliveryFee: roundMoneyValue(deliveryFee, bookDigits),
       tipAmount,
       taxRate,
       pricesIncludeTax,
       taxAmount,
       total,
     };
-  }, [params.cart, params.discount, params.loyaltyPointsRedeemed, params.deliveryFee, params.tipAmount, params.settings, params.orderType]);
+  }, [params.cart, params.discount, params.loyaltyPointsRedeemed, params.deliveryFee, params.tipAmount, params.settings, params.orderType, bookDigits]);
 
-  const changeAmount = useMemo(() => Math.max(0, Number(params.paidAmount || 0) - totals.total), [params.paidAmount, totals.total]);
-  const amountDue = useMemo(() => Math.max(0, Number(totals.total || 0) - Number(params.paidAmount || 0)), [params.paidAmount, totals.total]);
+  const changeAmount = useMemo(() => roundMoneyValue(Math.max(0, Number(params.paidAmount || 0) - totals.total), bookDigits), [params.paidAmount, totals.total, bookDigits]);
+  const amountDue = useMemo(() => roundMoneyValue(Math.max(0, Number(totals.total || 0) - Number(params.paidAmount || 0)), bookDigits), [params.paidAmount, totals.total, bookDigits]);
   const currentBranch = useMemo(
     () => branchById.get(String(params.branchId)) || branchList[0] || null,
     [branchById, branchList, params.branchId],
@@ -280,9 +286,9 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
       const product = productById.get(String(item.productId));
       if (!product) return false;
       const unitMultiplier = Number(item.unitMultiplier) > 0 ? Number(item.unitMultiplier) : 1;
-      return Math.abs(Number(item.price || 0) - Number(getProductPrice(product, item.priceType, item.qty, unitMultiplier) || 0)) > 0.0001;
+      return Math.abs(Number(item.price || 0) - Number(getProductPrice(product, item.priceType, item.qty, unitMultiplier, bookDigits) || 0)) > 0.0001;
     });
-  }, [canEditPrice, params.cart, defaultPriceByProductId, productById]);
+  }, [canEditPrice, params.cart, defaultPriceByProductId, productById, bookDigits]);
 
   const isDelivery = params.orderType === 'delivery';
   const isDeliveryCod = isDelivery && params.collectionStatus === 'cod';

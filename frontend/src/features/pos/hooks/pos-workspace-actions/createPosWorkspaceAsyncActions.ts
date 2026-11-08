@@ -11,6 +11,8 @@ import { queryClient } from '@/app/providers';
 import { getFriendlyApiErrorMessage } from '@/lib/api-error-message';
 import { getSubmitSaleErrorMessage } from '@/features/pos/lib/pos-submit-error';
 import { stripSaleItemNameFields } from '@/features/pos/contracts';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 function getSaleKey(sale: Sale | null) {
   if (!sale) return '';
@@ -107,13 +109,16 @@ export function createPosWorkspaceAsyncActions(
     }
 
     const total = Number(params.totals.total || 0);
+    // INV-FE1-FRONTEND-BOOK-DIGITS: paid/change amounts round at the
+    // tenant's book digits (settings currency, global fallback).
+    const bookDigits = currencyMoneyDigits(params.settings?.currency || getGlobalSystemCurrency());
     const allowNegativeStockSales = isNegativeStockSalesAllowed(params.settings);
     const initialCashAmount = Number(params.cashAmount || 0);
     const initialCardAmount = Number(params.cardAmount || 0);
     const initialTransferAmount = Number(params.transferAmount || 0);
     const initialPaidAmount = params.paymentChannel === 'wallet' || params.paymentChannel === 'instapay'
-      ? Number(initialTransferAmount.toFixed(2))
-      : Number((initialCashAmount + initialCardAmount).toFixed(2));
+      ? roundMoneyValue(initialTransferAmount, bookDigits)
+      : roundMoneyValue(initialCashAmount + initialCardAmount, bookDigits);
 
     // F2 is a fast-cash shortcut only while the current invoice is NOT explicitly credit.
     // If the cashier selected "آجل", the sale must remain credit and must stay attached to the selected customer.
@@ -169,9 +174,10 @@ export function createPosWorkspaceAsyncActions(
       ? initialTransferAmount
       : (settleAsTransfer ? total : initialTransferAmount);
 
-    const effectivePaidAmount = Number((
-      effectiveCashAmount + effectiveCardAmount + effectiveTransferAmount
-    ).toFixed(2));
+    const effectivePaidAmount = roundMoneyValue(
+      effectiveCashAmount + effectiveCardAmount + effectiveTransferAmount,
+      bookDigits,
+    );
 
     const transferChannel = params.paymentChannel === 'wallet' ? 'wallet' : 'instapay';
     const effectivePaymentChannel = settleAsCash
@@ -283,7 +289,7 @@ export function createPosWorkspaceAsyncActions(
         tenderedAmount: resolvedTendered,
         changeAmount: (createdSale as any)?.sale?.changeAmount
           ?? (createdSale as any)?.changeAmount
-          ?? (resolvedTendered > total ? Number((resolvedTendered - total).toFixed(2)) : 0),
+          ?? (resolvedTendered > total ? roundMoneyValue(resolvedTendered - total, bookDigits) : 0),
         onlineOrderNumber: rawOnlineNumber || (createdSale as any)?.onlineOrderNumber,
         terminalId: params.terminalPaymentDetails?.terminalId || (createdSale as any)?.terminalId,
         terminalAuthCode: params.terminalPaymentDetails?.authCode || (createdSale as any)?.terminalAuthCode,

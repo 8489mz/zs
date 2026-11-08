@@ -10,6 +10,7 @@ import { MutationFeedback } from '@/shared/components/mutation-feedback';
 import { SubmitButton } from '@/shared/components/submit-button';
 import { formatCurrency } from '@/lib/format';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
 import { SINGLE_STORE_MODE } from '@/config/product-scope';
 import type { Branch, CashierShift, Location } from '@/types/domain';
 import type { CloseShiftValues, MovementValues, OpenShiftValues } from '@/features/cash-drawer/hooks/useCashDrawerPageController';
@@ -57,15 +58,15 @@ function normalizeCount(value: unknown): number {
   return Math.floor(parsed);
 }
 
-function summarizeDetails(rows: Array<{ amount?: number }>): number {
+function summarizeDetails(rows: Array<{ amount?: number }>, digits: MoneyDigits): number {
   if (!Array.isArray(rows)) return 0;
-  return Number(
+  return roundMoneyValue(
     rows
       .reduce((sum, row) => {
         const val = Number(row?.amount);
         return sum + (Number.isFinite(val) ? val : 0);
-      }, 0)
-      .toFixed(2)
+      }, 0),
+    digits,
   );
 }
 
@@ -202,9 +203,13 @@ function PaymentChannelRow(props: PaymentChannelRowProps) {
   });
   const declaredTotal = Number(rawDeclared || 0);
 
-  const detailsTotal = useMemo(() => summarizeDetails(detailsRows), [detailsRows]);
-  const diff = Number((detailsTotal - declaredTotal).toFixed(2));
-  const isMatch = Math.abs(diff) < 0.01 && detailsTotal > 0 && declaredTotal > 0;
+  // INV-FE1-FRONTEND-BOOK-DIGITS: drawer detail totals and the
+  // match threshold round at the tenant's book digits (global system
+  // currency; the match threshold is just under one minor unit).
+  const bookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
+  const detailsTotal = useMemo(() => summarizeDetails(detailsRows, bookDigits), [detailsRows, bookDigits]);
+  const diff = roundMoneyValue(detailsTotal - declaredTotal, bookDigits);
+  const isMatch = Math.abs(diff) < 10 ** -bookDigits && detailsTotal > 0 && declaredTotal > 0;
   const isZero = detailsTotal === 0 && declaredTotal === 0;
 
   return (

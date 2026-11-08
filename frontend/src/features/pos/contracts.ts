@@ -1,5 +1,6 @@
 import type { PosItem } from '@/features/pos/types/pos.types';
-import { getCurrencyDecimals } from '@/lib/currencies';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 export type PaymentType = 'cash' | 'credit';
 export type PaymentChannel = 'cash' | 'card' | 'wallet' | 'instapay' | 'credit' | 'mixed';
@@ -54,9 +55,15 @@ export interface CreatePosSaleInput {
   tipAmount?: number;
 }
 
+// INV-FE1-FRONTEND-BOOK-DIGITS: every money field of the sale POST
+// payload (line prices, discount, delivery fee, service charge, tip,
+// payment amounts) rounds at the tenant's book digits — global
+// system currency, set from tenant settings at boot; the builders
+// carry no settings object. The old getCurrencyDecimals + toFixed
+// path missed JOD/TND/IQD/LYD (3dp) and disagreed with backend
+// roundMoney on float-edge values (e.g. 2.675).
 function normalizeMoney(value: number) {
-  const decimals = getCurrencyDecimals();
-  return Number(Number(value || 0).toFixed(decimals));
+  return roundMoneyValue(Number(value || 0), currencyMoneyDigits(getGlobalSystemCurrency()));
 }
 
 function normalizeCustomerId(value: string) {

@@ -1,6 +1,7 @@
 import type { Product } from '@/types/domain';
 import type { PosPriceType } from '@/features/pos/types/pos.types';
 import { getProductPrice } from '@/features/pos/lib/pos.domain';
+import type { MoneyDigits } from '@/shared/utils/money';
 
 export interface PosProductGroup {
   key: string;
@@ -41,7 +42,7 @@ function getGroupKey(product: Product, repeatedStems: Set<string>) {
 
 const arCollator = new Intl.Collator('ar', { numeric: true, sensitivity: 'base' });
 
-export function buildPosProductGroups(products: Product[], priceType: PosPriceType) {
+export function buildPosProductGroups(products: Product[], priceType: PosPriceType, digits: MoneyDigits) {
   const stemCounts = new Map<string, number>();
   products.forEach((product) => {
     const stem = getNameStem(product.name);
@@ -72,7 +73,7 @@ export function buildPosProductGroups(products: Product[], priceType: PosPriceTy
         return arCollator.compare(aSize, bSize);
       });
       const first = orderedProducts[0];
-      const prices = orderedProducts.map((product) => getProductPrice(product, priceType));
+      const prices = orderedProducts.map((product) => getProductPrice(product, priceType, 1, 1, digits));
       const colors = Array.from(
         new Set(orderedProducts.map((product) => String(product.color || '').trim()).filter(Boolean)),
       );

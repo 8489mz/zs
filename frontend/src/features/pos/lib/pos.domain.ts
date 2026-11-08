@@ -1,4 +1,5 @@
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
+import { roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
 import type { Product, ProductOffer, ProductUnit } from '@/types/domain';
 import type { PosItem, PosPriceType } from '@/features/pos/types/pos.types';
 
@@ -29,10 +30,6 @@ function normalizeDateOnly(value: unknown) {
   if (isoMatch) return isoMatch[1];
   const parsed = new Date(text);
   return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10);
-}
-
-function roundMoney(value: number) {
-  return Number(Number(value || 0).toFixed(2));
 }
 
 function roundQuantity(value: number) {
@@ -112,20 +109,20 @@ export function isOfferHappyHourActive(offer: ProductOffer, now = new Date()): b
   return true;
 }
 
-export function getOfferAppliedPrice(basePrice: number, offer: ProductOffer, qty = 1) {
+export function getOfferAppliedPrice(basePrice: number, offer: ProductOffer, qty = 1, digits: MoneyDigits) {
   const type = getOfferType(offer);
   const offerVal = Number(offer.value || 0);
-  if (type === 'percent') return roundMoney(Math.max(0, basePrice - ((basePrice * offerVal) / 100)));
-  if (type === 'fixed') return roundMoney(Math.max(0, basePrice - offerVal));
-  if (type === 'price') return roundMoney(Math.max(0, offerVal));
+  if (type === 'percent') return roundMoneyValue(Math.max(0, basePrice - ((basePrice * offerVal) / 100)), digits);
+  if (type === 'fixed') return roundMoneyValue(Math.max(0, basePrice - offerVal), digits);
+  if (type === 'price') return roundMoneyValue(Math.max(0, offerVal), digits);
   if (type === 'bundle') {
     const minQty = getOfferMinQty(offer);
     const normalizedQty = Math.max(1, qty);
-    if (normalizedQty < minQty) return roundMoney(basePrice);
+    if (normalizedQty < minQty) return roundMoneyValue(basePrice, digits);
     const bundles = Math.floor(normalizedQty / minQty);
     const remainder = normalizedQty % minQty;
     const total = (bundles * offerVal) + (remainder * basePrice);
-    return roundMoney(total / normalizedQty);
+    return roundMoneyValue(total / normalizedQty, digits);
   }
   if (type === 'bogo') {
     const buyQty = Math.max(1, Number(offer.bogoBuyQty ?? (offer as any).bogo_buy_qty ?? 1));
@@ -133,7 +130,7 @@ export function getOfferAppliedPrice(basePrice: number, offer: ProductOffer, qty
     const discountPercent = Math.min(100, Math.max(0, Number(offer.bogoDiscountPercent ?? (offer as any).bogo_discount_percent ?? (offerVal || 100))));
     const normalizedQty = Math.max(1, qty);
     const cycle = buyQty + getQty;
-    if (normalizedQty < cycle) return roundMoney(basePrice);
+    if (normalizedQty < cycle) return roundMoneyValue(basePrice, digits);
 
     const fullCycles = Math.floor(normalizedQty / cycle);
     const remainder = normalizedQty % cycle;
@@ -141,9 +138,9 @@ export function getOfferAppliedPrice(basePrice: number, offer: ProductOffer, qty
     const discountPerUnit = (basePrice * discountPercent) / 100;
     const totalDiscount = discountedUnits * discountPerUnit;
     const totalLinePrice = Math.max(0, (normalizedQty * basePrice) - totalDiscount);
-    return roundMoney(totalLinePrice / normalizedQty);
+    return roundMoneyValue(totalLinePrice / normalizedQty, digits);
   }
-  return roundMoney(basePrice);
+  return roundMoneyValue(basePrice, digits);
 }
 
 function getOfferMinQty(offer: ProductOffer) {
@@ -155,7 +152,7 @@ function getOfferMinQty(offer: ProductOffer) {
   return Math.max(1, Number(offer.minQty ?? (offer as any).min_qty ?? 1));
 }
 
-function getApplicableOffer(product: Product, priceType: PosPriceType, qty = 1, now = new Date(), unitMultiplier = 1) {
+function getApplicableOffer(product: Product, priceType: PosPriceType, qty = 1, now = new Date(), unitMultiplier = 1, digits: MoneyDigits) {
   if (priceType === 'wholesale') return null;
   const today = todayLocalIsoDate();
   const basePrice = Number(product.retailPrice || 0) * unitMultiplier;
@@ -179,8 +176,8 @@ function getApplicableOffer(product: Product, priceType: PosPriceType, qty = 1, 
   if (!applicableOffers.length) return null;
 
   return [...applicableOffers].sort((left, right) => {
-    const leftPrice = getOfferAppliedPrice(basePrice, left, normalizedQty);
-    const rightPrice = getOfferAppliedPrice(basePrice, right, normalizedQty);
+    const leftPrice = getOfferAppliedPrice(basePrice, left, normalizedQty, digits);
+    const rightPrice = getOfferAppliedPrice(basePrice, right, normalizedQty, digits);
     if (leftPrice !== rightPrice) return leftPrice - rightPrice;
 
     const leftMinQty = getOfferMinQty(left);
@@ -208,10 +205,10 @@ export function getProductItemCode(product: Product, unit?: ProductUnit) {
   return String(product.styleCode || unit?.barcode || product.barcode || product.id || '').trim();
 }
 
-export function getProductPrice(product: Product, priceType: PosPriceType, qty = 1, unitMultiplier = 1) {
+export function getProductPrice(product: Product, priceType: PosPriceType, qty = 1, unitMultiplier = 1, digits: MoneyDigits) {
   const basePrice = Number(priceType === 'wholesale' ? product.wholesalePrice || product.retailPrice || 0 : product.retailPrice || 0) * unitMultiplier;
-  const offer = getApplicableOffer(product, priceType, qty, new Date(), unitMultiplier);
-  return offer ? getOfferAppliedPrice(basePrice, offer, qty) : roundMoney(basePrice);
+  const offer = getApplicableOffer(product, priceType, qty, new Date(), unitMultiplier, digits);
+  return offer ? getOfferAppliedPrice(basePrice, offer, qty, digits) : roundMoneyValue(basePrice, digits);
 }
 
 export function getOfferDisplayName(offer: ProductOffer) {
@@ -227,21 +224,21 @@ export function getOfferDisplayName(offer: ProductOffer) {
   return 'تم تفعيل عرض خاص';
 }
 
-export function repriceCartLine(item: PosItem, product: Product, qty: number) {
+export function repriceCartLine(item: PosItem, product: Product, qty: number, digits: MoneyDigits) {
   const unitMultiplier = Number.isFinite(item.unitMultiplier) && item.unitMultiplier > 0 ? item.unitMultiplier : 1;
   const basePrice = Number(item.priceType === 'wholesale' ? product.wholesalePrice || product.retailPrice || 0 : product.retailPrice || 0) * unitMultiplier;
-  const offer = getApplicableOffer(product, item.priceType, qty, new Date(), unitMultiplier);
-  const effectivePrice = offer ? getOfferAppliedPrice(basePrice, offer, qty) : roundMoney(basePrice);
+  const offer = getApplicableOffer(product, item.priceType, qty, new Date(), unitMultiplier, digits);
+  const effectivePrice = offer ? getOfferAppliedPrice(basePrice, offer, qty, digits) : roundMoneyValue(basePrice, digits);
   
   let origPrice = basePrice;
   let offerDiscount = 0;
   let offerName = offer ? getOfferDisplayName(offer) : undefined;
 
   if (offer) {
-    offerDiscount = roundMoney(Math.max(0, basePrice - effectivePrice));
+    offerDiscount = roundMoneyValue(Math.max(0, basePrice - effectivePrice), digits);
   } else if (item.priceType !== 'wholesale' && product.comboOriginalPrice && Number(product.comboOriginalPrice) > effectivePrice) {
     origPrice = Number(product.comboOriginalPrice);
-    offerDiscount = roundMoney(Math.max(0, origPrice - effectivePrice));
+    offerDiscount = roundMoneyValue(Math.max(0, origPrice - effectivePrice), digits);
     offerName = product.comboComponentsSummary 
       ? `عرض مجمع (${product.comboComponentsSummary})`
       : 'عرض مجمع';
@@ -282,6 +279,7 @@ export function getAvailableSaleProducts(products: Product[], search: string, fi
 
 interface AddPosItemOptions {
   priceType: PosPriceType;
+  digits: MoneyDigits;
   unitId?: string;
   allowNegativeStockSales?: boolean;
   quantity?: number;
@@ -335,7 +333,7 @@ export function addPosItem(cart: PosItem[], product: Product, options: AddPosIte
           quantityChunks: (item.isWeighted === true || isWeighted) && options.sourceBarcode 
             ? [...(item.quantityChunks || [Number(item.qty || 0)]), requestedQty] 
             : item.quantityChunks,
-        }, product, nextQty)
+        }, product, nextQty, options.digits)
       : item);
   }
   const newItem: PosItem = {
@@ -364,19 +362,7 @@ export function addPosItem(cart: PosItem[], product: Product, options: AddPosIte
     serials: incomingSerial ? [incomingSerial] : undefined,
   };
 
-  return [...cart, repriceCartLine(newItem, product, requestedQty)];
-}
-
-export function updatePosItemQty(cart: PosItem[], lineKey: string, qty: number, products: Product[]) {
-  return cart.map((item) => {
-    if (item.lineKey !== lineKey) return item;
-    const isWeighted = item.isWeighted === true;
-    const normalizedQty = normalizeSaleQuantity(qty, isWeighted);
-    const nextQty = Math.min(normalizedQty, item.stockLimit);
-    const product = products.find((entry) => String(entry.id) === String(item.productId));
-    if (!product) return { ...item, qty: nextQty };
-    return repriceCartLine(item, product, nextQty);
-  });
+  return [...cart, repriceCartLine(newItem, product, requestedQty, options.digits)];
 }
 
 export function updatePosItemNotes(cart: PosItem[], lineKey: string, notes: string) {
@@ -405,7 +391,7 @@ export function updatePosItemQtyWithOptions(
   lineKey: string,
   qty: number,
   products: Product[],
-  options: { allowNegativeStockSales?: boolean; quantityChunks?: number[] | null } = {},
+  options: { allowNegativeStockSales?: boolean; quantityChunks?: number[] | null; digits: MoneyDigits },
 ) {
   return cart.map((item) => {
     if (item.lineKey !== lineKey) return item;
@@ -419,7 +405,7 @@ export function updatePosItemQtyWithOptions(
     }
     const stockLimit = options.allowNegativeStockSales || !!product.hasBom ? UNBOUNDED_STOCK_LIMIT : item.stockLimit;
     const finalQty = options.allowNegativeStockSales || !!product.hasBom ? normalizedQty : Math.min(normalizedQty, stockLimit);
-    return repriceCartLine({ ...item, quantityChunks: resolvedChunks }, product, finalQty);
+    return repriceCartLine({ ...item, quantityChunks: resolvedChunks }, product, finalQty, options.digits);
   });
 }
 
@@ -427,7 +413,7 @@ export function removePosItem(cart: PosItem[], lineKey: string) {
   return cart.filter((row) => row.lineKey !== lineKey);
 }
 
-export function syncPosCartStock(cart: PosItem[], products: Product[], options: { allowNegativeStockSales?: boolean } = {}) {
+export function syncPosCartStock(cart: PosItem[], products: Product[], options: { allowNegativeStockSales?: boolean; digits: MoneyDigits }) {
   let changed = false;
   let removedCount = 0;
   let clampedCount = 0;
@@ -457,7 +443,7 @@ export function syncPosCartStock(cart: PosItem[], products: Product[], options: 
       stockLimit,
       currentStock: Number(product.stock || 0),
       minStock: Number(product.minStock || 0),
-      price: getProductPrice(product, item.priceType, nextQty, Number(unit.multiplier) > 0 ? Number(unit.multiplier) : 1),
+      price: getProductPrice(product, item.priceType, nextQty, Number(unit.multiplier) > 0 ? Number(unit.multiplier) : 1, options.digits),
       qty: nextQty,
       quantityChunks: nextQty === Number(item.qty || 0) ? item.quantityChunks : undefined,
     };

@@ -6,6 +6,8 @@ import { Button } from '@/shared/ui/button';
 import { formatCurrency } from '@/lib/format';
 import { CheckIcon, UsersIcon, ReceiptIcon, PlusIcon, TrashIcon } from '@/shared/components/icons/AppIcons';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import type { PosItem } from '@/features/pos/types/pos.types';
 
 interface PosSplitBillModalProps {
@@ -44,6 +46,10 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
   const [guestCount, setGuestCount] = useState<number>(2);
   const [evenGuests, setEvenGuests] = useState<EvenSplitGuest[]>([]);
 
+  // INV-FE1-FRONTEND-BOOK-DIGITS: split shares round at the tenant's
+  // book digits; the last guest/bill takes the remainder so shares
+  // sum exactly to the total.
+  const bookDigits = currencyMoneyDigits(pos.settings?.currency || pos.settingsQuery?.data?.currency || getGlobalSystemCurrency());
   const totalAmount = Number(pos.totals?.total || 0);
 
   // Sync state whenever modal opens or cart changes
@@ -68,12 +74,12 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
 
       // 2. Initialize even guests split
       const currentTotal = Number(pos.totals?.total || 0);
-      const perGuest = currentTotal > 0 ? Number((currentTotal / guestCount).toFixed(2)) : 0;
+      const perGuest = currentTotal > 0 ? roundMoneyValue(currentTotal / guestCount, bookDigits) : 0;
       const newGuests: EvenSplitGuest[] = [];
       let allocated = 0;
       for (let i = 1; i <= guestCount; i++) {
         const isLast = i === guestCount;
-        const amt = isLast ? Number((currentTotal - allocated).toFixed(2)) : perGuest;
+        const amt = isLast ? roundMoneyValue(currentTotal - allocated, bookDigits) : perGuest;
         allocated += amt;
         newGuests.push({
           id: i,
@@ -94,12 +100,12 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
     if (count < 2) count = 2;
     if (count > 12) count = 12;
     setGuestCount(count);
-    const perGuest = Number((totalAmount / count).toFixed(2));
+    const perGuest = roundMoneyValue(totalAmount / count, bookDigits);
     const newGuests: EvenSplitGuest[] = [];
     let allocated = 0;
     for (let i = 1; i <= count; i++) {
       const isLast = i === count;
-      const amt = isLast ? Number((totalAmount - allocated).toFixed(2)) : perGuest;
+      const amt = isLast ? roundMoneyValue(totalAmount - allocated, bookDigits) : perGuest;
       allocated += amt;
       newGuests.push({
         id: i,
@@ -276,13 +282,13 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
 
       // Calculate parts with penny-accurate rounding
       const unpaidBills = currentBills.filter((b) => !b.isPaid);
-      const basePartVal = Number((totalItemVal / partsCount).toFixed(2));
+      const basePartVal = roundMoneyValue(totalItemVal / partsCount, bookDigits);
       let allocated = 0;
       const parts: number[] = [];
 
       for (let p = 0; p < partsCount; p++) {
         const isLast = p === partsCount - 1;
-        const val = isLast ? Number((totalItemVal - allocated).toFixed(2)) : basePartVal;
+        const val = isLast ? roundMoneyValue(totalItemVal - allocated, bookDigits) : basePartVal;
         allocated += val;
         parts.push(val);
       }

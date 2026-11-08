@@ -13,6 +13,8 @@ import { formatCurrency } from '@/lib/format';
 import { toast } from '@/shared/components/system-alert';
 import { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced-fnb.api';
 import { useAuthStore } from '@/stores/auth-store';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 interface PosManagerCompModalProps {
   open: boolean;
@@ -379,7 +381,7 @@ export function PosManagerCompModal({
                     <button
                       key={pct}
                       type="button"
-                      onClick={() => setCustomAmount(String(Number((currentCartTotal * (pct / 100)).toFixed(2))))}
+                      onClick={() => setCustomAmount(String(roundMoneyValue(currentCartTotal * (pct / 100), currencyMoneyDigits(getGlobalSystemCurrency()))))}
                       style={{
                         padding: '0 10px',
                         height: '34px',

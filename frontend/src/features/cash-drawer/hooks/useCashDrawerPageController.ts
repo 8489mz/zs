@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { formatCurrency } from '@/lib/format';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { useCashierShifts } from '@/features/cash-drawer/hooks/useCashierShifts';
 import { useCashDrawerCatalog } from '@/features/cash-drawer/hooks/useCashDrawerCatalog';
 import { useCashDrawerMutations } from '@/features/cash-drawer/hooks/useCashDrawerMutations';
@@ -220,7 +222,9 @@ export function useCashDrawerPageController() {
 
   const closeExpectedCash = Number(selectedCloseShift?.expectedCash || 0);
   const closeCountedCash = Number(closeForm.watch('countedCash') || 0);
-  const closeVariancePreview = Number((closeCountedCash - closeExpectedCash).toFixed(2));
+  // INV-FE1-FRONTEND-BOOK-DIGITS: close variance preview rounds at
+  // the tenant's book digits (global system currency).
+  const closeVariancePreview = roundMoneyValue(closeCountedCash - closeExpectedCash, currencyMoneyDigits(getGlobalSystemCurrency()));
   const closeNoteValue = String(closeForm.watch('note') || '').trim();
 
   const openShift = openOptions[0] || (summary.openShiftDocNo ? { docNo: summary.openShiftDocNo } : null);

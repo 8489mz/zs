@@ -3,6 +3,8 @@ import { normalizePaymentChannel } from '@/features/pos/lib/pos-workspace.helper
 import { toMoney } from '@/features/pos/hooks/pos-workspace-actions/createPosWorkspaceBaseActions.helpers';
 import { buildDraftState, persistDraftSnapshot, persistLastSale, persistRecentProductIds } from '@/features/pos/lib/pos.persistence';
 import { isNegativeStockSalesAllowed, syncPosCartStock } from '@/features/pos/lib/pos.domain';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits } from '@/shared/utils/money';
 import type { PosItem, PosPriceType } from '@/features/pos/types/pos.types';
 import type { Product, Sale } from '@/types/domain';
 import type { PaymentChannel, PaymentType } from '@/features/pos/hooks/usePosWorkspace';
@@ -93,7 +95,7 @@ export function usePosWorkspaceEffects({
   setSelectedLineKey: (value: string) => void;
   discountApprovalSecret: string;
   setDiscountApprovalSecret: (value: string) => void;
-  settings?: { allowNegativeStockSales?: unknown; allowSellingBelowStock?: unknown } | null;
+  settings?: { currency?: string; allowNegativeStockSales?: unknown; allowSellingBelowStock?: unknown } | null;
 }) {
   useEffect(() => {
     if (ownOpenShift) {
@@ -145,7 +147,7 @@ export function usePosWorkspaceEffects({
 
   useEffect(() => {
     if (!cart.length || !products.length) return;
-    const result = syncPosCartStock(cart, products, { allowNegativeStockSales: isNegativeStockSalesAllowed(settings) });
+    const result = syncPosCartStock(cart, products, { allowNegativeStockSales: isNegativeStockSalesAllowed(settings), digits: currencyMoneyDigits(settings?.currency || getGlobalSystemCurrency()) });
     if (result.cart === cart) return;
     setCart(result.cart);
     if (result.removedCount || result.clampedCount) {

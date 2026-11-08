@@ -6,6 +6,8 @@ import { CustomSelect } from '@/shared/ui/custom-select';
 import { DraftStateNotice } from '@/shared/components/draft-state-notice';
 import { useUnsavedChangesGuard } from '@/shared/hooks/use-unsaved-changes-guard';
 import { formatCurrency } from '@/lib/format';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import type { Sale } from '@/types/domain';
 import { useTranslation } from "react-i18next";
 
@@ -90,21 +92,24 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
 
   const canNavigateAway = useUnsavedChangesGuard(open && isDirty && !isBusy);
 
-  const computedSubTotal = useMemo(() => Number(items.reduce((sum, item) => sum + item.qty * item.price, 0).toFixed(2)), [items]);
+  // INV-FE1-FRONTEND-BOOK-DIGITS: edit-dialog previews round at the
+  // tenant's book digits (global system currency; no settings here).
+  const bookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
+  const computedSubTotal = useMemo(() => roundMoneyValue(items.reduce((sum, item) => sum + item.qty * item.price, 0), bookDigits), [items, bookDigits]);
   const computedTax = useMemo(() => {
     if (!sale) return 0;
     const taxable = Math.max(0, computedSubTotal - discount);
     const taxRate = Number(sale.taxRate || 0);
     if (!taxRate) return 0;
-    if (sale.pricesIncludeTax) return Number((taxable - taxable / (1 + taxRate / 100)).toFixed(2));
-    return Number((taxable * (taxRate / 100)).toFixed(2));
-  }, [computedSubTotal, discount, sale]);
+    if (sale.pricesIncludeTax) return roundMoneyValue(taxable - taxable / (1 + taxRate / 100), bookDigits);
+    return roundMoneyValue(taxable * (taxRate / 100), bookDigits);
+  }, [computedSubTotal, discount, sale, bookDigits]);
 
   const computedTotal = useMemo(() => {
     if (!sale) return 0;
     const taxable = Math.max(0, computedSubTotal - discount);
-    return sale.pricesIncludeTax ? Number(taxable.toFixed(2)) : Number((taxable + computedTax).toFixed(2));
-  }, [computedSubTotal, computedTax, discount, sale]);
+    return sale.pricesIncludeTax ? roundMoneyValue(taxable, bookDigits) : roundMoneyValue(taxable + computedTax, bookDigits);
+  }, [computedSubTotal, computedTax, discount, sale, bookDigits]);
 
   const paymentTypeOptions = useMemo(() => [
     { value: 'cash', label: t('sales.47062f') },

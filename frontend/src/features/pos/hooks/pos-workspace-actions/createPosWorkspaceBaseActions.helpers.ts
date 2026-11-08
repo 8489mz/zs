@@ -1,14 +1,19 @@
 import { downloadExcelFile } from '@/lib/browser';
 import { computeDraftTotal } from '@/features/pos/lib/pos-workspace.helpers';
 import { clearDraftSnapshot } from '@/features/pos/lib/pos.persistence';
-import { getCurrencyDecimals } from '@/lib/currencies';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import type { PosItem } from '@/features/pos/types/pos.types';
 import type { Product } from '@/types/domain';
 import type { PosWorkspaceActionParams } from '@/features/pos/hooks/usePosWorkspaceActionGroups';
 
+// INV-FE1-FRONTEND-BOOK-DIGITS: rounds at the tenant's book digits
+// (global system currency, set from tenant settings at boot) with
+// backend-identical half-up rounding — the old getCurrencyDecimals
+// + toFixed(2) path missed JOD/TND/IQD/LYD (3dp) and disagreed with
+// backend roundMoney on float-edge values (e.g. 2.675).
 export function toMoney(value: number) {
-  const decimals = getCurrencyDecimals();
-  return Number(Number(value || 0).toFixed(decimals));
+  return roundMoneyValue(Number(value || 0), currencyMoneyDigits(getGlobalSystemCurrency()));
 }
 
 export function formatQty(value: number, isWeighted = false) {

@@ -1,5 +1,6 @@
 import i18n from '@/lib/i18n';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
+import { roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
 
 export type ComparisonRow = {
   key: string;
@@ -12,10 +13,13 @@ export type ComparisonRow = {
   countDiff: number | null;
 };
 
-export function toMoney(value: unknown): number {
+// INV-FE1-FRONTEND-BOOK-DIGITS: drawer review money rounds at the
+// tenant's book digits, passed in by the dialog (global system
+// currency). The old hardcoded 2dp truncated 3dp tenants.
+export function toMoney(value: unknown, digits: MoneyDigits): number {
   const parsed = Number(value || 0);
   if (!Number.isFinite(parsed)) return 0;
-  return Number(parsed.toFixed(2));
+  return roundMoneyValue(parsed, digits);
 }
 
 export function toCount(value: unknown): number {
@@ -24,14 +28,9 @@ export function toCount(value: unknown): number {
   return Math.max(0, Math.trunc(parsed));
 }
 
-export function differenceTone(value: number): 'ok' | 'negative' | 'positive' {
-  if (Math.abs(value) <= 0.009) return 'ok';
-  return value < 0 ? 'negative' : 'positive';
-}
-
-export function formatMoney(value: number): string {
-  const amount = toMoney(value);
-  return `${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)} ${getGlobalCurrencySymbol()}`;
+export function formatMoney(value: number, digits: MoneyDigits): string {
+  const amount = toMoney(value, digits);
+  return `${new Intl.NumberFormat('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(amount)} ${getGlobalCurrencySymbol()}`;
 }
 
 export function formatCount(value: number): string {
@@ -47,10 +46,11 @@ export function formatSignedCount(value: number): string {
   return formatInteger(value);
 }
 
-export function differenceLabel(value: number): string {
+export function differenceLabel(value: number, digits: MoneyDigits): string {
   const isEn = i18n.language === 'en';
-  const money = formatMoney(Math.abs(value));
-  if (Math.abs(value) <= 0.009) return isEn ? `${formatMoney(0)} (Matched)` : `${formatMoney(0)} (مطابق)`;
+  const money = formatMoney(Math.abs(value), digits);
+  // A difference smaller than one minor unit counts as matched.
+  if (Math.abs(value) < 10 ** -digits) return isEn ? `${formatMoney(0, digits)} (Matched)` : `${formatMoney(0, digits)} (مطابق)`;
   if (value < 0) return `-${money}`;
   return `+${money}`;
 }
@@ -90,55 +90,4 @@ export function formatDuration(startIso?: string, endIso?: string): string {
 export function toDisplayCount(value?: number | null): string {
   if (value == null) return '—';
   return formatCount(Number(value || 0));
-}
-
-export function renderOperationDetails(
-  title: string,
-  rows: Array<{ amount: number; reference?: string }> | undefined,
-  declaredCount?: number | null,
-  declaredTotal?: number | null,
-) {
-  const isEn = i18n.language === 'en';
-  const safeRows = Array.isArray(rows) ? rows : [];
-  const count = safeRows.length;
-  const total = safeRows.reduce((sum, row) => sum + toMoney(row.amount || 0), 0);
-  const summaryCount = declaredCount == null ? count : toCount(declaredCount);
-  const summaryTotal = declaredTotal == null ? total : toMoney(declaredTotal);
-
-  return (
-    <details className="cash-drawer-review-accordion">
-      <summary>
-        <span>{title}</span>
-        <span className="muted small">
-          {formatCount(summaryCount)} {isEn ? 'txns' : 'عملية'} — {formatMoney(summaryTotal)}
-        </span>
-      </summary>
-      {safeRows.length ? (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>{isEn ? 'Tx No.' : 'رقم العملية'}</th>
-                <th>{isEn ? 'Amount' : 'المبلغ'}</th>
-                <th>{isEn ? 'Reference' : 'المرجع'}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {safeRows.map((row, index) => (
-                <tr key={`${title}-${index}`}>
-                  <td>{formatCount(index + 1)}</td>
-                  <td>{formatMoney(toMoney(row.amount || 0))}</td>
-                  <td>{row.reference || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="muted small" style={{ margin: 0 }}>
-          {isEn ? 'No details recorded for this item.' : 'لا توجد تفاصيل مسجلة لهذا البند.'}
-        </p>
-      )}
-    </details>
-  );
 }

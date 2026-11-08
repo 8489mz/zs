@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { formatCurrency } from '@/lib/format';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { toast } from '@/shared/components/system-alert';
 import { PlusIcon, Trash2Icon } from '@/shared/components/icons/AppIcons';
 import { customersApi, type Customer } from '@/features/customers';
@@ -95,7 +97,9 @@ export const CreateSubscriptionModal: React.FC<CreateSubscriptionModalProps> = (
 
   const subtotal = calculateSubtotal();
   const taxTotal = calculateTax();
-  const grandTotal = Math.round((subtotal + taxTotal) * 100) / 100;
+  // INV-FE1-FRONTEND-BOOK-DIGITS: grand-total preview rounds at the
+  // tenant's book digits (global system currency; no settings here).
+  const grandTotal = roundMoneyValue(subtotal + taxTotal, currencyMoneyDigits(getGlobalSystemCurrency()));
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();

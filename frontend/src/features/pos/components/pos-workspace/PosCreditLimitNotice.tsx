@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { posApi } from '@/features/pos/api/pos.api';
 import { formatCurrency } from '@/lib/format';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
 
 export type CreditLimitPreviewState = 'ok' | 'near' | 'over';
 
@@ -26,13 +28,13 @@ export function getCreditLimitPreview(input: {
   creditLimit: number;
   balance: number;
   amount: number;
-}): CreditLimitPreview {
+}, digits: MoneyDigits): CreditLimitPreview {
   const creditLimit = Number(input.creditLimit || 0);
   const balance = Number(input.balance || 0);
   const amount = Math.max(0, Number(input.amount || 0));
-  const nextBalance = Math.round((balance + amount) * 100) / 100;
-  const excess = Math.max(0, Math.round((nextBalance - creditLimit) * 100) / 100);
-  const remainingAfter = Math.round((creditLimit - nextBalance) * 100) / 100;
+  const nextBalance = roundMoneyValue(balance + amount, digits);
+  const excess = Math.max(0, roundMoneyValue(nextBalance - creditLimit, digits));
+  const remainingAfter = roundMoneyValue(creditLimit - nextBalance, digits);
   const usagePercent = creditLimit > 0 ? (nextBalance / creditLimit) * 100 : 0;
   const state: CreditLimitPreviewState =
     creditLimit > 0 && nextBalance > creditLimit + 0.001
@@ -77,7 +79,7 @@ export function PosCreditLimitNotice({ customerId, total, paidAmount }: PosCredi
     creditLimit: Number(summary.creditLimit),
     balance: Number(summary.balance),
     amount,
-  });
+  }, currencyMoneyDigits(getGlobalSystemCurrency()));
 
   const tone =
     preview.state === 'over'

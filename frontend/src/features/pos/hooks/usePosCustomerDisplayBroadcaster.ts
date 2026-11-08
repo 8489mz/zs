@@ -3,6 +3,7 @@ import type { PosItem } from '@/features/pos/types/pos.types';
 import type { PaymentChannel, PaymentType } from '@/features/pos/hooks/usePosWorkspace';
 import type { Sale } from '@/types/domain';
 import { broadcastCustomerDisplayState } from '@/features/pos/lib/pos-customer-display-bridge';
+import { roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
 import type {
   CustomerDisplayItem,
   CustomerDisplayPayload,
@@ -27,6 +28,7 @@ interface PosCustomerDisplayBroadcasterParams {
   paymentChannel: PaymentChannel;
   paidAmount: number;
   changeAmount: number;
+  digits: MoneyDigits;
   lastSale: Sale | null;
   postSaleSaleKey?: string;
   storeName?: string;
@@ -45,6 +47,7 @@ export function usePosCustomerDisplayBroadcaster({
   postSaleSaleKey,
   storeName,
   branchName,
+  digits,
 }: PosCustomerDisplayBroadcasterParams): void {
   const lastCompletedSaleKeyRef = useRef<string>('');
 
@@ -91,10 +94,10 @@ export function usePosCustomerDisplayBroadcaster({
     let qrLabel: string | undefined;
 
     if (paymentChannel === 'instapay') {
-      qrData = `instapay://pay?amount=${totals.total.toFixed(2)}&ref=${encodeURIComponent(storeName || 'POS')}`;
+      qrData = `instapay://pay?amount=${roundMoneyValue(totals.total, digits).toFixed(digits)}&ref=${encodeURIComponent(storeName || 'POS')}`;
       qrLabel = 'امسح للدفع الفوري عبر InstaPay';
     } else if (paymentChannel === 'wallet') {
-      qrData = `wallet://pay?amount=${totals.total.toFixed(2)}&store=${encodeURIComponent(storeName || 'Store')}`;
+      qrData = `wallet://pay?amount=${roundMoneyValue(totals.total, digits).toFixed(digits)}&store=${encodeURIComponent(storeName || 'Store')}`;
       qrLabel = 'امسح للدفع عبر المحفظة الإلكترونية (Vodafone Cash, Etisalat...)';
     }
 
@@ -103,10 +106,10 @@ export function usePosCustomerDisplayBroadcaster({
       storeName: storeName || 'Z-Systems Store',
       branchName: branchName || '',
       items,
-      subtotal: Number(totals.subTotal.toFixed(2)),
-      discount: Number(((totals.discountAmount ?? totals.discountValue) || 0).toFixed(2)),
-      tax: Number(totals.taxAmount.toFixed(2)),
-      total: Number(totals.total.toFixed(2)),
+      subtotal: roundMoneyValue(totals.subTotal, digits),
+      discount: roundMoneyValue((totals.discountAmount ?? totals.discountValue) || 0, digits),
+      tax: roundMoneyValue(totals.taxAmount, digits),
+      total: roundMoneyValue(totals.total, digits),
       itemCount,
       customer: customer ? {
         name: customer.name,
@@ -144,5 +147,6 @@ export function usePosCustomerDisplayBroadcaster({
     postSaleSaleKey,
     storeName,
     branchName,
+    digits,
   ]);
 }

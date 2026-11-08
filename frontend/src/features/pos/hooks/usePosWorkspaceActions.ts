@@ -3,6 +3,8 @@ import { removePosItem } from '@/features/pos/lib/pos.domain';
 import { computeDraftTotal } from '@/features/pos/lib/pos-workspace.helpers';
 import type { PosPriceType } from '@/features/pos/types/pos.types';
 import { posApi } from '@/features/pos/api/pos.api';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import type { Product } from '@/types/domain';
 import {
   createPosWorkspaceAsyncActions,
@@ -60,7 +62,7 @@ export function createPosWorkspaceActions(params: PosWorkspaceActionParams): Pos
     if (!params.cart.length) return;
     void posApi.logSecurityEvent({
       eventType: 'draft_cancel',
-      total: Number(computeDraftTotal({
+      total: roundMoneyValue(computeDraftTotal({
         cart: params.cart,
         tableNumber: params.tableNumber,
         orderType: params.orderType,
@@ -78,7 +80,7 @@ export function createPosWorkspaceActions(params: PosWorkspaceActionParams): Pos
         priceType: params.priceType,
         branchId: params.branchId,
         locationId: params.locationId,
-      }).toFixed(2)),
+      }), currencyMoneyDigits(params.settings?.currency || getGlobalSystemCurrency())),
       cartItemsCount: params.cart.length,
       note: 'إلغاء المسودة الحالية من واجهة الكاشير',
     });
@@ -93,7 +95,7 @@ export function createPosWorkspaceActions(params: PosWorkspaceActionParams): Pos
       productId: Number(removed.productId || 0) || undefined,
       productName: removed.name || undefined,
       qty: Number(removed.qty || 0) || undefined,
-      total: Number(computeDraftTotal({
+      total: roundMoneyValue(computeDraftTotal({
         cart: remainingCart,
         tableNumber: params.tableNumber,
         orderType: params.orderType,
@@ -111,7 +113,7 @@ export function createPosWorkspaceActions(params: PosWorkspaceActionParams): Pos
         priceType: params.priceType,
         branchId: params.branchId,
         locationId: params.locationId,
-      }).toFixed(2)),
+      }), currencyMoneyDigits(params.settings?.currency || getGlobalSystemCurrency())),
       cartItemsCount: remainingCart.length,
       note: 'حذف عنصر من سلة الكاشير',
     });
