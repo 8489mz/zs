@@ -41,6 +41,39 @@ export interface UpsertMaintenanceTicketPayload {
   warrantyDays?: number;
 }
 
+export type MaintenancePaymentMethod = 'cash' | 'card' | 'wallet' | 'instapay';
+
+export interface MaintenanceTicketCounts {
+  received: number;
+  inspecting: number;
+  in_progress: number;
+  waiting_parts: number;
+  repaired: number;
+  delivered: number;
+  unrepairable: number;
+  cancelled: number;
+  total: number;
+}
+
+export interface MaintenanceTicketCountsResponse {
+  counts: MaintenanceTicketCounts;
+  totalRemaining: number;
+}
+
+/* KPI groupings for the tickets page, computed from the aggregate counts
+ * endpoint (never from a pageSize:1000 list — the backend caps pageSize
+ * at 100, so list-derived counts go silently wrong past 100 tickets). */
+export function summarizeTicketCounts(counts: MaintenanceTicketCounts, totalRemaining: number) {
+  return {
+    inProgressCount: counts.received + counts.in_progress + counts.waiting_parts,
+    readyCount: counts.repaired,
+    deliveredCount: counts.delivered,
+    receivedCount: counts.received,
+    totalCount: counts.total,
+    totalRemainingSum: totalRemaining,
+  };
+}
+
 export const maintenanceApi = {
   list: (params: MaintenanceListParams = {}) =>
     http<MaintenanceListPageResponse>(`/api/maintenance/tickets${buildQueryString(params)}`),
@@ -67,7 +100,7 @@ export const maintenanceApi = {
       finalCost?: number;
       collectedAmount?: number;
       technicianNotes?: string;
-      paymentMethod?: string;
+      paymentMethod?: MaintenancePaymentMethod;
       refundAdvance?: boolean;
     },
   ) =>
@@ -96,6 +129,9 @@ export const maintenanceApi = {
     http<{ ok: boolean }>(`/api/maintenance/tickets/${ticketId}/parts/${partId}`, {
       method: 'DELETE',
     }),
+
+  getCounts: () =>
+    http<MaintenanceTicketCountsResponse>('/api/maintenance/tickets/counts'),
 
   delete: (id: string | number) =>
     http<{ ok: boolean }>(`/api/maintenance/tickets/${id}`, {

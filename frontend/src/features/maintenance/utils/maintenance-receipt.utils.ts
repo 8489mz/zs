@@ -19,13 +19,10 @@ export function extractTicketDiscount(notes?: string | null) {
 
 export function printMaintenanceReceipt(ticket: MaintenanceTicket, settings?: AppSettings | null) {
   const barcodeSvg = buildCode128Svg(ticket.ticketNo);
-  const discountInfo = extractTicketDiscount(ticket.technicianNotes);
-  let totalCost = ticket.finalCost || ticket.expectedCost || 0;
-  if (discountInfo.amount > 0 && ticket.expectedCost > totalCost) {
-    totalCost = ticket.expectedCost;
-  }
+  /* D-M1-1: no discount concept — the final agreed amount is the total. */
+  const totalCost = ticket.finalCost || ticket.expectedCost || 0;
   const advancePaid = ticket.advancePayment || 0;
-  const netTotal = Math.max(0, totalCost - discountInfo.amount);
+  const netTotal = totalCost;
   const collectedAtDelivery = Math.max(0, netTotal - advancePaid);
   const remainingAmount = ticket.status === 'delivered' ? 0 : Math.max(0, netTotal - advancePaid);
   const dateFormatted = new Date(ticket.receivedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' });
@@ -80,12 +77,6 @@ export function printMaintenanceReceipt(ticket: MaintenanceTicket, settings?: Ap
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
             <span>المدفوع مقدماً (عربون):</span>
             <span style="font-weight: 700;">${advancePaid.toFixed(2)} ${getGlobalCurrencySymbol()}</span>
-          </div>
-        ` : ''}
-        ${discountInfo.amount > 0 ? `
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; color: #000;">
-            <span>خصم (${escapeHtml(discountInfo.reason)}):</span>
-            <span style="font-weight: 700;">-${discountInfo.amount.toFixed(2)} ${getGlobalCurrencySymbol()}</span>
           </div>
         ` : ''}
         ${ticket.status === 'delivered' ? `
@@ -231,13 +222,10 @@ export function printMaintenanceDeviceSticker(ticket: MaintenanceTicket, setting
 
 export async function exportMaintenanceReceiptPdf(ticket: MaintenanceTicket, settings?: Partial<AppSettings> | null) {
   const barcodeSvg = buildCode128Svg(ticket.ticketNo);
-  const discountInfo = extractTicketDiscount(ticket.technicianNotes);
-  let totalCost = ticket.finalCost || ticket.expectedCost || 0;
-  if (discountInfo.amount > 0 && ticket.expectedCost > totalCost) {
-    totalCost = ticket.expectedCost;
-  }
+  /* D-M1-1: no discount concept — the final agreed amount is the total. */
+  const totalCost = ticket.finalCost || ticket.expectedCost || 0;
   const advancePaid = ticket.advancePayment || 0;
-  const netTotal = Math.max(0, totalCost - discountInfo.amount);
+  const netTotal = totalCost;
   const collectedAtDelivery = Math.max(0, netTotal - advancePaid);
   const remainingAmount = ticket.status === 'delivered' ? 0 : Math.max(0, netTotal - advancePaid);
   const dateFormatted = new Date(ticket.receivedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' });
@@ -296,12 +284,6 @@ export async function exportMaintenanceReceiptPdf(ticket: MaintenanceTicket, set
           <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #16a34a;">
             <span>المدفوع مقدماً (عربون):</span>
             <strong style="font-size: 13px;">${advancePaid.toFixed(2)} ${getGlobalCurrencySymbol()}</strong>
-          </div>
-        ` : ''}
-        ${discountInfo.amount > 0 ? `
-          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: #b45309;">
-            <span>خصم (${escapeHtml(discountInfo.reason)}):</span>
-            <strong style="font-size: 13px;">-${discountInfo.amount.toFixed(2)} ${getGlobalCurrencySymbol()}</strong>
           </div>
         ` : ''}
         ${ticket.status === 'delivered' ? `

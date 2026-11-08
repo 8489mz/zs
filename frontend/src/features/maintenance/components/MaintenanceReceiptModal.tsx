@@ -70,8 +70,8 @@ export function MaintenanceReceiptModal({ open, ticket, settings, onClose }: Mai
     }
     const storeName = settings?.storeName || 'مخازن رجب العطار';
     const totalCost = ticket.finalCost || ticket.expectedCost || 0;
-    const discountInfo = extractTicketDiscount(ticket.technicianNotes);
-    const netTotal = Math.max(0, totalCost - discountInfo.amount);
+    /* D-M1-1: no discount concept — the final agreed amount is the total. */
+    const netTotal = totalCost;
     const advancePaid = ticket.advancePayment || 0;
     const remaining = ticket.status === 'delivered' ? 0 : Math.max(0, netTotal - advancePaid);
 
@@ -86,10 +86,6 @@ export function MaintenanceReceiptModal({ open, ticket, settings, onClose }: Mai
       `- *العطل المسجل:* ${ticket.problemDescription}`,
       ``,
       `- *إجمالي قيمة الإصلاح:* ${totalCost.toFixed(2)} ${getGlobalCurrencySymbol()}`,
-      ...(discountInfo.amount > 0 ? [
-        `- *خصم خاص للعميل (${discountInfo.reason}):* -${discountInfo.amount.toFixed(2)} ${getGlobalCurrencySymbol()}`,
-        `- *الصافي بعد الخصم:* ${netTotal.toFixed(2)} ${getGlobalCurrencySymbol()}`,
-      ] : []),
       ...(advancePaid > 0 ? [`- *المدفوع مقدماً (عربون):* ${advancePaid.toFixed(2)} ${getGlobalCurrencySymbol()}`] : []),
       `- *المتبقي عند الاستلام:* ${remaining.toFixed(2)} ${getGlobalCurrencySymbol()} ${ticket.status === 'delivered' ? '(خالص بالكامل)' : ''}`,
       `----------------------------------------`,
@@ -109,12 +105,9 @@ export function MaintenanceReceiptModal({ open, ticket, settings, onClose }: Mai
 
   const profile = getMaintenanceProfile(settings?.maintenanceProfile);
   const barcodeSvg = buildCode128Svg(ticket.ticketNo);
-  const discountInfo = extractTicketDiscount(ticket.technicianNotes);
-  let totalCost = ticket.finalCost || ticket.expectedCost || 0;
-  if (discountInfo.amount > 0 && ticket.expectedCost > totalCost) {
-    totalCost = ticket.expectedCost;
-  }
-  const netTotal = Math.max(0, totalCost - discountInfo.amount);
+  /* D-M1-1: no discount concept — the final agreed amount is the total. */
+  const totalCost = ticket.finalCost || ticket.expectedCost || 0;
+  const netTotal = totalCost;
   const advancePaid = ticket.advancePayment || 0;
   const collectedAtDelivery = Math.max(0, netTotal - advancePaid);
   const remainingAmount = ticket.status === 'delivered' ? 0 : Math.max(0, netTotal - advancePaid);
@@ -276,12 +269,6 @@ export function MaintenanceReceiptModal({ open, ticket, settings, onClose }: Mai
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', color: '#16a34a' }}>
                   <span>{t('maintenance.maintenance_receipt_modal.s19', "المدفوع مقدماً (عربون):")}</span>
                   <strong>{ticket.advancePayment.toFixed(2)} <CurrencySymbol /></strong>
-                </div>
-              )}
-              {discountInfo.amount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', color: '#b45309' }}>
-                  <span>{t('maintenance.maintenance_receipt_modal.s20', "خصم ممنوح للعميل (")}{discountInfo.reason}):</span>
-                  <strong>-{discountInfo.amount.toFixed(2)} <CurrencySymbol /></strong>
                 </div>
               )}
               {ticket.status === 'delivered' && (
