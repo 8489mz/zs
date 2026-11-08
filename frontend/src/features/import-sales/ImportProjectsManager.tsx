@@ -41,6 +41,11 @@ import {
   normalizeFeasibilityNumber,
   parseFeasibilityNumberInput,
 } from './utils/import-display-formatters';
+import {
+  buildTruckPartsPreset,
+  EMPTY_FEASIBILITY_COSTS,
+  TRUCK_PARTS_PRESET_COSTS,
+} from './feasibility-preset';
 
 export default function ImportProjectsManager() {
   const { data: projects = [], isLoading: isProjectsLoading, refetch } = useImportProjectsQuery();
@@ -188,15 +193,22 @@ export default function ImportProjectsManager() {
   // Feasibility Study State
   const [commRate, setCommRate] = useState<number>(50);
   const [custRate, setCustRate] = useState<number>(50);
-  const [shippingUsd, setShippingUsd] = useState<number>(3500);
-  const [insuranceUsd, setInsuranceUsd] = useState<number>(200);
+  // I2-P8: a fresh study starts with NO assumed costs. The old
+  // hardcoded values (freight $3,500, clearance 48,000 EGP, travel
+  // 15,000 EGP) now live only in the truck-parts preset
+  // (feasibility-preset.ts) and are applied when the user picks it.
+  const [shippingUsd, setShippingUsd] = useState<number>(EMPTY_FEASIBILITY_COSTS.shippingUsd);
+  const [insuranceUsd, setInsuranceUsd] = useState<number>(EMPTY_FEASIBILITY_COSTS.insuranceUsd);
   const [customsDutyPercent, setCustomsDutyPercent] = useState<number>(5);
   const [vatPercent, setVatPercent] = useState<number>(14);
-  const [clearanceEgp, setClearanceEgp] = useState<number>(48000);
-  const [transportEgp, setTransportEgp] = useState<number>(12000);
-  const [travelEgp, setTravelEgp] = useState<number>(15000);
+  const [clearanceEgp, setClearanceEgp] = useState<number>(EMPTY_FEASIBILITY_COSTS.clearanceEgp);
+  const [transportEgp, setTransportEgp] = useState<number>(EMPTY_FEASIBILITY_COSTS.transportEgp);
+  const [travelEgp, setTravelEgp] = useState<number>(EMPTY_FEASIBILITY_COSTS.travelEgp);
   const [targetMarkup, setTargetMarkup] = useState<number>(30);
 
+  // I2-P8: a fresh study starts with ZERO forced rows. The 5
+  // truck-parts rows the form used to pre-load on every new study
+  // are now the selectable preset in feasibility-preset.ts.
   const [items, setItems] = useState<Array<{
     name: string;
     // I1-P1: link to the real inventory item. The feasibility engine
@@ -215,53 +227,12 @@ export default function ImportProjectsManager() {
     unitWeightKg?: number | string;
     unitCbm?: number | string;
     expectedLocalMarketPriceEgp?: number | string;
-  }>>([
-    {
-      name: 'طقم تيل فرامل وبطانات مكابح شاحنات وتريلات ثقيلة',
-      hsCode: '8708.30.10',
-      qty: 600,
-      factoryPriceUsd: 14.5,
-      unitWeightKg: 4.8,
-      unitCbm: 0.008,
-      expectedLocalMarketPriceEgp: 1350,
-    },
-    {
-      name: 'طقم بستم وشنابر محرك ديزل 6 سلندر شاحنات نقل ثقيل',
-      hsCode: '8409.99.10',
-      qty: 250,
-      factoryPriceUsd: 42,
-      unitWeightKg: 12.5,
-      unitCbm: 0.024,
-      expectedLocalMarketPriceEgp: 3600,
-    },
-    {
-      name: 'طقم دبرياج كامل (ديسك + اسطوانة + بلية) شاحنات نقل ثقيل',
-      hsCode: '8708.93.10',
-      qty: 120,
-      factoryPriceUsd: 95,
-      unitWeightKg: 32,
-      unitCbm: 0.045,
-      expectedLocalMarketPriceEgp: 8200,
-    },
-    {
-      name: 'شواحن توربينية (تيربو) لمحركات شاحنات النقل الثقيل والديزل',
-      hsCode: '8414.80.10',
-      qty: 60,
-      factoryPriceUsd: 95,
-      unitWeightKg: 9.5,
-      unitCbm: 0.018,
-      expectedLocalMarketPriceEgp: 10500,
-    },
-    {
-      name: 'فلاتر زيت وفلاتر وقود ديزل (جاز) لشاحنات وسيارات النقل',
-      hsCode: '8421.23.10',
-      qty: 500,
-      factoryPriceUsd: 3.5,
-      unitWeightKg: 0.85,
-      unitCbm: 0.003,
-      expectedLocalMarketPriceEgp: 360,
-    },
-  ]);
+  }>>([]);
+
+  // I2-P8: whether the user has chosen how this fresh study starts
+  // (truck-parts preset or empty manual start). False until a choice
+  // is made, or until a stored study is loaded for a project.
+  const [hasChosenFeasibilityPreset, setHasChosenFeasibilityPreset] = useState(false);
 
   const [feasibilityResult, setFeasibilityResult] = useState<any>(null);
 
@@ -438,6 +409,38 @@ export default function ImportProjectsManager() {
     toast.success(`تم إدراج البند (${tariff.hs_code}) "${tariff.description_ar.slice(0, 30)}..." في دراسة الجدوى`);
   };
 
+  // I2-P8: preset picker actions for a fresh study. The preset is
+  // the exact old forced bundle (5 truck-parts rows + freight $3,500,
+  // clearance 48,000 EGP, travel 15,000 EGP); the manual start keeps
+  // the grid empty and the costs at zero.
+  const resetFeasibilityForm = () => {
+    setItems([]);
+    setShippingUsd(EMPTY_FEASIBILITY_COSTS.shippingUsd);
+    setInsuranceUsd(EMPTY_FEASIBILITY_COSTS.insuranceUsd);
+    setClearanceEgp(EMPTY_FEASIBILITY_COSTS.clearanceEgp);
+    setTransportEgp(EMPTY_FEASIBILITY_COSTS.transportEgp);
+    setTravelEgp(EMPTY_FEASIBILITY_COSTS.travelEgp);
+    setFeasibilityResult(null);
+    setHasChosenFeasibilityPreset(false);
+  };
+
+  const applyTruckPartsPreset = () => {
+    const preset = buildTruckPartsPreset();
+    setItems(preset.items as any);
+    setShippingUsd(preset.costs.shippingUsd);
+    setInsuranceUsd(preset.costs.insuranceUsd);
+    setClearanceEgp(preset.costs.clearanceEgp);
+    setTransportEgp(preset.costs.transportEgp);
+    setTravelEgp(preset.costs.travelEgp);
+    setHasChosenFeasibilityPreset(true);
+    toast.success('تم تحميل قالب قطع غيار النقل والتريلات (5 أصناف) — عدّل الكميات والأسعار حسب شحنتك');
+  };
+
+  const startManualFeasibility = () => {
+    setHasChosenFeasibilityPreset(true);
+    toast.info('بدء يدوي فارغ — أضف الأصناف من المكتبة أو يدوياً وأدخل التكاليف');
+  };
+
   const handleAddItem = () => {
     setItems([
       ...items,
@@ -497,6 +500,12 @@ export default function ImportProjectsManager() {
   };
 
   const handleRunFeasibility = async () => {
+    // I2-P8: a fresh study starts empty — refuse to run the engine
+    // on zero rows instead of pricing the old forced bundle.
+    if (items.length === 0) {
+      toast.error('أضف صنفاً واحداً على الأقل قبل احتساب دراسة الجدوى');
+      return;
+    }
     try {
       // I2-P9: grid numeric fields may hold in-progress decimal text
       // ("0.") while the user types — normalize to finite numbers here,
@@ -634,8 +643,14 @@ export default function ImportProjectsManager() {
       if (data.costs?.internalTransportEgp) setTransportEgp(data.costs.internalTransportEgp);
       if (data.costs?.travelAndSourcingCostEgp) setTravelEgp(data.costs.travelAndSourcingCostEgp);
       setFeasibilityResult(data);
+      // I2-P8: a stored study is already a made choice — no picker.
+      setHasChosenFeasibilityPreset(true);
       toast.success(`تم تحميل دراسة الجدوى والسيناريوهات لمشروع "${p.title}"`);
     } else {
+      // I2-P8: no stored study — open a FRESH study (empty grid,
+      // zero costs) with the preset picker, never the old forced
+      // 5 rows and never another project's leftovers.
+      resetFeasibilityForm();
       toast.info(`المشروع "${p.title}": تم فتح المحرك لإعداد دراسة جدوى وتخصيص البنود`);
     }
     setIsFeasibilityOpen(true);
@@ -932,6 +947,74 @@ export default function ImportProjectsManager() {
         width="1180px"
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* I2-P8: preset picker for a fresh study — the truck-parts
+              bundle is offered, never forced; the manual start keeps
+              the grid empty and the costs at zero. */}
+          {!hasChosenFeasibilityPreset && (
+            <div
+              style={{
+                border: '1px solid #c7d2fe',
+                backgroundColor: '#eef2ff',
+                borderRadius: 10,
+                padding: '12px 14px',
+              }}
+            >
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#170e5e', marginBottom: 4 }}>
+                ابدأ دراسة الجدوى — اختر قالباً أو ابدأ فارغاً
+              </div>
+              <div style={{ fontSize: '12px', color: '#475569', marginBottom: 10 }}>
+                لا يتم تحميل أي أصناف تلقائياً. اختر قالب قطع غيار النقل والتريلات الجاهز، أو ابدأ بجدول فارغ وأضف أصنافك بنفسك.
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={applyTruckPartsPreset}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 14px',
+                    backgroundColor: '#170e5e',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 6,
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <TruckIcon size={14} />
+                  <span>قالب قطع غيار النقل والتريلات (5 أصناف)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={startManualFeasibility}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 14px',
+                    backgroundColor: '#ffffff',
+                    color: '#170e5e',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 6,
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <PlusCircleIcon size={14} />
+                  <span>بدء يدوي فارغ</span>
+                </button>
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b', marginTop: 8 }}>
+                القالب يحمّل: شحن ${TRUCK_PARTS_PRESET_COSTS.shippingUsd.toLocaleString()} — تخليص{' '}
+                {TRUCK_PARTS_PRESET_COSTS.clearanceEgp.toLocaleString()} ج.م — سفر ومعاينات{' '}
+                {TRUCK_PARTS_PRESET_COSTS.travelEgp.toLocaleString()} ج.م
+              </div>
+            </div>
+          )}
+
           {/* Global Parameters */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, backgroundColor: '#f8fafc', padding: 12, borderRadius: 10 }}>
             <div>
@@ -956,6 +1039,7 @@ export default function ImportProjectsManager() {
               <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>الشحن الدولي ($)</label>
               <input
                 type="number"
+                aria-label="الشحن الدولي ($)"
                 value={shippingUsd}
                 onChange={(e) => setShippingUsd(Number(e.target.value))}
                 style={{ width: '100%', height: 34, padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
@@ -965,6 +1049,7 @@ export default function ImportProjectsManager() {
               <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>التأمين البحري ($)</label>
               <input
                 type="number"
+                aria-label="التأمين البحري ($)"
                 value={insuranceUsd}
                 onChange={(e) => setInsuranceUsd(Number(e.target.value))}
                 style={{ width: '100%', height: 34, padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
@@ -994,6 +1079,7 @@ export default function ImportProjectsManager() {
               </label>
               <input
                 type="number"
+                aria-label="تخليص، نافذة، وفحص رقابي (ج.م)"
                 value={clearanceEgp}
                 onChange={(e) => setClearanceEgp(Number(e.target.value))}
                 style={{ width: '100%', height: 34, padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
@@ -1003,6 +1089,7 @@ export default function ImportProjectsManager() {
               <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>نقل داخلي للمخزن (ج.م)</label>
               <input
                 type="number"
+                aria-label="نقل داخلي للمخزن (ج.م)"
                 value={transportEgp}
                 onChange={(e) => setTransportEgp(Number(e.target.value))}
                 style={{ width: '100%', height: 34, padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
@@ -1012,6 +1099,7 @@ export default function ImportProjectsManager() {
               <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>مصاريف سفر ومعاينات (ج.م)</label>
               <input
                 type="number"
+                aria-label="مصاريف سفر ومعاينات (ج.م)"
                 value={travelEgp}
                 onChange={(e) => setTravelEgp(Number(e.target.value))}
                 style={{ width: '100%', height: 34, padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
@@ -1246,18 +1334,31 @@ export default function ImportProjectsManager() {
                         />
                       </td>
                       <td style={{ padding: '6px 8px', textAlign: 'center' }}>
-                        {items.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem(idx)}
-                            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
-                          >
-                            <XIcon size={14} />
-                          </button>
-                        )}
+                        {/* I2-P8: the delete control is rendered for EVERY
+                            row, including the last one. The old
+                            `items.length > 1` guard hid it on the sole
+                            remaining row, so the grid could never be
+                            emptied and the last row had to be overwritten
+                            in place (trial problem 8). */}
+                        <button
+                          type="button"
+                          aria-label="حذف الصنف"
+                          title="حذف الصنف"
+                          onClick={() => handleRemoveItem(idx)}
+                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 4 }}
+                        >
+                          <XIcon size={14} />
+                        </button>
                       </td>
                     </tr>
                   ))}
+                  {items.length === 0 && (
+                    <tr>
+                      <td colSpan={9} style={{ padding: '18px 12px', textAlign: 'center', fontSize: '12px', color: '#64748b' }}>
+                        لا توجد أصناف بعد — اختر قالباً من الأعلى أو أضف صنفاً من المكتبة أو يدوياً
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
