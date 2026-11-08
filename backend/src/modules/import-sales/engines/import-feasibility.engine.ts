@@ -92,6 +92,12 @@ export interface FeasibilityScenarioOutput {
   grossMarginPercentage: number;
   breakEvenUnits: number;
   breakEvenRevenueEgp: number;
+  /**
+   * Worst-case demurrage (detention) reserve held in the worst scenario
+   * only; 0 on base/best. I2-P9: derived from the shipment itself (see
+   * the worst-scenario computation), never a fixed lump sum.
+   */
+  demurrageReserveEgp?: number;
 }
 
 export interface FeasibilityCalculationResult {
@@ -375,9 +381,26 @@ export function calculateImportFeasibility(input: FeasibilityCalculationInput): 
   const bestBreakEvenUnits =
     avgSellingPriceBest > 0 ? Math.min(totalUnitsCount, Math.ceil(bestAccountingCost / avgSellingPriceBest)) : totalUnitsCount;
 
-  // 9. Worst Scenario (-10% Revenue, +15% Shipping/Overhead + 15,000 EGP demurrage)
-  const worstAccountingCost = totalAccountingCostEgp + capitalizedOverheadEgp * 0.15 + 15000;
-  const worstInvestment = totalProjectInvestmentEgp + capitalizedOverheadEgp * 0.15 + 15000;
+  // 9. Worst Scenario (-10% Revenue, +15% Shipping/Overhead + demurrage reserve)
+  // I2-P9: the demurrage reserve is derived from the shipment's own
+  // values, not a fixed 15,000 EGP. Detention accrues per container per
+  // day, so the reserve is containerCountNeeded x overdue days x the
+  // daily rate, converted at this study's own commercial rate. The daily
+  // rate ($50/day) is the same default calculateDemurrageRisk in
+  // import-landed-cost.engine.ts assumes — one canonical rate, not a
+  // second invented number. The 6 overdue days decode the old flat
+  // 15,000 EGP at the trial's rate (15,000 / ($50/day x 50 EGP/USD) =
+  // 6 days), so a one-container study at FX 50 still reserves exactly
+  // 15,000, while a two-container study reserves twice that and a study
+  // priced at FX 48.5 reserves 14,550. No cap: a cap would understate
+  // real detention exposure for large shipments — the container count is
+  // the correct physical bound.
+  const WORST_CASE_DEMURRAGE_OVERDUE_DAYS = 6;
+  const DEMURRAGE_DAILY_RATE_USD = 50;
+  const worstDemurrageReserveEgp =
+    containerCountNeeded * WORST_CASE_DEMURRAGE_OVERDUE_DAYS * DEMURRAGE_DAILY_RATE_USD * commRate;
+  const worstAccountingCost = totalAccountingCostEgp + capitalizedOverheadEgp * 0.15 + worstDemurrageReserveEgp;
+  const worstInvestment = totalProjectInvestmentEgp + capitalizedOverheadEgp * 0.15 + worstDemurrageReserveEgp;
   const worstRevenue = baseRevenue * 0.90;
   const worstProfit = worstRevenue - worstAccountingCost;
   const worstRoi = worstInvestment > 0 ? (worstProfit / worstInvestment) * 100 : 0;
@@ -426,6 +449,7 @@ export function calculateImportFeasibility(input: FeasibilityCalculationInput): 
         grossMarginPercentage: Number(baseGrossMargin.toFixed(2)),
         breakEvenUnits: baseBreakEvenUnits,
         breakEvenRevenueEgp: roundMoney(totalAccountingCostEgp, digits),
+        demurrageReserveEgp: 0,
       },
       best: {
         scenarioName: 'best',
@@ -436,6 +460,7 @@ export function calculateImportFeasibility(input: FeasibilityCalculationInput): 
         grossMarginPercentage: Number(bestGrossMargin.toFixed(2)),
         breakEvenUnits: bestBreakEvenUnits,
         breakEvenRevenueEgp: roundMoney(bestAccountingCost, digits),
+        demurrageReserveEgp: 0,
       },
       worst: {
         scenarioName: 'worst',
@@ -446,6 +471,7 @@ export function calculateImportFeasibility(input: FeasibilityCalculationInput): 
         grossMarginPercentage: Number(worstGrossMargin.toFixed(2)),
         breakEvenUnits: worstBreakEvenUnits,
         breakEvenRevenueEgp: roundMoney(worstAccountingCost, digits),
+        demurrageReserveEgp: roundMoney(worstDemurrageReserveEgp, digits),
       },
     },
   };

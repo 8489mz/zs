@@ -18,6 +18,7 @@ import {
   type ShipmentItem 
 } from './api/shipments.api';
 import { formatCurrency } from '@/lib/format';
+import { formatFreightAllocationHint } from './utils/import-display-formatters';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { useState, useEffect, useRef } from 'react';
 import { AddShipmentItemDialog } from './AddShipmentItemDialog';
@@ -720,7 +721,7 @@ export default function ShipmentDetailsPage() {
                   <option value="cbm">الحجم والمساحة بالمتر المكعب (CBM Volume)</option>
                 </select>
                 <small style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', marginTop: '3px' }}>
-                  تحدد كيف يقسم النظام الـ 3500$ والجمارك بين قطع الغيار المختلفة في الحاوية.
+                  {formatFreightAllocationHint(shippingCost !== '' ? Number(shippingCost) : Number(data.shipping_cost_usd || 0))}
                 </small>
               </div>
             )}

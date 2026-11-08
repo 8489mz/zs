@@ -7,6 +7,7 @@ import {
   useImportProjectsQuery,
   useShipmentsQuery,
 } from './api/shipments.api';
+import { getImportProjectStatusLabel } from './utils/import-display-formatters';
 import {
   TrendingUpIcon,
   ShieldAlertIcon,
@@ -480,7 +481,7 @@ export default function ImportCommandCenter() {
                       color: p.status === 'closed' ? '#64748b' : '#3730a3',
                     }}
                   >
-                    {p.status}
+                    {getImportProjectStatusLabel(p.status)}
                   </span>
                 </div>
               ))}

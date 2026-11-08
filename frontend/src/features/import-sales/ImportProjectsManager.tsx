@@ -34,6 +34,13 @@ import { toast } from '@/shared/components/system-alert';
 import { LoadingState } from '@/shared/ui/loading-state';
 import { useProductsQuery } from '@/shared/hooks/use-catalog-queries';
 import { SearchableCombobox } from '@/shared/ui/searchable-combobox';
+import {
+  formatMarketProfitEgp,
+  formatMarketRoiBadge,
+  getImportProjectStatusLabel,
+  normalizeFeasibilityNumber,
+  parseFeasibilityNumberInput,
+} from './utils/import-display-formatters';
 
 export default function ImportProjectsManager() {
   const { data: projects = [], isLoading: isProjectsLoading, refetch } = useImportProjectsQuery();
@@ -199,11 +206,15 @@ export default function ImportProjectsManager() {
     partNumber?: string;
     oemNumber?: string;
     hsCode: string;
-    qty: number;
-    factoryPriceUsd: number;
-    unitWeightKg?: number;
-    unitCbm?: number;
-    expectedLocalMarketPriceEgp?: number;
+    // I2-P9: numeric grid fields also hold in-progress decimal text
+    // ("0.", "0.0") while the user types — see
+    // parseFeasibilityNumberInput. They are normalized back to numbers
+    // in handleRunFeasibility before the engine call.
+    qty: number | string;
+    factoryPriceUsd: number | string;
+    unitWeightKg?: number | string;
+    unitCbm?: number | string;
+    expectedLocalMarketPriceEgp?: number | string;
   }>>([
     {
       name: 'طقم تيل فرامل وبطانات مكابح شاحنات وتريلات ثقيلة',
@@ -487,8 +498,21 @@ export default function ImportProjectsManager() {
 
   const handleRunFeasibility = async () => {
     try {
+      // I2-P9: grid numeric fields may hold in-progress decimal text
+      // ("0.") while the user types — normalize to finite numbers here,
+      // the single boundary before the engine call, so the engine (and
+      // the stored feasibility) always receives numbers.
+      const normalizedItems = items.map((it) => ({
+        ...it,
+        qty: normalizeFeasibilityNumber(it.qty),
+        factoryPriceUsd: normalizeFeasibilityNumber(it.factoryPriceUsd),
+        unitWeightKg: it.unitWeightKg === undefined ? undefined : normalizeFeasibilityNumber(it.unitWeightKg),
+        unitCbm: it.unitCbm === undefined ? undefined : normalizeFeasibilityNumber(it.unitCbm),
+        expectedLocalMarketPriceEgp:
+          it.expectedLocalMarketPriceEgp === undefined ? undefined : normalizeFeasibilityNumber(it.expectedLocalMarketPriceEgp),
+      }));
       const res = await calculateFeasibilityMutation.mutateAsync({
-        items,
+        items: normalizedItems,
         exchangeRateCommercial: Number(commRate),
         exchangeRateCustoms: Number(custRate),
         internationalShippingUsd: Number(shippingUsd),
@@ -510,7 +534,7 @@ export default function ImportProjectsManager() {
       const resWithLinks = {
         ...res,
         items: Array.isArray(res.items)
-          ? res.items.map((ri: any, i: number) => ({ ...ri, productId: items[i]?.productId || undefined }))
+          ? res.items.map((ri: any, i: number) => ({ ...ri, productId: normalizedItems[i]?.productId || undefined }))
           : res.items,
       };
       setFeasibilityResult(resWithLinks);
@@ -830,7 +854,7 @@ export default function ImportProjectsManager() {
                               : '#3730a3',
                         }}
                       >
-                        {p.status}
+                        {getImportProjectStatusLabel(p.status)}
                       </span>
                     </td>
                     <td style={{ padding: '12px 14px', textAlign: 'center' }}>
@@ -1178,8 +1202,8 @@ export default function ImportProjectsManager() {
                       <td style={{ padding: '6px 8px' }}>
                         <input
                           type="number"
-                          value={it.qty}
-                          onChange={(e) => handleUpdateItem(idx, 'qty', Number(e.target.value))}
+                          value={it.qty ?? ''}
+                          onChange={(e) => handleUpdateItem(idx, 'qty', parseFeasibilityNumberInput(e.target.value))}
                           style={{ width: '100%', height: 30, padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: '12px' }}
                         />
                       </td>
@@ -1187,8 +1211,8 @@ export default function ImportProjectsManager() {
                         <input
                           type="number"
                           step="0.01"
-                          value={it.factoryPriceUsd}
-                          onChange={(e) => handleUpdateItem(idx, 'factoryPriceUsd', Number(e.target.value))}
+                          value={it.factoryPriceUsd ?? ''}
+                          onChange={(e) => handleUpdateItem(idx, 'factoryPriceUsd', parseFeasibilityNumberInput(e.target.value))}
                           style={{ width: '100%', height: 30, padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: '12px' }}
                         />
                       </td>
@@ -1197,8 +1221,8 @@ export default function ImportProjectsManager() {
                           type="number"
                           step="0.1"
                           placeholder="مثال: 5"
-                          value={it.unitWeightKg || ''}
-                          onChange={(e) => handleUpdateItem(idx, 'unitWeightKg', Number(e.target.value))}
+                          value={it.unitWeightKg ?? ''}
+                          onChange={(e) => handleUpdateItem(idx, 'unitWeightKg', parseFeasibilityNumberInput(e.target.value))}
                           style={{ width: '100%', height: 30, padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: '12px' }}
                         />
                       </td>
@@ -1207,8 +1231,8 @@ export default function ImportProjectsManager() {
                           type="number"
                           step="0.001"
                           placeholder="0.01"
-                          value={it.unitCbm || ''}
-                          onChange={(e) => handleUpdateItem(idx, 'unitCbm', Number(e.target.value))}
+                          value={it.unitCbm ?? ''}
+                          onChange={(e) => handleUpdateItem(idx, 'unitCbm', parseFeasibilityNumberInput(e.target.value))}
                           style={{ width: '100%', height: 30, padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: '12px' }}
                         />
                       </td>
@@ -1216,8 +1240,8 @@ export default function ImportProjectsManager() {
                         <input
                           type="number"
                           placeholder="سعر المحل..."
-                          value={it.expectedLocalMarketPriceEgp || ''}
-                          onChange={(e) => handleUpdateItem(idx, 'expectedLocalMarketPriceEgp', Number(e.target.value))}
+                          value={it.expectedLocalMarketPriceEgp ?? ''}
+                          onChange={(e) => handleUpdateItem(idx, 'expectedLocalMarketPriceEgp', parseFeasibilityNumberInput(e.target.value))}
                           style={{ width: '100%', height: 30, padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: '12px', fontWeight: 600, color: '#166534' }}
                         />
                       </td>
@@ -1524,18 +1548,26 @@ export default function ImportProjectsManager() {
                       </span>
                     </div>
 
-                    <span
-                      style={{
-                        padding: '3px 10px',
-                        borderRadius: 6,
-                        fontSize: '12px',
-                        fontWeight: 800,
-                        backgroundColor: '#15803d',
-                        color: '#ffffff',
-                      }}
-                    >
-                      عائد الاستثمار من السوق: {feasibilityResult.overallRoiVsMarketPercent}% ROI
-                    </span>
+                    {(() => {
+                      // I2-P9: hide the badge when the engine reported no
+                      // market ROI (zero/negative market profit) — never
+                      // an empty "% ROI" with no number.
+                      const badge = formatMarketRoiBadge(feasibilityResult.overallRoiVsMarketPercent);
+                      return badge ? (
+                        <span
+                          style={{
+                            padding: '3px 10px',
+                            borderRadius: 6,
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            backgroundColor: '#15803d',
+                            color: '#ffffff',
+                          }}
+                        >
+                          {badge}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
@@ -1689,9 +1721,7 @@ export default function ImportProjectsManager() {
                               color: (it.unitNetProfitVsMarketEgp || 0) >= 0 ? '#15803d' : '#b91c1c',
                             }}
                           >
-                            {it.unitNetProfitVsMarketEgp !== undefined
-                              ? `+${it.unitNetProfitVsMarketEgp.toLocaleString()} ج.م`
-                              : '—'}
+                            {formatMarketProfitEgp(it.unitNetProfitVsMarketEgp)}
                           </td>
                           <td style={{ padding: '6px 8px', fontSize: '11.5px', fontWeight: 700, color: '#15803d' }}>
                             {it.marginVsMarketPercent !== undefined ? `${it.marginVsMarketPercent}%` : '—'}
