@@ -1108,7 +1108,10 @@ export class ConvertFeasibilityToProjectDto {
 }
 
 export class ProformaInvoiceItemDto {
+  // I1-P1: coerce a string id ("5") to a number so the PI item link
+  // survives transport instead of failing IsNumber validation.
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   productId?: number;
 

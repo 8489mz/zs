@@ -6566,17 +6566,23 @@ export class ImportSalesService {
       const scopeAccountId = String(supplier.account_id ?? '').trim() || tenantId;
       const lines: Array<{productId: number; name: string; quantity: number; unitCost: number; total: number}> = [];
       let foreignTotal = 0;
-      for (const item of raw) {
+      for (let lineIdx = 0; lineIdx < raw.length; lineIdx++) {
+        const item = raw[lineIdx];
+        const lineLabel = String(item.productName ?? item.name ?? '').trim() || 'بلا اسم';
         const productId = Number(item.productId ?? item.product_id);
         const qty = Number(item.quantity ?? item.qty);
         const foreignUnitCost = Number(item.unitPriceForeign ?? item.factoryPriceUsd ?? item.unitPriceUsd);
         if (!Number.isSafeInteger(productId) || productId <= 0 || !Number.isFinite(qty) || qty <= 0 ||
           !Number.isFinite(foreignUnitCost) || foreignUnitCost < 0) {
-          throw new BadRequestException('يجب ربط كل بند من الـ Proforma بصنف حقيقي وتحديد الكمية وسعر الوحدة الأجنبي.');
+          // I1-P1: the fail-closed error names the offending line
+          // (index + name) so the merchant knows exactly which PI
+          // line still needs a real inventory item linked. Never
+          // silently skip the line or auto-match by name.
+          throw new BadRequestException(`يجب ربط البند رقم ${lineIdx + 1} (${lineLabel}) من الـ Proforma بصنف حقيقي وتحديد الكمية وسعر الوحدة الأجنبي.`);
         }
         const product = await trx.selectFrom('products').select(['id', 'name'])
           .where('tenant_id', '=', tenantId).where('id', '=', productId).executeTakeFirst();
-        if (!product) throw new BadRequestException('صنف Proforma غير موجود ضمن أصناف المنشأة.');
+        if (!product) throw new BadRequestException(`البند رقم ${lineIdx + 1} (${lineLabel}) يشير إلى صنف غير موجود ضمن أصناف المنشأة.`);
 
         const unitCost = Number((foreignUnitCost * exchangeRate).toFixed(3));
         const total = Number((qty * unitCost).toFixed(3));

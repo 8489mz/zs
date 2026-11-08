@@ -11,6 +11,8 @@ import { CheckCircleIcon, PlusCircleIcon } from '@/shared/components/icons/AppIc
 import { toast } from '@/shared/components/system-alert';
 import { useQuery } from '@tanstack/react-query';
 import { http } from '@/lib/http';
+import { useProductsQuery } from '@/shared/hooks/use-catalog-queries';
+import { SearchableCombobox } from '@/shared/ui/searchable-combobox';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 export interface PiItemLine {
@@ -24,6 +26,12 @@ export interface PiItemLine {
 export function ChinaProformasTab() {
   const { data: proformas = [], refetch } = useProformaInvoicesQuery();
   const { data: suppliers = [] } = useChinaSuppliersQuery();
+  // I1-P1: real inventory items for the per-line picker. The product
+  // has no foreign (USD) price — its costPrice is EGP — so picking a
+  // product links the line (productId) and fills its name; the
+  // contract quantity and foreign unit price stay as typed, never
+  // derived from the EGP cost.
+  const { data: products = [] } = useProductsQuery();
   const approvePiMutation = useApproveProformaInvoiceMutation();
   const generatePoMutation = useGenerateInternationalPoMutation('');
   const createPiMutation = useCreateProformaInvoiceMutation();
@@ -87,6 +95,13 @@ export function ChinaProformasTab() {
         }))
       );
       toast.success(`تم سحب (${items.length}) أصناف مباشرة من دراسة جدوى المشروع!`);
+      // I1-P1: the pull carries productId only when the feasibility
+      // items were linked to real items. An unlinked pulled line can
+      // never generate a PO, so warn now instead of at PO time.
+      const unlinkedPulled = items.filter((it: any) => !it.productId).length;
+      if (unlinkedPulled > 0) {
+        toast.warning(`(${unlinkedPulled}) من الأصناف المسحوبة غير مربوطة بصنف حقيقي — اربطها من قائمة الأصناف في كل بند قبل الحفظ، فأمر الشراء لن يصدر من بند غير مربوط.`);
+      }
     } else {
       setPiItems([
         { productName: '', productId: '', quantity: 1, unitPriceForeign: 0 },
@@ -145,6 +160,25 @@ export function ChinaProformasTab() {
     }
     if (!piNumber.trim()) {
       toast.error('رقم الفاتورة المبدئية PI مطلوب');
+      return;
+    }
+    // I1-P1: every entered line must link to a real inventory item
+    // before the PI is saved. There is no PI-edit screen (no frontend
+    // update mutation), so an unlinked line saved here could never be
+    // linked afterwards in the UI and its PO generation would fail
+    // with no path to fix it. The backend still allows approve-then-
+    // link over the API and fail-closes at PO generation.
+    const unlinkedIdx = piItems.findIndex(
+      (l) =>
+        (l.productName?.trim() || l.productId) &&
+        Number(l.quantity) > 0 &&
+        Number(l.unitPriceForeign) >= 0 &&
+        !l.productId,
+    );
+    if (unlinkedIdx >= 0) {
+      toast.error(
+        `البند رقم ${unlinkedIdx + 1} (${piItems[unlinkedIdx].productName?.trim() || 'بلا اسم'}) غير مربوط بصنف حقيقي — اختر الصنف من قائمة الأصناف في البند قبل الحفظ، فأمر الشراء لن يصدر من بند غير مربوط.`,
+      );
       return;
     }
     // INV-FE2-FRONTEND-BOOK-DIGITS: the PI total is POSTed as
@@ -570,20 +604,45 @@ export function ChinaProformasTab() {
                   {piItems.map((line, idx) => {
                     const lineTotal = roundMoneyValue((line.quantity || 0) * (line.unitPriceForeign || 0), currencyMoneyDigits(currency));
                     return (
-                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1.2fr 1.2fr 52px', gap: 8, alignItems: 'center' }}>
-                        <input
-                          type="text"
-                          className="input"
-                          style={{ width: '100%', padding: '6px 8px', fontSize: 12, fontWeight: 600 }}
-                          placeholder="اسم الصنف والمواصفات (مثال: صينية سحب تريلا 2 بوصة)"
-                          value={line.productName}
-                          onChange={(e) => {
-                            const next = [...piItems];
-                            next[idx].productName = e.target.value;
-                            setPiItems(next);
-                          }}
-                          required
-                        />
+                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1.2fr 1.2fr 52px', gap: 8, alignItems: 'start' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                          <SearchableCombobox
+                            inline
+                            placeholder="ابحث عن صنف حقيقي بالاسم أو الكود..."
+                            value={line.productName}
+                            onChange={(value) => {
+                              // Typing a different name clears the link:
+                              // the productId is only valid for the
+                              // product that was picked.
+                              const next = [...piItems];
+                              next[idx] = { ...next[idx], productName: value, productId: '' };
+                              setPiItems(next);
+                            }}
+                            options={products || []}
+                            search={(p: any, q: string) =>
+                              (p.name || '').toLowerCase().includes(q.toLowerCase()) ||
+                              (p.barcode || '').toLowerCase().includes(q.toLowerCase()) ||
+                              (p.styleCode || '').toLowerCase().includes(q.toLowerCase())
+                            }
+                            getLabel={(p: any) => p.name}
+                            getMeta={(p: any) => (p.barcode ? `كود: ${p.barcode}` : p.styleCode ? `Code: ${p.styleCode}` : '')}
+                            onSelect={(p: any) => {
+                              const next = [...piItems];
+                              next[idx] = { ...next[idx], productId: Number(p.id), productName: p.name };
+                              setPiItems(next);
+                            }}
+                            showIdleHelper={false}
+                          />
+                          {line.productId ? (
+                            <span style={{ fontSize: 10.5, fontWeight: 700, color: '#15803d' }}>
+                              مربوط بصنف حقيقي (#{line.productId})
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 10.5, fontWeight: 700, color: '#b45309' }}>
+                              غير مربوط بصنف حقيقي — اختر الصنف من القائمة
+                            </span>
+                          )}
+                        </div>
                         <input
                           type="number"
                           min="1"

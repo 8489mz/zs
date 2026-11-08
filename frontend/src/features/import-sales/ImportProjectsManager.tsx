@@ -31,6 +31,8 @@ import {
   Trash2Icon,
 } from '@/shared/components/icons/AppIcons';
 import { toast } from '@/shared/components/system-alert';
+import { useProductsQuery } from '@/shared/hooks/use-catalog-queries';
+import { SearchableCombobox } from '@/shared/ui/searchable-combobox';
 
 export default function ImportProjectsManager() {
   const { data: projects = [], refetch } = useImportProjectsQuery();
@@ -189,6 +191,10 @@ export default function ImportProjectsManager() {
 
   const [items, setItems] = useState<Array<{
     name: string;
+    // I1-P1: link to the real inventory item. The feasibility engine
+    // rebuilds its output items without this field, so handleRunFeasibility
+    // re-attaches it by index before storing the result.
+    productId?: number | '';
     partNumber?: string;
     oemNumber?: string;
     hsCode: string;
@@ -254,6 +260,9 @@ export default function ImportProjectsManager() {
 
   const { data: tariffSectors = [] } = useCustomsTariffSectorsQuery();
   const { data: tariffsData = [], isLoading: isTariffsLoading } = useCustomsTariffsQuery(pickerSearch, pickerSector);
+  // I1-P1: real inventory items for the per-line picker that links a
+  // feasibility item to the catalog product the PI->PO chain needs.
+  const { data: products = [] } = useProductsQuery();
 
   const availableSectors =
     tariffSectors && tariffSectors.length > 0
@@ -422,6 +431,7 @@ export default function ImportProjectsManager() {
       ...items,
       {
         name: '',
+        productId: '',
         hsCode: '8708.30',
         qty: 100,
         factoryPriceUsd: 10,
@@ -439,6 +449,23 @@ export default function ImportProjectsManager() {
   const handleUpdateItem = (index: number, field: string, value: any) => {
     const updated = [...items];
     (updated[index] as any)[field] = value;
+    setItems(updated);
+  };
+
+  // I1-P1: typing a different name clears the catalog link — the
+  // productId is only valid for the product that was picked.
+  const handleFeasibilityNameChange = (index: number, value: string) => {
+    const updated = [...items];
+    updated[index] = { ...updated[index], name: value, productId: '' };
+    setItems(updated);
+  };
+
+  // I1-P1: link a feasibility line to a real inventory item. The
+  // contract quantity and factory price stay as typed — the product
+  // carries no foreign price to fill them from.
+  const handleLinkFeasibilityItem = (index: number, product: any) => {
+    const updated = [...items];
+    updated[index] = { ...updated[index], productId: Number(product.id), name: product.name };
     setItems(updated);
   };
 
@@ -472,7 +499,20 @@ export default function ImportProjectsManager() {
         travelAndSourcingCostEgp: Number(travelEgp),
         targetMarkupPercent: Number(targetMarkup),
       });
-      setFeasibilityResult(res);
+      // I1-P1: the feasibility engine rebuilds its output items
+      // without productId, so re-attach the link the user picked,
+      // by index (the engine maps items in input order). Without
+      // this, feasibility_data loses the link and the PI pull copies
+      // only name/qty/price, leaving the PO chain dead. The engine
+      // itself (import-feasibility.engine.ts) is out of scope for
+      // this package; carrying productId through it is the follow-up.
+      const resWithLinks = {
+        ...res,
+        items: Array.isArray(res.items)
+          ? res.items.map((ri: any, i: number) => ({ ...ri, productId: items[i]?.productId || undefined }))
+          : res.items,
+      };
+      setFeasibilityResult(resWithLinks);
       toast.success('تم احتساب دراسة الجدوى والسيناريوهات بنجاح');
     } catch (err: any) {
       toast.error('حدث خطأ أثناء احتساب الجدوى: ' + (err.message || 'خطأ غير معروف'));
@@ -1088,13 +1128,31 @@ export default function ImportProjectsManager() {
                   {items.map((it, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
                       <td style={{ padding: '6px 8px' }}>
-                        <input
-                          type="text"
+                        <SearchableCombobox
+                          inline
+                          placeholder="ابحث عن صنف حقيقي..."
                           value={it.name}
-                          onChange={(e) => handleUpdateItem(idx, 'name', e.target.value)}
-                          placeholder="اسم قطعة الغيار / المنتج..."
-                          style={{ width: '100%', height: 30, padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: '12px' }}
+                          onChange={(value) => handleFeasibilityNameChange(idx, value)}
+                          options={products || []}
+                          search={(p: any, q: string) =>
+                            (p.name || '').toLowerCase().includes(q.toLowerCase()) ||
+                            (p.barcode || '').toLowerCase().includes(q.toLowerCase()) ||
+                            (p.styleCode || '').toLowerCase().includes(q.toLowerCase())
+                          }
+                          getLabel={(p: any) => p.name}
+                          getMeta={(p: any) => (p.barcode ? `كود: ${p.barcode}` : p.styleCode ? `Code: ${p.styleCode}` : '')}
+                          onSelect={(p: any) => handleLinkFeasibilityItem(idx, p)}
+                          showIdleHelper={false}
                         />
+                        {it.productId ? (
+                          <div style={{ fontSize: 10, fontWeight: 700, color: '#15803d', marginTop: 2 }}>
+                            مربوط بصنف حقيقي (#{it.productId})
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 10, fontWeight: 700, color: '#b45309', marginTop: 2 }}>
+                            غير مربوط — اختر الصنف من القائمة
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: '6px 8px' }}>
                         <input
