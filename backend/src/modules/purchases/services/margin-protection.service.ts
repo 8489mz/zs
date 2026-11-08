@@ -6,6 +6,8 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AuditService } from '../../../core/audit/audit.service';
 import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
 export interface MarginProtectionItem {
   productId: number;
@@ -67,8 +69,9 @@ export class MarginProtectionService {
     @Optional() private readonly whatsappService?: WhatsAppGatewayService,
   ) {}
 
-  private roundMoney(val: number): number {
-    return Number(Number(val || 0).toFixed(2));
+  private toBookMoney(val: number, digits: MoneyDigits): number {
+    const n = Number(val || 0);
+    return Number.isFinite(n) ? roundMoney(n, digits) : 0;
   }
 
   async analyzePurchaseMargins(purchaseId: number, targetMargin = 25, auth: AuthContext): Promise<MarginProtectionAnalysisResponse> {
@@ -108,6 +111,7 @@ export class MarginProtectionService {
       .where('pi.tenant_id', '=', scope.tenantId)
       .execute()) as any;
 
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const analysisItems: MarginProtectionItem[] = [];
     let lossMakingCount = 0;
     let marginCompressedCount = 0;
@@ -140,21 +144,21 @@ export class MarginProtectionService {
 
       // Recommended price to achieve target margin %: Cost / (1 - Margin%)
       const safeTargetMargin = Math.min(80, Math.max(5, targetMargin));
-      const recommendedRetailPrice = this.roundMoney(newCost / (1 - (safeTargetMargin / 100)));
+      const recommendedRetailPrice = this.toBookMoney(newCost / (1 - (safeTargetMargin / 100)), bookDigits);
 
       // Recommended wholesale margin is typically around 60% of retail margin
       const wholesaleTargetMargin = Math.min(50, Math.max(3, safeTargetMargin * 0.6));
-      const recommendedWholesalePrice = this.roundMoney(newCost / (1 - (wholesaleTargetMargin / 100)));
+      const recommendedWholesalePrice = this.toBookMoney(newCost / (1 - (wholesaleTargetMargin / 100)), bookDigits);
 
       analysisItems.push({
         productId,
         productName: row.product_name || `صنف #${productId}`,
         barcode: row.barcode || '',
-        previousCost: this.roundMoney(previousCost),
-        newCost: this.roundMoney(newCost),
+        previousCost: this.toBookMoney(previousCost, bookDigits),
+        newCost: this.toBookMoney(newCost, bookDigits),
         costChangePercent,
-        currentRetailPrice: this.roundMoney(currentRetailPrice),
-        currentWholesalePrice: this.roundMoney(currentWholesalePrice),
+        currentRetailPrice: this.toBookMoney(currentRetailPrice, bookDigits),
+        currentWholesalePrice: this.toBookMoney(currentWholesalePrice, bookDigits),
         currentMarginPercent,
         previousMarginPercent,
         targetMarginPercent: safeTargetMargin,

@@ -2,6 +2,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Kysely, sql } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
 export interface DailyRollupSummary {
   rollupDate: string;
@@ -41,9 +43,9 @@ export class DailyCommercialRollupService {
 
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
-  private toMoney(value: unknown): number {
+  private toBookMoney(value: unknown, digits: MoneyDigits): number {
     const n = Number(value || 0);
-    return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
+    return Number.isFinite(n) ? roundMoney(n, digits) : 0;
   }
 
   /**
@@ -129,16 +131,17 @@ export class DailyCommercialRollupService {
       expensesQuery.executeTakeFirst(),
     ]);
 
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
     const salesCount = Number(salesRow?.sales_count || 0);
-    const salesTotal = this.toMoney(salesRow?.sales_total);
-    const cashSalesTotal = this.toMoney(salesRow?.cash_total);
-    const creditSalesTotal = this.toMoney(salesRow?.credit_total);
-    const cogsTotal = this.toMoney(cogsRow?.cogs_total);
-    const grossProfit = this.toMoney(salesTotal - cogsTotal);
+    const salesTotal = this.toBookMoney(salesRow?.sales_total, bookDigits);
+    const cashSalesTotal = this.toBookMoney(salesRow?.cash_total, bookDigits);
+    const creditSalesTotal = this.toBookMoney(salesRow?.credit_total, bookDigits);
+    const cogsTotal = this.toBookMoney(cogsRow?.cogs_total, bookDigits);
+    const grossProfit = this.toBookMoney(salesTotal - cogsTotal, bookDigits);
     const returnsCount = Number(returnsRow?.returns_count || 0);
-    const returnsTotal = this.toMoney(returnsRow?.returns_total);
-    const expensesTotal = this.toMoney(expensesRow?.expenses_total);
-    const netProfit = this.toMoney(grossProfit - expensesTotal);
+    const returnsTotal = this.toBookMoney(returnsRow?.returns_total, bookDigits);
+    const expensesTotal = this.toBookMoney(expensesRow?.expenses_total, bookDigits);
+    const netProfit = this.toBookMoney(grossProfit - expensesTotal, bookDigits);
 
     // 5. Atomic Upsert into daily_commercial_rollups
     await (this.db as any)
@@ -232,6 +235,7 @@ export class DailyCommercialRollupService {
 
     const rows = await query.execute();
 
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
     const yearMap = new Map<number, YearComparisonRow>();
     for (const y of years) {
       yearMap.set(y, {
@@ -250,19 +254,19 @@ export class DailyCommercialRollupService {
     for (const r of rows) {
       const year = Number(r.year);
       const month = Number(r.month);
-      const rowSales = this.toMoney(r.sales_total);
-      const rowGross = this.toMoney(r.gross_profit);
-      const rowNet = this.toMoney(r.net_profit);
+      const rowSales = this.toBookMoney(r.sales_total, bookDigits);
+      const rowGross = this.toBookMoney(r.gross_profit, bookDigits);
+      const rowNet = this.toBookMoney(r.net_profit, bookDigits);
 
       const targetYear = yearMap.get(year);
       if (targetYear) {
         targetYear.salesCount += Number(r.sales_count || 0);
-        targetYear.salesTotal = this.toMoney(targetYear.salesTotal + rowSales);
-        targetYear.cogsTotal = this.toMoney(targetYear.cogsTotal + this.toMoney(r.cogs_total));
-        targetYear.grossProfit = this.toMoney(targetYear.grossProfit + rowGross);
-        targetYear.returnsTotal = this.toMoney(targetYear.returnsTotal + this.toMoney(r.returns_total));
-        targetYear.expensesTotal = this.toMoney(targetYear.expensesTotal + this.toMoney(r.expenses_total));
-        targetYear.netProfit = this.toMoney(targetYear.netProfit + rowNet);
+        targetYear.salesTotal = this.toBookMoney(targetYear.salesTotal + rowSales, bookDigits);
+        targetYear.cogsTotal = this.toBookMoney(targetYear.cogsTotal + this.toBookMoney(r.cogs_total, bookDigits), bookDigits);
+        targetYear.grossProfit = this.toBookMoney(targetYear.grossProfit + rowGross, bookDigits);
+        targetYear.returnsTotal = this.toBookMoney(targetYear.returnsTotal + this.toBookMoney(r.returns_total, bookDigits), bookDigits);
+        targetYear.expensesTotal = this.toBookMoney(targetYear.expensesTotal + this.toBookMoney(r.expenses_total, bookDigits), bookDigits);
+        targetYear.netProfit = this.toBookMoney(targetYear.netProfit + rowNet, bookDigits);
         targetYear.monthlyBreakdown.push({
           month,
           salesTotal: rowSales,

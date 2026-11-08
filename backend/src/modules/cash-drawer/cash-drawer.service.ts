@@ -126,7 +126,6 @@ export class CashDrawerService {
     @Optional() private readonly whatsappService?: WhatsAppGatewayService,
   ) {}
 
-  private toMoney(value: unknown): number { return Number(Number(value || 0).toFixed(2)); }
   /**
    * Book-precision rounding for the EXPECTED-CASH computation and,
    * since INV-BLIND-CLOSE-DECLARED-RECONCILIATION, for blind-close

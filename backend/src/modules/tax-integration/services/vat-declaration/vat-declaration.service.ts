@@ -7,6 +7,8 @@ import { requireTenantScope } from '../../../../core/auth/utils/tenant-boundary'
 import { KYSELY_DB } from '../../../../database/database.constants';
 import { Database } from '../../../../database/database.types';
 import { selectConfiguredTaxRow } from '../../engines/configured-tax-id.engine';
+import { tenantBaseCurrency } from '../../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../../accounting/engines/money-minor-units.engine';
 
 export interface VatDeclarationQueryDto {
   from?: string;
@@ -62,8 +64,9 @@ export class VatDeclarationService {
       : sql<boolean>`tenant_id = ${scope.tenantId}`;
   }
 
-  private roundCurrency(value: number): number {
-    return Number((Number(value) || 0).toFixed(2));
+  private roundCurrency(value: number, digits: MoneyDigits): number {
+    const n = Number(value) || 0;
+    return Number.isFinite(n) ? roundMoney(n, digits) : 0;
   }
 
   private async returnTaxTotals(auth: AuthContext, type: 'sale' | 'purchase', from: Date, to: Date) {
@@ -105,6 +108,7 @@ export class VatDeclarationService {
     const settingByKey = new Map(jurisdictionSettings.map((row) => [row.key, row.value]));
     const country = deriveDeclarationCountry(settingByKey.get('country'), settingByKey.get('currency'));
     const standardRate = country === 'SA' ? 15 : 14;
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
 
     // 1. Sales query
     const salesStats = await this.db
@@ -157,22 +161,22 @@ export class VatDeclarationService {
       .executeTakeFirst();
 
     const purchaseReturns = await this.returnTaxTotals(auth, 'purchase', fromDate, toDate);
-    const salesReturnsTax = this.roundCurrency(Number(salesReturns.tax));
-    const salesReturnsBase = this.roundCurrency(Number(salesReturns.total) - salesReturnsTax);
-    const purchaseReturnsTax = this.roundCurrency(Number(purchaseReturns.tax));
-    const purchaseReturnsBase = this.roundCurrency(Number(purchaseReturns.total) - purchaseReturnsTax);
+    const salesReturnsTax = this.roundCurrency(Number(salesReturns.tax), bookDigits);
+    const salesReturnsBase = this.roundCurrency(Number(salesReturns.total) - salesReturnsTax, bookDigits);
+    const purchaseReturnsTax = this.roundCurrency(Number(purchaseReturns.tax), bookDigits);
+    const purchaseReturnsBase = this.roundCurrency(Number(purchaseReturns.total) - purchaseReturnsTax, bookDigits);
 
-    const salesStandardBase = this.roundCurrency(Number(salesStats?.standard_rated_base || 0));
-    const salesStandardTax = this.roundCurrency(Number(salesStats?.standard_rated_tax || 0));
-    const salesZeroBase = this.roundCurrency(Number(salesStats?.zero_rated_base || 0));
+    const salesStandardBase = this.roundCurrency(Number(salesStats?.standard_rated_base || 0), bookDigits);
+    const salesStandardTax = this.roundCurrency(Number(salesStats?.standard_rated_tax || 0), bookDigits);
+    const salesZeroBase = this.roundCurrency(Number(salesStats?.zero_rated_base || 0), bookDigits);
 
-    const purchasesStandardBase = this.roundCurrency(Number(purchaseStats?.standard_rated_base || 0));
-    const purchasesStandardTax = this.roundCurrency(Number(purchaseStats?.standard_rated_tax || 0));
-    const purchasesZeroBase = this.roundCurrency(Number(purchaseStats?.zero_rated_base || 0));
+    const purchasesStandardBase = this.roundCurrency(Number(purchaseStats?.standard_rated_base || 0), bookDigits);
+    const purchasesStandardTax = this.roundCurrency(Number(purchaseStats?.standard_rated_tax || 0), bookDigits);
+    const purchasesZeroBase = this.roundCurrency(Number(purchaseStats?.zero_rated_base || 0), bookDigits);
 
-    const totalOutputVat = this.roundCurrency(salesStandardTax - salesReturnsTax);
-    const totalInputVat = this.roundCurrency(purchasesStandardTax - purchaseReturnsTax);
-    const netVatDue = this.roundCurrency(totalOutputVat - totalInputVat);
+    const totalOutputVat = this.roundCurrency(salesStandardTax - salesReturnsTax, bookDigits);
+    const totalInputVat = this.roundCurrency(purchasesStandardTax - purchaseReturnsTax, bookDigits);
+    const netVatDue = this.roundCurrency(totalOutputVat - totalInputVat, bookDigits);
 
     // Tenant info
     const tenant = await this.db
@@ -224,7 +228,7 @@ export class VatDeclarationService {
         returns_base: salesReturnsBase,
         returns_tax: salesReturnsTax,
         invoices_count: Number(salesStats?.invoices_count || 0),
-        total_sales_base: this.roundCurrency(salesStandardBase + salesZeroBase - salesReturnsBase),
+        total_sales_base: this.roundCurrency(salesStandardBase + salesZeroBase - salesReturnsBase, bookDigits),
         total_output_vat: Math.max(0, totalOutputVat),
       },
       input_tax: {
@@ -235,7 +239,7 @@ export class VatDeclarationService {
         returns_base: purchaseReturnsBase,
         returns_tax: purchaseReturnsTax,
         bills_count: Number(purchaseStats?.bills_count || 0),
-        total_purchases_base: this.roundCurrency(purchasesStandardBase + purchasesZeroBase - purchaseReturnsBase),
+        total_purchases_base: this.roundCurrency(purchasesStandardBase + purchasesZeroBase - purchaseReturnsBase, bookDigits),
         total_input_vat: Math.max(0, totalInputVat),
       },
       summary: {

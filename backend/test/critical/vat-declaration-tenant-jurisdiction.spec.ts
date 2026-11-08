@@ -51,6 +51,7 @@ async function main(): Promise<void> {
   try {
     await pg.exec(`
       CREATE TABLE settings (tenant_id text, key text, value text);
+      CREATE TABLE currency_exchange_rates (tenant_id text, currency_code text, is_base boolean, exchange_rate numeric);
       CREATE TABLE tenants (id text PRIMARY KEY, business_name text, owner_name text, owner_phone text);
       CREATE TABLE tenant_tax_settings (id serial PRIMARY KEY, tenant_id text, account_id text, provider text, tax_id text, is_active boolean);
       CREATE TABLE sales (id bigint PRIMARY KEY, tenant_id text, status text, created_at timestamptz, subtotal numeric, discount numeric, service_charge numeric, tax_amount numeric, total numeric, tax_rate numeric, prices_include_tax boolean);
@@ -61,6 +62,7 @@ async function main(): Promise<void> {
       INSERT INTO sales VALUES (1,'t1','posted','2026-10-15',1000,0,0,140,1140,14,false);
       INSERT INTO purchases VALUES (1,'t1','posted','2026-10-15',500,0,70,570,14,false);
       INSERT INTO settings VALUES ('t1','country','SA'),('t1','currency','EGP');
+      INSERT INTO currency_exchange_rates VALUES ('t1','EGP',true,1);
       INSERT INTO tenant_tax_settings (tenant_id, account_id, provider, tax_id, is_active) VALUES ('t1','a1','ZATCA','310123456700003',true);
     `);
 
@@ -75,11 +77,13 @@ async function main(): Promise<void> {
     // 2. Currency-only derivation: SAR -> SA.
     await pg.exec(`DELETE FROM settings WHERE tenant_id = 't1' AND key = 'country'`);
     await pg.exec(`UPDATE settings SET value = 'SAR' WHERE tenant_id = 't1' AND key = 'currency'`);
+    await pg.exec(`UPDATE currency_exchange_rates SET currency_code = 'SAR' WHERE tenant_id = 't1' AND is_base = true`);
     const saByCurrency = await service.getDeclaration(query, auth);
     assert.equal(saByCurrency.period.country, 'SA');
 
     // 3. Currency-only derivation: EGP -> EG.
     await pg.exec(`UPDATE settings SET value = 'EGP' WHERE tenant_id = 't1' AND key = 'currency'`);
+    await pg.exec(`UPDATE currency_exchange_rates SET currency_code = 'EGP' WHERE tenant_id = 't1' AND is_base = true`);
     await pg.exec(
       `INSERT INTO tenant_tax_settings (tenant_id, account_id, provider, tax_id, is_active) VALUES ('t1','a1','ETA_EGYPT','123456789',true)`,
     );
