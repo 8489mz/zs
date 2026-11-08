@@ -6,6 +6,8 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { mapHeldSalesRows, mapSaleRows, filterSales, paginateRows, summarizeSales } from '../helpers/sales-query.helper';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { SalesAuthorizationService } from './sales-authorization.service';
 
 @Injectable()
@@ -204,15 +206,16 @@ export class SalesQueryService {
     const { rows: baseSales, totalItems, nextCursor } = await this.fetchSaleBaseRows(auth, query);
     const shells = this.mapSaleShells(baseSales);
     const firstRow = (baseSales[0] || {}) as Record<string, unknown>;
-    const baseSummary = summarizeSales(shells);
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
+    const baseSummary = summarizeSales(shells, digits);
     const summary = {
       ...baseSummary,
       totalItems,
-      totalSales: baseSales.length > 0 ? Number(Number(firstRow.agg_total_sales || 0).toFixed(2)) : 0,
+      totalSales: baseSales.length > 0 ? roundMoney(Number(firstRow.agg_total_sales || 0), digits) : 0,
       todaySalesCount: baseSales.length > 0 ? Number(firstRow.agg_today_sales_count || 0) : 0,
-      todaySalesTotal: baseSales.length > 0 ? Number(Number(firstRow.agg_today_sales_total || 0).toFixed(2)) : 0,
-      cashTotal: baseSales.length > 0 ? Number(Number(firstRow.agg_cash_total || 0).toFixed(2)) : 0,
-      creditTotal: baseSales.length > 0 ? Number(Number(firstRow.agg_credit_total || 0).toFixed(2)) : 0,
+      todaySalesTotal: baseSales.length > 0 ? roundMoney(Number(firstRow.agg_today_sales_total || 0), digits) : 0,
+      cashTotal: baseSales.length > 0 ? roundMoney(Number(firstRow.agg_cash_total || 0), digits) : 0,
+      creditTotal: baseSales.length > 0 ? roundMoney(Number(firstRow.agg_credit_total || 0), digits) : 0,
       cancelledCount: baseSales.length > 0 ? Number(firstRow.agg_cancelled_count || 0) : 0,
     };
     

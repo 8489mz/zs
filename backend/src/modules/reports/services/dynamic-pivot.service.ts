@@ -6,6 +6,8 @@ import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { ExecuteDynamicPivotDto, SavePivotTemplateDto } from '../dto/dynamic-pivot.dto';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import {
   buildDynamicPivotMatrix,
   type PivotResult,
@@ -204,6 +206,7 @@ export class DynamicPivotService {
       rowDimension: dto.rowDimension,
       colDimension: dto.colDimension,
       metric: dto.metric,
+      digits: currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId)),
     });
   }
 

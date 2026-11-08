@@ -3,6 +3,7 @@ import { Database } from '../../../database/database.types';
 import { ReportRangeQueryDto } from '../dto/report-query.dto';
 import { applyReportScopeFilter, buildTenantPredicate } from './reports-query.helper';
 import { sumMoney, toMoney } from './reports-math.helper';
+import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
 export type SummaryCounts = {
   salesCount: number;
@@ -605,15 +606,15 @@ export interface CustomerRfmRow {
   lastSaleDate?: string | null;
 }
 
-export function buildCustomerRfmPayload(rows: CustomerRfmRow[], targetSegment?: string) {
+export function buildCustomerRfmPayload(rows: CustomerRfmRow[], targetSegment?: string, digits: MoneyDigits = 2) {
   const now = Date.now();
 
   const mapped = rows.map((r) => {
     const frequency = Number(r.frequency || 0);
-    const monetary = Number(Number(r.monetary || 0).toFixed(2));
+    const monetary = roundMoney(Number(r.monetary || 0), digits);
     const lastDate = r.lastSaleDate ? new Date(r.lastSaleDate).getTime() : 0;
     const recencyDays = lastDate ? Math.max(0, Math.floor((now - lastDate) / (1000 * 60 * 60 * 24))) : 999;
-    const aov = frequency > 0 ? Number((monetary / frequency).toFixed(2)) : 0;
+    const aov = frequency > 0 ? roundMoney(monetary / frequency, digits) : 0;
 
     let segment: 'champions' | 'loyal' | 'promising' | 'at_risk' | 'lost' = 'promising';
     if (recencyDays <= 30 && frequency >= 4) {
@@ -651,9 +652,9 @@ export function buildCustomerRfmPayload(rows: CustomerRfmRow[], targetSegment?: 
   const promisingCount = mapped.filter((c) => c.segment === 'promising').length;
   const atRiskCount = mapped.filter((c) => c.segment === 'at_risk').length;
   const lostCount = mapped.filter((c) => c.segment === 'lost').length;
-  const totalRevenue = Number(mapped.reduce((sum, c) => sum + c.monetary, 0).toFixed(2));
+  const totalRevenue = roundMoney(mapped.reduce((sum, c) => sum + c.monetary, 0), digits);
   const totalOrders = mapped.reduce((sum, c) => sum + c.frequency, 0);
-  const averageAov = totalOrders > 0 ? Number((totalRevenue / totalOrders).toFixed(2)) : 0;
+  const averageAov = totalOrders > 0 ? roundMoney(totalRevenue / totalOrders, digits) : 0;
   const repeatCount = mapped.filter((c) => c.frequency > 1).length;
   const repeatRate = totalCustomers > 0 ? Number(((repeatCount / totalCustomers) * 100).toFixed(1)) : 0;
 

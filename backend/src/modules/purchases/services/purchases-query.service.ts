@@ -6,6 +6,8 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { filterPurchases, mapPurchaseRows, paginatePurchases, summarizePurchases } from '../helpers/purchases-query.helper';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { detectDuplicateBills, type DuplicateBillCheckResult, type HistoricalPurchaseRecord } from '../engines/duplicate-bill-detector.engine';
 
 @Injectable()
@@ -150,13 +152,14 @@ export class PurchasesQueryService {
       attachments as unknown as Array<Record<string, unknown>>
     );
 
-    const baseSummary = summarizePurchases(hydratedRows);
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
+    const baseSummary = summarizePurchases(hydratedRows, digits);
     const summary = {
       ...baseSummary,
       totalItems,
-      totalAmount: purchases.length > 0 ? Number(Number(firstRow.agg_total_amount || 0).toFixed(2)) : 0,
-      cashTotal: purchases.length > 0 ? Number(Number(firstRow.agg_cash_total || 0).toFixed(2)) : 0,
-      creditTotal: purchases.length > 0 ? Number(Number(firstRow.agg_credit_total || 0).toFixed(2)) : 0,
+      totalAmount: purchases.length > 0 ? roundMoney(Number(firstRow.agg_total_amount || 0), digits) : 0,
+      cashTotal: purchases.length > 0 ? roundMoney(Number(firstRow.agg_cash_total || 0), digits) : 0,
+      creditTotal: purchases.length > 0 ? roundMoney(Number(firstRow.agg_credit_total || 0), digits) : 0,
       cancelledCount: purchases.length > 0 ? Number(firstRow.agg_cancelled_count || 0) : 0,
     };
 

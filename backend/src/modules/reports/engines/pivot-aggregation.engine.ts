@@ -1,3 +1,5 @@
+import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+
 /**
  * Dynamic BI Pivot Aggregation Pure Engine
  *
@@ -40,6 +42,8 @@ export interface PivotEngineInput {
   valueField?: string;
   profitField?: string;
   quantityField?: string;
+  /** Book digits for money metrics (total_amount / net_profit / avg_amount). Defaults to 2. */
+  digits?: MoneyDigits;
 }
 
 /**
@@ -91,6 +95,10 @@ export function buildDynamicPivotMatrix(input: PivotEngineInput): PivotResult {
   const valueField = input.valueField || 'total_amount';
   const profitField = input.profitField || 'net_profit';
   const quantityField = input.quantityField || 'quantity';
+  const digits = input.digits ?? 2;
+  const isMoneyMetric = metric === 'total_amount' || metric === 'net_profit' || metric === 'avg_amount';
+  // Money totals round at book digits; quantity/count keep the legacy 2dp shaping.
+  const shapeCell = (value: number): number => (isMoneyMetric ? roundMoney(value, digits) : Number(value.toFixed(2)));
 
   // 1. Discover unique row & col keys preserving sort order
   const rowKeyMap = new Map<string, string>();
@@ -184,8 +192,8 @@ export function buildDynamicPivotMatrix(input: PivotEngineInput): PivotResult {
       const acc = cellAccumulators[r.key]?.[c.key] || { sum: 0, count: 0 };
       const val = metric === 'avg_amount' ? (acc.count > 0 ? acc.sum / acc.count : 0) : acc.sum;
       matrix[r.key][c.key] = {
-        value: Number(val.toFixed(2)),
-        formattedValue: formatPivotValue(Number(val.toFixed(2)), metric),
+        value: shapeCell(val),
+        formattedValue: formatPivotValue(shapeCell(val), metric),
         count: acc.count,
       };
     }
@@ -193,8 +201,8 @@ export function buildDynamicPivotMatrix(input: PivotEngineInput): PivotResult {
     const rAcc = rowAccumulators[r.key] || { sum: 0, count: 0 };
     const rVal = metric === 'avg_amount' ? (rAcc.count > 0 ? rAcc.sum / rAcc.count : 0) : rAcc.sum;
     rowTotals[r.key] = {
-      value: Number(rVal.toFixed(2)),
-      formattedValue: formatPivotValue(Number(rVal.toFixed(2)), metric),
+      value: shapeCell(rVal),
+      formattedValue: formatPivotValue(shapeCell(rVal), metric),
       count: rAcc.count,
     };
   }
@@ -203,16 +211,16 @@ export function buildDynamicPivotMatrix(input: PivotEngineInput): PivotResult {
     const cAcc = colAccumulators[c.key] || { sum: 0, count: 0 };
     const cVal = metric === 'avg_amount' ? (cAcc.count > 0 ? cAcc.sum / cAcc.count : 0) : cAcc.sum;
     colTotals[c.key] = {
-      value: Number(cVal.toFixed(2)),
-      formattedValue: formatPivotValue(Number(cVal.toFixed(2)), metric),
+      value: shapeCell(cVal),
+      formattedValue: formatPivotValue(shapeCell(cVal), metric),
       count: cAcc.count,
     };
   }
 
   const grandVal = metric === 'avg_amount' ? (grandCount > 0 ? grandSum / grandCount : 0) : grandSum;
   const grandTotal: PivotCell = {
-    value: Number(grandVal.toFixed(2)),
-    formattedValue: formatPivotValue(Number(grandVal.toFixed(2)), metric),
+    value: shapeCell(grandVal),
+    formattedValue: formatPivotValue(shapeCell(grandVal), metric),
     count: grandCount,
   };
 

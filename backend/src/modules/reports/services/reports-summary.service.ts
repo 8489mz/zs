@@ -5,7 +5,7 @@ import { Database } from '../../../database/database.types';
 import { sql } from '../../../database/kysely';
 import { toMoney } from '../helpers/reports-math.helper';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { ReportRangeQueryDto } from '../dto/report-query.dto';
@@ -368,10 +368,11 @@ export class ReportsSummaryService {
       .execute();
 
     const nowMs = Date.now();
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const items = rows.map((r: any) => {
       const stock = Number(r.stock_qty || 0);
       const cost = Number(r.cost_price || 0);
-      const tiedCapital = Number((stock * cost).toFixed(2));
+      const tiedCapital = roundMoney(stock * cost, digits);
       const lastSale = r.last_sale_date ? new Date(r.last_sale_date) : null;
       const daysWithoutSale = lastSale
         ? Math.max(0, Math.floor((nowMs - lastSale.getTime()) / (1000 * 60 * 60 * 24)))
@@ -406,8 +407,8 @@ export class ReportsSummaryService {
       summary: {
         totalDeadItems: totalItems,
         totalDeadStockQty: Number(Number((summaryAgg as any)?.total_qty || 0).toFixed(2)),
-        totalTiedCapital: Number(Number((summaryAgg as any)?.total_tied_capital || 0).toFixed(2)),
-        totalRetailValue: Number(Number((summaryAgg as any)?.total_retail_value || 0).toFixed(2)),
+        totalTiedCapital: roundMoney(Number((summaryAgg as any)?.total_tied_capital || 0), digits),
+        totalRetailValue: roundMoney(Number((summaryAgg as any)?.total_retail_value || 0), digits),
         daysThreshold: days,
       }
     }, auth);
@@ -415,6 +416,7 @@ export class ReportsSummaryService {
 
   async customerRfmReport(query: ReportRangeQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
     const { search, searchPattern } = buildReportListState(query, 50, { includeRange: false });
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, this.tenantId(auth)));
 
     const twoYearsAgo = new Date();
     twoYearsAgo.setUTCFullYear(twoYearsAgo.getUTCFullYear() - 2);
@@ -446,7 +448,7 @@ export class ReportsSummaryService {
     }
 
     const rows = await baseQuery.limit(500).execute();
-    return this.withScope(buildCustomerRfmPayload(rows as any, (query as any).segment), auth);
+    return this.withScope(buildCustomerRfmPayload(rows as any, (query as any).segment, digits), auth);
   }
 
   private async partnerBalances(type: 'customer' | 'supplier', query: ReportRangeQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {

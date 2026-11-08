@@ -1,3 +1,5 @@
+import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+
 type PurchaseRow = Record<string, unknown>;
 
 export function mapPurchaseRows(
@@ -97,7 +99,7 @@ export function paginatePurchases(rows: PurchaseRow[], query: Record<string, unk
   };
 }
 
-export function summarizePurchases(rows: PurchaseRow[]) {
+export function summarizePurchases(rows: PurchaseRow[], digits: MoneyDigits = 2) {
   const topBySupplier = new Map<string, { name: string; total: number; count: number }>();
   for (const row of rows) {
     const key = String(row.supplierId || row.supplierName || 'unknown');
@@ -109,8 +111,8 @@ export function summarizePurchases(rows: PurchaseRow[]) {
 
   return {
     totalItems: rows.length,
-    totalAmount: Number(rows.reduce((sum, row) => sum + Number(row.total || 0), 0).toFixed(2)),
-    creditTotal: Number(rows.filter((row) => row.paymentType === 'credit').reduce((sum, row) => sum + Number(row.total || 0), 0).toFixed(2)),
+    totalAmount: roundMoney(rows.reduce((sum, row) => sum + Number(row.total || 0), 0), digits),
+    creditTotal: roundMoney(rows.filter((row) => row.paymentType === 'credit').reduce((sum, row) => sum + Number(row.total || 0), 0), digits),
     cancelledCount: rows.filter((row) => row.status === 'cancelled').length,
     posted: rows.filter((row) => row.status === 'posted').length,
     draft: rows.filter((row) => row.status !== 'posted').length,

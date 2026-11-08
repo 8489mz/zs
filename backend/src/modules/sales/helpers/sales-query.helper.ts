@@ -1,3 +1,5 @@
+import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+
 type SaleRow = Record<string, unknown>;
 
 type SaleListSummary = {
@@ -192,7 +194,7 @@ export function paginateRows(rows: SaleRow[], query: Record<string, unknown>, de
   };
 }
 
-export function summarizeSales(rows: SaleRow[]): SaleListSummary {
+export function summarizeSales(rows: SaleRow[], digits: MoneyDigits = 2): SaleListSummary {
   const today = new Date().toISOString().slice(0, 10);
   const todayRows = rows.filter((row) => String(row.date || '').slice(0, 10) === today);
   const cashiers = [...new Set(
@@ -211,11 +213,11 @@ export function summarizeSales(rows: SaleRow[]): SaleListSummary {
 
   return {
     totalItems: rows.length,
-    totalSales: Number(rows.reduce((sum, row) => sum + Number(row.total || 0), 0).toFixed(2)),
+    totalSales: roundMoney(rows.reduce((sum, row) => sum + Number(row.total || 0), 0), digits),
     todaySalesCount: todayRows.length,
-    todaySalesTotal: Number(todayRows.reduce((sum, row) => sum + Number(row.total || 0), 0).toFixed(2)),
-    cashTotal: Number(rows.filter((row) => row.paymentType === 'cash').reduce((sum, row) => sum + Number(row.total || 0), 0).toFixed(2)),
-    creditTotal: Number(rows.filter((row) => row.paymentType === 'credit').reduce((sum, row) => sum + Number(row.total || 0), 0).toFixed(2)),
+    todaySalesTotal: roundMoney(todayRows.reduce((sum, row) => sum + Number(row.total || 0), 0), digits),
+    cashTotal: roundMoney(rows.filter((row) => row.paymentType === 'cash').reduce((sum, row) => sum + Number(row.total || 0), 0), digits),
+    creditTotal: roundMoney(rows.filter((row) => row.paymentType === 'credit').reduce((sum, row) => sum + Number(row.total || 0), 0), digits),
     cancelledCount: rows.filter((row) => row.status === 'cancelled').length,
     cashiers,
     topCustomers: [...topCustomersMap.values()].sort((a, b) => b.total - a.total).slice(0, 5),

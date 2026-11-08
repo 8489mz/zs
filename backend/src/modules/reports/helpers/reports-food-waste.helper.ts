@@ -4,6 +4,8 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { ReportRangeQueryDto } from '../dto/report-query.dto';
 import { parseRange } from './reports-range.helper';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
 export async function buildFoodCostVarianceReport(
   db: Kysely<Database>,
@@ -11,6 +13,7 @@ export async function buildFoodCostVarianceReport(
   auth: AuthContext,
 ): Promise<Record<string, unknown>> {
   const scope = requireTenantScope(auth);
+  const digits = currencyMoneyDigits(await tenantBaseCurrency(db, scope.tenantId));
   const range = parseRange(query);
   const fromDate = new Date(range.from);
   const toDate = new Date(range.to);
@@ -191,20 +194,20 @@ export async function buildFoodCostVarianceReport(
     const prod = productMap.get(pId);
     const costPrice = Number(prod?.cost_price || 0);
     const theoreticalQty = Number((theoreticalMap.get(pId) || 0).toFixed(3));
-    const theoreticalCost = Number((theoreticalQty * costPrice).toFixed(2));
+    const theoreticalCost = roundMoney(theoreticalQty * costPrice, digits);
 
     const waste = wasteMap.get(pId) || { qty: 0, cost: 0 };
     const wasteQty = Number(waste.qty.toFixed(3));
-    const wasteCost = Number(waste.cost.toFixed(2));
+    const wasteCost = roundMoney(waste.cost, digits);
 
     const recordedActual = actualStockMap.get(pId);
     const actualQty = recordedActual !== undefined
       ? Number(recordedActual.toFixed(3))
       : Number((theoreticalQty + wasteQty).toFixed(3));
-    const actualCost = Number((actualQty * costPrice).toFixed(2));
+    const actualCost = roundMoney(actualQty * costPrice, digits);
 
     const varianceQty = Number((actualQty - (theoreticalQty + wasteQty)).toFixed(3));
-    const varianceCost = Number((varianceQty * costPrice).toFixed(2));
+    const varianceCost = roundMoney(varianceQty * costPrice, digits);
     const variancePct = theoreticalQty > 0
       ? Number(((varianceQty / theoreticalQty) * 100).toFixed(1))
       : (varianceQty > 0 ? 100 : 0);
@@ -249,10 +252,10 @@ export async function buildFoodCostVarianceReport(
   return {
     range,
     summary: {
-      totalTheoreticalCost: Number(sumTheoreticalCost.toFixed(2)),
-      totalActualCost: Number(sumActualCost.toFixed(2)),
-      totalWasteCost: Number(sumWasteCost.toFixed(2)),
-      totalVarianceCost: Number(sumVarianceCost.toFixed(2)),
+      totalTheoreticalCost: roundMoney(sumTheoreticalCost, digits),
+      totalActualCost: roundMoney(sumActualCost, digits),
+      totalWasteCost: roundMoney(sumWasteCost, digits),
+      totalVarianceCost: roundMoney(sumVarianceCost, digits),
       overallVariancePct,
     },
     items: rows,
