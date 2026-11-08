@@ -1,4 +1,4 @@
-import { nextAccountingDay } from '../engines/accounting-date.engine';
+import { nextAccountingDay, resolveBusinessDateKey } from '../engines/accounting-date.engine';
 import { tenantBaseCurrency } from '../accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 import { classifyCashFlow } from '../engines/cash-flow-classification.engine';
@@ -55,8 +55,9 @@ export class CashFlowService {
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId ?? ''));
 
     // UTC calendar bounds include every database microsecond of the last day.
+    // The default "today" is the tenant-local business day, never the UTC day.
+    const today = await resolveBusinessDateKey(this.db, tenantId ?? '', new Date());
     const parseReportBoundary = (input?: string, isEnd = false): { date: Date; dateStr: string } => {
-      const today = new Date().toISOString().slice(0, 10);
       const dateStr = input ? input.slice(0, 10) : isEnd ? today : `${today.slice(0, 4)}-01-01`;
       let end: Date;
       try { end = nextAccountingDay(dateStr); }

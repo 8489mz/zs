@@ -7,7 +7,7 @@ import { CloseFiscalPeriodDto, ReopenFiscalPeriodDto, FiscalPeriodResponse } fro
 import { buildMonthlyFiscalPeriods } from '../engines/fiscal-period-generation.engine';
 import { AccountingPostingService } from '../accounting-posting.service';
 import { lockAccountingPeriod } from '../accounting-period-lock';
-import { nextAccountingDay } from '../engines/accounting-date.engine';
+import { nextAccountingDay, resolveBusinessDateKey } from '../engines/accounting-date.engine';
 import { assertAccountingCloseReady } from '../accounting-close-readiness';
 import { tenantBaseCurrency } from '../accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
@@ -144,7 +144,7 @@ export class FiscalYearService {
     };
   }> {
     const tenantId = String(auth.tenantId || '');
-    const today = new Date().toISOString().substring(0, 10);
+    const today = await resolveBusinessDateKey(this.db, tenantId, new Date());
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
 
     const years = await this.db
@@ -557,7 +557,7 @@ export class FiscalYearService {
 
     const year = await this.db.selectFrom('accounting_fiscal_years').select('end_date').where('tenant_id', '=', tenantId).where('id', '=', id).executeTakeFirstOrThrow();
     const recognitionEnd = this.formatDate(year.end_date);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = await resolveBusinessDateKey(this.db, tenantId, new Date());
     await this.accountingPosting.recognizeInstallmentInterest(this.db, tenantId, recognitionEnd < today ? recognitionEnd : today, userId);
 
     // 1. Get preview and validation
@@ -918,7 +918,8 @@ export class FiscalYearService {
         .executeTakeFirst();
       if (later) throw new BadRequestException('يجب إعادة فتح السنوات المالية بالترتيب الزمني العكسي.');
 
-      const reopenLog = `\n[أعيد فتحها بتاريخ ${new Date().toISOString().substring(0, 10)} بواسطة مستخدم #${auth.userId} - السبب: ${reason}]`;
+      const reopenDay = await resolveBusinessDateKey(trx, tenantId, new Date());
+      const reopenLog = `\n[أعيد فتحها بتاريخ ${reopenDay} بواسطة مستخدم #${auth.userId} - السبب: ${reason}]`;
       await trx.updateTable('accounting_fiscal_years')
         .set({
           status: 'open', closing_entry_id: null, closed_at: null, closed_by: null,
@@ -1169,7 +1170,8 @@ export class FiscalYearService {
         );
       }
 
-      await this.accountingPosting.recognizeInstallmentInterest(trx, tenantId, endDateStr < new Date().toISOString().slice(0, 10) ? endDateStr : new Date().toISOString().slice(0, 10), auth.userId || null);
+      const today = await resolveBusinessDateKey(trx, tenantId, new Date());
+      await this.accountingPosting.recognizeInstallmentInterest(trx, tenantId, endDateStr < today ? endDateStr : today, auth.userId || null);
       await assertAccountingCloseReady(trx, tenantId, startDateStr, endDateStr);
 
       // 2. التحقق من القيود المعلقة (Draft entries)
@@ -1320,7 +1322,8 @@ export class FiscalYearService {
         );
       }
 
-      const reopenNote = `\n[أعيد فتحها بتاريخ ${new Date().toISOString().slice(0, 10)} بواسطة مستخدم #${auth.userId} - السبب: ${reason}]`;
+      const reopenDay = await resolveBusinessDateKey(trx, tenantId, new Date());
+      const reopenNote = `\n[أعيد فتحها بتاريخ ${reopenDay} بواسطة مستخدم #${auth.userId} - السبب: ${reason}]`;
       await trx
         .updateTable('accounting_fiscal_periods')
         .set({

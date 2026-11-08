@@ -19,6 +19,7 @@ import { assertAutomatedJournalPeriodOpen, lockAccountingPeriod } from './accoun
 import { assertTaxPeriodOpen } from './accounting-tax-lock';
 import { randomUUID } from 'node:crypto';
 import { tenantBaseCurrency } from './accounting-currency';
+import { resolveBusinessDateKey } from './engines/accounting-date.engine';
 import { currencyMoneyDigits, roundMoney, toMinorUnits, fromMinorUnits, MoneyDigits } from './engines/money-minor-units.engine';
 import { scaledBomOverhead } from '../manufacturing/engines/manufacturing-overhead.engine';
 import { partitionPurchaseLineTotals } from '../purchases/helpers/purchases-write.helper';
@@ -801,7 +802,9 @@ export class AccountingPostingService {
         .where('id', '=', params.sourceId)
         .forUpdate()
         .executeTakeFirst();
-      const postingDate = params.entryDate.toISOString().slice(0, 10);
+      // The entry instant keys by the tenant-local business day, never the UTC
+      // day: a 00:30 Cairo closing entry is the year-end day, not the previous UTC day.
+      const postingDate = await resolveBusinessDateKey(queryable, params.tenantId, params.entryDate);
       const endDate = fiscalYear?.end_date instanceof Date
         ? fiscalYear.end_date.toISOString().slice(0, 10)
         : String(fiscalYear?.end_date || '').slice(0, 10);
@@ -7083,7 +7086,9 @@ export class AccountingPostingService {
     const installments = await queryable.selectFrom('customer_installments').select(['id', 'amount', 'due_date'])
       .where('tenant_id', '=', scope.tenantId).where('plan_id', '=', planId).orderBy('installment_number').execute();
     const allocations = allocateInstallmentInterest(Number(plan.financed_amount), installments.map(item => Number(item.amount)), interest, bookDigits);
-    const createdDay = new Date(plan.created_at).toISOString().slice(0, 10);
+    // The plan-creation floor is the tenant-local business day of the creation
+    // instant, not its UTC day.
+    const createdDay = await resolveBusinessDateKey(queryable, scope.tenantId, new Date(plan.created_at));
     for (const [index, item] of installments.entries()) {
       const amount = allocations[index];
       if (!amount) continue;

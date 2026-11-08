@@ -3,6 +3,7 @@ import { Kysely, sql } from '../../../database/kysely';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { tenantBaseCurrency } from '../accounting-currency';
+import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
@@ -107,6 +108,9 @@ export class PaymentAllocationService {
     this.assertAccountingAccess(auth);
     const scope = requireTenantScope(auth);
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
+    // Row dates are the tenant-local business day of each recorded instant,
+    // never its UTC day (same formatter the business-date gateway uses).
+    const timeZone = await getTenantTimezone(this.db, scope.tenantId);
 
     if (partnerType === 'customer') {
       const sales = await this.db
@@ -136,7 +140,7 @@ export class PaymentAllocationService {
             total,
             paidAmount: paid,
             remainingAmount: remaining,
-            date: s.created_at ? new Date(s.created_at).toISOString().slice(0, 10) : '',
+            date: s.created_at ? todayTenantDate(timeZone, new Date(s.created_at)) : '',
             status: s.status,
           };
         })
@@ -175,7 +179,7 @@ export class PaymentAllocationService {
             total,
             paidAmount: roundMoney(paid + (scheduledPaid.get(Number(p.id)) || 0), digits),
             remainingAmount: remaining,
-            date: p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : '',
+            date: p.created_at ? todayTenantDate(timeZone, new Date(p.created_at)) : '',
             status: p.status,
           };
         })
@@ -187,6 +191,9 @@ export class PaymentAllocationService {
     this.assertAccountingAccess(auth);
     const scope = requireTenantScope(auth);
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
+    // Row dates are the tenant-local business day of each recorded instant,
+    // never its UTC day (same formatter the business-date gateway uses).
+    const timeZone = await getTenantTimezone(this.db, scope.tenantId);
 
     if (partnerType === 'customer') {
       const payments = await this.db
@@ -221,7 +228,7 @@ export class PaymentAllocationService {
             amount,
             allocatedAmount: allocated,
             unallocatedAmount: unallocated,
-            date: p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : '',
+            date: p.created_at ? todayTenantDate(timeZone, new Date(p.created_at)) : '',
             note: p.note || '',
           };
         })
@@ -260,7 +267,7 @@ export class PaymentAllocationService {
             amount,
             allocatedAmount: allocated,
             unallocatedAmount: unallocated,
-            date: p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : '',
+            date: p.created_at ? todayTenantDate(timeZone, new Date(p.created_at)) : '',
             note: p.note || '',
           };
         })

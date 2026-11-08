@@ -1,4 +1,4 @@
-import { nextAccountingDay } from '../engines/accounting-date.engine';
+import { nextAccountingDay, resolveBusinessDateKey } from '../engines/accounting-date.engine';
 import { tenantBaseCurrency } from '../accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
@@ -89,7 +89,7 @@ export class AgedDebtsService {
     params: { asOfDate?: string; branchId?: number; page?: number; pageSize?: number; search?: string; risk?: string },
     kind: 'receivables' | 'payables',
   ): Promise<AgedDebtsSummary> {
-    const asOfDay = params.asOfDate ? params.asOfDate.slice(0, 10) : new Date().toISOString().slice(0, 10);
+    const asOfDay = params.asOfDate ? params.asOfDate.slice(0, 10) : await resolveBusinessDateKey(this.db, auth.tenantId ?? '', new Date());
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, auth.tenantId ?? ''));
     // Dust threshold: a balance that rounds to zero at book digits is
     // dust. At 2dp this is exactly the old 0.01; at 3dp it is 0.001, so

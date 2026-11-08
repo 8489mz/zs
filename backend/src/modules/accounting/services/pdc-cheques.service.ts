@@ -1,4 +1,5 @@
 import { tenantBaseCurrency } from '../accounting-currency';
+import { resolveBusinessDateKey } from '../engines/accounting-date.engine';
 import { assertPdcTransition, pdcBookAmount } from '../engines/pdc-transition.engine';
 import { pdcCurrencySnapshot } from '../pdc-currency';
 import { currencyMoneyDigits, roundMoney, toMinorUnits, type MoneyDigits } from '../engines/money-minor-units.engine';
@@ -249,8 +250,11 @@ export class PdcChequesService {
    */
   async getStats(authContext: AuthContext): Promise<PdcChequesStats> {
     const tenantId = String(authContext.tenantId || '');
-    const today = new Date().toISOString().substring(0, 10);
-    const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
+    const today = await resolveBusinessDateKey(this.db, tenantId, new Date());
+    // +7 calendar days from the tenant-local day (calendar math on a day string, not an instant cut).
+    const in7DaysDate = new Date(`${today}T00:00:00.000Z`);
+    in7DaysDate.setUTCDate(in7DaysDate.getUTCDate() + 7);
+    const in7Days = `${in7DaysDate.getUTCFullYear()}-${String(in7DaysDate.getUTCMonth() + 1).padStart(2, '0')}-${String(in7DaysDate.getUTCDate()).padStart(2, '0')}`;
 
     const rows = await (this.db as any)
       .selectFrom('accounting_cheques')
@@ -572,7 +576,7 @@ export class PdcChequesService {
       }
       const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
       const bookAmount = pdcBookAmount(existing, bookDigits);
-      const today = new Date().toISOString().substring(0, 10);
+      const today = await resolveBusinessDateKey(trx, tenantId, new Date());
       const actionDate = actionDto.actionDate || today;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(actionDate) || !Number.isFinite(new Date(actionDate).getTime()) || new Date(actionDate).toISOString().slice(0, 10) !== actionDate) throw new BadRequestException('تاريخ إجراء الشيك غير صالح.');
       if (actionDate < this.formatDate(existing.last_action_date || existing.issue_date)) throw new BadRequestException('تاريخ الإجراء يسبق آخر حركة مثبتة للشيك.');

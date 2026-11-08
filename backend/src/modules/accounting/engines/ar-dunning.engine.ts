@@ -15,6 +15,7 @@
  * wired to tenantBaseCurrency (D6c wiring follow-up, U3).
  */
 import { roundMoney, type MoneyDigits } from './money-minor-units.engine';
+import { todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 
 export interface DunningLevel {
   id: string;
@@ -153,7 +154,12 @@ export function allocateCustomerOverdueFifo(
       overdueInvoices.push({
         id: inv.id,
         invoiceNumber: inv.invoiceNumber,
-        createdAt: new Date(inv.createdAt).toISOString().slice(0, 10),
+        // Display day of the creation instant in the system business timezone
+        // (env BUSINESS_TIMEZONE, else Africa/Cairo -- the same fallback the
+        // tenant gateway uses when no tenant is known). This pure engine has
+        // no tenant context, so it cannot resolve a per-tenant zone; the UTC
+        // day was wrong for every tenant, including the default one.
+        createdAt: todayTenantDate(process.env.BUSINESS_TIMEZONE || 'Africa/Cairo', new Date(inv.createdAt)),
         dueDate: effectiveDueDate.toISOString().slice(0, 10),
         total: roundMoney(inv.total, moneyDigits),
         paidAmount: roundMoney(inv.paidAmount, moneyDigits),

@@ -85,6 +85,7 @@ import type { Transaction } from 'kysely';
 import { Database } from '../../../database/database.types';
 import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import type { MoneyDigits } from '../engines/money-minor-units.engine';
+import { resolveBusinessDateKey } from '../engines/accounting-date.engine';
 import {
   classifySaleEditCandidate,
   discoverSaleEditDiscrepancies,
@@ -211,6 +212,10 @@ function buildReport(
 function validateOptions(
   options: SaleEditRepairOptions,
   auth: AuthContext,
+  // Tenant-local business day for the default run id, resolved by the caller
+  // (which owns the db handle). Falls back to the UTC day only when no caller
+  // resolves it -- validateOptions itself is sync and owns no db handle.
+  todayKey?: string,
 ): { tenantId: string; bookDigits: MoneyDigits; mode: SaleEditRepairMode; runId: string } {
   const tenantId = options.tenantId;
   if (typeof tenantId !== 'string' || tenantId.trim() === '') {
@@ -233,7 +238,7 @@ function validateOptions(
   const runId =
     options.runId && options.runId.trim() !== ''
       ? options.runId
-      : `sale-edit-remediation-${new Date().toISOString().slice(0, 10)}`;
+      : `sale-edit-remediation-${todayKey ?? new Date().toISOString().slice(0, 10)}`;
   return { tenantId, bookDigits: options.bookDigits, mode, runId };
 }
 
@@ -492,7 +497,12 @@ export async function repairSaleEditCandidates(
   candidates: SaleEditCandidate[],
   options: SaleEditRepairOptions,
 ): Promise<SaleEditRepairReport> {
-  const { tenantId, bookDigits, mode, runId } = validateOptions(options, auth);
+  // The default run id carries the tenant-local business day, never the UTC
+  // day. The lookup runs before validation only because validation owns the
+  // tenantId check; a missing/invalid tenant resolves to the gateway fallback
+  // here and validation still throws right after, with no side effect.
+  const todayKey = await resolveBusinessDateKey(db, typeof options.tenantId === 'string' ? options.tenantId : '', new Date());
+  const { tenantId, bookDigits, mode, runId } = validateOptions(options, auth, todayKey);
 
   const dbAny = db as unknown as {
     isTransaction?: boolean;

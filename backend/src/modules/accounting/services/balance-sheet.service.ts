@@ -4,6 +4,7 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { tenantBaseCurrency } from '../accounting-currency';
+import { resolveBusinessDateKey } from '../engines/accounting-date.engine';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 
 export interface BalanceSheetAccountRow {
@@ -77,7 +78,13 @@ export class BalanceSheetService {
     // amount below is rounded at the tenant's minor-unit precision.
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, String(tenantId)));
     const unit = 10 ** -digits;
-    const targetDate = params.asOfDate ? new Date(params.asOfDate) : new Date();
+    // The as-of day is the caller's day, or the tenant-local business day when
+    // no date is given -- never the UTC day. The query bound below still ends
+    // the day at host-local 23:59:59, as before; only the day key changes.
+    const asOfDay = params.asOfDate
+      ? String(params.asOfDate).slice(0, 10)
+      : await resolveBusinessDateKey(this.db, String(tenantId), new Date());
+    const targetDate = new Date(`${asOfDay}T00:00:00.000Z`);
     targetDate.setHours(23, 59, 59, 999);
 
     const hasCompare = !!params.compareDate;
@@ -249,8 +256,8 @@ export class BalanceSheetService {
     const isBalanced = Math.abs(difference) <= 5 * unit;
 
     return {
-      asOfDate: targetDate.toISOString().slice(0, 10),
-      compareDate: hasCompare ? compareDate?.toISOString().slice(0, 10) : undefined,
+      asOfDate: asOfDay,
+      compareDate: hasCompare ? String(params.compareDate).slice(0, 10) : undefined,
       isBalanced,
       difference,
       assets: {

@@ -291,10 +291,11 @@ export class AccountingService {
       : sql<boolean>`tenant_id = ${scope.tenantId}`;
   }
 
-  private normalizeDateInput(value?: string | null): string {
+  private async normalizeDateInput(value: string | null | undefined, db: Kysely<Database>, tenantId: string): Promise<string> {
     const dateText = String(value || '').slice(0, 10);
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateText)) return dateText;
-    return new Date().toISOString().slice(0, 10);
+    // No usable start date: default to the tenant-local business day, never the UTC day.
+    return resolveBusinessDateKey(db, tenantId, new Date());
   }
 
   private openingAmount(value: unknown, digits: MoneyDigits): number {
@@ -423,7 +424,7 @@ export class AccountingService {
     warnings: string[];
   }> {
     const existing = await this.getExistingOpeningBalanceEntry(auth, db);
-    const systemStartDate = this.normalizeDateInput(input.system_start_date);
+    const systemStartDate = await this.normalizeDateInput(input.system_start_date, db, String(auth.tenantId ?? ''));
     const cashOpening = this.openingAmount(input.cash_opening, digits);
     const bankOpening = this.openingAmount(input.bank_opening, digits);
     const operational = await this.calculateOpeningOperationalTotals(auth, digits, db);
