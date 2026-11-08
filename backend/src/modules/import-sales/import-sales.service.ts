@@ -8506,6 +8506,48 @@ export class ImportSalesService {
     const pendingDeposits = deposits.filter((d) => d.refund_status === 'pending');
     const totalPendingDepositEgp = pendingDeposits.reduce((acc, d) => acc + Number(d.deposit_amount_egp), 0);
 
+    // I2-D6: the lots row must NOT divide by quantity again.
+    // import_shipment_items.landed_cost_egp stores the PER-UNIT
+    // landed cost (the landed-cost engine's landedCostEgp =
+    // totalItemLandedCostEgp / effectiveQty; the receipt lots and
+    // every other consumer read it as the unit cost). The modal
+    // used to divide it by the received quantity a second time
+    // and show the stored value as the line total, so the trial
+    // container read 9.00 / 90.00 instead of 90.00 / 900.00.
+    // The autopsy therefore carries both figures explicitly: the
+    // stored per-unit value, and the line total on the RECEIVED
+    // quantity (unit x received — the landed value of the goods
+    // that physically arrived). The stored value is untouched.
+    const autopsyItems = items.map((item) => {
+      const receivedQty = Number(item.received_quantity ?? item.quantity);
+      const unitLandedCostEgp = Number(item.landed_cost_egp || 0);
+      return {
+        ...item,
+        unit_landed_cost_egp: unitLandedCostEgp,
+        total_landed_cost_egp: roundMoney(unitLandedCostEgp * receivedQty, currencyMoneyDigits('EGP')),
+      };
+    });
+
+    // I2-D6: the P&L status reads the container's ACTUAL status.
+    // Real container_status values (migration 2040000000238):
+    // on_water, port_arrived, customs_cleared,
+    // warehouse_received, empty_returned. The modal used to show
+    // "قيد الاستلام والتفريغ" for anything not empty_returned —
+    // wrong for a container already received in the warehouse.
+    // 'arrived' is the legacy NULL default kept by the payload
+    // below; anything unrecognised gets an honest fallback, never
+    // a wrong specific state.
+    const containerStatusLabels: Record<string, string> = {
+      on_water: 'في البحر',
+      port_arrived: 'وصلت إلى الميناء',
+      customs_cleared: 'تم التخليص الجمركي',
+      warehouse_received: 'تم الوصول للمخزن',
+      empty_returned: 'تم تسليم الفارغ والمطابقة',
+      arrived: 'تم الوصول',
+    };
+    const containerStatus = shipment.container_status || 'arrived';
+    const containerStatusLabel = containerStatusLabels[containerStatus] || 'حالة غير معروفة';
+
     return {
       basis: {
         exchangeRateSource,
@@ -8526,7 +8568,8 @@ export class ImportSalesService {
         freightType: shipment.freight_type,
         portOfLoading: shipment.port_of_loading,
         portOfDischarge: shipment.port_of_discharge,
-        containerStatus: shipment.container_status || 'arrived',
+        containerStatus,
+        containerStatusLabel,
         arrivalDate: shipment.arrival_date,
         unstuffingDate: shipment.unstuffing_date,
         emptyReturnedDate: shipment.empty_returned_date,
@@ -8592,7 +8635,7 @@ export class ImportSalesService {
         brokerCapitalisedInLandedEgp,
         brokerExpensedEgp,
       },
-      items,
+      items: autopsyItems,
       lots,
       preorders,
     };

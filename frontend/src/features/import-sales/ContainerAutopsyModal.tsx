@@ -42,11 +42,13 @@ export function ContainerAutopsyModal({ isOpen, onClose, shipmentId }: Container
         item.quantity,
         item.received_quantity ?? item.quantity,
         Number(item.factory_unit_price_usd || 0),
-        // INV-FE2-FRONTEND-BOOK-DIGITS: unit/total landed cost are EGP
-        // money exported to a file — they round at EGP digits (2), the
-        // denomination of the amount, not at a hardcoded 2dp.
-        roundMoneyValue(Number(item.landed_cost_egp) / Number((item.received_quantity ?? item.quantity) || 1), currencyMoneyDigits('EGP')),
-        roundMoneyValue(Number(item.landed_cost_egp || 0), currencyMoneyDigits('EGP')),
+        // I2-D6: landed_cost_egp stores the PER-UNIT landed cost
+        // (see getContainerAutopsySheet) — the unit is the stored
+        // value itself, and the line total is unit x received qty.
+        // Dividing the stored value by qty again read 9.00/90.00
+        // for the trial container instead of 90.00/900.00.
+        roundMoneyValue(Number(item.unit_landed_cost_egp ?? item.landed_cost_egp), currencyMoneyDigits('EGP')),
+        roundMoneyValue(Number(item.total_landed_cost_egp ?? Number(item.landed_cost_egp || 0) * Number((item.received_quantity ?? item.quantity) || 0)), currencyMoneyDigits('EGP')),
       ]);
 
       rows.push(['---', '---', '---', '---', '---', '---']);
@@ -220,7 +222,7 @@ export function ContainerAutopsyModal({ isOpen, onClose, shipmentId }: Container
                 <div>
                   <span style={{ color: '#64748b' }}>حالة الحاوية: </span>
                   <span style={{ fontWeight: 700, color: autopsy.operational.containerStatus === 'empty_returned' ? '#15803d' : '#d97706' }}>
-                    {autopsy.operational.containerStatus === 'empty_returned' ? 'تم تسليم الفارغ والمطابقة' : 'قيد الاستلام والتفريغ'}
+                    {autopsy.operational.containerStatusLabel || 'حالة غير معروفة'}
                   </span>
                 </div>
               </div>
@@ -294,9 +296,9 @@ export function ContainerAutopsyModal({ isOpen, onClose, shipmentId }: Container
                     </td>
                     <td style={{ padding: '8px 10px' }}>${Number(item.factory_unit_price_usd).toFixed(2)}</td>
                     <td style={{ padding: '8px 10px', fontWeight: 700, color: '#170e5e' }}>
-                      {formatCurrency(Number(item.landed_cost_egp) / Number((item.received_quantity ?? item.quantity) || 1))}
+                      {formatCurrency(Number(item.unit_landed_cost_egp ?? item.landed_cost_egp))}
                     </td>
-                    <td style={{ padding: '8px 10px', fontWeight: 700, color: '#0f172a' }}>{formatCurrency(Number(item.landed_cost_egp))}</td>
+                    <td style={{ padding: '8px 10px', fontWeight: 700, color: '#0f172a' }}>{formatCurrency(Number(item.total_landed_cost_egp ?? Number(item.landed_cost_egp || 0) * Number(item.received_quantity ?? item.quantity || 0)))}</td>
                   </tr>
                 ))}
               </tbody>

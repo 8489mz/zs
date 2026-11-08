@@ -191,7 +191,12 @@ const checks = [
   [`${F}purchases/components/MarginProtectionModal.tsx`, 'roundMoneyValue(item.newCost / (1 - (targetMargin / 100)), bookDigits)', 'Number((item.newCost / (1 - (targetMargin / 100))).toFixed(2))'],
   [`${F}inventory/components/sections/stockCountMonitor.helpers.ts`, 'roundMoneyValue(expectedValue, digits)', 'expectedValue: Number(expectedValue.toFixed(2)),'],
   [`${F}inventory/components/sections/StockCountMonitorCard.tsx`, 'summarizeSessionVariance(selectedSession, bookDigits, products)', 'summarizeSessionVariance(selectedSession, products)'],
-  [`${F}import-sales/ContainerAutopsyModal.tsx`, "roundMoneyValue(Number(item.landed_cost_egp) / Number((item.received_quantity ?? item.quantity) || 1), currencyMoneyDigits('EGP'))", 'Number((Number(item.landed_cost_egp) / Number((item.received_quantity ?? item.quantity) || 1)).toFixed(2))'],
+  // I2-D6: the autopsy export unit is the stored PER-UNIT landed
+  // cost itself (landed_cost_egp is per-unit; the old expression
+  // divided it by qty a second time and read 9.00 for a 90.00
+  // unit). The pin still requires routing through the helper and
+  // still forbids the old hardcoded-toFixed(2) snippet.
+  [`${F}import-sales/ContainerAutopsyModal.tsx`, "roundMoneyValue(Number(item.unit_landed_cost_egp ?? item.landed_cost_egp), currencyMoneyDigits('EGP'))", 'Number((Number(item.landed_cost_egp) / Number((item.received_quantity ?? item.quantity) || 1)).toFixed(2))'],
   [`${F}import-sales/SupplierCredit.tsx`, "roundMoneyValue(remaining * rate, currencyMoneyDigits('EGP'))", 'setAmountEgp(String(Number((remaining * rate).toFixed(2))));'],
   [`${F}import-sales/components/ChinaProformasTab.tsx`, 'roundMoneyValue(computedLinesTotal, currencyMoneyDigits(currency))', 'Number(computedLinesTotal.toFixed(2))'],
   [`${F}import-sales/components/ChinaQuotationsTab.tsx`, "currencyMoneyDigits('EGP')", 'const estimatedUnitLandedCostEgp = Number('],
