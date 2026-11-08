@@ -3,6 +3,7 @@ import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { scaledBomOverhead } from '../../manufacturing/engines/manufacturing-overhead.engine';
 import { assertBusinessAccountingDate } from '../../accounting/accounting-boundaries';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Kysely, sql, type Transaction } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
@@ -861,7 +862,7 @@ export class SalesWriteService {
       .executeTakeFirst();
     if (!drug && !linkedBatch) return;
 
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = await resolveBusinessDateKey(trx, scope.tenantId, new Date());
     const currentMonthIso = todayIso.slice(0, 7);
     for (const allocation of allocations) {
       let remaining = Number(allocation.qty.toFixed(3));
@@ -942,7 +943,7 @@ export class SalesWriteService {
     if (items.some((item) => drugProducts.has(Number(item.product_id)) && !tracked.has(Number(item.id)))) {
       throw new AppError('فاتورة دوائية قديمة بلا ربط بالتشغيلات تحتاج تسوية قبل التعديل أو الإلغاء', 'PHARMACY_BATCH_RECONCILIATION_REQUIRED', 422);
     }
-    const today = new Date().toISOString().slice(0, 10);
+    const today = await resolveBusinessDateKey(trx, scope.tenantId, new Date());
     for (const row of rows) {
       const batch = await trx.selectFrom('pharmacy_batches').select(['id', 'quantity', 'expiry_date'])
         .where('tenant_id', '=', scope.tenantId).where('id', '=', Number(row.pharmacy_batch_id))

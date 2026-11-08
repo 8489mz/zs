@@ -12,6 +12,7 @@ import { applyStockDelta, lockStockProducts } from '../../../common/utils/locati
 import { allocateGrnAccrual, allocateGrniBillPortion } from '../engines/grni-settlement.engine';
 import { allocateLandedCosts } from '../engines/landed-cost-allocation.engine';
 import { valueStockReceipt } from '../../accounting/inventory-valuation';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, fromMinorUnits, roundMoney, toMinorUnits } from '../../accounting/engines/money-minor-units.engine';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
@@ -634,7 +635,7 @@ export class GoodsReceiptService {
             throw new UnprocessableEntityException('محضر استلام الدواء يتطلب رقم التشغيلة وتاريخ الصلاحية');
           }
           if (batchNumber) {
-            const today = new Date().toISOString().slice(0, 10);
+            const today = await resolveBusinessDateKey(trx, scope.tenantId, new Date());
             if (!/^\d{4}-\d{2}(?:-\d{2})?$/.test(expiryDate) ||
               (expiryDate.length === 7 ? expiryDate < today.slice(0, 7) : expiryDate < today)) {
               throw new UnprocessableEntityException('لا يمكن ترحيل تشغيلة منتهية أو بتاريخ صلاحية غير صالح');

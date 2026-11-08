@@ -66,6 +66,7 @@ async function main(): Promise<void> {
     await pg.exec(`
       CREATE TABLE import_projects (id text PRIMARY KEY, tenant_id text, project_no text, feasibility_data jsonb, budget_currency text, country_destination text, status text, feasibility_converted_at timestamptz, cash_flow_schedule text, initial_po_id bigint, updated_at timestamptz);
       CREATE TABLE import_proforma_invoices (id bigserial PRIMARY KEY, tenant_id text, project_id text, supplier_id bigint, pi_number text, pi_date date, currency text, total_amount_foreign numeric, incoterm text, delivery_port text, payment_terms text, exchange_rate_contract numeric, status text, advance_percentage numeric, balance_percentage numeric, items text);
+      CREATE TABLE settings (tenant_id text, key text, value text);
     `);
 
     for (const bad of [null, 0, -5]) {

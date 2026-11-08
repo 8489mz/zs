@@ -13,6 +13,7 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import {
   CreateCommercialSubscriptionDto,
@@ -314,6 +315,9 @@ export class CommercialSubscriptionService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
     const now = new Date();
+    // Billing-due is a business-day decision: compare the stored DATE
+    // against the tenant-local day, not the UTC day.
+    const todayKey = await resolveBusinessDateKey(this.db, tenantId, now);
 
     // 1. Fetch active subscriptions where next_billing_date <= today
     const dueSubscriptions = await (this.db as any)
@@ -321,7 +325,7 @@ export class CommercialSubscriptionService {
       .selectAll()
       .where('s.tenant_id', '=', tenantId)
       .where('s.status', '=', 'active')
-      .where('s.next_billing_date', '<=', now.toISOString().slice(0, 10))
+      .where('s.next_billing_date', '<=', todayKey)
       .execute();
 
     const generatedInvoices: string[] = [];

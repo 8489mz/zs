@@ -1,6 +1,7 @@
 import { Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 
 export type TrackedIncreaseBatchAllocation = {
   batchId?: number;
@@ -126,7 +127,7 @@ export async function recordTrackedStockIncrease(
     if (new Set(ids).size !== ids.length || new Set(newNames).size !== newNames.length) {
       throw new AppError('التشغيلة مكررة في التسوية', 'ADJUSTMENT_BATCH_DUPLICATE', 400);
     }
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = await resolveBusinessDateKey(trx, scope.tenantId, new Date());
     const currentMonthIso = todayIso.slice(0, 7);
     const stored = await trx.selectFrom('pharmacy_batches').selectAll()
       .where('tenant_id', '=', scope.tenantId).where('product_id', '=', productId)

@@ -1,4 +1,5 @@
 import { assertBusinessAccountingDate } from '../accounting/accounting-boundaries';
+import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
 import { Inject, Injectable } from '@nestjs/common';
 import { Kysely, sql } from '../../database/kysely';
 import { AuditService, AUDIT_EVENT_CODES } from '../../core/audit/audit.service';
@@ -440,7 +441,7 @@ export class VanSalesService {
       .executeTakeFirst();
     if (!drug && !anyBatch) return 0;
 
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = await resolveBusinessDateKey(trx, scope.tenantId, new Date());
     const currentMonthIso = todayIso.slice(0, 7);
     const batches = await trxAny
       .selectFrom('pharmacy_batches')
@@ -578,7 +579,7 @@ export class VanSalesService {
       .executeTakeFirst();
     if (!drug && !linkedBatch) return [];
 
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = await resolveBusinessDateKey(trx, scope.tenantId, new Date());
     const currentMonthIso = todayIso.slice(0, 7);
     let remaining = Number(Number(qty || 0).toFixed(3));
     const allocations: Array<{ pharmacyBatchId: number; quantity: number }> = [];
@@ -830,7 +831,10 @@ export class VanSalesService {
 
     // Query active promotional offers for van inventory items
     const prodIds = invRows.map((r: any) => Number(r.productId)).filter((id: number) => id > 0);
-    const todayIso = new Date().toISOString().slice(0, 10);
+    // Offer windows use the pinned shared clock (INV-OFFER-SELECTION-
+    // SHARED-POS-VAN): the same helper the sale writers use, so the
+    // inventory fetch agrees with the writer instead of sampling UTC.
+    const todayIso = todayLocalIsoDate();
     const activeOffers = prodIds.length > 0
       ? await this.anyDb
           .selectFrom('product_offers')
@@ -6050,7 +6054,7 @@ export class VanSalesService {
     for (const row of lastSales) {
       pricesMap[Number(row.productId)] = {
         lastPrice: Number(row.lastPrice || 0),
-        lastSaleDate: row.lastSaleDate ? new Date(row.lastSaleDate).toISOString().slice(0, 10) : '',
+        lastSaleDate: row.lastSaleDate ? await resolveBusinessDateKey(this.anyDb, tenantId, row.lastSaleDate) : '',
         lastDocNo: String(row.lastDocNo || ''),
       };
     }

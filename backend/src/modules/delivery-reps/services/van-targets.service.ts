@@ -10,6 +10,7 @@ import {
 import { getMonthlyOfficialHolidayDates } from './van-common.util';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 
@@ -692,7 +693,7 @@ export class VanTargetsService {
           account_id: accountId,
           title,
           amount: effectivePayout,
-          expense_date: new Date().toISOString().slice(0, 10),
+          expense_date: await resolveBusinessDateKey(trxAny, tenantId, new Date()),
           note,
           branch_id: branchId,
           location_id: locationId,

@@ -1,4 +1,5 @@
 import { revalueStockReturn, valueStockReceipt } from '../accounting/inventory-valuation';
+import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
 import { exchangeStoreCreditAmount, hasUnpaidExchangeBalance } from './engines/exchange-store-credit.engine';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney as roundBookMoney } from '../accounting/engines/money-minor-units.engine';
@@ -121,7 +122,7 @@ export class ReturnsService {
     }
     let skip = Number(previousReturnedBaseQty.toFixed(3));
     let remaining = Number(returnBaseQty.toFixed(3));
-    const today = new Date().toISOString().slice(0, 10);
+    const today = await resolveBusinessDateKey(trx, scope.tenantId, new Date());
     for (const allocation of allocations) {
       const sold = Number(allocation.quantity);
       const previouslyRestored = Math.min(sold, skip);
@@ -251,7 +252,7 @@ export class ReturnsService {
       .orderBy('rd.id', 'desc')
       .orderBy('ri.id', 'asc')
       .execute();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = await resolveBusinessDateKey(this.db, this.scope(auth).tenantId, new Date());
     const mapped = filterReturnRows(mapReturnRows(rows as Array<Record<string, unknown>>), query, today);
     const paged = paginateRows(mapped, query, { defaultSize: 20 });
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, this.scope(auth).tenantId));

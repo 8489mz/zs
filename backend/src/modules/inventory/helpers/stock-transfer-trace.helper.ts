@@ -1,6 +1,7 @@
 import { Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 
 type Scope = { tenantId: string; accountId: string };
 export type TransferBatchRequest = { batchId: number; qty: number };
@@ -97,7 +98,7 @@ export async function dispatchTrackedStock(
 
   const batchTracking: TransferBatchTrace[] = [];
   if (batchTracked) {
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = await resolveBusinessDateKey(trx, scope.tenantId, new Date());
     const currentMonthIso = todayIso.slice(0, 7);
     const candidates = await trx.selectFrom('pharmacy_batches').selectAll()
       .where('tenant_id', '=', scope.tenantId).where('product_id', '=', productId)

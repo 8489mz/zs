@@ -11,6 +11,7 @@ import { purchaseReceiptBaseUnitCost } from '../engines/purchase-receipt-cost.en
 import { allocateLandedCosts } from '../engines/landed-cost-allocation.engine';
 import { advancePurchaseOrderReceipt } from '../engines/purchase-order-receipt.engine';
 import { revalueStockReturn, valueStockReceipt } from '../../accounting/inventory-valuation';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { ensureNonNegativeStock, ensureUniqueFlowItems } from '../../../common/utils/financial-integrity';
 import { authorizeManagerSecret } from '../../../common/utils/manager-approval';
 import { applyStockDelta, lockStockProducts, previewConsumableStockQty } from '../../../common/utils/location-stock-ledger';
@@ -669,7 +670,7 @@ export class PurchasesWriteService {
             throw new AppError('الصنف الدوائي يتطلب رقم تشغيلة وتاريخ صلاحية عند الاستلام', 'PHARMACY_BATCH_REQUIRED', 422);
           }
           if (batchNo) {
-              const today = new Date().toISOString().slice(0, 10);
+              const today = await resolveBusinessDateKey(trx, scope.tenantId, new Date());
               if (!/^\d{4}-\d{2}(?:-\d{2})?$/.test(expiryDate) ||
                 (expiryDate.length === 7 ? expiryDate < today.slice(0, 7) : expiryDate < today)) {
                 throw new AppError('تاريخ صلاحية التشغيلة غير صالح أو منتهٍ', 'PHARMACY_BATCH_EXPIRED', 422);

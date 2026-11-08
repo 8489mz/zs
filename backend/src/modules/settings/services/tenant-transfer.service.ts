@@ -8,6 +8,7 @@ import { AuthCacheService } from '../../../core/auth/services/auth-cache.service
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { isPlatformTenantId, requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../../common/errors/app-error';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { resolveTenantPackage } from '../../../core/tenant-transfer/backup-bundle';
 import { exportTenantPackage, importTenantPackage, TenantPackageError } from '../../../core/tenant-transfer/tenant-package';
 import { SettingsService } from '../settings.service';
@@ -62,7 +63,7 @@ export class TenantTransferService {
       allocateOfflineBlock: !desktop,
     });
     await this.audit.log('تصدير حزمة بيانات المنشأة', `تم تصدير حزمة بيانات المنشأة بواسطة ${auth.username}`, auth).catch(() => undefined);
-    const day = new Date().toISOString().slice(0, 10);
+    const day = await resolveBusinessDateKey(this.db, scope.tenantId, new Date());
     const slug = (manifest.origin?.slug || manifest.tenant.slug || 'tenant').replace(/[^A-Za-z0-9_-]+/g, '-');
     return { buffer, fileName: `ZERP-tenant-${slug}-${day}.zsbak` };
   }

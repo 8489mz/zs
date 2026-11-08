@@ -1,5 +1,6 @@
 import { calculateCarrierCreditBaseAmount } from './engines/carrier-credit.engine';
 import { assertBusinessAccountingDate } from '../accounting/accounting-boundaries';
+import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { ensureDomainSupplier } from '../accounting/partner-subledger';
 import { lockAccountingPeriod } from '../accounting/accounting-period-lock';
@@ -146,9 +147,19 @@ export class MaritimeFreightService {
     if (chargeCostsBase > billed + 0.01) {
       throw new BadRequestException('لا يمكن إغلاق الشحنة: تكاليف بنود التشغيل تتجاوز الفواتير المرحلة للعميل');
     }
-    const hasDueDemurrage = containers.some((container) => container.return_deadline &&
-      new Date(container.empty_returned_at || Date.now()).toISOString().slice(0, 10) > container.return_deadline &&
-      Number(container.demurrage_rate_per_day || 0) > 0);
+    // return_deadline is a stored DATE (a Date object from pg, so a raw
+    // string comparison against it is always false) and empty_returned_at
+    // is an instant: both sides are reduced to tenant-local day keys.
+    const deadlineDayKey = (value: unknown): string =>
+      value instanceof Date ? value.toISOString().slice(0, 10) : String(value || '').slice(0, 10);
+    const hasDueDemurrage = (await Promise.all(containers.map(async (container) => {
+      if (!container.return_deadline) return false;
+      const returnedDay = await resolveBusinessDateKey(
+        this.db, tenantId, container.empty_returned_at ? new Date(container.empty_returned_at) : new Date(),
+      );
+      return returnedDay > deadlineDayKey(container.return_deadline) &&
+        Number(container.demurrage_rate_per_day || 0) > 0;
+    }))).some(Boolean);
     if (hasDueDemurrage && (billed <= 0 || !invoicedCharges.some((charge) =>
       /DEM|DETENTION/i.test(`${charge.charge_code} ${charge.charge_name_en}`) && Number(charge.sell_amount) > 0))) {
       throw new BadRequestException('لا يمكن إغلاق الشحنة: غرامات الحاويات المستحقة لم تُفوتر للعميل');
@@ -3319,7 +3330,9 @@ export class MaritimeFreightService {
     const dischargedAt = dto.dischargedAt !== undefined ? dto.dischargedAt : container.discharged_at;
     let deadlineDate = dto.returnDeadline !== undefined ? dto.returnDeadline : container.return_deadline;
     if (dto.returnDeadline === undefined && dischargedAt && (dto.dischargedAt !== undefined || dto.freeDays !== undefined || !deadlineDate)) {
-      const baseDate = new Date(dischargedAt);
+      // Free time starts at the tenant-local discharge day, not its UTC day.
+      const dischargeDay = await resolveBusinessDateKey(trx, tenantId, dischargedAt);
+      const baseDate = new Date(`${dischargeDay}T00:00:00.000Z`);
       baseDate.setUTCDate(baseDate.getUTCDate() + Number(dto.freeDays ?? container.free_days ?? 14));
       deadlineDate = baseDate.toISOString().slice(0, 10);
     }
@@ -3328,7 +3341,7 @@ export class MaritimeFreightService {
     }
     if (deadlineDate) {
       const returnedAt = dto.emptyReturnedAt !== undefined ? dto.emptyReturnedAt : container.empty_returned_at;
-      const endDay = new Date(returnedAt || Date.now()).toISOString().slice(0, 10);
+      const endDay = await resolveBusinessDateKey(trx, tenantId, returnedAt ? new Date(returnedAt) : new Date());
       const deadlineDay = new Date(deadlineDate).toISOString().slice(0, 10);
       const overdueDays = Math.max(0, Math.round((Date.parse(endDay) - Date.parse(deadlineDay)) / 86_400_000));
       updatePayload.is_overdue = !returnedAt && overdueDays > 0;
@@ -3380,9 +3393,11 @@ export class MaritimeFreightService {
     if (!Number.isInteger(freeDays) || freeDays < 0 || !Number.isFinite(demurrageRate) || demurrageRate < 0) {
       throw new BadRequestException('فترة السماح أو الغرامة اليومية غير صالحة');
     }
-    const deadlineDate = dto.returnDeadline ? new Date(dto.returnDeadline).toISOString().slice(0, 10) : null;
+    const deadlineDate = dto.returnDeadline ? await resolveBusinessDateKey(this.db, tenantId, dto.returnDeadline) : null;
+    // Overdue days count from the tenant-local today, not the UTC day.
+    const todayKey = await resolveBusinessDateKey(this.db, tenantId, new Date());
     const overdueDays = deadlineDate
-      ? Math.max(0, Math.round((Date.parse(new Date().toISOString().slice(0, 10)) - Date.parse(deadlineDate)) / 86_400_000))
+      ? Math.max(0, Math.round((Date.parse(todayKey) - Date.parse(deadlineDate)) / 86_400_000))
       : 0;
 
     let depositStatus: 'not_required' | 'held_by_line' = 'not_required';
@@ -4486,8 +4501,13 @@ export class MaritimeFreightService {
     const rows = await query.orderBy('total_freight_cost', 'asc').execute();
 
     // Surface expired-but-still-flagged-active cards as expired without requiring a cron job.
-    const today = new Date().toISOString().slice(0, 10);
-    return rows.map((r) => this.mapRateCardRow({ ...r, status: r.status === 'active' && r.valid_until < today ? 'expired' : r.status }));
+    const today = await resolveBusinessDateKey(this.db, tenantId, new Date());
+    // valid_until is a stored DATE (a Date object from pg): comparing it
+    // raw against a string is always false, so the expired flag below
+    // could never fire. Normalize to the stored calendar day first.
+    const validUntilDayKey = (value: unknown): string =>
+      value instanceof Date ? value.toISOString().slice(0, 10) : String(value || '').slice(0, 10);
+    return rows.map((r) => this.mapRateCardRow({ ...r, status: r.status === 'active' && validUntilDayKey(r.valid_until) < today ? 'expired' : r.status }));
   }
 
   /**
@@ -4497,7 +4517,7 @@ export class MaritimeFreightService {
    */
   async findBestRate(auth: AuthContext, polCode: string, podCode: string, containerType?: string) {
     const { tenantId } = requireTenantScope(auth);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = await resolveBusinessDateKey(this.db, tenantId, new Date());
 
     let query = this.db
       .selectFrom('maritime_rate_cards')
@@ -4560,7 +4580,7 @@ export class MaritimeFreightService {
         total_freight_cost: totalFreightCost,
         transit_time_days: dto.transitTimeDays || 0,
         free_days: dto.freeDays || 14,
-        valid_from: dto.validFrom || new Date().toISOString().slice(0, 10),
+        valid_from: dto.validFrom || await resolveBusinessDateKey(this.db, tenantId, new Date()),
         valid_until: dto.validUntil,
         source: 'manual',
         status: 'active',
@@ -4612,7 +4632,7 @@ export class MaritimeFreightService {
         total_freight_cost: bid.total_freight_cost,
         transit_time_days: bid.transit_time_days,
         free_days: bid.free_days,
-        valid_from: new Date().toISOString().slice(0, 10),
+        valid_from: await resolveBusinessDateKey(this.db, tenantId, new Date()),
         valid_until: validUntil,
         source: 'carrier_bid',
         source_bid_id: bid.id,
@@ -4972,8 +4992,10 @@ export class MaritimeFreightService {
       }
       const updatePayload: any = { status: dto.status, updated_at: sql`NOW()` };
       if (dto.declarationNumber) updatePayload.declaration_number = dto.declarationNumber;
-      if (dto.status === 'submitted') updatePayload.submitted_date = new Date().toISOString().slice(0, 10);
-      if (dto.status === 'cleared') updatePayload.cleared_date = new Date().toISOString().slice(0, 10);
+      // Status dates are business days: the tenant-local day, not UTC.
+      const statusDay = await resolveBusinessDateKey(trx, tenantId, new Date());
+      if (dto.status === 'submitted') updatePayload.submitted_date = statusDay;
+      if (dto.status === 'cleared') updatePayload.cleared_date = statusDay;
 
       const [updated] = await trx
         .updateTable('maritime_customs_declarations')
@@ -5104,7 +5126,7 @@ export class MaritimeFreightService {
     const shippingLineId = dto.shippingLineId || job.shipping_line_id;
     const polCode = (job.pol_code || '').toUpperCase();
     const podCode = (job.pod_code || '').toUpperCase();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = await resolveBusinessDateKey(this.db, tenantId, new Date());
 
     let query = this.db
       .selectFrom('maritime_rate_cards')
@@ -5277,7 +5299,7 @@ export class MaritimeFreightService {
           shipping_line_id: dto.shippingLineId ? Number(dto.shippingLineId) : (job.shipping_line_id ? Number(job.shipping_line_id) : null),
           carrier_name: dto.carrierName || job.shipping_line_name || 'Carrier',
           invoice_number: dto.invoiceNumber.trim(),
-          invoice_date: dto.invoiceDate ? (dto.invoiceDate as any) : (new Date().toISOString().slice(0, 10) as any),
+          invoice_date: dto.invoiceDate ? (dto.invoiceDate as any) : (await resolveBusinessDateKey(trx, tenantId, new Date()) as any),
           currency,
           total_invoiced_amount: totalAmount,
           ocean_freight: Number(dto.oceanFreight || 0),

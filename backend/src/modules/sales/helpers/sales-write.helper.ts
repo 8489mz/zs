@@ -589,14 +589,15 @@ export function computeSaleAllocationLegs(params: {
   return { legs, pooledAvailableQty, remainingQty };
 }
 
-function normalizeDateOnly(value: unknown): string {
+export function normalizeDateOnly(value: unknown): string {
   if (!value) return '';
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return '';
-    const year = value.getFullYear();
-    const month = String(value.getMonth() + 1).padStart(2, '0');
-    const day = String(value.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    // PostgreSQL DATE values arrive as UTC-midnight Date objects, so the
+    // UTC slice IS the stored calendar day (same rule as the storefront's
+    // normalizeDateOnly). Host-local parts would shift the day on any
+    // non-UTC host.
+    return value.toISOString().slice(0, 10);
   }
   const text = String(value).trim();
   if (!text) return '';
@@ -604,7 +605,13 @@ function normalizeDateOnly(value: unknown): string {
   if (isoMatch) return isoMatch[1];
   const parsed = new Date(text);
   if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 10);
+    // Non-ISO text parses as a LOCAL midnight, so the UTC slice would
+    // shift it on any east-of-UTC host; take the local calendar parts
+    // (the day as written).
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
   return '';
 }

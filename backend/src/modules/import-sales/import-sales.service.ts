@@ -51,6 +51,7 @@ import { allocateSaleFromImportLots, calculateImportSaleCost } from './helpers/i
 import { applyStockDelta, lockStockProducts } from '../../common/utils/location-stock-ledger';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
+import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { generateDailySequenceNumber } from '../delivery-reps/services/van-common.util';
 import { resolveFxRate } from '../accounting/fx-rate-resolution';
@@ -932,6 +933,8 @@ export class ImportSalesService {
           }
 
           if (partnerId) {
+            // New partner rows start on the tenant-local business day.
+            const todayKey = await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date());
             await trx
               .insertInto('import_project_partners')
               .values({
@@ -941,14 +944,14 @@ export class ImportSalesService {
                 capital_share_amount: Number(p.capitalShare || 0),
                 profit_percentage: Number(p.profitPercentage || 0),
                 is_active: true,
-                effective_from: new Date().toISOString().slice(0, 10),
+                effective_from: todayKey,
               })
               .onConflict((oc) =>
                 oc.columns(['tenant_id', 'project_id', 'partner_id']).doUpdateSet({
                   capital_share_amount: Number(p.capitalShare || 0),
                   profit_percentage: Number(p.profitPercentage || 0),
                   is_active: true,
-                  effective_from: new Date().toISOString().slice(0, 10),
+                  effective_from: todayKey,
                 })
               )
               .execute();
@@ -1371,7 +1374,14 @@ export class ImportSalesService {
         // and the minter knows the trip id, not its project.
       });
       const payableAccountId = await this.resolveTenantAccount(trx, tenantId, 'payable');
-      const expenseDate = trip.start_date ? String(trip.start_date).slice(0, 10) : new Date().toISOString().slice(0, 10);
+      // start_date is a stored DATE (a Date object from pg): String()
+      // on it yields 'Wed Jan 15', not a calendar day. Normalize it;
+      // the fallback is the tenant-local business day.
+      const expenseDate = trip.start_date
+        ? (trip.start_date instanceof Date
+          ? trip.start_date.toISOString().slice(0, 10)
+          : String(trip.start_date).slice(0, 10))
+        : await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date());
       await trx.insertInto('expenses').values({
         tenant_id: tenantId,
         account_id: String(dto.expenseAccountId),
@@ -2280,7 +2290,7 @@ export class ImportSalesService {
           }
           const expense = await trx.insertInto('expenses').values({
             tenant_id: tenantId, account_id: accountId, title: `${title} للحاوية ${shipment.container_number}`,
-            amount: cost, expense_date: new Date().toISOString().slice(0, 10), created_by: userId,
+            amount: cost, expense_date: await resolveBusinessDateKey(trx, tenantId, new Date()), created_by: userId,
             note: '', branch_id: null, location_id: null,
           }).returning('id').executeTakeFirstOrThrow();
           return expense.id;
@@ -2606,7 +2616,7 @@ export class ImportSalesService {
         await trx.insertInto('expenses').values({
           tenant_id: tenantId, account_id: accountId,
           title: `خسائر نواقص حاوية (تسوية عجز) - صنف ${group.productId}`,
-          amount: roundMoney(group.shortageExpense, digits), expense_date: new Date().toISOString().slice(0, 10),
+          amount: roundMoney(group.shortageExpense, digits), expense_date: await resolveBusinessDateKey(trx, tenantId, new Date()),
           note: `شحنة استيراد #${shipmentId} - سند استلام ${receipt.id}`,
           created_by: userId, branch_id: null, location_id: null,
         }).execute();
@@ -2633,7 +2643,7 @@ export class ImportSalesService {
           remaining_quantity: receivedQty,
           unit_landed_cost_egp: unitLandedCost,
           status: 'active',
-          receipt_date: new Date().toISOString().slice(0, 10),
+          receipt_date: await resolveBusinessDateKey(trx, tenantId, new Date()),
         } as any)
         .execute();
     }
@@ -3519,7 +3529,7 @@ export class ImportSalesService {
             account_id: String(cogsAccountId),
             title: `${opts.title} (تسوية تكلفة متأخرة على مبيعات سابقة) - حاوية ${shipment.container_number}`,
             amount: totalLateCogs,
-            expense_date: new Date().toISOString().slice(0, 10),
+            expense_date: await resolveBusinessDateKey(trx, tenantId, new Date()),
             created_by: userId,
             note: opts.note || `تم تحميل ${totalSoldUnits} وحدة مباعة بقيمة ${totalLateCogs} ج.م`,
             branch_id: null,
@@ -3992,6 +4002,11 @@ export class ImportSalesService {
     if (typeof endDate === 'string' && !endDate.includes('T')) {
       end.setHours(23, 59, 59, 999);
     }
+    // Range bounds are stored DATEs: compare day keys resolved from the
+    // caller's own inputs (a YYYY-MM-DD string passes through; an
+    // instant is keyed in the tenant zone), not UTC slices of the bounds.
+    const startKey = await resolveBusinessDateKey(qb, tenantId, startDate);
+    const endKey = await resolveBusinessDateKey(qb, tenantId, endDate);
 
     let projectProductIds: number[] = [];
     let projectShipmentIds: string[] = [];
@@ -4272,8 +4287,8 @@ export class ImportSalesService {
         // report figure. Counting it here would double-count the
         // moment it posts, and overstate profit before it does.
         .where('journal_entry_id', 'is not', null)
-        .where('start_date', '>=', start.toISOString().slice(0, 10))
-        .where('start_date', '<=', end.toISOString().slice(0, 10))
+        .where('start_date', '>=', startKey)
+        .where('start_date', '<=', endKey)
         .executeTakeFirst();
 
       const lateCogsExp = projectShipmentIds.length
@@ -4321,8 +4336,8 @@ export class ImportSalesService {
         .where('tenant_id', '=', tenantId)
         .where('project_id', '=', projectId)
         .where('journal_entry_id', 'is', null)
-        .where('start_date', '>=', start.toISOString().slice(0, 10))
-        .where('start_date', '<=', end.toISOString().slice(0, 10))
+        .where('start_date', '>=', startKey)
+        .where('start_date', '<=', endKey)
         .executeTakeFirst();
       const unpostedLate = projectShipmentIds.length
         ? await qb.selectFrom('import_late_expense_events')
@@ -4758,7 +4773,7 @@ export class ImportSalesService {
             amount_foreign: cleanForeign,
             note: `حوالة استيراد خارجية${notes ? ' - ' + notes : ''} [تدبير عملة: ${actualEgp} ج.م]`,
             created_by: userId,
-            payment_date: (dto as any).transferDate || new Date().toISOString().slice(0, 10),
+            payment_date: (dto as any).transferDate || await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date()),
             currency: currency || 'USD',
             exchange_rate: actualEgp / cleanForeign,
             forex_variance_egp: forexVarianceEgp,
@@ -5665,6 +5680,8 @@ export class ImportSalesService {
       }
 
       // Upsert each partner cleanly to prevent duplicate key collision on (tenant_id, project_id, partner_id)
+      // New partner rows start on the tenant-local business day.
+      const todayKey = await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date());
       for (const p of partners) {
         await trx
           .insertInto('import_project_partners')
@@ -5675,14 +5692,14 @@ export class ImportSalesService {
             capital_share_amount: Number(p.capitalShare || 0),
             profit_percentage: Number(p.profitPercentage || 0),
             is_active: true,
-            effective_from: new Date().toISOString().slice(0, 10),
+            effective_from: todayKey,
           })
           .onConflict((oc) =>
             oc.columns(['tenant_id', 'project_id', 'partner_id']).doUpdateSet({
               capital_share_amount: Number(p.capitalShare || 0),
               profit_percentage: Number(p.profitPercentage || 0),
               is_active: true,
-              effective_from: new Date().toISOString().slice(0, 10),
+              effective_from: todayKey,
             })
           )
           .execute();
@@ -5933,7 +5950,7 @@ export class ImportSalesService {
         project_id: dto.projectId ?? null,
         supplier_id: Number(dto.supplierId),
         quotation_no: dto.quotationNo,
-        inquiry_date: dto.inquiryDate || new Date().toISOString().slice(0, 10),
+        inquiry_date: dto.inquiryDate || await resolveBusinessDateKey(this.db, tenantId, new Date()),
         expiry_date: dto.expiryDate || null,
         incoterm: dto.incoterm || 'FOB',
         currency: dto.currency || 'USD',
@@ -5999,7 +6016,7 @@ export class ImportSalesService {
         if (v instanceof Date) return v.toISOString().slice(0, 10);
         return String(v).slice(0, 10);
       };
-      const today = new Date().toISOString().slice(0, 10);
+      const today = await resolveBusinessDateKey(this.db, tenantId, new Date());
       const expiry = toDateOnly((quote as any).expiry_date);
       if (expiry && expiry < today) {
         throw new BadRequestException(
@@ -6079,7 +6096,7 @@ export class ImportSalesService {
         sample_cost_foreign: dto.sampleCostForeign || 0,
         freight_cost_foreign: dto.freightCostForeign || 0,
         currency: dto.currency || 'USD',
-        request_date: dto.requestDate || new Date().toISOString().slice(0, 10),
+        request_date: dto.requestDate || await resolveBusinessDateKey(this.db, tenantId, new Date()),
         courier_tracking_no: dto.courierTrackingNo || null,
         decision: 'pending',
         reference_sample_approved: false,
@@ -6230,7 +6247,7 @@ export class ImportSalesService {
             project_id: projectId,
             supplier_id: Number(dto.supplierId),
             pi_number: piNumber,
-            pi_date: new Date().toISOString().slice(0, 10),
+            pi_date: await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date()),
             currency: project.budget_currency || 'USD',
             total_amount_foreign: totalFactoryUsd,
             incoterm: 'FOB',
@@ -6566,7 +6583,7 @@ export class ImportSalesService {
         }).execute();
       }
       return trx.updateTable('import_proforma_invoices').set({
-        po_number: orderNumber, po_date: new Date().toISOString().slice(0, 10), po_status: 'issued',
+        po_number: orderNumber, po_date: await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date()), po_status: 'issued',
       }).where('id', '=', id).where('tenant_id', '=', tenantId)
         .returningAll().executeTakeFirstOrThrow();
     });
@@ -6700,7 +6717,7 @@ export class ImportSalesService {
           shipment_id: dto.shipmentId ?? null,
           advance_no: dto.advanceNo,
           amount_egp: dto.amountEgp,
-          disbursement_date: dto.disbursementDate || new Date().toISOString().slice(0, 10),
+          disbursement_date: dto.disbursementDate || await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date()),
           payment_method: dto.paymentMethod || 'bank_transfer',
           treasury_account_id: dto.treasuryAccountId ? Number(dto.treasuryAccountId) : null,
           status: 'active',
@@ -6834,7 +6851,7 @@ export class ImportSalesService {
           project_id: dto.projectId ?? advanceForValidation.project_id ?? null,
           shipment_id: dto.shipmentId ?? advanceForValidation.shipment_id ?? null,
           receipt_no: dto.receiptNo,
-          expense_date: dto.expenseDate || new Date().toISOString().slice(0, 10),
+          expense_date: dto.expenseDate || await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date()),
           category: dto.category,
           amount_egp: dto.amountEgp,
           is_capitalized: dto.isCapitalized ?? true,
@@ -7095,7 +7112,7 @@ export class ImportSalesService {
           container_no: dto.containerNo,
           shipping_line: dto.shippingLine,
           deposit_amount_egp: dto.depositAmountEgp,
-          payment_date: dto.paymentDate || new Date().toISOString().slice(0, 10),
+          payment_date: dto.paymentDate || await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date()),
           expected_return_date: dto.expectedReturnDate,
           refund_status: 'pending',
           refunded_amount_egp: 0,
@@ -8368,7 +8385,7 @@ export class ImportSalesService {
         throw new BadRequestException('سعر الصرف المرسل لا يطابق المبالغ (تكلفة الجنيه ÷ المبلغ الأجنبي)؛ صحح السعر أو المبالغ. [IMPORT_FX_RATE_MISMATCH]');
       }
     }
-    const acquisitionDate = dto.acquisitionDate || new Date().toISOString().slice(0, 10);
+    const acquisitionDate = dto.acquisitionDate || await resolveBusinessDateKey(this.db, tenantId, new Date());
     return await this.db.transaction().execute(async (trx) => {
       // Optional transfer link: the transfer must belong to this
       // tenant and its currency must match the acquisition. The
@@ -8686,7 +8703,7 @@ export class ImportSalesService {
       .where('refund_status', '=', 'pending')
       .execute();
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = await resolveBusinessDateKey(this.db, tenantId, new Date());
     for (const dep of pendingDeposits) {
       if (dep.expected_return_date && (dep.expected_return_date as any) < todayStr) {
         exceptions.push({

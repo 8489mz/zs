@@ -47,6 +47,7 @@ async function makeDb(): Promise<Kysely<Database>> {
     CREATE TABLE import_proforma_invoices (id text PRIMARY KEY, tenant_id text, project_id text, supplier_id bigint, pi_number text, pi_date text, currency text, total_amount_foreign numeric, exchange_rate_contract numeric, status text, po_status text, po_number text, po_date text, items text, advance_percentage numeric, balance_percentage numeric, incoterm text, delivery_port text, payment_terms text, notes text);
     CREATE TABLE purchase_orders (id bigserial PRIMARY KEY, tenant_id text, account_id text, order_number text, supplier_id bigint, supplier_name text, subtotal numeric, tax_amount numeric, discount_amount numeric, total_amount numeric, status text, notes text, created_by bigint);
     CREATE TABLE purchase_order_items (id bigserial PRIMARY KEY, tenant_id text, account_id text, purchase_order_id bigint, product_id bigint, product_name text, quantity numeric, received_quantity numeric, unit_cost numeric, tax_rate numeric, discount numeric, total numeric);
+    CREATE TABLE settings (tenant_id text, key text, value text);
   `);
   await db.insertInto('suppliers' as never).values({
     id: 3, tenant_id: 't1', name: 'Supplier', account_id: 't1',

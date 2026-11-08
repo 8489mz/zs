@@ -10,6 +10,7 @@ import { allocateReceiptCostByStockFlow, stockMovementGlobalDelta } from '../eng
 import { lockStockProducts } from '../../../common/utils/location-stock-ledger';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { revalueStockCost } from '../../accounting/inventory-valuation';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { MoneyDigits, currencyMoneyDigits, toMinorUnits, fromMinorUnits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
@@ -282,8 +283,11 @@ export class PurchaseLandedCostsService {
       // landed_cost_applied_at was written but never read, so re-running this compounded the cost
       // into products.cost_price without limit and double-posted the capitalisation journal.
       if (purchase.landed_cost_applied_at) {
+        // The applied instant is shown as the tenant-local business day
+        // it landed on, not its UTC day.
+        const appliedDay = await resolveBusinessDateKey(trx, scope.tenantId, purchase.landed_cost_applied_at);
         throw new BadRequestException(
-          `سبق تحميل تكاليف إضافية على هذه الفاتورة بتاريخ ${new Date(purchase.landed_cost_applied_at).toISOString().slice(0, 10)}. لإعادة التحميل يلزم عكس التحميل السابق أولاً.`,
+          `سبق تحميل تكاليف إضافية على هذه الفاتورة بتاريخ ${appliedDay}. لإعادة التحميل يلزم عكس التحميل السابق أولاً.`,
         );
       }
 

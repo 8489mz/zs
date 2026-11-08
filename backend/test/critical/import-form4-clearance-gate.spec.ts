@@ -53,6 +53,8 @@ async function makeDb(): Promise<Kysely<Database>> {
     CREATE TABLE import_inventory_receipts (id text PRIMARY KEY, tenant_id text, shipment_id text, state text, posted_at timestamptz, review_reason text, journal_entry_id bigint);
     CREATE TABLE import_proforma_invoices (id text PRIMARY KEY, tenant_id text, pi_number text, supplier_id bigint, project_id text, currency text, total_amount_foreign numeric, paid_amount_foreign numeric, exchange_rate_contract numeric, payment_status text);
     CREATE TABLE supplier_payments (id bigserial PRIMARY KEY, tenant_id text, account_id text, supplier_id bigint, amount numeric, amount_foreign numeric, note text, created_by bigint, payment_date text, currency text, exchange_rate numeric, forex_variance_egp numeric, proforma_invoice_id text, idempotency_key text, doc_no text, created_at timestamptz DEFAULT NOW(), payment_method text, payment_reference text, bank_swift_code text, form4_number text, form4_date date, evidence_carrier_name text, evidence_travel_date date, evidence_handover_receipt text, evidence_lc_number text, evidence_lc_issuing_bank text, evidence_lc_expiry date, evidence_lc_documents text, evidence_cad_proof text, evidence_payment_terms text, evidence_payment_due_date date);
+    CREATE TABLE settings (tenant_id text, key text, value text);
+    CREATE TABLE currency_exchange_rates (tenant_id text, currency_code text, exchange_rate numeric, is_base boolean);
     INSERT INTO products VALUES (1, 'Widget');
     INSERT INTO import_proforma_invoices VALUES ('pi-a', 't1', 'PI-A', 1, 'proj-1', 'USD', 5000, 0, 50, 'open');
   `);

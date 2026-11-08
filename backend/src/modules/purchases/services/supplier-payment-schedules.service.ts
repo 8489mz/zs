@@ -9,6 +9,7 @@ import { TransactionHelper } from '../../../database/helpers/transaction.helper'
 import { CreateSupplierPaymentScheduleDto, PaySupplierScheduleInstallmentDto } from '../dto/supplier-payment-schedule.dto';
 import { normalizeInstapayAddress, normalizeOptionalNote, normalizePurchaseScope } from '../helpers/purchases-write.helper';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { currencyMoneyDigits, roundMoney, toMinorUnits, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { PurchasesFinanceService } from './purchases-finance.service';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
@@ -203,13 +204,12 @@ export class SupplierPaymentSchedulesService {
     return !Number.isNaN(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : str.slice(0, 10);
   }
 
-  private map(row: ScheduleRow, paymentLogs: SchedulePaymentLogRow[] = [], digits: MoneyDigits = 2): Record<string, unknown> {
+  private map(row: ScheduleRow, paymentLogs: SchedulePaymentLogRow[] = [], digits: MoneyDigits = 2, todayKey: string): Record<string, unknown> {
     const amount = Number(row.amount || 0);
     const paidAmount = Number(row.paid_amount || 0);
     const dueDate = this.formatIsoDate(row.due_date);
-    const today = new Date().toISOString().slice(0, 10);
     const baseStatus = String(row.status || 'pending');
-    const status = baseStatus === 'pending' && dueDate < today ? 'overdue' : baseStatus;
+    const status = baseStatus === 'pending' && dueDate < todayKey ? 'overdue' : baseStatus;
     return {
       id: String(row.id),
       purchaseId: row.purchase_id == null ? '' : String(row.purchase_id),
@@ -229,6 +229,7 @@ export class SupplierPaymentSchedulesService {
   private async listWithPayments(where: { purchaseId?: number; supplierId?: number }, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = this.tenantScope(auth);
     const digits = await this.getMoneyDigits(this.db, scope.tenantId);
+    const todayKey = await resolveBusinessDateKey(this.db, scope.tenantId, new Date());
     const db = this.scheduleDb(this.db);
     let query = db.selectFrom('supplier_payment_schedules').selectAll().where(this.tenantPredicate(auth));
     if (where.purchaseId != null) query = query.where('purchase_id', '=', where.purchaseId);
@@ -243,7 +244,7 @@ export class SupplierPaymentSchedulesService {
       const scheduleId = Number(log.schedule_id);
       logsBySchedule.set(scheduleId, [...(logsBySchedule.get(scheduleId) || []), log]);
     });
-    return { schedules: rows.map((row) => this.map(row, logsBySchedule.get(Number(row.id)) || [], digits)) };
+    return { schedules: rows.map((row) => this.map(row, logsBySchedule.get(Number(row.id)) || [], digits, todayKey)) };
   }
 
   async listForPurchase(purchaseId: number, auth: AuthContext): Promise<Record<string, unknown>> {

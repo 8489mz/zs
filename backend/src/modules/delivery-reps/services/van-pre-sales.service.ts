@@ -7,6 +7,7 @@ import { formatDailyDocumentNumber } from '../../../common/utils/document-number
 import { reserveLocationStock, releaseLocationStock } from '../../../common/utils/location-stock-ledger';
 import { sortItemsByProductId, generateDailySequenceNumber } from './van-common.util';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { normalizeDateOnly, todayLocalIsoDate } from '../../sales/helpers/sales-write.helper';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { SalesService } from '../../sales/sales.service';
 import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -244,7 +245,7 @@ export class VanPreSalesService {
     }
 
     // Fetch active offers
-    const nowIso = new Date().toISOString().slice(0, 10);
+    const nowIso = todayLocalIsoDate();
     const offers = await this.anyDb
       .selectFrom('product_offers')
       .select(['id', 'product_id', 'offer_type', 'value', 'min_qty', 'start_date', 'end_date'])
@@ -256,8 +257,8 @@ export class VanPreSalesService {
     const offersByProduct = new Map<number, any[]>();
     for (const off of offers) {
       const pid = Number(off.product_id);
-      const start = off.start_date ? String(off.start_date).slice(0, 10) : null;
-      const end = off.end_date ? String(off.end_date).slice(0, 10) : null;
+      const start = normalizeDateOnly(off.start_date);
+      const end = normalizeDateOnly(off.end_date);
       if ((!start || start <= nowIso) && (!end || end >= nowIso)) {
         if (!offersByProduct.has(pid)) offersByProduct.set(pid, []);
         offersByProduct.get(pid)!.push({
@@ -462,7 +463,7 @@ export class VanPreSalesService {
       const productIds = sortedItems.map((it) => Number(it.productId));
 
       // Fetch active offers for these products
-      const nowIso = new Date().toISOString().slice(0, 10);
+      const nowIso = todayLocalIsoDate();
       const offers = await trxAny
         .selectFrom('product_offers')
         .select(['product_id', 'offer_type', 'value', 'min_qty', 'start_date', 'end_date', 'bogo_buy_qty', 'bogo_get_qty', 'bogo_discount_percent'])
@@ -474,8 +475,8 @@ export class VanPreSalesService {
       const offersByProduct = new Map<number, any[]>();
       for (const off of offers) {
         const pid = Number(off.product_id);
-        const start = off.start_date ? String(off.start_date).slice(0, 10) : null;
-        const end = off.end_date ? String(off.end_date).slice(0, 10) : null;
+        const start = normalizeDateOnly(off.start_date);
+        const end = normalizeDateOnly(off.end_date);
         if ((!start || start <= nowIso) && (!end || end >= nowIso)) {
           if (!offersByProduct.has(pid)) offersByProduct.set(pid, []);
           offersByProduct.get(pid)!.push(off);
