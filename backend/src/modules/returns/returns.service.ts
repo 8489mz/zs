@@ -259,6 +259,104 @@ export class ReturnsService {
     return { returns: paged.rows, pagination: paged.pagination, summary: summarizeReturnRows(mapped, today, moneyDigits), scope: this.scope(auth) };
   }
 
+  /* INV-STATEMENT-RETURN-ROW-DETAILS: single return-document read for the
+   * supplier/customer statement details button. A ledger row carries only
+   * the return id (reference_type 'return_document', entry_type
+   * 'purchase_return' / 'sale_return'); the ZPR/ZR number, the party, the
+   * original invoice, the items and the journal number live on the return
+   * document and its lines, never on the ledger row. The journal number is
+   * read from journal_entries.entry_no -- never fabricated from the journal
+   * id (gapless numbering, INV-JE-NUMBERING-GAP). The journal source type
+   * follows the return type ('purchase_return' / 'sales_return'). A missing
+   * return throws RETURN_NOT_FOUND, never PURCHASE_NOT_FOUND: the id is a
+   * return id, and a purchase lookup on it would either fail with the wrong
+   * error or -- worse -- return an unrelated invoice whose id happened to
+   * collide. */
+  async getReturnById(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
+    const scope = requireTenantScope(auth);
+    const row = await this.db
+      .selectFrom('return_documents as rd')
+      .leftJoin('sales as s', (join) => join.on('rd.return_type', '=', 'sale').onRef('s.id', '=', 'rd.invoice_id').onRef('s.tenant_id', '=', 'rd.tenant_id'))
+      .leftJoin('customers as c', (join) => join.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 'rd.tenant_id'))
+      .leftJoin('purchases as p', (join) => join.on('rd.return_type', '=', 'purchase').onRef('p.id', '=', 'rd.invoice_id').onRef('p.tenant_id', '=', 'rd.tenant_id'))
+      .leftJoin('suppliers as sup', (join) => join.onRef('sup.id', '=', 'p.supplier_id').onRef('sup.tenant_id', '=', 'rd.tenant_id'))
+      .leftJoin('branches as b', (join) => join.onRef('b.id', '=', 'rd.branch_id').onRef('b.tenant_id', '=', 'rd.tenant_id'))
+      .leftJoin('stock_locations as l', (join) => join.onRef('l.id', '=', 'rd.location_id').onRef('l.tenant_id', '=', 'rd.tenant_id'))
+      .leftJoin('users as u', (join) => join.onRef('u.id', '=', 'rd.created_by').onRef('u.tenant_id', '=', 'rd.tenant_id'))
+      .select([
+        'rd.id',
+        'rd.doc_no',
+        'rd.return_type',
+        'rd.invoice_id',
+        'rd.settlement_mode',
+        'rd.refund_method',
+        'rd.total',
+        'rd.note',
+        'rd.created_at',
+        'rd.created_by',
+        sql<string>`coalesce(s.doc_no, p.doc_no, '')`.as('invoice_doc_no'),
+        sql<string>`coalesce(c.name, sup.name, '')`.as('party_name'),
+        'b.name as branch_name',
+        'l.name as location_name',
+        'u.username as created_by_name',
+      ])
+      .where('rd.id', '=', id)
+      .where(this.tenantPredicate(auth, 'rd'))
+      .executeTakeFirst();
+
+    if (!row) throw new AppError('Return not found', 'RETURN_NOT_FOUND', 404);
+
+    const items = await this.db
+      .selectFrom('return_items')
+      .select(['id', 'product_id', 'product_name', 'qty', 'unit_total', 'line_total', 'allocated_tax'])
+      .where('return_document_id', '=', id)
+      .where(this.tenantPredicate(auth))
+      .orderBy('id', 'asc')
+      .execute();
+
+    const journalSourceType = row.return_type === 'sale' ? 'sales_return' : 'purchase_return';
+    const journal = await this.db
+      .selectFrom('journal_entries')
+      .select(['id', 'entry_no'])
+      .where('source_type', '=', journalSourceType)
+      .where('source_id', '=', id)
+      .where('tenant_id', '=', scope.tenantId)
+      .where('status', 'in', ['draft', 'posted'])
+      .orderBy('id', 'desc')
+      .executeTakeFirst();
+
+    return {
+      returnDocument: {
+        id: String(row.id),
+        docNo: row.doc_no || (row.return_type === 'sale' ? `ZR-${row.id}` : `ZPR-${row.id}`),
+        returnType: row.return_type,
+        invoiceId: row.invoice_id ? String(row.invoice_id) : '',
+        invoiceDocNo: row.invoice_doc_no || '',
+        partyName: row.party_name || '',
+        total: Number(row.total || 0),
+        note: row.note || '',
+        settlementMode: row.settlement_mode || '',
+        refundMethod: row.refund_method || '',
+        date: row.created_at,
+        branchName: row.branch_name || '',
+        locationName: row.location_name || '',
+        createdBy: row.created_by_name || '',
+        journalEntryId: journal ? String(journal.id) : '',
+        journalNo: journal ? journal.entry_no || '' : '',
+        items: items.map((item) => ({
+          id: String(item.id),
+          productId: item.product_id ? String(item.product_id) : '',
+          productName: item.product_name || '',
+          qty: Number(item.qty || 0),
+          unitTotal: Number(item.unit_total || 0),
+          lineTotal: Number(item.line_total || 0),
+          allocatedTax: Number(item.allocated_tax || 0),
+        })),
+      },
+      scope,
+    };
+  }
+
   /** Unpaginated invoice-return history, used only to guide the UI.
    * Transactional posting independently checks quantities with invoice locks.
    */

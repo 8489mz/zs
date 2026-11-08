@@ -11,7 +11,7 @@ import { AccountsInvoiceDetailCard } from '@/features/accounts/components/Accoun
 import { formatLedgerEntryType } from '@/features/accounts/utils/ledger-format.utils';
 
 type Entry = CustomerLedgerEntry | SupplierLedgerEntry;
-type SupportedDocumentType = 'sale' | 'purchase' | 'supplier_payment';
+type SupportedDocumentType = 'sale' | 'purchase' | 'supplier_payment' | 'purchase_return' | 'sale_return';
 type SelectedLedgerDocument = { key: string; type: SupportedDocumentType; referenceId: string; label: string };
 
 function readEntryText(entry: Entry, keys: string[]) {
@@ -33,6 +33,22 @@ export function inferDocumentType(entry: Entry): SupportedDocumentType | '' {
    * and the payment id was then fed to purchaseById -- which 404s, or
    * silently shows an unrelated invoice when the ids collide. */
   if (referenceType === 'supplier_payment' || entryType === 'supplier_payment') return 'supplier_payment';
+  /* INV-STATEMENT-RETURN-ROW-DETAILS: a return is its own document type,
+   * never its parent invoice. Without this early return the fallthrough
+   * below classified it 'purchase' ('purchase_return'.includes('purchase'))
+   * or 'sale' ('sale_return'.includes('sale')), and the return id was then
+   * fed to purchaseById / saleById -- which 404s with PURCHASE_NOT_FOUND,
+   * or silently shows an unrelated invoice when the ids collide. The
+   * reference_type on these rows is 'return_document'; the direction comes
+   * from the entry_type (or, when it is missing, from the note). */
+  if (referenceType === 'return_document' || entryType === 'purchase_return' || entryType === 'supplier_return' || entryType === 'sale_return' || entryType === 'customer_return' || entryType === 'sale_return_refund') {
+    if (entryType === 'sale_return' || entryType === 'customer_return' || entryType === 'sale_return_refund') return 'sale_return';
+    if (entryType === 'purchase_return' || entryType === 'supplier_return') return 'purchase_return';
+    const returnNote = readEntryText(entry, ['note', 'description']).toLowerCase();
+    if (returnNote.includes('sale return') || returnNote.includes('مرتجع مبيعات')) return 'sale_return';
+    if (returnNote.includes('purchase return') || returnNote.includes('مرتجع مشتريات')) return 'purchase_return';
+    return '';
+  }
   if (referenceType === 'sale' || referenceType === 'purchase') return referenceType;
 
   const note = readEntryText(entry, ['note', 'description']);
@@ -66,20 +82,27 @@ function inferDocumentId(entry: Entry, type: SupportedDocumentType | '') {
     if (match?.[1]) return match[1];
   }
 
+  /* INV-STATEMENT-RETURN-ROW-DETAILS: a return id is never derivable
+   * from its doc number (ZPR-261105-0592 carries a date and a sequence,
+   * not the return id). Without reference_id there is no safe id to load
+   * -- the generic digit fallback below would grab the date part
+   * ('261105') and feed a wrong id to the return read. */
+  if (type === 'purchase_return' || type === 'sale_return') return '';
+
   const genericMatch = haystack.match(/#?(\d+)/);
   return genericMatch?.[1] || '';
 }
 
 export function getDocumentReference(entry: Entry): SelectedLedgerDocument | null {
   const type = inferDocumentType(entry);
-  if (type !== 'sale' && type !== 'purchase' && type !== 'supplier_payment') return null;
+  if (type !== 'sale' && type !== 'purchase' && type !== 'supplier_payment' && type !== 'purchase_return' && type !== 'sale_return') return null;
 
   const referenceId = inferDocumentId(entry, type);
   if (!referenceId) return null;
 
   const docNo = readEntryText(entry, ['doc_no', 'docNo', 'documentNo']);
   const note = readEntryText(entry, ['note', 'description']);
-  const label = docNo || note || (type === 'sale' ? `فاتورة بيع #${referenceId}` : type === 'supplier_payment' ? `سند صرف #${referenceId}` : `فاتورة شراء #${referenceId}`);
+  const label = docNo || note || (type === 'sale' ? `فاتورة بيع #${referenceId}` : type === 'supplier_payment' ? `سند صرف #${referenceId}` : type === 'purchase_return' ? `مرتجع مشتريات #${referenceId}` : type === 'sale_return' ? `مرتجع مبيعات #${referenceId}` : `فاتورة شراء #${referenceId}`);
 
   return {
     key: `${type}-${referenceId}`,
@@ -140,6 +163,12 @@ export function LedgerPanel({
     queryKey: ['accounts-ledger-supplier-payment-detail', selectedDocument?.type, selectedDocument?.referenceId],
     queryFn: () => documentDetailsApi.supplierPaymentById(String(selectedDocument?.referenceId || '')),
     enabled: selectedDocument?.type === 'supplier_payment' && Boolean(selectedDocument?.referenceId),
+  });
+
+  const returnDetailQuery = useQuery({
+    queryKey: ['accounts-ledger-return-detail', selectedDocument?.type, selectedDocument?.referenceId],
+    queryFn: () => documentDetailsApi.returnById(String(selectedDocument?.referenceId || '')),
+    enabled: (selectedDocument?.type === 'purchase_return' || selectedDocument?.type === 'sale_return') && Boolean(selectedDocument?.referenceId),
   });
 
   function toggleDocument(entry: Entry) {
@@ -213,6 +242,9 @@ export function LedgerPanel({
         rowTitle={(entry) => {
           const document = getDocumentReference(entry);
           if (!document) return undefined;
+          if (document.type === 'purchase_return' || document.type === 'sale_return') {
+            return t('accounts.ledger_panel.s21', "اضغط لعرض تفاصيل المرتجع");
+          }
           return document.type === 'supplier_payment'
             ? t('accounts.ledger_panel.s20', "اضغط لعرض تفاصيل الدفع")
             : t('accounts.ledger_panel.s18', "اضغط لعرض تفاصيل الفاتورة");
@@ -230,11 +262,12 @@ export function LedgerPanel({
         <AccountsInvoiceDetailCard
           selectedLabel={selectedDocument?.label || ''}
           documentType={selectedDocument?.type || null}
-          isLoading={saleDetailQuery.isLoading || purchaseDetailQuery.isLoading || supplierPaymentDetailQuery.isLoading}
-          error={saleDetailQuery.error || purchaseDetailQuery.error || supplierPaymentDetailQuery.error}
+          isLoading={saleDetailQuery.isLoading || purchaseDetailQuery.isLoading || supplierPaymentDetailQuery.isLoading || returnDetailQuery.isLoading}
+          error={saleDetailQuery.error || purchaseDetailQuery.error || supplierPaymentDetailQuery.error || returnDetailQuery.error}
           sale={saleDetailQuery.data || null}
           purchase={purchaseDetailQuery.data || null}
           supplierPayment={supplierPaymentDetailQuery.data || null}
+          returnDocument={returnDetailQuery.data || null}
         />
       </div>
     </div>

@@ -28,6 +28,16 @@ export class ReturnsController {
     return this.returnsService.getInvoiceReturnedQuantities(type, invoiceId, req.authContext!);
   }
 
+  /* INV-STATEMENT-RETURN-ROW-DETAILS: single return-document read for the
+   * statement details button. Registered after the specific
+   * 'returns/invoices/...' route so that path never reaches this handler
+   * (ParseIntPipe would also reject the 'invoices' segment). */
+  @Get('returns/:id')
+  @RequirePermissions('returns')
+  getReturnById(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+    return this.returnsService.getReturnById(id, req.authContext!);
+  }
+
   @Post('returns')
   @RequirePermissions('returns')
   @UseInterceptors(IdempotencyInterceptor)

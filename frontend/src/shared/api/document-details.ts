@@ -43,6 +43,38 @@ export interface SupplierPaymentDetail {
 
 type SupplierPaymentDetailPayload = SupplierPaymentDetail | { supplierPayment?: SupplierPaymentDetail | null; data?: unknown; result?: unknown };
 
+export interface ReturnDocumentItem {
+  id: string;
+  productId: string;
+  productName: string;
+  qty: number;
+  unitTotal: number;
+  lineTotal: number;
+  allocatedTax: number;
+}
+
+export interface ReturnDocumentDetail {
+  id: string;
+  docNo: string;
+  returnType: string;
+  invoiceId: string;
+  invoiceDocNo: string;
+  partyName: string;
+  total: number;
+  note: string;
+  settlementMode: string;
+  refundMethod: string;
+  date: string;
+  branchName: string;
+  locationName: string;
+  createdBy: string;
+  journalEntryId: string;
+  journalNo: string;
+  items: ReturnDocumentItem[];
+}
+
+type ReturnDocumentDetailPayload = ReturnDocumentDetail | { returnDocument?: ReturnDocumentDetail | null; data?: unknown; result?: unknown };
+
 export const documentDetailsApi = {
   saleById: async (id: string) => unwrapByKey<Sale>(await http<SaleDetailPayload>(`/api/sales/${id}`), 'sale'),
   purchaseById: async (id: string) => unwrapByKey<Purchase>(await http<PurchaseDetailPayload>(`/api/purchases/${id}`), 'purchase'),
@@ -51,4 +83,10 @@ export const documentDetailsApi = {
    * read, never from purchaseById (a payment id fed to /api/purchases/:id
    * either 404s or returns an unrelated invoice on an id collision). */
   supplierPaymentById: async (id: string) => unwrapByKey<SupplierPaymentDetail>(await http<SupplierPaymentDetailPayload>(`/api/supplier-payments/${id}`), 'supplierPayment'),
+  /* INV-STATEMENT-RETURN-ROW-DETAILS: a statement return row is a return,
+   * not its parent invoice -- its details come from the single-return
+   * read, never from purchaseById / saleById (a return id fed to
+   * /api/purchases/:id or /api/sales/:id either 404s or returns an
+   * unrelated invoice on an id collision). */
+  returnById: async (id: string) => unwrapByKey<ReturnDocumentDetail>(await http<ReturnDocumentDetailPayload>(`/api/returns/${id}`), 'returnDocument'),
 };
