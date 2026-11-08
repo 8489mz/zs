@@ -759,12 +759,12 @@ export class CatalogProductService {
 
 
   async listPosProducts(query: Record<string, unknown>, actor: AuthContext): Promise<Record<string, unknown>> {
-    const { q, barcode, limit, requestedLocationId, requestedBranchId, view, isFullCatalog } = this.parsePosProductLookupQuery(query);
+    const { q, barcode, limit, requestedLocationId, requestedBranchId, view, isFullCatalog, categoryId } = this.parsePosProductLookupQuery(query);
     const offerCapabilities = await this.getProductOfferColumnCapabilities();
     const scopedLocation = requestedLocationId > 0 ? await this.inventoryScope.assertLocationScope(requestedLocationId, actor).catch(() => null) : null;
     const productRows = barcode
       ? await this.findPosProductsByBarcode(barcode, limit, actor)
-      : await this.searchPosProducts(q, limit, view === 'offers' ? 'offers' : 'all', actor);
+      : await this.searchPosProducts(q, limit, view === 'offers' ? 'offers' : 'all', actor, categoryId);
 
     const uniqueRows = this.uniquePosProductRows(productRows).slice(0, limit);
     const productIds = uniqueRows.map((product) => Number(product.id));
@@ -827,6 +827,7 @@ export class CatalogProductService {
         limit,
         view,
         fullCatalog: isFullCatalog,
+        categoryId: categoryId > 0 ? categoryId : undefined,
         locationId: scopedLocation?.id ? String(scopedLocation.id) : '',
       },
     };
@@ -844,6 +845,7 @@ export class CatalogProductService {
       limit: Math.min(maxLimit, Math.max(1, safeLimit)),
       requestedLocationId: Number(query.locationId || 0),
       requestedBranchId: Number(query.branchId || 0),
+      categoryId: Number(query.categoryId || 0),
       view,
       isFullCatalog,
     };
@@ -981,7 +983,7 @@ export class CatalogProductService {
     return [...productMatches, ...serialMatches, ...unitMatches];
   }
 
-  private async searchPosProducts(q: string, limit: number, view: 'all' | 'offers' = 'all', actor: AuthContext): Promise<PosProductLookupRow[]> {
+  private async searchPosProducts(q: string, limit: number, view: 'all' | 'offers' = 'all', actor: AuthContext, categoryId = 0): Promise<PosProductLookupRow[]> {
     const normalized = normalizeArabicSearch(q);
     const tokens = normalized.split(/\s+/).filter(Boolean);
     let productQuery = this.db
@@ -1013,6 +1015,14 @@ export class CatalogProductService {
       ])
       .where('p.is_active', '=', true)
       .where(this.tenantPredicate(actor, 'p'));
+
+    // INV-POS-CATEGORY-TILE-FILTER: a category tile must be a server-side
+    // filter. The POS browse list is a bounded window (first 300 by name),
+    // so filtering client-side over the loaded page shows EMPTY for any
+    // category whose products sit outside that window.
+    if (categoryId > 0) {
+      productQuery = productQuery.where('p.category_id', '=', categoryId);
+    }
 
     for (const token of tokens) {
       const pattern = `%${token}%`;

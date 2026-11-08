@@ -16,6 +16,7 @@ type ProductRow = {
   style_code: string | null;
   color: string | null;
   size: string | null;
+  category_id: number | null;
   retail_price: number;
   wholesale_price: number;
   stock_qty: number;
@@ -106,6 +107,10 @@ class FakeSelectBuilder {
         ? String(product.sku || '').toLowerCase() === String(skuFilter.value || '').toLowerCase()
         : product.sku === skuFilter.value);
     }
+    const categoryFilter = this.filters.find((filter) => filter.column === 'p.category_id' && filter.op === '=');
+    if (categoryFilter) {
+      rows = rows.filter((product) => Number(product.category_id) === Number(categoryFilter.value));
+    }
     if (!barcodeFilter && this.hasExpressionFilter && this.db.searchNeedle) {
       const needle = this.db.searchNeedle.toLowerCase();
       rows = rows.filter((product) => {
@@ -175,7 +180,7 @@ class FakeDb {
   }
 }
 
-function product(id: number, name: string, barcode: string, retailPrice: number): ProductRow {
+function product(id: number, name: string, barcode: string, retailPrice: number, categoryId: number | null = null): ProductRow {
   return {
     id,
     name,
@@ -184,6 +189,7 @@ function product(id: number, name: string, barcode: string, retailPrice: number)
     style_code: `SKU-${id}`,
     color: null,
     size: null,
+    category_id: categoryId,
     retail_price: retailPrice,
     wholesale_price: Math.max(1, retailPrice - 2),
     stock_qty: 12,
@@ -264,6 +270,46 @@ async function run(): Promise<void> {
     assert.equal((result.products as Array<Record<string, unknown>>).length, 80);
     assert.equal((result.meta as Record<string, unknown>).limit, 500);
     assert.equal(db.lastProductQueryLimit, 500);
+  }
+
+  {
+    // INV-POS-CATEGORY-TILE-FILTER: a category tile must return that
+    // category's products even when they sit outside the bounded browse
+    // window (first 300 by name). The server filter — not the client-side
+    // filter over the loaded page — is what makes the tile work.
+    const db = new FakeDb();
+    db.products = [
+      product(1, 'AAA First', 'A-1', 9, 7),
+      product(2, 'BBB Second', 'B-2', 9, 8),
+      product(3, 'CCC Third', 'C-3', 11, 7),
+    ];
+    const { service } = createService(db);
+    const result = await service.listPosProducts({ categoryId: 7 }, cashier);
+    assert.deepEqual(productIds(result), ['1', '3']);
+    assert.equal((result.meta as Record<string, unknown>).categoryId, 7);
+  }
+
+  {
+    const db = new FakeDb();
+    db.products = [
+      product(1, 'AAA First', 'A-1', 9, 7),
+      product(2, 'BBB Second', 'B-2', 9, 8),
+    ];
+    const { service } = createService(db);
+    const result = await service.listPosProducts({}, cashier);
+    assert.deepEqual(productIds(result), ['1', '2'], 'no category filter: browse window unchanged');
+  }
+
+  {
+    // An exact barcode still wins even when its product is in another category.
+    const db = new FakeDb();
+    db.products = [
+      product(1, 'AAA First', 'A-1', 9, 7),
+      product(2, 'BBB Second', 'B-2', 9, 8),
+    ];
+    const { service } = createService(db);
+    const result = await service.listPosProducts({ barcode: 'B-2', categoryId: 7 }, cashier);
+    assert.deepEqual(productIds(result), ['2']);
   }
 
   {

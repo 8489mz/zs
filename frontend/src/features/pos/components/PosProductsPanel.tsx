@@ -43,6 +43,8 @@ interface PosProductsPanelProps {
   onAddProduct: (product: Product) => void;
   productFilter: 'all' | 'offers' | 'priced' | 'low' | 'recent' | 'raw_materials' | 'services';
   onProductFilterChange: (value: 'all' | 'offers' | 'priced' | 'low' | 'recent' | 'raw_materials' | 'services') => void;
+  selectedCategoryId?: string | null;
+  onSelectedCategoryIdChange?: (value: string | null) => void;
   searchInputRef: RefObject<HTMLInputElement | null>;
   posMode: PosSaleMode;
   onOpenNewProduct?: (params: { name?: string; barcode?: string }) => void;
@@ -541,6 +543,8 @@ function PosProductsPanelComponent({
   onAddProduct,
   productFilter,
   onProductFilterChange,
+  selectedCategoryId: controlledSelectedCategoryId,
+  onSelectedCategoryIdChange,
   searchInputRef,
   posMode,
   onOpenNewProduct,
@@ -665,7 +669,13 @@ function PosProductsPanelComponent({
   const categoriesQuery = useQuery({ queryKey: ['pos-categories'], queryFn: sharedProductsApi.categories, staleTime: 300000 });
   const categories: any[] = categoriesQuery.data || [];
   const iconSettings = useProductIconSettings();
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  // INV-POS-CATEGORY-TILE-FILTER: the workspace owns the selected category
+  // (it drives the server-side catalog lookup); when no controlled value is
+  // provided the panel keeps its own local state. The client-side filter
+  // below stays as a guard — the server already filtered by category.
+  const [localSelectedCategoryId, setLocalSelectedCategoryId] = useState<string | null>(null);
+  const selectedCategoryId = controlledSelectedCategoryId !== undefined ? controlledSelectedCategoryId : localSelectedCategoryId;
+  const setSelectedCategoryId = onSelectedCategoryIdChange ?? setLocalSelectedCategoryId;
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
   const [isCustomizationOpen, setIsCustomizationOpen] = useState(false);
@@ -928,10 +938,19 @@ function PosProductsPanelComponent({
                       defaultValue={search}
                       onChange={scannerBuffer.handleChange}
                       onKeyDown={handleSearchKeyDown}
-                      onBlur={() => {
-                        if (isMobile) {
-                          setIsMobileKeyboardActive(false);
-                        }
+                      onBlur={(event) => {
+                        if (!isMobile) return;
+                        // INV-POS-CATEGORY-TILE-FILTER (keyboard-toggle race fix):
+                        // tapping the toggle button blurs this input first; the
+                        // blur must NOT reset the keyboard state, or the toggle
+                        // that follows flips the already-reset value back to
+                        // true and the keyboard can never be dismissed. Skip the
+                        // reset only when focus moves to the toggle itself.
+                        const nextTarget =
+                          (event.relatedTarget as HTMLElement | null) ??
+                          (document.activeElement as HTMLElement | null);
+                        if (nextTarget?.classList?.contains('pos-keyboard-toggle-btn')) return;
+                        setIsMobileKeyboardActive(false);
                       }}
                       placeholder={t('pos.search_placeholder', 'امسح باركود أو اكتب الاسم...')}
                       style={{

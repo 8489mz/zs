@@ -185,6 +185,8 @@ export function PosWorkspaceMainContent({
             recentProducts={pos.recentProducts}
             productFilter={pos.productFilter}
             onProductFilterChange={pos.setProductFilter}
+            selectedCategoryId={pos.selectedCategoryId}
+            onSelectedCategoryIdChange={pos.setSelectedCategoryId}
             onAddProduct={pos.handleAddProduct}
             searchInputRef={searchInputRef}
             posMode={posMode}

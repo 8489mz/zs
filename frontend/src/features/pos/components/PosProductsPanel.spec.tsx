@@ -1,17 +1,20 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createRef } from 'react';
+import { createRef, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PosProductsPanel } from './PosProductsPanel';
 import type { Product } from '@/types/domain';
 
-function renderWithClient(ui: React.ReactElement, settings?: Record<string, any>) {
+function renderWithClient(ui: React.ReactElement, settings?: Record<string, any>, categories?: Array<{ id: string; name: string }>) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   if (settings) {
     client.setQueryData(['settings'], settings);
+  }
+  if (categories) {
+    client.setQueryData(['pos-categories'], categories);
   }
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
@@ -215,5 +218,50 @@ describe('PosProductsPanel', () => {
       window.innerWidth = originalInnerWidth;
       window.matchMedia = originalMatchMedia;
     }
+  });
+
+  it('INV-POS-CATEGORY-TILE-FILTER: clicking a category tile selects it and filters the grid to that category', async () => {
+    const user = userEvent.setup();
+    const inCategory = createProduct(1);
+    const otherCategory = { ...createProduct(2), name: 'Other 002', categoryId: 'category-2' };
+    function ControlledPanel() {
+      const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+      return (
+        <PosProductsPanel
+          search=""
+          onSearchChange={vi.fn()}
+          onSearchSubmitFirstResult={() => false}
+          priceType="retail"
+          onPriceTypeChange={vi.fn()}
+          products={[inCategory, otherCategory]}
+          recentProducts={[]}
+          onAddProduct={vi.fn()}
+          productFilter="all"
+          onProductFilterChange={vi.fn()}
+          selectedCategoryId={selectedCategoryId}
+          onSelectedCategoryIdChange={setSelectedCategoryId}
+          searchInputRef={createRef<HTMLInputElement>()}
+          posMode="touch"
+        />
+      );
+    }
+
+    renderWithClient(<ControlledPanel />, undefined, [
+      { id: 'category-1', name: 'إلكترونيات' },
+      { id: 'category-2', name: 'أدوات منزلية' },
+    ]);
+
+    expect(screen.getByText('Product 001')).toBeInTheDocument();
+    expect(screen.getByText('Other 002')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'إلكترونيات' }));
+
+    expect(screen.getByText('Product 001')).toBeInTheDocument();
+    expect(screen.queryByText('Other 002')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'كل الأقسام' }));
+
+    expect(screen.getByText('Product 001')).toBeInTheDocument();
+    expect(screen.getByText('Other 002')).toBeInTheDocument();
   });
 });

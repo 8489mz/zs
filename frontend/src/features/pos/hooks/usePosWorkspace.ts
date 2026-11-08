@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/app/query-keys';
 import { posApi } from '@/features/pos/api/pos.api';
@@ -93,7 +93,13 @@ export function usePosWorkspace() {
     locationId: operationalContext.locationId,
   });
 
-  const { saleProducts, catalogProducts, productsQuery } = usePosCatalog(state.search, operationalContext.branchId, operationalContext.locationId, state.productFilter);
+  // INV-POS-CATEGORY-TILE-FILTER: the selected category is workspace state,
+  // not panel-local state — it drives the server-side catalog lookup, so a
+  // tile returns the category's products instead of filtering the bounded
+  // browse window (first 300 by name) client-side.
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+
+  const { saleProducts, catalogProducts, productsQuery } = usePosCatalog(state.search, operationalContext.branchId, operationalContext.locationId, state.productFilter, selectedCategoryId);
 
   const createSale = usePosSaleMutation();
   const queryClient = useQueryClient();
@@ -460,6 +466,8 @@ export function usePosWorkspace() {
     locationId: operationalContext.locationId,
     productFilter: state.productFilter,
     setProductFilter: state.setProductFilter,
+    selectedCategoryId,
+    setSelectedCategoryId,
     submitMessage: state.submitMessage,
     canShowLastSaleActions: Boolean(
       state.cart.length === 0

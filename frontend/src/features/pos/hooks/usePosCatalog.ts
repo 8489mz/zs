@@ -61,7 +61,7 @@ export function clearStoredCatalog() {
   }
 }
 
-export function usePosCatalog(search: string, branchId: string, locationId: string, productFilter: string = 'all') {
+export function usePosCatalog(search: string, branchId: string, locationId: string, productFilter: string = 'all', selectedCategoryId: string | null = null) {
   const activeTenantId = getActiveTenantId();
   const [cacheState, setCacheState] = useState<{ tenantId: string; products: Product[] }>({ tenantId: '', products: [] });
   const parsedSearch = parseQuantityPrefixQuery(search);
@@ -71,7 +71,7 @@ export function usePosCatalog(search: string, branchId: string, locationId: stri
   const lookupMode: 'browse' | 'barcode' | 'search' = !lookupTerm ? 'browse' : isLikelyBarcodeQuery(lookupTerm) ? 'barcode' : 'search';
   const lookupView = productFilter === 'offers' ? 'offers' : '';
   const productsQuery = useQuery({
-    queryKey: ['products', 'pos', activeTenantId || 'unscoped', branchId || 'all', locationId || 'all', lookupMode, lookupTerm || '', lookupView || 'all', String(POS_PRODUCT_LOOKUP_LIMIT)] as const,
+    queryKey: ['products', 'pos', activeTenantId || 'unscoped', branchId || 'all', locationId || 'all', lookupMode, lookupTerm || '', lookupView || 'all', String(POS_PRODUCT_LOOKUP_LIMIT), selectedCategoryId || ''] as const,
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
       if (!activeTenantId || activeTenantId !== getActiveTenantId()) return [];
@@ -79,6 +79,7 @@ export function usePosCatalog(search: string, branchId: string, locationId: stri
         const res = await posApi.lookupProducts({
           ...(lookupMode === 'barcode' ? { barcode: lookupTerm } : lookupTerm ? { q: lookupTerm } : {}),
           ...(lookupView ? { view: lookupView } : {}),
+          ...(selectedCategoryId ? { categoryId: selectedCategoryId } : {}),
           branchId,
           locationId,
           limit: POS_PRODUCT_LOOKUP_LIMIT,
