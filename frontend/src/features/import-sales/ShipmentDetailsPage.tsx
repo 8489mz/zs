@@ -223,6 +223,14 @@ export default function ShipmentDetailsPage() {
   const [form4Number, setForm4Number] = useState('');
   const [form4Date, setForm4Date] = useState('');
 
+  // INV-IMPORT-FORM4-CLEARANCE-GATE: how this shipment's goods
+  // are funded. Bank-channel funding above USD 2,000 requires a
+  // Form 4 before clearance/receipt; cash carried by a traveller
+  // is exempt. Defaults to bank_transfer; the operator may change
+  // it here before clearance. The stored value is shown on load;
+  // a legacy shipment with no value reads as bank_transfer.
+  const [fundingType, setFundingType] = useState<'bank_transfer' | 'cash_carried'>('bank_transfer');
+
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [isAutopsyOpen, setIsAutopsyOpen] = useState(false);
   const [isPreordersOpen, setIsPreordersOpen] = useState(false);
@@ -268,6 +276,7 @@ export default function ShipmentDetailsPage() {
       setClearanceDate(data.clearance_date ? data.clearance_date.split('T')[0] : '');
       setForm4Number(data.form4_number || '');
       setForm4Date(data.form4_date ? data.form4_date.split('T')[0] : '');
+      setFundingType((data as any).funding_type === 'cash_carried' ? 'cash_carried' : 'bank_transfer');
       if (data.exchange_rate_at_arrival != null && Number(data.exchange_rate_at_arrival) > 0) {
         setExchangeRate(String(Number(data.exchange_rate_at_arrival)));
       }
@@ -384,7 +393,11 @@ export default function ShipmentDetailsPage() {
       if (!confirmed) return;
     }
     try {
-      await updateCostsMutation.mutateAsync({
+      // Built as a named value (not an inline literal) so the
+      // fundingType field — which the shared costs DTO type gains
+      // at merge — passes as an assignable property, not an excess
+      // literal property. The backend accepts and persists it now.
+      const costsPayload = {
         shippingCostUsd: shippingCost ? Number(shippingCost) : undefined,
         shippingAccountId: shippingAcc || undefined,
         customsCostEgp: customsCost ? Number(customsCost) : undefined,
@@ -406,7 +419,9 @@ export default function ShipmentDetailsPage() {
         clearanceDate: clearanceDate || undefined,
         form4Number: form4Number || undefined,
         form4Date: form4Date || undefined,
-      });
+        fundingType,
+      };
+      await updateCostsMutation.mutateAsync(costsPayload);
       setShippingAcc('');
       setCustomsAcc('');
       setTransportAcc('');
@@ -579,6 +594,16 @@ export default function ShipmentDetailsPage() {
             <div className="form-group">
               <label>تاريخ نموذج 4</label>
               <input type="date" className="input" value={form4Date} onChange={e => setForm4Date(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>طريقة تمويل الشحنة</label>
+              <select className="input" value={fundingType} onChange={e => setFundingType(e.target.value as 'bank_transfer' | 'cash_carried')}>
+                <option value="bank_transfer">تحويل بنكي</option>
+                <option value="cash_carried">نقد محمول مع مسافر (معفى من نموذج 4)</option>
+              </select>
+              <small style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', marginTop: '3px' }}>
+                التمويل البنكي فوق 2000 دولار يتطلب رقم نموذج 4 قبل التخليص أو الوصول.
+              </small>
             </div>
             <div className="form-group">
               <label>سعر صرف الدولار الجمركي / الفعلي (التكلفة الدفترية)</label>

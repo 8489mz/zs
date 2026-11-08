@@ -1822,6 +1822,13 @@ export class ImportSalesService {
         pricing_exchange_rate: dto.pricingExchangeRate !== undefined
           ? requireImportNumber(dto.pricingExchangeRate, 'سعر صرف التسعير', Number.MIN_VALUE)
           : undefined,
+        // INV-IMPORT-FORM4-CLEARANCE-GATE: persist the funding
+        // type, defaulting to bank_transfer — the gate keys on
+        // this column, so a shipment must never be stored
+        // without one. Spread, not a direct key: funding_type
+        // joins the ImportShipmentTable type at merge (the
+        // column itself is created by this package's migration).
+        ...({ funding_type: dto.fundingType ?? 'bank_transfer' }),
       })
       .returningAll()
       .executeTakeFirstOrThrow();
@@ -2295,6 +2302,13 @@ export class ImportSalesService {
       if (dto.clearanceDate !== undefined) payload.clearance_date = dto.clearanceDate;
       if (dto.form4Number !== undefined) payload.form4_number = dto.form4Number || null;
       if (dto.form4Date !== undefined) payload.form4_date = dto.form4Date || null;
+      // INV-IMPORT-FORM4-CLEARANCE-GATE: the funding type may be
+      // corrected before clearance/receipt; it feeds the gate on
+      // a status transition in this same call. Written through
+      // (payload as any) like the payee columns: funding_type
+      // joins the ImportShipmentTable type at merge (the column
+      // is created by this package's migration).
+      if (dto.fundingType !== undefined) (payload as any).funding_type = dto.fundingType;
       if (dto.projectId !== undefined) {
         if (dto.projectId) {
           const matchingProject = await trx.selectFrom('import_projects').select('id')
@@ -2438,6 +2452,19 @@ export class ImportSalesService {
           }
           delete (payload as any)[column];
         }
+        // INV-IMPORT-FORM4-CLEARANCE-GATE: the funding type
+        // freezes with the posted receipt too — the gate decision
+        // that allowed the receipt was taken on it, so it is part
+        // of the posted record, not a free edit. (Not in
+        // frozenFields above: funding_type joins the
+        // ImportShipmentTable type at merge.)
+        if (dto.fundingType !== undefined) {
+          const storedFundingType = (shipment as any).funding_type || 'bank_transfer';
+          if (dto.fundingType !== storedFundingType) {
+            this.assertShipmentEditable(state);
+          }
+          delete (payload as any).funding_type;
+        }
         for (const [accountId, expenseId, cost] of expenseInputs) {
           if (accountId === undefined) continue;
           if (expenseId === null && Number(cost) === 0) continue;
@@ -2545,6 +2572,21 @@ export class ImportSalesService {
    * nor satisfies the gate (recorded scoping, same attribution
    * limit as the approval binding). Throws before any write
    * outside this transaction commits.
+   *
+   * SUPERSEDED SCOPING (I1-P4, trial 2026-11-09 problem 4):
+   * the engine's "no funding recorded → gate does not apply"
+   * branch NO LONGER exempts a shipment. Every shipment now
+   * carries funding_type (migration 2040000000303, default
+   * bank_transfer), and it is ALWAYS fed to the engine as a
+   * funding method — alongside any transfer methods — so a
+   * bank-default shipment above the threshold is gated even
+   * with zero supplier_payments rows (the trial defect:
+   * MSCU-TEST-002, $2,500, no funding rows, sailed into
+   * "In Customs"). A legacy NULL funding_type reads as
+   * bank_transfer (defensive default; the migration backfills
+   * existing rows with the default). Any bank-channel method
+   * anywhere (shipment or transfer) triggers the gate; only
+   * all-cash_carried is exempt.
    */
   private async assertForm4ClearanceGate(trx: Transaction<Database>, tenantId: string, shipment: Selectable<ImportShipmentTable>): Promise<void> {
     const items = await trx.selectFrom('import_shipment_items')
@@ -2568,15 +2610,19 @@ export class ImportSalesService {
         .where('import_proforma_invoices.project_id', '=', shipment.project_id)
         .execute();
     }
+    // The shipment's own funding type is always a funding method
+    // (see the header): a NULL legacy value means bank_transfer,
+    // never "no funding".
+    const shipmentFundingType = (shipment as any).funding_type || 'bank_transfer';
     const decision = evaluateForm4Gate({
       shipmentUsdValue,
-      fundingMethods: funding.map((f) => f.payment_method),
+      fundingMethods: [shipmentFundingType, ...funding.map((f) => f.payment_method)],
       shipmentForm4Number: shipment.form4_number ?? null,
       transferForm4Numbers: funding.map((f) => f.form4_number),
     });
     if (decision.required && !decision.satisfied) {
       throw new BadRequestException(
-        `لا يمكن نقل الشحنة إلى التخليص الجمركي أو الوصول بلا نموذج 4: شحنة ممولة عبر القنوات البنكية بقيمة ${shipmentUsdValue.toFixed(2)} دولار تتجاوز حد ${FORM4_REQUIRED_THRESHOLD_USD} دولار. سجل رقم نموذج 4 على الشحنة أو على الحوالة الممولة أولاً. [IMPORT_FORM4_REQUIRED]`,
+        `لا يمكن نقل الحاوية (${shipment.container_number}) إلى التخليص الجمركي أو الوصول بلا نموذج 4: شحنة ممولة عبر القنوات البنكية بقيمة ${shipmentUsdValue.toFixed(2)} دولار تتجاوز حد ${FORM4_REQUIRED_THRESHOLD_USD} دولار. سجل رقم نموذج 4 على الشحنة أو على الحوالة الممولة أولاً. [IMPORT_FORM4_REQUIRED]`,
       );
     }
   }

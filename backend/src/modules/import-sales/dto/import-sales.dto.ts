@@ -95,6 +95,18 @@ export class CreateShipmentDto {
   @IsOptional()
   @IsIn(['value', 'weight', 'cbm'])
   costAllocationMethod?: 'value' | 'weight' | 'cbm';
+
+  // INV-IMPORT-FORM4-CLEARANCE-GATE: how this shipment's goods
+  // are funded. Bank-channel funding above USD 2,000 requires a
+  // Form 4 before clearance/receipt; cash carried by a traveller
+  // is exempt (no bank-issued Form 4 exists). Defaults to
+  // bank_transfer (the common case) when omitted; the service
+  // persists that default so the gate always has a method to
+  // key on — a shipment with no funding rows no longer slips
+  // through as "unrecorded funding".
+  @IsOptional()
+  @IsIn(['bank_transfer', 'cash_carried'])
+  fundingType?: 'bank_transfer' | 'cash_carried';
 }
 
 export class UpdateShipmentCostsDto {
@@ -277,6 +289,14 @@ export class UpdateShipmentCostsDto {
   @IsOptional()
   @IsIn(['value', 'weight', 'cbm'])
   costAllocationMethod?: 'value' | 'weight' | 'cbm';
+
+  // INV-IMPORT-FORM4-CLEARANCE-GATE: see CreateShipmentDto —
+  // the funding type may be corrected before clearance/receipt.
+  // It freezes with the posted receipt (service) and feeds the
+  // gate on every clearance/receipt transition in the same call.
+  @IsOptional()
+  @IsIn(['bank_transfer', 'cash_carried'])
+  fundingType?: 'bank_transfer' | 'cash_carried';
 }
 
 export class AddShipmentItemDto {

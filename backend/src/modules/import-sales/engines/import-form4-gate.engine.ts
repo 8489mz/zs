@@ -14,6 +14,18 @@
  * the funding is unrecorded, and the gate must not invent a
  * requirement from silence (that scoping is recorded, not
  * hidden). The threshold lives here and nowhere else.
+ *
+ * SUPERSEDED SCOPING (I1-P4, trial 2026-11-09 problem 4): the
+ * "no funding recorded" branch above no longer exempts a real
+ * shipment. Every shipment now carries a funding_type
+ * (migration 2040000000303, default bank_transfer), and the
+ * service ALWAYS passes it as a funding method — so in
+ * production the methods list is never empty and the gate
+ * applies to every bank-default shipment above the threshold,
+ * even one with no supplier_payments rows at all. The empty
+ * branch below survives only as this pure function's defined
+ * behaviour for a caller with genuinely no funding
+ * information; it is not a live exemption path.
  */
 
 /** Form 4 becomes mandatory above this B/L value, in US dollars. Single source of truth. */
