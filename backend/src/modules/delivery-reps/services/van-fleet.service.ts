@@ -4,6 +4,8 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
 import { FLEET_VEHICLE_STATUSES } from './van-common.util';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
 @Injectable()
 export class VanFleetService {
@@ -375,7 +377,11 @@ export class VanFleetService {
       throw new AppError('يرجى إدخال سعر لتر الوقود', 'INVALID_PRICE_PER_LITER', 400);
     }
 
-    const totalCost = Number((lit * ppl).toFixed(2));
+    // Fuel cost is money: round at the tenant's book digits (a 3-decimal
+    // tenant keeps its third decimal; the old 2-decimal cut dropped it).
+    // consumptionRate below stays 2dp: it is km per litre, not money.
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
+    const totalCost = roundMoney(lit * ppl, moneyDigits);
 
     const lastFuelLog = await this.anyDb
       .selectFrom('fleet_fuel_logs')

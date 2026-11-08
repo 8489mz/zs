@@ -22,6 +22,8 @@ import { createPasswordRecord, verifyPassword } from '../../core/auth/utils/pass
 import { assertSecurePasscode } from '../../core/auth/utils/password-policy';
 
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
+import { tenantBaseCurrency } from '../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
 import { SalesFinanceService } from '../sales/services/sales-finance.service';
 
 const DRIVER_TOKEN_ERRORS: PortalTokenErrorSpec = {
@@ -578,7 +580,13 @@ export class DeliveryRepsService {
       }
       const defaultMode = await this.getDeliveryFeeMode(trx, actor);
       const cashDue = (order: typeof unsettledOrders[number]) => (order.delivery_fee_mode || defaultMode) === 'store_fleet' ? Number(order.total) : Math.max(0, Number(order.total) - Number(order.delivery_fee || 0));
-      const actualTotal = Number(unsettledOrders.reduce((sum, order) => sum + cashDue(order), 0).toFixed(2));
+      // Cash due is money: round at the tenant's book digits. Currency
+      // resolves on the transaction handle (never the pool) inside the
+      // open transaction; the old 2-decimal cut dropped a 3-decimal tenant's
+      // fils before the amount was posted to treasury.
+      const { tenantId } = requireTenantScope(actor);
+      const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
+      const actualTotal = roundMoney(unsettledOrders.reduce((sum, order) => sum + cashDue(order), 0), moneyDigits);
 
       if (Math.abs(actualTotal - expectedAmount) > 0.01) {
         throw new AppError(`مبلغ التسوية (${expectedAmount}) لا يتطابق مع إجمالي المطلوب من المندوب (${actualTotal}).`, 'AMOUNT_MISMATCH', 400);

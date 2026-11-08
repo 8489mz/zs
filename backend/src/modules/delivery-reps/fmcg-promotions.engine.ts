@@ -3,6 +3,8 @@
  * Deterministic, zero side-effects, testable in isolation.
  */
 
+import { type MoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
+
 export type FmcgPromoType = 'mix_and_match' | 'tiered_qty' | 'invoice_threshold';
 export type FmcgApplyType = 'free_bonus' | 'discount_percent' | 'discount_amount';
 
@@ -105,8 +107,14 @@ export function evaluateFmcgCartPromotions(params: {
   customerType?: string | null;
   activePromotions: FmcgPromotion[];
   referenceDate?: string | Date;
+  // Book digits of the tenant's base currency (2 or 3). Defaults to 2
+  // for pure-engine callers that do not resolve a tenant; the live
+  // caller (VanPromotionsService.evaluateCart) passes the tenant's
+  // book digits so a 3-decimal tenant keeps its third decimal.
+  moneyDigits?: MoneyDigits;
 }): CartPromotionEvaluationResult {
   const { cartItems, activePromotions } = params;
+  const moneyDigits: MoneyDigits = params.moneyDigits ?? 2;
 
   // Filter out any existing system-added promo bonuses from condition checking
   const nonBonusItems = cartItems.filter((i) => !i.isBonus && i.qty > 0);
@@ -212,9 +220,9 @@ export function evaluateFmcgCartPromotions(params: {
             bonusReason: bItem.bonusReason,
           });
         } else if (promo.applyType === 'discount_percent' && reward.discountPercent) {
-          discount = Number(((computedSubtotal * Number(reward.discountPercent)) / 100).toFixed(2));
+          discount = roundMoney((computedSubtotal * Number(reward.discountPercent)) / 100, moneyDigits);
         } else if (promo.applyType === 'discount_amount' && reward.discountAmount) {
-          discount = Number((Number(reward.discountAmount) * apps).toFixed(2));
+          discount = roundMoney(Number(reward.discountAmount) * apps, moneyDigits);
         }
 
         totalPromotionalDiscount += discount;
@@ -280,9 +288,9 @@ export function evaluateFmcgCartPromotions(params: {
           });
         } else if (promo.applyType === 'discount_percent' && reward.discountPercent) {
           const itemTotal = (itemInCart?.unitPrice || 0) * currentQty;
-          discount = Number(((itemTotal * Number(reward.discountPercent)) / 100).toFixed(2));
+          discount = roundMoney((itemTotal * Number(reward.discountPercent)) / 100, moneyDigits);
         } else if (promo.applyType === 'discount_amount' && reward.discountAmount) {
-          discount = Number((Number(reward.discountAmount) * apps).toFixed(2));
+          discount = roundMoney(Number(reward.discountAmount) * apps, moneyDigits);
         }
 
         totalPromotionalDiscount += discount;
@@ -320,9 +328,9 @@ export function evaluateFmcgCartPromotions(params: {
         const bonuses: AppliedPromotionReward['bonusItems'] = [];
 
         if (promo.applyType === 'discount_percent' && reward.discountPercent) {
-          discount = Number(((computedSubtotal * Number(reward.discountPercent)) / 100).toFixed(2));
+          discount = roundMoney((computedSubtotal * Number(reward.discountPercent)) / 100, moneyDigits);
         } else if (promo.applyType === 'discount_amount' && reward.discountAmount) {
-          discount = Number(Number(reward.discountAmount).toFixed(2));
+          discount = roundMoney(Number(reward.discountAmount), moneyDigits);
         } else if (promo.applyType === 'free_bonus' && reward.bonusProductId) {
           const bQty = Number(reward.bonusQty || 1);
           const bItem = {
@@ -357,7 +365,7 @@ export function evaluateFmcgCartPromotions(params: {
           description: `تم تطبيق ${promo.name} لتجاوز الفاتورة ${minTotal}`,
         });
       } else if (computedSubtotal >= minTotal * 0.7) {
-        const diff = Number((minTotal - computedSubtotal).toFixed(2));
+        const diff = roundMoney(minTotal - computedSubtotal, moneyDigits);
         upsellNudges.push({
           promoId: promo.id,
           promoName: promo.name,
@@ -371,7 +379,7 @@ export function evaluateFmcgCartPromotions(params: {
   return {
     appliedPromotions,
     bonusItemsToAdd,
-    totalPromotionalDiscount: Number(totalPromotionalDiscount.toFixed(2)),
+    totalPromotionalDiscount: roundMoney(totalPromotionalDiscount, moneyDigits),
     upsellNudges,
   };
 }

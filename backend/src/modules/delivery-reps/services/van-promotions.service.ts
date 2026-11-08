@@ -9,6 +9,8 @@ import {
   CartItemInput,
   CartPromotionEvaluationResult,
 } from '../fmcg-promotions.engine';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
 export interface UpsertFmcgPromotionDto {
   name: string;
@@ -170,11 +172,15 @@ export class VanPromotionsService {
     },
   ): Promise<CartPromotionEvaluationResult> {
     const activePromotions = await this.listPromotions(tenantId, { isActive: true });
+    // Pass the tenant's book digits into the pure engine: without this
+    // the engine would default to 2 and cut a 3-decimal tenant's fils.
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
     return evaluateFmcgCartPromotions({
       cartItems: payload.cartItems || [],
       invoiceSubtotal: payload.invoiceSubtotal,
       customerType: payload.customerType,
       activePromotions,
+      moneyDigits,
     });
   }
 

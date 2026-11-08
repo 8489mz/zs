@@ -6,6 +6,8 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
 import { AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
 export type RiskLevel = 'low' | 'medium' | 'high';
 
@@ -102,6 +104,9 @@ export class CashierFraudRadarService {
     const scope = requireTenantScope(auth);
     const timeSql = this.getTimeFilter(timeframe);
     const maxDetailedEvents = 2_000;
+    // estimatedProtectedLoss is money: round at the tenant's book digits
+    // (the old 2-decimal cut dropped a 3-decimal tenant's fils).
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
 
     // 1. Fetch active users / cashiers for this tenant
     const cashiers = await this.db
@@ -307,7 +312,7 @@ export class CashierFraudRadarService {
       totalSuspiciousEvents,
       highRiskCashiersCount: highRiskCount,
       mediumRiskCashiersCount: mediumRiskCount,
-      estimatedProtectedLoss: Number(estimatedProtectedLoss.toFixed(2)),
+      estimatedProtectedLoss: roundMoney(estimatedProtectedLoss, moneyDigits),
       cashiers: profiles,
       thresholds: {
         maxHourlyVoidsAlert: 5,

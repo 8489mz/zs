@@ -41,6 +41,11 @@ async function setup() {
   await sql`CREATE TABLE users (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, username TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'cashier', is_active BOOLEAN NOT NULL DEFAULT true)`.execute(db);
   await sql`CREATE TABLE audit_logs (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, account_id VARCHAR(50) NOT NULL DEFAULT 'a1', action TEXT NOT NULL, event_code TEXT, details TEXT NOT NULL DEFAULT '', created_by INTEGER, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`.execute(db);
   await sql`CREATE TABLE sales (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, account_id VARCHAR(50) NOT NULL DEFAULT 'a1', doc_no TEXT, status TEXT NOT NULL DEFAULT 'posted', total NUMERIC(14,2) NOT NULL DEFAULT 0, created_by INTEGER, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`.execute(db);
+  // Currency lookup tables for tenantBaseCurrency (no rows seeded:
+  // the tenant defaults to EGP / 2dp, so the assertions below are
+  // unaffected). getSummary resolves book digits from these.
+  await sql`CREATE TABLE settings (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL DEFAULT '')`.execute(db);
+  await sql`CREATE TABLE currency_exchange_rates (id SERIAL PRIMARY KEY, tenant_id VARCHAR(50) NOT NULL, currency_code TEXT NOT NULL, exchange_rate NUMERIC(14,6) NOT NULL DEFAULT 1, is_base BOOLEAN NOT NULL DEFAULT false)`.execute(db);
 
   await db.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'muse', role: 'cashier', is_active: true }).execute();
   const service = new CashierFraudRadarService(db as any);

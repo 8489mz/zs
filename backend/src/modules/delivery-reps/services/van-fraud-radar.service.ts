@@ -4,6 +4,8 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
 export type VanSuspicionSeverity = 'medium' | 'high' | 'critical';
 
@@ -196,7 +198,11 @@ export class VanFraudRadarService {
       const detailsAr = String(params.detailsAr || params.details || titleAr).trim();
       const severity: VanSuspicionSeverity = params.severity || 'high';
       const rawAmount = params.amountInvolved ?? params.attemptedAmount ?? params.amount ?? 0;
-      const amountInvolved = Number.isFinite(Number(rawAmount)) ? Number(Number(rawAmount).toFixed(2)) : 0;
+      // amountInvolved is money stored in the audit log: round at the
+      // tenant's book digits (a 3-decimal tenant keeps its third decimal;
+      // the old 2-decimal cut dropped it before the event was persisted).
+      const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, params.tenantId));
+      const amountInvolved = Number.isFinite(Number(rawAmount)) ? roundMoney(Number(rawAmount), moneyDigits) : 0;
       const wasBlocked = params.wasBlocked !== undefined ? params.wasBlocked : params.eventCode !== AUDIT_EVENT_CODES.VAN_SUSPICION_SETTLEMENT_SHORTAGE;
 
       const payloadJson = {
@@ -326,6 +332,8 @@ export class VanFraudRadarService {
   ): Promise<VanFraudRadarSummaryResponse> {
     const periodDays = Math.min(365, Math.max(1, Number(options?.days || 30)));
     const cutoff = new Date(Date.now() - periodDays * 24 * 3600 * 1000);
+    // Amount-at-risk totals are money: round at the tenant's book digits.
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
 
     const [repsRows, logsRows] = await Promise.all([
       this.anyDb
@@ -399,7 +407,7 @@ export class VanFraudRadarService {
       totalSuspicionEvents++;
       if (ev.severity === 'critical') criticalEventsCount++;
       if (ev.amountInvolved > 0) {
-        totalAmountAtRisk = Number((totalAmountAtRisk + ev.amountInvolved).toFixed(2));
+        totalAmountAtRisk = roundMoney(totalAmountAtRisk + ev.amountInvolved, moneyDigits);
       }
       if (ev.eventCode === AUDIT_EVENT_CODES.VAN_SUSPICION_SETTLEMENT_SHORTAGE) {
         settlementShortageEventsCount++;
@@ -446,7 +454,7 @@ export class VanFraudRadarService {
         else profile.mediumEventsCount++;
 
         if (ev.amountInvolved > 0) {
-          profile.totalAmountAtRisk = Number((profile.totalAmountAtRisk + ev.amountInvolved).toFixed(2));
+          profile.totalAmountAtRisk = roundMoney(profile.totalAmountAtRisk + ev.amountInvolved, moneyDigits);
         }
         if (!profile.lastEventAt || ev.createdAt > profile.lastEventAt) {
           profile.lastEventAt = ev.createdAt;

@@ -4,6 +4,8 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
 export interface AggregatorChannelDto {
   code: string;
@@ -247,8 +249,12 @@ export class DeliveryAggregatorsService {
     const commRate = dto.commissionRate ?? Number(aggregator.commission_rate || 0);
     const subtotal = Number(dto.subtotal || 0);
     const deliveryFee = Number(dto.deliveryFee || 0);
-    const commissionAmount = Number(((subtotal * commRate) / 100).toFixed(2));
-    const netPayout = Number((subtotal - commissionAmount).toFixed(2));
+    // Commission and net payout are money: round at the tenant's book
+    // digits (the old 2-decimal cut dropped a 3-decimal tenant's fils
+    // before the amounts were stored on the aggregator order).
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
+    const commissionAmount = roundMoney((subtotal * commRate) / 100, moneyDigits);
+    const netPayout = roundMoney(subtotal - commissionAmount, moneyDigits);
 
     const initialStatus = aggregator.auto_accept_orders ? 'preparing' : 'received';
 

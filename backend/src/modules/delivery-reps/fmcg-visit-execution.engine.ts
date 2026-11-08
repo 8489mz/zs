@@ -4,6 +4,8 @@
  * and structured store visit transitions.
  */
 
+import { type MoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
+
 export interface VisitCoordinates {
   latitude: number;
   longitude: number;
@@ -113,7 +115,10 @@ export class FmcgVisitExecutionEngine {
   }
 
   /**
-   * Computes Strike-Rate (نجاح التغطية والإنتاجية) and visit KPI aggregates
+   * Computes Strike-Rate (نجاح التغطية والإنتاجية) and visit KPI aggregates.
+   * Money totals round at the tenant's book digits (default 2 for
+   * pure-engine callers); the live caller (VanFieldExecutionService
+   * .getVisitsHistory) passes the tenant's book digits.
    */
   static calculateStrikeRateMetrics(visits: Array<{
     has_sale?: boolean;
@@ -122,7 +127,7 @@ export class FmcgVisitExecutionEngine {
     collection_amount?: number | string;
     dwell_time_seconds?: number;
     no_sale_reason?: string | null;
-  }>) {
+  }>, moneyDigits: MoneyDigits = 2) {
     const totalVisits = visits.length;
     let productiveVisits = 0;
     let totalSales = 0;
@@ -150,8 +155,8 @@ export class FmcgVisitExecutionEngine {
       productiveVisits,
       nonProductiveVisits: totalVisits - productiveVisits,
       strikeRatePercentage,
-      totalSalesAmount: Number(totalSales.toFixed(2)),
-      totalCollectionsAmount: Number(totalCollections.toFixed(2)),
+      totalSalesAmount: roundMoney(totalSales, moneyDigits),
+      totalCollectionsAmount: roundMoney(totalCollections, moneyDigits),
       avgDwellTimeMinutes,
       noSaleReasonsCount,
     };

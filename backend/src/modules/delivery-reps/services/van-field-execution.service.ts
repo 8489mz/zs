@@ -5,6 +5,8 @@ import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
 import { VanFraudRadarService } from './van-fraud-radar.service';
 import { FmcgVisitExecutionEngine, GeofenceEvaluationResult } from '../fmcg-visit-execution.engine';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
 export interface CheckInVisitPayload {
   tripId?: number | null;
@@ -540,7 +542,11 @@ export class VanFieldExecutionService {
       return tb - ta;
     });
 
-    const metrics = FmcgVisitExecutionEngine.calculateStrikeRateMetrics(allVisits);
+    // Pass the tenant's book digits into the pure engine: without this
+    // the engine would default to 2 and cut a 3-decimal tenant's fils
+    // off the visit sales/collections totals.
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+    const metrics = FmcgVisitExecutionEngine.calculateStrikeRateMetrics(allVisits, moneyDigits);
 
     return {
       ok: true,
