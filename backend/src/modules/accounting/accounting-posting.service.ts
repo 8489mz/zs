@@ -14,6 +14,7 @@ import { AppError } from '../../common/errors/app-error';
 import { calculateSalesReturnCost, resolveSalesReturnCostLines } from './engines/sales-return-cost.engine';
 import { cogsResidualAmount, type CogsResidualGroup } from './engines/cogs-residual.engine';
 import { allocatePayrollAccrual } from '../hr/engines/payroll-accrual-allocation.engine';
+import { calculateSettlementAbsorption } from '../hr/engines/eos-calculation.engine';
 import { assertAutomatedJournalPeriodOpen, lockAccountingPeriod } from './accounting-period-lock';
 import { assertTaxPeriodOpen } from './accounting-tax-lock';
 import { randomUUID } from 'node:crypto';
@@ -6432,30 +6433,44 @@ export class AccountingPostingService {
     const pendingSalary = toBookMoney(settlement.pending_salary_amount || 0);
     const noticePeriod = toBookMoney(settlement.notice_period_amount || 0);
     const otherEntitlements = toBookMoney(settlement.other_entitlements_amount || 0);
-    const totalEntitlements = toBookMoney(gratuity + leavePay + pendingSalary + noticePeriod + otherEntitlements);
-
     const unpaidLoans = toBookMoney(settlement.unpaid_loans_deduction || 0);
     const assetsDeduction = toBookMoney(settlement.assets_deduction || 0);
     const otherDeductions = toBookMoney(settlement.other_deductions || 0);
 
+    // Absorption invariant: deductions cannot exceed total entitlements
+    // in the settlement payout. The order (assets, other, loans) and
+    // the pool math live in ONE place — the EOS engine that priced
+    // the settlement — so the posting can never drift from it. Any
+    // excess remains an uncollected employee debt.
+    let absorption: ReturnType<typeof calculateSettlementAbsorption>;
+    try {
+      absorption = calculateSettlementAbsorption({
+        gratuityAmount: gratuity,
+        leaveEncashmentAmount: leavePay,
+        pendingSalaryAmount: pendingSalary,
+        noticePeriodAmount: noticePeriod,
+        otherEntitlementsAmount: otherEntitlements,
+        unpaidLoansDeduction: unpaidLoans,
+        assetsDeduction,
+        otherDeductions,
+        minorUnits: bookDigits,
+      });
+    } catch (error) {
+      throw new AppError(
+        error instanceof Error ? error.message : 'End of service settlement amounts are invalid',
+        'HR_EOS_SETTLEMENT_AMOUNTS_INVALID',
+        400,
+      );
+    }
+    const totalEntitlements = absorption.totalEntitlements;
+    const appliedAssets = absorption.appliedAssets;
+    const appliedOther = absorption.appliedOther;
+    const appliedLoans = absorption.appliedLoans;
+    const netPayable = absorption.netPayable;
+
     if (totalEntitlements <= 0) {
       throw new AppError('Cannot post end of service settlement with zero entitlements', 'HR_EOS_ZERO_VALUE', 400);
     }
-
-    // Absorption invariant: Deductions cannot exceed total entitlements in the settlement payout.
-    // Any excess deductions remain as uncollected employee debts.
-    let remainingPool = totalEntitlements;
-
-    const appliedAssets = Math.min(assetsDeduction, remainingPool);
-    remainingPool = toBookMoney(remainingPool - appliedAssets);
-
-    const appliedOther = Math.min(otherDeductions, remainingPool);
-    remainingPool = toBookMoney(remainingPool - appliedOther);
-
-    const appliedLoans = Math.min(unpaidLoans, remainingPool);
-    remainingPool = toBookMoney(remainingPool - appliedLoans);
-
-    const netPayable = remainingPool;
 
     const expenseAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '6200'); // Salaries & EOS Expense
     const advancesAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1160'); // Employee Advances

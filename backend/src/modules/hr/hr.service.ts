@@ -51,7 +51,7 @@ import {
 } from './attendance-punch.engine';
 import { allocateLoanDeduction, calculatePayrollLoanDueTotal, calculateLoanInstallmentSchedule, addLoanInstallmentMonths, requireLoanMoney } from './payroll-loan-allocation.engine';
 import { MoneyDigits, currencyMoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
-import { calculateOvertime, calculateHourlyOvertimePremium } from './engines/payroll-calculation.engine';
+import { calculateOvertime, calculateHourlyOvertimePremium, calculateProgressiveDelayDeduction } from './engines/payroll-calculation.engine';
 import { calculateHrPayrollRunLine, requirePayrollMonetaryCurrency, requireStoredHrMoney, requireBankPayrollPaymentReference, canReincludeAutoExcludedPayrollItem, AUTO_PAYROLL_EXCLUSION_NOTE, MANUAL_PAYROLL_EXCLUSION_NOTE } from './engines/hr-payroll-run.engine';
 import { validateHrStatutoryPolicy, requireHrPayrollJurisdictionCurrency, inferStatutoryCountry, STATUTORY_COUNTRIES, type HrStatutoryPolicy } from './engines/hr-statutory-policy.engine';
 import { summarizeHourlyAttendance, calculateEffectiveContractPay, calculateEffectiveCompensationPay, calculateHistoricalOvertimePay, calculateDatedPayrollAdjustment, payrollCalendarMonthFraction, calculatePayableMinutes, resolveExpectedDailyMinutes, daysInCalendarMonth, type EffectiveSalaryContract, type EffectiveCompensationPackage, type ApprovedOvertimeDay } from './engines/hourly-attendance-pay.engine';
@@ -3332,33 +3332,36 @@ export class HrService {
       const dailyRate = isHourly ? (hourlyRate * expectedHours) : (contractedBase > 0 ? roundMoney(contractedBase / daysInCalendarMonth(range.from), reviewDigits) : 0);
       const calculatedHourlyRate = isHourly ? hourlyRate : (dailyRate / expectedHours);
 
-      // Determine Delay Policy Deduction
+      // Delay deduction runs through the canonical engine
+      // (payroll-calculation.engine): the same tier loop and minute
+      // rate the attendance preview path uses. 'strict' (half a day
+      // per incident, no grace) has no engine mode and stays inline.
       let delayDeduction = 0;
       let delayPolicyMode = emp.delay_policy || 'inherit';
       if (delayPolicyMode === 'inherit') {
         delayPolicyMode = hrDelayPolicyEnabled ? 'progressive' : 'standard';
       }
-      
-      if (delayPolicyMode === 'progressive') {
-        // Calculate progressive deduction (in days or hours depending on settings)
-        // Assume global settings are in days (or fractions of days like 0.25)
-        let totalPenaltyDays = 0;
-        for (let i = 1; i <= totalIncidents; i++) {
-          if (i === 1) totalPenaltyDays += hrDelayPolicyFirstTime;
-          else if (i === 2) totalPenaltyDays += hrDelayPolicySecondTime;
-          else if (i === 3) totalPenaltyDays += hrDelayPolicyThirdTime;
-          else totalPenaltyDays += hrDelayPolicyFourthTime;
-        }
-        delayDeduction = roundMoney(dailyRate * totalPenaltyDays, reviewDigits);
-      } else if (delayPolicyMode === 'standard') {
-        // Standard: just exact minutes translated to money
-        delayDeduction = roundMoney((calculatedHourlyRate * (lateMinutes + earlyLeaveMinutes) / 60), reviewDigits);
-      } else if (delayPolicyMode === 'strict') {
+
+      if (delayPolicyMode === 'strict') {
         // Strict: half-day deduction per incident
         delayDeduction = roundMoney(dailyRate * 0.5 * totalIncidents, reviewDigits);
       } else {
-        // disabled
-        delayDeduction = 0;
+        delayDeduction = calculateProgressiveDelayDeduction({
+          minorUnits: reviewDigits,
+          dailyRate,
+          calculatedHourlyRate,
+          totalIncidents,
+          totalLateMinutes: lateMinutes + earlyLeaveMinutes,
+          policyMode: delayPolicyMode === 'progressive' || delayPolicyMode === 'standard'
+            ? delayPolicyMode
+            : 'disabled',
+          tiers: {
+            firstTimeDeductionDays: hrDelayPolicyFirstTime,
+            secondTimeDeductionDays: hrDelayPolicySecondTime,
+            thirdTimeDeductionDays: hrDelayPolicyThirdTime,
+            fourthTimeDeductionDays: hrDelayPolicyFourthTime,
+          },
+        });
       }
 
       // D4: each absent day is priced at ITS calendar month's daily rate
