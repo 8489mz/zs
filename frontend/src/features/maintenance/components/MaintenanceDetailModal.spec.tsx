@@ -14,12 +14,13 @@ import { SYSTEM_DEFAULTS } from '@/config/system-defaults.constants';
 import type { Product } from '@/types/domain-models/catalog';
 import type { MaintenanceTicket } from '@/types/domain-models/maintenance';
 
-const { listPageMock, addPartMock, getTicketMock, updateStatusMock, removePartMock } = vi.hoisted(() => ({
+const { listPageMock, addPartMock, getTicketMock, updateStatusMock, removePartMock, toastErrorMock } = vi.hoisted(() => ({
   listPageMock: vi.fn(),
   addPartMock: vi.fn(),
   getTicketMock: vi.fn(),
   updateStatusMock: vi.fn(),
   removePartMock: vi.fn(),
+  toastErrorMock: vi.fn(),
 }));
 
 vi.mock('@/features/products/api/products.api', () => ({
@@ -32,6 +33,18 @@ vi.mock('@/features/maintenance/api/maintenance.api', () => ({
     get: getTicketMock,
     updateStatus: updateStatusMock,
     removePart: removePartMock,
+  },
+}));
+
+/* The modal toasts addPart failures through the shared toast framework
+ * (repo rule: never a native alert); the mock lets the spec assert the
+ * exact specific message the user would see. */
+vi.mock('@/shared/components/system-alert', () => ({
+  toast: {
+    error: toastErrorMock,
+    success: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
   },
 }));
 
@@ -103,19 +116,19 @@ function renderModal(ticket: MaintenanceTicket = TICKET) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   }
   const user = userEvent.setup();
-  const view = render(
+  const modalElement = (t: MaintenanceTicket) => (
     <MaintenanceDetailModal
-      ticket={ticket}
+      ticket={t}
       onClose={vi.fn()}
       onOpenSettlement={vi.fn()}
       onSendWhatsApp={vi.fn()}
       onPrintReceipt={vi.fn()}
       maintenanceProfile={getMaintenanceProfile()}
       commissionRate={SYSTEM_DEFAULTS.TECHNICIAN_COMMISSION_RATE}
-    />,
-    { wrapper: Wrapper },
+    />
   );
-  return { ...view, user };
+  const view = render(modalElement(ticket), { wrapper: Wrapper });
+  return { ...view, user, rerenderTicket: (next: MaintenanceTicket) => view.rerender(modalElement(next)) };
 }
 
 /* The combobox selects the input text on focus and re-selects it from a
@@ -306,5 +319,145 @@ describe('MaintenanceDetailModal refund, passcode and pricing warnings', () => {
     });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.queryByText(/سعر قطع الغيار أعلى من إجمالي الحساب/)).not.toBeInTheDocument();
+  });
+});
+
+/* LF-P1 (live-fix batch, ticket ZM-261108-0002): the "+ صرف" button was
+ * dead live — a stocked part picked by barcode or by name, four clicks,
+ * zero parts recorded, no error, no 5100/1140 journal. The pick→click
+ * path itself works on a stable prop (see the 600 ms test above), so the
+ * break is what happens AROUND the pick: (1) the modal's useEffect
+ * ([ticket]) wipes the pick whenever the ticket prop arrives as a new
+ * object — a list refetch re-deriving the selected ticket does exactly
+ * that, and the button goes disabled under the technician's clicks;
+ * (2) addPart had no error surface at all, so ANY backend refusal
+ * (closed ticket, insufficient stock) vanished with no trace; (3) the
+ * dispatch row offered dispatch on closed tickets, whose backend
+ * rejects it (MAINTENANCE_CLOSED 409) by design. Each test below FAILS
+ * on the base file and PASSES only with the production fix. */
+describe('MaintenanceDetailModal parts dispatch stays alive (LF-P1)', () => {
+  beforeEach(() => {
+    listPageMock.mockReset();
+    addPartMock.mockReset();
+    getTicketMock.mockReset();
+    updateStatusMock.mockReset();
+    removePartMock.mockReset();
+    toastErrorMock.mockReset();
+    listPageMock.mockImplementation(async (params: { q: string }) => ({
+      products: [SCREEN, BATTERY].filter((p) => p.name.includes(params.q) || p.barcode.includes(params.q)),
+      pagination: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
+      summary: {
+        totalProducts: 2,
+        lowStockCount: 0,
+        outOfStockCount: 1,
+        inventoryCost: 0,
+        inventorySaleValue: 0,
+        activeOffersCount: 0,
+        customerPriceCount: 0,
+      },
+    }));
+    addPartMock.mockResolvedValue({ ok: true, partId: 'p1', newFinalCost: 850 });
+    getTicketMock.mockResolvedValue({ ticket: TICKET });
+  });
+
+  async function pickScreenPart(user: ReturnType<typeof userEvent.setup>) {
+    await searchForPart(user, 'شاشة');
+    const option = await screen.findByText('شاشة سامسونج A54 (متاح: 4) - 850 ج.م', {}, { timeout: 3000 });
+    await user.click(option);
+    const dispatchButton = screen.getByRole('button', { name: '+ صرف' });
+    await waitFor(() => expect(dispatchButton).toBeEnabled(), { timeout: 3000 });
+    return dispatchButton;
+  }
+
+  it('keeps the picked part when the same ticket arrives as a fresh prop object', async () => {
+    const { user, rerenderTicket } = renderModal();
+    await pickScreenPart(user);
+
+    /* A list refetch re-derives the selected ticket: same id, new object
+     * identity, one harmless field changed — the technician's in-progress
+     * pick must survive it, exactly as a real refetch would deliver it. */
+    rerenderTicket({ ...TICKET, technicianNotes: 'فحص أولي' });
+
+    const dispatchButton = screen.getByRole('button', { name: '+ صرف' });
+    await waitFor(() => expect(dispatchButton).toBeEnabled(), { timeout: 3000 });
+    expect(screen.getByPlaceholderText('السعر')).toHaveValue(850);
+
+    await user.click(dispatchButton);
+    await waitFor(() =>
+      expect(addPartMock).toHaveBeenCalledWith('t1', {
+        productId: 42,
+        productName: 'شاشة سامسونج A54',
+        qty: 1,
+        unitCost: 600,
+        unitPrice: 850,
+      }),
+    );
+    expect(addPartMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('still resets the pick when a DIFFERENT ticket is opened', async () => {
+    const { user, rerenderTicket } = renderModal();
+    await pickScreenPart(user);
+
+    rerenderTicket({ ...TICKET, id: 't2', ticketNo: 'ZM-261108-0002' });
+
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: '+ صرف' })).toBeDisabled(),
+      { timeout: 3000 },
+    );
+    expect(addPartMock).not.toHaveBeenCalled();
+  });
+
+  it('does not offer dispatch on a delivered ticket', async () => {
+    const { user } = renderModal({ ...TICKET, status: 'delivered' });
+    await searchForPart(user, 'شاشة');
+    const option = await screen.findByText('شاشة سامسونج A54 (متاح: 4) - 850 ج.م', {}, { timeout: 3000 });
+    await user.click(option);
+
+    expect(screen.getByRole('button', { name: '+ صرف' })).toBeDisabled();
+    expect(addPartMock).not.toHaveBeenCalled();
+  });
+
+  it('names the closed ticket when the backend refuses a dispatch on it', async () => {
+    const { user } = renderModal();
+    addPartMock.mockRejectedValueOnce(
+      Object.assign(new Error('Cannot issue parts to a closed maintenance ticket'), {
+        code: 'MAINTENANCE_CLOSED',
+        status: 409,
+      }),
+    );
+    const dispatchButton = await pickScreenPart(user);
+
+    await user.click(dispatchButton);
+
+    await waitFor(() => expect(addPartMock).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled(), { timeout: 3000 });
+    const toasted = String(toastErrorMock.mock.calls[0][0]);
+    expect(toasted).toMatch(/مغلقة/);
+    expect(toasted).toMatch(/ZM-261108-0001/);
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByText(/مغلقة/)).toBeInTheDocument();
+  });
+
+  it('shows the backend stock message verbatim when stock refuses the dispatch', async () => {
+    const { user } = renderModal();
+    addPartMock.mockRejectedValueOnce(
+      Object.assign(new Error('الرصيد غير كافٍ لصرف قطعة الغيار شاشة سامسونج A54'), {
+        code: 'INSUFFICIENT_STOCK',
+        status: 422,
+      }),
+    );
+    const dispatchButton = await pickScreenPart(user);
+
+    await user.click(dispatchButton);
+
+    await waitFor(() => expect(addPartMock).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled(), { timeout: 3000 });
+    expect(String(toastErrorMock.mock.calls[0][0])).toContain(
+      'الرصيد غير كافٍ لصرف قطعة الغيار شاشة سامسونج A54',
+    );
+    expect(
+      screen.getByText('الرصيد غير كافٍ لصرف قطعة الغيار شاشة سامسونج A54'),
+    ).toBeInTheDocument();
   });
 });

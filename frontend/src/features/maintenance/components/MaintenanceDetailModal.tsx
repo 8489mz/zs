@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/shared/ui/button';
 import { DialogShell } from '@/shared/components/dialog-shell';
+import { toast } from '@/shared/components/system-alert';
 import { AlertTriangleIcon, CheckIcon, XIcon } from '@/shared/components/icons/AppIcons';
 import { SearchableCombobox } from '@/shared/ui/searchable-combobox';
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value';
@@ -120,7 +121,24 @@ export function MaintenanceDetailModal({
   const getPartOptionLabel = (p: PartProductOption) =>
     `${p.name} (متاح: ${p.stock}) - ${p.retailPrice} ${getGlobalCurrencySymbol()}`;
 
+  /* Which ticket the modal's drafts belong to. The ticket prop arrives
+   * as a FRESH object whenever the parent list refetch re-derives the
+   * selected ticket (same id, new identity): resetting the in-progress
+   * pick on every identity change wiped a part the technician had
+   * already picked and left the dispatch button disabled under live
+   * clicks (LF-P1). The reset below runs only when a DIFFERENT ticket
+   * is opened (or the modal closes); a same-ticket refresh keeps the
+   * pick, the drafts and the prices, and only refreshes the shown
+   * ticket content. */
+  const openedTicketIdRef = useRef<string | null>(ticket?.id ?? null);
+
   useEffect(() => {
+    const nextId = ticket?.id ?? null;
+    if (nextId === openedTicketIdRef.current) {
+      setCurrentTicket(ticket);
+      return;
+    }
+    openedTicketIdRef.current = nextId;
     setCurrentTicket(ticket);
     setEditingCost(null);
     setPendingCashRefundStatus(null);
@@ -159,6 +177,24 @@ export function MaintenanceDetailModal({
     },
   });
 
+  /* A failed dispatch must name the actual problem — never a generic
+   * message, and never silence (LF-P1: four live clicks produced no
+   * error at all). The backend already returns a specific message +
+   * code (ApiError.code): the English closed-ticket message is rendered
+   * in Arabic with the ticket number, the Arabic stock message is shown
+   * verbatim because it already names the part, and anything else falls
+   * back to the backend message — never a bare "تعذر تنفيذ العملية". */
+  const getAddPartErrorMessage = (error: unknown): string => {
+    const code = (error as { code?: unknown } | null)?.code;
+    const backendMessage = error instanceof Error && error.message ? error.message : '';
+    const ticketNo = currentTicket?.ticketNo ?? '';
+    if (code === 'MAINTENANCE_CLOSED') {
+      return `لا يمكن صرف قطع غيار لتذكرة مغلقة — التذكرة ${ticketNo} مسلّمة/ملغاة ولا تقبل صرفًا جديدًا.`;
+    }
+    if (backendMessage) return backendMessage;
+    return `تعذّر صرف قطعة الغيار على التذكرة ${ticketNo} — راجع المخزون وحالة التذكرة ثم حاول مجددًا.`;
+  };
+
   const addPartMutation = useMutation({
     mutationFn: ({ ticketId, payload }: { ticketId: string; payload: any }) =>
       maintenanceApi.addPart(ticketId, payload),
@@ -168,6 +204,9 @@ export function MaintenanceDetailModal({
       setPartQty(1);
       setPartPrice(0);
       if (currentTicket) void refreshCurrentTicket(currentTicket.id);
+    },
+    onError: (error) => {
+      toast.error(getAddPartErrorMessage(error));
     },
   });
 
@@ -605,12 +644,26 @@ export function MaintenanceDetailModal({
               type="button"
               variant="primary"
               onClick={handleAddPartSubmit}
-              disabled={!selectedProductId || addPartMutation.isPending}
+              /* A closed ticket can never accept a dispatch — the backend
+               * rejects it with MAINTENANCE_CLOSED — so the button is not
+               * offered at all instead of taking clicks that fail (LF-P1). */
+              disabled={!selectedProductId || !isTicketOpen || addPartMutation.isPending}
               style={{ height: '36px', padding: '0 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap', margin: 0, fontWeight: 700, fontSize: '0.825rem' }}
             >
               {addPartMutation.isPending ? t('maintenance.maintenance_detail_modal.s16', "جاري...") : t('maintenance.maintenance_detail_modal.s17', "+ صرف")}
             </Button>
           </div>
+
+          {/* A failed dispatch must name the reason in place (same pattern
+           * as the status-change error above) — the toast alone is not
+           * enough if the technician missed it. The message itself is in
+           * its own span so it stays addressable verbatim. */}
+          {addPartMutation.isError && (
+            <div role="alert" style={{ marginBottom: '8px', padding: '8px 10px', borderRadius: '6px', border: '1px solid #fecdd3', background: '#fff1f2', color: '#9f1239', fontSize: '0.8rem', fontWeight: 600 }}>
+              {t('maintenance.maintenance_detail_modal.add_part_failed', 'تعذّر صرف قطعة الغيار:')}{' '}
+              <span>{getAddPartErrorMessage(addPartMutation.error)}</span>
+            </div>
+          )}
 
           {(currentTicket.parts || []).length > 0 ? (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.825rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
