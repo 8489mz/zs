@@ -7,16 +7,6 @@ import type { MaintenanceTicket } from '@/types/domain-models/maintenance';
 import type { AppSettings } from '@/types/domain';
 import { getMaintenanceProfile } from '../constants/maintenance-profiles';
 
-export function extractTicketDiscount(notes?: string | null) {
-  if (!notes) return { amount: 0, reason: '' };
-  const match = notes.match(/\[خصم تسليم:\s*([\d.]+)\s*ج\.م\s*-\s*السبب:\s*([^\]]+)\]/);
-  if (!match) return { amount: 0, reason: '' };
-  return {
-    amount: Number(match[1]) || 0,
-    reason: match[2].trim(),
-  };
-}
-
 export function printMaintenanceReceipt(ticket: MaintenanceTicket, settings?: AppSettings | null) {
   const barcodeSvg = buildCode128Svg(ticket.ticketNo);
   /* D-M1-1: no discount concept — the final agreed amount is the total. */

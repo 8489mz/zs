@@ -10,7 +10,6 @@ import { SearchableCombobox } from '@/shared/ui/searchable-combobox';
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value';
 import { productsApi } from '@/features/products/api/products.api';
 import { MaintenanceIcons as Icons, statusConfig } from './MaintenanceConstants';
-import { extractTicketDiscount } from './MaintenanceReceiptModal';
 import { maintenanceApi } from '../api/maintenance.api';
 import type { MaintenanceTicket, MaintenanceStatus } from '@/types/domain-models/maintenance';
 import type { getMaintenanceProfile } from '../constants/maintenance-profiles';
@@ -54,6 +53,10 @@ export function MaintenanceDetailModal({
   const [partPrice, setPartPrice] = useState(0);
   const [editingCost, setEditingCost] = useState<number | null>(null);
   const [pendingCashRefundStatus, setPendingCashRefundStatus] = useState<MaintenanceStatus | null>(null);
+
+  /* Device passcode is masked by default (P1-3): the real value is shown
+   * only after an explicit show action, and it is never printed from here. */
+  const [showPasscode, setShowPasscode] = useState(false);
 
   /* Synchronous record of the picked part: the combobox calls onSelect and
    * then onChange(label) in the same tick, so state set by onSelect is not
@@ -104,6 +107,7 @@ export function MaintenanceDetailModal({
     setCurrentTicket(ticket);
     setEditingCost(null);
     setPendingCashRefundStatus(null);
+    setShowPasscode(false);
     clearPartSelection();
     setPartSearchText('');
     setPartQty(1);
@@ -375,7 +379,21 @@ export function MaintenanceDetailModal({
               <Icons.Lock />
               <span>{maintenanceProfile.passcodeLabel}:</span>
             </div>
-            <strong dir="ltr" style={{ color: '#0f172a', fontFamily: 'monospace' }}>{currentTicket.passcode || t('maintenance.maintenance_detail_modal.s7', "بدون قفل")}</strong>
+            {currentTicket.passcode ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <strong dir="ltr" style={{ color: '#0f172a', fontFamily: 'monospace' }}>{showPasscode ? currentTicket.passcode : '••••••'}</strong>
+                <button
+                  type="button"
+                  onClick={() => setShowPasscode((v) => !v)}
+                  aria-label={showPasscode ? t('maintenance.maintenance_detail_modal.hide_passcode', "إخفاء") : t('maintenance.maintenance_detail_modal.show_passcode', "إظهار")}
+                  style={{ background: 'transparent', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '2px 8px', fontSize: '0.72rem', fontWeight: 700, color: '#475569', cursor: 'pointer' }}
+                >
+                  {showPasscode ? t('maintenance.maintenance_detail_modal.hide_passcode', "إخفاء") : t('maintenance.maintenance_detail_modal.show_passcode', "إظهار")}
+                </button>
+              </span>
+            ) : (
+              <strong style={{ color: '#0f172a' }}>{t('maintenance.maintenance_detail_modal.s7', "بدون قفل")}</strong>
+            )}
           </div>
 
           <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px' }}>
@@ -551,14 +569,22 @@ export function MaintenanceDetailModal({
               <strong style={{ color: '#16a34a', fontSize: '0.875rem' }}>{storeProfit.toFixed(2)} <CurrencySymbol /></strong>
             </div>
           </div>
+          {/* Warning only (P1-1): the ticket may be priced below its parts
+           * cost. No blocking, no change to any mutation. */}
+          {partsPrice > totalCost && (
+            <div role="alert" style={{ marginTop: '8px', padding: '8px 10px', borderRadius: '6px', border: '1px solid #fed7aa', background: '#fff7ed', color: '#9a3412', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <AlertTriangleIcon size={14} color="#c2410c" />
+              <span>{t('maintenance.maintenance_detail_modal.parts_price_above_total', "تحذير: سعر قطع الغيار أعلى من إجمالي الحساب — التذكرة مسعّرة بأقل من تكلفة القطع.")} ({partsPrice.toFixed(2)} <CurrencySymbol /> / {totalCost.toFixed(2)} <CurrencySymbol />)</span>
+            </div>
+          )}
         </div>
 
         {/* Settlement / Financial Card */}
         {currentTicket.status === 'delivered' ? (() => {
-          const discountInfo = extractTicketDiscount(currentTicket.technicianNotes);
-          const netTotal = Math.max(0, totalCost - discountInfo.amount);
+          /* No discount concept at delivery (D-M1-1): the final agreed
+           * amount IS the revenue; the estimate is reference only. */
           const advancePaid = currentTicket.advancePayment || 0;
-          const collectedAtDelivery = Math.max(0, netTotal - advancePaid);
+          const collectedAtDelivery = Math.max(0, totalCost - advancePaid);
 
           return (
             <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
@@ -568,22 +594,12 @@ export function MaintenanceDetailModal({
                   <strong style={{ fontSize: '1.2rem', color: '#0f172a' }}>
                     {totalCost.toFixed(2)} <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}><CurrencySymbol /></span>
                   </strong>
-                  {discountInfo.amount > 0 && (
-                    <span style={{ fontSize: '0.75rem', color: '#475569', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                      {t('maintenance.maintenance_detail_modal.s35', "خصم: -")}{discountInfo.amount.toFixed(2)} <CurrencySymbol /> {t('maintenance.maintenance_detail_modal.s36', "(الصافي:")} {netTotal.toFixed(2)} <CurrencySymbol />)
-                    </span>
-                  )}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '3px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <CheckIcon size={12} color="#16a34a" />
                   <span>{t('maintenance.maintenance_detail_modal.s37', "تم السداد والتحصيل في الخزينة بالكامل")}</span>
                   {advancePaid > 0 ? ` (مقدم: ${advancePaid.toFixed(2)} ${getGlobalCurrencySymbol()} + عند الاستلام: ${collectedAtDelivery.toFixed(2)} ${getGlobalCurrencySymbol()})` : ` (المحصل عند الاستلام: ${collectedAtDelivery.toFixed(2)} ${getGlobalCurrencySymbol()})`}
                 </div>
-                {discountInfo.amount > 0 && (
-                  <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '3px' }}>
-                    {t('maintenance.maintenance_detail_modal.s38', "سبب الخصم:")} {discountInfo.reason}
-                  </div>
-                )}
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -603,6 +619,11 @@ export function MaintenanceDetailModal({
         })() : (currentTicket.status === 'unrepairable' || currentTicket.status === 'cancelled') ? (() => {
           const advancePaid = currentTicket.advancePayment || 0;
           const isUnrep = currentTicket.status === 'unrepairable';
+          /* `refundedAdvance` arrives with package 5 (merges before this
+           * one); on this base the field does not exist yet, so read it
+           * defensively and treat absent as not-refunded. */
+          const refundedAdvance =
+            (currentTicket as { refundedAdvance?: boolean }).refundedAdvance === true;
           return (
             <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div>
@@ -610,10 +631,15 @@ export function MaintenanceDetailModal({
                   <XIcon size={13} color={isUnrep ? '#9f1239' : '#475569'} />
                   <span>{isUnrep ? t('maintenance.maintenance_detail_modal.s42', "تعذر إصلاح الجهاز (تم إلغاء رسوم الصيانة)") : t('maintenance.maintenance_detail_modal.s43', "تم إلغاء تذكرة الصيانة")}</span>
                 </div>
-                {advancePaid > 0 ? (
+                {advancePaid > 0 && !refundedAdvance ? (
                   <div style={{ fontSize: '0.78rem', color: '#c2410c', marginTop: '3px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <AlertTriangleIcon size={14} color="#c2410c" />
                     <span>{t('maintenance.maintenance_detail_modal.s44', "مستحق رد العربون للعميل بالكامل:")} {advancePaid.toFixed(2)} <CurrencySymbol /> {t('maintenance.maintenance_detail_modal.s45', "عند تسليم الجهاز")}</span>
+                  </div>
+                ) : advancePaid > 0 ? (
+                  <div style={{ fontSize: '0.78rem', color: '#16a34a', marginTop: '3px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <CheckIcon size={14} color="#16a34a" />
+                    <span>{t('maintenance.maintenance_detail_modal.s44b', "تم تسجيل رد العربون للعميل بالكامل:")} {advancePaid.toFixed(2)} <CurrencySymbol /></span>
                   </div>
                 ) : (
                   <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>

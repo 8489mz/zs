@@ -10,13 +10,12 @@ import type { MaintenanceTicket } from '@/types/domain-models/maintenance';
 import type { AppSettings } from '@/types/domain';
 import { getMaintenanceProfile } from '../constants/maintenance-profiles';
 import {
-  extractTicketDiscount,
   printMaintenanceReceipt,
   printMaintenanceDeviceSticker as printMaintenanceSticker,
   exportMaintenanceReceiptPdf,
 } from '../utils/maintenance-receipt.utils';
 
-export { extractTicketDiscount, printMaintenanceReceipt };
+export { printMaintenanceReceipt };
 
 interface MaintenanceReceiptModalProps {
   open: boolean;

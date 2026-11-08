@@ -97,7 +97,7 @@ const TICKET: MaintenanceTicket = {
   parts: [],
 };
 
-function renderModal() {
+function renderModal(ticket: MaintenanceTicket = TICKET) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   function Wrapper({ children }: PropsWithChildren) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
@@ -105,7 +105,7 @@ function renderModal() {
   const user = userEvent.setup();
   const view = render(
     <MaintenanceDetailModal
-      ticket={TICKET}
+      ticket={ticket}
       onClose={vi.fn()}
       onOpenSettlement={vi.fn()}
       onSendWhatsApp={vi.fn()}
@@ -237,5 +237,74 @@ describe('MaintenanceDetailModal spare-parts picker', () => {
   it('shows the system-default technician commission rate, not 0', () => {
     renderModal();
     expect(screen.getByText(/عمولة الفني \(30%\)/)).toBeInTheDocument();
+  });
+});
+
+/* Package 7 (batch M2): the cancelled/unrepairable card must not claim a
+ * refund is due after it was already recorded; the device passcode is
+ * masked by default; and a parts price sum above the ticket total warns
+ * (warning only, no blocking). `refundedAdvance` is added by package 5,
+ * which merges before this one — on this base the field does not exist
+ * on MaintenanceTicket yet, so the flag is passed via a cast. */
+describe('MaintenanceDetailModal refund, passcode and pricing warnings', () => {
+  beforeEach(() => {
+    listPageMock.mockReset();
+    addPartMock.mockReset();
+    getTicketMock.mockReset();
+    updateStatusMock.mockReset();
+    removePartMock.mockReset();
+    getTicketMock.mockResolvedValue({ ticket: TICKET });
+  });
+
+  it('cancelled ticket with refundedAdvance=true shows no refund-due text', () => {
+    renderModal({ ...TICKET, status: 'cancelled', advancePayment: 100, refundedAdvance: true } as MaintenanceTicket);
+    expect(screen.queryByText(/مستحق رد العربون/)).not.toBeInTheDocument();
+    expect(screen.getByText(/تم تسجيل رد العربون/)).toBeInTheDocument();
+  });
+
+  it('cancelled ticket without refundedAdvance keeps the old refund-due text', () => {
+    renderModal({ ...TICKET, status: 'cancelled', advancePayment: 100 });
+    expect(screen.getByText(/مستحق رد العربون للعميل بالكامل/)).toBeInTheDocument();
+  });
+
+  it('masks the passcode by default and reveals it only on click', async () => {
+    const { user } = renderModal({ ...TICKET, passcode: '1234' });
+    expect(screen.queryByText('1234')).not.toBeInTheDocument();
+    expect(screen.getByText('••••••')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'إظهار' }));
+    expect(screen.getByText('1234')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'إخفاء' }));
+    expect(screen.queryByText('1234')).not.toBeInTheDocument();
+    expect(screen.getByText('••••••')).toBeInTheDocument();
+  });
+
+  it('warns when the parts price sum exceeds the ticket total', () => {
+    renderModal({
+      ...TICKET,
+      finalCost: 100,
+      expectedCost: 100,
+      parts: [
+        { id: 'p1', ticketId: 't1', productId: '42', productName: 'شاشة سامسونج A54', qty: 1, unitCost: 100, unitPrice: 150, totalPrice: 150, createdAt: '2026-11-08T10:00:00.000Z' },
+      ],
+    });
+    /* role="alert" has no accessible name (live region): assert the role
+     * plus the warning text itself. */
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByText(/سعر قطع الغيار أعلى من إجمالي الحساب/)).toBeInTheDocument();
+  });
+
+  it('shows no pricing warning when the parts price sum is within the total', () => {
+    renderModal({
+      ...TICKET,
+      finalCost: 500,
+      expectedCost: 500,
+      parts: [
+        { id: 'p1', ticketId: 't1', productId: '42', productName: 'شاشة سامسونج A54', qty: 1, unitCost: 100, unitPrice: 150, totalPrice: 150, createdAt: '2026-11-08T10:00:00.000Z' },
+      ],
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText(/سعر قطع الغيار أعلى من إجمالي الحساب/)).not.toBeInTheDocument();
   });
 });
