@@ -10,7 +10,7 @@ name: Deploy to Oracle SaaS Server
 
 on:
   workflow_run:
-    workflows: ["ci"]
+    workflows: ["ci-full"]
     branches:
       - main
     types:
@@ -30,7 +30,7 @@ jobs:
     name: Build on GitHub and deploy to Oracle Cloud VPS
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: ${{ (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository) }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'workflow_dispatch' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository) }}
     env:
       DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
@@ -44,8 +44,8 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/main"
           CURRENT_MAIN=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
           test "$CURRENT_MAIN" = "$DEPLOY_SHA" || { echo "::error::Main advanced after dispatch; start a new approved deployment"; exit 1; }
-          PASSED=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$DEPLOY_SHA&event=push&per_page=100" \
-            --jq ".workflow_runs | map(select(.head_sha == \"$DEPLOY_SHA\" and .head_branch == \"main\" and .event == \"push\" and .conclusion == \"success\")) | length")
+          PASSED=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci-full.yml/runs?head_sha=$DEPLOY_SHA&event=workflow_dispatch&per_page=100" \
+            --jq ".workflow_runs | map(select(.head_sha == \"$DEPLOY_SHA\" and .head_branch == \"main\" and .event == \"workflow_dispatch\" and .conclusion == \"success\")) | length")
           test "$PASSED" -ge 1 || { echo "::error::Exact main commit has no successful push CI run; refusing deployment"; exit 1; }
 
       - name: Checkout the exact commit that passed CI

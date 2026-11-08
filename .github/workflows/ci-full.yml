@@ -1,0 +1,254 @@
+name: ci-full
+
+# FULL SUITE (INV-CI-COST-CUT): the complete backend + frontend test runs
+# from the old ci.yml, unchanged step-for-step. Runs ONLY on workflow_dispatch
+# (dispatched once on the batch head) or pull requests — never on push.
+# Deploy to Oracle watches this workflow, so a green full run is the deploy
+# gate. The `changes` job below is the same plain-git path filter as ci-fast:
+# a backend-only head runs only the backend job and vice versa; on dispatch
+# both sides run (fail-closed).
+#
+# v2 (2026-11-08, base 0f7f82b): regenerated against the sequential ci.yml
+# (0531150). The sequential fail-fast is PRESERVED here: the backend job
+# needs [changes, frontend] and runs only when the frontend job succeeded
+# or was skipped (backend-only change) — a failed frontend still skips the
+# whole ~21m backend job. The `always()` in the backend `if:` is what lets
+# the job run at all when its needed frontend job was skipped; without it
+# GitHub would skip the backend whenever the frontend is skipped.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  # Only superseded development-branch push runs may be cancelled.
+  # Main pushes, PR checks and Oracle production deploys are never cancelled here.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        run: |
+          set -euo pipefail
+          base='${{ github.event.before }}'
+          if [ -z "$base" ] || [ "$base" = '0000000000000000000000000000000000000000' ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo 'base commit unknown (first or force push) - running both sides'
+            echo 'backend=true' >> "$GITHUB_OUTPUT"
+            echo 'frontend=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "$base" '${{ github.sha }}')
+          backend='false'
+          frontend='false'
+          if printf '%s\n' "$files" | grep -Eq '^(backend/|ARCHITECTURE_INVARIANTS\.md$|docs/ENGINE_MAP\.md$|package\.json$|\.github/workflows/ci(-full)?\.yml$)'; then
+            backend='true'
+          fi
+          if printf '%s\n' "$files" | grep -Eq '^(frontend/|releases/|package\.json$|\.github/workflows/ci(-full)?\.yml$)'; then
+            frontend='true'
+          fi
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+
+  frontend:
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' || github.event_name != 'push' }}
+    runs-on: ubuntu-latest
+    # CI runner Node heap (~2 GB) is too small for this frontend's `tsc -b`:
+    # the build dies with "JavaScript heap out of memory", exit 134, while
+    # the same build passes on a dev machine in 43 s. Raise the heap for
+    # this job only -- local builds are fine without it. If CI still OOMs,
+    # raise to 6144/8192; do not change frontend code for a runner limit.
+    env:
+      NODE_OPTIONS: '--max-old-space-size=4096'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend
+        run: npm ci
+        working-directory: frontend
+      # Fail-fast: the type-check + bundle runs FIRST, before the guards
+      # and specs. A type error (e.g. the TS1117 duplicate key that failed
+      # run #2813) used to surface only after ~8m of guards and tests;
+      # now it fails the job in ~1-2m and the backend never starts.
+      - name: Build frontend (type-check + bundle)
+        run: npm run build
+        working-directory: frontend
+      - name: Frontend architecture and contract guards
+        run: |
+          npm run qa:functional
+          npm run qa:api
+          npm run qa:contracts
+          npm run qa:routes
+          npm run qa:composition
+          npm run qa:architecture
+        working-directory: frontend
+      - name: Frontend regression guards (component and route specs)
+        run: npm run test:run
+        working-directory: frontend
+
+      # PERF-5..PERF-8 can only be measured on a real build: this is the check that catches a heavy
+      # library sneaking into the startup bundle (jsPDF, pdfjs, the camera scanner, Sentry). It used
+      # to depend on someone remembering to run it by hand after a build, so in practice it never ran
+      # on a push. The build above is right here, so it costs seconds.
+      - name: Frontend bundle budget on the built output (qa:perf:dist)
+        run: npm run qa:perf:dist
+        working-directory: frontend
+
+  backend:
+    # Sequential fail-fast (2026-11-07): the backend only runs after the
+    # frontend passes. A failed frontend skips the backend automatically
+    # (0 billable minutes) instead of both jobs burning minutes in
+    # parallel while the run is already doomed. Frontend first because it
+    # is the short job (~8m vs ~21m): a frontend failure saves the whole
+    # backend job, and the backend's own typecheck is already its first
+    # step, so backend-first would add no early signal.
+    # The `always()` + frontend.result check keeps this working with the
+    # path filter: a backend-only change skips the frontend job, and the
+    # backend still runs (frontend.result == 'skipped').
+    needs: [changes, frontend]
+    if: ${{ always() && (needs.changes.outputs.backend == 'true' || github.event_name != 'push') && (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: zsdb
+          POSTGRES_USER: zs
+          POSTGRES_PASSWORD: zs
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U zs -d zsdb"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      NODE_ENV: test
+      APP_MODE: CLOUD_SAAS
+      PLATFORM_TENANT_ID: default
+      TENANT_ID: default
+      ACCOUNT_ID: default
+      APP_HOST: 127.0.0.1
+      APP_PORT: 3001
+      LOG_LEVEL: warn
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: 5432
+      DATABASE_NAME: zsdb
+      DATABASE_USER: zs
+      DATABASE_PASSWORD: zs
+      DATABASE_SCHEMA: public
+      DATABASE_SSL: 'false'
+      DATABASE_LOGGING: 'false'
+      ENABLE_BOOTSTRAP_ADMIN: 'true'
+      ALLOW_BOOTSTRAP_ADMIN_IN_PRODUCTION: 'false'
+      DEFAULT_ADMIN_USERNAME: owner
+      DEFAULT_ADMIN_PASSWORD: OwnerBootstrap2026!
+      SESSION_COOKIE_NAME: 'zs_cloud_session'
+      SESSION_CSRF_COOKIE_NAME: 'zs_cloud_csrf_token'
+      SESSION_COOKIE_SECURE: 'false'
+      SESSION_COOKIE_SAME_SITE: lax
+      SESSION_CSRF_SECRET: ci-csrf-secret-0123456789
+      ALLOW_SESSION_ID_HEADER: 'false'
+      LOGIN_MAX_ATTEMPTS: 5
+      LOGIN_LOCKOUT_MINUTES: 15
+      CORS_ORIGINS: http://127.0.0.1:5173
+      LOGIN_RATE_LIMIT_MAX: 100
+      LOGIN_RATE_LIMIT_WINDOW_SECONDS: 600
+      AUTH_BURST_RATE_LIMIT_MAX: 60
+      AUTH_BURST_RATE_LIMIT_WINDOW_SECONDS: 60
+      BUSINESS_TIMEZONE: UTC
+      E2E_BASE_URL: http://127.0.0.1:3001
+      E2E_USERNAME: owner
+      E2E_PASSWORD: OwnerBootstrap2026!
+      MAIL_DELIVERY_MODE: console
+      PUBLIC_TRIAL_DEBUG_CREDENTIALS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - name: Install backend
+        run: npm ci
+        working-directory: backend
+      - name: Backend typecheck and release gate
+        run: |
+          npm run build
+          npm run typecheck
+          npm run check:readiness
+          npm run check:permissions
+          npm run check:env-safety
+        working-directory: backend
+      - name: Backend regression guards (invariants + security specs)
+        run: npm run test:infra
+        working-directory: backend
+      - name: Sales return cost regression
+        run: npm run test:returns-cost
+        working-directory: backend
+      - name: Purchase order conversion regression
+        run: npx ts-node test/critical/purchase-order-conversion.spec.ts
+        working-directory: backend
+      - name: ZATCA and encrypted backup safety
+        run: npm run test:zatca-safety
+        working-directory: backend
+      - name: P1 tenant and demo-data safety
+        run: npm run test:p1-safety
+        working-directory: backend
+      - name: Start backend for E2E
+        run: |
+          npm run migration:run
+          chmod +x ../scripts/wait-for-http.sh
+          node dist/main.js > /tmp/backend.log 2>&1 &
+          BACKEND_PID=$!
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:3001/health/live > /dev/null; then
+              echo "Backend is live"
+              exit 0
+            fi
+            if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
+              echo "Backend process exited before becoming healthy"
+              cat /tmp/backend.log
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "Timed out waiting for backend liveness"
+          cat /tmp/backend.log
+          exit 1
+        working-directory: backend
+      - name: Import module financial and PostgreSQL regression
+        run: npm run test:import-safety
+        working-directory: backend
+      - name: Run backend E2E
+        run: npm run test:e2e
+        working-directory: backend
+      - name: Approval workflow integration
+        run: npm run test:e2e:approvals
+        working-directory: backend
+      - name: SaaS onboarding and tenant lifecycle integration
+        run: npm run test:e2e:saas-lifecycle
+        working-directory: backend
+      - name: Upload backend log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-log
+          path: /tmp/backend.log
