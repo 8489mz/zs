@@ -883,12 +883,72 @@ export class MaintenanceService {
         throw new AppError('تذكرة الصيانة غير موجودة', 'TICKET_NOT_FOUND', 404);
       }
 
-      const targetLocationId = payload.locationId ?? (ticket.location_id ? Number(ticket.location_id) : null);
-      const targetBranchId = ticket.branch_id ? Number(ticket.branch_id) : null;
+      let targetLocationId = payload.locationId ?? (ticket.location_id ? Number(ticket.location_id) : null);
+      let targetBranchId = ticket.branch_id ? Number(ticket.branch_id) : null;
       const deductQty = Number(payload.qty);
 
       if (ticket.status === 'delivered' || ticket.status === 'cancelled' || ticket.status === 'unrepairable') {
         throw new AppError('Cannot issue parts to a closed maintenance ticket', 'MAINTENANCE_CLOSED', 409);
+      }
+
+      // No location anywhere (no payload location, no ticket location):
+      // the operator picked from GLOBAL stock, so deduct from the
+      // location that actually holds the units instead of failing
+      // against the empty unassigned balance. One location must cover
+      // the whole qty (never split across locations, never invent
+      // stock); when the ticket has a branch, only that branch's rows
+      // are candidates, so another branch's stock is never consumed.
+      // applyStockDelta still re-checks under its own locks, so a
+      // concurrent consumption fails closed with INSUFFICIENT_STOCK.
+      if (targetLocationId === null) {
+        let candidatesQuery = trx
+          .selectFrom('product_location_stock')
+          .select(['location_id', 'branch_id', 'qty', 'reserved_qty'])
+          .where('tenant_id', '=', scope.tenantId)
+          .where('account_id', '=', scope.accountId)
+          .where('product_id', '=', payload.productId)
+          .where('location_id', 'is not', null);
+        if (ticket.branch_id != null) {
+          candidatesQuery = candidatesQuery.where('branch_id', '=', Number(ticket.branch_id));
+        }
+        const candidates = await candidatesQuery.execute();
+        const covering = candidates
+          .map((row) => ({
+            locationId: Number(row.location_id),
+            branchId: row.branch_id == null ? null : Number(row.branch_id),
+            available: Number(row.qty || 0) - Number(row.reserved_qty || 0),
+          }))
+          .filter((row) => row.available >= deductQty)
+          .sort((a, b) => (b.available - a.available) || (a.locationId - b.locationId));
+        const best = covering[0];
+        if (best) {
+          targetLocationId = best.locationId;
+          targetBranchId = best.branchId ?? targetBranchId;
+        }
+      }
+
+      // Branchless ticket + a real location: the location row itself
+      // knows its branch. Derive it here instead of passing null:
+      // updateBalanceQty treats an explicitly-passed null as "overwrite
+      // the row's branch_id with null", so a null branch on this call
+      // would NULL the location row's branch_id and a later
+      // branch-restricted resolution would miss the row and falsely
+      // report INSUFFICIENT_STOCK. Never overrides an explicit ticket
+      // branch_id; when the location row carries no branch (or no row
+      // exists yet) the branch stays null, which is harmless — the
+      // ledger only overwrites when the passed value differs.
+      if (targetLocationId !== null && targetBranchId === null) {
+        const locationRow = await trx
+          .selectFrom('product_location_stock')
+          .select('branch_id')
+          .where('tenant_id', '=', scope.tenantId)
+          .where('account_id', '=', scope.accountId)
+          .where('product_id', '=', payload.productId)
+          .where('location_id', '=', targetLocationId)
+          .executeTakeFirst();
+        if (locationRow?.branch_id != null) {
+          targetBranchId = Number(locationRow.branch_id);
+        }
       }
       const partRes = await trx
         .insertInto('maintenance_ticket_parts')
@@ -1012,7 +1072,26 @@ export class MaintenanceService {
 
       const returnQty = Number(part.qty);
       const targetLocationId = part.location_id ? Number(part.location_id) : (ticket.location_id ? Number(ticket.location_id) : null);
-      const targetBranchId = ticket.branch_id ? Number(ticket.branch_id) : null;
+      let targetBranchId = ticket.branch_id ? Number(ticket.branch_id) : null;
+
+      // Same branch derivation as addPart (see there): a branchless
+      // ticket returning stock to a real location must pass the
+      // location row's branch, or updateBalanceQty NULLs the row's
+      // branch_id and a later branch-restricted issue falsely reports
+      // INSUFFICIENT_STOCK. Never overrides an explicit ticket branch.
+      if (targetLocationId !== null && targetBranchId === null) {
+        const locationRow = await trx
+          .selectFrom('product_location_stock')
+          .select('branch_id')
+          .where('tenant_id', '=', scope.tenantId)
+          .where('account_id', '=', scope.accountId)
+          .where('product_id', '=', Number(part.product_id))
+          .where('location_id', '=', targetLocationId)
+          .executeTakeFirst();
+        if (locationRow?.branch_id != null) {
+          targetBranchId = Number(locationRow.branch_id);
+        }
+      }
 
       const stockChange = await applyStockDelta(trx, {
         productId: Number(part.product_id),
@@ -1099,7 +1178,25 @@ export class MaintenanceService {
       for (const part of parts) {
         const returnQty = Number(part.qty);
         const targetLocationId = part.location_id ? Number(part.location_id) : (ticket.location_id ? Number(ticket.location_id) : null);
-        const targetBranchId = ticket.branch_id ? Number(ticket.branch_id) : null;
+        let targetBranchId = ticket.branch_id ? Number(ticket.branch_id) : null;
+
+        // Same branch derivation as addPart (see there): deleting a
+        // branchless ticket returns each part to its location, and a
+        // null branch here would NULL the location row's branch_id
+        // via updateBalanceQty. Never overrides an explicit ticket branch.
+        if (targetLocationId !== null && targetBranchId === null) {
+          const locationRow = await trx
+            .selectFrom('product_location_stock')
+            .select('branch_id')
+            .where('tenant_id', '=', scope.tenantId)
+            .where('account_id', '=', scope.accountId)
+            .where('product_id', '=', Number(part.product_id))
+            .where('location_id', '=', targetLocationId)
+            .executeTakeFirst();
+          if (locationRow?.branch_id != null) {
+            targetBranchId = Number(locationRow.branch_id);
+          }
+        }
 
         const stockChange = await applyStockDelta(trx, {
           productId: Number(part.product_id),
