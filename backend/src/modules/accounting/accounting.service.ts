@@ -1,4 +1,5 @@
 import { tenantBaseCurrency } from './accounting-currency';
+import { resolveFxRate } from './fx-rate-resolution';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from './engines/money-minor-units.engine';
 
 /**
@@ -2850,34 +2851,61 @@ export class AccountingService {
   }
 
   async convertCurrency(
-    body: { amount: number; fromCurrency: string; toCurrency: string },
+    body: { amount: number; fromCurrency: string; toCurrency: string; asOf?: string },
     auth: AuthContext,
   ): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
-    await tenantBaseCurrency(this.db, scope.tenantId);
+    const baseCurrency = await tenantBaseCurrency(this.db, scope.tenantId);
     const fromCode = String(body.fromCurrency || '').trim().toUpperCase();
     const toCode = String(body.toCurrency || '').trim().toUpperCase();
     const amount = Number(body.amount || 0);
 
     if (!Number.isFinite(amount) || !/^[A-Z]{3}$/.test(fromCode) || !/^[A-Z]{3}$/.test(toCode)) throw new BadRequestException('مبلغ أو رمز عملة غير صالح.');
 
-    const rates = await this.db
-      .selectFrom('currency_exchange_rates')
-      .select(['currency_code', 'exchange_rate', 'is_base'])
-      .where('tenant_id', '=', scope.tenantId)
-      .where('currency_code', 'in', [fromCode, toCode])
-      .execute();
+    // INV-FX-RATE-HISTORY-CONSUMER: the first production consumer of
+    // the append-only rate history. With an asOf moment both legs
+    // resolve through the single resolver, which reads the rate
+    // registered at that moment and fails closed when none was
+    // recorded yet — a historical amount is never silently converted
+    // at a later (live) rate. Without asOf the live rows are used,
+    // exactly as before.
+    const asOfRaw = typeof body.asOf === 'string' ? body.asOf.trim() : '';
+    let asOf: Date | null = null;
+    if (asOfRaw) {
+      asOf = new Date(asOfRaw);
+      if (!Number.isFinite(asOf.getTime())) throw new BadRequestException('تاريخ سعر الصرف غير صالح.');
+    }
 
-    const fromRow = rates.find((r) => r.currency_code === fromCode);
-    const toRow = rates.find((r) => r.currency_code === toCode);
+    let fromRate: number;
+    let toRate: number;
+    let fromIsBase: boolean;
+    let toIsBase: boolean;
+    if (asOf) {
+      fromRate = await resolveFxRate(this.db, scope.tenantId, fromCode, { asOf });
+      toRate = await resolveFxRate(this.db, scope.tenantId, toCode, { asOf });
+      fromIsBase = fromCode === baseCurrency;
+      toIsBase = toCode === baseCurrency;
+    } else {
+      const rates = await this.db
+        .selectFrom('currency_exchange_rates')
+        .select(['currency_code', 'exchange_rate', 'is_base'])
+        .where('tenant_id', '=', scope.tenantId)
+        .where('currency_code', 'in', [fromCode, toCode])
+        .execute();
 
-    if (!fromRow || !toRow) throw new BadRequestException('العملة غير مسجلة؛ لا يجوز افتراض سعر صرف.');
-    const fromRate = Number(fromRow.exchange_rate);
-    const toRate = Number(toRow.exchange_rate);
-    if (![fromRate, toRate].every(rate => Number.isFinite(rate) && rate > 0)) throw new BadRequestException('سعر صرف مسجل غير صالح.');
+      const fromRow = rates.find((r) => r.currency_code === fromCode);
+      const toRow = rates.find((r) => r.currency_code === toCode);
 
-    const amountInBase = fromRow?.is_base ? amount : amount * fromRate;
-    const convertedAmount = toRow?.is_base ? amountInBase : amountInBase / toRate;
+      if (!fromRow || !toRow) throw new BadRequestException('العملة غير مسجلة؛ لا يجوز افتراض سعر صرف.');
+      fromRate = Number(fromRow.exchange_rate);
+      toRate = Number(toRow.exchange_rate);
+      if (![fromRate, toRate].every(rate => Number.isFinite(rate) && rate > 0)) throw new BadRequestException('سعر صرف مسجل غير صالح.');
+      fromIsBase = Boolean(fromRow.is_base);
+      toIsBase = Boolean(toRow.is_base);
+    }
+
+    const amountInBase = fromIsBase ? amount : amount * fromRate;
+    const convertedAmount = toIsBase ? amountInBase : amountInBase / toRate;
 
     return {
       amount,
@@ -2890,6 +2918,7 @@ export class AccountingService {
       // rate are unchanged.
       convertedAmount: roundMoney(convertedAmount, currencyMoneyDigits(toCode)),
       effectiveRate: toRate > 0 ? Number((fromRate / toRate).toFixed(6)) : 1,
+      rateAsOf: asOf ? asOf.toISOString() : null,
     };
   }
 

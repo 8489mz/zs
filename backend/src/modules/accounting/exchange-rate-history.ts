@@ -7,8 +7,9 @@ import { Database } from '../../database/database.types';
  * that was registered at a point in time, from the append-only
  * history the trigger maintains. Fails closed when no rate was
  * registered yet at that moment — an as-of conversion must never
- * silently use a later rate. No production consumer is wired yet:
- * the revaluation policy decision (FX F4) chooses the first one.
+ * silently use a later rate. First production consumer (FX F4):
+ * AccountingService.convertCurrency resolves both legs through
+ * resolveFxRate with an optional asOf moment.
  */
 export async function exchangeRateAsOf(
   db: Kysely<Database>,

@@ -386,7 +386,7 @@ export class AccountingController {
   }
 
   @Post('currencies/convert')
-  convertCurrency(@Body() body: { amount: number; fromCurrency: string; toCurrency: string }, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+  convertCurrency(@Body() body: { amount: number; fromCurrency: string; toCurrency: string; asOf?: string }, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.accountingService.convertCurrency(body, req.authContext!);
   }
 
