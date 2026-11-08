@@ -117,7 +117,12 @@ export class ProductSerialsService {
 
   async lookupSerial(serialOrImei: string, actor: AuthContext) {
     const cleanSerial = serialOrImei.trim();
-    if (!cleanSerial) return { found: false, serial: null };
+    // LF-P4: the response key is `item`, not `serial`. The only frontend
+    // consumer (frontend/src/features/products/api/product-serials.api.ts)
+    // reads `res?.item`, so the old `serial` key never reached the IMEI
+    // history page: serialItem was always null and the header could never
+    // show the price / branch / warranty the query already selected.
+    if (!cleanSerial) return { found: false, item: null };
 
     const row = await this.db
       .selectFrom('product_serials as ps')
@@ -152,12 +157,17 @@ export class ProductSerialsService {
       .executeTakeFirst();
 
     if (!row) {
-      return { found: false, serial: null };
+      return { found: false, item: null };
     }
 
     return {
       found: true,
-      serial: {
+      // LF-P4: `item` is the key the frontend lookup client reads.
+      // branchName / locationName stay honestly empty when the serial row
+      // has no branch/location (trade-in intake records none, and its
+      // stock lands in the unassigned balance, so no stock-location
+      // fallback could recover a real one — never invent one here).
+      item: {
         id: String(row.id),
         productId: String(row.product_id),
         productName: row.product_name,

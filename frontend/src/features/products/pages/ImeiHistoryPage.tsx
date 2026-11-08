@@ -13,6 +13,20 @@ import { tradeInApi, type TradeInListPageResponse } from '@/features/tradein/api
 import type { MaintenanceTicket } from '@/types/domain-models/maintenance';
 import type { TradeInTransaction } from '@/types/domain-models/tradein';
 
+// LF-P4: the lookup client returns the item under `item`, and the backend
+// already returns the product prices on it — but the shared
+// ProductSerialItem type does not declare those price fields, so they
+// are read through this local extension (no change to the shared type).
+type LookupSerialItem = ProductSerialItem & {
+  productRetailPrice?: number | null;
+  productWholesalePrice?: number | null;
+};
+
+// LF-P4: the backend ticket list returns warrantyEnd per ticket (M2 P5:
+// computed at first repair as repaired_at + warranty_days), but the
+// shared MaintenanceTicket type does not declare it.
+type TicketWithWarranty = MaintenanceTicket & { warrantyEnd?: string | null };
+
 // Premium Minimal Vector SVG Icons (StrokeWidth 1.75)
 const Icons = {
   Search: () => (
@@ -64,6 +78,12 @@ const Icons = {
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
   ),
+  Tag: () => (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+      <line x1="7" y1="7" x2="7.01" y2="7" />
+    </svg>
+  ),
   Printer: () => (
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="6 9 6 2 18 2 18 9" />
@@ -106,7 +126,7 @@ export function ImeiHistoryPage() {
 
   useAppToolbar([{ label: `سجل وتتبع ${profile.shortTitle} والسيريالات` }]);
 
-  const { data: serialItem } = useQuery<ProductSerialItem | null>({
+  const { data: serialItem } = useQuery<LookupSerialItem | null>({
     queryKey: ['imei-history-serial', activeSerial],
     queryFn: () => (activeSerial ? productSerialsApi.lookup(activeSerial) : Promise.resolve(null)),
     enabled: Boolean(activeSerial),
@@ -158,6 +178,24 @@ export function ImeiHistoryPage() {
 
   const tickets: MaintenanceTicket[] = maintenanceData?.tickets || [];
   const tradeins: TradeInTransaction[] = tradeinData?.transactions || [];
+
+  // LF-P4: the device's repair warranty is real data for the SAME device,
+  // already loaded above (M2 P5 sets warranty_end on the ticket at first
+  // repair). Take the latest one; never compute a warranty from thin air.
+  const ticketWarrantyEnd =
+    tickets
+      .map((t) => (t as TicketWithWarranty).warrantyEnd)
+      .filter((w): w is string => Boolean(w))
+      .sort()
+      .at(-1) || null;
+  const warrantyEndDate = serialItem?.warrantyEndDate || ticketWarrantyEnd;
+  const warrantyFromTicket = !serialItem?.warrantyEndDate && Boolean(ticketWarrantyEnd);
+  // LF-P4: the header must never label a device "available in the public
+  // record" when no serial row exists — a customer device under repair
+  // is not stock. A registered row with no branch/location is an honest
+  // "not recorded" (trade-in intake records none; see the backend spec).
+  const retailPrice = serialItem?.productRetailPrice ?? null;
+  const tradeInPrice = tradeins[0]?.agreedPurchasePrice ?? null;
 
   return (
     <div className="page-stack page-shell" dir="rtl">
@@ -270,6 +308,24 @@ export function ImeiHistoryPage() {
                 </div>
               </div>
 
+              {/* LF-P4: a device with no serial row is NOT in stock. Say so
+                  plainly instead of the old generic availability label — a
+                  customer device under repair must never read as available
+                  inventory. */}
+              {!serialItem && (
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px', fontSize: '0.85rem', color: '#92400e' }}>
+                  <strong>{__t('products.imei_history_page.s40', "هذا الجهاز غير مسجَّل في سجل السيريالات")}</strong>
+                  <span>
+                    {' — '}
+                    {tickets.length > 0
+                      ? __t('products.imei_history_page.s41', "جهاز عميل له سجل صيانة — وليس مخزوناً متاحاً للبيع.")
+                      : tradeins.length > 0
+                        ? __t('products.imei_history_page.s42', "له سجل شراء مستعمل دون تسجيل سيريال.")
+                        : __t('products.imei_history_page.s43', "لا توجد بيانات مسجَّلة عن هذا السيريال.")}
+                  </span>
+                </div>
+              )}
+
               {/* Specs & History Grid */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', fontSize: '0.85rem' }}>
                 <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
@@ -277,7 +333,45 @@ export function ImeiHistoryPage() {
                     <Icons.Warehouse />
                     <span>{__t('products.imei_history_page.s8', "الموقع الحالي / الفرع:")}</span>
                   </div>
-                  <strong style={{ color: '#0f172a' }}>{serialItem?.locationName || serialItem?.branchName || __t('products.imei_history_page.s9', "متاح بالسجل العام")}</strong>
+                  <strong style={{ color: '#0f172a' }}>
+                    {serialItem
+                      ? serialItem.locationName ||
+                        serialItem.branchName ||
+                        __t('products.imei_history_page.s46', "لم يُسجَّل الموقع / الفرع")
+                      : __t('products.imei_history_page.s44', "غير مسجَّل في سجل السيريالات")}
+                  </strong>
+                  {!serialItem && tickets.length > 0 && (
+                    <div style={{ color: '#475569', fontSize: '0.78rem', marginTop: '1px' }}>
+                      {__t('products.imei_history_page.s45', "جهاز عميل — ليس مخزوناً متاحاً")}
+                    </div>
+                  )}
+                </div>
+
+                {/* LF-P4: the price the backend already returned but the
+                    header never rendered. Retail price when the serial row
+                    exists; the trade-in agreed purchase price (labelled as
+                    such) only when no serial row exists; never invented. */}
+                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ color: '#64748b', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
+                    <Icons.Tag />
+                    <span>{__t('products.imei_history_page.s47', "سعر البيع (تجزئة):")}</span>
+                  </div>
+                  {retailPrice != null ? (
+                    <strong style={{ color: '#0f172a' }}>
+                      {retailPrice.toFixed(2)} <CurrencySymbol />
+                    </strong>
+                  ) : tradeInPrice != null ? (
+                    <>
+                      <strong style={{ color: '#0f172a' }}>
+                        {tradeInPrice.toFixed(2)} <CurrencySymbol />
+                      </strong>
+                      <div style={{ color: '#475569', fontSize: '0.78rem', marginTop: '1px' }}>
+                        {__t('products.imei_history_page.s48', "سعر الشراء المستعمل (لا يوجد سعر بيع مسجَّل)")}
+                      </div>
+                    </>
+                  ) : (
+                    <span style={{ color: '#94a3b8' }}>{__t('products.imei_history_page.s49', "لا يوجد سعر مسجَّل")}</span>
+                  )}
                 </div>
 
                 <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
@@ -308,13 +402,24 @@ export function ImeiHistoryPage() {
                     <Icons.Shield />
                     <span>{__t('products.imei_history_page.s16', "موقف الضمان:")}</span>
                   </div>
-                  {serialItem?.warrantyEndDate ? (
-                    <strong style={{ color: new Date(serialItem.warrantyEndDate) >= new Date() ? '#166534' : '#9f1239' }}>
-                      {new Date(serialItem.warrantyEndDate) >= new Date() ? __t('products.imei_history_page.s17', "ساري حتى: ") : __t('products.imei_history_page.s18', "منتهي في: ")}
-                      {new Date(serialItem.warrantyEndDate).toLocaleDateString('ar-EG')}
-                    </strong>
+                  {/* LF-P4: warranty from the serial row when set, else the
+                      device's latest repair warranty from its tickets
+                      (real data, same device); honest "not recorded" when
+                      neither has one — never a computed or assumed date. */}
+                  {warrantyEndDate ? (
+                    <>
+                      <strong style={{ color: new Date(warrantyEndDate) >= new Date() ? '#166534' : '#9f1239' }}>
+                        {new Date(warrantyEndDate) >= new Date() ? __t('products.imei_history_page.s17', "ساري حتى: ") : __t('products.imei_history_page.s18', "منتهي في: ")}
+                        {new Date(warrantyEndDate).toLocaleDateString('ar-EG')}
+                      </strong>
+                      {warrantyFromTicket && (
+                        <div style={{ color: '#475569', fontSize: '0.78rem', marginTop: '1px' }}>
+                          {__t('products.imei_history_page.s50', "ضمان الصيانة (آخر إصلاح)")}
+                        </div>
+                      )}
+                    </>
                   ) : (
-                    <span style={{ color: '#94a3b8' }}>—</span>
+                    <span style={{ color: '#94a3b8' }}>{__t('products.imei_history_page.s51', "لا يوجد ضمان مسجَّل")}</span>
                   )}
                 </div>
               </div>
