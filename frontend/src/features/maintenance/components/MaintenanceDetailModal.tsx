@@ -8,7 +8,7 @@ import { DialogShell } from '@/shared/components/dialog-shell';
 import { AlertTriangleIcon, CheckIcon, XIcon } from '@/shared/components/icons/AppIcons';
 import { SearchableCombobox } from '@/shared/ui/searchable-combobox';
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value';
-import { productsApi } from '@/features/products/api/products.api';
+import { productsApi } from '@/features/products';
 import { MaintenanceIcons as Icons, statusConfig } from './MaintenanceConstants';
 import { maintenanceApi } from '../api/maintenance.api';
 import type { MaintenanceTicket, MaintenanceStatus } from '@/types/domain-models/maintenance';
