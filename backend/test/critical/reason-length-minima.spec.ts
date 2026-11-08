@@ -69,9 +69,9 @@ assert.equal(
 console.log('✓ freight override rationale: one word ok, role gate unchanged');
 
 // Trip expense governance: one-word note allows a routine petty expense.
-const routine = evaluateTripExpenseGovernance({ expenseType: 'fuel', amount: 100, notes: 'وقود', existingTripExpenses: 0 });
+const routine = evaluateTripExpenseGovernance({ moneyDigits: 2, expenseType: 'fuel', amount: 100, notes: 'وقود', existingTripExpenses: 0 });
 assert.equal(routine.allowed, true, 'a one-word expense note must allow a routine petty expense');
-const noNotes = evaluateTripExpenseGovernance({ expenseType: 'fuel', amount: 100, notes: '   ', existingTripExpenses: 0 });
+const noNotes = evaluateTripExpenseGovernance({ moneyDigits: 2, expenseType: 'fuel', amount: 100, notes: '   ', existingTripExpenses: 0 });
 assert.equal(noNotes.allowed, false, 'empty expense notes must stay rejected');
 assert.equal(noNotes.reasonCode, 'EXPENSE_NOTES_REQUIRED');
 console.log('✓ trip expense notes: one word ok, empty rejected');

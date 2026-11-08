@@ -169,6 +169,7 @@ assert.equal(unAudited.itemVariances[0].status, 'balanced');
 
 // Blocked customer rejected
 const blockedCheck = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 5,
   customerName: 'Blocked Store',
   currentBalance: 1000,
@@ -183,6 +184,7 @@ assert.equal(blockedCheck.errorMessageAr?.includes('تجاوز فترة السد
 
 // Exceeded credit limit rejected
 const limitExceededCheck = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 6,
   customerName: 'Limited Market',
   currentBalance: 8000,
@@ -197,6 +199,7 @@ assert.equal(limitExceededCheck.projectedBalance, 11000);
 
 // Within credit limit permitted
 const withinLimitCheck = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 7,
   customerName: 'Healthy Mart',
   currentBalance: 4000,
@@ -210,6 +213,7 @@ assert.equal(withinLimitCheck.exceededAmount, 0);
 
 // Unlimited credit (limit = 0) permitted
 const unlimitedCheck = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 8,
   customerName: 'Unlimited Partner',
   currentBalance: 50000,
@@ -222,6 +226,7 @@ assert.equal(unlimitedCheck.projectedBalance, 70000);
 
 // Zero or negative requested amount rejected
 const zeroCreditCheck = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 9,
   customerName: 'Invalid Amount',
   currentBalance: 0,
@@ -234,6 +239,7 @@ assert.equal(zeroCreditCheck.reasonCode, 'ZERO_OR_NEGATIVE_REQUEST');
 
 // Overdue invoice rejected
 const overdueInvoiceCheck = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 10,
   customerName: 'Overdue Mart',
   currentBalance: 3000,
@@ -250,6 +256,7 @@ assert.equal(overdueInvoiceCheck.errorMessageAr?.includes('فواتير متأخ
 
 // Overdue invoice allowed with supervisor override PIN
 const overdueWithOverrideCheck = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 10,
   customerName: 'Overdue Mart',
   currentBalance: 3000,
@@ -380,6 +387,7 @@ assert.equal(expenseTrip.cashVarianceStatus, 'balanced');
 
 // Test 7.2: Credit Limit Exceeded but permitted via Supervisor Override
 const overrideExceeded = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 45,
   customerName: 'سوبرماركت البركة',
   currentBalance: 8000,
@@ -400,6 +408,7 @@ assert.equal(overrideExceeded.exceededAmount, 2000);
 
 // Test 7.3: Blocked Customer permitted via Supervisor Override
 const overrideBlocked = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 88,
   customerName: 'محل التقوى',
   currentBalance: 2000,
@@ -423,6 +432,7 @@ assert.equal(overrideBlocked.reasonCode, 'SUPERVISOR_OVERRIDE');
 
 // Test 8.1: Rep-created / cash-only customer (creditLimit = 0) rejected on credit sale without PIN
 const cashOnlyRejected = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 91,
   customerName: 'كشك السلام - مضاف ميدانياً',
   currentBalance: 0,
@@ -438,6 +448,7 @@ assert.equal(cashOnlyRejected.exceededAmount, 1200);
 
 // Test 8.2: Rep-created / cash-only customer permitted when Supervisor PIN is approved
 const cashOnlyOverridden = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 91,
   customerName: 'كشك السلام - مضاف ميدانياً',
   currentBalance: 0,
@@ -502,6 +513,7 @@ assert.equal(cardApproved.approvedReference, 'POS-RRN-445566');
 
 // Test 10.1: Expense without detailed notes rejected
 const expNoNotes = evaluateTripExpenseGovernance({
+  moneyDigits: 2,
   expenseType: 'fuel',
   amount: 120,
   notes: ' ',
@@ -512,6 +524,7 @@ assert.equal(expNoNotes.reasonCode, 'EXPENSE_NOTES_REQUIRED');
 
 // Test 10.2: Routine fuel expense within single (<=250) and cumulative (<=400) ceiling allowed without PIN
 const expRoutineFuel = evaluateTripExpenseGovernance({
+  moneyDigits: 2,
   expenseType: 'fuel',
   amount: 150,
   notes: 'بنزين 92 محطة وطنية إيصال 104',
@@ -524,6 +537,7 @@ assert.equal(expRoutineFuel.projectedTripExpenses, 180);
 
 // Test 10.3: Non-routine category (tips/maintenance/other) rejected without Supervisor PIN even for small amount
 const expTipsNoPin = evaluateTripExpenseGovernance({
+  moneyDigits: 2,
   expenseType: 'tips',
   amount: 80,
   notes: 'إكرامية عمال تنزيل مخزن العميل',
@@ -535,6 +549,7 @@ assert.equal(expTipsNoPin.reasonCode, 'EXPENSE_REQUIRES_SUPERVISOR_PIN');
 
 // Test 10.4: Single fuel expense exceeding 250 ceiling rejected without Supervisor PIN
 const expSingleHighNoPin = evaluateTripExpenseGovernance({
+  moneyDigits: 2,
   expenseType: 'fuel',
   amount: 320,
   notes: 'تموين سولار كامل للسيارة',
@@ -546,6 +561,7 @@ assert.equal(expSingleHighNoPin.reasonCode, 'EXPENSE_REQUIRES_SUPERVISOR_PIN');
 
 // Test 10.5: Cumulative routine expenses exceeding 400 ceiling rejected without Supervisor PIN
 const expCumulativeHighNoPin = evaluateTripExpenseGovernance({
+  moneyDigits: 2,
   expenseType: 'toll',
   amount: 120,
   notes: 'بوابات طريق الإسكندرية الصحراوي',
@@ -557,6 +573,7 @@ assert.equal(expCumulativeHighNoPin.reasonCode, 'EXPENSE_REQUIRES_SUPERVISOR_PIN
 
 // Test 10.6: Non-routine or over-ceiling expense approved when Supervisor PIN is verified
 const expHighApproved = evaluateTripExpenseGovernance({
+  moneyDigits: 2,
   expenseType: 'maintenance',
   amount: 450,
   notes: 'إصلاح إطار داخلي وتغيير بلية عجل طارئ',

@@ -901,6 +901,9 @@ export class VanSalesService {
       });
     }
 
+    // Book digits resolved once (D4): the offer prices below round
+    // at book digits, never a hardcoded 2dp.
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
     const nowRef = new Date();
     const inventory: VanStockItem[] = invRows.map((r: any) => {
       const pid = Number(r.productId);
@@ -915,21 +918,21 @@ export class VanSalesService {
       if (offer) {
         const offVal = Number(offer.value || 0);
         if (offer.offer_type === 'percent' && offVal > 0) {
-          discountPerUnit = Number(((baseRetail * offVal) / 100).toFixed(2));
-          effectiveRetail = Math.max(0, Number((baseRetail - discountPerUnit).toFixed(2)));
+          discountPerUnit = roundMoney((baseRetail * offVal) / 100, moneyDigits);
+          effectiveRetail = Math.max(0, roundMoney(baseRetail - discountPerUnit, moneyDigits));
           offerBadge = `خصم ${offVal}%`;
         } else if (offer.offer_type === 'fixed' && offVal > 0) {
           discountPerUnit = Math.min(baseRetail, offVal);
-          effectiveRetail = Math.max(0, Number((baseRetail - discountPerUnit).toFixed(2)));
+          effectiveRetail = Math.max(0, roundMoney(baseRetail - discountPerUnit, moneyDigits));
           offerBadge = `خصم ${offVal} ج.م`;
         } else if (offer.offer_type === 'price' && offVal > 0) {
           effectiveRetail = offVal;
-          discountPerUnit = Math.max(0, Number((baseRetail - effectiveRetail).toFixed(2)));
+          discountPerUnit = Math.max(0, roundMoney(baseRetail - effectiveRetail, moneyDigits));
           offerBadge = `سعر عرض خاص`;
         } else if (offer.offer_type === 'bundle' && offVal > 0) {
           const minQ = Math.max(1, Number(offer.min_qty || 1));
-          effectiveRetail = Number((offVal / minQ).toFixed(2));
-          discountPerUnit = Math.max(0, Number((baseRetail - effectiveRetail).toFixed(2)));
+          effectiveRetail = roundMoney(offVal / minQ, moneyDigits);
+          discountPerUnit = Math.max(0, roundMoney(baseRetail - effectiveRetail, moneyDigits));
           offerBadge = `باقة ${minQ} قطع بسعر ${offVal}`;
         } else if (offer.offer_type === 'bogo') {
           const buyQ = Number(offer.bogo_buy_qty || 1);
@@ -937,8 +940,8 @@ export class VanSalesService {
           const discPct = Number(offer.bogo_discount_percent ?? 100);
           const cycle = buyQ + getQ;
           const fullDisc = getQ * baseRetail * (discPct / 100);
-          effectiveRetail = Number((Math.max(0, (cycle * baseRetail) - fullDisc) / cycle).toFixed(2));
-          discountPerUnit = Math.max(0, Number((baseRetail - effectiveRetail).toFixed(2)));
+          effectiveRetail = roundMoney(Math.max(0, (cycle * baseRetail) - fullDisc) / cycle, moneyDigits);
+          discountPerUnit = Math.max(0, roundMoney(baseRetail - effectiveRetail, moneyDigits));
           offerBadge = discPct === 100 ? `اشتري ${buyQ} واحصل على ${getQ} مجاناً` : `اشتري ${buyQ} و${getQ} بخصم ${discPct}%`;
         }
       }
@@ -1004,7 +1007,6 @@ export class VanSalesService {
       customerTotalBalances[cid] = Number(c.balance || 0);
     }
 
-    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
     const repBalancesMap = await getCustomerRepBalancesMap(this.anyDb, tenantId, {
       customerIds,
       customerTotalBalances,
@@ -1344,6 +1346,9 @@ export class VanSalesService {
 
     let totalLoadedValue = 0;
     let totalLoadedCost = 0;
+    // Book digits resolved once, before the transaction below opens
+    // (D4): the loaded value below rounds at book digits.
+    const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
     let createdTripId = 0;
     const hasItemsToLoad = Boolean(payload.items && payload.items.length > 0);
 
@@ -1468,7 +1473,7 @@ export class VanSalesService {
           source_warehouse_id: sourceLocId || vanLoc.id,
           status: 'open',
           settlement_status: 'open',
-          loaded_amount: Number(totalLoadedValue.toFixed(2)),
+          loaded_amount: roundMoney(totalLoadedValue, moneyDigits),
           sales_amount: 0,
           cash_collected: 0,
           credit_sales: 0,
@@ -1510,7 +1515,7 @@ export class VanSalesService {
     return {
       ok: true,
       tripId: createdTripId,
-      totalLoadedValue: Number(totalLoadedValue.toFixed(2)),
+      totalLoadedValue: roundMoney(totalLoadedValue, moneyDigits),
       itemsCount: payload.items?.length || 0,
     };
   }
@@ -1559,6 +1564,9 @@ export class VanSalesService {
 
     let totalLoadedValue = 0;
     let totalLoadedCost = 0;
+    // Book digits resolved once, before the transaction below opens
+    // (D4): the loaded value below rounds at book digits.
+    const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
     const hasItemsToLoad = Boolean(payload.items && payload.items.length > 0);
 
     if (!hasItemsToLoad) {
@@ -1657,7 +1665,7 @@ export class VanSalesService {
       await trxAny
         .updateTable('van_sales_trips')
         .set({
-          loaded_amount: sql`coalesce(loaded_amount, 0) + ${Number(totalLoadedValue.toFixed(2))}`,
+          loaded_amount: sql`coalesce(loaded_amount, 0) + ${roundMoney(totalLoadedValue, moneyDigits)}`,
           notes: sql`case 
             when notes is null or notes = '' then ${additionalNote}
             else notes || E'\n' || ${additionalNote}
@@ -1696,7 +1704,7 @@ export class VanSalesService {
     return {
       ok: true,
       tripId,
-      totalLoadedValue: Number(totalLoadedValue.toFixed(2)),
+      totalLoadedValue: roundMoney(totalLoadedValue, moneyDigits),
       itemsCount: payload.items.length,
     };
   }
@@ -2157,7 +2165,7 @@ export class VanSalesService {
           // sale instant), not merely date-filtered as before.
           const hasActiveBogoOffer = activeOffers.some((o: any) => o.offer_type === 'bogo' && isOfferActive(o, offerTodayIso, saleNow));
           if (!hasActiveBogoOffer && !supervisorOverrideApproved) {
-            const attemptedVal = Number((defaultBasePrice * multiplier * inputQty).toFixed(2));
+            const attemptedVal = toBookMoney(defaultBasePrice * multiplier * inputQty);
             await this.vanFraudRadarService.recordSuspicionEvent({
               tenantId,
               accountId,
@@ -2297,7 +2305,7 @@ export class VanSalesService {
           } else if (clientPrice < systemAuthorizedPrice - 0.05) {
             // Price is lower than authorized system price — requires supervisor PIN
             if (!supervisorOverrideApproved) {
-              const attemptedDiff = Number(((systemAuthorizedPrice - clientPrice) * inputQty).toFixed(2));
+              const attemptedDiff = toBookMoney((systemAuthorizedPrice - clientPrice) * inputQty);
               await this.vanFraudRadarService.recordSuspicionEvent({
                 tenantId,
                 accountId,
@@ -2551,12 +2559,13 @@ export class VanSalesService {
             const oldest = overdueSales[0];
             const oldestDate = new Date(oldest.created_at);
             oldestOverdueDays = Math.max(0, Math.floor((Date.now() - oldestDate.getTime()) / (1000 * 60 * 60 * 24)));
-            overdueAmount = Number(
-              overdueSales.reduce((sum: number, s: any) => sum + Number(s.remaining || 0), 0).toFixed(2),
+            overdueAmount = toBookMoney(
+              overdueSales.reduce((sum: number, s: any) => sum + Number(s.remaining || 0), 0),
             );
           }
 
           const creditCheck = evaluateCreditLimitCheck({
+            moneyDigits: bookDigits,
             customerId: resolvedCustomerId,
             customerName: custRecord.name || customerName,
             currentBalance: Number(custRecord.balance || 0),
@@ -3344,6 +3353,8 @@ export class VanSalesService {
 
     await this.db.transaction().execute(async (trx) => {
       const trxAny = trx as any;
+      // Book digits resolved once on THIS transaction handle (D4).
+      const bookDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
 
       // Canonical Lock Order: sort product IDs ascending to prevent deadlock
       const sortedProductIds = [damagedPid, replacementPid].sort((a, b) => a - b);
@@ -3389,6 +3400,7 @@ export class VanSalesService {
         replacementQty,
         replacementUnitPrice: replacementPrice,
         availableVanStockQty: availableVanStock,
+        moneyDigits: bookDigits,
       });
 
       if (!evalResult.allowed) {
@@ -4316,7 +4328,7 @@ export class VanSalesService {
 
     if (cashVariance < -0.5 || totalStockVarianceCost > 0.5) {
       const cashShortageAmount = cashVariance < 0 ? Math.abs(cashVariance) : 0;
-      const totalShortage = Number((cashShortageAmount + totalStockVarianceCost).toFixed(2));
+      const totalShortage = roundMoney(cashShortageAmount + totalStockVarianceCost, bookDigits);
       await this.recordSuspicionEvent({
         tenantId,
         accountId,
@@ -4344,7 +4356,7 @@ export class VanSalesService {
     const returnsAmount = Number(trip.returns_amount || 0);
     const cashRefunds = Number(trip.cash_refunds || 0);
     const creditReturns = Math.max(0, returnsAmount - cashRefunds);
-    const collectionsTotal = Math.max(0, Number((grossCashCollected - cashSales + cashRefunds).toFixed(2)));
+    const collectionsTotal = Math.max(0, roundMoney(grossCashCollected - cashSales + cashRefunds, bookDigits));
 
     return {
       ok: true,
@@ -4370,7 +4382,7 @@ export class VanSalesService {
       creditReturns,
       totalInstapaySales: Number(trip.total_instapay_sales || 0),
       totalInstapayCollections: Number(trip.total_instapay_collections || 0),
-      expectedBankTransfers: Number((Number(trip.total_instapay_sales || 0) + Number(trip.total_instapay_collections || 0)).toFixed(2)),
+      expectedBankTransfers: roundMoney(Number(trip.total_instapay_sales || 0) + Number(trip.total_instapay_collections || 0), bookDigits),
       stockVariances: (stockAuditResult as any)?.itemVariances || [],
     };
   }
@@ -5482,7 +5494,10 @@ export class VanSalesService {
       approvedSupervisorName = pinCheck.supervisorName;
     }
 
+    // Book digits resolved once (D4) and passed to the governance engine.
+    const expenseDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
     const governance = evaluateTripExpenseGovernance({
+      moneyDigits: expenseDigits,
       expenseType: payload.expenseType || 'other',
       amount: Number(payload.amount),
       notes: payload.notes,
@@ -5561,6 +5576,9 @@ export class VanSalesService {
    * Retrieves all recorded trip expenses for a van trip.
    */
   async getTripExpenses(tripId: number, tenantId: string, repId?: number) {
+    // Book digits resolved once (D4): the expenses total below rounds
+    // at book digits, never a hardcoded 2dp.
+    const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
     if (repId != null) {
       await this.assertTripOwnedByRep(tenantId, tripId, repId);
     }
@@ -5594,7 +5612,7 @@ export class VanSalesService {
         createdAt: r.createdAt,
         createdByName: r.createdByName || null,
       })),
-      totalExpenses: Number(total.toFixed(2)),
+      totalExpenses: roundMoney(total, moneyDigits),
     };
   }
 
@@ -6049,6 +6067,9 @@ export class VanSalesService {
   // =========================================================================
 
   async getCustomerFieldStatement(tenantId: string, customerId: number, repId?: number) {
+    // Book digits resolved once (D4): the overdue total below rounds
+    // at book digits, never a hardcoded 2dp.
+    const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
     const customer = await this.anyDb
       .selectFrom('customers')
       .select([
@@ -6211,8 +6232,9 @@ export class VanSalesService {
       .orderBy('created_at', 'asc')
       .execute();
 
-    const totalOverdueAmount = Number(
-      overdueInvoices.reduce((sum: number, inv: any) => sum + Number(inv.remaining || 0), 0).toFixed(2),
+    const totalOverdueAmount = roundMoney(
+      overdueInvoices.reduce((sum: number, inv: any) => sum + Number(inv.remaining || 0), 0),
+      moneyDigits,
     );
     const oldestOverdueDays = overdueInvoices.length > 0
       ? Math.max(0, Math.floor((Date.now() - new Date(overdueInvoices[0].saleDate).getTime()) / (1000 * 60 * 60 * 24)))
@@ -6263,6 +6285,9 @@ export class VanSalesService {
       dateTo?: string;
     },
   ) {
+    // Book digits resolved once (D4): the ledger summary totals
+    // below round at book digits, never a hardcoded 2dp.
+    const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
     let query = this.anyDb
       .selectFrom('van_rep_financial_settlements as fs')
       .innerJoin('delivery_representatives as dr', 'dr.id', 'fs.rep_id')
@@ -6401,18 +6426,18 @@ export class VanSalesService {
       } else if (isBonus) {
         repEntry.commissions += amt;
       }
-      repEntry.netBalance = Number((repEntry.commissions - repEntry.pendingShortages).toFixed(2));
+      repEntry.netBalance = roundMoney(repEntry.commissions - repEntry.pendingShortages, moneyDigits);
     }
 
     return {
       items,
       summary: {
-        totalPendingShortages: Number(totalPendingShortages.toFixed(2)),
-        totalSettledShortages: Number(totalSettledShortages.toFixed(2)),
-        totalWaivedShortages: Number(totalWaivedShortages.toFixed(2)),
-        totalPushedToPayroll: Number(totalPushedToPayroll.toFixed(2)),
-        totalCommissions: Number(totalCommissions.toFixed(2)),
-        netRepBalance: Number((totalCommissions - totalPendingShortages).toFixed(2)),
+        totalPendingShortages: roundMoney(totalPendingShortages, moneyDigits),
+        totalSettledShortages: roundMoney(totalSettledShortages, moneyDigits),
+        totalWaivedShortages: roundMoney(totalWaivedShortages, moneyDigits),
+        totalPushedToPayroll: roundMoney(totalPushedToPayroll, moneyDigits),
+        totalCommissions: roundMoney(totalCommissions, moneyDigits),
+        netRepBalance: roundMoney(totalCommissions - totalPendingShortages, moneyDigits),
         repsBreakdown: Array.from(repMap.values()),
       },
     };
@@ -6870,7 +6895,10 @@ export class VanSalesService {
 
     if (!rep) throw new AppError('مندوب التوزيع غير موجود', 'REP_NOT_FOUND', 404);
 
-    const amount = Number(Number(payload.amount || 0).toFixed(2));
+    // Book digits resolved once (D4): the bonus/commission amount
+    // below rounds at book digits, never a hardcoded 2dp.
+    const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
+    const amount = roundMoney(Number(payload.amount || 0), moneyDigits);
     if (amount <= 0) throw new AppError('يجب أن يكون المبلغ أكبر من صفر', 'INVALID_AMOUNT', 400);
 
     const inserted = await this.anyDb

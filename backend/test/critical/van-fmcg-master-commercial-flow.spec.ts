@@ -173,6 +173,7 @@ console.log(`[PASS] Promotions applied: Discount ${promoEvaluation.totalPromotio
 
 // 2.4 Credit Limit Governance
 const creditCheck = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: cust1.id,
   customerName: cust1.name,
   currentBalance: 1000,

@@ -6,7 +6,7 @@ import { AppError } from '../../../common/errors/app-error';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { moveVanStock, sortItemsByProductId, generateDailySequenceNumber } from './van-common.util';
 import { VanFraudRadarService } from './van-fraud-radar.service';
 
@@ -56,6 +56,9 @@ export class VanReturnsService {
    * When `repId` is provided (from the driver portal), strictly isolates to sales owned by that rep.
    */
   async getCustomerEligibleSales(tenantId: string, customerId: number, repId?: number) {
+    // Book digits resolved once (D4): the derived net unit price below
+    // rounds at book digits, never a hardcoded 2dp.
+    const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
     let query = this.anyDb
       .selectFrom('sales as s')
       .leftJoin('van_sales_trips as vt', (join: any) =>
@@ -107,7 +110,7 @@ export class VanReturnsService {
       const sid = Number(it.saleId);
       const soldQty = Number(it.soldQty || 0);
       const lineTotal = Number(it.lineTotal || 0);
-      const netUnitPrice = soldQty > 0 ? Number((lineTotal / soldQty).toFixed(2)) : 0;
+      const netUnitPrice = soldQty > 0 ? roundMoney(lineTotal / soldQty, moneyDigits) : 0;
       const alreadyReturned = returnedQtyBySaleItem.get(Number(it.saleItemId)) || 0;
       const remainingReturnableQty = Math.max(0, soldQty - alreadyReturned);
 
@@ -163,6 +166,10 @@ export class VanReturnsService {
       throw new AppError('يجب تحديد صنف واحد على الأقل للمرتجع', 'EMPTY_RETURN_ITEMS', 400);
     }
 
+    // Book digits resolved once, before the transaction below opens
+    // (D4): the return total and net-unit caps below round at book digits.
+    const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+
     const trip = await this.anyDb
       .selectFrom('van_sales_trips')
       .select(['id', 'status', 'van_location_id', 'cash_collected'])
@@ -194,7 +201,7 @@ export class VanReturnsService {
       }
       totalAmount += q * p;
     }
-    totalAmount = Number(totalAmount.toFixed(2));
+    totalAmount = roundMoney(totalAmount, moneyDigits);
 
     // If saleId is linked, validate against original invoice lines and rep isolation
     if (payload.saleId) {
@@ -287,7 +294,7 @@ export class VanReturnsService {
         }
         const soldQty = Number(line.qty || 0);
         const lineTotal = Number(line.line_total || 0);
-        const netUnit = soldQty > 0 ? Number((lineTotal / soldQty).toFixed(2)) : 0;
+        const netUnit = soldQty > 0 ? roundMoney(lineTotal / soldQty, moneyDigits) : 0;
         if (Number(item.unitPrice) > netUnit + 0.05) {
           await this.fraudRadar?.recordSuspicionEvent({
             tenantId,
@@ -400,7 +407,7 @@ export class VanReturnsService {
         const totalSoldQty = matchingLines.reduce((sum: number, sl: any) => sum + Number(sl.qty || 0), 0);
         const maxNetUnitPrice = matchingLines.reduce((maxP: number, sl: any) => {
           const q = Number(sl.qty || 0);
-          const netU = q > 0 ? Number((Number(sl.line_total || 0) / q).toFixed(2)) : 0;
+          const netU = q > 0 ? roundMoney(Number(sl.line_total || 0) / q, moneyDigits) : 0;
           return Math.max(maxP, netU);
         }, 0);
 
@@ -607,6 +614,12 @@ export class VanReturnsService {
         throw new AppError('رحلة التوزيع المحددة مغلقة أو غير صالحة', 'INVALID_TRIP', 400);
       }
 
+      // Book digits resolved once on THIS transaction handle (D4), AFTER
+      // the trip lock above: the custody-guard spec pins the settings
+      // read after the lock, and the cash check + net-unit caps below
+      // both use these digits.
+      const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
+
       const trip = await trxAny
         .selectFrom('van_sales_trips as vt')
         .leftJoin('stock_locations as van', 'van.id', 'vt.van_location_id')
@@ -633,7 +646,6 @@ export class VanReturnsService {
         // book currency, never a hardcoded 0.01 — 0.01 is ten minor
         // units on a 3-decimal tenant and let a refund overdraw the
         // rep's custody by up to that much, even sequentially.
-        const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
         const tolerance = 1 / 10 ** moneyDigits;
         const repCash = Number(trip.cash_collected || 0);
         if (totalAmount > repCash + tolerance) {
@@ -720,7 +732,7 @@ export class VanReturnsService {
           }
           const soldQty = Number(line.qty || 0);
           const lineTotal = Number(line.line_total || 0);
-          const netUnit = soldQty > 0 ? Number((lineTotal / soldQty).toFixed(2)) : 0;
+          const netUnit = soldQty > 0 ? roundMoney(lineTotal / soldQty, moneyDigits) : 0;
           if (Number(item.unitPrice) > netUnit + 0.05) {
             throw new AppError(
               `سعر المرتجع (${item.unitPrice}) يتجاوز السعر الصافي بعد الخصم بالفاتورة الأصلية (${netUnit})`,
@@ -787,7 +799,7 @@ export class VanReturnsService {
           const totalSoldQty = matchingLines.reduce((sum: number, sl: any) => sum + Number(sl.qty || 0), 0);
           const maxNetUnitPrice = matchingLines.reduce((maxP: number, sl: any) => {
             const q = Number(sl.qty || 0);
-            const netU = q > 0 ? Number((Number(sl.line_total || 0) / q).toFixed(2)) : 0;
+            const netU = q > 0 ? roundMoney(Number(sl.line_total || 0) / q, moneyDigits) : 0;
             return Math.max(maxP, netU);
           }, 0);
           const alreadyRet = returnedByProduct.get(pid) || 0;

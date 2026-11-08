@@ -67,6 +67,8 @@ async function main(): Promise<void> {
       CREATE TABLE sale_items (id bigserial PRIMARY KEY, sale_id bigint, tenant_id text, account_id text, product_id bigint, unit_price numeric DEFAULT 0, created_at timestamptz DEFAULT NOW());
       CREATE TABLE customer_payments (id bigserial PRIMARY KEY, tenant_id text, account_id text, customer_id bigint, amount numeric DEFAULT 0, note text, transfer_reference text, created_at timestamptz DEFAULT NOW());
       CREATE TABLE customer_ledger (id bigserial PRIMARY KEY, tenant_id text, account_id text, customer_id bigint, entry_type text, amount numeric DEFAULT 0, note text, created_at timestamptz DEFAULT NOW());
+      CREATE TABLE settings (tenant_id text, key text, value text);
+      CREATE TABLE currency_exchange_rates (tenant_id text, currency_code text, is_base boolean, exchange_rate numeric);
     `);
 
     const postingStub = {
@@ -82,6 +84,12 @@ async function main(): Promise<void> {
     // context value is never consumed; shadow it for the harness only.
     (vanService as any).resolveSystemAuthContext = async () => ({ userId: 1, sessionId: 'spec', username: 'spec' });
     const preSalesService = new VanPreSalesService(db as never);
+
+    // D4: getTripExpenses / getCustomerFieldStatement resolve the
+    // tenant's book digits through tenantBaseCurrency (settings +
+    // currency_exchange_rates); the fixture answers with EGP (2dp).
+    await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
+    await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', is_base: true, exchange_rate: 1 }).execute();
 
     await anyDb.insertInto('delivery_representatives').values([
       { id: REP_OWN, tenant_id: TENANT, account_id: ACCOUNT, full_name: 'Own Rep', name: 'Own Rep', phone: '01000000001', is_active: true },

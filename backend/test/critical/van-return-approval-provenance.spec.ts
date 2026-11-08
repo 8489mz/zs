@@ -80,6 +80,14 @@ function buildService(opts: {
       if (table === 'sale_items') {
         return chainable({ execute: async () => opts.saleLines.concat(opts.soldLines) });
       }
+      if (table === 'settings') {
+        // D4: approveFieldReturn resolves book digits on the transaction
+        // handle after the trip lock; the mock answers with EGP.
+        return chainable({ executeTakeFirst: async () => ({ value: '"EGP"' }) });
+      }
+      if (table === 'currency_exchange_rates') {
+        return chainable({ execute: async () => [{ currency_code: 'EGP', exchange_rate: 1 }] });
+      }
       throw new Error(`unexpected query on table ${table}: provenance re-validation must run before it`);
     },
   };

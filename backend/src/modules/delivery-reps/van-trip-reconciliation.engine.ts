@@ -91,6 +91,9 @@ export interface VanStockAuditResult {
 }
 
 export interface CreditLimitEvaluationParams {
+  // REQUIRED (D4, like reconcileTripFinancials): every amount in the
+  // evaluation rounds at the tenant's book digits.
+  moneyDigits: MoneyDigits;
   customerId: number;
   customerName: string;
   currentBalance: number;
@@ -143,6 +146,8 @@ export interface FieldCardPaymentEvaluationResult {
 }
 
 export interface TripExpenseGovernanceParams {
+  // REQUIRED (D4): the expense amounts round at the tenant's book digits.
+  moneyDigits: MoneyDigits;
   expenseType: string;
   amount: number;
   notes?: string | null;
@@ -335,10 +340,10 @@ export function reconcileVanStockAudit(items: VanStockAuditItem[], digits: Money
  * Evaluates whether a field credit or split sale is allowed for a customer.
  */
 export function evaluateCreditLimitCheck(params: CreditLimitEvaluationParams): CreditLimitEvaluationResult {
-  const currentBalance = Number((Number(params.currentBalance) || 0).toFixed(2));
-  const creditLimit = Number((Number(params.creditLimit) || 0).toFixed(2));
-  const requestedCreditAmount = Number((Number(params.requestedCreditAmount) || 0).toFixed(2));
-  const projectedBalance = Number((currentBalance + requestedCreditAmount).toFixed(2));
+  const currentBalance = roundBookMoney(Number(params.currentBalance) || 0, params.moneyDigits);
+  const creditLimit = roundBookMoney(Number(params.creditLimit) || 0, params.moneyDigits);
+  const requestedCreditAmount = roundBookMoney(Number(params.requestedCreditAmount) || 0, params.moneyDigits);
+  const projectedBalance = roundBookMoney(currentBalance + requestedCreditAmount, params.moneyDigits);
 
   if (requestedCreditAmount <= 0) {
     return {
@@ -440,7 +445,7 @@ export function evaluateCreditLimitCheck(params: CreditLimitEvaluationParams): C
   }
 
   if (creditLimit > 0 && projectedBalance > creditLimit) {
-    const exceededAmount = Number((projectedBalance - creditLimit).toFixed(2));
+    const exceededAmount = roundBookMoney(projectedBalance - creditLimit, params.moneyDigits);
     if (params.supervisorOverride?.approved) {
       return {
         allowed: true,
@@ -601,9 +606,9 @@ export function evaluateFieldCardPayment(params: FieldCardPaymentEvaluationParam
  * and requires Supervisor PIN for non-routine categories (maintenance, tips, meals, other) or amounts exceeding ceilings.
  */
 export function evaluateTripExpenseGovernance(params: TripExpenseGovernanceParams): TripExpenseGovernanceResult {
-  const amount = Number((Number(params.amount) || 0).toFixed(2));
-  const existing = Number((Number(params.existingTripExpenses) || 0).toFixed(2));
-  const projectedTripExpenses = Number((existing + amount).toFixed(2));
+  const amount = roundBookMoney(Number(params.amount) || 0, params.moneyDigits);
+  const existing = roundBookMoney(Number(params.existingTripExpenses) || 0, params.moneyDigits);
+  const projectedTripExpenses = roundBookMoney(existing + amount, params.moneyDigits);
   const maxSingle = params.maxSinglePettyExpense ?? 250;
   const maxCumulative = params.maxCumulativePettyExpenses ?? 400;
   const trimmedNotes = String(params.notes || '').trim();
@@ -699,6 +704,9 @@ export interface RepCustomerSalesHistoryProduct {
 }
 
 export interface FieldReturnEvaluationParams {
+  // REQUIRED (D4): the return total and net-unit caps round at the
+  // tenant's book digits.
+  moneyDigits: MoneyDigits;
   repId: number;
   customerId: number;
   items: FieldReturnEvaluationItem[];
@@ -767,7 +775,7 @@ export function evaluateFieldReturnGovernance(
     }
     totalAmount += q * p;
   }
-  totalAmount = Number(totalAmount.toFixed(2));
+  totalAmount = roundBookMoney(totalAmount, params.moneyDigits);
 
   // Linked Return Flow
   if (params.linkedSale) {
@@ -809,7 +817,7 @@ export function evaluateFieldReturnGovernance(
 
       const soldQty = Number(line.soldQty || 0);
       const lineTotal = Number(line.lineTotal || 0);
-      const netUnit = soldQty > 0 ? Number((lineTotal / soldQty).toFixed(2)) : 0;
+      const netUnit = soldQty > 0 ? roundBookMoney(lineTotal / soldQty, params.moneyDigits) : 0;
 
       if (Number(item.unitPrice) > netUnit + 0.05) {
         return {
@@ -1157,6 +1165,8 @@ export function formatVanSettlementSummaryText(params: {
 }
 
 export interface DamagedSwapParams {
+  // REQUIRED (D4): the swap values round at the tenant's book digits.
+  moneyDigits: MoneyDigits;
   damagedProductId: number;
   damagedQty: number;
   damagedUnitPrice: number;
@@ -1224,9 +1234,9 @@ export function evaluateDamagedSwap(params: DamagedSwapParams): DamagedSwapResul
     };
   }
 
-  const dVal = Number((dQty * Number(params.damagedUnitPrice || 0)).toFixed(2));
-  const rVal = Number((rQty * Number(params.replacementUnitPrice || 0)).toFixed(2));
-  const diff = Number((rVal - dVal).toFixed(2));
+  const dVal = roundBookMoney(dQty * Number(params.damagedUnitPrice || 0), params.moneyDigits);
+  const rVal = roundBookMoney(rQty * Number(params.replacementUnitPrice || 0), params.moneyDigits);
+  const diff = roundBookMoney(rVal - dVal, params.moneyDigits);
 
   return {
     allowed: true,

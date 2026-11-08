@@ -5,6 +5,8 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { canManagePriceLists } from '../../../core/auth/utils/commerce-operation-guards';
 import { KYSELY_DB } from '../../../database/database.constants';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
 export interface UpsertPriceListDto {
   name: string;
@@ -294,6 +296,10 @@ export class PriceListsService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
 
+    // Book digits resolved once (D4): effective prices round at the
+    // tenant's book digits, never a hardcoded 2dp.
+    const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+
     if (options?.paymentTerms === 'credit') {
       const prod = await this.db
         .selectFrom('products')
@@ -384,7 +390,7 @@ export class PriceListsService {
         const disc = Number(specificItem.discount_percent);
         const finalPrice = Math.max(0, basePrice * (1 - disc / 100));
         return {
-          effectivePrice: Number(finalPrice.toFixed(2)),
+          effectivePrice: roundMoney(finalPrice, moneyDigits),
           discountPercent: disc,
           appliedRule: 'product_discount',
           priceListId: Number(priceList.id),
@@ -398,7 +404,7 @@ export class PriceListsService {
     if (defaultDiscount > 0) {
       const finalPrice = Math.max(0, basePrice * (1 - defaultDiscount / 100));
       return {
-        effectivePrice: Number(finalPrice.toFixed(2)),
+        effectivePrice: roundMoney(finalPrice, moneyDigits),
         discountPercent: defaultDiscount,
         appliedRule: 'list_default_discount',
         priceListId: Number(priceList.id),

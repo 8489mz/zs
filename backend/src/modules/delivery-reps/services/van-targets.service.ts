@@ -10,7 +10,7 @@ import {
 import { getMonthlyOfficialHolidayDates } from './van-common.util';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 
 export interface VanRepCommissionConfig {
@@ -179,6 +179,9 @@ export class VanTargetsService {
     tenantId: string,
     month: string,
   ): Promise<Map<number, number>> {
+    // Book digits resolved once (D4): the accumulated commission sums
+    // below round at book digits, never a hardcoded 2dp.
+    const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
     const map = new Map<number, number>();
     const rows = await this.anyDb
       .selectFrom('expenses')
@@ -194,7 +197,7 @@ export class VanTargetsService {
         const rId = Number(m[1]);
         const amt = Number(r.amount || 0);
         if (rId > 0 && amt > 0) {
-          map.set(rId, Number(((map.get(rId) || 0) + amt).toFixed(2)));
+          map.set(rId, roundMoney((map.get(rId) || 0) + amt, moneyDigits));
         }
       }
     }
@@ -219,9 +222,11 @@ export class VanTargetsService {
       targetBonusRatePercent?: number;
     },
   ) {
-    const target = Math.max(0, Number(Number(targetAmount || 0).toFixed(2)));
+    // Book digits resolved once (D4): target amounts round at book digits.
+    const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
+    const target = Math.max(0, roundMoney(Number(targetAmount || 0), moneyDigits));
     const colTarget = collectionTarget !== undefined && collectionTarget !== null && !isNaN(Number(collectionTarget))
-      ? Math.max(0, Number(Number(collectionTarget).toFixed(2)))
+      ? Math.max(0, roundMoney(Number(collectionTarget), moneyDigits))
       : null;
     const visTarget = visitsTarget !== undefined && visitsTarget !== null && !isNaN(Number(visitsTarget))
       ? Math.max(0, Math.round(Number(visitsTarget)))
@@ -621,6 +626,10 @@ export class VanTargetsService {
     paidAmount: number;
     remainingPayableCommission: number;
   }> {
+    // Book digits resolved once, before the transaction below opens
+    // (D4): the requested payout and remaining payable below round at
+    // book digits.
+    const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
     const repId = Number(payload.repId || 0);
     if (!repId || repId <= 0) {
       throw new AppError('يرجى تحديد المندوب لصرف العمولة', 'REP_REQUIRED', 400);
@@ -639,7 +648,7 @@ export class VanTargetsService {
 
     const requestedAmount =
       payload.amount !== undefined && payload.amount !== null && Number(payload.amount) > 0
-        ? Number(Number(payload.amount).toFixed(2))
+        ? roundMoney(Number(payload.amount), moneyDigits)
         : maxPayable;
 
     if (requestedAmount <= 0) {
@@ -714,7 +723,7 @@ export class VanTargetsService {
         await this.accountingPosting.postExpense(trx as any, expenseId, auth);
       }
 
-      const remainingAfter = Number(Math.max(0, maxPayable - effectivePayout).toFixed(2));
+      const remainingAfter = roundMoney(Math.max(0, maxPayable - effectivePayout), moneyDigits);
       return {
         ok: true,
         expenseId,

@@ -37,6 +37,7 @@ console.log('--- Claude Audit 1: Overdue Invoice Grace Period Governance ---');
 // However, the customer has an unpaid invoice from 45 days ago (allowed grace period: 30 days).
 // Rogue rep tries to push an additional credit sale of 1,500 EGP.
 const overdueCheckNoPin = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 401,
   customerName: 'سوبر ماركت الأمل',
   currentBalance: 4000,
@@ -54,6 +55,7 @@ assert.ok(overdueCheckNoPin.errorMessageAr?.includes('فواتير متأخرة 
 
 // Supervisor provides verified override PIN with signed rationale
 const overdueCheckWithPin = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 401,
   customerName: 'سوبر ماركت الأمل',
   currentBalance: 4000,

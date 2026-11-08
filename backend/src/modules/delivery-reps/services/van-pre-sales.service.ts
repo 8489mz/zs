@@ -6,6 +6,8 @@ import { AppError } from '../../../common/errors/app-error';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 import { reserveLocationStock, releaseLocationStock } from '../../../common/utils/location-stock-ledger';
 import { sortItemsByProductId, generateDailySequenceNumber } from './van-common.util';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { SalesService } from '../../sales/sales.service';
 import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 
@@ -453,6 +455,9 @@ export class VanPreSalesService {
 
     await this.db.transaction().execute(async (trx) => {
       const trxAny = trx as any;
+      // Book digits resolved once on THIS transaction handle (D4):
+      // every derived pre-sale price/total below rounds at book digits.
+      const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
       const sortedItems = sortItemsByProductId(payload.items);
       const productIds = sortedItems.map((it) => Number(it.productId));
 
@@ -520,7 +525,7 @@ export class VanPreSalesService {
 
         const isCredit = payload.paymentMethod === 'credit';
         // When cash: grant cash discount equal to difference between list/credit price and cash price
-        const cashDiscountPerUnit = isCredit ? 0 : Math.max(0, Number((listPrice - cashBasePrice).toFixed(2)));
+        const cashDiscountPerUnit = isCredit ? 0 : Math.max(0, roundMoney(listPrice - cashBasePrice, moneyDigits));
 
         let unitPrice = isCredit ? listPrice : (item.unitPrice ? Number(item.unitPrice) : cashBasePrice);
         let pricingTierType: 'cash' | 'credit' | 'offer' = isCredit ? 'credit' : 'cash';
@@ -536,25 +541,25 @@ export class VanPreSalesService {
         if (matchingOffer && !item.unitPrice) {
           const offerVal = Number(matchingOffer.value || 0);
           if (matchingOffer.offer_type === 'percent' && offerVal > 0) {
-            unitPrice = Math.max(0, Number((unitPrice * (1 - offerVal / 100)).toFixed(2)));
+            unitPrice = Math.max(0, roundMoney(unitPrice * (1 - offerVal / 100), moneyDigits));
             pricingTierType = 'offer';
-            unitOfferSavings = Math.max(0, Number((listPrice - unitPrice).toFixed(2)));
+            unitOfferSavings = Math.max(0, roundMoney(listPrice - unitPrice, moneyDigits));
           } else if (matchingOffer.offer_type === 'fixed' && offerVal > 0) {
-            unitPrice = Math.max(0, Number((unitPrice - (offerVal * multiplier)).toFixed(2)));
+            unitPrice = Math.max(0, roundMoney(unitPrice - (offerVal * multiplier), moneyDigits));
             pricingTierType = 'offer';
-            unitOfferSavings = Math.max(0, Number((listPrice - unitPrice).toFixed(2)));
+            unitOfferSavings = Math.max(0, roundMoney(listPrice - unitPrice, moneyDigits));
           } else if (matchingOffer.offer_type === 'price' && offerVal > 0) {
-            unitPrice = Number((offerVal * multiplier).toFixed(2));
+            unitPrice = roundMoney(offerVal * multiplier, moneyDigits);
             pricingTierType = 'offer';
-            unitOfferSavings = Math.max(0, Number((listPrice - unitPrice).toFixed(2)));
+            unitOfferSavings = Math.max(0, roundMoney(listPrice - unitPrice, moneyDigits));
           } else if (matchingOffer.offer_type === 'bundle' && offerVal > 0) {
             const minQ = Math.max(1, Number(matchingOffer.min_qty || 1));
             const bundles = Math.floor(qty / minQ);
             const rem = qty % minQ;
             const bundleTotal = (bundles * offerVal) + (rem * listPrice);
-            unitPrice = Number(((bundleTotal / qty)).toFixed(2));
+            unitPrice = roundMoney(bundleTotal / qty, moneyDigits);
             pricingTierType = 'offer';
-            unitOfferSavings = Math.max(0, Number((listPrice - unitPrice).toFixed(2)));
+            unitOfferSavings = Math.max(0, roundMoney(listPrice - unitPrice, moneyDigits));
           } else if (matchingOffer.offer_type === 'bogo') {
             const buyQ = Math.max(1, Number(matchingOffer.bogo_buy_qty || 1));
             const getQ = Math.max(1, Number(matchingOffer.bogo_get_qty || 1));
@@ -566,23 +571,23 @@ export class VanPreSalesService {
               const freeUnits = (fullCycles * getQ) + Math.max(0, rem - buyQ);
               const discAmt = freeUnits * listPrice * (discPct / 100);
               const netTot = Math.max(0, (qty * listPrice) - discAmt);
-              unitPrice = Number(((netTot / qty)).toFixed(2));
+              unitPrice = roundMoney(netTot / qty, moneyDigits);
               pricingTierType = 'offer';
-              unitOfferSavings = Math.max(0, Number((listPrice - unitPrice).toFixed(2)));
+              unitOfferSavings = Math.max(0, roundMoney(listPrice - unitPrice, moneyDigits));
             }
           }
         }
 
-        const lineGrossTotal = Number((listPrice * qty).toFixed(2));
-        const lineNetTotal = Number((unitPrice * qty).toFixed(2));
-        const lineDiscount = Math.max(0, Number((lineGrossTotal - lineNetTotal).toFixed(2)));
+        const lineGrossTotal = roundMoney(listPrice * qty, moneyDigits);
+        const lineNetTotal = roundMoney(unitPrice * qty, moneyDigits);
+        const lineDiscount = Math.max(0, roundMoney(lineGrossTotal - lineNetTotal, moneyDigits));
 
         grossSubtotalAmount += lineGrossTotal;
         totalDiscountAmount += lineDiscount;
         totalAmount += lineNetTotal;
 
         const consumerPrice = prod.consumer_price != null && Number(prod.consumer_price) > 0
-          ? Number((Number(prod.consumer_price) * multiplier).toFixed(2))
+          ? roundMoney(Number(prod.consumer_price) * multiplier, moneyDigits)
           : null;
 
         preparedOrderItems.push({
@@ -631,10 +636,10 @@ export class VanPreSalesService {
           rep_id: repId,
           order_source: 'pre_sales_rep',
           payment_terms: payload.paymentMethod,
-          subtotal: Number(grossSubtotalAmount.toFixed(2)),
-          discount_amount: Number(totalDiscountAmount.toFixed(2)),
+          subtotal: roundMoney(grossSubtotalAmount, moneyDigits),
+          discount_amount: roundMoney(totalDiscountAmount, moneyDigits),
           tax_amount: 0,
-          total_amount: Number(totalAmount.toFixed(2)),
+          total_amount: roundMoney(totalAmount, moneyDigits),
           status: 'pending_approval',
           notes: payload.notes || null,
           delivery_date: payload.deliveryDate ? new Date(payload.deliveryDate) : null,

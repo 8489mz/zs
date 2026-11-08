@@ -66,6 +66,7 @@ const baselineSale = {
 
 // Vector 1.1: Legitimate Linked Return (5 pcs of Item 101 @ 50 EGP = 250 EGP)
 const legitReturn = evaluateFieldReturnGovernance({
+  moneyDigits: 2,
   repId: 1,
   customerId: 10,
   items: [{ productId: 101, saleItemId: 1001, qty: 5, unitPrice: 50 }],
@@ -77,6 +78,7 @@ assert.equal(legitReturn.totalAmount, 250);
 
 // Vector 1.2: Over-Quantity Attack (Returning 25 pcs when only 20 were sold)
 const overQtyReturn = evaluateFieldReturnGovernance({
+  moneyDigits: 2,
   repId: 1,
   customerId: 10,
   items: [{ productId: 101, saleItemId: 1001, qty: 25, unitPrice: 50 }],
@@ -100,6 +102,7 @@ const partialPriorSale = {
   ],
 };
 const cumulativeOverdraft = evaluateFieldReturnGovernance({
+  moneyDigits: 2,
   repId: 1,
   customerId: 10,
   items: [{ productId: 101, saleItemId: 1001, qty: 8, unitPrice: 50 }],
@@ -112,6 +115,7 @@ assert.equal(cumulativeOverdraft.reasonCode, 'RETURN_QTY_EXCEEDS_SOLD');
 // Vector 1.4: Net Discount Price Inflation Attack
 // Item 102 was sold net @ 80 EGP. Rogue rep tries to return at list price 100 EGP!
 const priceInflationReturn = evaluateFieldReturnGovernance({
+  moneyDigits: 2,
   repId: 1,
   customerId: 10,
   items: [{ productId: 102, saleItemId: 1002, qty: 3, unitPrice: 100 }],
@@ -124,6 +128,7 @@ assert.equal(priceInflationReturn.reasonCode, 'RETURN_PRICE_EXCEEDS_NET');
 // Vector 1.5: Cross-Customer Invoice Return Exploit
 // Rep tries to file return for Customer 12 using Customer 10's invoice
 const crossCustomerReturn = evaluateFieldReturnGovernance({
+  moneyDigits: 2,
   repId: 1,
   customerId: 12, // Mismatch!
   items: [{ productId: 101, saleItemId: 1001, qty: 2, unitPrice: 50 }],
@@ -136,6 +141,7 @@ assert.equal(crossCustomerReturn.reasonCode, 'SALE_CUSTOMER_MISMATCH');
 // Vector 1.6: Cross-Rep Invoice Hijacking Attack
 // Rep 2 tries to file a return against Rep 1's invoice
 const crossRepReturn = evaluateFieldReturnGovernance({
+  moneyDigits: 2,
   repId: 2, // Rogue rep trying to touch Rep 1's invoice
   customerId: 10,
   items: [{ productId: 101, saleItemId: 1001, qty: 2, unitPrice: 50 }],
@@ -148,6 +154,7 @@ assert.equal(crossRepReturn.httpStatus, 403);
 
 // Vector 1.7: Phantom Item Return Attack (Item 999 not on invoice)
 const phantomItemReturn = evaluateFieldReturnGovernance({
+  moneyDigits: 2,
   repId: 1,
   customerId: 10,
   items: [{ productId: 999, qty: 1, unitPrice: 50 }],
@@ -159,6 +166,7 @@ assert.equal(phantomItemReturn.reasonCode, 'ITEM_NOT_IN_SALE');
 
 // Vector 1.8: Unlinked Return Without Sales History Attack
 const noHistoryReturn = evaluateFieldReturnGovernance({
+  moneyDigits: 2,
   repId: 1,
   customerId: 99,
   items: [{ productId: 101, qty: 2, unitPrice: 50 }],
@@ -172,6 +180,7 @@ assert.equal(noHistoryReturn.httpStatus, 403);
 
 // Vector 1.9: Unlinked Return Exceeding Historical Sales
 const unlinkedOverQtyReturn = evaluateFieldReturnGovernance({
+  moneyDigits: 2,
   repId: 1,
   customerId: 10,
   items: [{ productId: 101, qty: 15, unitPrice: 48 }],
@@ -191,6 +200,7 @@ assert.equal(unlinkedOverQtyReturn.reasonCode, 'RETURN_QTY_EXCEEDS_SOLD');
 
 // Vector 1.10: Unlinked Return Price Higher Than Historical Net
 const unlinkedPriceSpikeReturn = evaluateFieldReturnGovernance({
+  moneyDigits: 2,
   repId: 1,
   customerId: 10,
   items: [{ productId: 101, qty: 2, unitPrice: 65 }], // 65 > 45 max net
@@ -210,6 +220,7 @@ assert.equal(unlinkedPriceSpikeReturn.reasonCode, 'RETURN_PRICE_EXCEEDS_NET');
 
 // Vector 1.11: Cash Refund Exceeding Van Trip Cash Collected
 const excessiveCashRefund = evaluateFieldReturnGovernance({
+  moneyDigits: 2,
   repId: 1,
   customerId: 10,
   items: [{ productId: 101, saleItemId: 1001, qty: 10, unitPrice: 50 }], // 500 EGP refund
@@ -222,6 +233,7 @@ assert.equal(excessiveCashRefund.reasonCode, 'INSUFFICIENT_REP_CASH_FOR_REFUND')
 
 // Vector 1.12: Legitimate Cash Refund Within Van Cash Limits
 const legitCashRefund = evaluateFieldReturnGovernance({
+  moneyDigits: 2,
   repId: 1,
   customerId: 10,
   items: [{ productId: 101, saleItemId: 1001, qty: 3, unitPrice: 50 }], // 150 EGP refund

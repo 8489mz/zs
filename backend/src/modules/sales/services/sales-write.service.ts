@@ -4144,7 +4144,7 @@ export class SalesWriteService {
       const transferAmount = paymentType === 'credit' ? 0 : Math.max(0, Number(payload.transferAmount || 0));
       const paidAmount = paymentType === 'credit'
         ? 0
-        : Number((cashAmount + cardAmount + transferAmount).toFixed(2));
+        : roundMoney(cashAmount + cardAmount + transferAmount, moneyDigits);
 
       const paymentChannel: 'cash' | 'card' | 'wallet' | 'instapay' | 'mixed' | 'credit' = paymentType === 'credit'
         ? 'credit'

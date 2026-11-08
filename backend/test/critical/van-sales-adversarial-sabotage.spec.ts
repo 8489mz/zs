@@ -255,6 +255,7 @@ console.log('--- Test Suite 5: Customer Credit Limit & Block Governance ---');
 
 // Case 5.1: Customer is credit blocked (bad debtor)
 const blockedCheck = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 5,
   customerName: 'Bad Debtor',
   currentBalance: 1500,
@@ -267,6 +268,7 @@ assert.equal(blockedCheck.reasonCode, 'CUSTOMER_BLOCKED');
 
 // Case 5.2: Cash-only customer (creditLimit = 0 with customerType = 'cash')
 const cashOnlyCheck = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 6,
   customerName: 'Cash Only Mart',
   currentBalance: 0,
@@ -280,6 +282,7 @@ assert.equal(cashOnlyCheck.reasonCode, 'CASH_ONLY_CUSTOMER');
 
 // Case 5.3: Credit limit breached without PIN
 const limitExceededCheck = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 7,
   customerName: 'Over Limit Shop',
   currentBalance: 4500,
@@ -294,6 +297,7 @@ assert.equal(limitExceededCheck.exceededAmount, 700);
 
 // Case 5.4: Credit limit breached with verified supervisor override PIN
 const supervisorApprovedCheck = evaluateCreditLimitCheck({
+  moneyDigits: 2,
   customerId: 7,
   customerName: 'Over Limit Shop',
   currentBalance: 4500,
@@ -359,6 +363,7 @@ console.log('--- Test Suite 7: Trip Expense Ceilings & Petty Theft ---');
 
 // Case 7.1: Fuel expense exceeding single limit of 250 EGP without PIN
 const overSingleFuel = evaluateTripExpenseGovernance({
+  moneyDigits: 2,
   expenseType: 'fuel',
   amount: 320,
   notes: 'تموين سولار كامل',
@@ -370,6 +375,7 @@ assert.equal(overSingleFuel.reasonCode, 'EXPENSE_REQUIRES_SUPERVISOR_PIN');
 
 // Case 7.2: Cumulative expenses exceeding 400 EGP ceiling without PIN
 const overCumulativeToll = evaluateTripExpenseGovernance({
+  moneyDigits: 2,
   expenseType: 'toll',
   amount: 150,
   notes: 'بوابات الإسكندرية',
@@ -380,6 +386,7 @@ assert.equal(overCumulativeToll.requiresSupervisorPin, true);
 
 // Case 7.3: Routine fuel within ceiling (120 EGP) with proper notes
 const routineFuel = evaluateTripExpenseGovernance({
+  moneyDigits: 2,
   expenseType: 'fuel',
   amount: 120,
   notes: 'بنزين 92 محطة شل إيصال 4402',

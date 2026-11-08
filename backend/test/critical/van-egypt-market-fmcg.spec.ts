@@ -194,6 +194,7 @@ console.log('--- Vector 4: Instant Damaged / Broken Goods Swap Engine ---');
 // Scenario A: 1-to-1 Even Swap (Same product, fresh replacement for damaged goods)
 // Customer gives 2 damaged boxes of Chipsy Cheese (120 EGP each), rep gives 2 fresh boxes of Chipsy Cheese
 const evenSwap = evaluateDamagedSwap({
+  moneyDigits: 2,
   damagedProductId: 10,
   damagedQty: 2,
   damagedUnitPrice: 120,
@@ -214,6 +215,7 @@ assert.equal(evenSwap.replacementValue, 240);
 // Customer gives 1 damaged bottle of Juice (25 EGP), wants 1 box of Biscuits (35 EGP)
 // Price difference: customer pays +10 EGP
 const diffSwap = evaluateDamagedSwap({
+  moneyDigits: 2,
   damagedProductId: 20,
   damagedQty: 1,
   damagedUnitPrice: 25,
@@ -230,6 +232,7 @@ assert.equal(diffSwap.priceDifference, 10); // 35 - 25 = 10 EGP
 
 // Scenario C: Swap rejected due to insufficient van stock
 const rejectedStock = evaluateDamagedSwap({
+  moneyDigits: 2,
   damagedProductId: 10,
   damagedQty: 5,
   damagedUnitPrice: 120,
@@ -246,6 +249,7 @@ assert.ok(rejectedStock.errorMessageAr?.includes('غير كافٍ'));
 
 // Scenario D: Swap rejected due to missing damage reason
 const rejectedReason = evaluateDamagedSwap({
+  moneyDigits: 2,
   damagedProductId: 10,
   damagedQty: 1,
   damagedUnitPrice: 120,
