@@ -1731,11 +1731,22 @@ export class ImportSalesService {
   // ==========================================
 
   async listShipments(tenantId: string) {
+    // I1-P3: the list UI reads supplier_name, not supplier_id — join
+    // the supplier so a persisted supplier is visible instead of
+    // "غير محدد". Tenant-scoped join: a supplier id belongs to one
+    // tenant only, so a same-id supplier in another tenant must
+    // never leak its name into this tenant's list.
     const rows = await this.db
       .selectFrom('import_shipments')
-      .selectAll()
-      .where('tenant_id', '=', tenantId)
-      .orderBy('created_at', 'desc')
+      .leftJoin('suppliers', (join) =>
+        join
+          .onRef('suppliers.id', '=', 'import_shipments.supplier_id')
+          .onRef('suppliers.tenant_id', '=', 'import_shipments.tenant_id'),
+      )
+      .selectAll('import_shipments')
+      .select('suppliers.name as supplier_name')
+      .where('import_shipments.tenant_id', '=', tenantId)
+      .orderBy('import_shipments.created_at', 'desc')
       .execute();
       
     const stats = {
@@ -1824,11 +1835,21 @@ export class ImportSalesService {
   }
 
   async getShipmentById(tenantId: string, id: string) {
+    // I1-P3: same supplier join as listShipments — the detail page
+    // reads supplier_name, which a bare selectAll() never populated,
+    // so every shipment showed "غير محدد" even when supplier_id was
+    // persisted. Tenant-scoped join, same as the list.
     const shipment = await this.db
       .selectFrom('import_shipments')
-      .selectAll()
-      .where('tenant_id', '=', tenantId)
-      .where('id', '=', id)
+      .leftJoin('suppliers', (join) =>
+        join
+          .onRef('suppliers.id', '=', 'import_shipments.supplier_id')
+          .onRef('suppliers.tenant_id', '=', 'import_shipments.tenant_id'),
+      )
+      .selectAll('import_shipments')
+      .select('suppliers.name as supplier_name')
+      .where('import_shipments.tenant_id', '=', tenantId)
+      .where('import_shipments.id', '=', id)
       .executeTakeFirst();
 
     if (!shipment) throw new NotFoundException('Shipment not found');

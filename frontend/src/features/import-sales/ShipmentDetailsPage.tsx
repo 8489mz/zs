@@ -19,7 +19,7 @@ import {
 } from './api/shipments.api';
 import { formatCurrency } from '@/lib/format';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AddShipmentItemDialog } from './AddShipmentItemDialog';
 import { ContainerAutopsyModal } from './ContainerAutopsyModal';
 import { ContainerPreordersModal } from './ContainerPreordersModal';
@@ -186,10 +186,18 @@ export default function ShipmentDetailsPage() {
   // option. A nonzero component with no payee and no recorded reason
   // fails the receipt closed, so the operator records the payee (or
   // the unallocable reason) here before marking the shipment Arrived.
+  // I1-P3: when a component has no stored payee yet and the shipment
+  // has a supplier, the select defaults to that supplier instead of
+  // "غير محدد" (see the hydration effect below). The stored payee,
+  // when set, always wins over the shipment supplier.
   const [freightSupplier, setFreightSupplier] = useState('');
   const [customsSupplier, setCustomsSupplier] = useState('');
   const [transportSupplier, setTransportSupplier] = useState('');
   const [demurrageSupplier, setDemurrageSupplier] = useState('');
+  // I1-P3: payee defaults are applied once per shipment (first data
+  // arrival) so a later refetch never clobbers an operator's
+  // in-progress pick.
+  const payeeDefaultsAppliedFor = useRef<string | null>(null);
   const [unallocableCostReason, setUnallocableCostReason] = useState('');
   const { data: suppliersData } = useQuery({
     queryKey: ['suppliers', 'all'],
@@ -280,6 +288,20 @@ export default function ShipmentDetailsPage() {
       }
       if (data.status) {
         setStatus(data.status);
+      }
+      // I1-P3: default each cost-component payee to the shipment's
+      // supplier when the component has no stored payee yet. Applied
+      // once per shipment so a refetch never overwrites a pick the
+      // operator already made; a stored payee always wins.
+      if (payeeDefaultsAppliedFor.current !== data.id) {
+        payeeDefaultsAppliedFor.current = data.id;
+        const shipmentSupplier = data.supplier_id ? String(data.supplier_id) : '';
+        if (shipmentSupplier) {
+          if (!data.freight_supplier_id) setFreightSupplier(shipmentSupplier);
+          if (!data.customs_supplier_id) setCustomsSupplier(shipmentSupplier);
+          if (!data.transport_supplier_id) setTransportSupplier(shipmentSupplier);
+          if (!data.demurrage_supplier_id) setDemurrageSupplier(shipmentSupplier);
+        }
       }
     }
   }, [data]);
