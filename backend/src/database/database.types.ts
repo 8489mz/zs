@@ -488,6 +488,10 @@ export interface MaintenanceTicketTable {
   technician_id: number | null;
   technician_name: string | null;
   technician_notes: string | null;
+  diagnosis: string | null;
+  quoted_cost: number | null;
+  quote_approved_at: ColumnType<Date | null, string | Date | null | undefined, string | Date | null | undefined>;
+  quote_approved_by: number | null;
   branch_id: number | null;
   location_id: number | null;
   sale_id: number | null;

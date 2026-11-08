@@ -127,6 +127,126 @@ export function buildNonFinancialTicketUpdate(
   };
 }
 
+export type StoredQuoteFields = {
+  diagnosis: string | null;
+  quoted_cost: number | null;
+  quote_approved_at: Date | null;
+  quote_approved_by: number | null;
+};
+
+export type QuoteStatusPayload = {
+  diagnosis?: string;
+  quotedCost?: number;
+  approveQuote?: boolean;
+};
+
+export type ResolvedQuoteFields = {
+  /** SET-clause fragment for the status-update write (only keys the call sent). */
+  updates: Record<string, unknown>;
+  /** Quoted cost in force after this call (payload wins, else stored). */
+  effectiveQuotedCost: number | null;
+  /** True when the effective quoted cost is covered by an approval. */
+  effectiveApproved: boolean;
+};
+
+/**
+ * Resolve the diagnosis / quote fields of a status-update call
+ * (review P2-5). Pure — no DB — so the PGlite spec pins the exact
+ * rules the service enforces inside its transaction (transactional
+ * service methods hang on PGlite; see the spec header).
+ *
+ * - diagnosis is stored in its own column, separate from free-text
+ *   technician_notes; an explicitly sent empty string clears it.
+ * - quotedCost must be finite and >= 0; it becomes the effective
+ *   quoted cost for the gate below.
+ * - approveQuote is an EXPLICIT staff-recorded customer approval:
+ *   it stamps quote_approved_at = now and quote_approved_by = the
+ *   authenticated user. It is never inferred from a status change.
+ *   Approving requires a real quoted cost (> 0) in force — there is
+ *   nothing to approve on a quick job with no quote — and an
+ *   authenticated approver.
+ * - A re-quote replaces the amount the old approval covered: the
+ *   stored approval only survives when the call sends no new amount
+ *   or the same amount. A different amount needs a fresh approval
+ *   in the same call (or a later one, before the in_progress move).
+ */
+export function resolveQuoteFields(
+  payload: QuoteStatusPayload,
+  stored: StoredQuoteFields,
+  approverId: number | null,
+  now: Date = new Date(),
+): ResolvedQuoteFields {
+  if (
+    payload.quotedCost !== undefined &&
+    (!Number.isFinite(Number(payload.quotedCost)) || Number(payload.quotedCost) < 0)
+  ) {
+    throw new AppError('Invalid maintenance quoted cost', 'MAINTENANCE_QUOTE_COST_INVALID', 400);
+  }
+  const updates: Record<string, unknown> = {};
+  if (payload.diagnosis !== undefined) {
+    updates.diagnosis = payload.diagnosis?.trim() ? payload.diagnosis.trim() : null;
+  }
+  const effectiveQuotedCost =
+    payload.quotedCost !== undefined
+      ? Number(payload.quotedCost)
+      : stored.quoted_cost === null || stored.quoted_cost === undefined
+        ? null
+        : Number(stored.quoted_cost);
+  if (payload.quotedCost !== undefined) {
+    updates.quoted_cost = Number(payload.quotedCost);
+  }
+  const priorApprovalCovers =
+    payload.quotedCost === undefined ||
+    Number(payload.quotedCost) === Number(stored.quoted_cost ?? 0);
+  let effectiveApproved = priorApprovalCovers && stored.quote_approved_at !== null;
+  if (payload.approveQuote === true) {
+    if (effectiveQuotedCost === null || effectiveQuotedCost <= 0) {
+      throw new AppError(
+        'Cannot approve a maintenance quote when no quoted cost exists',
+        'MAINTENANCE_QUOTE_APPROVAL_WITHOUT_QUOTE',
+        422,
+      );
+    }
+    if (approverId === null || approverId === undefined) {
+      throw new AppError(
+        'Quote approval requires an authenticated staff user',
+        'MAINTENANCE_QUOTE_APPROVAL_INVALID',
+        422,
+      );
+    }
+    updates.quote_approved_at = now;
+    updates.quote_approved_by = approverId;
+    effectiveApproved = true;
+  }
+  return { updates, effectiveQuotedCost, effectiveApproved };
+}
+
+/**
+ * Gate the move to 'in_progress' on an approved quote — but only
+ * when a quoted cost exists (non-null and > 0). Tickets with no
+ * quoted cost (quick jobs) proceed without approval, and a
+ * same-status call while already in_progress is not a move and is
+ * never gated (it must not strand a legacy ticket, or a cost edit,
+ * behind an approval it never needed to start). Throws the specific
+ * MAINTENANCE_QUOTE_APPROVAL_REQUIRED (422) — never a generic
+ * message — so the operator knows exactly what is missing.
+ */
+export function assertInProgressQuoteAllowed(
+  targetStatus: string,
+  previousStatus: string,
+  effectiveQuotedCost: number | null,
+  effectiveApproved: boolean,
+): void {
+  if (targetStatus !== 'in_progress' || previousStatus === 'in_progress') return;
+  if (effectiveQuotedCost !== null && effectiveQuotedCost > 0 && !effectiveApproved) {
+    throw new AppError(
+      `Maintenance ticket cannot move to in_progress: quoted cost ${effectiveQuotedCost} has not been approved by the customer`,
+      'MAINTENANCE_QUOTE_APPROVAL_REQUIRED',
+      422,
+    );
+  }
+}
+
 @Injectable()
 export class MaintenanceService {
   constructor(
@@ -339,6 +459,10 @@ export class MaintenanceService {
         technicianId: ticket.technician_id ? String(ticket.technician_id) : null,
         technicianName: ticket.technician_name,
         technicianNotes: ticket.technician_notes,
+        diagnosis: ticket.diagnosis,
+        quotedCost: ticket.quoted_cost === null || ticket.quoted_cost === undefined ? null : Number(ticket.quoted_cost),
+        quoteApprovedAt: ticket.quote_approved_at ?? null,
+        quoteApprovedBy: ticket.quote_approved_by ?? null,
         branchId: ticket.branch_id ? String(ticket.branch_id) : null,
         locationId: ticket.location_id ? String(ticket.location_id) : null,
         saleId: ticket.sale_id ? String(ticket.sale_id) : null,
@@ -582,10 +706,23 @@ export class MaintenanceService {
         if (!previousRefund) throw new AppError('Historical cancellation has no verified refund',
           'MAINTENANCE_REFUND_RECONCILIATION_REQUIRED', 409);
       }
+      // Diagnosis / quote (review P2-5): the technician records the
+      // finding + quoted cost during 'inspecting' on this same call,
+      // and the customer approval is an explicit flag — never inferred
+      // from the status change. Moving to in_progress needs an approved
+      // quote whenever a quoted cost exists; quick jobs with no quote
+      // proceed without approval.
+      const quote = resolveQuoteFields(
+        payload,
+        ticket,
+        auth.userId ? Number(auth.userId) : null,
+      );
+      assertInProgressQuoteAllowed(payload.status, ticket.status, quote.effectiveQuotedCost, quote.effectiveApproved);
       const updates: Record<string, any> = {
         status: payload.status,
         updated_at: new Date(),
       };
+      Object.assign(updates, quote.updates);
 
       if (payload.finalCost !== undefined) {
         updates.final_cost = payload.finalCost;
@@ -719,6 +856,7 @@ export class MaintenanceService {
       received: 'تم الاستلام',
       inspecting: 'قيد الفحص والتسعير',
       in_progress: 'قيد الصيانة والإصلاح',
+      waiting_parts: 'بانتظار قطع الغيار',
       repaired: 'تم الإصلاح وجاهز للتسليم',
       delivered: 'تم التسليم للعميل',
       unrepairable: 'غير قابل للإصلاح',

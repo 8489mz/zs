@@ -26,6 +26,29 @@ export class UpdateTicketStatusDto {
   @IsBoolean()
   refundAdvance?: boolean;
 
+  // Structured diagnosis + quoted cost, recorded by the technician
+  // during 'inspecting' through this same status-update call. Kept
+  // separate from free-text technicianNotes: diagnosis is the
+  // technician's finding, quotedCost the price the customer is asked
+  // to approve before repair starts (review P2-5).
+  @IsOptional()
+  @IsString()
+  diagnosis?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  quotedCost?: number;
+
+  // Explicit staff-recorded customer approval of the quote. There is
+  // no customer portal and no customer signature: staff record the
+  // approval as quote_approved_at = now, quote_approved_by = the
+  // authenticated user. Never inferred from a status change — the
+  // flag must be sent on the call.
+  @IsOptional()
+  @IsBoolean()
+  approveQuote?: boolean;
+
   @IsOptional()
   @IsString()
   paymentMethod?: 'cash' | 'card' | 'wallet' | 'instapay';

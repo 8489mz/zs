@@ -34,6 +34,17 @@ type PartProductOption = {
   barcode: string;
 };
 
+/* Diagnosis / quote fields (package 9): getTicket exposes them, but
+ * MaintenanceTicket in domain-models does not declare them yet, so
+ * they are read through an explicit intersection — the same pattern
+ * package 7 used for refundedAdvance — never `as any`. */
+type TicketWithQuote = MaintenanceTicket & {
+  diagnosis?: string | null;
+  quotedCost?: number | null;
+  quoteApprovedAt?: string | null;
+  quoteApprovedBy?: number | null;
+};
+
 export function MaintenanceDetailModal({
   ticket,
   onClose,
@@ -53,6 +64,12 @@ export function MaintenanceDetailModal({
   const [partPrice, setPartPrice] = useState(0);
   const [editingCost, setEditingCost] = useState<number | null>(null);
   const [pendingCashRefundStatus, setPendingCashRefundStatus] = useState<MaintenanceStatus | null>(null);
+
+  /* Diagnosis / quote drafts (package 9, review P2-5): the technician
+   * records the finding + quoted cost during 'inspecting', and the
+   * customer approval is recorded by staff with an explicit flag. */
+  const [diagnosisDraft, setDiagnosisDraft] = useState('');
+  const [quotedCostDraft, setQuotedCostDraft] = useState('');
 
   /* Device passcode is masked by default (P1-3): the real value is shown
    * only after an explicit show action, and it is never printed from here. */
@@ -112,6 +129,9 @@ export function MaintenanceDetailModal({
     setPartSearchText('');
     setPartQty(1);
     setPartPrice(0);
+    const quote = ticket as TicketWithQuote | null;
+    setDiagnosisDraft(quote?.diagnosis ?? '');
+    setQuotedCostDraft(quote?.quotedCost === null || quote?.quotedCost === undefined ? '' : String(quote.quotedCost));
   }, [ticket]);
 
   const refreshCurrentTicket = async (ticketId: string) => {
@@ -121,8 +141,18 @@ export function MaintenanceDetailModal({
   };
 
   const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status, finalCost, collectedAmount, technicianNotes, refundAdvance }: { id: string; status: MaintenanceStatus; finalCost?: number; collectedAmount?: number; technicianNotes?: string; refundAdvance?: boolean }) =>
-      maintenanceApi.updateStatus(id, { status, finalCost, collectedAmount, technicianNotes, refundAdvance }),
+    mutationFn: ({ id, status, finalCost, collectedAmount, technicianNotes, refundAdvance, diagnosis, quotedCost, approveQuote }: { id: string; status: MaintenanceStatus; finalCost?: number; collectedAmount?: number; technicianNotes?: string; refundAdvance?: boolean; diagnosis?: string; quotedCost?: number; approveQuote?: boolean }) => {
+      /* diagnosis / quotedCost / approveQuote ride the same PATCH body
+       * the backend DTO accepts; maintenance.api.ts updateStatus has
+       * not gained the typed fields yet (package scope), so the
+       * payload is built as a variable — extra properties on a
+       * non-literal object are structurally fine — instead of a fresh
+       * literal the narrower api type would reject. The values are
+       * sent verbatim by JSON.stringify. */
+      const payload: { status: MaintenanceStatus; finalCost?: number; collectedAmount?: number; technicianNotes?: string; refundAdvance?: boolean; diagnosis?: string; quotedCost?: number; approveQuote?: boolean } =
+        { status, finalCost, collectedAmount, technicianNotes, refundAdvance, diagnosis, quotedCost, approveQuote };
+      return maintenanceApi.updateStatus(id, payload);
+    },
     onSuccess: () => {
       setPendingCashRefundStatus(null);
       if (currentTicket) void refreshCurrentTicket(currentTicket.id);
@@ -175,6 +205,14 @@ export function MaintenanceDetailModal({
   };
 
   if (!currentTicket) return null;
+
+  const quoteTicket = currentTicket as TicketWithQuote;
+  const isTicketOpen = !['delivered', 'cancelled', 'unrepairable'].includes(currentTicket.status);
+  const storedDiagnosis = quoteTicket.diagnosis ?? '';
+  const storedQuotedCostText =
+    quoteTicket.quotedCost === null || quoteTicket.quotedCost === undefined ? '' : String(quoteTicket.quotedCost);
+  const storedQuotedCost = quoteTicket.quotedCost === null || quoteTicket.quotedCost === undefined ? null : Number(quoteTicket.quotedCost);
+  const quoteUnchanged = diagnosisDraft === storedDiagnosis && quotedCostDraft === storedQuotedCostText;
 
   const totalCost = currentTicket.finalCost || currentTicket.expectedCost || 0;
   const partsCost = (currentTicket.parts || []).reduce((acc, p) => acc + (p.qty * (p.unitCost || 0)), 0);
@@ -253,7 +291,7 @@ export function MaintenanceDetailModal({
             {t('maintenance.maintenance_detail_modal.s4', "مرحلة عمل وصيانة الجهاز:")}
           </div>
           <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-            {(['received', 'inspecting', 'in_progress', 'repaired', 'delivered', 'unrepairable', 'cancelled'] as MaintenanceStatus[]).map((st) => {
+            {(['received', 'inspecting', 'in_progress', 'waiting_parts', 'repaired', 'delivered', 'unrepairable', 'cancelled'] as MaintenanceStatus[]).map((st) => {
               const isCurrent = currentTicket.status === st;
               const cfg = statusConfig[st];
               return (
@@ -299,6 +337,14 @@ export function MaintenanceDetailModal({
               );
             })}
           </div>
+          {/* A failed status change must name the reason (e.g. the
+           * quote-approval gate blocking in_progress) instead of
+           * failing silently — the stepper has no other error surface. */}
+          {updateStatusMutation.isError && (
+            <div role="alert" style={{ marginTop: '10px', padding: '8px 10px', borderRadius: '6px', border: '1px solid #fecdd3', background: '#fff1f2', color: '#9f1239', fontSize: '0.8rem', fontWeight: 600 }}>
+              {t('maintenance.maintenance_detail_modal.status_change_failed', 'تعذّر تغيير الحالة:')} {(updateStatusMutation.error as Error)?.message || t('maintenance.maintenance_detail_modal.status_change_failed_fallback', 'راجع حالة التذكرة ثم حاول مجددًا.')}
+            </div>
+          )}
           {pendingCashRefundStatus && (
             <div role="alert" style={{ marginTop: '10px', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff' }}>
               <strong style={{ fontSize: '0.85rem', color: '#9f1239' }}>
@@ -410,6 +456,96 @@ export function MaintenanceDetailModal({
           <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '10px 14px', borderRadius: '8px', fontSize: '0.85rem', color: '#1e293b', lineHeight: 1.5 }}>
             {currentTicket.problemDescription}
           </div>
+        </div>
+
+        {/* Diagnosis & quote approval (package 9, review P2-5): the
+         * diagnosis lives in its own column, separate from the
+         * free-text technician notes, and the customer approves the
+         * quoted price before repair starts. There is no customer
+         * portal — staff record the approval with an explicit flag;
+         * the backend stamps who approved and when. Moving to
+         * in_progress with an unapproved quote is rejected by the
+         * backend gate (MAINTENANCE_QUOTE_APPROVAL_REQUIRED). */}
+        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
+          <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>
+            {t('maintenance.maintenance_detail_modal.diagnosis_title', "التشخيص والتسعير قبل الإصلاح:")}
+          </div>
+          {storedQuotedCost !== null && storedQuotedCost > 0 && !quoteTicket.quoteApprovedAt && (
+            <div role="alert" style={{ marginBottom: '8px', padding: '8px 10px', borderRadius: '6px', border: '1px solid #fde68a', background: '#fffbeb', color: '#92400e', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <AlertTriangleIcon size={14} color="#d97706" />
+              <span>{t('maintenance.maintenance_detail_modal.quote_awaiting_approval', "بانتظار اعتماد العميل على السعر قبل بدء الصيانة — لا يمكن نقل التذكرة إلى «قيد الصيانة» قبل الاعتماد.")}</span>
+            </div>
+          )}
+          {quoteTicket.quoteApprovedAt && (
+            <div style={{ marginBottom: '8px', padding: '8px 10px', borderRadius: '6px', border: '1px solid #a7f3d0', background: '#ecfdf5', color: '#065f46', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <CheckIcon size={14} color="#065f46" />
+              <span>
+                {t('maintenance.maintenance_detail_modal.quote_approved', "تم اعتماد العميل على السعر:")} {storedQuotedCost !== null ? `${storedQuotedCost.toFixed(2)} ` : ''}<CurrencySymbol />
+                {' — '}{new Date(quoteTicket.quoteApprovedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
+              </span>
+            </div>
+          )}
+          {storedDiagnosis && (
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '10px 14px', borderRadius: '8px', fontSize: '0.85rem', color: '#1e293b', lineHeight: 1.5, marginBottom: '8px' }}>
+              <span style={{ color: '#475569', fontWeight: 700 }}>{t('maintenance.maintenance_detail_modal.diagnosis_label', "التشخيص:")} </span>
+              {storedDiagnosis}
+            </div>
+          )}
+          {isTicketOpen && (
+            <div style={{ display: 'grid', gap: '8px', background: '#f8fafc', padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <textarea
+                aria-label={t('maintenance.maintenance_detail_modal.diagnosis_placeholder', "تشخيص الفني للعطل")}
+                placeholder={t('maintenance.maintenance_detail_modal.diagnosis_placeholder', "تشخيص الفني للعطل — مثال: شاشة مكسورة وتحتاج استبدال، البطارية سليمة")}
+                value={diagnosisDraft}
+                onChange={(e) => setDiagnosisDraft(e.target.value)}
+                style={{ minHeight: '60px', lineHeight: 1.5, padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '0.825rem', width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
+              />
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  aria-label={t('maintenance.maintenance_detail_modal.quoted_cost_placeholder', "السعر المعروض على العميل")}
+                  placeholder={t('maintenance.maintenance_detail_modal.quoted_cost_placeholder', "السعر المعروض على العميل")}
+                  value={quotedCostDraft}
+                  onChange={(e) => setQuotedCostDraft(e.target.value)}
+                  style={{ height: '35px', padding: '0 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '0.825rem', width: '160px', boxSizing: 'border-box' }}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={quoteUnchanged || updateStatusMutation.isPending}
+                  onClick={() => {
+                    const parsed = quotedCostDraft.trim() === '' ? undefined : Number(quotedCostDraft);
+                    updateStatusMutation.mutate({
+                      id: currentTicket.id,
+                      status: currentTicket.status,
+                      diagnosis: diagnosisDraft,
+                      quotedCost: parsed,
+                    });
+                  }}
+                  style={{ padding: '3px 12px', fontSize: '0.8rem', fontWeight: 700 }}
+                >
+                  {t('maintenance.maintenance_detail_modal.save_diagnosis_quote', "حفظ التشخيص والسعر")}
+                </Button>
+                {storedQuotedCost !== null && storedQuotedCost > 0 && !quoteTicket.quoteApprovedAt && (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    disabled={updateStatusMutation.isPending}
+                    onClick={() => updateStatusMutation.mutate({
+                      id: currentTicket.id,
+                      status: currentTicket.status,
+                      approveQuote: true,
+                    })}
+                    style={{ padding: '3px 12px', fontSize: '0.8rem', fontWeight: 700 }}
+                  >
+                    {t('maintenance.maintenance_detail_modal.approve_quote', "تأكيد اعتماد العميل على السعر")}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Parts Dispatch Area */}
