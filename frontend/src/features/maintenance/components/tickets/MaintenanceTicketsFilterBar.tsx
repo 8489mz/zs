@@ -12,6 +12,11 @@ interface MaintenanceTicketsFilterBarProps {
   inProgressCount: number;
   readyCount: number;
   deliveredCount: number;
+  // Optional: the page does not wire these counts yet (batch 2). The
+  // new tabs render without a badge until the page passes them.
+  inspectingCount?: number;
+  unrepairableCount?: number;
+  cancelledCount?: number;
   serialLabel: string;
 }
 
@@ -26,6 +31,9 @@ export function MaintenanceTicketsFilterBar({
   inProgressCount,
   readyCount,
   deliveredCount,
+  inspectingCount,
+  unrepairableCount,
+  cancelledCount,
   serialLabel,
 }: MaintenanceTicketsFilterBarProps) {
   const { t } = useTranslation();
@@ -35,9 +43,12 @@ export function MaintenanceTicketsFilterBar({
         {[
           { key: 'all', label: t('maintenance.tickets.maintenance_tickets_filter_bar.s0', "الكل"), count: totalItems },
           { key: 'received', label: t('maintenance.tickets.maintenance_tickets_filter_bar.s1', "استلام جديد"), count: receivedCount },
+          { key: 'inspecting', label: t('maintenance.tickets.maintenance_tickets_filter_bar.s5', "قيد الفحص والتسعير"), count: inspectingCount },
           { key: 'in_progress', label: t('maintenance.tickets.maintenance_tickets_filter_bar.s2', "قيد الصيانة"), count: inProgressCount },
           { key: 'repaired', label: t('maintenance.tickets.maintenance_tickets_filter_bar.s3', "جاهز للتسليم"), count: readyCount },
           { key: 'delivered', label: t('maintenance.tickets.maintenance_tickets_filter_bar.s4', "تم التسليم"), count: deliveredCount },
+          { key: 'unrepairable', label: t('maintenance.tickets.maintenance_tickets_filter_bar.s6', "تعذر الإصلاح"), count: unrepairableCount },
+          { key: 'cancelled', label: t('maintenance.tickets.maintenance_tickets_filter_bar.s7', "ملغي"), count: cancelledCount },
         ].map((tab) => {
           const active = filterStatus === tab.key;
           return (
@@ -64,18 +75,20 @@ export function MaintenanceTicketsFilterBar({
               }}
             >
               <span>{tab.label}</span>
-              <span
-                style={{
-                  fontSize: '0.68rem',
-                  fontWeight: 700,
-                  padding: '1px 5px',
-                  borderRadius: '10px',
-                  background: active ? '#0f172a' : '#e2e8f0',
-                  color: active ? '#ffffff' : '#475569',
-                }}
-              >
-                {tab.count}
-              </span>
+              {tab.count !== undefined && (
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    padding: '1px 5px',
+                    borderRadius: '10px',
+                    background: active ? '#0f172a' : '#e2e8f0',
+                    color: active ? '#ffffff' : '#475569',
+                  }}
+                >
+                  {tab.count}
+                </span>
+              )}
             </button>
           );
         })}

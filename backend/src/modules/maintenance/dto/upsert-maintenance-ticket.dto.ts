@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class UpsertMaintenanceTicketDto {
   @IsOptional()
@@ -54,7 +54,8 @@ export class UpsertMaintenanceTicketDto {
 
   @IsOptional()
   @IsString()
-  status?: 'received' | 'inspecting' | 'in_progress' | 'repaired' | 'delivered' | 'unrepairable' | 'cancelled';
+  @IsIn(['received', 'inspecting', 'in_progress', 'waiting_parts', 'repaired', 'delivered', 'unrepairable', 'cancelled'], { message: 'حالة التذكرة غير صالحة' })
+  status?: 'received' | 'inspecting' | 'in_progress' | 'waiting_parts' | 'repaired' | 'delivered' | 'unrepairable' | 'cancelled';
 
   @IsOptional()
   @IsNumber()

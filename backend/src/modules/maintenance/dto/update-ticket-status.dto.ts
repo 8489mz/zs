@@ -1,9 +1,10 @@
-import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class UpdateTicketStatusDto {
   @IsNotEmpty({ message: 'حالة التذكرة مطلوبة' })
   @IsString()
-  status!: 'received' | 'inspecting' | 'in_progress' | 'repaired' | 'delivered' | 'unrepairable' | 'cancelled';
+  @IsIn(['received', 'inspecting', 'in_progress', 'waiting_parts', 'repaired', 'delivered', 'unrepairable', 'cancelled'], { message: 'حالة التذكرة غير صالحة' })
+  status!: 'received' | 'inspecting' | 'in_progress' | 'waiting_parts' | 'repaired' | 'delivered' | 'unrepairable' | 'cancelled';
 
   @IsOptional()
   @IsNumber()
