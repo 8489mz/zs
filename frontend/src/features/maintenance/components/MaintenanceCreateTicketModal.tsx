@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from '@/shared/components/system-alert';
 import { Button } from '@/shared/ui/button';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { XIcon } from '@/shared/components/icons/AppIcons';
@@ -59,8 +60,21 @@ export function MaintenanceCreateTicketModal({
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.customerName.trim() || !formData.customerPhone.trim() || !formData.deviceModel.trim() || !formData.problemDescription.trim()) {
-      alert('يرجى ملء كافة الحقول الأساسية: اسم العميل، الهاتف، موديل الجهاز، ووصف العطل');
+    const missingFields: string[] = [];
+    if (!formData.customerName.trim()) missingFields.push('اسم العميل');
+    if (!formData.customerPhone.trim()) missingFields.push('الهاتف');
+    if (!formData.deviceModel.trim()) missingFields.push('موديل الجهاز');
+    if (!formData.problemDescription.trim()) missingFields.push('وصف العطل');
+    if (missingFields.length > 0) {
+      toast.error(`يرجى ملء الحقول الأساسية التالية: ${missingFields.join('، ')}`);
+      return;
+    }
+    const expectedCost = Number(formData.expectedCost || 0);
+    const advancePayment = Number(formData.advancePayment || 0);
+    if (advancePayment > expectedCost) {
+      toast.error(
+        `العربون (${advancePayment.toFixed(2)}) أكبر من التكلفة التقديرية (${expectedCost.toFixed(2)}) — خفّض العربون أو ارفع التكلفة التقديرية قبل الحفظ`,
+      );
       return;
     }
     createMutation.mutate(formData);
