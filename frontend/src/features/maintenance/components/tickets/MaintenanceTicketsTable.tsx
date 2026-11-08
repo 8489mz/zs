@@ -98,10 +98,22 @@ export function MaintenanceTicketsTable({
               tickets.map((t) => {
                 const statusMeta = getStatusMeta(t.status);
                 const totalCost = t.finalCost > 0 ? t.finalCost : t.expectedCost;
-                const remaining = Math.max(0, totalCost - (t.advancePayment || 0));
-                const hasRemaining = remaining > 0;
                 const isDelivered = t.status === 'delivered';
-                const isDeliveredWithRemaining = isDelivered && hasRemaining;
+                const isTerminal = t.status === 'cancelled' || t.status === 'unrepairable';
+                /* Delivered tickets are fully settled by construction: delivery
+                 * enforces remaining + advance = finalCost in minor units
+                 * server-side (422 MAINTENANCE_SETTLEMENT_MISMATCH otherwise),
+                 * so the delivery collection is part of paid and the settled
+                 * total is finalCost itself, never the estimate fallback.
+                 * Terminal tickets hold nothing collectible (the counts
+                 * endpoint excludes them from totalRemaining, and a terminal
+                 * transition refunds any advance first), so the pre-refund
+                 * advance must never render as paid. Open tickets keep the
+                 * advance-only figures. */
+                const displayTotal = isDelivered ? t.finalCost : totalCost;
+                const paidAmount = isDelivered ? t.finalCost : isTerminal ? 0 : (t.advancePayment || 0);
+                const remaining = isDelivered || isTerminal ? 0 : Math.max(0, totalCost - (t.advancePayment || 0));
+                const hasRemaining = remaining > 0;
 
                 return (
                   <tr
@@ -197,13 +209,13 @@ export function MaintenanceTicketsTable({
 
                     <td style={{ padding: '12px 14px' }} onClick={() => onOpenDetail(t)}>
                       <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.88rem' }}>
-                        {totalCost.toFixed(2)}{' '}
+                        {displayTotal.toFixed(2)}{' '}
                         <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#64748b' }}><CurrencySymbol /></span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
-                        {t.advancePayment > 0 && (
+                        {paidAmount > 0 && (
                           <span style={{ fontSize: '0.72rem', color: '#16a34a', fontWeight: 700 }}>
-                            {__t('maintenance.tickets.maintenance_tickets_table.s14', "مسدد:")} {t.advancePayment.toFixed(0)}
+                            {__t('maintenance.tickets.maintenance_tickets_table.s14', "مسدد:")} {paidAmount.toFixed(0)}
                           </span>
                         )}
                         {hasRemaining ? (
@@ -211,8 +223,8 @@ export function MaintenanceTicketsTable({
                             style={{
                               fontSize: '0.72rem',
                               fontWeight: 700,
-                              color: isDeliveredWithRemaining ? '#b91c1c' : '#d97706',
-                              background: isDeliveredWithRemaining ? '#fef2f2' : '#fffbeb',
+                              color: '#d97706',
+                              background: '#fffbeb',
                               padding: '1px 5px',
                               borderRadius: '4px',
                             }}
