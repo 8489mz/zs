@@ -1855,6 +1855,8 @@ export class ImportSalesService {
       ratePerDayUsd: shipment.demurrage_rate_per_day,
       exchangeRate: shipment.exchange_rate_at_arrival,
       status: shipment.container_status === 'empty_returned' ? 'empty_returned' : (shipment.status || 'Pending'),
+      // Book digits for the estimated fee (U4 W1 canonical wiring).
+      moneyDigits: currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId)),
     });
 
     return { ...shipment, items, inventory_receipt: receipt ?? null, demurrageRisk };
@@ -3134,6 +3136,11 @@ export class ImportSalesService {
     const rate = requireImportNumber(shipment.exchange_rate_at_arrival, 'سعر الصرف', Number.MIN_VALUE);
     const method = (shipment.cost_allocation_method as 'value' | 'weight' | 'cbm') || 'value';
 
+    // Book digits: the breakdown's money totals round at the tenant
+    // base currency's digits so the allocation ties to the books
+    // (U4 W1 canonical wiring — the engine must not guess EGP).
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, shipment.tenant_id));
+
     if (method === 'weight' && items.some((item) => Number(item.gross_weight_kg_unit || 0) <= 0)) {
       throw new BadRequestException('يلزم تحديد وزن الوحدة لكل صنف قبل التوزيع بالوزن.');
     }
@@ -3159,6 +3166,7 @@ export class ImportSalesService {
       vatRefundableEgp: Number(shipment.vat_refundable_egp ?? 0),
       vatIsRefundable: true,
       allocationMethod: method,
+      moneyDigits: digits,
     });
 
     for (const line of breakdown.items) {
@@ -5479,6 +5487,9 @@ export class ImportSalesService {
     const totalDebtEgp = foreignDebts.reduce((sum, s) => sum + Number(s.balance || 0), 0);
     const totalDebtForeign = Number((unpaidProformaForeign > 0 ? unpaidProformaForeign : totalDebtEgp).toFixed(2));
 
+    // Book digits for the demurrage estimates (U4 W1 canonical wiring).
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+
     const demurrageAlerts: any[] = [];
     for (const s of shipmentRows.filter((r) => r.status !== 'Arrived')) {
       const risk = calculateDemurrageRisk({
@@ -5488,6 +5499,7 @@ export class ImportSalesService {
         ratePerDayUsd: s.demurrage_rate_per_day,
         exchangeRate: s.exchange_rate_at_arrival,
         status: s.container_status === 'empty_returned' ? 'empty_returned' : (s.status || 'Pending'),
+        moneyDigits: digits,
       });
       if (risk.isOverdue || (risk.daysRemaining !== null && risk.daysRemaining <= 3)) {
         demurrageAlerts.push({

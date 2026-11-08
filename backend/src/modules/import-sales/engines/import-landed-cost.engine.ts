@@ -1,7 +1,20 @@
 /**
  * Import Landed Cost Engine (محرك احتساب التكلفة الفعلية الشاملة وتوزيع الأعباء)
  * Pure functional calculation engine imported identically by production and test suites.
+ *
+ * Canonical-money note (U4 W1): every BOOK-money output (overhead
+ * totals, per-item allocations, item totals, shortage losses, late-
+ * expense splits, demurrage fees) rounds through roundMoney at the
+ * tenant base currency's digits and the overhead split goes through
+ * allocateLandedCosts, so the parts sum exactly to the posted total.
+ * Per-UNIT costs (baseCostEgp, unitOverheadEgp, landedCostEgp) stay
+ * at 4 decimals: migration 0271 stores them in NUMERIC(15, 4) and
+ * the tiny-rate pin needs sub-cent unit precision. Quantities and
+ * ratios are not money and keep their existing precision.
  */
+
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { allocateLandedCosts } from '../../purchases/engines/landed-cost-allocation.engine';
 
 export interface LandedCostItemInput {
   id: string;
@@ -25,6 +38,8 @@ export interface LandedCostCalculationInput {
   vatRefundableEgp?: number;
   vatIsRefundable?: boolean;
   allocationMethod?: 'value' | 'weight' | 'cbm';
+  /** Book digits for the money outputs; defaults to EGP's (2), as in calculateImportFeasibility. */
+  moneyDigits?: MoneyDigits;
 }
 
 export interface LandedCostItemResult {
@@ -60,6 +75,7 @@ export function calculateLandedCostBreakdown(input: LandedCostCalculationInput):
   if (!Number.isFinite(rate) || rate <= 0) {
     throw new Error('Invalid exchange rate for landed cost calculation');
   }
+  const digits = input.moneyDigits ?? currencyMoneyDigits('EGP');
   const method = input.allocationMethod || 'value';
 
   const shippingEgp = (Number(input.shippingCostUsd) || 0) * rate;
@@ -74,7 +90,7 @@ export function calculateLandedCostBreakdown(input: LandedCostCalculationInput):
   const vatIsRefundable = input.vatIsRefundable ?? true;
   const nonRefundableVatEgp = vatIsRefundable ? 0 : vatRefundableEgp;
 
-  const totalOverheadEgp = shippingEgp + customsEgp + transportEgp + demurrageEgp + clearanceEgp + nonRefundableVatEgp;
+  const totalOverheadEgp = roundMoney(shippingEgp + customsEgp + transportEgp + demurrageEgp + clearanceEgp + nonRefundableVatEgp, digits);
 
   // Aggregate bases
   let totalUsdValue = 0;
@@ -92,7 +108,30 @@ export function calculateLandedCostBreakdown(input: LandedCostCalculationInput):
     totalCbm += qty * cbm;
   }
 
-  const itemsResult: LandedCostItemResult[] = (input.items || []).map((item) => {
+  // Canonical allocation: the rounded book total is split with
+  // allocateLandedCosts so the parts sum exactly to the total
+  // (remainder to the largest fractional share). Weight bases mirror
+  // the old ratio chain: the chosen method's base, else the value
+  // base, else an equal split when every base totals zero.
+  const methodBases = (input.items || []).map((item) => {
+    const qty = Math.max(0, Number(item.quantity) || 0);
+    if (method === 'weight') return qty * Math.max(0, Number(item.unitWeightKg) || 0);
+    if (method === 'cbm') return qty * Math.max(0, Number(item.unitCbm) || 0);
+    return qty * Math.max(0, Number(item.factoryUnitPriceUsd) || 0);
+  });
+  const valueBases = (input.items || []).map((item) =>
+    Math.max(0, Number(item.quantity) || 0) * Math.max(0, Number(item.factoryUnitPriceUsd) || 0));
+  const sumBases = (bases: number[]): number => bases.reduce((sum, value) => sum + value, 0);
+  const weights = sumBases(methodBases) > 0
+    ? methodBases
+    : sumBases(valueBases) > 0
+      ? valueBases
+      : (input.items || []).map(() => 1);
+  const allocatedOverheads = (input.items || []).length
+    ? allocateLandedCosts(totalOverheadEgp, weights, digits)
+    : [];
+
+  const itemsResult: LandedCostItemResult[] = (input.items || []).map((item, index) => {
     const qty = Math.max(0, Number(item.quantity) || 0);
     const receivedQty = item.receivedQuantity !== null && item.receivedQuantity !== undefined
       ? Number(item.receivedQuantity)
@@ -101,23 +140,12 @@ export function calculateLandedCostBreakdown(input: LandedCostCalculationInput):
     const effectiveQty = handlingMethod === 'capitalize' && receivedQty > 0 ? receivedQty : qty;
 
     const unitPriceUsd = Math.max(0, Number(item.factoryUnitPriceUsd) || 0);
-    const itemTotalUsd = qty * unitPriceUsd;
-    const itemWeight = qty * (Number(item.unitWeightKg) || 0);
-    const itemCbm = qty * (Number(item.unitCbm) || 0);
 
-    let ratio = 0;
-    if (method === 'weight' && totalWeightKg > 0) {
-      ratio = itemWeight / totalWeightKg;
-    } else if (method === 'cbm' && totalCbm > 0) {
-      ratio = itemCbm / totalCbm;
-    } else {
-      // Default to value allocation
-      ratio = totalUsdValue > 0 ? itemTotalUsd / totalUsdValue : ((input.items?.length || 1) > 0 ? 1 / (input.items.length || 1) : 0);
-    }
-
-    const itemAllocatedOverheadEgp = totalOverheadEgp * ratio;
-    const baseCostEgp = unitPriceUsd * rate;
-    const totalItemLandedCostEgp = (qty * baseCostEgp) + itemAllocatedOverheadEgp;
+    const itemAllocatedOverheadEgp = allocatedOverheads[index];
+    // Unit base cost stays at 4 decimals (migration 0271 storage
+    // precision); the book total below rounds at book digits.
+    const baseCostEgp = Number((unitPriceUsd * rate).toFixed(4));
+    const totalItemLandedCostEgp = roundMoney((qty * baseCostEgp) + itemAllocatedOverheadEgp, digits);
 
     const unitLandedEgp = effectiveQty > 0 ? totalItemLandedCostEgp / effectiveQty : 0;
     const unitOverheadEgp = effectiveQty > 0 ? itemAllocatedOverheadEgp / effectiveQty : 0;
@@ -125,7 +153,7 @@ export function calculateLandedCostBreakdown(input: LandedCostCalculationInput):
     let shortageLossEgp = 0;
     if (handlingMethod === 'expense' && receivedQty < qty) {
       const missingQty = qty - receivedQty;
-      shortageLossEgp = missingQty * unitLandedEgp;
+      shortageLossEgp = roundMoney(missingQty * unitLandedEgp, digits);
     }
 
     return {
@@ -133,12 +161,12 @@ export function calculateLandedCostBreakdown(input: LandedCostCalculationInput):
       productId: item.productId,
       effectiveQuantity: effectiveQty,
       factoryPriceUsd: unitPriceUsd,
-      baseCostEgp: Number(baseCostEgp.toFixed(4)),
-      allocatedOverheadEgp: Number(itemAllocatedOverheadEgp.toFixed(4)),
+      baseCostEgp,
+      allocatedOverheadEgp: itemAllocatedOverheadEgp,
       unitOverheadEgp: Number(unitOverheadEgp.toFixed(4)),
       landedCostEgp: Number(unitLandedEgp.toFixed(4)),
-      totalItemLandedCostEgp: Number(totalItemLandedCostEgp.toFixed(4)),
-      shortageLossEgp: Number(shortageLossEgp.toFixed(4)),
+      totalItemLandedCostEgp,
+      shortageLossEgp,
     };
   });
 
@@ -146,8 +174,8 @@ export function calculateLandedCostBreakdown(input: LandedCostCalculationInput):
     totalUsdValue: Number(totalUsdValue.toFixed(2)),
     totalWeightKg: Number(totalWeightKg.toFixed(3)),
     totalCbm: Number(totalCbm.toFixed(3)),
-    totalOverheadEgp: Number(totalOverheadEgp.toFixed(2)),
-    vatRefundableEgp: Number(vatRefundableEgp.toFixed(2)),
+    totalOverheadEgp,
+    vatRefundableEgp: roundMoney(vatRefundableEgp, digits),
     allocationMethod: method,
     items: itemsResult,
   };
@@ -174,8 +202,10 @@ export interface LateExpenseAllocationResult {
 export function calculateLateExpenseAllocation(
   totalLateExpenseEgp: number,
   receivedQuantity: number,
-  onHandQuantity: number
+  onHandQuantity: number,
+  moneyDigits?: MoneyDigits,
 ): LateExpenseAllocationResult {
+  const digits = moneyDigits ?? currencyMoneyDigits('EGP');
   const safeLateExpense = Math.max(0, Number(totalLateExpenseEgp) || 0);
   const safeReceived = Math.max(0, Number(receivedQuantity) || 0);
   const safeOnHand = Math.max(0, Math.min(safeReceived, Number(onHandQuantity) || 0));
@@ -184,12 +214,25 @@ export function calculateLateExpenseAllocation(
   const soldRatio = safeReceived > 0 ? soldQuantity / safeReceived : 0;
   const onHandRatio = safeReceived > 0 ? safeOnHand / safeReceived : 1;
 
-  const lateCogsAdjustmentEgp = Number((safeLateExpense * soldRatio).toFixed(2));
-  const lateInventoryAdjustmentEgp = Number((safeLateExpense - lateCogsAdjustmentEgp).toFixed(2));
-  const unitCostIncreaseEgp = safeOnHand > 0 ? Number((lateInventoryAdjustmentEgp / safeOnHand).toFixed(4)) : 0;
+  // Canonical split: the rounded total is divided with
+  // allocateLandedCosts, so COGS + inventory sum exactly to the
+  // total (no remainder drift). With nothing received the whole
+  // amount stays in inventory, as before.
+  const roundedTotal = roundMoney(safeLateExpense, digits);
+  let lateCogsAdjustmentEgp: number;
+  let lateInventoryAdjustmentEgp: number;
+  if (safeReceived <= 0) {
+    lateCogsAdjustmentEgp = 0;
+    lateInventoryAdjustmentEgp = roundedTotal;
+  } else {
+    const [cogs, inventory] = allocateLandedCosts(roundedTotal, [soldQuantity, safeOnHand], digits);
+    lateCogsAdjustmentEgp = cogs;
+    lateInventoryAdjustmentEgp = inventory;
+  }
+  const unitCostIncreaseEgp = safeOnHand > 0 ? roundMoney(lateInventoryAdjustmentEgp / safeOnHand, digits) : 0;
 
   return {
-    totalLateExpenseEgp: safeLateExpense,
+    totalLateExpenseEgp: roundedTotal,
     receivedQuantity: safeReceived,
     onHandQuantity: safeOnHand,
     soldQuantity,
@@ -208,6 +251,8 @@ export function calculateDemurrageRisk(input: {
   ratePerDayUsd?: number | string | null;
   exchangeRate?: number | string | null;
   status?: string;
+  /** Book digits for the estimated fee; defaults to EGP's (2). */
+  moneyDigits?: MoneyDigits;
 }): {
   isOverdue: boolean;
   isUrgent: boolean;
@@ -231,6 +276,7 @@ export function calculateDemurrageRisk(input: {
   const freeDaysAssumed = input.freeDays === undefined || input.freeDays === null;
   const dailyRateAssumed = input.ratePerDayUsd === undefined || input.ratePerDayUsd === null;
   const exchangeRateAssumed = input.exchangeRate === undefined || input.exchangeRate === null || Number(input.exchangeRate) <= 0;
+  const digits = input.moneyDigits ?? currencyMoneyDigits('EGP');
   const freeDays = Math.max(0, Number(input.freeDays ?? 14));
   const rateUsd = Math.max(0, Number(input.ratePerDayUsd ?? 50));
   const exchangeRate = Math.max(0.0001, Number(input.exchangeRate) || 1);
@@ -292,7 +338,7 @@ export function calculateDemurrageRisk(input: {
     };
   } else {
     const overdueDays = Math.abs(diffDays);
-    const feesEgp = Number((overdueDays * rateUsd * exchangeRate).toFixed(2));
+    const feesEgp = roundMoney(overdueDays * rateUsd * exchangeRate, digits);
     return {
       isOverdue: true,
       isUrgent: true,
