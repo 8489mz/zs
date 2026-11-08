@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addPosItem, getProductPrice, isOfferHappyHourActive, repriceCartLine, syncPosCartStock, updatePosItemQtyWithOptions } from '@/features/pos/lib/pos.domain';
+import { addPosItem, addSerialToPosLine, getRequiredSerialCount, getSerialEntryState, getSerialLookupError, getProductPrice, isOfferHappyHourActive, removeSerialFromPosLine, repriceCartLine, syncPosCartStock, updatePosItemQtyWithOptions } from '@/features/pos/lib/pos.domain';
 import type { Product } from '@/types/domain';
 
 const product: Product = {
@@ -222,5 +222,94 @@ describe('POS stock handling', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+/* LF-P3: serial entry on a cart line. On base these helpers do not exist, so
+ * this block fails on base (import error) and passes with the fix. */
+describe('POS cart-line serial entry (LF-P3)', () => {
+  const serialProduct: Product = { ...product, stock: 5, trackSerials: true };
+
+  function serialCart(qty = 2) {
+    return addPosItem([], serialProduct, { priceType: 'retail', quantity: qty, digits: 2 });
+  }
+
+  it('adds one serial per unit until the line is complete, then blocks with a specific message', () => {
+    let cart = serialCart(2);
+    expect(getRequiredSerialCount(cart[0])).toBe(2);
+    expect(getSerialEntryState(cart[0])).toEqual({ required: 2, entered: 0, missing: 2, complete: false });
+
+    cart = addSerialToPosLine(cart, cart[0].lineKey, '869123456789022');
+    cart = addSerialToPosLine(cart, cart[0].lineKey, '869123456789023');
+    expect(cart[0].serials).toEqual(['869123456789022', '869123456789023']);
+    expect(getSerialEntryState(cart[0]).complete).toBe(true);
+
+    expect(() => addSerialToPosLine(cart, cart[0].lineKey, '869123456789024'))
+      .toThrow('اكتملت سيريالات Tea (2 من 2)');
+  });
+
+  it('rejects a duplicate serial on the same line (case-insensitive) naming the serial', () => {
+    let cart = serialCart(2);
+    cart = addSerialToPosLine(cart, cart[0].lineKey, '869123456789022');
+    expect(() => addSerialToPosLine(cart, cart[0].lineKey, ' 869123456789022 '))
+      .toThrow('السيريال 869123456789022 مضاف بالفعل إلى Tea.');
+  });
+
+  it('rejects the same serial on another line of the cart', () => {
+    const otherProduct: Product = { ...serialProduct, id: 'p2', name: 'Phone B' };
+    let cart = serialCart(1);
+    cart = addPosItem(cart, otherProduct, { priceType: 'retail', quantity: 1, digits: 2 });
+    cart = addSerialToPosLine(cart, cart[0].lineKey, '869123456789022');
+    expect(() => addSerialToPosLine(cart, cart[1].lineKey, '869123456789022'))
+      .toThrow('السيريال 869123456789022 مضاف بالفعل إلى سطر آخر في السلة.');
+  });
+
+  it('refuses serials on a line that does not track serials and on an unknown line', () => {
+    const plainCart = addPosItem([], { ...product, stock: 5 }, { priceType: 'retail', quantity: 1, digits: 2 });
+    expect(() => addSerialToPosLine(plainCart, plainCart[0].lineKey, '869123456789022'))
+      .toThrow('الصنف Tea لا يتطلب سيريالاً.');
+    expect(() => addSerialToPosLine(plainCart, 'missing-line', '869123456789022'))
+      .toThrow('تعذّر العثور على سطر السلة');
+    expect(() => addSerialToPosLine(serialCart(1), serialCart(1)[0].lineKey, '   '))
+      .toThrow('أدخل رقم السيريال أولاً.');
+  });
+
+  it('removes a serial and drops the serials field once the last one is removed', () => {
+    let cart = serialCart(2);
+    cart = addSerialToPosLine(cart, cart[0].lineKey, '869123456789022');
+    cart = addSerialToPosLine(cart, cart[0].lineKey, '869123456789023');
+    cart = removeSerialFromPosLine(cart, cart[0].lineKey, '869123456789022');
+    expect(cart[0].serials).toEqual(['869123456789023']);
+    cart = removeSerialFromPosLine(cart, cart[0].lineKey, '869123456789023');
+    expect(cart[0].serials).toBeUndefined();
+  });
+
+  it('counts one serial per piece for fractional unit multipliers', () => {
+    const halfUnitProduct: Product = {
+      ...serialProduct,
+      units: [{ ...product.units[0], id: 'half', name: 'نصف كيلو', multiplier: 0.5 }],
+    };
+    const cart = addPosItem([], halfUnitProduct, { priceType: 'retail', quantity: 4, digits: 2 });
+    expect(getRequiredSerialCount(cart[0])).toBe(2);
+  });
+
+  it('trims excess serials (last-entered first) when the quantity drops', () => {
+    let cart = serialCart(2);
+    cart = addSerialToPosLine(cart, cart[0].lineKey, '869123456789022');
+    cart = addSerialToPosLine(cart, cart[0].lineKey, '869123456789023');
+    const trimmed = updatePosItemQtyWithOptions(cart, cart[0].lineKey, 1, [serialProduct], { digits: 2 });
+    expect(trimmed[0].qty).toBe(1);
+    expect(trimmed[0].serials).toEqual(['869123456789022']);
+  });
+
+  it('names the serial and the reason for every lookup verdict', () => {
+    expect(getSerialLookupError('869123456789022', null, 'p1', 'Tea'))
+      .toBe('السيريال 869123456789022 غير مسجّل في النظام.');
+    expect(getSerialLookupError('869123456789022', { productId: 'p9', status: 'in_stock', productName: 'Phone B' }, 'p1', 'Tea'))
+      .toBe('السيريال 869123456789022 مسجّل لصنف آخر (Phone B) وليس Tea.');
+    expect(getSerialLookupError('869123456789022', { productId: 'p1', status: 'sold' }, 'p1', 'Tea'))
+      .toBe('السيريال 869123456789022 غير متاح للبيع — حالته: مباع.');
+    expect(getSerialLookupError('869123456789022', { productId: 'p1', status: 'in_stock' }, 'p1', 'Tea'))
+      .toBeNull();
   });
 });

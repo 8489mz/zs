@@ -217,3 +217,53 @@ describe('POS sale contracts', () => {
     expect(items[0]).toHaveProperty('nameEn', 'Product');
   });
 });
+
+/* LF-P3: a serial-tracked line with its serials entered passes the existing
+ * validation and ships them in the main payload; without them confirm stays
+ * blocked. The validation itself is unchanged — this pins the entry path
+ * end to end (helper -> validate -> payload). */
+describe('POS serial-tracked lines (LF-P3)', () => {
+  const serialCart: PosItem[] = [
+    { ...cart[0], trackSerials: true, qty: 2, serials: ['869123456789022', '869123456789023'] },
+  ];
+
+  function cashInput(cartItems: PosItem[], expectedTotal = 50) {
+    return {
+      cart: cartItems,
+      customerId: '',
+      paymentType: 'cash' as const,
+      paymentChannel: 'cash' as const,
+      discount: 0,
+      deliveryFee: 0,
+      note: '',
+      paidAmount: expectedTotal,
+      tenderedAmount: expectedTotal,
+      payments: [{ paymentChannel: 'cash' as const, amount: expectedTotal }],
+      taxRate: 0,
+      pricesIncludeTax: false,
+      expectedTotal,
+    };
+  }
+
+  it('passes validation and ships the entered serials once count == qty', () => {
+    expect(() => validatePosSaleInput(cashInput(serialCart))).not.toThrow();
+    expect((buildPosSalePayload(cashInput(serialCart)) as any).items[0].serials)
+      .toEqual(['869123456789022', '869123456789023']);
+  });
+
+  it('keeps confirm blocked while any serial is missing', () => {
+    const missingOne: PosItem[] = [{ ...serialCart[0], serials: ['869123456789022'] }];
+    expect(() => validatePosSaleInput(cashInput(missingOne)))
+      .toThrow('امسح سيريالاً فريداً لكل قطعة من صنف اختبار');
+    const missingAll: PosItem[] = [{ ...serialCart[0], serials: undefined }];
+    for (const build of [buildPosSalePayload, buildLegacyPosSalePayload, buildMinimalPosSalePayload]) {
+      expect(() => build(cashInput(missingAll))).toThrow('امسح سيريالاً فريداً لكل قطعة من صنف اختبار');
+    }
+  });
+
+  it('keeps confirm blocked on a duplicate serial', () => {
+    const duplicated: PosItem[] = [{ ...serialCart[0], serials: ['869123456789022', '869123456789022'] }];
+    expect(() => validatePosSaleInput(cashInput(duplicated)))
+      .toThrow('امسح سيريالاً فريداً لكل قطعة من صنف اختبار');
+  });
+});

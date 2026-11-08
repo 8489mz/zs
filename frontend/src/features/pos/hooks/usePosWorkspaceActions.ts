@@ -37,6 +37,8 @@ interface PosWorkspaceActions {
   completePostSaleCycle: (message?: string) => void;
   setQty: (lineKey: string, qty: number) => void;
   setItemNote: (lineKey: string, notes: string) => void;
+  addLineSerial: (lineKey: string, serial: string) => void;
+  removeLineSerial: (lineKey: string, serial: string) => void;
   setItemModifiers: (lineKey: string, modifiers: any[]) => void;
   setItemSeat: (lineKey: string, seatNumber?: number) => void;
   removeItem: (lineKey: string) => void;
@@ -129,6 +131,8 @@ export function createPosWorkspaceActions(params: PosWorkspaceActionParams): Pos
     exportHeldDrafts: base.exportHeldDrafts,
     setQty: base.setQty,
     setItemNote: base.setItemNote,
+    addLineSerial: base.addLineSerial,
+    removeLineSerial: base.removeLineSerial,
     setItemModifiers: base.setItemModifiers,
     setItemSeat: base.setItemSeat,
     removeItem: (lineKey: string) => {

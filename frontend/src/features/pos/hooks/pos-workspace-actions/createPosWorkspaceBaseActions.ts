@@ -1,7 +1,9 @@
 import {
   addPosItem,
+  addSerialToPosLine,
   isNegativeStockSalesAllowed,
   removePosItem,
+  removeSerialFromPosLine,
   repriceCartLine,
   updatePosItemQtyWithOptions,
   updatePosItemNotes,
@@ -302,6 +304,32 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
     }
   }
 
+  /* LF-P3: serial entry on a cart line. The pure helper throws a specific
+   * message (duplicate, line full, not a serial-tracked line); surfacing it
+   * through the submit message keeps the cashier on the cart with the reason
+   * in front of them. The live lookup check already ran in the entry UI. */
+  function addLineSerial(lineKey: string, serial: string) {
+    try {
+      const nextCart = addSerialToPosLine(params.cart, lineKey, serial);
+      params.setSelectedLineKey(lineKey);
+      params.setCart(nextCart);
+      params.setSubmitMessage('');
+    } catch (error) {
+      params.setSubmitMessage(error instanceof Error ? error.message : 'تعذّرت إضافة السيريال.');
+      throw error;
+    }
+  }
+
+  function removeLineSerial(lineKey: string, serial: string) {
+    try {
+      const nextCart = removeSerialFromPosLine(params.cart, lineKey, serial);
+      params.setSelectedLineKey(lineKey);
+      params.setCart(nextCart);
+    } catch (error) {
+      params.setSubmitMessage('تعذّر حذف السيريال.');
+    }
+  }
+
   function removeItem(lineKey: string) {
     params.setCart((current) => removePosItem(current, lineKey));
     if (params.selectedLineKey === lineKey) params.setSelectedLineKey('');
@@ -480,6 +508,8 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
     setItemNote,
     setItemModifiers,
     setItemSeat,
+    addLineSerial,
+    removeLineSerial,
     removeItem,
     fillPaidAmount,
     setPaymentPreset,

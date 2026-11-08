@@ -4,6 +4,7 @@ import { formatCurrency, formatCurrencyWithCode } from '@/lib/format';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { FileTextIcon, TagIcon, SmartphoneIcon } from '@/shared/components/icons/AppIcons';
 import { PosItemNotesDialog } from './PosItemNotesDialog';
+import { PosLineSerialEntry } from './PosLineSerialEntry';
 import { ProductIcon } from '@/shared/components/icons/product-svg-catalog';
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
 import type { Product } from '@/types/domain';
@@ -28,6 +29,8 @@ const PosCartItemRow = memo(function PosCartItemRow({
   onItemModifiersClick,
   onQtyChange,
   onChangeLineQtyByDelta,
+  onAddLineSerial,
+  onRemoveLineSerial,
   onRemoveItem
 }: any) {
   const { t: __t } = useTranslation();
@@ -182,11 +185,17 @@ const PosCartItemRow = memo(function PosCartItemRow({
             ) : null}
           </div>
         )}
-        {item.serials && item.serials.length > 0 && (
+        {item.trackSerials ? (
+          <PosLineSerialEntry
+            item={item}
+            onAddSerial={(lineKey, serial) => onAddLineSerial?.(lineKey, serial)}
+            onRemoveSerial={(lineKey, serial) => onRemoveLineSerial?.(lineKey, serial)}
+          />
+        ) : item.serials && item.serials.length > 0 ? (
           <div style={{ fontSize: '0.72rem', color: '#7e22ce', background: '#faf5ff', padding: '2px 6px', borderRadius: '4px', border: '1px solid #e9d5ff', marginTop: '3px', direction: 'ltr', textAlign: 'right', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
             <strong>{item.serials.join(', ')}</strong> :IMEI <SmartphoneIcon size={12} color="#7e22ce" />
           </div>
-        )}
+        ) : null}
         {allowItemModifiers && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
             {onItemModifiersClick && (
@@ -361,7 +370,7 @@ const PosCartItemRow = memo(function PosCartItemRow({
   );
 });
 
-export function PosCartItemsList({ cart, products, onNavigateToProducts, lastAddedLineKey, selectedLineKey, onQtyChange, onItemNoteChange, onItemModifiersClick, onItemSeatChange, onEditProduct, onRemoveItem, onSelectLine, onChangeLineQtyByDelta }: Pick<PosCartPanelProps, 'cart' | 'products' | 'onNavigateToProducts' | 'lastAddedLineKey' | 'selectedLineKey' | 'onQtyChange' | 'onItemNoteChange' | 'onItemModifiersClick' | 'onItemSeatChange' | 'onEditProduct' | 'onRemoveItem' | 'onSelectLine' | 'onChangeLineQtyByDelta'>) {
+export function PosCartItemsList({ cart, products, onNavigateToProducts, lastAddedLineKey, selectedLineKey, onQtyChange, onItemNoteChange, onItemModifiersClick, onItemSeatChange, onEditProduct, onRemoveItem, onSelectLine, onChangeLineQtyByDelta, onAddLineSerial, onRemoveLineSerial }: Pick<PosCartPanelProps, 'cart' | 'products' | 'onNavigateToProducts' | 'lastAddedLineKey' | 'selectedLineKey' | 'onQtyChange' | 'onItemNoteChange' | 'onItemModifiersClick' | 'onItemSeatChange' | 'onEditProduct' | 'onRemoveItem' | 'onSelectLine' | 'onChangeLineQtyByDelta' | 'onAddLineSerial' | 'onRemoveLineSerial'>) {
   const { t: __t } = useTranslation();
   const { t } = useTranslation();
   const settingsQuery = useSettingsQuery();
@@ -406,6 +415,8 @@ export function PosCartItemsList({ cart, products, onNavigateToProducts, lastAdd
   const handleItemSeatChange = useCallback((lineKey: string, seat?: number) => onItemSeatChange?.(lineKey, seat), [onItemSeatChange]);
   const handleQtyChange = useCallback((lineKey: string, qty: number) => onQtyChange(lineKey, qty), [onQtyChange]);
   const handleChangeLineQtyByDelta = useCallback((lineKey: string, delta: number) => onChangeLineQtyByDelta?.(lineKey, delta), [onChangeLineQtyByDelta]);
+  const handleAddLineSerial = useCallback((lineKey: string, serial: string) => onAddLineSerial?.(lineKey, serial), [onAddLineSerial]);
+  const handleRemoveLineSerial = useCallback((lineKey: string, serial: string) => onRemoveLineSerial?.(lineKey, serial), [onRemoveLineSerial]);
   const handleRemoveItem = useCallback((lineKey: string) => onRemoveItem(lineKey), [onRemoveItem]);
   const handleOpenItemNotes = useCallback((it: any) => {
     setNotesDialogItem({
@@ -545,6 +556,8 @@ export function PosCartItemsList({ cart, products, onNavigateToProducts, lastAdd
               onItemSeatChange={handleItemSeatChange}
               onQtyChange={handleQtyChange}
               onChangeLineQtyByDelta={handleChangeLineQtyByDelta}
+              onAddLineSerial={handleAddLineSerial}
+              onRemoveLineSerial={handleRemoveLineSerial}
               onRemoveItem={handleRemoveItem}
             />
           );
