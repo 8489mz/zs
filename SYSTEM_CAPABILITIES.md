@@ -2,7 +2,7 @@
 
 هذا الملف **فهرس المجالات**؛ تفاصيل كل قدرة تُحدّث في ملف مجالها، ولا تُضاف هنا سجلات الميزات الطويلة. **حالة التحقق الحالية لكل موديول** تُوثق منفصلة في [سجل المراجعات](docs/reviews/README.md)، لا في نسب الإنجاز القديمة.
 
-ابدأ بـ[الخريطة المعمارية](SYSTEM_BLUEPRINT.md) لمعرفة القلب والتبعيات، ثم اختر الملف أدناه. اقرأ [قواعد التوثيق](docs/capabilities/README.md) قبل الإضافة أو التعديل.
+ابدأ بـ[الخريطة المعمارية](SYSTEM_BLUEPRINT.md) لمعرفة القلب والتبعيات، ثم اختر الملف أدناه. خريطة المحركات القانونية للمال في [docs/ENGINE_MAP.md](docs/ENGINE_MAP.md) — التنفيذ الواحد المعتمد لكل حساب مالي. اقرأ [قواعد التوثيق](docs/capabilities/README.md) قبل الإضافة أو التعديل.
 
 ## خريطة المعرفة
 
@@ -12,6 +12,7 @@ flowchart TD
   B --> C[SYSTEM_CAPABILITIES: domain index]
   C --> D[Domain capability files]
   D --> E[Code / migrations / tests / dated evidence]
+  C --> F[ENGINE_MAP: canonical money engines]
 ```
 
 ## ملفات المجالات
@@ -59,6 +60,7 @@ flowchart TD
 - المطاعم والاستيراد والتجزئة تحتفظ بملفاتها السابقة؛ لم تُنشأ نسخة منافسة لها.
 - تصنيف Core / Primary / Secondary واتجاه الاعتماد في [SYSTEM_BLUEPRINT.md](SYSTEM_BLUEPRINT.md). أوضاع التشغيل والقطاعات والباقات في [SYSTEM_MODES_AND_TIERS_MATRIX.md](SYSTEM_MODES_AND_TIERS_MATRIX.md).
 - الثوابت في [ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md)، وقواعد الأداء في [PERFORMANCE_CONSTITUTION.md](PERFORMANCE_CONSTITUTION.md)، وقرارات المراجعة بتاريخها في [REVIEW_ROADMAP.md](REVIEW_ROADMAP.md).
+- خريطة المحركات القانونية للمال في [docs/ENGINE_MAP.md](docs/ENGINE_MAP.md) — التنفيذ الواحد المعتمد لكل حساب مالي؛ صفوفها PARTIAL هي العمل المتبقي. توحيد محركات المال U1–U4 مقفول على الرأس `30a84e93` (2026-11-08) بأدلة في [ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md)؛ هذه السطور ليست شهادة جاهزية، وحالة التحقق لكل موديول في [سجل المراجعات](docs/reviews/README.md).
 - عبارات «مكتمل 100%» داخل المواد القديمة محفوظة لأمانة النقل؛ لا تعتمدها دون دليل حديث محدد النطاق.
 - نُقل كل محتوى الفهرس السابق دون إسقاط نصوص، مع حفظ التكرارات التاريخية والإشارة إليها. [سجل النقل](docs/capabilities/migration-manifest.json) يربط كل قسم بمكانه ومعرّفه وبصمته وقت النقل. تاريخ التنظيم: 25 أكتوبر 2026.
 - التغيير المشترك له ملف مالك واحد، وتضاف روابط من بقية المجالات؛ لا تنسخ الوصف أو نتائج الاختبار بينها.
