@@ -51,39 +51,43 @@ import { allocateSaleFromImportLots, calculateImportSaleCost } from './helpers/i
 import { applyStockDelta, lockStockProducts } from '../../common/utils/location-stock-ledger';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { generateDailySequenceNumber } from '../delivery-reps/services/van-common.util';
 import { resolveFxRate } from '../accounting/fx-rate-resolution';
 
 /**
  * INV-IMPORT-SUPPLIER-ATTRIBUTION: apportion a cent-exact total
  * across non-negative bucket weights by share, largest-remainder
- * to the cent. The returned shares always sum to exactly `total`
+ * to the tenant's book minor unit (2dp, or 3dp for KWD/OMR/BHD and
+ * the other 3dp currencies — the old cents-only math rounded a
+ * one-fils overhead share to a whole cent on a 3dp tenant). The
+ * returned shares always sum to exactly `total`
  * (a final correction on the largest weight absorbs float dust),
  * so a split journal can never drift from its single-line total
  * by rounding. Zero total or all-zero weights yield all zeros;
  * the caller decides whether that is a mismatch.
  */
-export function apportionByBucketShares(total: number, weights: number[]): number[] {
-  const totalCents = Math.round(Number(total) * 100);
+export function apportionByBucketShares(total: number, weights: number[], minorUnits: MoneyDigits = 2): number[] {
+  const factor = 10 ** minorUnits;
+  const totalMinor = Math.round(Number(total) * factor);
   const shares = weights.map(() => 0);
   const weightSum = weights.reduce((sum, w) => sum + Math.max(0, Number(w) || 0), 0);
-  if (totalCents === 0 || weightSum <= 0) return shares;
-  const raw = weights.map((w) => (totalCents * Math.max(0, Number(w) || 0)) / weightSum);
+  if (totalMinor === 0 || weightSum <= 0) return shares;
+  const raw = weights.map((w) => (totalMinor * Math.max(0, Number(w) || 0)) / weightSum);
   const floors = raw.map((r) => Math.floor(r));
-  let remainder = totalCents - floors.reduce((sum, f) => sum + f, 0);
+  let remainder = totalMinor - floors.reduce((sum, f) => sum + f, 0);
   const order = raw.map((r, i) => i).sort((a, b) => raw[b] - Math.floor(raw[b]) - (raw[a] - Math.floor(raw[a])));
   for (const i of order) {
     if (remainder <= 0) break;
     floors[i] += 1;
     remainder -= 1;
   }
-  const out = floors.map((f) => Number((f / 100).toFixed(2)));
-  const drift = Number((total - out.reduce((sum, s) => sum + s, 0)).toFixed(2));
+  const out = floors.map((f) => Number((f / factor).toFixed(minorUnits)));
+  const drift = roundMoney(total - out.reduce((sum, s) => sum + s, 0), minorUnits);
   if (drift !== 0) {
     let largest = 0;
     for (let i = 1; i < weights.length; i += 1) if (weights[i] > weights[largest]) largest = i;
-    out[largest] = Number((out[largest] + drift).toFixed(2));
+    out[largest] = roundMoney(out[largest] + drift, minorUnits);
   }
   return out;
 }
@@ -2430,7 +2434,15 @@ export class ImportSalesService {
         throw new BadRequestException(`الحجز المسبق للصنف ${id} يتجاوز الكمية المستلمة فعلياً، يجب معالجة العجز والحجوزات قبل الترحيل.`);
       }
     }
-    const groups = groupImportReceipts(items.map((item) => ({ ...this.costLine(item), landedCost: Number(item.landed_cost_egp) })));
+    // INV-IMPORT-RECEIPT-BOOK-DIGITS: the receipt journal, the WAC
+    // blend and the shortage expense all round at the tenant's book
+    // digits, resolved fail-closed on this trx handle (a settings /
+    // rates mismatch throws before any stock or journal write).
+    // The old code cut every total to a hardcoded 2dp while the
+    // groups carried raw floats: on a 3dp tenant the journal said
+    // 42.88 for a receipt the pool blended at 42.875.
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
+    const groups = groupImportReceipts(items.map((item) => ({ ...this.costLine(item), landedCost: Number(item.landed_cost_egp) })), digits);
     const products = await trx.selectFrom('products').select(['id', 'account_id'])
       .where('tenant_id', '=', tenantId).where('id', 'in', groups.map((group) => group.productId))
       .orderBy('id', 'asc').execute();
@@ -2458,20 +2470,20 @@ export class ImportSalesService {
     // 4-decimal unit rounding) keeps the journal balanced to the
     // cent; a residual more than 0.50 below zero means the stored
     // costs disagree with the arrival rate and fails closed.
-    const totalInventoryValue = Number(groups.reduce((sum, g) => sum + g.value, 0).toFixed(2));
-    const totalShortageExpense = Number(groups.reduce((sum, g) => sum + g.shortageExpense, 0).toFixed(2));
-    const totalCreditPayable = Number((totalInventoryValue + totalShortageExpense).toFixed(2));
+    const totalInventoryValue = roundMoney(groups.reduce((sum, g) => sum + g.value, 0), digits);
+    const totalShortageExpense = roundMoney(groups.reduce((sum, g) => sum + g.shortageExpense, 0), digits);
+    const totalCreditPayable = roundMoney(totalInventoryValue + totalShortageExpense, digits);
     const foldedRows = await trx.selectFrom('import_broker_capitalizations')
       .select(['id', 'broker_expense_id', 'amount_egp', 'cost_bucket'])
       .where('tenant_id', '=', tenantId).where('shipment_id', '=', shipmentId).where('state', '=', 'folded')
       .execute();
-    const foldedBrokerTotal = Number(foldedRows.reduce((sum, r) => sum + Number(r.amount_egp || 0), 0).toFixed(2));
+    const foldedBrokerTotal = roundMoney(foldedRows.reduce((sum, r) => sum + Number(r.amount_egp || 0), 0), digits);
     if (foldedBrokerTotal > totalInventoryValue + 0.001) {
       throw new BadRequestException('إجمالي مصروفات المخلص المرسملة يتجاوز قيمة المخزون المستلم؛ راجع بنود تكلفة الشحنة قبل الترحيل. [IMPORT_BROKER_CAPITALIZATION_EXCEEDS_LANDED]');
     }
     const arrivalRateForSplit = requireImportNumber(shipment.exchange_rate_at_arrival, 'سعر الصرف عند الوصول', Number.MIN_VALUE);
-    const goodsValue = Number(items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.factory_unit_price_usd || 0) * arrivalRateForSplit, 0).toFixed(2));
-    const overheadResidual = Number((totalCreditPayable - goodsValue).toFixed(2));
+    const goodsValue = roundMoney(items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.factory_unit_price_usd || 0) * arrivalRateForSplit, 0), digits);
+    const overheadResidual = roundMoney(totalCreditPayable - goodsValue, digits);
     if (overheadResidual < -0.5) {
       throw new BadRequestException('تعذر تقسيم قيد الاستلام على بنود التكلفة: قيمة البضاعة المحسوبة بسعر الوصول تتجاوز إجمالي التكلفة المحملة؛ راجع سعر الصرف وبنود الشحنة قبل الترحيل. [IMPORT_RECEIPT_COMPONENT_SPLIT_MISMATCH]');
     }
@@ -2481,10 +2493,10 @@ export class ImportSalesService {
       foldedByBucket.set(bucket, (foldedByBucket.get(bucket) || 0) + Number(row.amount_egp || 0));
     }
     const bucketTotals = {
-      freight: Number((Number(shipment.shipping_cost_usd || 0) * arrivalRateForSplit).toFixed(2)),
-      customs: Number(Number(shipment.customs_cost_egp || 0).toFixed(2)),
-      transport: Number(Number(shipment.internal_transport_cost_egp || 0).toFixed(2)),
-      demurrage: Number(Number(shipment.actual_demurrage_fees || 0).toFixed(2)),
+      freight: roundMoney(Number(shipment.shipping_cost_usd || 0) * arrivalRateForSplit, digits),
+      customs: roundMoney(Number(shipment.customs_cost_egp || 0), digits),
+      transport: roundMoney(Number(shipment.internal_transport_cost_egp || 0), digits),
+      demurrage: roundMoney(Number(shipment.actual_demurrage_fees || 0), digits),
     };
     const netWeights = [
       Math.max(0, bucketTotals.freight),
@@ -2492,7 +2504,7 @@ export class ImportSalesService {
       Math.max(0, bucketTotals.transport - (foldedByBucket.get('internal_transport_cost_egp') || 0)),
       Math.max(0, bucketTotals.demurrage - (foldedByBucket.get('actual_demurrage_fees') || 0)),
     ];
-    const payableOverhead = Number((overheadResidual - foldedBrokerTotal).toFixed(2));
+    const payableOverhead = roundMoney(overheadResidual - foldedBrokerTotal, digits);
     if (payableOverhead < -0.005) {
       throw new BadRequestException('إجمالي مصروفات المخلص المرسملة يتجاوز الأعباء المستحقة؛ راجع بنود تكلفة الشحنة قبل الترحيل. [IMPORT_BROKER_CAPITALIZATION_EXCEEDS_LANDED]');
     }
@@ -2502,7 +2514,7 @@ export class ImportSalesService {
       freight: 'freight_supplier_id', customs: 'customs_supplier_id',
       transport: 'transport_supplier_id', demurrage: 'demurrage_supplier_id',
     };
-    const overheadShares = apportionByBucketShares(payableOverhead, netWeights);
+    const overheadShares = apportionByBucketShares(payableOverhead, netWeights, digits);
     const unallocableReason = typeof (shipment as any).unallocable_cost_reason === 'string'
       ? (shipment as any).unallocable_cost_reason.trim() : '';
     let clearingAccountId: number | null = null;
@@ -2533,9 +2545,9 @@ export class ImportSalesService {
       clearingAccountId?: number | null;
     };
     const receiptCreditComponents: ReceiptCreditComponent[] = [];
-    const payableTotal = Number((totalCreditPayable - foldedBrokerTotal).toFixed(2));
-    const dust = Number((payableTotal - (goodsValue + totalShortageExpense + overheadShares.reduce((s, v) => s + v, 0))).toFixed(2));
-    let goodsCredit = Number((goodsValue + totalShortageExpense + dust).toFixed(2));
+    const payableTotal = roundMoney(totalCreditPayable - foldedBrokerTotal, digits);
+    const dust = roundMoney(payableTotal - (goodsValue + totalShortageExpense + overheadShares.reduce((s, v) => s + v, 0)), digits);
+    let goodsCredit = roundMoney(goodsValue + totalShortageExpense + dust, digits);
     const overheadEntries = overheadKeys
       .map((key, i) => ({ key, amount: overheadShares[i] }))
       .filter((entry) => entry.amount > 0);
@@ -2545,7 +2557,7 @@ export class ImportSalesService {
       // split still sums exactly, with no goods line at all.
       let largest = overheadEntries[0];
       for (const entry of overheadEntries) if (entry.amount > largest.amount) largest = entry;
-      largest.amount = Number((largest.amount + dust).toFixed(2));
+      largest.amount = roundMoney(largest.amount + dust, digits);
       goodsCredit = 0;
     }
     if (goodsCredit > 0) {
@@ -2594,7 +2606,7 @@ export class ImportSalesService {
         await trx.insertInto('expenses').values({
           tenant_id: tenantId, account_id: accountId,
           title: `خسائر نواقص حاوية (تسوية عجز) - صنف ${group.productId}`,
-          amount: Number(group.shortageExpense.toFixed(2)), expense_date: new Date().toISOString().slice(0, 10),
+          amount: roundMoney(group.shortageExpense, digits), expense_date: new Date().toISOString().slice(0, 10),
           note: `شحنة استيراد #${shipmentId} - سند استلام ${receipt.id}`,
           created_by: userId, branch_id: null, location_id: null,
         }).execute();

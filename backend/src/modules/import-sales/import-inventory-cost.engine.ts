@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { weightedReceiptCost } from '../accounting/engines/inventory-valuation.engine';
+import { roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 
 export interface ImportCostLine {
   id: string;
@@ -35,7 +36,25 @@ export function validateImportLine(line: ImportCostLine): void {
   }
 }
 
-export function groupImportReceipts(lines: Array<ImportCostLine & { landedCost: number }>) {
+/**
+ * Group receipt lines by product, rounding each group's money ONCE at
+ * the tenant's book digits (INV-IMPORT-RECEIPT-BOOK-DIGITS): the
+ * rounded group value is the single number the WAC blend
+ * (valueStockReceipt), the stock-movement total and the receipt
+ * journal all share, so cost_price x qty reconciles with the 1140
+ * leg exactly. Before this the groups carried raw float products
+ * (receivedQty * landedCost) while the service cut only the journal
+ * totals to 2dp: on a 3dp tenant the journal said 42.88 for a receipt
+ * the pool blended at 42.875, and the shortage expense was cut to
+ * 2dp in the expenses row. The digits are caller-supplied (the live
+ * caller resolves them from tenantBaseCurrency on the trx handle);
+ * the engine fails closed on anything but 2 or 3 rather than
+ * silently defaulting. Quantities stay at the ledger's 3dp.
+ */
+export function groupImportReceipts(lines: Array<ImportCostLine & { landedCost: number }>, moneyDigits: MoneyDigits) {
+  if (moneyDigits !== 2 && moneyDigits !== 3) {
+    throw new BadRequestException('دقة العملة غير صالحة');
+  }
   const products = new Map<number, { productId: number; quantity: number; value: number; shortageExpense: number }>();
   for (const line of lines) {
     validateImportLine(line);
@@ -51,7 +70,13 @@ export function groupImportReceipts(lines: Array<ImportCostLine & { landedCost: 
     requireImportNumber(group.value, 'قيمة الاستلام');
     products.set(line.productId, group);
   }
-  return [...products.values()].sort((a, b) => a.productId - b.productId);
+  return [...products.values()]
+    .map((group) => ({
+      ...group,
+      value: roundMoney(group.value, moneyDigits),
+      shortageExpense: roundMoney(group.shortageExpense, moneyDigits),
+    }))
+    .sort((a, b) => a.productId - b.productId);
 }
 
 /**
