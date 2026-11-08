@@ -7,7 +7,8 @@ import { QueryFeedback } from '@/shared/components/query-feedback';
 import { MutationFeedback } from '@/shared/components/mutation-feedback';
 import { SubmitButton } from '@/shared/components/submit-button';
 import { formatDate } from '@/lib/format';
-import { getGlobalCurrencySymbol } from '@/lib/currencies';
+import { getGlobalCurrencySymbol, getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits } from '@/shared/utils/money';
 import {
   EyeIcon,
   SearchIcon,
@@ -102,6 +103,10 @@ export function StockCountMonitorCard({
 }: StockCountMonitorCardProps) {
   const { t } = useTranslation();
   const currencySymbol = getGlobalCurrencySymbol();
+  // INV-FE2-FRONTEND-BOOK-DIGITS: the session money summary rounds at
+  // the tenant's book digits (global system currency, synced from
+  // tenant settings at boot).
+  const bookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
 
   const [itemSearch, setItemSearch] = useState('');
   const [itemFilter, setItemFilter] = useState<'all' | 'variance' | 'matched'>('all');
@@ -119,8 +124,8 @@ export function StockCountMonitorCard({
   };
 
   const selectedSummary = useMemo(
-    () => (selectedSession ? summarizeSessionVariance(selectedSession, products) : null),
-    [selectedSession, products],
+    () => (selectedSession ? summarizeSessionVariance(selectedSession, products, bookDigits) : null),
+    [selectedSession, products, bookDigits],
   );
 
   const overallStats = useMemo(() => {
@@ -648,7 +653,7 @@ export function StockCountMonitorCard({
                   header: "محتوى الجلسة",
                   className: 'text-center',
                   cell: (session) => {
-                    const summary = summarizeSessionVariance(session, products);
+                    const summary = summarizeSessionVariance(session, products, bookDigits);
                     return (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
                         <strong style={{ fontSize: '12.5px', color: '#0f172a' }}>{summary.itemsCount} صنفاً</strong>
@@ -670,7 +675,7 @@ export function StockCountMonitorCard({
                   header: "الأثر الكمي والمالي",
                   className: 'text-center',
                   cell: (session) => {
-                    const summary = summarizeSessionVariance(session, products);
+                    const summary = summarizeSessionVariance(session, products, bookDigits);
                     const isNegative = summary.totalVariance < 0;
                     return (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>

@@ -11,6 +11,7 @@ import { CheckCircleIcon, PlusCircleIcon } from '@/shared/components/icons/AppIc
 import { toast } from '@/shared/components/system-alert';
 import { useQuery } from '@tanstack/react-query';
 import { http } from '@/lib/http';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 export interface PiItemLine {
   productName: string;
@@ -146,7 +147,10 @@ export function ChinaProformasTab() {
       toast.error('رقم الفاتورة المبدئية PI مطلوب');
       return;
     }
-    const finalTotal = validLines.length > 0 ? Number(computedLinesTotal.toFixed(2)) : Number(totalAmountForeign);
+    // INV-FE2-FRONTEND-BOOK-DIGITS: the PI total is POSTed as
+    // totalAmountForeign — it rounds at the PI currency's digits
+    // (`currency` state, default 'USD'), never at a hardcoded 2dp.
+    const finalTotal = validLines.length > 0 ? roundMoneyValue(computedLinesTotal, currencyMoneyDigits(currency)) : Number(totalAmountForeign);
     if (finalTotal <= 0) {
       toast.error('إجمالي قيمة الفاتورة يجب أن يكون أكبر من صفر');
       return;
@@ -564,7 +568,7 @@ export function ChinaProformasTab() {
 
                 <div className="thin-scrollbar" style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, paddingRight: 2 }}>
                   {piItems.map((line, idx) => {
-                    const lineTotal = Number(((line.quantity || 0) * (line.unitPriceForeign || 0)).toFixed(2));
+                    const lineTotal = roundMoneyValue((line.quantity || 0) * (line.unitPriceForeign || 0), currencyMoneyDigits(currency));
                     return (
                       <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1.2fr 1.2fr 52px', gap: 8, alignItems: 'center' }}>
                         <input

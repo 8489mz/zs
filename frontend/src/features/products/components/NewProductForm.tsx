@@ -27,6 +27,8 @@ import { guessProductIcon } from '@/features/products/lib/product-smart-matcher'
 import { toast } from '@/shared/components/system-alert';
 import { getFriendlyApiErrorMessage } from '@/lib/errors';
 import { shouldShowExpiryDateField } from '@/features/products/utils/product-visibility.utils';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
 
 const normalizeLookupText = (value: unknown) => normalizeArabicSearchKey(value);
 
@@ -277,18 +279,23 @@ export function NewProductForm({
   useEffect(() => {
     if (isMarginActive && watchedCostPrice !== undefined) {
       const cost = Number(watchedCostPrice) || 0;
+      // INV-FE2-FRONTEND-BOOK-DIGITS: the margin-derived prices are
+      // written into the form and submitted as the product's stored
+      // retail/wholesale prices — they round at the tenant's book
+      // digits (settings currency, tenant base as fallback).
+      const bookDigits = currencyMoneyDigits(settingsQuery.data?.currency || getGlobalSystemCurrency());
       if (retailMargin) {
         const rMargin = Number(retailMargin);
         const newRetail = cost + (cost * rMargin / 100);
-        form.setValue('retailPrice', Number(newRetail.toFixed(2)), { shouldValidate: true, shouldDirty: true });
+        form.setValue('retailPrice', roundMoneyValue(newRetail, bookDigits), { shouldValidate: true, shouldDirty: true });
       }
       if (wholesaleMargin) {
         const wMargin = Number(wholesaleMargin);
         const newWholesale = cost + (cost * wMargin / 100);
-        form.setValue('wholesalePrice', Number(newWholesale.toFixed(2)), { shouldValidate: true, shouldDirty: true });
+        form.setValue('wholesalePrice', roundMoneyValue(newWholesale, bookDigits), { shouldValidate: true, shouldDirty: true });
       }
     }
-  }, [watchedCostPrice, isMarginActive, retailMargin, wholesaleMargin, form]);
+  }, [watchedCostPrice, isMarginActive, retailMargin, wholesaleMargin, form, settingsQuery.data?.currency]);
 
   const duplicateFashionBarcodes = useMemo(() => {
     const counts = new Map<string, number>();

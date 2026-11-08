@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { useStorefrontLang } from '@/i18n';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
-import { getGlobalCurrencySymbol, getCurrencySymbol, isThreeDecimalCurrency } from '@/lib/currencies';
+import { getGlobalCurrencySymbol, getCurrencySymbol, isThreeDecimalCurrency, getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits } from '@/shared/utils/money';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { CartItem, CreateOnlineOrderResponse, StorefrontInfo, ValidateCouponResponse, StorefrontPaymentSessionResponse, QuoteCartResponse } from '../types/storefront.types';
@@ -525,7 +526,11 @@ export function StorefrontCheckoutModal({
     setCouponError('');
 
     try {
-      const res = await storefrontApi.validateCoupon(tenantSlug, cleanCode, subtotal);
+      // INV-FE2-FRONTEND-BOOK-DIGITS: the offline fallback coupon
+      // discount rounds at the store currency's digits. NOTE: pass
+      // info?.currency (the CODE) — never storeCurrency below, which
+      // may hold a symbol (e.g. 'ج.م') that the helper would reject.
+      const res = await storefrontApi.validateCoupon(tenantSlug, cleanCode, subtotal, currencyMoneyDigits(info?.currency || getGlobalSystemCurrency()));
       if (res.ok) {
         setAppliedCoupon(res);
         setCouponError('');
@@ -549,7 +554,9 @@ export function StorefrontCheckoutModal({
 
   if (!isOpen) return null;
 
-  const localTotals = calculateCartSubtotal(cartItems);
+  // INV-FE2-FRONTEND-BOOK-DIGITS: the local subtotal rounds at the
+  // store currency's digits (the server quote, when present, wins).
+  const localTotals = calculateCartSubtotal(cartItems, info?.currency);
   const subtotal = serverQuote ? serverQuote.subtotal : localTotals.subtotal;
   const bogoSavings = serverQuote ? serverQuote.bogoSavings : localTotals.totalSavings;
 

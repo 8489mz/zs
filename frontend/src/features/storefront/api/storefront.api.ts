@@ -1,4 +1,5 @@
 import { http } from '@/lib/http';
+import { roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
 import {
   StorefrontInfo,
   StorefrontCatalogResponse,
@@ -307,7 +308,7 @@ export const storefrontApi = {
     });
   },
 
-  validateCoupon: async (slug: string, code: string, subtotal: number): Promise<ValidateCouponResponse> => {
+  validateCoupon: async (slug: string, code: string, subtotal: number, digits: MoneyDigits): Promise<ValidateCouponResponse> => {
     try {
       return await http<ValidateCouponResponse>(`/api/storefront/${encodeURIComponent(slug)}/coupons/validate`, {
         method: 'POST',
@@ -316,7 +317,11 @@ export const storefrontApi = {
     } catch {
       const normalized = (code || '').trim().toUpperCase();
       if (normalized === 'WELCOME10' || normalized === 'DISCOUNT10' || normalized === 'ZSTORE10') {
-        const discountAmount = Math.round(subtotal * 0.1 * 100) / 100;
+        // INV-FE2-FRONTEND-BOOK-DIGITS: the offline fallback discount is
+        // applied to the checkout total — it rounds at the store's book
+        // digits (required param; the caller resolves it from the store
+        // currency), never at a hardcoded 2dp.
+        const discountAmount = roundMoneyValue(subtotal * 0.1, digits);
         return {
           ok: true,
           code: normalized,

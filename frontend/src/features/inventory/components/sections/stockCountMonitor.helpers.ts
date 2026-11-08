@@ -1,4 +1,5 @@
 import type { StockCountSession, Product } from '@/types/domain';
+import { roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
 
 export type SessionVarianceSummary = {
   itemsCount: number;
@@ -22,9 +23,15 @@ export function getSessionStatusLabel(status?: string | null) {
   return status || '—';
 }
 
+/* INV-FE2-FRONTEND-BOOK-DIGITS (U6 FE2): the money legs of a stock-count
+ * summary round at the tenant's book digits. `digits` is a required
+ * trailing param (FE1 convention) — the callers resolve it from the
+ * tenant base currency. The quantity legs stay toFixed(3): quantities
+ * are 3dp by design (the ledger's quantity precision), not money. */
 export function summarizeSessionVariance(
   session: StockCountSession,
-  products?: Product[]
+  products?: Product[],
+  digits: MoneyDigits,
 ): SessionVarianceSummary {
   const items = Array.isArray(session.items) ? session.items : [];
   const itemsCount = items.length;
@@ -70,10 +77,10 @@ export function summarizeSessionVariance(
     totalVariance: Number(totalVariance.toFixed(3)),
     totalAbsoluteVariance: Number(totalAbsoluteVariance.toFixed(3)),
     hasVariance: varianceItemsCount > 0,
-    expectedValue: Number(expectedValue.toFixed(2)),
-    countedValue: Number(countedValue.toFixed(2)),
-    netFinancialVariance: Number(netFinancialVariance.toFixed(2)),
-    deficitCost: Number(deficitCost.toFixed(2)),
-    surplusCost: Number(surplusCost.toFixed(2)),
+    expectedValue: roundMoneyValue(expectedValue, digits),
+    countedValue: roundMoneyValue(countedValue, digits),
+    netFinancialVariance: roundMoneyValue(netFinancialVariance, digits),
+    deficitCost: roundMoneyValue(deficitCost, digits),
+    surplusCost: roundMoneyValue(surplusCost, digits),
   };
 }

@@ -6,7 +6,8 @@ import { restaurantAdvancedFnbApi } from '@/features/pos';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { Button } from '@/shared/ui/button';
 import { toast } from '@/shared/components/system-alert';
-import { getGlobalCurrencySymbol } from '@/lib/currencies';
+import { getGlobalCurrencySymbol, getGlobalSystemCurrency } from '@/lib/currencies';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import {
   CreditCardIcon,
   CheckShieldIcon,
@@ -79,7 +80,11 @@ export function TableBillModal({ open, onClose, slug, tableNumber }: TableBillMo
     setTipAmount(parsed);
   };
 
-  const finalTotal = Math.round(((bill?.total || 0) + tipAmount) * 100) / 100;
+  // INV-FE2-FRONTEND-BOOK-DIGITS: the pay-button label shows bill total
+  // + tip — a computed money preview, so it rounds at the bill
+  // currency's digits (bill.currency is the CODE; the pay mutation
+  // itself sends only tipAmount and the server totals the charge).
+  const finalTotal = roundMoneyValue((bill?.total || 0) + tipAmount, currencyMoneyDigits(bill?.currency || getGlobalSystemCurrency()));
   const titleId = useId();
 
   const handleSelectRating = async (stars: number) => {

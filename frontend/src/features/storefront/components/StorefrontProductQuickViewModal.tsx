@@ -16,6 +16,8 @@ import {
 } from './StorefrontIcons';
 import { trackStorefrontEvent } from '../lib/storefront-pixel-tracker';
 import { buildCartProduct, getProductVariants, resolveVariantUnitPrice } from '../lib/storefront-variant-pricing';
+import { currencyMoneyDigits } from '@/shared/utils/money';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { generatePremiumProductSvg, resolveProductPhoto } from '../lib/storefront-photo-matcher';
 import { getContrastTextColor } from '../lib/storefront-theme-contrast';
 import { useBodyScrollLock } from '@/shared/components/dialog-shell';
@@ -249,7 +251,10 @@ export function StorefrontProductQuickViewModal({
   const activePhotoUrl =
     gallery[activePhotoIndex] || displayPrimaryPhoto || generatePremiumProductSvg(product.name, product.categoryName);
 
-  const basePrice = resolveVariantUnitPrice(product.price, selectedVariant) ?? product.price;
+  // INV-FE2-FRONTEND-BOOK-DIGITS: variant prices round at the store
+  // currency's digits (info.currency is the store's currency CODE).
+  const bookDigits = currencyMoneyDigits(info?.currency || getGlobalSystemCurrency());
+  const basePrice = resolveVariantUnitPrice(product.price, selectedVariant, bookDigits) ?? product.price;
   const isZeroPrice = Number(basePrice || 0) <= 0;
 
   const hasOriginalDiscount = Boolean(product.hasDiscount && product.originalPrice && product.originalPrice > basePrice);
@@ -270,7 +275,7 @@ export function StorefrontProductQuickViewModal({
 
   const handleAdd = () => {
     if (!inStock || isZeroPrice) return;
-    const finalProduct = buildCartProduct(product, selectedVariant?.name);
+    const finalProduct = buildCartProduct(product, selectedVariant?.name, bookDigits);
     if (!finalProduct) return;
 
     onAddToCart(finalProduct, qty);

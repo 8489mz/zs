@@ -5,6 +5,8 @@ import { DialogShell } from '@/shared/components/dialog-shell';
 import { AlertTriangleIcon, CheckCircleIcon, FileTextIcon, ShieldAlertIcon } from '@/shared/components/icons/AppIcons';
 import { formatCurrency } from '@/lib/format';
 import { systemConfirm } from '@/shared/components/system-alert';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
 
 export interface ProductArchiveConfirmDialogProps {
   open: boolean;
@@ -57,7 +59,11 @@ export function ProductArchiveConfirmDialog({
   const currentStock = Number(product.stock || 0);
   const hasRemainingStock = currentStock > 0;
   const unitCost = Number(product.costPrice || 0);
-  const totalCost = Number((currentStock * unitCost).toFixed(2));
+  // INV-FE2-FRONTEND-BOOK-DIGITS: the stock valuation feeds the
+  // High-Value Safety Gate (totalCost >= 5000) and the confirm message —
+  // it rounds at the tenant's book digits (tenant base currency; the
+  // dialog carries no settings and the product has no currency field).
+  const totalCost = roundMoneyValue(currentStock * unitCost, currencyMoneyDigits(getGlobalSystemCurrency()));
 
   const handleExecuteArchive = async () => {
     const archiveEntireGroup = isFashionModel ? archiveScope === 'all' : undefined;

@@ -4,6 +4,8 @@ import { purchasesApi, type PurchaseMutationResult } from '@/features/purchases/
 import { buildPurchasePayload, type PurchaseDraftItem } from '@/features/purchases/contracts';
 import { withIdempotency } from '@/lib/idempotency';
 import type { PurchaseHeaderOutput } from '@/features/purchases/schemas/purchase.schema';
+import { currencyMoneyDigits } from '@/shared/utils/money';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
 
 interface CreatePurchaseArgs {
   values: PurchaseHeaderOutput & {
@@ -23,7 +25,9 @@ export function useCreatePurchaseMutation(onSuccess?: (result: PurchaseMutationR
   return useMutation({
     mutationFn: ({ values, items, taxRate, pricesIncludeTax, attachments, idempotencyKey }: CreatePurchaseArgs & { idempotencyKey: string }) =>
       withIdempotency(
-        (headers) => purchasesApi.create(buildPurchasePayload(values, items, taxRate, pricesIncludeTax, attachments), headers),
+        // INV-FE2-FRONTEND-BOOK-DIGITS: discount/freight round at the
+        // document currency's digits (tenant base as fallback).
+        (headers) => purchasesApi.create(buildPurchasePayload(values, items, taxRate, pricesIncludeTax, attachments, currencyMoneyDigits(values.currency || getGlobalSystemCurrency())), headers),
         'purchase_create',
         idempotencyKey
       ),

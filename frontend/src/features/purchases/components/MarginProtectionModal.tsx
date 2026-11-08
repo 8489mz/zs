@@ -4,6 +4,7 @@ import { Button } from '@/shared/ui/button';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { formatCurrency } from '@/lib/format';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { CheckIcon, TagIcon, MessageSquareIcon } from '@/shared/components/icons/AppIcons';
 import {
   marginProtectionApi,
@@ -26,7 +27,7 @@ export function MarginProtectionModal({
   onRepricingApplied,
 }: MarginProtectionModalProps) {
   const { t } = useTranslation();
-  const { currencySymbol } = useSystemCurrency();
+  const { currencySymbol, currencyCode } = useSystemCurrency();
   const [targetMargin, setTargetMargin] = useState(initialTargetMargin);
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -82,12 +83,19 @@ export function MarginProtectionModal({
   }, [open, purchaseId, targetMargin]);
 
   // Recalculate recommended price dynamically if user changes target margin
+  // INV-FE2-FRONTEND-BOOK-DIGITS: the recommended price is POSTed as the
+  // new retail price (handleApply), so it must round at the tenant's book
+  // digits — a 2dp cut would store a truncated price on a 3-decimal
+  // tenant. profitAfter is the matching preview. NOTE: currencyCode (not
+  // the hook's `decimals`, which comes from the incomplete
+  // getCurrencyDecimals — KWD/BHD/OMR only) feeds the canonical helper.
+  const bookDigits = currencyMoneyDigits(currencyCode);
   const displayItems = useMemo(() => {
     if (!analysis) return [];
     return analysis.items.map((item) => {
-      const recPrice = Number((item.newCost / (1 - (targetMargin / 100))).toFixed(2));
+      const recPrice = roundMoneyValue(item.newCost / (1 - (targetMargin / 100)), bookDigits);
       const currentEdit = editedPrices[item.productId] ?? recPrice;
-      const profitAfter = Number((currentEdit - item.newCost).toFixed(2));
+      const profitAfter = roundMoneyValue(currentEdit - item.newCost, bookDigits);
       const marginAfter = currentEdit > 0 ? Number(((profitAfter / currentEdit) * 100).toFixed(1)) : 0;
       return {
         ...item,
@@ -97,7 +105,7 @@ export function MarginProtectionModal({
         marginAfter,
       };
     });
-  }, [analysis, targetMargin, editedPrices]);
+  }, [analysis, bookDigits, targetMargin, editedPrices]);
 
   const handlePriceChange = (productId: number, val: number) => {
     setEditedPrices((prev) => ({ ...prev, [productId]: Math.max(0, val) }));

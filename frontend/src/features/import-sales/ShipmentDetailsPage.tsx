@@ -18,6 +18,7 @@ import {
   type ShipmentItem 
 } from './api/shipments.api';
 import { formatCurrency } from '@/lib/format';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { useState, useEffect } from 'react';
 import { AddShipmentItemDialog } from './AddShipmentItemDialog';
 import { ContainerAutopsyModal } from './ContainerAutopsyModal';
@@ -52,8 +53,11 @@ function ItemRowInputs({ item, shipmentId, arrivalRate, pricingRate, isArrived }
   const landedCost = Number(item.landed_cost_egp) || 0;
   const pricingCostEgp = landedCost + (unitUsd * (pricingRate - arrivalRate));
   
-  const suggestedWholesale = Math.round((pricingCostEgp * (1 + (Number(wholesaleMargin) || 0) / 100)) * 100) / 100;
-  const suggestedRetail = Math.round((pricingCostEgp * (1 + (Number(retailMargin) || 0) / 100)) * 100) / 100;
+  // INV-FE2-FRONTEND-BOOK-DIGITS: the margin-suggested prices are
+  // EGP-denominated (pricingCostEgp) previews shown to the merchant —
+  // they round at EGP digits (2), the denomination of the amount.
+  const suggestedWholesale = roundMoneyValue(pricingCostEgp * (1 + (Number(wholesaleMargin) || 0) / 100), currencyMoneyDigits('EGP'));
+  const suggestedRetail = roundMoneyValue(pricingCostEgp * (1 + (Number(retailMargin) || 0) / 100), currencyMoneyDigits('EGP'));
   
   return (
     <>

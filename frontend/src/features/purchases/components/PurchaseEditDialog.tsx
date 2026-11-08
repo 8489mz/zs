@@ -10,6 +10,8 @@ import { useUnsavedChangesGuard } from '@/shared/hooks/use-unsaved-changes-guard
 import { formatCurrency } from '@/lib/format';
 import { useAuthStore, isAdminUser } from '@/stores/auth-store';
 import type { Purchase } from '@/types/domain';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
 
 const PAYMENT_TYPE_OPTIONS = [
   { value: 'cash', label: 'نقدي' },
@@ -82,20 +84,28 @@ export function PurchaseEditDialog({ open, purchase, isBusy = false, errorMessag
   }, [baselineItems, discount, normalizedItems, note, paymentType, purchase]);
   useUnsavedChangesGuard(open && isDirty && !isBusy);
 
-  const computedSubTotal = useMemo(() => Number(items.reduce((sum, item) => sum + item.qty * item.cost, 0).toFixed(2)), [items]);
+  // INV-FE2-FRONTEND-BOOK-DIGITS: the preview totals round at the
+  // tenant's book digits. The dialog carries no settings of its own and
+  // the purchase has no currency field, so the tenant base currency
+  // (synced from settings at boot) is the source. These totals are a
+  // preview — the save payload carries items/discount only — but a
+  // preview that disagrees with the posted journal by a fils is still
+  // a live defect on a 3-decimal tenant.
+  const bookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
+  const computedSubTotal = useMemo(() => roundMoneyValue(items.reduce((sum, item) => sum + item.qty * item.cost, 0), bookDigits), [bookDigits, items]);
   const computedTax = useMemo(() => {
     if (!purchase) return 0;
     const taxable = Math.max(0, computedSubTotal - discount);
     const taxRate = Number(purchase.taxRate || 0);
     if (!taxRate) return 0;
-    if (purchase.pricesIncludeTax) return Number((taxable - taxable / (1 + taxRate / 100)).toFixed(2));
-    return Number((taxable * (taxRate / 100)).toFixed(2));
-  }, [computedSubTotal, discount, purchase]);
+    if (purchase.pricesIncludeTax) return roundMoneyValue(taxable - taxable / (1 + taxRate / 100), bookDigits);
+    return roundMoneyValue(taxable * (taxRate / 100), bookDigits);
+  }, [bookDigits, computedSubTotal, discount, purchase]);
   const computedTotal = useMemo(() => {
     if (!purchase) return 0;
     const taxable = Math.max(0, computedSubTotal - discount);
-    return purchase.pricesIncludeTax ? Number(taxable.toFixed(2)) : Number((taxable + computedTax).toFixed(2));
-  }, [computedSubTotal, computedTax, discount, purchase]);
+    return purchase.pricesIncludeTax ? roundMoneyValue(taxable, bookDigits) : roundMoneyValue(taxable + computedTax, bookDigits);
+  }, [bookDigits, computedSubTotal, computedTax, discount, purchase]);
 
   function handleCancel() {
     if (isBusy) return;

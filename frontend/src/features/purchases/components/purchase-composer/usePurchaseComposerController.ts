@@ -5,6 +5,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUnsavedChangesGuard } from '@/shared/hooks/use-unsaved-changes-guard';
 import type { AppSettings, Branch, Category, Location, Product, Supplier } from '@/types/domain';
 import { buildPurchaseDraftItem, upsertPurchaseDraftItem, type PurchaseDraftItem } from '@/features/purchases/contracts';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { useCreatePurchaseMutation } from '@/features/purchases/hooks/useCreatePurchaseMutation';
 import { checkDuplicateBill, type DuplicateBillCheckResult, type PurchaseRepricingInsights } from '@/features/purchases/api/purchases.api';
 import { purchaseHeaderSchema, purchaseLineSchema, type PurchaseHeaderInput, type PurchaseHeaderOutput } from '@/features/purchases/schemas/purchase.schema';
@@ -188,7 +190,14 @@ export function usePurchaseComposerController({
     if (!headerForm.getValues('locationId') && locations[0]?.id) headerForm.setValue('locationId', String(locations[0].id));
   }, [branches, headerForm, locations]);
 
-  const subTotal = useMemo(() => items.reduce((sum, item) => sum + item.total, 0), [items]);
+  // INV-FE2-FRONTEND-BOOK-DIGITS: every computed purchase total rounds
+  // at the tenant's book digits (the global system currency is synced
+  // from tenant settings at boot in app/providers.tsx). The draft items
+  // are priced in the tenant base currency, so the tenant digits apply.
+  // NOTE: bookDigits must stay above subTotal — the memos below read it
+  // on first render, and a `const` declared later would throw in TDZ.
+  const bookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
+  const subTotal = useMemo(() => roundMoneyValue(items.reduce((sum, item) => sum + item.total, 0), bookDigits), [items, bookDigits]);
   const discount = Math.max(0, Number(headerForm.watch('discount') || 0));
   // INV-LANDED-COST-ALLOCATION: freight is added to the invoice total
   // after tax (never taxed), matching the backend posting.
@@ -198,14 +207,14 @@ export function usePurchaseComposerController({
   const taxAmount = useMemo(() => {
     const taxable = Math.max(0, subTotal - discount);
     if (!taxRate) return 0;
-    if (pricesIncludeTax) return Number((taxable - taxable / (1 + taxRate / 100)).toFixed(2));
-    return Number((taxable * (taxRate / 100)).toFixed(2));
-  }, [discount, pricesIncludeTax, subTotal, taxRate]);
+    if (pricesIncludeTax) return roundMoneyValue(taxable - taxable / (1 + taxRate / 100), bookDigits);
+    return roundMoneyValue(taxable * (taxRate / 100), bookDigits);
+  }, [bookDigits, discount, pricesIncludeTax, subTotal, taxRate]);
   const total = useMemo(() => {
     const taxable = Math.max(0, subTotal - discount);
-    const withoutFreight = pricesIncludeTax ? Number(taxable.toFixed(2)) : Number((taxable + taxAmount).toFixed(2));
-    return Number((withoutFreight + freight).toFixed(2));
-  }, [discount, freight, pricesIncludeTax, subTotal, taxAmount]);
+    const withoutFreight = pricesIncludeTax ? roundMoneyValue(taxable, bookDigits) : roundMoneyValue(taxable + taxAmount, bookDigits);
+    return roundMoneyValue(withoutFreight + freight, bookDigits);
+  }, [bookDigits, discount, freight, pricesIncludeTax, subTotal, taxAmount]);
 
   const [duplicateCheckResult, setDuplicateCheckResult] = useState<DuplicateBillCheckResult | null>(null);
   const [confirmedDuplicateWarning, setConfirmedDuplicateWarning] = useState<boolean>(false);
@@ -291,7 +300,7 @@ export function usePurchaseComposerController({
       const parsed = purchaseLineSchema.parse({ productId: lineProductId, qty: lineQty, cost: lineCost });
       const product = products.find((entry) => String(entry.id) === String(parsed.productId));
       if (!product) throw new Error('الصنف المختار غير موجود');
-      setItems((current) => upsertPurchaseDraftItem(current, buildPurchaseDraftItem(product, parsed.qty, parsed.cost)));
+      setItems((current) => upsertPurchaseDraftItem(current, buildPurchaseDraftItem(product, parsed.qty, parsed.cost, bookDigits), bookDigits));
       resetLineDraft(setLineProductId, setLineQty, setLineCost, setLineError, setProductSearch);
       mutation.reset();
     } catch (error) {

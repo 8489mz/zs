@@ -11,6 +11,7 @@ import { PlusCircleIcon } from '@/shared/components/icons/AppIcons';
 import { toast } from '@/shared/components/system-alert';
 import { useQuery } from '@tanstack/react-query';
 import { http } from '@/lib/http';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 export function ChinaQuotationsTab() {
   const { data: quotations = [], refetch } = useQuotationsQuery();
@@ -59,13 +60,15 @@ export function ChinaQuotationsTab() {
   const effectiveEstimateRate = Number(exchangeRate || 50);
   const effectiveEstimateCustoms = Number(customsDutyEgp || 5);
   const estimateUsesAssumedInputs = !exchangeRate || !customsDutyEgp;
-  const estimatedUnitLandedCostEgp = Number(
-    (
-      (Number(totalForeign || 0) + Number(shippingCostUsd || 0)) *
+  // INV-FE2-FRONTEND-BOOK-DIGITS: the estimate is POSTed as
+  // estimatedUnitCostEgp — an EGP-denominated amount, so it rounds at
+  // EGP digits (2), the denomination of the amount.
+  const estimatedUnitLandedCostEgp = roundMoneyValue(
+    (Number(totalForeign || 0) + Number(shippingCostUsd || 0)) *
       effectiveEstimateRate *
       (1 + effectiveEstimateCustoms / 100) *
-      1.14
-    ).toFixed(2)
+      1.14,
+    currencyMoneyDigits('EGP'),
   );
 
   const handleCreateQuotation = async (e: React.FormEvent) => {

@@ -39,19 +39,34 @@ describe('storefront variant photos (display-only)', () => {
 
   it('builds the cart line with the picked variant photo, falling back to the product photo', () => {
     const product = productWithVariants();
-    const red = buildCartProduct(product, 'أحمر');
+    const red = buildCartProduct(product, 'أحمر', 2);
     expect(red?.imageUrl).toBe('/api/storefront/media/2/bbb');
     expect(red?.variantName).toBe('أحمر');
-    const blue = buildCartProduct(product, 'أزرق');
+    const blue = buildCartProduct(product, 'أزرق', 2);
     expect(blue?.imageUrl).toBe('/api/storefront/media/1/aaa');
-    const plain = buildCartProduct(product, null);
+    const plain = buildCartProduct(product, null, 2);
     expect(plain?.imageUrl).toBe('/api/storefront/media/1/aaa');
     expect(plain?.variantName).toBeNull();
   });
 
   it('never lets a photo affect the priced amount', () => {
     const variants = getProductVariants(productWithVariants());
-    expect(resolveVariantUnitPrice(500, variants[0]!)).toBe(550);
-    expect(resolveVariantUnitPrice(500, variants[1]!)).toBe(520);
+    expect(resolveVariantUnitPrice(500, variants[0]!, 2)).toBe(550);
+    expect(resolveVariantUnitPrice(500, variants[1]!, 2)).toBe(520);
+  });
+
+  // INV-FE2-FRONTEND-BOOK-DIGITS: a variant price with a third decimal
+  // keeps it at 3 book digits and rounds to 2dp at 2 digits. The old
+  // code hardcoded Math.round(price*100)/100, so a 3-decimal store's
+  // variant price (550.125) was silently cut to 550.13 in the cart.
+  it('rounds variant prices at the passed book digits (3dp keeps the third decimal)', () => {
+    const product = productWithVariants();
+    (product.variants as unknown[])[0] = { name: 'أحمر', price: 550.125 };
+    const kwd = buildCartProduct(product, 'أحمر', 3);
+    expect(kwd?.price).toBe(550.125);
+    const egp = buildCartProduct(product, 'أحمر', 2);
+    expect(egp?.price).toBe(550.13);
+    expect(resolveVariantUnitPrice(550.125, getProductVariants(product)[0]!, 3)).toBe(550.125);
+    expect(resolveVariantUnitPrice(550.125, getProductVariants(product)[0]!, 2)).toBe(550.13);
   });
 });

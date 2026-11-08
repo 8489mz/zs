@@ -1,5 +1,6 @@
 import type { Product, Purchase } from '@/types/domain';
 import type { PurchaseHeaderOutput } from '@/features/purchases/schemas/purchase.schema';
+import { roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
 
 export interface PurchaseDraftItem {
   productId: string;
@@ -13,7 +14,12 @@ export interface PurchaseDraftItem {
   categoryId?: string | number;
 }
 
-export function buildPurchaseDraftItem(product: Product, qty: number, cost: number): PurchaseDraftItem {
+/* INV-FE2-FRONTEND-BOOK-DIGITS (U6 FE2): computed purchase money rounds
+ * at the tenant's book digits through the canonical helper, not hardcoded
+ * 2dp. `digits` is a required trailing param (FE1 convention): the caller
+ * resolves it from the document currency, falling back to the tenant base
+ * currency — a pure function must never guess it. */
+export function buildPurchaseDraftItem(product: Product, qty: number, cost: number, digits: MoneyDigits): PurchaseDraftItem {
   const purchaseUnit = product.units?.find((unit) => unit.isPurchaseUnit) || product.units?.[0];
   const safeQty = Number(qty || 0);
   const safeCost = Number(cost || 0);
@@ -22,13 +28,13 @@ export function buildPurchaseDraftItem(product: Product, qty: number, cost: numb
     name: product.name,
     qty: safeQty,
     cost: safeCost,
-    total: Number((safeQty * safeCost).toFixed(2)),
+    total: roundMoneyValue(safeQty * safeCost, digits),
     unitName: purchaseUnit?.name || 'وحدة',
     unitMultiplier: Number(purchaseUnit?.multiplier || 1)
   };
 }
 
-export function upsertPurchaseDraftItem(items: PurchaseDraftItem[], incoming: PurchaseDraftItem) {
+export function upsertPurchaseDraftItem(items: PurchaseDraftItem[], incoming: PurchaseDraftItem, digits: MoneyDigits) {
   const index = items.findIndex((item) => item.productId === incoming.productId && item.unitName === incoming.unitName);
   if (index === -1) return [...items, incoming];
   const next = items.slice();
@@ -37,7 +43,7 @@ export function upsertPurchaseDraftItem(items: PurchaseDraftItem[], incoming: Pu
     ...next[index],
     qty: mergedQty,
     cost: incoming.cost,
-    total: Number((mergedQty * incoming.cost).toFixed(2))
+    total: roundMoneyValue(mergedQty * incoming.cost, digits)
   };
   return next;
 }
@@ -52,14 +58,19 @@ export function buildPurchasePayload(
   taxRate: number,
   pricesIncludeTax: boolean,
   attachments?: any[],
+  digits: MoneyDigits,
 ) {
-  const discount = Number(Math.max(0, Number(values.discount || 0)).toFixed(2));
+  // The discount/freight are in the document currency; the caller passes
+  // its digits (document currency, tenant base as fallback). The param is
+  // required on purpose: an optional digits with a silent 2 default would
+  // reintroduce the KWD bug for any caller that forgets the argument.
+  const discount = roundMoneyValue(Math.max(0, Number(values.discount || 0)), digits);
   // INV-LANDED-COST-ALLOCATION: freight entered on the invoice is sent as
   // landedCosts (single 'freight' cost, vendor = the invoice supplier,
   // which the backend requires) so it is allocated to item cost at
   // posting. No freight means no landedCosts key at all — the backend
   // then posts exactly as before.
-  const freight = Number(Math.max(0, Number(values.freight || 0)).toFixed(2));
+  const freight = roundMoneyValue(Math.max(0, Number(values.freight || 0)), digits);
   return {
     supplierId: Number(values.supplierId),
     ...(freight > 0
@@ -120,8 +131,8 @@ export function buildPurchaseUpdatePayload(purchase: Purchase, payload: {
   editReason: string;
   managerPin: string;
   items: Array<{ productId: string; qty: number; cost: number; unitName: string; unitMultiplier: number; locationId?: string | number; categoryId?: string | number }>;
-}) {
-  const discount = Number(Math.max(0, payload.discount || 0).toFixed(2));
+}, digits: MoneyDigits) {
+  const discount = roundMoneyValue(Math.max(0, payload.discount || 0), digits);
   const taxRate = Number(purchase.taxRate || 0);
 
   return {

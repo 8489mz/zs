@@ -5,6 +5,8 @@ import { storefrontApi } from '../api/storefront.api';
 import { tableCallsApi } from '@/shared/api/table-calls.api';
 import { buildCartProduct } from '../lib/storefront-variant-pricing';
 import { calculateCartSubtotal } from '../lib/storefront-cart-pricing';
+import { currencyMoneyDigits } from '@/shared/utils/money';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
 import {
   localizeCategory,
   localizeProduct,
@@ -42,6 +44,11 @@ export function usePublicStorefront(cleanSlug: string) {
     // inherits the global false (providers.tsx), so focusing the window never
     // re-fetches the full catalog or silently re-prices the cart mid-checkout.
   });
+
+  // INV-FE2-FRONTEND-BOOK-DIGITS: variant/cart prices round at the
+  // store currency's digits (infoQuery carries the store's currency
+  // CODE; tenant base as fallback while info loads).
+  const bookDigits = currencyMoneyDigits(infoQuery.data?.currency || getGlobalSystemCurrency());
 
   const catalogQuery = useQuery({
     queryKey: ['storefront-catalog', cleanSlug],
@@ -194,7 +201,7 @@ export function usePublicStorefront(cleanSlug: string) {
         .map((item) => {
           // Re-price from the fresh catalog, keeping the chosen variant (SF-4). A variant that no
           // longer exists drops the line rather than silently falling back to the base price.
-          const fresh = buildCartProduct(activeProductMap.get(String(item.product.id))!, item.product.variantName);
+          const fresh = buildCartProduct(activeProductMap.get(String(item.product.id))!, item.product.variantName, bookDigits);
           if (!fresh) {
             changed = true;
             return null;
@@ -209,7 +216,7 @@ export function usePublicStorefront(cleanSlug: string) {
 
       return changed ? updated : prev;
     });
-  }, [catalogQuery.data?.products]);
+  }, [catalogQuery.data?.products, bookDigits]);
 
   const cartMap = useMemo(() => {
     const map = new Map<number, number>();
@@ -272,7 +279,7 @@ export function usePublicStorefront(cleanSlug: string) {
     const newCart: CartItem[] = [];
     for (const item of order.items) {
       const prod = rawProds.find((p) => Number(p.id) === Number(item.productId));
-      const cartProduct = prod ? buildCartProduct(prod, (item as { variantName?: string | null }).variantName) : null;
+      const cartProduct = prod ? buildCartProduct(prod, (item as { variantName?: string | null }).variantName, bookDigits) : null;
       if (cartProduct) {
         newCart.push({ product: cartProduct, quantity: item.quantity });
       } else {
@@ -293,7 +300,7 @@ export function usePublicStorefront(cleanSlug: string) {
     setCartItems(newCart);
     setEditingOrderNumber(order.orderNumber);
     setIsCartOpen(true);
-  }, [catalogQuery.data?.products]);
+  }, [catalogQuery.data?.products, bookDigits]);
 
   /**
    * "اطلب تاني": refills the cart from a past order at TODAY's catalog prices (the server re-prices at
@@ -307,7 +314,7 @@ export function usePublicStorefront(cleanSlug: string) {
     for (const item of order.items) {
       const prod = rawProds.find((p) => Number(p.id) === Number(item.productId));
       const cartProduct = prod && prod.inStock !== false && prod.price > 0
-        ? buildCartProduct(prod, (item as { variantName?: string | null }).variantName)
+        ? buildCartProduct(prod, (item as { variantName?: string | null }).variantName, bookDigits)
         : null;
       if (cartProduct) {
         newCart.push({ product: cartProduct, quantity: Math.max(1, Number(item.quantity) || 1) });
@@ -321,7 +328,7 @@ export function usePublicStorefront(cleanSlug: string) {
       setIsCartOpen(true);
     }
     return { added: newCart.length, skipped };
-  }, [catalogQuery.data?.products]);
+  }, [catalogQuery.data?.products, bookDigits]);
 
   const rawProducts: StorefrontProduct[] = useMemo(() => {
     const base: StorefrontProduct[] = catalogQuery.data?.products || [];
@@ -456,8 +463,8 @@ export function usePublicStorefront(cleanSlug: string) {
     [cartItems]
   );
   const cartTotals = useMemo(
-    () => calculateCartSubtotal(cartItems),
-    [cartItems]
+    () => calculateCartSubtotal(cartItems, infoQuery.data?.currency),
+    [cartItems, infoQuery.data?.currency]
   );
   const cartSubtotal = cartTotals.subtotal;
   const cartOriginalSubtotal = cartTotals.originalSubtotal;

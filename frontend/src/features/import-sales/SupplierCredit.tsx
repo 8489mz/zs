@@ -9,6 +9,7 @@ import { Button } from '@/shared/ui/button';
 import { formatCurrency } from '@/lib/format';
 import { useSuppliersQuery } from '@/shared/hooks/use-catalog-queries';
 import { useTreasury } from '@/shared/hooks/use-treasury';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import {
   useRecordForeignTransferMutation,
   useForeignTransfersQuery,
@@ -144,7 +145,10 @@ export default function SupplierCredit() {
     const remaining = Math.max(0, Number(selectedPi.total_amount_foreign || 0) - Number(selectedPi.paid_amount_foreign || 0));
     const rate = Number(selectedPi.exchange_rate_contract) || 50;
     setAmountForeign(String(remaining));
-    setAmountEgp(String(Number((remaining * rate).toFixed(2))));
+    // INV-FE2-FRONTEND-BOOK-DIGITS: the EGP amount is POSTed as the
+    // treasury withdrawal, so it rounds at EGP digits (2) — the
+    // denomination of the amount.
+    setAmountEgp(String(roundMoneyValue(remaining * rate, currencyMoneyDigits('EGP'))));
   };
 
   const handleSubmit = (e: React.FormEvent) => {

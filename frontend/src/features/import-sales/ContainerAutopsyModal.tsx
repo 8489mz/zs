@@ -9,6 +9,7 @@ import {
 } from '@/shared/components/icons/AppIcons';
 import { downloadExcelFile } from '@/lib/browser';
 import { toast } from '@/shared/components/system-alert';
+import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 interface ContainerAutopsyModalProps {
   isOpen: boolean;
@@ -41,8 +42,11 @@ export function ContainerAutopsyModal({ isOpen, onClose, shipmentId }: Container
         item.quantity,
         item.received_quantity ?? item.quantity,
         Number(item.factory_unit_price_usd || 0),
-        Number((Number(item.landed_cost_egp) / Number((item.received_quantity ?? item.quantity) || 1)).toFixed(2)),
-        Number(Number(item.landed_cost_egp || 0).toFixed(2)),
+        // INV-FE2-FRONTEND-BOOK-DIGITS: unit/total landed cost are EGP
+        // money exported to a file — they round at EGP digits (2), the
+        // denomination of the amount, not at a hardcoded 2dp.
+        roundMoneyValue(Number(item.landed_cost_egp) / Number((item.received_quantity ?? item.quantity) || 1), currencyMoneyDigits('EGP')),
+        roundMoneyValue(Number(item.landed_cost_egp || 0), currencyMoneyDigits('EGP')),
       ]);
 
       rows.push(['---', '---', '---', '---', '---', '---']);
