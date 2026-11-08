@@ -194,8 +194,8 @@ export function paginateRows(rows: SaleRow[], query: Record<string, unknown>, de
   };
 }
 
-export function summarizeSales(rows: SaleRow[], digits: MoneyDigits = 2): SaleListSummary {
-  const today = new Date().toISOString().slice(0, 10);
+export function summarizeSales(rows: SaleRow[], digits: MoneyDigits = 2, todayKey?: string): SaleListSummary {
+  const today = todayKey ?? new Date().toISOString().slice(0, 10);
   const todayRows = rows.filter((row) => String(row.date || '').slice(0, 10) === today);
   const cashiers = [...new Set(
     rows

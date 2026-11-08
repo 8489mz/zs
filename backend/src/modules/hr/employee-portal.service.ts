@@ -508,7 +508,7 @@ export class EmployeePortalService {
    * Get employee dashboard overview
    */
   async getDashboard(employeeId: number, tenantId: string) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayTenantDate(await getTenantTimezone(this.db, tenantId));
     const currentMonth = today.slice(0, 7); // YYYY-MM
 
     // 1. Employee Profile
@@ -661,7 +661,7 @@ export class EmployeePortalService {
    * Get attendance log for month
    */
   async getAttendance(employeeId: number, tenantId: string, month?: string) {
-    const targetMonth = month || new Date().toISOString().slice(0, 7);
+    const targetMonth = month || todayTenantDate(await getTenantTimezone(this.db, tenantId)).slice(0, 7);
     const records = await this.anyDb
       .selectFrom('hr_attendance_records')
       .selectAll()

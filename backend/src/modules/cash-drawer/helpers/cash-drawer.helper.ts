@@ -1,6 +1,7 @@
 import { AppError } from '../../../common/errors/app-error';
 import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 
 type CashDrawerQuery = Record<string, unknown>;
 type CashDrawerMappedRow = Record<string, unknown>;
@@ -151,15 +152,18 @@ export function paginateCashDrawerRows<T>(rows: T[], query: CashDrawerQuery): { 
   };
 }
 
-function cashDrawerDateKey(value: unknown): string {
-  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.toISOString().slice(0, 10) : '';
+function cashDrawerDateKey(value: unknown, timeZone?: string): string {
+  if (value instanceof Date) {
+    if (!Number.isFinite(value.getTime())) return '';
+    return timeZone ? todayTenantDate(timeZone, value) : value.toISOString().slice(0, 10);
+  }
   return String(value || '').slice(0, 10);
 }
 
-export function filterCashDrawerRows(rows: CashDrawerMappedRow[], query: CashDrawerQuery): CashDrawerMappedRow[] {
+export function filterCashDrawerRows(rows: CashDrawerMappedRow[], query: CashDrawerQuery, todayKey?: string, timeZone?: string): CashDrawerMappedRow[] {
   const search = String(query.search || '').trim().toLowerCase();
   const filter = String(query.filter || (query as any).status || 'all').trim().toLowerCase();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayKey ?? (timeZone ? todayTenantDate(timeZone) : new Date().toISOString().slice(0, 10));
   return rows.filter((row) => {
     const status = String(row.status || '');
     const variance = Number(row.variance || 0);
@@ -167,7 +171,7 @@ export function filterCashDrawerRows(rows: CashDrawerMappedRow[], query: CashDra
     if (filter === 'closed' && status !== 'closed') return false;
     if (filter === 'pending_review' && status !== 'pending_review') return false;
     if (filter === 'variance' && Math.abs(variance) <= 0) return false;
-    if (filter === 'today' && cashDrawerDateKey(row.openedAt || row.createdAt) !== today) return false;
+    if (filter === 'today' && cashDrawerDateKey(row.openedAt || row.createdAt, timeZone) !== today) return false;
     if (!search) return true;
     return [row.docNo, row.status, row.branchName, row.locationName, row.openedByName, row.openingNote, row.closeNote].some((value) => String(value || '').toLowerCase().includes(search));
   });

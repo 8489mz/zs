@@ -13,6 +13,7 @@ import {
   calculateSettlementAbsorption,
 } from '../engines/eos-calculation.engine';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { requireStoredHrMoney } from '../engines/hr-payroll-run.engine';
 import { daysInCalendarMonth } from '../engines/hourly-attendance-pay.engine';
 
@@ -365,6 +366,7 @@ export class EndOfServiceService {
    */
   async createSettlement(dto: CreateSettlementDto, auth: AuthContext) {
     const { tenantId } = requireTenantScope(auth);
+    const settlementDate = dto.settlementDate || (await resolveBusinessDateKey(this.db, tenantId, new Date()));
 
     // Calculate full breakdown
     const calc = await this.calculateSettlementPreview(dto, auth);
@@ -390,7 +392,7 @@ export class EndOfServiceService {
           tenant_id: tenantId,
           settlement_no: tempNo,
           employee_id: dto.employeeId,
-          settlement_date: dto.settlementDate || new Date().toISOString().slice(0, 10),
+          settlement_date: settlementDate,
           hire_date: calc.employee.hireDate,
           termination_date: dto.terminationDate,
           contract_type: dto.contractType || 'unspecified',

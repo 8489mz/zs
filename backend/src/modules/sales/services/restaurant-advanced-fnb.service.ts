@@ -5,6 +5,7 @@ import { Kysely, sql } from 'kysely';
 import { AppError } from '../../../common/errors/app-error';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 
 export interface TenantScope {
   tenantId: string;
@@ -196,6 +197,7 @@ export class RestaurantAdvancedFnbService {
 
   async calculateAndSaveTipPool(scope: TenantScope, dto: CalculateTipPoolDto) {
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
+    const shiftDate = dto.shiftDate || (await resolveBusinessDateKey(this.db, scope.tenantId, new Date()));
     const cashTips = Number(dto.totalCashTips || 0);
     const cardTips = Number(dto.totalCardTips || 0);
     const totalTips = roundMoney(cashTips + cardTips, moneyDigits);
@@ -263,7 +265,7 @@ export class RestaurantAdvancedFnbService {
       .values({
         tenant_id: scope.tenantId,
         branch_id: scope.branchId || null,
-        shift_date: dto.shiftDate || new Date().toISOString().slice(0, 10),
+        shift_date: shiftDate,
         shift_name: dto.shiftName || 'وردية العمل',
         total_cash_tips: cashTips,
         total_card_tips: cardTips,
@@ -459,7 +461,7 @@ export class RestaurantAdvancedFnbService {
   }
 
   async generateDailyPrepSheet(scope: TenantScope, dto: GeneratePrepSheetDto) {
-    const prepDate = dto.prepDate || new Date().toISOString().slice(0, 10);
+    const prepDate = dto.prepDate || (await resolveBusinessDateKey(this.db, scope.tenantId, new Date()));
 
     // Create header
     const [sheet] = await this.db

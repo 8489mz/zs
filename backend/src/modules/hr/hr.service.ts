@@ -3555,7 +3555,7 @@ export class HrService {
       baseSalaryByEmployeeId.set(employeeId, Number(row.base_salary || 0));
     }
     const fromDate = String(run.start_date_text || `${periodMonth}-01`);
-    const toDate = String(run.end_date_text || new Date(Number(periodMonth.split('-')[0]), Number(periodMonth.split('-')[1]), 0).toISOString().slice(0, 10));
+    const toDate = String(run.end_date_text || new Date(Date.UTC(Number(periodMonth.split('-')[0]), Number(periodMonth.split('-')[1]), 0)).toISOString().slice(0, 10));
     const range = { from: fromDate, to: toDate };
     // An approved/paid payslip is an immutable financial snapshot. Its presentation
     // must not be recomputed using current (possibly newer) tax, leave or attendance
@@ -4581,8 +4581,7 @@ export class HrService {
         'HR_PAYROLL_EXPORT_BANK_DETAILS_MISSING', 400,
       );
     }
-    const now = new Date();
-    const createDate = now.toISOString().slice(0, 10);
+    const createDate = todayTenantDate(await getTenantTimezone(this.db, auth.tenantId || ''));
     const periodMonth = clean(run.period_month) || createDate.slice(0, 7);
     const startDate = clean(run.start_date_text) || `${periodMonth}-01`;
     const endDate = clean(run.end_date_text) || `${periodMonth}-28`;

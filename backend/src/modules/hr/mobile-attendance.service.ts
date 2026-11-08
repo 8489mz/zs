@@ -243,7 +243,7 @@ export class MobileAttendanceService {
     };
 
     // Check today's punch status
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayTenantDate(await getTenantTimezone(this.db, employeeUser.tenantId));
     const record = await this.anyDb
       .selectFrom('hr_attendance_records')
       .selectAll()

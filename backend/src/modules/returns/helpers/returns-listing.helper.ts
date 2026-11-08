@@ -1,4 +1,5 @@
 import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 
 export type ReturnListRow = {
   id: string;
@@ -24,8 +25,11 @@ export type ReturnListRow = {
   items?: Array<{ productId: string; productName: string; qty: number; total: number; }>;
 };
 
-function returnDateKey(value: unknown): string {
-  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.toISOString().slice(0, 10) : '';
+function returnDateKey(value: unknown, timeZone?: string): string {
+  if (value instanceof Date) {
+    if (!Number.isFinite(value.getTime())) return '';
+    return timeZone ? todayTenantDate(timeZone, value) : value.toISOString().slice(0, 10);
+  }
   return String(value || '').slice(0, 10);
 }
 
@@ -85,7 +89,7 @@ export function mapReturnRows(rows: Array<Record<string, unknown>>): ReturnListR
   return result;
 }
 
-export function filterReturnRows(rows: ReturnListRow[], query: Record<string, unknown>, today: string): ReturnListRow[] {
+export function filterReturnRows(rows: ReturnListRow[], query: Record<string, unknown>, today: string, timeZone?: string): ReturnListRow[] {
   const q = String(query.search || query.q || '').trim().toLowerCase();
   const filter = String(query.filter || query.view || 'all').trim();
   const employee = String(query.employee || query.employeeName || '').trim().toLowerCase();
@@ -93,20 +97,20 @@ export function filterReturnRows(rows: ReturnListRow[], query: Record<string, un
   return rows.filter((row) => {
     if (filter === 'sales' && row.returnType !== 'sale') return false;
     if (filter === 'purchase' && row.returnType !== 'purchase') return false;
-    if (filter === 'today' && returnDateKey(row.createdAt) !== today) return false;
+    if (filter === 'today' && returnDateKey(row.createdAt, timeZone) !== today) return false;
     if (employee && !String(row.createdByName || '').toLowerCase().includes(employee)) return false;
     if (!q) return true;
     return [row.docNo, row.productName, row.note, row.returnType, row.createdByName].some((value) => String(value || '').toLowerCase().includes(q));
   });
 }
 
-export function summarizeReturnRows(rows: ReturnListRow[], today: string, moneyDigits: MoneyDigits = 2) {
+export function summarizeReturnRows(rows: ReturnListRow[], today: string, moneyDigits: MoneyDigits = 2, timeZone?: string) {
   return {
     totalItems: new Set(rows.map((row) => row.id)).size,
     totalAmount: roundMoney(rows.reduce((sum, row) => sum + Number(row.total || 0), 0), moneyDigits),
     salesReturns: new Set(rows.filter((row) => row.returnType === 'sale').map((row) => row.id)).size,
     purchaseReturns: new Set(rows.filter((row) => row.returnType === 'purchase').map((row) => row.id)).size,
-    todayCount: new Set(rows.filter((row) => returnDateKey(row.createdAt) === today).map((row) => row.id)).size,
+    todayCount: new Set(rows.filter((row) => returnDateKey(row.createdAt, timeZone) === today).map((row) => row.id)).size,
     latestDocNo: rows[0]?.docNo || '',
   };
 }

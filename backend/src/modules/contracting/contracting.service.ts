@@ -12,9 +12,10 @@ import {
   getDailyDocumentPrefix,
   formatDailyDocumentNumber,
 } from '../../common/utils/document-number.util';
-import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
+import { getTenantTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
+import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
 import {
   CreateProjectDto,
   UpdateProjectDto,
@@ -1244,7 +1245,7 @@ export class ContractingService {
         subcontractId: subcontractId ? String(subcontractId) : undefined,
         projectId: String(projectId),
         unrecoveredAdvanceBalance: unrecoveredAdvanceBefore,
-        invoiceDate: dto.periodEnd || new Date().toISOString().split('T')[0],
+        invoiceDate: dto.periodEnd || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
         activeGuarantees,
       });
       if (interlocking.isBlocked) {
@@ -1393,7 +1394,7 @@ export class ContractingService {
             subcontractId: String(invoice.subcontract_id),
             projectId: String(invoice.project_id),
             unrecoveredAdvanceBalance: unrecBalance,
-            invoiceDate: invoice.period_end ? (typeof invoice.period_end === 'string' ? invoice.period_end : new Date(invoice.period_end).toISOString().split('T')[0]) : new Date().toISOString().split('T')[0],
+            invoiceDate: invoice.period_end ? (typeof invoice.period_end === 'string' ? invoice.period_end : new Date(invoice.period_end).toISOString().split('T')[0]) : (await resolveBusinessDateKey(this.db, tenantId, new Date())),
             activeGuarantees,
           });
           if (interlocking.isBlocked) {
@@ -1469,6 +1470,11 @@ export class ContractingService {
 
   async postInvoiceJournalEntry(auth: AuthContext, invoiceId: string) {
     const { tenantId, accountId } = requireTenantScope(auth);
+    // Retention release falls due one calendar year after the tenant-local business day (not a UTC-sliced instant + 365d).
+    const releaseBaseDay = await resolveBusinessDateKey(this.db, tenantId, new Date());
+    const releaseDueDate = new Date(`${releaseBaseDay}T00:00:00.000Z`);
+    releaseDueDate.setUTCDate(releaseDueDate.getUTCDate() + 365);
+    const releaseDueKey = releaseDueDate.toISOString().slice(0, 10);
     return this.db.transaction().execute(async (trx) => {
       await lockAccountingPeriod(trx, tenantId);
       const invoice = await trx
@@ -1740,7 +1746,7 @@ export class ContractingService {
               retention_percent: ledgerRetentionPercent,
               ipc_invoice_id: invoice.id,
               guarantee_certificate_ref: invoice.ipc_number,
-              release_due_date: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().split('T')[0],
+              release_due_date: releaseDueKey,
               status: 'held',
               notes: `استقطاع ضمان حسن تنفيذ لمقاول الباطن من مستخلص ${invoice.ipc_number}`,
             }).execute();
@@ -1834,7 +1840,7 @@ export class ContractingService {
               retention_percent: Number(project.retention_percent ?? 5),
               ipc_invoice_id: invoice.id,
               guarantee_certificate_ref: invoice.ipc_number,
-              release_due_date: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().split('T')[0],
+              release_due_date: releaseDueKey,
               status: 'held',
               notes: `استقطاع ضمان حسن تنفيذ على المالك من مستخلص ${invoice.ipc_number}`,
             }).execute();
@@ -2196,7 +2202,7 @@ export class ContractingService {
           question: dto.question.trim(),
           assigned_to: dto.assignedTo || null,
           status: 'open',
-          date_requested: new Date().toISOString().split('T')[0],
+          date_requested: await resolveBusinessDateKey(this.db, tenantId, new Date()),
           date_required: dto.dateRequired || null,
           notes: dto.notes || null,
         })
@@ -2379,7 +2385,7 @@ export class ContractingService {
       taskCode = candidate;
     }
 
-    const startStr = (dto.startDate || (dto as any).start_date || new Date().toISOString().slice(0, 10)).trim();
+    const startStr = (dto.startDate || (dto as any).start_date || (await resolveBusinessDateKey(this.db, tenantId, new Date()))).trim();
     let endStr = (dto.endDate || (dto as any).end_date || '').trim();
 
     let durationDays = Number(dto.durationDays || (dto as any).duration_days || 0);
@@ -2531,9 +2537,9 @@ export class ContractingService {
     const scheduleStart = new Date(Math.min(...allStarts));
     const scheduleEnd = new Date(Math.max(...allEnds));
 
-    // Snap to the start of the week (Saturday, matching the region's work week) for stable buckets.
+    // Calendar-day buckets in UTC (stored task dates are DATEs); local-midnight math shifts the labels on a non-UTC host.
     const weekStart = new Date(scheduleStart);
-    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setUTCHours(0, 0, 0, 0);
 
     const weeks: { weekStart: string; weekEnd: string; totalManpower: number; totalEquipment: number; taskCount: number }[] = [];
     const cursor = new Date(weekStart);
@@ -2542,7 +2548,7 @@ export class ContractingService {
     while (cursor.getTime() <= scheduleEnd.getTime() && guard < maxWeeks) {
       const wStart = new Date(cursor);
       const wEnd = new Date(cursor);
-      wEnd.setDate(wEnd.getDate() + 6);
+      wEnd.setUTCDate(wEnd.getUTCDate() + 6);
 
       let totalManpower = 0;
       let totalEquipment = 0;
@@ -2565,7 +2571,7 @@ export class ContractingService {
         taskCount,
       });
 
-      cursor.setDate(cursor.getDate() + 7);
+      cursor.setUTCDate(cursor.getUTCDate() + 7);
       guard += 1;
     }
 
@@ -2628,7 +2634,7 @@ export class ContractingService {
       quantity: qty,
       unit_cost: unitCost,
       total_cost: totalCost,
-      issue_date: dto.issueDate || new Date().toISOString().split('T')[0],
+      issue_date: dto.issueDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
       recipient_name: dto.recipientName || null,
       status: 'issued',
       notes: dto.notes || null,
@@ -3715,7 +3721,7 @@ export class ContractingService {
       return_number: suppliedNumber || tempNumber,
       supplier_id: dto.supplierId ? Number(dto.supplierId) : null,
       supplier_name: dto.supplierName.trim(),
-      return_date: dto.returnDate || new Date().toISOString().split('T')[0],
+      return_date: dto.returnDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
       total_amount: totalAmount,
       status: 'posted',
       credit_note_number: `CN-${suppliedNumber || tempNumber}`,
@@ -3803,7 +3809,7 @@ export class ContractingService {
         project_id: projectId as any,
         worker_name: dto.workerName.trim(),
         trade: dto.trade,
-        work_date: dto.workDate || new Date().toISOString().split('T')[0],
+        work_date: dto.workDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
         shift_type: dto.shiftType || 'full_day',
         hours_worked: hours,
         split_project_id: dto.splitProjectId ? (dto.splitProjectId as any) : null,
@@ -3891,7 +3897,7 @@ export class ContractingService {
       amount_given: Number(dto.amountGiven),
       amount_settled: 0,
       remaining_balance: Number(dto.amountGiven),
-      issue_date: dto.issueDate || new Date().toISOString().split('T')[0],
+      issue_date: dto.issueDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
       settlement_due_date: dto.settlementDueDate || null,
       status: 'active',
       receipts_json: '[]',
@@ -5011,7 +5017,7 @@ export class ContractingService {
         expense_category: dto.expenseCategory,
         title: dto.title.trim(),
         amount: Number(dto.amount || 0),
-        expense_date: dto.expenseDate || new Date().toISOString().split('T')[0],
+        expense_date: dto.expenseDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
         paid_to: dto.paidTo.trim(),
         payment_method: dto.paymentMethod || 'petty_cash',
         reference_receipt: dto.referenceReceipt || null,
@@ -5131,7 +5137,7 @@ export class ContractingService {
         boq_item_id: dto.boqItemId ? (dto.boqItemId as any) : null,
         worker_name: dto.workerName.trim(),
         worker_role: dto.workerRole || 'technician',
-        attendance_date: dto.attendanceDate || new Date().toISOString().split('T')[0],
+        attendance_date: dto.attendanceDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
         status: dto.status || 'present',
         daily_base_wage: baseWage,
         overtime_hours: otHours,
@@ -5389,7 +5395,7 @@ export class ContractingService {
         equipment_id: equipmentId as any,
         from_project_id: equip.current_project_id,
         to_project_id: dto.toProjectId as any,
-        transfer_date: dto.transferDate || new Date().toISOString().split('T')[0],
+        transfer_date: dto.transferDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
         dispatched_by: dto.dispatchedBy.trim(),
         received_by: dto.receivedBy.trim(),
         condition_on_dispatch: dto.conditionOnDispatch || 'good',
@@ -5544,7 +5550,7 @@ export class ContractingService {
         .set({
           unit: dto.unit || existing.unit,
           last_unit_price: Number(dto.lastUnitPrice),
-          last_purchase_date: dto.lastPurchaseDate || new Date().toISOString().split('T')[0],
+          last_purchase_date: dto.lastPurchaseDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
           last_project_id: dto.lastProjectId ? (dto.lastProjectId as any) : existing.last_project_id,
           governorate: dto.governorate || existing.governorate,
           payment_terms: dto.paymentTerms || existing.payment_terms,
@@ -5569,7 +5575,7 @@ export class ContractingService {
           material_name: dto.materialName.trim(),
           unit: dto.unit || 'item',
           last_unit_price: Number(dto.lastUnitPrice),
-          last_purchase_date: dto.lastPurchaseDate || new Date().toISOString().split('T')[0],
+          last_purchase_date: dto.lastPurchaseDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
           last_project_id: dto.lastProjectId ? (dto.lastProjectId as any) : null,
           governorate: dto.governorate || 'القاهرة',
           payment_terms: dto.paymentTerms || 'cash',
@@ -6053,7 +6059,7 @@ export class ContractingService {
       .updateTable('contracting_snag_items')
       .set({
         status: dto.status,
-        rectified_date: dto.status !== 'open' ? (dto.rectifiedDate || new Date().toISOString().split('T')[0]) : null,
+        rectified_date: dto.status !== 'open' ? (dto.rectifiedDate || (await resolveBusinessDateKey(this.db, tenantId, new Date()))) : null,
         verified_by: dto.status === 'verified_closed' ? (dto.verifiedBy || auth.username || 'المهندس المشرف') : null,
         notes: dto.notes || undefined,
         updated_at: new Date(),
@@ -6700,7 +6706,7 @@ export class ContractingService {
     // Calculate Planned Value from Schedule Tasks scheduled till today
     const tasks = await this.getScheduleTasks(auth, projectId);
     let pv = 0;
-    const today = new Date().toISOString().split('T')[0];
+    const today = await resolveBusinessDateKey(this.db, tenantId, new Date());
     if (tasks.length > 0) {
       const scheduledTasks = tasks.filter((t) => (t.start_date || '') <= today);
       pv = (scheduledTasks.length / tasks.length) * bac;
@@ -6989,6 +6995,7 @@ export class ContractingService {
 
   async getSubcontractorLedger(auth: AuthContext, subcontractorId: number, query?: { projectId?: string; fromDate?: string; toDate?: string }) {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
     const sub = await this.getSubcontractorById(auth, subcontractorId);
 
     let subcontractsQuery = (this.db as any)
@@ -7052,7 +7059,7 @@ export class ContractingService {
     for (const inv of invoices) {
       const net = Number(inv.net_payable || 0);
       rawTx.push({
-        date: inv.period_end || (inv.created_at instanceof Date ? inv.created_at.toISOString().split('T')[0] : String(inv.created_at).split('T')[0]),
+        date: inv.period_end || (inv.created_at instanceof Date ? todayTenantDate(businessTz, inv.created_at) : todayTenantDate(businessTz, new Date(String(inv.created_at)))),
         type: 'invoice',
         refNumber: inv.ipc_number,
         description: `مستخلص أعمال وتشوينات رقم ${inv.ipc_number}`,
@@ -7082,7 +7089,7 @@ export class ContractingService {
           ? 'سلفة تشغيلية'
           : 'دفعة جارية تحت الحساب';
       rawTx.push({
-        date: p.payment_date || (p.created_at instanceof Date ? p.created_at.toISOString().split('T')[0] : String(p.created_at).split('T')[0]),
+        date: p.payment_date || (p.created_at instanceof Date ? todayTenantDate(businessTz, p.created_at) : todayTenantDate(businessTz, new Date(String(p.created_at)))),
         type: 'payment',
         refNumber: p.payment_number,
         description: `سند صرف ${catLabel} (${methodLabel})${p.reference_number ? ` - م: ${p.reference_number}` : ''}${p.notes ? ` - ${p.notes}` : ''}`,
@@ -7100,7 +7107,7 @@ export class ContractingService {
     for (const bc of backcharges) {
       const amt = Number(bc.amount || 0);
       rawTx.push({
-        date: bc.occurrence_date || (bc.created_at instanceof Date ? bc.created_at.toISOString().split('T')[0] : String(bc.created_at).split('T')[0]),
+        date: bc.occurrence_date || (bc.created_at instanceof Date ? todayTenantDate(businessTz, bc.created_at) : todayTenantDate(businessTz, new Date(String(bc.created_at)))),
         type: 'backcharge',
         refNumber: bc.voucher_number,
         description: `خصم تشوينات/مصروفات موقع (${bc.description || 'خصم مباشر'})`,
@@ -7263,7 +7270,7 @@ export class ContractingService {
           projectId: dto.projectId ? String(dto.projectId) : (subcontract?.project_id ? String(subcontract.project_id) : ''),
           requestedDisbursementAmount: amount,
           priorAdvanceDisbursedAgainstGuarantee: priorAdvanceDisbursed,
-          disbursementDate: dto.paymentDate || new Date().toISOString().split('T')[0],
+          disbursementDate: dto.paymentDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
           activeGuarantees,
         });
       }
@@ -7283,7 +7290,7 @@ export class ContractingService {
           subcontract_id: dto.subcontractId ? String(dto.subcontractId) : null,
           invoice_id: dto.invoiceId ? String(dto.invoiceId) : null,
           payment_number: `SPAY-TMP-${randomUUID()}`,
-          payment_date: dto.paymentDate || new Date().toISOString().split('T')[0],
+          payment_date: dto.paymentDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
           amount,
           payment_method: dto.paymentMethod || 'bank_transfer',
           payment_category: finalPaymentCategory,
@@ -7428,7 +7435,7 @@ export class ContractingService {
     }
 
     const rows = await q.orderBy('g.expiry_date', 'asc').execute();
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = await resolveBusinessDateKey(this.db, tenantId, new Date());
 
     return rows.map((r: any) => {
       const expDate = new Date(r.expiry_date);
@@ -7637,7 +7644,7 @@ export class ContractingService {
   async getGuaranteeExpiryAlerts(auth: AuthContext, projectId?: string) {
     const { tenantId } = requireTenantScope(auth);
     const rawGuarantees = await this.getGuaranteesRaw(tenantId, { projectId });
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = await resolveBusinessDateKey(this.db, tenantId, new Date());
     return evaluateGuaranteeExpiryAlerts(rawGuarantees, todayStr);
   }
 
@@ -7831,7 +7838,7 @@ export class ContractingService {
         gross_amount: gross,
         recovered_amount: recovered,
         net_amount: net,
-        expense_date: dto.expenseDate || new Date().toISOString().split('T')[0],
+        expense_date: dto.expenseDate || (await resolveBusinessDateKey(this.db, tenantId, new Date())),
         voucher_ref: dto.voucherRef || null,
         mobilization_expense_id: dto.mobilizationExpenseId ? (dto.mobilizationExpenseId as any) : null,
       })
@@ -8229,7 +8236,7 @@ export class ContractingService {
           rev_code: dto.revCode || 'A',
           file_ref: dto.fileRef || null,
           review_status: 'for_review',
-          issued_date: new Date().toISOString().slice(0, 10),
+          issued_date: todayTenantDate(businessTz),
           created_by: auth.userId ? Number(auth.userId) : null,
         } as any)
         .returningAll()
@@ -8251,6 +8258,7 @@ export class ContractingService {
 
   async addDocumentRevision(auth: AuthContext, documentId: string, dto: CreateContractingDocumentRevisionDto) {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
 
     return this.db.transaction().execute(async (trx) => {
       const doc = await trx
@@ -8281,7 +8289,7 @@ export class ContractingService {
           rev_code: dto.revCode,
           file_ref: dto.fileRef || null,
           review_status: 'for_review',
-          issued_date: new Date().toISOString().slice(0, 10),
+          issued_date: todayTenantDate(businessTz),
           notes: dto.notes || null,
           created_by: auth.userId ? Number(auth.userId) : null,
         } as any)
@@ -8301,6 +8309,7 @@ export class ContractingService {
 
   async updateDocumentRevisionStatus(auth: AuthContext, revisionId: string, dto: UpdateContractingDocumentRevisionStatusDto) {
     const { tenantId } = requireTenantScope(auth);
+    const businessTz = await getTenantTimezone(this.db, tenantId);
 
     return this.db.transaction().execute(async (trx) => {
       const revision = await trx
@@ -8317,7 +8326,7 @@ export class ContractingService {
         .set({
           review_status: dto.reviewStatus,
           reviewed_by: dto.reviewedBy || null,
-          review_date: new Date().toISOString().slice(0, 10),
+          review_date: todayTenantDate(businessTz),
           review_comments: dto.reviewComments || null,
           updated_at: new Date(),
         })
@@ -8475,7 +8484,7 @@ export class ContractingService {
           project_id: projectId,
           minute_number: tempNumber,
           meeting_type: dto.meetingType || 'site_progress',
-          meeting_date: dto.meetingDate || new Date().toISOString().slice(0, 10),
+          meeting_date: dto.meetingDate || todayTenantDate(businessTz),
           location: dto.location || null,
           attendees: JSON.stringify(dto.attendees || []),
           agenda: dto.agenda || null,

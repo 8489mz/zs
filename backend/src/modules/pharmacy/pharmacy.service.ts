@@ -17,6 +17,7 @@ import { postPharmacyCashReceipt } from './pharmacy-accounting';
 import { AppError } from '../../common/errors/app-error';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits, toMinorUnits, fromMinorUnits, roundMoney } from '../accounting/engines/money-minor-units.engine';
+import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
 import { UpsertDrugDto } from './dto/upsert-drug.dto';
 import { UpsertBatchDto } from './dto/upsert-batch.dto';
 import { UpsertPrescriptionDto } from './dto/upsert-prescription.dto';
@@ -29,7 +30,7 @@ INV-PHARMACY-BATCH-FROZEN: batch identity helpers. An expiry is a
 real calendar date (YYYY-MM-DD) or a real month (YYYY-MM, the form
 the acceptance suite already creates with). The past check mirrors
 the FEFO sale gate's boundary exactly (month form against the
-current month, full date against today, both UTC), so a batch the
+current month, full date against the tenant-local today), so a batch the
 gate would skip can never be (re-)activated as saleable here.
 */
 function pharmacyExpiryText(value: unknown): string | null {
@@ -47,8 +48,7 @@ function isValidPharmacyExpiry(value: string): boolean {
   return day >= 1 && day <= new Date(Number(match[1]), Number(match[2]), 0).getDate();
 }
 
-function isPastPharmacyExpiry(normalized: string): boolean {
-  const todayIso = new Date().toISOString().slice(0, 10);
+function isPastPharmacyExpiry(normalized: string, todayIso: string): boolean {
   return normalized.length === 7 ? normalized < todayIso.slice(0, 7) : normalized < todayIso;
 }
 
@@ -681,6 +681,7 @@ export class PharmacyService {
 
   async upsertBatch(auth: AuthContext, dto: UpsertBatchDto) {
     const scope = requireTenantScope(auth);
+    const todayKey = await resolveBusinessDateKey(this.db, scope.tenantId, new Date());
     // Batch quantities and WAC are physical and monetary ledgers, NOT metadata.
     // Stock intake must go through the canonical purchase/GRN transaction.
     return this.db.transaction().execute(async (trx) => {
@@ -715,7 +716,7 @@ export class PharmacyService {
             throw new AppError('Invalid pharmacy batch status', 'PHARMACY_BATCH_STATUS_INVALID', 422);
           }
           const oldExpiry = pharmacyExpiryText(old.expiry_date);
-          if (dto.status === 'active' && (old.status === 'expired' || (oldExpiry != null && isPastPharmacyExpiry(oldExpiry)))) {
+          if (dto.status === 'active' && (old.status === 'expired' || (oldExpiry != null && isPastPharmacyExpiry(oldExpiry, todayKey)))) {
             throw new AppError('An expired batch cannot be returned to active status', 'PHARMACY_BATCH_REACTIVATION_FORBIDDEN', 409);
           }
         }
@@ -756,7 +757,7 @@ export class PharmacyService {
       if (!isValidPharmacyExpiry(createExpiry)) {
         throw new AppError('Batch expiry date must be a real calendar date (YYYY-MM-DD) or month (YYYY-MM)', 'PHARMACY_BATCH_EXPIRY_INVALID', 422);
       }
-      if (createStatus === 'active' && isPastPharmacyExpiry(createExpiry)) {
+      if (createStatus === 'active' && isPastPharmacyExpiry(createExpiry, todayKey)) {
         throw new AppError('An expired batch cannot be created with active status', 'PHARMACY_BATCH_EXPIRY_INVALID', 422);
       }
       return trx.insertInto('pharmacy_batches').values({
@@ -803,7 +804,7 @@ export class PharmacyService {
     }
 
     if (params.excludeExpired) {
-      const todayYm = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const todayYm = (await resolveBusinessDateKey(this.db, scope.tenantId, new Date())).slice(0, 7); // YYYY-MM, tenant-local
       query = query.where('expiry_date', '>=', todayYm);
     }
 
