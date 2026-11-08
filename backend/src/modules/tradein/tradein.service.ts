@@ -16,6 +16,32 @@ import { AccountingPostingService } from '../accounting/accounting-posting.servi
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits, toMinorUnits } from '../accounting/engines/money-minor-units.engine';
 
+/**
+ * Pure link check for an exchange trade-in (D-M3-P10-1): the linked
+ * sale must exist (the service query is tenant-scoped, so a null row
+ * also covers a sale of another tenant — never leak its existence)
+ * and must be a posted sale. A draft or cancelled sale settles
+ * nothing, so it cannot absorb a trade-in credit.
+ */
+export function assertExchangeSaleLink(
+  sale: { status: string } | null | undefined,
+): void {
+  if (!sale) {
+    throw new AppError(
+      'Linked sale for the exchange does not exist',
+      'TRADEIN_EXCHANGE_SALE_NOT_FOUND',
+      404,
+    );
+  }
+  if (sale.status !== 'posted') {
+    throw new AppError(
+      'Linked sale for the exchange is not a posted sale',
+      'TRADEIN_EXCHANGE_SALE_NOT_POSTED',
+      422,
+    );
+  }
+}
+
 @Injectable()
 export class TradeInService {
   constructor(
@@ -175,10 +201,31 @@ export class TradeInService {
       } catch {
         throw new AppError('Trade-in cost exceeds tenant currency minor-unit precision', 'TRADEIN_CURRENCY_PRECISION_INVALID', 422);
       }
-      if (agreed > 0 && ((payload.transactionType ?? 'cash_purchase') !== 'cash_purchase' ||
-          !['cash', 'bank'].includes(payload.paymentMethod ?? 'cash') ||
+      const transactionType = payload.transactionType ?? 'cash_purchase';
+      if (transactionType !== 'cash_purchase' && transactionType !== 'exchange_trade_in') {
+        throw new AppError('Trade-in transaction type is not supported', 'TRADEIN_TYPE_UNSUPPORTED', 422);
+      }
+      const isExchange = transactionType === 'exchange_trade_in';
+      if (isExchange) {
+        // An exchange settles the used device against the new-device
+        // sale it links: the sale must exist, belong to this tenant
+        // and be posted, or the link is meaningless.
+        if (!payload.saleId || !Number.isSafeInteger(payload.saleId) || payload.saleId <= 0) {
+          throw new AppError('An exchange trade-in must link the new-device sale', 'TRADEIN_EXCHANGE_SALE_REQUIRED', 422);
+        }
+        const linkedSale = await trx.selectFrom('sales')
+          .select(['id', 'status'])
+          .where('tenant_id', '=', scope.tenantId)
+          .where('id', '=', payload.saleId)
+          .forUpdate()
+          .executeTakeFirst();
+        assertExchangeSaleLink(linkedSale);
+        if (agreed > 0 && !payload.createdProductId && !payload.autoAddToInventory) {
+          throw new AppError('A valued exchange must stock the used device (link a product or auto-add it to inventory)', 'TRADEIN_EXCHANGE_PRODUCT_REQUIRED', 422);
+        }
+      } else if (agreed > 0 && (!['cash', 'bank'].includes(payload.paymentMethod ?? 'cash') ||
           (!payload.createdProductId && !payload.autoAddToInventory))) {
-        throw new AppError('Paid trade-in requires a physical receipt and immediate cash or default-bank payout; exchange/deferred settlements require their own flow', 'TRADEIN_POSTING_UNSUPPORTED', 422);
+        throw new AppError('Paid trade-in requires a physical receipt and immediate cash or default-bank payout', 'TRADEIN_POSTING_UNSUPPORTED', 422);
       }
       const conditionState = payload.deviceConditionState || 'used';
       const stateSuffixMap: Record<string, string> = {
@@ -214,10 +261,13 @@ export class TradeInService {
           imei_2: payload.imei2?.trim() ?? null,
           device_condition_notes: formattedConditionNotes,
           agreed_purchase_price: payload.agreedPurchasePrice,
-          transaction_type: payload.transactionType ?? 'cash_purchase',
+          transaction_type: transactionType,
           created_product_id: payload.createdProductId ?? null,
           sale_id: payload.saleId ?? null,
-          payment_method: payload.paymentMethod ?? 'cash',
+          // An exchange pays nothing out: 'exchange' records that no
+          // payout rail applies, so no reader mistakes the row for a
+          // cash purchase awaiting its treasury leg.
+          payment_method: isExchange ? 'exchange' : (payload.paymentMethod ?? 'cash'),
           signature_data: payload.signatureData ?? null,
           branch_id: payload.branchId ?? null,
           location_id: payload.locationId ?? null,
@@ -330,7 +380,9 @@ export class TradeInService {
 
       // A real immediate payout (cash or configured bank) and its inventory
       // valuation journal are atomic. Never book an unsupported payment rail.
-      if (agreed > 0) {
+      // An exchange pays nothing out — the used-device value settles
+      // against the linked sale, not through the treasury.
+      if (agreed > 0 && !isExchange) {
         await trx
           .insertInto('treasury_transactions')
           .values({
@@ -350,7 +402,22 @@ export class TradeInService {
       }
 
       // Receipt, cash transfer and posted journal commit or roll back as one unit.
-      await this.accountingPosting.postTradeInCashPurchase(trx, txnId, auth);
+      // Exchange (D-M3-P10-1): NO journal and NO cash payout here. The
+      // used device is stocked above, but its value is NOT yet credited
+      // against the linked sale: the sale flow derives what a customer
+      // still owes from sales.paid_amount / store_credit_used / returns
+      // only, so a GL-only Dr 1140 / Cr 1130 credit would leave the
+      // sale showing the full amount still collectible (double
+      // collection), and the remaining-receivable cap has no clean
+      // source inside this package (PaymentAllocationService's
+      // reversal sum is private). Posting that journal would be a
+      // wrong journal; the missing journal is the recorded open
+      // question for the follow-up package (see the package report),
+      // which must teach the allocation readers to absorb the credit
+      // before any journal is posted.
+      if (!isExchange) {
+        await this.accountingPosting.postTradeInCashPurchase(trx, txnId, auth);
+      }
       return { id: String(txnId), docNo };
     });
 

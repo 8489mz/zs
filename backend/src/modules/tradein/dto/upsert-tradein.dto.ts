@@ -1,4 +1,4 @@
-import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min, ValidateIf } from 'class-validator';
 
 export class UpsertTradeInDto {
   @IsNotEmpty({ message: 'اسم البائع / العميل مطلوب' })
@@ -44,6 +44,7 @@ export class UpsertTradeInDto {
 
   @IsOptional()
   @IsString()
+  @IsIn(['cash_purchase', 'exchange_trade_in'], { message: 'نوع عملية الاستبدال غير مدعوم' })
   transactionType?: 'cash_purchase' | 'exchange_trade_in';
 
   @IsOptional()
@@ -58,8 +59,11 @@ export class UpsertTradeInDto {
   @IsNumber()
   resalePrice?: number;
 
-  @IsOptional()
+  // An exchange settles against the new-device sale, so it must name
+  // it; a cash purchase keeps sale_id optional (client-supplied link).
+  @ValidateIf((o: UpsertTradeInDto) => o.transactionType === 'exchange_trade_in')
   @IsNumber()
+  @Min(1, { message: 'ربط الاستبدال بفاتورة بيع مطلوب' })
   saleId?: number;
 
   @IsOptional()
