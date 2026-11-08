@@ -15,7 +15,9 @@ export interface MarketplaceWebhookEventTable {
   dedup_key: string;
   payload: ColumnType<unknown, unknown | undefined, unknown | undefined>;
   payload_hash: string;
-  status: string; // pending, unresolved
+  signature: string | null;
+  raw_body: string | null;
+  status: string; // pending, unresolved, processed, rejected
   received_at: ColumnType<Date, string | undefined, never>;
   processed_at: Date | null;
 }

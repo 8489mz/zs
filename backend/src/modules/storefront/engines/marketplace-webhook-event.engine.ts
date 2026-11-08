@@ -21,7 +21,7 @@
  * guard nothing. Mirrors the WH-1 precedent in
  * `webhook-order-resolution.engine.ts`.
  */
-import { createHash } from 'crypto';
+import { createHash, createHmac, timingSafeEqual } from 'crypto';
 
 /** Stable JSON: object keys sorted recursively, so key order in the
  *  delivered payload cannot change the dedup key. Mirrors JSON.stringify
@@ -157,4 +157,39 @@ export function matchMarketplaceTenant(
   const matched = candidates.filter((c) => c.sellerIds.some((id) => wanted.has(id)));
   if (matched.length !== 1) return null;
   return matched[0].tenantId;
+}
+
+/**
+ * Signature verification for inbound marketplace webhooks
+ * (INV-MARKETPLACE-OUTBOX-RELAY). Mirrors the WhatsApp precedent
+ * (MT-21 / whatsapp-gateway.service.ts `handleVerifiedInboundWebhook`):
+ * the signature is `sha256=<hex HMAC-SHA256 of the RAW request body>`
+ * under the shared `x-zs-webhook-signature` header, keyed by the
+ * tenant's per-marketplace `webhookSecret` (minimum 32 characters).
+ *
+ * Fail-closed, always: a missing/short secret, a missing or
+ * malformed signature, or a non-buffer/non-string body all return
+ * false -- never true. Comparison is timing-safe; the HMAC runs over
+ * the raw bytes, never over a re-serialised payload (re-serialising
+ * would verify a different byte string than the gateway signed).
+ * This function never throws on bad input: the caller maps `false`
+ * to the stored outcome (rejected when forgery is proven, left
+ * pending when verification is impossible).
+ */
+export const MARKETPLACE_WEBHOOK_SIGNATURE_HEADER = 'x-zs-webhook-signature';
+
+export function verifyMarketplaceWebhookSignature(args: {
+  secret: unknown;
+  signature: unknown;
+  rawBody: unknown;
+}): boolean {
+  if (typeof args.secret !== 'string' || args.secret.length < 32) return false;
+  if (typeof args.signature !== 'string' || !args.signature) return false;
+  if (!Buffer.isBuffer(args.rawBody) && typeof args.rawBody !== 'string') return false;
+  const supplied = args.signature.replace(/^sha256=/i, '');
+  if (!/^[a-f0-9]{64}$/i.test(supplied)) return false;
+  const expected = createHmac('sha256', args.secret).update(args.rawBody).digest();
+  const actual = Buffer.from(supplied, 'hex');
+  if (expected.length !== actual.length) return false;
+  return timingSafeEqual(expected, actual);
 }

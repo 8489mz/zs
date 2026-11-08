@@ -11,6 +11,7 @@ import { CreateProductReviewDto } from './dto/create-product-review.dto';
 import { RecordAbandonedCartDto } from './dto/abandoned-cart.dto';
 import { CustomerOrderLookupDto } from './dto/customer-order-lookup.dto';
 import { ORDER_ACCESS_TOKEN_HEADER } from './engines/online-order-access.engine';
+import { MARKETPLACE_WEBHOOK_SIGNATURE_HEADER } from './engines/marketplace-webhook-event.engine';
 
 @Controller('api/storefront')
 export class StorefrontPublicController {
@@ -314,15 +315,23 @@ export class StorefrontPublicController {
    * session (the previous route lived behind SessionAuthGuard, so no
    * external gateway could ever reach it). The handler ONLY persists
    * the raw payload and returns 200 after the insert -- it creates no
-   * order, moves no stock, and runs no repricing. Acting on these
-   * payloads needs signature verification first (separate package).
+   * order, moves no stock, and runs no repricing. The signature
+   * header and the exact raw request bytes are captured alongside the
+   * payload (INV-MARKETPLACE-OUTBOX-RELAY) so the relay can verify
+   * HMAC-SHA256 over the bytes the gateway actually signed; nothing
+   * is verified or processed at receipt time.
    */
   @Post('webhooks/marketplace/:marketplace')
   handleMarketplaceWebhook(
     @Param('marketplace') marketplace: SupportedMarketplace,
     @Body() body: any,
+    @Headers() headers: Record<string, any>,
+    @Req() req: RequestWithAuth,
   ) {
-    return this.marketplaceSyncService.receiveMarketplaceWebhook(marketplace, body);
+    return this.marketplaceSyncService.receiveMarketplaceWebhook(marketplace, body, undefined, {
+      signature: headers?.[MARKETPLACE_WEBHOOK_SIGNATURE_HEADER],
+      rawBody: (req as any)?.rawBody,
+    });
   }
 
   /**

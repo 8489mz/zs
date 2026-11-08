@@ -59,6 +59,7 @@ import {
   matchMarketplaceTenant,
 } from '../../src/modules/storefront/engines/marketplace-webhook-event.engine';
 import { up as webhookEventsUp } from '../../src/database/migrations/2040000000275_marketplace_webhook_events';
+import { up as signatureCaptureUp } from '../../src/database/migrations/2040000000298_marketplace_webhook_signature_capture';
 
 const TENANT_AMZ = 't-amz';
 const TENANT_AMZ2 = 't-amz2';
@@ -87,6 +88,10 @@ async function main(): Promise<void> {
     `);
     await webhookEventsUp(db as never);
     await webhookEventsUp(db as never);
+    // INV-MARKETPLACE-OUTBOX-RELAY (0298): receipt now stores the
+    // signature header and raw body columns; the fixture must run the
+    // migration or every receive call fails on missing columns.
+    await signatureCaptureUp(db as never);
 
     const auditStub = { log: async () => undefined };
     const service = new MarketplaceSyncService(db, auditStub as never, {} as never);

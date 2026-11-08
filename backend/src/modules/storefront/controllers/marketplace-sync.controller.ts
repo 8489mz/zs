@@ -209,6 +209,23 @@ export class MarketplaceSyncController {
     });
   }
 
+  /**
+   * Relay stored inbound marketplace webhook events to their handlers
+   * (INV-MARKETPLACE-OUTBOX-RELAY). Staff-triggered and guarded by
+   * the controller's storefront/settings permission: each stored
+   * event is verified (HMAC-SHA256 over the captured raw bytes
+   * against the tenant's per-marketplace webhookSecret) before its
+   * handler runs, and a signature failure rejects the event loudly
+   * instead of processing it. A relay failure leaves the event
+   * stored and retryable, never silently dropped.
+   */
+  @Post('webhooks/relay')
+  relayWebhookEvents(@Query('limit') limit: string | undefined, @Req() req: RequestWithAuth) {
+    return this.syncService.relayMarketplaceWebhookEvents(req.authContext!, {
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
   @Get('onboarding-check')
   getSellerOnboardingCheck(@Req() req: RequestWithAuth) {
     return this.syncService.getSellerOnboardingCheck(req.authContext!);

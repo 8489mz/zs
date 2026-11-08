@@ -1,9 +1,10 @@
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { lockAccountingPeriod } from '../../accounting/accounting-period-lock';
 import { BadRequestException, Inject, Injectable, Logger, NotFoundException, Optional, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { Kysely, sql } from '../../../database/kysely';
+import { Kysely, sql, type Transaction } from '../../../database/kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -16,6 +17,8 @@ import {
   extractMarketplaceEventIdentity,
   marketplaceWebhookDedupKey,
   matchMarketplaceTenant,
+  verifyMarketplaceWebhookSignature,
+  MARKETPLACE_WEBHOOK_SIGNATURE_HEADER,
   type MarketplaceTenantCandidate,
 } from '../engines/marketplace-webhook-event.engine';
 
@@ -25,6 +28,10 @@ export interface AmazonConfig {
   refreshToken?: string;
   clientId?: string;
   clientSecret?: string;
+  /** Shared webhook secret (minimum 32 characters) for HMAC-SHA256
+   *  verification of inbound marketplace webhooks
+   *  (INV-MARKETPLACE-OUTBOX-RELAY). Never returned in clear. */
+  webhookSecret?: string;
   marketplaceId: 'eg' | 'sa' | 'ae';
   autoSyncStock: boolean;
   autoPullOrders: boolean;
@@ -36,6 +43,8 @@ export interface NoonConfig {
   merchantId: string;
   apiKey?: string;
   appSecret?: string;
+  /** Shared webhook secret, see AmazonConfig.webhookSecret. */
+  webhookSecret?: string;
   marketplace: 'eg' | 'sa' | 'ae';
   autoSyncStock: boolean;
   autoPullOrders: boolean;
@@ -46,6 +55,8 @@ export interface JumiaConfig {
   enabled: boolean;
   sellerEmail: string;
   apiKey?: string;
+  /** Shared webhook secret, see AmazonConfig.webhookSecret. */
+  webhookSecret?: string;
   marketplace: 'eg' | 'ng' | 'ke';
   autoSyncStock: boolean;
   autoPullOrders: boolean;
@@ -57,6 +68,8 @@ export interface TrendyolConfig {
   supplierId: string;
   apiKey?: string;
   apiSecret?: string;
+  /** Shared webhook secret, see AmazonConfig.webhookSecret. */
+  webhookSecret?: string;
   autoSyncStock: boolean;
   autoPullOrders: boolean;
   fulfillmentType: 'trendyol_cargo' | 'merchant_cargo';
@@ -357,10 +370,76 @@ export interface GtinExemptionApplication {
   submissionInstructions: string[];
 }
 
+/** A stored marketplace webhook event as the relay hands it to a handler. */
+export interface StoredMarketplaceWebhookEvent {
+  id: number;
+  tenantId: string;
+  marketplace: SupportedMarketplace;
+  eventType: string;
+  eventKey: string;
+  status: string;
+  receivedAt: Date;
+  payload: unknown;
+}
+
+/**
+ * A relay handler for one marketplace event type. Runs inside the
+ * relay's per-event transaction on its handle: any throw rolls the
+ * event back to 'pending' (retryable) and is reported as `failed`,
+ * never as processed. Return `handled: false` to leave the event
+ * pending without failing it.
+ */
+export type MarketplaceWebhookHandler = (
+  trx: Transaction<Database>,
+  event: StoredMarketplaceWebhookEvent,
+) => Promise<{ handled: boolean; actionTaken: string }>;
+
+export type MarketplaceWebhookRelayOutcome =
+  | 'processed'
+  | 'rejected'
+  | 'skipped-no-handler'
+  | 'unverifiable'
+  | 'failed'
+  | 'skipped';
+
+export interface MarketplaceWebhookRelayResult {
+  claimed: number;
+  processed: number;
+  rejected: number;
+  skippedNoHandler: number;
+  unverifiable: number;
+  failed: number;
+  results: Array<{
+    eventId: number;
+    outcome: MarketplaceWebhookRelayOutcome;
+    actionTaken?: string;
+    error?: string;
+  }>;
+}
+
+/** Signature material captured at receipt (INV-MARKETPLACE-OUTBOX-RELAY). */
+export interface MarketplaceWebhookReceiptOpts {
+  /** Value of the `x-zs-webhook-signature` header as received, if any. */
+  signature?: string;
+  /** Exact request bytes, when the transport captured them. */
+  rawBody?: Buffer | string;
+}
+
 @Injectable()
 export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MarketplaceSyncService.name);
   private repricingTimer?: NodeJS.Timeout;
+  /**
+   * Webhook handler registry (INV-MARKETPLACE-OUTBOX-RELAY). The relay
+   * dispatches verified stored events to the handler registered for
+   * their event type; no handler is registered in production yet --
+   * there is no order-ingestion handler to register (see the relay
+   * docs below), so verified events wait as 'pending' until one
+   * exists. Handlers run inside the relay's per-event transaction on
+   * its handle: a handler throw rolls the event back to 'pending'
+   * (retryable) instead of marking it processed.
+   */
+  private readonly marketplaceWebhookHandlers = new Map<string, MarketplaceWebhookHandler>();
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -459,6 +538,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
       refreshToken: rawAmazon.refreshToken ? '••••••••' : '',
       clientId: rawAmazon.clientId || '',
       clientSecret: rawAmazon.clientSecret ? '••••••••' : '',
+      webhookSecret: rawAmazon.webhookSecret ? '••••••••' : '',
       marketplaceId: rawAmazon.marketplaceId || 'eg',
       autoSyncStock: rawAmazon.autoSyncStock ?? true,
       autoPullOrders: rawAmazon.autoPullOrders ?? true,
@@ -470,6 +550,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
       merchantId: rawNoon.merchantId || '',
       apiKey: rawNoon.apiKey ? '••••••••' : '',
       appSecret: rawNoon.appSecret ? '••••••••' : '',
+      webhookSecret: rawNoon.webhookSecret ? '••••••••' : '',
       marketplace: rawNoon.marketplace || 'eg',
       autoSyncStock: rawNoon.autoSyncStock ?? true,
       autoPullOrders: rawNoon.autoPullOrders ?? true,
@@ -480,6 +561,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
       enabled: Boolean(rawJumia.enabled),
       sellerEmail: rawJumia.sellerEmail || '',
       apiKey: rawJumia.apiKey ? '••••••••' : '',
+      webhookSecret: rawJumia.webhookSecret ? '••••••••' : '',
       marketplace: rawJumia.marketplace || 'eg',
       autoSyncStock: rawJumia.autoSyncStock ?? true,
       autoPullOrders: rawJumia.autoPullOrders ?? true,
@@ -491,6 +573,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
       supplierId: rawTrendyol.supplierId || '',
       apiKey: rawTrendyol.apiKey ? '••••••••' : '',
       apiSecret: rawTrendyol.apiSecret ? '••••••••' : '',
+      webhookSecret: rawTrendyol.webhookSecret ? '••••••••' : '',
       autoSyncStock: rawTrendyol.autoSyncStock ?? true,
       autoPullOrders: rawTrendyol.autoPullOrders ?? true,
       fulfillmentType: rawTrendyol.fulfillmentType || 'merchant_cargo',
@@ -515,6 +598,8 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
       const merged: Partial<AmazonConfig> = { ...existing, ...payload.amazon };
       if (payload.amazon.refreshToken === '••••••••') merged.refreshToken = existing.refreshToken;
       if (payload.amazon.clientSecret === '••••••••') merged.clientSecret = existing.clientSecret;
+      if (payload.amazon.webhookSecret === '••••••••') merged.webhookSecret = existing.webhookSecret;
+      if (payload.amazon.webhookSecret && payload.amazon.webhookSecret !== '••••••••' && payload.amazon.webhookSecret.length < 32) throw new BadRequestException('Webhook secret must be at least 32 characters');
       await this.setSettingJson('marketplace_amazon_config', scope.tenantId, merged);
     }
 
@@ -523,6 +608,8 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
       const merged: Partial<NoonConfig> = { ...existing, ...payload.noon };
       if (payload.noon.apiKey === '••••••••') merged.apiKey = existing.apiKey;
       if (payload.noon.appSecret === '••••••••') merged.appSecret = existing.appSecret;
+      if (payload.noon.webhookSecret === '••••••••') merged.webhookSecret = existing.webhookSecret;
+      if (payload.noon.webhookSecret && payload.noon.webhookSecret !== '••••••••' && payload.noon.webhookSecret.length < 32) throw new BadRequestException('Webhook secret must be at least 32 characters');
       await this.setSettingJson('marketplace_noon_config', scope.tenantId, merged);
     }
 
@@ -530,6 +617,8 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
       const existing = await this.getSettingJson<Partial<JumiaConfig>>('marketplace_jumia_config', scope.tenantId, {});
       const merged: Partial<JumiaConfig> = { ...existing, ...payload.jumia };
       if (payload.jumia.apiKey === '••••••••') merged.apiKey = existing.apiKey;
+      if (payload.jumia.webhookSecret === '••••••••') merged.webhookSecret = existing.webhookSecret;
+      if (payload.jumia.webhookSecret && payload.jumia.webhookSecret !== '••••••••' && payload.jumia.webhookSecret.length < 32) throw new BadRequestException('Webhook secret must be at least 32 characters');
       await this.setSettingJson('marketplace_jumia_config', scope.tenantId, merged);
     }
 
@@ -538,6 +627,8 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
       const merged: Partial<TrendyolConfig> = { ...existing, ...payload.trendyol };
       if (payload.trendyol.apiKey === '••••••••') merged.apiKey = existing.apiKey;
       if (payload.trendyol.apiSecret === '••••••••') merged.apiSecret = existing.apiSecret;
+      if (payload.trendyol.webhookSecret === '••••••••') merged.webhookSecret = existing.webhookSecret;
+      if (payload.trendyol.webhookSecret && payload.trendyol.webhookSecret !== '••••••••' && payload.trendyol.webhookSecret.length < 32) throw new BadRequestException('Webhook secret must be at least 32 characters');
       await this.setSettingJson('marketplace_trendyol_config', scope.tenantId, merged);
     }
 
@@ -1232,7 +1323,10 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     const mappings = await this.getMappings(auth);
     const filtered = mappings.filter((m) => m.marketplace === marketplace);
 
-    const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    // The export filename carries the tenant-local business day
+    // (INV-BUSINESS-DATE-TENANT-LOCAL): a UTC slice of "now" names the
+    // wrong day around local midnight.
+    const timestamp = (await resolveBusinessDateKey(this.db, scope.tenantId, new Date())).replace(/-/g, '');
 
     if (marketplace === 'amazon') {
       const headers = [
@@ -1551,7 +1645,12 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     const referralId = await this.resolveAccountingAccount(scope.tenantId, input.referralFeesAccountId, ['6400', '6700'], 'expense');
     const fulfillmentId = await this.resolveAccountingAccount(scope.tenantId, input.fulfillmentFeesAccountId, ['6400', '6700'], 'expense');
     const revenueId = await this.resolveAccountingAccount(scope.tenantId, input.salesAccountId, ['4100', '4200'], 'revenue');
-    const entryDate = new Date(input.periodEnd || new Date().toISOString().slice(0, 10));
+    // The settlement entry date is the tenant-local business day: a
+    // supplied periodEnd passes through untouched (it is already a
+    // calendar day), while the "today" fallback resolves in the
+    // tenant's timezone instead of the UTC slice of "now"
+    // (INV-BUSINESS-DATE-TENANT-LOCAL).
+    const entryDate = new Date(await resolveBusinessDateKey(this.db, scope.tenantId, input.periodEnd || new Date()));
     if (!Number.isFinite(entryDate.getTime())) throw new BadRequestException('تاريخ الكشف غير صالح.');
     const result = await this.db.transaction().execute(async trx => {
       await lockAccountingPeriod(trx, scope.tenantId);
@@ -2174,10 +2273,14 @@ ${itemsSummaryAr}
    * propagates, so the gateway gets a 5xx and retries -- a 200 is never
    * returned for an event that was not durably stored.
    *
-   * Rows are inert evidence: NOTHING processes them yet (no order, no
-   * stock movement, no repricing). Acting on unsigned public webhook
-   * payloads needs signature verification first -- a separate package.
-   * Staff review the stored rows through listMarketplaceWebhookEvents.
+   * Rows are inert evidence at receipt: NOTHING processes them here
+   * (no order, no stock movement, no repricing). The signature header
+   * and the exact raw request bytes are captured alongside the payload
+   * (INV-MARKETPLACE-OUTBOX-RELAY, migration 0298) so the relay can
+   * verify HMAC-SHA256 over the bytes the gateway actually signed;
+   * receipt statuses stay 'pending' / 'unresolved' and no event is
+   * ever processed at receipt time. Staff review the stored rows
+   * through listMarketplaceWebhookEvents and trigger the relay.
    *
    * Tenant resolution, in order: (1) a seller identifier in the payload
    * matching exactly one tenant's enabled config for this marketplace;
@@ -2190,14 +2293,16 @@ ${itemsSummaryAr}
     marketplace: SupportedMarketplace,
     payload: any,
     sessionTenantId?: string,
+    opts?: MarketplaceWebhookReceiptOpts,
   ): Promise<{ received: boolean; duplicate: boolean; eventId: number | null; actionTaken: string }> {
-    return this.receiveMarketplaceWebhook(marketplace, payload, sessionTenantId);
+    return this.receiveMarketplaceWebhook(marketplace, payload, sessionTenantId, opts);
   }
 
   async receiveMarketplaceWebhook(
     marketplace: SupportedMarketplace,
     payload: any,
     sessionTenantId?: string,
+    opts?: MarketplaceWebhookReceiptOpts,
   ): Promise<{ received: boolean; duplicate: boolean; eventId: number | null; actionTaken: string }> {
     this.logger.log(`[Marketplace Webhook] Received webhook event for ${marketplace}`);
     const identity = extractMarketplaceEventIdentity(payload ?? {});
@@ -2217,6 +2322,8 @@ ${itemsSummaryAr}
         dedup_key: dedupKey,
         payload: payload ?? {},
         payload_hash: identity.payloadHash,
+        signature: opts?.signature ?? null,
+        raw_body: opts?.rawBody === undefined ? null : Buffer.isBuffer(opts.rawBody) ? opts.rawBody.toString('utf8') : opts.rawBody,
         status: tenantId ? 'pending' : 'unresolved',
       })
       .onConflict((oc) => oc.column('dedup_key').doNothing())
@@ -2319,6 +2426,178 @@ ${itemsSummaryAr}
       processedAt: row.processed_at,
       payload: row.payload,
     }));
+  }
+
+  // =========================================================================
+  // MARKETPLACE WEBHOOK OUTBOX RELAY (INV-MARKETPLACE-OUTBOX-RELAY)
+  // =========================================================================
+
+  /**
+   * Register a handler for one marketplace event type. Handlers are
+   * the relay's dispatch targets; registration is explicit and
+   * per-event-type so an unhandled type can never be silently
+   * "processed". Production registers ZERO handlers today: there is
+   * no order-ingestion handler to register (the only ingestion path,
+   * `simulateIncomingOrder`, fabricates a test order and is not a
+   * webhook handler), and inventing one here -- guessed
+   * per-marketplace payload schemas plus real-money order/stock
+   * creation from unauthenticated public payloads -- would violate
+   * the strict-money spirit of the law. The order-ingestion handler
+   * is a recorded follow-up needing a policy decision; until it
+   * exists, verified events report `skipped-no-handler` and stay
+   * 'pending' for staff review. The spec registers a counting test
+   * handler to prove the relay machinery.
+   */
+  registerMarketplaceWebhookHandler(eventType: string, handler: MarketplaceWebhookHandler): void {
+    this.marketplaceWebhookHandlers.set(eventType, handler);
+  }
+
+  unregisterMarketplaceWebhookHandler(eventType: string): void {
+    this.marketplaceWebhookHandlers.delete(eventType);
+  }
+
+  /**
+   * Relay stored inbound marketplace webhook events to their
+   * handlers. Staff-triggered (guarded `POST webhooks/relay`), never
+   * automatic: an unsigned public payload must never self-execute.
+   *
+   * Per event, in ONE transaction: the row is re-read `FOR UPDATE`
+   * (a concurrent relay blocks on the lock, then sees the new status
+   * and skips -- exactly-once), the stored signature is verified
+   * against the tenant's CURRENT per-marketplace `webhookSecret`
+   * (HMAC-SHA256 over the stored raw bytes), and only then is the
+   * registered handler invoked on the same transaction handle; the
+   * event is marked 'processed' with `processed_at` in that same
+   * transaction, so a handler's writes and its processed mark commit
+   * or roll back together.
+   *
+   * Outcomes, all loud, nothing silently dropped:
+   * - `processed`: verified and handled; a second relay is a no-op.
+   * - `rejected`: secret, signature and raw body were all present
+   *   but the HMAC mismatched -- proven forgery/tampering. The event
+   *   is NEVER dispatched. Terminal.
+   * - `unverifiable`: the secret is missing/short, or the signature
+   *   or raw body was never captured (e.g. a legacy row stored
+   *   before migration 0298). Verification is impossible, so the
+   *   event stays 'pending' for manual staff review -- fail-closed,
+   *   never guessed. (A secret rotated after receipt also lands
+   *   here only when the old secret is gone; a present-but-wrong
+   *   secret lands in `rejected`.)
+   * - `skipped-no-handler`: verified, but no handler is registered
+   *   for the event type yet. Stays 'pending'.
+   * - `failed`: the handler threw. The transaction rolls back, the
+   *   event stays 'pending' (retryable), the batch continues.
+   * - `skipped`: the row was already processed (or foreign) by the
+   *   time its transaction ran -- a concurrent relay claimed it.
+   *
+   * Only 'pending' rows for the caller's tenant are claimed, oldest
+   * first, at most 50 per call. 'unresolved' rows (no tenant) have
+   * no secret to verify against and are never relayed.
+   */
+  async relayMarketplaceWebhookEvents(
+    auth: AuthContext,
+    filters: { limit?: number } = {},
+  ): Promise<MarketplaceWebhookRelayResult> {
+    const scope = requireTenantScope(auth);
+    const limit = Math.min(Math.max(filters.limit ?? 50, 1), 50);
+    const candidates = await this.db
+      .selectFrom('marketplace_webhook_events')
+      .select(['id'])
+      .where('tenant_id', '=', scope.tenantId)
+      .where('status', '=', 'pending')
+      .orderBy('received_at', 'asc')
+      .limit(limit)
+      .execute();
+
+    const result: MarketplaceWebhookRelayResult = {
+      claimed: candidates.length,
+      processed: 0,
+      rejected: 0,
+      skippedNoHandler: 0,
+      unverifiable: 0,
+      failed: 0,
+      results: [],
+    };
+
+    for (const candidate of candidates) {
+      try {
+        const outcome = await this.db.transaction().execute(async (trx) => {
+          const row = await trx
+            .selectFrom('marketplace_webhook_events')
+            .selectAll()
+            .where('id', '=', candidate.id)
+            .forUpdate()
+            .executeTakeFirst();
+          if (!row || row.status !== 'pending' || row.tenant_id !== scope.tenantId) {
+            return { outcome: 'skipped' as const };
+          }
+          const config = await this.getSettingJson<Record<string, unknown>>(
+            `marketplace_${row.marketplace}_config`,
+            row.tenant_id,
+            {},
+            trx,
+          );
+          const secret = typeof config.webhookSecret === 'string' ? config.webhookSecret : undefined;
+          if (!secret || secret.length < 32 || !row.signature || !row.raw_body) {
+            return { outcome: 'unverifiable' as const };
+          }
+          if (
+            !verifyMarketplaceWebhookSignature({
+              secret,
+              signature: row.signature,
+              rawBody: row.raw_body,
+            })
+          ) {
+            await trx
+              .updateTable('marketplace_webhook_events')
+              .set({ status: 'rejected' })
+              .where('id', '=', row.id)
+              .execute();
+            return { outcome: 'rejected' as const };
+          }
+          const handler = this.marketplaceWebhookHandlers.get(row.event_type);
+          if (!handler) {
+            return { outcome: 'skipped-no-handler' as const };
+          }
+          const event: StoredMarketplaceWebhookEvent = {
+            id: row.id,
+            tenantId: row.tenant_id as string,
+            marketplace: row.marketplace as SupportedMarketplace,
+            eventType: row.event_type,
+            eventKey: row.event_key,
+            status: row.status,
+            receivedAt: row.received_at,
+            payload: row.payload,
+          };
+          const handled = await handler(trx, event);
+          if (!handled.handled) {
+            return { outcome: 'skipped-no-handler' as const };
+          }
+          await trx
+            .updateTable('marketplace_webhook_events')
+            .set({ status: 'processed', processed_at: new Date() })
+            .where('id', '=', row.id)
+            .execute();
+          return { outcome: 'processed' as const, actionTaken: handled.actionTaken };
+        });
+        if (outcome.outcome === 'processed') result.processed += 1;
+        if (outcome.outcome === 'rejected') result.rejected += 1;
+        if (outcome.outcome === 'skipped-no-handler') result.skippedNoHandler += 1;
+        if (outcome.outcome === 'unverifiable') result.unverifiable += 1;
+        result.results.push({ eventId: candidate.id, ...outcome });
+      } catch (err) {
+        // The per-event transaction rolled back: the event stays
+        // 'pending' and retryable; the batch continues.
+        result.failed += 1;
+        result.results.push({
+          eventId: candidate.id,
+          outcome: 'failed',
+          error: err instanceof Error ? err.message : String(err),
+        });
+        this.logger.error(`[Marketplace Webhook Relay] Event ${candidate.id} failed`, err);
+      }
+    }
+    return result;
   }
 
   // =========================================================================
