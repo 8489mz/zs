@@ -1,6 +1,6 @@
 import type { AppSettings } from '@/types/domain';
 import type { BranchFormOutput, LocationFormOutput, SettingsFormOutput } from '@/features/settings/schemas/settings.schema';
-import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { currencyMoneyDigits, roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
 
 function cleanText(value: unknown, fallback = '') {
   const text = String(value ?? '').trim();
@@ -14,7 +14,7 @@ function normalizeRate(value: number) {
   return Number(Number(value || 0).toFixed(2));
 }
 
-function normalizeMoney(value: number, bookDigits: number) {
+function normalizeMoney(value: number, bookDigits: MoneyDigits) {
   return roundMoneyValue(Number(value || 0), bookDigits);
 }
 

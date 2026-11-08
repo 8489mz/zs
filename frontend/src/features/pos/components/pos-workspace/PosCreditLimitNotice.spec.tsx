@@ -66,7 +66,7 @@ function renderNotice(props: { customerId?: string | null; total: number; paidAm
 
 describe('getCreditLimitPreview', () => {
   it('marks the worked example over, with next balance 574.00 and excess 74.00', () => {
-    const preview = getCreditLimitPreview({ creditLimit: 500, balance: 79.8, amount: 494.2 });
+    const preview = getCreditLimitPreview({ creditLimit: 500, balance: 79.8, amount: 494.2 }, 2);
     expect(preview.nextBalance).toBe(574);
     expect(preview.excess).toBe(74);
     expect(preview.remainingAfter).toBe(-74);
@@ -74,13 +74,13 @@ describe('getCreditLimitPreview', () => {
   });
 
   it('marks 80% usage and above near, never over, while the sale stays within the limit', () => {
-    expect(getCreditLimitPreview({ creditLimit: 500, balance: 420, amount: 10 }).state).toBe('near');
-    expect(getCreditLimitPreview({ creditLimit: 500, balance: 79.8, amount: 420.2 }).state).toBe('near');
-    expect(getCreditLimitPreview({ creditLimit: 500, balance: 79.8, amount: 420.2 }).excess).toBe(0);
+    expect(getCreditLimitPreview({ creditLimit: 500, balance: 420, amount: 10 }, 2).state).toBe('near');
+    expect(getCreditLimitPreview({ creditLimit: 500, balance: 79.8, amount: 420.2 }, 2).state).toBe('near');
+    expect(getCreditLimitPreview({ creditLimit: 500, balance: 79.8, amount: 420.2 }, 2).excess).toBe(0);
   });
 
   it('marks a small within-limit sale ok', () => {
-    const preview = getCreditLimitPreview({ creditLimit: 500, balance: 79.8, amount: 10 });
+    const preview = getCreditLimitPreview({ creditLimit: 500, balance: 79.8, amount: 10 }, 2);
     expect(preview.state).toBe('ok');
     expect(preview.nextBalance).toBe(89.8);
   });

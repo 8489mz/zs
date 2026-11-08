@@ -201,7 +201,7 @@ export function usePublicStorefront(cleanSlug: string) {
         .map((item) => {
           // Re-price from the fresh catalog, keeping the chosen variant (SF-4). A variant that no
           // longer exists drops the line rather than silently falling back to the base price.
-          const fresh = buildCartProduct(activeProductMap.get(String(item.product.id))!, item.product.variantName, bookDigits);
+          const fresh = buildCartProduct(activeProductMap.get(String(item.product.id))!, bookDigits, item.product.variantName);
           if (!fresh) {
             changed = true;
             return null;
@@ -279,7 +279,7 @@ export function usePublicStorefront(cleanSlug: string) {
     const newCart: CartItem[] = [];
     for (const item of order.items) {
       const prod = rawProds.find((p) => Number(p.id) === Number(item.productId));
-      const cartProduct = prod ? buildCartProduct(prod, (item as { variantName?: string | null }).variantName, bookDigits) : null;
+      const cartProduct = prod ? buildCartProduct(prod, bookDigits, (item as { variantName?: string | null }).variantName) : null;
       if (cartProduct) {
         newCart.push({ product: cartProduct, quantity: item.quantity });
       } else {
@@ -314,7 +314,7 @@ export function usePublicStorefront(cleanSlug: string) {
     for (const item of order.items) {
       const prod = rawProds.find((p) => Number(p.id) === Number(item.productId));
       const cartProduct = prod && prod.inStock !== false && prod.price > 0
-        ? buildCartProduct(prod, (item as { variantName?: string | null }).variantName, bookDigits)
+        ? buildCartProduct(prod, bookDigits, (item as { variantName?: string | null }).variantName)
         : null;
       if (cartProduct) {
         newCart.push({ product: cartProduct, quantity: Math.max(1, Number(item.quantity) || 1) });

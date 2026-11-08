@@ -1,6 +1,10 @@
 import type { HrContact, HrEmployee } from '@/types/domain';
 import { getGlobalCurrencySymbol, getGlobalSystemCurrency } from '@/lib/currencies';
-import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { currencyMoneyDigits } from '@/shared/utils/money';
+
+export function fallbackText(value: unknown) {
+  return String(value || '').trim() || '—';
+}
 
 export function money(value: unknown) {
   const amount = Number(value || 0);

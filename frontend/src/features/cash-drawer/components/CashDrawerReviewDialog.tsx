@@ -193,7 +193,7 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
     const systemOpsTotal = rows.reduce((sum, row) => sum + (row.systemCount == null ? 0 : row.systemCount), 0);
     const declaredOpsTotal = rows.reduce((sum, row) => sum + (row.declaredCount == null ? 0 : row.declaredCount), 0);
     const opsDiffTotal = declaredOpsTotal - systemOpsTotal;
-    const allInvoicesSystemTotal = toMoney(expected.rawCashSales + rows.reduce((sum, row) => sum + toMoney(row.systemAmount), 0), bookDigits);
+    const allInvoicesSystemTotal = toMoney(expected.rawCashSales + rows.reduce((sum, row) => sum + toMoney(row.systemAmount, bookDigits), 0), bookDigits);
 
     return {
       rows,

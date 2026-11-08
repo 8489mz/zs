@@ -27,7 +27,7 @@ export function useCreatePurchaseMutation(onSuccess?: (result: PurchaseMutationR
       withIdempotency(
         // INV-FE2-FRONTEND-BOOK-DIGITS: discount/freight round at the
         // document currency's digits (tenant base as fallback).
-        (headers) => purchasesApi.create(buildPurchasePayload(values, items, taxRate, pricesIncludeTax, attachments, currencyMoneyDigits(values.currency || getGlobalSystemCurrency())), headers),
+        (headers) => purchasesApi.create(buildPurchasePayload(values, items, taxRate, pricesIncludeTax, currencyMoneyDigits(values.currency || getGlobalSystemCurrency()), attachments), headers),
         'purchase_create',
         idempotencyKey
       ),

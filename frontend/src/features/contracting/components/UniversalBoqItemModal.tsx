@@ -6,7 +6,7 @@ import { CustomSelect } from '@/shared/ui/custom-select';
 import { contractingApi } from '../api/contracting.api';
 import { MasterBoqItem, MasterBoqTrade, ContractingBoqItem } from '../contracting.types';
 import { useSystemCurrency } from '@/shared/hooks/use-system-currency';
-import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { currencyMoneyDigits, roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
 
 export const UNIT_OPTIONS = [
@@ -127,7 +127,7 @@ export const TRADE_LABELS: Record<string, string> = {
 // silent 2dp default, U4 W2 lesson). Every caller passes the component's
 // bookDigits; CreateMasterBoqItemModal only re-exports this function and
 // makes no calls, so no other call site exists (repo-wide grep verified).
-export function calculatePriceFromMargin(costNum: number, marginPercent: number, bookDigits: number): number {
+export function calculatePriceFromMargin(costNum: number, marginPercent: number, bookDigits: MoneyDigits): number {
   if (costNum <= 0) return 0;
   if (marginPercent <= 0) return roundMoneyValue(costNum, bookDigits);
   if (marginPercent >= 99) return roundMoneyValue(costNum * 100, bookDigits);

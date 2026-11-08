@@ -25,13 +25,15 @@ export function getSessionStatusLabel(status?: string | null) {
 
 /* INV-FE2-FRONTEND-BOOK-DIGITS (U6 FE2): the money legs of a stock-count
  * summary round at the tenant's book digits. `digits` is a required
- * trailing param (FE1 convention) — the callers resolve it from the
- * tenant base currency. The quantity legs stay toFixed(3): quantities
+ * param (FE1 convention) — the callers resolve it from the
+ * tenant base currency. It sits BEFORE the optional products list:
+ * TypeScript forbids a required param after an optional one.
+ * The quantity legs stay toFixed(3): quantities
  * are 3dp by design (the ledger's quantity precision), not money. */
 export function summarizeSessionVariance(
   session: StockCountSession,
-  products?: Product[],
   digits: MoneyDigits,
+  products?: Product[],
 ): SessionVarianceSummary {
   const items = Array.isArray(session.items) ? session.items : [];
   const itemsCount = items.length;

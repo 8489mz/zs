@@ -35,7 +35,7 @@ describe('Purchase Contracts - buildPurchasePayload', () => {
       }
     ];
 
-    const payload = buildPurchasePayload(defaultValues, items, 14, false, undefined, 2);
+    const payload = buildPurchasePayload(defaultValues, items, 14, false, 2);
     
     expect(payload.items[0].locationId).toBe(5);
     expect(payload.items[0].categoryId).toBe(2);
@@ -54,7 +54,7 @@ describe('Purchase Contracts - buildPurchasePayload', () => {
       }
     ];
 
-    const payload = buildPurchasePayload(defaultValues, items, 14, false, undefined, 2);
+    const payload = buildPurchasePayload(defaultValues, items, 14, false, 2);
     
     expect(payload.items[0].locationId).toBeUndefined();
     expect(payload.items[0].categoryId).toBeUndefined();
@@ -68,7 +68,7 @@ describe('Purchase Contracts - buildPurchasePayload', () => {
       { productId: '10', name: 'صنف', qty: 1, cost: 100, total: 100, unitName: 'Piece', unitMultiplier: 1 },
     ];
 
-    const payload = buildPurchasePayload({ ...defaultValues, freight: 20 }, items, 0, false, undefined, 2);
+    const payload = buildPurchasePayload({ ...defaultValues, freight: 20 }, items, 0, false, 2);
 
     expect(payload.landedCosts).toEqual({
       allocationMethod: 'value',
@@ -81,7 +81,7 @@ describe('Purchase Contracts - buildPurchasePayload', () => {
       { productId: '10', name: 'صنف', qty: 1, cost: 100, total: 100, unitName: 'Piece', unitMultiplier: 1 },
     ];
 
-    const payload = buildPurchasePayload({ ...defaultValues, freight: 0 }, items, 0, false, undefined, 2);
+    const payload = buildPurchasePayload({ ...defaultValues, freight: 0 }, items, 0, false, 2);
 
     expect('landedCosts' in payload).toBe(false);
   });
@@ -91,7 +91,7 @@ describe('Purchase Contracts - buildPurchasePayload', () => {
       { productId: '10', name: 'صنف', qty: 1, cost: 100, total: 100, unitName: 'Piece', unitMultiplier: 1 },
     ];
 
-    const payload = buildPurchasePayload({ ...defaultValues, freight: '20' as unknown as number }, items, 0, false, undefined, 2);
+    const payload = buildPurchasePayload({ ...defaultValues, freight: '20' as unknown as number }, items, 0, false, 2);
 
     expect(payload.landedCosts).toEqual({
       allocationMethod: 'value',
@@ -114,7 +114,7 @@ describe('Purchase Contracts - buildPurchasePayload', () => {
       }
     ];
 
-    const payload = buildPurchasePayload(defaultValues, items, 14, false, undefined, 2);
+    const payload = buildPurchasePayload(defaultValues, items, 14, false, 2);
     
     expect(payload.items[0].locationId).toBe(100);
     expect(payload.items[0].categoryId).toBe(200);
@@ -130,11 +130,11 @@ describe('Purchase Contracts - buildPurchasePayload', () => {
       { productId: '10', name: 'صنف', qty: 1, cost: 100, total: 100, unitName: 'Piece', unitMultiplier: 1 },
     ];
 
-    const kwd = buildPurchasePayload({ ...defaultValues, currency: 'KWD', discount: 100.125, freight: 100.125 }, items, 0, false, undefined, 3);
+    const kwd = buildPurchasePayload({ ...defaultValues, currency: 'KWD', discount: 100.125, freight: 100.125 }, items, 0, false, 3);
     expect(kwd.discount).toBe(100.125);
     expect(kwd.landedCosts?.costs[0]?.amount).toBe(100.125);
 
-    const egp = buildPurchasePayload({ ...defaultValues, currency: 'EGP', discount: 100.125, freight: 100.125 }, items, 0, false, undefined, 2);
+    const egp = buildPurchasePayload({ ...defaultValues, currency: 'EGP', discount: 100.125, freight: 100.125 }, items, 0, false, 2);
     expect(egp.discount).toBe(100.13);
     expect(egp.landedCosts?.costs[0]?.amount).toBe(100.13);
   });

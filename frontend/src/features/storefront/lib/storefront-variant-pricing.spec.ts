@@ -39,12 +39,12 @@ describe('storefront variant photos (display-only)', () => {
 
   it('builds the cart line with the picked variant photo, falling back to the product photo', () => {
     const product = productWithVariants();
-    const red = buildCartProduct(product, 'أحمر', 2);
+    const red = buildCartProduct(product, 2, 'أحمر');
     expect(red?.imageUrl).toBe('/api/storefront/media/2/bbb');
     expect(red?.variantName).toBe('أحمر');
-    const blue = buildCartProduct(product, 'أزرق', 2);
+    const blue = buildCartProduct(product, 2, 'أزرق');
     expect(blue?.imageUrl).toBe('/api/storefront/media/1/aaa');
-    const plain = buildCartProduct(product, null, 2);
+    const plain = buildCartProduct(product, 2, null);
     expect(plain?.imageUrl).toBe('/api/storefront/media/1/aaa');
     expect(plain?.variantName).toBeNull();
   });
@@ -62,9 +62,9 @@ describe('storefront variant photos (display-only)', () => {
   it('rounds variant prices at the passed book digits (3dp keeps the third decimal)', () => {
     const product = productWithVariants();
     (product.variants as unknown[])[0] = { name: 'أحمر', price: 550.125 };
-    const kwd = buildCartProduct(product, 'أحمر', 3);
+    const kwd = buildCartProduct(product, 3, 'أحمر');
     expect(kwd?.price).toBe(550.125);
-    const egp = buildCartProduct(product, 'أحمر', 2);
+    const egp = buildCartProduct(product, 2, 'أحمر');
     expect(egp?.price).toBe(550.13);
     expect(resolveVariantUnitPrice(550.125, getProductVariants(product)[0]!, 3)).toBe(550.125);
     expect(resolveVariantUnitPrice(550.125, getProductVariants(product)[0]!, 2)).toBe(550.13);

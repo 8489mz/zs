@@ -275,7 +275,7 @@ export function StorefrontProductQuickViewModal({
 
   const handleAdd = () => {
     if (!inStock || isZeroPrice) return;
-    const finalProduct = buildCartProduct(product, selectedVariant?.name, bookDigits);
+    const finalProduct = buildCartProduct(product, bookDigits, selectedVariant?.name);
     if (!finalProduct) return;
 
     onAddToCart(finalProduct, qty);

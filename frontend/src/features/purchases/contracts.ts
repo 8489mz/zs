@@ -57,8 +57,8 @@ export function buildPurchasePayload(
   items: PurchaseDraftItem[],
   taxRate: number,
   pricesIncludeTax: boolean,
-  attachments?: any[],
   digits: MoneyDigits,
+  attachments?: any[],
 ) {
   // The discount/freight are in the document currency; the caller passes
   // its digits (document currency, tenant base as fallback). The param is

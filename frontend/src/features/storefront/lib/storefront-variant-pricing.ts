@@ -44,7 +44,7 @@ export function resolveVariantUnitPrice(basePrice: number, variant: StorefrontPr
  * `basePrice` keeps the catalog price so the line can be re-priced when the catalog refreshes.
  * Returns null when the variant is gone from the catalog.
  */
-export function buildCartProduct(catalogProduct: StorefrontProduct, variantName?: string | null, digits: MoneyDigits): StorefrontProduct | null {
+export function buildCartProduct(catalogProduct: StorefrontProduct, digits: MoneyDigits, variantName?: string | null): StorefrontProduct | null {
   const base = Number(catalogProduct.basePrice ?? catalogProduct.price ?? 0);
   const wanted = String(variantName ?? '').trim();
   if (!wanted) {

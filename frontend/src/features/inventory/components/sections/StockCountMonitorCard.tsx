@@ -124,7 +124,7 @@ export function StockCountMonitorCard({
   };
 
   const selectedSummary = useMemo(
-    () => (selectedSession ? summarizeSessionVariance(selectedSession, products, bookDigits) : null),
+    () => (selectedSession ? summarizeSessionVariance(selectedSession, bookDigits, products) : null),
     [selectedSession, products, bookDigits],
   );
 
@@ -653,7 +653,7 @@ export function StockCountMonitorCard({
                   header: "محتوى الجلسة",
                   className: 'text-center',
                   cell: (session) => {
-                    const summary = summarizeSessionVariance(session, products, bookDigits);
+                    const summary = summarizeSessionVariance(session, bookDigits, products);
                     return (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
                         <strong style={{ fontSize: '12.5px', color: '#0f172a' }}>{summary.itemsCount} صنفاً</strong>
@@ -675,7 +675,7 @@ export function StockCountMonitorCard({
                   header: "الأثر الكمي والمالي",
                   className: 'text-center',
                   cell: (session) => {
-                    const summary = summarizeSessionVariance(session, products, bookDigits);
+                    const summary = summarizeSessionVariance(session, bookDigits, products);
                     const isNegative = summary.totalVariance < 0;
                     return (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>

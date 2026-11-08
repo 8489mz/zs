@@ -190,7 +190,7 @@ const checks = [
   [`${F}purchases/components/PurchaseEditDialog.tsx`, 'roundMoneyValue(items.reduce((sum, item) => sum + item.qty * item.cost, 0), bookDigits)', 'Number(items.reduce((sum, item) => sum + item.qty * item.cost, 0).toFixed(2))'],
   [`${F}purchases/components/MarginProtectionModal.tsx`, 'roundMoneyValue(item.newCost / (1 - (targetMargin / 100)), bookDigits)', 'Number((item.newCost / (1 - (targetMargin / 100))).toFixed(2))'],
   [`${F}inventory/components/sections/stockCountMonitor.helpers.ts`, 'roundMoneyValue(expectedValue, digits)', 'expectedValue: Number(expectedValue.toFixed(2)),'],
-  [`${F}inventory/components/sections/StockCountMonitorCard.tsx`, 'summarizeSessionVariance(selectedSession, products, bookDigits)', 'summarizeSessionVariance(selectedSession, products)'],
+  [`${F}inventory/components/sections/StockCountMonitorCard.tsx`, 'summarizeSessionVariance(selectedSession, bookDigits, products)', 'summarizeSessionVariance(selectedSession, products)'],
   [`${F}import-sales/ContainerAutopsyModal.tsx`, "roundMoneyValue(Number(item.landed_cost_egp) / Number((item.received_quantity ?? item.quantity) || 1), currencyMoneyDigits('EGP'))", 'Number((Number(item.landed_cost_egp) / Number((item.received_quantity ?? item.quantity) || 1)).toFixed(2))'],
   [`${F}import-sales/SupplierCredit.tsx`, "roundMoneyValue(remaining * rate, currencyMoneyDigits('EGP'))", 'setAmountEgp(String(Number((remaining * rate).toFixed(2))));'],
   [`${F}import-sales/components/ChinaProformasTab.tsx`, 'roundMoneyValue(computedLinesTotal, currencyMoneyDigits(currency))', 'Number(computedLinesTotal.toFixed(2))'],
@@ -206,7 +206,7 @@ const checks = [
   [`${F}storefront/components/StorefrontCheckoutModal.tsx`, 'validateCoupon(tenantSlug, cleanCode, subtotal, currencyMoneyDigits(info?.currency || getGlobalSystemCurrency()))', 'validateCoupon(tenantSlug, cleanCode, subtotal)'],
   [`${F}storefront/components/StorefrontCheckoutModal.tsx`, 'calculateCartSubtotal(cartItems, info?.currency)', 'calculateCartSubtotal(cartItems)'],
   [`${F}storefront/components/StorefrontProductQuickViewModal.tsx`, 'resolveVariantUnitPrice(product.price, selectedVariant, bookDigits)', 'resolveVariantUnitPrice(product.price, selectedVariant)'],
-  [`${F}storefront/hooks/usePublicStorefront.ts`, 'buildCartProduct(activeProductMap.get(String(item.product.id))!, item.product.variantName, bookDigits)', 'buildCartProduct(activeProductMap.get(String(item.product.id))!, item.product.variantName)'],
+  [`${F}storefront/hooks/usePublicStorefront.ts`, 'buildCartProduct(activeProductMap.get(String(item.product.id))!, bookDigits, item.product.variantName)', 'buildCartProduct(activeProductMap.get(String(item.product.id))!, item.product.variantName)'],
   [`${F}storefront/hooks/usePublicStorefront.ts`, 'calculateCartSubtotal(cartItems, infoQuery.data?.currency)', 'calculateCartSubtotal(cartItems)'],
   [`${F}storefront/components/TableBillModal.tsx`, "roundMoneyValue((bill?.total || 0) + tipAmount, currencyMoneyDigits(bill?.currency || getGlobalSystemCurrency()))", 'Math.round(((bill?.total || 0) + tipAmount) * 100) / 100'],
 ];
