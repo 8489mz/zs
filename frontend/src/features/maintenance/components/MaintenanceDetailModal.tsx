@@ -1,12 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { getCurrencyDecimals, getGlobalCurrencySymbol } from '@/lib/currencies';
-import { useState, useEffect } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/shared/ui/button';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { AlertTriangleIcon, CheckIcon, XIcon } from '@/shared/components/icons/AppIcons';
 import { SearchableCombobox } from '@/shared/ui/searchable-combobox';
+import { useDebouncedValue } from '@/shared/hooks/use-debounced-value';
+import { productsApi } from '@/features/products/api/products.api';
 import { MaintenanceIcons as Icons, statusConfig } from './MaintenanceConstants';
 import { extractTicketDiscount } from './MaintenanceReceiptModal';
 import { maintenanceApi } from '../api/maintenance.api';
@@ -21,8 +23,17 @@ interface MaintenanceDetailModalProps {
   onPrintReceipt: (ticket: MaintenanceTicket) => void;
   maintenanceProfile: ReturnType<typeof getMaintenanceProfile>;
   commissionRate: number;
-  products: any[];
 }
+
+/* One combobox row: a real catalog product found by the server-side search. */
+type PartProductOption = {
+  id: string;
+  name: string;
+  stock: number;
+  retailPrice: number;
+  costPrice: number;
+  barcode: string;
+};
 
 export function MaintenanceDetailModal({
   ticket,
@@ -32,7 +43,6 @@ export function MaintenanceDetailModal({
   onPrintReceipt,
   maintenanceProfile,
   commissionRate,
-  products,
 }: MaintenanceDetailModalProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -45,10 +55,59 @@ export function MaintenanceDetailModal({
   const [editingCost, setEditingCost] = useState<number | null>(null);
   const [pendingCashRefundStatus, setPendingCashRefundStatus] = useState<MaintenanceStatus | null>(null);
 
+  /* Synchronous record of the picked part: the combobox calls onSelect and
+   * then onChange(label) in the same tick, so state set by onSelect is not
+   * yet visible to the onChange guard. The ref is the guard's source of
+   * truth; the state above is what renders the dispatch button. It also
+   * retains the full picked option: 250 ms after the pick the debounced
+   * search text becomes the option label, a query key that never runs, so
+   * the option list empties while the button stays enabled. Dispatch must
+   * resolve from this retained pick, never from the (possibly empty) list. */
+  const selectedPartRef = useRef<(PartProductOption & { label: string }) | null>(null);
+
+  const clearPartSelection = () => {
+    selectedPartRef.current = null;
+    setSelectedProductId('');
+  };
+
+  /* Search-as-you-type against the real catalog (server-side `q` matches
+   * name / barcode / SKU, Arabic-normalized). The whole catalog is never
+   * fetched: it can hold 10k+ products and the combobox shows at most 8.
+   * No request fires until the technician types, and none fires for the
+   * label text left in the box after a pick (it is not a search query). */
+  const debouncedPartSearch = useDebouncedValue(partSearchText, 250);
+  const trimmedPartSearch = debouncedPartSearch.trim();
+  const { data: partSearchData } = useQuery({
+    queryKey: ['maintenance-part-products', trimmedPartSearch],
+    queryFn: () => productsApi.listPage({ q: trimmedPartSearch, page: 1, pageSize: 20 }),
+    enabled:
+      Boolean(currentTicket) &&
+      trimmedPartSearch.length > 0 &&
+      trimmedPartSearch !== selectedPartRef.current?.label,
+  });
+  const partOptions = useMemo<PartProductOption[]>(
+    () =>
+      (partSearchData?.products || []).map((p: any) => ({
+        id: String(p.id),
+        name: p.name,
+        stock: Number(p.stock ?? p.stock_qty ?? 0),
+        retailPrice: Number(p.retailPrice ?? p.retail_price ?? 0),
+        costPrice: Number(p.costPrice ?? p.cost_price ?? 0),
+        barcode: p.barcode || '',
+      })),
+    [partSearchData],
+  );
+  const getPartOptionLabel = (p: PartProductOption) =>
+    `${p.name} (متاح: ${p.stock}) - ${p.retailPrice} ${getGlobalCurrencySymbol()}`;
+
   useEffect(() => {
     setCurrentTicket(ticket);
     setEditingCost(null);
     setPendingCashRefundStatus(null);
+    clearPartSelection();
+    setPartSearchText('');
+    setPartQty(1);
+    setPartPrice(0);
   }, [ticket]);
 
   const refreshCurrentTicket = async (ticketId: string) => {
@@ -70,7 +129,7 @@ export function MaintenanceDetailModal({
     mutationFn: ({ ticketId, payload }: { ticketId: string; payload: any }) =>
       maintenanceApi.addPart(ticketId, payload),
     onSuccess: () => {
-      setSelectedProductId('');
+      clearPartSelection();
       setPartSearchText('');
       setPartQty(1);
       setPartPrice(0);
@@ -88,7 +147,15 @@ export function MaintenanceDetailModal({
 
   const handleAddPartSubmit = () => {
     if (!currentTicket || !selectedProductId) return;
-    const prod = (products || []).find((p: any) => String(p.id) === selectedProductId);
+    /* Prefer the retained pick: after the 250 ms debounce the option list
+     * is empty (the label query key never runs), so resolving from the list
+     * alone silently drops a dispatch the button still offers. The list is
+     * only a fallback for a selection whose retained snapshot is gone. */
+    const retained = selectedPartRef.current;
+    const prod =
+      retained && retained.id === selectedProductId
+        ? retained
+        : partOptions.find((p) => p.id === selectedProductId);
     if (!prod) return;
 
     addPartMutation.mutate({
@@ -343,17 +410,19 @@ export function MaintenanceDetailModal({
               inputClassName="purchase-prototype-field-input"
               placeholder={t('maintenance.maintenance_detail_modal.s13', "ابحث عن قطعة غيار في المخزن بالاسم أو الباركود...")}
               value={partSearchText}
-              onChange={setPartSearchText}
-              options={(products || []).map((p: any) => ({
-                id: String(p.id),
-                name: p.name,
-                stock: p.stock ?? p.stock_qty ?? 0,
-                retailPrice: p.retailPrice ?? p.retail_price ?? 0,
-                barcode: p.barcode || '',
-              }))}
-              getLabel={(p) => `${p.name} (متاح: ${p.stock}) - ${p.retailPrice} ${getGlobalCurrencySymbol()}`}
+              onChange={(value) => {
+                setPartSearchText(value);
+                /* Typing over a picked part unpicks it: dispatch must always
+                 * send the part shown in the box, never a stale selection. */
+                if (selectedPartRef.current && value !== selectedPartRef.current.label) {
+                  clearPartSelection();
+                }
+              }}
+              options={partOptions}
+              getLabel={getPartOptionLabel}
               getMeta={(p) => `${p.barcode} ${p.name}`}
               onSelect={(p) => {
+                selectedPartRef.current = { ...p, label: getPartOptionLabel(p) };
                 setSelectedProductId(p.id);
                 setPartSearchText(p.name);
                 setPartPrice(Number(p.retailPrice || 0));

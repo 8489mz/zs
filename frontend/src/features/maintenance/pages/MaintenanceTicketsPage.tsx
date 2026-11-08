@@ -6,6 +6,7 @@ import { Button } from '@/shared/ui/button';
 import { maintenanceApi } from '@/features/maintenance/api/maintenance.api';
 import type { MaintenanceTicket } from '@/types/domain-models/maintenance';
 import { getMaintenanceProfile } from '@/features/maintenance/constants/maintenance-profiles';
+import { SYSTEM_DEFAULTS } from '@/config/system-defaults.constants';
 import { MaintenanceReceiptModal } from '../components/MaintenanceReceiptModal';
 import { PlusIcon, RefreshCwIcon } from '@/shared/components/icons/AppIcons';
 import { MaintenanceSettlementModal } from '../components/MaintenanceSettlementModal';
@@ -233,8 +234,7 @@ export function MaintenanceTicketsPage() {
           onSendWhatsApp={(t) => { void t; }}
           onPrintReceipt={(t) => setReceiptTicket(t)}
           maintenanceProfile={maintenanceProfile}
-          commissionRate={0}
-          products={[]}
+          commissionRate={SYSTEM_DEFAULTS.TECHNICIAN_COMMISSION_RATE}
         />
 
         {/* 3. Modal: Delivery Settlement Modal */}
