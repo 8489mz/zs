@@ -54,6 +54,7 @@
   "features/maritime-freight/pages/MaritimeWorkspacePage.tsx imports another page module (./MaritimeRfqsPage)",
   "features/maritime-freight/pages/MaritimeWorkspacePage.tsx imports another page module (./MaritimeSettingsPage)",
   "features/portals-hub/pages/PortalsHubPage.spec.tsx imports another page module (./PortalsHubPage)",
+  "features/products/pages/ImeiHistoryPage.spec.tsx imports another page module (./ImeiHistoryPage)",
   "features/settings/components/forms/tabs/GeneralSettingsTab.tsx imports app layer directly (@/app/router/access)",
   "features/settings/components/forms/tabs/ModulesSettingsTab.tsx imports app layer directly (@/app/router/access)",
   "features/settings/components/user-management-panels/UserManagementEditorCard.tsx imports app layer directly (@/app/router/access)",
