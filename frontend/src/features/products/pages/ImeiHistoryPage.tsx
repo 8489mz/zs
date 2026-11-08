@@ -182,12 +182,12 @@ export function ImeiHistoryPage() {
   // LF-P4: the device's repair warranty is real data for the SAME device,
   // already loaded above (M2 P5 sets warranty_end on the ticket at first
   // repair). Take the latest one; never compute a warranty from thin air.
+  const warrantyEnds = tickets
+    .map((t) => (t as TicketWithWarranty).warrantyEnd)
+    .filter((w): w is string => Boolean(w))
+    .sort();
   const ticketWarrantyEnd =
-    tickets
-      .map((t) => (t as TicketWithWarranty).warrantyEnd)
-      .filter((w): w is string => Boolean(w))
-      .sort()
-      .at(-1) || null;
+    warrantyEnds.length > 0 ? warrantyEnds[warrantyEnds.length - 1] : null;
   const warrantyEndDate = serialItem?.warrantyEndDate || ticketWarrantyEnd;
   const warrantyFromTicket = !serialItem?.warrantyEndDate && Boolean(ticketWarrantyEnd);
   // LF-P4: the header must never label a device "available in the public
