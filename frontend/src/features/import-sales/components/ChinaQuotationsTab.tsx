@@ -14,7 +14,7 @@ import { http } from '@/lib/http';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
 export function ChinaQuotationsTab() {
-  const { data: quotations = [], refetch } = useQuotationsQuery();
+  const { data: quotations = [], isLoading: isQuotationsLoading, refetch } = useQuotationsQuery();
   const { data: suppliers = [] } = useChinaSuppliersQuery();
   const createQuotationMutation = useCreateQuotationMutation();
   const selectQuotationMutation = useSelectQuotationMutation();
@@ -170,7 +170,13 @@ export function ChinaQuotationsTab() {
             </tr>
           </thead>
           <tbody>
-            {quotations.length === 0 ? (
+            {isQuotationsLoading ? (
+              <tr>
+                <td colSpan={8} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
+                  جاري تحميل عروض الأسعار...
+                </td>
+              </tr>
+            ) : quotations.length === 0 ? (
               <tr>
                 <td colSpan={8} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
                   لا توجد عروض أسعار مسجلة للمقارنة حالياً

@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/shared/ui/button';
+import { LoadingState } from '@/shared/ui/loading-state';
 import {
   useImportCommandCenterQuery,
   useImportProjectsQuery,
@@ -20,8 +21,8 @@ import {
 export default function ImportCommandCenter() {
   const navigate = useNavigate();
   const { data: metrics, isLoading, refetch } = useImportCommandCenterQuery();
-  const { data: projects = [] } = useImportProjectsQuery();
-  const { data: shipmentsData } = useShipmentsQuery();
+  const { data: projects = [], isLoading: isProjectsLoading } = useImportProjectsQuery();
+  const { data: shipmentsData, isLoading: isShipmentsLoading } = useShipmentsQuery();
 
   const shipments = shipmentsData?.rows || [];
 
@@ -29,6 +30,13 @@ export default function ImportCommandCenter() {
   const pipeline = metrics?.pipeline || { projects: {}, shipments: { inTransit: 0, inCustoms: 0, arrived: 0 } };
   const alerts = metrics?.alerts || { demurrageAlerts: [], aciExpiring: [] };
   const performance = metrics?.performance || { totalRevenue: 0, grossProfit: 0, netProfitPool: 0 };
+
+  // While the metrics query is still in flight every value is unknown, not
+  // zero: render an em dash (repo AGENTS.md §7) instead of a flashing 0.00.
+  const money2 = (value: number) =>
+    isLoading ? '—' : Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const money0 = (value: number) => (isLoading ? '—' : Number(value || 0).toLocaleString('en-US'));
+  const count = (value: number) => (isLoading ? '—' : value);
 
   return (
     <div className="page-stack page-shell import-sales-page" dir="rtl">
@@ -111,6 +119,7 @@ export default function ImportCommandCenter() {
       </div>
 
       {/* 2. Top KPI Cards */}
+      {isLoading && <LoadingState title="جاري تحميل مؤشرات الاستيراد..." />}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
         {/* Card 1: Total Capital */}
         <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 18px' }}>
@@ -121,10 +130,10 @@ export default function ImportCommandCenter() {
             </div>
           </div>
           <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
-            {Number(capital.totalCapital || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748b' }}>ج.م</span>
+            {money2(capital.totalCapital)} <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748b' }}>ج.م</span>
           </div>
           <div style={{ fontSize: '11px', color: '#10b981', fontWeight: 600, marginTop: 4 }}>
-            المتاح للتشغيل: {Number(capital.availableCapital || 0).toLocaleString('en-US')} ج.م
+            المتاح للتشغيل: {money0(capital.availableCapital)} ج.م
           </div>
         </div>
 
@@ -137,10 +146,10 @@ export default function ImportCommandCenter() {
             </div>
           </div>
           <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
-            {Number(capital.deployedCapital || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748b' }}>ج.م</span>
+            {money2(capital.deployedCapital)} <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748b' }}>ج.م</span>
           </div>
           <div style={{ fontSize: '11px', color: '#6366f1', fontWeight: 600, marginTop: 4 }}>
-            نسبة التوظيف: {capital.totalCapital > 0 ? ((capital.deployedCapital / capital.totalCapital) * 100).toFixed(1) : 0}%
+            نسبة التوظيف: {isLoading ? '—' : capital.totalCapital > 0 ? ((capital.deployedCapital / capital.totalCapital) * 100).toFixed(1) : 0}%
           </div>
         </div>
 
@@ -153,10 +162,10 @@ export default function ImportCommandCenter() {
             </div>
           </div>
           <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
-            {pipeline.shipments.inTransit + pipeline.shipments.inCustoms} <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748b' }}>حاويات نشطة</span>
+            {count(pipeline.shipments.inTransit + pipeline.shipments.inCustoms)} <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748b' }}>حاويات نشطة</span>
           </div>
           <div style={{ fontSize: '11px', color: '#b45309', fontWeight: 600, marginTop: 4 }}>
-            {pipeline.shipments.inTransit} بالبحر | {pipeline.shipments.inCustoms} بالجمارك
+            {count(pipeline.shipments.inTransit)} بالبحر | {count(pipeline.shipments.inCustoms)} بالجمارك
           </div>
         </div>
 
@@ -169,10 +178,10 @@ export default function ImportCommandCenter() {
             </div>
           </div>
           <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#b91c1c' }}>
-            ${Number((metrics?.liabilities as any)?.unpaidProformaUsd ?? metrics?.liabilities?.totalDebtForeign ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${money2((metrics?.liabilities as any)?.unpaidProformaUsd ?? metrics?.liabilities?.totalDebtForeign ?? 0)}
           </div>
           <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginTop: 4 }}>
-            الرصيد الدفتري: {Number((metrics?.liabilities as any)?.totalDebtEgp || 0).toLocaleString('en-US')} ج.م
+            الرصيد الدفتري: {money0((metrics?.liabilities as any)?.totalDebtEgp || 0)} ج.م
           </div>
         </div>
 
@@ -185,10 +194,10 @@ export default function ImportCommandCenter() {
             </div>
           </div>
           <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#047857' }}>
-            {Number(performance.netProfitPool || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748b' }}>ج.م</span>
+            {money2(performance.netProfitPool)} <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748b' }}>ج.م</span>
           </div>
           <div style={{ fontSize: '11px', color: '#047857', fontWeight: 600, marginTop: 4 }}>
-            إجمالي المبيعات: {Number(performance.totalRevenue || 0).toLocaleString('en-US')} ج.م
+            إجمالي المبيعات: {money0(performance.totalRevenue)} ج.م
           </div>
         </div>
       </div>
@@ -315,7 +324,7 @@ export default function ImportCommandCenter() {
           >
             <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569' }}>1. دراسة الجدوى</div>
             <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#170e5e', margin: '6px 0 2px' }}>
-              {pipeline.projects['feasibility'] || 0}
+              {count(pipeline.projects['feasibility'] || 0)}
             </div>
             <div style={{ fontSize: '10.5px', color: '#64748b' }}>مشاريع قيد الدراسة</div>
           </div>
@@ -334,7 +343,7 @@ export default function ImportCommandCenter() {
           >
             <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569' }}>2. تعاقد وتصنيع</div>
             <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#4338ca', margin: '6px 0 2px' }}>
-              {(pipeline.projects['contracted'] || 0) + (pipeline.projects['manufacturing'] || 0)}
+              {count((pipeline.projects['contracted'] || 0) + (pipeline.projects['manufacturing'] || 0))}
             </div>
             <div style={{ fontSize: '10.5px', color: '#64748b' }}>مصانع الصين وفحص QC</div>
           </div>
@@ -353,7 +362,7 @@ export default function ImportCommandCenter() {
           >
             <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569' }}>3. الشحن الدولي</div>
             <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0284c7', margin: '6px 0 2px' }}>
-              {pipeline.shipments.inTransit}
+              {count(pipeline.shipments.inTransit)}
             </div>
             <div style={{ fontSize: '10.5px', color: '#64748b' }}>حاويات بالبحر / الجو</div>
           </div>
@@ -372,7 +381,7 @@ export default function ImportCommandCenter() {
           >
             <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569' }}>4. التخليص الجمركي</div>
             <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#d97706', margin: '6px 0 2px' }}>
-              {pipeline.shipments.inCustoms}
+              {count(pipeline.shipments.inCustoms)}
             </div>
             <div style={{ fontSize: '10.5px', color: '#64748b' }}>نافذة وACI والرقابة</div>
           </div>
@@ -391,7 +400,7 @@ export default function ImportCommandCenter() {
           >
             <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569' }}>5. استلام المخازن</div>
             <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10b981', margin: '6px 0 2px' }}>
-              {pipeline.shipments.arrived}
+              {count(pipeline.shipments.arrived)}
             </div>
             <div style={{ fontSize: '10.5px', color: '#64748b' }}>شحنات تم استلامها بالـ WAC</div>
           </div>
@@ -410,7 +419,7 @@ export default function ImportCommandCenter() {
           >
             <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569' }}>6. أرباح الشركاء</div>
             <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#059669', margin: '6px 0 2px' }}>
-              {pipeline.projects['closed'] || 0}
+              {count(pipeline.projects['closed'] || 0)}
             </div>
             <div style={{ fontSize: '10.5px', color: '#64748b' }}>مشاريع مقفلة وموزعة</div>
           </div>
@@ -429,11 +438,13 @@ export default function ImportCommandCenter() {
               onClick={() => navigate('/import-sales/projects')}
               style={{ background: 'none', border: 'none', color: '#170e5e', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
             >
-              عرض الكل ({projects.length})
+              عرض الكل ({isProjectsLoading ? '…' : projects.length})
             </button>
           </div>
 
-          {projects.length === 0 ? (
+          {isProjectsLoading ? (
+            <LoadingState title="جاري تحميل مشاريع الاستيراد..." />
+          ) : projects.length === 0 ? (
             <div style={{ padding: '24px 0', textAlign: 'center', color: '#94a3b8', fontSize: '12.5px' }}>
               لا توجد مشاريع استيراد مسجلة حتى الآن.
             </div>
@@ -487,11 +498,13 @@ export default function ImportCommandCenter() {
               onClick={() => navigate('/import-sales/shipments')}
               style={{ background: 'none', border: 'none', color: '#170e5e', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
             >
-              عرض الكل ({shipments.length})
+              عرض الكل ({isShipmentsLoading ? '…' : shipments.length})
             </button>
           </div>
 
-          {shipments.length === 0 ? (
+          {isShipmentsLoading ? (
+            <LoadingState title="جاري تحميل الشحنات..." />
+          ) : shipments.length === 0 ? (
             <div style={{ padding: '24px 0', textAlign: 'center', color: '#94a3b8', fontSize: '12.5px' }}>
               لا توجد شحنات بحرية مسجلة حاليًا.
             </div>

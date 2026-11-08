@@ -31,11 +31,12 @@ import {
   Trash2Icon,
 } from '@/shared/components/icons/AppIcons';
 import { toast } from '@/shared/components/system-alert';
+import { LoadingState } from '@/shared/ui/loading-state';
 import { useProductsQuery } from '@/shared/hooks/use-catalog-queries';
 import { SearchableCombobox } from '@/shared/ui/searchable-combobox';
 
 export default function ImportProjectsManager() {
-  const { data: projects = [], refetch } = useImportProjectsQuery();
+  const { data: projects = [], isLoading: isProjectsLoading, refetch } = useImportProjectsQuery();
   const createProjectMutation = useCreateImportProjectMutation();
   const calculateFeasibilityMutation = useCalculateFeasibilityMutation();
   const convertFeasibilityMutation = useConvertFeasibilityToProjectMutation();
@@ -736,7 +737,7 @@ export default function ImportProjectsManager() {
       <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h2 style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-            قائمة مشاريع وصفقات الاستيراد ({projects.length})
+            قائمة مشاريع وصفقات الاستيراد ({isProjectsLoading ? '…' : projects.length})
           </h2>
           <button
             onClick={() => refetch()}
@@ -747,7 +748,9 @@ export default function ImportProjectsManager() {
           </button>
         </div>
 
-        {projects.length === 0 ? (
+        {isProjectsLoading ? (
+          <LoadingState title="جاري تحميل مشاريع الاستيراد..." />
+        ) : projects.length === 0 ? (
           <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
             <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>
               لا توجد مشاريع استيراد مسجلة

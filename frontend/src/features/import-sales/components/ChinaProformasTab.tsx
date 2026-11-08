@@ -24,7 +24,7 @@ export interface PiItemLine {
 }
 
 export function ChinaProformasTab() {
-  const { data: proformas = [], refetch } = useProformaInvoicesQuery();
+  const { data: proformas = [], isLoading: isProformasLoading, refetch } = useProformaInvoicesQuery();
   const { data: suppliers = [] } = useChinaSuppliersQuery();
   // I1-P1: real inventory items for the per-line picker. The product
   // has no foreign (USD) price — its costPrice is EGP — so picking a
@@ -281,7 +281,13 @@ export function ChinaProformasTab() {
             </tr>
           </thead>
           <tbody>
-            {proformas.length === 0 ? (
+            {isProformasLoading ? (
+              <tr>
+                <td colSpan={7} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
+                  جاري تحميل الفواتير المبدئية...
+                </td>
+              </tr>
+            ) : proformas.length === 0 ? (
               <tr>
                 <td colSpan={7} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
                   لا توجد فواتير مبدئية مسجلة حالياً

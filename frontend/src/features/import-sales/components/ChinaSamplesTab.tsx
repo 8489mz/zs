@@ -15,7 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { http } from '@/lib/http';
 
 export function ChinaSamplesTab() {
-  const { data: samples = [], refetch } = useSampleOrdersQuery();
+  const { data: samples = [], isLoading: isSamplesLoading, refetch } = useSampleOrdersQuery();
   const { data: suppliers = [] } = useChinaSuppliersQuery();
   const createSampleMutation = useCreateSampleOrderMutation();
   const updateInspectionMutation = useUpdateSampleInspectionMutation();
@@ -151,7 +151,13 @@ export function ChinaSamplesTab() {
             </tr>
           </thead>
           <tbody>
-            {samples.length === 0 ? (
+            {isSamplesLoading ? (
+              <tr>
+                <td colSpan={8} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
+                  جاري تحميل طلبات العينات...
+                </td>
+              </tr>
+            ) : samples.length === 0 ? (
               <tr>
                 <td colSpan={8} style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
                   لا توجد طلبات عينات مسجلة حالياً

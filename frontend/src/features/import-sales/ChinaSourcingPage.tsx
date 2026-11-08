@@ -20,18 +20,19 @@ import {
   AlertTriangleIcon,
 } from '@/shared/components/icons/AppIcons';
 import { toast } from '@/shared/components/system-alert';
+import { LoadingState } from '@/shared/ui/loading-state';
 import { ChinaQuotationsTab } from './components/ChinaQuotationsTab';
 import { ChinaSamplesTab } from './components/ChinaSamplesTab';
 import { ChinaProformasTab } from './components/ChinaProformasTab';
 
 export default function ChinaSourcingPage() {
-  const { data: suppliers = [], refetch } = useChinaSuppliersQuery();
-  const { data: qcInspections = [], refetch: refetchQc } = useQcInspectionsQuery();
+  const { data: suppliers = [], isLoading: isSuppliersLoading, refetch } = useChinaSuppliersQuery();
+  const { data: qcInspections = [], isLoading: isQcLoading, refetch: refetchQc } = useQcInspectionsQuery();
   const upsertSupplierMetaMutation = useUpsertSupplierMetaMutation('');
   const createQcMutation = useCreateQcInspectionMutation();
 
   const [activeTab, setActiveTab] = useState<'factories' | 'quotations' | 'samples' | 'proformas' | 'qc' | 'trips'>('factories');
-  const { data: sourcingTrips = [], refetch: refetchTrips } = useSourcingTripsQuery();
+  const { data: sourcingTrips = [], isLoading: isTripsLoading, refetch: refetchTrips } = useSourcingTripsQuery();
   const createTripMutation = useCreateSourcingTripMutation();
   const [isTripModalOpen, setIsTripModalOpen] = useState(false);
   const [tripTitle, setTripTitle] = useState('');
@@ -202,12 +203,12 @@ export default function ChinaSourcingPage() {
   };
 
   const tabItems: Array<{ key: 'factories' | 'quotations' | 'samples' | 'proformas' | 'qc' | 'trips'; label: string }> = [
-    { key: 'factories', label: `دليل المصانع والحسابات الموثقة (${suppliers.length})` },
+    { key: 'factories', label: `دليل المصانع والحسابات الموثقة (${isSuppliersLoading ? '…' : suppliers.length})` },
     { key: 'quotations', label: 'مقارنة عروض الأسعار (RFQ)' },
     { key: 'samples', label: 'العينات والاعتماد المرجعي' },
     { key: 'proformas', label: 'الفواتير المبدئية وأوامر الشراء (PI / PO)' },
-    { key: 'qc', label: `تقارير فحص الجودة (${qcInspections.length})` },
-    { key: 'trips', label: `رحلات الصين والمعارض (${sourcingTrips.length})` },
+    { key: 'qc', label: `تقارير فحص الجودة (${isQcLoading ? '…' : qcInspections.length})` },
+    { key: 'trips', label: `رحلات الصين والمعارض (${isTripsLoading ? '…' : sourcingTrips.length})` },
   ];
 
   return (
@@ -301,7 +302,7 @@ export default function ChinaSourcingPage() {
         <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h2 style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', margin: 0 }}>
-              سجل رحلات وزيارات المصانع بالصين ({sourcingTrips.length})
+              سجل رحلات وزيارات المصانع بالصين ({isTripsLoading ? '…' : sourcingTrips.length})
             </h2>
             <button
               onClick={() => setIsTripModalOpen(true)}
@@ -324,7 +325,9 @@ export default function ChinaSourcingPage() {
             </button>
           </div>
 
-          {sourcingTrips.length === 0 ? (
+          {isTripsLoading ? (
+            <LoadingState title="جاري تحميل رحلات المصانع..." />
+          ) : sourcingTrips.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b', fontSize: '13px' }}>
               لا توجد رحلات مصانع مسجلة حالياً. قم بتسجيل زيارات المعارض والمصانع لتوثيق المصاريف والنتائج.
             </div>
@@ -418,7 +421,9 @@ export default function ChinaSourcingPage() {
             </button>
           </div>
 
-          {filteredSuppliers.length === 0 ? (
+          {isSuppliersLoading ? (
+            <LoadingState title="جاري تحميل المصانع والموردين..." />
+          ) : filteredSuppliers.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '48px 20px', border: '1px dashed #cbd5e1', borderRadius: 10, margin: '10px 0' }}>
               <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
                 لا توجد مصانع أو موردين دوليين مسجلين
@@ -531,7 +536,7 @@ export default function ChinaSourcingPage() {
         <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h2 style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-              سجل فحوصات الجودة ومراحل التصنيع ({qcInspections.length})
+              سجل فحوصات الجودة ومراحل التصنيع ({isQcLoading ? '…' : qcInspections.length})
             </h2>
             <button
               onClick={() => refetchQc()}
@@ -542,7 +547,9 @@ export default function ChinaSourcingPage() {
             </button>
           </div>
 
-          {qcInspections.length === 0 ? (
+          {isQcLoading ? (
+            <LoadingState title="جاري تحميل تقارير الفحص..." />
+          ) : qcInspections.length === 0 ? (
             <div style={{ padding: '30px 0', textAlign: 'center', color: '#64748b', fontSize: '12.5px' }}>
               لا توجد تقارير فحص مسجلة حتى الآن.
             </div>
