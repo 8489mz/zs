@@ -1784,23 +1784,20 @@ export class MaritimeFreightService {
     const baseCost = Number(dto.baseCost || 0);
     const marginType = dto.marginType || 'fixed';
     const marginValue = Number(dto.marginValue || 0);
-    const currencySetting = await this.db
-      .selectFrom('settings')
-      .select('value')
-      .where('tenant_id', '=', tenantId)
-      .where('key', '=', 'currency')
-      .executeTakeFirst();
-    let systemCurrency = 'EGP';
-    if (currencySetting) {
-      try { systemCurrency = String(JSON.parse(currencySetting.value)); }
-      catch { systemCurrency = String(currencySetting.value); }
-    }
-    const exchangeRate = (dto.currency || 'USD').trim().toUpperCase() === systemCurrency.trim().toUpperCase()
-      ? 1
-      : Number(dto.exchangeRate);
-    if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
-      throw new BadRequestException('سعر الصرف يجب أن يكون أكبر من صفر');
-    }
+    // INV-MARITIME-QUOTATION-FX-RESOLVED: the quotation rate resolves
+    // through the shared resolver, never from the client alone. A
+    // supplied rate stands after validation; an omitted rate resolves
+    // to the live registered rate; the base currency resolves to 1;
+    // a currency with no registered rate fails closed. The old inline
+    // read took the base currency from settings with a fail-open
+    // 'EGP' default and trusted Number(dto.exchangeRate) unchecked,
+    // so a quotation with no rate threw a bare positivity error while
+    // a quotation with a stale client rate priced at that rate. The
+    // automated pipeline keeps working: it passes the resolver's own
+    // rate in as the supplied rate.
+    const currency = (dto.currency || 'USD').trim().toUpperCase();
+    const exchangeRate = await this.resolveFreightExchangeRate(tenantId, currency, dto.exchangeRate);
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
 
     let finalTotal = baseCost;
     if (marginType === 'percentage') {
@@ -1809,7 +1806,10 @@ export class MaritimeFreightService {
       finalTotal = baseCost + marginValue;
     }
     finalTotal = Math.round(finalTotal * 10_000) / 10_000;
-    const finalTotalLocal = Math.round(finalTotal * exchangeRate * 10_000) / 10_000;
+    // INV-MARITIME-QUOTATION-FX-CONVERSION: the local total converts
+    // at the base currency's book digits through the shared engine,
+    // not at a fixed 4dp cut.
+    const finalTotalLocal = convertFxAmount(finalTotal, exchangeRate, digits);
 
     const transportMode = dto.transportMode || 'sea';
     let grossWeightKg = Number(dto.grossWeightKg || 0);
@@ -5137,6 +5137,11 @@ export class MaritimeFreightService {
       otherCharges: Number(dto.otherCharges || 0),
       rateCard: matchedCard ? this.mapRateCardRow(matchedCard) : null,
       containerCount,
+      // INV-FX-CONVERSION-SINGLE-ENGINE: the audit converts at the
+      // tenant's book digits. The rate itself is not passed here:
+      // the rate-card query above already filters to the invoice
+      // currency, so the audit never converts across currencies.
+      moneyDigits: currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId)),
     });
 
     return {

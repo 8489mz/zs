@@ -1,3 +1,6 @@
+import { convertFxAmount } from '../../accounting/engines/fx-conversion.engine';
+import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+
 /**
  * Pure Calculation Engine: Freight Audit & Carrier Rate Reconciliation
  *
@@ -27,6 +30,12 @@ export interface FreightAuditInput {
   } | null;
   containerCount?: number;
   exchangeRate?: number; // Rate to convert rateCard.currency into invoicedCurrency
+  // Book digits the converted amounts round at. Default 3 = the
+  // engine's historical cut; the live caller passes the tenant's
+  // book digits. The rate itself stays a caller-supplied input: a
+  // pure engine reads no database, and the live caller resolves it
+  // through resolveFxRate.
+  moneyDigits?: MoneyDigits;
 }
 
 export type FreightAuditStatus =
@@ -123,25 +132,36 @@ export function calculateFreightAudit(input: FreightAuditInput): FreightAuditRes
     };
   }
 
+  // INV-FX-CONVERSION-SINGLE-ENGINE: every FX conversion in this
+  // pure engine runs through the shared conversion primitive at the
+  // caller's book digits, never through hand-rolled
+  // Math.round(*1000)/1000 rate math. At the default 3 digits the
+  // per-unit and total conversions are identical to the old cuts;
+  // the breakdown now rounds each component per unit before scaling
+  // by container count, so sub-minor-unit inputs can differ by one
+  // minor unit (pinned in maritime-fx-resolver.spec.ts case 8).
+  const digits: MoneyDigits = input.moneyDigits ?? 3;
   const fxMultiplier = (cardCurrency !== invCurrency && fxRate > 0) ? fxRate : 1;
-  const ratePerUnit = Math.round(Number(rateCard.totalFreightCost || 0) * fxMultiplier * 1000) / 1000;
-  const contractedTotal = Math.round(ratePerUnit * containerCount * 1000) / 1000;
-  const varianceAmount = Math.round((invoicedTotal - contractedTotal) * 1000) / 1000;
+  const ratePerUnit = convertFxAmount(Number(rateCard.totalFreightCost || 0), fxMultiplier, digits);
+  const contractedTotal = roundMoney(ratePerUnit * containerCount, digits);
+  const varianceAmount = roundMoney(invoicedTotal - contractedTotal, digits);
   const variancePct =
     contractedTotal > 0
-      ? Math.round(((varianceAmount / contractedTotal) * 100) * 100) / 100
+      ? roundMoney((varianceAmount / contractedTotal) * 100, 2)
       : 0;
 
-  // Breakdown diffs with FX applied
-  const contractedOcean = (Number(rateCard.oceanFreight || 0) * fxMultiplier) * containerCount;
-  const contractedThc = ((Number(rateCard.thcOrigin || 0) + Number(rateCard.thcDestination || 0)) * fxMultiplier) * containerCount;
-  const contractedBaf = (Number(rateCard.bafCharges || 0) * fxMultiplier) * containerCount;
-  const contractedOther = (Number(rateCard.otherCharges || 0) * fxMultiplier) * containerCount;
+  // Breakdown diffs with FX applied: each contracted component
+  // converts per unit through the shared engine, then scales by
+  // the container count.
+  const contractedOcean = convertFxAmount(Number(rateCard.oceanFreight || 0), fxMultiplier, digits) * containerCount;
+  const contractedThc = convertFxAmount((Number(rateCard.thcOrigin || 0) + Number(rateCard.thcDestination || 0)), fxMultiplier, digits) * containerCount;
+  const contractedBaf = convertFxAmount(Number(rateCard.bafCharges || 0), fxMultiplier, digits) * containerCount;
+  const contractedOther = convertFxAmount(Number(rateCard.otherCharges || 0), fxMultiplier, digits) * containerCount;
 
-  const oceanFreightDiff = Math.round(((Number(input.oceanFreight || 0)) - contractedOcean) * 1000) / 1000;
-  const thcDiff = Math.round(((Number(input.thcCharges || 0)) - contractedThc) * 1000) / 1000;
-  const bafDiff = Math.round(((Number(input.bafCharges || 0)) - contractedBaf) * 1000) / 1000;
-  const otherDiff = Math.round(((Number(input.otherCharges || 0)) - contractedOther) * 1000) / 1000;
+  const oceanFreightDiff = roundMoney(Number(input.oceanFreight || 0) - contractedOcean, digits);
+  const thcDiff = roundMoney(Number(input.thcCharges || 0) - contractedThc, digits);
+  const bafDiff = roundMoney(Number(input.bafCharges || 0) - contractedBaf, digits);
+  const otherDiff = roundMoney(Number(input.otherCharges || 0) - contractedOther, digits);
 
   // Tolerance of 0.01 for floating-point / rounding differences
   const TOLERANCE = 0.01;
