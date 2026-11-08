@@ -6,6 +6,7 @@ import { FormSection } from '@/shared/components/form-section';
 import { formatCurrency } from '@/lib/format';
 import type { ReportsSectionContentProps } from '@/features/reports/components/reports-section.types';
 import { CircularProgress } from '@/shared/components/charts/CircularProgress';
+import { SalesTrendChart } from '@/shared/components/charts/SalesTrendChart';
 import { ShiftAnalysisChart } from '@/shared/components/charts/ShiftAnalysisChart';
 import { ShoppingCartIcon, PackageIcon, CreditCardIcon, TrendingUpIcon } from '@/shared/components/icons/AppIcons';
 
@@ -134,26 +135,53 @@ export function OverviewReportSection({
     ];
   }, [executiveRows, formatPercent]);
 
+  // INV-REPORTS-REAL-SALES-PURCHASES-SERIES: the chart draws the
+  // backend series — one real net point per bucket of the selected
+  // range. The daily label is MM-DD (unique inside a <=92-day
+  // window); monthly buckets keep their YYYY-MM key. When the
+  // series is absent the card keeps the honest two-number boxes
+  // instead of inventing points.
+  const series = report?.salesPurchasesSeries;
+  const chartData = useMemo(
+    () =>
+      (series?.points ?? []).map((point) => ({
+        name: point.date.length === 7 ? point.date : point.date.slice(5),
+        sales: point.sales,
+        purchases: point.purchases,
+      })),
+    [series],
+  );
+  const hasSeries = chartData.length > 0;
+
   return (
     <div className="page-stack" style={{ gap: '12px' }}>
       {/* 1. Visual Command Center: Side-by-Side Charts (Area Trend + Margin Donut) */}
       <div className="reports-charts-hub-grid">
-        {/* Only display backed-by-invoices aggregates; this API has no time-series rows. */}
         <FormSection
           title={t('reports.sections.overview_report_section.s0', 'إجمالي المبيعات والمشتريات')}
-          description={t('reports.overview_time_series_unavailable', 'القيم التالية فعلية للفترة المختارة؛ لا تتوفر نقاط زمنية للرسم من هذا المصدر.')}
+          description={
+            hasSeries
+              ? series?.granularity === 'month'
+                ? t('reports.overview_series_from_invoices_monthly', 'كل نقطة هي إجمالي شهرها الحقيقي من الفواتير المعتمدة في الفترة المختارة.')
+                : t('reports.overview_series_from_invoices', 'كل نقطة هي إجمالي يومها الحقيقي من الفواتير المعتمدة في الفترة المختارة.')
+              : t('reports.overview_time_series_unavailable', 'القيم التالية فعلية للفترة المختارة؛ لا تتوفر نقاط زمنية للرسم من هذا المصدر.')
+          }
           className="reports-chart-motion"
         >
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px', minHeight: '130px', alignItems: 'center' }}>
-            <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '10px', minWidth: 0 }}>
-              <div style={{ color: '#64748b', fontSize: '0.8rem' }}>{t('reports.net_sales', 'صافي المبيعات')}</div>
-              <strong>{formatCurrency(netSales)}</strong>
+          {hasSeries ? (
+            <SalesTrendChart data={chartData} height={300} />
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px', minHeight: '130px', alignItems: 'center' }}>
+              <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '10px', minWidth: 0 }}>
+                <div style={{ color: '#64748b', fontSize: '0.8rem' }}>{t('reports.net_sales', 'صافي المبيعات')}</div>
+                <strong>{formatCurrency(netSales)}</strong>
+              </div>
+              <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '10px', minWidth: 0 }}>
+                <div style={{ color: '#64748b', fontSize: '0.8rem' }}>{t('reports.net_purchases', 'صافي المشتريات')}</div>
+                <strong>{formatCurrency(report?.purchases.netPurchases ?? 0)}</strong>
+              </div>
             </div>
-            <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '10px', minWidth: 0 }}>
-              <div style={{ color: '#64748b', fontSize: '0.8rem' }}>{t('reports.net_purchases', 'صافي المشتريات')}</div>
-              <strong>{formatCurrency(report?.purchases.netPurchases ?? 0)}</strong>
-            </div>
-          </div>
+          )}
         </FormSection>
 
         {/* Left (35%): Profit Margin & Flow Distribution */}

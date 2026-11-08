@@ -54,12 +54,16 @@ export function SalesTrendChart({ data, height = 300 }: SalesTrendChartProps) {
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border, #e2e8f0)" />
-          <XAxis 
-            dataKey="name" 
-            axisLine={false} 
-            tickLine={false} 
+          <XAxis
+            dataKey="name"
+            axisLine={false}
+            tickLine={false}
             tick={{ fill: 'var(--text-muted, #64748b)', fontSize: 12 }}
             dy={10}
+            // INV-REPORTS-REAL-SALES-PURCHASES-SERIES: a daily series
+            // can hold up to 92 labels; thin them instead of overlapping.
+            interval="preserveStartEnd"
+            minTickGap={24}
           />
           <YAxis 
             axisLine={false} 

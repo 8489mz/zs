@@ -59,6 +59,21 @@ export interface ReportSummary {
     revenue: number;
     total?: number;
   }>;
+  /* INV-REPORTS-REAL-SALES-PURCHASES-SERIES: one point per
+  business-date bucket of the selected range (daily up to 92 days,
+  monthly beyond), each point the real net sales / net purchases
+  of its bucket from posted invoices. The points sum exactly to
+  sales.netSales / purchases.netPurchases. Absent on old payloads
+  (e.g. the FakeDb fallback before this package); the overview
+  section falls back to the honest two-number boxes then. */
+  salesPurchasesSeries?: {
+    granularity: 'day' | 'month';
+    points: Array<{
+      date: string;
+      sales: number;
+      purchases: number;
+    }>;
+  };
 }
 
 export interface CustomerLedgerEntry {

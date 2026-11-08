@@ -11,6 +11,11 @@ import { Database } from '../../database/database.types';
 import { ReportRangeQueryDto } from './dto/report-query.dto';
 import { buildPagination, filterScope, getBusinessTimezone, parseRange, setBusinessTimezoneResolver } from './helpers/reports-range.helper';
 import { buildCustomerRfmPayload, buildReportSummaryAggregates, buildReportSummaryPayload } from './helpers/reports-summary.helper';
+import {
+  buildSalesPurchasesSeries,
+  buildSalesPurchasesSeriesComponents,
+  buildSeriesDayComponentsFromRows,
+} from './helpers/reports-series.helper';
 import { buildDashboardComputedState, buildDashboardOverviewPayload, buildDashboardScope, buildInventorySnapshot, buildPartnerExposureSnapshot } from './helpers/reports-dashboard.helper';
 import { buildCustomerBalancesPayload, buildCustomerLedgerPayload, buildSupplierBalancesPayload, buildSupplierLedgerPayload, LedgerSummaryRow, PartnerLedgerEntryRow } from './helpers/reports-ledger.helper';
 import { buildCustomerLedgerTotals, buildSupplierLedgerTotals } from './helpers/reports-partner-ledger.helper';
@@ -131,21 +136,42 @@ export class ReportsService {
         returnedSaleItemsQuery.execute(),
       ]);
 
-      return this.withScope({
-        range,
-        ...buildReportSummaryPayload({
+      // INV-REPORTS-REAL-SALES-PURCHASES-SERIES: the trend series is
+      // built from the same rows the payload totals come from, with
+      // the same netting, so its points sum to the card totals.
+      const rowPayload = buildReportSummaryPayload({
+        salesRows: salesRows as any,
+        servicesRows: rawServicesRows as any,
+        purchasesRows: purchasesRows as any,
+        expensesRows: expensesRows as any,
+        returnsRows: returnsRows as any,
+        treasuryRows: treasuryRows as any,
+        saleItemsRows: saleItemsRows as any,
+        returnedSaleItemsRows: returnedSaleItemsRows as any,
+        topProductsLimit: 10,
+        deliveryFeeMode,
+        storeFleetCommissionRate,
+      });
+      const rowSeries = buildSalesPurchasesSeries({
+        fromDate: fromDate!,
+        toDate: toDate!,
+        timezone: getBusinessTimezone(),
+        dayComponents: buildSeriesDayComponentsFromRows({
           salesRows: salesRows as any,
           servicesRows: rawServicesRows as any,
           purchasesRows: purchasesRows as any,
-          expensesRows: expensesRows as any,
           returnsRows: returnsRows as any,
-          treasuryRows: treasuryRows as any,
-          saleItemsRows: saleItemsRows as any,
           returnedSaleItemsRows: returnedSaleItemsRows as any,
-          topProductsLimit: 10,
-          deliveryFeeMode,
-          storeFleetCommissionRate,
+          timezone: getBusinessTimezone(),
         }),
+        netSalesTotal: rowPayload.sales.netSales,
+        netPurchasesTotal: rowPayload.purchases.netPurchases,
+      });
+
+      return this.withScope({
+        range,
+        ...rowPayload,
+        salesPurchasesSeries: rowSeries,
       }, auth);
     }
 
@@ -162,17 +188,41 @@ export class ReportsService {
       deliveryFeeMode,
     });
 
+    // INV-REPORTS-REAL-SALES-PURCHASES-SERIES: the trend series is
+    // built from the same rows, statuses and scope filters as the
+    // totals above, with the same netting, so its points sum to the
+    // card totals.
+    const timezone = getBusinessTimezone();
+    const dayComponents = await buildSalesPurchasesSeriesComponents({
+      db: this.db,
+      query,
+      fromDate,
+      toDate,
+      tenantId: this.scope(auth).tenantId,
+      timezone,
+    });
+    const payload = buildReportSummaryPayload({
+      countsOverride: aggregates.countsOverride,
+      totalsOverride: aggregates.totalsOverride,
+      cogsOverride: aggregates.cogsOverride,
+      topProductsOverride: aggregates.topProductsOverride,
+      topProductsLimit: 10,
+      deliveryFeeMode,
+      storeFleetCommissionRate,
+    });
+    const series = buildSalesPurchasesSeries({
+      fromDate,
+      toDate,
+      timezone,
+      dayComponents,
+      netSalesTotal: payload.sales.netSales,
+      netPurchasesTotal: payload.purchases.netPurchases,
+    });
+
     return this.withScope({
       range,
-      ...buildReportSummaryPayload({
-        countsOverride: aggregates.countsOverride,
-        totalsOverride: aggregates.totalsOverride,
-        cogsOverride: aggregates.cogsOverride,
-        topProductsOverride: aggregates.topProductsOverride,
-        topProductsLimit: 10,
-        deliveryFeeMode,
-        storeFleetCommissionRate,
-      }),
+      ...payload,
+      salesPurchasesSeries: series,
     }, auth);
   }
 
