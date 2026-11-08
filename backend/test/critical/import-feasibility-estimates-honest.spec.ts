@@ -3,9 +3,12 @@ New file: backend/test/critical/import-feasibility-estimates-honest.spec.ts
 Pins the honest-estimates rule (INV-IMPORT-ESTIMATES-HONEST): no silent
 default in any money-creating path. Four grounded dispositions:
 
-1. QUOTATIONS (estimate, labelled): createQuotation still computes the
-   estimate from the 50 rate / 5% customs fallbacks when the caller
-   supplies neither — but the row now RECORDS the basis
+1. QUOTATIONS (estimate, labelled): createQuotation resolves the
+   rate live through resolveFxRate when the caller supplies none
+   (the fixture registers USD 50, so the stored basis still reads
+   50 — now as a live rate, never an invented one) and still
+   computes the estimate from the 5% customs fallback when the
+   caller supplies neither — but the row now RECORDS the basis
    (exchange_rate_used, exchange_rate_assumed, customs_rate_assumed)
    so the comparison list and any consumer can label the estimate with
    what was assumed instead of presenting an invented rate as fact.

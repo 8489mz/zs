@@ -10,8 +10,9 @@ variance and container-deposit deductions — all posted to the
 ledger — so the reported "profit" overstated the books. The
 autopsy called invoiced-minus-COGS "realised net profit" while
 excluding operating/broker/FX costs, computed factory cost on
-B/L quantity, used a silent || 50 exchange rate, and counted
-broker expenses without saying where each one landed.
+B/L quantity, invented a 50 exchange rate when no shipment rate
+was recorded, and counted broker expenses without saying where
+each one landed.
 
 WHAT THIS PINS, driving the real updateShipmentCosts (receipt),
 disburseBrokerAdvance, liquidateBrokerExpenses,
@@ -27,11 +28,12 @@ PGlite through the real posting boundary:
   reported as excluded and never enter profit.
 - The autopsy renames the figure to gross trading margin (the
   old net-profit field is gone), labels the exchange-rate
-  source (arrival / pricing / assumed 50), reports factory
-  cost on both B/L and received quantities, states the posted
-  receipt landed value separately from shipment-field
-  estimates, and breaks broker expenses down by the path each
-  one took.
+  source (arrival / pricing / live — the live registered rate
+  when no shipment rate is recorded, failing closed when none
+  is registered), reports factory cost on both B/L and received
+  quantities, states the posted receipt landed value separately
+  from shipment-field estimates, and breaks broker expenses
+  down by the path each one took.
 */
 
 import 'reflect-metadata';
@@ -403,20 +405,27 @@ async function main(): Promise<void> {
     }
   }
 
-  // Case 3: no arrival or pricing rate — the autopsy labels the
-  // assumed rate instead of silently using 50.
+  // Case 3: no arrival or pricing rate — the autopsy resolves the
+  // LIVE registered rate (labelled 'live', nothing assumed) instead
+  // of silently inventing 50 (F1, INV-IMPORT-FX-RESOLVER); with no
+  // registered rate at all it fails closed.
   {
     const db = await makeDb();
     try {
       const service = makeService(db);
       await seedShipment(db, null);
       const autopsy: any = await service.getContainerAutopsySheet('t1', 'sh-1');
-      assert.equal(autopsy.basis.exchangeRateSource, 'assumed_50');
-      assert.equal(autopsy.basis.exchangeRateAssumed, true);
+      assert.equal(autopsy.basis.exchangeRateSource, 'live');
+      assert.equal(autopsy.basis.exchangeRateAssumed, false);
       assert.equal(autopsy.landedCosts.exchangeRate, 50);
-      assert.equal(autopsy.landedCosts.exchangeRateAssumed, true);
+      assert.equal(autopsy.landedCosts.exchangeRateAssumed, false);
       assert.equal(autopsy.landedCosts.postedLandedValueEgp, null, 'No posted receipt, no frozen value');
       assert.equal(autopsy.landedCosts.landedCostBasis, 'shipment_field_estimates');
+      await (db as any).deleteFrom('currency_exchange_rates').where('tenant_id', '=', 't1').where('currency_code', '=', 'USD').execute();
+      await assert.rejects(
+        () => service.getContainerAutopsySheet('t1', 'sh-1'),
+        /سعر صرف USD غير متاح/,
+      );
     } finally {
       await db.destroy();
     }

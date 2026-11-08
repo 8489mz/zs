@@ -69,7 +69,15 @@ async function makeDb(): Promise<Kysely<Database>> {
       updated_at timestamptz DEFAULT NOW()
     );
     CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, name text);
+    -- F1 (INV-IMPORT-FX-RESOLVER): createQuotation resolves an
+    -- unsupplied rate live through resolveFxRate, which reads the
+    -- tenant base currency + the registered rate rows. The fixture
+    -- carries them so the lock cases keep proving selection, not FX.
+    CREATE TABLE settings (tenant_id text, key text, value text);
+    CREATE TABLE currency_exchange_rates (id bigserial PRIMARY KEY, tenant_id text, currency_code text, exchange_rate numeric, is_base boolean);
     INSERT INTO suppliers VALUES (1, 't1', 'Supplier A');
+    INSERT INTO settings VALUES ('t1', 'currency', '"EGP"');
+    INSERT INTO currency_exchange_rates (tenant_id, currency_code, exchange_rate, is_base) VALUES ('t1', 'EGP', 1, true), ('t1', 'USD', 50, false);
   `);
   return db;
 }

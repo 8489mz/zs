@@ -5883,13 +5883,20 @@ export class ImportSalesService {
   // INTERNATIONAL RFQ & QUOTATIONS COMPARISON
   // -------------------------------------------------------------
   async createQuotation(tenantId: string, dto: CreateQuotationDto) {
-    // INV-IMPORT-ESTIMATES-HONEST: the 50 rate / 5% customs fallbacks are
-    // recorded, never silent. The estimate stays an estimate, but the row
-    // now carries the exact basis it was computed from so every consumer
-    // (comparison list, reports) can label it with what was assumed.
+    // INV-IMPORT-ESTIMATES-HONEST + INV-IMPORT-FX-RESOLVER (F1): the
+    // estimate basis is recorded, never silent — and the rate itself
+    // is never invented. When the caller supplies no exchange rate,
+    // the rate resolves live through resolveFxRate for the quotation
+    // currency and fails closed when no rate is registered (no
+    // hardcoded 50). The row still carries the exact basis it was
+    // computed from (exchange_rate_used, exchange_rate_assumed) so
+    // every consumer can label the estimate with what was assumed.
     const rateAssumed = dto.exchangeRate === undefined || dto.exchangeRate === null || Number(dto.exchangeRate) <= 0;
     const customsAssumed = dto.estimatedCustomsRatePercent === undefined || dto.estimatedCustomsRatePercent === null;
-    const commRate = !rateAssumed ? Number(dto.exchangeRate) : 50;
+    const currency = String(dto.currency || 'USD').trim().toUpperCase() || 'USD';
+    const commRate = rateAssumed
+      ? await resolveFxRate(this.db, tenantId, currency)
+      : await resolveFxRate(this.db, tenantId, currency, { suppliedRate: Number(dto.exchangeRate) });
     const estLanded =
       Number(dto.unitPriceForeign) * commRate +
       Number(dto.estimatedFreightUsd || 0) * commRate +
@@ -8039,12 +8046,14 @@ export class ImportSalesService {
       .where('tenant_id', '=', tenantId)
       .execute();
 
-    // Exchange rate: the arrival rate is authoritative, then the
-    // pricing rate. A missing rate is NEVER silently replaced by
-    // 50 in a way the reader cannot see: the fallback is labelled
-    // as an assumption (exchangeRateAssumed + exchangeRateSource)
-    // so every EGP figure below is visibly an estimate when no
-    // real rate exists (INV-IMPORT-PROFIT-HONESTY).
+    // Exchange rate (INV-IMPORT-FX-RESOLVER, F1): the arrival rate is
+    // authoritative, then the pricing rate. When neither is recorded,
+    // the rate resolves live through resolveFxRate for USD — the
+    // denomination of the factory/shipping figures below — and fails
+    // closed when no rate is registered, instead of inventing 50.
+    // The source is labelled (exchangeRateSource) so every EGP
+    // figure below is visibly live-resolved when no shipment rate
+    // exists (INV-IMPORT-PROFIT-HONESTY).
     const arrivalRate = Number(shipment.exchange_rate_at_arrival);
     const pricingRate = Number(shipment.pricing_exchange_rate);
     const exchangeRateSource =
@@ -8052,9 +8061,17 @@ export class ImportSalesService {
         ? 'arrival'
         : Number.isFinite(pricingRate) && pricingRate > 0
           ? 'pricing'
-          : 'assumed_50';
-    const exRate = exchangeRateSource === 'arrival' ? arrivalRate : exchangeRateSource === 'pricing' ? pricingRate : 50;
-    const exchangeRateAssumed = exchangeRateSource === 'assumed_50';
+          : 'live';
+    const exRate =
+      exchangeRateSource === 'arrival'
+        ? arrivalRate
+        : exchangeRateSource === 'pricing'
+          ? pricingRate
+          : await resolveFxRate(this.db, tenantId, 'USD');
+    // Nothing is assumed anymore: the rate is either recorded on the
+    // shipment or live-registered. The flag stays in the response so
+    // existing consumers keep their shape.
+    const exchangeRateAssumed = false;
     const factoryTotalUsd = items.reduce((acc, i) => acc + Number(i.quantity) * Number(i.factory_unit_price_usd), 0);
     const factoryTotalEgp = factoryTotalUsd * exRate;
     // Factory cost on the B/L (ordered) quantity is what the
