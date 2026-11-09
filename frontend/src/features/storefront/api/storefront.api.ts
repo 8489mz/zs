@@ -49,6 +49,60 @@ function orderTokenHeaders(token: string): Record<string, string> {
   return { 'x-order-token': token };
 }
 
+/*
+ * INV-REST-STOREFRONT-NO-DEMO (R3-C): the catalog a caller shows must be
+ * the catalog the server returned for the store it asked for — never the
+ * demo menu. The old getCatalog swallowed ANY http error (404, unknown
+ * slug, network failure) and returned a deep clone of
+ * DEMO_STOREFRONT_CATALOG, so a dead link still served a full demo menu
+ * through the API layer, below R2-A's fix (which only removed the fallback
+ * in the kiosk hook). The response also carried no store identity, so no
+ * caller could tell whose menu it was showing.
+ *
+ * resolveStorefrontCatalogResponse is the single decision: it normalizes
+ * the server's categories/products exactly as before, stamps the response
+ * with the store it belongs to (storeSlug = the requested slug, normalized
+ * the same way the server normalizes it; storeName = the name the server
+ * sent, or null — never invented), and throws on a missing or malformed
+ * response instead of inventing a menu. getCatalog itself no longer
+ * catches http errors: an ApiError propagates to the caller, which fails
+ * closed (the public page has an isError screen; the kiosk hook catches
+ * and returns an empty catalog).
+ */
+export function resolveStorefrontCatalogResponse(
+  res: StorefrontCatalogResponse | null | undefined,
+  slug: string,
+): StorefrontCatalogResponse & { storeSlug: string; storeName: string | null } {
+  const cleanSlug = String(slug || '').trim().toLowerCase();
+  if (!res || typeof res !== 'object' || !Array.isArray((res as { products?: unknown }).products)) {
+    throw new Error('تعذّر تحميل كتالوج المتجر: لم تصل بيانات صالحة من الخادم.');
+  }
+  const serverIdentity = res as unknown as Record<string, unknown>;
+  const serverName =
+    typeof serverIdentity.storeName === 'string' && serverIdentity.storeName.trim()
+      ? serverIdentity.storeName.trim()
+      : typeof serverIdentity.businessName === 'string' && serverIdentity.businessName.trim()
+        ? serverIdentity.businessName.trim()
+        : null;
+  return {
+    ...res,
+    categories: (res.categories || []).map((c) => ({
+      ...c,
+      id: Number(c.id),
+      imageUrl: resolveStorefrontMediaUrl(c.imageUrl) || generatePremiumProductSvg(c.name, c.name),
+    })),
+    products: (res.products || []).map((p) =>
+      withResolvedProductMedia({
+        ...p,
+        id: Number(p.id),
+        categoryId: p.categoryId ? Number(p.categoryId) : null,
+      }),
+    ),
+    storeSlug: cleanSlug,
+    storeName: serverName,
+  };
+}
+
 export const storefrontApi = {
   // Public APIs (No auth needed)
   getInfo: async (slug: string) => {
@@ -201,27 +255,12 @@ export const storefrontApi = {
   },
 
   getCatalog: async (slug: string) => {
-    let res: StorefrontCatalogResponse;
-    try {
-      res = await http<StorefrontCatalogResponse>(`/api/storefront/${encodeURIComponent(slug)}/catalog`);
-    } catch {
-      res = JSON.parse(JSON.stringify(DEMO_STOREFRONT_CATALOG));
-    }
-    if (res?.categories) {
-      res.categories = res.categories.map((c) => ({
-        ...c,
-        id: Number(c.id),
-        imageUrl: resolveStorefrontMediaUrl(c.imageUrl) || generatePremiumProductSvg(c.name, c.name),
-      }));
-    }
-    if (res?.products) {
-      res.products = res.products.map((p) => withResolvedProductMedia({
-        ...p,
-        id: Number(p.id),
-        categoryId: p.categoryId ? Number(p.categoryId) : null,
-      }));
-    }
-    return res;
+    // INV-REST-STOREFRONT-NO-DEMO: no try/catch here on purpose — an http
+    // error (unknown store, 404, network failure) must reach the caller,
+    // never come back as the demo catalog. See
+    // resolveStorefrontCatalogResponse above.
+    const res = await http<StorefrontCatalogResponse>(`/api/storefront/${encodeURIComponent(slug)}/catalog`);
+    return resolveStorefrontCatalogResponse(res, slug);
   },
 
   getSearchSuggestions: async (slug: string, q: string) => {
