@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { addonsApi, type ModifierGroup } from '@/shared/api/addons.api';
+import { buildGroupModifierSelection } from './group-modifier-mapping';
 import type { PosItem } from '@/features/pos/types/pos.types';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { XIcon, CheckIcon, AlertCircleIcon, LayersIcon } from '@/shared/components/icons/AppIcons';
@@ -96,16 +97,7 @@ export function PosItemModifiersModal({ open, onClose, item, onSave }: PosItemMo
       } else {
         setSelectedModifiers([
           ...filtered,
-          {
-            productId: opt.id,
-            optionId: opt.id,
-            groupId: group.id,
-            groupName: group.name,
-            name: opt.name,
-            qty: 1,
-            price: Number(opt.price || 0),
-            costPrice: Number(opt.costPrice || 0),
-          },
+          buildGroupModifierSelection(group, opt),
         ]);
       }
     } else {
@@ -125,16 +117,7 @@ export function PosItemModifiersModal({ open, onClose, item, onSave }: PosItemMo
 
         setSelectedModifiers([
           ...selectedModifiers,
-          {
-            productId: opt.id,
-            optionId: opt.id,
-            groupId: group.id,
-            groupName: group.name,
-            name: opt.name,
-            qty: 1,
-            price: Number(opt.price || 0),
-            costPrice: Number(opt.costPrice || 0),
-          },
+          buildGroupModifierSelection(group, opt),
         ]);
       }
     }
