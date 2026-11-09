@@ -298,7 +298,7 @@ export function ContainerAutopsyModal({ isOpen, onClose, shipmentId }: Container
                     <td style={{ padding: '8px 10px', fontWeight: 700, color: '#170e5e' }}>
                       {formatCurrency(Number(item.unit_landed_cost_egp ?? item.landed_cost_egp))}
                     </td>
-                    <td style={{ padding: '8px 10px', fontWeight: 700, color: '#0f172a' }}>{formatCurrency(Number(item.total_landed_cost_egp ?? Number(item.landed_cost_egp || 0) * Number(item.received_quantity ?? item.quantity || 0)))}</td>
+                    <td style={{ padding: '8px 10px', fontWeight: 700, color: '#0f172a' }}>{formatCurrency(Number(item.total_landed_cost_egp ?? Number(item.landed_cost_egp || 0) * Number((item.received_quantity ?? item.quantity) || 0)))}</td>
                   </tr>
                 ))}
               </tbody>

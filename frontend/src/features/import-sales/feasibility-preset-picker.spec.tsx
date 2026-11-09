@@ -48,7 +48,7 @@ vi.mock('react-i18next', () => ({
 // effect keyed on the query data, so a fresh array literal per render
 // would loop forever. (vi.mock factories run before the module body,
 // so these must live in vi.hoisted, not in plain consts.)
-const { projectsMock, EMPTY_DATA, EMPTY_QUERY, EMPTY_TARIFFS_QUERY, MUTATION } = vi.hoisted(() => {
+const { projectsMock, EMPTY_QUERY, EMPTY_TARIFFS_QUERY, MUTATION } = vi.hoisted(() => {
   const data: any[] = [];
   return {
     projectsMock: vi.fn(),
