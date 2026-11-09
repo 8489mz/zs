@@ -16,6 +16,14 @@
  * inputs — e.g. retail 100 with no offer is 100 / 0% now, not 85 /
  * 15%. The render tests pin the two wiring fixes (no offers-view
  * fallback, visible error state) against the real page.
+ *
+ * R8-D (INV-REST-SIGNAGE-REFETCH-INDICATOR): the R-B6 error state above
+ * only covers the initial load (no prior data). TanStack keeps the last
+ * good data when a background refetch fails, so the hero keeps cycling
+ * stale offers and the full error screen is never reached — the page
+ * below pins the stale banner for that state: refetch failure with
+ * prior data shows the banner AND keeps the old offer; a successful
+ * retry clears it; an in-flight refetch shows no banner at all.
  */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -269,13 +277,14 @@ describe('buildSignagePromoItems (INV-REST-SIGNAGE-TRUTH)', () => {
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const utils = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
         <DigitalSignagePage />
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return { ...utils, queryClient };
 }
 
 describe('DigitalSignagePage wiring (R-B5 fallback + R-B6 error state)', () => {
@@ -316,5 +325,82 @@ describe('DigitalSignagePage wiring (R-B5 fallback + R-B6 error state)', () => {
     await waitFor(() => expect(container.textContent).toContain('80.00'));
     expect(container.textContent).not.toContain('85.00');
     expect(container.textContent).toContain('خصم 20%');
+  });
+});
+
+describe('DigitalSignagePage stale refetch (INV-REST-SIGNAGE-REFETCH-INDICATOR, R8-D)', () => {
+  const offered = () =>
+    product({ offers: [offer({ value: 20, from: '2026-01-01', to: '2026-12-31' })] });
+
+  it('shows a stale banner with retry while keeping the last-known offer after a background refetch fails', async () => {
+    listPageMock.mockResolvedValue({ products: [offered()] });
+    const { container, queryClient } = renderPage();
+
+    await waitFor(() => expect(container.textContent).toContain('80.00'));
+    expect(screen.queryByText('تعذّر تحديث العروض')).not.toBeInTheDocument();
+
+    // The 25s refetch fails: TanStack keeps the last good data, so the
+    // hero must keep showing the old offer — AND the banner must appear.
+    listPageMock.mockRejectedValueOnce(new Error('Network failed'));
+    await queryClient.refetchQueries({ queryKey: ['signage-products'] }).catch(() => {});
+
+    await screen.findByText('تعذّر تحديث العروض');
+    expect(
+      screen.getByText('تُعرض آخر أسعار معروفة وقد تكون قديمة — تحقق من شبكة الشاشة.')
+    ).toBeInTheDocument();
+    expect(screen.getByText('إعادة المحاولة')).toBeInTheDocument();
+    expect(container.textContent).toContain('80.00');
+    // The full error screen is the no-data state — it must not appear here.
+    expect(screen.queryByText('تعذّر تحميل العروض')).not.toBeInTheDocument();
+  });
+
+  it('clears the stale banner and shows the fresh price after a successful retry', async () => {
+    listPageMock.mockResolvedValue({ products: [offered()] });
+    const { container, queryClient } = renderPage();
+
+    await waitFor(() => expect(container.textContent).toContain('80.00'));
+    listPageMock.mockRejectedValueOnce(new Error('Network failed'));
+    await queryClient.refetchQueries({ queryKey: ['signage-products'] }).catch(() => {});
+    await screen.findByText('تعذّر تحديث العروض');
+
+    listPageMock.mockResolvedValue({
+      products: [product({ offers: [offer({ value: 30, from: '2026-01-01', to: '2026-12-31' })] })],
+    });
+    fireEvent.click(screen.getByText('إعادة المحاولة'));
+
+    await waitFor(() => expect(container.textContent).toContain('70.00'));
+    expect(screen.queryByText('تعذّر تحديث العروض')).not.toBeInTheDocument();
+  });
+
+  it('still shows the full error screen — never the stale banner — when the initial load fails', async () => {
+    listPageMock.mockRejectedValueOnce(new Error('Network failed'));
+    renderPage();
+
+    await screen.findByText('تعذّر تحميل العروض');
+    expect(screen.queryByText('تعذّر تحديث العروض')).not.toBeInTheDocument();
+  });
+
+  it('shows no banner while a refetch is in flight and keeps the hero', async () => {
+    listPageMock.mockResolvedValue({ products: [offered()] });
+    const { container, queryClient } = renderPage();
+
+    await waitFor(() => expect(container.textContent).toContain('80.00'));
+
+    let resolveSecond: (value: unknown) => void = () => {};
+    listPageMock.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        resolveSecond = resolve;
+      }),
+    );
+    const refetchPromise = queryClient.refetchQueries({ queryKey: ['signage-products'] });
+    await waitFor(() => expect(listPageMock).toHaveBeenCalledTimes(2));
+    // In flight (no error yet): no banner, hero still shows the old offer.
+    expect(screen.queryByText('تعذّر تحديث العروض')).not.toBeInTheDocument();
+    expect(container.textContent).toContain('80.00');
+
+    resolveSecond({ products: [offered()] });
+    await refetchPromise;
+    expect(screen.queryByText('تعذّر تحديث العروض')).not.toBeInTheDocument();
+    expect(container.textContent).toContain('80.00');
   });
 });

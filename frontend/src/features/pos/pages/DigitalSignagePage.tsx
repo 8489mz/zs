@@ -16,6 +16,7 @@ import { SignageMarqueeFooter } from '../components/signage/SignageMarqueeFooter
 import { SignageSettingsDrawer } from '../components/signage/SignageSettingsDrawer';
 import { SignageNavDrawer } from '../components/signage/SignageNavDrawer';
 import { SignageShowroomWelcome } from '../components/signage/SignageShowroomWelcome';
+import { AlertTriangleIcon } from '@/shared/components/icons/AppIcons';
 
 /* INV-REST-SIGNAGE-TRUTH (R-B5 + signage slice of R-B6): the signage
  * screen must show only real prices. Before this fix the promo builder
@@ -335,6 +336,70 @@ export function DigitalSignagePage() {
         theme={theme}
         onToggleTheme={handleToggleTheme}
       />
+
+      {/* INV-REST-SIGNAGE-REFETCH-INDICATOR (R8-D): a background refetch
+        * that fails while last-known offers are on screen must say so
+        * loudly. TanStack keeps the last good data, so the hero keeps
+        * cycling stale offers and the full error screen below (which only
+        * renders when there is no data at all) is never reached.
+        * isRefetchError is exactly that state (isError with previous
+        * data). The banner shows only while stale offers are actually on
+        * screen (promoItems.length > 0) — when the last good data was an
+        * empty list there is nothing stale to label and the full error
+        * screen already speaks, so no second indicator is stacked on it.
+        * It clears on the next successful refetch (isError goes false);
+        * the retry button is the same productsQuery.refetch() as the full
+        * error screen. Shape mirrors the KDS stale banner precedent
+        * (KdsDisconnectedState variant="banner"): solid red strip, white
+        * text, retry button — as a local banner in this page's own
+        * styling, not the KDS component. */}
+      {productsQuery.isRefetchError && promoItems.length > 0 && (
+        <div
+          role="alert"
+          style={{
+            margin: '12px 28px 0',
+            backgroundColor: '#dc2626',
+            color: '#ffffff',
+            borderRadius: '12px',
+            padding: '12px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            flexWrap: 'wrap',
+            boxShadow: '0 3px 8px rgba(220, 38, 38, 0.25)',
+            zIndex: 10,
+          }}
+        >
+          <AlertTriangleIcon size={22} color="#ffffff" />
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <div style={{ fontSize: '14px', fontWeight: 900 }}>
+              {t('pos.digital_signage_page.stale_banner_title', 'تعذّر تحديث العروض')}
+            </div>
+            <div style={{ fontSize: '12px', color: '#fecaca', marginTop: '2px' }}>
+              {t(
+                'pos.digital_signage_page.stale_banner_desc',
+                'تُعرض آخر أسعار معروفة وقد تكون قديمة — تحقق من شبكة الشاشة.'
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void productsQuery.refetch()}
+            style={{
+              background: '#ffffff',
+              color: '#dc2626',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '10px 18px',
+              fontWeight: 800,
+              fontSize: '14px',
+              cursor: 'pointer',
+            }}
+          >
+            {t('pos.digital_signage_page.retry', 'إعادة المحاولة')}
+          </button>
+        </div>
+      )}
 
       {/* Main Promo Stage */}
       <main
