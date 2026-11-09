@@ -11,6 +11,7 @@ import { settingsApi } from '@/features/settings/api/settings.api';
 import { queryKeys } from '@/app/query-keys';
 import { PLAN_TIERS, type PlanTierKey } from '@/features/settings/components/modular-configurator/modular-presets';
 import { APPS_CATALOG } from '../data/apps-catalog';
+import { resolveAppToggleFeedback } from '../lib/app-toggle-feedback';
 import { AppCard } from '../components/AppCard';
 import { AppsKpiHeader } from '../components/AppsKpiHeader';
 import { AppUpgradeModal } from '../components/AppUpgradeModal';
@@ -88,6 +89,7 @@ export function AppsStorePage() {
   const rawActivity = String(tenant?.activityType || tenant?.pillar || (settings as any)?.businessIndustry || (settings as any)?.activityType || '').trim().toLowerCase();
   const isContractingVertical = rawActivity === 'contracting' || rawActivity === 'construction' || rawActivity === 'مقاولات';
   const isMaritimeVertical = rawActivity === 'maritime_freight' || rawActivity === 'maritime' || rawActivity === 'freight' || rawActivity === 'shipping' || rawActivity === 'شحن';
+  const isWarehousingVertical = rawActivity === 'warehousing' || rawActivity === 'warehouse' || rawActivity === 'wms' || rawActivity.includes('مخازن') || rawActivity.includes('مستودع');
 
   // Scoped visible catalog based on business vertical
   const visibleCatalog = useMemo(() => {
@@ -132,12 +134,37 @@ export function AppsStorePage() {
   // Settings update mutation
   const updateMutation = useMutation({
     mutationFn: (partialSettings: Record<string, any>) => settingsApi.update(partialSettings),
-    onSuccess: (_, variables) => {
+    onSuccess: (response, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings });
+      // INV-REST-SUCCESS-FEEDBACK-TRUTH: toast from the CONFIRMED server
+      // response, never from the requested variables. The backend deletes
+      // posModuleEnabled for non-super-admin actors (protected list) and
+      // forces it false for warehousing tenants for any actor — a
+      // requested install that did not persist must say so, not claim
+      // success.
+      const feedback = resolveAppToggleFeedback(
+        variables,
+        response as unknown as Record<string, unknown>,
+      );
       const changedKey = Object.keys(variables)[0];
       const isEnabled = variables[changedKey];
       const appDef = APPS_CATALOG.find((a) => a.key === changedKey);
       const appTitle = appDef?.title || 'التطبيق';
+      if (feedback.kind === 'rejected') {
+        const rejectedTitles = feedback.rejectedKeys.map(
+          (key) => APPS_CATALOG.find((a) => a.key === key)?.title || key,
+        );
+        if (feedback.enabled) {
+          if (feedback.rejectedKeys.includes('posModuleEnabled') && isWarehousingVertical) {
+            toast.error(`تعذّر تفعيل [${appTitle}]: نقاط البيع غير متاحة لمنشآت قطاع المخازن — أغلقها قطاع المنشأة، ولم يؤكد النظام التثبيت.`);
+          } else {
+            toast.error(`تعذّر تفعيل [${rejectedTitles.join('، ')}]: لم يؤكد النظام التثبيت — تحقق من أن قطاع المنشأة وصلاحياتك تسمح بهذا التطبيق.`);
+          }
+        } else {
+          toast.error(`تعذّر إلغاء تفعيل [${rejectedTitles.join('، ')}]: لم يؤكد النظام التغيير — أعد المحاولة.`);
+        }
+        return;
+      }
       if (isEnabled) {
         toast.success(`تم تفعيل وتثبيت [${appTitle}] بنجاح وتم تحديث القوائم والشاشات.`);
       } else {

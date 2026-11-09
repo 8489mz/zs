@@ -4,6 +4,7 @@ import { queryKeys } from '@/app/query-keys';
 import { settingsApi } from '@/features/settings/api/settings.api';
 import { useAuthStore } from '@/stores/auth-store';
 import { buildBranchPayload, buildLocationPayload, buildSettingsUpdatePayload } from '@/features/settings/contracts';
+import { FORCED_SETTINGS_KEY_LABELS_AR, findOverriddenSettingsValues } from '@/features/settings/lib/settings-save-feedback';
 import { setGlobalSystemCurrency } from '@/lib/currencies';
 import { authApi } from '@/shared/api/auth';
 import { toast } from '@/shared/components/system-alert';
@@ -19,7 +20,7 @@ export function useSettingsUpdateMutation(currentSettings?: AppSettings, onSucce
   const updateSessionMeta = useAuthStore((state) => state.updateSessionMeta);
   return useMutation({
     mutationFn: (values: SettingsFormValues) => settingsApi.update(buildSettingsUpdatePayload(currentSettings, values)),
-    onSuccess: async (updatedSettings) => {
+    onSuccess: async (updatedSettings, variables) => {
       const currentTenant = useAuthStore.getState().tenant;
       const newActivity = (updatedSettings as any)?.activityType;
       const newPillar = (updatedSettings as any)?.pillar;
@@ -55,7 +56,21 @@ export function useSettingsUpdateMutation(currentSettings?: AppSettings, onSucce
         queryClient.invalidateQueries({ queryKey: ['auth'] }),
         invalidateAuditLogs(queryClient),
       ]);
-      toast.success('تم حفظ وتطبيق كافة إعدادات النظام بنجاح!');
+      // INV-REST-SUCCESS-FEEDBACK-TRUTH: never toast success for a value
+      // the server silently overrode. The vertical force can discard a
+      // requested enableEnterpriseFeatures / posModuleEnabled (form
+      // defaults, submit handler, backend read/update paths); only the
+      // confirmed persisted values may be claimed as saved.
+      const overridden = findOverriddenSettingsValues(
+        variables as unknown as Record<string, unknown>,
+        updatedSettings as unknown as Record<string, unknown>,
+      );
+      if (overridden.length > 0) {
+        const names = overridden.map((key) => FORCED_SETTINGS_KEY_LABELS_AR[key]).join('، ');
+        toast.warning(`تم حفظ الإعدادات، لكن لم تُطبَّق: ${names} — لأن قطاع المنشأة يفرض هذه القيم ولا يمكن تغييرها من هنا.`);
+      } else {
+        toast.success('تم حفظ وتطبيق كافة إعدادات النظام بنجاح!');
+      }
       onSuccessCallback?.();
     },
     onError: (error: any) => {

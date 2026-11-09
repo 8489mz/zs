@@ -525,7 +525,11 @@ export const ModulesSettingsTab = memo(function ModulesSettingsTab({ form, disab
       )}
 
       {/* ===== نمط تشغيل المنشأة ونطاق العمل (محل تجاري مبسط مقابل مؤسسة متقدمة) ===== */}
-      {!isContractingVertical && !isMaritimeVertical && !isManufacturingVertical && (
+      {/* INV-REST-SUCCESS-FEEDBACK-TRUTH: wholesale and warehousing force
+          enableEnterpriseFeatures: true at every layer, so this choice is
+          not a real choice for them — hidden here exactly as it already
+          is for contracting/maritime/manufacturing. */}
+      {!isContractingVertical && !isMaritimeVertical && !isManufacturingVertical && !isWholesaleVanVertical && !isWarehousingVertical && (
         <div style={{
           background: '#ffffff',
           border: '1px solid #e2e8f0',
@@ -726,7 +730,7 @@ export const ModulesSettingsTab = memo(function ModulesSettingsTab({ form, disab
           
           {/* نقاط البيع السريعة والكاشير */}
           {(!isContractingVertical && !isMaritimeVertical) || isSuperAdmin ? (
-            <label style={getCardStyle(Boolean(isPosActive), !isContractingVertical && !isMaritimeVertical)}>
+            <label style={getCardStyle(Boolean(isPosActive), !isContractingVertical && !isMaritimeVertical && !isManufacturingVertical && !isWholesaleVanVertical && !isWarehousingVertical)}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={getIconBadgeStyle(Boolean(isPosActive))}>
                   <MonitorIcon size={20} />
@@ -742,12 +746,24 @@ export const ModulesSettingsTab = memo(function ModulesSettingsTab({ form, disab
                       <span style={{ fontSize: '0.7rem', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
                         {t('settings.forms.tabs.modules_settings_tab.s27', "معطل تلقائياً (غير مخصص للشحن)")}
                       </span>
+                    ) : isWarehousingVertical ? (
+                      <span style={{ fontSize: '0.7rem', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                        {t('settings.forms.tabs.modules_settings_tab.s188', "معطل تلقائياً (غير مخصص للمخازن)")}
+                      </span>
+                    ) : isWholesaleVanVertical ? (
+                      <span style={{ fontSize: '0.7rem', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                        {t('settings.forms.tabs.modules_settings_tab.s189', "معطل تلقائياً (غير مخصص للجملة والتوزيع)")}
+                      </span>
+                    ) : isManufacturingVertical ? (
+                      <span style={{ fontSize: '0.7rem', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                        {t('settings.forms.tabs.modules_settings_tab.s190', "معطل تلقائياً (غير مخصص للتصنيع)")}
+                      </span>
                     ) : null}
                   </div>
                   <small className="muted" style={{ fontSize: '0.76rem', color: '#64748b' }}>{t('settings.forms.tabs.modules_settings_tab.s28', "شاشات البيع السريع بالباركود والورديات (يمكن إيقافها لشركات الجملة والخدمات والمشاريع)")}</small>
                 </div>
               </div>
-              <input type="checkbox" style={premiumCheckboxInputStyle} {...form.register('posModuleEnabled')} checked={Boolean(isPosActive)} disabled={disabled || isContractingVertical || isMaritimeVertical} />
+              <input type="checkbox" style={premiumCheckboxInputStyle} {...form.register('posModuleEnabled')} checked={Boolean(isPosActive)} disabled={disabled || isContractingVertical || isMaritimeVertical || isManufacturingVertical || isWholesaleVanVertical || isWarehousingVertical} />
             </label>
           ) : null}
 
@@ -1329,7 +1345,7 @@ export const ModulesSettingsTab = memo(function ModulesSettingsTab({ form, disab
           <label 
             style={getCardStyle(Boolean(isEnterpriseActive), hasEnterpriseFeature || isContractingVertical || isMaritimeVertical)}
             onClick={(e) => {
-              if (isContractingVertical || isMaritimeVertical) return;
+              if (isContractingVertical || isMaritimeVertical || isManufacturingVertical || isWholesaleVanVertical || isWarehousingVertical) return;
               if (!hasEnterpriseFeature) {
                 e.preventDefault();
                 handleLockedCardClick(
@@ -1355,6 +1371,10 @@ export const ModulesSettingsTab = memo(function ModulesSettingsTab({ form, disab
                     <span style={{ fontSize: '0.7rem', background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
                       {t('settings.forms.tabs.modules_settings_tab.s126', "مفعل تلقائياً لمحاسبة الشحن ومراكز التكلفة")}
                     </span>
+                  ) : isManufacturingVertical || isWholesaleVanVertical || isWarehousingVertical ? (
+                    <span style={{ fontSize: '0.7rem', background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                      {t('settings.forms.tabs.modules_settings_tab.s191', "مفعل تلقائياً لقطاع المنشأة")}
+                    </span>
                   ) : !hasEnterpriseFeature ? (
                     <span style={{ fontSize: '0.7rem', background: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe', padding: '1px 6px', borderRadius: '4px', fontWeight: 700, display: 'inline-flex', alignItems: 'center' }}>
                       <LockIcon size={11} /> {t('settings.forms.tabs.modules_settings_tab.s127', "الباقة المتكاملة")}
@@ -1364,7 +1384,7 @@ export const ModulesSettingsTab = memo(function ModulesSettingsTab({ form, disab
                 <small className="muted" style={{ fontSize: '0.76rem', color: '#64748b' }}>{t('settings.forms.tabs.modules_settings_tab.s128', "يفعّل مراكز التكلفة، ربط الفواتير بالمشاريع أو الشحنات، وشروط التعاقد")}</small>
               </div>
             </div>
-            <input type="checkbox" style={premiumCheckboxInputStyle} {...form.register('enableEnterpriseFeatures')} checked={Boolean(isEnterpriseActive)} disabled={disabled || isContractingVertical || isMaritimeVertical || !hasEnterpriseFeature} />
+            <input type="checkbox" style={premiumCheckboxInputStyle} {...form.register('enableEnterpriseFeatures')} checked={Boolean(isEnterpriseActive)} disabled={disabled || isContractingVertical || isMaritimeVertical || isManufacturingVertical || isWholesaleVanVertical || isWarehousingVertical || !hasEnterpriseFeature} />
           </label>
 
           {/* المتجر الإلكتروني وطلبات الأونلاين */}

@@ -304,6 +304,13 @@ export const GeneralSettingsTab = memo(function GeneralSettingsTab({
   const isContractingVertical = rawAct === 'contracting' || rawAct === 'construction' || rawAct === 'مقاولات' || Boolean(form.watch('contractingModuleEnabled'));
   const isMaritimeVertical = rawAct === 'maritime_freight' || rawAct === 'maritime' || rawAct === 'freight' || rawAct === 'shipping' || rawAct === 'شحن' || Boolean(form.watch('maritimeFreightModuleEnabled'));
   const isManufacturingVertical = rawAct === 'manufacturing' || rawAct === 'production' || rawAct === 'تصنيع' || rawAct === 'مصنع' || Boolean(form.watch('manufacturingModuleEnabled'));
+  // INV-REST-SUCCESS-FEEDBACK-TRUTH: wholesale and warehousing force
+  // enableEnterpriseFeatures: true at every layer (form defaults, submit
+  // handler, backend read/update paths), so the operation-mode choice is
+  // not a real choice for them either — the card stays hidden here exactly
+  // as it already does for contracting/maritime/manufacturing.
+  const isWholesaleVertical = rawAct === 'wholesale_van' || rawAct === 'wholesale' || rawAct === 'distribution' || rawAct.includes('توزيع') || rawAct.includes('فان') || rawAct.includes('جمل');
+  const isWarehousingVertical = rawAct === 'warehousing' || rawAct === 'warehouse' || rawAct === 'wms' || rawAct.includes('مخازن') || rawAct.includes('مستودع');
   const isServicesVertical = rawAct === 'services' || rawAct === 'consulting' || rawAct === 'استشارات';
   const isImportVertical = rawAct === 'import_export' || rawAct === 'import';
   const isRestaurantVertical = ['restaurant', 'cafe', 'مطعم', 'كافيه'].includes(rawAct) || Boolean(form.watch('restaurantModuleEnabled'));
@@ -867,7 +874,7 @@ export const GeneralSettingsTab = memo(function GeneralSettingsTab({
       </div>
 
       {/* Card: نمط تشغيل المنشأة ونطاق العمل (Facility Operation Mode) */}
-      {!isContractingVertical && !isMaritimeVertical && !isManufacturingVertical && (
+      {!isContractingVertical && !isMaritimeVertical && !isManufacturingVertical && !isWholesaleVertical && !isWarehousingVertical && (
         <div style={{
           background: '#ffffff',
           border: '1px solid #e2e8f0',
