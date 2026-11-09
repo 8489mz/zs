@@ -106,6 +106,7 @@ import {
 } from './engines/import-payment-method.engine';
 import { evaluateForm4Gate, FORM4_REQUIRED_THRESHOLD_USD } from './engines/import-form4-gate.engine';
 import { resolveBrokerCapitalizationBucket } from './engines/import-broker-capitalization.engine';
+import { resolveImportProjectDisplayStatus } from './engines/import-project-status.engine';
 
 @Injectable()
 export class ImportSalesService {
@@ -828,17 +829,21 @@ export class ImportSalesService {
   // ==========================================
 
   async listProjects(tenantId: string, status?: string) {
-    let query = this.db
+    // INV-IMPORT-PROJECT-STATUS-APPROVED: the list never trusts the
+    // stored import_projects.status — it is a stale single-writer
+    // field (create 'feasibility', convert 'sourcing', close
+    // 'closed'; nothing else ever advances it), so projects that
+    // ran the real cycle without converting read 'feasibility'
+    // forever. The displayed status is derived per project from the
+    // authoritative lifecycle evidence (see the engine), and the
+    // ?status= filter applies to that DERIVED status, so filtering
+    // for 'sourcing' finds an approved-but-unconverted project.
+    const projects = await this.db
       .selectFrom('import_projects')
       .selectAll()
       .where('tenant_id', '=', tenantId)
-      .orderBy('created_at', 'desc');
-
-    if (status) {
-      query = query.where('status', '=', status);
-    }
-
-    const projects = await query.execute();
+      .orderBy('created_at', 'desc')
+      .execute();
 
     const shipmentCounts = await this.db
       .selectFrom('import_shipments')
@@ -852,10 +857,41 @@ export class ImportSalesService {
       shipmentCounts.map((sc) => [String(sc.project_id), Number(sc.shipment_count)])
     );
 
-    return projects.map((p) => ({
-      ...p,
-      shipmentCount: countByProject.get(String(p.id)) || 0,
-    }));
+    const arrivedShipments = await this.db
+      .selectFrom('import_shipments')
+      .select('project_id')
+      .where('tenant_id', '=', tenantId)
+      .where('project_id', 'is not', null)
+      .where('status', '=', 'Arrived')
+      .groupBy('project_id')
+      .execute();
+
+    const arrivedByProject = new Set(arrivedShipments.map((s) => String(s.project_id)));
+
+    const approvedProformas = await this.db
+      .selectFrom('import_proforma_invoices')
+      .select('project_id')
+      .where('tenant_id', '=', tenantId)
+      .where('project_id', 'is not', null)
+      .where('status', '=', 'approved')
+      .groupBy('project_id')
+      .execute();
+
+    const approvedProformaByProject = new Set(approvedProformas.map((pi) => String(pi.project_id)));
+
+    const wanted = (status || '').trim().toLowerCase();
+    return projects
+      .map((p) => ({
+        ...p,
+        status: resolveImportProjectDisplayStatus(p.status, {
+          feasibilityConvertedAt: (p as any).feasibility_converted_at,
+          hasApprovedProforma: approvedProformaByProject.has(String(p.id)),
+          hasShipment: (countByProject.get(String(p.id)) || 0) > 0,
+          hasArrivedShipment: arrivedByProject.has(String(p.id)),
+        }),
+        shipmentCount: countByProject.get(String(p.id)) || 0,
+      }))
+      .filter((p) => !wanted || p.status.toLowerCase() === wanted);
   }
 
   async getProjectById(tenantId: string, id: string) {
@@ -913,8 +949,27 @@ export class ImportSalesService {
       .where('import_project_partners.project_id', '=', id)
       .execute();
 
+    // INV-IMPORT-PROJECT-STATUS-APPROVED: the detail view derives
+    // the same display status as the list (same engine, same
+    // evidence), so a project never reads 'feasibility' here while
+    // the list shows 'sourcing' for it.
+    const approvedProforma = await this.db
+      .selectFrom('import_proforma_invoices')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('project_id', '=', id)
+      .where('status', '=', 'approved')
+      .limit(1)
+      .executeTakeFirst();
+
     return {
       ...project,
+      status: resolveImportProjectDisplayStatus(project.status, {
+        feasibilityConvertedAt: (project as any).feasibility_converted_at,
+        hasApprovedProforma: !!approvedProforma,
+        hasShipment: shipments.length > 0,
+        hasArrivedShipment: shipments.some((s: any) => s.status === 'Arrived'),
+      }),
       shipments,
       qcInspections,
       sourcingTrips,

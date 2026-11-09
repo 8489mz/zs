@@ -21,6 +21,11 @@ export function getImportProjectStatusLabel(status: string | null | undefined): 
   switch ((status || '').trim().toLowerCase()) {
     case 'feasibility':
       return 'قيد الدراسة';
+    // INV-IMPORT-PROJECT-STATUS-APPROVED: a converted / approved
+    // project reads 'sourcing' — without this case the badge fell
+    // through to the raw English code ("sourcing").
+    case 'sourcing':
+      return 'قيد التوريد';
     case 'warehousing':
       return 'بالمخزن';
     case 'selling':

@@ -49,6 +49,10 @@ import {
 describe('getImportProjectStatusLabel', () => {
   it('translates the known project statuses to Arabic', () => {
     expect(getImportProjectStatusLabel('feasibility')).toBe('قيد الدراسة');
+    // INV-IMPORT-PROJECT-STATUS-APPROVED: an approved / converted
+    // project reads 'sourcing', which must render an Arabic label
+    // ('قيد التوريد'), never the raw English code.
+    expect(getImportProjectStatusLabel('sourcing')).toBe('قيد التوريد');
     expect(getImportProjectStatusLabel('warehousing')).toBe('بالمخزن');
     expect(getImportProjectStatusLabel('selling')).toBe('قيد البيع');
     expect(getImportProjectStatusLabel('closed')).toBe('مغلق');
