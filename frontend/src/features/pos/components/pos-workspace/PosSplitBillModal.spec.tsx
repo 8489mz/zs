@@ -840,6 +840,132 @@ describe('PosSplitBillModal — save as drafts saves each bill under its own che
   });
 });
 
+/* INV-REST-HELD-LOYALTY (R7-C): the save-as-separate-held-checks path
+ * called the held-draft mutation directly with the COMBINED discount and
+ * NO loyaltyPointsRedeemed — the held check recalled and paid posted the
+ * loyalty discount as a plain manual discount while the customer KEPT
+ * the points (double-spendable), and the same call dropped the bill's
+ * tip share too. The fix sends discount = the bill's MANUAL share only
+ * plus loyaltyPointsRedeemed = the bill's allocated points (the backend
+ * derives the loyalty discount FROM the points at submit — sending the
+ * combined discount AND the points would grant the loyalty discount
+ * twice, Trap 1 from R6-C) and tipAmount = the bill's allocated tip.
+ * Base-red: at base the payload has no loyaltyPointsRedeemed key, no
+ * tipAmount key, and discount is the combined manual+loyalty value. */
+describe('PosSplitBillModal — save as separate held checks carries loyalty points, manual discount and tip (R7-C)', () => {
+  function heldLoyaltyPos() {
+    const a = item({ lineKey: 'LA', productId: '1', name: 'صنف أ', price: 100, modifiers: [] });
+    const b = item({ lineKey: 'LB', productId: '2', name: 'صنف ب', price: 100, modifiers: [] });
+    // Manual 20 + 100 points at 0.1 = 10 loyalty, combined 30, tip 10, total 180.
+    const totals = orderTotals({
+      subTotal: 200,
+      discountValue: 30,
+      manualDiscount: 20,
+      loyaltyPointsRedeemed: 100,
+      loyaltyPointRedeemValue: 0.1,
+      loyaltyMaxDiscountPercentage: 100,
+      serviceCharge: 0,
+      taxRate: 0,
+      tipAmount: 10,
+      total: 180,
+    });
+    return createMockPos([a, b], totals, {
+      loyaltyPointsRedeemed: 100,
+      discount: 20,
+      loyaltyPointRedeemValue: 0.1,
+      loyaltyMaxDiscountPercentage: 100,
+      customerId: '7',
+    });
+  }
+
+  async function saveTwoHeldChecks(mockPos: ReturnType<typeof createMockPos>) {
+    renderModal(mockPos);
+    const moveButtons = screen.getAllByTitle('نقل إلى الشيك 2');
+    fireEvent.click(moveButtons[1]);
+    fireEvent.click(screen.getByRole('button', { name: 'حفظ الشيكات كطلبات معلقة منفصلة في الصالة' }));
+    await waitFor(() => expect(mockPos.saveHeldDraftMutation.mutateAsync).toHaveBeenCalledTimes(2));
+    return mockPos.saveHeldDraftMutation.mutateAsync.mock.calls.map((c) => c[0]);
+  }
+
+  it('sends each held check its allocated points plus the manual discount only — never the combined discount — and its tip share', async () => {
+    const mockPos = heldLoyaltyPos();
+    const [first, second] = await saveTwoHeldChecks(mockPos);
+    // Trap 1: discount must carry NO loyalty share — the backend adds
+    // the loyalty discount from the points itself at submit.
+    expect(first.discount).toBe(10);
+    expect(first.loyaltyPointsRedeemed).toBe(50);
+    expect(first.tipAmount).toBe(5);
+    expect(second.discount).toBe(10);
+    expect(second.loyaltyPointsRedeemed).toBe(50);
+    expect(second.tipAmount).toBe(5);
+    // The points across the held checks sum to the order's redeemed
+    // points — deducted once across checks, never double-redeemed.
+    const totalRedeemed = [first, second].reduce((s, p) => s + Number(p.loyaltyPointsRedeemed || 0), 0);
+    expect(totalRedeemed).toBe(100);
+    // Regression: labels, items and delivery fields unchanged.
+    expect(first.tableNumber).toBe('5 - شيك 1');
+    expect(second.tableNumber).toBe('5 - شيك 2');
+    expect(first.items.map((i: { productId: number }) => i.productId)).toEqual([1]);
+    expect(second.items.map((i: { productId: number }) => i.productId)).toEqual([2]);
+  });
+
+  it('strands the unplaceable point: 201 points over two 10.05 bills hold 100 + 100, never 201', async () => {
+    const a = item({ lineKey: 'LA', productId: '1', name: 'صنف أ', price: 10.05, modifiers: [] });
+    const b = item({ lineKey: 'LB', productId: '2', name: 'صنف ب', price: 10.05, modifiers: [] });
+    const totals = orderTotals({
+      subTotal: 20.1,
+      discountValue: 20.1,
+      manualDiscount: 0,
+      loyaltyPointsRedeemed: 201,
+      loyaltyPointRedeemValue: 0.1,
+      loyaltyMaxDiscountPercentage: 100,
+      serviceCharge: 0,
+      taxRate: 0,
+      tipAmount: 0,
+      total: 0,
+    });
+    const mockPos = createMockPos([a, b], totals, {
+      loyaltyPointsRedeemed: 201,
+      discount: 0,
+      loyaltyPointRedeemValue: 0.1,
+      loyaltyMaxDiscountPercentage: 100,
+      customerId: '7',
+    });
+    const [first, second] = await saveTwoHeldChecks(mockPos);
+    expect(first.discount).toBe(0);
+    expect(first.loyaltyPointsRedeemed).toBe(100);
+    expect(second.discount).toBe(0);
+    expect(second.loyaltyPointsRedeemed).toBe(100);
+    const totalRedeemed = [first, second].reduce((s, p) => s + Number(p.loyaltyPointsRedeemed || 0), 0);
+    expect(totalRedeemed).toBe(200);
+  });
+
+  it('sends loyaltyPointsRedeemed 0 and the manual share unchanged when the order redeems no points', async () => {
+    const a = item({ lineKey: 'LA', productId: '1', name: 'صنف أ', price: 100, modifiers: [] });
+    const b = item({ lineKey: 'LB', productId: '2', name: 'صنف ب', price: 100, modifiers: [] });
+    const totals = orderTotals({
+      subTotal: 200,
+      discountValue: 20,
+      manualDiscount: 20,
+      loyaltyPointsRedeemed: 0,
+      loyaltyPointRedeemValue: 0.1,
+      loyaltyMaxDiscountPercentage: 100,
+      serviceCharge: 0,
+      taxRate: 0,
+      tipAmount: 10,
+      total: 190,
+    });
+    const mockPos = createMockPos([a, b], totals, { discount: 20, customerId: '7' });
+    const [first, second] = await saveTwoHeldChecks(mockPos);
+    expect(first.discount).toBe(10);
+    expect(first.loyaltyPointsRedeemed).toBe(0);
+    expect(first.tipAmount).toBe(5);
+    expect(second.discount).toBe(10);
+    expect(second.loyaltyPointsRedeemed).toBe(0);
+    expect(second.tipAmount).toBe(5);
+  });
+});
+
 describe('PosSplitBillModal — even split never shows a guest paid before the sale posts (I33)', () => {
   function evenPos() {
     const a = item({ lineKey: 'LA', productId: '1', name: 'صنف أ', price: 100, modifiers: [] });

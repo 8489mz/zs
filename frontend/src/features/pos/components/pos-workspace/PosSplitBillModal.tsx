@@ -981,7 +981,16 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
         await pos.saveHeldDraftMutation.mutateAsync({
           customerId: pos.customerId || null,
           paymentType: pos.paymentType,
-          discount: amounts.discount,
+          // INV-REST-HELD-LOYALTY (R7-C): the held check sends the MANUAL
+          // discount only plus this bill's allocated points — the backend
+          // derives the loyalty discount FROM the points at submit, so
+          // sending the combined discount AND the points would grant the
+          // loyalty discount twice (Trap 1, same as handlePayBill). The
+          // same call also carries the bill's allocated tip share, which
+          // it used to drop even though the backend already accepts it.
+          discount: amounts.manualDiscount,
+          loyaltyPointsRedeemed: amounts.loyaltyPointsRedeemed,
+          tipAmount: amounts.tipAmount,
           deliveryFee: amounts.deliveryFee,
           note: pos.note,
           search: pos.search,
