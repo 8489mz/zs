@@ -9,6 +9,7 @@ import {
 import { formatCurrency } from '@/lib/format';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
 import { useQuery } from '@tanstack/react-query';
+import { customersApi } from '@/shared/api/customers.api';
 import { http } from '@/lib/http';
 
 interface ContainerPreordersModalProps {
@@ -24,11 +25,29 @@ export function ContainerPreordersModal({ isOpen, onClose, shipment }: Container
   const [convertingPreorder, setConvertingPreorder] = useState<any | null>(null);
   const [convertNotes, setConvertNotes] = useState('');
 
+  // INV-IMPORT-FLOATING-RESERVATION (I4-D12): sane defaults derived
+  // from the selected B/L item, never hardcoded constants. The old
+  // defaults (qty 100 / price 1,500 / deposit 20,000) were impossible
+  // for the trial container (B/L capacity 10, goods worth 900 EGP:
+  // a 150,000 EGP deal). Qty defaults to 1 (always <= capacity while
+  // any capacity remains; submit is disabled at 0). The agreed price
+  // defaults to the item's landed cost — the goods' real value — and
+  // the user edits it to the agreed price (0 when no landed cost is
+  // known, so the required field forces an explicit price). The
+  // deposit defaults to 0: a deposit asserts cash actually received,
+  // so no non-zero default may invent a payment; the proportionate
+  // cap (deposit <= deal total) is enforced on submit and in the
+  // service before the insert.
+  const defaultUnitPriceFor = (item: any): number => {
+    const landed = Number(item?.landed_cost_egp || 0);
+    return Number.isFinite(landed) && landed > 0 ? landed : 0;
+  };
+
   const [customerId, setCustomerId] = useState('');
   const [productId, setProductId] = useState(shipment.items[0]?.product_id || '');
-  const [quantity, setQuantity] = useState<number>(100);
-  const [unitPrice, setUnitPrice] = useState<number>(1500);
-  const [depositAmount, setDepositAmount] = useState<number>(20000);
+  const [quantity, setQuantity] = useState<number>(1);
+  const [unitPrice, setUnitPrice] = useState<number>(() => defaultUnitPriceFor(shipment.items[0]));
+  const [depositAmount, setDepositAmount] = useState<number>(0);
   const [treasuryAccountId, setTreasuryAccountId] = useState('');
   const [expectedDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -92,13 +111,18 @@ export function ContainerPreordersModal({ isOpen, onClose, shipment }: Container
     }
   };
 
-  // Fetch customers
+  // INV-IMPORT-FLOATING-RESERVATION (I4-D12): the customer list must
+  // come through the canonical reader. The old hand-rolled fetch read
+  // `res?.items`, but GET /api/customers returns the `{ customers:
+  // [...] }` envelope (never a bare array, never `.items`), so the
+  // combobox was always empty and the native "Please select an item
+  // in the list" validation stopped every confirm. Same read-path
+  // family as the I3-D4 quotation picker (a picker bypassing the
+  // canonical reader), different mechanism — this modal never
+  // converted the id to a number, so D4's fix did not cover it.
   const { data: customers = [] } = useQuery({
     queryKey: ['customers-list'],
-    queryFn: async () => {
-      const res = await http<any[]>('/api/customers');
-      return Array.isArray(res) ? res : (res as any)?.items || [];
-    },
+    queryFn: () => customersApi.list(),
   });
 
   // Fetch treasury accounts
@@ -106,8 +130,18 @@ export function ContainerPreordersModal({ isOpen, onClose, shipment }: Container
     queryKey: ['accounts-list'],
     queryFn: () => http<any>('/api/accounting/accounts').catch(() => ({ accounts: [] })),
   });
+  // INV-IMPORT-FLOATING-RESERVATION (I4-D12): only cash/bank accounts
+  // may receive a deposit — the backend 'bank' role rejects anything
+  // with isCashBank false, so offering parent current-asset accounts
+  // (e.g. 1100) only produced a rejection. The flag lives under
+  // flags.isCashBank on the accounts endpoint (AccountingAccount
+  // type) — a top-level a.isCashBank read is always undefined, so
+  // the filter must read flags (coordinator follow-through: D7
+  // grounded the shape; the agent's top-level read would have
+  // offered zero accounts live, same defect as I3-D8's deposit
+  // dropdown).
   const treasuryAccounts = (accountsData?.accounts || (Array.isArray(accountsData) ? accountsData : [])).filter(
-    (a: any) => a.accountGroup === 'current_assets' || a.isCashBank
+    (a: any) => a.flags?.isCashBank === true
   );
 
   if (!isOpen) return null;
@@ -120,6 +154,29 @@ export function ContainerPreordersModal({ isOpen, onClose, shipment }: Container
     .reduce((sum: number, p: any) => sum + Number(p.reserved_quantity), 0);
   const remainingCapacity = Math.max(0, blCapacity - bookedForProduct);
   const capacityPercent = blCapacity > 0 ? Math.min(100, (bookedForProduct / blCapacity) * 100) : 0;
+
+  // INV-IMPORT-FLOATING-RESERVATION (I4-D12): a reservation is a
+  // PRE-RECEIPT allotment. Once the container has arrived (status
+  // 'Arrived', which posts the receipt) or its receipt is posted,
+  // the goods are stock, not floating goods: the new-reservation
+  // form is not offered. The dialog itself stays openable — the
+  // bookings table below and the convert-to-sale action are the
+  // post-arrival path for reservations made while floating (the
+  // convert button itself is gated on Arrived), so hiding the whole
+  // dialog would strand them. The service refuses a post-receipt
+  // create fail-closed with the same rule.
+  const isFloating = shipment.status !== 'Arrived' && shipment.inventory_receipt?.state !== 'posted';
+
+  const handleProductChange = (nextProductId: string) => {
+    setProductId(nextProductId);
+    // Re-derive the sane defaults for the newly selected B/L item so a
+    // stale qty/price/deposit from the previous item can never leak
+    // into this reservation.
+    const item = shipment.items.find((i) => String(i.product_id) === String(nextProductId));
+    setQuantity(1);
+    setUnitPrice(defaultUnitPriceFor(item));
+    setDepositAmount(0);
+  };
 
   const handleCreatePreorder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,6 +194,13 @@ export function ContainerPreordersModal({ isOpen, onClose, shipment }: Container
     }
     if (quantity > remainingCapacity) {
       toast.error(`الكمية المطلوبة (${quantity}) تتجاوز السعة المتبقية بالبوليصة (${remainingCapacity})`);
+      return;
+    }
+    // INV-IMPORT-FLOATING-RESERVATION: the deposit is proportionate
+    // to the deal — it may never exceed the deal total (the service
+    // enforces the same rule before the insert).
+    if (!Number.isFinite(depositAmount) || depositAmount < 0 || depositAmount > quantity * unitPrice) {
+      toast.error('قيمة العربون يجب أن تكون موجبة ولا تتجاوز إجمالي قيمة الحجز');
       return;
     }
 
@@ -198,7 +262,8 @@ export function ContainerPreordersModal({ isOpen, onClose, shipment }: Container
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: 16 }}>
-          {/* Booking Form */}
+          {/* Booking Form — offered only while the goods are floating (pre-receipt) */}
+          {isFloating ? (
           <form
             onSubmit={handleCreatePreorder}
             style={{
@@ -243,7 +308,7 @@ export function ContainerPreordersModal({ isOpen, onClose, shipment }: Container
                 className="input"
                 style={{ width: '100%', padding: '6px 8px', fontSize: 12.5 }}
                 value={productId}
-                onChange={(e) => setProductId(e.target.value)}
+                onChange={(e) => handleProductChange(e.target.value)}
                 required
               >
                 {shipment.items.map((i) => (
@@ -357,6 +422,24 @@ export function ContainerPreordersModal({ isOpen, onClose, shipment }: Container
               </button>
             </div>
           </form>
+          ) : (
+            <div
+              style={{
+                backgroundColor: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: 8,
+                padding: 14,
+                fontSize: 13,
+                fontWeight: 600,
+                color: '#166534',
+                lineHeight: 1.8,
+              }}
+            >
+              وصلت الحاوية وتم استلامها — توقف تسجيل حجوزات جديدة للبضاعة العايمة.
+              <br />
+              الحجوزات القائمة أدناه يمكن تحويلها إلى فاتورة بيع بعد الوصول.
+            </div>
+          )}
 
           {/* Bookings Table */}
           <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>

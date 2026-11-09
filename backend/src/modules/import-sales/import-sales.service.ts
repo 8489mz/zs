@@ -7761,6 +7761,26 @@ export class ImportSalesService {
         .forUpdate()
         .executeTakeFirstOrThrow();
 
+      // INV-IMPORT-FLOATING-RESERVATION: a floating-goods reservation is
+      // a PRE-RECEIPT allotment of B/L capacity. Once the container has
+      // arrived (status 'Arrived', which posts the receipt) or any
+      // inventory receipt row exists for it, the goods are stock, not
+      // floating goods: a new reservation is refused fail-closed.
+      // Existing reservations stay convertible to a sale through
+      // convertPreorderToSale, which is the post-arrival path.
+      if (shipment.status === 'Arrived') {
+        throw new BadRequestException('وصلت الحاوية وتم استلامها؛ لا يمكن تسجيل حجز بضاعة عايمة جديد بعد الوصول.');
+      }
+      const receiptRow = await trx
+        .selectFrom('import_inventory_receipts')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('shipment_id', '=', dto.shipmentId)
+        .executeTakeFirst();
+      if (receiptRow) {
+        throw new BadRequestException('تم ترحيل استلام الحاوية للمخزون؛ لا يمكن تسجيل حجز بضاعة عايمة جديد بعد الاستلام.');
+      }
+
       const itemRows = await trx
         .selectFrom('import_shipment_items')
         .select(['quantity', 'received_quantity'])
@@ -7793,15 +7813,24 @@ export class ImportSalesService {
       const alreadyReserved = existingOrders.reduce((acc, o) => acc + Number(o.reserved_quantity), 0);
       const requested = Number(dto.reservedQuantity);
 
+      // Validate BEFORE the insert: the deposit rule used to be checked
+      // after the insert (the throw rolled the transaction back, so no
+      // row survived — but a fail-closed check belongs before the write).
+      if (!Number.isFinite(requested) || requested <= 0) {
+        throw new BadRequestException('الكمية المحجوزة يجب أن تكون أكبر من صفر.');
+      }
+      const totalPrice = Number((requested * Number(dto.unitPriceEgp)).toFixed(2));
+      const depositAmount = Number(dto.depositAmountEgp || 0);
+      if (!Number.isFinite(depositAmount) || depositAmount < 0 || depositAmount > totalPrice) {
+        throw new BadRequestException('قيمة العربون يجب أن تكون موجبة ولا تتجاوز إجمالي قيمة الحجز.');
+      }
+
       if (alreadyReserved + requested > blQuantity) {
         const freeToReserve = Math.max(0, blQuantity - alreadyReserved);
         throw new BadRequestException(
           `لا يمكن تجاوز كمية البوليصة: المتاح للحجز فقط (${freeToReserve}) وحدة من إجمالي (${blQuantity})، والمطلوب (${requested}).`
         );
       }
-
-      const totalPrice = Number((requested * Number(dto.unitPriceEgp)).toFixed(2));
-      const depositAmount = Number(dto.depositAmountEgp || 0);
 
       const preorder = await trx
         .insertInto('import_container_preorders')
@@ -7825,9 +7854,6 @@ export class ImportSalesService {
         .returningAll()
         .executeTakeFirstOrThrow();
 
-      if (!Number.isFinite(depositAmount) || depositAmount < 0 || depositAmount > totalPrice) {
-        throw new BadRequestException('قيمة العربون يجب أن تكون موجبة ولا تتجاوز إجمالي قيمة الحجز.');
-      }
       if (depositAmount > 0) {
         const bankAccId = await this.resolveTenantAccount(
           trx,

@@ -1189,18 +1189,28 @@ export const useCreateContainerPreorderMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (dto: any) => {
+      const depositTreasuryAccountId =
+        dto.depositTreasuryAccountId ?? dto.deposit_treasury_account_id ?? dto.treasuryAccountId;
       const payload = {
         shipmentId: dto.shipmentId || dto.shipment_id,
         projectId: dto.projectId || dto.project_id || undefined,
         customerId: Number(dto.customerId ?? dto.customer_id),
         productId: Number(dto.productId ?? dto.product_id),
         reservedQuantity: Number(dto.reservedQuantity ?? dto.reserved_quantity),
-        agreedUnitPriceEgp: Number(dto.agreedUnitPriceEgp ?? dto.unit_price_egp ?? dto.agreed_unit_price_egp),
+        unitPriceEgp: Number(dto.unitPriceEgp ?? dto.unit_price_egp ?? dto.agreedUnitPriceEgp ?? dto.agreed_unit_price_egp),
         depositAmountEgp: dto.depositAmountEgp !== undefined ? Number(dto.depositAmountEgp) : undefined,
-        treasuryAccountId: dto.treasuryAccountId ? Number(dto.treasuryAccountId) : undefined,
-        idempotencyKey: dto.idempotencyKey || `PRE-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        depositTreasuryAccountId: depositTreasuryAccountId ? Number(depositTreasuryAccountId) : undefined,
+        expectedDeliveryDate: dto.expectedDeliveryDate || dto.expected_delivery_date || undefined,
         notes: dto.notes || undefined,
       };
+      // INV-IMPORT-FLOATING-RESERVATION (I4-D12): send exactly the
+      // CreateContainerPreorderDto fields. The old payload sent
+      // `agreedUnitPriceEgp` + `idempotencyKey` (neither declared on
+      // the DTO) and never sent the DTO's required `unitPriceEgp`,
+      // so the global whitelist + forbidNonWhitelisted pipe rejected
+      // every create with 400 before the service ran — the same
+      // class as the I3-D8 deposit failure. There is no server-side
+      // preorder idempotency, so no key is sent.
       return await http<any>('/api/import-sales/preorders', {
         method: 'POST',
         body: JSON.stringify(payload),
