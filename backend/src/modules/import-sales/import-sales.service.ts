@@ -5051,6 +5051,17 @@ export class ImportSalesService {
   }
 
   async listForeignTransfers(tenantId: string) {
+    // INV-IMPORT-SUPPLIER-CREDIT-TRANSFER-REGISTER: the register is the
+    // supplier-credit screen's history of posted supplier payments, and
+    // it must list EVERY posted supplier payment for the tenant — not
+    // only the ones recorded through this screen. The old
+    // `doc_no LIKE 'FT-%'` filter silently hid every payment posted
+    // through the canonical purchases path, which numbers its rows
+    // `ZPV-YYMMDD-NNNN` (live re-test 2026-11-09 R5: the register read
+    // "0 حوالة مسجلة" while ZPV-261108-000004 / JE-00015028 existed).
+    // FT- vs ZPV- is a numbering artifact of the recording screen,
+    // not a property of the payment, so the doc_no prefix must never
+    // decide visibility. Tenant scoping is the only filter.
     const rows = await this.db
       .selectFrom('supplier_payments')
       .leftJoin('suppliers', 'suppliers.id', 'supplier_payments.supplier_id')
@@ -5067,13 +5078,20 @@ export class ImportSalesService {
         'suppliers.name as supplier_name',
       ])
       .where('supplier_payments.tenant_id', '=', tenantId)
-      .where('supplier_payments.doc_no', 'like', 'FT-%')
       .orderBy('supplier_payments.created_at', 'desc')
+      .orderBy('supplier_payments.id', 'desc')
       .execute();
 
     return rows.map((r) => {
       const foreignAmount = r.amount_foreign != null ? Number(r.amount_foreign) : null;
-      const egpAmount = Number(r.amount);
+      // The two recording paths store opposite signs in `amount`:
+      // recordForeignTransfer stores -contractValue (EGP), the
+      // purchases path stores a positive EGP amount. The register
+      // renders a payment magnitude, so normalise to the absolute
+      // value — otherwise every FT row renders its EGP column as
+      // '—' (the screen only renders egpAmount > 0) and the row
+      // looks amount-less.
+      const egpAmount = Math.abs(Number(r.amount));
       const effectiveRate = r.exchange_rate ? Number(r.exchange_rate) : (foreignAmount && foreignAmount > 0 ? Number((egpAmount / foreignAmount).toFixed(2)) : null);
       const dateVal = r.payment_date || r.created_at;
 
