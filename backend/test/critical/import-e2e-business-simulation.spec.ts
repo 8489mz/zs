@@ -727,6 +727,12 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
       vat_rate_percent NUMERIC(6, 2) DEFAULT 0,
       insurance_cost_usd NUMERIC(12, 2) DEFAULT 0,
       funding_type TEXT DEFAULT 'bank_transfer',
+      -- INV-IMPORT-FORM4-CLEARANCE-GATE (migration
+      -- 2040000000284): the shipment's own Form 4, recorded
+      -- before clearance/receipt when no project-linked transfer
+      -- carries one (Step 27's parallel project).
+      form4_number TEXT,
+      form4_date DATE,
       is_consolidated BOOLEAN DEFAULT FALSE,
       cost_allocation_method VARCHAR(50) DEFAULT 'value',
       arrival_date DATE,
@@ -2026,6 +2032,14 @@ async function runBusinessSimulation() {
     customsCostEgp: 70000,
     internalTransportCostEgp: 8000,
     exchangeRateAtArrival: 50.0,
+    // INV-IMPORT-FORM4-CLEARANCE-GATE: unlike Project 1, this
+    // parallel project has no project-linked transfer carrying a
+    // Form 4, so the bank-funded container (500 x $26 = $13,000,
+    // above the $2,000 threshold) needs its Form 4 recorded on
+    // the shipment itself before receipt. The gate reads the
+    // updated row, so supplying it in this same call satisfies it.
+    form4Number: 'F4-2026-0002',
+    form4Date: '2026-03-20',
     freightSupplierId: Number(supplier.id),
     customsSupplierId: Number(supplier.id),
     transportSupplierId: Number(supplier.id),
