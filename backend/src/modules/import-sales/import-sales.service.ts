@@ -378,6 +378,72 @@ export class ImportSalesService {
   }
 
   /**
+   * INV-IMPORT-RECEIPT-JE-SUPPLIER-SUBACCOUNT: resolve the import
+   * project's cost centre for the receipt journal, following the
+   * contracting canonical pattern (resolve-or-create by code
+   * CC-<project code>, dimension 'project'). The receipt journal
+   * used to post every line with a NULL cost centre, so the JE
+   * screen showed '-' and the project attribution lived nowhere
+   * on the journal itself. A shipment with no project has no
+   * project cost centre (NULL, honest); a project_id pointing at
+   * a missing project row fails closed instead of posting an
+   * unattributed journal. The concurrent-create race is absorbed
+   * by the (tenant_id, code) unique key: a do-nothing conflict
+   * re-reads the row the other transaction inserted.
+   */
+  private async resolveImportProjectCostCenter(
+    trx: any,
+    tenantId: string,
+    shipment: any,
+  ): Promise<number | null> {
+    const projectId = shipment?.project_id;
+    if (!projectId) return null;
+    const project = await trx
+      .selectFrom('import_projects')
+      .select(['project_no', 'title', 'allocated_capital'])
+      .where('tenant_id', '=', tenantId)
+      .where('id', '=', projectId)
+      .executeTakeFirst();
+    if (!project?.project_no) {
+      throw new BadRequestException(
+        'لا يمكن ترحيل قيد استلام شحنة مشروعها غير موجود في هذه المنشأة؛ راجع مشروع الشحنة قبل الترحيل. [IMPORT_RECEIPT_PROJECT_NOT_FOUND]',
+      );
+    }
+    const code = `CC-${project.project_no}`;
+    const existing = await trx
+      .selectFrom('cost_centers')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('code', '=', code)
+      .executeTakeFirst();
+    if (existing) return Number(existing.id);
+    const inserted = await trx
+      .insertInto('cost_centers')
+      .values({
+        tenant_id: tenantId,
+        code,
+        name: `مشروع: ${project.title || project.project_no}`,
+        dimension: 'project',
+        budget_amount: Number(project.allocated_capital || 0),
+        is_active: true,
+      })
+      .onConflict((oc: any) => oc.columns(['tenant_id', 'code']).doNothing())
+      .returning('id')
+      .executeTakeFirst();
+    if (inserted) return Number(inserted.id);
+    const raced = await trx
+      .selectFrom('cost_centers')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('code', '=', code)
+      .executeTakeFirst();
+    if (raced) return Number(raced.id);
+    throw new BadRequestException(
+      'تعذر تحديد مركز تكلفة مشروع الاستلام؛ أعد المحاولة. [IMPORT_RECEIPT_COST_CENTER_UNRESOLVED]',
+    );
+  }
+
+  /**
    * Helper to verify and consume a Maker-Checker approval request for sensitive actions
    */
   private async verifyAndConsumeApprovalRequest(
@@ -2776,6 +2842,10 @@ export class ImportSalesService {
     // Fail closed BEFORE any stock or journal write: the payable
     // supplier must be identified now, never defaulted later.
     const effectiveReceiptSupplierId = await this.resolveImportReceiptSupplierId(trx, tenantId, shipment);
+    // INV-IMPORT-RECEIPT-JE-SUPPLIER-SUBACCOUNT: resolve the
+    // project cost centre BEFORE any stock or journal write, so
+    // a missing project row fails closed with zero writes.
+    const receiptCostCenterId = await this.resolveImportProjectCostCenter(trx, tenantId, shipment);
     // Never silently allocate more pre-sold stock than the physically received quantity.
     const receivedByProduct = new Map<number, number>();
     for (const item of items) {
@@ -3048,6 +3118,7 @@ export class ImportSalesService {
         debit: number; credit: number;
         partnerType: 'supplier' | 'none'; partnerId: number | null;
         branchId: number | null; locationId: number | null;
+        costCenterId: number | null;
       }> = [];
 
       // DR: Inventory (landed cost value of physically received goods)
@@ -3061,6 +3132,7 @@ export class ImportSalesService {
           partnerId: null,
           branchId: receiptBranchId,
           locationId: Number(receiptLocationId),
+          costCenterId: receiptCostCenterId,
         });
       }
 
@@ -3076,6 +3148,7 @@ export class ImportSalesService {
           partnerId: null,
           branchId: receiptBranchId,
           locationId: Number(receiptLocationId),
+          costCenterId: receiptCostCenterId,
         });
       }
 
@@ -3095,6 +3168,7 @@ export class ImportSalesService {
             partnerId: component.payee.supplierId,
             branchId: receiptBranchId,
             locationId: Number(receiptLocationId),
+            costCenterId: receiptCostCenterId,
           });
         } else {
           journalLines.push({
@@ -3106,6 +3180,7 @@ export class ImportSalesService {
             partnerId: null,
             branchId: receiptBranchId,
             locationId: Number(receiptLocationId),
+            costCenterId: receiptCostCenterId,
           });
         }
       }
@@ -3123,6 +3198,7 @@ export class ImportSalesService {
           partnerId: null,
           branchId: receiptBranchId,
           locationId: Number(receiptLocationId),
+          costCenterId: receiptCostCenterId,
         });
       }
 

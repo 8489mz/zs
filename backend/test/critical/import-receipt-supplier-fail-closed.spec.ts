@@ -57,7 +57,8 @@ async function makeDb(): Promise<Kysely<Database>> {
     CREATE TABLE supplier_ledger (id bigserial PRIMARY KEY, supplier_id bigint, tenant_id text, account_id text, entry_type text, amount numeric, balance_after numeric, note text, reference_type text, reference_id bigint, created_by bigint, created_at date, branch_id bigint, location_id bigint);
     CREATE TABLE journal_entries (id bigserial PRIMARY KEY, tenant_id text, account_id text, entry_no text, dedup_key text, entry_date date, description text, source_type text, source_id bigint, status text, branch_id bigint, location_id bigint, created_by bigint, posted_by bigint, posted_at timestamptz, reversal_of_entry_id bigint, reversed_by_entry_id bigint, updated_at timestamptz);
     CREATE TABLE journal_entry_lines (id bigserial PRIMARY KEY, tenant_id text, journal_entry_id bigint, account_id bigint, cost_center_id bigint, description text, debit numeric, credit numeric, partner_type text, partner_id bigint, branch_id bigint, location_id bigint);
-    CREATE TABLE import_projects (id text PRIMARY KEY, tenant_id text, feasibility_data text);
+    CREATE TABLE cost_centers (id bigserial PRIMARY KEY, tenant_id text, code text, name text, dimension text, budget_amount numeric, parent_id bigint, is_active boolean, description text, created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW(), CONSTRAINT uq_cost_centers_tenant_code UNIQUE (tenant_id, code));
+    CREATE TABLE import_projects (id text PRIMARY KEY, tenant_id text, project_no text, title text, allocated_capital numeric, feasibility_data text);
     CREATE TABLE import_shipments (id text PRIMARY KEY, tenant_id text, supplier_id bigint, project_id text, container_number text, status text, exchange_rate_at_arrival numeric, shipping_cost_usd numeric, customs_cost_egp numeric, internal_transport_cost_egp numeric, actual_demurrage_fees numeric, freight_supplier_id bigint, customs_supplier_id bigint, transport_supplier_id bigint, demurrage_supplier_id bigint, unallocable_cost_reason text);
     CREATE TABLE import_shipment_items (id text PRIMARY KEY, tenant_id text, shipment_id text, product_id bigint, quantity numeric, received_quantity numeric, factory_unit_price_usd numeric, landed_cost_egp numeric, shortage_handling_method text);
     CREATE TABLE import_container_preorders (id bigserial PRIMARY KEY, tenant_id text, shipment_id text, product_id bigint, reserved_quantity numeric, status text);
@@ -109,6 +110,7 @@ async function seedReceiptFixture(
   if (opts.projectId) {
     await db.insertInto('import_projects' as never).values({
       id: opts.projectId, tenant_id: 't1',
+      project_no: 'IMP-261109-0001', title: 'اختبار مشروع استيراد 001', allocated_capital: 100,
       feasibility_data: opts.feasibilitySupplierId
         ? JSON.stringify({ supplierId: opts.feasibilitySupplierId })
         : JSON.stringify({}),

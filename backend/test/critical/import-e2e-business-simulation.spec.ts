@@ -505,6 +505,21 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE cost_centers (
+      id BIGSERIAL PRIMARY KEY,
+      tenant_id TEXT NOT NULL REFERENCES tenants(id),
+      code TEXT NOT NULL,
+      name TEXT NOT NULL,
+      dimension TEXT,
+      budget_amount NUMERIC(15, 2) DEFAULT 0,
+      parent_id BIGINT,
+      is_active BOOLEAN DEFAULT TRUE,
+      description TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      CONSTRAINT uq_cost_centers_tenant_code UNIQUE (tenant_id, code)
+    );
+
     CREATE TABLE import_projects (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       tenant_id TEXT NOT NULL REFERENCES tenants(id),
