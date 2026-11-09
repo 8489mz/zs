@@ -3,69 +3,161 @@ import { storefrontApi } from '@/features/storefront';
 import { posApi } from '@/features/pos/api/pos.api';
 import { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced-fnb.api';
 
-export function useSelfOrderingKiosk(storeSlug: string = 'almhnds') {
-  const cleanSlug = String(storeSlug || 'almhnds').trim().toLowerCase();
+/**
+ * INV-REST-KIOSK-NO-FICTION (R-B4): the kiosk resolves its store slug from
+ * the caller's candidates only — the first non-empty one wins. There is NO
+ * default slug: an empty or unknown slug resolves to null and the caller
+ * must fail closed (never serve another tenant's menu). The old default
+ * ('almhnds') and the silent fallback chain ('almhnds' -> 'default' -> POS
+ * catalog) are removed.
+ */
+export function resolveKioskSlug(candidates: Array<string | null | undefined>): string | null {
+  for (const candidate of candidates) {
+    const slug = String(candidate || '').trim().toLowerCase();
+    if (slug) return slug;
+  }
+  return null;
+}
+
+export type KioskPaymentStatus = 'paid' | 'unpaid' | 'pending';
+
+export interface KioskConfirmationItem {
+  productId: number;
+  name: string;
+  price: number;
+  qty: number;
+}
+
+export interface KioskConfirmation {
+  orderNumber: string;
+  total: number;
+  diningMode: string;
+  tableNumber?: string;
+  items: KioskConfirmationItem[];
+  placedAt: string;
+  paymentStatus: KioskPaymentStatus;
+  paymentMethodLabel: string;
+  authCode?: string;
+  rrn?: string;
+}
+
+/**
+ * INV-REST-KIOSK-NO-FICTION (R-B1): the single decision for what a finalize
+ * attempt produces. A confirmation exists ONLY when the server answered with
+ * a real order number. A failed request — or a success response carrying no
+ * order number — produces NO confirmation: no invented K-XXXX ticket and no
+ * carried-over 'paid' the server never saw. The caller renders the failure
+ * state and lets the customer retry.
+ */
+export function resolveKioskFinalizeOutcome(input: {
+  failed: boolean;
+  serverOrderNumber?: string | null;
+  total: number;
+  diningModeLabel: string;
+  tableNumber?: string;
+  items: KioskConfirmationItem[];
+  placedAt: string;
+  paymentStatus: KioskPaymentStatus;
+  paymentMethodLabel: string;
+  authCode?: string;
+  rrn?: string;
+}): { status: 'confirmed'; confirmation: KioskConfirmation } | { status: 'failed' } {
+  const orderNumber = String(input.serverOrderNumber || '').trim();
+  if (input.failed || !orderNumber) return { status: 'failed' };
+  return {
+    status: 'confirmed',
+    confirmation: {
+      orderNumber,
+      total: input.total,
+      diningMode: input.diningModeLabel,
+      tableNumber: input.tableNumber,
+      items: [...input.items],
+      placedAt: input.placedAt,
+      paymentStatus: input.paymentStatus,
+      paymentMethodLabel: input.paymentMethodLabel,
+      authCode: input.authCode,
+      rrn: input.rrn,
+    },
+  };
+}
+
+export interface KioskConfirmationCopy {
+  tone: KioskPaymentStatus;
+  heroTitle: string;
+  heroNote: string;
+  badgeText: string;
+  printLabel: string;
+  receiptTitle: string;
+  receiptBody: string;
+  receiptFooter: string;
+}
+
+/**
+ * INV-REST-KIOSK-NO-FICTION (R-B2): the words on the ticket. 'pending' is a
+ * third, honest state — the customer claims a QR transfer, the server still
+ * holds payment_status 'pending', and the ticket says the transfer awaits
+ * verification by the cashier. It never says PAID and never says "pay at the
+ * counter" either: the counter must verify the transfer, not take a second
+ * payment. 'paid' is reserved for a verified approval (card terminal).
+ */
+export function kioskConfirmationCopy(
+  paymentStatus: KioskPaymentStatus,
+  details: { totalText: string; paymentMethodLabel: string },
+  t: (key: string, fallback: string) => string,
+): KioskConfirmationCopy {
+  if (paymentStatus === 'paid') {
+    return {
+      tone: 'paid',
+      heroTitle: t('pos.self_ordering_kiosk_page.s10', 'تم استلام ودفع طلبك بنجاح!'),
+      heroNote: t('pos.self_ordering_kiosk_page.s11', 'طلبك أُرسل لشاشات المطبخ ويتم تجهيزه الآن بكل عناية'),
+      badgeText: `${t('pos.self_ordering_kiosk_page.s14', 'مدفوع بالكامل •')} ${details.paymentMethodLabel}`,
+      printLabel: t('pos.self_ordering_kiosk_page.s20', 'طباعة إيصال الطلب والنداء'),
+      receiptTitle: t('pos.self_ordering_kiosk_page.s28', '*** طلب مدفوع بالكامل - PAID ***'),
+      receiptBody: `${t('pos.self_ordering_kiosk_page.s29', 'طريقة الدفع:')} ${details.paymentMethodLabel}`,
+      receiptFooter: t('pos.self_ordering_kiosk_page.s34', 'شكراً لزيارتكم! يرجى الانتظار حتى مناداة رقمك على الشاشة.'),
+    };
+  }
+  if (paymentStatus === 'pending') {
+    return {
+      tone: 'pending',
+      heroTitle: t('pos.self_ordering_kiosk_page.s124', 'تم تسجيل طلبك — التحويل قيد التأكيد'),
+      heroNote: `${t('pos.self_ordering_kiosk_page.s125', 'أرسلت تحويلاً بقيمة')} ${details.totalText} ${t('pos.self_ordering_kiosk_page.s126', '— اعرض هذه التذكرة للكاشير للتأكد من وصول التحويل قبل بدء التحضير')}`,
+      badgeText: t('pos.self_ordering_kiosk_page.s127', 'بانتظار تأكيد التحويل • اعرض التذكرة للكاشير'),
+      printLabel: t('pos.self_ordering_kiosk_page.s128', 'طباعة تذكرة بانتظار التأكيد'),
+      receiptTitle: t('pos.self_ordering_kiosk_page.s129', '*** بانتظار تأكيد التحويل - PENDING ***'),
+      receiptBody: t('pos.self_ordering_kiosk_page.s130', 'اعرض هذه التذكرة للكاشير للتأكد من وصول التحويل قبل بدء التحضير'),
+      receiptFooter: t('pos.self_ordering_kiosk_page.s131', 'تحويلك قيد التأكيد — اعرض التذكرة للكاشير قبل بدء التحضير.'),
+    };
+  }
+  return {
+    tone: 'unpaid',
+    heroTitle: t('pos.self_ordering_kiosk_page.s7', 'تم تسجيل طلبك بنجاح!'),
+    heroNote: `${t('pos.self_ordering_kiosk_page.s8', 'تذكرتك غير مدفوعة حالياً • يرجى أخذ التذكرة والتوجه لكاونتر الكاشير لسداد')} ${details.totalText} ${t('pos.self_ordering_kiosk_page.s9', '(نقداً أو بالفيزا) لتأكيد الطلب وبدء تحضيره فوراً')}`,
+    badgeText: t('pos.self_ordering_kiosk_page.s13', 'تذكرة غير مدفوعة • يلزم السداد لدى الكاشير'),
+    printLabel: t('pos.self_ordering_kiosk_page.s19', 'طباعة تذكرة السداد لدى الكاشير'),
+    receiptTitle: t('pos.self_ordering_kiosk_page.s25', '*** تذكرة غير مدفوعة - UNPAID ***'),
+    receiptBody: `${t('pos.self_ordering_kiosk_page.s26', 'يرجى التوجه للكاشير لسداد')} ${details.totalText} ${t('pos.self_ordering_kiosk_page.s27', '(نقداً أو بالبطاقة البنكية)')}`,
+    receiptFooter: t('pos.self_ordering_kiosk_page.s33', 'يرجى سداد هذه التذكرة لدى الكاشير لتأكيد طلبك وبدء تحضيره في المطبخ.'),
+  };
+}
+
+export function useSelfOrderingKiosk(storeSlug: string | null | undefined) {
+  const cleanSlug = resolveKioskSlug([storeSlug]);
 
   const { data: catalogData, isLoading: isCatalogLoading } = useQuery({
-    queryKey: ['kiosk-catalog', cleanSlug],
+    queryKey: ['kiosk-catalog', cleanSlug ?? ''],
     queryFn: async () => {
-      // 1. Try target slug if provided and valid
-      if (cleanSlug && cleanSlug !== 'main') {
-        try {
-          const cat = await storefrontApi.getCatalog(cleanSlug);
-          if (cat && cat.products && cat.products.length > 0) return cat;
-        } catch {
-          // ignore & fallback
-        }
-      }
-
-      // 2. Try candidate fallback slugs
-      const candidateSlugs = ['almhnds', 'default'];
-      for (const candidate of candidateSlugs) {
-        if (candidate === cleanSlug) continue;
-        try {
-          const fallbackCat = await storefrontApi.getCatalog(candidate);
-          if (fallbackCat && fallbackCat.products && fallbackCat.products.length > 0) return fallbackCat;
-        } catch {
-          // continue
-        }
-      }
-
-      // 3. Fallback to POS product catalog (for authenticated POS/kiosk terminals)
+      // INV-REST-KIOSK-NO-FICTION: no slug means no store, so no menu —
+      // fail closed. And exactly one catalog attempt: the requested store
+      // only. A failed or empty catalog stays empty; there is no fallback
+      // chain to another tenant's menu or to the POS catalog.
+      if (!cleanSlug) return { categories: [], products: [] };
       try {
-        const rawProducts = await posApi.lookupProducts({ limit: 100 });
-        const productsList = Array.isArray(rawProducts) ? rawProducts : (rawProducts as any)?.products || [];
-        if (productsList.length > 0) {
-          const categoryMap = new Map<number, string>();
-          productsList.forEach((p: any) => {
-            if (p.categoryId && p.categoryName) {
-              categoryMap.set(Number(p.categoryId), String(p.categoryName));
-            }
-          });
-          const categories = Array.from(categoryMap.entries()).map(([id, name]) => ({
-            id,
-            name,
-            imageUrl: '',
-          }));
-
-          return {
-            categories,
-            products: productsList.map((p: any) => ({
-              id: p.id,
-              name: p.name,
-              price: Number(p.retailPrice ?? p.price ?? 0),
-              categoryId: p.categoryId ? Number(p.categoryId) : null,
-              categoryName: p.categoryName || 'عام',
-              imageUrl: p.imageUrl || p.image_url || '',
-              description: p.description || p.notes || '',
-              inStock: true,
-            })),
-          };
-        }
+        const cat = await storefrontApi.getCatalog(cleanSlug);
+        if (cat && cat.products && cat.products.length > 0) return cat;
       } catch {
-        // ignore
+        // fall through to the empty catalog below
       }
-
       return { categories: [], products: [] };
     },
     staleTime: 60_000,
@@ -81,7 +173,12 @@ export function useSelfOrderingKiosk(storeSlug: string = 'almhnds') {
   };
 
   const createOrder = async (orderPayload: any) => {
-    const slugToUse = cleanSlug && cleanSlug !== 'main' ? cleanSlug : 'almhnds';
+    // INV-REST-KIOSK-NO-FICTION: an order without a known store slug must
+    // fail here, never post to a hardcoded fallback store.
+    const slugToUse = resolveKioskSlug([cleanSlug]);
+    if (!slugToUse) {
+      throw new Error('لا يمكن إرسال الطلب: الكشك غير مرتبط بمتجر معروف.');
+    }
     const payload = {
       customerName:
         orderPayload.customerName ||

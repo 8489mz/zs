@@ -27,7 +27,13 @@ import {
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { Button } from '@/shared/ui/button';
 import { PosSmartUpsellModal } from '@/features/pos/components/pos-workspace/PosSmartUpsellModal';
-import { useSelfOrderingKiosk } from '@/features/pos/hooks/useSelfOrderingKiosk';
+import {
+  useSelfOrderingKiosk,
+  resolveKioskSlug,
+  resolveKioskFinalizeOutcome,
+  kioskConfirmationCopy,
+  type KioskPaymentStatus,
+} from '@/features/pos/hooks/useSelfOrderingKiosk';
 import { getStoreHostSlug } from '@/lib/store-public-url';
 import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
 
@@ -123,14 +129,16 @@ export function SelfOrderingKioskPage() {
   const hostSlug = getStoreHostSlug();
   const localSlug = typeof localStorage !== 'undefined' ? localStorage.getItem('zs_last_company_code') : null;
 
-  // توجيه تلقائي لكتالوج مطعم المهندس (75 وجبة)
-  const initialSlug = routeSlug || querySlug || (tenant?.slug === 'zs' ? 'almhnds' : (tenant?.slug || hostSlug || localSlug || 'almhnds'));
-  const [currentSlug, setCurrentSlug] = useState<string>(initialSlug);
+  // INV-REST-KIOSK-NO-FICTION: the kiosk serves exactly the store its URL,
+  // tenant, host or device points at — nothing else. No hardcoded default
+  // slug and no mapping of one tenant onto another tenant's menu: an
+  // unknown/missing slug resolves to null and the kiosk fails closed.
+  const initialSlug = resolveKioskSlug([routeSlug, querySlug, tenant?.slug, hostSlug, localSlug]);
+  const [currentSlug, setCurrentSlug] = useState<string | null>(initialSlug);
 
-  const isRestaurant = currentSlug === 'almhnds';
-  const storeDisplayName = isRestaurant
-    ? 'مطعم المهندس للمشويات والسندوتشات'
-    : (tenant?.businessName || 'المتجر الذكي');
+  // The brand is the tenant's own business name; never a hardcoded
+  // restaurant name for a store this kiosk may not be.
+  const storeDisplayName = tenant?.businessName || 'المتجر الذكي';
 
   const [diningMode, setDiningMode] = useState<'dine_in' | 'takeaway' | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<number | 'all'>('all');
@@ -149,13 +157,25 @@ export function SelfOrderingKioskPage() {
     tableNumber?: string;
     items?: KioskCartItem[];
     placedAt?: string;
-    paymentStatus: 'paid' | 'unpaid';
+    paymentStatus: KioskPaymentStatus;
     paymentMethodLabel: string;
     authCode?: string;
     rrn?: string;
   } | null>(null);
   const [resetCountdown, setResetCountdown] = useState<number>(15);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // INV-REST-KIOSK-NO-FICTION: a failed finalize keeps a visible error and
+  // the last attempt, so the customer can retry instead of receiving an
+  // invented confirmation.
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const [lastFinalizeOpts, setLastFinalizeOpts] = useState<{
+    paymentMethod: 'card' | 'qr_mobile' | 'cash';
+    paymentStatus: KioskPaymentStatus;
+    paymentLabel: string;
+    authCode?: string;
+    rrn?: string;
+  } | null>(null);
 
   // حالة ماكينة الدفع بالكشك (Terminal State)
   const [isTerminalModalOpen, setIsTerminalModalOpen] = useState(false);
@@ -323,6 +343,8 @@ export function SelfOrderingKioskPage() {
     setGuestNotes('');
     setOrderConfirmedData(null);
     setResetCountdown(15);
+    setOrderError(null);
+    setLastFinalizeOpts(null);
     setSearchQuery('');
     setSelectedCategory('all');
     setPaymentChoice('card_terminal');
@@ -330,12 +352,14 @@ export function SelfOrderingKioskPage() {
 
   const handleFinalizeOrder = async (opts: {
     paymentMethod: 'card' | 'qr_mobile' | 'cash';
-    paymentStatus: 'paid' | 'unpaid';
+    paymentStatus: KioskPaymentStatus;
     paymentLabel: string;
     authCode?: string;
     rrn?: string;
   }) => {
     setIsSubmitting(true);
+    setOrderError(null);
+    setLastFinalizeOpts(opts);
     try {
       const orderPayload = {
         orderType: diningMode || 'dine_in',
@@ -354,12 +378,11 @@ export function SelfOrderingKioskPage() {
       };
 
       const res = await createOrder(orderPayload as any);
-      const generatedOrderNo = res?.orderNumber || `K-${Math.floor(1000 + Math.random() * 9000)}`;
-
-      setOrderConfirmedData({
-        orderNumber: generatedOrderNo,
+      const outcome = resolveKioskFinalizeOutcome({
+        failed: false,
+        serverOrderNumber: (res as any)?.orderNumber,
         total: totalCartAmount,
-        diningMode: diningMode === 'dine_in' ? 'تناول بالصالة' : 'استلام سفري',
+        diningModeLabel: diningMode === 'dine_in' ? 'تناول بالصالة' : 'استلام سفري',
         tableNumber: tableNumber.trim() || undefined,
         items: [...cart],
         placedAt: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
@@ -368,29 +391,27 @@ export function SelfOrderingKioskPage() {
         authCode: opts.authCode,
         rrn: opts.rrn,
       });
+      if (outcome.status === 'failed') {
+        // The server answered without a real order number: treat it exactly
+        // like a failed submit — no confirmation, no ticket, retry allowed.
+        setOrderError('تعذّر تأكيد الطلب من النظام (لم يصل رقم طلب حقيقي). حاول مرة أخرى.');
+        toast.error('تعذّر تأكيد الطلب من النظام. حاول مرة أخرى.');
+        return;
+      }
+
+      setOrderConfirmedData(outcome.confirmation);
 
       setIsReviewOpen(false);
       setIsTerminalModalOpen(false);
       setIsQrModalOpen(false);
-      setResetCountdown(opts.paymentStatus === 'unpaid' ? 25 : 15);
+      setResetCountdown(opts.paymentStatus === 'paid' ? 15 : 25);
     } catch {
-      const fallbackNo = `K-${Math.floor(1000 + Math.random() * 9000)}`;
-      setOrderConfirmedData({
-        orderNumber: fallbackNo,
-        total: totalCartAmount,
-        diningMode: diningMode === 'dine_in' ? 'تناول بالصالة' : 'استلام سفري',
-        tableNumber: tableNumber.trim() || undefined,
-        items: [...cart],
-        placedAt: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-        paymentStatus: opts.paymentStatus,
-        paymentMethodLabel: opts.paymentLabel,
-        authCode: opts.authCode,
-        rrn: opts.rrn,
-      });
-      setIsReviewOpen(false);
-      setIsTerminalModalOpen(false);
-      setIsQrModalOpen(false);
-      setResetCountdown(opts.paymentStatus === 'unpaid' ? 25 : 15);
+      // INV-REST-KIOSK-NO-FICTION: a failed createOrder shows a visible
+      // error and keeps the cart and the open modal, so the customer can
+      // retry. It never invents a ticket and never carries a 'paid' the
+      // server never saw.
+      setOrderError('تعذّر إرسال الطلب إلى النظام. تحقق من الاتصال وحاول مرة أخرى.');
+      toast.error('تعذّر إرسال الطلب إلى النظام. حاول مرة أخرى.');
     } finally {
       setIsSubmitting(false);
     }
@@ -703,6 +724,17 @@ export function SelfOrderingKioskPage() {
   // الشاشة 4: تأكيد الطلب والطباعة الحرارية
   // ==========================================
   if (orderConfirmedData) {
+    // INV-REST-KIOSK-NO-FICTION: the ticket's words come from one helper so
+    // a 'pending' QR transfer can never render as PAID — or as "pay at the
+    // counter" either.
+    const confirmationCopy = kioskConfirmationCopy(
+      orderConfirmedData.paymentStatus,
+      {
+        totalText: formatCurrency(orderConfirmedData.total),
+        paymentMethodLabel: orderConfirmedData.paymentMethodLabel,
+      },
+      (key, fallback) => __t(key, __t(key, fallback)),
+    );
     return (
       <div
         dir="rtl"
@@ -729,7 +761,7 @@ export function SelfOrderingKioskPage() {
             boxShadow: '0 16px 40px rgba(0,0,0,0.07)',
           }}
         >
-          {orderConfirmedData.paymentStatus === 'unpaid' ? (
+          {confirmationCopy.tone !== 'paid' ? (
             <>
               <div
                 style={{
@@ -747,7 +779,7 @@ export function SelfOrderingKioskPage() {
               </div>
 
               <h2 style={{ fontSize: '25px', fontWeight: 900, color: '#0f172a', margin: '0 0 8px' }}>
-                {__t('pos.self_ordering_kiosk_page.s7', __t('pos.self_ordering_kiosk_page.s7', "تم تسجيل طلبك بنجاح!"))}
+                {confirmationCopy.heroTitle}
               </h2>
               <div
                 style={{
@@ -762,7 +794,7 @@ export function SelfOrderingKioskPage() {
                   lineHeight: 1.5,
                 }}
               >
-                {__t('pos.self_ordering_kiosk_page.s8', __t('pos.self_ordering_kiosk_page.s8', "تذكرتك غير مدفوعة حالياً • يرجى أخذ التذكرة والتوجه لكاونتر الكاشير لسداد"))} {formatCurrency(orderConfirmedData.total)} {__t('pos.self_ordering_kiosk_page.s9', __t('pos.self_ordering_kiosk_page.s9', "(نقداً أو بالفيزا) لتأكيد الطلب وبدء تحضيره فوراً"))}
+                {confirmationCopy.heroNote}
               </div>
             </>
           ) : (
@@ -783,10 +815,10 @@ export function SelfOrderingKioskPage() {
               </div>
 
               <h2 style={{ fontSize: '26px', fontWeight: 900, color: '#0f172a', margin: '0 0 8px' }}>
-                {__t('pos.self_ordering_kiosk_page.s10', __t('pos.self_ordering_kiosk_page.s10', "تم استلام ودفع طلبك بنجاح!"))}
+                {confirmationCopy.heroTitle}
               </h2>
               <p style={{ fontSize: '14.5px', color: '#64748b', margin: '0 0 24px' }}>
-                {__t('pos.self_ordering_kiosk_page.s11', __t('pos.self_ordering_kiosk_page.s11', "طلبك أُرسل لشاشات المطبخ ويتم تجهيزه الآن بكل عناية"))}
+                {confirmationCopy.heroNote}
               </p>
             </>
           )}
@@ -807,36 +839,35 @@ export function SelfOrderingKioskPage() {
             </div>
 
             <div style={{ marginTop: '8px' }}>
-              {orderConfirmedData.paymentStatus === 'unpaid' ? (
-                <span
-                  style={{
-                    display: 'inline-block',
-                    backgroundColor: '#fee2e2',
-                    color: '#b91c1c',
-                    border: '1px solid #fecaca',
-                    borderRadius: '8px',
-                    padding: '4px 12px',
-                    fontSize: '12.5px',
-                    fontWeight: 900,
-                  }}
-                >
-                  {__t('pos.self_ordering_kiosk_page.s13', __t('pos.self_ordering_kiosk_page.s13', "تذكرة غير مدفوعة • يلزم السداد لدى الكاشير"))}
-                </span>
-              ) : (
-                <span
-                  style={{
-                    display: 'inline-block',
-                    backgroundColor: '#dcfce7',
-                    color: '#15803d',
-                    borderRadius: '8px',
-                    padding: '4px 12px',
-                    fontSize: '12.5px',
-                    fontWeight: 900,
-                  }}
-                >
-                  {__t('pos.self_ordering_kiosk_page.s14', __t('pos.self_ordering_kiosk_page.s14', "مدفوع بالكامل •"))} {orderConfirmedData.paymentMethodLabel}
-                </span>
-              )}
+              <span
+                style={{
+                  display: 'inline-block',
+                  backgroundColor:
+                    confirmationCopy.tone === 'unpaid'
+                      ? '#fee2e2'
+                      : confirmationCopy.tone === 'pending'
+                        ? '#fef3c7'
+                        : '#dcfce7',
+                  color:
+                    confirmationCopy.tone === 'unpaid'
+                      ? '#b91c1c'
+                      : confirmationCopy.tone === 'pending'
+                        ? '#92400e'
+                        : '#15803d',
+                  border:
+                    confirmationCopy.tone === 'unpaid'
+                      ? '1px solid #fecaca'
+                      : confirmationCopy.tone === 'pending'
+                        ? '1px solid #fde68a'
+                        : 'none',
+                  borderRadius: '8px',
+                  padding: '4px 12px',
+                  fontSize: '12.5px',
+                  fontWeight: 900,
+                }}
+              >
+                {confirmationCopy.badgeText}
+              </span>
             </div>
 
             {orderConfirmedData.tableNumber && (
@@ -876,9 +907,7 @@ export function SelfOrderingKioskPage() {
             >
               <PrinterIcon size={20} color="#170e5e" />
               <span>
-                {orderConfirmedData.paymentStatus === 'unpaid'
-                  ? __t('pos.self_ordering_kiosk_page.s19', __t('pos.self_ordering_kiosk_page.s19', "طباعة تذكرة السداد لدى الكاشير"))
-                  : __t('pos.self_ordering_kiosk_page.s20', __t('pos.self_ordering_kiosk_page.s20', "طباعة إيصال الطلب والنداء"))}
+                {confirmationCopy.printLabel}
               </span>
             </Button>
           </div>
@@ -931,8 +960,15 @@ export function SelfOrderingKioskPage() {
                 <div style={{ fontSize: '14px', fontWeight: 900, marginTop: '4px' }}>{__t('pos.self_ordering_kiosk_page.s24', __t('pos.self_ordering_kiosk_page.s24', "طاولة:"))} {orderConfirmedData.tableNumber}</div>
               )}
 
-              {/* تحذير صريح على الورقة المطبوعة إذا كان غير مدفوع */}
-              {orderConfirmedData.paymentStatus === 'unpaid' ? (
+              {/* تحذير صريح على الورقة المطبوعة: غير مدفوع أو بانتظار تأكيد التحويل — لا تظهر أبداً كمدفوع */}
+              {confirmationCopy.tone === 'paid' ? (
+                <div style={{ fontSize: '12px', fontWeight: 800, marginTop: '6px' }}>
+                  {confirmationCopy.receiptTitle}
+                  <div>{confirmationCopy.receiptBody}</div>
+                  {orderConfirmedData.authCode && <div>{__t('pos.self_ordering_kiosk_page.s30', __t('pos.self_ordering_kiosk_page.s30', "رقم التفويض:"))} {orderConfirmedData.authCode}</div>}
+                  {orderConfirmedData.rrn && <div>{__t('pos.self_ordering_kiosk_page.s31', __t('pos.self_ordering_kiosk_page.s31', "رقم المرجع:"))} {orderConfirmedData.rrn}</div>}
+                </div>
+              ) : (
                 <div
                   style={{
                     fontSize: '13.5px',
@@ -943,18 +979,9 @@ export function SelfOrderingKioskPage() {
                     lineHeight: 1.4,
                   }}
                 >
-                  {__t('pos.self_ordering_kiosk_page.s25', __t('pos.self_ordering_kiosk_page.s25', "*** تذكرة غير مدفوعة - UNPAID ***"))}
+                  {confirmationCopy.receiptTitle}
                   <br />
-                  {__t('pos.self_ordering_kiosk_page.s26', __t('pos.self_ordering_kiosk_page.s26', "يرجى التوجه للكاشير لسداد"))} {formatCurrency(orderConfirmedData.total)}
-                  <br />
-                  {__t('pos.self_ordering_kiosk_page.s27', __t('pos.self_ordering_kiosk_page.s27', "(نقداً أو بالبطاقة البنكية)"))}
-                </div>
-              ) : (
-                <div style={{ fontSize: '12px', fontWeight: 800, marginTop: '6px' }}>
-                  {__t('pos.self_ordering_kiosk_page.s28', __t('pos.self_ordering_kiosk_page.s28', "*** طلب مدفوع بالكامل - PAID ***"))}
-                  <div>{__t('pos.self_ordering_kiosk_page.s29', __t('pos.self_ordering_kiosk_page.s29', "طريقة الدفع:"))} {orderConfirmedData.paymentMethodLabel}</div>
-                  {orderConfirmedData.authCode && <div>{__t('pos.self_ordering_kiosk_page.s30', __t('pos.self_ordering_kiosk_page.s30', "رقم التفويض:"))} {orderConfirmedData.authCode}</div>}
-                  {orderConfirmedData.rrn && <div>{__t('pos.self_ordering_kiosk_page.s31', __t('pos.self_ordering_kiosk_page.s31', "رقم المرجع:"))} {orderConfirmedData.rrn}</div>}
+                  {confirmationCopy.receiptBody}
                 </div>
               )}
             </div>
@@ -974,10 +1001,84 @@ export function SelfOrderingKioskPage() {
               <span>{formatCurrency(orderConfirmedData.total)}</span>
             </div>
             <div style={{ textAlign: 'center', fontSize: '11px' }}>
-              {orderConfirmedData.paymentStatus === 'unpaid'
-                ? __t('pos.self_ordering_kiosk_page.s33', __t('pos.self_ordering_kiosk_page.s33', "يرجى سداد هذه التذكرة لدى الكاشير لتأكيد طلبك وبدء تحضيره في المطبخ."))
-                : __t('pos.self_ordering_kiosk_page.s34', __t('pos.self_ordering_kiosk_page.s34', "شكراً لزيارتكم! يرجى الانتظار حتى مناداة رقمك على الشاشة."))}
+              {confirmationCopy.receiptFooter}
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // INV-REST-KIOSK-NO-FICTION: no known store slug means this kiosk shows
+  // no menu at all — never another tenant's menu and never an empty menu
+  // that looks like a store with no food. The operator picks a store with
+  // the switcher below, or fixes the kiosk link.
+  if (!currentSlug) {
+    return (
+      <div
+        dir="rtl"
+        style={{
+          minHeight: '100vh',
+          backgroundColor: '#f8fafc',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+          textAlign: 'center',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '460px',
+            width: '100%',
+            backgroundColor: '#ffffff',
+            borderRadius: '22px',
+            border: '1px solid #e2e8f0',
+            padding: '36px 28px',
+            boxShadow: '0 16px 40px rgba(0,0,0,0.07)',
+          }}
+        >
+          <AlertTriangleIcon size={44} color="#d97706" />
+          <h2 style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a', margin: '14px 0 8px' }}>
+            {__t('pos.self_ordering_kiosk_page.s135', __t('pos.self_ordering_kiosk_page.s135', "الكشك غير مرتبط بمتجر"))}
+          </h2>
+          <p style={{ fontSize: '13.5px', color: '#64748b', lineHeight: 1.6, margin: '0 0 20px' }}>
+            {__t('pos.self_ordering_kiosk_page.s136', __t('pos.self_ordering_kiosk_page.s136', "لا يوجد متجر معروف لهذا الكشك. اطلب من الموظف ضبط رابط المتجر أو اختيار المتجر من الأزرار بالأسفل."))}
+          </p>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setCurrentSlug('almhnds')}
+              style={{
+                border: 'none',
+                backgroundColor: '#170e5e',
+                color: '#ffffff',
+                padding: '10px 18px',
+                borderRadius: '12px',
+                fontSize: '13px',
+                fontWeight: 800,
+                cursor: 'pointer',
+              }}
+            >
+              {__t('pos.self_ordering_kiosk_page.s0', __t('pos.self_ordering_kiosk_page.s0', "مطعم المشويات والسندوتشات (75 وجبة)"))}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentSlug('zs')}
+              style={{
+                border: 'none',
+                backgroundColor: '#170e5e',
+                color: '#ffffff',
+                padding: '10px 18px',
+                borderRadius: '12px',
+                fontSize: '13px',
+                fontWeight: 800,
+                cursor: 'pointer',
+              }}
+            >
+              {__t('pos.self_ordering_kiosk_page.s1', __t('pos.self_ordering_kiosk_page.s1', "متجر الأجهزة والهواتف"))}
+            </button>
           </div>
         </div>
       </div>
@@ -2197,6 +2298,26 @@ export function SelfOrderingKioskPage() {
             </div>
           </div>
 
+          {/* INV-REST-KIOSK-NO-FICTION: a failed finalize stays visible here; the button below retries it. */}
+          {orderError && (
+            <div
+              style={{
+                display: 'flex',
+                gap: '10px',
+                alignItems: 'flex-start',
+                backgroundColor: '#fef2f2',
+                border: '1.5px solid #fecaca',
+                borderRadius: '12px',
+                padding: '12px 14px',
+                marginBottom: '14px',
+                textAlign: 'right',
+              }}
+            >
+              <AlertCircleIcon size={20} color="#dc2626" />
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#b91c1c', lineHeight: 1.5 }}>{orderError}</div>
+            </div>
+          )}
+
           {/* 5. زر التأكيد النهائي وإصدار التذكرة: Full-width tactile button */}
           <Button
             variant="primary"
@@ -2266,6 +2387,26 @@ export function SelfOrderingKioskPage() {
               <XIcon size={16} />
             </button>
           </div>
+
+          {/* INV-REST-KIOSK-NO-FICTION: a failed finalize stays visible in every terminal step. */}
+          {orderError && (
+            <div
+              style={{
+                display: 'flex',
+                gap: '10px',
+                alignItems: 'flex-start',
+                backgroundColor: '#fef2f2',
+                border: '1.5px solid #fecaca',
+                borderRadius: '12px',
+                padding: '12px 14px',
+                marginBottom: '14px',
+                textAlign: 'right',
+              }}
+            >
+              <AlertCircleIcon size={20} color="#dc2626" />
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#b91c1c', lineHeight: 1.5 }}>{orderError}</div>
+            </div>
+          )}
 
           {/* الخطوة 1: جاري الاتصال بالماكينة */}
           {terminalStep === 'connecting' && (
@@ -2395,6 +2536,29 @@ export function SelfOrderingKioskPage() {
               <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>
                 {terminalMessage || __t('pos.self_ordering_kiosk_page.s101', __t('pos.self_ordering_kiosk_page.s101', "تم تأكيد التفويض البنكي، جاري إصدار تذكرتك..."))}
               </p>
+              {/* INV-REST-KIOSK-NO-FICTION: the card is already charged, so
+                  the retry re-sends the order only — it never re-charges. */}
+              {orderError && lastFinalizeOpts && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '18px' }}>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() => {
+                      void handleFinalizeOrder(lastFinalizeOpts);
+                    }}
+                    style={{
+                      width: '100%',
+                      height: '44px',
+                      borderRadius: '10px',
+                      backgroundColor: '#170e5e',
+                      fontSize: '13.5px',
+                      fontWeight: 800,
+                    }}
+                  >
+                    {__t('pos.self_ordering_kiosk_page.s137', __t('pos.self_ordering_kiosk_page.s137', "إعادة إرسال الطلب"))}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
@@ -2645,16 +2809,41 @@ export function SelfOrderingKioskPage() {
             </span>
           </div>
 
+          {/* INV-REST-KIOSK-NO-FICTION: a failed finalize stays visible here; the green button below retries it. */}
+          {orderError && (
+            <div
+              style={{
+                display: 'flex',
+                gap: '10px',
+                alignItems: 'flex-start',
+                backgroundColor: '#fef2f2',
+                border: '1.5px solid #fecaca',
+                borderRadius: '12px',
+                padding: '12px 14px',
+                marginBottom: '14px',
+                textAlign: 'right',
+              }}
+            >
+              <AlertCircleIcon size={20} color="#dc2626" />
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#b91c1c', lineHeight: 1.5 }}>{orderError}</div>
+            </div>
+          )}
+
           {/* Buttons */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <Button
               type="button"
               variant="primary"
               onClick={() => {
+                // INV-REST-KIOSK-NO-FICTION: tapping "I sent it" creates
+                // the order as PENDING — the server still holds
+                // payment_status 'pending' and only the cashier's
+                // verification can mark it paid. Never 'paid' on the
+                // customer's word.
                 void handleFinalizeOrder({
                   paymentMethod: 'qr_mobile',
-                  paymentStatus: 'paid',
-                  paymentLabel: __t('pos.self_ordering_kiosk_page.s120', __t('pos.self_ordering_kiosk_page.s120', "مدفوع إلكترونياً (رمز QR بالهاتف)")),
+                  paymentStatus: 'pending',
+                  paymentLabel: __t('pos.self_ordering_kiosk_page.s133', __t('pos.self_ordering_kiosk_page.s133', "تحويل QR — بانتظار تأكيد الكاشير")),
                   rrn: qrRef,
                 });
               }}
@@ -2671,7 +2860,7 @@ export function SelfOrderingKioskPage() {
                 boxShadow: '0 4px 14px rgba(22, 128, 61, 0.25)',
               }}
             >
-              {__t('pos.self_ordering_kiosk_page.s121', __t('pos.self_ordering_kiosk_page.s121', "تم التحويل بنجاح • استلام التذكرة"))}
+              {__t('pos.self_ordering_kiosk_page.s132', __t('pos.self_ordering_kiosk_page.s132', "أرسلت التحويل • استلام التذكرة"))}
             </Button>
 
             <Button
@@ -2697,6 +2886,10 @@ export function SelfOrderingKioskPage() {
               {__t('pos.self_ordering_kiosk_page.s123', __t('pos.self_ordering_kiosk_page.s123', "تعذر التحويل؟ سداد نقداً عند الكاشير"))}
             </Button>
           </div>
+
+          <p style={{ fontSize: '11.5px', color: '#64748b', marginTop: '12px', lineHeight: 1.5 }}>
+            {__t('pos.self_ordering_kiosk_page.s134', __t('pos.self_ordering_kiosk_page.s134', "سيتم تأكيد التحويل لدى الكاشير قبل بدء تحضير طلبك — احتفظ بالتذكرة."))}
+          </p>
         </div>
       </DialogShell>
 
