@@ -43,6 +43,7 @@ import {
   updateKioskCartLineModifiers,
   type GroupModifierSelection,
   type ModifierGroup,
+  type KioskConfirmationItem,
   type KioskPaymentStatus,
 } from '@/features/pos/hooks/useSelfOrderingKiosk';
 import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
@@ -173,7 +174,10 @@ export function SelfOrderingKioskPage() {
     total: number;
     diningMode: string;
     tableNumber?: string;
-    items?: KioskCartItem[];
+    /* The confirmation receipt holds the hook's confirmation items
+     * (name/qty/price/modifiers) — not cart lines: lineKey is cart
+     * identity and means nothing once the order is placed. */
+    items?: KioskConfirmationItem[];
     placedAt?: string;
     paymentStatus: KioskPaymentStatus;
     paymentMethodLabel: string;
