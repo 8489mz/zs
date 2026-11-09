@@ -40,6 +40,13 @@ export class RestaurantAdvancedFnbController {
   }
 
   // 2. Tip Pooling & Shift Distribution
+  // INV-REST-FNB-CLAIMS-POST: these three endpoints are manager-only. The
+  // gate lives in the service (assertManagerCaller), not in a decorator:
+  // the manager definition is admin role OR the pos_manager /
+  // manage_restaurant permission — the same definition the POS uses for
+  // its manager tiles — and PermissionsGuard checks permission strings
+  // only, so a decorator could not express the role half and would lock
+  // out tenant admins.
   @Get('tip-pools')
   async getTipPools(
     @Req() req: RequestWithAuth,
@@ -55,7 +62,10 @@ export class RestaurantAdvancedFnbController {
     @Body() dto: CalculateTipPoolDto,
   ) {
     const scope = requireTenantScope(req.authContext!);
-    return this.service.calculateAndSaveTipPool(scope, dto);
+    return this.service.calculateAndSaveTipPool(
+      { ...scope, role: req.authContext?.role, permissions: req.authContext?.permissions ?? [] },
+      dto,
+    );
   }
 
   @Post('tip-pools/:id/distribute')
@@ -65,7 +75,10 @@ export class RestaurantAdvancedFnbController {
   ) {
     const scope = requireTenantScope(req.authContext!);
     const userId = Number(req.authContext?.userId || 0);
-    return this.service.confirmTipDistribution({ ...scope, userId }, id);
+    return this.service.confirmTipDistribution(
+      { ...scope, userId, role: req.authContext?.role, permissions: req.authContext?.permissions ?? [] },
+      id,
+    );
   }
 
   // 3. Multi-Zone Floor Plan
@@ -161,13 +174,18 @@ export class RestaurantAdvancedFnbController {
       tableNumber?: string;
       compType: 'vip_guest' | 'customer_complaint' | 'staff_meal' | 'promotional_tasting';
       managerName: string;
+      managerPin?: string;
       amount: number;
       itemsSummary?: string;
       notes?: string;
     },
   ) {
     const scope = requireTenantScope(req.authContext!);
-    return this.service.recordManagerComp(scope, dto);
+    const userId = Number(req.authContext?.userId || 0);
+    return this.service.recordManagerComp(
+      { ...scope, userId, role: req.authContext?.role, permissions: req.authContext?.permissions ?? [] },
+      dto,
+    );
   }
 
   // 8. Table QR Rating & Rescue Alert

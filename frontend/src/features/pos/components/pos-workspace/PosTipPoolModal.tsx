@@ -5,7 +5,7 @@ import { RestaurantOperationsDialog } from './RestaurantOperationsDialog';
 import { toast } from '@/shared/components/system-alert';
 import { PlusCircleIcon, TrashIcon, CheckCircleIcon } from '@/shared/components/icons/AppIcons';
 import { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced-fnb.api';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, todayLocalDateKey } from '@/lib/format';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 
@@ -38,12 +38,19 @@ export function PosTipPoolModal({
 }: PosTipPoolModalProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // INV-REST-FNB-CLAIMS-POST: the shift date is the tenant-local business
+  // day (local calendar parts), never the UTC slice — a pool opened at
+  // 00:30 Cairo used to be keyed to the previous UTC day, and the server
+  // reconciles the totals against that day's collected tips.
+  const todayStr = todayLocalDateKey();
 
   const [shiftDate] = useState(todayStr);
   const [shiftName] = useState('وردية اليوم');
-  const [cashTips, setCashTips] = useState<number>(initialCashTips || 250);
-  const [cardTips, setCardTips] = useState<number>(initialCardTips || 450);
+  // INV-REST-FNB-CLAIMS-POST: no invented defaults — the old 250/450 were
+  // hardcoded guesses the server now rejects (it reconciles against the
+  // actual collected tips), so the cashier types the real counted totals.
+  const [cashTips, setCashTips] = useState<number>(initialCashTips || 0);
+  const [cardTips, setCardTips] = useState<number>(initialCardTips || 0);
   const [distributionMethod, setDistributionMethod] = useState<'roles' | 'hours' | 'equal'>('roles');
   const [notes] = useState('');
 
@@ -115,16 +122,22 @@ export function PosTipPoolModal({
         })),
       }),
     onSuccess: async (res) => {
-      toast.success(`تم حفظ مجمع الإكراميات (${formatCurrency(res.totalTips, currency)}) واعتماد حصص الطاقم`);
-      // Auto confirm distribution
-      if (res.pool?.id) {
-        await restaurantAdvancedFnbApi.confirmTipDistribution(res.pool.id);
-      }
+      // INV-REST-FNB-CLAIMS-POST: calculating a pool does NOT confirm it.
+      // The old code auto-confirmed immediately, so one click calculated
+      // AND "paid" the tips while no money moved. The pool is saved as a
+      // draft; confirming it is a separate, explicit manager step, and
+      // even confirming only approves the distribution — the payout stays
+      // pending until the money is actually paid out.
+      toast.success(`تم حفظ مجمع الإكراميات (${formatCurrency(res.totalTips, currency)}) كمسودة بانتظار الاعتماد — لم يتحرك أي مبلغ بعد`);
       queryClient.invalidateQueries({ queryKey: ['restaurant-tip-pools'] });
       onClose();
     },
-    onError: () => {
-      toast.error('تعذر حفظ وتوزيع مجمع الإكراميات');
+    onError: (err: any) => {
+      // INV-REST-FNB-CLAIMS-POST: surface the server's message — a
+      // reconciliation failure reports the actual collected totals, so the
+      // cashier can correct the typed numbers instead of seeing a generic
+      // error.
+      toast.error(err?.message || 'تعذر حفظ مجمع الإكراميات');
     },
   });
 
@@ -180,7 +193,7 @@ export function PosTipPoolModal({
           }}
         >
           <CheckCircleIcon size={14} />
-          <span>{t('pos.pos_workspace.pos_tip_pool_modal.s4', "اعتماد وصرف الإكراميات")}</span>
+          <span>{t('pos.pos_workspace.pos_tip_pool_modal.s4', "حفظ مجمع الإكراميات")}</span>
         </button>
       }
     >

@@ -67,19 +67,37 @@ export function PosManagerCompModal({
       return;
     }
 
+    // INV-REST-FNB-CLAIMS-POST: the PIN is REQUIRED, not optional — the
+    // server verifies it via authorizeManagerSecret and refuses the comp
+    // without it. It accepts the shared manager PIN or an active admin's
+    // login password.
+    if (!managerPin.trim()) {
+      toast.warning('أدخل رمز PIN المدير أو كلمة مرور المدير للاعتماد');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      // 1. Record official comp ledger in backend
-      await restaurantAdvancedFnbApi.recordManagerComp({
+      // 1. Record official comp ledger in backend. The payload is built
+      // as a named variable (not an inline literal) because the API
+      // client's recordManagerComp DTO has no managerPin field yet — the
+      // server accepts it, and a follow-up should add `managerPin?` to
+      // that DTO type. The server records the VERIFIED approver, never
+      // the free-text managerName.
+      const compPayload = {
         compType,
         amount: finalCompAmount,
         managerName: managerName.trim(),
+        managerPin: managerPin.trim(),
         tableNumber: currentTableNumber || undefined,
         itemsSummary: cartSummary || undefined,
         notes: notes.trim() || undefined,
-      });
+      };
+      const res = await restaurantAdvancedFnbApi.recordManagerComp(compPayload);
 
-      // 2. Apply discount to POS cart
+      // 2. Apply discount to POS cart — the discount posts with the sale
+      // (postSale's discount leg). The server posts no second journal
+      // for a current-cart comp, so the discount is counted exactly once.
       await onApplyComp({
         compType,
         amount: finalCompAmount,
@@ -87,7 +105,10 @@ export function PosManagerCompModal({
         notes: notes.trim() || undefined,
       });
 
-      toast.success(`تم اعتماد قيد ضيافة الإدارة بقيمة ${formatCurrency(finalCompAmount)} بنجاح`);
+      // INV-REST-FNB-CLAIMS-POST: the toast repeats the SERVER's message,
+      // which is honest per path (posted on a sale vs. authorized pending
+      // the sale) — never the old hardcoded "قيد" claim.
+      toast.success(res?.message || `تم اعتماد ضيافة الإدارة بقيمة ${formatCurrency(finalCompAmount)} بنجاح`);
       onClose();
     } catch (err: any) {
       toast.error(err?.message || 'تعذر تسجيل ضيافة الإدارة');
@@ -228,7 +249,7 @@ export function PosManagerCompModal({
               <div>
                 <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
                   <LockIcon size={13} color="#170e5e" />
-                  <span>{__t('pos.pos_workspace.pos_manager_comp_modal.s11', __t('pos.pos_workspace.pos_manager_comp_modal.s11', "رمز PIN الأمني (اختياري):"))}</span>
+                  <span>{__t('pos.pos_workspace.pos_manager_comp_modal.s11', __t('pos.pos_workspace.pos_manager_comp_modal.s11', "رمز PIN الأمني أو كلمة مرور المدير:"))}</span>
                 </label>
                 <input
                   type="password"

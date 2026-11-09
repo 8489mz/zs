@@ -1,16 +1,27 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Database } from '../../../database/database.types';
 import { KYSELY_DB } from '../../../database/database.constants';
-import { Kysely, sql } from 'kysely';
+import { Kysely, sql, type Transaction } from 'kysely';
 import { AppError } from '../../../common/errors/app-error';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
+import { authorizeManagerSecret } from '../../../common/utils/manager-approval';
+import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
+import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 
 export interface TenantScope {
   tenantId: string;
   branchId?: number | null;
   userId?: number | null;
+  // INV-REST-FNB-CLAIMS-POST: the comp/tip gates need the caller's identity.
+  // accountId is the tenant account scope the journal posts under; role /
+  // permissions are the caller's own, read from the session — never from
+  // the request body. The controller forwards them from req.authContext.
+  accountId?: string | null;
+  role?: string | null;
+  permissions?: string[];
 }
 
 export interface Toggle86ItemDto {
@@ -64,10 +75,78 @@ export interface GeneratePrepSheetDto {
 export class RestaurantAdvancedFnbService {
   private readonly logger = new Logger(RestaurantAdvancedFnbService.name);
 
+  // The posting service is optional ONLY so existing direct constructions
+  // (d6c-misc-book-digits.spec.ts builds the service with the db alone to
+  // test tip splits) keep compiling: Nest always injects it, and the sale
+  // comp path refuses to post without it (FNB_POSTING_UNAVAILABLE below)
+  // instead of crashing on an undefined call.
   constructor(
     @Inject(KYSELY_DB)
     private readonly db: Kysely<Database>,
+    private readonly accountingPosting?: AccountingPostingService,
   ) {}
+
+  /**
+   * INV-REST-FNB-CLAIMS-POST: the manager gate for the comp/tip endpoints.
+   * The caller must BE a manager by the same definition the POS uses for
+   * its manager tiles (isManager = admin role, or the pos_manager /
+   * manage_restaurant permission). A PermissionsGuard decorator alone
+   * cannot express this: the guard checks permission strings only, and
+   * SUPER_ADMIN_PERMISSIONS does not contain pos_manager /
+   * manage_restaurant, so a decorator would lock out tenant admins while
+   * the UI still shows them as managers. The verified manager PIN (checked
+   * separately via authorizeManagerSecret) is the approval second factor —
+   * it proves a manager approved, it does not make the caller a manager.
+   */
+  private assertManagerCaller(scope: TenantScope): void {
+    const role = String(scope.role || '');
+    const permissions = scope.permissions ?? [];
+    const isManager =
+      role === 'admin' ||
+      role === 'super_admin' ||
+      permissions.includes('pos_manager') ||
+      permissions.includes('manage_restaurant');
+    if (!isManager) {
+      throw new AppError('هذا الإجراء يتطلب صلاحية مدير', 'MANAGER_PERMISSION_REQUIRED', 403);
+    }
+  }
+
+  /**
+   * INV-REST-FNB-CLAIMS-POST: resolve an accounting account the way
+   * postSale does — the tenant's configured account when it exists and is
+   * active, otherwise the canonical account code. Mirrors
+   * AccountingPostingService.resolveAccountWithFallback, which is private.
+   */
+  private async resolveCompAccount(
+    queryable: Kysely<Database> | Transaction<Database>,
+    tenantId: string,
+    configuredId: number | null | undefined,
+    fallbackCode: string,
+  ): Promise<number> {
+    if (configuredId && Number(configuredId) > 0) {
+      const configured = await queryable
+        .selectFrom('accounting_accounts')
+        .select(['id'])
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', Number(configuredId))
+        .where('is_active', '=', true)
+        .executeTakeFirst();
+      if (configured) return Number(configured.id);
+    }
+    const fallback = await queryable
+      .selectFrom('accounting_accounts')
+      .select(['id'])
+      .where('tenant_id', '=', tenantId)
+      .where('code', '=', fallbackCode)
+      .where('is_active', '=', true)
+      .executeTakeFirst();
+    if (fallback) return Number(fallback.id);
+    throw new AppError(
+      `حساب الضيافة (${fallbackCode}) غير موجود أو غير مفعّل لهذا المستأجر`,
+      'COMP_ACCOUNT_NOT_FOUND',
+      409,
+    );
+  }
 
   // ==========================================
   // 1. FAST 86 ENGINE (OUT-OF-STOCK TOGGLE)
@@ -196,10 +275,15 @@ export class RestaurantAdvancedFnbService {
   }
 
   async calculateAndSaveTipPool(scope: TenantScope, dto: CalculateTipPoolDto) {
+    // INV-REST-FNB-CLAIMS-POST: only a manager caller may create a pool.
+    this.assertManagerCaller(scope);
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const shiftDate = dto.shiftDate || (await resolveBusinessDateKey(this.db, scope.tenantId, new Date()));
-    const cashTips = Number(dto.totalCashTips || 0);
-    const cardTips = Number(dto.totalCardTips || 0);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(shiftDate)) {
+      throw new AppError('تاريخ الوردية يجب أن يكون بصيغة YYYY-MM-DD', 'INVALID_SHIFT_DATE', 400);
+    }
+    const cashTips = roundMoney(Number(dto.totalCashTips || 0), moneyDigits);
+    const cardTips = roundMoney(Number(dto.totalCardTips || 0), moneyDigits);
     const totalTips = roundMoney(cashTips + cardTips, moneyDigits);
 
     if (totalTips <= 0) {
@@ -208,6 +292,73 @@ export class RestaurantAdvancedFnbService {
 
     if (!dto.staff || dto.staff.length === 0) {
       throw new AppError('يجب تحديد موظف واحد على الأقل لتوزيع الإكراميات', 'NO_STAFF_SELECTED', 400);
+    }
+
+    // INV-REST-FNB-CLAIMS-POST: one pool per branch + shift date. A second
+    // pool for the same shift would distribute the same tips twice. A
+    // cancelled pool does not block a fresh one.
+    const branchId = scope.branchId || null;
+    let duplicateQuery = this.db
+      .selectFrom('restaurant_tip_pools')
+      .select(['id'])
+      .where('tenant_id', '=', scope.tenantId)
+      .where('shift_date', '=', shiftDate)
+      .where('status', 'in', ['draft', 'distributed']);
+    duplicateQuery = branchId
+      ? duplicateQuery.where('branch_id', '=', branchId)
+      : duplicateQuery.where('branch_id', 'is', null);
+    const duplicate = await duplicateQuery.executeTakeFirst();
+    if (duplicate) {
+      throw new AppError(
+        'يوجد مجمع إكراميات بالفعل لنفس الفرع وتاريخ الوردية',
+        'TIP_POOL_EXISTS',
+        409,
+      );
+    }
+
+    // INV-REST-FNB-CLAIMS-POST: every recipient must be a real, active
+    // employee of this tenant — a hardcoded id or a Date.now() id is not a
+    // person. The id is the validated identity; the name/role travel with
+    // the shift roster as submitted.
+    const employeeIds = dto.staff.map((m) => Number(m.employeeId || 0));
+    if (employeeIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
+      throw new AppError('كل موظف في التوزيع يجب أن يكون له معرف موظف صحيح', 'UNKNOWN_EMPLOYEE', 422);
+    }
+    if (new Set(employeeIds).size !== employeeIds.length) {
+      throw new AppError('لا يمكن تكرار نفس الموظف في توزيع واحد', 'DUPLICATE_EMPLOYEE', 400);
+    }
+    const employees = await this.db
+      .selectFrom('hr_employees')
+      .select(['id'])
+      .where('tenant_id', '=', scope.tenantId)
+      .where('id', 'in', employeeIds)
+      .where('status', '=', 'active')
+      .execute();
+    if (employees.length !== employeeIds.length) {
+      const found = new Set(employees.map((e) => Number(e.id)));
+      const missing = employeeIds.find((id) => !found.has(id));
+      throw new AppError(
+        `الموظف رقم ${missing} غير موجود أو غير نشط لدى هذه المنشأة`,
+        'UNKNOWN_EMPLOYEE',
+        422,
+      );
+    }
+
+    // INV-REST-FNB-CLAIMS-POST: the pool distributes ONLY the tips the
+    // branch actually collected on that business day — posted, non-credit
+    // sales whose tenant-local business date is the shift date. A credit
+    // sale's tip is a receivable, not collected money, so it is excluded.
+    // The cash/card split is recorded as stated; the reconciled figure is
+    // the TOTAL, within one minor unit. An invented total fails here and
+    // no pool row is created.
+    const actualTips = await this.sumCollectedTips(this.db, scope, shiftDate);
+    const tolerance = Math.pow(10, -moneyDigits);
+    if (Math.abs(totalTips - actualTips) > tolerance) {
+      throw new AppError(
+        `إجمالي الإكراميات المُدخل (${totalTips}) لا يطابق الإكراميات المحصّلة فعلياً لذلك الفرع والوردية (${actualTips})`,
+        'TIP_TOTAL_MISMATCH',
+        422,
+      );
     }
 
     // Role default weights if method is 'roles'
@@ -302,10 +453,39 @@ export class RestaurantAdvancedFnbService {
       pool: insertedPool,
       distributions,
       totalTips,
+      actualTips,
     };
   }
 
+  /**
+   * INV-REST-FNB-CLAIMS-POST: the tips a branch actually collected on one
+   * tenant-local business day — the sum of tip_amount over posted,
+   * non-credit sales whose created_at falls on that day in the tenant's
+   * timezone (settings key 'timezone', default Africa/Cairo). Drafts never
+   * collected anything and cancelled sales collected nothing, so both are
+   * excluded; a credit sale's tip is a receivable, not collected money.
+   */
+  private async sumCollectedTips(
+    queryable: Kysely<Database> | Transaction<Database>,
+    scope: TenantScope,
+    shiftDate: string,
+  ): Promise<number> {
+    const timeZone = await getTenantTimezone(queryable as Kysely<Database>, scope.tenantId);
+    const branchId = scope.branchId || null;
+    const row = await sql<{ actual: string }>`
+      SELECT COALESCE(SUM(tip_amount), 0) AS actual FROM sales
+      WHERE tenant_id = ${scope.tenantId}
+      ${branchId ? sql`AND branch_id = ${branchId}` : sql``}
+      AND status = 'posted'
+      AND payment_type <> 'credit'
+      AND to_char(created_at AT TIME ZONE ${timeZone}, 'YYYY-MM-DD') = ${shiftDate}
+    `.execute(queryable);
+    return Number(row.rows?.[0]?.actual || 0);
+  }
+
   async confirmTipDistribution(scope: TenantScope, poolId: number) {
+    // INV-REST-FNB-CLAIMS-POST: only a manager caller may confirm a pool.
+    this.assertManagerCaller(scope);
     const pool = await this.db
       .selectFrom('restaurant_tip_pools')
       .selectAll()
@@ -315,6 +495,19 @@ export class RestaurantAdvancedFnbService {
 
     if (!pool) {
       throw new AppError('مجمع الإكراميات غير موجود', 'POOL_NOT_FOUND', 404);
+    }
+
+    // INV-REST-FNB-CLAIMS-POST: confirm is an APPROVAL, not a payout. An
+    // already-distributed pool cannot be confirmed again — confirming twice
+    // used to re-mark the same tips paid. And the distribution rows stay
+    // unpaid (is_paid false, paid_at null) until a real payout moves the
+    // money; the old code flipped them to paid with no journal, no cash
+    // movement and no payroll link while the message claimed "صرف".
+    if (pool.status === 'distributed') {
+      throw new AppError('مجمع الإكراميات معتمَد بالفعل ولا يمكن اعتماده مرة أخرى', 'POOL_ALREADY_DISTRIBUTED', 409);
+    }
+    if (pool.status === 'cancelled') {
+      throw new AppError('مجمع الإكراميات ملغى ولا يمكن اعتماده', 'POOL_CANCELLED', 409);
     }
 
     await this.db
@@ -328,17 +521,11 @@ export class RestaurantAdvancedFnbService {
       .where('id', '=', poolId)
       .execute();
 
-    await this.db
-      .updateTable('restaurant_tip_pool_distributions')
-      .set({
-        is_paid: true,
-        paid_at: new Date(),
-      })
-      .where('tenant_id', '=', scope.tenantId)
-      .where('pool_id', '=', poolId)
-      .execute();
-
-    return { success: true, message: 'تم اعتماد وصرف توزيع الإكراميات على طاقم الوردية بنجاح' };
+    return {
+      success: true,
+      payoutPending: true,
+      message: 'تم اعتماد توزيع الإكراميات على طاقم الوردية؛ الصرف معلّق حتى تنفيذ الدفع الفعلي للموظفين',
+    };
   }
 
   // ==========================================
@@ -703,36 +890,236 @@ export class RestaurantAdvancedFnbService {
     tableNumber?: string;
     compType: 'vip_guest' | 'customer_complaint' | 'staff_meal' | 'promotional_tasting';
     managerName: string;
+    managerPin?: string;
     amount: number;
     itemsSummary?: string;
     notes?: string;
   }) {
-    if (!dto.amount || dto.amount <= 0) {
+    // INV-REST-FNB-CLAIMS-POST: only a manager caller may record a comp.
+    this.assertManagerCaller(scope);
+    const compTypes = ['vip_guest', 'customer_complaint', 'staff_meal', 'promotional_tasting'] as const;
+    if (!compTypes.includes(dto.compType as (typeof compTypes)[number])) {
+      throw new AppError('نوع الضيافة غير معروف', 'INVALID_COMP_TYPE', 400);
+    }
+    if (!dto.amount || Number(dto.amount) <= 0) {
       throw new AppError('مبلغ الضيافة يجب أن يكون أكبر من الصفر', 'INVALID_COMP_AMOUNT', 400);
     }
 
-    const [comp] = await this.db
-      .insertInto('restaurant_manager_comps')
-      .values({
-        tenant_id: scope.tenantId,
-        branch_id: scope.branchId || null,
-        sale_id: dto.saleId || null,
-        table_number: dto.tableNumber || null,
-        comp_type: dto.compType,
-        manager_name: dto.managerName || 'مدير الصالة',
-        amount: dto.amount,
-        items_summary: dto.itemsSummary || null,
-        notes: dto.notes || null,
-        created_at: new Date(),
-      })
-      .returningAll()
-      .execute();
+    const accountId = String(scope.accountId || '').trim();
+    if (!accountId) {
+      throw new AppError('Tenant/account scope is required', 'TENANT_SCOPE_REQUIRED', 403);
+    }
 
-    return {
-      success: true,
-      comp,
-      message: `تم اعتماد وقيد ضيافة الإدارة بقيمة ${dto.amount} بنجاح`,
-    };
+    // The comp row and its journal commit or roll back together.
+    return this.db.transaction().execute(async (trx) => {
+      const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+      const amount = roundMoney(Number(dto.amount), moneyDigits);
+      if (amount <= 0) {
+        throw new AppError('مبلغ الضيافة يجب أن يكون أكبر من الصفر', 'INVALID_COMP_AMOUNT', 400);
+      }
+
+      // INV-REST-FNB-CLAIMS-POST: the PIN the modal collects is actually
+      // checked — via the one shared authorizeManagerSecret (PIN or an
+      // active admin's login password; R3-D stores the PIN hashed). The
+      // recorded manager is the VERIFIED approver it returns, never the
+      // client-supplied free-text name.
+      const approval = await authorizeManagerSecret(
+        trx,
+        { tenantId: scope.tenantId, accountId } as AuthContext,
+        dto.managerPin ?? '',
+      );
+
+      // INV-REST-FNB-CLAIMS-POST: a comp on a named sale posts against a
+      // REAL, POSTED sale of this tenant only. The sale must already have
+      // a journal (its receivable exists in the GL); a draft or an
+      // unposted sale has no receivable to credit, so a comp on it is
+      // refused — apply the comp to the cart before checkout instead.
+      // The amount may not exceed what the customer still owes after
+      // earlier posted comps on the same sale.
+      let journalEntryId: number | null = null;
+      let saleDocNo = '';
+      if (dto.saleId) {
+        const saleId = Number(dto.saleId);
+        const sale = await trx
+          .selectFrom('sales')
+          .select(['id', 'doc_no', 'customer_id', 'total', 'paid_amount', 'store_credit_used', 'branch_id', 'location_id'])
+          .where('tenant_id', '=', scope.tenantId)
+          .where('id', '=', saleId)
+          .executeTakeFirst();
+        if (!sale) {
+          throw new AppError('الفاتورة غير موجودة لدى هذه المنشأة', 'SALE_NOT_FOUND', 404);
+        }
+        const saleJournal = await trx
+          .selectFrom('journal_entries')
+          .select(['id'])
+          .where('tenant_id', '=', scope.tenantId)
+          .where('source_type', '=', 'sale')
+          .where('source_id', '=', saleId)
+          .where('status', 'in', ['draft', 'posted'])
+          .executeTakeFirst();
+        if (!saleJournal) {
+          throw new AppError(
+            'الفاتورة لم تُرحَّل بعد؛ طبّق الضيافة على السلة قبل إتمام البيع',
+            'SALE_NOT_POSTED',
+            422,
+          );
+        }
+        const priorCompRows = await trx
+          .selectFrom('restaurant_manager_comps')
+          .select(['id', 'amount'])
+          .where('tenant_id', '=', scope.tenantId)
+          .where('sale_id', '=', saleId)
+          .execute();
+        let priorPosted = 0;
+        for (const row of priorCompRows) {
+          const priorJournal = await trx
+            .selectFrom('journal_entries')
+            .select(['id'])
+            .where('tenant_id', '=', scope.tenantId)
+            .where('source_type', '=', 'manager_comp')
+            .where('source_id', '=', Number(row.id))
+            .where('status', '=', 'posted')
+            .executeTakeFirst();
+          if (priorJournal) priorPosted = roundMoney(priorPosted + Number(row.amount || 0), moneyDigits);
+        }
+        const remaining = roundMoney(
+          Number(sale.total || 0) - Number(sale.paid_amount || 0) - Number(sale.store_credit_used || 0) - priorPosted,
+          moneyDigits,
+        );
+        if (amount > remaining) {
+          throw new AppError(
+            `مبلغ الضيافة (${amount}) يتجاوز المتبقي على الفاتورة (${remaining})`,
+            'COMP_EXCEEDS_RECEIVABLE',
+            422,
+          );
+        }
+        saleDocNo = String(sale.doc_no || sale.id);
+
+        const [comp] = await trx
+          .insertInto('restaurant_manager_comps')
+          .values({
+            tenant_id: scope.tenantId,
+            branch_id: scope.branchId || null,
+            sale_id: saleId,
+            table_number: dto.tableNumber || null,
+            comp_type: dto.compType,
+            manager_name: approval.authorizedByName,
+            amount,
+            items_summary: dto.itemsSummary || null,
+            notes: dto.notes || null,
+            created_at: new Date(),
+          })
+          .returningAll()
+          .execute();
+
+        // INV-REST-FNB-CLAIMS-POST: the comp POSTS. A comp is a price
+        // reduction on an already-posted sale, so it posts exactly the
+        // discount leg postSale uses for a sale discount: debit the sales
+        // discount account (settings sales_discount_account_id, fallback
+        // code 4300), credit the customer receivable (settings
+        // customer_receivable_account_id, fallback 1130). The journal is
+        // the posting the old response claimed; the comp row and the
+        // journal are linked by source_type 'manager_comp' + the comp id.
+        const settings = await trx
+          .selectFrom('accounting_settings')
+          .select(['sales_discount_account_id', 'customer_receivable_account_id'])
+          .where('tenant_id', '=', scope.tenantId)
+          .where('id', '=', 1)
+          .executeTakeFirst();
+        const discountAccountId = await this.resolveCompAccount(
+          trx,
+          scope.tenantId,
+          settings?.sales_discount_account_id ?? null,
+          '4300',
+        );
+        const receivableAccountId = await this.resolveCompAccount(
+          trx,
+          scope.tenantId,
+          settings?.customer_receivable_account_id ?? null,
+          '1130',
+        );
+        const customerId = sale.customer_id ? Number(sale.customer_id) : null;
+        if (!this.accountingPosting) {
+          throw new AppError(
+            'الضيافة على فاتورة مسجلة تحتاج خدمة الترحيل المحاسبي',
+            'FNB_POSTING_UNAVAILABLE',
+            500,
+          );
+        }
+        journalEntryId = await this.accountingPosting.postDomainJournal(trx, {
+          sourceType: 'manager_comp',
+          sourceId: Number(comp.id),
+          tenantId: scope.tenantId,
+          accountId,
+          entryDate: new Date(),
+          description: `ضيافة إدارة على الفاتورة ${saleDocNo} — ${dto.compType}`,
+          branchId: sale.branch_id ? Number(sale.branch_id) : (scope.branchId || null),
+          locationId: sale.location_id ? Number(sale.location_id) : null,
+          createdBy: scope.userId || null,
+          lines: [
+            {
+              accountId: discountAccountId,
+              description: `ضيافة إدارة على الفاتورة ${saleDocNo}`,
+              debit: amount,
+              credit: 0,
+              partnerType: 'none',
+              partnerId: null,
+              branchId: sale.branch_id ? Number(sale.branch_id) : null,
+              locationId: sale.location_id ? Number(sale.location_id) : null,
+            },
+            {
+              accountId: receivableAccountId,
+              description: `تخفيض مديونية عميل بضيافة إدارة على الفاتورة ${saleDocNo}`,
+              debit: 0,
+              credit: amount,
+              partnerType: customerId ? 'customer' : 'none',
+              partnerId: customerId,
+              branchId: sale.branch_id ? Number(sale.branch_id) : null,
+              locationId: sale.location_id ? Number(sale.location_id) : null,
+            },
+          ],
+        });
+
+        return {
+          success: true,
+          comp,
+          journalEntryId,
+          message: `تم اعتماد وقيد ضيافة الإدارة بقيمة ${amount} على الفاتورة ${saleDocNo} بنجاح`,
+        };
+      }
+
+      // INV-REST-FNB-CLAIMS-POST: no sale yet — this is the current-cart
+      // authorization. There is no receivable to credit and no journal to
+      // post against, so NO journal is posted here: the comp is recorded
+      // as an approved authorization, and the discount posts with the
+      // sale (the cart discount the POS applies, posted by postSale's
+      // discount leg). Posting a journal now as well would count the same
+      // discount twice. The response says exactly that — it never claims
+      // a posting that did not happen.
+      const [comp] = await trx
+        .insertInto('restaurant_manager_comps')
+        .values({
+          tenant_id: scope.tenantId,
+          branch_id: scope.branchId || null,
+          sale_id: null,
+          table_number: dto.tableNumber || null,
+          comp_type: dto.compType,
+          manager_name: approval.authorizedByName,
+          amount,
+          items_summary: dto.itemsSummary || null,
+          notes: dto.notes || null,
+          created_at: new Date(),
+        })
+        .returningAll()
+        .execute();
+
+      return {
+        success: true,
+        comp,
+        journalEntryId: null,
+        message: `تم اعتماد ضيافة الإدارة بقيمة ${amount} وتسجيلها؛ يُرحَّل الخصم مع الفاتورة عند إتمام البيع`,
+      };
+    });
   }
 
   // ==========================================
