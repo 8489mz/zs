@@ -165,6 +165,20 @@ export function KitchenDisplayPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['kds-tickets'] });
     },
+    onError: (err) => {
+      // INV-REST-KDS-TOGGLE-FEEDBACK (R8-B): the ready -> cooking un-mark
+      // is refused server-side by design (R4-E I18 forward-only), and the
+      // failure used to be silent — the cook tapped, nothing happened,
+      // and the item stayed ready with no explanation. Surface the
+      // server's own Arabic message in the page's existing banner
+      // (lastRecallMessage) so the kitchen sees why the un-mark did not
+      // happen. The backward move stays refused: nothing here changes
+      // the status, and the 5s refetch restores the true state anyway.
+      setLastRecallMessage(
+        err instanceof Error ? err.message : 'تعذر تغيير حالة الصنف. حاول مرة أخرى.',
+      );
+      setTimeout(() => setLastRecallMessage(null), 5000);
+    },
   });
 
   const recallMutation = useMutation({
