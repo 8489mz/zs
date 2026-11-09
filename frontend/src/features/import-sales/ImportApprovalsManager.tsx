@@ -5,6 +5,7 @@ import {
   useApprovalRequestsQuery,
   useCreateApprovalRequestMutation,
   useDecideApprovalRequestMutation,
+  useImportFlowEventsQuery,
   IMPORT_PAYMENT_METHODS,
   IMPORT_PAYMENT_METHOD_LABELS,
 } from './api/shipments.api';
@@ -19,6 +20,12 @@ import { toast } from '@/shared/components/system-alert';
 export default function ImportApprovalsManager() {
   const [filterStatus, setFilterStatus] = useState<string>('');
   const { data: requests = [], isLoading, refetch } = useApprovalRequestsQuery(filterStatus || undefined);
+  // INV-IMPORT-TRACEABILITY-APPROVALS-POOL: the flow trace reads the
+  // same source of truth as the reconciliation tie-out and the profit
+  // attribution — the tables that store each event — so a posted flow
+  // shows here with its real state even when no manual approval
+  // request was ever raised for it.
+  const { data: trace } = useImportFlowEventsQuery();
   const createApprovalMutation = useCreateApprovalRequestMutation();
   const decideApprovalMutation = useDecideApprovalRequestMutation();
 
@@ -183,6 +190,19 @@ export default function ImportApprovalsManager() {
         return 'تحميل مصروفات متأخرة على الحاوية';
       default:
         return type;
+    }
+  };
+
+  const getTraceKindLabel = (kind: string) => {
+    switch (kind) {
+      case 'project': return 'مشروع استيراد';
+      case 'proforma_invoice': return 'فاتورة مبدئية';
+      case 'shipment': return 'شحنة / حاوية';
+      case 'receipt': return 'سند استلام';
+      case 'supplier_payment': return 'دفعة مورد';
+      case 'partner_payout': return 'صرف أرباح شريك';
+      case 'approval_request': return 'طلب اعتماد';
+      default: return kind;
     }
   };
 
@@ -400,7 +420,66 @@ export default function ImportApprovalsManager() {
         )}
       </div>
 
-      {/* 5. Create Request Dialog */}
+      {/* 5. Import flow trace (INV-IMPORT-TRACEABILITY-APPROVALS-POOL):
+          every import event with its REAL stored state — projects,
+          approved PIs, arrived shipments, posted receipts with their
+          journal, supplier payments and payouts. The maker-checker
+          counts above stay honest (they count real requests only);
+          this table is what proves the flow itself happened. */}
+      <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+          <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#0f172a' }}>سجل تتبع تدفق الاستيراد</h4>
+          <span style={{ fontSize: '0.74rem', color: '#64748b' }}>
+            {trace
+              ? `${trace.counts.projects} مشروع • ${trace.counts.proformaInvoicesApproved}/${trace.counts.proformaInvoices} فاتورة مبدئية معتمدة • ${trace.counts.shipmentsArrived}/${trace.counts.shipments} حاوية وصلت • ${trace.counts.receiptsMatched}/${trace.counts.receipts} سند استلام مطابق مع اليومية • ${trace.counts.supplierPayments} دفعة مورد`
+              : 'جاري تحميل سجل التتبع...'}
+          </span>
+        </div>
+        {!trace ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>جاري تحميل سجل التتبع...</div>
+        ) : trace.events.length === 0 ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>لا توجد أحداث استيراد مسجلة بعد</div>
+        ) : (
+          <div style={{ overflowX: 'auto', maxHeight: 420, overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>التاريخ</th>
+                  <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>الحدث</th>
+                  <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>المرجع</th>
+                  <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>الحالة الفعلية</th>
+                  <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>القيد / المطابقة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trace.events.map((e: any, idx: number) => (
+                  <tr key={`${e.kind}-${e.ref}-${idx}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '10px 14px', fontSize: '12px', color: '#64748b' }}>
+                      {e.createdAt ? new Date(e.createdAt).toLocaleDateString('ar-EG') : '—'}
+                    </td>
+                    <td style={{ padding: '10px 14px', fontSize: '12.5px', fontWeight: 600, color: '#0f172a' }}>{getTraceKindLabel(e.kind)}</td>
+                    <td style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>
+                      {e.ref}{e.label ? ` — ${e.label}` : ''}
+                    </td>
+                    <td style={{ padding: '10px 14px', fontSize: '12px' }}>
+                      <span style={{ padding: '3px 8px', borderRadius: 6, fontSize: '11px', fontWeight: 700, backgroundColor: '#f1f5f9', color: '#334155' }}>
+                        {e.state || '—'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 14px', fontSize: '12px', color: '#475569' }}>
+                      {e.kind === 'receipt'
+                        ? (e.journalMatched ? `مطابق — ${e.journalEntryNo || ''}` : (e.journalEntryNo ? `قيد ${e.journalEntryNo} غير مرحّل` : 'بلا قيد يومية بعد'))
+                        : (e.amountEgp != null ? formatCurrency(e.amountEgp) : '—')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* 6. Create Request Dialog */}
       <StandardDialog
         open={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}

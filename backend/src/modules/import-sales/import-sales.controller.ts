@@ -473,6 +473,28 @@ export class ImportSalesController {
     return this.importSalesService.generatePeriodProfitReport(req.authContext!.tenantId!, startDate, endDate, projectId);
   }
 
+  @RequireAnyPermission('canViewProfit', 'reports', 'accounting')
+  @Get('profit-attribution')
+  async listProjectProfitAttribution(
+    @Req() req: RequestWithAuth,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string
+  ) {
+    if (!startDate || !endDate) {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(1);
+      return this.importSalesService.listProjectProfitAttribution(req.authContext!.tenantId!, start, end);
+    }
+    return this.importSalesService.listProjectProfitAttribution(req.authContext!.tenantId!, startDate, endDate);
+  }
+
+  @RequireAnyPermission('purchases', 'accounting')
+  @Get('traceability')
+  async listImportFlowEvents(@Req() req: RequestWithAuth, @Query('projectId') projectId?: string) {
+    return this.importSalesService.listImportFlowEvents(req.authContext!.tenantId!, projectId);
+  }
+
   @RequireAnyPermission('purchases', 'accounting')
   @Get('foreign-transfers')
   async listForeignTransfers(@Req() req: RequestWithAuth) {

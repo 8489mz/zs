@@ -3,6 +3,7 @@ import {
   useReconciliationExceptionsQuery,
   useRunReconciliationScanMutation,
   useResolveReconciliationExceptionMutation,
+  useImportFlowEventsQuery,
 } from './api/shipments.api';
 import { StandardDialog } from '@/shared/components/StandardDialog';
 import { PageHeader } from '@/shared/components/page-header';
@@ -17,6 +18,12 @@ import { toast } from '@/shared/components/system-alert';
 export default function ImportReconciliationManager() {
   const [filterStatus, setFilterStatus] = useState<string>('');
   const { data: exceptions = [], isLoading, refetch } = useReconciliationExceptionsQuery(filterStatus || undefined);
+  // INV-IMPORT-TRACEABILITY-APPROVALS-POOL: the receipt <-> journal
+  // tie-out below reads the same traceability source as the approvals
+  // queue and the profit attribution — a posted receipt shows here
+  // as matched with its real journal number, so "0 exceptions" is
+  // never the whole story: the matched flow is visible too.
+  const { data: trace } = useImportFlowEventsQuery();
   const runScanMutation = useRunReconciliationScanMutation();
   const resolveExceptionMutation = useResolveReconciliationExceptionMutation();
 
@@ -287,7 +294,57 @@ export default function ImportReconciliationManager() {
         )}
       </div>
 
-      {/* 5. Resolve Exception Dialog */}
+      {/* 5. Receipt <-> journal tie-out (INV-IMPORT-TRACEABILITY-APPROVALS-POOL):
+          every import receipt with its real state and its journal.
+          A receipt is "matched" only when receipt and journal are
+          both posted — an unposted receipt is an open tie-out, never
+          a silent 100% match. */}
+      <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+          <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#0f172a' }}>مطابقة سندات الاستلام مع قيود اليومية</h4>
+          <span style={{ fontSize: '0.74rem', color: '#64748b' }}>
+            {trace
+              ? `${trace.counts.receiptsMatched}/${trace.counts.receipts} سند مطابق • ${trace.counts.receiptsPosted} مرحّل • ${trace.counts.supplierPayments} دفعة مورد مرتبطة بفاتورة مبدئية`
+              : 'جاري تحميل سجل المطابقة...'}
+          </span>
+        </div>
+        {!trace ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>جاري تحميل سجل المطابقة...</div>
+        ) : trace.events.filter((e: any) => e.kind === 'receipt').length === 0 ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>لا توجد سندات استلام مسجلة بعد</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>سند الاستلام</th>
+                  <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>الحاوية</th>
+                  <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>حالة السند</th>
+                  <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>قيد اليومية</th>
+                  <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>المطابقة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trace.events.filter((e: any) => e.kind === 'receipt').map((e: any, idx: number) => (
+                  <tr key={`${e.ref}-${idx}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '10px 14px', fontSize: '12.5px', fontWeight: 700, color: '#0f172a' }}>سند الاستلام {e.ref}</td>
+                    <td style={{ padding: '10px 14px', fontSize: '12.5px', color: '#0f172a' }}>{e.label || '—'}</td>
+                    <td style={{ padding: '10px 14px', fontSize: '12px' }}>{e.state || '—'}</td>
+                    <td style={{ padding: '10px 14px', fontSize: '12.5px', fontWeight: 700, color: '#170e5e' }}>{e.journalEntryNo || '—'}</td>
+                    <td style={{ padding: '10px 14px', fontSize: '12px' }}>
+                      <span style={{ padding: '3px 8px', borderRadius: 6, fontSize: '11px', fontWeight: 700, backgroundColor: e.journalMatched ? '#dcfce7' : '#fef3c7', color: e.journalMatched ? '#166534' : '#92400e' }}>
+                        {e.journalMatched ? 'مطابق' : 'مطابقة مفتوحة'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* 6. Resolve Exception Dialog */}
       <StandardDialog
         open={Boolean(selectedExceptionForResolve)}
         onClose={() => setSelectedExceptionForResolve(null)}

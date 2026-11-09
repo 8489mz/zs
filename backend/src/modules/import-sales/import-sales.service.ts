@@ -5351,8 +5351,16 @@ export class ImportSalesService {
         .executeTakeFirstOrThrow();
 
       // Bind payout to its approved project; never silently choose the first project linked to a partner.
+      // INV-IMPORT-TRACEABILITY-APPROVALS-POOL: a UUID that does not
+      // exist must fail with the named maker-checker error, not a raw
+      // NoResultError — the trial's distribution step demanded an
+      // approval UUID with no approval behind it, and the generic
+      // failure hid which field was wrong.
       const approved = await trx.selectFrom('import_approval_requests').select('request_payload')
-        .where('tenant_id', '=', tenantId).where('id', '=', approvalRequestId).executeTakeFirstOrThrow();
+        .where('tenant_id', '=', tenantId).where('id', '=', approvalRequestId).executeTakeFirst();
+      if (!approved) {
+        throw new BadRequestException('طلب الاعتماد (Maker-Checker) المحدد غير موجود.');
+      }
       let approvalDetails: any;
       try {
         approvalDetails = typeof approved.request_payload === 'string'
@@ -9156,6 +9164,277 @@ export class ImportSalesService {
         .returningAll()
         .executeTakeFirstOrThrow();
     });
+  }
+
+  // -------------------------------------------------------------
+  // IMPORT TRACEABILITY (INV-IMPORT-TRACEABILITY-APPROVALS-POOL)
+  // One traceability source of truth: every import event is read
+  // from the table that actually stores it — never from a separate
+  // counter. The live trials proved the separate counters stay 0:
+  // approvals read only import_approval_requests, whose ONLY writer
+  // is the manual createApprovalRequest (no flow transition — project
+  // create, PI approval, shipment create, receipt posting, supplier
+  // payment — ever inserts a row); the reconciliation scan only
+  // looks for stale broker advances and overdue deposits, never at
+  // receipts; and the profit pool page never passed a projectId, so
+  // it could only render the company-wide aggregate. These two read
+  // methods derive every row below from the posted state, so a
+  // posted receipt (JE-00015025 shape) shows up with its real
+  // state in the approvals queue, in the reconciliation tie-out
+  // and in the per-project / per-shipment profit attribution.
+  // -------------------------------------------------------------
+  async listImportFlowEvents(tenantId: string, projectId?: string) {
+    const events: Array<{
+      kind: string;
+      ref: string;
+      label: string;
+      state: string;
+      projectId: string | null;
+      shipmentId: string | null;
+      amountEgp: number | null;
+      amountForeign: number | null;
+      currency: string | null;
+      journalEntryNo: string | null;
+      journalMatched: boolean | null;
+      createdAt: any;
+    }> = [];
+    const num = (v: any): number | null => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    let projectsQ = this.db.selectFrom('import_projects').selectAll().where('tenant_id', '=', tenantId);
+    if (projectId) projectsQ = projectsQ.where('id', '=', projectId);
+    const projects = await projectsQ.orderBy('created_at', 'asc').execute();
+    for (const p of projects) {
+      events.push({
+        kind: 'project', ref: String(p.project_no || p.id), label: String(p.title || ''),
+        state: String(p.status || ''), projectId: String(p.id), shipmentId: null,
+        amountEgp: num((p as any).allocated_capital), amountForeign: null, currency: String((p as any).budget_currency || '') || null,
+        journalEntryNo: null, journalMatched: null, createdAt: (p as any).created_at,
+      });
+    }
+
+    let piQ = this.db.selectFrom('import_proforma_invoices').selectAll().where('tenant_id', '=', tenantId);
+    if (projectId) piQ = piQ.where('project_id', '=', projectId);
+    const pis = await piQ.orderBy('created_at', 'asc').execute();
+    for (const pi of pis) {
+      events.push({
+        kind: 'proforma_invoice', ref: String(pi.pi_number || pi.id), label: '',
+        state: String(pi.status || ''),
+        projectId: pi.project_id ? String(pi.project_id) : null, shipmentId: null,
+        amountEgp: null, amountForeign: num(pi.total_amount_foreign), currency: String(pi.currency || '') || null,
+        journalEntryNo: null, journalMatched: null, createdAt: (pi as any).created_at,
+      });
+    }
+
+    let shipQ = this.db.selectFrom('import_shipments').selectAll().where('tenant_id', '=', tenantId);
+    if (projectId) shipQ = shipQ.where('project_id', '=', projectId);
+    const shipments = await shipQ.orderBy('created_at', 'asc').execute();
+    const shipmentIds = shipments.map((s) => String(s.id));
+    for (const s of shipments) {
+      events.push({
+        kind: 'shipment', ref: String(s.container_number || s.id), label: String(s.bill_of_lading || ''),
+        state: String(s.status || ''), projectId: s.project_id ? String(s.project_id) : null,
+        shipmentId: String(s.id), amountEgp: null, amountForeign: null, currency: null,
+        journalEntryNo: null, journalMatched: null, createdAt: (s as any).created_at,
+      });
+    }
+
+    // Receipt tie-out: the receipt row carries its journal; the
+    // journal row carries the posted state. A receipt is "matched"
+    // only when BOTH are posted — a posted receipt with no journal,
+    // or a journal that is not posted, is an open tie-out, never a
+    // silent 100% match.
+    let receiptQ = this.db
+      .selectFrom('import_inventory_receipts as r')
+      .leftJoin('journal_entries as je', 'je.id', 'r.journal_entry_id')
+      .leftJoin('import_shipments as s', 's.id', 'r.shipment_id')
+      .select([
+        'r.id as receipt_id', 'r.shipment_id as shipment_id', 'r.state as state',
+        'r.journal_entry_id as journal_entry_id', 'r.created_at as created_at',
+        'je.entry_no as entry_no', 'je.status as journal_status',
+        's.project_id as project_id', 's.container_number as container_number',
+      ])
+      .where('r.tenant_id', '=', tenantId);
+    if (projectId) receiptQ = receiptQ.where('s.project_id', '=', projectId);
+    else if (shipmentIds.length > 0) receiptQ = receiptQ.where('r.shipment_id', 'in', shipmentIds);
+    const receipts = await receiptQ.orderBy('r.created_at', 'asc').execute();
+    for (const r of receipts as any[]) {
+      const matched = r.state === 'posted' && r.journal_entry_id != null && r.journal_status === 'posted';
+      events.push({
+        kind: 'receipt', ref: `#${r.receipt_id}`, label: String(r.container_number || ''),
+        state: String(r.state || ''), projectId: r.project_id ? String(r.project_id) : null,
+        shipmentId: r.shipment_id ? String(r.shipment_id) : null,
+        amountEgp: null, amountForeign: null, currency: null,
+        journalEntryNo: r.entry_no ? String(r.entry_no) : null, journalMatched: matched,
+        createdAt: r.created_at,
+      });
+    }
+
+    // Supplier payments are linked to the import flow only through
+    // their proforma invoice (the same join recordForeignTransfer
+    // uses to prove payment coverage). supplier_payments carries no
+    // project_id: inventing one would attribute a payment to the
+    // wrong project, so unlinked payments are not traced here.
+    const payments = await this.db
+      .selectFrom('supplier_payments as sp')
+      .innerJoin('import_proforma_invoices as pi', 'pi.id', 'sp.proforma_invoice_id')
+      .select([
+        'sp.id as payment_id', 'sp.doc_no as doc_no', 'sp.amount as amount',
+        'sp.amount_foreign as amount_foreign', 'sp.currency as currency',
+        'sp.created_at as created_at', 'pi.project_id as project_id',
+        'pi.pi_number as pi_number',
+      ])
+      .where('sp.tenant_id', '=', tenantId)
+      .$if(!!projectId, (eb) => eb.where('pi.project_id', '=', projectId as string))
+      .orderBy('sp.created_at', 'asc')
+      .execute();
+    for (const pay of payments as any[]) {
+      events.push({
+        kind: 'supplier_payment', ref: String(pay.doc_no || `#${pay.payment_id}`),
+        label: String(pay.pi_number || ''), state: 'paid',
+        projectId: pay.project_id ? String(pay.project_id) : null, shipmentId: null,
+        amountEgp: num(pay.amount), amountForeign: num(pay.amount_foreign),
+        currency: String(pay.currency || '') || null,
+        journalEntryNo: null, journalMatched: null, createdAt: pay.created_at,
+      });
+    }
+
+    let payoutQ = this.db.selectFrom('import_partner_project_payouts').selectAll().where('tenant_id', '=', tenantId);
+    if (projectId) payoutQ = payoutQ.where('project_id', '=', projectId);
+    const payouts = await payoutQ.orderBy('created_at', 'asc').execute();
+    for (const po of payouts) {
+      events.push({
+        kind: 'partner_payout', ref: `#${po.id}`, label: '',
+        state: 'paid', projectId: String(po.project_id), shipmentId: null,
+        amountEgp: num(po.amount_egp), amountForeign: null, currency: null,
+        journalEntryNo: null, journalMatched: null, createdAt: (po as any).created_at,
+      });
+    }
+
+    const approvals = await this.listApprovalRequests(tenantId);
+    for (const a of approvals as any[]) {
+      if (projectId) {
+        let payload: any = {};
+        try {
+          payload = typeof a.request_payload === 'string' ? JSON.parse(a.request_payload || '{}') : (a.request_payload || {});
+        } catch { payload = {}; }
+        // The project binding is the payload's projectId when the
+        // approval carries one (partner_distribution, project_closure,
+        // large_transfer); otherwise the approval has no project and
+        // does not belong to one project's trace.
+        const boundProject = payload.projectId ? String(payload.projectId) : null;
+        if (boundProject !== String(projectId)) continue;
+      }
+      events.push({
+        kind: 'approval_request', ref: `#${String(a.id).slice(0, 8)}`, label: String(a.action_type || ''),
+        state: String(a.status || ''), projectId: null, shipmentId: null,
+        amountEgp: null, amountForeign: null, currency: null,
+        journalEntryNo: null, journalMatched: null, createdAt: a.created_at,
+      });
+    }
+
+    events.sort((x, y) => {
+      const tx = x.createdAt ? new Date(x.createdAt).getTime() : 0;
+      const ty = y.createdAt ? new Date(y.createdAt).getTime() : 0;
+      return tx - ty;
+    });
+
+    const byKind = (kind: string) => events.filter((e) => e.kind === kind);
+    const counts = {
+      projects: byKind('project').length,
+      proformaInvoices: byKind('proforma_invoice').length,
+      proformaInvoicesApproved: byKind('proforma_invoice').filter((e) => e.state === 'approved').length,
+      shipments: byKind('shipment').length,
+      shipmentsArrived: byKind('shipment').filter((e) => e.state === 'Arrived').length,
+      receipts: byKind('receipt').length,
+      receiptsPosted: byKind('receipt').filter((e) => e.state === 'posted').length,
+      receiptsMatched: byKind('receipt').filter((e) => e.journalMatched === true).length,
+      supplierPayments: byKind('supplier_payment').length,
+      partnerPayouts: byKind('partner_payout').length,
+      approvalsPending: byKind('approval_request').filter((e) => e.state === 'pending').length,
+      approvalsApproved: byKind('approval_request').filter((e) => e.state === 'approved').length,
+      approvalsRejected: byKind('approval_request').filter((e) => e.state === 'rejected').length,
+      approvalsExecuted: byKind('approval_request').filter((e) => e.state === 'executed').length,
+    };
+    return { events, counts };
+  }
+
+  async listProjectProfitAttribution(tenantId: string, startDate: string | Date, endDate: string | Date) {
+    // Attribution rows are report/display values: round them through
+    // the canonical rounder at the tenant's book digits (never a
+    // hardcoded toFixed(2) — the architecture guard dispositions
+    // every toFixed(2) site in this file).
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+    const projects = await this.db
+      .selectFrom('import_projects')
+      .select(['id', 'project_no', 'title', 'status'])
+      .where('tenant_id', '=', tenantId)
+      .orderBy('created_at', 'asc')
+      .execute();
+    const start = typeof startDate === 'string' ? startDate : startDate.toISOString().slice(0, 10);
+    const end = typeof endDate === 'string' ? endDate : endDate.toISOString().slice(0, 10);
+    const rows: any[] = [];
+    for (const p of projects) {
+      const report = await this.generatePeriodProfitReport(tenantId, start, end, String(p.id));
+      const shipments = await this.db
+        .selectFrom('import_shipments')
+        .select(['id', 'container_number', 'status'])
+        .where('tenant_id', '=', tenantId)
+        .where('project_id', '=', String(p.id))
+        .orderBy('created_at', 'asc')
+        .execute();
+      const shipmentRows: any[] = [];
+      for (const s of shipments) {
+        const items = await this.db
+          .selectFrom('import_shipment_items')
+          .select(['received_quantity', 'quantity', 'landed_cost_egp'])
+          .where('tenant_id', '=', tenantId)
+          .where('shipment_id', '=', String(s.id))
+          .execute();
+        let receivedQuantity = 0;
+        let landedCostEgp = 0;
+        for (const it of items) {
+          const qty = Number(it.received_quantity ?? it.quantity ?? 0);
+          receivedQuantity += qty;
+          landedCostEgp += qty * Number(it.landed_cost_egp || 0);
+        }
+        const allocs = await this.db
+          .selectFrom('import_sale_allocations')
+          .select(['quantity', 'unit_sale_price_egp', 'unit_cost_egp', 'allocation_type'])
+          .where('tenant_id', '=', tenantId)
+          .where('shipment_id', '=', String(s.id))
+          .execute();
+        let salesRevenueEgp = 0;
+        let salesCostEgp = 0;
+        for (const al of allocs) {
+          const qty = Number(al.quantity || 0);
+          const sign = al.allocation_type === 'return' || al.allocation_type === 'cancellation' || al.allocation_type === 'reversal' ? -1 : 1;
+          salesRevenueEgp += sign * qty * Number(al.unit_sale_price_egp || 0);
+          salesCostEgp += sign * qty * Number(al.unit_cost_egp || 0);
+        }
+        shipmentRows.push({
+          shipmentId: String(s.id),
+          containerNumber: String(s.container_number || ''),
+          status: String(s.status || ''),
+          receivedQuantity: Number(receivedQuantity.toFixed(4)),
+          landedCostEgp: roundMoney(landedCostEgp, digits),
+          salesRevenueEgp: roundMoney(salesRevenueEgp, digits),
+          salesCostEgp: roundMoney(salesCostEgp, digits),
+        });
+      }
+      rows.push({
+        ...report.data,
+        projectId: String(p.id),
+        projectNo: String(p.project_no || ''),
+        title: String(p.title || ''),
+        status: String(p.status || ''),
+        shipments: shipmentRows,
+      });
+    }
+    const total = await this.generatePeriodProfitReport(tenantId, start, end);
+    return { startDate: start, endDate: end, projects: rows, total: total.data };
   }
 
   // -------------------------------------------------------------
