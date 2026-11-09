@@ -28,11 +28,17 @@ export class CreateOnlineOrderDto {
   @IsNotEmpty({ message: 'يرجى إدخال اسم المستلم' })
   customerName!: string;
 
+  // INV-REST-KIOSK-ORDER-TRUTH: a missing phone is allowed through the
+  // DTO — the service itself decides where a phone is required: a
+  // dine-in order needs none (the ticket has the table number; the
+  // service skips phone validation there and stores ''), while a
+  // takeaway/delivery order is still rejected by assertValidCustomerPhone.
+  // A phone that IS sent is still validated by the pattern below.
+  @IsOptional()
   @Matches(/^[+]?[0-9]{7,16}$/, { message: 'يرجى إدخال رقم هاتف صحيح (بين 7 إلى 16 رقماً)' })
   @IsString({ message: 'رقم الهاتف يجب أن يكون نصاً' })
-  @IsNotEmpty({ message: 'يرجى إدخال رقم الهاتف' })
   @Transform(({ value }) => (typeof value === 'string' ? value.replace(/[^0-9+]/g, '').trim() : value))
-  customerPhone!: string;
+  customerPhone?: string;
 
   @IsOptional()
   @IsString()

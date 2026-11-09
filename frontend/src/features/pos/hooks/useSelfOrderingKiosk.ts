@@ -30,6 +30,7 @@ export interface KioskConfirmationItem {
 
 export interface KioskConfirmation {
   orderNumber: string;
+  /** The SERVER's recorded total for the order (totalAmount from the createOrder response) — never the kiosk's raw sum. */
   total: number;
   diningMode: string;
   tableNumber?: string;
@@ -42,17 +43,122 @@ export interface KioskConfirmation {
 }
 
 /**
- * INV-REST-KIOSK-NO-FICTION (R-B1): the single decision for what a finalize
- * attempt produces. A confirmation exists ONLY when the server answered with
- * a real order number. A failed request — or a success response carrying no
- * order number — produces NO confirmation: no invented K-XXXX ticket and no
- * carried-over 'paid' the server never saw. The caller renders the failure
- * state and lets the customer retry.
+ * INV-REST-KIOSK-ORDER-TRUTH (R-I56): the kiosk never invents a customer
+ * phone. The page collects no phone by default — `guestPhone` starts empty
+ * and has no fallback — so a missing phone resolves to `undefined` and the
+ * order is sent without one. The old fallback ('01000000000') was a
+ * format-valid Egyptian number, so it sailed through every server check
+ * and every kiosk order was recorded against a number nobody owns.
+ */
+export function resolveKioskCustomerPhone(raw: string | null | undefined): string | undefined {
+  const phone = String(raw || '').trim();
+  return phone ? phone : undefined;
+}
+
+/**
+ * INV-REST-KIOSK-ORDER-TRUTH (R-I56): the same phone rule the server
+ * enforces (assertValidCustomerPhone): an Egyptian mobile is 11 digits
+ * starting 010/011/012/015, anything else is 7–16 digits. The fake
+ * '01000000000' is format-valid by this rule — that is exactly why the
+ * fix is to never SEND it (see resolveKioskCustomerPhone), not to
+ * validate it away here.
+ */
+export function isValidKioskCustomerPhone(raw: string | null | undefined): boolean {
+  const cleaned = String(raw || '').replace(/[^0-9+]/g, '');
+  const digitsOnly = cleaned.replace(/\D/g, '');
+  if (cleaned.startsWith('01') || cleaned.length === 11) {
+    return /^01[0125]\d{8}$/.test(digitsOnly);
+  }
+  return digitsOnly.length >= 7 && digitsOnly.length <= 16;
+}
+
+/**
+ * INV-REST-KIOSK-ORDER-TRUTH (idempotency): one key per finalize attempt.
+ * The page keeps the key for the whole attempt (including its retries) and
+ * generates a fresh one for the next attempt, so a retried finalize replays
+ * the same order instead of creating a second one. The server already
+ * dedupes on idempotencyKey (pre-check + in-transaction replay); the kiosk
+ * simply never sent one.
+ */
+export function newKioskIdempotencyKey(): string {
+  const uuid =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.floor(Math.random() * 0xffffffff).toString(36)}`;
+  return `kiosk-${uuid}`;
+}
+
+/**
+ * INV-REST-KIOSK-ORDER-TRUTH (R-I54 + idempotency): the single place the
+ * kiosk order payload is built. The customer phone passes through exactly
+ * as typed (or is absent — never the fake fallback), the idempotency key
+ * passes through when the caller holds one, and the takeaway mapping
+ * (orderType 'delivery' + fulfillmentType 'pickup') is unchanged.
+ */
+export function buildKioskOrderPayload(
+  orderPayload: {
+    customerName?: string;
+    customerPhone?: string;
+    orderType?: string;
+    tableNumber?: string;
+    notes?: string;
+    paymentMethod?: string;
+    items?: Array<{ productId: number; qty?: number; quantity?: number; notes?: string }>;
+    idempotencyKey?: string;
+  },
+  cleanSlug: string | null,
+): Record<string, unknown> {
+  // INV-REST-KIOSK-NO-FICTION: an order without a known store slug must
+  // fail here, never post to a hardcoded fallback store.
+  if (!cleanSlug) {
+    throw new Error('لا يمكن إرسال الطلب: الكشك غير مرتبط بمتجر معروف.');
+  }
+  return {
+    customerName:
+      orderPayload.customerName ||
+      (orderPayload.orderType === 'dine_in'
+        ? `عميل طاولة ${orderPayload.tableNumber || ''}`.trim()
+        : 'طلب كشك استلام سفري'),
+    customerPhone: resolveKioskCustomerPhone(orderPayload.customerPhone),
+    orderType: orderPayload.orderType === 'takeaway' ? 'delivery' : 'dine_in',
+    fulfillmentType: orderPayload.orderType === 'takeaway' ? 'pickup' : 'dine_in',
+    tableNumber: orderPayload.tableNumber ? String(orderPayload.tableNumber) : undefined,
+    customerNotes: orderPayload.notes,
+    paymentMethod: orderPayload.paymentMethod || 'card',
+    idempotencyKey: String(orderPayload.idempotencyKey || '').trim() || undefined,
+    items: (orderPayload.items || []).map((item) => ({
+      productId: item.productId,
+      quantity: item.qty || item.quantity || 1,
+      notes: item.notes,
+    })),
+  };
+}
+
+/**
+ * INV-REST-KIOSK-ORDER-TRUTH: the kiosk shows the server's refusal
+ * verbatim only when the refusal names the closed shift — a customer at
+ * a closed restaurant must know retrying will not help and should go to
+ * the counter instead. Every other failure keeps the generic visible
+ * error from R2-A (the server's other messages are validation or network
+ * noise the customer cannot act on).
+ */
+export function resolveKioskOrderErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  if (message && message.includes('وردية مفتوحة')) return message;
+  return 'تعذّر إرسال الطلب إلى النظام. تحقق من الاتصال وحاول مرة أخرى.';
+}
+
+/**
+ * INV-REST-KIOSK-ORDER-TRUTH (R-I54): the confirmation shows the SERVER's
+ * recorded total for the order — the totalAmount the server computed from
+ * its own prices and offers — never the kiosk's raw sum. A confirmation
+ * exists ONLY on a real server order number AND a finite server total; a
+ * success response carrying no total is treated exactly like a failure.
  */
 export function resolveKioskFinalizeOutcome(input: {
   failed: boolean;
   serverOrderNumber?: string | null;
-  total: number;
+  serverTotal?: number | null;
   diningModeLabel: string;
   tableNumber?: string;
   items: KioskConfirmationItem[];
@@ -64,11 +170,14 @@ export function resolveKioskFinalizeOutcome(input: {
 }): { status: 'confirmed'; confirmation: KioskConfirmation } | { status: 'failed' } {
   const orderNumber = String(input.serverOrderNumber || '').trim();
   if (input.failed || !orderNumber) return { status: 'failed' };
+  // The confirmation total is the server's recorded total. A missing or
+  // non-numeric total means the server never recorded the order properly.
+  if (!Number.isFinite(input.serverTotal)) return { status: 'failed' };
   return {
     status: 'confirmed',
     confirmation: {
       orderNumber,
-      total: input.total,
+      total: input.serverTotal as number,
       diningMode: input.diningModeLabel,
       tableNumber: input.tableNumber,
       items: [...input.items],
@@ -173,31 +282,8 @@ export function useSelfOrderingKiosk(storeSlug: string | null | undefined) {
   };
 
   const createOrder = async (orderPayload: any) => {
-    // INV-REST-KIOSK-NO-FICTION: an order without a known store slug must
-    // fail here, never post to a hardcoded fallback store.
-    const slugToUse = resolveKioskSlug([cleanSlug]);
-    if (!slugToUse) {
-      throw new Error('لا يمكن إرسال الطلب: الكشك غير مرتبط بمتجر معروف.');
-    }
-    const payload = {
-      customerName:
-        orderPayload.customerName ||
-        (orderPayload.orderType === 'dine_in'
-          ? `عميل طاولة ${orderPayload.tableNumber || ''}`.trim()
-          : 'طلب كشك استلام سفري'),
-      customerPhone: orderPayload.customerPhone || '01000000000',
-      orderType: orderPayload.orderType === 'takeaway' ? 'delivery' : 'dine_in',
-      fulfillmentType: orderPayload.orderType === 'takeaway' ? 'pickup' : 'dine_in',
-      tableNumber: orderPayload.tableNumber ? String(orderPayload.tableNumber) : undefined,
-      customerNotes: orderPayload.notes,
-      paymentMethod: orderPayload.paymentMethod || 'card',
-      items: (orderPayload.items || []).map((item: any) => ({
-        productId: item.productId,
-        quantity: item.qty || item.quantity || 1,
-        notes: item.notes,
-      })),
-    };
-    return await storefrontApi.createOrder(slugToUse, payload as any);
+    const payload = buildKioskOrderPayload(orderPayload, cleanSlug);
+    return await storefrontApi.createOrder(cleanSlug as string, payload as any);
   };
 
   const listTerminals = async () => {

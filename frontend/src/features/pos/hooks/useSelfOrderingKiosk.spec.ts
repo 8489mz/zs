@@ -9,16 +9,31 @@
  * ticket state that never reads as paid; and a slug resolves from the
  * caller's candidates only, with no default.
  *
+ * R3-B (INV-REST-KIOSK-ORDER-TRUTH): the confirmation total is the
+ * SERVER's recorded total (totalAmount), never the kiosk's raw sum; the
+ * order carries a real customer phone (the page never collected one — the
+ * hook substituted the fake '01000000000' for every order) or no phone at
+ * all; a retried finalize reuses one idempotency key per attempt; and a
+ * closed-shift refusal is shown verbatim instead of the generic error.
+ *
  * Base note: these helpers did not exist at base, so there is no meaningful
  * "fails at base" run for them — the base behaviour is proven by reading the
  * old code (catch block identical to success; QR button passing 'paid';
- * hook default 'almhnds' + fallback chain), not by a failing import. */
+ * hook default 'almhnds' + fallback chain), not by a failing import. The
+ * R3-B base behaviour is likewise proven by reading: the old finalize
+ * passed `total: totalCartAmount`, the hook hard-coded the fake phone, and
+ * no idempotency key was ever sent. */
 
 import { describe, expect, it } from 'vitest';
 import {
   resolveKioskSlug,
   resolveKioskFinalizeOutcome,
   kioskConfirmationCopy,
+  resolveKioskCustomerPhone,
+  isValidKioskCustomerPhone,
+  newKioskIdempotencyKey,
+  buildKioskOrderPayload,
+  resolveKioskOrderErrorMessage,
 } from '@/features/pos/hooks/useSelfOrderingKiosk';
 
 /** The spec's fake translator: returns the Arabic fallback verbatim. */
@@ -35,7 +50,7 @@ function finalizeInput(overrides: Partial<FinalizeInput> = {}): FinalizeInput {
   return {
     failed: false,
     serverOrderNumber: 'ON-20261109-0007',
-    total: 225,
+    serverTotal: 225,
     diningModeLabel: 'تناول بالصالة',
     tableNumber: '12',
     items,
@@ -83,6 +98,23 @@ describe('resolveKioskFinalizeOutcome (R-B1)', () => {
     expect(outcome.confirmation.total).toBe(225);
     expect(outcome.confirmation.items).toEqual(items);
     expect(outcome.confirmation.tableNumber).toBe('12');
+  });
+
+  it('shows the SERVER total, even when it differs from the kiosk raw sum', () => {
+    // The cart sums to 225 (2x100 + 25) but the server repriced with an
+    // offer to 160: the ticket must show 160, the recorded total.
+    const outcome = resolveKioskFinalizeOutcome(finalizeInput({ serverTotal: 160 }));
+    expect(outcome.status).toBe('confirmed');
+    if (outcome.status !== 'confirmed') throw new Error('expected confirmed');
+    expect(outcome.confirmation.total).toBe(160);
+  });
+
+  it('fails when the server answers without a total — no confirmation on a number alone', () => {
+    for (const serverTotal of [undefined, null, NaN]) {
+      const outcome = resolveKioskFinalizeOutcome(finalizeInput({ serverTotal }));
+      expect(outcome.status).toBe('failed');
+      expect(outcome).not.toHaveProperty('confirmation');
+    }
   });
 
   it('fails when the server answers without an order number — no fallback ticket', () => {
@@ -170,5 +202,121 @@ describe('kioskConfirmationCopy (R-B2)', () => {
       expect(text).not.toContain('يلزم السداد');
     }
     expect(copy.badgeText).not.toContain('غير مدفوعة');
+  });
+});
+
+describe('resolveKioskCustomerPhone (R-I56)', () => {
+  it('passes a typed phone through trimmed', () => {
+    expect(resolveKioskCustomerPhone('  01012345678 ')).toBe('01012345678');
+    expect(resolveKioskCustomerPhone('+201012345678')).toBe('+201012345678');
+  });
+
+  it('never invents a phone: empty or missing input means no phone at all', () => {
+    expect(resolveKioskCustomerPhone('')).toBeUndefined();
+    expect(resolveKioskCustomerPhone('   ')).toBeUndefined();
+    expect(resolveKioskCustomerPhone(undefined)).toBeUndefined();
+    expect(resolveKioskCustomerPhone(null)).toBeUndefined();
+    // The old fallback was '01000000000' — it must never come back.
+    for (const input of ['', '   ', undefined, null]) {
+      expect(resolveKioskCustomerPhone(input)).not.toBe('01000000000');
+    }
+  });
+});
+
+describe('isValidKioskCustomerPhone (R-I56)', () => {
+  it('accepts a real Egyptian mobile (010/011/012/015, 11 digits)', () => {
+    for (const phone of ['01012345678', '01112345678', '01212345678', '01512345678']) {
+      expect(isValidKioskCustomerPhone(phone)).toBe(true);
+    }
+  });
+
+  it('accepts a non-Egyptian number of 7–16 digits', () => {
+    expect(isValidKioskCustomerPhone('966501234567')).toBe(true);
+    expect(isValidKioskCustomerPhone('1234567')).toBe(true);
+  });
+
+  it('rejects too-short, too-long and wrong-prefix numbers', () => {
+    expect(isValidKioskCustomerPhone('')).toBe(false);
+    expect(isValidKioskCustomerPhone('123456')).toBe(false);
+    expect(isValidKioskCustomerPhone('01012345678901234')).toBe(false);
+    expect(isValidKioskCustomerPhone('01912345678')).toBe(false);
+    expect(isValidKioskCustomerPhone('0101234567')).toBe(false);
+  });
+
+  it('the fake 01000000000 is format-valid — that is why the fix removes the fallback, not the format', () => {
+    // The server's own rule accepts it too; the no-fake guarantee lives
+    // in resolveKioskCustomerPhone / buildKioskOrderPayload, not here.
+    expect(isValidKioskCustomerPhone('01000000000')).toBe(true);
+  });
+});
+
+describe('newKioskIdempotencyKey (idempotency)', () => {
+  it('generates a kiosk-prefixed key, different on every call, inside the 128-char DTO limit', () => {
+    const first = newKioskIdempotencyKey();
+    const second = newKioskIdempotencyKey();
+    expect(first).toMatch(/^kiosk-/);
+    expect(first.length).toBeLessThanOrEqual(128);
+    expect(second).not.toBe(first);
+  });
+});
+
+describe('buildKioskOrderPayload (R-I56 + idempotency)', () => {
+  const basePayload = {
+    customerName: 'عميل اختبار',
+    orderType: 'takeaway',
+    items: [{ productId: 101, qty: 2 }],
+    paymentMethod: 'cash',
+  };
+
+  it('sends no phone when none was typed — never the fake fallback', () => {
+    const payload = buildKioskOrderPayload(basePayload, 'almhnds');
+    expect(payload.customerPhone).toBeUndefined();
+    expect(payload.customerPhone).not.toBe('01000000000');
+  });
+
+  it('passes a typed phone through unchanged', () => {
+    const payload = buildKioskOrderPayload({ ...basePayload, customerPhone: ' 01012345678 ' }, 'almhnds');
+    expect(payload.customerPhone).toBe('01012345678');
+  });
+
+  it('maps takeaway to delivery + pickup, dine-in to dine_in + table', () => {
+    const takeaway = buildKioskOrderPayload(basePayload, 'almhnds');
+    expect(takeaway.orderType).toBe('delivery');
+    expect(takeaway.fulfillmentType).toBe('pickup');
+
+    const dineIn = buildKioskOrderPayload(
+      { ...basePayload, orderType: 'dine_in', tableNumber: '5' },
+      'almhnds',
+    );
+    expect(dineIn.orderType).toBe('dine_in');
+    expect(dineIn.fulfillmentType).toBe('dine_in');
+    expect(dineIn.tableNumber).toBe('5');
+  });
+
+  it('forwards the idempotency key when the caller holds one, omits it otherwise', () => {
+    const withKey = buildKioskOrderPayload({ ...basePayload, idempotencyKey: 'kiosk-abc' }, 'almhnds');
+    expect(withKey.idempotencyKey).toBe('kiosk-abc');
+    const withoutKey = buildKioskOrderPayload(basePayload, 'almhnds');
+    expect(withoutKey.idempotencyKey).toBeUndefined();
+  });
+
+  it('throws on an unknown slug instead of posting to a fallback store', () => {
+    expect(() => buildKioskOrderPayload(basePayload, null)).toThrow('غير مرتبط بمتجر معروف');
+    expect(() => buildKioskOrderPayload(basePayload, '')).toThrow('غير مرتبط بمتجر معروف');
+  });
+});
+
+describe('resolveKioskOrderErrorMessage (R-I56 shift gate)', () => {
+  it('shows the closed-shift refusal verbatim — retrying will not help', () => {
+    const message = 'لا توجد وردية مفتوحة حالياً — لا يمكن استقبال طلبات جديدة';
+    expect(resolveKioskOrderErrorMessage(new Error(message))).toBe(message);
+  });
+
+  it('keeps the generic visible error for anything else', () => {
+    const generic = 'تعذّر إرسال الطلب إلى النظام. تحقق من الاتصال وحاول مرة أخرى.';
+    expect(resolveKioskOrderErrorMessage(new Error('تعذر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.'))).toBe(generic);
+    expect(resolveKioskOrderErrorMessage(new Error('Network Error'))).toBe(generic);
+    expect(resolveKioskOrderErrorMessage(undefined)).toBe(generic);
+    expect(resolveKioskOrderErrorMessage('some string')).toBe(generic);
   });
 });

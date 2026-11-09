@@ -1496,6 +1496,29 @@ export class StorefrontService {
       if (existingOrder) return replayResponse(existingOrder);
     }
 
+    // INV-REST-KIOSK-ORDER-TRUTH: a dine-in or pickup order needs staff on
+    // site right now — the kitchen cannot cook an order nobody is staffed
+    // to make, and a kiosk left on overnight must not keep taking them.
+    // The gate mirrors hasOpenCashierShift (cashier_shifts status 'open',
+    // tenant-scoped) minus the user/branch scoping: the kiosk is public,
+    // with no user and no branch context — any open shift of the tenant
+    // means someone is staffed. Plain delivery is fulfilled later, so it
+    // is not gated (same scoping precedent as the POS-only shift check in
+    // sales-write.service.ts). The replay above still returns an
+    // already-created order after the shift closes: replaying creates no
+    // new kitchen work.
+    if (isDineIn || isPickup) {
+      const openShift = await this.db
+        .selectFrom('cashier_shifts')
+        .select('id')
+        .where(sql<boolean>`tenant_id = ${tenant.id}`)
+        .where('status', '=', 'open')
+        .executeTakeFirst();
+      if (!openShift) {
+        throw new BadRequestException('لا توجد وردية مفتوحة حالياً — لا يمكن استقبال طلبات جديدة');
+      }
+    }
+
     const countryCode = (dto.countryCode || 'EG').toUpperCase();
 
     if (!isDineIn) {

@@ -32,6 +32,9 @@ import {
   resolveKioskSlug,
   resolveKioskFinalizeOutcome,
   kioskConfirmationCopy,
+  newKioskIdempotencyKey,
+  isValidKioskCustomerPhone,
+  resolveKioskOrderErrorMessage,
   type KioskPaymentStatus,
 } from '@/features/pos/hooks/useSelfOrderingKiosk';
 import { getStoreHostSlug } from '@/lib/store-public-url';
@@ -176,6 +179,20 @@ export function SelfOrderingKioskPage() {
     authCode?: string;
     rrn?: string;
   } | null>(null);
+
+  // INV-REST-KIOSK-ORDER-TRUTH: one idempotency key per finalize attempt.
+  // The first finalize of an attempt generates it; every retry of THAT
+  // attempt reuses it, so the server replays the same order instead of
+  // creating a second one. A ref (not state) holds it so two rapid
+  // finalizes cannot generate two different keys. It is cleared on
+  // success, on full reset, and whenever the order itself changes (cart,
+  // mode, table, phone, notes) — a changed order is a new attempt and
+  // must never replay the old one.
+  const attemptIdempotencyKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    attemptIdempotencyKeyRef.current = null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, diningMode, tableNumber, guestPhone, guestNotes]);
 
   // حالة ماكينة الدفع بالكشك (Terminal State)
   const [isTerminalModalOpen, setIsTerminalModalOpen] = useState(false);
@@ -332,6 +349,12 @@ export function SelfOrderingKioskPage() {
   const totalItemsCount = cart.reduce((sum, item) => sum + item.qty, 0);
   const totalCartAmount = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
 
+  // INV-REST-KIOSK-ORDER-TRUTH: the confirm button stays disabled until
+  // the required order info is present (table for dine-in, real phone
+  // for takeaway) — same pattern as the table guard.
+  const isTableMissing = diningMode === 'dine_in' && !tableNumber.trim();
+  const isTakeawayPhoneMissing = diningMode === 'takeaway' && !isValidKioskCustomerPhone(guestPhone);
+
   const handleFullReset = () => {
     setDiningMode(null);
     setCart([]);
@@ -345,6 +368,7 @@ export function SelfOrderingKioskPage() {
     setResetCountdown(15);
     setOrderError(null);
     setLastFinalizeOpts(null);
+    attemptIdempotencyKeyRef.current = null;
     setSearchQuery('');
     setSelectedCategory('all');
     setPaymentChoice('card_terminal');
@@ -360,12 +384,20 @@ export function SelfOrderingKioskPage() {
     setIsSubmitting(true);
     setOrderError(null);
     setLastFinalizeOpts(opts);
+    // INV-REST-KIOSK-ORDER-TRUTH: the attempt's key is generated once and
+    // reused by every retry of this attempt, so the server replays the
+    // same order instead of creating a second one.
+    if (!attemptIdempotencyKeyRef.current) {
+      attemptIdempotencyKeyRef.current = newKioskIdempotencyKey();
+    }
+    const idempotencyKey = attemptIdempotencyKeyRef.current;
     try {
       const orderPayload = {
         orderType: diningMode || 'dine_in',
         tableNumber: diningMode === 'dine_in' ? tableNumber.trim() : undefined,
         customerPhone: guestPhone.trim() || undefined,
         notes: guestNotes.trim() || undefined,
+        idempotencyKey,
         items: cart.map((i) => ({
           productId: i.productId,
           qty: i.qty,
@@ -381,7 +413,9 @@ export function SelfOrderingKioskPage() {
       const outcome = resolveKioskFinalizeOutcome({
         failed: false,
         serverOrderNumber: (res as any)?.orderNumber,
-        total: totalCartAmount,
+        // INV-REST-KIOSK-ORDER-TRUTH: the confirmation shows the server's
+        // recorded total (totalAmount), never the kiosk's raw sum.
+        serverTotal: Number((res as any)?.totalAmount),
         diningModeLabel: diningMode === 'dine_in' ? 'تناول بالصالة' : 'استلام سفري',
         tableNumber: tableNumber.trim() || undefined,
         items: [...cart],
@@ -392,26 +426,31 @@ export function SelfOrderingKioskPage() {
         rrn: opts.rrn,
       });
       if (outcome.status === 'failed') {
-        // The server answered without a real order number: treat it exactly
-        // like a failed submit — no confirmation, no ticket, retry allowed.
+        // The server answered without a real order number or without a
+        // real total: treat it exactly like a failed submit — no
+        // confirmation, no ticket, retry allowed.
         setOrderError('تعذّر تأكيد الطلب من النظام (لم يصل رقم طلب حقيقي). حاول مرة أخرى.');
         toast.error('تعذّر تأكيد الطلب من النظام. حاول مرة أخرى.');
         return;
       }
 
       setOrderConfirmedData(outcome.confirmation);
+      attemptIdempotencyKeyRef.current = null;
 
       setIsReviewOpen(false);
       setIsTerminalModalOpen(false);
       setIsQrModalOpen(false);
       setResetCountdown(opts.paymentStatus === 'paid' ? 15 : 25);
-    } catch {
-      // INV-REST-KIOSK-NO-FICTION: a failed createOrder shows a visible
+    } catch (err) {
+      // INV-REST-KIOSK-ORDER-TRUTH: a failed createOrder shows a visible
       // error and keeps the cart and the open modal, so the customer can
-      // retry. It never invents a ticket and never carries a 'paid' the
-      // server never saw.
-      setOrderError('تعذّر إرسال الطلب إلى النظام. تحقق من الاتصال وحاول مرة أخرى.');
-      toast.error('تعذّر إرسال الطلب إلى النظام. حاول مرة أخرى.');
+      // retry with the SAME idempotency key. It never invents a ticket
+      // and never carries a 'paid' the server never saw. A closed-shift
+      // refusal is shown verbatim (retrying will not help); anything else
+      // keeps the generic error.
+      const message = resolveKioskOrderErrorMessage(err);
+      setOrderError(message);
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -425,6 +464,15 @@ export function SelfOrderingKioskPage() {
 
     if (diningMode === 'dine_in' && !tableNumber.trim()) {
       toast.warning('يرجى تحديد رقم الطاولة للمتابعة');
+      return;
+    }
+
+    // INV-REST-KIOSK-ORDER-TRUTH: takeaway needs a real phone — the
+    // kitchen calls it when the order is ready, and the server rejects a
+    // takeaway order without one. Dine-in stays optional (the ticket has
+    // the table number).
+    if (diningMode === 'takeaway' && !isValidKioskCustomerPhone(guestPhone)) {
+      toast.warning('يرجى إدخال رقم هاتف صحيح لاستلام طلبك');
       return;
     }
 
@@ -2117,6 +2165,47 @@ export function SelfOrderingKioskPage() {
             </div>
           )}
 
+          {/* INV-REST-KIOSK-ORDER-TRUTH: the kiosk collects a real phone.
+              Takeaway requires one (the server rejects a takeaway order
+              without it); dine-in leaves it optional. There is no
+              fallback number anywhere — an empty field sends no phone. */}
+          <div style={{ marginBottom: '18px' }}>
+            <label
+              style={{
+                fontSize: '13px',
+                fontWeight: 900,
+                color: '#0f172a',
+                display: 'block',
+                marginBottom: '8px',
+              }}
+            >
+              {diningMode === 'takeaway'
+                ? __t('pos.self_ordering_kiosk_page.s138', __t('pos.self_ordering_kiosk_page.s138', "رقم الهاتف للاستلام (مطلوب):"))
+                : __t('pos.self_ordering_kiosk_page.s139', __t('pos.self_ordering_kiosk_page.s139', "رقم الهاتف (اختياري — للتواصل عند الحاجة):"))}
+            </label>
+            <input
+              type="tel"
+              inputMode="tel"
+              dir="ltr"
+              value={guestPhone}
+              onChange={(e) => setGuestPhone(e.target.value)}
+              placeholder={__t('pos.self_ordering_kiosk_page.s140', __t('pos.self_ordering_kiosk_page.s140', "مثال: 01012345678"))}
+              style={{
+                width: '100%',
+                height: '38px',
+                borderRadius: '10px',
+                border: '1.5px solid #cbd5e1',
+                padding: '0 12px',
+                fontSize: '12.5px',
+                fontWeight: 700,
+                boxSizing: 'border-box',
+                outline: 'none',
+                backgroundColor: '#ffffff',
+                textAlign: 'right',
+              }}
+            />
+          </div>
+
           {/* 4. اختيار وسيلة الدفع: 3 خيارات مؤسسية ملموسة */}
           <div style={{ marginBottom: '22px' }}>
             <label
@@ -2322,24 +2411,24 @@ export function SelfOrderingKioskPage() {
           <Button
             variant="primary"
             onClick={handleCheckoutSubmit}
-            disabled={isSubmitting || (diningMode === 'dine_in' && !tableNumber.trim())}
+            disabled={isSubmitting || isTableMissing || isTakeawayPhoneMissing}
             style={{
               width: '100%',
               height: '52px',
               backgroundColor:
-                diningMode === 'dine_in' && !tableNumber.trim()
+                isTableMissing || isTakeawayPhoneMissing
                   ? '#cbd5e1'
                   : '#15803d',
               fontSize: '15px',
               fontWeight: 900,
               borderRadius: '14px',
-              cursor: diningMode === 'dine_in' && !tableNumber.trim() ? 'not-allowed' : 'pointer',
+              cursor: isTableMissing || isTakeawayPhoneMissing ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
               boxShadow:
-                diningMode === 'dine_in' && !tableNumber.trim()
+                isTableMissing || isTakeawayPhoneMissing
                   ? 'none'
                   : '0 6px 18px rgba(22, 128, 61, 0.25)',
               border: 'none',
@@ -2348,8 +2437,10 @@ export function SelfOrderingKioskPage() {
           >
             {isSubmitting ? (
               __t('pos.self_ordering_kiosk_page.s85', __t('pos.self_ordering_kiosk_page.s85', "جارٍ معالجة الطلب..."))
-            ) : diningMode === 'dine_in' && !tableNumber.trim() ? (
+            ) : isTableMissing ? (
               __t('pos.self_ordering_kiosk_page.s86', __t('pos.self_ordering_kiosk_page.s86', "يرجى تحديد رقم طاولتك بالأعلى أولاً"))
+            ) : isTakeawayPhoneMissing ? (
+              __t('pos.self_ordering_kiosk_page.s141', __t('pos.self_ordering_kiosk_page.s141', "يرجى إدخال رقم هاتف صحيح للاستلام أولاً"))
             ) : paymentChoice === 'card_terminal' ? (
               <span>{__t('pos.self_ordering_kiosk_page.s87', __t('pos.self_ordering_kiosk_page.s87', "المتابعة للدفع بجهاز الكشك •"))} {formatCurrency(totalCartAmount)}</span>
             ) : paymentChoice === 'qr_mobile' ? (
