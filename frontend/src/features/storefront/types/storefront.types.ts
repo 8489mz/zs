@@ -147,6 +147,25 @@ export interface CartItem {
   quantity: number;
 }
 
+/* INV-REST-KIOSK-MODIFIER-UI (R7-B2): one modifier picked on an online-order
+ * line. Mirrors backend OnlineOrderItemModifierDto (R7-B1): optionId is the
+ * pos_modifier_options row, productId is the option's linked stock
+ * component (or 0 when the option has none). The price is the client's
+ * price and is never trusted — the server re-prices it from server truth
+ * (R4-C contract). */
+export interface OnlineOrderItemModifier {
+  optionId?: number;
+  productId?: number;
+  componentProductId?: number;
+  groupId?: number;
+  groupName?: string;
+  name?: string;
+  price?: number;
+  qty?: number;
+  isComboComponent?: boolean;
+  costPrice?: number;
+}
+
 export interface CreateOnlineOrderPayload {
   customerName: string;
   customerPhone: string;
@@ -157,6 +176,7 @@ export interface CreateOnlineOrderPayload {
     quantity: number;
     notes?: string;
     variantName?: string;
+    modifiers?: OnlineOrderItemModifier[];
   }>;
   paymentMethod?: string;
   couponCode?: string;

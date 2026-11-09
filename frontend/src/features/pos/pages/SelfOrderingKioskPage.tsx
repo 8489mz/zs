@@ -37,8 +37,16 @@ import {
   newKioskIdempotencyKey,
   isValidKioskCustomerPhone,
   resolveKioskOrderErrorMessage,
+  kioskCartLineKey,
+  kioskCartTotal,
+  addKioskCartLine,
+  updateKioskCartLineModifiers,
+  type GroupModifierSelection,
+  type ModifierGroup,
   type KioskPaymentStatus,
 } from '@/features/pos/hooks/useSelfOrderingKiosk';
+import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
+import { KioskModifierPickerModal } from '@/features/pos/components/kiosk/KioskModifierPickerModal';
 import { getStoreHostSlug } from '@/lib/store-public-url';
 import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
 
@@ -50,6 +58,11 @@ interface KioskCartItem {
   notes?: string;
   imageUrl?: string;
   categoryName?: string;
+  /* INV-REST-KIOSK-MODIFIER-UI (R7-B2): the line's picked modifiers and
+   * its identity (product + sorted option ids). Two lines of the same
+   * product with different extras are separate lines. */
+  modifiers?: GroupModifierSelection[];
+  lineKey: string;
 }
 
 /**
@@ -213,6 +226,21 @@ export function SelfOrderingKioskPage() {
   const [upsellTriggerItem, setUpsellTriggerItem] = useState<{ id: number; name: string } | null>(null);
   const [upsellRules, setUpsellRules] = useState<any[]>([]);
 
+  // INV-REST-KIOSK-MODIFIER-UI (R7-B2): the modifier picker state. When a
+  // product has linked groups, tapping it opens the picker instead of
+  // adding the base product straight away; `editingLineKey` marks an
+  // edit of an existing cart line (tray / review), otherwise the save
+  // adds a NEW line. Fetched groups are cached per product for the
+  // session so every tap does not re-hit the public endpoint.
+  const [modifierPicker, setModifierPicker] = useState<{
+    product: any;
+    groups: ModifierGroup[];
+    initialModifiers?: GroupModifierSelection[];
+    editingLineKey?: string;
+    skipUpsell?: boolean;
+  } | null>(null);
+  const modifierGroupsCacheRef = useRef(new Map<number, ModifierGroup[]>());
+
   // عداد مهلة ماكينة الدفع
   useEffect(() => {
     let timer: any = null;
@@ -268,7 +296,7 @@ export function SelfOrderingKioskPage() {
   }, [orderConfirmedData, resetCountdown]);
 
   // Load catalog & actions via feature hook
-  const { catalogData, isCatalogLoading, checkUpsell, createOrder, listTerminals, initiateTerminalCharge } =
+  const { catalogData, isCatalogLoading, checkUpsell, getProductModifiers, createOrder, listTerminals, initiateTerminalCharge } =
     useSelfOrderingKiosk(currentSlug);
 
   const eightySixedIds = useKiosk86Items(currentSlug);
@@ -305,41 +333,110 @@ export function SelfOrderingKioskPage() {
     }
   };
 
+  // INV-REST-KIOSK-MODIFIER-UI (R7-B2): adding a product first asks the
+  // public endpoint whether it has modifier groups. With groups, the
+  // customer picks in the picker (a mandatory group blocks the add until
+  // chosen — the picker enforces it); without groups, the base product
+  // joins the cart exactly as before. A failed groups fetch also adds
+  // the base product: a kiosk that cannot reach the modifier data must
+  // still sell, never block the customer on a read it cannot prove.
   const handleAddToCart = (product: any, skipUpsell = false) => {
-    const smartImg = getSmartProductImage(product);
-    setCart((prev) => {
-      const existingIdx = prev.findIndex((i) => i.productId === product.id);
-      if (existingIdx !== -1) {
-        const next = [...prev];
-        next[existingIdx] = {
-          ...next[existingIdx],
-          qty: next[existingIdx].qty + 1,
-        };
-        return next;
+    void (async () => {
+      const productId = Number(product.id);
+      let groups = modifierGroupsCacheRef.current.get(productId);
+      if (!groups) {
+        groups = await getProductModifiers(productId);
+        modifierGroupsCacheRef.current.set(productId, groups);
       }
-      return [
-        ...prev,
-        {
+      if (groups.length > 0) {
+        setModifierPicker({ product, groups, skipUpsell });
+        return;
+      }
+      addPlainCartLine(product);
+      if (!skipUpsell) {
+        void checkUpsellForProduct(product);
+      }
+    })();
+  };
+
+  const addPlainCartLine = (product: any) => {
+    const smartImg = getSmartProductImage(product);
+    setCart((prev) =>
+      addKioskCartLine(prev, {
+        productId: product.id,
+        name: product.name,
+        price: Number(product.price || 0),
+        qty: 1,
+        imageUrl: smartImg,
+        categoryName: product.categoryName,
+        lineKey: kioskCartLineKey(product.id, undefined),
+      }),
+    );
+  };
+
+  // INV-REST-KIOSK-MODIFIER-UI (R7-B2): the picker save. A new pick adds
+  // a line (merging only with a line of the SAME product + SAME options);
+  // an edit rewrites that line's modifiers (merging into a twin line
+  // when the new pick collides with one). The upsell check runs after
+  // the add, exactly as the plain path does.
+  const handleModifierPickerSave = (modifiers: GroupModifierSelection[]) => {
+    const picker = modifierPicker;
+    if (!picker) return;
+    const product = picker.product;
+    const smartImg = getSmartProductImage(product);
+    if (picker.editingLineKey) {
+      setCart((prev) => updateKioskCartLineModifiers(prev, picker.editingLineKey as string, modifiers));
+    } else {
+      setCart((prev) =>
+        addKioskCartLine(prev, {
           productId: product.id,
           name: product.name,
           price: Number(product.price || 0),
           qty: 1,
           imageUrl: smartImg,
           categoryName: product.categoryName,
-        },
-      ];
-    });
-
-    if (!skipUpsell) {
+          modifiers,
+          lineKey: kioskCartLineKey(product.id, modifiers),
+        }),
+      );
+    }
+    setModifierPicker(null);
+    if (!picker.skipUpsell) {
       void checkUpsellForProduct(product);
     }
   };
 
-  const handleUpdateQty = (productId: number, delta: number) => {
+  // INV-REST-KIOSK-MODIFIER-UI (R7-B2): re-open the picker for one cart
+  // line (tray / review "تعديل الإضافات"). The groups come from the
+  // session cache when the line was first added, otherwise from the
+  // public endpoint; a line whose product has no groups anymore simply
+  // keeps its picks (nothing to edit).
+  const handleEditCartLineModifiers = (item: KioskCartItem) => {
+    void (async () => {
+      const productId = Number(item.productId);
+      let groups = modifierGroupsCacheRef.current.get(productId);
+      if (!groups) {
+        groups = await getProductModifiers(productId);
+        modifierGroupsCacheRef.current.set(productId, groups);
+      }
+      if (groups.length === 0) return;
+      setModifierPicker({
+        product: { id: item.productId, name: item.name, price: item.price },
+        groups,
+        initialModifiers: item.modifiers ? [...item.modifiers] : [],
+        editingLineKey: item.lineKey,
+      });
+    })();
+  };
+
+  // INV-REST-KIOSK-MODIFIER-UI (R7-B2): qty / remove are keyed by the
+  // LINE identity (product + options), never by productId alone — two
+  // lines of one product with different extras are adjusted separately.
+  const handleUpdateQty = (lineKey: string, delta: number) => {
     setCart((prev) => {
       return prev
         .map((item) => {
-          if (item.productId === productId) {
+          if (item.lineKey === lineKey) {
             const nextQty = item.qty + delta;
             return nextQty > 0 ? { ...item, qty: nextQty } : null;
           }
@@ -349,12 +446,16 @@ export function SelfOrderingKioskPage() {
     });
   };
 
-  const handleRemoveFromCart = (productId: number) => {
-    setCart((prev) => prev.filter((i) => i.productId !== productId));
+  const handleRemoveFromCart = (lineKey: string) => {
+    setCart((prev) => prev.filter((i) => i.lineKey !== lineKey));
   };
 
   const totalItemsCount = cart.reduce((sum, item) => sum + item.qty, 0);
-  const totalCartAmount = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
+  // INV-REST-KIOSK-MODIFIER-UI (R7-B2): the shown total includes the
+  // picked modifiers (base + extras per line), so the customer confirms
+  // against the number they will actually pay — the old base-only sum
+  // hid their paid extras until the server total arrived.
+  const totalCartAmount = kioskCartTotal(cart);
 
   // INV-REST-KIOSK-ORDER-TRUTH: the confirm button stays disabled until
   // the required order info is present (table for dine-in, real phone
@@ -365,6 +466,7 @@ export function SelfOrderingKioskPage() {
   const handleFullReset = () => {
     setDiningMode(null);
     setCart([]);
+    setModifierPicker(null);
     setIsReviewOpen(false);
     setIsTerminalModalOpen(false);
     setIsQrModalOpen(false);
@@ -409,6 +511,7 @@ export function SelfOrderingKioskPage() {
           productId: i.productId,
           qty: i.qty,
           unitPrice: i.price,
+          modifiers: i.modifiers,
         })),
         paymentMethod: opts.paymentMethod,
         paymentStatus: opts.paymentStatus,
@@ -1044,9 +1147,20 @@ export function SelfOrderingKioskPage() {
             {orderConfirmedData.items && orderConfirmedData.items.length > 0 && (
               <div style={{ borderBottom: '1px dashed #000', paddingBottom: '8px', marginBottom: '8px' }}>
                 {orderConfirmedData.items.map((item, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', margin: '3px 0' }}>
-                    <span>{item.qty}x {item.name}</span>
-                    <span>{formatCurrency(item.qty * item.price)}</span>
+                  <div key={idx} style={{ margin: '3px 0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                      <span>{item.qty}x {item.name}</span>
+                      <span>{formatCurrency(calcCartLineTotal(item as any))}</span>
+                    </div>
+                    {/* INV-REST-KIOSK-MODIFIER-UI (R7-B2): the receipt shows
+                        the chosen extras under their line, so the ticket
+                        the customer prints matches what the kitchen sees. */}
+                    {(item.modifiers || []).map((mod, modIdx) => (
+                      <div key={modIdx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', paddingRight: '12px', color: '#334155' }}>
+                        <span>+ {mod.name}{Number(mod.qty || 1) > 1 ? ` ×${mod.qty}` : ''}</span>
+                        <span>{formatCurrency(Number(mod.price || 0) * Number(mod.qty || 1) * item.qty)}</span>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
@@ -1542,8 +1656,19 @@ export function SelfOrderingKioskPage() {
                 }}
               >
                 {filteredProducts.map((p: any) => {
-                  const inCartItem = cart.find((i) => i.productId === p.id);
-                  const inCartQty = inCartItem?.qty || 0;
+                  // INV-REST-KIOSK-MODIFIER-UI (R7-B2): the badge counts
+                  // EVERY line of this product (a product with different
+                  // extras has several lines). The inline stepper only
+                  // appears for a single PLAIN line — with modifier lines
+                  // the tap target stays "إضافة", which opens the picker
+                  // for a new choice instead of guessing which line a
+                  // +/- belongs to.
+                  const productLines = cart.filter((i) => i.productId === p.id);
+                  const inCartQty = productLines.reduce((sum, i) => sum + i.qty, 0);
+                  const singlePlainLine =
+                    productLines.length === 1 && !(productLines[0].modifiers?.length)
+                      ? productLines[0]
+                      : null;
                   const smartImg = getSmartProductImage(p);
 
                   return (
@@ -1628,30 +1753,8 @@ export function SelfOrderingKioskPage() {
                             {formatCurrency(p.price)}
                           </div>
 
-                          {inCartQty === 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => handleAddToCart(p)}
-                              style={{
-                                height: '34px',
-                                padding: '0 14px',
-                                borderRadius: '10px',
-                                fontSize: '12px',
-                                fontWeight: 800,
-                                backgroundColor: '#170e5e',
-                                color: '#ffffff',
-                                border: 'none',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              <PlusCircleIcon size={14} />
-                              <span>{__t('pos.self_ordering_kiosk_page.s51', __t('pos.self_ordering_kiosk_page.s51', "إضافة"))}</span>
-                            </button>
-                          ) : (
-                            /* عداد تفاعلي مباشر داخل الكارت: [+] (الكمية) [-] */
+                          {singlePlainLine ? (
+                            /* عداد تفاعلي مباشر داخل الكارت: [+] (الكمية) [-] — خط عادي واحد فقط */
                             <div
                               style={{
                                 display: 'flex',
@@ -1664,7 +1767,7 @@ export function SelfOrderingKioskPage() {
                             >
                               <button
                                 type="button"
-                                onClick={() => handleUpdateQty(p.id, 1)}
+                                onClick={() => handleUpdateQty(singlePlainLine.lineKey, 1)}
                                 style={{
                                   width: '30px',
                                   height: '30px',
@@ -1691,7 +1794,7 @@ export function SelfOrderingKioskPage() {
                               </span>
                               <button
                                 type="button"
-                                onClick={() => handleUpdateQty(p.id, -1)}
+                                onClick={() => handleUpdateQty(singlePlainLine.lineKey, -1)}
                                 style={{
                                   width: '30px',
                                   height: '30px',
@@ -1706,6 +1809,28 @@ export function SelfOrderingKioskPage() {
                                 -
                               </button>
                             </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleAddToCart(p)}
+                              style={{
+                                height: '34px',
+                                padding: '0 14px',
+                                borderRadius: '10px',
+                                fontSize: '12px',
+                                fontWeight: 800,
+                                backgroundColor: '#170e5e',
+                                color: '#ffffff',
+                                border: 'none',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <PlusCircleIcon size={14} />
+                              <span>{__t('pos.self_ordering_kiosk_page.s51', __t('pos.self_ordering_kiosk_page.s51', "إضافة"))}</span>
+                            </button>
                           )}
                         </div>
                       </div>
@@ -1816,7 +1941,7 @@ export function SelfOrderingKioskPage() {
               ) : (
                 cart.map((item) => (
                   <div
-                    key={item.productId}
+                    key={item.lineKey}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -1854,9 +1979,34 @@ export function SelfOrderingKioskPage() {
                         >
                           {item.name}
                         </div>
+                        {/* INV-REST-KIOSK-MODIFIER-UI (R7-B2): the chosen
+                            extras render under their line, and the line
+                            price already includes them. */}
+                        {(item.modifiers || []).map((mod, modIdx) => (
+                          <div key={modIdx} style={{ fontSize: '10.5px', color: '#475569', marginTop: '1px' }}>
+                            + {mod.name}{Number(mod.qty || 1) > 1 ? ` ×${mod.qty}` : ''} ({formatCurrency(Number(mod.price || 0) * Number(mod.qty || 1))})
+                          </div>
+                        ))}
                         <div style={{ fontSize: '11px', color: '#170e5e', fontWeight: 800, marginTop: '2px' }}>
-                          {formatCurrency(item.price * item.qty)}
+                          {formatCurrency(calcCartLineTotal(item))}
                         </div>
+                        {(item.modifiers?.length || 0) > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleEditCartLineModifiers(item)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#170e5e',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                              padding: '2px 0 0',
+                            }}
+                          >
+                            تعديل الإضافات
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -1874,7 +2024,7 @@ export function SelfOrderingKioskPage() {
                       >
                         <button
                           type="button"
-                          onClick={() => handleUpdateQty(item.productId, 1)}
+                          onClick={() => handleUpdateQty(item.lineKey, 1)}
                           style={{
                             width: '24px',
                             height: '24px',
@@ -1900,7 +2050,7 @@ export function SelfOrderingKioskPage() {
                         </span>
                         <button
                           type="button"
-                          onClick={() => handleUpdateQty(item.productId, -1)}
+                          onClick={() => handleUpdateQty(item.lineKey, -1)}
                           style={{
                             width: '24px',
                             height: '24px',
@@ -1918,7 +2068,7 @@ export function SelfOrderingKioskPage() {
 
                       <button
                         type="button"
-                        onClick={() => handleRemoveFromCart(item.productId)}
+                        onClick={() => handleRemoveFromCart(item.lineKey)}
                         style={{
                           background: 'none',
                           border: 'none',
@@ -2080,6 +2230,69 @@ export function SelfOrderingKioskPage() {
                 {formatCurrency(totalCartAmount)}
               </div>
             </div>
+          </div>
+
+          {/* INV-REST-KIOSK-MODIFIER-UI (R7-B2): the review lists every
+              line with its chosen extras (name + qty + price) and its
+              line total including extras — the customer checks exactly
+              what the kitchen will see — with edit / remove per line. */}
+          <div style={{ marginBottom: '18px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {cart.map((item) => (
+              <div
+                key={item.lineKey}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '10px',
+                  padding: '10px 12px',
+                  borderRadius: '12px',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                }}
+              >
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: '13.5px', fontWeight: 900, color: '#0f172a' }}>
+                    {item.qty}× {item.name}
+                  </div>
+                  {(item.modifiers || []).map((mod, modIdx) => (
+                    <div key={modIdx} style={{ fontSize: '12px', color: '#475569', marginTop: '2px' }}>
+                      + {mod.name}{Number(mod.qty || 1) > 1 ? ` ×${mod.qty}` : ''} ({formatCurrency(Number(mod.price || 0) * Number(mod.qty || 1))})
+                    </div>
+                  ))}
+                  {(item.modifiers?.length || 0) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleEditCartLineModifiers(item)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#170e5e',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        padding: '4px 0 0',
+                      }}
+                    >
+                      تعديل الإضافات
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                  <span style={{ fontSize: '13.5px', fontWeight: 900, color: '#170e5e' }}>
+                    {formatCurrency(calcCartLineTotal(item))}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFromCart(item.lineKey)}
+                    aria-label={`حذف ${item.name}`}
+                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '3px' }}
+                  >
+                    <Trash2Icon size={15} />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* 3. في حالة الصالة فقط: اختيار رقم الطاولة أو جهاز النداء بلمسة سريعة */}
@@ -3010,6 +3223,22 @@ export function SelfOrderingKioskPage() {
           );
         }}
       />
+
+      {/* INV-REST-KIOSK-MODIFIER-UI (R7-B2): the customer-facing modifier
+          picker. It opens from a product tap (new line) or from a cart
+          line's "تعديل الإضافات" (edit that line's picks). */}
+      {modifierPicker && (
+        <KioskModifierPickerModal
+          open
+          onClose={() => setModifierPicker(null)}
+          productName={modifierPicker.product.name}
+          productPrice={Number(modifierPicker.product.price || 0)}
+          groups={modifierPicker.groups}
+          initialModifiers={modifierPicker.initialModifiers}
+          onSave={handleModifierPickerSave}
+          saveLabel={modifierPicker.editingLineKey ? 'تأكيد التعديل' : 'أضف إلى السلة'}
+        />
+      )}
     </div>
   );
 }

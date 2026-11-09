@@ -1,4 +1,5 @@
 import { http } from '@/lib/http';
+import type { ModifierGroup, ModifierOption } from '@/shared/api/addons.api';
 import { roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
 import {
   StorefrontInfo,
@@ -290,9 +291,7 @@ export const storefrontApi = {
     const { localizeProduct } = await import('../lib/storefront-translations');
     // INV-REST-QUOTECART-NO-DEMO (R6-A): no try/catch here on purpose — an
     // http error must reach the caller, never come back as a demo product.
-    // The old catch returned the demo product with the requested id, or
-    // DEMO_STOREFRONT_CATALOG.products[0] for an unknown id. The backend
-    // throws NotFoundException for an unknown product; the frontend must
+    // The backend throws NotFoundException for an unknown product; the frontend must
     // not invent one. No frontend caller exists at this base — this is
     // defence in depth, pinned by the API-level spec.
     const res = await http<{
@@ -304,6 +303,76 @@ export const storefrontApi = {
       product: localizeProduct(withResolvedProductMedia(res?.product), lang),
       related: (res?.related || []).map((p) => localizeProduct(withResolvedProductMedia(p), lang)),
       crossSell: (res?.crossSell || []).map((p) => localizeProduct(withResolvedProductMedia(p), lang)),
+    };
+  },
+
+  /*
+   * INV-REST-KIOSK-MODIFIER-UI (R7-B2): the PUBLIC modifier data for one
+   * catalog product — what the kiosk picker shows before the customer
+   * picks. Slug-scoped exactly like getProductDetails (the tenant comes
+   * from the slug, so another tenant's groups can never leak through a
+   * guessed product id). Shaped like the authenticated
+   * addons.getProductModifiers MINUS costPrice: a public response must
+   * never leak what an option costs the merchant, so every option is
+   * normalized with costPrice 0. No try/catch here on purpose — an http
+   * error must reach the caller (the kiosk hook catches it and falls
+   * back to a plain add), never come back as invented groups.
+   */
+  getProductModifiers: async (slug: string, productId: number): Promise<{ groups: ModifierGroup[] }> => {
+    const res = await http<{
+      groups: Array<{
+        id: number;
+        name: string;
+        nameEn?: string;
+        selectionType?: string;
+        isMandatory?: boolean;
+        minSelections?: number;
+        maxSelections?: number;
+        displayOrder?: number;
+        isSplittableInHalf?: boolean;
+        options?: Array<{
+          id: number;
+          groupId: number;
+          name: string;
+          nameEn?: string;
+          price?: number;
+          isDefault?: boolean;
+          displayOrder?: number;
+          componentProductId?: number | null;
+          componentProductName?: string | null;
+          consumptionQty?: number | null;
+          unitName?: string | null;
+        }>;
+      }>;
+    }>(`/api/storefront/${encodeURIComponent(slug)}/products/${productId}/modifiers`);
+    return {
+      groups: (res?.groups || []).map((g) => ({
+        id: Number(g.id),
+        name: g.name,
+        nameEn: g.nameEn,
+        selectionType: g.selectionType === 'single' ? 'single' : 'multiple',
+        isMandatory: Boolean(g.isMandatory),
+        minSelections: Number(g.minSelections || 0),
+        maxSelections: Number(g.maxSelections || 0),
+        displayOrder: Number(g.displayOrder || 0),
+        isActive: true,
+        isSplittableInHalf: Boolean(g.isSplittableInHalf),
+        options: (g.options || []).map((opt): ModifierOption => ({
+          id: Number(opt.id),
+          groupId: Number(opt.groupId),
+          name: opt.name,
+          nameEn: opt.nameEn,
+          price: Number(opt.price || 0),
+          costPrice: 0,
+          isDefault: Boolean(opt.isDefault),
+          isActive: true,
+          displayOrder: Number(opt.displayOrder || 0),
+          componentProductId: opt.componentProductId ? Number(opt.componentProductId) : null,
+          componentProductName: opt.componentProductName || null,
+          consumptionQty: opt.consumptionQty !== null && opt.consumptionQty !== undefined ? Number(opt.consumptionQty) : null,
+          unitName: opt.unitName || null,
+        })),
+      })),
     };
   },
 

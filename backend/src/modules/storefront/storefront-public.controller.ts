@@ -118,6 +118,14 @@ export class StorefrontPublicController {
     return this.service.getSearchSuggestions(slug, q);
   }
 
+  @Get(':slug/products/:productId/modifiers')
+  getProductModifiers(
+    @Param('slug') slug: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.service.getProductModifiers(slug, Number(productId));
+  }
+
   @Get(':slug/products/:productId')
   getProductDetails(
     @Param('slug') slug: string,

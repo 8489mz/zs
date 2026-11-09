@@ -2,6 +2,18 @@ import { useQuery } from '@tanstack/react-query';
 import { storefrontApi } from '@/features/storefront';
 import { posApi } from '@/features/pos/api/pos.api';
 import { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced-fnb.api';
+import type { ModifierGroup } from '@/shared/api/addons.api';
+/* The page types its picker state from the hook (pages must not import
+ * the api layer directly — composition check). */
+export type { ModifierGroup };
+import {
+  buildGroupModifierSelection,
+  type GroupModifierSelection,
+} from '@/features/pos/components/pos-cart-panel/group-modifier-mapping';
+import { calcCartLineTotal, calcModifiersTotal } from '@/features/pos/lib/pos-modifier-totals';
+
+export type { GroupModifierSelection };
+export { buildGroupModifierSelection };
 
 /**
  * INV-REST-KIOSK-NO-FICTION (R-B4): the kiosk resolves its store slug from
@@ -38,6 +50,126 @@ export function filterKioskMenuItems<T extends { id: number | string }>(
 }
 
 /**
+ * INV-REST-KIOSK-MODIFIER-UI (R7-B2): the kiosk cart model with modifiers.
+ * A cart line's identity is its product PLUS its chosen options — the same
+ * product with different extras is a SEPARATE line, never merged into one
+ * (the old model merged by productId only, so two different modifier
+ * choices of one product collapsed into a single line). The key sorts the
+ * option ids, so the same pick in a different tap order is still the same
+ * line; an option's qty rides in the key too, so "extra cheese x1" and
+ * "extra cheese x2" stay separate lines.
+ */
+export interface KioskCartLineLike {
+  productId: number;
+  price: number;
+  qty: number;
+  modifiers?: GroupModifierSelection[] | null;
+}
+
+export function kioskCartLineKey(
+  productId: number,
+  modifiers?: GroupModifierSelection[] | null,
+): string {
+  const parts = (modifiers || [])
+    .filter((m) => Number(m.optionId || 0) > 0)
+    .map((m) => `${Number(m.optionId)}:${Number(m.qty || 1)}`)
+    .sort();
+  return `${Number(productId)}|${parts.join(',')}`;
+}
+
+/** Per-unit price of one cart line: base price + the selected modifiers. */
+export function kioskCartLineUnitPrice(line: KioskCartLineLike): number {
+  return Number(line.price || 0) + calcModifiersTotal(line.modifiers);
+}
+
+/** Whole-cart total: Σ qty × (base + modifiers), the same formula the
+ * backend charges (R-B8 pos-modifier-totals), so the total the customer
+ * confirms against already includes their paid extras. */
+export function kioskCartTotal(cart: KioskCartLineLike[]): number {
+  return (cart || []).reduce((sum, line) => sum + calcCartLineTotal(line), 0);
+}
+
+/** Add one line: merge into the existing line with the SAME identity
+ * (qty + 1), otherwise append a new line. */
+export function addKioskCartLine<T extends KioskCartLineLike>(cart: T[], line: T): T[] {
+  const key = kioskCartLineKey(line.productId, line.modifiers);
+  const idx = cart.findIndex((item) => kioskCartLineKey(item.productId, item.modifiers) === key);
+  if (idx === -1) return [...cart, line];
+  const next = [...cart];
+  next[idx] = { ...next[idx], qty: next[idx].qty + 1 };
+  return next;
+}
+
+/** Replace one line's modifiers (edit-in-review / edit-in-tray). When the
+ * new selection collides with ANOTHER line of the same product, the two
+ * lines merge (the edited line's qty moves into the other line) instead
+ * of leaving two identical lines behind. */
+export function updateKioskCartLineModifiers<T extends KioskCartLineLike>(
+  cart: T[],
+  lineKey: string,
+  modifiers: GroupModifierSelection[],
+): T[] {
+  const idx = cart.findIndex((item) => kioskCartLineKey(item.productId, item.modifiers) === lineKey);
+  if (idx === -1) return cart;
+  const edited = { ...cart[idx], modifiers };
+  const newKey = kioskCartLineKey(edited.productId, edited.modifiers);
+  const collision = cart.findIndex(
+    (item, i) => i !== idx && kioskCartLineKey(item.productId, item.modifiers) === newKey,
+  );
+  if (collision === -1) {
+    const next = [...cart];
+    next[idx] = edited;
+    return next;
+  }
+  return cart
+    .map((item, i) => {
+      if (i === collision) return { ...item, qty: item.qty + edited.qty };
+      if (i === idx) return null;
+      return item;
+    })
+    .filter(Boolean) as T[];
+}
+
+/**
+ * INV-REST-KIOSK-MODIFIER-UI (R7-B2): the client-side mirror of the
+ * server's R4-C group rules (validateModifierGroupRules). A mandatory
+ * group needs at least max(1, min) picks; an optional group may be
+ * skipped entirely, but once picked it must reach its min; a
+ * single-select group takes at most one; every group caps at its max.
+ * The count is the number of picked OPTIONS in the group — an option's
+ * qty never counts as extra picks, exactly like the server. Returns the
+ * first broken rule as a specific Arabic message, or null when the
+ * selection satisfies every group. The server still re-validates (422),
+ * so this is the customer's early, specific error — never the only gate.
+ */
+export function validateKioskModifierSelection(
+  groups: ModifierGroup[],
+  selections: GroupModifierSelection[],
+): string | null {
+  for (const group of groups || []) {
+    if (group.isActive === false) continue;
+    const count = (selections || []).filter((m) => Number(m.groupId) === Number(group.id)).length;
+    const min = Math.max(0, Math.floor(Number(group.minSelections || 0)));
+    const max =
+      String(group.selectionType || '') === 'single'
+        ? 1
+        : Number(group.maxSelections) > 0
+          ? Math.floor(Number(group.maxSelections))
+          : Number.MAX_SAFE_INTEGER;
+    if (group.isMandatory && count < Math.max(1, min)) {
+      return `يرجى اختيار ${group.name} — هذه المجموعة إلزامية`;
+    }
+    if (count > 0 && count < min) {
+      return `يرجى اختيار ${min} على الأقل من مجموعة "${group.name}"`;
+    }
+    if (count > max) {
+      return `الحد الأقصى للاختيار في مجموعة "${group.name}" هو ${max === 1 ? 1 : group.maxSelections}`;
+    }
+  }
+  return null;
+}
+
+/**
  * INV-REST-FNB-TRUTH-2 (R-I11): the kiosk's 86 list lives in the feature
  * hook, never in the page (pages must go through hooks — the composition
  * check). 86'd items never reach the kiosk menu — excluded entirely,
@@ -65,6 +197,8 @@ export interface KioskConfirmationItem {
   name: string;
   price: number;
   qty: number;
+  /** Modifiers picked on this line, so the ticket/receipt shows them. */
+  modifiers?: Array<{ name: string; qty?: number; price?: number }>;
 }
 
 export interface KioskConfirmation {
@@ -133,6 +267,11 @@ export function newKioskIdempotencyKey(): string {
  * as typed (or is absent — never the fake fallback), the idempotency key
  * passes through when the caller holds one, and the takeaway mapping
  * (orderType 'delivery' + fulfillmentType 'pickup') is unchanged.
+ *
+ * INV-REST-KIOSK-MODIFIER-UI (R7-B2): a line's picked modifiers travel
+ * with it (the server re-prices them from server truth — the client
+ * price is never trusted). A line with no modifiers omits the field
+ * entirely, so a modifier-less order is byte-identical to before.
  */
 export function buildKioskOrderPayload(
   orderPayload: {
@@ -142,7 +281,13 @@ export function buildKioskOrderPayload(
     tableNumber?: string;
     notes?: string;
     paymentMethod?: string;
-    items?: Array<{ productId: number; qty?: number; quantity?: number; notes?: string }>;
+    items?: Array<{
+      productId: number;
+      qty?: number;
+      quantity?: number;
+      notes?: string;
+      modifiers?: GroupModifierSelection[];
+    }>;
     idempotencyKey?: string;
   },
   cleanSlug: string | null,
@@ -169,6 +314,8 @@ export function buildKioskOrderPayload(
       productId: item.productId,
       quantity: item.qty || item.quantity || 1,
       notes: item.notes,
+      modifiers:
+        item.modifiers && item.modifiers.length > 0 ? item.modifiers : undefined,
     })),
   };
 }
@@ -320,6 +467,27 @@ export function useSelfOrderingKiosk(storeSlug: string | null | undefined) {
     }
   };
 
+  /*
+   * INV-REST-KIOSK-MODIFIER-UI (R7-B2): the kiosk's modifier data comes
+   * ONLY from the public storefront endpoint (slug-scoped, no auth
+   * token) — never from the authenticated addonsApi, which the public
+   * kiosk cannot call. A failed fetch resolves to NO groups, and the
+   * page then adds the product plain (base behaviour): a kiosk that
+   * cannot reach the modifier data must still sell the base product,
+   * never block the customer on a read it cannot prove. The server
+   * still enforces the group rules on any line that DOES carry
+   * modifiers, so a missed fetch can never post a broken selection.
+   */
+  const getProductModifiers = async (productId: number): Promise<ModifierGroup[]> => {
+    if (!cleanSlug) return [];
+    try {
+      const res = await storefrontApi.getProductModifiers(cleanSlug, productId);
+      return res?.groups || [];
+    } catch {
+      return [];
+    }
+  };
+
   const createOrder = async (orderPayload: any) => {
     const payload = buildKioskOrderPayload(orderPayload, cleanSlug);
     return await storefrontApi.createOrder(cleanSlug as string, payload as any);
@@ -342,6 +510,7 @@ export function useSelfOrderingKiosk(storeSlug: string | null | undefined) {
     catalogData,
     isCatalogLoading,
     checkUpsell,
+    getProductModifiers,
     createOrder,
     listTerminals,
     initiateTerminalCharge,

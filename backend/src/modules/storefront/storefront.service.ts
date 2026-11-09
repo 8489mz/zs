@@ -20,6 +20,7 @@ import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.se
 import { PlanFeatureService } from '../../core/auth/services/plan-feature.service';
 import {
   isStorefrontEntitledForOrders,
+  parseTenantExtraFeatures,
   STOREFRONT_NOT_ENTITLED_MESSAGE,
 } from './engines/storefront-entitlement.engine';
 import { CustomerOrderRefDto } from './dto/customer-order-lookup.dto';
@@ -56,6 +57,11 @@ import {
   RawStorefrontOffer,
 } from './engines/storefront-offers.engine';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
+import {
+  enforceRestaurantModifierContract,
+  type ModifierGroupRule,
+  type ModifierPriceTruth,
+} from '../sales/helpers/restaurant-modifier-contract.helper';
 
 /** Country-aware phone rule shared by order creation and edit (O56: edit used to accept Egypt only). */
 function assertValidCustomerPhone(rawPhone: string | undefined, countryCode: string): void {
@@ -1137,6 +1143,243 @@ export class StorefrontService {
   }
 
   /**
+   * INV-REST-KIOSK-MODIFIER-UI (R7-B1): the public modifier data for one
+   * catalog product — what the kiosk picker shows before the customer
+   * picks. Slug-scoped exactly like getProductDetails (the tenant comes
+   * from the slug, every read below is tenant-scoped, so another
+   * tenant's groups can never leak through a guessed product id), and
+   * shaped like the authenticated addons.getProductModifiers MINUS
+   * costPrice: a public response must never leak what an option costs
+   * the merchant. Only groups linked to this product (R4-C I50: an
+   * unlinked product shows NO groups, never all of them) and only active
+   * groups / active options are returned. No storefront-entitlement
+   * gate: this is a public read like the catalog itself — ordering is
+   * still gated in createOnlineOrder.
+   */
+  async getProductModifiers(slug: string, productId: number) {
+    const tenant = await this.getTenantBySlug(slug);
+
+    const linked = await this.db
+      .selectFrom('product_pos_modifiers')
+      .select(['modifier_group_id'])
+      .where('product_id', '=', productId)
+      .where(sql<boolean>`tenant_id = ${tenant.id}`)
+      .execute();
+    const targetGroupIds = linked.map((l) => Number(l.modifier_group_id));
+    if (targetGroupIds.length === 0) {
+      return { groups: [] };
+    }
+
+    const groups = await this.db
+      .selectFrom('pos_modifier_groups as g')
+      .selectAll()
+      .where(sql<boolean>`g.tenant_id = ${tenant.id}`)
+      .where('g.is_active', '=', true)
+      .where('g.id', 'in', targetGroupIds)
+      .orderBy('g.display_order', 'asc')
+      .orderBy('g.id', 'asc')
+      .execute();
+    const groupIds = groups.map((g) => Number(g.id));
+
+    let options: any[] = [];
+    if (groupIds.length > 0) {
+      options = await this.db
+        .selectFrom('pos_modifier_options as pmo')
+        .leftJoin('products as p', (join) =>
+          join.onRef('p.id', '=', 'pmo.component_product_id').onRef('p.tenant_id', '=', 'pmo.tenant_id'),
+        )
+        .select([
+          'pmo.id',
+          'pmo.group_id',
+          'pmo.name',
+          'pmo.name_en',
+          'pmo.price',
+          'pmo.is_default',
+          'pmo.display_order',
+          'pmo.component_product_id',
+          'pmo.consumption_qty',
+          'pmo.unit_name',
+          'pmo.portion_allowed',
+          'pmo.preparation_time_minutes',
+          'p.name as component_product_name',
+        ])
+        .where(sql<boolean>`pmo.tenant_id = ${tenant.id}`)
+        .where('pmo.group_id', 'in', groupIds)
+        .where('pmo.is_active', '=', true)
+        .orderBy('pmo.display_order', 'asc')
+        .orderBy('pmo.id', 'asc')
+        .execute();
+    }
+
+    return {
+      groups: groups.map((g) => ({
+        id: Number(g.id),
+        name: g.name,
+        nameEn: g.name_en,
+        selectionType: g.selection_type || 'multiple',
+        isMandatory: Boolean(g.is_mandatory),
+        minSelections: Number(g.min_selections || 0),
+        maxSelections: Number(g.max_selections || 10),
+        displayOrder: Number(g.display_order || 0),
+        isSplittableInHalf: Boolean(g.is_splittable_in_half),
+        options: options
+          .filter((opt) => Number(opt.group_id) === Number(g.id))
+          .map((opt) => ({
+            id: Number(opt.id),
+            groupId: Number(opt.group_id),
+            name: opt.name,
+            nameEn: opt.name_en,
+            price: Number(opt.price || 0),
+            isDefault: Boolean(opt.is_default),
+            displayOrder: Number(opt.display_order || 0),
+            componentProductId: opt.component_product_id ? Number(opt.component_product_id) : null,
+            componentProductName: opt.component_product_name || null,
+            consumptionQty: opt.consumption_qty !== null && opt.consumption_qty !== undefined ? Number(opt.consumption_qty) : null,
+            unitName: opt.unit_name || null,
+            portionAllowed: (opt.portion_allowed as 'both' | 'half_only' | 'whole_only') || 'both',
+            preparationTimeMinutes: opt.preparation_time_minutes ? Number(opt.preparation_time_minutes) : 0,
+          })),
+      })),
+    };
+  }
+
+  /**
+   * INV-REST-KIOSK-MODIFIER-UI (R7-B1): normalize one line's client-sent
+   * modifiers. Absent means none; a present value that is not an array
+   * fails closed with a specific error instead of silently dropping the
+   * customer's picks (the DTO rejects it as 400 on the HTTP path; this
+   * is the service-direct backstop). Entries pass through untouched —
+   * the R4-C contract below is what validates and re-prices them.
+   */
+  private normalizeOnlineOrderModifiers(raw: unknown): any[] {
+    if (raw === undefined || raw === null) return [];
+    if (!Array.isArray(raw)) {
+      throw new BadRequestException('إضافات الصنف يجب أن تكون قائمة صالحة');
+    }
+    return raw;
+  }
+
+  /** Per-line modifier surcharge on already re-priced modifiers: the
+   * same formula the POS charges (calcModifiersTotal /
+   * buildPreparedSaleItem): Σ price × qty, a modifier with no qty
+   * counting once. */
+  private onlineOrderModifiersTotal(modifiers: any[] | undefined): number {
+    return (Array.isArray(modifiers) ? modifiers : []).reduce(
+      (sum, mod) => sum + Number(mod?.price || 0) * Number(mod?.qty || 1),
+      0,
+    );
+  }
+
+  /**
+   * INV-REST-KIOSK-MODIFIER-UI (R7-B1): the R4-C modifier contract for
+   * online orders — the same pure helper createSale runs, fed by the
+   * same truth load (sales-write.service.ts enforceRestaurantModifierContract,
+   * mirrored here line for line so the two paths can never drift apart):
+   * option prices from pos_modifier_options, combo components from
+   * products.retail_price, flat legacy addons from addons.price, group
+   * rules from the product's linked active groups. A spoofed client
+   * price is re-priced to server truth; a modifier with no truth, an
+   * unknown optionId, or a violated group rule fails as 422 before any
+   * stock, offer or order work — the caller runs this BEFORE pricing
+   * the lines, so the re-priced modifiers feed the line totals.
+   *
+   * Gated on the restaurant feature with the exact call createSale
+   * uses, so a non-restaurant tenant keeps today's behaviour (its
+   * modifiers, if any, are stored as sent with no group rules) —
+   * exactly like a POS sale with the feature off. A missing
+   * planFeatureService fails closed to "off" (createOnlineOrder
+   * already refuses without it, so this is unreachable there).
+   *
+   * SCOPE (decided, never-ask): the contract runs ONLY on lines that
+   * actually carry modifiers. A modifier-less line is untouched — the
+   * web storefront has no modifier UI, so enforcing mandatory groups
+   * on its orders would refuse every order of a product with a
+   * mandatory group, a blast radius far outside the kiosk. The kiosk
+   * picker (Batch 8) blocks add-to-cart until mandatory groups are
+   * chosen, so the enforcement still bites exactly where a choice was
+   * claimed; the server guarantees whatever is sent is valid and
+   * correctly priced. As a side effect this keeps the change strictly
+   * additive for every existing modifier-less order: no new table is
+   * read when no line carries modifiers.
+   */
+  private async enforceOnlineOrderModifierContract(
+    items: Array<{ productId: number; modifiers?: any[] }>,
+    tenant: { id: string; plan_id?: string | null; extra_features?: unknown; activity_type?: string | null },
+  ): Promise<void> {
+    if (!items.some((item) => Array.isArray(item.modifiers) && item.modifiers.length > 0)) return;
+    const restaurantEnabled = this.planFeatureService
+      ? this.planFeatureService.hasFeature(
+          tenant.plan_id ?? undefined,
+          parseTenantExtraFeatures(tenant.extra_features),
+          'restaurant',
+          undefined,
+          tenant.activity_type ?? undefined,
+        )
+      : false;
+    if (!restaurantEnabled) return;
+
+    const optionIds = new Set<number>();
+    const modProductIds = new Set<number>();
+    const lineProductIds = new Set<number>();
+    for (const item of items) {
+      if (Number(item.productId || 0) > 0) lineProductIds.add(Number(item.productId));
+      for (const mod of Array.isArray(item.modifiers) ? item.modifiers : []) {
+        const optionId = Number(mod?.optionId || mod?.option_id || 0);
+        const productId = Number(mod?.productId || mod?.componentProductId || mod?.component_product_id || 0);
+        if (optionId > 0) optionIds.add(optionId);
+        if (productId > 0) modProductIds.add(productId);
+      }
+    }
+    const tenantId = tenant.id;
+    const optionRows = optionIds.size
+      ? await this.db.selectFrom('pos_modifier_options')
+          .select(['id', 'price', 'group_id'])
+          .where(sql<boolean>`tenant_id = ${tenantId}`).where('id', 'in', [...optionIds]).execute()
+      : [];
+    const truth: ModifierPriceTruth = {
+      options: new Map(optionRows.map((row) => [Number(row.id),
+        { price: Number(row.price), groupId: Number(row.group_id) }])),
+      products: new Map(),
+      addons: new Map(),
+    };
+    if (modProductIds.size) {
+      const productRows = await this.db.selectFrom('products').select(['id', 'retail_price'])
+        .where(sql<boolean>`tenant_id = ${tenantId}`).where('id', 'in', [...modProductIds]).execute();
+      for (const row of productRows) truth.products.set(Number(row.id), Number(row.retail_price));
+      const addonRows = await this.db.selectFrom('addons').select(['id', 'price'])
+        .where(sql<boolean>`tenant_id = ${tenantId}`).where('id', 'in', [...modProductIds]).execute();
+      for (const row of addonRows) truth.addons.set(Number(row.id), Number(row.price));
+    }
+    const linkedGroups = new Map<number, ModifierGroupRule[]>();
+    if (lineProductIds.size) {
+      const links = await this.db.selectFrom('product_pos_modifiers')
+        .select(['product_id', 'modifier_group_id'])
+        .where(sql<boolean>`tenant_id = ${tenantId}`).where('product_id', 'in', [...lineProductIds]).execute();
+      const groupIds = [...new Set(links.map((l) => Number(l.modifier_group_id)))];
+      const groupRows = groupIds.length
+        ? await this.db.selectFrom('pos_modifier_groups')
+            .select(['id', 'name', 'selection_type', 'is_mandatory', 'min_selections', 'max_selections', 'is_active'])
+            .where(sql<boolean>`tenant_id = ${tenantId}`).where('id', 'in', groupIds)
+            .where('is_active', '=', true).execute()
+        : [];
+      const groupsById = new Map(groupRows.map((g) => [Number(g.id), {
+        id: Number(g.id), name: String(g.name), selectionType: String(g.selection_type || 'multiple'),
+        isMandatory: Boolean(g.is_mandatory), minSelections: Number(g.min_selections || 0),
+        maxSelections: Number(g.max_selections || 10), isActive: Boolean(g.is_active),
+      }]));
+      for (const link of links) {
+        const group = groupsById.get(Number(link.modifier_group_id));
+        if (!group) continue;
+        const list = linkedGroups.get(Number(link.product_id)) || [];
+        list.push(group);
+        linkedGroups.set(Number(link.product_id), list);
+      }
+    }
+    const repriced = enforceRestaurantModifierContract(items, truth, linkedGroups);
+    repriced.forEach((item, index) => { items[index].modifiers = item.modifiers; });
+  }
+
+  /**
    * Delivery fee, zone, free-shipping rule and coupon for an order — ONE implementation for create
    * and edit. O56: the edit path had its own copy that reset the fee to the flat default and dropped
    * the zone, the coupon, the free-shipping rule and the pickup/dine-in exemption, so editing an
@@ -1630,12 +1873,23 @@ export class StorefrontService {
     // Same canonical digits as the quote (INV-STOREFRONT-LINE-TOTAL-DIGITS).
     const moneyDigits = storefrontMoneyDigits(settings, tenant);
 
+    // INV-REST-KIOSK-MODIFIER-UI (R7-B1): modifiers are validated and
+    // re-priced BEFORE the lines are priced, so the re-priced extras
+    // feed the line totals — the same fail-fast order createSale uses
+    // (contract first, stock/offer work after). A 422 here leaves no
+    // order row, no reservation and no coupon claim.
+    const contractItems = dto.items.map((item) => ({
+      productId: Number(item.productId),
+      modifiers: this.normalizeOnlineOrderModifiers((item as any).modifiers),
+    }));
+    await this.enforceOnlineOrderModifierContract(contractItems, tenant);
+
     let subtotal = 0;
     // One line per product: the sales engine that will invoice this order rejects two rows of the
     // same product and unit (ensureUniqueFlowItems), so two variants of one product cannot both be
     // invoiced. The storefront cart already keeps a single variant per product.
     const seenProductIds = new Set<number>();
-    const validatedItems = dto.items.map((item) => {
+    const validatedItems = dto.items.map((item, itemIndex) => {
       const prod = productMap.get(item.productId) ?? productMap.get(Number(item.productId)) ?? productMap.get(String(item.productId));
       if (!prod) {
         throw new BadRequestException(`عفواً، أحد الأصناف المطلوبة غير متاح في المتجر حالياً، يرجى تحديث السلة.`);
@@ -1655,7 +1909,16 @@ export class StorefrontService {
       const pOffers = offersByProductId.get(Number(prod.id)) || [];
       const bestOffer = resolveBestStorefrontOffer(priced.unitPrice, pOffers, quantity, undefined, new Date(), offerTimezone(settings), storefrontMoneyDigits(settings, tenant));
       const unitPrice = bestOffer.hasDiscount ? bestOffer.price : priced.unitPrice;
-      const lineTotal = roundMoney(unitPrice * quantity, moneyDigits);
+      // INV-REST-KIOSK-MODIFIER-UI (R7-B1): the line total is the POS
+      // formula — qty × (base unit price + Σ re-priced modifier
+      // price × qty). The offer discounts the base price only; the
+      // extras sit on top. unitPrice stays the base price (as in a
+      // POS sale_items row, where unit_price is base and line_total
+      // carries the modifiers); the conversion re-derives the same
+      // total from price + modifiers.
+      const modifiers = contractItems[itemIndex].modifiers || [];
+      const modifiersTotal = this.onlineOrderModifiersTotal(modifiers);
+      const lineTotal = roundMoney((unitPrice + modifiersTotal) * quantity, moneyDigits);
       subtotal += lineTotal;
 
       return {
@@ -1667,6 +1930,7 @@ export class StorefrontService {
         unitPrice,
         total: lineTotal,
         notes: item.notes || '',
+        ...(modifiers.length > 0 ? { modifiers } : {}),
       };
     });
 
@@ -1710,9 +1974,36 @@ export class StorefrontService {
     // fails as 422 ITEM_86ED naming the item, before any stock is
     // reserved or the order recorded. Branch-scoped like createSale:
     // a tenant-wide 86 blocks everywhere, a branch 86 only its branch.
+    // INV-REST-KIOSK-MODIFIER-UI (R7-B1): the same check covers
+    // modifier components — an 86'd cheese must refuse the order here,
+    // not surface later at conversion. Only ids that are real products
+    // of this tenant are checked: a flat addon's id lives in another
+    // table and must never false-positive against a product id.
+    const modifierComponentIds = [...new Set(contractItems.flatMap((item) =>
+      item.modifiers.map((mod: any) =>
+        Number(mod.productId || mod.componentProductId || mod.component_product_id || 0)).filter((id) => id > 0)))];
+    const modifierComponentChecks: Array<{ productId: number; name?: string }> = [];
+    if (modifierComponentIds.length > 0) {
+      const componentRows = await this.db.selectFrom('products').select(['id'])
+        .where(sql<boolean>`tenant_id = ${tenant.id}`).where('id', 'in', modifierComponentIds).execute();
+      const realProductIds = new Set(componentRows.map((row) => Number(row.id)));
+      const seenComponents = new Set<number>();
+      for (const item of contractItems) {
+        for (const mod of item.modifiers) {
+          const componentId = Number(mod.productId || mod.componentProductId || mod.component_product_id || 0);
+          if (componentId > 0 && realProductIds.has(componentId) && !seenComponents.has(componentId)) {
+            seenComponents.add(componentId);
+            modifierComponentChecks.push({ productId: componentId, name: String(mod.name || '') });
+          }
+        }
+      }
+    }
     await assertProductsNot86ed(
       this.db, tenant.id, targetBranchId,
-      validatedItems.map((item) => ({ productId: item.productId, name: item.name })),
+      [
+        ...validatedItems.map((item) => ({ productId: item.productId, name: item.name })),
+        ...modifierComponentChecks,
+      ],
     );
 
     /**
@@ -1953,7 +2244,13 @@ export class StorefrontService {
               cost_price: 0,
               price_type: 'retail',
               notes: it.notes || '',
-              modifiers: null,
+              // INV-REST-KIOSK-MODIFIER-UI (R7-B1): the draft is what
+              // the kitchen display reads, so the chosen modifiers
+              // ride on it — stored as a JSON string exactly like
+              // createSale stores sale_items.modifiers, which the KDS
+              // parses (string or array). A line with no modifiers
+              // keeps null, as before.
+              modifiers: (it as any).modifiers?.length ? JSON.stringify((it as any).modifiers) : null,
             })
             .execute();
         }
@@ -2353,13 +2650,24 @@ export class StorefrontService {
       unitPrice: number;
       total: number;
       notes?: string;
+      modifiers?: any[];
     }> = [];
 
     const updateAllowsOutOfStock = isOutOfStockOrderingAllowed(settings, tenant.slug, tenant.activity_type);
     // Same canonical digits as quote/create (INV-STOREFRONT-LINE-TOTAL-DIGITS).
     const moneyDigits = storefrontMoneyDigits(settings, tenant);
     const seenProductIds = new Set<number>();
-    for (const item of dto.items) {
+    // INV-REST-KIOSK-MODIFIER-UI (R7-B1): the edit path shares the
+    // DTO, so it enforces the same contract — otherwise editing an
+    // order that carries modifiers would silently drop them from
+    // items_json (O56's lesson: the edit path must not silently change
+    // what the customer owes or ordered).
+    const updateContractItems = dto.items.map((item) => ({
+      productId: Number(item.productId),
+      modifiers: this.normalizeOnlineOrderModifiers((item as any).modifiers),
+    }));
+    await this.enforceOnlineOrderModifierContract(updateContractItems, tenant);
+    for (const [itemIndex, item] of dto.items.entries()) {
       const p = productMap.get(Number(item.productId));
       if (!p) {
         throw new BadRequestException('أحد أصناف الطلب لم يعد متاحاً، يرجى تحديث السلة');
@@ -2378,7 +2686,10 @@ export class StorefrontService {
       const bestOffer = resolveBestStorefrontOffer(priced.unitPrice, offersByProductId.get(Number(p.id)), qty,
         undefined, new Date(), offerTimezone(settings), moneyDigits);
       const price = bestOffer.hasDiscount ? bestOffer.price : priced.unitPrice;
-      const lineTotal = roundMoney(price * qty, moneyDigits);
+      // INV-REST-KIOSK-MODIFIER-UI (R7-B1): same POS line formula as
+      // create — qty × (base + Σ re-priced modifier price × qty).
+      const updateModifiers = updateContractItems[itemIndex].modifiers || [];
+      const lineTotal = roundMoney((price + this.onlineOrderModifiersTotal(updateModifiers)) * qty, moneyDigits);
 
       subtotal += lineTotal;
       validatedItems.push({
@@ -2389,6 +2700,7 @@ export class StorefrontService {
         unitPrice: price,
         total: lineTotal,
         notes: item.notes ? String(item.notes).trim() : undefined,
+        ...(updateModifiers.length > 0 ? { modifiers: updateModifiers } : {}),
       });
     }
 
@@ -3213,6 +3525,11 @@ export class StorefrontService {
       unitMultiplier: 1,
       priceType: 'retail',
       discount: 0,
+      // INV-REST-KIOSK-MODIFIER-UI (R7-B1): the modifiers stored on
+      // the order ride into the posted sale — createSale re-prices,
+      // enforces and costs them under its own contract run, so the
+      // invoice charges exactly what the customer picked.
+      modifiers: i.modifiers,
       notes: (i.variantName ? `المقاس: ${i.variantName} - ` : '') + 'طلب متجر إلكتروني #' + order.order_number,
     }));
 

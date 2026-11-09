@@ -1,5 +1,69 @@
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Matches, Max, MaxLength, MinLength, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+
+/* INV-REST-KIOSK-MODIFIER-UI (R7-B1): one modifier picked on a kiosk line.
+ * The shape mirrors the POS cart modifier (GroupModifierSelection in
+ * group-modifier-mapping.ts) so the kiosk, the POS and the online-order →
+ * sale conversion all speak the same modifier: optionId is the
+ * pos_modifier_options row, productId is the option's linked stock
+ * component (component_product_id) or, for a combo/bare mod, the component
+ * product itself; price is the CLIENT's price and is never trusted — the
+ * service re-prices it from server truth (R4-C contract). No @Min on
+ * price on purpose: a negative client price on a mod with no configured
+ * truth is the contract helper's 422 RESTAURANT_MODIFIER_PRICE_UNVERIFIED,
+ * and a min here would mask that specific error as a generic 400. */
+export class OnlineOrderItemModifierDto {
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  optionId?: number;
+
+  /* productId 0 is the POS "no stock component" sentinel
+   * (buildGroupModifierSelection sets productId to
+   * component_product_id || 0), so 0 is valid here — only
+   * negatives are rejected. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  productId?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  componentProductId?: number;
+
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  groupId?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  groupName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  name?: string;
+
+  @IsOptional()
+  @IsNumber()
+  price?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1, { message: 'كمية الإضافة يجب أن تكون 1 على الأقل' })
+  qty?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isComboComponent?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  costPrice?: number;
+}
 
 export class OnlineOrderItemDto {
   @IsNumber()
@@ -20,6 +84,16 @@ export class OnlineOrderItemDto {
   @IsString()
   @MaxLength(80)
   variantName?: string;
+
+  /** Modifiers picked for this line (kiosk / storefront). Validated and
+   * re-priced by the service from server truth (R4-C contract); a line
+   * with no modifiers omits the field entirely. */
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => OnlineOrderItemModifierDto)
+  @ArrayMaxSize(50, { message: 'عدد إضافات الصنف الواحد لا يتجاوز 50' })
+  @IsArray()
+  modifiers?: OnlineOrderItemModifierDto[];
 }
 
 export class CreateOnlineOrderDto {

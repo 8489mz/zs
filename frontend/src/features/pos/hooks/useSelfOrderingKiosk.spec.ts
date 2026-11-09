@@ -34,6 +34,13 @@ import {
   newKioskIdempotencyKey,
   buildKioskOrderPayload,
   resolveKioskOrderErrorMessage,
+  kioskCartLineKey,
+  kioskCartLineUnitPrice,
+  kioskCartTotal,
+  addKioskCartLine,
+  updateKioskCartLineModifiers,
+  validateKioskModifierSelection,
+  buildGroupModifierSelection,
 } from '@/features/pos/hooks/useSelfOrderingKiosk';
 
 /** The spec's fake translator: returns the Arabic fallback verbatim. */
@@ -318,5 +325,241 @@ describe('resolveKioskOrderErrorMessage (R-I56 shift gate)', () => {
     expect(resolveKioskOrderErrorMessage(new Error('Network Error'))).toBe(generic);
     expect(resolveKioskOrderErrorMessage(undefined)).toBe(generic);
     expect(resolveKioskOrderErrorMessage('some string')).toBe(generic);
+  });
+});
+
+/*
+ * R7-B2 (INV-REST-KIOSK-MODIFIER-UI): the kiosk cart used to merge by
+ * productId only and the payload builder dropped modifiers by
+ * construction, so two different extras of one product collapsed into
+ * one line and no modifier ever reached the server. These tests drive
+ * the pure cart model that replaces it: line identity is product +
+ * sorted option ids, totals include the picked extras, the payload
+ * maps modifiers, and the client-side group rules mirror the server's
+ * R4-C contract (mandatory / min / max / single-select).
+ *
+ * Base note: at base none of these helpers existed — the cart had no
+ * modifiers field and buildKioskOrderPayload mapped items to
+ * { productId, quantity, notes } only — so every test below fails at
+ * base by a missing import, which is the honest red proof. */
+
+const sauceGroup: any = {
+  id: 10,
+  name: 'الصوص',
+  nameEn: 'Sauce',
+  selectionType: 'single',
+  isMandatory: true,
+  minSelections: 1,
+  maxSelections: 1,
+  displayOrder: 0,
+  isActive: true,
+  options: [
+    { id: 201, groupId: 10, name: 'صوص حار', nameEn: 'Spicy', price: 0, componentProductId: null },
+    { id: 202, groupId: 10, name: 'صوص جبنة', nameEn: 'Cheese sauce', price: 10, componentProductId: null },
+  ],
+};
+
+const extrasGroup: any = {
+  id: 11,
+  name: 'إضافات',
+  nameEn: 'Extras',
+  selectionType: 'multiple',
+  isMandatory: false,
+  minSelections: 2,
+  maxSelections: 2,
+  displayOrder: 1,
+  isActive: true,
+  options: [
+    { id: 211, groupId: 11, name: 'جبنة إضافية', nameEn: 'Extra cheese', price: 20, componentProductId: null },
+    { id: 212, groupId: 11, name: 'بيض', nameEn: 'Egg', price: 15, componentProductId: null },
+    { id: 213, groupId: 11, name: 'مشروم', nameEn: 'Mushroom', price: 12, componentProductId: null },
+  ],
+};
+
+const spicySauce = buildGroupModifierSelection(sauceGroup, sauceGroup.options[0]);
+const cheeseSauce = buildGroupModifierSelection(sauceGroup, sauceGroup.options[1]);
+const extraCheese = buildGroupModifierSelection(extrasGroup, extrasGroup.options[0]);
+const egg = buildGroupModifierSelection(extrasGroup, extrasGroup.options[1]);
+
+describe('kioskCartLineKey (R7-B2)', () => {
+  it('the same product with different options is a different line', () => {
+    expect(kioskCartLineKey(5, [spicySauce])).not.toBe(kioskCartLineKey(5, [cheeseSauce]));
+    expect(kioskCartLineKey(5, [spicySauce])).not.toBe(kioskCartLineKey(5, undefined));
+  });
+
+  it('the same pick in a different tap order is the same line', () => {
+    expect(kioskCartLineKey(5, [extraCheese, egg])).toBe(kioskCartLineKey(5, [egg, extraCheese]));
+  });
+
+  it('an option qty is part of the identity: cheese x1 and cheese x2 stay separate', () => {
+    expect(kioskCartLineKey(5, [extraCheese])).not.toBe(
+      kioskCartLineKey(5, [{ ...extraCheese, qty: 2 }]),
+    );
+  });
+});
+
+describe('addKioskCartLine (R7-B2)', () => {
+  const burger = (modifiers: any[] | undefined, qty = 1) => ({
+    productId: 5,
+    name: 'برجر',
+    price: 100,
+    qty,
+    modifiers,
+    lineKey: kioskCartLineKey(5, modifiers),
+  });
+
+  it('merges a second add of the SAME product + SAME options into qty + 1', () => {
+    const cart = addKioskCartLine([burger([spicySauce])], burger([spicySauce]));
+    expect(cart).toHaveLength(1);
+    expect(cart[0].qty).toBe(2);
+  });
+
+  it('keeps the same product with DIFFERENT options as separate lines', () => {
+    const cart = addKioskCartLine([burger([spicySauce])], burger([cheeseSauce]));
+    expect(cart).toHaveLength(2);
+    expect(cart.map((line) => line.modifiers?.[0].name)).toEqual(['صوص حار', 'صوص جبنة']);
+  });
+
+  it('keeps a plain line and a modified line of the same product separate', () => {
+    const cart = addKioskCartLine([burger(undefined)], burger([spicySauce]));
+    expect(cart).toHaveLength(2);
+  });
+});
+
+describe('kioskCartTotal (R7-B2)', () => {
+  it('a line total is qty x (base + modifiers), with a modifier qty multiplied', () => {
+    const line = {
+      productId: 5,
+      price: 100,
+      qty: 2,
+      modifiers: [{ ...extraCheese, qty: 2 }],
+    };
+    // Per unit: 100 + 20x2 = 140; two units = 280.
+    expect(kioskCartLineUnitPrice(line)).toBe(140);
+    expect(kioskCartTotal([line])).toBe(280);
+  });
+
+  it('the cart total sums plain and modified lines together', () => {
+    const cart = [
+      { productId: 5, price: 100, qty: 1, modifiers: [cheeseSauce] },
+      { productId: 6, price: 25, qty: 1, modifiers: undefined },
+    ];
+    // (100 + 10) + 25 = 135.
+    expect(kioskCartTotal(cart)).toBe(135);
+  });
+
+  it('a modifier-less cart totals exactly like the old base-only sum', () => {
+    expect(kioskCartTotal([{ productId: 1, price: 100, qty: 2, modifiers: undefined }])).toBe(200);
+  });
+});
+
+describe('updateKioskCartLineModifiers (R7-B2)', () => {
+  const burger = (modifiers: any[] | undefined, qty = 1) => ({
+    productId: 5,
+    name: 'برجر',
+    price: 100,
+    qty,
+    modifiers,
+    lineKey: kioskCartLineKey(5, modifiers),
+  });
+
+  it('rewrites one line picks and keeps the other lines untouched', () => {
+    const cart = [burger([spicySauce]), burger([cheeseSauce])];
+    const next = updateKioskCartLineModifiers(cart, kioskCartLineKey(5, [spicySauce]), [cheeseSauce, extraCheese]);
+    expect(next).toHaveLength(2);
+    expect(next[0].modifiers?.map((m) => m.name)).toEqual(['صوص جبنة', 'جبنة إضافية']);
+    expect(next[1].modifiers?.map((m) => m.name)).toEqual(['صوص جبنة']);
+  });
+
+  it('merges into the twin line when the edit collides with another line', () => {
+    const cart = [burger([spicySauce], 1), burger([cheeseSauce], 2)];
+    const next = updateKioskCartLineModifiers(cart, kioskCartLineKey(5, [spicySauce]), [cheeseSauce]);
+    expect(next).toHaveLength(1);
+    expect(next[0].qty).toBe(3);
+    expect(next[0].modifiers?.map((m) => m.name)).toEqual(['صوص جبنة']);
+  });
+
+  it('leaves the cart untouched for an unknown line key', () => {
+    const cart = [burger([spicySauce])];
+    expect(updateKioskCartLineModifiers(cart, '999|', [cheeseSauce])).toEqual(cart);
+  });
+});
+
+describe('validateKioskModifierSelection (R7-B2)', () => {
+  it('a missing mandatory group is named in the error', () => {
+    const error = validateKioskModifierSelection([sauceGroup, extrasGroup], []);
+    expect(error).toContain('الصوص');
+    expect(error).toContain('إلزامية');
+  });
+
+  it('a satisfied mandatory group passes, and an optional group may be skipped', () => {
+    expect(validateKioskModifierSelection([sauceGroup, extrasGroup], [spicySauce])).toBeNull();
+  });
+
+  it('an optional group picked below its min fails — the min binds once picked', () => {
+    // extrasGroup min is 2: one pick is not enough.
+    const error = validateKioskModifierSelection([extrasGroup], [extraCheese]);
+    expect(error).toContain('2');
+    expect(error).toContain('إضافات');
+    expect(validateKioskModifierSelection([extrasGroup], [extraCheese, egg])).toBeNull();
+  });
+
+  it('an option qty never counts as extra picks: one option x2 is still one pick', () => {
+    const error = validateKioskModifierSelection([extrasGroup], [{ ...extraCheese, qty: 2 }]);
+    expect(error).not.toBeNull();
+  });
+
+  it('a single-select group with two picks fails at the max of one', () => {
+    const error = validateKioskModifierSelection([sauceGroup], [spicySauce, cheeseSauce]);
+    expect(error).toContain('الصوص');
+    expect(validateKioskModifierSelection([sauceGroup], [spicySauce])).toBeNull();
+  });
+
+  it('a multi group over its max fails', () => {
+    const mushroom = buildGroupModifierSelection(extrasGroup, extrasGroup.options[2]);
+    const error = validateKioskModifierSelection([extrasGroup], [extraCheese, egg, mushroom]);
+    expect(error).toContain('إضافات');
+  });
+});
+
+describe('buildKioskOrderPayload maps modifiers (R7-B2)', () => {
+  const cheesePick = { ...extraCheese, qty: 2 };
+
+  it('sends the picked modifiers on the line, with their option ids and qty', () => {
+    const payload = buildKioskOrderPayload(
+      {
+        customerName: 'عميل اختبار',
+        orderType: 'dine_in',
+        tableNumber: '5',
+        items: [{ productId: 5, qty: 1, modifiers: [spicySauce, cheesePick] }],
+        paymentMethod: 'cash',
+      },
+      'almhnds',
+    ) as any;
+    expect(payload.items).toHaveLength(1);
+    expect(payload.items[0].productId).toBe(5);
+    expect(payload.items[0].quantity).toBe(1);
+    expect(payload.items[0].modifiers).toHaveLength(2);
+    expect(payload.items[0].modifiers[0].optionId).toBe(201);
+    expect(payload.items[0].modifiers[1].optionId).toBe(211);
+    expect(payload.items[0].modifiers[1].qty).toBe(2);
+    expect(payload.items[0].modifiers[1].price).toBe(20);
+  });
+
+  it('omits the modifiers field entirely for a line with no picks', () => {
+    const payload = buildKioskOrderPayload(
+      {
+        customerName: 'عميل اختبار',
+        orderType: 'takeaway',
+        items: [
+          { productId: 5, qty: 1 },
+          { productId: 6, qty: 1, modifiers: [] },
+        ],
+        paymentMethod: 'cash',
+      },
+      'almhnds',
+    ) as any;
+    expect(payload.items[0].modifiers).toBeUndefined();
+    expect(payload.items[1].modifiers).toBeUndefined();
   });
 });
