@@ -6,6 +6,7 @@ import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/shared/ui/button';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { posApi } from '@/features/pos/api/pos.api';
+import { applyComboToCart, buildComboLineKey, isNegativeStockSalesAllowed } from '@/features/pos/lib/pos.domain';
 import { storefrontApi } from '@/features/storefront/api/storefront.api';
 import { PosOnlineOrdersModal } from './PosOnlineOrdersModal';
 import { PosTablesFloorPlanDialog } from './PosTablesFloorPlanDialog';
@@ -53,6 +54,8 @@ import {
 } from '@/shared/components/icons/AppIcons';
 import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
 import { formatCurrency } from '@/lib/format';
+import { currencyMoneyDigits } from '@/shared/utils/money';
+import { getGlobalSystemCurrency } from '@/lib/currencies';
 
 interface PosWorkspaceHeaderProps {
   pos: PosWorkspaceState;
@@ -1119,22 +1122,34 @@ function PosWorkspaceHeaderComponent({
       products={(pos as any).productsQuery?.data || []}
       onAddComboToCart={(combo) => {
         const product = ((pos as any).productsQuery?.data || []).find((p: any) => p.id === combo.productId);
-        if (product) {
-          pos.handleAddProduct(product);
-          pos.setCart((prevCart: any[]) => {
-            const lastIdx = prevCart.length - 1;
-            if (lastIdx < 0) return prevCart;
-            const updated = [...prevCart];
-            updated[lastIdx] = {
-              ...updated[lastIdx],
-              name: combo.productName,
-              notes: combo.notes,
-              modifiers: combo.modifiers,
-            };
-            return updated;
-          });
-          toast.success(`تمت إضافة ${combo.productName} إلى السلة بنجاح`);
+        if (!product) return;
+        const comboLineId = `combo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+        const comboOptions = {
+          priceType: pos.priceType,
+          digits: currencyMoneyDigits(settings?.currency || getGlobalSystemCurrency()),
+          allowNegativeStockSales: isNegativeStockSalesAllowed(settings) || Boolean((product as any).hasBom),
+          comboLineId,
+        };
+        // Synchronous pre-flight on the current cart: a failed add (out of
+        // stock) surfaces here and leaves the cart untouched, instead of
+        // stamping the combo onto whatever line happens to be last.
+        try {
+          applyComboToCart(pos.cart, product, combo, comboOptions);
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : 'تعذّر إضافة الوجبة إلى السلة.');
+          return;
         }
+        const comboLineKey = buildComboLineKey(product, pos.priceType, comboLineId);
+        pos.setCart((prevCart) => {
+          try {
+            return applyComboToCart(prevCart, product, combo, comboOptions).cart;
+          } catch {
+            return prevCart;
+          }
+        });
+        pos.setSelectedLineKey(comboLineKey);
+        pos.setLastAddedLineKey(comboLineKey);
+        toast.success(`تمت إضافة ${combo.productName} إلى السلة بنجاح`);
       }}
     />
     <PosCustomizationDialog
