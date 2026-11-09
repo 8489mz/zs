@@ -30,3 +30,19 @@ export function computePaidAmount(legs: PosPaymentLegs, digits: MoneyDigits): nu
     digits,
   );
 }
+
+/*
+ * INV-REST-PAID-GATES-2 (R4-D, I45): change is cash-only. A card (or
+ * wallet) leg can never produce change — the money never passed
+ * through the drawer — so change is the cash leg minus the part of
+ * the total the non-cash legs did not cover. The old display summed
+ * every leg, so card 120 on a 100 total showed 20 change for cash
+ * never received. Non-cash overpay is already blocked at submit
+ * (validatePosSaleInput), so the non-cash share is capped at the
+ * total here and the change is 0 in that case.
+ */
+export function computeCashChange(legs: PosPaymentLegs, total: number, digits: MoneyDigits): number {
+  const nonCashPaid = Number(legs.cardAmount || 0) + Number(legs.transferAmount || 0);
+  const cashOwed = Math.max(0, Number(total || 0) - nonCashPaid);
+  return roundMoneyValue(Math.max(0, Number(legs.cashAmount || 0) - cashOwed), digits);
+}

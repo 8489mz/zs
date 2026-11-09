@@ -10,7 +10,7 @@ import { Button } from '@/shared/ui/button';
 import { formatCurrency } from '@/lib/format';
 import { CreditCardIcon, StarIcon, CheckIcon } from '@/shared/components/icons/AppIcons';
 import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
-import { shouldTryAlternateTerminalCharge, canChangePaymentAfterTerminalApproval, terminalAuthorizationLabel } from './pos-terminal-charge-safety';
+import { shouldTryAlternateTerminalCharge, canChangePaymentAfterTerminalApproval, isTerminalApprovalLive, terminalAuthorizationLabel } from './pos-terminal-charge-safety';
 import { toast } from '@/shared/components/system-alert';
 import { useAuthStore } from '@/stores/auth-store';
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
@@ -410,6 +410,11 @@ export function PosCheckoutPaymentSection({
   const isCreditSale = pos.paymentType === 'credit';
   const needsCreditCustomer = isCreditSale && !String(pos.customerId || '').trim();
   const transferSelected = !isCreditSale && (pos.paymentChannel === 'wallet' || pos.paymentChannel === 'instapay');
+  // INV-REST-PAID-GATES-2 (R4-D, I40): while a terminal approval is
+  // live the total-changing inputs are frozen — discount, tip,
+  // delivery fee, order type — because any of them would move the
+  // amount the terminal approved. Same condition as the payment lock.
+  const isTerminalApproved = isTerminalApprovalLive(pos.terminalPaymentDetails);
 
   const [percentStr, setPercentStr] = useState('');
   const [isPercentFocused, setIsPercentFocused] = useState(false);
@@ -525,6 +530,7 @@ export function PosCheckoutPaymentSection({
             pos.setTerminalPaymentDetails?.({
               terminalId,
               authCode,
+              approvedAmount,
               rrn,
               cardScheme,
               cardLastFour,
@@ -612,6 +618,7 @@ export function PosCheckoutPaymentSection({
           }
           pos.setTerminalPaymentDetails?.({
             authCode,
+            approvedAmount: amount,
             rrn,
             cardScheme,
             cardLastFour,
@@ -678,6 +685,7 @@ export function PosCheckoutPaymentSection({
           }
           pos.setTerminalPaymentDetails?.({
             authCode,
+            approvedAmount: amount,
             rrn,
             cardScheme,
             cardLastFour,
@@ -820,7 +828,7 @@ export function PosCheckoutPaymentSection({
             step="0.01"
             value={pos.discount === 0 ? '' : pos.discount}
             onChange={(event) => pos.setDiscount(Number(event.target.value || 0))}
-            disabled={isDiscountLocked}
+            disabled={isDiscountLocked || isTerminalApproved}
             placeholder="0"
             style={{ boxSizing: 'border-box', width: '100%', height: '38px', borderRadius: '6px', fontSize: '14px', border: '1px solid #cbd5e1', textAlign: 'center' }}
           />
@@ -838,7 +846,7 @@ export function PosCheckoutPaymentSection({
               const p = Number(event.target.value || 0);
               pos.setDiscount(roundMoneyValue((p / 100) * pos.totals.subTotal, bookDigits));
             }}
-            disabled={isDiscountLocked || pos.totals.subTotal === 0}
+            disabled={isDiscountLocked || isTerminalApproved || pos.totals.subTotal === 0}
             placeholder="0"
             style={{ boxSizing: 'border-box', width: '100%', height: '38px', borderRadius: '6px', fontSize: '14px', border: '1px solid #cbd5e1', textAlign: 'center' }}
           />
@@ -1338,6 +1346,10 @@ export function PosCheckoutPaymentSection({
             const tipStep = isKwdStore ? '0.050' : '1';
             const tipUnit = isKwdStore ? 'د.ك' : isKsaStore ? 'ر.س' : 'ج.م';
             const applyTipChange = (nextTip: number) => {
+              // INV-REST-PAID-GATES-2 (R4-D, I40): a tip change after
+              // approval would bump the card leg past the approved
+              // amount — frozen while the approval is live.
+              if (isTerminalApproved) return;
               const prevTip = Number(pos.tipAmount || 0);
               const diff = nextTip - prevTip;
               pos.setTipAmount?.(nextTip);
@@ -1359,6 +1371,7 @@ export function PosCheckoutPaymentSection({
                     key={preset}
                     type="button"
                     onClick={() => applyTipChange(preset)}
+                    disabled={isTerminalApproved}
                     style={{
                       padding: '3px 8px',
                       borderRadius: '4px',
@@ -1383,6 +1396,7 @@ export function PosCheckoutPaymentSection({
                   step={tipStep}
                   value={pos.tipAmount || ''}
                   onChange={(e) => applyTipChange(Math.max(0, Number(e.target.value || 0)))}
+                  disabled={isTerminalApproved}
                   placeholder="مخصص"
                   style={{
                     width: isKwdStore ? '68px' : '55px',
@@ -1437,6 +1451,10 @@ export function PosCheckoutOrderTypeSection({
 
   // The pager field is strictly for restaurants in Kuwait/Saudi, or if explicitly enabled by the restaurant
   const showPager = isRestaurant && pos.orderType !== 'delivery' && (isKwdStore || isKsaStore || Boolean(currentSettings?.enableGuestPagers));
+  // INV-REST-PAID-GATES-2 (R4-D, I40): the order type drives the
+  // service charge, so it is a total-changing input — frozen while a
+  // terminal approval is live.
+  const isTerminalApproved = isTerminalApprovalLive(pos.terminalPaymentDetails);
 
   return (
     <div style={{ display: 'flex', gap: '8px', width: '100%', marginBottom: '6px', alignItems: 'center' }}>
@@ -1444,6 +1462,7 @@ export function PosCheckoutOrderTypeSection({
         type="button"
         variant={pos.orderType === 'takeaway' || !pos.orderType ? 'primary' : 'secondary'}
         onClick={() => pos.setOrderType('takeaway')}
+        disabled={isTerminalApproved}
         style={{ flex: 1, minHeight: '38px', fontSize: '13px', fontWeight: 700 }}
       >
         {isRestaurant ? 'تيك أواي' : 'بيع مباشر (استلام)'}
@@ -1457,6 +1476,7 @@ export function PosCheckoutOrderTypeSection({
             onDeliverySelected?.();
           }
         }}
+        disabled={isTerminalApproved}
         style={{ flex: 1, minHeight: '38px', fontSize: '13px', fontWeight: 700 }}
       >
         دليفري (توصيل)
@@ -1466,6 +1486,7 @@ export function PosCheckoutOrderTypeSection({
           type="button"
           variant={pos.orderType === 'dine_in' ? 'primary' : 'secondary'}
           onClick={() => pos.setOrderType('dine_in')}
+          disabled={isTerminalApproved}
           style={{ flex: 1, minHeight: '38px', fontSize: '13px', fontWeight: 700 }}
         >
           صالة (طاولات)
@@ -1515,6 +1536,9 @@ export function PosCheckoutDeliverySection({ pos, deliveryReps, isMobile: isMobi
   const currentSettings = pos.settings || pos.settingsQuery?.data;
   const isKwdStore = isKuwait(currentSettings);
   const isKsaStore = isSaudi(currentSettings);
+  // INV-REST-PAID-GATES-2 (R4-D, I40): the delivery fee is a
+  // total-changing input — frozen while a terminal approval is live.
+  const isTerminalApproved = isTerminalApprovalLive(pos.terminalPaymentDetails);
 
   const deliveryChannels = isKwdStore
     ? [
@@ -1846,6 +1870,7 @@ export function PosCheckoutDeliverySection({ pos, deliveryReps, isMobile: isMobi
             step="0.01"
             value={pos.deliveryFee === 0 ? '' : pos.deliveryFee}
             onChange={(event) => pos.setDeliveryFee(Number(event.target.value || 0))}
+            disabled={isTerminalApproved}
             placeholder="0"
             style={{ boxSizing: 'border-box', padding: '6px 10px', height: '38px', width: '100%', minWidth: 0, borderRadius: '6px', border: '1px solid #cbd5e1', fontWeight: 700, fontSize: '14px', textAlign: 'center' }}
           />

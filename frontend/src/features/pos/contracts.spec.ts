@@ -306,3 +306,161 @@ describe('POS serial-tracked lines (LF-P3)', () => {
       .toThrow('امسح سيريالاً فريداً لكل قطعة من صنف اختبار');
   });
 });
+
+/* R4-D (INV-REST-PAID-GATES-2): the paid gates the POS workspace used
+ * to enforce alone — or not at all. At base every case below PASSES
+ * validation (the validator either exempted it or never checked it);
+ * after the fix each one throws before any payload is built, so the
+ * mutation, the offline sync and the split-bill modal (all three run
+ * validatePosSaleInput via the payload builders) are guarded alike. */
+describe('POS paid gates (R4-D)', () => {
+  function baseInput(overrides: Record<string, unknown> = {}) {
+    return {
+      cart,
+      customerId: '',
+      paymentType: 'cash' as const,
+      paymentChannel: 'cash' as const,
+      discount: 0,
+      deliveryFee: 0,
+      note: '',
+      paidAmount: 25,
+      tenderedAmount: 25,
+      payments: [{ paymentChannel: 'cash' as const, amount: 25 }],
+      taxRate: 0,
+      pricesIncludeTax: false,
+      expectedTotal: 25,
+      ...overrides,
+    };
+  }
+
+  it('I28: an underpaid cash sale with a customer no longer passes as a silent partial credit', () => {
+    expect(() => validatePosSaleInput(baseInput({
+      customerId: '7',
+      paidAmount: 10,
+      tenderedAmount: 10,
+      payments: [{ paymentChannel: 'cash' as const, amount: 10 }],
+    }))).toThrow('المبلغ المدفوع أقل من إجمالي الفاتورة');
+  });
+
+  it('I28: an explicitly-chosen credit sale with a customer still passes', () => {
+    expect(() => validatePosSaleInput(baseInput({
+      customerId: '7',
+      paymentType: 'credit' as const,
+      paymentChannel: 'credit' as const,
+      paidAmount: 0,
+      tenderedAmount: 0,
+      payments: [],
+    }))).not.toThrow();
+  });
+
+  it('I39: a negative payment leg is rejected instead of being dropped before validation', () => {
+    // Cash -50 + card 100 + cash 50 covers the 100 total, so the old
+    // underpaid and non-cash-overpay checks never fired and the -50 leg
+    // was silently dropped by the > 0 filter in the submit path.
+    expect(() => validatePosSaleInput(baseInput({
+      expectedTotal: 100,
+      paidAmount: 100,
+      tenderedAmount: 100,
+      payments: [
+        { paymentChannel: 'cash' as const, amount: -50 },
+        { paymentChannel: 'card' as const, amount: 100 },
+        { paymentChannel: 'cash' as const, amount: 50 },
+      ],
+    }))).toThrow('مبالغ الدفع لا يمكن أن تكون سالبة');
+  });
+
+  it('I39: a discount larger than the cart-line subtotal is rejected', () => {
+    expect(() => validatePosSaleInput(baseInput({ discount: 30 })))
+      .toThrow('الخصم أكبر من إجمالي الأصناف');
+  });
+
+  it('I39: negative delivery fee, tip, service charge and tendered amounts are rejected', () => {
+    expect(() => validatePosSaleInput(baseInput({ deliveryFee: -5 })))
+      .toThrow('رسوم التوصيل لا يمكن أن تكون سالبة');
+    expect(() => validatePosSaleInput(baseInput({ tipAmount: -10 })))
+      .toThrow('الإكرامية لا يمكن أن تكون سالبة');
+    expect(() => validatePosSaleInput(baseInput({ serviceCharge: -5 })))
+      .toThrow('رسوم الخدمة لا يمكن أن تكون سالبة');
+    expect(() => validatePosSaleInput(baseInput({ tenderedAmount: -50 })))
+      .toThrow('المبلغ المستلم لا يمكن أن يكون سالبًا');
+  });
+
+  it('I40: a card leg below the terminal-approved amount is rejected', () => {
+    expect(() => validatePosSaleInput(baseInput({
+      expectedTotal: 100,
+      paidAmount: 100,
+      tenderedAmount: 10,
+      payments: [
+        { paymentChannel: 'card' as const, amount: 90 },
+        { paymentChannel: 'cash' as const, amount: 10 },
+      ],
+      terminalAuthCode: 'AUTH-1',
+      terminalApprovedAmount: 100,
+    }))).toThrow('المبلغ المعتمد من الماكينة لا يطابق مبلغ البطاقة');
+  });
+
+  it('I40: a card leg equal to the terminal-approved amount passes', () => {
+    expect(() => validatePosSaleInput(baseInput({
+      expectedTotal: 100,
+      paidAmount: 100,
+      tenderedAmount: 0,
+      payments: [{ paymentChannel: 'card' as const, amount: 100 }],
+      terminalAuthCode: 'AUTH-1',
+      terminalApprovedAmount: 100,
+    }))).not.toThrow();
+  });
+
+  it('I42: a dine-in sale without a table is rejected', () => {
+    expect(() => validatePosSaleInput(baseInput({ orderType: 'dine_in' })))
+      .toThrow('اختر طاولة أولًا لطلبات الصالة');
+  });
+
+  it('I42: a dine-in sale with a table, and a takeaway sale without one, still pass', () => {
+    expect(() => validatePosSaleInput(baseInput({ orderType: 'dine_in', tableNumber: 'T1' }))).not.toThrow();
+    expect(() => validatePosSaleInput(baseInput({ orderType: 'takeaway' }))).not.toThrow();
+  });
+
+  it('I43: an unpaid COD delivery with no customer is rejected', () => {
+    expect(() => validatePosSaleInput(baseInput({
+      orderType: 'delivery',
+      collectionStatus: 'cod',
+      paidAmount: 0,
+      tenderedAmount: 0,
+      payments: [],
+    }))).toThrow('الدليفري غير المسدد يحتاج عميلًا مسجلًا');
+  });
+
+  it('I43: an unpaid COD delivery WITH a customer, and a prepaid COD without one, still pass', () => {
+    expect(() => validatePosSaleInput(baseInput({
+      orderType: 'delivery',
+      collectionStatus: 'cod',
+      customerId: '7',
+      paidAmount: 0,
+      tenderedAmount: 0,
+      payments: [],
+    }))).not.toThrow();
+    expect(() => validatePosSaleInput(baseInput({
+      orderType: 'delivery',
+      collectionStatus: 'cod',
+      payments: [{ paymentChannel: 'cash' as const, amount: 25 }],
+    }))).not.toThrow();
+  });
+
+  it('I44: a zero-total sale is rejected', () => {
+    expect(() => validatePosSaleInput(baseInput({
+      expectedTotal: 0,
+      paidAmount: 0,
+      tenderedAmount: 0,
+      payments: [],
+    }))).toThrow('إجمالي الفاتورة غير صالح');
+  });
+
+  it('I24 follow-up: the payload builder carries the per-browser terminal code through', () => {
+    // R4-B wired terminalCode only into the offline-sync path, so the
+    // online submit dropped it and terminal attribution worked only
+    // for synced offline sales. At base the builder drops the field
+    // (no terminalCode key on the built payload); after the fix the
+    // online payload carries it to normalizeSalePayload.
+    expect((buildPosSalePayload(baseInput({ terminalCode: 'T4A2' })) as any).terminalCode).toBe('T4A2');
+  });
+});

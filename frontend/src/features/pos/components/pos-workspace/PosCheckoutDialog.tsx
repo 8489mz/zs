@@ -150,6 +150,17 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
       pos.setSubmitMessage('يرجى اختيار مندوب التوصيل لتسجيل عهدة التحصيل عليه (في حالة تحصيل من العميل).');
       return;
     }
+    // INV-REST-PAID-GATES-2 (R4-D, I40): when the terminal approved an
+    // amount, the card leg must still equal it at confirm time — a leg
+    // edited after approval cannot post for a different amount.
+    // handleSubmit re-checks the settled legs; this is the early,
+    // user-facing stop (it also covers the F2 path, which calls here).
+    const approvedAmount = Number(pos.terminalPaymentDetails?.approvedAmount || 0);
+    if (pos.terminalPaymentDetails?.authCode && approvedAmount > 0 && Number(pos.cardAmount || 0) > 0
+      && Math.abs(Number(pos.cardAmount || 0) - approvedAmount) > 0.0001) {
+      pos.setSubmitMessage('المبلغ المعتمد من ماكينة الدفع لا يطابق مبلغ البطاقة. راجع المبلغ قبل تأكيد البيع.');
+      return;
+    }
     const managerPin = approvedManagerPinRef.current || undefined;
     const finalTendered = tenderedAmountOverride !== undefined && tenderedAmountOverride > 0
       ? tenderedAmountOverride
@@ -513,6 +524,23 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
             </div>
 
             <PosCreditLimitNotice customerId={pos.customerId} total={pos.totals.total} paidAmount={pos.paidAmount} />
+            {!pos.canSubmitSale && pos.canSubmitHint && (
+              <div
+                style={{
+                  fontSize: '11.5px',
+                  color: '#92400e',
+                  background: '#fef3c7',
+                  border: '1px solid #fde68a',
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  textAlign: 'center',
+                  fontWeight: 700,
+                  marginTop: '8px',
+                }}
+              >
+                {pos.canSubmitHint}
+              </div>
+            )}
             <div className="actions compact-actions pos-checkout-dialog-actions" style={{ marginTop: '8px' }}>
               <Button type="button" variant="secondary" onClick={handleDialogClose} disabled={pos.createSale.isPending}>{t('pos.back_to_cart', 'رجوع للسلة')}</Button>
               {isRestaurant && onOpenSplitBill && pos.cart.length > 0 && (
@@ -543,7 +571,7 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
                   }
                   handleConfirmSale();
                 }}
-                disabled={pos.createSale.isPending || (isPaymentActive('card') && isTerminalHardwareManaged && !pos.terminalPaymentDetails?.authCode && !pos.terminalPaymentDetails?.rrn)}
+                disabled={pos.createSale.isPending || !pos.canSubmitSale || (isPaymentActive('card') && isTerminalHardwareManaged && !pos.terminalPaymentDetails?.authCode && !pos.terminalPaymentDetails?.rrn)}
               >
                 {pos.createSale.isPending ? t('common.saving', 'جاري الحفظ...') : t('pos.confirm_sale_f2', 'تأكيد البيع (F2)')}
               </Button>

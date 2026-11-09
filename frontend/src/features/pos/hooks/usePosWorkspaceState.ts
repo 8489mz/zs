@@ -88,6 +88,10 @@ export function usePosWorkspaceState() {
   const [terminalPaymentDetails, setTerminalPaymentDetails] = useState<{
     terminalId?: string;
     authCode?: string;
+    // INV-REST-PAID-GATES-2 (R4-D, I40): the amount the terminal
+    // approved, recorded at every approval site so the submit gate
+    // and the server can pin the card leg to it.
+    approvedAmount?: number;
     rrn?: string;
     cardScheme?: string;
     cardLastFour?: string;

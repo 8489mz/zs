@@ -4,6 +4,7 @@ import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { paymentLabel } from '@/features/pos/lib/pos-workspace.helpers';
 import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
+import { computeCashChange } from '@/features/pos/lib/pos-paid-amount';
 import { getProductPrice, isNegativeStockSalesAllowed } from '@/features/pos/lib/pos.domain';
 import type { PaymentChannel, PaymentType, PosProductFilter } from '@/features/pos/hooks/usePosWorkspace';
 import type { PosItem, PosPriceType } from '@/features/pos/types/pos.types';
@@ -32,11 +33,15 @@ interface PosWorkspaceDerivedParams {
   discountApprovalGranted?: boolean;
   wholesaleApprovalGranted?: boolean;
   paidAmount: number;
+  cashAmount?: number;
+  cardAmount?: number;
+  transferAmount?: number;
   paymentType: PaymentType;
   paymentChannel: PaymentChannel;
   customerId: string;
   branchId: string;
   locationId: string;
+  tableNumber?: string;
   lastSale: Sale | null;
   orderType: string;
   deliveryRepId?: string | number | null;
@@ -51,7 +56,9 @@ function getCanSubmitHint(params: {
   ownOpenShift: { id: string | number } | null;
   hasCreditWithoutCustomer: boolean;
   hasDeliveryWithoutRep?: boolean;
+  hasDineInWithoutTable?: boolean;
   hasZeroPriceLine: boolean;
+  hasZeroTotal?: boolean;
   hasDiscountPermissionViolation?: boolean;
   hasPricePermissionViolation?: boolean;
   hasUnderpaidSale: boolean;
@@ -62,7 +69,9 @@ function getCanSubmitHint(params: {
   if (params.requiresCashierShift && !params.ownOpenShift) return 'افتح وردية كاشير أولًا.';
   if (params.hasCreditWithoutCustomer) return 'البيع الآجل يحتاج اختيار عميل.';
   if (params.hasDeliveryWithoutRep) return 'يرجى اختيار مندوب التوصيل لتسجيل عهدة التحصيل عليه.';
+  if (params.hasDineInWithoutTable) return 'اختر طاولة أولًا لطلبات الصالة.';
   if (params.hasZeroPriceLine) return 'راجع السلة: يوجد صنف بسعر صفر.';
+  if (params.hasZeroTotal) return 'إجمالي الفاتورة صفر — لا يمكن إتمام بيع بقيمة صفر.';
   if ((params as typeof params & { hasDiscountPermissionViolation?: boolean }).hasDiscountPermissionViolation) return 'الخصم يتطلب اعتماد المدير (PIN).';
   if ((params as typeof params & { hasPricePermissionViolation?: boolean }).hasPricePermissionViolation) return 'لا تملك صلاحية تعديل السعر.';
   if (params.hasUnderpaidSale) return 'أكمل المدفوع أو حوّل العملية إلى آجل.';
@@ -205,7 +214,11 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
     };
   }, [params.cart, params.discount, params.loyaltyPointsRedeemed, params.deliveryFee, params.tipAmount, params.settings, params.orderType, bookDigits]);
 
-  const changeAmount = useMemo(() => roundMoneyValue(Math.max(0, Number(params.paidAmount || 0) - totals.total), bookDigits), [params.paidAmount, totals.total, bookDigits]);
+  const changeAmount = useMemo(() => computeCashChange(
+    { cashAmount: params.cashAmount, cardAmount: params.cardAmount, transferAmount: params.transferAmount },
+    totals.total,
+    bookDigits,
+  ), [params.cashAmount, params.cardAmount, params.transferAmount, totals.total, bookDigits]);
   const amountDue = useMemo(() => roundMoneyValue(Math.max(0, Number(totals.total || 0) - Number(params.paidAmount || 0)), bookDigits), [params.paidAmount, totals.total, bookDigits]);
   const currentBranch = useMemo(
     () => branchById.get(String(params.branchId)) || branchList[0] || null,
@@ -257,8 +270,15 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
   const canSellWholesale = authPermissionSet.has('canSellWholesale') || authPermissionSet.has('*') || Boolean(params.wholesaleApprovalGranted);
   const hasOperationalSetup = Boolean(branchList.length > 0 && locationList.length > 0);
   const hasCatalogReady = Boolean(productList.length > 0);
-  const requiresCashierShift = params.paymentType !== 'credit';
+  // INV-REST-PAID-GATES-2 (R4-D, I41): every POS sale needs the
+  // cashier's own open shift — credit included. The backend already
+  // enforces this for every POS sale (OPEN_SHIFT_REQUIRED); the old
+  // `paymentType !== 'credit'` carve-out let a credit sale open
+  // checkout and 400 on submit.
+  const requiresCashierShift = true;
   const hasZeroPriceLine = useMemo(() => params.cart.some((item) => Number(item.price || 0) <= 0), [params.cart]);
+  const hasZeroTotal = Number(totals.total || 0) <= 0;
+  const hasDineInWithoutTable = params.orderType === 'dine_in' && !String(params.tableNumber || '').trim();
   const hasInvalidCartLine = useMemo(() => params.cart.some((item) => {
     const qty = Number(item.qty || 0);
     const price = Number(item.price || 0);
@@ -300,6 +320,8 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
     && hasCatalogReady
     && (!requiresCashierShift || ownOpenShift)
     && !hasZeroPriceLine
+    && !hasZeroTotal
+    && !hasDineInWithoutTable
     && !hasCreditWithoutCustomer
     && !hasDeliveryWithoutRep
     && !hasUnderpaidSale
@@ -312,6 +334,8 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
     requiresCashierShift,
     ownOpenShift,
     hasZeroPriceLine,
+    hasZeroTotal,
+    hasDineInWithoutTable,
     hasCreditWithoutCustomer,
     hasDeliveryWithoutRep,
     hasUnderpaidSale,
@@ -344,7 +368,9 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
     ownOpenShift,
     hasCreditWithoutCustomer,
     hasDeliveryWithoutRep,
+    hasDineInWithoutTable,
     hasZeroPriceLine,
+    hasZeroTotal,
     hasDiscountPermissionViolation,
     hasPricePermissionViolation,
     hasUnderpaidSale,
@@ -356,7 +382,9 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
     ownOpenShift,
     hasCreditWithoutCustomer,
     hasDeliveryWithoutRep,
+    hasDineInWithoutTable,
     hasZeroPriceLine,
+    hasZeroTotal,
     hasDiscountPermissionViolation,
     hasPricePermissionViolation,
     hasUnderpaidSale,
@@ -397,6 +425,8 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
     hasCatalogReady,
     requiresCashierShift,
     hasZeroPriceLine,
+    hasZeroTotal,
+    hasDineInWithoutTable,
     hasCreditWithoutCustomer,
     hasDiscountPermissionViolation,
     hasPricePermissionViolation,

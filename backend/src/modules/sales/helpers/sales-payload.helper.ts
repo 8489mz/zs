@@ -107,7 +107,17 @@ export function normalizeSalePayload(payload: UpsertSaleDto): NormalizedSalePayl
     diningCourse: typeof payload.diningCourse === 'string' ? payload.diningCourse.trim() : null,
     pagerNumber: typeof (payload as any).pagerNumber === 'string' ? (payload as any).pagerNumber.trim() : null,
     terminalId: payload.terminalId ? String(payload.terminalId).trim() : null,
+    // INV-REST-PAID-GATES-2 (R4-D, I24 follow-up): the per-browser POS
+    // terminal code. Read via `as any`: the UpsertSaleDto field is
+    // R4-B's (offline-sync path); this passthrough carries the online
+    // submit's code into `normalized` so the sales insert can store
+    // it as pos_terminal_code. The EDC terminalId above is a different
+    // field (the card machine), not this one.
+    terminalCode: typeof (payload as any).terminalCode === 'string' && (payload as any).terminalCode.trim()
+      ? (payload as any).terminalCode.trim()
+      : null,
     terminalAuthCode: payload.terminalAuthCode ? String(payload.terminalAuthCode).trim() : null,
+    terminalApprovedAmount: Number(payload.terminalApprovedAmount || 0) > 0 ? Number(payload.terminalApprovedAmount) : null,
     terminalRrn: payload.terminalRrn ? String(payload.terminalRrn).trim() : null,
     cardScheme: payload.cardScheme ? String(payload.cardScheme).trim() : null,
     cardLastFour: payload.cardLastFour ? String(payload.cardLastFour).trim() : null,

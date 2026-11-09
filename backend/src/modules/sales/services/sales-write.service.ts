@@ -27,6 +27,7 @@ import { normalizeSalePayload } from '../helpers/sales-payload.helper';
 import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateRemainingDebt, calculateRestoredStockQuantity, calculateStoreCreditBalance, computeSaleAllocationLegs, findBelowFloorSaleItems, paidAmountExceedsRecordedPayments, resolvePostedSalePaymentChannel, restoreFrozenSaleLineCosts, roundSaleInvoiceTotals, roundSaleResidual } from '../helpers/sales-write.helper';
 import { enforceRestaurantModifierContract as enforceModifierContractPure, type ModifierGroupRule, type ModifierPriceTruth } from '../helpers/restaurant-modifier-contract.helper';
 import { allocateSaleTenders, type SaleTenderChannel } from '../engines/sale-tender.engine';
+import { assertPosSubmitGates } from '../engines/pos-submit-gates.engine';
 import { allocateInvoiceDiscount } from '../engines/invoice-discount.engine';
 import { resolveSaleTaxRate } from '../engines/sale-tax-rate.engine';
 import { resolveSaleServiceCharge } from '../engines/sale-service-charge.engine';
@@ -1818,11 +1819,38 @@ export class SalesWriteService {
       }
 
       const isCodDelivery = isDelivery && (collectionStatus === 'cod' || collectionStatus === 'pending' || paidAmount + 0.0001 < collectibleTotal);
-      const isPartialCredit = Boolean(normalized.customerId) && paidAmount + 0.0001 < collectibleTotal;
+      // INV-REST-PAID-GATES-2 (R4-D, I28, D-R4D-1/D-R4D-4): no silent
+      // flip for POS sales — an underpaid cash sale with a customer is
+      // rejected by the INVALID_PAID_AMOUNT throw below instead of
+      // being reclassified as credit. Non-POS conversions keep the old
+      // flip (deposit-carrying and guest COD conversions).
+      const isPartialCredit = normalized.source !== 'pos' && Boolean(normalized.customerId) && paidAmount + 0.0001 < collectibleTotal;
       const effectivePaymentType = (isPartialCredit || normalized.paymentType === 'credit') ? 'credit' : 'cash';
       if (effectivePaymentType !== 'credit' && !isCodDelivery && paidAmount + 0.0001 < collectibleTotal) {
         throw new AppError('Paid amount cannot be less than invoice total', 'INVALID_PAID_AMOUNT', 400);
       }
+      // INV-REST-PAID-GATES-2 (R4-D): POS-only submit gates — zero
+      // total, dine-in without a table, unpaid remainder without a
+      // customer (the COD hole: the :1631 block above still exempts
+      // deliveries, so this is the enforcement point for POS), and
+      // the terminal-approved-amount pin. Runs on the allocated legs,
+      // so the pinned card leg is the one that posts. Non-POS sources
+      // return early inside the helper.
+      assertPosSubmitGates({
+        source: normalized.source,
+        customerId: normalized.customerId,
+        paidAmount,
+        collectibleTotal,
+        total,
+        orderType: normalized.orderType,
+        collectionStatus,
+        tableNumber: normalized.tableNumber,
+        cardAmount: payments.find((entry) => entry.paymentChannel === 'card')?.amount ?? 0,
+        terminalApprovedAmount: normalized.terminalApprovedAmount,
+        terminalAuthCode: normalized.terminalAuthCode,
+        discount: effectiveDiscount,
+        subtotal,
+      });
 
       const finalTenderedAmount = tenderAllocation.tenderedAmount;
       const changeAmount = tenderAllocation.changeAmount;
@@ -3293,9 +3321,28 @@ export class SalesWriteService {
       if (normalized.source === 'pos' && !await this.authz.hasOpenCashierShift(trx, auth, normalized.branchId)) {
         throw new AppError('وردية كاشير مفتوحة مطلوبة لتعديل فاتورة نقطة البيع', 'OPEN_SHIFT_REQUIRED', 400);
       }
-      const isPartialCredit = Boolean(normalized.customerId) && paidAmount + 0.0001 < collectibleTotal;
+      // INV-REST-PAID-GATES-2 (R4-D, I28, D-R4D-1/D-R4D-4): same
+      // POS-gated flip removal as createSale — the edit path had the
+      // same silent reclassification. Today's callers send no source
+      // (dashboard), so the helper returns early for them.
+      const isPartialCredit = normalized.source !== 'pos' && Boolean(normalized.customerId) && paidAmount + 0.0001 < collectibleTotal;
       const effectivePaymentType = (isPartialCredit || normalized.paymentType === 'credit') ? 'credit' : 'cash';
       if (effectivePaymentType !== 'credit' && paidAmount + 0.0001 < collectibleTotal) throw new AppError('Paid amount cannot be less than invoice total', 'INVALID_PAID_AMOUNT', 400);
+      assertPosSubmitGates({
+        source: normalized.source,
+        customerId: normalized.customerId,
+        paidAmount,
+        collectibleTotal,
+        total,
+        orderType: normalized.orderType,
+        collectionStatus: normalized.collectionStatus,
+        tableNumber: normalized.tableNumber,
+        cardAmount: payments.find((entry) => entry.paymentChannel === 'card')?.amount ?? 0,
+        terminalApprovedAmount: normalized.terminalApprovedAmount,
+        terminalAuthCode: normalized.terminalAuthCode,
+        discount: normalized.discount,
+        subtotal,
+      });
       const newDebt = roundMoney(Math.max(0, collectibleTotal - paidAmount), moneyDigits);
       if (newDebt > 0) {
         if (!customer) throw new AppError('Credit sale requires a customer', 'CUSTOMER_REQUIRED_FOR_CREDIT', 400);
@@ -4378,6 +4425,27 @@ export class SalesWriteService {
           if (requestedChannel === 'card') return 'card';
           return 'cash';
         })();
+
+      const heldTableNumber = String(payload.tableNumber || '').trim();
+      // INV-REST-PAID-GATES-2 (R4-D, I42): one open held draft per
+      // table. A held row IS the open draft (recall/complete deletes
+      // it), so an existing row for the same tenant + table blocks a
+      // second hold. The branch is matched when the payload names
+      // one; without a branch any open draft on that table blocks.
+      if (heldTableNumber) {
+        let occupantQuery = trx
+          .selectFrom('held_sales')
+          .select('id')
+          .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+          .where('table_number', '=', heldTableNumber);
+        if (payload.branchId) {
+          occupantQuery = occupantQuery.where('branch_id', '=', Number(payload.branchId));
+        }
+        const occupant = await occupantQuery.executeTakeFirst();
+        if (occupant) {
+          throw new AppError(`الطاولة ${heldTableNumber} مشغولة بالفعل بطلب محفوظ.`, 'HELD_DRAFT_TABLE_OCCUPIED', 409);
+        }
+      }
 
       const heldInsert = await trx
         .insertInto('held_sales')

@@ -6,6 +6,7 @@ import { CreditCardIcon, UserIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon } f
 import { toast } from '@/shared/components/system-alert';
 import { isStandalonePosTerminal } from '@/features/pos/lib/pos-shell';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
+import { isTerminalApprovalLive } from '@/features/pos/components/pos-workspace/pos-terminal-charge-safety';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import type { PaymentPreset } from '@/features/pos/components/pos-workspace/PosCheckoutDialogSections';
@@ -81,7 +82,12 @@ export function PosCheckoutExpressSection({
       pos.setTransferAmount?.(0);
       pos.setTenderedAmount?.(effectiveReceivedCash);
     } else if (isPaymentActive('card')) {
-      pos.setCardAmount?.(total);
+      // INV-REST-PAID-GATES-2 (R4-D, I40): never overwrite the card
+      // leg with the current total while a terminal approval is live —
+      // the approved amount is the leg, and the submit gate pins it.
+      if (!isTerminalApprovalLive(pos.terminalPaymentDetails)) {
+        pos.setCardAmount?.(total);
+      }
       pos.setCashAmount?.(0);
       pos.setTransferAmount?.(0);
       pos.setTenderedAmount?.(0);
@@ -96,6 +102,10 @@ export function PosCheckoutExpressSection({
     pos.setTerminalPaymentDetails?.({
       ...(pos.terminalPaymentDetails || {}),
       authCode: code,
+      // INV-REST-PAID-GATES-2 (R4-D, I40): the manual confirm is an
+      // approval site too — record the approved amount so the submit
+      // gate pins the card leg to it.
+      approvedAmount: total,
       rrn: code,
       cardScheme: isKwdStore ? 'knet' : isKsaStore ? 'mada' : 'visa',
       provider: defaultProvider,
@@ -992,7 +1002,7 @@ export function PosCheckoutExpressSection({
         const isCardPayment = isPaymentActive('card');
         const isCardReady = !isCardPayment || !isTerminalHardwareManaged || terminalDispatchStatus === 'approved' || isManualCardConfirmed || Boolean(pos.terminalPaymentDetails?.authCode || pos.terminalPaymentDetails?.rrn);
         const isCardBlocked = isCardPayment && isTerminalHardwareManaged && !isCardReady;
-        const canConfirmNow = !pos.createSale.isPending && !isCardBlocked;
+        const canConfirmNow = !pos.createSale.isPending && !isCardBlocked && pos.canSubmitSale;
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
@@ -1011,7 +1021,13 @@ export function PosCheckoutExpressSection({
                   pos.setPaymentChannel?.('cash');
                   onConfirmSale(effectiveReceivedCash);
                 } else {
-                  pos.setCardAmount?.(total);
+                  // INV-REST-PAID-GATES-2 (R4-D, I40): never overwrite
+                  // the card leg with the current total while a
+                  // terminal approval is live — the approved amount
+                  // is the leg, and the submit gate pins it.
+                  if (!isTerminalApprovalLive(pos.terminalPaymentDetails)) {
+                    pos.setCardAmount?.(total);
+                  }
                   pos.setCashAmount?.(0);
                   pos.setPaymentChannel?.('card');
                   onConfirmSale();
@@ -1049,7 +1065,7 @@ export function PosCheckoutExpressSection({
                   : t('pos.confirm_sale_f2', 'تأكيد البيع والطباعة (F2)')}
               </span>
             </Button>
-            {!pos.canSubmitSale && pos.canSubmitHint && canConfirmNow && (
+            {!pos.canSubmitSale && pos.canSubmitHint && (
               <div
                 style={{
                   fontSize: '11.5px',

@@ -89,6 +89,7 @@ export interface PosWorkspaceActionParams {
   terminalPaymentDetails?: {
     terminalId?: string;
     authCode?: string;
+    approvedAmount?: number;
     rrn?: string;
     cardScheme?: string;
     cardLastFour?: string;
@@ -121,6 +122,12 @@ export interface PosWorkspaceActionParams {
   hasCreditWithoutCustomer: boolean;
   hasZeroPriceLine: boolean;
   hasUnderpaidSale: boolean;
+  // INV-REST-PAID-GATES-2 (R4-D, I27): the derived submit gate, wired
+  // from usePosWorkspace — handleSubmit blocks on it with the hint
+  // message instead of letting an unapproved discount/price or a
+  // short payment reach the server.
+  canSubmitSale: boolean;
+  canSubmitHint: string;
   heldDrafts: HeldPosDraft[];
   quickCustomerMutation: { mutateAsync: (payload: { name: string; phone: string; address: string; balance: number; type: Customer['type']; creditLimit: number }) => Promise<unknown> };
   createSale: { mutateAsync: (payload: CreatePosSaleInput) => Promise<unknown>; isError?: boolean; isPending?: boolean };

@@ -12,13 +12,18 @@
  *
  * The fix is one shared definition — paid = cash + card + transfer, always,
  * rounded once at book digits — in computePaidAmount, called by the display,
- * the gate and the payload. The with-customer partial-credit flip is
- * unchanged by design: it now fires only when that unified paid is truly
- * below the total.
+ * the gate and the payload.
+ *
+ * R4-D (INV-REST-PAID-GATES-2) supersedes the last paragraph of the old
+ * note: the with-customer partial-credit flip is REMOVED — an underpaid
+ * sale with a customer is now blocked in handleSubmit and must be
+ * switched explicitly to the credit preset. The "posts as partial
+ * credit" case below is updated to the block; the flip no longer exists
+ * in either layer.
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { computePaidAmount } from '@/features/pos/lib/pos-paid-amount';
+import { computePaidAmount, computeCashChange } from '@/features/pos/lib/pos-paid-amount';
 import { createPosWorkspaceAsyncActions } from '@/features/pos/hooks/pos-workspace-actions/createPosWorkspaceAsyncActions';
 import { createPosWorkspaceBaseActions } from '@/features/pos/hooks/pos-workspace-actions/createPosWorkspaceBaseActions';
 import type { PosWorkspaceActionParams } from '@/features/pos/hooks/usePosWorkspaceActionGroups';
@@ -96,6 +101,43 @@ describe('computePaidAmount (INV-REST-PAID-DEFINITION)', () => {
   });
 });
 
+/*
+ * R4-D, I45 (INV-REST-PAID-GATES-2): change is cash-only. A card (or
+ * wallet) leg can never produce change — the money never passed through
+ * the drawer — so change is the cash leg minus the part of the total the
+ * non-cash legs did not cover. At base the display summed every leg, so
+ * card 120 on a 100 total showed 20 change for cash never received.
+ */
+describe('computeCashChange (INV-REST-PAID-GATES-2, I45)', () => {
+  it('pins the reported case: card 120 on a 100 total yields change 0, not 20', () => {
+    expect(computeCashChange({ cashAmount: 0, cardAmount: 120 }, 100, 2)).toBe(0);
+  });
+
+  it('cash 120 on a 100 total yields change 20', () => {
+    expect(computeCashChange({ cashAmount: 120 }, 100, 2)).toBe(20);
+  });
+
+  it('cash 50 + card 60 on a 100 total yields change 10 (cash covers the 40 the card did not)', () => {
+    expect(computeCashChange({ cashAmount: 50, cardAmount: 60 }, 100, 2)).toBe(10);
+  });
+
+  it('transfer-only overpay yields change 0', () => {
+    expect(computeCashChange({ cashAmount: 0, transferAmount: 150 }, 100, 2)).toBe(0);
+  });
+
+  it('cash below the uncovered part yields change 0, never negative', () => {
+    expect(computeCashChange({ cashAmount: 10, cardAmount: 60 }, 100, 2)).toBe(0);
+  });
+
+  it('rounds once at the tenant book digits', () => {
+    // 100.115 is not used: in binary float it is 0.11499… below the
+    // half-cent, so it rounds to 0.11 — the rounding is correct, the
+    // test value was not.
+    expect(computeCashChange({ cashAmount: 100.12, cardAmount: 0 }, 100, 2)).toBe(0.12);
+    expect(computeCashChange({ cashAmount: 100.001, cardAmount: 0 }, 100, 3)).toBe(0.001);
+  });
+});
+
 const cartItem: PosItem = {
   lineKey: 'p1::u1::retail',
   productId: 'p1',
@@ -114,6 +156,12 @@ const cartItem: PosItem = {
 };
 
 function makeSubmitParams(overrides: Partial<PosWorkspaceActionParams> = {}) {
+  // INV-REST-PAID-GATES-2 (R4-D, I27): the harness defaults the
+  // derived submit gate to open, so the cases below pin handleSubmit's
+  // own downstream checks (the unified paid, the terminal pin, the
+  // negative-leg rejection). The derived gate itself is covered by
+  // the R4-D describe block at the end of this file, which passes
+  // canSubmitSale: false + the hint.
   const params = {
     cart: [cartItem],
     setCart: vi.fn(),
@@ -220,6 +268,8 @@ function makeSubmitParams(overrides: Partial<PosWorkspaceActionParams> = {}) {
     hasCreditWithoutCustomer: false,
     hasZeroPriceLine: false,
     hasUnderpaidSale: false,
+    canSubmitSale: true,
+    canSubmitHint: '',
     heldDrafts: [],
     quickCustomerMutation: { mutateAsync: vi.fn() },
     createSale: { mutateAsync: vi.fn().mockResolvedValue({ id: 1, docNo: 'S-1' }), isPending: false },
@@ -253,9 +303,11 @@ describe('handleSubmit gate uses the same paid as the display (R-B13)', () => {
     expect(params.setSubmitMessage).toHaveBeenCalledWith(expect.stringContaining('أقل من المطلوب'));
   });
 
-  it('wallet sale, cash 20 + transfer 0 on a 100 total, with a customer: posts as partial credit for the unified paid 20', async () => {
-    // The partial-credit flip stays as designed, but it now fires on the
-    // unified paid (20 < 100) instead of the gate inventing a full payment.
+  it('wallet sale, cash 20 + transfer 0 on a 100 total, with a customer: BLOCKED as underpaid — the partial-credit flip is gone (R4-D, I28)', async () => {
+    // INV-REST-PAID-GATES-2 (R4-D, I28, D-R4D-1): the silent flip is
+    // removed. The cashier completes the payment or switches
+    // explicitly to the credit preset and re-confirms; the sale must
+    // NOT post as credit on its own.
     const params = makeSubmitParams({
       paymentChannel: 'wallet',
       cashAmount: 20,
@@ -268,10 +320,8 @@ describe('handleSubmit gate uses the same paid as the display (R-B13)', () => {
 
     await actions.handleSubmit();
 
-    expect(params.createSale.mutateAsync).toHaveBeenCalledTimes(1);
-    const payload = (params.createSale.mutateAsync as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(payload.paymentType).toBe('credit');
-    expect(payload.paidAmount).toBe(20);
+    expect(params.createSale.mutateAsync).not.toHaveBeenCalled();
+    expect(params.setSubmitMessage).toHaveBeenCalledWith(expect.stringContaining('أقل من الإجمالي'));
   });
 
   it('reported case, wallet sale, cash 20 + transfer 80 on a 100 total: posts fully paid, never as credit', async () => {
@@ -296,5 +346,100 @@ describe('handleSubmit gate uses the same paid as the display (R-B13)', () => {
       { paymentChannel: 'cash', amount: 20 },
       { paymentChannel: 'wallet', amount: 80 },
     ]);
+  });
+});
+
+/*
+ * R4-D (INV-REST-PAID-GATES-2): handleSubmit's own gates — the derived
+ * submit gate (I27), the negative-leg rejection (I39), and the
+ * terminal-approved-amount pin (I40). At base every case here posted
+ * (the gate was never passed in, negative legs were dropped silently,
+ * and no approved amount was stored anywhere).
+ */
+describe('handleSubmit paid gates (INV-REST-PAID-GATES-2, R4-D)', () => {
+  it('I27: a closed derived gate blocks the submit with the hint message', async () => {
+    const params = makeSubmitParams({
+      canSubmitSale: false,
+      canSubmitHint: 'الخصم يتطلب اعتماد المدير (PIN).',
+      paymentChannel: 'cash',
+      cashAmount: 100,
+    });
+    const base = createPosWorkspaceBaseActions(params);
+    const actions = createPosWorkspaceAsyncActions(params, base);
+
+    await actions.handleSubmit();
+
+    expect(params.createSale.mutateAsync).not.toHaveBeenCalled();
+    expect(params.setSubmitMessage).toHaveBeenCalledWith('الخصم يتطلب اعتماد المدير (PIN).');
+  });
+
+  it('I27: a closed gate for a dine-in sale without a table blocks with the table hint', async () => {
+    const params = makeSubmitParams({
+      canSubmitSale: false,
+      canSubmitHint: 'اختر طاولة أولًا لطلبات الصالة.',
+      paymentChannel: 'cash',
+      cashAmount: 100,
+    });
+    const base = createPosWorkspaceBaseActions(params);
+    const actions = createPosWorkspaceAsyncActions(params, base);
+
+    await actions.handleSubmit();
+
+    expect(params.createSale.mutateAsync).not.toHaveBeenCalled();
+    expect(params.setSubmitMessage).toHaveBeenCalledWith('اختر طاولة أولًا لطلبات الصالة.');
+  });
+
+  it('I39: a negative card leg is rejected before the > 0 filter can drop it', async () => {
+    const params = makeSubmitParams({
+      paymentChannel: 'card',
+      cashAmount: 0,
+      cardAmount: -50,
+      transferAmount: 0,
+    });
+    const base = createPosWorkspaceBaseActions(params);
+    const actions = createPosWorkspaceAsyncActions(params, base);
+
+    await actions.handleSubmit();
+
+    expect(params.createSale.mutateAsync).not.toHaveBeenCalled();
+    expect(params.setSubmitMessage).toHaveBeenCalledWith(expect.stringContaining('سالبة'));
+  });
+
+  it('I40: a card leg above the terminal-approved amount is rejected (approved 90, leg 100)', async () => {
+    // The leg covers the total, so the underpaid check does not fire
+    // first — the pin is the reason for the block.
+    const params = makeSubmitParams({
+      paymentChannel: 'card',
+      cashAmount: 0,
+      cardAmount: 100,
+      transferAmount: 0,
+      terminalPaymentDetails: { authCode: 'AUTH-1', approvedAmount: 90 },
+    });
+    const base = createPosWorkspaceBaseActions(params);
+    const actions = createPosWorkspaceAsyncActions(params, base);
+
+    await actions.handleSubmit();
+
+    expect(params.createSale.mutateAsync).not.toHaveBeenCalled();
+    expect(params.setSubmitMessage).toHaveBeenCalledWith(expect.stringContaining('المعتمد'));
+  });
+
+  it('I40: a card leg equal to the terminal-approved amount posts, and the approved amount is sent', async () => {
+    const params = makeSubmitParams({
+      paymentChannel: 'card',
+      cashAmount: 0,
+      cardAmount: 100,
+      transferAmount: 0,
+      terminalPaymentDetails: { authCode: 'AUTH-1', approvedAmount: 100 },
+    });
+    const base = createPosWorkspaceBaseActions(params);
+    const actions = createPosWorkspaceAsyncActions(params, base);
+
+    await actions.handleSubmit();
+
+    expect(params.createSale.mutateAsync).toHaveBeenCalledTimes(1);
+    const payload = (params.createSale.mutateAsync as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(payload.terminalApprovedAmount).toBe(100);
+    expect(payload.terminalAuthCode).toBe('AUTH-1');
   });
 });

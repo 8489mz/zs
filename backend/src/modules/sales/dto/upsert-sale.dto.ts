@@ -300,6 +300,16 @@ export class UpsertSaleDto {
   @IsString()
   terminalAuthCode?: string;
 
+  // INV-REST-PAID-GATES-2 (R4-D, I40): the amount the terminal
+  // approved, sent by the POS so the server can pin the card leg to
+  // it. Optional — a manual-auth-code path without an amount stays
+  // unpinned (D-R4D-5).
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  terminalApprovedAmount?: number;
+
   @IsOptional()
   @IsString()
   terminalRrn?: string;
@@ -351,7 +361,9 @@ export type NormalizedSalePayload = {
   collectionStatus?: 'cod' | 'prepaid_by_rep' | 'prepaid_online';
   deliveryFeeMode?: 'freelance_courier' | 'store_fleet';
   terminalId?: string | null;
+  terminalCode?: string | null;
   terminalAuthCode?: string | null;
+  terminalApprovedAmount?: number | null;
   terminalRrn?: string | null;
   cardScheme?: string | null;
   cardLastFour?: string | null;

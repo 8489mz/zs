@@ -407,6 +407,17 @@ export function PosTablesFloorPlanDialog({
       return;
     }
 
+    // INV-REST-PAID-GATES-2 (R4-D, I42): a custom table number that
+    // already has a held draft is refused — typing it used to bypass
+    // the occupied check the floor map enforces, creating a second
+    // draft on the same table. Tap the occupied table on the map to
+    // recall its draft instead.
+    const occupiedDraft = occupiedMap.get(trimmed);
+    if (occupiedDraft) {
+      toast.error(`الطاولة ${trimmed} مشغولة بالفعل بطلب قيمته ${formatCurrency(occupiedDraft.total || 0)}. استدعِ الطلب المحفوظ من الخريطة أولًا.`);
+      return;
+    }
+
     setIsSubmittingTable(true);
     try {
       await onSelectTable(trimmed);

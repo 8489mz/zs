@@ -1,6 +1,7 @@
 import type { PosItem } from '@/features/pos/types/pos.types';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 
 export type PaymentType = 'cash' | 'credit';
 export type PaymentChannel = 'cash' | 'card' | 'wallet' | 'instapay' | 'credit' | 'mixed';
@@ -43,7 +44,23 @@ export interface CreatePosSaleInput {
    */
   onlineOrderId?: number;
   terminalId?: string | null;
+  /**
+   * INV-REST-PAID-GATES-2 (R4-D, I24 follow-up): the persistent
+   * per-browser POS terminal code (localStorage zs_pos_terminal_code,
+   * e.g. T4A2) — which register this sale came from. NOT the EDC
+   * terminalId above: that identifies the card machine, this one the
+   * POS browser. Sent on the online submit (handleSubmit) and the
+   * offline sync; the server stores it as pos_terminal_code.
+   */
+  terminalCode?: string;
   terminalAuthCode?: string | null;
+  /**
+   * INV-REST-PAID-GATES-2 (R4-D, I40): the amount the payment terminal
+   * actually approved for this sale. The backend pins the posted card
+   * leg to it (422 TERMINAL_AMOUNT_MISMATCH on drift); a missing or
+   * zero value leaves the sale unpinned (manual-auth-code path, M26).
+   */
+  terminalApprovedAmount?: number;
   terminalRrn?: string | null;
   cardScheme?: string | null;
   cardLastFour?: string | null;
@@ -124,12 +141,46 @@ export function validatePosSaleInput(input: CreatePosSaleInput) {
   if (input.paymentType === 'credit' && !normalizeCustomerId(input.customerId)) throw new Error('اختر العميل أولًا في حالة البيع الآجل');
   if (input.paymentType === 'cash' && input.paymentChannel === 'credit') throw new Error('لا يمكن استخدام قناة آجل مع بيع نقدي');
   if (Number(input.discount || 0) < 0) throw new Error('الخصم لا يمكن أن يكون سالبًا');
-  if (Number(input.expectedTotal || 0) < 0) throw new Error('إجمالي الفاتورة غير صالح');
+  // INV-REST-PAID-GATES-2 (R4-D, I39): negative legs and amounts are
+  // rejected here, before any > 0 filter can silently drop them — the
+  // submit path used to drop a negative leg and post the rest as if it
+  // never existed.
+  if ((input.payments || []).some((entry) => Number(entry.amount || 0) < 0)) throw new Error('مبالغ الدفع لا يمكن أن تكون سالبة');
+  if (Number(input.deliveryFee || 0) < 0) throw new Error('رسوم التوصيل لا يمكن أن تكون سالبة');
+  if (Number(input.tipAmount || 0) < 0) throw new Error('الإكرامية لا يمكن أن تكون سالبة');
+  if (Number(input.serviceCharge || 0) < 0) throw new Error('رسوم الخدمة لا يمكن أن تكون سالبة');
+  if (Number(input.tenderedAmount || 0) < 0) throw new Error('المبلغ المستلم لا يمكن أن يكون سالبًا');
+  // I44: a zero total is not a sale (the 100%-discount case). The old
+  // check only rejected a negative total.
+  if (Number(input.expectedTotal || 0) <= 0) throw new Error('إجمالي الفاتورة غير صالح');
+  const cartLineSubtotal = input.cart.reduce((sum, item) => sum + calcCartLineTotal(item), 0);
+  if (Number(input.discount || 0) > cartLineSubtotal) throw new Error('الخصم أكبر من إجمالي الأصناف');
+  // I42: a dine-in sale must name its table.
+  if (input.orderType === 'dine_in' && !String(input.tableNumber || '').trim()) throw new Error('اختر طاولة أولًا لطلبات الصالة');
   const isCodDelivery = input.orderType === 'delivery' && input.collectionStatus === 'cod';
   const paymentsTotal = (input.payments || []).reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
-  const isPartialCreditWithCustomer = Boolean(normalizeCustomerId(input.customerId)) && paymentsTotal < Number(input.expectedTotal || 0);
-  if (input.paymentType !== 'credit' && !isPartialCreditWithCustomer && !isCodDelivery && paymentsTotal < Number(input.expectedTotal || 0)) {
+  // I28: no silent partial credit — an underpaid cash sale with a
+  // customer is rejected unless the cashier explicitly chose credit.
+  // (The old isPartialCreditWithCustomer exemption let it through.)
+  if (input.paymentType !== 'credit' && !isCodDelivery && paymentsTotal < Number(input.expectedTotal || 0)) {
     throw new Error('المبلغ المدفوع أقل من إجمالي الفاتورة');
+  }
+  // I43: an unpaid COD delivery must have a customer to carry the
+  // debt. A COD delivery WITH a customer, or one already paid in
+  // full, passes.
+  if (isCodDelivery && paymentsTotal < Number(input.expectedTotal || 0) && !normalizeCustomerId(input.customerId)) {
+    throw new Error('الدليفري غير المسدد يحتاج عميلًا مسجلًا');
+  }
+  // I40: when the terminal approved an amount, the card leg must equal
+  // it — a leg edited after approval cannot post for a different amount.
+  const approvedAmount = Number(input.terminalApprovedAmount || 0);
+  if (input.terminalAuthCode && approvedAmount > 0) {
+    const cardLegTotal = (input.payments || [])
+      .filter((entry) => entry.paymentChannel === 'card')
+      .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+    if (Math.abs(cardLegTotal - approvedAmount) > 0.0001) {
+      throw new Error('المبلغ المعتمد من الماكينة لا يطابق مبلغ البطاقة');
+    }
   }
 
   const nonCashTotal = (input.payments || [])
@@ -206,7 +257,9 @@ export function buildPosSalePayload(input: CreatePosSaleInput) {
     ...(input.diningCourse ? { diningCourse: input.diningCourse } : {}),
     ...(input.pagerNumber ? { pagerNumber: input.pagerNumber } : {}),
     ...(input.terminalId ? { terminalId: input.terminalId } : {}),
+    ...(input.terminalCode ? { terminalCode: input.terminalCode } : {}),
     ...(input.terminalAuthCode ? { terminalAuthCode: input.terminalAuthCode } : {}),
+    ...(Number(input.terminalApprovedAmount) > 0 ? { terminalApprovedAmount: Number(input.terminalApprovedAmount) } : {}),
     ...(input.terminalRrn ? { terminalRrn: input.terminalRrn } : {}),
     ...(input.cardScheme ? { cardScheme: input.cardScheme } : {}),
     ...(input.cardLastFour ? { cardLastFour: input.cardLastFour } : {}),

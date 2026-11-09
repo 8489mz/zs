@@ -11,6 +11,7 @@ import { queryClient } from '@/app/providers';
 import { getFriendlyApiErrorMessage } from '@/lib/api-error-message';
 import { getSubmitSaleErrorMessage } from '@/features/pos/lib/pos-submit-error';
 import { stripSaleItemNameFields } from '@/features/pos/contracts';
+import { getPosTerminalCode } from '@/features/pos/lib/pos-offline-sync';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { computePaidAmount } from '@/features/pos/lib/pos-paid-amount';
@@ -108,6 +109,16 @@ export function createPosWorkspaceAsyncActions(
       params.requestBarcodeFocus();
       return;
     }
+    // INV-REST-PAID-GATES-2 (R4-D, I27): the derived gate carries the
+    // violation flags the checks above do not (unapproved discount /
+    // price, underpaid, zero total, dine-in without a table). Block
+    // here with the hint so the cashier sees why; the server enforces
+    // the same gates and is the final authority.
+    if (!params.canSubmitSale) {
+      params.setSubmitMessage(params.canSubmitHint || 'أكمل المطلوب أولًا قبل تأكيد البيع.');
+      params.requestBarcodeFocus();
+      return;
+    }
 
     const total = Number(params.totals.total || 0);
     // INV-FE1-FRONTEND-BOOK-DIGITS: paid/change amounts round at the
@@ -117,6 +128,14 @@ export function createPosWorkspaceAsyncActions(
     const initialCashAmount = Number(params.cashAmount || 0);
     const initialCardAmount = Number(params.cardAmount || 0);
     const initialTransferAmount = Number(params.transferAmount || 0);
+    // INV-REST-PAID-GATES-2 (R4-D, I39): a negative leg is rejected
+    // HERE, before the > 0 filter below can silently drop it — a
+    // cash −50 + customer used to flip to a zero-paid credit sale.
+    if (initialCashAmount < 0 || initialCardAmount < 0 || initialTransferAmount < 0) {
+      params.setSubmitMessage('مبالغ الدفع لا يمكن أن تكون سالبة. راجع المبالغ قبل تأكيد البيع.');
+      params.requestBarcodeFocus();
+      return;
+    }
     // INV-REST-PAID-DEFINITION: the gate paid is the same all-legs sum as
     // the display and the payload — no channel may drop a leg. (Before:
     // wallet/instapay saw transfer only, so cash entered first was invisible
@@ -200,10 +219,19 @@ export function createPosWorkspaceAsyncActions(
               ? transferChannel
               : (effectiveCardAmount > 0 ? 'card' : (params.paymentChannel || 'cash')));
 
+    // INV-REST-PAID-GATES-2 (R4-D, I28, D-R4D-1): no silent flip. An
+    // underpaid sale with a customer is BLOCKED here — the cashier
+    // completes the payment or switches explicitly to the credit
+    // preset and re-confirms. (The old code flipped it to credit.)
     const isPartialCreditWithCustomer = Boolean(effectiveCustomerId) && effectivePaidAmount < total;
-    const isUnderpaid = effectivePaymentType !== 'credit' && !isPartialCreditWithCustomer && !isCodDelivery && effectivePaidAmount < total;
+    if (isPartialCreditWithCustomer && effectivePaymentType !== 'credit') {
+      params.setSubmitMessage('المبلغ المدفوع أقل من الإجمالي. أكمل المدفوع أو حوّل العملية إلى آجل صراحةً.');
+      params.requestBarcodeFocus();
+      return;
+    }
+    const isUnderpaid = effectivePaymentType !== 'credit' && !isCodDelivery && effectivePaidAmount < total;
 
-    if ((effectivePaymentType === 'credit' || isPartialCreditWithCustomer) && !effectiveCustomerId) {
+    if (effectivePaymentType === 'credit' && !effectiveCustomerId) {
       params.setSubmitMessage('اختر عميلًا أولًا لأن البيع الآجل يجب أن يسجل على حساب العميل.');
       params.requestBarcodeFocus();
       return;
@@ -234,6 +262,17 @@ export function createPosWorkspaceAsyncActions(
       params.setTransferAmount(total);
     }
 
+    // INV-REST-PAID-GATES-2 (R4-D, I40): when the terminal approved an
+    // amount, the final card leg must equal it. This runs on the
+    // settled legs, so an assume-full-card fill is checked too.
+    const approvedAmount = Number(params.terminalPaymentDetails?.approvedAmount || 0);
+    if (params.terminalPaymentDetails?.authCode && approvedAmount > 0 && effectiveCardAmount > 0
+      && Math.abs(effectiveCardAmount - approvedAmount) > 0.0001) {
+      params.setSubmitMessage('المبلغ المعتمد من ماكينة الدفع لا يطابق مبلغ البطاقة. راجع المبلغ قبل تأكيد البيع.');
+      params.requestBarcodeFocus();
+      return;
+    }
+
     params.setPostSaleSaleKey('');
 
     const activeOnlineOrderId = readActiveOnlineOrderId();
@@ -245,7 +284,7 @@ export function createPosWorkspaceAsyncActions(
         customerId: effectiveCustomerId,
         customerPhone: params.quickCustomerPhone,
         customerAddress: params.quickCustomerAddress,
-        paymentType: (effectivePaymentType === 'credit' || isPartialCreditWithCustomer) ? 'credit' : 'cash',
+        paymentType: effectivePaymentType,
         paymentChannel: effectivePaymentChannel,
         discount: Number(params.discount || 0),
         loyaltyPointsRedeemed: Number(params.loyaltyPointsRedeemed || 0),
@@ -282,7 +321,13 @@ export function createPosWorkspaceAsyncActions(
         // a cashier without canDiscount for a manager PIN).
         onlineOrderId: activeOnlineOrderId > 0 ? activeOnlineOrderId : undefined,
         terminalId: params.terminalPaymentDetails?.terminalId || undefined,
+        // INV-REST-PAID-GATES-2 (R4-D, I24 follow-up): the online
+        // submit sends the per-browser terminal code too — R4-B wired
+        // it only into the offline-sync path, so without this the
+        // attribution worked only for synced offline sales.
+        terminalCode: getPosTerminalCode(),
         terminalAuthCode: params.terminalPaymentDetails?.authCode || undefined,
+        terminalApprovedAmount: params.terminalPaymentDetails?.approvedAmount || undefined,
         terminalRrn: params.terminalPaymentDetails?.rrn || undefined,
         cardScheme: params.terminalPaymentDetails?.cardScheme || undefined,
         cardLastFour: params.terminalPaymentDetails?.cardLastFour || undefined,
