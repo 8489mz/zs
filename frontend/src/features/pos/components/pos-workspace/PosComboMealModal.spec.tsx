@@ -8,6 +8,14 @@
  * movement. State must also fully reset on open (at base the selected
  * main/side/drink persist across opens and the main is preselected
  * during render). */
+/* R8-C (INV-REST-COMBO-MODAL-CLOSE): onAddComboToCart returns boolean
+ * and the modal closes ONLY on true. The cases below pin it: on false
+ * the modal stays open on step 3 (onClose NOT called, step-3 content
+ * still in the document); on true onClose is called exactly once with
+ * the same payload the I52 test pins. At base the modal called
+ * onClose() unconditionally, so the false case fails there. The
+ * default mock returns true — the old vi.fn() mocks returned
+ * undefined, which the fixed modal treats as failure. */
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -20,7 +28,7 @@ const PRODUCTS = [
 ];
 
 function renderModal(props: Partial<Parameters<typeof PosComboMealModal>[0]> = {}) {
-  const onAddComboToCart = vi.fn();
+  const onAddComboToCart = vi.fn().mockReturnValue(true);
   const onClose = vi.fn();
   const utils = render(
     <MemoryRouter>
@@ -38,7 +46,7 @@ function renderModal(props: Partial<Parameters<typeof PosComboMealModal>[0]> = {
 
 describe('PosComboMealModal — real catalog products (I52)', () => {
   it('emits combo sides/drinks as real products with real prices', () => {
-    const { onAddComboToCart } = renderModal();
+    const { onAddComboToCart, onClose } = renderModal();
     // Step 1: pick the main. (The step indicator also names the
     // preselected main, so the product card is the last match.)
     const mainButtons = screen.getAllByRole('button', { name: /Burger/ });
@@ -60,6 +68,8 @@ describe('PosComboMealModal — real catalog products (I52)', () => {
       { productId: 2, name: 'طبق جانبي: Fries', price: 25, qty: 1, isComboComponent: true },
       { productId: 3, name: 'مشروب: Cola', price: 15, qty: 1, isComboComponent: true },
     ]);
+    // R8-C: a successful add closes the modal exactly once.
+    expect(onClose).toHaveBeenCalledTimes(1);
   }, 30000);
 
   it('shows no hardcoded side/drink with invented deltas', () => {
@@ -107,5 +117,54 @@ describe('PosComboMealModal — real catalog products (I52)', () => {
     fireEvent.click(screen.getByRole('button', { name: /إضافة وجبة الكومبو/ }));
     expect(onAddComboToCart).toHaveBeenCalledTimes(1);
     expect(onAddComboToCart.mock.calls[0][0].modifiers).toEqual([]);
+  }, 30000);
+});
+
+describe('PosComboMealModal — close only on successful add (R8-C)', () => {
+  function buildCombo() {
+    const mainButtons = screen.getAllByRole('button', { name: /Burger/ });
+    fireEvent.click(mainButtons[mainButtons.length - 1]);
+    fireEvent.click(screen.getByRole('button', { name: /2\. الصنف الجانبي/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Fries/ }));
+    fireEvent.click(screen.getByRole('button', { name: /3\. المشروب/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Cola/ }));
+  }
+
+  it('stays open when the add fails (onAddComboToCart returns false)', () => {
+    const onAddComboToCart = vi.fn().mockReturnValue(false);
+    const onClose = vi.fn();
+    renderModal({ onAddComboToCart, onClose });
+    buildCombo();
+    fireEvent.click(screen.getByRole('button', { name: /إضافة وجبة الكومبو/ }));
+
+    expect(onAddComboToCart).toHaveBeenCalledTimes(1);
+    // The modal must NOT close: the cashier keeps the built combo on
+    // step 3 and can fix it instead of rebuilding from scratch.
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText(/اختر المشروب المنعش/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /إضافة وجبة الكومبو/ })).toBeInTheDocument();
+  }, 30000);
+
+  it('closes exactly once when the add succeeds (returns true)', () => {
+    const { onAddComboToCart, onClose } = renderModal();
+    buildCombo();
+    fireEvent.click(screen.getByRole('button', { name: /إضافة وجبة الكومبو/ }));
+
+    expect(onAddComboToCart).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  }, 30000);
+
+  it('does not call the add or close when no main is selected', () => {
+    const onAddComboToCart = vi.fn().mockReturnValue(true);
+    const onClose = vi.fn();
+    renderModal({ products: [], onAddComboToCart, onClose });
+    // Jump to step 3 via the step indicator; the confirm button is
+    // disabled with no main, and the handler guard returns early.
+    fireEvent.click(screen.getByRole('button', { name: /3\. المشروب/ }));
+    const confirm = screen.getByRole('button', { name: /إضافة وجبة الكومبو/ });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(onAddComboToCart).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   }, 30000);
 });

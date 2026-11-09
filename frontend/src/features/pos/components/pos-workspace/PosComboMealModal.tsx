@@ -15,6 +15,13 @@
  * combo-definition system exists elsewhere (ProductOfferComboCreatorTab,
  * ComboComponentsEditor) and whether this modal should consume it is a
  * follow-up. */
+/* R8-C (INV-REST-COMBO-MODAL-CLOSE): onAddComboToCart returns boolean —
+ * the modal closes ONLY on true. At base it called onClose()
+ * unconditionally, so a failed add (main vanished from the catalog,
+ * out-of-stock pre-flight, or the setCart-updater catch) closed the
+ * modal and the cashier believed the combo was added — or had to
+ * rebuild all three steps from scratch. On false the modal stays open
+ * on step 3 with the built combo intact. */
 import { useTranslation } from 'react-i18next';
 import { useState, useMemo, useEffect } from 'react';
 import { RestaurantOperationsDialog } from './RestaurantOperationsDialog';
@@ -48,7 +55,7 @@ interface PosComboMealModalProps {
     price: number;
     modifiers: ComboModifier[];
     notes?: string;
-  }) => void;
+  }) => boolean; // R8-C: true = the combo line is in the cart, false = it is not
 }
 
 function productPrice(p: any): number {
@@ -131,15 +138,18 @@ export function PosComboMealModal({
       });
     }
 
-    onAddComboToCart({
+    // R8-C: close ONLY when the add landed. On false the modal stays
+    // open on step 3 with the built combo intact, so the cashier can
+    // fix the build instead of rebuilding it from scratch.
+    if (onAddComboToCart({
       productId: selectedMain.id,
       productName: `وجبة كومبو (${selectedMain.name})`,
       price: basePrice,
       modifiers,
       notes: comboNotes.trim() || undefined,
-    });
-
-    onClose();
+    })) {
+      onClose();
+    }
   };
 
   return (

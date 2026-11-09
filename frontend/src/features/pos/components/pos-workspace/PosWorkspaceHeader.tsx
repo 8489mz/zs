@@ -6,7 +6,7 @@ import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/shared/ui/button';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { posApi } from '@/features/pos/api/pos.api';
-import { applyComboToCart, buildComboLineKey, isNegativeStockSalesAllowed } from '@/features/pos/lib/pos.domain';
+import { applyComboToCart, isNegativeStockSalesAllowed } from '@/features/pos/lib/pos.domain';
 import { storefrontApi } from '@/features/storefront/api/storefront.api';
 import { PosOnlineOrdersModal } from './PosOnlineOrdersModal';
 import { PosTablesFloorPlanDialog } from './PosTablesFloorPlanDialog';
@@ -1180,7 +1180,13 @@ function PosWorkspaceHeaderComponent({
       products={(pos as any).productsQuery?.data || []}
       onAddComboToCart={(combo) => {
         const product = ((pos as any).productsQuery?.data || []).find((p: any) => p.id === combo.productId);
-        if (!product) return;
+        // R8-C path 1: the main vanished from the catalog between modal
+        // open and confirm. Was a silent no-op; now a named toast + false
+        // so the modal stays open instead of closing on a lost combo.
+        if (!product) {
+          toast.error('تعذّر إضافة الوجبة: الصنف الرئيسي غير موجود في الكتالوج.');
+          return false;
+        }
         const comboLineId = `combo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
         const comboOptions = {
           priceType: pos.priceType,
@@ -1188,26 +1194,25 @@ function PosWorkspaceHeaderComponent({
           allowNegativeStockSales: isNegativeStockSalesAllowed(settings) || Boolean((product as any).hasBom),
           comboLineId,
         };
-        // Synchronous pre-flight on the current cart: a failed add (out of
-        // stock) surfaces here and leaves the cart untouched, instead of
-        // stamping the combo onto whatever line happens to be last.
+        // R8-C: ONE apply, on the current cart — its result IS the cart
+        // setCart installs, so the returned boolean is exact. The old
+        // double-apply (pre-flight + setCart updater with a silent
+        // `catch { return prevCart; }`) could swallow a failure that only
+        // appears with the freshest cart AFTER the modal had closed
+        // (path 3). The handler is synchronous, so no other cart write
+        // can interleave between the apply and setCart.
+        let nextCart: { cart: any[]; lineKey: string };
         try {
-          applyComboToCart(pos.cart, product, combo, comboOptions);
+          nextCart = applyComboToCart(pos.cart, product, combo, comboOptions);
         } catch (error) {
           toast.error(error instanceof Error ? error.message : 'تعذّر إضافة الوجبة إلى السلة.');
-          return;
+          return false;
         }
-        const comboLineKey = buildComboLineKey(product, pos.priceType, comboLineId);
-        pos.setCart((prevCart) => {
-          try {
-            return applyComboToCart(prevCart, product, combo, comboOptions).cart;
-          } catch {
-            return prevCart;
-          }
-        });
-        pos.setSelectedLineKey(comboLineKey);
-        pos.setLastAddedLineKey(comboLineKey);
+        pos.setCart(nextCart.cart);
+        pos.setSelectedLineKey(nextCart.lineKey);
+        pos.setLastAddedLineKey(nextCart.lineKey);
         toast.success(`تمت إضافة ${combo.productName} إلى السلة بنجاح`);
+        return true;
       }}
     />
     <PosCustomizationDialog
