@@ -3761,6 +3761,12 @@ export class ImportSalesService {
       if (!Number.isFinite(opts.amount) || opts.amount <= 0) {
         throw new BadRequestException('مبلغ التسوية يجب أن يكون أكبر من صفر.');
       }
+      // INV-IMPORT-LATE-EXPENSE-JE-COST-CENTRE: resolve the project
+      // cost centre BEFORE any write, exactly as P11 does for the
+      // receipt journal — a missing project row fails closed with
+      // zero writes, and every revaluation JE line below carries
+      // the centre (project-less shipments post with honest NULL).
+      const lateExpenseCostCenterId = await this.resolveImportProjectCostCenter(trx, tenantId, shipment);
       // Idempotency (the deposit/preorder refund pattern): a supplied
       // key is checked before any write, and a provisional event row
       // is inserted after validation (pass 1) so the partial unique
@@ -4087,6 +4093,7 @@ export class ImportSalesService {
           description: `تسوية تكلفة مبيعات سابقة لمصروف متأخر - حاوية ${shipment.container_number}`,
           debit: totalLateCogs,
           credit: 0,
+          costCenterId: lateExpenseCostCenterId,
           partnerType: 'none',
           partnerId: null,
           branchId: null,
@@ -4099,6 +4106,7 @@ export class ImportSalesService {
           description: `رسملة مصروف متأخر على المخزون المتبقي - حاوية ${shipment.container_number}`,
           debit: totalLateInventory,
           credit: 0,
+          costCenterId: lateExpenseCostCenterId,
           partnerType: 'none',
           partnerId: null,
           branchId: null,
@@ -4111,6 +4119,7 @@ export class ImportSalesService {
           description: `استحقاق مصروف متأخر - حاوية ${shipment.container_number}`,
           debit: 0,
           credit: roundedTotal,
+          costCenterId: lateExpenseCostCenterId,
           partnerType: 'supplier',
           partnerId: opts.credit.supplierId,
           branchId: null,
@@ -4126,6 +4135,7 @@ export class ImportSalesService {
           description: `استحقاق مصروف متأخر غير قابل للتخصيص - سبب: ${opts.credit.reason} - حاوية ${shipment.container_number}`,
           debit: 0,
           credit: roundedTotal,
+          costCenterId: lateExpenseCostCenterId,
           partnerType: 'none',
           partnerId: null,
           branchId: null,
@@ -4142,6 +4152,7 @@ export class ImportSalesService {
           description: `تخفيض عهدة المخلص الجمركي برسملة مصروف - حاوية ${shipment.container_number}`,
           debit: 0,
           credit: roundedTotal,
+          costCenterId: lateExpenseCostCenterId,
           partnerType: 'none',
           partnerId: null,
           branchId: null,
