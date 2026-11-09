@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { productsApi } from '@/features/products/api/products.api';
+import type { Product, ProductOffer } from '@/types/domain';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { subscribeSignageOffersUpdate } from '@/features/pos/lib/pos-customer-display-bridge';
 import { SignagePromoItem, SignageTheme } from '../components/signage/types';
@@ -15,6 +16,118 @@ import { SignageMarqueeFooter } from '../components/signage/SignageMarqueeFooter
 import { SignageSettingsDrawer } from '../components/signage/SignageSettingsDrawer';
 import { SignageNavDrawer } from '../components/signage/SignageNavDrawer';
 import { SignageShowroomWelcome } from '../components/signage/SignageShowroomWelcome';
+
+/* INV-REST-SIGNAGE-TRUTH (R-B5 + signage slice of R-B6): the signage
+ * screen must show only real prices. Before this fix the promo builder
+ * invented a price whenever the catalog had no real offer:
+ * promotionalPrice || offerPrice || (retail * 0.85) || flat 100, a
+ * fabricated "was" price (promo * 1.25 when retail was 0), a discount
+ * that defaulted to 15%, and a badge cycled by slide index
+ * ('عرض خاص' / 'أفضل مبيعاً' / 'صفقة اليوم' / 'تخفيض محدود' /
+ * 'سعر حصري'). It also treated an expired p.offers[0] as the current
+ * offer, and the offers query silently fell back to the full-price
+ * catalog when the offers view was empty. buildSignagePromoItems is
+ * the single pure decision: a promo price exists only when a
+ * merchant-configured price (promotionalPrice or a currently-active
+ * offer) is really below retail; otherwise the item shows its real
+ * retail price with discount 0 and no saving. In the offers view only
+ * items with a real current promo are listed at all. The badge is the
+ * product's own configured badge when present, the single true label
+ * 'عرض خاص' for an item with a verified current offer, and empty
+ * otherwise — never a superlative assigned by index. Dates compare
+ * against the local calendar date (never UTC toISOString), so an
+ * offer does not flip at midnight UTC. */
+
+function localTodayStr(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function isOfferActiveNow(offer: ProductOffer, todayStr: string): boolean {
+  return (!offer.from || offer.from <= todayStr) && (!offer.to || offer.to >= todayStr);
+}
+
+function calcOfferPrice(retail: number, offer: ProductOffer): number | null {
+  const value = Number(offer.value) || 0;
+  if (value <= 0) return null;
+  if (offer.type === 'percent') return Math.max(0, retail * (1 - value / 100));
+  if (offer.type === 'fixed') return Math.max(0, retail - value);
+  if (offer.type === 'price') return Math.max(0, value);
+  if (offer.type === 'bundle') {
+    const bundleQty = Math.max(1, Number(offer.minQty || 1));
+    return Math.max(0, value / bundleQty);
+  }
+  if (offer.type === 'bogo') {
+    const buyQ = Math.max(1, Number(offer.bogoBuyQty || 1));
+    const getQ = Math.max(1, Number(offer.bogoGetQty || 1));
+    const discPct = Math.min(100, Math.max(0, Number(offer.bogoDiscountPercent ?? 100)));
+    const cycleTotalQty = buyQ + getQ;
+    const origTotal = retail * cycleTotalQty;
+    const savings = getQ * retail * (discPct / 100);
+    return cycleTotalQty > 0 ? Math.max(0, (origTotal - savings) / cycleTotalQty) : retail;
+  }
+  return null;
+}
+
+export function buildSignagePromoItems(
+  products: Product[],
+  view: 'offers' | 'all',
+  todayStr: string = localTodayStr(),
+): SignagePromoItem[] {
+  const items: SignagePromoItem[] = [];
+  for (const p of products) {
+    const retail = Number(p.retailPrice) || 0;
+    const rawPromo = (p as unknown as { promotionalPrice?: unknown }).promotionalPrice;
+    const promotionalPrice = rawPromo != null && rawPromo !== '' ? Number(rawPromo) : null;
+    const activeOffers = (p.offers || []).filter((o) => isOfferActiveNow(o, todayStr));
+    const firstOffer = activeOffers.length > 0 ? activeOffers[0] : null;
+    const offerPrice = firstOffer ? calcOfferPrice(retail, firstOffer) : null;
+
+    let promoPrice: number | null = null;
+    if (
+      promotionalPrice != null &&
+      Number.isFinite(promotionalPrice) &&
+      promotionalPrice >= 0 &&
+      promotionalPrice < retail
+    ) {
+      promoPrice = promotionalPrice;
+    } else if (offerPrice != null && offerPrice >= 0 && offerPrice < retail) {
+      promoPrice = offerPrice;
+    }
+    const hasRealPromo = promoPrice != null;
+
+    // The offers view lists current offers only: a product whose offers
+    // are all expired (or not yet started) is not an offer.
+    if (view === 'offers' && !hasRealPromo) continue;
+
+    const displayPrice = promoPrice != null ? promoPrice : retail;
+    const savingAmount = Math.max(0, retail - displayPrice);
+    const discountPercent =
+      retail > 0 && savingAmount > 0 ? Math.round((savingAmount / retail) * 100) : 0;
+    const rawBadge = (p as unknown as { badge?: unknown }).badge;
+    const configuredBadge = typeof rawBadge === 'string' ? rawBadge.trim() : '';
+    const badge = configuredBadge || (hasRealPromo ? 'عرض خاص' : '');
+
+    items.push({
+      id: p.id,
+      name: p.name,
+      categoryName:
+        (p as unknown as { category?: { name?: string | null } }).category?.name ||
+        p.categoryName ||
+        'القسم الرئيسي',
+      originalPrice: retail,
+      promoPrice: displayPrice,
+      discountPercent,
+      savingAmount,
+      badge,
+      barcode: p.barcode || p.sku || '',
+      imageUrl: p.imageUrl || '',
+    });
+  }
+  return items;
+}
 
 export function DigitalSignagePage() {
   const { currentLang, toggleLanguage } = useIsolatedDisplayLanguage('signage_ui_lang');
@@ -105,26 +218,18 @@ export function DigitalSignagePage() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch products with Smart Fallback (background polling every 25s for standalone TV screens)
+  // Fetch products (background polling every 25s for standalone TV screens).
+  // INV-REST-SIGNAGE-TRUTH: no silent fallback — when the offers view is
+  // empty there are no current offers, and the screen says so instead of
+  // showing full-price products as if they were offers.
   const productsQuery = useQuery({
     queryKey: ['signage-products', viewFilter],
     queryFn: async () => {
-      let res = await productsApi.listPage({
+      const res = await productsApi.listPage({
         page: 1,
         pageSize: 40,
         view: viewFilter === 'offers' ? 'offers' : 'all',
       });
-      // Smart Fallback: If 'offers' filter returns empty, fallback to 'all' so the showroom screen is never dead!
-      if (viewFilter === 'offers' && (!res.products || res.products.length === 0)) {
-        const fallbackRes = await productsApi.listPage({
-          page: 1,
-          pageSize: 40,
-          view: 'all',
-        });
-        if (fallbackRes.products && fallbackRes.products.length > 0) {
-          return fallbackRes.products;
-        }
-      }
       return res.products || [];
     },
     refetchInterval: 25000,
@@ -140,66 +245,11 @@ export function DigitalSignagePage() {
 
   const rawProducts = productsQuery.data || [];
 
-  // Transform products to promo items
-  const promoItems: SignagePromoItem[] = useMemo(() => {
-    if (!rawProducts.length) return [];
-
-    const todayStr = new Date().toISOString().slice(0, 10);
-
-    return rawProducts.map((p, idx) => {
-      const retail = Number(p.retailPrice) || 0;
-      const promotionalPrice = (p as any).promotionalPrice ? Number((p as any).promotionalPrice) : null;
-      
-      // Filter for active offers first, or fallback to first configured offer
-      const activeOffers = (p.offers || []).filter((o: any) => (!o.to || o.to >= todayStr) && (!o.from || o.from <= todayStr));
-      const firstOffer = activeOffers.length > 0 ? activeOffers[0] : (p.offers && p.offers.length > 0 ? p.offers[0] : null);
-      const offerVal = firstOffer ? Number(firstOffer.value) : 0;
-      let offerPrice: number | null = null;
-
-      if (firstOffer && offerVal > 0) {
-        if (firstOffer.type === 'percent') {
-          offerPrice = Math.max(0, retail * (1 - offerVal / 100));
-        } else if (firstOffer.type === 'fixed') {
-          offerPrice = Math.max(0, retail - offerVal);
-        } else if (firstOffer.type === 'price') {
-          offerPrice = Math.max(0, offerVal);
-        } else if (firstOffer.type === 'bundle') {
-          const bundleQty = Math.max(1, Number(firstOffer.minQty || 1));
-          offerPrice = Math.max(0, offerVal / bundleQty);
-        } else if (firstOffer.type === 'bogo') {
-          const buyQ = Math.max(1, Number(firstOffer.bogoBuyQty || 1));
-          const getQ = Math.max(1, Number(firstOffer.bogoGetQty || 1));
-          const discPct = Math.min(100, Math.max(0, Number(firstOffer.bogoDiscountPercent ?? 100)));
-          const cycleTotalQty = buyQ + getQ;
-          const origTotal = retail * cycleTotalQty;
-          const savings = getQ * retail * (discPct / 100);
-          offerPrice = cycleTotalQty > 0 ? Math.max(0, (origTotal - savings) / cycleTotalQty) : retail;
-        }
-      }
-
-      const calculatedPromoPrice = promotionalPrice || offerPrice || (retail > 0 ? retail * 0.85 : 100);
-      const originalPrice = retail > 0 ? retail : calculatedPromoPrice * 1.25;
-      const savingAmount = Math.max(0, originalPrice - calculatedPromoPrice);
-      const discountPercent =
-        originalPrice > 0 ? Math.round((savingAmount / originalPrice) * 100) : 15;
-
-      const badges = ['عرض خاص', 'أفضل مبيعاً', 'صفقة اليوم', 'تخفيض محدود', 'سعر حصري'];
-      const badge = (p as any).badge || badges[idx % badges.length];
-
-      return {
-        id: p.id,
-        name: p.name,
-        categoryName: (p as any).category?.name || 'القسم الرئيسي',
-        originalPrice,
-        promoPrice: calculatedPromoPrice,
-        discountPercent: discountPercent > 0 ? discountPercent : 15,
-        savingAmount,
-        badge,
-        barcode: p.barcode || (p as any).sku || '',
-        imageUrl: (p as any).imageUrl || '',
-      };
-    });
-  }, [rawProducts]);
+  // Promo items come only from real prices — see buildSignagePromoItems.
+  const promoItems: SignagePromoItem[] = useMemo(
+    () => buildSignagePromoItems(rawProducts, viewFilter),
+    [rawProducts, viewFilter],
+  );
 
   // Safeguard index if item list shrinks
   useEffect(() => {
@@ -336,6 +386,59 @@ export function DigitalSignagePage() {
             />
             <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
             <span>{t('pos.digital_signage_page.loading', 'جاري تجهيز وبث عروض صالة العرض...')}</span>
+          </div>
+        ) : productsQuery.isError ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              fontSize: '18px',
+              fontWeight: 800,
+              color: isDark ? '#f87171' : '#dc2626',
+              backgroundColor: isDark ? 'rgba(15, 23, 42, 0.6)' : '#ffffff',
+              border: isDark ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid #fecaca',
+              borderRadius: '24px',
+              gap: '14px',
+              padding: '24px',
+              textAlign: 'center',
+            }}
+          >
+            <span style={{ fontSize: '22px', fontWeight: 900 }}>
+              {t('pos.digital_signage_page.load_error_title', 'تعذّر تحميل العروض')}
+            </span>
+            <span
+              style={{
+                fontSize: '15px',
+                fontWeight: 600,
+                color: isDark ? '#cbd5e1' : '#475569',
+                maxWidth: '520px',
+                lineHeight: 1.6,
+              }}
+            >
+              {t(
+                'pos.digital_signage_page.load_error_desc',
+                'انقطع الاتصال بالخادم — تحقق من شبكة الشاشة ثم أعد المحاولة.'
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => void productsQuery.refetch()}
+              style={{
+                padding: '12px 26px',
+                borderRadius: '12px',
+                backgroundColor: isDark ? '#2563eb' : '#170e5e',
+                color: '#ffffff',
+                border: 'none',
+                fontWeight: 800,
+                fontSize: '15px',
+                cursor: 'pointer',
+              }}
+            >
+              {t('pos.digital_signage_page.retry', 'إعادة المحاولة')}
+            </button>
           </div>
         ) : (
           <SignageShowroomWelcome
