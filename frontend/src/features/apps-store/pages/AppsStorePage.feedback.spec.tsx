@@ -116,7 +116,7 @@ describe('AppsStorePage install feedback on a warehousing tenant', () => {
   it('still toasts success for an install the server confirms', async () => {
     // Echo the request back as the saved state: the server persisted it.
     updateMock.mockImplementation((vars: Record<string, unknown>) =>
-      Promise.resolve({ ...vars } as AppSettings),
+      Promise.resolve({ ...vars } as unknown as AppSettings),
     );
 
     renderPage();

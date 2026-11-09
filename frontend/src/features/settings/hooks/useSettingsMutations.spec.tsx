@@ -175,7 +175,7 @@ describe('useSettingsUpdateMutation', () => {
       logoData: '',
       currentBranchId: '',
       currentLocationId: '',
-    } as never;
+    };
 
     it('warns by name instead of toasting success when the server keeps enterprise mode on', async () => {
       toastSuccess.mockClear();
