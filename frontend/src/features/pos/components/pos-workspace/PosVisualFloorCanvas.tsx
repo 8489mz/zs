@@ -6,7 +6,8 @@ import {
   type TableLayout,
 } from '@/features/pos/api/restaurant-advanced-fnb.api';
 import { formatCurrency } from '@/lib/format';
-import { toast } from '@/shared/components/system-alert';
+import { toast, systemConfirm } from '@/shared/components/system-alert';
+import type { FloorTableState } from '@/features/pos/lib/pos-floor-state';
 import {
   EditIcon,
   SaveIcon,
@@ -24,7 +25,13 @@ interface PosVisualFloorCanvasProps {
   tablesCount: number;
   zones: any[];
   selectedZone: string;
+  /** The dialog's zone.table_numbers set is the zone authority (R-I37). */
+  zoneTableSet?: Set<string> | null;
   occupiedMap: Map<string, any>;
+  /** The single floor-state derivation (R-I36) — grid and canvas render from it. */
+  floorState?: Map<string, FloorTableState>;
+  /** Design mode is manager-only (R-I37); the server save enforces it too. */
+  isManager?: boolean;
   currentTableNumber: string;
   confirmedReservationsMap: Map<string, TableReservation>;
   pendingCallsByTable: Map<string, TableServiceCall[]>;
@@ -39,7 +46,10 @@ export function PosVisualFloorCanvas({
   tablesCount,
   zones: _zones,
   selectedZone,
+  zoneTableSet,
   occupiedMap,
+  floorState,
+  isManager = false,
   currentTableNumber,
   confirmedReservationsMap,
   pendingCallsByTable,
@@ -54,12 +64,19 @@ export function PosVisualFloorCanvas({
 
   // Designer Mode State
   const [isDesignMode, setIsDesignMode] = useState(false);
+  // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I37): snapshot of the server
+  // layouts taken on entering design mode, so Cancel restores it.
+  const [designSnapshot, setDesignSnapshot] = useState<TableLayout[] | null>(null);
+  const isDesignModeRef = useRef(false);
+  useEffect(() => {
+    isDesignModeRef.current = isDesignMode;
+  }, [isDesignMode]);
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   // Fetch table layouts from server
-  const { data: serverLayouts = [] } = useQuery({
+  const { data: serverLayouts } = useQuery({
     queryKey: ['restaurant-table-layouts', branchId],
     queryFn: () => restaurantAdvancedFnbApi.getTableLayouts(branchId),
     staleTime: 30_000,
@@ -70,7 +87,14 @@ export function PosVisualFloorCanvas({
 
   // Initialize or generate default grid layout when server layouts arrive or count changes
   useEffect(() => {
-    if (serverLayouts && serverLayouts.length > 0) {
+    // R-I37: while in design mode the layout effect must not regenerate
+    // over unsaved work (it used to overwrite deletes/moves on remount).
+    if (isDesignModeRef.current) return;
+    // R5-D: wait for the query to resolve. The old `= []` default was a
+    // fresh array on every render, so this effect re-ran — and re-set
+    // layouts — forever while the data was still undefined.
+    if (!serverLayouts) return;
+    if (serverLayouts.length > 0) {
       setLayouts(serverLayouts);
     } else {
       // Auto-generate harmonious 2D initial layout for configured tables
@@ -108,6 +132,7 @@ export function PosVisualFloorCanvas({
     onSuccess: () => {
       toast.success('تم حفظ تصميم وتوزيع طاولات الصالة بنجاح!');
       queryClient.invalidateQueries({ queryKey: ['restaurant-table-layouts', branchId] });
+      setDesignSnapshot(null);
       setIsDesignMode(false);
     },
     onError: () => {
@@ -115,11 +140,40 @@ export function PosVisualFloorCanvas({
     },
   });
 
-  // Filter layouts by selected zone
+  // Filter layouts by selected zone — reconciled with the dialog
+  // (R-I37): the dialog's zone.table_numbers set is the authority and
+  // the canvas maps each layout's table_number through it; layouts keep
+  // zone_code for storage only. An empty/absent set means "all".
   const visibleLayouts = layouts.filter((tbl) => {
     if (selectedZone === 'all') return true;
-    return tbl.zone_code === selectedZone;
+    if (!zoneTableSet || zoneTableSet.size === 0) return true;
+    return zoneTableSet.has(String(tbl.table_number).trim());
   });
+
+  // Custom tables (R-I38): drafts outside 1..N have no stored layout,
+  // so they render as extra tiles along the bottom of the canvas.
+  const customLayouts: TableLayout[] = [];
+  if (floorState) {
+    let customIdx = 0;
+    for (const entry of floorState.values()) {
+      if (!entry.isCustom) continue;
+      if (layouts.some((l) => String(l.table_number).trim() === entry.tableNumber)) continue;
+      if (selectedZone !== 'all' && zoneTableSet && zoneTableSet.size > 0 && !zoneTableSet.has(entry.tableNumber)) continue;
+      customLayouts.push({
+        table_number: entry.tableNumber,
+        zone_code: 'main',
+        shape: 'square',
+        x_pos: 8 + customIdx * 14,
+        y_pos: 80,
+        width: 78,
+        height: 78,
+        seats: 4,
+        rotation: 0,
+      });
+      customIdx += 1;
+    }
+  }
+  const renderLayouts = [...visibleLayouts, ...customLayouts];
 
   // Handle Drag Start
   const handlePointerDown = (e: React.PointerEvent, tbl: TableLayout) => {
@@ -227,8 +281,47 @@ export function PosVisualFloorCanvas({
     );
   };
 
-  // Delete Table from Layout
-  const handleDeleteTable = (tableNum: string) => {
+  // R-I37: entering design mode snapshots the server layouts; Cancel
+  // restores the snapshot (it used to only close the mode, leaving
+  // deletes/moves in the local state until remount).
+  const enterDesignMode = () => {
+    setDesignSnapshot(layouts.map((l) => ({ ...l })));
+    setIsDesignMode(true);
+  };
+
+  const cancelDesignMode = () => {
+    if (designSnapshot) setLayouts(designSnapshot.map((l) => ({ ...l })));
+    setDesignSnapshot(null);
+    setActiveTableId(null);
+    setIsDesignMode(false);
+  };
+
+  // Delete Table from Layout — R-I37: asks for confirm and REFUSES
+  // when the table is occupied / reserved / has a KDS ticket. Deleting
+  // an occupied table used to hide a live order from the floor.
+  const handleDeleteTable = async (tableNum: string) => {
+    const entry = floorState?.get(tableNum);
+    const hasDraft = Boolean(entry?.drafts?.length) || Boolean(occupiedMap.get(tableNum));
+    if (hasDraft || entry?.status === 'occupied') {
+      toast.error(`لا يمكن حذف طاولة ${tableNum} — مشغولة بطلب قائم. استدعِ الطلب أو انقله أولًا.`);
+      return;
+    }
+    if (confirmedReservationsMap.get(tableNum)) {
+      toast.error(`لا يمكن حذف طاولة ${tableNum} — لديها حجز مؤكد اليوم.`);
+      return;
+    }
+    const kdsTicket = entry?.kdsTicket ?? _kdsTableMap.get(tableNum);
+    if (kdsTicket) {
+      toast.error(`لا يمكن حذف طاولة ${tableNum} — لديها طلب قيد التحضير في المطبخ.`);
+      return;
+    }
+    const confirmed = await systemConfirm({
+      title: 'حذف طاولة من المخطط',
+      message: `سيتم حذف طاولة ${tableNum} من مخطط الصالة. هل أنت متأكد؟`,
+      confirmText: 'حذف الطاولة',
+      cancelText: 'إلغاء',
+    });
+    if (!confirmed) return;
     setLayouts((prev) => prev.filter((t) => t.table_number !== tableNum));
     if (activeTableId === tableNum) setActiveTableId(null);
     toast.info(`تم حذف طاولة ${tableNum} من المخطط.`);
@@ -358,7 +451,7 @@ export function PosVisualFloorCanvas({
 
               <button
                 type="button"
-                onClick={() => setIsDesignMode(false)}
+                onClick={cancelDesignMode}
                 style={{
                   background: '#f1f5f9',
                   color: '#64748b',
@@ -373,10 +466,10 @@ export function PosVisualFloorCanvas({
                 {__t('pos.pos_workspace.pos_visual_floor_canvas.s7', __t('pos.pos_workspace.pos_visual_floor_canvas.s7', "إلغاء"))}
               </button>
             </>
-          ) : (
+          ) : isManager ? (
             <button
               type="button"
-              onClick={() => setIsDesignMode(true)}
+              onClick={enterDesignMode}
               style={{
                 background: '#ffffff',
                 color: '#170e5e',
@@ -395,7 +488,7 @@ export function PosVisualFloorCanvas({
               <EditIcon size={13} color="#170e5e" />
               <span>{__t('pos.pos_workspace.pos_visual_floor_canvas.s9', __t('pos.pos_workspace.pos_visual_floor_canvas.s9', "تعديل وتصميم المخطط"))}</span>
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -560,10 +653,22 @@ export function PosVisualFloorCanvas({
           cursor: isDesignMode ? (isDragging ? 'grabbing' : 'crosshair') : 'default',
         }}
       >
-        {visibleLayouts.map((tbl) => {
+        {renderLayouts.map((tbl) => {
           const tNum = String(tbl.table_number).trim();
-          const draft = occupiedMap.get(tNum);
-          const isOccupied = Boolean(draft);
+          // INV-REST-FLOOR-STATE-TRUTH (R-I36): the tile renders from the
+          // single floor-state record, like the grid. occupiedMap values
+          // are draft LISTS now (and the old canvas read draft.cartTotal
+          // / draft.cart / draft.itemCount — fields a held draft does not
+          // have — so every tile showed 0 and 1 item).
+          const floorEntry = floorState?.get(tNum);
+          const occupiedList = occupiedMap.get(tNum);
+          const legacyDraft = Array.isArray(occupiedList) ? occupiedList[0] : occupiedList;
+          const draft = floorEntry?.drafts?.[0] ?? legacyDraft;
+          const qrOrder = floorEntry?.qrOrder;
+          const kdsTicket = floorEntry?.kdsTicket ?? _kdsTableMap.get(tNum);
+          const isOccupied = floorEntry ? floorEntry.status === 'occupied' : Boolean(draft);
+          const tileTotal = floorEntry ? floorEntry.total : Number(draft?.total || 0);
+          const tileItemsCount = floorEntry ? floorEntry.itemsCount : Number(draft?.itemsCount || 0);
           const isCurrent = currentTableNumber === tNum;
           const reservation = confirmedReservationsMap.get(tNum);
           const calls = pendingCallsByTable.get(tNum) || [];
@@ -571,7 +676,8 @@ export function PosVisualFloorCanvas({
           const isPaidOnline = calls.some((c) => c.call_type === 'bill_paid');
           const isSelectedInDesigner = isDesignMode && activeTableId === tNum;
 
-          // Dimensions & Shape styling
+          // Dimensions & Shape styling — R-I37: render the STORED
+          // width/height; the shape constants are only the fallback.
           const shape = tbl.shape || 'square';
           const borderRadius =
             shape === 'round'
@@ -579,8 +685,8 @@ export function PosVisualFloorCanvas({
               : shape === 'booth'
               ? '16px 16px 6px 6px'
               : '10px';
-          const widthPx = shape === 'rectangle' ? 110 : 80;
-          const heightPx = shape === 'rectangle' ? 66 : 80;
+          const widthPx = Number(tbl.width || (shape === 'rectangle' ? 110 : 80));
+          const heightPx = Number(tbl.height || (shape === 'rectangle' ? 66 : 80));
 
           // Status Theme Colors
           let bgColor = '#ffffff';
@@ -598,6 +704,9 @@ export function PosVisualFloorCanvas({
           } else if (isOccupied) {
             bgColor = '#f0fdf4';
             borderColor = '#86efac';
+          } else if (qrOrder) {
+            bgColor = '#faf5ff';
+            borderColor = '#c084fc';
           } else if (reservation) {
             bgColor = '#eff6ff';
             borderColor = '#93c5fd';
@@ -616,7 +725,7 @@ export function PosVisualFloorCanvas({
                 if (isDesignMode) {
                   setActiveTableId(tNum);
                 } else {
-                  if (isOccupied && draft?.id) {
+                  if (draft?.id) {
                     onRecallDraft(draft.id);
                   } else {
                     onSelectTable(tNum);
@@ -684,6 +793,25 @@ export function PosVisualFloorCanvas({
                 </span>
               </div>
 
+              {/* KDS badge (R-I36, decided): a KDS ticket alone is a
+                  display badge, never occupancy — the sale already posted
+                  and is cooking. */}
+              {kdsTicket && (
+                <div
+                  style={{
+                    fontSize: '8.5px',
+                    fontWeight: 800,
+                    color: '#6b21a8',
+                    background: '#f3e8ff',
+                    padding: '1px 4px',
+                    borderRadius: '4px',
+                    marginTop: '2px',
+                  }}
+                >
+                  {__t('pos.pos_workspace.pos_visual_floor_canvas.s25', __t('pos.pos_workspace.pos_visual_floor_canvas.s25', "بالمطبخ"))}
+                </div>
+              )}
+
               {/* Status Indicator */}
               {isPaidOnline ? (
                 <div
@@ -724,14 +852,28 @@ export function PosVisualFloorCanvas({
                     style={{
                       fontSize: '10px',
                       fontWeight: 800,
-                      color: '#166534',
+                      color: qrOrder && !draft ? '#7e22ce' : '#166534',
                       lineHeight: 1.1,
                     }}
                   >
-                    {formatCurrency(Number(draft?.cartTotal || draft?.totals?.total || 0))}
+                    {formatCurrency(tileTotal)}
                   </div>
                   <div style={{ fontSize: '8.5px', color: '#64748b' }}>
-                    {draft?.cart?.length || draft?.itemCount || 1} {__t('pos.pos_workspace.pos_visual_floor_canvas.s21', __t('pos.pos_workspace.pos_visual_floor_canvas.s21', "صنف"))}
+                    {tileItemsCount} {__t('pos.pos_workspace.pos_visual_floor_canvas.s21', __t('pos.pos_workspace.pos_visual_floor_canvas.s21', "صنف"))}
+                  </div>
+                  {qrOrder && !draft && (
+                    <div style={{ fontSize: '8.5px', fontWeight: 800, color: '#9333ea' }}>
+                      {__t('pos.pos_workspace.pos_visual_floor_canvas.s24', __t('pos.pos_workspace.pos_visual_floor_canvas.s24', "طلب QR"))}
+                    </div>
+                  )}
+                </div>
+              ) : qrOrder ? (
+                <div style={{ textAlign: 'center', marginTop: '2px' }}>
+                  <div style={{ fontSize: '10px', fontWeight: 800, color: '#7e22ce', lineHeight: 1.1 }}>
+                    {formatCurrency(tileTotal)}
+                  </div>
+                  <div style={{ fontSize: '8.5px', color: '#7e22ce' }}>
+                    {tileItemsCount} {__t('pos.pos_workspace.pos_visual_floor_canvas.s21', __t('pos.pos_workspace.pos_visual_floor_canvas.s21', "صنف"))} • {__t('pos.pos_workspace.pos_visual_floor_canvas.s24', __t('pos.pos_workspace.pos_visual_floor_canvas.s24', "طلب QR"))}
                   </div>
                 </div>
               ) : reservation ? (

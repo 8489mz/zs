@@ -1,8 +1,10 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { Button } from '@/shared/ui/button';
+import { toast } from '@/shared/components/system-alert';
+import { buildQrRange, isDefaultStorefrontSlug } from '@/features/pos/lib/pos-floor-state';
 import {
   PrinterIcon,
   QrCodeIcon,
@@ -36,24 +38,44 @@ export function TableQrPrintDialog({
     enabled: open,
   });
 
-  const activeSlug = slug || storefrontSettings?.slug || 'default';
+  // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I57): the slug was silently
+  // falling back to 'default', so QR cards printed before the slug was
+  // configured pointed at the wrong store. An unconfigured slug is now
+  // a BLOCKING warning, never a silent print.
+  const configuredSlug = slug || storefrontSettings?.slug;
+  const isSlugUnconfigured = isDefaultStorefrontSlug(configuredSlug);
+  const activeSlug = configuredSlug || 'default';
   const activeName = businessName || storefrontSettings?.title || settings?.storeName || 'المطعم';
-  const initialCount = Math.max(1, defaultTablesCount || Number(settings?.restaurantTablesCount || 12));
+  const configuredCount = Math.max(1, defaultTablesCount || Number(settings?.restaurantTablesCount || 12));
+  const initialCount = configuredCount;
 
   const [fromTable, setFromTable] = useState(1);
   const [toTable, setToTable] = useState(initialCount);
   const [cardType, setCardType] = useState<'tent' | 'sticker'>('tent');
   const customInstructions = 'وجّه كاميرا هاتفك لمسح الرمز، تصفح المنيو، وأرسل طلبك فوراً للمطبخ';
 
+  // R-I57: toTable was initialised once at mount, before settings
+  // loaded, and never synced — the range stayed stale. Sync it whenever
+  // the configured count itself changes (settings load / count edit);
+  // user edits to the range do not change the count, so they are kept.
+  const syncedCountRef = useRef(configuredCount);
+  useEffect(() => {
+    if (syncedCountRef.current !== configuredCount) {
+      syncedCountRef.current = configuredCount;
+      setToTable(configuredCount);
+    }
+  }, [configuredCount]);
+
   const baseUrl = useMemo(() => {
     return buildStorePublicUrl(activeSlug);
   }, [activeSlug]);
 
   const tablesList = useMemo(() => {
-    const start = Math.max(1, Number(fromTable) || 1);
-    const end = Math.min(100, Math.max(start, Number(toTable) || 1));
+    // R-I57: the range is clamped to the configured table count —
+    // never print QR cards for tables that do not exist.
+    const range = buildQrRange(fromTable, toTable, configuredCount);
     const items = [];
-    for (let i = start; i <= end; i++) {
+    for (const i of range.tables) {
       const tableUrl = `${baseUrl}?table=${i}`;
       const qrSvg = buildQrSvg(tableUrl, { size: cardType === 'tent' ? 160 : 130, color: '#170e5e' });
       items.push({
@@ -63,11 +85,18 @@ export function TableQrPrintDialog({
       });
     }
     return items;
-  }, [fromTable, toTable, baseUrl, cardType]);
+  }, [fromTable, toTable, baseUrl, cardType, configuredCount]);
 
   const handlePrint = () => {
+    if (isSlugUnconfigured) {
+      toast.error('لم يتم ضبط رابط المتجر (slug) بعد — اضبطه أولاً قبل طباعة كروت الـ QR حتى لا تشير لمتجر خاطئ.');
+      return;
+    }
     const printWin = window.open('', '_blank', 'width=880,height=750');
-    if (!printWin) return;
+    if (!printWin) {
+      toast.error('تعذّر فتح نافذة الطباعة — اسمح بالنوافذ المنبثقة لهذا الموقع ثم حاول مجدداً.');
+      return;
+    }
 
     const cardsHtml = tablesList.map((tbl) => {
       if (cardType === 'sticker') {
@@ -297,6 +326,13 @@ export function TableQrPrintDialog({
           </button>
         </div>
 
+        {/* R-I57: blocking warning while the storefront slug is unconfigured. */}
+        {isSlugUnconfigured && (
+          <div style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: '10px', padding: '10px 14px', fontSize: '12.5px', color: '#991b1b', fontWeight: 800 }}>
+            {t('pos.pos_workspace.table_qr_print_dialog.s17', 'لم يتم ضبط رابط المتجر (slug) بعد — اضبطه من إعدادات المتجر أولاً، وإلا ستشير كروت الـ QR لمتجر خاطئ. الطباعة متوقفة حتى يتم الضبط.')}
+          </div>
+        )}
+
         {/* Controls Bar */}
         <div
           style={{
@@ -332,9 +368,9 @@ export function TableQrPrintDialog({
               <input
                 type="number"
                 min={fromTable}
-                max="100"
+                max={configuredCount}
                 value={toTable}
-                onChange={(e) => setToTable(Math.min(100, Math.max(fromTable, Number(e.target.value) || fromTable)))}
+                onChange={(e) => setToTable(Math.min(configuredCount, Math.max(fromTable, Number(e.target.value) || fromTable)))}
                 style={{ width: '56px', height: '30px', textAlign: 'center', fontWeight: 800, fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
               />
             </div>
@@ -459,6 +495,7 @@ export function TableQrPrintDialog({
               type="button"
               variant="primary"
               onClick={handlePrint}
+              disabled={isSlugUnconfigured}
               style={{
                 minHeight: '34px',
                 height: '34px',

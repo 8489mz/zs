@@ -27,6 +27,8 @@ import {
   printCurrentPosDraft,
 } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import { posApi } from '@/features/pos/api/pos.api';
+import { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced-fnb.api';
+import { getFriendlyApiErrorMessage } from '@/lib/api-error-message';
 import { applyPosLineTransfer, isNegativeStockSalesAllowed, repriceCartLine, getProductItemCode, getSaleUnit, summarizeCartQuantities } from '@/features/pos/lib/pos.domain';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
@@ -837,7 +839,73 @@ export function PosWorkspace() {
           onClearAllDrafts={async () => {
             await pos.clearHeldDrafts();
           }}
-          onTransferTable={(from, to) => {
+          onTransferTable={async (from, to) => {
+            // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I35): real whole-table
+            // transfer — the old handler only renamed in-memory state, so
+            // after a reload the floor, the draft and the QR order
+            // disagreed. Two cases:
+            // (a) the source order is already a held draft: rename it
+            // server-side via renameHeldDraftTable, which updates ONLY
+            // held_sales.table_number (no re-save of the draft).
+            // (b) the source order is the live cart: save it as a held
+            // draft on the target table via the existing saveHeldDraft
+            // (the server enforces one-draft-per-table, so a 409 here
+            // means the target filled in the meantime), then clear the
+            // live cart and set the table. The cart is cleared only
+            // after the save succeeds — never before.
+            const sourceDraft = pos.heldDrafts.find(
+              (d) => String(d.tableNumber).trim() === String(from).trim(),
+            );
+            if (sourceDraft) {
+              try {
+                await restaurantAdvancedFnbApi.renameHeldDraftTable(Number(sourceDraft.id), to);
+                pos.setTableNumber(to);
+                pos.setSubmitMessage(`تم نقل الطلب بنجاح من طاولة ${from} إلى طاولة ${to}.`);
+              } catch (error) {
+                pos.setSubmitMessage(getFriendlyApiErrorMessage(error, `تعذر نقل الطلب من طاولة ${from} إلى طاولة ${to}`));
+              }
+              return;
+            }
+            if (pos.cart.length > 0 && pos.tableNumber === from) {
+              try {
+                await posApi.saveHeldDraft({
+                  customerId: pos.customerId || null,
+                  paymentType: pos.paymentType,
+                  discount: pos.discount,
+                  deliveryFee: pos.deliveryFee,
+                  note: pos.note,
+                  search: pos.search,
+                  priceType: pos.priceType,
+                  branchId: pos.branchId || null,
+                  locationId: pos.locationId || null,
+                  cashAmount: pos.cashAmount,
+                  cardAmount: pos.cardAmount,
+                  transferAmount: pos.transferAmount,
+                  paymentChannel: pos.paymentChannel,
+                  orderType: pos.orderType || 'dine_in',
+                  tableNumber: to,
+                  items: pos.cart.map((item: any) => ({
+                    productId: Number(item.productId || 0),
+                    qty: Number(item.qty || 0),
+                    price: Number(item.price || 0),
+                    name: String(item.name || '').trim(),
+                    unitName: String(item.unitName || '').trim(),
+                    unitMultiplier: Number(item.unitMultiplier || 1),
+                    priceType: item.priceType === 'wholesale' ? 'wholesale' : 'retail',
+                    notes: String(item.notes || '').trim(),
+                    modifiers: item.modifiers || [],
+                    seatNumber: item.seatNumber ? Number(item.seatNumber) : undefined,
+                    course: item.course || undefined,
+                  })),
+                });
+                pos.setCart([]);
+                pos.setTableNumber(to);
+                pos.setSubmitMessage(`تم نقل الطلب بنجاح من طاولة ${from} إلى طاولة ${to}.`);
+              } catch (error) {
+                pos.setSubmitMessage(getFriendlyApiErrorMessage(error, `تعذر نقل الطلب من طاولة ${from} إلى طاولة ${to}`));
+              }
+              return;
+            }
             pos.setTableNumber(to);
             pos.setSubmitMessage(`تم نقل الطلب بنجاح من طاولة ${from} إلى طاولة ${to}.`);
           }}

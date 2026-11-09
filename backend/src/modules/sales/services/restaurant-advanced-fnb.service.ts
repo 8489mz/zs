@@ -1419,6 +1419,14 @@ export class RestaurantAdvancedFnbService {
     }>,
     branchId?: number | null,
   ) {
+    // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I37): design mode is
+    // manager-only. A cashier overwriting the shared floor layout could
+    // hide live orders; the gate lives here (not in a decorator) because
+    // the manager definition is admin role OR pos_manager /
+    // manage_restaurant permission — the same definition the POS uses for
+    // its manager tiles — and PermissionsGuard checks permission strings
+    // only. Read stays authenticated-any.
+    this.assertManagerCaller(scope);
     if (!Array.isArray(layouts)) return [];
 
     return await this.db.transaction().execute(async (trx) => {
@@ -1486,5 +1494,49 @@ export class RestaurantAdvancedFnbService {
       .where('id', '=', id)
       .execute();
     return { success: true };
+  }
+
+  /*
+   * INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I35): real whole-table transfer
+   * for a held draft. The rename updates ONLY held_sales.table_number —
+   * no other column is touched — so it needs no dependency on the
+   * hold/recall snapshot work (R5-B): the draft's cart, totals and
+   * discounts are never re-saved, only re-pointed at the target table.
+   * A target table that already holds a draft is refused (409), the
+   * same one-draft-per-table rule saveHeldSale enforces (R4-D I42).
+   */
+  async renameHeldDraftTable(scope: TenantScope, draftId: number, toTableNumber: string) {
+    const to = String(toTableNumber || '').trim();
+    if (!to) {
+      throw new AppError('رقم الطاولة الجديدة إلزامي.', 'HELD_DRAFT_TABLE_REQUIRED', 400);
+    }
+    const draft = await this.db
+      .selectFrom('held_sales')
+      .selectAll()
+      .where('id', '=', Number(draftId))
+      .where('tenant_id', '=', scope.tenantId)
+      .executeTakeFirst();
+    if (!draft) {
+      throw new AppError('الطلب المحفوظ غير موجود.', 'HELD_DRAFT_NOT_FOUND', 404);
+    }
+    if (String(draft.table_number).trim() === to) return draft;
+    const occupant = await this.db
+      .selectFrom('held_sales')
+      .select('id')
+      .where('tenant_id', '=', scope.tenantId)
+      .where('table_number', '=', to)
+      .where('id', '!=', Number(draftId))
+      .executeTakeFirst();
+    if (occupant) {
+      throw new AppError(`الطاولة ${to} مشغولة بالفعل بطلب محفوظ.`, 'HELD_DRAFT_TABLE_OCCUPIED', 409);
+    }
+    const [renamed] = await this.db
+      .updateTable('held_sales')
+      .set({ table_number: to, updated_at: new Date() })
+      .where('id', '=', Number(draftId))
+      .where('tenant_id', '=', scope.tenantId)
+      .returningAll()
+      .execute();
+    return renamed;
   }
 }

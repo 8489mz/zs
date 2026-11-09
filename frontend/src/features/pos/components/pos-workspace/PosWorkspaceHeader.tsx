@@ -32,6 +32,7 @@ import { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced
 import { playNotificationChime } from '@/lib/audio-chime';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { toast } from '@/shared/components/system-alert';
+import { getFriendlyApiErrorMessage } from '@/lib/api-error-message';
 import { printXReport } from '@/features/cash-drawer';
 import { cashDrawerApi } from '@/lib/api/cash-drawer';
 
@@ -958,7 +959,64 @@ function PosWorkspaceHeaderComponent({
           }
           await pos.recallDraft(draftId);
         }}
-        onTransferTable={(from, to) => {
+        onTransferTable={async (from, to) => {
+          // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I35): real whole-table
+          // transfer, same as PosWorkspace — a held draft is renamed
+          // server-side (table_number only); a live cart is saved as a
+          // held draft on the target table first, then the cart clears.
+          const sourceDraft = pos.heldDrafts.find(
+            (d: any) => String(d.tableNumber).trim() === String(from).trim(),
+          );
+          if (sourceDraft) {
+            try {
+              await restaurantAdvancedFnbApi.renameHeldDraftTable(Number(sourceDraft.id), to);
+              pos.setTableNumber(to);
+              toast.success(`تم نقل الطلب بنجاح من طاولة ${from} إلى طاولة ${to}`);
+            } catch (error) {
+              toast.error(getFriendlyApiErrorMessage(error, `تعذر نقل الطلب من طاولة ${from} إلى طاولة ${to}`));
+            }
+            return;
+          }
+          if (pos.cart.length > 0 && pos.tableNumber === from) {
+            try {
+              await posApi.saveHeldDraft({
+                customerId: pos.customerId || null,
+                paymentType: pos.paymentType,
+                discount: pos.discount,
+                deliveryFee: pos.deliveryFee,
+                note: pos.note,
+                search: pos.search,
+                priceType: pos.priceType,
+                branchId: pos.branchId || null,
+                locationId: pos.locationId || null,
+                cashAmount: pos.cashAmount,
+                cardAmount: pos.cardAmount,
+                transferAmount: pos.transferAmount,
+                paymentChannel: pos.paymentChannel,
+                orderType: pos.orderType || 'dine_in',
+                tableNumber: to,
+                items: pos.cart.map((item: any) => ({
+                  productId: Number(item.productId || 0),
+                  qty: Number(item.qty || 0),
+                  price: Number(item.price || 0),
+                  name: String(item.name || '').trim(),
+                  unitName: String(item.unitName || '').trim(),
+                  unitMultiplier: Number(item.unitMultiplier || 1),
+                  priceType: item.priceType === 'wholesale' ? 'wholesale' : 'retail',
+                  notes: String(item.notes || '').trim(),
+                  modifiers: item.modifiers || [],
+                  seatNumber: item.seatNumber ? Number(item.seatNumber) : undefined,
+                  course: item.course || undefined,
+                })),
+              });
+              pos.setCart([]);
+              pos.setTableNumber(to);
+              toast.success(`تم نقل الطلب بنجاح من طاولة ${from} إلى طاولة ${to}`);
+            } catch (error) {
+              toast.error(getFriendlyApiErrorMessage(error, `تعذر نقل الطلب من طاولة ${from} إلى طاولة ${to}`));
+            }
+            return;
+          }
           pos.setTableNumber(to);
           toast.success(`تم نقل الطلب بنجاح من طاولة ${from} إلى طاولة ${to}`);
         }}

@@ -380,6 +380,12 @@ export const restaurantAdvancedFnbApi = {
   deleteTableLayout: async (id: number): Promise<{ success: boolean }> => {
     return apiPost<{ success: boolean }>(`/api/sales/restaurant/table-layouts/${id}/delete`, {});
   },
+
+  // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I35): whole-table transfer of a
+  // held draft — renames ONLY held_sales.table_number server-side.
+  renameHeldDraftTable: async (id: number, tableNumber: string): Promise<unknown> => {
+    return apiPost(`/api/sales/restaurant/held-drafts/${id}/rename-table`, { tableNumber });
+  },
 };
 
 export interface TableLayout {

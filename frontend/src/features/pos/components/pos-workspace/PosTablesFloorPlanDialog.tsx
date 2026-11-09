@@ -20,6 +20,8 @@ import { TableQrPrintDialog } from './TableQrPrintDialog';
 import { PosKitchenPrintersModal } from './PosKitchenPrintersModal';
 import { PosTransferItemModal, type TransferableCartItem } from './PosTransferItemModal';
 import { PosVisualFloorCanvas } from './PosVisualFloorCanvas';
+import { buildFloorState } from '@/features/pos/lib/pos-floor-state';
+import { useAuthStore, isAdminUser } from '@/stores/auth-store';
 import { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced-fnb.api';
 import type { AppSettings } from '@/types/domain';
 import type { HeldPosDraftSummary } from '@/features/pos/components/pos-cart-panel/posCartPanel.types';
@@ -71,6 +73,11 @@ export function PosTablesFloorPlanDialog({
 }: PosTablesFloorPlanDialogProps) {
   const { t: __t } = useTranslation();
   const queryClient = useQueryClient();
+  // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I37): design mode is manager-only
+  // — same manager definition R3-E used (admin role OR pos_manager /
+  // manage_restaurant permission). The server save enforces it too.
+  const currentUser = useAuthStore((state: any) => state.user);
+  const isManager = isAdminUser(currentUser) || currentUser?.permissions?.includes('pos_manager') || currentUser?.permissions?.includes('manage_restaurant');
   const [activeTab, setActiveTab] = useState<'floor' | 'list'>(initialTab);
   const [floorViewMode, setFloorViewMode] = useState<'canvas' | 'grid'>('canvas');
   const [customInput, setCustomInput] = useState('');
@@ -122,8 +129,17 @@ export function PosTablesFloorPlanDialog({
   });
   const [selectedZone, setSelectedZone] = useState<string>('all');
 
-  // Today's Table Reservations
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // Today's Table Reservations — INV-REST-FLOOR-STATE-TRUTH (R5-D,
+  // R-I38): the tenant-local date, never the UTC slice. toISOString()
+  // between 00:00-02:00 EET returns the previous day, so the floor
+  // fetched yesterday's reservations. Same local-parts pattern as
+  // todayLocalIsoDate() in pos.domain.ts.
+  const todayStr = (() => {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${now.getFullYear()}-${month}-${day}`;
+  })();
   const { data: todayReservations = [] } = useQuery({
     queryKey: ['table-reservations-floor', todayStr],
     queryFn: () => tableReservationsApi.listReservations({ date: todayStr }),
@@ -268,13 +284,22 @@ export function PosTablesFloorPlanDialog({
     return zoneTableSet.has(String(t).trim());
   });
 
-  // Map occupied tables by table number
-  const occupiedMap = new Map<string, HeldPosDraftSummary>();
+
+  // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I36): occupiedMap keeps ALL
+  // drafts per table (a list, never silently overwritten — a second
+  // draft on one table used to vanish from the floor). The single
+  // floor-state derivation below is what the grid, the canvas and the
+  // stats all render from: one source, so no view can disagree with
+  // another about money, counts or occupancy.
+  const occupiedMap = new Map<string, HeldPosDraftSummary[]>();
   const nonTableDrafts: HeldPosDraftSummary[] = [];
 
   for (const draft of heldDrafts) {
     if (draft.tableNumber && String(draft.tableNumber).trim()) {
-      occupiedMap.set(String(draft.tableNumber).trim(), draft);
+      const key = String(draft.tableNumber).trim();
+      const existing = occupiedMap.get(key);
+      if (existing) existing.push(draft);
+      else occupiedMap.set(key, [draft]);
     } else {
       nonTableDrafts.push(draft);
     }
@@ -298,16 +323,33 @@ export function PosTablesFloorPlanDialog({
     !occupiedMap.has(currentTableNumber)
   );
 
-  // Calculate statistics (including the active live cart table and standalone QR orders)
-  const qrOnlyCount = Array.from(qrOrdersMap.keys()).filter((t) => !occupiedMap.has(t) && t !== currentTableNumber).length;
-  const occupiedCount = occupiedMap.size + (currentTableHasLiveCart ? 1 : 0) + qrOnlyCount;
-  const totalOccupiedMoney =
-    Array.from(occupiedMap.values()).reduce((sum, d) => sum + Number(d.total || 0), 0) +
-    (currentTableHasLiveCart ? Number(currentCartTotal || 0) : 0) +
-    Array.from(qrOrdersMap.entries())
-      .filter(([t]) => !occupiedMap.has(t) && t !== currentTableNumber)
-      .reduce((sum, [, ord]) => sum + Number(ord.totalAmount || 0), 0);
-  const availableCount = Math.max(0, tablesCount - occupiedCount);
+  // Single floor-state derivation (R-I36): the grid, the canvas and the
+  // stats below all read this. QR money on a draft table is counted
+  // once (never lost, never doubled); a KDS ticket alone is a display
+  // badge, not occupancy; a reservation alone is reserved, not occupied.
+  const floorState = buildFloorState({
+    drafts: heldDrafts,
+    qrOrders: onlineOrders,
+    kdsTickets,
+    liveCart:
+      currentTableNumber && currentCartItemsCount > 0
+        ? { tableNumber: currentTableNumber, total: Number(currentCartTotal || 0), itemsCount: currentCartItemsCount }
+        : null,
+    reservations: todayReservations,
+    tablesCount,
+  });
+  const occupiedCount = floorState.occupiedCount;
+  const totalOccupiedMoney = floorState.totalOccupiedMoney;
+  const availableCount = floorState.availableCount;
+  // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I38): custom tables (a draft
+  // whose number is not in 1..N, e.g. "VIP 2") render as extra tiles on
+  // the floor — zero schema change. They show under "all" zones, or
+  // under a zone that lists them by name.
+  const customTableTiles = floorState.customTables
+    .map((t) => t.tableNumber)
+    .filter((t) => !displayedTables.includes(t))
+    .filter((t) => selectedZone === 'all' || !zoneTableSet || zoneTableSet.size === 0 || zoneTableSet.has(String(t).trim()));
+  const gridTables = [...displayedTables, ...customTableTiles];
 
   const handleRecall = useCallback(async (draftId: string) => {
     setPendingRecallId(draftId);
@@ -322,11 +364,22 @@ export function PosTablesFloorPlanDialog({
   const handleTableClick = async (tableNum: string) => {
     if (isTransferring) {
       if (currentTableNumber && currentTableNumber !== tableNum) {
-        const isTargetOccupied = occupiedMap.has(tableNum);
+        // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I35): a target with only a
+        // pending QR order is occupied too — renaming the live cart onto
+        // it would put two orders on one table. Refuse with a named
+        // message and stay in transfer mode; never merge silently.
+        const qrTarget = qrOrdersMap.get(tableNum);
+        if (qrTarget) {
+          toast.error(`الطاولة ${tableNum} لديها طلب QR بقيمة ${formatCurrency(qrTarget.totalAmount || 0)} — لا يمكن نقل الطلب إليها. اختر طاولة أخرى.`);
+          return;
+        }
+        const targetDrafts = occupiedMap.get(tableNum);
+        const isTargetOccupied = Boolean(targetDrafts && targetDrafts.length > 0);
         if (isTargetOccupied && onMergeTable) {
+          const firstDraft = targetDrafts![0];
           const confirmMerge = await systemConfirm({
             title: 'دمج طلب طاولة',
-            message: `الطاولة ${tableNum} مشغولة بالفعل بطلب قيمته ${formatCurrency(occupiedMap.get(tableNum)?.total || 0)}.\n\nهل ترغب في دمج طلب الطاولة ${currentTableNumber} مع هذه الطاولة؟`,
+            message: `الطاولة ${tableNum} مشغولة بالفعل بطلب قيمته ${formatCurrency(firstDraft.total || 0)}${targetDrafts!.length > 1 ? ` (وهناك ${targetDrafts!.length} طلبات محفوظة على هذه الطاولة)` : ''}.\n\nهل ترغب في دمج طلب الطاولة ${currentTableNumber} مع هذه الطاولة؟`,
             confirmText: 'دمج الطلب',
             cancelText: 'إلغاء',
           });
@@ -353,7 +406,8 @@ export function PosTablesFloorPlanDialog({
       return;
     }
 
-    const occupiedDraft = occupiedMap.get(tableNum);
+    const occupiedDrafts = occupiedMap.get(tableNum);
+    const occupiedDraft = occupiedDrafts?.[0];
     if (occupiedDraft) {
       await handleRecall(occupiedDraft.id);
       return;
@@ -398,9 +452,19 @@ export function PosTablesFloorPlanDialog({
     // the occupied check the floor map enforces, creating a second
     // draft on the same table. Tap the occupied table on the map to
     // recall its draft instead.
-    const occupiedDraft = occupiedMap.get(trimmed);
+    const occupiedDrafts = occupiedMap.get(trimmed);
+    const occupiedDraft = occupiedDrafts?.[0];
     if (occupiedDraft) {
       toast.error(`الطاولة ${trimmed} مشغولة بالفعل بطلب قيمته ${formatCurrency(occupiedDraft.total || 0)}. استدعِ الطلب المحفوظ من الخريطة أولًا.`);
+      return;
+    }
+
+    // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I38): the same refusal for a
+    // QR-occupied custom name — the old check consulted held drafts
+    // only, so a second order could start on a QR table.
+    const qrOccupied = qrOrdersMap.get(trimmed);
+    if (qrOccupied) {
+      toast.error(`الطاولة ${trimmed} لديها طلب QR بقيمة ${formatCurrency(qrOccupied.totalAmount || 0)} — استدعِ طلب الـ QR من الخريطة أولًا.`);
       return;
     }
 
@@ -751,7 +815,15 @@ export function PosTablesFloorPlanDialog({
                   <span>{__t('pos.pos_workspace.pos_tables_floor_plan_dialog.s24', __t('pos.pos_workspace.pos_tables_floor_plan_dialog.s24', "طابعات المطبخ والبار"))}</span>
                 </button>
 
-                {currentTableNumber && (
+                {/* INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I35): the transfer
+                    toggle shows only when there is a live cart OR a held
+                    draft to move — merely having a table number set moved
+                    nothing, the real order stayed a held draft. */}
+                {Boolean(
+                  currentTableNumber &&
+                  (currentCartItemsCount > 0 ||
+                    heldDrafts.some((d) => String(d.tableNumber || '').trim() === String(currentTableNumber).trim())),
+                ) && (
                   <button
                     type="button"
                     onClick={() => setIsTransferring(!isTransferring)}
@@ -924,7 +996,10 @@ export function PosTablesFloorPlanDialog({
                 tablesCount={tablesCount}
                 zones={zones}
                 selectedZone={selectedZone}
+                zoneTableSet={zoneTableSet}
                 occupiedMap={occupiedMap}
+                floorState={floorState.byTable}
+                isManager={isManager}
                 currentTableNumber={currentTableNumber}
                 confirmedReservationsMap={confirmedReservationsMap}
                 pendingCallsByTable={pendingCallsByTable}
@@ -945,8 +1020,9 @@ export function PosTablesFloorPlanDialog({
                 padding: '4px',
               }}
             >
-              {displayedTables.map((tableNum) => {
-                const occupied = occupiedMap.get(tableNum);
+              {gridTables.map((tableNum) => {
+                const occupied = occupiedMap.get(tableNum)?.[0];
+                const duplicateDraftCount = (occupiedMap.get(tableNum) || []).length;
                 const qrOrder = qrOrdersMap.get(tableNum);
                 const kdsTicket = kdsTableMap.get(tableNum);
                 const tableCalls = pendingCallsByTable.get(tableNum) || [];
@@ -1085,6 +1161,11 @@ export function PosTablesFloorPlanDialog({
                         <div style={{ fontSize: '10.5px', color: '#64748b', marginTop: '1px' }}>
                           {occupied.itemsCount} {__t('pos.pos_workspace.pos_tables_floor_plan_dialog.s45', __t('pos.pos_workspace.pos_tables_floor_plan_dialog.s45', "أصناف • معلقة"))}
                         </div>
+                        {duplicateDraftCount > 1 && (
+                          <div style={{ fontSize: '9.5px', color: '#b45309', fontWeight: 800, marginTop: '2px', background: '#fef3c7', borderRadius: '4px', padding: '1px 5px' }}>
+                            {duplicateDraftCount} {__t('pos.pos_workspace.pos_tables_floor_plan_dialog.s80', __t('pos.pos_workspace.pos_tables_floor_plan_dialog.s80', "طلبات محفوظة على هذه الطاولة"))}
+                          </div>
+                        )}
                         <button
                           type="button"
                           onClick={(e) => {

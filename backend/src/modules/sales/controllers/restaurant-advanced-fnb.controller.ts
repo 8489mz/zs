@@ -327,4 +327,18 @@ export class RestaurantAdvancedFnbController {
     const scope = requireTenantScope(req.authContext!);
     return this.service.deleteTableLayout(scope, id);
   }
+
+  // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I35): whole-table transfer for a
+  // held draft renames ONLY held_sales.table_number (see
+  // renameHeldDraftTable). The target-occupied refusal lives in the
+  // service (409), the merge path stays in the POS dialog.
+  @Post('held-drafts/:id/rename-table')
+  async renameHeldDraftTable(
+    @Req() req: RequestWithAuth,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: { tableNumber?: string },
+  ) {
+    const scope = requireTenantScope(req.authContext!);
+    return this.service.renameHeldDraftTable(scope, id, String(dto?.tableNumber || ''));
+  }
 }
