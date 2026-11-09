@@ -55,4 +55,57 @@ describe('cash-drawer movement request keys', () => {
     expect(mayReleaseCashDrawerMovementRequestAttempt({ status: 0 })).toBe(false);
     expect(mayReleaseCashDrawerMovementRequestAttempt(new Error('network down'))).toBe(false);
   });
+
+  it('carries the safe-transfer counterpart through normalization (INV-REST-SAFE-TRANSFER-TYPES)', () => {
+    const drop = normalizeCashDrawerMovementRequestPayload({
+      shiftId: '7', type: 'safe_drop', amount: 50, note: 'drop', counterpartAccountId: '1120',
+    });
+    expect(drop.counterpartAccountId).toBe(1120);
+    const replenishment = normalizeCashDrawerMovementRequestPayload({
+      shiftId: '7', type: 'safe_replenishment', amount: 30, note: 'top-up', counterpartAccountId: 1120,
+    });
+    expect(replenishment.counterpartAccountId).toBe(1120);
+    const plain = normalizeCashDrawerMovementRequestPayload({ shiftId: '7', type: 'cash_in', amount: 20, note: 'in' });
+    expect(plain.counterpartAccountId).toBeUndefined();
+  });
+
+  it('fingerprints differ when only the counterpart differs', () => {
+    const a = normalizeCashDrawerMovementRequestPayload({
+      shiftId: '7', type: 'safe_drop', amount: 50, note: 'drop', counterpartAccountId: 1120,
+    });
+    const b = normalizeCashDrawerMovementRequestPayload({
+      shiftId: '7', type: 'safe_drop', amount: 50, note: 'drop', counterpartAccountId: 1130,
+    });
+    expect(cashDrawerMovementRequestFingerprint(a)).not.toBe(cashDrawerMovementRequestFingerprint(b));
+    const aAgain = normalizeCashDrawerMovementRequestPayload({
+      shiftId: '7', type: 'safe_drop', amount: 50, note: 'drop', counterpartAccountId: '1120',
+    });
+    expect(cashDrawerMovementRequestFingerprint(a)).toBe(cashDrawerMovementRequestFingerprint(aAgain));
+  });
+
+  it('throws when only the counterpart changes while an attempt is unresolved', () => {
+    const first = acquireCashDrawerMovementRequestAttempt(
+      null,
+      normalizeCashDrawerMovementRequestPayload({
+        shiftId: '7', type: 'safe_drop', amount: 50, note: 'drop', counterpartAccountId: 1120,
+      }),
+      () => '123e4567-e89b-12d3-a456-426614174000',
+    );
+    expect(() =>
+      acquireCashDrawerMovementRequestAttempt(
+        first,
+        normalizeCashDrawerMovementRequestPayload({
+          shiftId: '7', type: 'safe_drop', amount: 50, note: 'drop', counterpartAccountId: 1130,
+        }),
+      ),
+    ).toThrow();
+    expect(
+      acquireCashDrawerMovementRequestAttempt(
+        first,
+        normalizeCashDrawerMovementRequestPayload({
+          shiftId: '7', type: 'safe_drop', amount: 50, note: 'drop', counterpartAccountId: 1120,
+        }),
+      ),
+    ).toBe(first);
+  });
 });

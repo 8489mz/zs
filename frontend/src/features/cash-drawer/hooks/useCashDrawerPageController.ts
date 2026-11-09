@@ -20,9 +20,11 @@ export interface OpenShiftValues {
 
 export interface MovementValues {
   shiftId: string;
-  type: 'cash_in' | 'cash_out';
+  type: 'cash_in' | 'cash_out' | 'safe_drop' | 'safe_replenishment';
   amount: number;
   note: string;
+  /** Caller-named counterpart cash/bank account for safe_drop / safe_replenishment. */
+  counterpartAccountId?: string;
   managerPin?: string;
 }
 
@@ -70,7 +72,7 @@ export function useCashDrawerPageController() {
   const summary = query.data?.summary || { totalItems: 0, openShiftCount: 0, pendingReviewCount: 0, openShiftDocNo: '', totalVariance: 0 };
 
   const openForm = useForm<OpenShiftValues>({ defaultValues: { openingCash: 0, note: '', branchId: '', locationId: '', password: '' } });
-  const movementForm = useForm<MovementValues>({ defaultValues: { shiftId: '', type: 'cash_in', amount: 0, note: '', managerPin: '' } });
+  const movementForm = useForm<MovementValues>({ defaultValues: { shiftId: '', type: 'cash_in', amount: 0, note: '', counterpartAccountId: '', managerPin: '' } });
   const closeForm = useForm<CloseShiftValues>({
     defaultValues: {
       shiftId: '',
@@ -108,7 +110,7 @@ export function useCashDrawerPageController() {
         password: '',
       });
     },
-    onMovementSuccess: () => movementForm.reset({ shiftId: '', type: 'cash_in', amount: 0, note: '', managerPin: '' }),
+    onMovementSuccess: () => movementForm.reset({ shiftId: '', type: 'cash_in', amount: 0, note: '', counterpartAccountId: '', managerPin: '' }),
     onCloseSuccess: () => closeForm.reset({
       shiftId: '',
       countedCash: undefined as unknown as number,
@@ -276,12 +278,17 @@ export function useCashDrawerPageController() {
     }
   };
 
-  const handleMovementSubmit = movementForm.handleSubmit(async (values) => {
-    try {
-      await movementMutation.mutateAsync(values);
-    } catch {
-      // mutation hook exposes error
-    }
+  // INV-REST-SAFE-TRANSFER-TYPES: movements post through the
+  // confirm dialog, which collects the approval secret the backend
+  // requires for every movement (manager PIN for cash_out /
+  // safe_drop by non-managers, own password otherwise). The direct
+  // mutation path sent managerPin '' and every movement failed
+  // server-side (CURRENT_USER_PASSWORD_REQUIRED / MANAGER_PIN_INVALID),
+  // so the safe-transfer options would have been dead on arrival.
+  // This restores the routing from c1483d61 that 1613c95b dropped
+  // when the approval check was (temporarily) removed server-side.
+  const handleMovementSubmit = movementForm.handleSubmit((values) => {
+    setConfirmAction({ kind: 'movement', values });
   });
 
   const handleCloseSubmit = closeForm.handleSubmit(async (values) => {

@@ -21,19 +21,34 @@
  * localStorage persistence is added here.
  */
 
+export type CashDrawerMovementType = 'cash_in' | 'cash_out' | 'safe_drop' | 'safe_replenishment';
+
 export interface CashDrawerMovementFormPayload {
   shiftId: string;
-  type: 'cash_in' | 'cash_out';
+  type: CashDrawerMovementType;
   amount: string | number;
   note: string;
+  /** Caller-named counterpart cash/bank account for safe_drop / safe_replenishment. */
+  counterpartAccountId?: string | number;
 }
 
 /** The exact movement body sent, minus managerPin and requestKey. */
 export interface CashDrawerMovementRequestPayload {
   shiftId: string;
-  type: 'cash_in' | 'cash_out';
+  type: CashDrawerMovementType;
   amount: number;
   note: string;
+  counterpartAccountId?: number;
+}
+
+/**
+ * A safe transfer names its counterpart cash/bank account; the other
+ * types post to the fixed 7100/6950 legs and carry no counterpart
+ * (INV-REST-SAFE-TRANSFER-TYPES). Mirrors the backend helper of the
+ * same name in cash-drawer.helper.ts.
+ */
+export function isCashDrawerTransferType(type: string): boolean {
+  return type === 'safe_drop' || type === 'safe_replenishment';
 }
 
 export interface CashDrawerMovementRequestAttempt {
@@ -44,16 +59,21 @@ export interface CashDrawerMovementRequestAttempt {
 /**
  * Normalize a form payload to the exact body the mutation sends.
  * The mapping is preserved unchanged: amount is coerced with Number
- * and the note is trimmed, exactly as the server stores it.
+ * and the note is trimmed, exactly as the server stores it. The
+ * counterpart account id is carried as a number when present; it is
+ * part of the payload identity, so two transfers that differ only by
+ * counterpart must never share a requestKey (INV-REST-SAFE-TRANSFER-TYPES).
  */
 export function normalizeCashDrawerMovementRequestPayload(
   payload: CashDrawerMovementFormPayload,
 ): CashDrawerMovementRequestPayload {
+  const counterpart = Number(payload.counterpartAccountId || 0);
   return {
     shiftId: payload.shiftId,
     type: payload.type,
     amount: Number(payload.amount || 0),
     note: String(payload.note || '').trim(),
+    counterpartAccountId: counterpart > 0 ? counterpart : undefined,
   };
 }
 
@@ -66,7 +86,7 @@ export function normalizeCashDrawerMovementRequestPayload(
 export function cashDrawerMovementRequestFingerprint(
   payload: CashDrawerMovementRequestPayload,
 ): string {
-  return JSON.stringify([payload.shiftId, payload.type, payload.amount, payload.note]);
+  return JSON.stringify([payload.shiftId, payload.type, payload.amount, payload.note, payload.counterpartAccountId ?? null]);
 }
 
 function defaultGenerateCashDrawerMovementRequestKey(): string {

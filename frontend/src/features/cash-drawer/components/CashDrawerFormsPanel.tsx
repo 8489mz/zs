@@ -1,4 +1,8 @@
 import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
+import { http } from '@/lib/http';
+import { isCashBankAccount } from '@/features/accounting';
+import { isCashDrawerTransferType } from '@/features/cash-drawer/lib/cash-drawer-movement-request-key';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { useEffect, useMemo, useState } from 'react';
 import { Controller, useWatch, type Control, type UseFormReturn } from 'react-hook-form';
@@ -50,6 +54,18 @@ interface CashDrawerFormsPanelProps {
 }
 
 type DetailChannel = 'cardDetails' | 'walletDetails' | 'instapayDetails';
+
+/** Minimal shape of the accounts-endpoint rows the counterpart picker needs. */
+interface CashBankAccountRow {
+  id: string | number;
+  code: string;
+  nameAr?: string | null;
+  nameEn?: string | null;
+  accountType?: string | null;
+  normalBalance?: string | null;
+  isActive?: boolean | null;
+  flags?: { isCashBank?: boolean | null } | null;
+}
 const EMPTY_DETAIL_ROWS: Array<{ amount?: number }> = [];
 
 function normalizeCount(value: unknown): number {
@@ -538,6 +554,27 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
   const [showInstapayDetails, setShowInstapayDetails] = useState(false);
   const isKwd = getGlobalSystemCurrency() === 'KWD';
 
+  // INV-REST-SAFE-TRANSFER-TYPES: the counterpart picker lists only
+  // the accounts the backend accepts for a safe transfer (active
+  // cash/bank assets with a debit normal balance). Anything else
+  // would be rejected server-side, so it is never offered — the
+  // same filter rule as the import treasury dropdowns
+  // (INV-IMPORT-ISCASHBANK-SWEEP).
+  const { data: accountsData } = useQuery({
+    queryKey: ['accounts-list'],
+    queryFn: () => http<{ accounts: CashBankAccountRow[] }>('/api/accounting/accounts').catch(() => ({ accounts: [] })),
+  });
+  const cashBankAccounts = useMemo(
+    () =>
+      (accountsData?.accounts || []).filter(
+        (a) =>
+          isCashBankAccount(a) && a?.isActive !== false && a?.accountType === 'asset' && a?.normalBalance === 'debit',
+      ),
+    [accountsData],
+  );
+  const movementType = props.movementForm.watch('type');
+  const isTransferMovement = isCashDrawerTransferType(movementType);
+
   const [offlinePendingCount, setOfflinePendingCount] = useState(() => {
     try {
       return getOfflineSalesQueue().length;
@@ -811,23 +848,55 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
               render={({ field }) => (
                 <CustomSelect
                   value={field.value}
-                  onChange={field.onChange}
+                  onChange={(value) => {
+                    field.onChange(value);
+                    if (!isCashDrawerTransferType(value)) {
+                      props.movementForm.setValue('counterpartAccountId', '');
+                    }
+                  }}
                   disabled={props.movementMutation.isPending}
                   options={[
                     { value: 'cash_in', label: t('cash_drawer.cash_drawer_forms_panel.s35', "إيداع") },
                     { value: 'cash_out', label: t('cash_drawer.cash_drawer_forms_panel.s36', "صرف") },
+                    { value: 'safe_drop', label: t('cash_drawer.cash_drawer_forms_panel.s105', "تحويل للخزنة (إيداع آمن)") },
+                    { value: 'safe_replenishment', label: t('cash_drawer.cash_drawer_forms_panel.s106', "تغذية الدرج من الخزنة") },
                   ]}
                 />
               )}
             />
           </Field>
+          {isTransferMovement && (
+            <Field
+              label={t('cash_drawer.cash_drawer_forms_panel.s107', "الحساب المقابل (خزنة / بنك)")}
+              hint={cashBankAccounts.length === 0 ? t('cash_drawer.cash_drawer_forms_panel.s109', "لا توجد حسابات نقدية أو بنكية نشطة") : undefined}
+            >
+              <Controller
+                name="counterpartAccountId"
+                control={props.movementForm.control}
+                render={({ field }) => (
+                  <CustomSelect
+                    value={field.value || ''}
+                    onChange={field.onChange}
+                    disabled={props.movementMutation.isPending}
+                    options={[
+                      { value: '', label: t('cash_drawer.cash_drawer_forms_panel.s108', "اختر الحساب المقابل") },
+                      ...cashBankAccounts.map((a) => ({
+                        value: String(a.id),
+                        label: `${a.code} — ${a.nameAr || a.nameEn || a.code}`,
+                      })),
+                    ]}
+                  />
+                )}
+              />
+            </Field>
+          )}
           <Field label={t('cash_drawer.cash_drawer_forms_panel.s37', "المبلغ")}><input type="number" step="0.01" {...props.movementForm.register('amount', { valueAsNumber: true })} disabled={props.movementMutation.isPending} onFocus={(e) => e.target.select()} /></Field>
           <Field label={t('cash_drawer.cash_drawer_forms_panel.s38', "سبب الحركة *")}><textarea rows={2} placeholder={t('cash_drawer.cash_drawer_forms_panel.s39', "اكتب سبب الصرف أو الإيداع بوضوح")} required {...props.movementForm.register('note', { required: true })} disabled={props.movementMutation.isPending} /></Field>
           <MutationFeedback isError={props.movementMutation.isError} isSuccess={props.movementMutation.isSuccess} error={props.movementMutation.error} errorFallback={t('cash_drawer.cash_drawer_forms_panel.s40', "تعذر تسجيل الحركة")} successText={t('cash_drawer.cash_drawer_forms_panel.s41', "تم تسجيل حركة درج النقدية بنجاح.")} />
           <SubmitButton
             type="submit"
             isPending={props.movementMutation.isPending}
-            disabled={!props.movementForm.watch('shiftId') || !(Number(props.movementForm.watch('amount')) > 0) || !String(props.movementForm.watch('note') || '').trim()}
+            disabled={!props.movementForm.watch('shiftId') || !(Number(props.movementForm.watch('amount')) > 0) || !String(props.movementForm.watch('note') || '').trim() || (isTransferMovement && !props.movementForm.watch('counterpartAccountId'))}
             idleText={t('cash_drawer.cash_drawer_forms_panel.s42', "حفظ الحركة")}
             pendingText={t('cash_drawer.cash_drawer_forms_panel.s43', "جارٍ الحفظ...")}
           />

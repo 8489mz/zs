@@ -1,0 +1,160 @@
+/* R-B15 / INV-REST-SAFE-TRANSFER-TYPES: the drawer movement form
+ * must offer the two safe-transfer types (safe_drop: cash out of the
+ * drawer into the safe/bank; safe_replenishment: float top-up from
+ * the safe/bank into the drawer) with a counterpart cash/bank
+ * account picker, and must not let a transfer submit without one.
+ * Before this fix the form offered only cash_in/cash_out, so every
+ * top-up posted as 7100 misc income and every deposit as 6950
+ * expense. The backend transfer posting itself is pinned by
+ * backend/test/critical/cash-drawer-movement-types.spec.ts; this
+ * spec pins the form half. The approval secret (manager PIN /
+ * user password) is collected by the page's confirm dialog, not
+ * by this form, so it is out of scope here.
+ */
+
+import { fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { describe, expect, it, vi } from 'vitest';
+import { useForm } from 'react-hook-form';
+import { CashDrawerFormsPanel } from './CashDrawerFormsPanel';
+import type {
+  CloseShiftValues,
+  MovementValues,
+  OpenShiftValues,
+} from '@/features/cash-drawer/hooks/useCashDrawerPageController';
+
+const mockAccounts = [
+  {
+    id: '1110', code: '1110', nameAr: 'صندوق الدرج', nameEn: '', accountType: 'asset',
+    accountGroup: 'current_assets', parentId: '', depth: 1, normalBalance: 'debit',
+    balance: 0, isActive: true, isSystem: true, allowManualEntries: true,
+    isControlAccount: false, isMonetary: true, revaluationCurrency: null,
+    flags: { isCashBank: true, isReceivable: false, isPayable: false, isInventory: false, isTax: false },
+    sortOrder: 0,
+  },
+  {
+    id: '1120', code: '1120', nameAr: 'بنك', nameEn: '', accountType: 'asset',
+    accountGroup: 'current_assets', parentId: '', depth: 1, normalBalance: 'debit',
+    balance: 0, isActive: true, isSystem: false, allowManualEntries: true,
+    isControlAccount: false, isMonetary: true, revaluationCurrency: null,
+    flags: { isCashBank: true, isReceivable: false, isPayable: false, isInventory: false, isTax: false },
+    sortOrder: 0,
+  },
+  {
+    id: '6950', code: '6950', nameAr: 'مصروفات', nameEn: '', accountType: 'expense',
+    accountGroup: 'expenses', parentId: '', depth: 1, normalBalance: 'debit',
+    balance: 0, isActive: true, isSystem: false, allowManualEntries: true,
+    isControlAccount: false, isMonetary: false, revaluationCurrency: null,
+    flags: { isCashBank: false, isReceivable: false, isPayable: false, isInventory: false, isTax: false },
+    sortOrder: 0,
+  },
+];
+
+vi.mock('@/lib/http', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/http')>();
+  return {
+    ...actual,
+    http: vi.fn(() => Promise.resolve({ accounts: mockAccounts })),
+  };
+});
+
+// jsdom has no Element.scrollIntoView; the shared CustomSelect calls it
+// when its dropdown opens (same stub as import-payee-selects.spec.tsx).
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
+
+const idleMutation = { isPending: false, isError: false, isSuccess: false, error: null, reset: vi.fn() };
+
+function Harness({ onMovementSubmit = vi.fn() }: { onMovementSubmit?: () => void }) {
+  const movementForm = useForm<MovementValues>({
+    defaultValues: { shiftId: '1', type: 'cash_in', amount: 100, note: 'تغذية', managerPin: '' },
+  });
+  const openForm = useForm<OpenShiftValues>({
+    defaultValues: { openingCash: 0, note: '', branchId: '', locationId: '' },
+  });
+  const closeForm = useForm<CloseShiftValues>({
+    defaultValues: {
+      shiftId: '', countedCash: 0, cardDeclaredTotal: 0, cardOperationCount: 0,
+      walletDeclaredTotal: 0, walletOperationCount: 0, instapayDeclaredTotal: 0,
+      instapayOperationCount: 0, cardDetails: [], walletDetails: [], instapayDetails: [],
+      note: '', managerPin: '',
+    },
+  });
+  const shift = { id: '1', openedByName: 'أمين الصندوق', docNo: 'SHIFT-1' };
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return (
+    <QueryClientProvider client={queryClient}>
+      <CashDrawerFormsPanel
+        activeForm="movement"
+        onCloseForm={vi.fn()}
+        branches={[]}
+        locations={[]}
+        openOptions={[shift as never]}
+        myOpenShift={shift as never}
+        openForm={openForm}
+        movementForm={movementForm}
+        closeForm={closeForm}
+        openMutation={idleMutation}
+        movementMutation={idleMutation}
+        closeMutation={idleMutation}
+        closeExpectedCash={0}
+        closeVariancePreview={0}
+        closeNoteValue=""
+        onMovementSubmit={onMovementSubmit}
+        onCloseSubmit={vi.fn()}
+      />
+    </QueryClientProvider>
+  );
+}
+
+function typeCombobox(): HTMLElement {
+  const boxes = screen.getAllByRole('combobox');
+  expect(boxes.length).toBeGreaterThanOrEqual(1);
+  return boxes[0];
+}
+
+async function chooseType(label: string): Promise<void> {
+  fireEvent.click(typeCombobox());
+  fireEvent.click(await screen.findByText(label));
+}
+
+describe('CashDrawerFormsPanel movement types', () => {
+  it('offers the two safe-transfer types alongside cash_in and cash_out', async () => {
+    render(<Harness />);
+    fireEvent.click(typeCombobox());
+    expect(await screen.findByText('إيداع')).toBeTruthy();
+    expect(await screen.findByText('صرف')).toBeTruthy();
+    expect(await screen.findByText('تحويل للخزنة (إيداع آمن)')).toBeTruthy();
+    expect(await screen.findByText('تغذية الدرج من الخزنة')).toBeTruthy();
+  });
+
+  it('shows a cash/bank counterpart picker for safe_drop and gates submit on it', async () => {
+    render(<Harness />);
+    await chooseType('تحويل للخزنة (إيداع آمن)');
+    expect(await screen.findByText('الحساب المقابل (خزنة / بنك)')).toBeTruthy();
+    const submit = screen.getByRole('button', { name: 'حفظ الحركة' });
+    expect(submit).toBeDisabled();
+    const boxes = screen.getAllByRole('combobox');
+    expect(boxes.length).toBe(2);
+    fireEvent.click(boxes[1]);
+    expect(await screen.findByText('1120 — بنك')).toBeTruthy();
+    expect(await screen.findByText('1110 — صندوق الدرج')).toBeTruthy();
+    expect(screen.queryByText('6950 — مصروفات')).toBeNull();
+    fireEvent.click(screen.getByText('1120 — بنك'));
+    expect(screen.getByRole('button', { name: 'حفظ الحركة' })).not.toBeDisabled();
+  });
+
+  it('shows the counterpart picker for safe_replenishment too', async () => {
+    render(<Harness />);
+    await chooseType('تغذية الدرج من الخزنة');
+    expect(await screen.findByText('الحساب المقابل (خزنة / بنك)')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'حفظ الحركة' })).toBeDisabled();
+  });
+
+  it('does not ask for a counterpart for cash_in', async () => {
+    render(<Harness />);
+    expect(screen.queryByText('الحساب المقابل (خزنة / بنك)')).toBeNull();
+    expect(screen.getByRole('button', { name: 'حفظ الحركة' })).not.toBeDisabled();
+  });
+});

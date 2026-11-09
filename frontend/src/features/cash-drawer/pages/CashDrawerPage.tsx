@@ -9,7 +9,7 @@ import { CashDrawerShiftsCard } from '@/features/cash-drawer/components/CashDraw
 import { CashDrawerReviewDialog } from '@/features/cash-drawer/components/CashDrawerReviewDialog';
 import { CashDrawerStatsGrid } from '@/features/cash-drawer/components/CashDrawerStatsGrid';
 import { useCashDrawerPageController } from '@/features/cash-drawer/hooks/useCashDrawerPageController';
-import { useAuthStore, isAdminUser } from '@/stores/auth-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { isPlatformAdmin } from '@/app/router/access';
 
@@ -22,7 +22,6 @@ void cashDrawerRegressionMarkers;
 export function CashDrawerPage() {
   const { t } = useTranslation();
   const { user } = useAuthStore();
-  const isAdmin = isAdminUser(user);
   const { data: settings } = useSettingsQuery();
   const [searchParams, setSearchParams] = useSearchParams();
   
@@ -107,13 +106,18 @@ export function CashDrawerPage() {
 
   const movementType = controller.confirmAction?.kind === 'movement' ? controller.confirmAction.values.type : '';
   const isCashOut = movementType === 'cash_out';
+  // INV-REST-SAFE-TRANSFER-TYPES: a safe drop moves cash out of the
+  // drawer exactly like a cash_out (the backend requires a manager
+  // PIN for it from non-managers), so it gets the same approval
+  // wording; a replenishment is money into the drawer like cash_in.
+  const isOutboundMovement = isCashOut || movementType === 'safe_drop';
   const isMovement = controller.confirmAction?.kind === 'movement';
   const confirmDialogTitle = isMovement
-    ? (isCashOut ? 'اعتماد صرف من درج النقدية' : 'تأكيد إيداع في درج النقدية')
+    ? (isOutboundMovement ? 'اعتماد صرف من درج النقدية' : 'تأكيد إيداع في درج النقدية')
     : 'تأكيد إغلاق وردية نقطة البيع';
 
   const confirmDialogDescription = isMovement
-    ? (isCashOut
+    ? (isOutboundMovement
       ? 'سيتم تسجيل حركة صرف نقدي على وردية نقطة البيع الحالية بعد الاعتماد.'
       : 'سيتم تسجيل حركة إيداع نقدي على وردية نقطة البيع الحالية بعد تأكيد المستخدم الحالي.')
     : (controller.isBlindCloseUser
@@ -121,13 +125,17 @@ export function CashDrawerPage() {
       : 'سيتم إغلاق وردية نقطة البيع الحالية وتسجيل المبلغ المعدود والفرق النهائي بعد تأكيد المستخدم الحالي.');
 
   const confirmBusy = controller.movementMutation.isPending || controller.closeMutation.isPending;
-  const managerPinLabel = isCashOut ? 'رمز اعتماد المدير أو كلمة مرور المدير' : 'كلمة مرور المستخدم الحالي';
-  const managerPinHint = isCashOut
+  const managerPinLabel = isOutboundMovement ? 'رمز اعتماد المدير أو كلمة مرور المدير' : 'كلمة مرور المستخدم الحالي';
+  const managerPinHint = isOutboundMovement
     ? 'صرف النقدية يحتاج اعتماد المدير إذا كان المستخدم الحالي ليس مديرًا أو أدمن.'
     : 'أدخل كلمة مرور المستخدم الحالي لتأكيد العملية.';
 
-  // If cash out AND user is admin, don't require PIN. If closing shift, require password anyway.
-  const isPinRequired = isMovement && isCashOut && !isAdmin ? true : !isMovement;
+  // The backend requires an approval secret for every movement
+  // (manager PIN for cash_out / safe_drop by non-managers, own
+  // password otherwise) and for close, so the PIN is always
+  // required here. The old expression let cash_in (and admin
+  // cash_out) confirm with an empty PIN and fail server-side.
+  const isPinRequired = true;
 
   return (
     <div className="page-stack page-shell cash-drawer-page" dir="rtl">
@@ -231,8 +239,8 @@ export function CashDrawerPage() {
         open={Boolean(controller.confirmAction)}
         title={confirmDialogTitle}
         description={confirmDialogDescription}
-        confirmLabel={isMovement ? (isCashOut ? t('cash_drawer.cash_drawer_page.s5', "تنفيذ الصرف") : t('cash_drawer.cash_drawer_page.s6', "تسجيل الإيداع")) : t('cash_drawer.cash_drawer_page.s7', "إغلاق وردية نقطة البيع")}
-        confirmVariant={isMovement ? (isCashOut ? 'danger' : 'success') : 'primary'}
+        confirmLabel={isMovement ? (isOutboundMovement ? t('cash_drawer.cash_drawer_page.s5', "تنفيذ الصرف") : t('cash_drawer.cash_drawer_page.s6', "تسجيل الإيداع")) : t('cash_drawer.cash_drawer_page.s7', "إغلاق وردية نقطة البيع")}
+        confirmVariant={isMovement ? (isOutboundMovement ? 'danger' : 'success') : 'primary'}
         managerPinRequired={isPinRequired}
         managerPinLabel={managerPinLabel}
         managerPinHint={managerPinHint}

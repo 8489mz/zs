@@ -20,9 +20,10 @@ interface OpenShiftValues {
 
 interface MovementValues {
   shiftId: string;
-  type: 'cash_in' | 'cash_out';
+  type: 'cash_in' | 'cash_out' | 'safe_drop' | 'safe_replenishment';
   amount: number;
   note: string;
+  counterpartAccountId?: string | number;
   managerPin?: string;
 }
 
@@ -91,6 +92,7 @@ export function useCashDrawerMutations(actions?: {
         type: normalized.type,
         amount: normalized.amount,
         note: normalized.note,
+        counterpartAccountId: normalized.counterpartAccountId || undefined,
         managerPin: values.managerPin || '',
         requestKey: attempt.requestKey,
       });
