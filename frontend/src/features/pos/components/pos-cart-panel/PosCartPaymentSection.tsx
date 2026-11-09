@@ -2,6 +2,7 @@ import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { formatCurrency } from '@/lib/format';
+import { getBalanceState } from '@/features/pos/lib/pos-balance-state';
 import { writeCheckoutIntent } from '@/features/pos/lib/pos-checkout-integrity';
 import type { PosCartPanelProps } from './posCartPanel.types';
 
@@ -23,27 +24,30 @@ function isTransferPreset(paymentType: PosCartPanelProps['paymentType'], payment
   return paymentType !== 'credit' && (paymentChannel === 'wallet' || paymentChannel === 'instapay');
 }
 
-function getBalanceState(props: Pick<PosCartPanelProps, 'paymentType' | 'amountDue' | 'changeAmount'>, t: (key: string, fallback: string) => string) {
-  if (props.paymentType === 'credit') {
-    return { label: t('pos.remaining', 'المتبقي'), value: props.amountDue };
-  }
-
-  if (props.amountDue > 0.009) {
-    return { label: t('pos.remaining', 'المتبقي'), value: props.amountDue };
-  }
-
-  return { label: t('pos.change', 'الباقي'), value: props.changeAmount };
-}
+/* R5-A (INV-REST-TOTALS-TRUTH-2, M24): the local getBalanceState used to
+ * treat only paymentType === 'credit' as credit and returned the raw
+ * amountDue; the checkout dialog's getBalancePreview treated any
+ * partial payment with a customer as credit-remaining and returned a
+ * NEGATIVE value. Both now delegate to the one shared helper in
+ * pos-balance-state.ts (paidAmount/totals join the Pick below; the
+ * parent spreads the full panel props, so no call-site change). */
 
 export function PosCartPaymentSection(props: Pick<PosCartPanelProps,
   'paymentType' | 'paymentChannel' | 'cashAmount' | 'cardAmount' | 'transferAmount' | 'discount' | 'deliveryFee' | 'amountDue' | 'changeAmount' |
-  'customerId' |
+  'customerId' | 'paidAmount' | 'totals' |
   'canApplyDiscount' | 'discountApprovalGranted' | 'isDiscountAuthorizationPending' | 'hasDiscountPermissionViolation' |
   'onPaymentPresetChange' | 'onCashAmountChange' | 'onCardAmountChange' | 'onTransferAmountChange' | 'onDiscountChange' | 'onDeliveryFeeChange' | 'onFillPaidAmount' | 'onRequestDiscountAuthorization'
 >) {
   const { t: __t } = useTranslation();
   const { t } = useTranslation();
-  const balance = getBalanceState(props, t);
+  const balance = getBalanceState({
+    paymentType: props.paymentType,
+    customerId: props.customerId,
+    paidAmount: props.paidAmount,
+    amountDue: props.amountDue,
+    changeAmount: props.changeAmount,
+    total: props.totals?.total ?? 0,
+  });
   const isCreditSale = props.paymentType === 'credit';
   const isDiscountLocked = !props.canApplyDiscount;
   const transferSelected = isTransferPreset(props.paymentType, props.paymentChannel);

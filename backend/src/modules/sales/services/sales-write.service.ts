@@ -1698,6 +1698,27 @@ export class SalesWriteService {
         computeInvoiceTotals(subtotal, effectiveDiscount, normalized.taxRate, normalized.pricesIncludeTax, normalized.deliveryFee, normalized.serviceCharge, Number((normalized as any).tipAmount || 0)),
         moneyDigits,
       );
+      // R5-A (INV-REST-TOTALS-TRUTH-2, R-I53): the POS sends the total
+      // it displayed as expectedTotal. The server never trusts it —
+      // it cross-checks it against the total it just recomputed, and a
+      // drift bigger than one minor unit is a loud 422 naming both
+      // totals, never a silently posted wrong invoice. This is what
+      // catches the next frontend/backend formula drift (today: the
+      // loyalty cap and the service-charge percent disagreed three
+      // ways). Callers that never send expectedTotal (dashboard,
+      // order conversions, offline sync) skip the check. Placed here,
+      // after computeInvoiceTotals and before any stock, journal or
+      // tender work, so a mismatch writes nothing.
+      if (normalized.expectedTotal != null && Number(normalized.expectedTotal) > 0) {
+        const expectedTotalDrift = Math.abs(total - Number(normalized.expectedTotal));
+        if (expectedTotalDrift > Math.pow(10, -moneyDigits)) {
+          throw new AppError(
+            `إجمالي الفاتورة المعروض (${Number(normalized.expectedTotal)}) لا يطابق الإجمالي المحسوب (${total})`,
+            'SALE_TOTAL_MISMATCH',
+            422,
+          );
+        }
+      }
       const { taxAmount: itemOnlyTaxAmount } = roundSaleInvoiceTotals(
         computeInvoiceTotals(subtotal, effectiveDiscount, normalized.taxRate, normalized.pricesIncludeTax, 0, 0, 0),
         moneyDigits,

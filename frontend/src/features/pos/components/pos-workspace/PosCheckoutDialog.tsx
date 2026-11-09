@@ -17,6 +17,7 @@ import {
 } from '@/features/pos/components/pos-workspace/PosCheckoutDialogSections';
 import { PosCheckoutExpressSection } from './PosCheckoutExpressSection';
 import { PosCreditLimitNotice } from './PosCreditLimitNotice';
+import { PosTotalsBreakdown } from '@/features/pos/components/pos-cart-panel/PosTotalsBreakdown';
 import { summarizeCartQuantities } from '@/features/pos/lib/pos.domain';
 import { toast } from '@/shared/components/system-alert';
 import { useAuthStore } from '@/stores/auth-store';
@@ -430,6 +431,13 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
                     <span style={{ color: '#64748b', fontWeight: 700 }}>{t('pos.due_amount', 'المطلوب:')}</span>
                     <strong className="is-primary" style={{ fontSize: isMobile ? '14px' : '15px', fontWeight: 900, color: '#170c5c' }}>{formatCurrency(pos.totals.total)}</strong>
                   </div>
+                </div>
+                {/* R5-A (INV-REST-TOTALS-TRUTH-2, R-I46): the breakdown
+                 * behind the single total — subtotal, discount, service
+                 * charge, delivery, tax, tip — fed by pos.totals, the
+                 * same rows the cart panel shows. */}
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 12px', marginTop: '6px' }}>
+                  <PosTotalsBreakdown totals={pos.totals} />
                 </div>
               </section>
 

@@ -463,4 +463,24 @@ describe('POS paid gates (R4-D)', () => {
     // online payload carries it to normalizeSalePayload.
     expect((buildPosSalePayload(baseInput({ terminalCode: 'T4A2' })) as any).terminalCode).toBe('T4A2');
   });
+
+  it('carries the displayed total as expectedTotal on both payload builders (R5-A, R-I53)', () => {
+    const input = {
+      cart,
+      customerId: '',
+      paymentType: 'cash' as const,
+      paymentChannel: 'cash' as const,
+      discount: 0,
+      deliveryFee: 0,
+      note: '',
+      paidAmount: 25,
+      tenderedAmount: 25,
+      payments: [{ paymentChannel: 'cash' as const, amount: 25 }],
+      taxRate: 0,
+      pricesIncludeTax: false,
+      expectedTotal: 25,
+    };
+    expect((buildPosSalePayload(input) as any).expectedTotal).toBe(25);
+    expect((buildLegacyPosSalePayload(input) as any).expectedTotal).toBe(25);
+  });
 });

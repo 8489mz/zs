@@ -105,6 +105,12 @@ function buildCreateSaleService(settingsRows: any[], captured: Array<{ table: st
       if (table === 'product_offers') {
         return chainable({ execute: async () => [] });
       }
+      if (table === 'product_pos_modifiers') {
+        // R5-A: the R4-C modifier-contract gate queries the product's
+        // linked modifier groups even when the line carries no
+        // modifiers. The fixture product has none, so this is empty.
+        return chainable({ execute: async () => [] });
+      }
       if (table === 'branches') {
         return chainable({
           executeTakeFirst: async () => ({
@@ -144,11 +150,18 @@ function buildCreateSaleService(settingsRows: any[], captured: Array<{ table: st
   service.db = {};
   service.tx = { runInTransaction: async (_db: any, cb: any) => cb(trx) };
   service.lockSaleStockRows = async () => {};
-  service.authz = { hasOpenCashierShift: async () => true };
+  // R5-A: the base mock predates the R4-C modifier-contract gate
+  // (createSale calls this.planFeatureService.hasFeature before any
+  // totals work); without it every Part D case dies with a TypeError
+  // instead of reaching the sales insert. The fixture items carry no
+  // modifiers, so the contract is out of scope here — disabled keeps
+  // the gate a no-op and the Part D/E flow identical to R4-A.
+  service.planFeatureService = { hasFeature: async () => false };
+  service.authz = { hasOpenCashierShift: async () => true, hasOpenCashierShiftForSale: async () => true };
   return service;
 }
 
-function createSalePayload(tenantId: string, opts: { orderType?: string; source?: string; serviceCharge?: number }): { payload: any; auth: any } {
+function createSalePayload(tenantId: string, opts: { orderType?: string; source?: string; serviceCharge?: number; expectedTotal?: number }): { payload: any; auth: any } {
   const payload: any = {
     customerId: 21,
     branchId: 1,
@@ -158,9 +171,14 @@ function createSalePayload(tenantId: string, opts: { orderType?: string; source?
     taxRate: 0,
     source: opts.source ?? 'pos',
     orderType: opts.orderType ?? 'takeaway',
+    // R5-A: the base mock predates the dine-in table gate
+    // (pos-submit-gates DINE_IN_TABLE_REQUIRED); a dine-in fixture
+    // without a table now dies before the totals work.
+    ...(opts.orderType === 'dine_in' ? { tableNumber: 'T1' } : {}),
     serviceCharge: opts.serviceCharge ?? 0,
     payments: [{ paymentChannel: 'cash', amount: 500 }],
   };
+  if (opts.expectedTotal !== undefined) payload.expectedTotal = opts.expectedTotal;
   const auth: any = { userId: 1, tenantId, accountId: 'a1', role: 'admin', permissions: [], sessionId: 'x', username: 't' };
   return { payload, auth };
 }
@@ -495,6 +513,37 @@ async function main() {
     const { payload: payload6, auth: auth6 } = createSalePayload('t-sc-garbled', { orderType: 'dine_in', serviceCharge: 99 });
     await assert.rejects(async () => service6.createSale(payload6, auth6), /TABLE_BILL_RATE_INVALID/);
     assert.equal(captured6.length, 0, 'a garbled percent must throw before any write');
+
+    // Part E (R5-A, INV-REST-TOTALS-TRUTH-2, R-I53): the client sends
+    // the total it displayed as expectedTotal; the server cross-checks
+    // it against its own recomputed total and rejects a drift bigger
+    // than one minor unit with 422 SALE_TOTAL_MISMATCH — never posts
+    // a different total silently. The takeaway fixture below posts a
+    // server total of exactly 100 (1 x 100, no tax, no charge).
+    // E1: a doctored expectedTotal is rejected before any write.
+    const captured7: Array<{ table: string; row: any }> = [];
+    const service7 = buildCreateSaleService(serviceChargeSettings(true, 12), captured7);
+    const { payload: payload7, auth: auth7 } = createSalePayload('t-et-doctored', { orderType: 'takeaway', expectedTotal: 101 });
+    await assert.rejects(
+      async () => service7.createSale(payload7, auth7),
+      (err: any) => err.code === 'SALE_TOTAL_MISMATCH',
+    );
+    assert.equal(captured7.length, 0, 'a mismatched expectedTotal must throw before any write');
+    // E2: the honest expectedTotal posts exactly the recomputed total.
+    const captured8: Array<{ table: string; row: any }> = [];
+    const service8 = buildCreateSaleService(serviceChargeSettings(true, 12), captured8);
+    const { payload: payload8, auth: auth8 } = createSalePayload('t-et-honest', { orderType: 'takeaway', expectedTotal: 100 });
+    await assert.rejects(async () => service8.createSale(payload8, auth8), /SALE_INSERT_REACHED/);
+    const saleRow8 = captured8.find((entry) => entry.table === 'sales')?.row;
+    assert.ok(saleRow8, 'an honest expectedTotal must reach the sales insert');
+    assert.equal(Number(saleRow8.total), 100);
+    // E3: callers that never send expectedTotal (dashboard, order
+    // conversions, offline sync) skip the check entirely.
+    const captured9: Array<{ table: string; row: any }> = [];
+    const service9 = buildCreateSaleService(serviceChargeSettings(true, 12), captured9);
+    const { payload: payload9, auth: auth9 } = createSalePayload('t-et-absent', { orderType: 'takeaway' });
+    await assert.rejects(async () => service9.createSale(payload9, auth9), /SALE_INSERT_REACHED/);
+    assert.ok(captured9.find((entry) => entry.table === 'sales'), 'an absent expectedTotal must not block the sale');
   }
 
   console.log('Sale money truth tests passed');

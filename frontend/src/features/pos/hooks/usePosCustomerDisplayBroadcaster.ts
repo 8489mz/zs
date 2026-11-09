@@ -4,6 +4,7 @@ import type { PaymentChannel, PaymentType } from '@/features/pos/hooks/usePosWor
 import type { Sale } from '@/types/domain';
 import { broadcastCustomerDisplayState } from '@/features/pos/lib/pos-customer-display-bridge';
 import { roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
+import { buildCustomerDisplayItems } from '@/features/pos/lib/pos-modifier-totals';
 import type {
   CustomerDisplayItem,
   CustomerDisplayPayload,
@@ -18,6 +19,9 @@ interface PosCustomerDisplayBroadcasterParams {
     discountValue?: number;
     taxAmount: number;
     total: number;
+    serviceCharge?: number;
+    deliveryFee?: number;
+    tipAmount?: number;
   };
   customer?: {
     name: string;
@@ -79,14 +83,12 @@ export function usePosCustomerDisplayBroadcaster({
       status = 'idle';
     }
 
-    const items: CustomerDisplayItem[] = cart.map((item) => ({
-      id: item.productId || item.lineKey,
-      name: item.name,
-      qty: item.qty,
-      price: item.price,
-      lineTotal: item.qty * item.price,
-      barcode: item.sourceBarcode || item.itemCode,
-    }));
+    /* R5-A (INV-REST-TOTALS-TRUTH-2, R-I14): the line total is the
+     * canonical calcCartLineTotal (price + modifiers) via the pure
+     * buildCustomerDisplayItems helper — the old `qty * price` left
+     * modifier money off the visible lines while the total included
+     * it, so the rows never summed to the total. */
+    const items: CustomerDisplayItem[] = buildCustomerDisplayItems(cart);
 
     const itemCount = cart.reduce((acc, curr) => acc + (Number(curr.qty) || 0), 0);
 
@@ -109,6 +111,9 @@ export function usePosCustomerDisplayBroadcaster({
       subtotal: roundMoneyValue(totals.subTotal, digits),
       discount: roundMoneyValue((totals.discountAmount ?? totals.discountValue) || 0, digits),
       tax: roundMoneyValue(totals.taxAmount, digits),
+      serviceCharge: roundMoneyValue(Number(totals.serviceCharge || 0), digits),
+      deliveryFee: roundMoneyValue(Number(totals.deliveryFee || 0), digits),
+      tipAmount: roundMoneyValue(Number(totals.tipAmount || 0), digits),
       total: roundMoneyValue(totals.total, digits),
       itemCount,
       customer: customer ? {

@@ -165,7 +165,18 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
     }, 0);
     const manualDiscount = Math.max(0, Number(params.discount || 0));
     const pointRedeemValue = Number(params.settings?.loyaltyPointRedeemValue ?? 0.1);
-    const loyaltyDiscount = Math.max(0, roundMoneyValue(Number(params.loyaltyPointsRedeemed || 0) * pointRedeemValue, bookDigits));
+    /* R5-A (INV-REST-TOTALS-TRUTH-2, R-I53/R-I10): the loyalty discount
+     * used to be uncapped here while the backend caps it at
+     * subtotal * maxDiscountPercentage/100 (default 100) and the
+     * redeem-all button capped at 50 by default — three different
+     * totals for one sale. The backend default (100) is the authority:
+     * it is the only one that already posts. */
+    const maxDiscountPercentage = Number(params.settings?.loyaltyMaxDiscountPercentage ?? 100);
+    const loyaltyDiscountCap = roundMoneyValue((subTotal * maxDiscountPercentage) / 100, bookDigits);
+    const loyaltyDiscount = Math.min(
+      Math.max(0, roundMoneyValue(Number(params.loyaltyPointsRedeemed || 0) * pointRedeemValue, bookDigits)),
+      loyaltyDiscountCap,
+    );
     const discountValue = manualDiscount + loyaltyDiscount;
     const deliveryFee = Math.max(0, Number(params.deliveryFee || 0));
     const tipAmount = Math.max(0, Number(params.tipAmount || 0));

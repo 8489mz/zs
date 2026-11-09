@@ -9,7 +9,7 @@ import { ProductIcon } from '@/shared/components/icons/product-svg-catalog';
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
 import type { Product } from '@/types/domain';
 import type { PosCartPanelProps } from './posCartPanel.types';
-import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
+import { calcCartLineTotal, calcModifiersTotal } from '@/features/pos/lib/pos-modifier-totals';
 
 const PosCartItemRow = memo(function PosCartItemRow({
   item,
@@ -37,6 +37,11 @@ const PosCartItemRow = memo(function PosCartItemRow({
   const { t: __t } = useTranslation();
   const { t } = useTranslation();
   const lineTotal = calcCartLineTotal(item);
+  /* R5-A (INV-REST-TOTALS-TRUTH-2, M19): the line total already
+   * includes modifiers (R-B8), but the price column and the per-unit
+   * hint showed the bare base price — the unit price a modifier sale
+   * actually charges is base + modifiers. */
+  const effectiveUnitPrice = Number(item.price || 0) + calcModifiersTotal(item.modifiers);
   const itemCode = String(item.itemCode || '').trim();
   const isWeightedLine = item.isWeighted === true;
   const minQty = isWeightedLine ? 0.001 : 1;
@@ -308,10 +313,10 @@ const PosCartItemRow = memo(function PosCartItemRow({
             <span style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: '0.74rem', lineHeight: 1 }}>
               {formatCurrency(item.originalPrice)}
             </span>
-            <strong className="pos-cart-number" style={{ color: '#15803d', textAlign: 'center' }}>{formatCurrency(item.price)}</strong>
+            <strong className="pos-cart-number" style={{ color: '#15803d', textAlign: 'center' }}>{formatCurrency(effectiveUnitPrice)}</strong>
           </div>
         ) : (
-          <strong className="pos-cart-number" style={{ textAlign: 'center' }}>{formatCurrency(item.price)}</strong>
+          <strong className="pos-cart-number" style={{ textAlign: 'center' }}>{formatCurrency(effectiveUnitPrice)}</strong>
         )}
       </div>
 
@@ -343,7 +348,7 @@ const PosCartItemRow = memo(function PosCartItemRow({
               whiteSpace: 'nowrap',
             }}
           >
-            ({formatCurrencyWithCode(item.price)} / للوحدة)
+            ({formatCurrencyWithCode(effectiveUnitPrice)} / للوحدة)
           </span>
         )}
       </div>

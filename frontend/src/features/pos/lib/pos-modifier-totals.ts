@@ -30,3 +30,60 @@ export function calcModifiersTotal(modifiers: PosModifierLike[] | null | undefin
 export function calcCartLineTotal(item: PosCartLineLike): number {
   return Number(item.qty || 0) * (Number(item.price || 0) + calcModifiersTotal(item.modifiers));
 }
+
+/** One cart line as the customer display sees it. R5-A (INV-REST-TOTALS-
+ * TRUTH-2, R-I14): the broadcaster used to send `qty * price` with no
+ * modifiers, so the visible lines did not sum to the shown total. The
+ * display unit price is the charged per-unit price (base + modifiers),
+ * and modifier names/quantities/prices plus the line note travel with
+ * the item so the display can render them under it. */
+export interface CustomerDisplayModifierLike {
+  name?: unknown;
+  qty?: unknown;
+  price?: unknown;
+}
+
+export interface CustomerDisplayCartLineLike extends PosCartLineLike {
+  productId?: unknown;
+  lineKey?: unknown;
+  name?: unknown;
+  notes?: unknown;
+  modifiers?: CustomerDisplayModifierLike[] | null;
+  sourceBarcode?: unknown;
+  itemCode?: unknown;
+  categoryName?: unknown;
+}
+
+export interface CustomerDisplayItemLike {
+  id: string | number;
+  name: string;
+  qty: number;
+  price: number;
+  lineTotal: number;
+  barcode?: string;
+  categoryName?: string;
+  modifiers: Array<{ name: string; qty: number; price: number }>;
+  notes?: string;
+}
+
+export function buildCustomerDisplayItems(cart: CustomerDisplayCartLineLike[]): CustomerDisplayItemLike[] {
+  return (cart || []).map((item) => {
+    const modifiers = (item.modifiers || []).map((mod: any) => ({
+      name: String((mod as any)?.name ?? (mod as any) ?? ''),
+      qty: Number((mod as any)?.qty || 1),
+      price: Number((mod as any)?.price || 0),
+    }));
+    const effectiveUnitPrice = Number(item.price || 0) + calcModifiersTotal(item.modifiers);
+    return {
+      id: (item.productId as string | number) || (item.lineKey as string | number),
+      name: String(item.name || ''),
+      qty: Number(item.qty || 0),
+      price: effectiveUnitPrice,
+      lineTotal: calcCartLineTotal(item),
+      barcode: String(item.sourceBarcode || item.itemCode || '') || undefined,
+      categoryName: item.categoryName ? String(item.categoryName) : undefined,
+      modifiers,
+      notes: item.notes ? String(item.notes) : undefined,
+    };
+  });
+}

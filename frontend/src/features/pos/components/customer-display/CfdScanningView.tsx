@@ -3,6 +3,7 @@ import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import React from 'react';
 import { ShoppingCartIcon, AwardIcon } from '@/shared/components/icons/AppIcons';
 import { formatCurrency } from '@/lib/format';
+import { PosTotalsBreakdown } from '@/features/pos/components/pos-cart-panel/PosTotalsBreakdown';
 import type { CustomerDisplayPayload } from '@/features/pos/types/pos-customer-display.types';
 
 interface CfdScanningViewProps {
@@ -61,6 +62,17 @@ export const CfdScanningView: React.FC<CfdScanningViewProps> = ({
                     {item.barcode && (
                       <span className="cfd-item-barcode">{t('pos.customer_display.cfd_scanning_view.s6', "باركود:")} {item.barcode}</span>
                     )}
+                    {/* R5-A (INV-REST-TOTALS-TRUTH-2, R-I14): the modifier
+                     * lines the line total charges for, so the customer
+                     * can see why the unit price is above the base price. */}
+                    {(item.modifiers || []).map((mod, modIndex) => (
+                      <span key={modIndex} className="cfd-item-barcode">
+                        + {mod.name}{Number(mod.qty || 1) > 1 ? ` (x${mod.qty})` : ''} {formatCurrency(Number(mod.price || 0) * Number(mod.qty || 1))}
+                      </span>
+                    ))}
+                    {item.notes && (
+                      <span className="cfd-item-barcode">{item.notes}</span>
+                    )}
                   </div>
 
                   <div className="cfd-item-unit-price">
@@ -88,24 +100,23 @@ export const CfdScanningView: React.FC<CfdScanningViewProps> = ({
             {t('pos.customer_display.cfd_scanning_view.s8', "ملخص الحساب")}
           </div>
 
-          <div className="cfd-summary-row">
-            <span>{t('pos.customer_display.cfd_scanning_view.s9', "المجموع الفرعي")}</span>
-            <span>{formatCurrency(payload.subtotal)}</span>
-          </div>
-
-          {payload.discount > 0 && (
-            <div className="cfd-summary-row discount">
-              <span>{t('pos.customer_display.cfd_scanning_view.s10', "الخصم المطبق")}</span>
-              <span>- {formatCurrency(payload.discount)}</span>
-            </div>
-          )}
-
-          {payload.tax > 0 && (
-            <div className="cfd-summary-row">
-              <span>{t('pos.customer_display.cfd_scanning_view.s11', "ضريبة القيمة المضافة")}</span>
-              <span>+ {formatCurrency(payload.tax)}</span>
-            </div>
-          )}
+          {/* R5-A (INV-REST-TOTALS-TRUTH-2, R-I14/R-I46): the shared
+           * breakdown — subtotal, discount, service charge, delivery,
+           * tax, tip — with zero rows hidden, so the visible rows sum
+           * to the total banner below. The banner itself stays. */}
+          <PosTotalsBreakdown
+            totals={{
+              subTotal: payload.subtotal,
+              discountValue: payload.discount,
+              serviceCharge: payload.serviceCharge,
+              deliveryFee: payload.deliveryFee,
+              taxAmount: payload.tax,
+              tipAmount: payload.tipAmount,
+              total: payload.total,
+            }}
+            showTotal={false}
+            rowClassName="cfd-summary-row"
+          />
 
           <div className="cfd-total-banner">
             <div className="cfd-total-label">{t('pos.customer_display.cfd_scanning_view.s12', "المبلغ الإجمالي المطلوب سداده")}</div>

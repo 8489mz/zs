@@ -179,6 +179,22 @@ export class UpsertSaleDto {
   @Min(0)
   tipAmount?: number;
 
+  /**
+   * R5-A (INV-REST-TOTALS-TRUTH-2, R-I53): the total the POS displayed
+   * to the cashier. createSale cross-checks it against its own
+   * recomputed total and rejects a drift over one minor unit with 422
+   * SALE_TOTAL_MISMATCH. Optional — dashboard sales, order
+   * conversions and offline sync never send it and skip the check.
+   * Required here (not just on the normalized payload) because the
+   * global validation pipe forbids non-whitelisted fields: without
+   * this field every POS sale carrying it would 400 VALIDATION_ERROR.
+   */
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  expectedTotal?: number;
+
   @Type(() => Number)
   @IsOptional()
   @IsNumber()
@@ -339,6 +355,7 @@ export type NormalizedSalePayload = {
   deliveryFee: number;
   serviceCharge?: number;
   tipAmount?: number;
+  expectedTotal?: number | null;
   guestCount?: number;
   taxRate: number;
   pricesIncludeTax: boolean;

@@ -238,6 +238,10 @@ export function buildPosSalePayload(input: CreatePosSaleInput) {
     note: String(input.note || '').trim(),
     payments: normalizePaymentsCapped(input.payments || [], input.expectedTotal),
     tenderedAmount: Number(input.tenderedAmount || 0),
+    /* R5-A (INV-REST-TOTALS-TRUTH-2, R-I53): the total the cashier
+     * displayed. The server cross-checks it against its own recomputed
+     * total (422 SALE_TOTAL_MISMATCH) — it never trusts it. */
+    expectedTotal: normalizeMoney(Number(input.expectedTotal || 0)),
     storeCreditUsed: 0,
     loyaltyPointsRedeemed: Number(input.loyaltyPointsRedeemed || 0),
     taxRate: normalizeMoney(Number(input.taxRate || 0)),
@@ -301,6 +305,10 @@ export function buildLegacyPosSalePayload(input: CreatePosSaleInput) {
     deliveryFeeMode: input.deliveryFeeMode || 'freelance_courier',
     note: String(input.note || '').trim(),
     tenderedAmount: Number(input.tenderedAmount || 0),
+    /* R5-A (INV-REST-TOTALS-TRUTH-2, R-I53): the displayed total, same
+     * cross-check as the online builder — the legacy retry path must
+     * carry it too, or a retried sale skips the check. */
+    expectedTotal: normalizeMoney(Number(input.expectedTotal || 0)),
     taxRate: normalizeMoney(Number(input.taxRate || 0)),
     ...(String(input.managerPin || '').trim() ? { managerPin: String(input.managerPin || '').trim() } : {}),
     pricesIncludeTax: Boolean(input.pricesIncludeTax),

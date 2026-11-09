@@ -90,6 +90,9 @@ export function normalizeSalePayload(payload: UpsertSaleDto): NormalizedSalePayl
     deliveryFee: Number(payload.deliveryFee || 0),
     serviceCharge: Number(payload.serviceCharge || 0),
     tipAmount: Number(payload.tipAmount || 0),
+    // R5-A (INV-REST-TOTALS-TRUTH-2, R-I53): the displayed total, for
+    // createSale's cross-check. Null when the caller never sent one.
+    expectedTotal: Number(payload.expectedTotal || 0) > 0 ? Number(payload.expectedTotal) : null,
     guestCount: Math.max(1, Number(payload.guestCount || 1)),
     taxRate: Number(payload.taxRate || 0),
     pricesIncludeTax: Boolean(payload.pricesIncludeTax),

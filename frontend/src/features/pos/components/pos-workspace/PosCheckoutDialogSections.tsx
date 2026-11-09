@@ -12,6 +12,7 @@ import { CreditCardIcon, StarIcon, CheckIcon } from '@/shared/components/icons/A
 import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
 import { shouldTryAlternateTerminalCharge, canChangePaymentAfterTerminalApproval, isTerminalApprovalLive, terminalAuthorizationLabel } from './pos-terminal-charge-safety';
 import { toast } from '@/shared/components/system-alert';
+import { getBalanceState } from '@/features/pos/lib/pos-balance-state';
 import { useAuthStore } from '@/stores/auth-store';
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
@@ -21,20 +22,20 @@ export type PaymentPreset = 'cash' | 'card' | 'wallet' | 'instapay' | 'credit';
 
 type CustomerOption = { id: string | number; name: string; phone?: string | null; address?: string | null };
 
+/* R5-A (INV-REST-TOTALS-TRUTH-2, M24): this used to return NEGATIVE
+ * remaining (-remainingDebt / -amountDue) while the cart panel showed
+ * positive remaining — the same screen showed two different remaining
+ * figures. It now delegates to the one shared helper (remaining
+ * positive, change positive, one 0.009 threshold). */
 function getBalancePreview(pos: Pick<PosWorkspaceState, 'paymentType' | 'amountDue' | 'changeAmount' | 'totals' | 'paidAmount' | 'customerId'>) {
-  const paid = Number(pos.paidAmount || 0);
-  const total = Number(pos.totals?.total || 0);
-  const remainingDebt = Math.max(0, total - paid);
-
-  if (pos.paymentType === 'credit' || (pos.customerId && paid < total)) {
-    if (remainingDebt > 0.009) {
-      return { label: 'المتبقي (آجل)', value: -remainingDebt, tone: 'danger' as const };
-    }
-  }
-  if (Number(pos.amountDue || 0) > 0.009) {
-    return { label: 'المتبقي', value: -Math.abs(Number(pos.amountDue || 0)), tone: 'danger' as const };
-  }
-  return { label: 'الباقي', value: Math.abs(Number(pos.changeAmount || 0)), tone: 'primary' as const };
+  return getBalanceState({
+    paymentType: pos.paymentType,
+    customerId: pos.customerId,
+    paidAmount: Number(pos.paidAmount || 0),
+    amountDue: Number(pos.amountDue || 0),
+    changeAmount: Number(pos.changeAmount || 0),
+    total: Number(pos.totals?.total || 0),
+  });
 }
 
 export interface PosCheckoutCustomerSectionProps {
@@ -274,7 +275,7 @@ export function PosCheckoutCustomerSection({
       {pos.customerId && (pos.settings?.loyaltyEnabled === true) && (loyaltyPoints > 0 || (pos.loyaltyPointsRedeemed || 0) > 0) ? (() => {
         const pointValue = Number(pos.settings?.loyaltyPointRedeemValue ?? 0.1);
         const minPoints = Number(pos.settings?.loyaltyMinRedeemPoints ?? 50);
-        const maxPct = Number(pos.settings?.loyaltyMaxDiscountPercentage ?? 50);
+        const maxPct = Number(pos.settings?.loyaltyMaxDiscountPercentage ?? 100);
         const discountInCurrency = roundMoneyValue((pos.loyaltyPointsRedeemed || 0) * pointValue, bookDigits);
         const totalValueInCurrency = roundMoneyValue(loyaltyPoints * pointValue, bookDigits);
         const subTotal = Number(pos.totals?.subTotal || 0);

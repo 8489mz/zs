@@ -4,7 +4,7 @@
  * on screen and on the receipt while the posted sale charged the full amount. */
 
 import { describe, it, expect } from 'vitest';
-import { calcModifiersTotal, calcCartLineTotal } from './pos-modifier-totals';
+import { calcModifiersTotal, calcCartLineTotal, buildCustomerDisplayItems } from './pos-modifier-totals';
 
 describe('pos-modifier-totals (R-B8)', () => {
   describe('calcModifiersTotal', () => {
@@ -46,6 +46,58 @@ describe('pos-modifier-totals (R-B8)', () => {
     it('is unchanged for qty-1 modifiers (no regression on the common case)', () => {
       expect(calcCartLineTotal({ qty: 1, price: 100, modifiers: [{ price: 20, qty: 1 }] })).toBe(120);
       expect(calcCartLineTotal({ qty: 3, price: 50, modifiers: [] })).toBe(150);
+    });
+  });
+
+  describe('buildCustomerDisplayItems (R5-A, R-I14)', () => {
+    it('charges modifiers in the CFD line total: 2 burgers with extra cheese 20 x2 -> 280', () => {
+      const items = buildCustomerDisplayItems([
+        {
+          productId: '1',
+          lineKey: 'L1',
+          name: 'برجر',
+          qty: 2,
+          price: 100,
+          modifiers: [{ name: 'جبنة إضافية', price: 20, qty: 2 }],
+        },
+      ]);
+      expect(items).toHaveLength(1);
+      expect(items[0].lineTotal).toBe(280);
+      // The unit price the display shows must be the charged per-unit
+      // price (base + modifiers), not the bare base price.
+      expect(items[0].price).toBe(140);
+    });
+
+    it('carries modifier names, quantities and the line note to the display', () => {
+      const items = buildCustomerDisplayItems([
+        {
+          productId: '1',
+          lineKey: 'L1',
+          name: 'برجر',
+          qty: 1,
+          price: 100,
+          notes: 'بدون بصل',
+          modifiers: [
+            { name: 'جبنة إضافية', price: 20, qty: 1 },
+            { name: 'صوص حار', price: 5, qty: 2 },
+          ],
+        },
+      ]);
+      expect(items[0].lineTotal).toBe(130);
+      expect(items[0].notes).toBe('بدون بصل');
+      expect(items[0].modifiers).toEqual([
+        { name: 'جبنة إضافية', qty: 1, price: 20 },
+        { name: 'صوص حار', qty: 2, price: 5 },
+      ]);
+    });
+
+    it('is unchanged for lines without modifiers', () => {
+      const items = buildCustomerDisplayItems([
+        { productId: '1', lineKey: 'L1', name: 'بطاطس', qty: 3, price: 50, modifiers: [] },
+      ]);
+      expect(items[0].lineTotal).toBe(150);
+      expect(items[0].price).toBe(50);
+      expect(items[0].modifiers).toEqual([]);
     });
   });
 });
