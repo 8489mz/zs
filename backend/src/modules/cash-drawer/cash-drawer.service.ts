@@ -6,6 +6,7 @@ import type { BlindCloseChannelReconciliation, BlindCloseReconciliation, CashDra
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { verifyPassword } from '../../core/auth/utils/password-hasher';
+import { authorizeManagerSecret } from '../../common/utils/manager-approval';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { TransactionHelper } from '../../database/helpers/transaction.helper';
@@ -157,38 +158,25 @@ export class CashDrawerService {
     } catch { return null; }
   }
 
-  private async getManagerPin(auth: AuthContext): Promise<string> {
-    const scope = this.scope(auth);
-    const result = await sql<SettingsRow>`select key, value from settings where tenant_id = ${scope.tenantId} and key in ('managerPin', 'managerApprovalPin', 'manager_pin')`.execute(this.db);
-    const value = result.rows?.find((row) => String(row.key || '').length > 0)?.value;
-    if (typeof value === 'string' && value.trim()) {
-      try { const parsed = JSON.parse(value); if (typeof parsed === 'string' && parsed.trim()) return parsed.trim(); } catch { return value.trim(); }
-    }
-    return '';
-  }
-
+  // INV-REST-MANAGER-PIN-HASHED: the drawer no longer keeps its own
+  // plaintext copy of the manager-PIN check. The shared
+  // authorizeManagerSecret is the one rule (bcrypt compare, legacy
+  // plaintext migrates in place on first success, admin login-password
+  // fallback) — the drawer's observable errors stay its own
+  // (MANAGER_PIN_INVALID + the drawer messages), so callers see no change.
   private async assertManagerPin(pin: string, auth: AuthContext): Promise<void> {
-    const normalizedPin = String(pin || '').trim();
-    if (!normalizedPin) {
-      throw new AppError('أدخل رمز المشرف أو كلمة مرور الإدارة', 'MANAGER_PIN_INVALID', 400);
+    try {
+      await authorizeManagerSecret(this.db, auth, pin);
+    } catch (err) {
+      const code = (err as AppError)?.code;
+      if (code === 'MANAGER_AUTH_REQUIRED') {
+        throw new AppError('أدخل رمز المشرف أو كلمة مرور الإدارة', 'MANAGER_PIN_INVALID', 400);
+      }
+      if (code === 'MANAGER_AUTH_INVALID') {
+        throw new AppError('رمز الاعتماد غير صحيح', 'MANAGER_PIN_INVALID', 400);
+      }
+      throw err;
     }
-    const expected = await this.getManagerPin(auth);
-    if (expected && normalizedPin === expected) return;
-
-    // Check if entered pin is an admin user password
-    const scope = this.scope(auth);
-    const adminUsers = await sql<UserPasswordRow>`
-      select id, is_active, password_hash, password_salt
-      from users
-      where tenant_id = ${scope.tenantId} and is_active = true and role in ('admin', 'super_admin')
-    `.execute(this.db);
-
-    for (const admin of adminUsers.rows || []) {
-      const check = await verifyPassword(normalizedPin, String(admin.password_hash || ''), String(admin.password_salt || ''));
-      if (check.valid) return;
-    }
-
-    throw new AppError('رمز الاعتماد غير صحيح', 'MANAGER_PIN_INVALID', 400);
   }
   private shouldRequireManagerApprovalForCashOut(auth: AuthContext): boolean { return !['admin', 'super_admin', 'manager'].includes(String(auth.role || '').trim()); }
   private canReviewPendingShift(auth: AuthContext): boolean { return ['admin', 'super_admin', 'manager'].includes(String(auth.role || '').trim()); }

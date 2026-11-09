@@ -13,6 +13,7 @@ import { AuthCacheService } from '../../core/auth/services/auth-cache.service';
 import { invalidateTenantTimezoneCache, isValidTimezone } from '../../common/utils/tenant-timezone.util';
 import { getIndustryProfile, normalizeIndustryProfileKey, listSupportedIndustryProfiles, type IndustryProfile } from '../../core/tenant/industry-profiles';
 import { PLAN_MANAGED_MODULES_SETTING_KEY } from '../../common/constants/platform-settings-keys';
+import { hashManagerPin, isBcryptHash, MANAGER_PIN_SETTING_KEYS } from '../../common/utils/manager-approval';
 import { SalesWriteService } from '../sales/services/sales-write.service';
 
 @Injectable()
@@ -652,6 +653,19 @@ export class SettingsService {
     // never create or overwrite it — a settings manager writing a
     // chosen hash here would take over the developer panel.
     delete normalizedPayload['developerMasterPasswordHash'];
+
+    // INV-REST-MANAGER-PIN-HASHED: the shared manager PIN is stored as a
+    // bcrypt hash, never plaintext (same mechanism as
+    // developerMasterPasswordHash). A value that is already a bcrypt hash
+    // is left alone, so a settings round-trip (getSettings returns the
+    // hash to a settings manager, the client sends the whole object back)
+    // never double-hashes it. An empty value clears the PIN, as before.
+    for (const key of MANAGER_PIN_SETTING_KEYS) {
+      const raw = normalizedPayload[key];
+      if (typeof raw === 'string' && raw.trim() && !isBcryptHash(raw.trim())) {
+        normalizedPayload[key] = await hashManagerPin(raw.trim());
+      }
+    }
 
     await this.db.transaction().execute(async trx => {
       if ('currency' in normalizedPayload) {
