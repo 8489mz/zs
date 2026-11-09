@@ -1745,7 +1745,7 @@ export class StorefrontService {
     const [yyyy, mm, dd] = todayTenantDate(businessTz, now).split('-');
     const datePrefix = `${yyyy.slice(-2)}${mm}${dd}`;
     let orderNumber = '';
-    // The order and (for dine-in) its kitchen draft are written together: a QR order the kitchen never
+    // The order and (for dine-in and pickup) its kitchen draft are written together: a QR order the kitchen never
     // sees, or a kitchen ticket with no order behind it, are both worse than a clear error.
     const creation = await this.db.transaction().execute(async (trx) => {
       // O57: numbering was MAX+1 outside any lock, so two checkouts in the same instant got the same
@@ -1835,11 +1835,16 @@ export class StorefrontService {
       .executeTakeFirstOrThrow();
 
 
-      if (isDineIn) {
+      if (isDineIn || isPickup) {
         // O53: a DRAFT sale, not a posted one. It exists only so the kitchen display (which reads
         // `sales`) shows the ticket immediately. It moves no stock, posts no journal and counts as no
         // revenue. The cashier posts the real invoice through SalesService (load into POS cart or
         // convert); retireKitchenDraft() then removes this draft and hands its ticket state over.
+        // INV-REST-TAKEAWAY-KDS-DRAFT: a kiosk takeaway order (orderType 'delivery',
+        // fulfillmentType 'pickup') gets a draft too — otherwise the kitchen never sees it,
+        // because getActiveTickets reads only `sales` rows. Its order_type is 'takeaway', the
+        // canonical POS type for a pickup order (the same value the convert path maps a pickup
+        // order to), and it carries no table number. Plain delivery orders still get no draft.
         const draft = await trx
           .insertInto('sales')
           .values({
@@ -1864,7 +1869,9 @@ export class StorefrontService {
             change_amount: 0,
             store_credit_used: 0,
             status: 'draft',
-            note: `طلب ذاتي من الطاولة (${dto.tableNumber}) بالـ QR — مسودة للمطبخ، تُرحَّل من الكاشير`,
+            note: isDineIn
+              ? `طلب ذاتي من الطاولة (${dto.tableNumber}) بالـ QR — مسودة للمطبخ، تُرحَّل من الكاشير`
+              : 'طلب استلام ذاتي بالـ QR — مسودة للمطبخ، تُرحَّل من الكاشير',
             branch_id: branchId,
             location_id: null,
             created_by: null,
@@ -1878,8 +1885,10 @@ export class StorefrontService {
             settled_by: null,
             eta_uuid: null,
             eta_submission_id: null,
-            order_type: 'dine_in',
-            table_number: String(dto.tableNumber).trim(),
+            order_type: isDineIn ? 'dine_in' : 'takeaway',
+            // Empty string, not null: the sales table type carries table_number as a plain
+            // string, and the sales writer uses '' for "no table" everywhere else.
+            table_number: isDineIn ? String(dto.tableNumber).trim() : '',
           })
           .returning(['id'])
           .executeTakeFirstOrThrow();
