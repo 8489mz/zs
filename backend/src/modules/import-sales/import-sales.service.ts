@@ -9093,12 +9093,20 @@ export class ImportSalesService {
     // I2-D6: the P&L status reads the container's ACTUAL status.
     // Real container_status values (migration 2040000000238):
     // on_water, port_arrived, customs_cleared,
-    // warehouse_received, empty_returned. The modal used to show
-    // "قيد الاستلام والتفريغ" for anything not empty_returned —
-    // wrong for a container already received in the warehouse.
-    // 'arrived' is the legacy NULL default kept by the payload
-    // below; anything unrecognised gets an honest fallback, never
-    // a wrong specific state.
+    // warehouse_received, empty_returned.
+    // I8-E (R6): container_status is never updated when the
+    // shipment status moves — the only writer sets
+    // 'empty_returned', so the column keeps its 'on_water'
+    // default for a container that has already arrived, and the
+    // sheet read "في البحر" for MSCU-TEST-001 although the
+    // shipment status is Arrived (list: تم الوصول للمخزن).
+    // The shipment status is the authoritative arrival state,
+    // so a NON-INFORMATIVE container_status — NULL, the
+    // 'on_water' default, or the legacy 'arrived' fallback —
+    // is resolved from it. An explicit value
+    // (warehouse_received, port_arrived, customs_cleared,
+    // empty_returned) — or an unknown one, which keeps the
+    // honest fallback below (D6) — is never overridden.
     const containerStatusLabels: Record<string, string> = {
       on_water: 'في البحر',
       port_arrived: 'وصلت إلى الميناء',
@@ -9107,7 +9115,16 @@ export class ImportSalesService {
       empty_returned: 'تم تسليم الفارغ والمطابقة',
       arrived: 'تم الوصول',
     };
-    const containerStatus = shipment.container_status || 'arrived';
+    const statusDerivedContainerStatus: Record<string, string> = {
+      Arrived: 'warehouse_received',
+      'In Customs': 'port_arrived',
+      Pending: 'on_water',
+    };
+    const rawContainerStatus = shipment.container_status as string | null | undefined;
+    const containerStatus =
+      rawContainerStatus && !['on_water', 'arrived'].includes(rawContainerStatus)
+        ? rawContainerStatus
+        : statusDerivedContainerStatus[shipment.status as string] || rawContainerStatus || 'arrived';
     const containerStatusLabel = containerStatusLabels[containerStatus] || 'حالة غير معروفة';
 
     return {

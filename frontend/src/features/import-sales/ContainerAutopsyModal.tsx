@@ -53,6 +53,11 @@ export function ContainerAutopsyModal({ isOpen, onClose, shipmentId }: Container
 
       rows.push(['---', '---', '---', '---', '---', '---']);
       rows.push(['رقم الحاوية', autopsy.operational.containerNumber, 'بوليصة الشحن', autopsy.operational.billOfLading || '—', 'المورد', autopsy.operational.supplierName || '—']);
+      // I8-E (R6): the Excel export carries the same breakdown rows
+      // as the modal, so the exported rows sum to the total too.
+      rows.push(['التأمين البحري (Insurance EGP)', Number(autopsy.landedCosts.insuranceEgp || 0), '', '', '', '']);
+      rows.push(['الرسوم الجمركية النسبية (Duty EGP)', Number(autopsy.landedCosts.dutyEgp || 0), '', '', '', '']);
+      rows.push(['ضريبة القيمة المضافة (VAT EGP)', Number(autopsy.landedCosts.vatEgp || 0), '', '', '', '']);
       rows.push(['إجمالي التكلفة الواصلة (Landed Cost EGP)', Number(autopsy.landedCosts.totalLandedCostEgp || 0), '', '', '', '']);
       rows.push(['إجمالي مبيعات الحاوية (Gross Sales EGP)', Number(autopsy.salesAndInventory.grossSalesEgp || 0), '', '', '', '']);
       rows.push(['هامش التداول الإجمالي (Gross Trading Margin EGP)', Number(autopsy.profitability.realizedGrossTradingMarginEgp || 0), '', '', '', '']);
@@ -241,6 +246,24 @@ export function ContainerAutopsyModal({ isOpen, onClose, shipmentId }: Container
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#475569' }}>الشحن البحري الدولي (Ocean Freight):</span>
                   <span style={{ fontWeight: 600, color: '#0f172a' }}>{formatCurrency(autopsy.landedCosts.shippingEgp)}</span>
+                </div>
+                {/* I8-E (R6): the backend already returns insurance /
+                  duty / VAT in landedCosts and includes them in the
+                  total, but the breakdown omitted them — MSCU-TEST-003
+                  listed only 900.00 of rows against a 1,107.60 total.
+                  The three rows are always shown (0.00 when none) so
+                  the listed rows visibly sum to the total. */}
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#475569' }}>التأمين البحري (Insurance):</span>
+                  <span style={{ fontWeight: 600, color: '#0f172a' }}>{formatCurrency(autopsy.landedCosts.insuranceEgp)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#475569' }}>الرسوم الجمركية النسبية (Customs Duty):</span>
+                  <span style={{ fontWeight: 600, color: '#0f172a' }}>{formatCurrency(autopsy.landedCosts.dutyEgp)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#475569' }}>ضريبة القيمة المضافة (VAT):</span>
+                  <span style={{ fontWeight: 600, color: '#0f172a' }}>{formatCurrency(autopsy.landedCosts.vatEgp)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#475569' }}>الجمارك ومصاريف الميناء المسواة:</span>
