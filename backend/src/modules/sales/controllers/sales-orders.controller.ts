@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { PermissionsGuard } from '../../../core/auth/guards/permissions.guard';
 import { RequirePermissions } from '../../../core/auth/decorators/permissions.decorator';
 import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
@@ -23,6 +23,23 @@ export class SalesOrdersController {
       limit: query.limit ? parseInt(query.limit, 10) : undefined,
       offset: query.offset ? parseInt(query.offset, 10) : undefined,
     });
+  }
+
+  // INV-SALES-ORDER-WAREHOUSE-SELECTION: the order form's line
+  // availability read. Declared BEFORE ':id' so 'availability' is
+  // not captured as an order id. Same arithmetic as the approval
+  // check — one source of truth for display and validation.
+  @Get('availability')
+  getLocationAvailability(
+    @Query('productId', ParseIntPipe) productId: number,
+    @Query('locationId') locationId: string | undefined,
+    @Req() req: RequestWithAuth,
+  ) {
+    const parsed = locationId === undefined || locationId === '' ? null : Number(locationId);
+    if (parsed !== null && !Number.isFinite(parsed)) {
+      throw new BadRequestException('المخزن غير صالح');
+    }
+    return this.salesOrdersService.getLocationAvailability(productId, parsed, req.authContext!);
   }
 
   @Get(':id')

@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCreateSalesOrderForm, type SalesOrderItem } from '../hooks/useCreateSalesOrderForm';
+import { useSalesOrderWarehouse } from '../hooks/useSalesOrderWarehouse';
 import { useProductsQuery } from '@/shared/hooks/use-catalog-queries';
 import { useAppToolbar } from '@/stores/toolbar-store';
 import { PageHeader } from '@/shared/components/page-header';
@@ -112,6 +113,15 @@ export function CreateSalesOrderPage() {
     }));
   }, [customers]);
 
+  const {
+    selectedWarehouseId,
+    selectWarehouse,
+    resetWarehouse,
+    warehouseOptions,
+    availabilityByProduct,
+    refreshAvailability,
+  } = useSalesOrderWarehouse();
+
   const productOptions = useMemo(() => {
     return (catalogProducts || []).map((p: Product) => ({
       id: String(p.id),
@@ -126,6 +136,30 @@ export function CreateSalesOrderPage() {
       raw: p,
     }));
   }, [catalogProducts]);
+
+  // INV-SALES-ORDER-WAREHOUSE-SELECTION: whenever the selected
+  // warehouse changes (or a line's product changes), re-read the
+  // availability of every line product IN THAT WAREHOUSE — the same
+  // read the approval check enforces — and show it on the line.
+  const lineProductIdsKey = items.map((it) => it.productId).filter((id) => id > 0).join(',');
+  useEffect(() => {
+    const ids = items.map((it) => it.productId).filter((id) => id > 0);
+    if (ids.length > 0) void refreshAvailability(ids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWarehouseId, lineProductIdsKey, refreshAvailability]);
+
+  useEffect(() => {
+    setItems((prev) => {
+      let changed = false;
+      const next = prev.map((it) => {
+        const avail = it.productId > 0 ? availabilityByProduct[it.productId] : undefined;
+        if (avail === undefined || avail === it.stockOnHand) return it;
+        changed = true;
+        return { ...it, stockOnHand: avail };
+      });
+      return changed ? next : prev;
+    });
+  }, [availabilityByProduct]);
 
   // Draft Data
   const draftData = useMemo(
@@ -146,6 +180,7 @@ export function CreateSalesOrderPage() {
       notes,
       termsConditions,
       items,
+      warehouseLocationId: selectedWarehouseId,
     }),
     [
       selectedCustomerId,
@@ -164,11 +199,13 @@ export function CreateSalesOrderPage() {
       notes,
       termsConditions,
       items,
+      selectedWarehouseId,
     ]
   );
 
   const resetForm = () => {
     clearDraft();
+    resetWarehouse();
     setSelectedCustomerId(null);
     setCustomerName('');
     setCustomerPhone('');
@@ -222,6 +259,7 @@ export function CreateSalesOrderPage() {
       if (typeof saved.discountValue === 'number') setDiscountValue(saved.discountValue);
       if (saved.notes) setNotes(saved.notes);
       if (saved.termsConditions) setTermsConditions(saved.termsConditions);
+      if (saved.warehouseLocationId) selectWarehouse(Number(saved.warehouseLocationId));
       if (Array.isArray(saved.items) && saved.items.length > 0) {
         setItems(saved.items);
       }
@@ -285,6 +323,10 @@ export function CreateSalesOrderPage() {
   };
 
   const handleProductSelect = (id: number, option: any) => {
+    // INV-SALES-ORDER-WAREHOUSE-SELECTION: the badge shows the
+    // availability in the SELECTED warehouse (0 until the read
+    // returns), never the global stock — then re-read it live.
+    const knownAvailability = availabilityByProduct[option.rawId];
     setItems((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
@@ -297,12 +339,13 @@ export function CreateSalesOrderPage() {
           productName: option.name,
           unitName: option.unit,
           unitPrice: price,
-          stockOnHand: option.stock,
+          stockOnHand: knownAvailability ?? 0,
           barcode: option.barcode,
           total: Math.max(0, qty * price - disc),
         };
       })
     );
+    void refreshAvailability([option.rawId]);
   };
 
   const handleBarcodeScan = () => {
@@ -321,10 +364,13 @@ export function CreateSalesOrderPage() {
             unitPrice: found.price,
             discount: 0,
             total: found.price,
-            stockOnHand: found.stock,
+            // INV-SALES-ORDER-WAREHOUSE-SELECTION: selected-warehouse
+            // availability, never the global stock.
+            stockOnHand: availabilityByProduct[found.rawId] ?? 0,
             warehouse: 'المستودع الرئيسي',
           },
         ]);
+        void refreshAvailability([found.rawId]);
         toast.success(`تمت إضافة الصنف: ${found.name}`);
       } else {
         toast.warning('لم يتم العثور على صنف بهذا الباركود');
@@ -370,6 +416,11 @@ export function CreateSalesOrderPage() {
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim() || undefined,
       customerAddress: customerAddress.trim() || undefined,
+      // INV-SALES-ORDER-WAREHOUSE-SELECTION: reserve in the warehouse
+      // the user selected (default = the branch's default selling
+      // warehouse); omit it only when none resolved yet, so the
+      // backend falls back to the branch default.
+      warehouseLocationId: selectedWarehouseId ?? undefined,
       deliveryDate: deliveryDate || undefined,
       reservationExpiresAt: reservationExpiresAt || undefined,
       autoReserve,
@@ -585,6 +636,19 @@ export function CreateSalesOrderPage() {
                 onChange={(e) => setCustomerAddress(e.target.value)}
               />
             </Field>
+
+            {/* INV-SALES-ORDER-WAREHOUSE-SELECTION: the warehouse the
+            order reserves from. Defaults to the branch's default
+            selling warehouse; the line availability and the approval
+            check both read this warehouse. */}
+            <Field label={t('sales.create_sales_order_page.s79', "مخزن الحجز")}>
+              <CustomSelect
+                value={selectedWarehouseId != null ? String(selectedWarehouseId) : ''}
+                onChange={(val) => selectWarehouse(val ? Number(val) : null)}
+                options={warehouseOptions}
+                placeholder={t('sales.create_sales_order_page.s80', "اختر المخزن...")}
+              />
+            </Field>
           </div>
 
           {/* Auto Reservation Banner */}
@@ -780,7 +844,7 @@ export function CreateSalesOrderPage() {
                         onChange={(value) => handleUpdateLine(line.id, 'productName', value)}
                         options={productOptions}
                         getLabel={(p) => p.name}
-                        getMeta={(p) => [p.barcode, p.price > 0 ? `${formatCurrency(p.price)}` : undefined, `رصيد: ${p.stock}`].filter(Boolean).join(' · ')}
+                        getMeta={(p) => [p.barcode, p.price > 0 ? `${formatCurrency(p.price)}` : undefined, `رصيد: ${availabilityByProduct[p.rawId] ?? p.stock}`].filter(Boolean).join(' · ')}
                         search={(p, query) =>
                           matchesArabic(p.name, query) ||
                           (p.barcode ? p.barcode.includes(query) : false) ||

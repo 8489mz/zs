@@ -1,7 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { formatCurrency } from '@/lib/format';
+import { CustomSelect } from '@/shared/ui/custom-select';
+import { useSalesOrderWarehouse } from '../hooks/useSalesOrderWarehouse';
 import { toast } from '@/shared/components/system-alert';
 import {
   PlusIcon,
@@ -53,6 +55,37 @@ export const CreateSalesOrderModal: React.FC<CreateSalesOrderModalProps> = ({
     { productId: 0, productName: '', unitName: 'قطعة', quantity: 1, unitPrice: 0, discount: 0, total: 0, stockOnHand: 0 },
   ]);
 
+  // INV-SALES-ORDER-WAREHOUSE-SELECTION: same warehouse selector and
+  // same selected-warehouse availability as the full order page.
+  const {
+    selectedWarehouseId,
+    selectWarehouse,
+    resetWarehouse,
+    warehouseOptions,
+    availabilityByProduct,
+    refreshAvailability,
+  } = useSalesOrderWarehouse();
+
+  const lineProductIdsKey = items.map((it) => it.productId).filter((id) => id > 0).join(',');
+  useEffect(() => {
+    const ids = items.map((it) => it.productId).filter((id) => id > 0);
+    if (ids.length > 0) void refreshAvailability(ids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWarehouseId, lineProductIdsKey, refreshAvailability]);
+
+  useEffect(() => {
+    setItems((prev) => {
+      let changed = false;
+      const next = prev.map((it) => {
+        const avail = it.productId > 0 ? availabilityByProduct[it.productId] : undefined;
+        if (avail === undefined || avail === it.stockOnHand) return it;
+        changed = true;
+        return { ...it, stockOnHand: avail };
+      });
+      return changed ? next : prev;
+    });
+  }, [availabilityByProduct]);
+
   const draftData = useMemo(() => ({
     customerName,
     customerPhone,
@@ -62,10 +95,12 @@ export const CreateSalesOrderModal: React.FC<CreateSalesOrderModalProps> = ({
     autoReserve,
     notes,
     items,
-  }), [customerName, customerPhone, customerAddress, deliveryDate, reservationExpiresAt, autoReserve, notes, items]);
+    warehouseLocationId: selectedWarehouseId,
+  }), [customerName, customerPhone, customerAddress, deliveryDate, reservationExpiresAt, autoReserve, notes, items, selectedWarehouseId]);
 
   const resetForm = () => {
     clearDraft();
+    resetWarehouse();
     setCustomerName('');
     setCustomerPhone('');
     setCustomerAddress('');
@@ -94,6 +129,7 @@ export const CreateSalesOrderModal: React.FC<CreateSalesOrderModalProps> = ({
       if (saved.reservationExpiresAt) setReservationExpiresAt(saved.reservationExpiresAt);
       if (typeof saved.autoReserve === 'boolean') setAutoReserve(saved.autoReserve);
       if (saved.notes) setNotes(saved.notes);
+      if (saved.warehouseLocationId) selectWarehouse(Number(saved.warehouseLocationId));
       if (Array.isArray(saved.items) && saved.items.length > 0) {
         setItems(saved.items);
       }
@@ -131,7 +167,9 @@ export const CreateSalesOrderModal: React.FC<CreateSalesOrderModalProps> = ({
     const price = promoPrice > 0 ? promoPrice : basePrice;
     const discount = Number(updated[index]?.discount) || 0;
     const unit = prod.units?.[0]?.name || 'قطعة';
-    const stock = Number(prod.stock ?? 0);
+    // INV-SALES-ORDER-WAREHOUSE-SELECTION: availability in the
+    // SELECTED warehouse (0 until the read returns), never global stock.
+    const stock = availabilityByProduct[Number(prod.id)] ?? 0;
 
     updated[index] = {
       ...updated[index],
@@ -144,6 +182,7 @@ export const CreateSalesOrderModal: React.FC<CreateSalesOrderModalProps> = ({
       total: Math.max(0, qty * price - discount),
     };
     setItems(updated);
+    void refreshAvailability([Number(prod.id)]);
   };
 
   const handleAddItem = () => {
@@ -191,6 +230,9 @@ export const CreateSalesOrderModal: React.FC<CreateSalesOrderModalProps> = ({
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim() || undefined,
       customerAddress: customerAddress.trim() || undefined,
+      // INV-SALES-ORDER-WAREHOUSE-SELECTION: reserve in the selected
+      // warehouse (default = the branch's default selling warehouse).
+      warehouseLocationId: selectedWarehouseId ?? undefined,
       deliveryDate: deliveryDate || undefined,
       reservationExpiresAt: reservationExpiresAt || undefined,
       autoReserve,
@@ -304,6 +346,21 @@ export const CreateSalesOrderModal: React.FC<CreateSalesOrderModalProps> = ({
                 value={customerAddress}
                 onChange={(e) => setCustomerAddress(e.target.value)}
                 style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', backgroundColor: '#f8fafc', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            {/* INV-SALES-ORDER-WAREHOUSE-SELECTION: the warehouse the
+            order reserves from (default = the branch's default
+            selling warehouse). */}
+            <div className="field">
+              <label className="field-label" style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px', display: 'block' }}>
+                {t('sales.create_sales_order_modal.s31', "مخزن الحجز")}
+              </label>
+              <CustomSelect
+                value={selectedWarehouseId != null ? String(selectedWarehouseId) : ''}
+                onChange={(val) => selectWarehouse(val ? Number(val) : null)}
+                options={warehouseOptions}
+                placeholder={t('sales.create_sales_order_modal.s32', "اختر المخزن...")}
               />
             </div>
           </div>

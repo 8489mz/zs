@@ -8,7 +8,7 @@ import { CreateSalesOrderDto, UpdateSalesOrderDto } from '../dto/sales-order.dto
 import { SalesWriteService } from './sales-write.service';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 import { randomUUID } from 'node:crypto';
-import { reserveLocationStock, releaseLocationStock } from '../../../common/utils/location-stock-ledger';
+import { reserveLocationStock, releaseLocationStock, getLocationAvailability } from '../../../common/utils/location-stock-ledger';
 import { idempotencyStorage } from '../../../core/idempotency/idempotency.context';
 import { IdempotencyService } from '../../../core/idempotency/idempotency.service';
 import { conversionRecoverySaleId, decideConversionRecovery, resolveConversionDiscounts, resolveConversionPaymentTerms } from '../helpers/sales-write.helper';
@@ -28,6 +28,113 @@ export class SalesOrdersService {
   }
 
   private readonly idempotency: IdempotencyService;
+
+  /**
+   * INV-SALES-ORDER-WAREHOUSE-SELECTION: resolve the warehouse an
+   * order reserves from. An explicitly selected location wins — it is
+   * validated tenant-scoped and active, and the error names the
+   * warehouse when it is not. Otherwise the branch's default selling
+   * warehouse applies (the previous behaviour). Branch scoping is
+   * deliberately NOT enforced here: a location may serve a branch
+   * other than its own record (e.g. the trial's transfer warehouse),
+   * and over-restricting would re-break exactly the case this fix
+   * exists for.
+   */
+  private async resolveOrderWarehouse(
+    trx: Kysely<Database>,
+    scope: { tenantId: string; accountId: string },
+    branchId: number | null,
+    requestedLocationId: number | null,
+  ): Promise<number | null> {
+    if (requestedLocationId != null) {
+      const loc = await trx
+        .selectFrom('stock_locations')
+        .select(['id', 'name', 'is_active'])
+        .where('id', '=', requestedLocationId)
+        .where('tenant_id', '=', scope.tenantId)
+        .where('account_id', '=', scope.accountId)
+        .executeTakeFirst();
+      if (!loc) {
+        throw new BadRequestException('المخزن المحدد لأمر البيع غير موجود');
+      }
+      if (!loc.is_active) {
+        throw new BadRequestException(`المخزن المحدد لأمر البيع غير نشط (${loc.name})`);
+      }
+      return Number(loc.id);
+    }
+    if (branchId == null) return null;
+    const branchRow = await trx
+      .selectFrom('branches')
+      .select(['default_stock_location_id'])
+      .where('id', '=', branchId)
+      .where('tenant_id', '=', scope.tenantId)
+      .executeTakeFirst();
+    return branchRow?.default_stock_location_id ? Number(branchRow.default_stock_location_id) : null;
+  }
+
+  /** The warehouse already stored on an order, else its branch default. */
+  private async resolveStoredOrderLocation(
+    order: { warehouse_location_id?: number | null; branch_id?: number | null },
+    scope: { tenantId: string; accountId: string },
+  ): Promise<number | null> {
+    if (order.warehouse_location_id) return Number(order.warehouse_location_id);
+    if (!order.branch_id) return null;
+    const branchRow = await this.db
+      .selectFrom('branches')
+      .select(['default_stock_location_id'])
+      .where('id', '=', Number(order.branch_id))
+      .where('tenant_id', '=', scope.tenantId)
+      .executeTakeFirst();
+    return branchRow?.default_stock_location_id ? Number(branchRow.default_stock_location_id) : null;
+  }
+
+  /**
+   * INV-SALES-ORDER-WAREHOUSE-SELECTION: the display read. Returns
+   * the available quantity of one product in one warehouse, computed
+   * by the SAME arithmetic reserveLocationStock enforces — so the
+   * order line's "available" badge and the approval check can never
+   * disagree about the warehouse again. A null location reads the
+   * global availability (the pre-selector fallback).
+   */
+  async getLocationAvailability(
+    productId: number,
+    locationId: number | null,
+    auth: AuthContext,
+  ): Promise<Record<string, unknown>> {
+    const scope = requireTenantScope(auth);
+    if (!Number.isFinite(productId) || productId <= 0) {
+      throw new BadRequestException('الصنف غير محدد');
+    }
+    let branchId: number | null = null;
+    if (locationId != null) {
+      const loc = await this.db
+        .selectFrom('stock_locations')
+        .select(['id', 'branch_id'])
+        .where('id', '=', locationId)
+        .where('tenant_id', '=', scope.tenantId)
+        .where('account_id', '=', scope.accountId)
+        .executeTakeFirst();
+      if (!loc) {
+        throw new BadRequestException('المخزن المحدد غير موجود');
+      }
+      branchId = loc.branch_id ? Number(loc.branch_id) : null;
+    }
+    const availability = await getLocationAvailability(this.db, {
+      tenantId: scope.tenantId,
+      accountId: scope.accountId,
+      productId,
+      locationId,
+      branchId,
+    });
+    // No warehouse chosen yet: there is no location balance to read,
+    // and reserveLocationStock enforces only the global check in that
+    // case — so the display shows the global availability, exactly
+    // like the approval check does.
+    if (locationId == null) {
+      return { ...availability, availableAtLocation: availability.globalAvailable };
+    }
+    return { ...availability };
+  }
 
   /** Durable conversion-operation row for one sales order's claim. */
   private conversionOperationParams(scope: { tenantId: string; accountId: string }, idemKey: string) {
@@ -174,7 +281,31 @@ export class SalesOrdersService {
       .orderBy('soi.id', 'asc')
       .execute();
 
-    return { ...order, items };
+    // INV-SALES-ORDER-WAREHOUSE-SELECTION: available_qty is the
+    // availability in THIS order's warehouse (the same number the
+    // approval check enforces), not the tenant-global stock. A
+    // per-item read failure falls back to the global figure so a
+    // missing product can never break the details view.
+    const orderLocationId = await this.resolveStoredOrderLocation(order, scope);
+    const itemsWithAvailability = [];
+    for (const item of items) {
+      let availableQty = Number(item.available_qty);
+      try {
+        const availability = await getLocationAvailability(this.db, {
+          tenantId: scope.tenantId,
+          accountId: scope.accountId,
+          productId: Number(item.product_id),
+          locationId: orderLocationId,
+          branchId: order.branch_id ? Number(order.branch_id) : null,
+        });
+        availableQty = availability.availableAtLocation;
+      } catch {
+        // keep the global figure
+      }
+      itemsWithAvailability.push({ ...item, available_qty: availableQty });
+    }
+
+    return { ...order, items: itemsWithAvailability };
   }
 
   async createOrder(dto: CreateSalesOrderDto, auth: AuthContext): Promise<Record<string, unknown>> {
@@ -198,7 +329,13 @@ export class SalesOrdersService {
           .orderBy('id', 'asc').executeTakeFirst();
         if (!branch) throw new BadRequestException('لا يوجد فرع مسموح لحجز البضاعة');
         resolvedBranchId = Number(branch.id);
-        resolvedLocationId = branch.default_stock_location_id ? Number(branch.default_stock_location_id) : null;
+        // INV-SALES-ORDER-WAREHOUSE-SELECTION: the selected warehouse
+        // wins; the branch default applies only when none was chosen.
+        resolvedLocationId = await this.resolveOrderWarehouse(trx, scope, resolvedBranchId, dto.warehouseLocationId ?? null);
+      } else if (dto.warehouseLocationId != null) {
+        // Draft with an explicit warehouse: validate and store it now
+        // so confirmAndReserve later reserves in the same warehouse.
+        resolvedLocationId = await this.resolveOrderWarehouse(trx, scope, resolvedBranchId, dto.warehouseLocationId);
       }
       const order = await trx
         .insertInto('sales_orders')
@@ -211,6 +348,7 @@ export class SalesOrdersService {
           customer_phone: dto.customerPhone?.trim() || null,
           customer_address: dto.customerAddress?.trim() || null,
           branch_id: resolvedBranchId,
+          warehouse_location_id: resolvedLocationId,
           subtotal: dto.subtotal,
           discount_amount: dto.discountAmount || 0,
           tax_amount: dto.taxAmount || 0,
@@ -328,10 +466,16 @@ export class SalesOrdersService {
         throw new BadRequestException('أمر البيع لا يحتوي على بنود');
       }
 
-      // Resolve branch and location
+      // Resolve branch and location.
+      // INV-SALES-ORDER-WAREHOUSE-SELECTION: the warehouse stored on
+      // the order (chosen on the form) wins — approval validates and
+      // reserves in the SELECTED warehouse. The branch default
+      // applies only when the order carries no warehouse.
       let branchId = order.branch_id;
       let locationId: number | null = null;
-      if (!branchId) {
+      if (order.warehouse_location_id) {
+        locationId = Number(order.warehouse_location_id);
+      } else if (!branchId) {
         const primaryBranch = await trx
           .selectFrom('branches')
           .select(['id', 'default_stock_location_id'])
@@ -445,8 +589,14 @@ export class SalesOrdersService {
       }
 
       if (releaseItems.length > 0) {
+        // INV-SALES-ORDER-WAREHOUSE-SELECTION: release from the
+        // warehouse the reservation was made in — the order's stored
+        // warehouse — never from the branch default, which may have
+        // changed (or never held the stock) since the reservation.
         let locationId: number | null = null;
-        if (order.branch_id) {
+        if (order.warehouse_location_id) {
+          locationId = Number(order.warehouse_location_id);
+        } else if (order.branch_id) {
           const branchRow = await trx
             .selectFrom('branches')
             .select(['default_stock_location_id'])
@@ -628,16 +778,22 @@ export class SalesOrdersService {
       }
     }
 
-    // INV-CONVERSION-STOCK-DEDUCTION: resolve the branch default
-    // stock location for EVERY conversion, not only when reserved
-    // items exist. The payload below carries it into createSale, so
-    // a goods conversion deducts from the branch's default location
-    // exactly like a POS sale. A branch with no default location
-    // keeps the prior null-location behaviour (locationId null);
-    // createSale's explicit-location validation still fails closed
-    // when a resolved default is deleted or inactive.
+    // INV-CONVERSION-STOCK-DEDUCTION (extended by
+    // INV-SALES-ORDER-WAREHOUSE-SELECTION): resolve the conversion
+    // location from the ORDER's stored warehouse first — the order
+    // was reserved in that warehouse, so its release and the sale
+    // deduction must come from the same warehouse, not only when
+    // reserved items exist. Legacy orders created before
+    // warehouse_location_id existed (null warehouse) fall back to
+    // the branch default, exactly like a POS sale. A branch with no
+    // default location keeps the prior null-location behaviour
+    // (locationId null); createSale's explicit-location validation
+    // still fails closed when a resolved location is deleted or
+    // inactive.
     let locationId: number | null = null;
-    {
+    if (order.warehouse_location_id) {
+      locationId = Number(order.warehouse_location_id);
+    } else {
       const branchRow = await this.db
         .selectFrom('branches')
         .select(['default_stock_location_id'])
@@ -871,8 +1027,12 @@ export class SalesOrdersService {
           }
         }
         if (releaseItems.length > 0) {
+          // INV-SALES-ORDER-WAREHOUSE-SELECTION: release from the
+          // order's stored warehouse (see cancelOrder).
           let locationId: number | null = null;
-          if (locked.branch_id) {
+          if (locked.warehouse_location_id) {
+            locationId = Number(locked.warehouse_location_id);
+          } else if (locked.branch_id) {
             const branchRow = await trx
               .selectFrom('branches')
               .select(['default_stock_location_id'])

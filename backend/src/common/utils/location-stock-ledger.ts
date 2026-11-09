@@ -613,6 +613,139 @@ export async function relocateStockBetweenLocations(db: Kysely<Database>, params
   };
 }
 
+/**
+ * INV-SALES-ORDER-WAREHOUSE-SELECTION: the ONE availability arithmetic
+ * shared by reserveLocationStock and the display read
+ * (getLocationAvailability). The available quantity at a location is
+ * the location balance minus its reservations PLUS the unassigned
+ * balance minus its reservations — unassigned stock is sellable from
+ * any location, which is exactly what reserveLocationStock has always
+ * enforced. Any change here must change both paths together, or the
+ * line display and the approval check will disagree about the same
+ * warehouse again (trial SO-261108-0008 showed "10 متاح" while
+ * approval failed with 0 in the default warehouse).
+ */
+export function computeLocationAvailability(args: {
+  locationQty: number | string | null | undefined;
+  locationReserved: number | string | null | undefined;
+  unassignedQty: number | string | null | undefined;
+  unassignedReserved: number | string | null | undefined;
+  globalStock: number | string | null | undefined;
+  globalReserved: number | string | null | undefined;
+}): { availableAtLocation: number; globalAvailable: number } {
+  return {
+    availableAtLocation: roundStockQty(
+      Math.max(0, Number(args.locationQty || 0) - Number(args.locationReserved || 0)) +
+        Math.max(0, Number(args.unassignedQty || 0) - Number(args.unassignedReserved || 0)),
+    ),
+    globalAvailable: roundStockQty(
+      Math.max(0, Number(args.globalStock || 0) - Number(args.globalReserved || 0)),
+    ),
+  };
+}
+
+export type LocationAvailability = {
+  productId: number;
+  locationId: number | null;
+  branchId: number | null;
+  locationQty: number;
+  locationReservedQty: number;
+  unassignedQty: number;
+  unassignedReservedQty: number;
+  availableAtLocation: number;
+  globalAvailable: number;
+};
+
+/**
+ * Read-only availability of one product at one location — the display
+ * side of computeLocationAvailability. It mirrors the row resolution
+ * of reserveLocationStock (ensureLocationBalance matching, plus the
+ * unassigned discrepancy seeding of ensureUnassignedBalance) WITHOUT
+ * writing anything: no balance row is created and no quantity is
+ * seeded, so a display read can never mutate stock. Throws
+ * PRODUCT_NOT_FOUND for an unknown product, exactly like reserve.
+ */
+export async function getLocationAvailability(
+  db: Kysely<Database>,
+  params: TenantStockScope & { productId: number; locationId?: number | null; branchId?: number | null },
+): Promise<LocationAvailability> {
+  const scope = requireStockTenantScope(params);
+  const product = await db
+    .selectFrom('products')
+    .select(['id', 'stock_qty', sql<number | null>`COALESCE(reserved_qty, 0)`.as('reserved_qty')])
+    .where('id', '=', params.productId)
+    .where('tenant_id', '=', scope.tenantId)
+    .where('account_id', '=', scope.accountId)
+    .executeTakeFirst();
+  if (!product) {
+    throw new AppError(
+      `الصنف رقم #${params.productId} غير موجود أو ليس لديك صلاحية للوصول إليه`,
+      'PRODUCT_NOT_FOUND',
+      404,
+    );
+  }
+  const balances = await db
+    .selectFrom('product_location_stock')
+    .select(['id', 'product_id', 'branch_id', 'location_id', 'qty', sql<number | null>`COALESCE(reserved_qty, 0)`.as('reserved_qty')])
+    .where('product_id', '=', Number(product.id))
+    .where('tenant_id', '=', scope.tenantId)
+    .where('account_id', '=', scope.accountId)
+    .orderBy('id', 'asc')
+    .execute();
+  const rows = balances.map((row: any) => ({
+    location_id: row.location_id == null ? null : Number(row.location_id),
+    branch_id: row.branch_id == null ? null : Number(row.branch_id),
+    qty: Number(row.qty || 0),
+    reserved_qty: Number(row.reserved_qty || 0),
+  }));
+  const locationId = params.locationId == null ? null : Number(params.locationId);
+  const branchId = params.branchId == null ? null : Number(params.branchId);
+
+  // Same matching as ensureLocationBalance, read-only (no insert).
+  let locationRow: (typeof rows)[number] | undefined;
+  if (locationId !== null) {
+    locationRow = rows.find((row) => row.location_id === locationId);
+  } else if (branchId !== null) {
+    locationRow =
+      rows.find((row) => row.branch_id === branchId && row.location_id === null) ||
+      rows.find((row) => row.location_id === null);
+  } else {
+    locationRow =
+      rows.find((row) => row.location_id === null && row.branch_id === null) ||
+      rows.find((row) => row.location_id === null);
+  }
+
+  // Same unassigned rule as ensureUnassignedBalance, read-only: the
+  // global-minus-located discrepancy is sellable from any location.
+  const globalQty = roundStockQty(product.stock_qty);
+  const locatedSum = roundStockQty(rows.reduce((sum, row) => sum + row.qty, 0));
+  const discrepancy = roundStockQty(globalQty - locatedSum);
+  const unassignedRow = rows.find((row) => row.location_id === null && row.branch_id === null);
+  const unassignedQty = roundStockQty((unassignedRow?.qty ?? 0) + (discrepancy > 0.001 ? discrepancy : 0));
+  const unassignedReserved = unassignedRow?.reserved_qty ?? 0;
+
+  const { availableAtLocation, globalAvailable } = computeLocationAvailability({
+    locationQty: locationRow?.qty ?? 0,
+    locationReserved: locationRow?.reserved_qty ?? 0,
+    unassignedQty,
+    unassignedReserved,
+    globalStock: product.stock_qty,
+    globalReserved: product.reserved_qty ?? 0,
+  });
+
+  return {
+    productId: Number(product.id),
+    locationId,
+    branchId,
+    locationQty: locationRow?.qty ?? 0,
+    locationReservedQty: locationRow?.reserved_qty ?? 0,
+    unassignedQty,
+    unassignedReservedQty: unassignedReserved,
+    availableAtLocation,
+    globalAvailable,
+  };
+}
+
 export async function reserveLocationStock(
   db: Kysely<Database>,
   params: StockLocationReservationParams,
@@ -637,17 +770,18 @@ export async function reserveLocationStock(
     const location = await ensureLocationBalance(db, state, params.locationId ?? null, params.branchId ?? null);
     const unassigned = await ensureUnassignedBalance(db, state);
 
-    const locationQty = Number(location.qty || 0);
+    // INV-SALES-ORDER-WAREHOUSE-SELECTION: same arithmetic as the
+    // display read (getLocationAvailability) — never recompute here.
+    const { availableAtLocation, globalAvailable } = computeLocationAvailability({
+      locationQty: location.qty,
+      locationReserved: location.reserved_qty,
+      unassignedQty: unassigned.qty,
+      unassignedReserved: unassigned.reserved_qty,
+      globalStock: state.product.stock_qty,
+      globalReserved: state.product.reserved_qty,
+    });
     const locationReserved = Number(location.reserved_qty || 0);
-    const unassignedQty = Number(unassigned.qty || 0);
-    const unassignedReserved = Number(unassigned.reserved_qty || 0);
-
-    const availableAtLocation = roundStockQty(
-      Math.max(0, locationQty - locationReserved) + Math.max(0, unassignedQty - unassignedReserved)
-    );
-    const globalStock = Number(state.product.stock_qty || 0);
     const globalReserved = Number(state.product.reserved_qty || 0);
-    const globalAvailable = roundStockQty(Math.max(0, globalStock - globalReserved));
 
     if (!params.allowOutOfStock) {
       if (params.locationId && availableAtLocation < qty) {

@@ -21,6 +21,18 @@ export interface SalesOrderItem {
   available_qty?: number;
 }
 
+export interface LocationAvailability {
+  productId: number;
+  locationId: number | null;
+  branchId: number | null;
+  locationQty: number;
+  locationReservedQty: number;
+  unassignedQty: number;
+  unassignedReservedQty: number;
+  availableAtLocation: number;
+  globalAvailable: number;
+}
+
 export interface SalesOrderRecord {
   id: number;
   tenant_id: string;
@@ -31,6 +43,7 @@ export interface SalesOrderRecord {
   customer_phone: string | null;
   customer_address: string | null;
   branch_id: number | null;
+  warehouse_location_id?: number | null;
   subtotal: number | string;
   discount_amount: number | string;
   tax_amount: number | string;
@@ -53,6 +66,12 @@ export interface CreateSalesOrderPayload {
   customerPhone?: string;
   customerAddress?: string;
   branchId?: number | null;
+  /**
+   * INV-SALES-ORDER-WAREHOUSE-SELECTION: the warehouse the order
+   * reserves from. Omit it to fall back to the branch's default
+   * selling warehouse.
+   */
+  warehouseLocationId?: number | null;
   subtotal: number;
   discountAmount?: number;
   taxAmount?: number;
@@ -98,6 +117,14 @@ export const salesOrdersApi = {
   },
 
   getById: (id: number) => http<SalesOrderRecord>(`/api/sales-orders/${id}`),
+
+  // INV-SALES-ORDER-WAREHOUSE-SELECTION: availability of one product
+  // in one warehouse, computed by the same arithmetic the approval
+  // check enforces. Pass null to read the global availability.
+  availability: (productId: number, locationId: number | null) =>
+    http<LocationAvailability>(
+      `/api/sales-orders/availability?productId=${productId}${locationId != null ? `&locationId=${locationId}` : ''}`,
+    ),
 
   create: (payload: CreateSalesOrderPayload) =>
     http<{ ok: boolean; message: string; order: SalesOrderRecord }>('/api/sales-orders', {

@@ -15,6 +15,13 @@ export interface CreateSalesOrderDto {
   customerPhone?: string;
   customerAddress?: string;
   branchId?: number | null;
+  /**
+   * INV-SALES-ORDER-WAREHOUSE-SELECTION: the warehouse the order
+   * reserves from. When given, approval validates/reserves stock in
+   * THIS warehouse; when omitted, the branch's default selling
+   * warehouse applies (previous behaviour, kept).
+   */
+  warehouseLocationId?: number | null;
   subtotal: number;
   discountAmount?: number;
   taxAmount?: number;
