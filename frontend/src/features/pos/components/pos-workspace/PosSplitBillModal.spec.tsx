@@ -43,6 +43,8 @@ import {
   allocateSplitBillAmounts,
   buildFractionalParts,
   isSplitPaidSumSettled,
+  moveSplitBillItem,
+  moveSplitBillItems,
   resolveSplitPaymentChannel,
   splitRoundingTolerance,
   type SplitOrderTotals,
@@ -465,5 +467,55 @@ describe('PosSplitBillModal — even split never shows a guest paid before the s
     fireEvent.click(retry);
     await waitFor(() => expect(mockPos.createSale.mutateAsync).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.getAllByText(/تم السداد/)).toHaveLength(2));
+  });
+});
+
+/* R-I34 / INV-REST-LINE-IDENTITY: split moves used to match on
+ * product + unit + price, so a modified line moved onto a bill holding the
+ * same product plain collapsed into it and the moved modifiers vanished.
+ * Moves now match on lineKey only. */
+describe('PosSplitBillModal — split moves never collapse lines that differ only by modifiers (R-I34)', () => {
+  const cheese = { price: 20, qty: 1, name: 'جبنة إضافية' };
+  const bill = (id: string, items: PosItem[]) => ({ id, name: `الشيك ${id}`, items, isPaid: false });
+
+  it('moving a modified line onto a bill holding the same product plain keeps two lines with modifiers intact', () => {
+    const modified = item({ lineKey: 'p1::u1::retail::cheese', productId: '1', price: 100, qty: 1, modifiers: [cheese] });
+    const plain = item({ lineKey: 'p1::u1::retail', productId: '1', price: 100, qty: 1, modifiers: [] });
+    const next = moveSplitBillItem([bill('b1', [modified]), bill('b2', [plain])], 'b1', 'b2', modified.lineKey, 1);
+    expect(next[0].items).toHaveLength(0);
+    expect(next[1].items).toHaveLength(2);
+    const moved = next[1].items.find((line) => (line.modifiers || []).length === 1);
+    expect(moved).toBeTruthy();
+    expect(calcCartLineTotal(moved!)).toBe(120);
+    expect(next[1].items.reduce((sum, line) => sum + calcCartLineTotal(line), 0)).toBe(220);
+  });
+
+  it('moving a partial quantity keeps the modifiers on the moved half and leaves the remainder untouched', () => {
+    const modified = item({ lineKey: 'p1::u1::retail::cheese', productId: '1', price: 100, qty: 2, modifiers: [cheese] });
+    const next = moveSplitBillItem([bill('b1', [modified]), bill('b2', [])], 'b1', 'b2', modified.lineKey, 1);
+    expect(next[0].items[0].qty).toBe(1);
+    expect(next[0].items[0].modifiers).toEqual([cheese]);
+    expect(next[1].items).toHaveLength(1);
+    expect(next[1].items[0].qty).toBe(1);
+    expect(next[1].items[0].modifiers).toEqual([cheese]);
+    expect(next[1].items[0].lineKey).not.toBe(modified.lineKey);
+  });
+
+  it('moving an identical line merges quantities instead of duplicating it', () => {
+    const line = item({ lineKey: 'p1::u1::retail', productId: '1', price: 100, qty: 1, modifiers: [] });
+    const other = item({ lineKey: 'p1::u1::retail', productId: '1', price: 100, qty: 1, modifiers: [] });
+    const next = moveSplitBillItem([bill('b1', [line]), bill('b2', [other])], 'b1', 'b2', line.lineKey, 1);
+    expect(next[0].items).toHaveLength(0);
+    expect(next[1].items).toHaveLength(1);
+    expect(next[1].items[0].qty).toBe(2);
+  });
+
+  it('move-all with differing modifiers never collapses', () => {
+    const modified = item({ lineKey: 'p1::u1::retail::cheese', productId: '1', price: 100, qty: 1, modifiers: [cheese] });
+    const plain = item({ lineKey: 'p1::u1::retail', productId: '1', price: 100, qty: 1, modifiers: [] });
+    const next = moveSplitBillItems([bill('b1', [modified]), bill('b2', [plain])], 'b1', 'b2');
+    expect(next[0].items).toHaveLength(0);
+    expect(next[1].items).toHaveLength(2);
+    expect(next[1].items.reduce((sum, line) => sum + calcCartLineTotal(line), 0)).toBe(220);
   });
 });

@@ -88,31 +88,17 @@ export function PosTablesFloorPlanDialog({
   const [transferSourceItems, setTransferSourceItems] = useState<TransferableCartItem[]>([]);
 
   const handleOpenItemTransfer = (tableNum: string) => {
+    // R-I34: pass the cart / draft items through UNCHANGED — the old code
+    // re-mapped them field by field and dropped lineKey / unitId /
+    // seatNumber / course / serials / originalPrice at the source, so the
+    // transfer target received lines with no identity.
     let itemsToTransfer: TransferableCartItem[] = [];
     if (tableNum === currentTableNumber && currentCartItems && currentCartItems.length > 0) {
-      itemsToTransfer = currentCartItems.map((item: any) => ({
-        id: item.id || item.productId,
-        productId: item.productId,
-        name: item.name,
-        qty: Number(item.qty || 1),
-        price: Number(item.price || 0),
-        unitName: item.unitName,
-        modifiers: item.modifiers,
-        notes: item.notes,
-      }));
+      itemsToTransfer = currentCartItems.map((item: any) => ({ ...item }));
     } else if (rawHeldDrafts && rawHeldDrafts.length > 0) {
       const draft = rawHeldDrafts.find((d: any) => String(d.tableNumber).trim() === String(tableNum).trim());
       if (draft && draft.cart) {
-        itemsToTransfer = draft.cart.map((item: any) => ({
-          id: item.id || item.productId,
-          productId: item.productId,
-          name: item.name,
-          qty: Number(item.qty || 1),
-          price: Number(item.price || 0),
-          unitName: item.unitName,
-          modifiers: item.modifiers,
-          notes: item.notes,
-        }));
+        itemsToTransfer = draft.cart.map((item: any) => ({ ...item }));
       }
     }
     setTransferSourceTable(tableNum);

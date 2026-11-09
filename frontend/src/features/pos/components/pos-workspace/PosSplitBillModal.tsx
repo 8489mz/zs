@@ -19,12 +19,92 @@ interface PosSplitBillModalProps {
   onSplitCompleted?: () => void;
 }
 
-interface SplitBill {
+export interface SplitBill {
   id: string;
   name: string;
   items: PosItem[];
   isPaid: boolean;
   paymentMethod?: 'cash' | 'card';
+}
+
+/* R-I34 / INV-REST-LINE-IDENTITY: split moves used to match target lines on
+ * product + unit + price, so a modified line moved onto a bill holding the
+ * same product plain collapsed into it — the moved modifiers, notes, seat
+ * and course silently vanished. Moves now match on lineKey only. A partial
+ * move keeps the source line's full identity on the moved copy; the two
+ * halves are the same line split across bills, and the ::split suffix keeps
+ * them individually addressable. A full move keeps the original key. */
+export function moveSplitBillItem(
+  bills: SplitBill[],
+  fromBillId: string,
+  toBillId: string,
+  itemLineKey: string,
+  moveQty?: number,
+): SplitBill[] {
+  const fromBill = bills.find((b) => b.id === fromBillId);
+  const toBill = bills.find((b) => b.id === toBillId);
+  if (!fromBill || !toBill || fromBill.isPaid || toBill.isPaid) return bills;
+  const itemIdx = fromBill.items.findIndex((i) => i.lineKey === itemLineKey);
+  if (itemIdx === -1) return bills;
+  const item = fromBill.items[itemIdx];
+  const actualMoveQty = moveQty === undefined ? item.qty : Math.min(item.qty, moveQty);
+  if (actualMoveQty <= 0) return bills;
+  const isPartial = item.qty > actualMoveQty;
+  const movedKey = isPartial ? `${item.lineKey}::split` : item.lineKey;
+
+  const updatedFromItems = [...fromBill.items];
+  if (!isPartial) {
+    updatedFromItems.splice(itemIdx, 1);
+  } else {
+    updatedFromItems[itemIdx] = { ...item, qty: item.qty - actualMoveQty };
+  }
+
+  const updatedToItems = [...toBill.items];
+  const existingToIdx = updatedToItems.findIndex((i) => i.lineKey === movedKey);
+  if (existingToIdx !== -1) {
+    updatedToItems[existingToIdx] = {
+      ...updatedToItems[existingToIdx],
+      qty: updatedToItems[existingToIdx].qty + actualMoveQty,
+    };
+  } else {
+    updatedToItems.push({ ...item, lineKey: movedKey, qty: actualMoveQty });
+  }
+
+  return bills.map((b) => {
+    if (b.id === fromBillId) return { ...b, items: updatedFromItems };
+    if (b.id === toBillId) return { ...b, items: updatedToItems };
+    return b;
+  });
+}
+
+/** Move every item of one bill onto another. Every item moves in full, so
+ * each keeps its own lineKey — identical lines merge, differing lines
+ * (different modifiers / seat / course) never collapse. */
+export function moveSplitBillItems(
+  bills: SplitBill[],
+  fromBillId: string,
+  toBillId: string,
+): SplitBill[] {
+  const fromBill = bills.find((b) => b.id === fromBillId);
+  const toBill = bills.find((b) => b.id === toBillId);
+  if (!fromBill || !toBill || fromBill.isPaid || toBill.isPaid || !fromBill.items.length) return bills;
+  const updatedToItems = [...toBill.items];
+  for (const item of fromBill.items) {
+    const existingIdx = updatedToItems.findIndex((i) => i.lineKey === item.lineKey);
+    if (existingIdx !== -1) {
+      updatedToItems[existingIdx] = {
+        ...updatedToItems[existingIdx],
+        qty: updatedToItems[existingIdx].qty + item.qty,
+      };
+    } else {
+      updatedToItems.push({ ...item });
+    }
+  }
+  return bills.map((b) => {
+    if (b.id === fromBillId) return { ...b, items: [] };
+    if (b.id === toBillId) return { ...b, items: updatedToItems };
+    return b;
+  });
 }
 
 interface EvenSplitGuest {
@@ -397,85 +477,16 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
     setStatusMessage(`تم توزيع الأصناف تلقائياً على ${generatedBills.length} شيكات حسب أرقام المقاعد.`);
   };
 
-  // Move item from one bill to another
+  // Move item from one bill to another (R-I34: match on lineKey only —
+  // see moveSplitBillItem above).
   const handleMoveItem = (fromBillId: string, toBillId: string, itemLineKey: string, moveQty?: number) => {
-    setBills((prev) => {
-      const fromBill = prev.find((b) => b.id === fromBillId);
-      const toBill = prev.find((b) => b.id === toBillId);
-      if (!fromBill || !toBill || fromBill.isPaid || toBill.isPaid) return prev;
-
-      const itemIdx = fromBill.items.findIndex((i) => i.lineKey === itemLineKey);
-      if (itemIdx === -1) return prev;
-      const item = fromBill.items[itemIdx];
-
-      const actualMoveQty = moveQty === undefined ? item.qty : Math.min(item.qty, moveQty);
-      if (actualMoveQty <= 0) return prev;
-
-      const updatedFromItems = [...fromBill.items];
-      if (item.qty <= actualMoveQty) {
-        // remove completely
-        updatedFromItems.splice(itemIdx, 1);
-      } else {
-        // decrement
-        updatedFromItems[itemIdx] = {
-          ...item,
-          qty: item.qty - actualMoveQty,
-        };
-      }
-
-      // Add to toBill
-      const existingToIdx = toBill.items.findIndex((i) => i.productId === item.productId && i.unitId === item.unitId && i.price === item.price);
-      let updatedToItems = [...toBill.items];
-      if (existingToIdx !== -1) {
-        updatedToItems[existingToIdx] = {
-          ...updatedToItems[existingToIdx],
-          qty: updatedToItems[existingToIdx].qty + actualMoveQty,
-        };
-      } else {
-        updatedToItems.push({
-          ...item,
-          lineKey: `${item.productId}::${item.unitId}::split::${Date.now()}::${Math.random()}`,
-          qty: actualMoveQty,
-        });
-      }
-
-      return prev.map((b) => {
-        if (b.id === fromBillId) return { ...b, items: updatedFromItems };
-        if (b.id === toBillId) return { ...b, items: updatedToItems };
-        return b;
-      });
-    });
+    setBills((prev) => moveSplitBillItem(prev, fromBillId, toBillId, itemLineKey, moveQty));
   };
 
-  // Move all items from one bill to another
+  // Move all items from one bill to another (R-I34: match on lineKey only —
+  // see moveSplitBillItems above).
   const handleMoveAllItems = (fromBillId: string, toBillId: string) => {
-    setBills((prev) => {
-      const fromBill = prev.find((b) => b.id === fromBillId);
-      const toBill = prev.find((b) => b.id === toBillId);
-      if (!fromBill || !toBill || fromBill.isPaid || toBill.isPaid || !fromBill.items.length) return prev;
-
-      const updatedToItems = [...toBill.items];
-      for (const item of fromBill.items) {
-        const existingIdx = updatedToItems.findIndex((i) => i.productId === item.productId && i.unitId === item.unitId && i.price === item.price);
-        if (existingIdx !== -1) {
-          updatedToItems[existingIdx] = {
-            ...updatedToItems[existingIdx],
-            qty: updatedToItems[existingIdx].qty + item.qty,
-          };
-        } else {
-          updatedToItems.push({
-            ...item,
-            lineKey: `${item.productId}::${item.unitId}::split::${Date.now()}::${Math.random()}`,
-          });
-        }
-      }
-
-      return prev.map((b) => {
-        if (b.id === fromBillId) return { ...b, items: [] };
-        if (b.id === toBillId) return { ...b, items: updatedToItems };
-        return b;
-      });
-    });
+    setBills((prev) => moveSplitBillItems(prev, fromBillId, toBillId));
   };
 
   // Fractional Split: splits single item into N equal parts distributed across bills

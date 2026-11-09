@@ -4,17 +4,31 @@ import { DialogShell } from '@/shared/components/dialog-shell';
 import { Button } from '@/shared/ui/button';
 import { XIcon, CheckCircleIcon, ArrowLeftIcon } from '@/shared/components/icons/AppIcons';
 import { formatCurrency } from '@/lib/format';
+import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 import { toast } from '@/shared/components/system-alert';
 
+/* R-I34 / INV-REST-LINE-IDENTITY: the transfer item carries the FULL line
+ * identity. The old shape ({productId, name, qty, price, unitName,
+ * modifiers, notes}) stripped lineKey / unitId / seat / course / serials
+ * before the transfer started, so the target line had no key for later
+ * qty / modifier / seat edits and matching fell back to product + price. */
 export interface TransferableCartItem {
   id?: string | number;
-  productId: number;
+  lineKey?: string;
+  productId: number | string;
   name: string;
   qty: number;
   price: number;
+  priceType?: string;
+  unitId?: string;
   unitName?: string;
+  unitMultiplier?: number;
   modifiers?: any[];
   notes?: string;
+  seatNumber?: number;
+  course?: string;
+  serials?: string[];
+  originalPrice?: number;
 }
 
 interface PosTransferItemModalProps {
@@ -76,9 +90,11 @@ export function PosTransferItemModal({
   };
 
   const totalTransferredItemsCount = Object.values(selectedQtys).reduce((a, b) => a + b, 0);
+  // R-I34: the transferred value is the real line total (price + modifiers)
+  // for the selected quantity — qty x price alone drops the modifiers.
   const totalTransferredValue = sourceItems.reduce((sum, item, idx) => {
     const qty = selectedQtys[idx] || 0;
-    return sum + qty * item.price;
+    return sum + calcCartLineTotal({ ...item, qty });
   }, 0);
 
   const handleSubmit = async () => {

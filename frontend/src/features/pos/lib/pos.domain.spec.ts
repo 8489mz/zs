@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addPosItem, addSerialToPosLine, getRequiredSerialCount, getSerialEntryState, getSerialLookupError, getProductPrice, isOfferHappyHourActive, removeSerialFromPosLine, repriceCartLine, syncPosCartStock, updatePosItemQtyWithOptions } from '@/features/pos/lib/pos.domain';
+import { addPosItem, addSerialToPosLine, applyPosLineTransfer, buildPosLineKey, getRequiredSerialCount, getSerialEntryState, getSerialLookupError, getProductPrice, isOfferHappyHourActive, removeSerialFromPosLine, repriceCartLine, syncPosCartStock, updatePosItemModifiers, updatePosItemQtyWithOptions, updatePosItemSeat } from '@/features/pos/lib/pos.domain';
+import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 import type { Product } from '@/types/domain';
 
 const product: Product = {
@@ -311,5 +312,122 @@ describe('POS cart-line serial entry (LF-P3)', () => {
       .toBe('السيريال 869123456789022 غير متاح للبيع — حالته: مباع.');
     expect(getSerialLookupError('869123456789022', { productId: 'p1', status: 'in_stock' }, 'p1', 'Tea'))
       .toBeNull();
+  });
+});
+
+/* R-I34 / INV-REST-LINE-IDENTITY: plain and modified lines of the same
+ * product are different lines. Before the fix addPosItem keyed lines by
+ * product::unit::priceType only, so a plain burger merged into a burger
+ * with extra cheese and the cheese was charged on every unit. */
+describe('POS line identity (R-I34)', () => {
+  const stocked = { ...product, stock: 10 };
+  const cheese = { optionId: 'opt-cheese', name: 'جبنة إضافية', price: 20, qty: 1 };
+
+  it('keeps a plain line and a modified line apart, charging the modifier only on the modified units', () => {
+    let cart = addPosItem([], stocked, { priceType: 'retail', quantity: 1, digits: 2 });
+    cart = addPosItem(cart, stocked, { priceType: 'retail', quantity: 1, digits: 2, modifiers: [cheese] });
+    expect(cart).toHaveLength(2);
+    const plain = cart.find((line) => !(line.modifiers || []).length)!;
+    const modified = cart.find((line) => (line.modifiers || []).length === 1)!;
+    expect(calcCartLineTotal(plain)).toBe(10);
+    expect(calcCartLineTotal(modified)).toBe(30);
+    expect(cart.reduce((sum, line) => sum + calcCartLineTotal(line), 0)).toBe(40);
+  });
+
+  it('merges a re-added identical modified item into one line', () => {
+    let cart = addPosItem([], stocked, { priceType: 'retail', quantity: 1, digits: 2, modifiers: [cheese] });
+    cart = addPosItem(cart, stocked, { priceType: 'retail', quantity: 1, digits: 2, modifiers: [cheese] });
+    expect(cart).toHaveLength(1);
+    expect(cart[0].qty).toBe(2);
+    expect(calcCartLineTotal(cart[0])).toBe(60);
+  });
+
+  it('keeps lines apart when the notes differ, even with identical modifiers', () => {
+    let cart = addPosItem([], stocked, { priceType: 'retail', quantity: 1, digits: 2, notes: 'بدون بصل' });
+    cart = addPosItem(cart, stocked, { priceType: 'retail', quantity: 1, digits: 2, notes: 'حار' });
+    expect(cart).toHaveLength(2);
+    expect(new Set(cart.map((line) => line.lineKey)).size).toBe(2);
+  });
+
+  it('re-keys a line when modifiers are set after the add, so a later plain add does not merge into it', () => {
+    // Live flow: the cashier adds the product, then picks modifiers in the
+    // modifier modal (setItemModifiers -> updatePosItemModifiers). The key
+    // must follow the modifiers, or the next plain add merges and the
+    // modifier is charged on all units.
+    let cart = addPosItem([], stocked, { priceType: 'retail', quantity: 1, digits: 2 });
+    const plainKey = cart[0].lineKey;
+    cart = updatePosItemModifiers(cart, plainKey, [cheese]);
+    expect(cart[0].lineKey).not.toBe(plainKey);
+    expect(cart[0].lineKey).toBe(buildPosLineKey({
+      productId: 'p1', unitId: 'u1', priceType: 'retail', modifiers: [cheese],
+    }));
+    cart = addPosItem(cart, stocked, { priceType: 'retail', quantity: 1, digits: 2 });
+    expect(cart).toHaveLength(2);
+    expect(cart.reduce((sum, line) => sum + calcCartLineTotal(line), 0)).toBe(40);
+  });
+
+  it('re-keys a line when its seat changes', () => {
+    let cart = addPosItem([], stocked, { priceType: 'retail', quantity: 1, digits: 2, seatNumber: 1 });
+    const seat1Key = cart[0].lineKey;
+    cart = updatePosItemSeat(cart, seat1Key, 2);
+    expect(cart[0].lineKey).not.toBe(seat1Key);
+    expect(cart[0].seatNumber).toBe(2);
+  });
+});
+
+describe('POS line transfer matching (R-I34)', () => {
+  const cheese = { optionId: 'opt-cheese', name: 'جبنة إضافية', price: 20, qty: 1 };
+  const plainLine = (overrides: Record<string, unknown> = {}) => ({
+    lineKey: 'p1::u1::retail',
+    productId: 'p1',
+    name: 'Tea',
+    unitId: 'u1',
+    unitName: 'قطعة',
+    unitMultiplier: 1,
+    price: 10,
+    costPrice: 5,
+    qty: 2,
+    stockLimit: 10,
+    currentStock: 10,
+    minStock: 0,
+    priceType: 'retail',
+    modifiers: [],
+    ...overrides,
+  } as never);
+
+  it('moves a modified line onto a target holding the same product plain without collapsing them', () => {
+    const source = [plainLine({ lineKey: 'p1::u1::retail::opt-cheese:جبنة إضافية:20:1', qty: 1, modifiers: [cheese] })];
+    const target = [plainLine({ qty: 1 })];
+    const { source: nextSource, target: nextTarget } = applyPosLineTransfer(source, target, source as never);
+    expect(nextSource).toHaveLength(0);
+    expect(nextTarget).toHaveLength(2);
+    expect(nextTarget.find((line: any) => (line.modifiers || []).length === 1)?.qty).toBe(1);
+    expect(nextTarget.find((line: any) => !(line.modifiers || []).length)?.qty).toBe(1);
+  });
+
+  it('merges a transferred line into the identical target line', () => {
+    const source = [plainLine({ qty: 1 })];
+    const target = [plainLine({ qty: 1 })];
+    const { target: nextTarget } = applyPosLineTransfer(source, target, source as never);
+    expect(nextTarget).toHaveLength(1);
+    expect(nextTarget[0].qty).toBe(2);
+  });
+
+  it('matches legacy lines without a key by full identity, never by product + price alone', () => {
+    const legacyModified = plainLine({ lineKey: undefined, qty: 1, modifiers: [cheese] });
+    const legacyPlain = plainLine({ lineKey: undefined, qty: 1, modifiers: [] });
+    const { target: nextTarget } = applyPosLineTransfer(
+      [legacyModified], [legacyPlain], [legacyModified] as never,
+    );
+    expect(nextTarget).toHaveLength(2);
+  });
+
+  it('deducts only the moved quantity from the source line', () => {
+    const source = [plainLine({ qty: 3 })];
+    const { source: nextSource, target: nextTarget } = applyPosLineTransfer(
+      source, [], [{ ...source[0], qty: 1 }] as never,
+    );
+    expect(nextSource[0].qty).toBe(2);
+    expect(nextTarget[0].qty).toBe(1);
   });
 });

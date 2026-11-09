@@ -287,9 +287,125 @@ interface AddPosItemOptions {
   isWeighted?: boolean;
   sourceBarcode?: string;
   serialNumber?: string;
+  /** Modifiers the new line carries (when known at add time). They are part
+   * of the line identity: a modified line never merges into a plain one. */
+  modifiers?: any[];
+  /** Note the new line carries. Notes are NOT in the key, but a merge
+   * requires equal notes (both empty, or equal). */
+  notes?: string;
+  seatNumber?: number;
+  course?: string;
   /** Appended to the lineKey so the new line never merges into an existing
    * line of the same product (used by combo adds — see applyComboToCart). */
   lineKeySuffix?: string;
+}
+
+/* R-I34 / INV-REST-LINE-IDENTITY: a cart line is identified by its FULL
+ * identity — product + unit + price type + modifier set + seat + course —
+ * never by product + price alone. Before this fix the key was
+ * product::unit::priceType, so a plain burger merged into a burger with
+ * extra cheese and the cheese was charged on EVERY unit (calcCartLineTotal
+ * is qty x (price + modifiers)). Notes are deliberately NOT in the key:
+ * they are free text, and editing a note must not split a line — the merge
+ * step requires equal notes instead (see posLineNotesMatch). */
+export interface PosLineModifierLike {
+  optionId?: unknown;
+  id?: unknown;
+  option_id?: unknown;
+  name?: unknown;
+  price?: unknown;
+  qty?: unknown;
+  quantity?: unknown;
+}
+
+function cleanKeyPart(value: unknown): string {
+  return String(value ?? '').replace(/[;:]/g, ' ').trim();
+}
+
+/** Stable signature of a modifier set. Sorted by option id first (names
+ * collide across groups); when there is no id — combo modifiers carry only
+ * name + price — name + price + qty is the only identity available. Two
+ * lines with the same modifier set in a different order share a signature,
+ * so re-adding the same modified item still merges. */
+export function modifiersSignature(modifiers: Array<PosLineModifierLike | any> | null | undefined): string {
+  const entries = (modifiers || []).map((rawMod) => {
+    const mod = (rawMod ?? {}) as PosLineModifierLike;
+    const id = cleanKeyPart(mod.optionId ?? mod.id ?? mod.option_id ?? '');
+    const name = cleanKeyPart(mod.name ?? '');
+    const price = Number(mod.price || 0);
+    const qty = Number(mod.qty ?? mod.quantity ?? 1);
+    return {
+      id,
+      name,
+      price: Number.isFinite(price) ? price : 0,
+      qty: Number.isFinite(qty) ? qty : 1,
+    };
+  });
+  entries.sort((a, b) => (a.id || a.name).localeCompare(b.id || b.name)
+    || a.name.localeCompare(b.name) || a.price - b.price || a.qty - b.qty);
+  return entries.map((entry) => `${entry.id}:${entry.name}:${entry.price}:${entry.qty}`).join(';');
+}
+
+export interface BuildPosLineKeyInput {
+  productId: string | number;
+  unitId?: string | number;
+  priceType: PosPriceType;
+  modifiers?: Array<PosLineModifierLike | any> | null;
+  seatNumber?: number | null;
+  course?: string | null;
+}
+
+/** The one canonical line key. Every merge / match site must use it — no
+ * site hand-rolls a key again. */
+export function buildPosLineKey(input: BuildPosLineKeyInput): string {
+  const signature = modifiersSignature(input.modifiers);
+  let key = `${input.productId}::${input.unitId || ''}::${input.priceType}`;
+  if (signature) key += `::${signature}`;
+  const seat = Number(input.seatNumber);
+  if (input.seatNumber != null && Number.isFinite(seat)) key += `::seat-${seat}`;
+  const course = cleanKeyPart(input.course ?? '');
+  if (course) key += `::course-${course}`;
+  return key;
+}
+
+/** Notes are not identity, but a merge must never silently drop a note
+ * that differs: two lines merge only when their notes match (both empty,
+ * or equal ignoring surrounding whitespace). */
+export function posLineNotesMatch(a?: string | null, b?: string | null): boolean {
+  return String(a || '').trim() === String(b || '').trim();
+}
+
+/** A line that cannot merge (notes differ) still needs its own addressable
+ * key, or later qty / modifier edits hit the first line with that key. */
+function uniquePosLineKey(cart: PosItem[], baseKey: string): string {
+  if (!cart.some((line) => line.lineKey === baseKey)) return baseKey;
+  let n = 2;
+  while (cart.some((line) => line.lineKey === `${baseKey}::note-${n}`)) n += 1;
+  return `${baseKey}::note-${n}`;
+}
+
+/** Rebuild a line's key after its identity changed (modifiers / seat set
+ * after the add). A trailing ::combo-<id> suffix (combo instances are
+ * distinct by design) and a ::split suffix (split halves) survive the
+ * rebuild — they are instance markers, not identity. */
+function rekeyPosLine(
+  item: PosItem,
+  patch: { modifiers?: any[]; seatNumber?: number | null },
+): string {
+  const key = String(item.lineKey || '');
+  const combo = key.match(/::(combo-[^:]+)$/);
+  const split = /::split$/.test(key) ? '::split' : '';
+  const base = buildPosLineKey({
+    productId: item.productId,
+    unitId: item.unitId || item.unitName,
+    priceType: item.priceType,
+    modifiers: patch.modifiers !== undefined ? patch.modifiers : item.modifiers,
+    seatNumber: patch.seatNumber !== undefined
+      ? (patch.seatNumber ?? undefined)
+      : item.seatNumber,
+    course: item.course,
+  });
+  return `${base}${combo ? `::${combo[1]}` : ''}${split}`;
 }
 
 export function addPosItem(cart: PosItem[], product: Product, options: AddPosItemOptions) {
@@ -310,9 +426,22 @@ export function addPosItem(cart: PosItem[], product: Product, options: AddPosIte
     throw new Error('الكمية المطلوبة أكبر من المخزون المتاح');
   }
   const priceType = options.priceType;
-  const baseLineKey = `${product.id}::${unit.id || unit.name}::${priceType}`;
-  const lineKey = options.lineKeySuffix ? `${baseLineKey}::${options.lineKeySuffix}` : baseLineKey;
-  const existing = cart.find((item) => item.lineKey === lineKey);
+  const incomingModifiers = options.modifiers;
+  const incomingNotes = options.notes;
+  const baseLineKey = buildPosLineKey({
+    productId: product.id,
+    unitId: unit.id || unit.name,
+    priceType,
+    modifiers: incomingModifiers,
+    seatNumber: options.seatNumber,
+    course: options.course,
+  });
+  // The combo suffix is an explicit override: a combo instance keeps its
+  // unique-per-instance key even when two identical combos are ordered.
+  const lineKey = options.lineKeySuffix
+    ? `${product.id}::${unit.id || unit.name}::${priceType}::${options.lineKeySuffix}`
+    : baseLineKey;
+  const existing = cart.find((item) => item.lineKey === lineKey && posLineNotesMatch(item.notes, incomingNotes));
   const incomingSerial = options.serialNumber || product.matchedSerialNumber || undefined;
   const isSerialized = Boolean(product.trackSerials || incomingSerial);
 
@@ -342,7 +471,7 @@ export function addPosItem(cart: PosItem[], product: Product, options: AddPosIte
       : item);
   }
   const newItem: PosItem = {
-    lineKey,
+    lineKey: uniquePosLineKey(cart, lineKey),
     productId: product.id,
     name: product.name,
     nameEn: (product as any).nameEn || (product as any).name_en || undefined,
@@ -360,6 +489,10 @@ export function addPosItem(cart: PosItem[], product: Product, options: AddPosIte
     currentStock: Number(product.stock || 0),
     minStock: Number(product.minStock || 0),
     priceType,
+    modifiers: incomingModifiers && incomingModifiers.length > 0 ? [...incomingModifiers] : undefined,
+    notes: incomingNotes ? String(incomingNotes) : undefined,
+    seatNumber: options.seatNumber != null ? Number(options.seatNumber) : undefined,
+    course: options.course ? String(options.course) : undefined,
     isWeighted: isWeighted ? true : undefined,
     sourceBarcode: options.sourceBarcode || undefined,
     quantityChunks: isWeighted && options.sourceBarcode ? [requestedQty] : undefined,
@@ -465,18 +598,144 @@ export function applyComboToCart(
   };
 }
 
+/* Modifiers are set on a line AFTER the add in the live flow (the cashier
+ * adds the product, then picks modifiers in the modifier modal), so the key
+ * must follow them here: without the re-key, the line keeps its plain key
+ * and the next plain add merges into it, charging the modifier on all
+ * units. If the new identity already exists as another line with equal
+ * notes, the two fold into one line; with differing notes the edited line
+ * keeps its own key. */
 export function updatePosItemModifiers(cart: PosItem[], lineKey: string, modifiers: any[]) {
+  const target = cart.find((item) => item.lineKey === lineKey);
+  if (!target) return cart;
+  const nextKey = rekeyPosLine(target, { modifiers });
+  if (nextKey === lineKey) {
+    return cart.map((item) => (item.lineKey === lineKey ? { ...item, modifiers } : item));
+  }
+  const collision = cart.find((item) => item.lineKey !== lineKey && item.lineKey === nextKey);
+  if (collision && posLineNotesMatch(collision.notes, target.notes)) {
+    return cart
+      .filter((item) => item.lineKey !== lineKey)
+      .map((item) => (item.lineKey === nextKey
+        ? { ...item, qty: roundQuantity(Number(item.qty || 0) + Number(target.qty || 0)) }
+        : item));
+  }
+  const finalKey = collision
+    ? uniquePosLineKey(cart.filter((item) => item.lineKey !== lineKey), nextKey)
+    : nextKey;
   return cart.map((item) => {
     if (item.lineKey !== lineKey) return item;
-    return { ...item, modifiers };
+    return { ...item, modifiers, lineKey: finalKey };
   });
 }
 
 export function updatePosItemSeat(cart: PosItem[], lineKey: string, seatNumber?: number) {
+  const target = cart.find((item) => item.lineKey === lineKey);
+  if (!target) return cart;
+  // Seat is in the key: a line moved to another seat is a different line.
+  const nextKey = rekeyPosLine(target, { seatNumber: seatNumber == null ? null : seatNumber });
+  const nextSeat = seatNumber ? Number(seatNumber) : undefined;
+  if (nextKey === lineKey) {
+    return cart.map((item) => {
+      if (item.lineKey !== lineKey) return item;
+      return { ...item, seatNumber: nextSeat };
+    });
+  }
+  const collision = cart.find((item) => item.lineKey !== lineKey && item.lineKey === nextKey);
+  if (collision && posLineNotesMatch(collision.notes, target.notes)) {
+    return cart
+      .filter((item) => item.lineKey !== lineKey)
+      .map((item) => (item.lineKey === nextKey
+        ? { ...item, qty: roundQuantity(Number(item.qty || 0) + Number(target.qty || 0)) }
+        : item));
+  }
+  const finalKey = collision
+    ? uniquePosLineKey(cart.filter((item) => item.lineKey !== lineKey), nextKey)
+    : nextKey;
   return cart.map((item) => {
     if (item.lineKey !== lineKey) return item;
-    return { ...item, seatNumber: seatNumber ? Number(seatNumber) : undefined };
+    return { ...item, seatNumber: nextSeat, lineKey: finalKey };
   });
+}
+
+/* Line transfer (R-I34): deduct-from-source and add-to-target match on the
+ * lineKey, never on product + price. Legacy lines without a key fall back
+ * to a full-identity match (product + unit + price type + modifiers +
+ * seat + course + price + notes) — product + price alone never matches. */
+export interface PosLineTransferItem {
+  lineKey?: string;
+  productId: string | number;
+  unitId?: string | number;
+  unitName?: string;
+  priceType?: PosPriceType;
+  price: number;
+  qty: number;
+  modifiers?: any[];
+  notes?: string;
+  seatNumber?: number;
+  course?: string;
+}
+
+function posLineMatchesTransfer(
+  line: PosItem | PosLineTransferItem,
+  other: PosItem | PosLineTransferItem,
+): boolean {
+  if (line.lineKey && other.lineKey) return line.lineKey === other.lineKey;
+  if (String(line.productId) !== String(other.productId)) return false;
+  if (Number(line.price || 0) !== Number(other.price || 0)) return false;
+  const keyOf = (entry: PosItem | PosLineTransferItem) => buildPosLineKey({
+    productId: entry.productId,
+    unitId: (entry as PosItem).unitId || entry.unitName,
+    priceType: (entry as PosItem).priceType || 'retail',
+    modifiers: entry.modifiers,
+    seatNumber: entry.seatNumber,
+    course: entry.course,
+  });
+  return keyOf(line) === keyOf(other) && posLineNotesMatch(line.notes, other.notes);
+}
+
+/** Move `items` (with the quantities to move) from `source` to `target`.
+ * Never merges two different keys; a line whose notes differ from the
+ * matching target line is added as its own line. */
+export function applyPosLineTransfer(
+  source: PosItem[],
+  target: PosItem[],
+  items: PosLineTransferItem[],
+): { source: PosItem[]; target: PosItem[] } {
+  let nextSource = [...source];
+  let nextTarget = [...target];
+  for (const item of items) {
+    const moveQty = Number(item.qty || 0);
+    if (moveQty <= 0) continue;
+    const srcIdx = nextSource.findIndex((line) => posLineMatchesTransfer(line, item));
+    if (srcIdx === -1) continue;
+    if (Number(nextSource[srcIdx].qty || 0) > moveQty) {
+      nextSource[srcIdx] = { ...nextSource[srcIdx], qty: Number(nextSource[srcIdx].qty || 0) - moveQty };
+    } else {
+      nextSource.splice(srcIdx, 1);
+    }
+    const tgtIdx = nextTarget.findIndex(
+      (line) => posLineMatchesTransfer(line, item) && posLineNotesMatch(line.notes, item.notes),
+    );
+    if (tgtIdx !== -1) {
+      nextTarget[tgtIdx] = { ...nextTarget[tgtIdx], qty: Number(nextTarget[tgtIdx].qty || 0) + moveQty };
+    } else {
+      const baseKey = item.lineKey || buildPosLineKey({
+        productId: item.productId,
+        unitId: item.unitId || item.unitName,
+        priceType: item.priceType || 'retail',
+        modifiers: item.modifiers,
+        seatNumber: item.seatNumber,
+        course: item.course,
+      });
+      nextTarget.push({
+        ...(item as unknown as PosItem),
+        lineKey: uniquePosLineKey(nextTarget, baseKey),
+        qty: moveQty,
+      });
+    }
+  }
+  return { source: nextSource, target: nextTarget };
 }
 
 /* Serial entry on a cart line (LF-P3): before this fix a serial-tracked line

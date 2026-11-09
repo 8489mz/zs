@@ -2,7 +2,7 @@ import type { FormEvent } from 'react';
 import type { Customer, Sale } from '@/types/domain';
 import { getPostSalePrintHint, getPostSalePrintMode } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import { catalogApi } from '@/lib/api/catalog';
-import { isNegativeStockSalesAllowed } from '@/features/pos/lib/pos.domain';
+import { buildPosLineKey, isNegativeStockSalesAllowed } from '@/features/pos/lib/pos.domain';
 import type { PosWorkspaceActionParams } from '@/features/pos/hooks/usePosWorkspaceActionGroups';
 import type { createPosWorkspaceBaseActions } from '@/features/pos/hooks/pos-workspace-actions/createPosWorkspaceBaseActions';
 import { extractCreatedEntityId } from '@/lib/api/extract-created-entity-id';
@@ -554,17 +554,24 @@ export function createPosWorkspaceAsyncActions(
     }
 
     /* Restore every field from the single versioned snapshot. The
-     * lineKey synthesis line below is UNCHANGED on purpose (R5-C owns
-     * it): the stored lineKey now flows through restoreHeldSnapshot,
-     * and only a missing one is synthesised here. */
+     * lineKey synthesis line below is owned by R5-C: the stored lineKey
+     * now flows through restoreHeldSnapshot, and only a missing one is
+     * synthesised here via buildPosLineKey. */
     const { cart, header } = restoreHeldSnapshot(draft);
-    const restoredCart = cart.map((item: any, index: number) => ({
+    const restoredCart = cart.map((item: any) => ({
       ...item,
       notes: item.notes || '',
       modifiers: Array.isArray(item.modifiers) ? item.modifiers : [],
       seatNumber: item.seatNumber != null ? Number(item.seatNumber) : undefined,
       course: item.course || undefined,
-      lineKey: item.lineKey || `${item.productId}::${item.unitName || 'unit'}::${item.priceType || 'retail'}::recalled-${index}`
+      lineKey: item.lineKey || buildPosLineKey({
+        productId: item.productId,
+        unitId: item.unitId || item.unitName,
+        priceType: item.priceType || 'retail',
+        modifiers: item.modifiers,
+        seatNumber: item.seatNumber,
+        course: item.course,
+      })
     }));
 
     /* M32: restore the draft's branch/location (they are already in the

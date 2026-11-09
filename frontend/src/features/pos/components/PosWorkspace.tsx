@@ -27,7 +27,7 @@ import {
   printCurrentPosDraft,
 } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import { posApi } from '@/features/pos/api/pos.api';
-import { isNegativeStockSalesAllowed, repriceCartLine, getProductItemCode, getSaleUnit, summarizeCartQuantities } from '@/features/pos/lib/pos.domain';
+import { applyPosLineTransfer, isNegativeStockSalesAllowed, repriceCartLine, getProductItemCode, getSaleUnit, summarizeCartQuantities } from '@/features/pos/lib/pos.domain';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { isLikelyBarcodeQuery } from '@/features/pos/lib/pos-product-lookup';
@@ -844,100 +844,72 @@ export function PosWorkspace() {
           rawHeldDrafts={pos.heldDrafts}
           currentCartItems={pos.cart}
           onTransferItems={async (sourceTable, targetTable, transferredItems) => {
-            // 1. Deduct from source
-            if (sourceTable === pos.tableNumber) {
-              const updatedCart = [...pos.cart];
-              for (const item of transferredItems) {
-                const idx = updatedCart.findIndex((c) => String(c.productId) === String(item.productId) && c.price === item.price);
-                if (idx !== -1) {
-                  if (updatedCart[idx].qty > item.qty) {
-                    updatedCart[idx] = { ...updatedCart[idx], qty: updatedCart[idx].qty - item.qty };
-                  } else {
-                    updatedCart.splice(idx, 1);
-                  }
-                }
-              }
-              pos.setCart(updatedCart);
-            } else {
-              const sourceDraft = pos.heldDrafts.find((d) => String(d.tableNumber).trim() === String(sourceTable).trim());
-              if (sourceDraft && sourceDraft.cart) {
-                const updatedDraftCart = [...sourceDraft.cart];
-                for (const item of transferredItems) {
-                  const idx = updatedDraftCart.findIndex((c) => String(c.productId) === String(item.productId) && c.price === item.price);
-                  if (idx !== -1) {
-                    if (updatedDraftCart[idx].qty > item.qty) {
-                      updatedDraftCart[idx] = { ...updatedDraftCart[idx], qty: updatedDraftCart[idx].qty - item.qty };
-                    } else {
-                      updatedDraftCart.splice(idx, 1);
-                    }
-                  }
-                }
-                if (updatedDraftCart.length === 0) {
-                  await pos.deleteDraft(sourceDraft.id);
-                } else {
-                  sourceDraft.cart = updatedDraftCart;
-                  await posApi.saveHeldDraft(sourceDraft as any);
-                }
+            // R-I34: deduct/add match on lineKey (applyPosLineTransfer), never
+            // on product + price — a modified line moved onto a target holding
+            // the same product plain stays its own line. The moved copies
+            // carry their lineKeys through the held-draft re-save below.
+            const sourceIsLive = sourceTable === pos.tableNumber;
+            const targetIsLive = targetTable === pos.tableNumber;
+            const sourceDraft = sourceIsLive
+              ? undefined
+              : pos.heldDrafts.find((d) => String(d.tableNumber).trim() === String(sourceTable).trim());
+            const targetDraft = targetIsLive
+              ? undefined
+              : pos.heldDrafts.find((d) => String(d.tableNumber).trim() === String(targetTable).trim());
+
+            // 1. Deduct from source (moved = the lines that were actually found).
+            const sourceCart = sourceIsLive ? [...pos.cart] : [...(sourceDraft?.cart || [])];
+            const deducted = applyPosLineTransfer(sourceCart, [], transferredItems);
+            const moved = deducted.target;
+            const nextSourceCart = deducted.source;
+
+            // 2. Add to target (same live cart when source and target are live).
+            const targetCart = targetIsLive
+              ? (sourceIsLive ? nextSourceCart : [...pos.cart])
+              : targetDraft
+                ? [...targetDraft.cart]
+                : [];
+            const nextTargetCart = applyPosLineTransfer([], targetCart, moved).target;
+
+            // 3. Persist source.
+            let liveCart: typeof pos.cart | null = null;
+            if (sourceIsLive) {
+              liveCart = targetIsLive ? nextTargetCart : nextSourceCart;
+            } else if (sourceDraft) {
+              if (nextSourceCart.length === 0) {
+                await pos.deleteDraft(sourceDraft.id);
+              } else {
+                sourceDraft.cart = nextSourceCart;
+                await posApi.saveHeldDraft(sourceDraft as any);
               }
             }
 
-            // 2. Add to target
-            if (targetTable === pos.tableNumber) {
-              const targetCart = [...pos.cart];
-              for (const item of transferredItems) {
-                const idx = targetCart.findIndex((c) => String(c.productId) === String(item.productId) && c.price === item.price);
-                if (idx !== -1) {
-                  targetCart[idx] = { ...targetCart[idx], qty: Number(targetCart[idx].qty || 0) + Number(item.qty || 0) };
-                } else {
-                  targetCart.push(item as any);
-                }
-              }
-              pos.setCart(targetCart);
+            // 4. Persist target.
+            if (targetIsLive) {
+              liveCart = nextTargetCart;
+            } else if (targetDraft) {
+              targetDraft.cart = nextTargetCart;
+              await posApi.saveHeldDraft(targetDraft as any);
             } else {
-              const targetDraft = pos.heldDrafts.find((d) => String(d.tableNumber).trim() === String(targetTable).trim());
-              if (targetDraft && targetDraft.cart) {
-                const targetCart = [...targetDraft.cart];
-                for (const item of transferredItems) {
-                  const idx = targetCart.findIndex((c) => String(c.productId) === String(item.productId) && c.price === item.price);
-                  if (idx !== -1) {
-                    targetCart[idx] = { ...targetCart[idx], qty: Number(targetCart[idx].qty || 0) + Number(item.qty || 0) };
-                  } else {
-                    targetCart.push(item as any);
-                  }
-                }
-                targetDraft.cart = targetCart;
-                await posApi.saveHeldDraft(targetDraft as any);
-              } else {
-                const newDraftId = `draft-${Date.now()}`;
-                await posApi.saveHeldDraft({
-                  id: newDraftId,
-                  tableNumber: targetTable,
-                  orderType: 'dine_in',
-                  cart: transferredItems as any,
-                  discount: 0,
-                  createdAt: new Date().toISOString(),
-                } as any);
-              }
+              const newDraftId = `draft-${Date.now()}`;
+              await posApi.saveHeldDraft({
+                id: newDraftId,
+                tableNumber: targetTable,
+                orderType: 'dine_in',
+                cart: nextTargetCart as any,
+                discount: 0,
+                createdAt: new Date().toISOString(),
+              } as any);
             }
+            if (liveCart) pos.setCart(liveCart);
             toast.success(`تم نقل ${transferredItems.length} صنف بنجاح من طاولة ${sourceTable} إلى طاولة ${targetTable}`);
           }}
           onMergeTable={async (from, to) => {
             const targetDraft = pos.heldDrafts.find((d) => String(d.tableNumber).trim() === String(to).trim());
             if (targetDraft && targetDraft.cart?.length) {
-              const mergedCart = [...pos.cart];
-              for (const targetItem of targetDraft.cart) {
-                const existingIdx = mergedCart.findIndex(
-                  (c) => c.productId === targetItem.productId && c.unitId === targetItem.unitId && c.price === targetItem.price
-                );
-                if (existingIdx !== -1) {
-                  mergedCart[existingIdx] = {
-                    ...mergedCart[existingIdx],
-                    qty: Number(mergedCart[existingIdx].qty || 0) + Number(targetItem.qty || 0),
-                  };
-                } else {
-                  mergedCart.push(targetItem);
-                }
-              }
+              // R-I34: merge on lineKey (applyPosLineTransfer), never on
+              // product + unit + price — differing modifiers stay separate.
+              const mergedCart = applyPosLineTransfer([], [...pos.cart], targetDraft.cart).target;
               pos.setCart(mergedCart);
               await pos.deleteDraft(targetDraft.id);
             }
