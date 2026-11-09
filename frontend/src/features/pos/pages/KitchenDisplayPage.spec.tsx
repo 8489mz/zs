@@ -235,3 +235,76 @@ describe('KitchenDisplayPage KDS un-mark toggle feedback (INV-REST-KDS-TOGGLE-FE
     expect(screen.queryByText('كباب مشكل')).not.toBeInTheDocument();
   });
 });
+
+/* R8-E (INV-REST-KPI-OUTAGE-TRUTH): the strip used to render the page's
+ * zero fallback (0/0/0/0) whenever the tickets query had no data, so
+ * during an outage the strip reported an idle kitchen while the tickets
+ * area said "disconnected". The page now passes `data?.stats ?? null`
+ * plus the same ticketsState the tickets area uses, and the strip
+ * renders '—' (with a marker) instead of fake zeros.
+ *
+ * Case 1 is base-red: at base the page always passed the zero fallback,
+ * so the strip showed 0s and no marker. Case 2 is base-red the same
+ * way: at base the stale last-known stats were replaced by the zero
+ * fallback, so the strip showed 0/0/0/0 instead of the last-known
+ * counts. The stale case needs the 5s refetch interval to fire (the
+ * first fetch succeeds, the interval refetch fails), so it waits.
+ */
+
+const DISCONNECTED_MARKER = 'غير متصل — بيانات غير متوفرة';
+const STALE_MARKER = 'بيانات قديمة — غير محدّثة';
+
+describe('KitchenDisplayPage KPI strip outage truth (INV-REST-KPI-OUTAGE-TRUTH)', () => {
+  beforeEach(() => {
+    get86ItemsMock.mockResolvedValue([]);
+    advanceStatusMock.mockResolvedValue({ ticketId: 1, newStatus: 'ready' });
+    recallLastServedMock.mockResolvedValue({ recalled: false });
+  });
+
+  it('shows — with the disconnected marker when the tickets query fails with no data', async () => {
+    getTicketsMock.mockRejectedValue(new Error('Network failed'));
+    renderPage();
+
+    await screen.findByText('انقطع الاتصال بخادم المطبخ');
+    // The strip reports "no data", not an idle kitchen.
+    expect(screen.getByText(DISCONNECTED_MARKER)).toBeInTheDocument();
+    expect(screen.getAllByText('—')).toHaveLength(4);
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
+  });
+
+  it('keeps the last-known counts with the stale marker when a refetch fails with prior data', async () => {
+    // Distinctive stats (7/6/8/9) so the strip values cannot be confused
+    // with any other number on the page (order '1', qty '1×', 3 elapsed
+    // minutes, table '5').
+    getTicketsMock.mockResolvedValueOnce({
+      tickets: [
+        ticketWithItems([
+          { id: 15, name: 'فتة شاورما', qty: 1, status: 'cooking', station: 'kitchen' },
+        ]),
+      ],
+      stats: { pendingCount: 7, cookingCount: 6, readyCount: 8, criticalCount: 9, avgPrepMinutes: 10 },
+      truncated: false,
+      totalActive: 1,
+      kdsStateCorrupt: false,
+    });
+    getTicketsMock.mockRejectedValue(new Error('Network failed'));
+    renderPage();
+
+    await screen.findByText('فتة شاورما');
+
+    // The 5s refetch interval fires, fails, and TanStack keeps the
+    // previous data: the tickets stay AND the strip keeps the last-known
+    // counts, labelled stale — never zeroed.
+    await waitFor(
+      () => expect(screen.getByText(STALE_MARKER)).toBeInTheDocument(),
+      { timeout: 9000 },
+    );
+    expect(screen.getByText('7')).toBeInTheDocument();
+    expect(screen.getByText('6')).toBeInTheDocument();
+    expect(screen.getByText('8')).toBeInTheDocument();
+    expect(screen.getByText('9')).toBeInTheDocument();
+    expect(screen.queryByText('—')).not.toBeInTheDocument();
+    expect(screen.queryByText(DISCONNECTED_MARKER)).not.toBeInTheDocument();
+    expect(screen.getByText('فتة شاورما')).toBeInTheDocument();
+  }, 15000);
+});

@@ -123,13 +123,14 @@ export function KitchenDisplayPage() {
 
   const tickets = data?.tickets || [];
   const ticketsState = resolveKitchenTicketsState({ isLoading, isError, ticketCount: tickets.length });
-  const stats = data?.stats || {
-    pendingCount: 0,
-    cookingCount: 0,
-    readyCount: 0,
-    criticalCount: 0,
-    avgPrepMinutes: 0,
-  };
+  // INV-REST-KPI-OUTAGE-TRUTH (R8-E): no zero fallback here. `data` is
+  // undefined both while the first load is in flight AND when the query
+  // errors with no prior data — the old `|| { 0, 0, 0, 0 }` made the
+  // strip report an idle kitchen during an outage. Null means "no data":
+  // the strip renders '—' (and a marker when the query has failed), and
+  // the last-known stats travel with the last-known tickets in the stale
+  // case. A genuine all-zero success still passes real zeros.
+  const stats = data?.stats ?? null;
 
   // Chime on new incoming ticket
   useEffect(() => {
@@ -235,7 +236,7 @@ export function KitchenDisplayPage() {
       />
 
       {/* 2. Executive Kitchen KPI Strip */}
-      <KdsKpiStrip stats={stats} />
+      <KdsKpiStrip stats={stats} state={ticketsState} />
 
       {/* 3. Filter Bar */}
       <KdsFilterBar
