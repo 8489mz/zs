@@ -289,8 +289,17 @@ export function SearchableCombobox<T extends ComboboxOption>({
   };
 
   const selectOption = (option: T) => {
-    onSelect(option);
+    // INV-IMPORT-PI-ITEM-PICKER-BIND: the text echo must run BEFORE
+    // onSelect. Callers clear derived link state in onChange (typing
+    // a new name invalidates the old link) and set it in onSelect;
+    // the old order (onSelect then onChange) let the echo wipe the
+    // link the selection had just set, so no click or keyboard pick
+    // ever bound — the PI dialog showed its suggestion yet stayed
+    // "غير مربوط بصنف حقيقي" and the PI could never save, and the
+    // feasibility grid in ImportProjectsManager shares the pattern.
+    // The selection is the final word now.
     onChange(getLabel(option));
+    onSelect(option);
     close();
   };
 
