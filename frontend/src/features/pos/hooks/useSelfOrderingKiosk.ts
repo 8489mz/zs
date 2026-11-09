@@ -37,6 +37,27 @@ export function filterKioskMenuItems<T extends { id: number | string }>(
   return items.filter((item) => !blocked.has(String(item.id)));
 }
 
+/**
+ * INV-REST-FNB-TRUTH-2 (R-I11): the kiosk's 86 list lives in the feature
+ * hook, never in the page (pages must go through hooks — the composition
+ * check). 86'd items never reach the kiosk menu — excluded entirely,
+ * not greyed-out. No branch is known on the public kiosk, so the
+ * tenant-wide list applies (a branch-scoped 86 hides the item here
+ * too; the kitchen toggles 86 precisely to stop orders). If the fetch
+ * fails the menu stays unfiltered and the server still rejects any
+ * 86'd line at createOnlineOrder, so a stale menu can never place
+ * the order.
+ */
+export function useKiosk86Items(currentSlug: string | null | undefined): Array<number | string> {
+  const { data: items86 = [] } = useQuery({
+    queryKey: ['pos-86-items-kiosk', currentSlug],
+    queryFn: () => restaurantAdvancedFnbApi.get86Items(),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
+  return items86.map((item) => item.product_id);
+}
+
 export type KioskPaymentStatus = 'paid' | 'unpaid' | 'pending';
 
 export interface KioskConfirmationItem {
