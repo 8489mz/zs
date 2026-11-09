@@ -266,65 +266,45 @@ export const storefrontApi = {
   getSearchSuggestions: async (slug: string, q: string) => {
     const lang = typeof localStorage !== 'undefined' && localStorage.getItem('zs_storefront_lang') === 'en' ? 'en' : 'ar';
     const { localizeCategory, localizeProduct } = await import('../lib/storefront-translations');
-    try {
-      const res = await http<{
-        categories: Array<{ id: number; name: string; imageUrl?: string }>;
-        products: Array<{ id: number; name: string; price: number; imageUrl?: string; categoryName?: string; inStock: boolean }>;
-      }>(`/api/storefront/${encodeURIComponent(slug)}/search/suggest?q=${encodeURIComponent(q)}`);
-      return {
-        categories: (res?.categories || []).map((c) => {
-          const loc = localizeCategory(c as any, lang);
-          return { ...loc, imageUrl: resolveStorefrontMediaUrl(c.imageUrl) };
-        }),
-        products: (res?.products || []).map((p) => localizeProduct(withResolvedProductMedia(p as any), lang)),
-      };
-    } catch {
-      const cleanQ = (q || '').trim().toLowerCase();
-      const allCats = DEMO_STOREFRONT_CATALOG.categories.map((c) => ({ raw: c, loc: localizeCategory(c, lang) }));
-      const allProds = DEMO_STOREFRONT_CATALOG.products.map((p) => ({ raw: p, loc: localizeProduct(p, lang) }));
-
-      const matchedCats = allCats
-        .filter(({ raw, loc }) => raw.name.toLowerCase().includes(cleanQ) || loc.name.toLowerCase().includes(cleanQ))
-        .map(({ loc }) => loc);
-      const matchedProds = allProds
-        .filter(
-          ({ raw, loc }) =>
-            raw.name.toLowerCase().includes(cleanQ) ||
-            loc.name.toLowerCase().includes(cleanQ) ||
-            (loc.categoryName || '').toLowerCase().includes(cleanQ)
-        )
-        .map(({ loc }) => loc);
-
-      return {
-        categories: matchedCats.map((c) => ({ id: c.id, name: c.name, imageUrl: c.imageUrl })),
-        products: matchedProds.map((p) => ({ id: p.id, name: p.name, price: p.price, imageUrl: p.imageUrl, categoryName: p.categoryName, inStock: p.inStock })),
-      };
-    }
+    // INV-REST-QUOTECART-NO-DEMO (R6-A): no try/catch here on purpose — an
+    // http error must reach the caller, never come back as demo-catalog
+    // matches. The old catch filtered DEMO_STOREFRONT_CATALOG by the query
+    // and returned the matches as if they were the store's own
+    // suggestions. The caller (StorefrontPredictiveSearch) already fails
+    // safe: its own catch shows an empty suggestion list.
+    const res = await http<{
+      categories: Array<{ id: number; name: string; imageUrl?: string }>;
+      products: Array<{ id: number; name: string; price: number; imageUrl?: string; categoryName?: string; inStock: boolean }>;
+    }>(`/api/storefront/${encodeURIComponent(slug)}/search/suggest?q=${encodeURIComponent(q)}`);
+    return {
+      categories: (res?.categories || []).map((c) => {
+        const loc = localizeCategory(c as any, lang);
+        return { ...loc, imageUrl: resolveStorefrontMediaUrl(c.imageUrl) };
+      }),
+      products: (res?.products || []).map((p) => localizeProduct(withResolvedProductMedia(p as any), lang)),
+    };
   },
 
   getProductDetails: async (slug: string, productId: number) => {
     const lang = typeof localStorage !== 'undefined' && localStorage.getItem('zs_storefront_lang') === 'en' ? 'en' : 'ar';
     const { localizeProduct } = await import('../lib/storefront-translations');
-    try {
-      const res = await http<{
-        product: any;
-        related: any[];
-        crossSell: any[];
-      }>(`/api/storefront/${encodeURIComponent(slug)}/products/${productId}`);
-      return {
-        product: localizeProduct(withResolvedProductMedia(res?.product), lang),
-        related: (res?.related || []).map((p) => localizeProduct(withResolvedProductMedia(p), lang)),
-        crossSell: (res?.crossSell || []).map((p) => localizeProduct(withResolvedProductMedia(p), lang)),
-      };
-    } catch {
-      const found = DEMO_STOREFRONT_CATALOG.products.find((p) => p.id === Number(productId)) || DEMO_STOREFRONT_CATALOG.products[0];
-      const related = DEMO_STOREFRONT_CATALOG.products.filter((p) => p.id !== found.id).slice(0, 4);
-      return {
-        product: localizeProduct(withResolvedProductMedia(found), lang),
-        related: related.map((p) => localizeProduct(withResolvedProductMedia(p), lang)),
-        crossSell: related.slice(0, 2).map((p) => localizeProduct(withResolvedProductMedia(p), lang)),
-      };
-    }
+    // INV-REST-QUOTECART-NO-DEMO (R6-A): no try/catch here on purpose — an
+    // http error must reach the caller, never come back as a demo product.
+    // The old catch returned the demo product with the requested id, or
+    // DEMO_STOREFRONT_CATALOG.products[0] for an unknown id. The backend
+    // throws NotFoundException for an unknown product; the frontend must
+    // not invent one. No frontend caller exists at this base — this is
+    // defence in depth, pinned by the API-level spec.
+    const res = await http<{
+      product: any;
+      related: any[];
+      crossSell: any[];
+    }>(`/api/storefront/${encodeURIComponent(slug)}/products/${productId}`);
+    return {
+      product: localizeProduct(withResolvedProductMedia(res?.product), lang),
+      related: (res?.related || []).map((p) => localizeProduct(withResolvedProductMedia(p), lang)),
+      crossSell: (res?.crossSell || []).map((p) => localizeProduct(withResolvedProductMedia(p), lang)),
+    };
   },
 
   /*
@@ -375,53 +355,19 @@ export const storefrontApi = {
   },
 
   quoteCart: async (slug: string, payload: QuoteCartPayload): Promise<QuoteCartResponse> => {
-    try {
-      return await http<QuoteCartResponse>(`/api/storefront/${encodeURIComponent(slug)}/cart/quote`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-    } catch {
-      const items = (payload.items || []).map((item) => {
-        const prod = DEMO_STOREFRONT_CATALOG.products.find((p) => p.id === Number(item.productId));
-        const unitPrice = Number(prod?.price ?? 0);
-        const baseUnitPrice = Number(prod?.originalPrice ?? prod?.price ?? 0);
-        const quantity = Number(item.quantity || 1);
-        return {
-          productId: Number(item.productId),
-          name: prod?.name || `منتج #${item.productId}`,
-          variantName: item.variantName ?? null,
-          barcode: prod?.barcode,
-          quantity,
-          baseUnitPrice,
-          unitPrice,
-          total: unitPrice * quantity,
-          originalTotal: baseUnitPrice * quantity,
-          hasDiscount: prod?.hasDiscount,
-          discountPercent: prod?.discountPercent,
-          offerBadge: prod?.offerBadge,
-          offerType: prod?.offerType,
-        };
-      });
-      const subtotal = items.reduce((sum, l) => sum + l.total, 0);
-      const originalSubtotal = items.reduce((sum, l) => sum + l.originalTotal, 0);
-      const baseDeliveryFee = payload.orderType === 'dine_in' ? 0 : (DEMO_STOREFRONT_INFO.deliveryFee || 0);
-      const freeThreshold = DEMO_STOREFRONT_INFO.freeShippingMinOrder || null;
-      const freeDeliveryApplied = Boolean(DEMO_STOREFRONT_INFO.freeShippingEnabled && freeThreshold && subtotal >= freeThreshold);
-      const deliveryFee = freeDeliveryApplied ? 0 : baseDeliveryFee;
-      return {
-        ok: true,
-        subtotal,
-        originalSubtotal,
-        bogoSavings: Math.max(0, originalSubtotal - subtotal),
-        discountAmount: 0,
-        deliveryFee,
-        deliveryZoneId: payload.deliveryZoneId ?? null,
-        deliveryZoneName: payload.deliveryZoneName ?? null,
-        appliedCouponCode: payload.couponCode ?? null,
-        totalAmount: subtotal + deliveryFee,
-        items,
-      };
-    }
+    // INV-REST-QUOTECART-NO-DEMO (R6-A): no try/catch here on purpose — a
+    // failed quote POST must reach the caller, never come back as a
+    // demo-priced quote. The old catch priced every line from
+    // DEMO_STOREFRONT_CATALOG (unitPrice = prod?.price ?? 0), took the
+    // delivery fee and free-shipping threshold from DEMO_STOREFRONT_INFO,
+    // and returned { ok: true, totalAmount: subtotal + deliveryFee } — a
+    // fully-formed, money-shaped quote the caller could not distinguish
+    // from the server's. The checkout modal clears its stale serverQuote
+    // on rejection and falls back to real local totals.
+    return await http<QuoteCartResponse>(`/api/storefront/${encodeURIComponent(slug)}/cart/quote`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 
   lookupCustomerOrders: async (slug: string, orders: CustomerOrderRef[]) => {

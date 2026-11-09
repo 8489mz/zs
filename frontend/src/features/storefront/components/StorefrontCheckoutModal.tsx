@@ -354,7 +354,14 @@ export function StorefrontCheckoutModal({
           setServerQuote(res);
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        // INV-REST-QUOTECART-NO-DEMO (R6-A): a failed quote must clear the
+        // stale serverQuote, never leave it in place — the modal prices
+        // from serverQuote when present, else from real local totals.
+        // The old empty catch kept a stale (possibly demo-priced) quote
+        // displayed after a failure.
+        if (!cancelled) setServerQuote(null);
+      })
       .finally(() => {
         if (!cancelled) setIsQuoting(false);
       });

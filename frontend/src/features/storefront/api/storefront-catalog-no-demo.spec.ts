@@ -21,6 +21,21 @@
  * temporary probe spec run against the base module (probe deleted after;
  * the real spec's error case covers the same assertion permanently).
  * The pure helper itself is new, so there is no helper-level base run.
+ *
+ * R6-A (INV-REST-QUOTECART-NO-DEMO): the same demo-fallback disease
+ * survived in three more functions of the same file — quoteCart priced
+ * the cart from DEMO_STOREFRONT_CATALOG on ANY http error and returned
+ * { ok: true, totalAmount } the caller could not distinguish from the
+ * server's quote; getSearchSuggestions filtered the demo catalog by the
+ * query; getProductDetails returned the demo product with the requested
+ * id, or DEMO_STOREFRONT_CATALOG.products[0] for an unknown id. All
+ * three now let the ApiError propagate (same fail-closed shape as
+ * getCatalog). RED PROOF for the quote case: at base the error case
+ * below resolves a demo-priced quote; after the fix it rejects.
+ * The checkout-modal caller case (a rejected quote clears the stale
+ * serverQuote) is NOT pinned here: the modal spec has no rendering
+ * harness (it only tests exported validation helpers), and no harness
+ * was invented — the one-line .catch change is pinned by code review.
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -147,5 +162,117 @@ describe('storefront getCatalog never serves the demo menu (INV-REST-STOREFRONT-
     expect(() =>
       resolveStorefrontCatalogResponse({ categories: [] } as never, 'almhnds'),
     ).toThrow();
+  });
+});
+
+describe('storefront quote/search/details never serve demo data (INV-REST-QUOTECART-NO-DEMO)', () => {
+  const quotePayload = {
+    items: [{ productId: 16812, quantity: 2 }],
+    orderType: 'delivery' as const,
+  };
+
+  const serverQuote = {
+    ok: true,
+    subtotal: 263.2,
+    originalSubtotal: 263.2,
+    bogoSavings: 0,
+    discountAmount: 0,
+    deliveryFee: 15,
+    deliveryZoneId: null,
+    deliveryZoneName: null,
+    appliedCouponCode: null,
+    totalAmount: 278.2,
+    items: [
+      {
+        productId: 16812,
+        name: 'وجبة مشويات',
+        variantName: null,
+        barcode: 'BC16812',
+        quantity: 2,
+        baseUnitPrice: 131.6,
+        unitPrice: 131.6,
+        total: 263.2,
+        originalTotal: 263.2,
+      },
+    ],
+  };
+
+  it('quoteCart rejects on HTTP error instead of resolving a demo-priced quote', async () => {
+    httpMock.mockRejectedValueOnce(new Error('Request failed with status code 500'));
+    await expect(storefrontApi.quoteCart('almhnds', quotePayload)).rejects.toThrow('500');
+    expect(httpMock).toHaveBeenCalledTimes(1);
+    expect(httpMock).toHaveBeenCalledWith(
+      '/api/storefront/almhnds/cart/quote',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('quoteCart success path passes the server quote through byte-identical', async () => {
+    httpMock.mockResolvedValueOnce(serverQuote);
+    const res = await storefrontApi.quoteCart('almhnds', quotePayload);
+    expect(res).toEqual(serverQuote);
+    expect(res.subtotal).toBe(263.2);
+    expect(res.deliveryFee).toBe(15);
+    expect(res.totalAmount).toBe(278.2);
+    expect(res.items[0].name).toBe('وجبة مشويات');
+  });
+
+  it('getSearchSuggestions rejects on HTTP error instead of returning demo matches', async () => {
+    httpMock.mockRejectedValueOnce(new Error('Request failed with status code 404'));
+    await expect(storefrontApi.getSearchSuggestions('almhnds', 'مشويات')).rejects.toThrow('404');
+    expect(httpMock).toHaveBeenCalledTimes(1);
+    expect(httpMock).toHaveBeenCalledWith('/api/storefront/almhnds/search/suggest?q=%D9%85%D8%B4%D9%88%D9%8A%D8%A7%D8%AA');
+  });
+
+  it('getSearchSuggestions success path returns the server suggestions', async () => {
+    httpMock.mockResolvedValueOnce({
+      categories: [{ id: 7, name: 'مشويات', imageUrl: '' }],
+      products: [
+        { id: 16812, name: 'وجبة مشويات', price: 131.6, imageUrl: '', categoryName: 'مشويات', inStock: true },
+      ],
+    });
+    const res = await storefrontApi.getSearchSuggestions('almhnds', 'مشويات');
+    expect(res.categories.map((c) => c.id)).toEqual([7]);
+    expect(res.products.map((p) => p.id)).toEqual([16812]);
+    expect(res.products[0].price).toBe(131.6);
+  });
+
+  it('getProductDetails rejects on HTTP error instead of returning a demo product', async () => {
+    httpMock.mockRejectedValueOnce(new Error('Request failed with status code 404'));
+    await expect(storefrontApi.getProductDetails('almhnds', 16812)).rejects.toThrow('404');
+    expect(httpMock).toHaveBeenCalledTimes(1);
+    expect(httpMock).toHaveBeenCalledWith('/api/storefront/almhnds/products/16812');
+  });
+
+  it('getProductDetails rejects for an unknown id on error — never demo product #1', async () => {
+    httpMock.mockRejectedValueOnce(new Error('Request failed with status code 404'));
+    await expect(storefrontApi.getProductDetails('almhnds', 999999)).rejects.toThrow('404');
+  });
+
+  it('getProductDetails success path returns the server product, related and cross-sell', async () => {
+    const serverProduct = {
+      id: 16812,
+      name: 'وجبة مشويات',
+      barcode: 'BC16812',
+      price: 131.6,
+      categoryId: 7,
+      categoryName: 'مشويات',
+      stockQty: 40,
+      inStock: true,
+      icon: '',
+      imageUrl: '',
+      description: '',
+    };
+    httpMock.mockResolvedValueOnce({
+      product: serverProduct,
+      related: [{ ...serverProduct, id: 16813, name: 'عصير مانجو', price: 25 }],
+      crossSell: [],
+    });
+    const res = await storefrontApi.getProductDetails('almhnds', 16812);
+    expect(res.product.id).toBe(16812);
+    expect(res.product.name).toBe('وجبة مشويات');
+    expect(res.product.price).toBe(131.6);
+    expect(res.related.map((p) => p.id)).toEqual([16813]);
+    expect(res.crossSell).toEqual([]);
   });
 });
