@@ -13,6 +13,7 @@ import { CreateCouponDto, UpdateCouponDto } from './dto/coupon.dto';
 import { CreateDeliveryZoneDto, UpdateDeliveryZoneDto } from './dto/delivery-zone.dto';
 import { RecordAbandonedCartDto } from './dto/abandoned-cart.dto';
 import { SalesService } from '../sales/sales.service';
+import { assertProductsNot86ed } from '../sales/services/restaurant-advanced-fnb.service';
 import { KdsService } from '../sales/services/kds.service';
 import { StorefrontMediaService } from './storefront-media.service';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
@@ -1704,6 +1705,15 @@ export class StorefrontService {
     const accountId = `${tenant.id}:main`;
 
     const targetBranchId = isPickup ? (dto.pickupBranchId ? Number(dto.pickupBranchId) : branchId) : branchId;
+
+    // INV-REST-FNB-TRUTH-2 (R-I11): 86 enforcement — an 86'd line
+    // fails as 422 ITEM_86ED naming the item, before any stock is
+    // reserved or the order recorded. Branch-scoped like createSale:
+    // a tenant-wide 86 blocks everywhere, a branch 86 only its branch.
+    await assertProductsNot86ed(
+      this.db, tenant.id, targetBranchId,
+      validatedItems.map((item) => ({ productId: item.productId, name: item.name })),
+    );
 
     /**
      * المخزن الذي يُحجز منه هذا الطلب.

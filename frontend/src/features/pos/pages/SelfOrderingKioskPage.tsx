@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/stores/auth-store';
 import { DisplayLanguageToggle } from '@/shared/components/DisplayLanguageToggle';
@@ -30,6 +31,7 @@ import { PosSmartUpsellModal } from '@/features/pos/components/pos-workspace/Pos
 import {
   useSelfOrderingKiosk,
   resolveKioskSlug,
+  filterKioskMenuItems,
   resolveKioskFinalizeOutcome,
   kioskConfirmationCopy,
   newKioskIdempotencyKey,
@@ -37,6 +39,7 @@ import {
   resolveKioskOrderErrorMessage,
   type KioskPaymentStatus,
 } from '@/features/pos/hooks/useSelfOrderingKiosk';
+import { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced-fnb.api';
 import { getStoreHostSlug } from '@/lib/store-public-url';
 import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
 
@@ -269,7 +272,25 @@ export function SelfOrderingKioskPage() {
   const { catalogData, isCatalogLoading, checkUpsell, createOrder, listTerminals, initiateTerminalCharge } =
     useSelfOrderingKiosk(currentSlug);
 
-  const products = useMemo(() => catalogData?.products || [], [catalogData]);
+  // INV-REST-FNB-TRUTH-2 (R-I11): 86'd items never reach the kiosk
+  // menu — excluded entirely, not greyed-out. No branch is known
+  // on the public kiosk, so the tenant-wide list applies (a
+  // branch-scoped 86 hides the item here too; the kitchen toggles
+  // 86 precisely to stop orders). The kiosk already calls this
+  // session-guarded API for upsells; if the fetch fails the menu
+  // stays unfiltered and the server still rejects any 86'd line at
+  // createOnlineOrder, so a stale menu can never place the order.
+  const { data: items86 = [] } = useQuery({
+    queryKey: ['pos-86-items-kiosk', currentSlug],
+    queryFn: () => restaurantAdvancedFnbApi.get86Items(),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
+
+  const products = useMemo(
+    () => filterKioskMenuItems(catalogData?.products || [], items86.map((item) => item.product_id)),
+    [catalogData, items86],
+  );
   const categories = useMemo(() => catalogData?.categories || [], [catalogData]);
 
   // فلترة الأصناف حسب القسم وبحث النص

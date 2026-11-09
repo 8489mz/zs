@@ -25,6 +25,11 @@ export class DeliveryAggregatorsController {
     return this.service.updateAggregator(req.authContext!, id, payload);
   }
 
+  // INV-REST-FNB-TRUTH-2 (R-I7): ingest stays session-authenticated
+  // for manual / mock ingest. A real aggregator webhook has no staff
+  // session, so this endpoint cannot accept live webhooks — and no
+  // real webhook ingestion is built here (LEAVE: no real aggregator
+  // demand; marketplace sync deferred by user decision 2026-11-05).
   @Post('orders/ingest')
   async ingestOrder(@Req() req: RequestWithAuth, @Body() dto: IngestOrderDto) {
     return this.service.ingestOrder(req.authContext!, dto);

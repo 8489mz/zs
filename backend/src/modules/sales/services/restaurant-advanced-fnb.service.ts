@@ -1540,3 +1540,52 @@ export class RestaurantAdvancedFnbService {
     return renamed;
   }
 }
+
+/**
+ * INV-REST-FNB-TRUTH-2 (R-I11): 86 enforcement, shared by both server
+ * entry points (createSale, createOnlineOrder). An 86 row blocks the
+ * product tenant-wide (branch_id null) or for its branch only; a row
+ * with is_86ed false blocks nothing. Throws AppError ITEM_86ED 422
+ * naming the first blocked item — the same shape as the R4-C
+ * modifier contract errors — so the cashier/kiosk can remove that
+ * line. Held drafts whose item becomes 86'd afterwards are rejected
+ * at submit by the same check; the line is never silently dropped.
+ */
+export async function assertProductsNot86ed(
+  queryable: Kysely<Database> | Transaction<Database>,
+  tenantId: string,
+  branchId: number | null | undefined,
+  items: Array<{ productId: number | string; name?: string }>,
+): Promise<void> {
+  const ids = [...new Set(
+    items
+      .map((item) => Number(item.productId))
+      .filter((id) => Number.isSafeInteger(id) && id > 0),
+  )];
+  if (ids.length === 0) return;
+  const rows = await queryable
+    .selectFrom('restaurant_86_items')
+    .select(['product_id', 'product_name'])
+    .where('tenant_id', '=', tenantId)
+    .where('is_86ed', '=', true)
+    .where('product_id', 'in', ids)
+    .where((eb) =>
+      branchId
+        ? eb.or([eb('branch_id', '=', branchId), eb('branch_id', 'is', null)])
+        : eb('branch_id', 'is', null),
+    )
+    .execute();
+  if (rows.length === 0) return;
+  const byId = new Map<number, string>();
+  for (const row of rows) byId.set(Number(row.product_id), String(row.product_name || ''));
+  for (const item of items) {
+    const name = byId.get(Number(item.productId));
+    if (name !== undefined) {
+      throw new AppError(
+        `الصنف [${name || item.name || item.productId}] غير متاح حالياً (86) — تم استبعاده من البيع`,
+        'ITEM_86ED',
+        422,
+      );
+    }
+  }
+}

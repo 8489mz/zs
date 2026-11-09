@@ -26,6 +26,7 @@ import { UpsertSaleDto, SalesOrderConversionRelease } from '../dto/upsert-sale.d
 import { normalizeSalePayload } from '../helpers/sales-payload.helper';
 import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateRemainingDebt, calculateRestoredStockQuantity, calculateStoreCreditBalance, computeSaleAllocationLegs, findBelowFloorSaleItems, paidAmountExceedsRecordedPayments, resolvePostedSalePaymentChannel, restoreFrozenSaleLineCosts, roundSaleInvoiceTotals, roundSaleResidual } from '../helpers/sales-write.helper';
 import { enforceRestaurantModifierContract as enforceModifierContractPure, type ModifierGroupRule, type ModifierPriceTruth } from '../helpers/restaurant-modifier-contract.helper';
+import { assertProductsNot86ed } from './restaurant-advanced-fnb.service';
 import { allocateSaleTenders, type SaleTenderChannel } from '../engines/sale-tender.engine';
 import { assertPosSubmitGates } from '../engines/pos-submit-gates.engine';
 import { allocateInvoiceDiscount } from '../engines/invoice-discount.engine';
@@ -1249,6 +1250,15 @@ export class SalesWriteService {
       await this.enforceRestaurantModifierContract(
         trx, normalized.items, scope.tenantId,
         this.planFeatureService.hasFeature(auth.planId, auth.extraFeatures, 'restaurant'),
+      );
+      // INV-REST-FNB-TRUTH-2 (R-I11): 86 enforcement at line
+      // validation, before totals and before any stock lock — an
+      // 86'd line fails as 422 ITEM_86ED naming the item, including
+      // a held draft whose item became 86'd after the hold. The
+      // line is never silently dropped; the cashier removes it.
+      await assertProductsNot86ed(
+        trx, scope.tenantId, normalized.branchId ?? null,
+        normalized.items.map((item: any) => ({ productId: item.productId })),
       );
       let exchange: ExchangeReturnContext | undefined;
       if (isExchange) {

@@ -5,6 +5,7 @@ import { RestaurantOperationsDialog } from './RestaurantOperationsDialog';
 import { toast } from '@/shared/components/system-alert';
 import { CheckCircleIcon, PlusCircleIcon, PrinterIcon } from '@/shared/components/icons/AppIcons';
 import { restaurantAdvancedFnbApi, RestaurantPrepSheetItem } from '@/features/pos/api/restaurant-advanced-fnb.api';
+import { todayLocalIsoDate } from '@/features/pos/lib/pos.domain';
 import { printPrepDayDotLabel } from '@/lib/pos-printing/prep-day-dot';
 
 interface KitchenDailyPrepSheetModalProps {
@@ -21,7 +22,9 @@ export function KitchenDailyPrepSheetModal({
   onBack,
 }: KitchenDailyPrepSheetModalProps) {
   const { t } = useTranslation();
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // INV-REST-FNB-TRUTH-2 (R-I19): tenant-local date — the old UTC
+  // toISOString() made 00:00–02:00 Cairo "today's" sheet yesterday's.
+  const todayStr = todayLocalIsoDate();
 
   const [shiftType, setShiftType] = useState<'morning' | 'evening' | 'night'>('morning');
   const [actualValues, setActualValues] = useState<Record<number, number>>({});
@@ -102,7 +105,7 @@ export function KitchenDailyPrepSheetModal({
       backText={t('pos.pos_workspace.kitchen_daily_prep_sheet_modal.s0', "الرجوع لعمليات المطعم")}
       title={t('pos.pos_workspace.kitchen_daily_prep_sheet_modal.s1', "ورقة التحضير اليومية للمطبخ المركزي (Daily Prep Sheet & Commissary)")}
       subtitle={t('pos.pos_workspace.kitchen_daily_prep_sheet_modal.s2', "جدولة ومتابعة تحضير الأصناف نصف المصنعة (تتبيل، صوصات، عجين) لضمان جاهزية الوردية ومنع العجز")}
-      footerNote={t('pos.pos_workspace.kitchen_daily_prep_sheet_modal.s3', "الكميات المحضرة تنعكس فورياً في كفاءة الشيف وسجلات المخزون المركزي.")}
+      footerNote={t('pos.pos_workspace.kitchen_daily_prep_sheet_modal.s3', "الكميات المحضرة تُسجَّل هنا لمتابعة كفاءة الشيف فقط، ولا تخصم من المخزون.")}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         {/* Top Control Bar */}

@@ -55,7 +55,7 @@ function getResolvedStockLimit(product: Product, unit: ProductUnit, allowDecimal
   return allowDecimal ? roundQuantity(rawLimit) : Math.floor(rawLimit);
 }
 
-function todayLocalIsoDate() {
+export function todayLocalIsoDate() {
   const today = new Date();
   const year = today.getFullYear();
   const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -287,6 +287,11 @@ interface AddPosItemOptions {
   isWeighted?: boolean;
   sourceBarcode?: string;
   serialNumber?: string;
+  /** Product ids currently 86'd (out of stock) for this branch — the
+   * workspace passes the list the header already fetches (query key
+   * ['pos-86-items-header', branchId]). An 86'd add is refused here
+   * with a named error, before any key/stock logic. */
+  eightySixedProductIds?: Array<number | string>;
   /** Modifiers the new line carries (when known at add time). They are part
    * of the line identity: a modified line never merges into a plain one. */
   modifiers?: any[];
@@ -409,6 +414,12 @@ function rekeyPosLine(
 }
 
 export function addPosItem(cart: PosItem[], product: Product, options: AddPosItemOptions) {
+  // INV-REST-FNB-TRUTH-2 (R-I11): 86 is enforced at the add, not at
+  // checkout — the server rejects the line at submit anyway, but the
+  // cashier must be stopped here, with the item named.
+  if (options.eightySixedProductIds?.some((id) => String(id) === String(product.id))) {
+    throw new Error(`الصنف ${product.name} غير متاح حالياً (86) — تم استبعاده من البيع.`);
+  }
   const unit = safeUnits(product).find((entry) => entry.id === options.unitId) || getSaleUnit(product);
   const isWeighted = options.isWeighted === true;
   const minQty = getMinimumSaleQuantity(isWeighted);

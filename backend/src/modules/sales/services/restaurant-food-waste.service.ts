@@ -289,7 +289,10 @@ export class RestaurantFoodWasteService {
     const scope = requireTenantScope(auth);
     let query = this.db
       .selectFrom('restaurant_food_waste_logs as w')
-      .innerJoin('products as p', 'p.id', 'w.product_id')
+      // INV-REST-FNB-TRUTH-2 (R-I9): left join — a log whose product
+      // was later deleted must still appear in the list (the old
+      // inner join dropped it silently).
+      .leftJoin('products as p', 'p.id', 'w.product_id')
       .leftJoin('branches as b', 'b.id', 'w.branch_id')
       .select([
         'w.id',
@@ -318,42 +321,77 @@ export class RestaurantFoodWasteService {
 
   /**
    * Get Food Cost Variance Summary (Theoretical consumption vs. waste)
+   *
+   * INV-REST-FNB-TRUTH-2 (R-I9): the branchId filter applies to the
+   * whole summary (the old code took branchId and never used it), and
+   * pending waste is NEVER inside totalWasteCost: a log is pending
+   * iff it has NO stock_movements row with reference_type=
+   * 'food_waste' + its id — the definition reconcilePendingWaste
+   * already uses (there is no status column; the stored total_cost
+   * of a pending log is real while its logWaste response honestly
+   * reports totalCost: 0, because no stock was deducted and no
+   * journal posted). Pending cost/incidents are returned as separate
+   * fields so the report shows both numbers honestly instead of
+   * hiding pending entirely. byReason follows the same posted-only
+   * rule as totalWasteCost.
    */
   async getVarianceSummary(auth: AuthContext, branchId?: number) {
     const scope = requireTenantScope(auth);
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
 
-    // Sum total waste in last 30 days
-    const wasteSummary = await this.db
+    let logsQuery = this.db
       .selectFrom('restaurant_food_waste_logs')
-      .select([
-        sql<number>`COALESCE(SUM(total_cost), 0)`.as('total_waste_cost'),
-        sql<number>`COALESCE(COUNT(*), 0)`.as('total_waste_incidents'),
-      ])
+      .select(['id', 'reason', 'total_cost'])
       .where('tenant_id', '=', scope.tenantId)
-      .where(sql<boolean>`created_at >= NOW() - INTERVAL '30 days'`)
-      .executeTakeFirst();
+      .where(sql<boolean>`created_at >= NOW() - INTERVAL '30 days'`);
+    if (branchId) {
+      logsQuery = logsQuery.where('branch_id', '=', branchId);
+    }
+    const logs = await logsQuery.execute();
 
-    // Group waste by reason
-    const wasteByReason = await this.db
-      .selectFrom('restaurant_food_waste_logs')
-      .select([
-        'reason',
-        sql<number>`COALESCE(SUM(total_cost), 0)`.as('cost'),
-        sql<number>`COUNT(*)`.as('count'),
-      ])
-      .where('tenant_id', '=', scope.tenantId)
-      .where(sql<boolean>`created_at >= NOW() - INTERVAL '30 days'`)
-      .groupBy('reason')
-      .execute();
+    const logIds = logs.map((log) => Number(log.id));
+    let reconciled = new Set<number>();
+    if (logIds.length > 0) {
+      const movements = await this.db
+        .selectFrom('stock_movements')
+        .select('reference_id')
+        .where('tenant_id', '=', scope.tenantId)
+        .where('reference_type', '=', 'food_waste')
+        .where('reference_id', 'in', logIds)
+        .execute();
+      reconciled = new Set(movements.map((m) => Number(m.reference_id)));
+    }
+
+    let totalWasteCost = 0;
+    let totalWasteIncidents = 0;
+    let pendingWasteCost = 0;
+    let pendingWasteIncidents = 0;
+    const byReasonMap = new Map<string, { cost: number; count: number }>();
+    for (const log of logs) {
+      const cost = Number(log.total_cost || 0);
+      if (reconciled.has(Number(log.id))) {
+        totalWasteCost += cost;
+        totalWasteIncidents += 1;
+        const entry = byReasonMap.get(String(log.reason)) || { cost: 0, count: 0 };
+        entry.cost += cost;
+        entry.count += 1;
+        byReasonMap.set(String(log.reason), entry);
+      } else {
+        pendingWasteCost += cost;
+        pendingWasteIncidents += 1;
+      }
+    }
 
     return {
       period: '30_days',
-      totalWasteCost: Number(wasteSummary?.total_waste_cost || 0),
-      totalWasteIncidents: Number(wasteSummary?.total_waste_incidents || 0),
-      byReason: wasteByReason.map((r) => ({
-        reason: r.reason,
-        cost: Number(r.cost),
-        count: Number(r.count),
+      totalWasteCost: roundMoney(totalWasteCost, moneyDigits),
+      totalWasteIncidents,
+      pendingWasteCost: roundMoney(pendingWasteCost, moneyDigits),
+      pendingWasteIncidents,
+      byReason: [...byReasonMap.entries()].map(([reason, entry]) => ({
+        reason,
+        cost: roundMoney(entry.cost, moneyDigits),
+        count: entry.count,
       })),
     };
   }

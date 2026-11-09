@@ -227,7 +227,16 @@ export class DeliveryAggregatorsService {
   }
 
   /**
-   * Ingest incoming aggregator order (from webhook or mock push)
+   * Ingest an incoming aggregator order (manual / mock push only).
+   * INV-REST-FNB-TRUTH-2 (R-I7): this endpoint stays
+   * session-authenticated — a real aggregator webhook has no staff
+   * session, so live webhook ingestion cannot work through it, and
+   * no real webhook / auto-sale integration is built here (LEAVE:
+   * no real aggregator demand, marketplace sync deferred by user
+   * decision 2026-11-05, no real aggregator contract exists). The
+   * ingest records a tracking row only: no sale, no stock deduction,
+   * no payment, no journal — the order reaches the kitchen via KDS
+   * and becomes revenue only when someone re-keys it.
    */
   async ingestOrder(auth: AuthContext, dto: IngestOrderDto) {
     const scope = requireTenantScope(auth);
@@ -246,7 +255,20 @@ export class DeliveryAggregatorsService {
       throw new BadRequestException(`منصة التوصيل ${dto.aggregatorCode} غير مفعلة`);
     }
 
-    const commRate = dto.commissionRate ?? Number(aggregator.commission_rate || 0);
+    // INV-REST-FNB-TRUTH-2 (R-I7): the stored channel rate ALWAYS wins.
+    // A caller-supplied commissionRate is accepted in the DTO so old
+    // callers do not 400, but it is ignored — the configured rate is
+    // the contract with the aggregator, and a caller override is
+    // exactly the spoof vector (commissionRate: 0 used to store a
+    // zero commission). R4-A does the same for service charge / tax:
+    // the server recomputes from its own truth instead of trusting
+    // the client.
+    const commRate = Number(aggregator.commission_rate || 0);
+    if (dto.commissionRate !== undefined && Number(dto.commissionRate) !== commRate) {
+      this.logger.debug(
+        `Aggregator ${dto.aggregatorCode}: caller commissionRate ${dto.commissionRate} ignored; stored rate ${commRate} applies`,
+      );
+    }
     const subtotal = Number(dto.subtotal || 0);
     const deliveryFee = Number(dto.deliveryFee || 0);
     // Commission and net payout are money: round at the tenant's book
@@ -254,7 +276,11 @@ export class DeliveryAggregatorsService {
     // before the amounts were stored on the aggregator order).
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const commissionAmount = roundMoney((subtotal * commRate) / 100, moneyDigits);
-    const netPayout = roundMoney(subtotal - commissionAmount, moneyDigits);
+    // INV-REST-FNB-TRUTH-2 (R-I7): the delivery fee is money the
+    // aggregator collects on the restaurant's behalf and owes back,
+    // so it joins the payout. The commission base stays subtotal
+    // only — no evidence any aggregator commissions the delivery fee.
+    const netPayout = roundMoney(subtotal + deliveryFee - commissionAmount, moneyDigits);
 
     const initialStatus = aggregator.auto_accept_orders ? 'preparing' : 'received';
 
@@ -353,11 +379,18 @@ export class DeliveryAggregatorsService {
   }
 
   /**
-   * Update aggregator order status (e.g. ready for pickup, delivered)
+   * Update aggregator order status (e.g. ready for pickup, delivered).
+   * INV-REST-FNB-TRUTH-2 (R-I7): only the six real lifecycle statuses
+   * are accepted (400 on nonsense), and a missing id 404s — the old
+   * code accepted any string and returned success for nonexistent ids.
    */
   async updateOrderStatus(auth: AuthContext, orderId: number, status: string) {
     const scope = requireTenantScope(auth);
-    await this.db
+    const allowedStatuses = ['received', 'preparing', 'ready', 'picked_up', 'delivered', 'cancelled'];
+    if (!allowedStatuses.includes(String(status || '').trim())) {
+      throw new BadRequestException(`حالة طلب منصة التوصيل غير معروفة: ${status}`);
+    }
+    const result = await this.db
       .updateTable('pos_aggregator_orders')
       .set({
         status,
@@ -365,7 +398,10 @@ export class DeliveryAggregatorsService {
       })
       .where('id', '=', orderId)
       .where('tenant_id', '=', scope.tenantId)
-      .execute();
+      .executeTakeFirst();
+    if (Number(result.numUpdatedRows || 0) === 0) {
+      throw new NotFoundException('طلب منصة التوصيل غير موجود');
+    }
 
     return { success: true, status };
   }

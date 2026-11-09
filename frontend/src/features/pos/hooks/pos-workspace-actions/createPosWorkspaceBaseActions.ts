@@ -104,6 +104,7 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
             isWeighted: options.isWeighted,
             sourceBarcode: options.sourceBarcode,
             serialNumber: options.serialNumber,
+            eightySixedProductIds: params.eightySixedProductIds,
           });
         } catch (error) {
           caughtError = error;

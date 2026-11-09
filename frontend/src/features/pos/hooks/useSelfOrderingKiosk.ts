@@ -19,6 +19,24 @@ export function resolveKioskSlug(candidates: Array<string | null | undefined>): 
   return null;
 }
 
+/**
+ * INV-REST-FNB-TRUTH-2 (R-I11): the kiosk menu EXCLUDES 86'd items
+ * entirely — never greyed-out: a greyed-out item on a
+ * customer-facing menu invites confusion and support calls, and the
+ * kitchen toggles 86 precisely to stop orders. Ids match across
+ * number/string shapes (the catalog carries numeric ids, the 86
+ * list may carry either). The server still rejects any 86'd line at
+ * createOnlineOrder, so a stale menu can never place the order.
+ */
+export function filterKioskMenuItems<T extends { id: number | string }>(
+  items: T[],
+  eightySixedIds?: Array<number | string> | null,
+): T[] {
+  if (!eightySixedIds || eightySixedIds.length === 0) return items;
+  const blocked = new Set(eightySixedIds.map((id) => String(id)));
+  return items.filter((item) => !blocked.has(String(item.id)));
+}
+
 export type KioskPaymentStatus = 'paid' | 'unpaid' | 'pending';
 
 export interface KioskConfirmationItem {

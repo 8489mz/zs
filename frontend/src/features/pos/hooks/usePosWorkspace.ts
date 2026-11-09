@@ -6,6 +6,7 @@ import { usePosCatalog } from '@/features/pos/hooks/usePosCatalog';
 import { usePosCatalogWarmup } from '@/features/pos/hooks/usePosCatalogWarmup';
 import { usePosSaleMutation } from '@/features/pos/hooks/usePosSaleMutation';
 import { createPosWorkspaceActions } from '@/features/pos/hooks/usePosWorkspaceActions';
+import { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced-fnb.api';
 import { usePosWorkspaceDerived } from '@/features/pos/hooks/usePosWorkspaceDerived';
 import { usePosWorkspaceEffects } from '@/features/pos/hooks/usePosWorkspaceEffects';
 import { usePosWorkspaceMutations } from '@/features/pos/hooks/usePosWorkspaceMutations';
@@ -98,6 +99,21 @@ export function usePosWorkspace() {
     settings: settingsQuery.data || null,
     branches: branchesQuery.data || [],
     locations: locationsQuery.data || [],
+  });
+
+  // INV-REST-FNB-TRUTH-2 (R-I11): the 86 list for this branch, on the
+  // SAME query key the POS header fetches (['pos-86-items-header',
+  // branchId]) so the workspace shares the header's cached rows
+  // instead of fetching twice. handleAddProduct refuses an 86'd add
+  // with a named message; the server still rejects the line at
+  // submit, so a stale list can never sell an 86'd item.
+  const isRestaurantActive = (settingsQuery.data as any)?.restaurantModuleEnabled === true;
+  const { data: items86 = [] } = useQuery({
+    queryKey: ['pos-86-items-header', operationalContext.branchId],
+    queryFn: () => restaurantAdvancedFnbApi.get86Items(operationalContext.branchId ? Number(operationalContext.branchId) : undefined),
+    enabled: isRestaurantActive,
+    staleTime: 60_000,
+    refetchInterval: 15_000,
   });
 
   /* M32 (R5-B): branch/location are derived from settings and have no
@@ -548,6 +564,7 @@ export function usePosWorkspace() {
     priceType: state.priceType,
     branchId: effectiveBranchId,
     locationId: effectiveLocationId,
+    eightySixedProductIds: items86.map((item) => item.product_id),
     productFilter: state.productFilter,
     setProductFilter: state.setProductFilter,
     selectedCategoryId,

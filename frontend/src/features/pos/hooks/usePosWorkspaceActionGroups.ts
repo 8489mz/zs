@@ -51,6 +51,9 @@ export interface PosWorkspaceActionParams {
   setPriceType: Dispatch<SetStateAction<PosPriceType>>;
   branchId: string;
   locationId: string;
+  /** Product ids currently 86'd for this branch (INV-REST-FNB-TRUTH-2,
+   * R-I11) — handleAddProduct refuses them with a named message. */
+  eightySixedProductIds?: Array<number | string>;
   tableNumber: string;
   setTableNumber: Dispatch<SetStateAction<string>>;
   pagerNumber?: string;
