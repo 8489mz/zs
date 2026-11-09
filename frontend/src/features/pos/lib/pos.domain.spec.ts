@@ -425,7 +425,7 @@ describe('POS line transfer matching (R-I34)', () => {
   it('deducts only the moved quantity from the source line', () => {
     const source = [plainLine({ qty: 3 })];
     const { source: nextSource, target: nextTarget } = applyPosLineTransfer(
-      source, [], [{ ...source[0], qty: 1 }] as never,
+      source, [], [plainLine({ qty: 1 })] as never,
     );
     expect(nextSource[0].qty).toBe(2);
     expect(nextTarget[0].qty).toBe(1);

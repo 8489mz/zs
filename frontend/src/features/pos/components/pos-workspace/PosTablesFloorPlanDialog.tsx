@@ -266,7 +266,7 @@ export function PosTablesFloorPlanDialog({
   };
 
   const activeZone = zones.find((z) => z.zone_code === selectedZone);
-  const zoneTableSet = activeZone && activeZone.table_numbers
+  const zoneTableSet: Set<string> | null = activeZone && activeZone.table_numbers
     ? new Set(
         (Array.isArray(activeZone.table_numbers)
           ? activeZone.table_numbers
@@ -316,20 +316,16 @@ export function PosTablesFloorPlanDialog({
     }
   }
 
-  // Live cart on currently active table that has items and is not yet in heldDrafts
-  const currentTableHasLiveCart = Boolean(
-    currentTableNumber &&
-    currentCartItemsCount > 0 &&
-    !occupiedMap.has(currentTableNumber)
-  );
-
   // Single floor-state derivation (R-I36): the grid, the canvas and the
   // stats below all read this. QR money on a draft table is counted
   // once (never lost, never doubled); a KDS ticket alone is a display
   // badge, not occupancy; a reservation alone is reserved, not occupied.
   const floorState = buildFloorState({
     drafts: heldDrafts,
-    qrOrders: onlineOrders,
+    qrOrders: onlineOrders.map((order) => ({
+      ...order,
+      tableNumber: order.tableNumber == null ? undefined : String(order.tableNumber),
+    })),
     kdsTickets,
     liveCart:
       currentTableNumber && currentCartItemsCount > 0

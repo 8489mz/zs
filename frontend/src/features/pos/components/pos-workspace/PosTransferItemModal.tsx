@@ -5,6 +5,7 @@ import { Button } from '@/shared/ui/button';
 import { XIcon, CheckCircleIcon, ArrowLeftIcon } from '@/shared/components/icons/AppIcons';
 import { formatCurrency } from '@/lib/format';
 import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
+import type { PosPriceType } from '@/features/pos/types/pos.types';
 import { toast } from '@/shared/components/system-alert';
 
 /* R-I34 / INV-REST-LINE-IDENTITY: the transfer item carries the FULL line
@@ -19,7 +20,7 @@ export interface TransferableCartItem {
   name: string;
   qty: number;
   price: number;
-  priceType?: string;
+  priceType?: PosPriceType;
   unitId?: string;
   unitName?: string;
   unitMultiplier?: number;
