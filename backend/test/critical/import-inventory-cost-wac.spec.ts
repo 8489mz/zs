@@ -33,7 +33,9 @@ WHAT THIS PINS, driving the real service end to end on PGlite:
   the 1140 leg), and the dust correction keeps the journal
   balanced (debits 104.14, credits 104.14).
 - Fail-closed wiring: a settings/rates currency mismatch throws
-  before any stock or journal write (no receipt, no journal).
+  at addShipmentItem, fail-fast (the landed-cost recalculation
+  reads the tenant base currency), before any stock or journal
+  write (no receipt, no journal).
 */
 
 import 'reflect-metadata';
@@ -285,7 +287,16 @@ async function main(): Promise<void> {
   }
 
   // Case 5: fail-closed wiring — a settings/rates currency
-  // mismatch throws before any stock or journal write.
+  // mismatch throws at addShipmentItem, fail-fast, before any
+  // stock or journal write. The check lives in
+  // calculateLandedCostInTransaction (tenantBaseCurrency), which
+  // addShipmentItem calls after inserting the item row, so the
+  // throw also rolls that insert back. The currency is tenant
+  // config read from settings + currency_exchange_rates, both
+  // known before any item exists, so no receipt-time check is
+  // needed; the receipt re-checks the same invariant. Placement
+  // is by recorded parent decision: keep the fail-fast throw at
+  // addShipmentItem, pin it here.
   {
     const db = await makeDb('KWD');
     try {
@@ -297,12 +308,12 @@ async function main(): Promise<void> {
       const shipment = await service.createShipment('t1', {
         containerNumber: 'MSCU-W2X', supplierId: '9', exchangeRateAtArrival: 5,
       });
-      await service.addShipmentItem('t1', shipment.id, { productId: 5, quantity: 7, factoryUnitPriceUsd: 1.225 });
       await assert.rejects(
-        async () => service.updateShipmentCosts('t1', 1, shipment.id, { status: 'Arrived', receiptLocationId: 10 }),
+        async () => service.addShipmentItem('t1', shipment.id, { productId: 5, quantity: 7, factoryUnitPriceUsd: 1.225 }),
         /إعداد عملة الأساس/,
-        'a currency mismatch must fail closed at the receipt',
+        'a currency mismatch must fail closed at addShipmentItem, before any item is costed',
       );
+      assert.equal(await countRows(db, 'import_shipment_items'), 0, 'the failed add rolls its item row back');
       assert.equal(await countRows(db, 'import_inventory_receipts'), 0, 'no receipt may be posted');
       assert.equal(await countRows(db, 'journal_entries'), 0, 'no journal may be posted');
     } finally {
