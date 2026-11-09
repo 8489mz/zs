@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCreateQuotationForm, type CreateQuotationPayload, type QuotationItem } from '../hooks/useCreateQuotationForm';
-import { salesOrdersApi } from '../api/sales-orders.api';
+import { useQuotationAvailability } from '../hooks/useQuotationAvailability';
 import { useProductsQuery } from '@/shared/hooks/use-catalog-queries';
 import { useAppToolbar } from '@/stores/toolbar-store';
 import { PageHeader } from '@/shared/components/page-header';
@@ -136,30 +136,11 @@ export function CreateQuotationPage() {
   // approval check enforces when no warehouse is chosen. Availability
   // is fetched for the options the dropdown is about to show (same
   // predicate and 8-option cap as SearchableCombobox), when the
-  // dropdown opens and, debounced, while the user types.
-  const [availabilityByProduct, setAvailabilityByProduct] = useState<Record<number, number>>({});
-
-  const refreshAvailability = useCallback(async (productIds: number[]) => {
-    const ids = [...new Set(productIds.filter((id) => Number(id) > 0))];
-    if (ids.length === 0) return;
-    const results = await Promise.all(
-      ids.map(async (productId) => {
-        try {
-          const res = await salesOrdersApi.availability(productId, null);
-          return [productId, Number(res.availableAtLocation ?? 0)] as const;
-        } catch {
-          return [productId, undefined] as const;
-        }
-      }),
-    );
-    setAvailabilityByProduct((prev) => {
-      const next = { ...prev };
-      for (const [productId, available] of results) {
-        if (available !== undefined) next[productId] = available;
-      }
-      return next;
-    });
-  }, []);
+  // dropdown opens and, debounced, while the user types. The read
+  // itself lives in useQuotationAvailability — page files must go
+  // through feature hooks instead of calling the api layer directly
+  // (INV-CI-I10-PAGE-COMPOSITION).
+  const { availabilityByProduct, refreshAvailability } = useQuotationAvailability();
 
   const pickerRefreshTimerRef = useRef<number | null>(null);
 
