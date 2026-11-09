@@ -24,7 +24,7 @@ import {
 } from '../types/storefront.types';
 import type { CustomerOrderRef } from '../lib/customer-order-refs';
 import { resolveStorefrontMediaList, resolveStorefrontMediaUrl, withResolvedProductMedia } from '../lib/storefront-media-url';
-import { DEMO_STOREFRONT_INFO, DEMO_STOREFRONT_CATALOG } from '../lib/storefront-demo-data';
+import { DEMO_STOREFRONT_INFO } from '../lib/storefront-demo-data';
 import { generatePremiumProductSvg } from '../lib/storefront-photo-matcher';
 
 /** Banner / logo fields of /info and /admin/settings → loadable URLs (SF-9). */
