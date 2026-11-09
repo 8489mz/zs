@@ -54,6 +54,26 @@ export function toArabicDigits(str: string): string {
   return String(str || '');
 }
 
+/**
+ * Today's date key (YYYY-MM-DD) from the LOCAL calendar parts, never from
+ * `toISOString()` (INV-IMPORT-COMPLIANCE-HS-ACI-DATES). A date-input
+ * default built from the UTC slice is the previous day for the first two
+ * hours after midnight in the tenant's zone (Africa/Cairo, UTC+2): a PI
+ * created at 00:03 EET on 2026-11-09 defaulted to 11/08/2026 while its
+ * server-issued number — keyed by the tenant-local business day — read
+ * 261109. Local parts are the browser's own day, which is the tenant's
+ * day for the operator sitting in the tenant's zone. A traveller in a
+ * different zone still sees their own local day: a fully tenant-zone
+ * default needs the settings timezone plumbed into the frontend.
+ */
+export function todayLocalDateKey(referenceDate?: Date): string {
+  const d = referenceDate ? new Date(referenceDate) : new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function formatDateOnly(value?: string | Date) {
   if (!value) return '—';
   let year = '';

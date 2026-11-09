@@ -6,7 +6,10 @@ import {
   useCustomsTariffSectorsQuery,
   useCalculateCustomsMutation,
   useUpsertAciComplianceMutation,
+  useSyncOfficialTariffsMutation,
+  useShipmentsQuery,
 } from './api/shipments.api';
+import { todayLocalDateKey } from '@/lib/format';
 import { StandardDialog } from '@/shared/components/StandardDialog';
 import {
   SearchIcon,
@@ -20,7 +23,27 @@ export default function CustomsTariffCalculator() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSector, setSelectedSector] = useState('all');
   const { data: tariffSectors = [] } = useCustomsTariffSectorsQuery();
-  const { data: tariffs = [], refetch } = useCustomsTariffsQuery(searchTerm, selectedSector);
+  const { data: tariffs = [], refetch, isLoading: isTariffsLoading } = useCustomsTariffsQuery(searchTerm, selectedSector);
+  // INV-IMPORT-COMPLIANCE-HS-ACI-DATES: the tariff list reads exactly
+  // what the tenant stored — a tenant with no rows lists empty, by
+  // design (INV-IMPORT-TARIFF-VERSIONING removed read-time seeding so
+  // a refresh can never overwrite tenant-edited rates). The bundled
+  // official snapshot only enters through the explicit sync endpoint,
+  // and this page never called it: "تحديث البنود" only re-read the
+  // same empty table. The button below is the sync's only UI entry.
+  const syncOfficialMutation = useSyncOfficialTariffsMutation();
+  const { data: shipmentsData } = useShipmentsQuery();
+  const shipmentsList: any[] = shipmentsData?.rows || [];
+
+  const handleSyncTariffs = async () => {
+    try {
+      const res: any = await syncOfficialMutation.mutateAsync();
+      toast.success(`تم تحميل التعريفة الرسمية: ${res?.inserted ?? 0} بنداً جديداً من أصل ${res?.total ?? res?.count ?? ''}`);
+      await refetch();
+    } catch (err: any) {
+      toast.error('حدث خطأ أثناء تحميل التعريفة الرسمية: ' + (err.message || 'خطأ غير معروف'));
+    }
+  };
 
   const availableSectors =
     tariffSectors && tariffSectors.length > 0
@@ -51,8 +74,12 @@ export default function CustomsTariffCalculator() {
   // ACI Modal State
   const [isAciModalOpen, setIsAciModalOpen] = useState(false);
   const [acidNumber, setAcidNumber] = useState('');
-  const [acidIssueDate, setAcidIssueDate] = useState(new Date().toISOString().slice(0, 10));
+  // INV-IMPORT-COMPLIANCE-HS-ACI-DATES: local calendar parts, never
+  // toISOString() — the UTC slice is the previous day for the first
+  // two hours after midnight in the tenant's zone.
+  const [acidIssueDate, setAcidIssueDate] = useState(todayLocalDateKey());
   const [acidExpiryDate, setAcidExpiryDate] = useState('');
+  const [aciShipmentId, setAciShipmentId] = useState('');
   const [cargoxDocId, setCargoxDocId] = useState('');
   const [importerTaxNo, setImporterTaxNo] = useState('');
   const [exporterId, setExporterId] = useState('');
@@ -85,10 +112,21 @@ export default function CustomsTariffCalculator() {
     }
 
     try {
+      const linkedShipment = shipmentsList.find((s: any) => String(s.id) === String(aciShipmentId));
       await upsertAciMutation.mutateAsync({
         acidNumber: acidNumber.trim(),
         acidIssueDate,
         acidExpiryDate,
+        // INV-IMPORT-COMPLIANCE-HS-ACI-DATES: the dialog used to send
+        // no container/shipment at all, although the backend stores
+        // shipment_id + project_id and reads the record back by them.
+        // The link is optional — an ACID is issued before the container
+        // exists in the system — but when a container is chosen its
+        // project follows it, so the record is retrievable from the
+        // shipment's traceability. The backend rejects a linked id
+        // that belongs to another tenant.
+        shipmentId: aciShipmentId || undefined,
+        projectId: linkedShipment?.project_id || undefined,
         cargoxDocumentId: cargoxDocId,
         importerTaxNumber: importerTaxNo,
         exporterId,
@@ -104,6 +142,7 @@ export default function CustomsTariffCalculator() {
       toast.success('تم حفظ وتوثيق بيانات منظومة ACI بنجاح');
       setIsAciModalOpen(false);
       setAcidNumber('');
+      setAciShipmentId('');
     } catch (err: any) {
       toast.error('حدث خطأ أثناء حفظ بيانات ACI: ' + (err.message || 'خطأ غير معروف'));
     }
@@ -325,13 +364,31 @@ export default function CustomsTariffCalculator() {
           </div>
 
           <button
-            onClick={() => refetch()}
+            onClick={handleSyncTariffs}
+            disabled={syncOfficialMutation.isPending}
             style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '12px' }}
           >
             <RefreshCwIcon size={13} />
-            تحديث البنود
+            {syncOfficialMutation.isPending ? 'جاري تحميل التعريفة...' : 'تحديث البنود'}
           </button>
         </div>
+
+        {!isTariffsLoading && tariffs.length === 0 && (
+          <div style={{ border: '1px dashed #cbd5e1', borderRadius: 8, padding: '18px', textAlign: 'center', marginBottom: 12 }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>لا توجد بنود تعريفة محفوظة لهذه المنشأة بعد</div>
+            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: 12 }}>
+              جدول البنود يقرأ ما حفظته المنشأة فقط — حمّل التعريفة الرسمية المعتمدة (مرسوم 218/2022) لتظهر البنود هنا وفي حاسبة الرسوم.
+            </div>
+            <button
+              type="button"
+              onClick={handleSyncTariffs}
+              disabled={syncOfficialMutation.isPending}
+              style={{ padding: '8px 20px', backgroundColor: '#170e5e', border: 'none', borderRadius: 6, fontSize: '12.5px', fontWeight: 700, color: '#ffffff', cursor: 'pointer' }}
+            >
+              {syncOfficialMutation.isPending ? 'جاري تحميل التعريفة...' : 'تحميل التعريفة الرسمية'}
+            </button>
+          </div>
+        )}
 
         <div style={{ overflowX: 'hidden', border: '1px solid #e2e8f0', borderRadius: 8 }}>
           <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', textAlign: 'right' }}>
@@ -428,6 +485,36 @@ export default function CustomsTariffCalculator() {
               placeholder="مثال: 2609140019284719283"
               style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
             />
+          </div>
+
+          {/* INV-IMPORT-COMPLIANCE-HS-ACI-DATES: the container/shipment
+              this ACID belongs to. The dialog used to have no linkage
+              field at all — the record could never be found from the
+              shipment. Optional: an ACID is issued before the container
+              exists in the system; when a container is chosen its
+              project follows it. */}
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: 4 }}>
+              الحاوية / الشحنة المرتبطة
+            </label>
+            <select
+              value={aciShipmentId}
+              onChange={(e) => setAciShipmentId(e.target.value)}
+              style={{ width: '100%', height: 36, padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
+            >
+              <option value="">-- بدون ربط (يسجَّل الرقم فقط) --</option>
+              {shipmentsList.map((s: any) => (
+                <option key={s.id} value={s.id}>
+                  {s.container_number} — {s.status}
+                  {s.bill_of_lading ? ` — بوليصة ${s.bill_of_lading}` : ''}
+                </option>
+              ))}
+            </select>
+            {!aciShipmentId && (
+              <div style={{ fontSize: '11px', color: '#64748b', marginTop: 4 }}>
+                اربط الحاوية حتى يظهر سجل ACI في تتبع الشحنة؛ إن لم تُنشأ الحاوية بعد، احفظ الرقم الآن واربطه لاحقاً.
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

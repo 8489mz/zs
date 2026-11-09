@@ -1625,6 +1625,46 @@ export class ImportSalesService {
   }
 
   async upsertAciCompliance(tenantId: string, dto: UpsertAciComplianceDto) {
+    // INV-IMPORT-COMPLIANCE-HS-ACI-DATES: a linked shipment/project is
+    // trusted only when it belongs to this tenant. The DTO used to pass
+    // shipmentId/projectId straight into the row, so a foreign UUID
+    // either failed opaquely on the FK or linked another tenant's
+    // shipment. Fail closed with a named error instead, and fill the
+    // project from the linked shipment when the caller sends only the
+    // container — the dialog sends both, the API stays usable with one.
+    const uuidShape = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let linkedProjectId: string | undefined = dto.projectId;
+    if (dto.shipmentId) {
+      if (!uuidShape.test(dto.shipmentId)) {
+        throw new BadRequestException('معرف الشحنة المرتبطة غير صالح');
+      }
+      const shipment = await this.db
+        .selectFrom('import_shipments')
+        .select(['id', 'project_id'])
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', dto.shipmentId)
+        .executeTakeFirst();
+      if (!shipment) {
+        throw new BadRequestException('الشحنة المرتبطة غير موجودة في هذه المنشأة');
+      }
+      if (!linkedProjectId && (shipment as any).project_id) {
+        linkedProjectId = String((shipment as any).project_id);
+      }
+    }
+    if (dto.projectId) {
+      if (!uuidShape.test(dto.projectId)) {
+        throw new BadRequestException('معرف المشروع المرتبط غير صالح');
+      }
+      const project = await this.db
+        .selectFrom('import_projects')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', dto.projectId)
+        .executeTakeFirst();
+      if (!project) {
+        throw new BadRequestException('المشروع المرتبط غير موجود في هذه المنشأة');
+      }
+    }
     return await this.db.transaction().execute(async (trx) => {
       const existing = await trx
         .selectFrom('import_aci_compliance')
@@ -1639,7 +1679,7 @@ export class ImportSalesService {
         .executeTakeFirst();
 
       const payload: any = {
-        project_id: dto.projectId,
+        project_id: linkedProjectId,
         shipment_id: dto.shipmentId,
         acid_number: dto.acidNumber.trim(),
         acid_issue_date: dto.acidIssueDate,

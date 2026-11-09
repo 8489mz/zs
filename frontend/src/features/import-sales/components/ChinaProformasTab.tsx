@@ -14,6 +14,7 @@ import { http } from '@/lib/http';
 import { useProductsQuery } from '@/shared/hooks/use-catalog-queries';
 import { SearchableCombobox } from '@/shared/ui/searchable-combobox';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { todayLocalDateKey } from '@/lib/format';
 
 export interface PiItemLine {
   productName: string;
@@ -43,7 +44,12 @@ export function ChinaProformasTab() {
   const [projectId, setProjectId] = useState('');
   const [supplierId, setSupplierId] = useState<number | ''>('');
   const [piNumber, setPiNumber] = useState('');
-  const [piDate, setPiDate] = useState(new Date().toISOString().split('T')[0]);
+  // INV-IMPORT-COMPLIANCE-HS-ACI-DATES: local calendar parts, never
+  // toISOString() — the UTC slice is the previous day for the first two
+  // hours after midnight in the tenant's zone, so a PI created at 00:03
+  // EET on 2026-11-09 defaulted to 11/08/2026 while its server-issued
+  // number — keyed by the tenant-local business day — read 261109.
+  const [piDate, setPiDate] = useState(todayLocalDateKey());
   const [currency, setCurrency] = useState('USD');
   const [exchangeRateContract, setExchangeRateContract] = useState<number>(50);
   const [totalAmountForeign, setTotalAmountForeign] = useState<number>(0);

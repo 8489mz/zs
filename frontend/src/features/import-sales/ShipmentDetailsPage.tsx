@@ -30,6 +30,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { suppliersApi } from '@/shared/api/suppliers.api';
 import { http } from '@/lib/http';
 import { referenceDataApi } from '@/services/reference-data.api';
+import { CustomSelect, type SelectOption } from '@/shared/ui/custom-select';
 import { DownloadIcon, PackageIcon, PlusCircleIcon } from '@/shared/components/icons/AppIcons';
 
 function ItemRowInputs({ item, shipmentId, arrivalRate, pricingRate, isArrived }: { item: ShipmentItem, shipmentId: string, arrivalRate: number, pricingRate: number, isArrived?: boolean }) {
@@ -546,6 +547,35 @@ export default function ShipmentDetailsPage() {
     }
   };
 
+  // INV-IMPORT-COMPLIANCE-HS-ACI-DATES: the four payee pickers used to
+  // be native selects rendering all 503 suppliers in each — unusable.
+  // Searchable CustomSelect (the shared combobox) with the shipment's
+  // own supplier pinned first; every supplier stays pickable, because
+  // the shipment supplier itself usually has no verified bank details
+  // and a verified-only scope would block the normal flow (the trial
+  // itself assigned the unverified shipment supplier as payee for all
+  // four components). The leading option keeps the old "no change"
+  // meaning: an empty pick leaves the stored payee untouched.
+  const payeeOptions = (storedId: number | null | undefined): SelectOption[] => {
+    const noChange: SelectOption = { value: '', label: `-- بلا تغيير (الحالي: ${supplierName(storedId)}) --` };
+    const ordered = [...suppliersList];
+    const shipmentSupplierId = data.supplier_id ? Number(data.supplier_id) : null;
+    if (shipmentSupplierId) {
+      const idx = ordered.findIndex((s: any) => Number(s.id) === shipmentSupplierId);
+      if (idx > 0) {
+        const [pinned] = ordered.splice(idx, 1);
+        ordered.unshift(pinned);
+      }
+    }
+    return [
+      noChange,
+      ...ordered.map((s: any) => ({
+        value: String(s.id),
+        label: s.name || s.nameAr || s.name_ar || `#${s.id}`,
+      })),
+    ];
+  };
+
   return (
     <div className="page-stack page-shell import-sales-page" dir="rtl">
       <main className="document-prototype-column" style={{ paddingBottom: '80px', maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
@@ -733,34 +763,22 @@ export default function ShipmentDetailsPage() {
                 recorded unallocable reason instead (clearing path). */}
             <div className="form-group">
               <label>مورد الشحن البحري (مستحق الشحن)</label>
-              <select className="input" value={freightSupplier} onChange={e => setFreightSupplier(e.target.value)}>
-                <option value="">-- بلا تغيير (الحالي: {supplierName(data.freight_supplier_id)}) --</option>
-                {suppliersList.map((s: any) => <option key={s.id} value={s.id}>{s.name || s.nameAr || s.name_ar || `#${s.id}`}</option>)}
-              </select>
+              <CustomSelect value={freightSupplier} onChange={setFreightSupplier} options={payeeOptions(data.freight_supplier_id)} searchable placeholder="ابحث عن مورد..." />
             </div>
 
             <div className="form-group">
               <label>مورد الجمارك والتخليص (مستحق الجمارك)</label>
-              <select className="input" value={customsSupplier} onChange={e => setCustomsSupplier(e.target.value)}>
-                <option value="">-- بلا تغيير (الحالي: {supplierName(data.customs_supplier_id)}) --</option>
-                {suppliersList.map((s: any) => <option key={s.id} value={s.id}>{s.name || s.nameAr || s.name_ar || `#${s.id}`}</option>)}
-              </select>
+              <CustomSelect value={customsSupplier} onChange={setCustomsSupplier} options={payeeOptions(data.customs_supplier_id)} searchable placeholder="ابحث عن مورد..." />
             </div>
 
             <div className="form-group">
               <label>مورد النقل الداخلي (مستحق النقل)</label>
-              <select className="input" value={transportSupplier} onChange={e => setTransportSupplier(e.target.value)}>
-                <option value="">-- بلا تغيير (الحالي: {supplierName(data.transport_supplier_id)}) --</option>
-                {suppliersList.map((s: any) => <option key={s.id} value={s.id}>{s.name || s.nameAr || s.name_ar || `#${s.id}`}</option>)}
-              </select>
+              <CustomSelect value={transportSupplier} onChange={setTransportSupplier} options={payeeOptions(data.transport_supplier_id)} searchable placeholder="ابحث عن مورد..." />
             </div>
 
             <div className="form-group">
               <label>مورد غرامات التأخير والأرضيات (الحالي: {data.actual_demurrage_fees || 0} ج)</label>
-              <select className="input" value={demurrageSupplier} onChange={e => setDemurrageSupplier(e.target.value)}>
-                <option value="">-- بلا تغيير (الحالي: {supplierName(data.demurrage_supplier_id)}) --</option>
-                {suppliersList.map((s: any) => <option key={s.id} value={s.id}>{s.name || s.nameAr || s.name_ar || `#${s.id}`}</option>)}
-              </select>
+              <CustomSelect value={demurrageSupplier} onChange={setDemurrageSupplier} options={payeeOptions(data.demurrage_supplier_id)} searchable placeholder="ابحث عن مورد..." />
             </div>
 
             <div className="form-group" style={{ gridColumn: 'span 2' }}>
