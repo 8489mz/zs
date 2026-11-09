@@ -1,5 +1,5 @@
-import { Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { Kysely } from 'kysely';
+import { Inject, Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Kysely, sql } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { CreateTableReservationDto, UpdateTableReservationStatusDto } from '../dto/table-reservation.dto';
@@ -92,6 +92,46 @@ export class TableReservationsService {
     return query.orderBy('reservation_time', 'asc').execute();
   }
 
+  /*
+   * INV-REST-RESERVATION-NO-OVERLAP (R6-B, I4): exact-instant conflict.
+   * A table holds at most one active reservation per instant: same tenant,
+   * same branch (null matches null — Kysely '=' never matches a null row,
+   * so the null branch gets an explicit IS NULL predicate), same trimmed
+   * table_number, same reservation_time instant, status confirmed/seated,
+   * and not a waitlist row (waitlist rows hold no table). Cancelled and
+   * no_show rows never block. excludeId keeps a row from colliding with
+   * itself on updateStatus. Honest limit: this is exact-instant only —
+   * 19:00 and 19:30 on one table both pass; a true time-window check
+   * needs a duration the data does not have (follow-up, not this package).
+   */
+  private async assertNoOverlap(
+    tenantId: string,
+    opts: { branchId: number | null; tableNumber: string; reservationTime: Date; excludeId?: number },
+  ): Promise<void> {
+    let query = this.db
+      .selectFrom('restaurant_table_reservations')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('table_number', '=', opts.tableNumber)
+      .where('reservation_time', '=', opts.reservationTime)
+      .where('status', 'in', ['confirmed', 'seated'])
+      .where(sql<boolean>`(reservation_type IS NULL OR reservation_type <> 'waitlist')`);
+    if (opts.branchId === null) {
+      query = query.where('branch_id', 'is', null);
+    } else {
+      query = query.where('branch_id', '=', opts.branchId);
+    }
+    if (opts.excludeId !== undefined) {
+      query = query.where('id', '!=', opts.excludeId);
+    }
+    const clash = await query.executeTakeFirst();
+    if (clash) {
+      throw new ConflictException(
+        `TABLE_ALREADY_RESERVED: الطاولة ${opts.tableNumber} محجوزة بالفعل في هذا التوقيت (${opts.reservationTime.toISOString()}).`,
+      );
+    }
+  }
+
   async createReservation(tenantId: string, userId: number, dto: CreateTableReservationDto) {
     const isWaitlist = dto.reservationType === 'waitlist';
     if (!dto.guestName) {
@@ -106,12 +146,20 @@ export class TableReservationsService {
       throw new BadRequestException('توقيت الحجز غير صالح.');
     }
 
+    // Same trimmed table number the insert below stores, so ' 5' and '5'
+    // cannot double-book. Waitlist rows hold no table and never block.
+    const tableNumber = dto.tableNumber ? String(dto.tableNumber).trim() : 'قائمة انتظار';
+    const branchId = dto.branchId || null;
+    if (!isWaitlist) {
+      await this.assertNoOverlap(tenantId, { branchId, tableNumber, reservationTime });
+    }
+
     const [created] = await this.db
       .insertInto('restaurant_table_reservations')
       .values({
         tenant_id: tenantId,
-        branch_id: dto.branchId || null,
-        table_number: dto.tableNumber ? String(dto.tableNumber).trim() : 'قائمة انتظار',
+        branch_id: branchId,
+        table_number: tableNumber,
         guest_name: String(dto.guestName).trim(),
         guest_phone: dto.guestPhone ? String(dto.guestPhone).trim() : null,
         guest_count: Math.max(1, Number(dto.guestCount || 1)),
@@ -139,6 +187,24 @@ export class TableReservationsService {
 
     if (!existing) {
       throw new NotFoundException('الحجز غير موجود.');
+    }
+
+    // INV-REST-RESERVATION-NO-OVERLAP (R6-B): re-check whenever the
+    // effective table changes, or when a cancelled/no_show row is
+    // re-activated into confirmed/seated. A pure confirmed -> seated on
+    // the same table needs no check (self-exclusion covers it in all
+    // cases). Moving/cancelling a row never blocks on its own table.
+    const effectiveTable = dto.tableNumber ? String(dto.tableNumber).trim() : existing.table_number;
+    const tableChanged = dto.tableNumber ? effectiveTable !== existing.table_number : false;
+    const newIsActive = dto.status === 'confirmed' || dto.status === 'seated';
+    const oldIsActive = existing.status === 'confirmed' || existing.status === 'seated';
+    if (tableChanged || (newIsActive && !oldIsActive)) {
+      await this.assertNoOverlap(tenantId, {
+        branchId: existing.branch_id,
+        tableNumber: effectiveTable,
+        reservationTime: new Date(existing.reservation_time),
+        excludeId: existing.id,
+      });
     }
 
     const [updated] = await this.db

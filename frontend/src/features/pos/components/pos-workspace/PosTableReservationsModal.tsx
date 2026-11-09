@@ -84,7 +84,12 @@ export function PosTableReservationsModal({
       toast.success('تم تحديث حالة الحجز.');
       queryClient.invalidateQueries({ queryKey: ['table-reservations'] });
     },
-    onError: () => toast.error('فشل تحديث حالة الحجز.'),
+    onError: (err: any) => {
+      // INV-REST-RESERVATION-NO-OVERLAP (R6-B): surface the server message
+      // (e.g. the 409 TABLE_ALREADY_RESERVED naming table + time) like the
+      // create path already does, instead of a generic failure toast.
+      toast.error(err?.response?.data?.message || 'فشل تحديث حالة الحجز.');
+    },
   });
 
   const deleteMutation = useMutation({
