@@ -20,6 +20,16 @@ interface ModifierGroupModalProps {
   setFormSelectionType: (v: 'single' | 'multiple') => void;
   formIsMandatory: boolean;
   setFormIsMandatory: (v: boolean) => void;
+  formMinSelections: number;
+  setFormMinSelections: (v: number) => void;
+  formMaxSelections: number;
+  setFormMaxSelections: (v: number) => void;
+  formDisplayOrder: number;
+  setFormDisplayOrder: (v: number) => void;
+  formIsActive: boolean;
+  setFormIsActive: (v: boolean) => void;
+  formIsSplittableInHalf: boolean;
+  setFormIsSplittableInHalf: (v: boolean) => void;
   formOptions: ModifierOption[];
   onAddOptionRow: () => void;
   onRemoveOptionRow: (index: number) => void;
@@ -46,6 +56,16 @@ export const ModifierGroupModal: React.FC<ModifierGroupModalProps> = ({
   setFormSelectionType,
   formIsMandatory,
   setFormIsMandatory,
+  formMinSelections,
+  setFormMinSelections,
+  formMaxSelections,
+  setFormMaxSelections,
+  formDisplayOrder,
+  setFormDisplayOrder,
+  formIsActive,
+  setFormIsActive,
+  formIsSplittableInHalf,
+  setFormIsSplittableInHalf,
   formOptions,
   onAddOptionRow,
   onRemoveOptionRow,
@@ -153,6 +173,58 @@ export const ModifierGroupModal: React.FC<ModifierGroupModalProps> = ({
               </label>
             </div>
           </div>
+
+          {/* R4-C I49: min/max, display order, active and splittable were
+              state on the page but had no inputs here, so they round-
+              tripped invisibly — and editing a name silently reset
+              display_order to 0, reactivated the group and cleared
+              splittable on the backend. */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '10px' }}>
+            <Field label={t('products.modifiers.modifier_group_modal.s24', "الحد الأدنى للاختيار")}>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={formMinSelections}
+                onChange={(e) => setFormMinSelections(Math.max(0, parseInt(e.target.value, 10) || 0))}
+              />
+            </Field>
+            <Field label={t('products.modifiers.modifier_group_modal.s25', "الحد الأقصى للاختيار")}>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={formMaxSelections}
+                onChange={(e) => setFormMaxSelections(Math.max(1, parseInt(e.target.value, 10) || 1))}
+              />
+            </Field>
+            <Field label={t('products.modifiers.modifier_group_modal.s26', "ترتيب العرض")}>
+              <input
+                type="number"
+                step="1"
+                value={formDisplayOrder}
+                onChange={(e) => setFormDisplayOrder(parseInt(e.target.value, 10) || 0)}
+              />
+            </Field>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginTop: '10px' }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8125rem', fontWeight: 600, color: '#334155' }}>
+              <input
+                type="checkbox"
+                checked={formIsActive}
+                onChange={(e) => setFormIsActive(e.target.checked)}
+              />
+              <span>{t('products.modifiers.modifier_group_modal.s27', "المجموعة مفعّلة")}</span>
+            </label>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8125rem', fontWeight: 600, color: '#334155' }}>
+              <input
+                type="checkbox"
+                checked={formIsSplittableInHalf}
+                onChange={(e) => setFormIsSplittableInHalf(e.target.checked)}
+              />
+              <span>{t('products.modifiers.modifier_group_modal.s28', "قابلة للقسمة نصفين")}</span>
+            </label>
+          </div>
         </div>
 
         {/* 2. قائمة الخيارات والإضافات وربط المكونات */}
@@ -199,8 +271,8 @@ export const ModifierGroupModal: React.FC<ModifierGroupModalProps> = ({
                   gap: '8px',
                 }}
               >
-                {/* السطر الأول: الاسم والسعر وحالة الافتراضي والحذف */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr auto auto', gap: '8px', alignItems: 'center' }}>
+                {/* السطر الأول: الاسم والسعر والتكلفة وحالة الافتراضي والحذف */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.8fr 0.8fr auto auto', gap: '8px', alignItems: 'center' }}>
                   <input
                     type="text"
                     value={opt.name}
@@ -215,6 +287,16 @@ export const ModifierGroupModal: React.FC<ModifierGroupModalProps> = ({
                     value={opt.price}
                     onChange={(e) => onOptionChange(idx, 'price', parseFloat(e.target.value) || 0)}
                     placeholder={t('products.modifiers.modifier_group_modal.s16', "السعر الإضافي...")}
+                    style={{ padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px' }}
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={opt.costPrice ?? 0}
+                    onChange={(e) => onOptionChange(idx, 'costPrice', parseFloat(e.target.value) || 0)}
+                    placeholder={t('products.modifiers.modifier_group_modal.s29', "التكلفة...")}
+                    title={t('products.modifiers.modifier_group_modal.s30', "تكلفة الخيار (للعرض فقط — التكلفة الفعلية من مخزون المادة الخام)")}
                     style={{ padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px' }}
                   />
                   <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '11px', color: '#64748b' }}>

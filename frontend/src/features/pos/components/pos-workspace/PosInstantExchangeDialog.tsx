@@ -118,7 +118,7 @@ export function PosInstantExchangeDialog({ open, onClose, pos }: {
     setAttempted(true);
     setPending(true);
     try {
-      await posApi.createSale(payload, undefined, undefined, { 'x-idempotency-key': requestKey.current });
+      await posApi.createSale(payload, undefined, { 'x-idempotency-key': requestKey.current });
       toast.success('تم تسجيل الاستبدال والمرتجع في معاملة واحدة');
       pos.resetPosDraft();
       void invalidateSalesDomain(queryClient, { includeDashboard: true });

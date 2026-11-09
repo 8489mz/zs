@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { posApi } from '@/features/pos/api/pos.api';
-import { buildPosSalePayload, buildLegacyPosSalePayload, buildMinimalPosSalePayload } from '@/features/pos/contracts';
+import { buildPosSalePayload, buildLegacyPosSalePayload } from '@/features/pos/contracts';
 import { getOfflineSalesQueue, getPosTerminalCode, updateOfflineSaleStatus, removeOfflineSale, OfflinePosSale, APP_NETWORK_STATE_EVENT } from '@/features/pos/lib/pos-offline-sync';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateSalesDomain } from '@/app/query-invalidation';
@@ -107,15 +107,13 @@ export function usePosOfflineSync() {
           // the sale's ORIGINAL timestamp (savedAt) so the server
           // books it into the shift whose window held it, and the
           // station code so its cash attributes to that station's
-          // shift. Both ride on every payload shape (full/legacy/
-          // minimal) — the fallback retry must carry them too.
+          // shift. Both ride on every payload shape (full/legacy) —
+          // the fallback retry must carry them too.
           const offlineSyncFields = { offlineDocNo, offlineCreatedAt: sale.savedAt, terminalCode: getPosTerminalCode() };
           const payload = { ...buildPosSalePayload(input), ...offlineSyncFields };
           const legacyPayload = { ...buildLegacyPosSalePayload(input), ...offlineSyncFields };
-          const minimalPayload = { ...buildMinimalPosSalePayload(input), ...offlineSyncFields };
-          
           try {
-            await posApi.createSale(payload, legacyPayload, minimalPayload, { 'x-idempotency-key': sale.id });
+            await posApi.createSale(payload, legacyPayload, { 'x-idempotency-key': sale.id });
             updateOfflineSaleStatus(sale.id, 'committed');
             removeOfflineSale(sale.id);
           } catch (initialError: any) {
@@ -144,7 +142,7 @@ export function usePosOfflineSync() {
                 updateOfflineSaleStatus(sale.id, 'committed');
                 removeOfflineSale(sale.id);
               } else if (resolved === 'safe_to_retry') {
-                await posApi.createSale(payload, legacyPayload, minimalPayload, { 'x-idempotency-key': sale.id });
+                await posApi.createSale(payload, legacyPayload, { 'x-idempotency-key': sale.id });
                 updateOfflineSaleStatus(sale.id, 'committed');
                 removeOfflineSale(sale.id);
               } else if (resolved === 'still_processing') {

@@ -378,6 +378,176 @@ async function main(): Promise<void> {
     await check(rest,[meal,cheese]);
     console.log('PASS sector-restaurant PostgreSQL shortage rolls back POS source, tender, stock and GL');
 
+    // R4-C (INV-REST-MODIFIER-CONTRACT-2): a configured option price is
+    // server truth — a client-sent 0 must post at the configured 10.
+    // At base this posts 60 (client price honoured) and fails below.
+    const pricedGroup=await db.insertInto('pos_modifier_groups').values({
+      tenant_id:rest.auth.tenantId!,account_id:rest.auth.accountId!,
+      name:'Priced extras',name_en:null,selection_type:'multiple',
+      is_mandatory:false,min_selections:0,max_selections:10,display_order:2,
+      is_active:true,is_splittable_in_half:false,
+    } as any).returning('id').executeTakeFirstOrThrow();
+    const pricedOption=await db.insertInto('pos_modifier_options').values({
+      tenant_id:rest.auth.tenantId!,account_id:rest.auth.accountId!,
+      group_id:Number(pricedGroup.id),name:'Extra cheese',name_en:null,
+      price:10,cost_price:0,component_product_id:null,
+      consumption_qty:1,unit_name:null,portion_allowed:'both',
+      is_default:false,is_active:true,display_order:1,preparation_time_minutes:0,
+    } as any).returning('id').executeTakeFirstOrThrow();
+    await db.insertInto('product_pos_modifiers').values({
+      tenant_id:rest.auth.tenantId!,account_id:rest.auth.accountId!,
+      product_id:meal,modifier_group_id:Number(pricedGroup.id),
+    } as any).execute();
+    const repricedSale=await checkout(rest,[{productId:meal,name:'Bistro meal',qty:1,price:60,
+      unitMultiplier:1,modifiers:[{optionId:Number(pricedOption.id),productId:0,
+        name:'Extra cheese',qty:1,price:0,costPrice:0}]}],
+      {payments:[{paymentChannel:'cash',amount:70}]});
+    const repricedId=Number((repricedSale.sale as {id:string}).id);
+    const repricedLine=await db.selectFrom('sale_items').select(['line_total','modifiers'])
+      .where('tenant_id','=',rest.auth.tenantId!).where('sale_id','=',repricedId).executeTakeFirstOrThrow();
+    assert.equal(Number(repricedLine.line_total),70,'option priced 10 posts at 60 + 10, not the client-sent 0');
+    const repricedMods=typeof repricedLine.modifiers==='string'
+      ? JSON.parse(repricedLine.modifiers) : repricedLine.modifiers;
+    assert.equal(Number(repricedMods[0].price),10,'stored modifier price is the configured price');
+    assert.equal(await posted(rest,'1110'),130,'cash 60 + repriced 70');
+    assert.equal(await posted(rest,'5100'),14,'COGS 10 + meal WAC 4');
+    assert.equal(Number((await db.selectFrom('products').select('stock_qty')
+      .where('tenant_id','=',rest.auth.tenantId!).where('id','=',meal)
+      .executeTakeFirstOrThrow()).stock_qty),0);
+    await check(rest,[meal,cheese]);
+    console.log('PASS sector-restaurant PostgreSQL configured option price re-prices a spoofed client price');
+
+    // R4-C: a modifier with no server price truth is rejected, never
+    // posted as a silent discount. At base both post at 55 (60 - 5).
+    const salesBeforeSpoof=await db.selectFrom('sales').select(db.fn.countAll().as('n'))
+      .where('tenant_id','=',rest.auth.tenantId!).executeTakeFirstOrThrow();
+    await assert.rejects(checkout(rest,[{productId:meal,name:'Bistro meal',qty:1,price:60,
+      unitMultiplier:1,modifiers:[{productId:999999,name:'Ghost',qty:1,price:-5,costPrice:0}]}]),
+      (e:any)=>e.code==='RESTAURANT_MODIFIER_PRICE_UNVERIFIED');
+    await assert.rejects(checkout(rest,[{productId:meal,name:'Bistro meal',qty:1,price:60,
+      unitMultiplier:1,modifiers:[{productId:cheese,name:'Cheese',qty:1,price:-5,costPrice:0}]}]),
+      (e:any)=>e.code==='RESTAURANT_MODIFIER_PRICE_UNVERIFIED');
+    const salesAfterSpoof=await db.selectFrom('sales').select(db.fn.countAll().as('n'))
+      .where('tenant_id','=',rest.auth.tenantId!).executeTakeFirstOrThrow();
+    assert.equal(Number(salesAfterSpoof.n),Number(salesBeforeSpoof.n),'unverifiable modifier price posts no sale');
+    assert.equal(await posted(rest,'1110'),130,'no cash moves on a rejected modifier price');
+    await check(rest,[meal,cheese]);
+    console.log('PASS sector-restaurant PostgreSQL negative modifier price with no server truth is rejected');
+
+    // R4-C (I52): a combo sale whose sides/drinks are real catalog
+    // products deducts their stock and posts their COGS. (The backend
+    // path already handles real-product mods; the base failure for I52
+    // is the combo modal emitting name-only deltas — see the frontend
+    // combo spec. This pins the backend side of the contract.)
+    const side=await product(rest,'Combo fries','COMBO-FRIES');
+    const drink=await product(rest,'Combo cola','COMBO-COLA');
+    await receive(rest,side,2,20);
+    await receive(rest,drink,2,8);
+    // qty 3 (total 12): the duplicate-bill guard warns on any repeat
+    // of a same-supplier total within 30 days — 1x4 would repeat the
+    // earlier meal receipt (line 346). Meal WAC stays 4 (stock was 0).
+    await receive(rest,meal,3,4);
+    const comboSale=await checkout(rest,[{productId:meal,name:'Bistro meal',qty:1,price:60,
+      unitMultiplier:1,modifiers:[
+        {productId:side,name:'Fries',qty:1,price:60,costPrice:0,isComboComponent:true},
+        {productId:drink,name:'Cola',qty:1,price:60,costPrice:0,isComboComponent:true}]}]);
+    assert.ok(Number((comboSale.sale as {id:string}).id)>0);
+    assert.equal(Number((await db.selectFrom('products').select('stock_qty')
+      .where('tenant_id','=',rest.auth.tenantId!).where('id','=',side)
+      .executeTakeFirstOrThrow()).stock_qty),1,'combo side stock deducted');
+    assert.equal(Number((await db.selectFrom('products').select('stock_qty')
+      .where('tenant_id','=',rest.auth.tenantId!).where('id','=',drink)
+      .executeTakeFirstOrThrow()).stock_qty),1,'combo drink stock deducted');
+    assert.equal(await posted(rest,'5100'),46,'COGS 14 + meal 4 + side 20 + drink 8');
+    assert.equal(await posted(rest,'1110'),310,'cash 130 + combo 180');
+    await check(rest,[meal,cheese,side,drink]);
+    console.log('PASS sector-restaurant PostgreSQL combo with real products deducts stock and posts COGS');
+
+    // R4-C (I48): mandatory/min/max group rules are enforced by the
+    // server, resolved from the DB option's group. At base every one
+    // of these posts (or is rejected for the wrong reason).
+    const saucesGroup=await db.insertInto('pos_modifier_groups').values({
+      tenant_id:rest.auth.tenantId!,account_id:rest.auth.accountId!,
+      name:'Sauces',name_en:null,selection_type:'multiple',
+      is_mandatory:true,min_selections:1,max_selections:2,display_order:3,
+      is_active:true,is_splittable_in_half:false,
+    } as any).returning('id').executeTakeFirstOrThrow();
+    const toppingGroup=await db.insertInto('pos_modifier_groups').values({
+      tenant_id:rest.auth.tenantId!,account_id:rest.auth.accountId!,
+      name:'Toppings',name_en:null,selection_type:'multiple',
+      is_mandatory:false,min_selections:2,max_selections:10,display_order:4,
+      is_active:true,is_splittable_in_half:false,
+    } as any).returning('id').executeTakeFirstOrThrow();
+    const sauceOptionIds:number[]=[];
+    for (const name of ['Ketchup','Mayo','BBQ']) {
+      const row=await db.insertInto('pos_modifier_options').values({
+        tenant_id:rest.auth.tenantId!,account_id:rest.auth.accountId!,
+        group_id:Number(saucesGroup.id),name,name_en:null,
+        price:0,cost_price:0,component_product_id:null,
+        consumption_qty:1,unit_name:null,portion_allowed:'both',
+        is_default:false,is_active:true,display_order:1,preparation_time_minutes:0,
+      } as any).returning('id').executeTakeFirstOrThrow();
+      sauceOptionIds.push(Number(row.id));
+    }
+    const toppingOptionIds:number[]=[];
+    for (const name of ['Mushroom','Olives']) {
+      const row=await db.insertInto('pos_modifier_options').values({
+        tenant_id:rest.auth.tenantId!,account_id:rest.auth.accountId!,
+        group_id:Number(toppingGroup.id),name,name_en:null,
+        price:0,cost_price:0,component_product_id:null,
+        consumption_qty:1,unit_name:null,portion_allowed:'both',
+        is_default:false,is_active:true,display_order:1,preparation_time_minutes:0,
+      } as any).returning('id').executeTakeFirstOrThrow();
+      toppingOptionIds.push(Number(row.id));
+    }
+    for (const gid of [saucesGroup,toppingGroup]) {
+      await db.insertInto('product_pos_modifiers').values({
+        tenant_id:rest.auth.tenantId!,account_id:rest.auth.accountId!,
+        product_id:meal,modifier_group_id:Number(gid.id),
+      } as any).execute();
+    }
+    // qty 6 (total 24): the duplicate-bill guard warns on any repeat
+    // of a same-supplier total within 30 days — 2x4 would repeat the
+    // earlier meal receipt (total 8, line 279).
+    await receive(rest,meal,6,4);
+    const salesBeforeRules=await db.selectFrom('sales').select(db.fn.countAll().as('n'))
+      .where('tenant_id','=',rest.auth.tenantId!).executeTakeFirstOrThrow();
+    const ruleMeal=()=>({productId:meal,name:'Bistro meal',qty:1,price:60,unitMultiplier:1});
+    await assert.rejects(checkout(rest,[{...ruleMeal(),modifiers:[]}]),
+      (e:any)=>e.code==='RESTAURANT_MODIFIER_RULE_VIOLATED');
+    await assert.rejects(checkout(rest,[{...ruleMeal(),modifiers:sauceOptionIds.map((id)=>(
+      {optionId:id,productId:0,name:'sauce',qty:1,price:0,costPrice:0}))}]),
+      (e:any)=>e.code==='RESTAURANT_MODIFIER_RULE_VIOLATED');
+    await assert.rejects(checkout(rest,[{...ruleMeal(),modifiers:[
+      {optionId:toppingOptionIds[0],productId:0,name:'topping',qty:1,price:0,costPrice:0},
+      {optionId:sauceOptionIds[0],productId:0,name:'sauce',qty:1,price:0,costPrice:0}]}]),
+      (e:any)=>e.code==='RESTAURANT_MODIFIER_RULE_VIOLATED');
+    const salesAfterRules=await db.selectFrom('sales').select(db.fn.countAll().as('n'))
+      .where('tenant_id','=',rest.auth.tenantId!).executeTakeFirstOrThrow();
+    assert.equal(Number(salesAfterRules.n),Number(salesBeforeRules.n),'rule violations post no sale');
+    const okSauce=await checkout(rest,[{...ruleMeal(),modifiers:[
+      {optionId:sauceOptionIds[0],productId:0,name:'sauce',qty:1,price:0,costPrice:0}]}]);
+    assert.ok(Number((okSauce.sale as {id:string}).id)>0,'one mandatory selection posts');
+    const okToppings=await checkout(rest,[{...ruleMeal(),modifiers:[
+      {optionId:toppingOptionIds[0],productId:0,name:'topping',qty:1,price:0,costPrice:0},
+      {optionId:toppingOptionIds[1],productId:0,name:'topping',qty:1,price:0,costPrice:0},
+      {optionId:sauceOptionIds[0],productId:0,name:'sauce',qty:1,price:0,costPrice:0}]}]);
+    assert.ok(Number((okToppings.sale as {id:string}).id)>0,'min-2 group satisfied with two selections posts');
+    assert.equal(await posted(rest,'1110'),430,'cash 310 + 60 + 60');
+    assert.equal(await posted(rest,'5100'),54,'COGS 46 + meal 4 + meal 4');
+    await check(rest,[meal,cheese,side,drink]);
+    console.log('PASS sector-restaurant PostgreSQL mandatory/min/max modifier rules enforced server-side');
+
+    // Unlink the I48 groups again: the mandatory Sauces group must not
+    // leak into the later pre-existing restaurant cases, which sell
+    // this same meal without modifiers (exactly as at base). The
+    // groups/options stay in the DB, just unlinked.
+    await db.deleteFrom('product_pos_modifiers')
+      .where('tenant_id','=',rest.auth.tenantId!)
+      .where('product_id','=',meal)
+      .where('modifier_group_id','in',[Number(saucesGroup.id),Number(toppingGroup.id)])
+      .execute();
+
     // REAL BOM: restaurant-only entitlement must produce a menu item from
     // costed ingredients, apply WAC/COGS and rollback shortage atomically.
     const recipe=await shop('recipe',['restaurant']);
@@ -487,7 +657,9 @@ async function main(): Promise<void> {
     const cancelled=await db.selectFrom('sales').select('status').where('tenant_id','=',rest.auth.tenantId!)
       .where('id','=',prePrepId).executeTakeFirstOrThrow();
     assert.equal(cancelled.status,'cancelled');
-    await check(rest,[meal,cheese]);
+    // R4-C: side/drink carry stock from the combo case, so they join
+    // the inventory check (GL 1140 covers every stocked product).
+    await check(rest,[meal,cheese,side,drink]);
     console.log('PASS restaurant PostgreSQL pre-prep cancellation restores, cooked meal cancellation performs safe financial cancellation without phantom stock');
 
     // Waste uses existing branch stock and live WAC; a shortage rejects by default (allowPending=false),
@@ -534,7 +706,8 @@ async function main(): Promise<void> {
     assert.ok(reconciled.journalEntryId);
     assert.equal(await posted(rest,'5300'),52);
 
-    await check(rest,[meal,cheese]);
+    // R4-C: side/drink carry stock from the combo case (see above).
+    await check(rest,[meal,cheese,side,drink]);
     console.log('PASS restaurant PostgreSQL real food waste WAC/stock/GL, pending incident on shortage, and clean reconciliation');
 
     // COD delivery: driver's proof-of-delivery must not silently settle cash;
@@ -564,7 +737,8 @@ async function main(): Promise<void> {
     assert.equal(await posted(rest,'1110'),cashBefore+60,'COD 70 minus freelance courier fee 10');
     await assert.rejects(couriers.settleOrder(codId,rest.auth),
       (e:any)=>e.code==='ALREADY_SETTLED');
-    await check(rest,[meal,cheese]);
+    // R4-C: side/drink carry stock from the combo case (see above).
+    await check(rest,[meal,cheese,side,drink]);
     console.log('PASS restaurant PostgreSQL COD courier POD, dispatch rollback, settlement fee/cash/GL once');
 
     // Provider retries must not produce two kitchen tickets or overwrite progress.

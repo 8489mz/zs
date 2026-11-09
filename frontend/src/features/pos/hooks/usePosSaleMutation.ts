@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
 import { invalidateSalesDomain } from '@/app/query-invalidation';
 import { posApi } from '@/features/pos/api/pos.api';
-import { buildPosSalePayload, buildLegacyPosSalePayload, buildMinimalPosSalePayload, type CreatePosSaleInput } from '@/features/pos/contracts';
+import { buildPosSalePayload, buildLegacyPosSalePayload, type CreatePosSaleInput } from '@/features/pos/contracts';
 import { enqueueOfflineSale, APP_NETWORK_STATE_EVENT } from '@/features/pos/lib/pos-offline-sync';
 
 export function isNetworkOrOfflineError(error: unknown): boolean {
@@ -63,11 +63,10 @@ export function usePosSaleMutation() {
       try {
         const payload = buildPosSalePayload(input);
         const legacyPayload = buildLegacyPosSalePayload(input);
-        const minimalPayload = buildMinimalPosSalePayload(input);
         const idempotencyKey = crypto.randomUUID();
-        
+
         try {
-          return await posApi.createSale(payload, legacyPayload, minimalPayload, { 'x-idempotency-key': idempotencyKey });
+          return await posApi.createSale(payload, legacyPayload, { 'x-idempotency-key': idempotencyKey });
         } catch (error: any) {
           if (isNetworkOrOfflineError(error)) {
             if (typeof window !== 'undefined') {

@@ -277,23 +277,13 @@ export function buildLegacyPosSalePayload(input: CreatePosSaleInput) {
   };
 }
 
-export function buildMinimalPosSalePayload(input: CreatePosSaleInput) {
-  validatePosSaleInput(input);
-
-  const customerId = normalizeCustomerId(input.customerId);
-  const normalizedItems = normalizeCart(input.cart);
-  return {
-    customerId: customerId || null,
-    paymentType: input.paymentType,
-    ...(String(input.managerPin || '').trim() ? { managerPin: String(input.managerPin || '').trim() } : {}),
-    source: input.source || 'pos',
-    ...(Number(input.onlineOrderId) > 0 ? { onlineOrderId: Number(input.onlineOrderId) } : {}),
-    items: normalizedItems.map((item) => ({
-      productId: item.productId,
-      qty: item.qty,
-      price: item.price,
-      unitName: item.unitName,
-      unitMultiplier: item.unitMultiplier,
-    }))
-  };
-}
+/* R4-C I51: buildMinimalPosSalePayload is DELETED, not fixed. It mapped
+ * items to {productId, qty, price, unitName, unitMultiplier} only —
+ * dropping modifiers, discount, deliveryFee, taxRate, serviceCharge,
+ * tipAmount, payments, tenderedAmount, tableNumber and orderType — so a
+ * modifier sale retried through it posted at base price. The retry path
+ * is dead at this base (pos.api createSale throws on a 400 before any
+ * retry when an idempotency key is present, and every live caller
+ * passes one), so deleting it changes no live behaviour; the surviving
+ * retry leg is buildLegacyPosSalePayload, which preserves modifiers
+ * and the sale terms. */

@@ -35,6 +35,9 @@ export interface ModifierGroup {
   maxSelections: number;
   displayOrder: number;
   isActive: boolean;
+  // Optional: fixtures and older cached payloads may omit it; the
+  // backend always returns it (addons.service listModifierGroups).
+  isSplittableInHalf?: boolean;
   options: ModifierOption[];
 }
 

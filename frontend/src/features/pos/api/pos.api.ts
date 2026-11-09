@@ -183,7 +183,7 @@ export const posApi = {
     cartItemsCount?: number;
     note?: string;
   }) => http('/api/sales/pos-audit-event', { method: 'POST', body: JSON.stringify(payload) }),
-  createSale: async (payload: unknown, legacyPayload?: unknown, minimalPayload?: unknown, headers?: Record<string, string>) => {
+  createSale: async (payload: unknown, legacyPayload?: unknown, headers?: Record<string, string>) => {
     try {
       return await postSale(payload, headers);
     } catch (error) {
@@ -191,12 +191,10 @@ export const posApi = {
       // Changing payload or key for a fallback would bypass server idempotency.
       if (headers?.['x-idempotency-key']) throw error;
       if (!legacyPayload || !shouldRetrySaleWithFallback(error)) throw error;
-      try {
-        return await postSale(legacyPayload);
-      } catch (legacyError) {
-        if (!minimalPayload || !shouldRetrySaleWithFallback(legacyError)) throw legacyError;
-        return await postSale(minimalPayload);
-      }
+      // R4-C I51: the minimal-payload leg is deleted — a retry that drops
+      // modifiers and sale terms would post a modifier sale at base price.
+      // The legacy payload is the only retry leg; it preserves them.
+      return await postSale(legacyPayload);
     }
   },
   // Resolves what actually happened to a previously submitted sale for a given idempotency key.

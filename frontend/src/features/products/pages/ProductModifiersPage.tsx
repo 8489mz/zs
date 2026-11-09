@@ -8,6 +8,7 @@ import {
   ModifierGroup,
   ModifierOption,
 } from '@/shared/api/addons.api';
+import { productsApi } from '@/features/products/api/products.api';
 import { ModifierGroupCard } from '@/features/products/components/modifiers/ModifierGroupCard';
 import { ModifierGroupModal } from '@/features/products/components/modifiers/ModifierGroupModal';
 import { systemConfirm, toast } from '@/shared/components/system-alert';
@@ -26,13 +27,67 @@ export const ProductModifiersPage: FC = () => {
   const [formIsMandatory, setFormIsMandatory] = useState(false);
   const [formMinSelections, setFormMinSelections] = useState(0);
   const [formMaxSelections, setFormMaxSelections] = useState(10);
+  const [formDisplayOrder, setFormDisplayOrder] = useState(0);
+  const [formIsActive, setFormIsActive] = useState(true);
+  const [formIsSplittableInHalf, setFormIsSplittableInHalf] = useState(false);
   const [formOptions, setFormOptions] = useState<ModifierOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [modalFeedback, setModalFeedback] = useState<{ text: string; error?: boolean } | null>(null);
 
+  // R4-C I50: product <-> group linking. A product shows ONLY its
+  // linked groups at the till; nothing was ever linked before (the
+  // endpoint had zero callers), so returning [] for unlinked products
+  // without this UI would silently switch the feature off.
+  const [linkProducts, setLinkProducts] = useState<{ id: number | string; name: string }[]>([]);
+  const [linkProductId, setLinkProductId] = useState('');
+  const [linkGroupIds, setLinkGroupIds] = useState<number[]>([]);
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [linkSaving, setLinkSaving] = useState(false);
+  const [linkFeedback, setLinkFeedback] = useState<{ text: string; error?: boolean } | null>(null);
+
   useEffect(() => {
     loadGroups();
+    loadLinkProducts();
   }, []);
+
+  const loadLinkProducts = async () => {
+    try {
+      const rows = await productsApi.list();
+      setLinkProducts((rows || []).map((p: any) => ({ id: p.id, name: p.name })));
+    } catch {
+      setLinkProducts([]);
+    }
+  };
+
+  const handleSelectLinkProduct = async (productId: string) => {
+    setLinkProductId(productId);
+    setLinkGroupIds([]);
+    setLinkFeedback(null);
+    if (!productId) return;
+    setLinkLoading(true);
+    try {
+      const linked = await addonsApi.getProductModifiers(Number(productId));
+      setLinkGroupIds((linked || []).map((g) => Number(g.id)));
+    } catch {
+      setLinkFeedback({ text: 'تعذر تحميل مجموعات الصنف', error: true });
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+  const handleSaveLink = async () => {
+    if (!linkProductId) return;
+    setLinkSaving(true);
+    setLinkFeedback(null);
+    try {
+      await addonsApi.linkProductModifiers(Number(linkProductId), linkGroupIds);
+      toast.success('تم حفظ ربط المجموعات بالصنف');
+    } catch (err: any) {
+      setLinkFeedback({ text: err?.message || 'تعذر حفظ الربط', error: true });
+    } finally {
+      setLinkSaving(false);
+    }
+  };
 
   const loadGroups = async () => {
     setLoading(true);
@@ -54,6 +109,9 @@ export const ProductModifiersPage: FC = () => {
     setFormIsMandatory(false);
     setFormMinSelections(0);
     setFormMaxSelections(10);
+    setFormDisplayOrder(0);
+    setFormIsActive(true);
+    setFormIsSplittableInHalf(false);
     setFormOptions([
       { name: '', price: 0, costPrice: 0, isDefault: false, isActive: true },
     ]);
@@ -69,6 +127,9 @@ export const ProductModifiersPage: FC = () => {
     setFormIsMandatory(group.isMandatory);
     setFormMinSelections(group.minSelections);
     setFormMaxSelections(group.maxSelections);
+    setFormDisplayOrder(Number(group.displayOrder ?? 0));
+    setFormIsActive(group.isActive !== false);
+    setFormIsSplittableInHalf(group.isSplittableInHalf === true);
     setFormOptions(group.options?.length ? [...group.options] : [{ name: '', price: 0, costPrice: 0, isDefault: false, isActive: true }]);
     setModalFeedback(null);
     setIsModalOpen(true);
@@ -121,6 +182,9 @@ export const ProductModifiersPage: FC = () => {
         isMandatory: formIsMandatory,
         minSelections: formMinSelections,
         maxSelections: formMaxSelections,
+        displayOrder: formDisplayOrder,
+        isActive: formIsActive,
+        isSplittableInHalf: formIsSplittableInHalf,
         options: cleanOptions,
       };
 
@@ -175,6 +239,59 @@ export const ProductModifiersPage: FC = () => {
           }
         />
 
+        {/* R4-C I50: product <-> group linking. A product shows ONLY its
+            linked groups at the till; without this UI nothing was ever
+            linked and every product fell back to all groups. */}
+        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px 18px', marginBottom: '20px' }}>
+          <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0f172a' }}>
+            {t('products.product_modifiers_page.s7', "ربط المجموعات بالأصناف")}
+          </div>
+          <div style={{ fontSize: '12.5px', color: '#64748b', marginTop: '2px', marginBottom: '12px' }}>
+            {t('products.product_modifiers_page.s8', "اختر الصنف ثم حدد المجموعات التي تظهر له عند الكاشير — الصنف بلا مجموعات مربوطة لا يعرض أي مجموعة خيارات.")}
+          </div>
+          {linkFeedback && (
+            <div style={{ padding: '8px 12px', borderRadius: '8px', fontSize: '13px', marginBottom: '10px', backgroundColor: linkFeedback.error ? '#fef2f2' : '#f0fdf4', color: linkFeedback.error ? '#991b1b' : '#166534', border: `1px solid ${linkFeedback.error ? '#fecaca' : '#bbf7d0'}` }}>
+              {linkFeedback.text}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <select
+              value={linkProductId}
+              onChange={(e) => void handleSelectLinkProduct(e.target.value)}
+              style={{ height: '35px', minWidth: '240px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 10px', fontSize: '13px', background: '#ffffff' }}
+              aria-label={t('products.product_modifiers_page.s9', "اختر الصنف")}
+            >
+              <option value="">{t('products.product_modifiers_page.s10', "— اختر الصنف —")}</option>
+              {linkProducts.map((p) => (
+                <option key={String(p.id)} value={String(p.id)}>{p.name}</option>
+              ))}
+            </select>
+            <Button variant="primary" onClick={() => void handleSaveLink()} disabled={!linkProductId || linkSaving || linkLoading}>
+              {linkSaving ? t('products.product_modifiers_page.s11', "جارٍ الحفظ...") : t('products.product_modifiers_page.s12', "حفظ الربط")}
+            </Button>
+            {linkLoading && <span style={{ fontSize: '12.5px', color: '#64748b' }}>{t('products.product_modifiers_page.s13', "جارٍ تحميل مجموعات الصنف...")}</span>}
+          </div>
+          {linkProductId && !linkLoading && (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
+              {groups.length === 0 && (
+                <span style={{ fontSize: '12.5px', color: '#64748b' }}>{t('products.product_modifiers_page.s14', "لا توجد مجموعات بعد — أنشئ مجموعة أولاً.")}</span>
+              )}
+              {groups.map((g) => (
+                <label key={g.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: '#334155', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 10px', background: linkGroupIds.includes(Number(g.id)) ? '#f5f3ff' : '#ffffff' }}>
+                  <input
+                    type="checkbox"
+                    checked={linkGroupIds.includes(Number(g.id))}
+                    onChange={(e) => setLinkGroupIds(e.target.checked
+                      ? [...linkGroupIds, Number(g.id)]
+                      : linkGroupIds.filter((id) => id !== Number(g.id)))}
+                  />
+                  <span>{g.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
         {loading ? (
           <div style={{ textAlign: 'center', padding: '50px', color: '#64748b' }}>
             {t('products.product_modifiers_page.s4', "جاري تحميل مجموعات الإضافات والخيارات...")}
@@ -223,6 +340,16 @@ export const ProductModifiersPage: FC = () => {
           setFormSelectionType={setFormSelectionType}
           formIsMandatory={formIsMandatory}
           setFormIsMandatory={setFormIsMandatory}
+          formMinSelections={formMinSelections}
+          setFormMinSelections={setFormMinSelections}
+          formMaxSelections={formMaxSelections}
+          setFormMaxSelections={setFormMaxSelections}
+          formDisplayOrder={formDisplayOrder}
+          setFormDisplayOrder={setFormDisplayOrder}
+          formIsActive={formIsActive}
+          setFormIsActive={setFormIsActive}
+          formIsSplittableInHalf={formIsSplittableInHalf}
+          setFormIsSplittableInHalf={setFormIsSplittableInHalf}
           formOptions={formOptions}
           onAddOptionRow={handleAddOptionRow}
           onRemoveOptionRow={handleRemoveOptionRow}

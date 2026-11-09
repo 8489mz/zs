@@ -25,6 +25,7 @@ import { PosAuditEventDto } from '../dto/pos-audit-event.dto';
 import { UpsertSaleDto, SalesOrderConversionRelease } from '../dto/upsert-sale.dto';
 import { normalizeSalePayload } from '../helpers/sales-payload.helper';
 import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateRemainingDebt, calculateRestoredStockQuantity, calculateStoreCreditBalance, computeSaleAllocationLegs, findBelowFloorSaleItems, paidAmountExceedsRecordedPayments, resolvePostedSalePaymentChannel, restoreFrozenSaleLineCosts, roundSaleInvoiceTotals, roundSaleResidual } from '../helpers/sales-write.helper';
+import { enforceRestaurantModifierContract as enforceModifierContractPure, type ModifierGroupRule, type ModifierPriceTruth } from '../helpers/restaurant-modifier-contract.helper';
 import { allocateSaleTenders, type SaleTenderChannel } from '../engines/sale-tender.engine';
 import { allocateInvoiceDiscount } from '../engines/invoice-discount.engine';
 import { resolveSaleTaxRate } from '../engines/sale-tax-rate.engine';
@@ -150,7 +151,7 @@ export class SalesWriteService {
       if (componentId > 0) componentIds.add(componentId);
     }
     const optionRows = optionIds.size ? await trx.selectFrom('pos_modifier_options')
-      .select(['id','component_product_id','consumption_qty'])
+      .select(['id','component_product_id','consumption_qty','price','group_id'])
       .where('tenant_id','=',tenantId).where('id','in',[...optionIds]).execute() : [];
     const options = new Map(optionRows.map(row => [Number(row.id),row]));
     optionRows.forEach(row => { if (Number(row.component_product_id || 0) > 0) componentIds.add(Number(row.component_product_id)); });
@@ -193,6 +194,78 @@ export class SalesWriteService {
         throw new AppError('Sale WAC product missing','SALE_COST_PRODUCT_MISSING',409);
       item.costPrice = Number((parentCost * Number(item.unitMultiplier || 1) + modifiersCost).toFixed(6));
     }
+  }
+
+  /** R4-C INV-REST-MODIFIER-CONTRACT-2: price-resolution + group-rule
+   * pre-pass. Runs BEFORE the prepared-items loop in createSale and
+   * updateSale, inside the same transaction, so buildPreparedSaleItem
+   * prices every line from server prices — a price fix inside
+   * resolveSaleModifierCosts would be too late (lineTotal is already
+   * frozen by then). Skipped entirely when the restaurant feature is
+   * off, so non-restaurant sales (including flat legacy addons) keep
+   * their exact current behaviour. Rewrites each modifier's price in
+   * place on the normalized items; throws 422/500 from the pure
+   * helper (see restaurant-modifier-contract.helper.ts) before any
+   * stock, tender or journal work. */
+  private async enforceRestaurantModifierContract(
+    trx: Kysely<Database> | Transaction<Database>, items: any[],
+    tenantId: string, restaurantEnabled: boolean,
+  ): Promise<void> {
+    if (!restaurantEnabled) return;
+    const optionIds = new Set<number>();
+    const modProductIds = new Set<number>();
+    const lineProductIds = new Set<number>();
+    for (const item of items) {
+      if (Number(item.productId || 0) > 0) lineProductIds.add(Number(item.productId));
+      for (const mod of (Array.isArray(item.modifiers) ? item.modifiers : [])) {
+        const optionId = Number(mod.optionId || mod.option_id || 0);
+        const productId = Number(mod.productId || mod.componentProductId || mod.component_product_id || 0);
+        if (optionId > 0) optionIds.add(optionId);
+        if (productId > 0) modProductIds.add(productId);
+      }
+    }
+    const optionRows = optionIds.size ? await trx.selectFrom('pos_modifier_options')
+      .select(['id', 'price', 'group_id'])
+      .where('tenant_id', '=', tenantId).where('id', 'in', [...optionIds]).execute() : [];
+    const truth: ModifierPriceTruth = {
+      options: new Map(optionRows.map((row) => [Number(row.id),
+        { price: Number(row.price), groupId: Number(row.group_id) }])),
+      products: new Map(),
+      addons: new Map(),
+    };
+    if (modProductIds.size) {
+      const productRows = await trx.selectFrom('products').select(['id', 'retail_price'])
+        .where('tenant_id', '=', tenantId).where('id', 'in', [...modProductIds]).execute();
+      for (const row of productRows) truth.products.set(Number(row.id), Number(row.retail_price));
+      const addonRows = await trx.selectFrom('addons').select(['id', 'price'])
+        .where('tenant_id', '=', tenantId).where('id', 'in', [...modProductIds]).execute();
+      for (const row of addonRows) truth.addons.set(Number(row.id), Number(row.price));
+    }
+    const linkedGroups = new Map<number, ModifierGroupRule[]>();
+    if (lineProductIds.size) {
+      const links = await trx.selectFrom('product_pos_modifiers')
+        .select(['product_id', 'modifier_group_id'])
+        .where('tenant_id', '=', tenantId).where('product_id', 'in', [...lineProductIds]).execute();
+      const groupIds = [...new Set(links.map((l) => Number(l.modifier_group_id)))];
+      const groupRows = groupIds.length ? await trx.selectFrom('pos_modifier_groups')
+        .select(['id', 'name', 'selection_type', 'is_mandatory', 'min_selections', 'max_selections', 'is_active'])
+        .where('tenant_id', '=', tenantId).where('id', 'in', groupIds)
+        .where('is_active', '=', true).execute() : [];
+      const groupsById = new Map(groupRows.map((g) => [Number(g.id), {
+        id: Number(g.id), name: String(g.name), selectionType: String(g.selection_type || 'multiple'),
+        isMandatory: Boolean(g.is_mandatory), minSelections: Number(g.min_selections || 0),
+        maxSelections: Number(g.max_selections || 10), isActive: Boolean(g.is_active),
+      }]));
+      for (const link of links) {
+        const group = groupsById.get(Number(link.modifier_group_id));
+        if (!group) continue;
+        const list = linkedGroups.get(Number(link.product_id)) || [];
+        list.push(group);
+        linkedGroups.set(Number(link.product_id), list);
+      }
+    }
+    const repriced = enforceModifierContractPure(items, truth, linkedGroups);
+    repriced.forEach((item, index) => { items[index].modifiers = item.modifiers; });
   }
 
   private async claimSaleSerials(
@@ -1139,6 +1212,16 @@ export class SalesWriteService {
     const saleId = await this.tx.runInTransaction(this.db, async (trx) => {
       await assertBusinessAccountingDate(trx, scope.tenantId, new Date(), true);
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+      // R4-C INV-REST-MODIFIER-CONTRACT-2: re-price modifiers from
+      // server truth and enforce group rules FIRST — before any stock
+      // lock, so an unverifiable modifier price fails as 422
+      // RESTAURANT_MODIFIER_PRICE_UNVERIFIED instead of the stock
+      // lock's 404 PRODUCT_NOT_FOUND for a ghost modifier productId,
+      // and before the prepared-items loop freezes lineTotal.
+      await this.enforceRestaurantModifierContract(
+        trx, normalized.items, scope.tenantId,
+        this.planFeatureService.hasFeature(auth.planId, auth.extraFeatures, 'restaurant'),
+      );
       let exchange: ExchangeReturnContext | undefined;
       if (isExchange) {
         const original = await trx.selectFrom('sales').select(['id', 'customer_id', 'branch_id'])
@@ -2504,6 +2587,15 @@ export class SalesWriteService {
       // consumed an ICV; editing it would leave the attestation stale
       // and burn a second ICV on the replacement. Correct via credit note.
       assertSaleNotZatcaSigned((sale as any).zatca_status);
+
+      // R4-C INV-REST-MODIFIER-CONTRACT-2: same pre-pass as createSale
+      // — re-price modifiers from server truth and enforce group rules
+      // before the stock lock, so an unverifiable modifier price fails
+      // as 422 instead of the lock's 404 PRODUCT_NOT_FOUND.
+      await this.enforceRestaurantModifierContract(
+        trx, normalized.items, scope.tenantId,
+        this.planFeatureService.hasFeature(auth.planId, auth.extraFeatures, 'restaurant'),
+      );
 
       // A field sale's trip counters were raised at creation time and
       // must move with the edit. Lock the trip row now (before any

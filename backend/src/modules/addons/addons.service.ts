@@ -8,6 +8,27 @@ import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { UpsertAddonDto } from './dto/upsert-addon.dto';
 
+/** R4-C I49: a price that is negative or not a number is never stored.
+ * Undefined/null means "not sent" and falls back to the caller's
+ * default (0 for a new row); an explicit negative or NaN value is a
+ * 400. The UpsertAddonDto @Min(0) covers the controller path; this is
+ * the service-level check the group endpoints (payload: any) lack. */
+function assertNonNegativePrice(value: unknown, code: string): void {
+  if (value === undefined || value === null || value === '') return;
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new AppError('Price must be a non-negative number', code, 400);
+  }
+}
+
+function assertModifierOptionPrices(options: any[] | undefined): void {
+  if (!Array.isArray(options)) return;
+  for (const opt of options) {
+    assertNonNegativePrice(opt?.price, 'MODIFIER_OPTION_PRICE_INVALID');
+    assertNonNegativePrice(opt?.costPrice, 'MODIFIER_OPTION_PRICE_INVALID');
+  }
+}
+
 @Injectable()
 export class AddonsService {
   constructor(
@@ -38,6 +59,8 @@ export class AddonsService {
 
   async createAddon(payload: UpsertAddonDto, auth: AuthContext) {
     const scope = requireTenantScope(auth);
+    assertNonNegativePrice(payload.price, 'ADDON_PRICE_INVALID');
+    assertNonNegativePrice(payload.costPrice, 'ADDON_PRICE_INVALID');
     const result = await this.db
       .insertInto('addons')
       .values({
@@ -61,6 +84,8 @@ export class AddonsService {
 
   async updateAddon(id: number, payload: UpsertAddonDto, auth: AuthContext) {
     const scope = requireTenantScope(auth);
+    assertNonNegativePrice(payload.price, 'ADDON_PRICE_INVALID');
+    assertNonNegativePrice(payload.costPrice, 'ADDON_PRICE_INVALID');
     const result = await this.db
       .updateTable('addons')
       .set({
@@ -178,6 +203,7 @@ export class AddonsService {
 
   async createModifierGroup(payload: any, auth: AuthContext) {
     const scope = requireTenantScope(auth);
+    assertModifierOptionPrices(payload.options);
     const result = await this.db.transaction().execute(async (trx) => {
       const insertedGroup = await trx
         .insertInto('pos_modifier_groups')
@@ -233,7 +259,25 @@ export class AddonsService {
 
   async updateModifierGroup(id: number, payload: any, auth: AuthContext) {
     const scope = requireTenantScope(auth);
+    assertModifierOptionPrices(payload.options);
     await this.db.transaction().execute(async (trx) => {
+      // R4-C I49: the page never sent displayOrder / isActive /
+      // isSplittableInHalf, so every name edit silently reset them to
+      // 0 / true / false. The || 0 / !== false defaults now apply ONLY
+      // on create; on update an unsent field keeps its stored value.
+      const current = await trx
+        .selectFrom('pos_modifier_groups')
+        .select(['display_order', 'is_active', 'is_splittable_in_half'])
+        .where('id', '=', id)
+        .where('tenant_id', '=', scope.tenantId)
+        .executeTakeFirst();
+      if (!current) {
+        throw new AppError('مجموعة الخيارات غير موجودة', 'MODIFIER_GROUP_NOT_FOUND', 404);
+      }
+      const displayOrder = payload.displayOrder !== undefined && payload.displayOrder !== null
+        && payload.displayOrder !== '' && Number.isFinite(Number(payload.displayOrder))
+        ? Number(payload.displayOrder)
+        : Number(current.display_order ?? 0);
       await trx
         .updateTable('pos_modifier_groups')
         .set({
@@ -243,9 +287,13 @@ export class AddonsService {
           is_mandatory: Boolean(payload.isMandatory),
           min_selections: Number(payload.minSelections || 0),
           max_selections: Number(payload.maxSelections || 10),
-          display_order: Number(payload.displayOrder || 0),
-          is_active: payload.isActive !== false,
-          is_splittable_in_half: Boolean(payload.isSplittableInHalf),
+          display_order: displayOrder,
+          is_active: payload.isActive !== undefined && payload.isActive !== null
+            ? payload.isActive !== false
+            : Boolean(current.is_active),
+          is_splittable_in_half: payload.isSplittableInHalf !== undefined && payload.isSplittableInHalf !== null
+            ? Boolean(payload.isSplittableInHalf)
+            : Boolean(current.is_splittable_in_half),
           updated_at: (this.db as any).fn ? undefined : undefined,
         })
         .where('id', '=', id)
@@ -328,17 +376,22 @@ export class AddonsService {
       .where('tenant_id', '=', scope.tenantId)
       .execute();
 
-    let targetGroupIds = linked.map((l) => Number(l.modifier_group_id));
+    const targetGroupIds = linked.map((l) => Number(l.modifier_group_id));
 
-    let groupsQuery = this.db
+    // R4-C I50: a product with no linked groups shows NO groups. The
+    // old code simply omitted the `id in (...)` filter here and
+    // returned every active group — and the POS modal then fell back
+    // to all groups anyway, so no product was ever really unlinked.
+    if (targetGroupIds.length === 0) {
+      return { groups: [] };
+    }
+
+    const groupsQuery = this.db
       .selectFrom('pos_modifier_groups as g')
       .selectAll()
       .where('g.tenant_id', '=', scope.tenantId)
-      .where('g.is_active', '=', true);
-
-    if (targetGroupIds.length > 0) {
-      groupsQuery = groupsQuery.where('g.id', 'in', targetGroupIds);
-    }
+      .where('g.is_active', '=', true)
+      .where('g.id', 'in', targetGroupIds);
 
     const groups = await groupsQuery.orderBy('g.display_order', 'asc').execute();
     const groupIds = groups.map((g) => Number(g.id));

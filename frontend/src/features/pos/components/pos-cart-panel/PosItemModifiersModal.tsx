@@ -21,44 +21,38 @@ export function PosItemModifiersModal({ open, onClose, item, onSave }: PosItemMo
 
   const productId = item?.productId ? Number(item.productId) : null;
 
-  // 1. Fetch product-specific modifier groups
+  // 1. Fetch product-specific modifier groups (the ONLY group source:
+  // R4-C I50 — the old all-groups fallback showed every group for every
+  // product, so an unlinked product offered choices it was never
+  // configured with. A product with no linked groups shows the flat
+  // legacy addons instead.)
   const productGroupsQuery = useQuery({
     queryKey: ['product-modifier-groups', productId],
     queryFn: () => (productId ? addonsApi.getProductModifiers(productId) : Promise.resolve([])),
     enabled: open && !!productId,
   });
 
-  // 2. Fetch all modifier groups as fallback
-  const allGroupsQuery = useQuery({
-    queryKey: ['all-modifier-groups'],
-    queryFn: addonsApi.listModifierGroups,
-    enabled: open,
-  });
-
-  // 3. Fetch flat legacy addons as fallback
+  // 2. Fetch flat legacy addons as fallback
   const addonsQuery = useQuery({
     queryKey: ['addons'],
     queryFn: addonsApi.list,
     enabled: open,
   });
 
-  // Determine active groups or flat addons
+  // Only the product's own linked groups, never all groups.
   const activeGroups: ModifierGroup[] = useMemo(() => {
     if (productGroupsQuery.data && productGroupsQuery.data.length > 0) {
       return productGroupsQuery.data.filter(g => g.isActive !== false);
     }
-    if (allGroupsQuery.data && allGroupsQuery.data.length > 0) {
-      return allGroupsQuery.data.filter(g => g.isActive !== false);
-    }
     return [];
-  }, [productGroupsQuery.data, allGroupsQuery.data]);
+  }, [productGroupsQuery.data]);
 
   const flatAddons = useMemo(() => {
     return (addonsQuery.data || []).filter(a => a.isActive !== false);
   }, [addonsQuery.data]);
 
   const hasGroups = activeGroups.length > 0;
-  const isLoading = productGroupsQuery.isLoading || allGroupsQuery.isLoading || addonsQuery.isLoading;
+  const isLoading = productGroupsQuery.isLoading || addonsQuery.isLoading;
 
   useEffect(() => {
     if (open && item) {

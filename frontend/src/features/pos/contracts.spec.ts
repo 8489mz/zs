@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildLegacyPosSalePayload, buildMinimalPosSalePayload, buildPosSalePayload, stripSaleItemNameFields, validatePosSaleInput } from './contracts';
+import { buildLegacyPosSalePayload, buildPosSalePayload, stripSaleItemNameFields, validatePosSaleInput } from './contracts';
 import type { PosItem } from '@/features/pos/types/pos.types';
 
 const cart: PosItem[] = [
@@ -51,10 +51,6 @@ describe('POS sale contracts', () => {
       paymentType: 'credit',
       paymentChannel: 'credit',
     });
-    expect(buildMinimalPosSalePayload(input)).toMatchObject({
-      customerId: '77',
-      paymentType: 'credit',
-    });
   });
 
   it('preserves fractional unit conversion in all POS payloads for accurate stock deduction', () => {
@@ -73,7 +69,7 @@ describe('POS sale contracts', () => {
       pricesIncludeTax: false,
       expectedTotal: 50,
     };
-    for (const build of [buildPosSalePayload, buildLegacyPosSalePayload, buildMinimalPosSalePayload]) {
+    for (const build of [buildPosSalePayload, buildLegacyPosSalePayload]) {
       expect((build(input) as any).items[0].unitMultiplier).toBe(0.5);
     }
   });
@@ -134,14 +130,57 @@ describe('POS sale contracts', () => {
 
     // The discount belongs to the storefront order, so the server must know which order it is;
     // without this the cashier is asked for a manager PIN (or the discount is lost).
-    for (const build of [buildPosSalePayload, buildLegacyPosSalePayload, buildMinimalPosSalePayload]) {
+    for (const build of [buildPosSalePayload, buildLegacyPosSalePayload]) {
       expect((build(input) as { onlineOrderId?: number }).onlineOrderId).toBe(41);
     }
 
     const withoutOrder = { ...input, onlineOrderId: undefined };
-    for (const build of [buildPosSalePayload, buildLegacyPosSalePayload, buildMinimalPosSalePayload]) {
+    for (const build of [buildPosSalePayload, buildLegacyPosSalePayload]) {
       expect('onlineOrderId' in (build(withoutOrder) as object)).toBe(false);
     }
+  });
+
+  it('the surviving retry leg preserves modifiers and sale terms (R4-C I51)', () => {
+    // buildMinimalPosSalePayload is DELETED by R4-C: it dropped
+    // modifiers, discount, deliveryFee, taxRate, serviceCharge,
+    // tipAmount, payments, tenderedAmount, tableNumber and orderType,
+    // so a modifier sale retried through it posted at base price.
+    // The legacy builder is the only retry leg left (pos.api createSale
+    // retries with it when no idempotency key is present), and it must
+    // carry the whole sale — this pins that.
+    const input = {
+      cart: [{ ...cart[0], modifiers: [{ productId: 9, name: 'Cheese', qty: 1, price: 10 }] }],
+      customerId: '',
+      paymentType: 'cash' as const,
+      paymentChannel: 'cash' as const,
+      discount: 5,
+      deliveryFee: 10,
+      note: '',
+      paidAmount: 40,
+      tenderedAmount: 40,
+      payments: [{ paymentChannel: 'cash' as const, amount: 40 }],
+      taxRate: 14,
+      pricesIncludeTax: false,
+      expectedTotal: 40,
+      tableNumber: 'T-4',
+      orderType: 'dine_in',
+      serviceCharge: 3,
+      tipAmount: 2,
+    };
+    const legacy = buildLegacyPosSalePayload(input) as any;
+    expect(legacy.items[0].modifiers).toEqual([{ productId: 9, name: 'Cheese', qty: 1, price: 10 }]);
+    expect(legacy.discount).toBe(5);
+    expect(legacy.deliveryFee).toBe(10);
+    expect(legacy.taxRate).toBe(14);
+    expect(legacy.serviceCharge).toBe(3);
+    expect(legacy.tipAmount).toBe(2);
+    expect(legacy.tenderedAmount).toBe(40);
+    expect(legacy.orderType).toBe('dine_in');
+    // NOTE (follow-up, not this package): the legacy builder still
+    // carries no `payments` array and no `tableNumber` — the retried
+    // sale leans on paymentType/paymentChannel + tenderedAmount, and
+    // loses its table. That gap predates R4-C and is out of scope here;
+    // this pin covers the fields the legacy leg does preserve.
   });
 
   it('never sends nameEn / name_en in any POS sale payload (English-only, Arabic-only, bilingual)', () => {
@@ -169,7 +208,7 @@ describe('POS sale contracts', () => {
       pricesIncludeTax: false,
       expectedTotal: 75,
     };
-    for (const build of [buildPosSalePayload, buildLegacyPosSalePayload, buildMinimalPosSalePayload]) {
+    for (const build of [buildPosSalePayload, buildLegacyPosSalePayload]) {
       const payload = build(input) as any;
       expect(payload.items).toHaveLength(3);
       for (const item of payload.items) {
@@ -256,7 +295,7 @@ describe('POS serial-tracked lines (LF-P3)', () => {
     expect(() => validatePosSaleInput(cashInput(missingOne)))
       .toThrow('امسح سيريالاً فريداً لكل قطعة من صنف اختبار');
     const missingAll: PosItem[] = [{ ...serialCart[0], serials: undefined }];
-    for (const build of [buildPosSalePayload, buildLegacyPosSalePayload, buildMinimalPosSalePayload]) {
+    for (const build of [buildPosSalePayload, buildLegacyPosSalePayload]) {
       expect(() => build(cashInput(missingAll))).toThrow('امسح سيريالاً فريداً لكل قطعة من صنف اختبار');
     }
   });

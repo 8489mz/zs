@@ -1,5 +1,22 @@
+/* R4-C I52: sides/drinks are REAL catalog products, never hardcoded
+ * names with invented EGP deltas. The old modal emitted modifiers
+ * carrying only {name, price: delta} — no productId/optionId/qty/
+ * costPrice — so the backend skipped their stock loop and costed them
+ * at 0 while the revenue included the deltas. Now each side/drink is
+ * a product from the products prop: the modifier carries its real
+ * productId, its real retail price and qty 1 with isComboComponent,
+ * so the existing stock loop and resolveSaleModifierCosts deduct stock
+ * and cost them, and the I47 pre-pass verifies the price against the
+ * products table. Combo price = main + side + drink (sum of
+ * components; no combo-discount rule exists). State fully resets on
+ * open and the main is preselected in an effect, never during render.
+ * Open point: no product-type filter exists on the products prop, so
+ * mains/sides/drinks are all picked from the same catalog; a real
+ * combo-definition system exists elsewhere (ProductOfferComboCreatorTab,
+ * ComboComponentsEditor) and whether this modal should consume it is a
+ * follow-up. */
 import { useTranslation } from 'react-i18next';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { RestaurantOperationsDialog } from './RestaurantOperationsDialog';
 import { Button } from '@/shared/ui/button';
 import { formatCurrency } from '@/lib/format';
@@ -12,10 +29,12 @@ import {
   SearchIcon,
 } from '@/shared/components/icons/AppIcons';
 
-interface ComboOption {
-  id: string;
+export interface ComboModifier {
+  productId: number;
   name: string;
-  priceDelta: number;
+  price: number;
+  qty: number;
+  isComboComponent: boolean;
 }
 
 interface PosComboMealModalProps {
@@ -27,9 +46,13 @@ interface PosComboMealModalProps {
     productId: number;
     productName: string;
     price: number;
-    modifiers: Array<{ name: string; price: number }>;
+    modifiers: ComboModifier[];
     notes?: string;
   }) => void;
+}
+
+function productPrice(p: any): number {
+  return Number(p?.price || p?.retail_price || 0);
 }
 
 export function PosComboMealModal({
@@ -42,56 +65,71 @@ export function PosComboMealModal({
   const { t } = useTranslation();
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [mainSearch, setMainSearch] = useState('');
+  const [sideSearch, setSideSearch] = useState('');
+  const [drinkSearch, setDrinkSearch] = useState('');
 
   // Step 1: Main Entree Selection
   const [selectedMain, setSelectedMain] = useState<any>(null);
 
-  // Step 2: Side Item Selection
-  const defaultSides: ComboOption[] = [
-    { id: 'side-fries-regular', name: 'بطاطس مقلية كلاسيك', priceDelta: 0 },
-    { id: 'side-fries-cheese', name: 'بطاطس مقلية بالجبنة الشيدر', priceDelta: 12 },
-    { id: 'side-onion-rings', name: 'حلقات بصل مقرمشة (6 قطع)', priceDelta: 15 },
-    { id: 'side-coleslaw', name: 'سلطة كول سلو طازجة', priceDelta: 8 },
-    { id: 'side-wedges', name: 'بطاطس ويدجز مبهرة', priceDelta: 10 },
-  ];
-  const [selectedSide, setSelectedSide] = useState<ComboOption>(defaultSides[0]);
+  // Step 2: Side Item Selection — a real catalog product, or none.
+  const [selectedSide, setSelectedSide] = useState<any>(null);
 
-  // Step 3: Drink Selection
-  const defaultDrinks: ComboOption[] = [
-    { id: 'drink-cola', name: 'كوكاكولا / بيبسي عادي', priceDelta: 0 },
-    { id: 'drink-diet', name: 'كوكاكولا / بيبسي دايت (بدون سكر)', priceDelta: 0 },
-    { id: 'drink-7up', name: 'سفن أب / سبرايت ليمون', priceDelta: 0 },
-    { id: 'drink-water', name: 'مياه معدنية طبيعية', priceDelta: 0 },
-    { id: 'drink-orange-fresh', name: 'عصير برتقال فريش طبيعي', priceDelta: 15 },
-    { id: 'drink-iced-tea', name: 'شاي مثلج بالخوخ (آيس تي)', priceDelta: 12 },
-  ];
-  const [selectedDrink, setSelectedDrink] = useState<ComboOption>(defaultDrinks[0]);
+  // Step 3: Drink Selection — a real catalog product, or none.
+  const [selectedDrink, setSelectedDrink] = useState<any>(null);
 
   const [comboNotes, setComboNotes] = useState('');
 
-  // Available Main Entrees
-  const mainEntrees = useMemo(() => {
+  // Full reset on open (and preselect the first main here, never
+  // during render). A previous build must not leak into the next one.
+  useEffect(() => {
+    if (!open) return;
+    setCurrentStep(1);
+    setMainSearch('');
+    setSideSearch('');
+    setDrinkSearch('');
+    setSelectedMain(products.length > 0 ? products[0] : null);
+    setSelectedSide(null);
+    setSelectedDrink(null);
+    setComboNotes('');
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const filterProducts = (query: string) => {
     if (!products.length) return [];
-    if (!mainSearch.trim()) return products.slice(0, 36);
-    const q = mainSearch.toLowerCase().trim();
+    if (!query.trim()) return products.slice(0, 36);
+    const q = query.toLowerCase().trim();
     return products.filter((p: any) => String(p?.name || '').toLowerCase().includes(q)).slice(0, 36);
-  }, [products, mainSearch]);
+  };
 
-  // Set initial main when opening
-  if (!selectedMain && mainEntrees.length > 0) {
-    setSelectedMain(mainEntrees[0]);
-  }
+  // Available Main Entrees
+  const mainEntrees = useMemo(() => filterProducts(mainSearch), [products, mainSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sideOptions = useMemo(() => filterProducts(sideSearch), [products, sideSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+  const drinkOptions = useMemo(() => filterProducts(drinkSearch), [products, drinkSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const basePrice = Number(selectedMain?.price || selectedMain?.retail_price || 0);
-  const totalComboPrice = basePrice + selectedSide.priceDelta + selectedDrink.priceDelta;
+  const basePrice = productPrice(selectedMain);
+  const totalComboPrice = basePrice + productPrice(selectedSide) + productPrice(selectedDrink);
 
   const handleConfirmCombo = () => {
     if (!selectedMain) return;
 
-    const modifiers = [
-      { name: `طبق جانبي: ${selectedSide.name}`, price: selectedSide.priceDelta },
-      { name: `مشروب: ${selectedDrink.name}`, price: selectedDrink.priceDelta },
-    ];
+    const modifiers: ComboModifier[] = [];
+    if (selectedSide) {
+      modifiers.push({
+        productId: Number(selectedSide.id),
+        name: `طبق جانبي: ${selectedSide.name}`,
+        price: productPrice(selectedSide),
+        qty: 1,
+        isComboComponent: true,
+      });
+    }
+    if (selectedDrink) {
+      modifiers.push({
+        productId: Number(selectedDrink.id),
+        name: `مشروب: ${selectedDrink.name}`,
+        price: productPrice(selectedDrink),
+        qty: 1,
+        isComboComponent: true,
+      });
+    }
 
     onAddComboToCart({
       productId: selectedMain.id,
@@ -102,8 +140,6 @@ export function PosComboMealModal({
     });
 
     onClose();
-    setCurrentStep(1);
-    setComboNotes('');
   };
 
   return (
@@ -209,8 +245,8 @@ export function PosComboMealModal({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', flexShrink: 0 }}>
           {[
             { step: 1, title: t('pos.pos_workspace.pos_combo_meal_modal.s7', "1. الصنف الرئيسي (البرجر/الساندوتش)"), desc: selectedMain ? selectedMain.name : t('pos.pos_workspace.pos_combo_meal_modal.s8', "اختر الصنف") },
-            { step: 2, title: t('pos.pos_workspace.pos_combo_meal_modal.s9', "2. الصنف الجانبي (البطاطس والمقبلات)"), desc: selectedSide.name },
-            { step: 3, title: t('pos.pos_workspace.pos_combo_meal_modal.s10', "3. المشروب والملاحظات"), desc: selectedDrink.name },
+            { step: 2, title: t('pos.pos_workspace.pos_combo_meal_modal.s9', "2. الصنف الجانبي (البطاطس والمقبلات)"), desc: selectedSide ? selectedSide.name : t('pos.pos_workspace.pos_combo_meal_modal.s22', "بدون طبق جانبي") },
+            { step: 3, title: t('pos.pos_workspace.pos_combo_meal_modal.s10', "3. المشروب والملاحظات"), desc: selectedDrink ? selectedDrink.name : t('pos.pos_workspace.pos_combo_meal_modal.s23', "بدون مشروب") },
           ].map((s) => {
             const isActive = currentStep === s.step;
             const isCompleted = currentStep > s.step;
@@ -327,7 +363,7 @@ export function PosComboMealModal({
                       {isSelected && <CheckCircleIcon size={14} color="#170e5e" />}
                     </div>
                     <div style={{ fontSize: '13px', fontWeight: 900, color: '#170e5e', marginTop: '4px' }}>
-                      {formatCurrency(prod.price || prod.retail_price || 0)}
+                      {formatCurrency(productPrice(prod))}
                     </div>
                   </button>
                 );
@@ -336,11 +372,31 @@ export function PosComboMealModal({
           </div>
         )}
 
-        {/* STEP 2: SIDE DISH */}
+        {/* STEP 2: SIDE DISH — real catalog products */}
         {currentStep === 2 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, minHeight: 0 }}>
-            <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>
-              {t('pos.pos_workspace.pos_combo_meal_modal.s14', "اختر الصنف الجانبي (بطاطس ومقبلات):")}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+              <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>
+                {t('pos.pos_workspace.pos_combo_meal_modal.s14', "اختر الصنف الجانبي (بطاطس ومقبلات):")}
+              </div>
+              <div style={{ position: 'relative', width: '220px' }}>
+                <input
+                  type="text"
+                  placeholder={t('pos.pos_workspace.pos_combo_meal_modal.s13', "بحث في الأصناف...")}
+                  value={sideSearch}
+                  onChange={(e) => setSideSearch(e.target.value)}
+                  style={{
+                    width: '100%',
+                    height: '30px',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    padding: '0 26px 0 8px',
+                    fontSize: '11.5px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <SearchIcon size={13} color="#94a3b8" style={{ position: 'absolute', right: '8px', top: '9px' }} />
+              </div>
             </div>
             <div
               className="thin-scrollbar"
@@ -355,13 +411,13 @@ export function PosComboMealModal({
                 boxSizing: 'border-box',
               }}
             >
-              {defaultSides.map((side) => {
-                const isSelected = selectedSide.id === side.id;
+              {sideOptions.map((prod) => {
+                const isSelected = selectedSide?.id === prod.id;
                 return (
                   <button
-                    key={side.id}
+                    key={prod.id}
                     type="button"
-                    onClick={() => setSelectedSide(side)}
+                    onClick={() => setSelectedSide(prod)}
                     style={{
                       background: isSelected ? '#eef2ff' : '#ffffff',
                       border: isSelected ? '2px solid #170e5e' : '1px solid #e2e8f0',
@@ -379,11 +435,11 @@ export function PosComboMealModal({
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
-                      <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>{side.name}</span>
+                      <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>{prod.name}</span>
                       {isSelected && <CheckCircleIcon size={14} color="#170e5e" />}
                     </div>
-                    <div style={{ fontSize: '12px', fontWeight: 800, color: side.priceDelta > 0 ? '#ea580c' : '#16a34a', marginTop: '4px' }}>
-                      {side.priceDelta > 0 ? `+ ${formatCurrency(side.priceDelta)}` : t('pos.pos_workspace.pos_combo_meal_modal.s15', "مشمول بالوجبة (0 ج.م)")}
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#15803d', marginTop: '4px' }}>
+                      {formatCurrency(productPrice(prod))}
                     </div>
                   </button>
                 );
@@ -392,11 +448,31 @@ export function PosComboMealModal({
           </div>
         )}
 
-        {/* STEP 3: DRINK & NOTES */}
+        {/* STEP 3: DRINK & NOTES — real catalog products */}
         {currentStep === 3 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, minHeight: 0 }}>
-            <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>
-              {t('pos.pos_workspace.pos_combo_meal_modal.s16', "اختر المشروب المنعش وتفضيلات التحضير:")}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+              <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>
+                {t('pos.pos_workspace.pos_combo_meal_modal.s16', "اختر المشروب المنعش وتفضيلات التحضير:")}
+              </div>
+              <div style={{ position: 'relative', width: '220px' }}>
+                <input
+                  type="text"
+                  placeholder={t('pos.pos_workspace.pos_combo_meal_modal.s13', "بحث في الأصناف...")}
+                  value={drinkSearch}
+                  onChange={(e) => setDrinkSearch(e.target.value)}
+                  style={{
+                    width: '100%',
+                    height: '30px',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    padding: '0 26px 0 8px',
+                    fontSize: '11.5px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <SearchIcon size={13} color="#94a3b8" style={{ position: 'absolute', right: '8px', top: '9px' }} />
+              </div>
             </div>
             <div
               className="thin-scrollbar"
@@ -411,13 +487,13 @@ export function PosComboMealModal({
                 boxSizing: 'border-box',
               }}
             >
-              {defaultDrinks.map((drink) => {
-                const isSelected = selectedDrink.id === drink.id;
+              {drinkOptions.map((prod) => {
+                const isSelected = selectedDrink?.id === prod.id;
                 return (
                   <button
-                    key={drink.id}
+                    key={prod.id}
                     type="button"
-                    onClick={() => setSelectedDrink(drink)}
+                    onClick={() => setSelectedDrink(prod)}
                     style={{
                       background: isSelected ? '#eef2ff' : '#ffffff',
                       border: isSelected ? '2px solid #170e5e' : '1px solid #e2e8f0',
@@ -435,11 +511,11 @@ export function PosComboMealModal({
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>{drink.name}</span>
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>{prod.name}</span>
                       {isSelected && <CheckCircleIcon size={14} color="#170e5e" />}
                     </div>
-                    <div style={{ fontSize: '11.5px', fontWeight: 800, color: drink.priceDelta > 0 ? '#ea580c' : '#16a34a', marginTop: '3px' }}>
-                      {drink.priceDelta > 0 ? `+ ${formatCurrency(drink.priceDelta)}` : t('pos.pos_workspace.pos_combo_meal_modal.s17', "مشمول بالوجبة (0 ج.م)")}
+                    <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#15803d', marginTop: '3px' }}>
+                      {formatCurrency(productPrice(prod))}
                     </div>
                   </button>
                 );
@@ -489,7 +565,7 @@ export function PosComboMealModal({
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 600 }}>{t('pos.pos_workspace.pos_combo_meal_modal.s20', "مكونات الوجبة المختارة:")}</div>
               <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {selectedMain?.name || '—'} + {selectedSide.name} + {selectedDrink.name}
+                {selectedMain?.name || '—'} + {selectedSide?.name || t('pos.pos_workspace.pos_combo_meal_modal.s22', "بدون طبق جانبي")} + {selectedDrink?.name || t('pos.pos_workspace.pos_combo_meal_modal.s23', "بدون مشروب")}
               </div>
             </div>
           </div>
