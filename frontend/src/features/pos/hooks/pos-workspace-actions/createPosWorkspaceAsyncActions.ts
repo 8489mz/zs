@@ -13,6 +13,7 @@ import { getSubmitSaleErrorMessage } from '@/features/pos/lib/pos-submit-error';
 import { stripSaleItemNameFields } from '@/features/pos/contracts';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { computePaidAmount } from '@/features/pos/lib/pos-paid-amount';
 
 function getSaleKey(sale: Sale | null) {
   if (!sale) return '';
@@ -116,9 +117,14 @@ export function createPosWorkspaceAsyncActions(
     const initialCashAmount = Number(params.cashAmount || 0);
     const initialCardAmount = Number(params.cardAmount || 0);
     const initialTransferAmount = Number(params.transferAmount || 0);
-    const initialPaidAmount = params.paymentChannel === 'wallet' || params.paymentChannel === 'instapay'
-      ? roundMoneyValue(initialTransferAmount, bookDigits)
-      : roundMoneyValue(initialCashAmount + initialCardAmount, bookDigits);
+    // INV-REST-PAID-DEFINITION: the gate paid is the same all-legs sum as
+    // the display and the payload — no channel may drop a leg. (Before:
+    // wallet/instapay saw transfer only, so cash entered first was invisible
+    // to the assume-full-payment checks below.)
+    const initialPaidAmount = computePaidAmount(
+      { cashAmount: initialCashAmount, cardAmount: initialCardAmount, transferAmount: initialTransferAmount },
+      bookDigits,
+    );
 
     // F2 is a fast-cash shortcut only while the current invoice is NOT explicitly credit.
     // If the cashier selected "آجل", the sale must remain credit and must stay attached to the selected customer.
@@ -174,8 +180,10 @@ export function createPosWorkspaceAsyncActions(
       ? initialTransferAmount
       : (settleAsTransfer ? total : initialTransferAmount);
 
-    const effectivePaidAmount = roundMoneyValue(
-      effectiveCashAmount + effectiveCardAmount + effectiveTransferAmount,
+    // INV-REST-PAID-DEFINITION: posted paid is the same all-legs sum as
+    // the display and the gate.
+    const effectivePaidAmount = computePaidAmount(
+      { cashAmount: effectiveCashAmount, cardAmount: effectiveCardAmount, transferAmount: effectiveTransferAmount },
       bookDigits,
     );
 

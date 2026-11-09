@@ -16,7 +16,8 @@ import { usePosCustomerDisplayBroadcaster } from '@/features/pos/hooks/usePosCus
 import { useAuthStore } from '@/stores/auth-store';
 import { loadPosWorkspaceStorage } from '@/features/pos/lib/pos.persistence';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
-import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { currencyMoneyDigits } from '@/shared/utils/money';
+import { computePaidAmount } from '@/features/pos/lib/pos-paid-amount';
 
 const posReferenceStaleTime = 45_000;
 
@@ -74,11 +75,12 @@ export function usePosWorkspace() {
 
   // INV-FE1-FRONTEND-BOOK-DIGITS: paidAmount rounds at the tenant's
   // book digits (settings currency, global system currency fallback).
+  // INV-REST-PAID-DEFINITION: paid is the all-legs sum (cash + card +
+  // transfer) from computePaidAmount — never channel-dependent — so the
+  // display, the submit gate and the posted payload all agree.
   const currencyDecimals = currencyMoneyDigits(settingsQuery.data?.currency || getGlobalSystemCurrency());
-  const paidAmount = roundMoneyValue(
-    state.paymentChannel === 'wallet' || state.paymentChannel === 'instapay'
-      ? Number(state.cashAmount || 0) + Number(state.transferAmount || 0)
-      : Number(state.cashAmount || 0) + Number(state.cardAmount || 0),
+  const paidAmount = computePaidAmount(
+    { cashAmount: state.cashAmount, cardAmount: state.cardAmount, transferAmount: state.transferAmount },
     currencyDecimals,
   );
 
