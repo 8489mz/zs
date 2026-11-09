@@ -53,6 +53,12 @@ export interface KdsTicketsResponse {
   tickets: KdsTicket[];
   stats: KdsSummaryStats;
   lastServedId?: number;
+  // R4-E I16: the queue is capped at 200 (oldest first); the banner needs
+  // both the flag and the real total. R4-E I55: the runtime state blob was
+  // unreadable, so tickets are shown without progress.
+  truncated: boolean;
+  totalActive?: number;
+  kdsStateCorrupt?: boolean;
 }
 
 export const kdsApi = {

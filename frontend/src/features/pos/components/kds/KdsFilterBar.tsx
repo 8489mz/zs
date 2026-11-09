@@ -17,6 +17,9 @@ const STATIONS: { key: KdsStation; label: string }[] = [
   { key: 'grill', label: 'المشويات' },
   { key: 'beverages', label: 'المشروبات والبار' },
   { key: 'bakery', label: 'المخبوزات والحلويات' },
+  // R4-E I15: products configured 'general' had no pill — any other station
+  // filter dropped them entirely, so they were invisible on the KDS.
+  { key: 'general', label: 'عام' },
   { key: 'expo', label: 'منسق التسليم (Expo)' },
 ];
 

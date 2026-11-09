@@ -2,6 +2,9 @@ export const SUPER_ADMIN_PERMISSIONS = [
   'dashboard',
   'products',
   'sales',
+  // R4-E I18: kitchen (KDS) mutations require this permission; it is
+  // granted alongside 'sales' so no kitchen worker is locked out.
+  'kitchen',
   'purchases',
   'inventory',
   'suppliers',

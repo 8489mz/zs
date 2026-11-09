@@ -43,3 +43,32 @@ export function resolveKitchenTicketsState(state: KitchenTicketsQueryState): Kit
   if (state.ticketCount === 0) return 'standby';
   return 'tickets';
 }
+
+/**
+ * R4-E I16: the queue is capped at 200, oldest first — the newest orders
+ * never appear. When truncated, the screen must say so loudly, with the
+ * real total when the backend knows it, and must say the stats cover only
+ * the shown tickets. Returns null when nothing is hidden.
+ */
+export function kdsTruncatedBannerText(input: {
+  truncated?: boolean;
+  totalActive?: number;
+  shownCount?: number;
+}): string | null {
+  if (!input.truncated) return null;
+  const shown = input.shownCount ?? 200;
+  const total = input.totalActive && input.totalActive > 0
+    ? ` — ${shown} من ${input.totalActive}`
+    : '';
+  return `يتم عرض أقدم 200 تذكرة فقط — الأحدث غير ظاهر${total}. الإحصائيات أعلاه تغطي التذاكر المعروضة فقط.`;
+}
+
+/**
+ * R4-E I55: the KDS runtime-state blob was unreadable, so tickets are
+ * shown without their progress. The screen must say so loudly instead of
+ * presenting every ticket as freshly pending. Returns null when healthy.
+ */
+export function kdsStateCorruptBannerText(kdsStateCorrupt?: boolean): string | null {
+  if (!kdsStateCorrupt) return null;
+  return 'بيانات حالة المطبخ تالفة — تُعرض الطلبات بدون حالات التقدم';
+}

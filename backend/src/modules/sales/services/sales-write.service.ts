@@ -45,6 +45,7 @@ import { CashierFraudRadarService } from './cashier-fraud-radar.service';
 import { PlanFeatureService } from '../../../core/auth/services/plan-feature.service';
 import { ReturnsService, type ExchangeReturnContext } from '../../returns/returns.service';
 import { CashDrawerService } from '../../cash-drawer/cash-drawer.service';
+import { KdsService } from './kds.service';
 import { validateOfflineCreatedAt } from '../../cash-drawer/helpers/cash-drawer.helper';
 import { allocateSaleFromImportLots, isAnomalousImportLotShortfall, restoreImportLotsFromCancelledSale } from '../../import-sales/helpers/import-lot-allocation.helper';
 
@@ -134,7 +135,33 @@ export class SalesWriteService {
     // Optional so existing manual constructions keep compiling; the
     // refresh helper below refuses loudly when it is absent.
     @Optional() private readonly cashDrawerService?: CashDrawerService,
+    // R4-E I17: the KDS transfer inside the release block. Optional so
+    // existing manual constructions keep compiling; the transfer helper
+    // below refuses loudly when it is absent. KdsService is provided and
+    // exported by sales.module.ts, so Nest injects it in production.
+    @Optional() private readonly kdsService?: KdsService,
   ) {}
+
+
+  /**
+   * R4-E I17: hands the draft ticket's progress to the posted sale inside
+   * the caller's transaction. Refuses loudly when KdsService is absent (a
+   * manual construction without it) instead of silently dropping the
+   * kitchen's progress. A corrupt KDS runtime state only logs and skips
+   * (see transferTicketStateInTrx): a sale must never fail because KDS
+   * progress is unreadable.
+   */
+  private async transferKdsTicketStateInTrx(
+    trx: Transaction<Database>,
+    tenantId: string,
+    draftSaleId: number,
+    postedSaleId: number,
+  ): Promise<void> {
+    if (!this.kdsService) {
+      throw new AppError('KDS service is not available to transfer the kitchen ticket', 'KDS_SERVICE_UNAVAILABLE', 500);
+    }
+    await this.kdsService.transferTicketStateInTrx(tenantId, draftSaleId, postedSaleId, trx);
+  }
 
 
   /** Cost every restaurant component at the LOCKED tenant product WAC, never
@@ -2523,6 +2550,12 @@ export class SalesWriteService {
         if (onlineOrderToRelease.kitchen_draft_sale_id) {
           const draftSaleId = Number(onlineOrderToRelease.kitchen_draft_sale_id);
           if (draftSaleId && draftSaleId !== id) {
+            // R4-E I17: move the kitchen ticket's progress BEFORE the draft
+            // rows are deleted — the pointer is nulled below, so any later
+            // transfer (retireKitchenDraft) would find nothing to move.
+            // Trx-aware on purpose: the public transfer opens its own
+            // transaction, which would nest inside this one.
+            await this.transferKdsTicketStateInTrx(trx, scope.tenantId, draftSaleId, id);
             await trx
               .deleteFrom('sale_items')
               .where('sale_id', '=', draftSaleId)

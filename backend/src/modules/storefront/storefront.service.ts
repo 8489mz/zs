@@ -258,7 +258,16 @@ export class StorefrontService {
     });
 
     if (removed) {
-      await this.kdsService.transferTicketState(tenantId, draftSaleId, postedSaleId).catch(() => undefined);
+      // R4-E I17: belt-and-braces only — createSale already transfers the
+      // ticket state inside its release block, so this is normally
+      // unreachable (the draft pointer is already null). A failure here
+      // must never be swallowed: log it loudly and surface it.
+      await this.kdsService.transferTicketState(tenantId, draftSaleId, postedSaleId).catch((err) => {
+        this.logger.error(
+          `Failed to transfer KDS ticket state from draft sale ${draftSaleId} to ${postedSaleId ?? 'null'}: ${err?.message || err}`,
+        );
+        throw err;
+      });
     }
   }
 

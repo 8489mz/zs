@@ -14,7 +14,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { resolveKitchenTicketsState } from '@/features/pos/lib/kds-connection-state';
+import {
+  resolveKitchenTicketsState,
+  kdsTruncatedBannerText,
+  kdsStateCorruptBannerText,
+} from '@/features/pos/lib/kds-connection-state';
 
 describe('resolveKitchenTicketsState (R-B6)', () => {
   it('pins the reported case: query error with no tickets is disconnected, never standby', () => {
@@ -47,5 +51,42 @@ describe('resolveKitchenTicketsState (R-B6)', () => {
   it('a failed attempt beats loading: error is a known fact, never a spinner', () => {
     expect(resolveKitchenTicketsState({ isLoading: true, isError: true, ticketCount: 0 })).toBe('disconnected');
     expect(resolveKitchenTicketsState({ isLoading: true, isError: true, ticketCount: 1 })).toBe('stale');
+  });
+});
+
+describe('kdsTruncatedBannerText (R4-E I16)', () => {
+  it('no banner when the queue fits in 200', () => {
+    expect(kdsTruncatedBannerText({ truncated: false, totalActive: 12, shownCount: 12 })).toBeNull();
+  });
+
+  it('a truncated queue shows the loud banner with the real total', () => {
+    const text = kdsTruncatedBannerText({ truncated: true, totalActive: 231, shownCount: 200 });
+    expect(text).toContain('200');
+    expect(text).toContain('231');
+    expect(text).toContain('الأحدث غير ظاهر');
+  });
+
+  it('the banner says the stats cover only the shown tickets', () => {
+    const text = kdsTruncatedBannerText({ truncated: true, totalActive: 201, shownCount: 200 });
+    expect(text).toContain('المعروضة فقط');
+  });
+
+  it('a truncated flag without a total still warns, without inventing a number', () => {
+    const text = kdsTruncatedBannerText({ truncated: true });
+    expect(text).toContain('الأحدث غير ظاهر');
+    expect(text).not.toMatch(/\d+ من \d+/);
+  });
+});
+
+describe('kdsStateCorruptBannerText (R4-E I55)', () => {
+  it('no banner when the runtime state is healthy', () => {
+    expect(kdsStateCorruptBannerText(false)).toBeNull();
+    expect(kdsStateCorruptBannerText(undefined)).toBeNull();
+  });
+
+  it('a corrupt runtime state shows the loud banner', () => {
+    const text = kdsStateCorruptBannerText(true);
+    expect(text).toContain('تالفة');
+    expect(text).toContain('بدون حالات التقدم');
   });
 });

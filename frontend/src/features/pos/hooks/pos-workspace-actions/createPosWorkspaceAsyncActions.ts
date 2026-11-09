@@ -15,6 +15,7 @@ import { getPosTerminalCode } from '@/features/pos/lib/pos-offline-sync';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { computePaidAmount } from '@/features/pos/lib/pos-paid-amount';
+import { printKitchenTicketAuto, shouldAutoPrintKitchenTicket } from '@/lib/pos-printing/kitchen';
 
 function getSaleKey(sale: Sale | null) {
   if (!sale) return '';
@@ -375,13 +376,39 @@ export function createPosWorkspaceAsyncActions(
 
       base.resetPosDraft();
       params.setPostSaleSaleKey(createdSaleKey);
+      // R4-E I13: the automatic kitchen print lives on the POST, never on
+      // the HOLD (a held draft never reaches the KDS). Network printers
+      // first; zero matches fall back to the Electron print; a failed
+      // configured printer is reported loudly, never as a silent success.
+      let kitchenPrintWarning = '';
+      if (shouldAutoPrintKitchenTicket({
+        posted: true,
+        held: false,
+        restaurantEnabled: Boolean(params.settings?.restaurantModuleEnabled),
+        autoPrint: Boolean(params.settings?.posAutoPrintKitchenReceipt),
+      })) {
+        const saleId = Number((createdSale as any)?.id || (createdSale as any)?.sale?.id || 0);
+        if (saleId > 0) {
+          try {
+            const autoPrint = await printKitchenTicketAuto(
+              { ...hydratedSale, id: saleId, items: params.cart } as any,
+              params.settings,
+            );
+            if (autoPrint.failed.length > 0) {
+              kitchenPrintWarning = ` تنبيه: تعذّرت طباعة المطبخ على ${autoPrint.failed.map((f) => f.printerName).join('، ')} — أعد طباعة شيت المطبخ يدويًا.`;
+            }
+          } catch {
+            kitchenPrintWarning = ' تنبيه: تعذّرت طباعة المطبخ تلقائيًا — أعد طباعة شيت المطبخ يدويًا.';
+          }
+        }
+      }
       const postSalePrintMode = getPostSalePrintMode(params.settings || null);
       const isOffline = Boolean((createdSale as any)?.offline);
       const docNo = (createdSale as Sale)?.docNo || (createdSale as any)?.id || '';
       const baseMsg = isOffline
         ? `تم حفظ الفاتورة محلياً (بدون إنترنت): ${docNo}. ستُرحل تلقائياً فور عودة الاتصال.`
         : `تم حفظ فاتورة البيع بنجاح${docNo ? `: ${docNo}` : ''}.`;
-      params.setSubmitMessage(`${baseMsg} ${getPostSalePrintHint(postSalePrintMode)}`);
+      params.setSubmitMessage(`${baseMsg}${kitchenPrintWarning} ${getPostSalePrintHint(postSalePrintMode)}`);
       params.requestBarcodeFocus();
     } catch (error) {
       params.setSubmitMessage(getSubmitSaleErrorMessage(error));
@@ -441,30 +468,16 @@ export function createPosWorkspaceAsyncActions(
           collectionStatus: params.collectionStatus || 'cod',
         } : {}),
         // HeldSaleItemDto has no nameEn / name_en and the validation pipe forbids
-        // non-whitelisted fields, so strip them from the server payload. The kitchen
-        // print below keeps the full sanitized items (it shows the English name).
+        // non-whitelisted fields, so strip them from the server payload.
         items: stripSaleItemNameFields(sanitizedItems),
       });
-      if (params.settings?.restaurantModuleEnabled && params.settings?.posAutoPrintKitchenReceipt) {
-        try {
-          const { printKitchenTicket } = await import('@/lib/pos-printing/kitchen');
-          printKitchenTicket({
-            tableNumber: params.tableNumber,
-            orderType: params.orderType,
-            cashierName: params.authUserName,
-            guestCount: params.guestCount,
-            note: params.note,
-            items: sanitizedItems,
-            date: new Date().toISOString(),
-          } as any, params.settings);
-        } catch {
-          // Non-blocking print
-        }
-      }
+      // R4-E I13: no kitchen print here anymore — a held draft never reaches
+      // the KDS, so printing it as "sent to the kitchen" lied. The automatic
+      // print lives on the POST in handleSubmit.
       base.resetPosDraft();
       const isRestaurant = Boolean(params.settings?.restaurantModuleEnabled);
       const successMessage = isRestaurant
-        ? (params.tableNumber ? `تم إرسال الطلب للمطبخ وحفظ طاولة ${params.tableNumber}` : 'تم إرسال الطلب للمطبخ وحفظ الطلب')
+        ? (params.tableNumber ? `تم تعليق طلب طاولة ${params.tableNumber} — لم يُرسل للمطبخ بعد` : 'تم تعليق الطلب — لم يُرسل للمطبخ بعد')
         : 'تم تعليق الفاتورة الحالية ويمكن استرجاعها لاحقًا';
       params.setSubmitMessage(successMessage);
       params.requestBarcodeFocus();

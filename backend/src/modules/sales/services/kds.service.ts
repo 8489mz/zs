@@ -4,10 +4,16 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
+import {
+  isAllowedKdsItemTransition,
+  isAllowedKdsTransition,
+  resolveItemStation,
+  type KdsItemStatus,
+  type KdsStation,
+  type KdsTicketStatus,
+} from '../helpers/kds-station.helper';
 
-export type KdsTicketStatus = 'pending' | 'cooking' | 'ready' | 'served';
-export type KdsItemStatus = 'pending' | 'cooking' | 'ready';
-export type KdsStation = 'all' | 'kitchen' | 'grill' | 'beverages' | 'bakery' | 'general' | 'expo';
+export type { KdsStation, KdsTicketStatus, KdsItemStatus };
 export type KdsUrgencyLevel = 'normal' | 'warning' | 'critical';
 
 export interface KdsTicketItem {
@@ -62,6 +68,23 @@ interface StoredKdsState {
     }
   >;
   lastServedId?: number;
+  /**
+   * R4-E I55: the persisted blob (or an entry inside it) was unreadable.
+   * Reads keep working on an empty in-memory state and the stored row is
+   * left untouched, so nothing recoverable is ever overwritten with a
+   * fabricated empty state. Writers drop the flag before persisting.
+   */
+  corrupt?: boolean;
+}
+
+/** R4-E I18: KDS state may only be written inside the 14h ticket window. */
+function assertWithinTicketWindow(createdAt: unknown): void {
+  const ms = createdAt instanceof Date
+    ? createdAt.getTime()
+    : (createdAt ? new Date(String(createdAt)).getTime() : NaN);
+  if (!Number.isFinite(ms) || Date.now() - ms > 14 * 60 * 60 * 1000) {
+    throw new NotFoundException('تذكرة المطعم غير موجودة أو انتهت مدة عرضها');
+  }
 }
 
 @Injectable()
@@ -87,25 +110,65 @@ export class KdsService {
         .executeTakeFirst();
 
       if (record?.value) {
-        const state = JSON.parse(record.value) as StoredKdsState;
+        let state: StoredKdsState;
+        try {
+          state = JSON.parse(record.value) as StoredKdsState;
+        } catch (e: any) {
+          // R4-E I55: one bad blob used to throw here and blind every kitchen
+          // screen on every 5s poll. Log loudly, leave the stored row
+          // untouched, and serve the tickets without progress.
+          this.logger.error(
+            `KDS runtime state for tenant ${tenantId} is corrupt JSON (${e?.message || e}). The stored row is left untouched; tickets are shown without progress.`,
+          );
+          return { tickets: {}, corrupt: true };
+        }
+        if (!state || typeof state !== 'object' || Array.isArray(state)) {
+          this.logger.error(
+            `KDS runtime state for tenant ${tenantId} is not an object. The stored row is left untouched; tickets are shown without progress.`,
+          );
+          return { tickets: {}, corrupt: true };
+        }
         state.tickets ||= {};
+        if (typeof state.tickets !== 'object' || Array.isArray(state.tickets)) {
+          state.tickets = {};
+          state.corrupt = true;
+        }
         const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+        let quarantined = false;
         for (const [id, ticket] of Object.entries(state.tickets || {})) {
+          // R4-E I55: one null / non-object / invalid-status entry used to
+          // throw (new Date(null.updatedAt)) and kill the whole response.
+          // Quarantine the bad entry and keep the rest.
+          if (!ticket || typeof ticket !== 'object'
+            || !['pending', 'cooking', 'ready', 'served'].includes((ticket as any).status)) {
+            delete state.tickets[id];
+            quarantined = true;
+            continue;
+          }
+          if (!ticket.itemsStatus || typeof ticket.itemsStatus !== 'object') ticket.itemsStatus = {};
           const updatedAt = new Date(ticket.updatedAt).getTime();
           if (!Number.isFinite(updatedAt) || updatedAt < cutoff) delete state.tickets[id];
         }
         if (state.lastServedId && !state.tickets[String(state.lastServedId)]) state.lastServedId = undefined;
+        if (quarantined) state.corrupt = true;
         return state;
       }
     } catch (e: any) {
-      this.logger.warn(`Failed reading kds runtime state: ${e.message}`);
-      throw e; // never overwrite persisted progress with a fabricated empty state
+      // A read failure must not blind the kitchen either: log loudly, keep
+      // the stored row untouched, and serve the tickets without progress.
+      this.logger.error(
+        `Failed reading kds runtime state: ${e?.message || e}. The stored row is left untouched; tickets are shown without progress.`,
+      );
+      return { tickets: {}, corrupt: true };
     }
     return { tickets: {} };
   }
 
   private async saveKdsStoreState(tenantId: string, state: StoredKdsState, db: Kysely<Database> = this.db): Promise<void> {
-    const jsonStr = JSON.stringify(state);
+    // The corrupt flag is a read-time signal only and is never persisted.
+    const persistable: StoredKdsState = { tickets: state.tickets };
+    if (state.lastServedId) persistable.lastServedId = state.lastServedId;
+    const jsonStr = JSON.stringify(persistable);
     const existing = await db
       .selectFrom('settings')
       .select(['key'])
@@ -151,12 +214,15 @@ export class KdsService {
     }
     if (ticketId >= 10_000_000) {
       const agg = await db.selectFrom('pos_aggregator_orders')
-        .select(['id', 'status', 'order_payload'])
+        .select(['id', 'status', 'order_payload', 'created_at'])
         .where('id', '=', ticketId - 10_000_000).where('tenant_id', '=', tenantId)
         .executeTakeFirst();
       if (!agg || !['received', 'preparing', 'ready', 'picked_up'].includes(String(agg.status))) {
         throw new NotFoundException('تذكرة التوصيل غير موجودة أو ألغيت');
       }
+      // R4-E I18: state may only be written inside the 14h ticket window,
+      // matching what getActiveTickets shows.
+      assertWithinTicketWindow((agg as any).created_at);
       if (itemId !== undefined) {
         let payload: any;
         try { payload = typeof agg.order_payload === 'string' ? JSON.parse(agg.order_payload) : agg.order_payload; }
@@ -168,13 +234,16 @@ export class KdsService {
       }
       return;
     }
-    const sale = await db.selectFrom('sales').select(['id', 'status', 'order_type'])
+    const sale = await db.selectFrom('sales').select(['id', 'status', 'order_type', 'created_at'])
       .where('id', '=', ticketId).where('tenant_id', '=', tenantId)
       .executeTakeFirst();
     if (!sale || sale.status === 'cancelled' ||
         !['dine_in', 'takeaway', 'delivery'].includes(String(sale.order_type || 'dine_in'))) {
       throw new NotFoundException('تذكرة المطعم غير موجودة أو ألغيت');
     }
+    // R4-E I18: state may only be written inside the 14h ticket window,
+    // matching what getActiveTickets shows.
+    assertWithinTicketWindow((sale as any).created_at);
     if (itemId !== undefined) {
       const item = await db.selectFrom('sale_items').select('id')
         .where('tenant_id', '=', tenantId).where('sale_id', '=', ticketId)
@@ -192,8 +261,28 @@ export class KdsService {
    * status carries over.
    */
   async transferTicketState(tenantId: string, fromSaleId: number, toSaleId: number | null): Promise<void> {
-    return this.withKdsWrite(tenantId, async (trx) => {
+    return this.withKdsWrite(tenantId, (trx) => this.transferTicketStateInTrx(tenantId, fromSaleId, toSaleId, trx));
+  }
+
+  /**
+   * R4-E I17: the trx-aware transfer. createSale's release block runs
+   * inside its own transaction, and opening a second transaction there
+   * would nest transactions on the pool (the PGlite single-connection hang),
+   * so the transfer inside createSale MUST use this variant, never the
+   * public one. A corrupt runtime state skips the move with a loud log
+   * instead of failing the caller's transaction: a sale must never fail
+   * because KDS progress is unreadable.
+   */
+  async transferTicketStateInTrx(
+    tenantId: string, fromSaleId: number, toSaleId: number | null, trx: Kysely<Database>,
+  ): Promise<void> {
     const state = await this.getKdsStoreState(tenantId, trx);
+    if (state.corrupt) {
+      this.logger.warn(
+        `Skipping KDS ticket transfer ${fromSaleId} -> ${toSaleId ?? 'null'}: runtime state is corrupt`,
+      );
+      return;
+    }
     const fromKey = String(fromSaleId);
     const stored = state.tickets?.[fromKey];
     if (!stored) return;
@@ -207,21 +296,6 @@ export class KdsService {
       };
     }
     await this.saveKdsStoreState(tenantId, state, trx);
-
-    });
-  }
-  private inferItemStation(name: string, categoryName?: string): KdsStation {
-    const lower = `${name} ${categoryName || ''}`.toLowerCase();
-    if (lower.includes('مشوي') || lower.includes('كباب') || lower.includes('كفتة') || lower.includes('ستيك') || lower.includes('grill')) {
-      return 'grill';
-    }
-    if (lower.includes('عصير') || lower.includes('مشروب') || lower.includes('قهوة') || lower.includes('شاي') || lower.includes('كوكتيل') || lower.includes('بار') || lower.includes('pepsi') || lower.includes('cola')) {
-      return 'beverages';
-    }
-    if (lower.includes('بيتزا') || lower.includes('فطير') || lower.includes('مخبوز') || lower.includes('حلو') || lower.includes('حلويات') || lower.includes('كيك')) {
-      return 'bakery';
-    }
-    return 'kitchen';
   }
 
   /**
@@ -230,7 +304,7 @@ export class KdsService {
   async getActiveTickets(
     auth: AuthContext,
     filters?: { station?: KdsStation; orderType?: string; status?: KdsTicketStatus }
-  ): Promise<{ tickets: KdsTicket[]; stats: KdsSummaryStats; lastServedId?: number; truncated: boolean }> {
+  ): Promise<{ tickets: KdsTicket[]; stats: KdsSummaryStats; lastServedId?: number; truncated: boolean; totalActive: number; kdsStateCorrupt: boolean }> {
     const { tenantId } = requireTenantScope(auth);
     const runtimeState = await this.getKdsStoreState(tenantId);
 
@@ -264,6 +338,12 @@ export class KdsService {
       .where('s.status', '!=', 'cancelled')
       .where('s.order_type', 'in', ['dine_in', 'takeaway', 'delivery']);
     if (servedIds.length) salesQuery = salesQuery.where(sql<boolean>`s.id <> ALL(${servedIds}::bigint[])`);
+    // R4-E I16: the banner needs the real total, not just the flag.
+    const countRow = await salesQuery
+      .clearSelect()
+      .select(sql<number>`count(*)`.as('n'))
+      .executeTakeFirst();
+    const totalActive = Number(countRow?.n ?? 0);
     // Oldest outstanding tickets retain priority when the bounded kitchen queue overflows.
     const candidateRows = await salesQuery.orderBy('s.created_at', 'asc').orderBy('s.id', 'asc').limit(201).execute();
     const salesRows = candidateRows.slice(0, 200);
@@ -278,9 +358,16 @@ export class KdsService {
           .leftJoin('products as p', (join) => join
             .onRef('p.id', '=', 'si.product_id')
             .onRef('p.tenant_id', '=', 'si.tenant_id'))
+          // R4-E I15: the category station is a real configured value
+          // (product_categories.kitchen_station) and must be read, not guessed.
+          .leftJoin('product_categories as pc', (join) => join
+            .onRef('pc.id', '=', 'p.category_id')
+            .onRef('pc.tenant_id', '=', 'si.tenant_id'))
           .select(['si.id', 'si.sale_id', 'si.product_id', 'si.product_name',
             'si.qty', 'si.unit_name', 'si.modifiers', 'si.notes',
-            'p.kitchen_station as configured_station'])
+            'p.kitchen_station as configured_station',
+            'pc.kitchen_station as category_station',
+            'pc.name as category_name'])
           .where('si.sale_id', 'in', saleIds)
           .where('si.tenant_id', '=', tenantId)
           .orderBy('si.id', 'asc')
@@ -351,10 +438,14 @@ export class KdsService {
           modifiers: mods,
           notes: item.notes || undefined,
           status: itemStatus,
-          station: ['kitchen', 'grill', 'beverages', 'bakery', 'general'].includes(
-            String(item.configured_station || '').toLowerCase())
-            ? String(item.configured_station).toLowerCase() as KdsStation
-            : this.inferItemStation(item.product_name),
+          // R4-E I15: product station -> category station -> word-boundary
+          // keyword inference (see kds-station.helper).
+          station: resolveItemStation({
+            productStation: (item as any).configured_station,
+            categoryStation: (item as any).category_station,
+            productName: item.product_name,
+            categoryName: (item as any).category_name,
+          }),
         };
       });
 
@@ -442,7 +533,20 @@ export class KdsService {
       const elapsedSeconds = Math.max(0, Math.floor((now - createdAtMs) / 1000));
       const elapsedMinutes = Math.floor(elapsedSeconds / 60);
 
-      const payload = typeof agg.order_payload === 'string' ? JSON.parse(agg.order_payload) : (agg.order_payload || {});
+      const payload = (() => {
+        try {
+          const parsed = typeof agg.order_payload === 'string' ? JSON.parse(agg.order_payload) : (agg.order_payload || {});
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+          return parsed;
+        } catch (e: any) {
+          // R4-E I55: one corrupt aggregator row used to throw here, after
+          // the sales tickets were built, and kill the whole response.
+          // Skip the row loudly and keep the rest.
+          this.logger.warn(`Skipping corrupt aggregator order payload ${agg.id}: ${e?.message || e}`);
+          return null;
+        }
+      })();
+      if (!payload) continue;
       const payloadItems = Array.isArray(payload.items) ? payload.items : [];
       const items: KdsTicketItem[] = payloadItems.map((pi: any, idx: number) => {
         const itemId = 1000 + idx;
@@ -455,7 +559,9 @@ export class KdsService {
           modifiers: Array.isArray(pi.modifiers) ? pi.modifiers : [],
           notes: pi.notes,
           status: ticketStored?.itemsStatus?.[String(itemId)] || (mappedStatus === 'ready' ? 'ready' : 'pending'),
-          station: this.inferItemStation(pi.name || ''),
+          // Aggregator items have no category, so keyword inference is the
+          // only option here — with word-boundary matching, not substrings.
+          station: resolveItemStation({ productName: pi.name || '' }),
         };
       });
 
@@ -506,6 +612,8 @@ export class KdsService {
       stats,
       lastServedId: runtimeState.lastServedId,
       truncated,
+      totalActive,
+      kdsStateCorrupt: runtimeState.corrupt === true,
     };
   }
 
@@ -590,6 +698,23 @@ export class KdsService {
     }
     const runtimeState = await this.getKdsStoreState(tenantId, trx);
     const existing = runtimeState.tickets[String(ticketId)];
+    // R4-E I18: single-step forward only. Re-setting the current status is
+    // an idempotent no-op, not a move. Aggregator tickets without stored
+    // state advance from their visible database status, as in advanceTicketStatus.
+    let current: KdsTicketStatus = existing?.status || 'pending';
+    if (!existing && ticketId >= 10_000_000) {
+      const aggregator = await trx.selectFrom('pos_aggregator_orders')
+        .select('status').where('id', '=', ticketId - 10_000_000)
+        .where('tenant_id', '=', tenantId).executeTakeFirst();
+      if (aggregator) {
+        current = aggregator.status === 'preparing' ? 'cooking'
+          : aggregator.status === 'ready' ? 'ready'
+          : aggregator.status === 'picked_up' ? 'served' : 'pending';
+      }
+    }
+    if (status !== current && !isAllowedKdsTransition(current, status)) {
+      throw new BadRequestException('لا يمكن نقل تذكرة المطبخ من هذه الحالة إلى تلك — التقدم خطوة واحدة للأمام فقط');
+    }
     const nowIso = new Date().toISOString();
 
     runtimeState.tickets[String(ticketId)] = {
@@ -639,6 +764,15 @@ export class KdsService {
       itemsStatus: {},
       updatedAt: new Date().toISOString(),
     };
+    // R4-E I18: items move forward only. pending -> ready is the
+    // tap-to-complete carve-out (KdsTicketCard marks an item done with one
+    // tap and has no "start cooking" step); un-marking a ready item is
+    // refused. Re-setting the current status is an idempotent no-op.
+    const currentItem: KdsItemStatus = existing.itemsStatus[String(itemId)]
+      || (existing.status === 'ready' ? 'ready' : 'pending');
+    if (status !== currentItem && !isAllowedKdsItemTransition(currentItem, status)) {
+      throw new BadRequestException('لا يمكن إعادة صنف المطبخ إلى حالة سابقة — التقدم للأمام فقط');
+    }
 
     existing.itemsStatus[String(itemId)] = status;
     existing.updatedAt = new Date().toISOString();
@@ -688,6 +822,17 @@ export class KdsService {
     await this.assertTicketOwned(trx, tenantId, ticketId);
     if (course && !['appetizer', 'main', 'dessert', 'beverage'].includes(course)) {
       throw new BadRequestException('مرحلة التحضير غير صالحة');
+    }
+    // R4-E I18: firing a course on a ready/served ticket used to force it
+    // back to cooking. Refuse instead; lastServedId is never touched here.
+    // The throw rolls back this transaction, so the dining_course update
+    // below never lands for a refused fire either.
+    {
+      const fireState = await this.getKdsStoreState(tenantId, trx);
+      const fireCurrent: KdsTicketStatus = fireState.tickets[String(ticketId)]?.status || 'pending';
+      if (fireCurrent === 'ready' || fireCurrent === 'served') {
+        throw new BadRequestException('لا يمكن إطلاق دورة تحضير لتذكرة جاهزة أو مُسلَّمة');
+      }
     }
     let targetCourse = course;
     if (!targetCourse) {

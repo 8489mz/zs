@@ -32,7 +32,16 @@ export class KdsController {
     });
   }
 
+  // R4-E I18: reads stay on 'sales' (class level). Every mutation that
+  // moves kitchen state requires the 'kitchen' permission, introduced by
+  // this package and granted alongside 'sales' in the role templates, and
+  // backfilled to every existing user who holds 'sales' by migration
+  // 0309, so no kitchen worker who holds restaurant/KDS access today is
+  // locked out. The finer split (kitchen without sales) is a follow-up,
+  // not a silent lockout. Method-level metadata overrides the
+  // class-level 'sales'.
   @Post('tickets/:id/advance')
+  @RequirePermissions('kitchen')
   async advanceStatus(
     @Param('id', ParseIntPipe) id: number,
     @Req() req: RequestWithAuth,
@@ -41,6 +50,7 @@ export class KdsController {
   }
 
   @Post('tickets/:id/status')
+  @RequirePermissions('kitchen')
   async setStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body('status') status: KdsTicketStatus,
@@ -50,6 +60,7 @@ export class KdsController {
   }
 
   @Post('tickets/:id/items/:itemId/status')
+  @RequirePermissions('kitchen')
   async setItemStatus(
     @Param('id', ParseIntPipe) id: number,
     @Param('itemId', ParseIntPipe) itemId: number,
@@ -60,11 +71,13 @@ export class KdsController {
   }
 
   @Post('tickets/recall-last')
+  @RequirePermissions('kitchen')
   async recallLastServed(@Req() req: RequestWithAuth) {
     return this.kdsService.recallLastServedTicket(req.authContext!);
   }
 
   @Post('tickets/:id/fire-course')
+  @RequirePermissions('kitchen')
   async fireCourse(
     @Param('id', ParseIntPipe) id: number,
     @Body('course') course: any,

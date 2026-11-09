@@ -13,7 +13,7 @@ import { useIsolatedDisplayLanguage } from '@/features/pos/hooks/useIsolatedDisp
 import { KdsKpiStrip } from '../components/kds/KdsKpiStrip';
 import { KdsFilterBar } from '../components/kds/KdsFilterBar';
 import { KdsStandbyState, KdsDisconnectedState } from '../components/kds/KdsStandbyState';
-import { resolveKitchenTicketsState } from '@/features/pos/lib/kds-connection-state';
+import { resolveKitchenTicketsState, kdsTruncatedBannerText, kdsStateCorruptBannerText } from '@/features/pos/lib/kds-connection-state';
 import { KdsTicketCard } from '../components/kds/KdsTicketCard';
 import { Pos86ItemsModal } from '../components/pos-workspace/Pos86ItemsModal';
 import { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced-fnb.api';
@@ -249,6 +249,51 @@ export function KitchenDisplayPage() {
           {lastRecallMessage}
         </div>
       )}
+
+      {/* R4-E I16: the queue is capped at 200, oldest first — the newest
+          orders never appear. Say so loudly, with the real total. */}
+      {(() => {
+        const text = kdsTruncatedBannerText({
+          truncated: data?.truncated,
+          totalActive: data?.totalActive,
+          shownCount: tickets.length,
+        });
+        return text ? (
+          <div
+            style={{
+              backgroundColor: '#b45309',
+              color: '#ffffff',
+              padding: '8px 20px',
+              textAlign: 'center',
+              fontSize: '13px',
+              fontWeight: 800,
+            }}
+          >
+            {text}
+          </div>
+        ) : null;
+      })()}
+
+      {/* R4-E I55: the runtime-state blob was unreadable — tickets are
+          shown without their progress. Say so loudly, never as fresh
+          pending tickets. */}
+      {(() => {
+        const text = kdsStateCorruptBannerText(data?.kdsStateCorrupt);
+        return text ? (
+          <div
+            style={{
+              backgroundColor: '#b91c1c',
+              color: '#ffffff',
+              padding: '8px 20px',
+              textAlign: 'center',
+              fontSize: '13px',
+              fontWeight: 800,
+            }}
+          >
+            {text}
+          </div>
+        ) : null;
+      })()}
 
       {/* 4. Main Tickets Grid or Executive Standby State */}
       <main style={{ flex: 1, padding: '20px 24px', overflowY: 'auto' }}>

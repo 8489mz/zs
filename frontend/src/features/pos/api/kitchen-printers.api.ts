@@ -57,4 +57,16 @@ export const kitchenPrintersApi = {
       method: 'DELETE',
     });
   },
+
+  // R4-E I12: send a posted sale's kitchen ticket to the matched network
+  // printers. An empty results list means no network printer serves this
+  // sale and the caller falls back to the Electron/browser print.
+  printTicket: async (saleId: number): Promise<{
+    results: Array<{ printerId: number; printerName: string; station: string; ok: boolean; error?: string }>;
+  }> => {
+    return http<{ results: Array<{ printerId: number; printerName: string; station: string; ok: boolean; error?: string }> }>(
+      '/api/sales/kitchen-printers/print',
+      { method: 'POST', body: JSON.stringify({ saleId }) },
+    );
+  },
 };

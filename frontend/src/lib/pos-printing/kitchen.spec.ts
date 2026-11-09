@@ -5,7 +5,7 @@ vi.mock('@/lib/browser', () => ({
   printHtmlDocument: vi.fn(),
 }));
 
-import { buildKitchenTicketDocument, getKitchenTicketStyles } from './kitchen';
+import { buildKitchenTicketDocument, getKitchenTicketStyles, shouldAutoPrintKitchenTicket } from './kitchen';
 
 describe('Kitchen Ticket Printing (KOT)', () => {
   const baseSale = {
@@ -78,5 +78,33 @@ describe('Kitchen Ticket Printing (KOT)', () => {
     expect(styles).toContain('.kitchen-item-en');
     expect(styles).toContain('.kitchen-item-ar');
     expect(styles).toContain('.kitchen-tag-pill');
+  });
+});
+
+describe('shouldAutoPrintKitchenTicket (R4-E I13)', () => {
+  // The automatic kitchen print belongs to the POST, never to the HOLD:
+  // a held draft lives in held_sales, never in sales, so it never appears
+  // on the KDS — printing it as "sent to the kitchen" was a lie in both
+  // directions. The predicate is the single decision for both call sites.
+  const posted = { posted: true, held: false, restaurantEnabled: true, autoPrint: true };
+
+  it('a posted restaurant sale with auto-print on prints', () => {
+    expect(shouldAutoPrintKitchenTicket(posted)).toBe(true);
+  });
+
+  it('a held draft never auto-prints, even with auto-print on', () => {
+    expect(shouldAutoPrintKitchenTicket({ ...posted, posted: false, held: true })).toBe(false);
+  });
+
+  it('no auto-print when the restaurant module is off', () => {
+    expect(shouldAutoPrintKitchenTicket({ ...posted, restaurantEnabled: false })).toBe(false);
+  });
+
+  it('no auto-print when the auto-print setting is off', () => {
+    expect(shouldAutoPrintKitchenTicket({ ...posted, autoPrint: false })).toBe(false);
+  });
+
+  it('a failed / unposted submit never auto-prints', () => {
+    expect(shouldAutoPrintKitchenTicket({ ...posted, posted: false, held: false })).toBe(false);
   });
 });

@@ -2,6 +2,66 @@ import { escapeHtml, printHtmlDocument } from '@/lib/browser';
 import type { Sale, AppSettings } from '@/types/domain';
 import { formatDateTime } from '@/lib/pos-printing/shared';
 import { resolveItemEnglishName, formatKitchenNote } from '@/features/pos/utils/kitchen-notes.util';
+import { kitchenPrintersApi } from '@/features/pos/api/kitchen-printers.api';
+
+/**
+ * R4-E I13: the automatic kitchen print belongs to the POST, never to the
+ * HOLD. A held draft lives in held_sales, never in sales, so it never
+ * appears on the KDS — auto-printing it as "sent to the kitchen" lied in
+ * both directions. Single decision for both call sites: only a posted sale
+ * in a restaurant with auto-print on prints automatically.
+ */
+export function shouldAutoPrintKitchenTicket(input: {
+  posted: boolean;
+  held: boolean;
+  restaurantEnabled: boolean;
+  autoPrint: boolean;
+}): boolean {
+  return input.posted && !input.held && input.restaurantEnabled && input.autoPrint;
+}
+
+export interface KitchenAutoPrintResult {
+  mode: 'network' | 'electron-fallback';
+  failed: Array<{ printerName: string; error?: string }>;
+}
+
+/**
+ * R4-E I12+I13: the post-success auto-print. Tries the network printers
+ * first (backend raw-TCP send). Zero matching printers — or an unreachable
+ * backend (offline sale) — falls back to the existing Electron/browser
+ * print. A configured printer that fails is reported in `failed`, never
+ * swallowed: the caller toasts it loudly.
+ */
+export async function printKitchenTicketAuto(
+  sale: Partial<Sale> & {
+    cashierName?: string;
+    waiterName?: string;
+    guestCount?: number;
+    isAddon?: boolean;
+    orderTypeLabel?: string;
+  },
+  settings?: Partial<AppSettings> | null,
+): Promise<KitchenAutoPrintResult> {
+  const saleId = Number((sale as any)?.id || 0);
+  if (saleId > 0) {
+    try {
+      const res = await kitchenPrintersApi.printTicket(saleId);
+      const results = Array.isArray(res?.results) ? res.results : [];
+      if (results.length > 0) {
+        return {
+          mode: 'network',
+          failed: results
+            .filter((r) => !r.ok)
+            .map((r) => ({ printerName: r.printerName, error: r.error })),
+        };
+      }
+    } catch {
+      // Offline or unreachable backend: fall through to the local print.
+    }
+  }
+  printKitchenTicket(sale, settings);
+  return { mode: 'electron-fallback', failed: [] };
+}
 
 export function getKitchenTicketStyles() {
   return `
