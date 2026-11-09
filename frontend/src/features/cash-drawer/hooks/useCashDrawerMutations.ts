@@ -9,7 +9,7 @@ import {
   normalizeCashDrawerMovementRequestPayload,
   type CashDrawerMovementRequestAttempt,
 } from '@/features/cash-drawer/lib/cash-drawer-movement-request-key';
-import { getPosTerminalCode } from '@/features/pos/lib/pos-offline-sync';
+import { getPosTerminalCode } from '@/features/pos';
 
 interface OpenShiftValues {
   openingCash: number;
