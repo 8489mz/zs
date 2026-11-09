@@ -1569,6 +1569,13 @@ export class ImportSalesService {
           'تم اعتماد محضر الفحص والاستلام لهذه الشحنة بالفعل؛ لا يمكن اعتماده مرة ثانية. [IMPORT_GRN_ALREADY_RECORDED]',
         );
       }
+      // INV-IMPORT-FORM4-GRN-GATE: a receiving (GRN) inspection IS
+      // the receipt approval — the dialog toasts "approved" and the
+      // operator treats the container as received — so the same
+      // Form 4 gate that blocks the clearance/receipt transitions
+      // must block this row too. Runs after the posted/duplicate
+      // guards above so the most specific refusal wins.
+      await this.assertForm4GrnGate(tenantId, dto.shipmentId);
     }
     // I6-E: the pre-check above is a read-then-write — two concurrent
     // submits can both pass it. The partial unique index from
@@ -1607,7 +1614,58 @@ export class ImportSalesService {
     }
   }
 
+  /**
+   * Form 4 gate on the GRN (receiving) approval path
+   * (INV-IMPORT-FORM4-GRN-GATE). Reuses assertForm4ClearanceGate
+   * verbatim — same engine, same message, same
+   * IMPORT_FORM4_REQUIRED code — so the dialog's already-wired
+   * onError path surfaces the named error instead of the success
+   * toast. The gate runs on the stored shipment row (B/L value
+   * and funding type are read from data, never from caller
+   * flags). When no shipment row can be loaded there is no B/L
+   * value or funding type to evaluate, so the approval records;
+   * the receipt posting itself is still gated at the Arrived
+   * transition, which loads the shipment with
+   * executeTakeFirstOrThrow. The 42P01 catch covers harnesses
+   * without an import_shipments relation; it never skips a
+   * gateable shipment, because a shipment row that exists is
+   * always gated. Non-receiving stages never reach this method.
+   */
+  private async assertForm4GrnGate(tenantId: string, shipmentId: string): Promise<void> {
+    let shipment: Selectable<ImportShipmentTable> | undefined;
+    try {
+      shipment = await this.inventoryDb
+        .selectFrom('import_shipments')
+        .selectAll()
+        .where('tenant_id', '=', tenantId)
+        .where('id', '=', shipmentId)
+        .executeTakeFirst();
+    } catch (err: any) {
+      if (err?.code === '42P01') return;
+      throw err;
+    }
+    if (!shipment) return;
+    await this.assertForm4ClearanceGate(this.inventoryDb, tenantId, shipment);
+  }
+
   async updateQcInspection(tenantId: string, id: string, dto: Partial<CreateQcInspectionDto>) {
+    // INV-IMPORT-FORM4-GRN-GATE: flipping an existing QC row into
+    // the receiving stage is a GRN approval by another verb, so it
+    // is gated the same way. Only a flip INTO 'receiving' is
+    // gated: editing an already-receiving row (inspector, notes)
+    // is not a new approval, and a row with no shipment has
+    // nothing to gate.
+    if (dto.stage === 'receiving') {
+      const existing = await this.db
+        .selectFrom('import_qc_inspections')
+        .select(['shipment_id', 'stage'])
+        .where('id', '=', id)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      if (existing && existing.stage !== 'receiving' && existing.shipment_id) {
+        await this.assertForm4GrnGate(tenantId, String(existing.shipment_id));
+      }
+    }
     const payload: any = {};
     if (dto.stage !== undefined) payload.stage = dto.stage;
     if (dto.inspectionDate !== undefined) payload.inspection_date = dto.inspectionDate;
@@ -2820,7 +2878,10 @@ export class ImportSalesService {
    * Form 4 clearance gate (INV-IMPORT-FORM4-CLEARANCE-GATE).
    * Caller holds the shipment lock and runs inside the costs
    * transaction; the shipment row already reflects this call's
-   * Form 4 fields. B/L value is the sum of item quantity x
+   * Form 4 fields. The GRN caller (assertForm4GrnGate) passes
+   * the plain db handle instead: an unlocked read is safe there
+   * because a concurrent Form 4 write can only satisfy the gate,
+   * and the receipt posting re-evaluates it under the lock. B/L value is the sum of item quantity x
    * factory unit price in USD. Funding is attributed through
    * project-linked proforma invoices only: an unlinked transfer
    * cannot be attributed to a shipment, so it neither triggers
@@ -2843,8 +2904,8 @@ export class ImportSalesService {
    * anywhere (shipment or transfer) triggers the gate; only
    * all-cash_carried is exempt.
    */
-  private async assertForm4ClearanceGate(trx: Transaction<Database>, tenantId: string, shipment: Selectable<ImportShipmentTable>): Promise<void> {
-    const items = await trx.selectFrom('import_shipment_items')
+  private async assertForm4ClearanceGate(executor: Transaction<Database> | Kysely<Database>, tenantId: string, shipment: Selectable<ImportShipmentTable>): Promise<void> {
+    const items = await executor.selectFrom('import_shipment_items')
       .select(['quantity', 'factory_unit_price_usd'])
       .where('tenant_id', '=', tenantId)
       .where('shipment_id', '=', shipment.id)
@@ -2855,7 +2916,7 @@ export class ImportSalesService {
     );
     let funding: Array<{ payment_method: string | null | undefined; form4_number: string | null | undefined }> = [];
     if (shipment.project_id) {
-      funding = await trx.selectFrom('supplier_payments')
+      funding = await executor.selectFrom('supplier_payments')
         .innerJoin('import_proforma_invoices', 'import_proforma_invoices.id', 'supplier_payments.proforma_invoice_id')
         .select([
           'supplier_payments.payment_method as payment_method',
