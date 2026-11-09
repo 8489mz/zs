@@ -1437,6 +1437,19 @@ export class RecordContainerDepositDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // I6-E: optional client idempotency key (<= 128 chars). When the
+  // caller sends one it is stored and a retry with the same key
+  // returns the existing deposit instead of recording twice. When
+  // absent the service derives the key from the natural key
+  // (shipment + container), which is already unique per tenant —
+  // so the live form (which sends exactly the DTO fields and no
+  // key) is retry-safe today without a frontend change, and a
+  // future frontend change can send a per-submit key.
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  idempotencyKey?: string;
 }
 
 export class RecordContainerReturnRefundDto {
@@ -1512,6 +1525,21 @@ export class CreateContainerPreorderDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // I6-E: optional client idempotency key (<= 128 chars). When the
+  // caller sends one it is stored and a retry with the same key
+  // returns the existing reservation instead of recording twice.
+  // When absent the service derives the key from the reservation
+  // identity (shipment + customer + product + qty + price +
+  // deposit) — a retry sends the identical payload so it replays,
+  // while a genuinely different reservation gets a different key.
+  // Known limit: two intentionally identical reservations with no
+  // client key are indistinguishable from a retry and the second
+  // returns the first; sending a client key removes the ambiguity.
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  idempotencyKey?: string;
 }
 
 export class ConvertPreorderToSaleDto {

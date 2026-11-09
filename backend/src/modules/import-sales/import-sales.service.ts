@@ -1570,24 +1570,41 @@ export class ImportSalesService {
         );
       }
     }
-    return await this.db
-      .insertInto('import_qc_inspections')
-      .values({
-        tenant_id: tenantId,
-        project_id: dto.projectId,
-        shipment_id: dto.shipmentId,
-        stage: dto.stage,
-        inspection_date: dto.inspectionDate,
-        inspector_name: dto.inspectorName,
-        sample_size: dto.sampleSize || 0,
-        passed_quantity: dto.passedQuantity || 0,
-        failed_quantity: dto.failedQuantity || 0,
-        defect_notes: dto.defectNotes,
-        status: dto.status || 'passed',
-        report_file_url: dto.reportFileUrl,
-      })
-      .returningAll()
-      .executeTakeFirstOrThrow();
+    // I6-E: the pre-check above is a read-then-write — two concurrent
+    // submits can both pass it. The partial unique index from
+    // migration 0306 (tenant, shipment) WHERE stage = 'receiving'
+    // decides the race: the loser gets a 23505, mapped here to the
+    // SAME named error as the pre-check, never a raw violation.
+    try {
+      return await this.db
+        .insertInto('import_qc_inspections')
+        .values({
+          tenant_id: tenantId,
+          project_id: dto.projectId,
+          shipment_id: dto.shipmentId,
+          stage: dto.stage,
+          inspection_date: dto.inspectionDate,
+          inspector_name: dto.inspectorName,
+          sample_size: dto.sampleSize || 0,
+          passed_quantity: dto.passedQuantity || 0,
+          failed_quantity: dto.failedQuantity || 0,
+          defect_notes: dto.defectNotes,
+          status: dto.status || 'passed',
+          report_file_url: dto.reportFileUrl,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+    } catch (err: any) {
+      if (
+        err?.code === '23505' ||
+        String(err?.message || '').includes('uq_import_qc_inspections_receiving_per_shipment')
+      ) {
+        throw new BadRequestException(
+          'تم اعتماد محضر الفحص والاستلام لهذه الشحنة بالفعل؛ لا يمكن اعتماده مرة ثانية. [IMPORT_GRN_ALREADY_RECORDED]',
+        );
+      }
+      throw err;
+    }
   }
 
   async updateQcInspection(tenantId: string, id: string, dto: Partial<CreateQcInspectionDto>) {
@@ -7607,11 +7624,96 @@ export class ImportSalesService {
   // -------------------------------------------------------------
   // CONTAINER SECURITY DEPOSITS & RETURN
   // -------------------------------------------------------------
+  // I6-E helpers: a 23505 is a lost race on a uniqueness index, never
+  // a raw error to surface; and a DATE value (Date object from the
+  // driver or 'yyyy-mm-dd' string) normalises to its calendar key.
+  private isUniqueViolation(err: any): boolean {
+    return (
+      err?.code === '23505' ||
+      String(err?.message || '').includes('duplicate key value violates unique constraint')
+    );
+  }
+
+  private dateKey(value: unknown): string {
+    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    const parsed = new Date(String(value));
+    return Number.isNaN(parsed.getTime()) ? String(value).slice(0, 10) : parsed.toISOString().slice(0, 10);
+  }
+
+  // I6-E: replay-or-fail-closed for a duplicate deposit write. The
+  // insert runs inside one transaction with the treasury row and
+  // the JE, so a 23505 means nothing was written and the existing
+  // row (if any) is the complete record. Same key + same payload
+  // is a retry: return the existing deposit (no second JE, no
+  // second treasury row). Same key + different payload is a key
+  // collision: fail closed with a named conflict. No row under
+  // the key means the 23505 came from the (tenant, shipment,
+  // container) unique constraint instead — one deposit per
+  // container per shipment is the standing rule — also a named
+  // conflict, never a raw violation.
+  private async replayContainerDepositOrThrow(
+    tenantId: string,
+    dto: RecordContainerDepositDto,
+    effectiveKey: string,
+    originalError: any,
+  ): Promise<any> {
+    const existing: any = await this.db
+      .selectFrom('import_container_deposits')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .where('idempotency_key', '=', effectiveKey)
+      .executeTakeFirst();
+    if (existing) {
+      const samePayload =
+        Number(existing.deposit_amount_egp) === Number(dto.depositAmountEgp) &&
+        String(existing.shipping_line) === String(dto.shippingLine) &&
+        String(existing.container_no) === String(dto.containerNo) &&
+        String(existing.shipment_id) === String(dto.shipmentId) &&
+        this.dateKey(existing.expected_return_date) === this.dateKey(dto.expectedReturnDate);
+      if (samePayload) return existing;
+      throw new ConflictException(
+        'يوجد تأمين حاوية مسجل بنفس مفتاح عدم التكرار لكن ببيانات مختلفة؛ راجع التأمينات المسجلة قبل إعادة الإرسال. [IMPORT_CONTAINER_DEPOSIT_DUPLICATE_KEY]',
+      );
+    }
+    const sameContainer: any = await this.db
+      .selectFrom('import_container_deposits')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('shipment_id', '=', dto.shipmentId)
+      .where('container_no', '=', dto.containerNo)
+      .executeTakeFirst();
+    if (sameContainer) {
+      throw new ConflictException(
+        'تم تسجيل تأمين لهذه الحاوية في هذه الشحنة بالفعل؛ لا يمكن تسجيل تأمين ثانٍ لنفس الحاوية. [IMPORT_CONTAINER_DEPOSIT_ALREADY_RECORDED]',
+      );
+    }
+    throw originalError;
+  }
+
   async recordContainerDeposit(tenantId: string, userId: number, dto: RecordContainerDepositDto) {
     if (!Number.isFinite(Number(dto.depositAmountEgp)) || Number(dto.depositAmountEgp) <= 0) {
       throw new BadRequestException('تأمين الحاوية يجب أن يكون مبلغاً موجباً.');
     }
-    return await this.db.transaction().execute(async (trx) => {
+    // I6-E — idempotency contract (decision recorded in the
+    // migration header and the DTO): the key is OPTIONAL on the
+    // DTO. A caller that sends idempotencyKey owns the retry
+    // identity; a caller that does not (the live form sends
+    // exactly the DTO fields and no key, after I3-D8 removed the
+    // dead field) gets a server-derived key from the natural key
+    // (shipment + container), which migration 0238 already makes
+    // unique per tenant. Requiring a client key would break the
+    // live form until a frontend package wires it; deriving it
+    // server-side makes every retry safe today, and the optional
+    // client key is the forward contract for per-submit keys.
+    const suppliedKey = typeof dto.idempotencyKey === 'string' ? dto.idempotencyKey.trim() : '';
+    if (dto.idempotencyKey !== undefined && (!suppliedKey || suppliedKey.length > 128)) {
+      throw new BadRequestException(
+        'مفتاح عدم تكرار التأمين يجب أن يكون نصاً غير فارغ لا يتجاوز 128 حرفاً. [IMPORT_CONTAINER_DEPOSIT_KEY_INVALID]',
+      );
+    }
+    const effectiveKey = suppliedKey || `deposit:${dto.shipmentId}:${dto.containerNo}`;
+    try {
+      return await this.db.transaction().execute(async (trx) => {
       const shipment = await trx.selectFrom('import_shipments').select('project_id')
         .where('tenant_id', '=', tenantId).where('id', '=', dto.shipmentId).executeTakeFirst();
       if (dto.projectId) {
@@ -7638,6 +7740,7 @@ export class ImportSalesService {
           deductions_amount_egp: 0,
           treasury_account_id: dto.treasuryAccountId ? Number(dto.treasuryAccountId) : null,
           notes: dto.notes || null,
+          idempotency_key: effectiveKey,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -7699,6 +7802,12 @@ export class ImportSalesService {
 
       return deposit;
     });
+    } catch (err: any) {
+      if (this.isUniqueViolation(err)) {
+        return await this.replayContainerDepositOrThrow(tenantId, dto, effectiveKey, err);
+      }
+      throw err;
+    }
   }
 
   async recordContainerReturnAndRefund(
@@ -7875,8 +7984,62 @@ export class ImportSalesService {
   // -------------------------------------------------------------
   // IN-TRANSIT CONTAINER PRE-ORDERS (حجز البضاعة العايمة قبل الوصول)
   // -------------------------------------------------------------
+  // I6-E: replay-or-fail-closed for a duplicate preorder write.
+  // Same key + same payload is a retry: return the existing
+  // reservation (no second B/L capacity consumed, no second
+  // advance JE). Same key + different payload is a key
+  // collision: fail closed with a named conflict. No row under
+  // the key means the 23505 came from elsewhere — rethrow.
+  private async replayContainerPreorderOrThrow(
+    tenantId: string,
+    dto: CreateContainerPreorderDto,
+    effectiveKey: string,
+    originalError: any,
+  ): Promise<any> {
+    const existing: any = await this.db
+      .selectFrom('import_container_preorders')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .where('idempotency_key', '=', effectiveKey)
+      .executeTakeFirst();
+    if (!existing) throw originalError;
+    const samePayload =
+      String(existing.shipment_id) === String(dto.shipmentId) &&
+      Number(existing.customer_id) === Number(dto.customerId) &&
+      Number(existing.product_id) === Number(dto.productId) &&
+      Number(existing.reserved_quantity) === Number(dto.reservedQuantity) &&
+      Number(existing.unit_price_egp) === Number(dto.unitPriceEgp) &&
+      Number(existing.deposit_amount_egp) === Number(dto.depositAmountEgp || 0);
+    if (samePayload) return existing;
+    throw new ConflictException(
+      'يوجد حجز بضاعة عايمة مسجل بنفس مفتاح عدم التكرار لكن ببيانات مختلفة؛ راجع الحجوزات المسجلة قبل إعادة الإرسال. [IMPORT_CONTAINER_PREORDER_DUPLICATE_KEY]',
+    );
+  }
+
   async createContainerPreorder(tenantId: string, userId: number, dto: CreateContainerPreorderDto) {
-    return await this.db.transaction().execute(async (trx) => {
+    // I6-E — idempotency contract, same shape as deposits: the key
+    // is OPTIONAL on the DTO. A caller that sends idempotencyKey
+    // owns the retry identity; a caller that does not (the live
+    // form sends exactly the DTO fields and no key, after I4-D12
+    // removed the dead field) gets a server-derived key from the
+    // reservation identity — shipment + customer + product + qty +
+    // unit price + deposit. A retry sends the identical payload,
+    // so it replays; a genuinely different reservation gets a
+    // different key. Known limit: two intentionally identical
+    // reservations with no client key are indistinguishable from
+    // a retry and the second returns the first; sending a client
+    // key removes the ambiguity.
+    const suppliedKey = typeof dto.idempotencyKey === 'string' ? dto.idempotencyKey.trim() : '';
+    if (dto.idempotencyKey !== undefined && (!suppliedKey || suppliedKey.length > 128)) {
+      throw new BadRequestException(
+        'مفتاح عدم تكرار الحجز يجب أن يكون نصاً غير فارغ لا يتجاوز 128 حرفاً. [IMPORT_CONTAINER_PREORDER_KEY_INVALID]',
+      );
+    }
+    const effectiveKey =
+      suppliedKey ||
+      `preorder:${dto.shipmentId}:${dto.customerId}:${dto.productId}:${Number(dto.reservedQuantity)}:${Number(dto.unitPriceEgp)}:${Number(dto.depositAmountEgp || 0)}`;
+    try {
+      return await this.db.transaction().execute(async (trx) => {
       const shipment = await trx
         .selectFrom('import_shipments')
         .selectAll()
@@ -7974,6 +8137,7 @@ export class ImportSalesService {
           expected_delivery_date: dto.expectedDeliveryDate || null,
           notes: dto.notes || null,
           created_by: userId,
+          idempotency_key: effectiveKey,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -8035,6 +8199,12 @@ export class ImportSalesService {
 
       return preorder;
     });
+    } catch (err: any) {
+      if (this.isUniqueViolation(err)) {
+        return await this.replayContainerPreorderOrThrow(tenantId, dto, effectiveKey, err);
+      }
+      throw err;
+    }
   }
 
   async listContainerPreorders(tenantId: string, shipmentId?: string, customerId?: string) {

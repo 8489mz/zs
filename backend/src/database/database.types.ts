@@ -6085,6 +6085,7 @@ export interface ImportContainerDepositTable {
   deduction_reason: string | null;
   treasury_account_id: number | null;
   notes: string | null;
+  idempotency_key: string;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -6108,6 +6109,7 @@ export interface ImportContainerPreorderTable {
   sale_invoice_id: number | null;
   expected_delivery_date: ImportDate;
   notes: string | null;
+  idempotency_key: string;
   created_by: number | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
