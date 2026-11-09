@@ -131,7 +131,12 @@ export const CreateSalesOrderModal: React.FC<CreateSalesOrderModalProps> = ({
       if (saved.notes) setNotes(saved.notes);
       if (saved.warehouseLocationId) selectWarehouse(Number(saved.warehouseLocationId));
       if (Array.isArray(saved.items) && saved.items.length > 0) {
-        setItems(saved.items);
+        // INV-SALES-ORDER-RESERVED-STOCK-DISPLAY: a saved stockOnHand
+        // is stale the moment another order reserves the stock — never
+        // show the persisted number as if it were live. A restored
+        // line starts at 0 (like a fresh line) until the reserved-aware
+        // read returns and the sync effect fills it in.
+        setItems(saved.items.map((it: any) => ({ ...it, stockOnHand: 0 })));
       }
     },
   });
@@ -454,6 +459,8 @@ export const CreateSalesOrderModal: React.FC<CreateSalesOrderModalProps> = ({
                       products={catalogProducts}
                       onChangeText={(text) => handleItemChange(idx, 'productName', text)}
                       onSelectProduct={(p) => handleSelectProduct(idx, p)}
+                      availabilityByProduct={availabilityByProduct}
+                      refreshAvailability={refreshAvailability}
                     />
                   </div>
                   <div>

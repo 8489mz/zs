@@ -15,6 +15,14 @@ interface OrderItemProductPickerProps {
   products: Product[];
   onChangeText: (text: string) => void;
   onSelectProduct: (product: Product) => void;
+  /**
+   * INV-SALES-ORDER-RESERVED-STOCK-DISPLAY: the reserved-aware
+   * availability per product in the selected warehouse (the same read
+   * the approval check enforces). The dropdown badge shows ONLY this
+   * — never the catalog stock (prod.stock ignores reservations).
+   */
+  availabilityByProduct?: Record<number, number>;
+  refreshAvailability?: (productIds: number[]) => void;
 }
 
 export function OrderItemProductPicker({
@@ -26,6 +34,8 @@ export function OrderItemProductPicker({
   products,
   onChangeText,
   onSelectProduct,
+  availabilityByProduct,
+  refreshAvailability,
 }: OrderItemProductPickerProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
@@ -126,6 +136,16 @@ export function OrderItemProductPicker({
 
   const isExceedingStock = selectedProductId > 0 && quantity > (stockOnHand || 0);
 
+  // INV-SALES-ORDER-RESERVED-STOCK-DISPLAY: fetch the reserved-aware
+  // availability for the options the dropdown shows — when it opens,
+  // when the query changes what is shown, and when the selected
+  // warehouse changes (refreshAvailability is re-created then).
+  useEffect(() => {
+    if (!isOpen || !refreshAvailability) return;
+    const ids = filtered.map((p) => Number(p.id)).filter((id) => Number.isFinite(id) && id > 0);
+    if (ids.length > 0) void refreshAvailability(ids);
+  }, [isOpen, filtered, refreshAvailability]);
+
   return (
     <div style={{ position: 'relative', width: '100%' }}>
       <div style={{ position: 'relative' }}>
@@ -215,9 +235,16 @@ export function OrderItemProductPicker({
         >
           {filtered.length > 0 ? (
             filtered.map((prod) => {
-              const stock = Number(prod.stock ?? 0);
+              // INV-SALES-ORDER-RESERVED-STOCK-DISPLAY: the badge
+              // shows ONLY the reserved-aware availability in the
+              // selected warehouse. The catalog stock (prod.stock)
+              // ignores reservations — it showed "متوفر: 10" for a
+              // product whose 10 units were already reserved.
+              // Unknown until the read returns: a neutral "…" chip,
+              // never a number from another source.
+              const avail = availabilityByProduct?.[Number(prod.id)];
               const price = Number(prod.retailPrice || prod.wholesalePrice || 0);
-              const hasStock = stock > 0;
+              const hasStock = avail !== undefined && avail > 0;
               const isSelected = selectedProductId === Number(prod.id);
 
               return (
@@ -269,12 +296,16 @@ export function OrderItemProductPicker({
                         fontWeight: 600,
                         padding: '1px 6px',
                         borderRadius: '4px',
-                        backgroundColor: hasStock ? '#ecfdf5' : '#fef2f2',
-                        color: hasStock ? '#065f46' : '#991b1b',
-                        border: `1px solid ${hasStock ? '#a7f3d0' : '#fecaca'}`,
+                        backgroundColor: avail === undefined ? '#f8fafc' : hasStock ? '#ecfdf5' : '#fef2f2',
+                        color: avail === undefined ? '#64748b' : hasStock ? '#065f46' : '#991b1b',
+                        border: `1px solid ${avail === undefined ? '#e2e8f0' : hasStock ? '#a7f3d0' : '#fecaca'}`,
                       }}
                     >
-                      {hasStock ? `متوفر: ${stock}` : t('sales.order_item_product_picker.s6', "غير متوفر")}
+                      {avail === undefined
+                        ? t('sales.order_item_product_picker.s8', 'المتوفر: …')
+                        : hasStock
+                          ? `متوفر: ${avail}`
+                          : t('sales.order_item_product_picker.s6', 'غير متوفر')}
                     </span>
                   </div>
                 </div>

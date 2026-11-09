@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCreateSalesOrderForm, type SalesOrderItem } from '../hooks/useCreateSalesOrderForm';
 import { useSalesOrderWarehouse } from '../hooks/useSalesOrderWarehouse';
@@ -137,6 +137,52 @@ export function CreateSalesOrderPage() {
     }));
   }, [catalogProducts]);
 
+  // INV-SALES-ORDER-RESERVED-STOCK-DISPLAY: the picker suggestion
+  // shows ONLY the reserved-aware availability in the selected
+  // warehouse — never the catalog stock (p.stock = products.stock_qty,
+  // on-hand before reservations, in no warehouse in particular).
+  // Availability is fetched for the options the dropdown is about to
+  // show (same predicate and 8-option cap as SearchableCombobox),
+  // when the dropdown opens and, debounced, while the user types.
+  const pickerRefreshTimerRef = useRef<number | null>(null);
+
+  const visibleProductIds = useCallback(
+    (query: string) => {
+      const q = (query || '').trim();
+      const matched = productOptions.filter(
+        (p) =>
+          matchesArabic(p.name, q) ||
+          (p.barcode ? p.barcode.includes(q) : false) ||
+          (p.sku ? p.sku.toLowerCase().includes(q.toLowerCase()) : false),
+      );
+      return matched.slice(0, 8).map((p) => p.rawId);
+    },
+    [productOptions],
+  );
+
+  const refreshPickerAvailability = useCallback(
+    (query: string) => {
+      const ids = visibleProductIds(query);
+      if (ids.length > 0) void refreshAvailability(ids);
+    },
+    [visibleProductIds, refreshAvailability],
+  );
+
+  const schedulePickerAvailabilityRefresh = useCallback(
+    (query: string) => {
+      if (pickerRefreshTimerRef.current) window.clearTimeout(pickerRefreshTimerRef.current);
+      pickerRefreshTimerRef.current = window.setTimeout(() => refreshPickerAvailability(query), 250);
+    },
+    [refreshPickerAvailability],
+  );
+
+  useEffect(
+    () => () => {
+      if (pickerRefreshTimerRef.current) window.clearTimeout(pickerRefreshTimerRef.current);
+    },
+    [],
+  );
+
   // INV-SALES-ORDER-WAREHOUSE-SELECTION: whenever the selected
   // warehouse changes (or a line's product changes), re-read the
   // availability of every line product IN THAT WAREHOUSE — the same
@@ -261,7 +307,12 @@ export function CreateSalesOrderPage() {
       if (saved.termsConditions) setTermsConditions(saved.termsConditions);
       if (saved.warehouseLocationId) selectWarehouse(Number(saved.warehouseLocationId));
       if (Array.isArray(saved.items) && saved.items.length > 0) {
-        setItems(saved.items);
+        // INV-SALES-ORDER-RESERVED-STOCK-DISPLAY: a saved stockOnHand
+        // is stale the moment another order reserves the stock — never
+        // show the persisted number as if it were live. A restored
+        // line starts at 0 (like a fresh line) until the reserved-aware
+        // read returns and the sync effect fills it in.
+        setItems(saved.items.map((it: any) => ({ ...it, stockOnHand: 0 })));
       }
     },
   });
@@ -841,16 +892,34 @@ export function CreateSalesOrderPage() {
                         inputClassName="purchase-prototype-field-input purchase-prototype-combobox-input purchase-prototype-combobox-input-inline"
                         placeholder={t('sales.create_sales_order_page.s59', "ابحث عن صنف بالاسم أو الباركود...")}
                         value={line.productName}
-                        onChange={(value) => handleUpdateLine(line.id, 'productName', value)}
+                        onChange={(value) => {
+                          handleUpdateLine(line.id, 'productName', value);
+                          schedulePickerAvailabilityRefresh(value);
+                        }}
                         options={productOptions}
                         getLabel={(p) => p.name}
-                        getMeta={(p) => [p.barcode, p.price > 0 ? `${formatCurrency(p.price)}` : undefined, `رصيد: ${availabilityByProduct[p.rawId] ?? p.stock}`].filter(Boolean).join(' · ')}
+                        getMeta={(p) => {
+                          // INV-SALES-ORDER-RESERVED-STOCK-DISPLAY: the
+                          // suggestion shows ONLY the reserved-aware
+                          // availability in the selected warehouse.
+                          // The catalog stock (p.stock) ignores
+                          // reservations — it showed "رصيد: 10" for a
+                          // product whose 10 units were already
+                          // reserved. Unknown until the read returns:
+                          // no stock segment at all, never a number
+                          // from another source.
+                          const avail = availabilityByProduct[p.rawId];
+                          return [p.barcode, p.price > 0 ? `${formatCurrency(p.price)}` : undefined, avail === undefined ? undefined : `رصيد: ${avail}`].filter(Boolean).join(' · ');
+                        }}
                         search={(p, query) =>
                           matchesArabic(p.name, query) ||
                           (p.barcode ? p.barcode.includes(query) : false) ||
                           (p.sku ? p.sku.toLowerCase().includes(query.toLowerCase()) : false)
                         }
                         onSelect={(option) => handleProductSelect(line.id, option)}
+                        onOpenChange={(open) => {
+                          if (open) schedulePickerAvailabilityRefresh(line.productName);
+                        }}
                         showDropdownOnEmpty={true}
                         emptyLabel={t('sales.create_sales_order_page.s60', "صنف جديد (يمكنك المتابعة بالاسم المدخل)")}
                       />
