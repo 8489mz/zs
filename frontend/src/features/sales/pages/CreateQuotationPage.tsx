@@ -203,9 +203,14 @@ export function CreateQuotationPage() {
   // Whenever a line's product changes, re-read the availability of
   // every line product — the same read the approval check enforces —
   // and show it on the line.
-  const lineProductIdsKey = items.map((it) => it.productId).filter((id) => id > 0).join(',');
+  const lineProductIdsKey = items
+    .map((it) => it.productId)
+    .filter((id): id is number => id !== undefined && id > 0)
+    .join(',');
   useEffect(() => {
-    const ids = items.map((it) => it.productId).filter((id) => id > 0);
+    const ids = items
+      .map((it) => it.productId)
+      .filter((id): id is number => id !== undefined && id > 0);
     if (ids.length > 0) void refreshAvailability(ids);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lineProductIdsKey, refreshAvailability]);
@@ -214,7 +219,10 @@ export function CreateQuotationPage() {
     setItems((prev) => {
       let changed = false;
       const next = prev.map((it) => {
-        const avail = it.productId > 0 ? availabilityByProduct[it.productId] : undefined;
+        const avail =
+          it.productId !== undefined && it.productId > 0
+            ? availabilityByProduct[it.productId]
+            : undefined;
         if (avail === undefined || avail === it.stockOnHand) return it;
         changed = true;
         return { ...it, stockOnHand: avail };
@@ -869,7 +877,7 @@ export function CreateQuotationPage() {
                           }
                           onSelect={(option) => handleProductSelect(item.id, option)}
                           onOpenChange={(open) => {
-                            if (open) schedulePickerAvailabilityRefresh(item.productName);
+                            if (open) schedulePickerAvailabilityRefresh(item.productName ?? '');
                           }}
                           showDropdownOnEmpty={true}
                           emptyLabel={t('sales.create_quotation_page.s43', "صنف جديد (يمكنك المتابعة بالاسم المدخل)")}
