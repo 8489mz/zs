@@ -12,7 +12,8 @@ import { KdsHeader } from '../components/kds/KdsHeader';
 import { useIsolatedDisplayLanguage } from '@/features/pos/hooks/useIsolatedDisplayLanguage';
 import { KdsKpiStrip } from '../components/kds/KdsKpiStrip';
 import { KdsFilterBar } from '../components/kds/KdsFilterBar';
-import { KdsStandbyState } from '../components/kds/KdsStandbyState';
+import { KdsStandbyState, KdsDisconnectedState } from '../components/kds/KdsStandbyState';
+import { resolveKitchenTicketsState } from '@/features/pos/lib/kds-connection-state';
 import { KdsTicketCard } from '../components/kds/KdsTicketCard';
 import { Pos86ItemsModal } from '../components/pos-workspace/Pos86ItemsModal';
 import { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced-fnb.api';
@@ -107,7 +108,10 @@ export function KitchenDisplayPage() {
   }, []);
 
   // Query tickets every 5 seconds
-  const { data, isLoading } = useQuery({
+  // INV-REST-KDS-LOUD-FAILURE: the error state is read — a failed query
+  // used to leave tickets empty and render the calm standby ("all stations
+  // ready / no pending orders") as if nothing were wrong.
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['kds-tickets', selectedStation, selectedOrderType],
     queryFn: () =>
       kdsApi.getTickets({
@@ -118,6 +122,7 @@ export function KitchenDisplayPage() {
   });
 
   const tickets = data?.tickets || [];
+  const ticketsState = resolveKitchenTicketsState({ isLoading, isError, ticketCount: tickets.length });
   const stats = data?.stats || {
     pendingCount: 0,
     cookingCount: 0,
@@ -248,7 +253,7 @@ export function KitchenDisplayPage() {
       {/* 4. Main Tickets Grid or Executive Standby State */}
       <main style={{ flex: 1, padding: '20px 24px', overflowY: 'auto' }}>
         {/* Expediter Pass Executive Strip */}
-        {selectedStation === 'expo' && (
+        {selectedStation === 'expo' && ticketsState !== 'disconnected' && (
           <div
             style={{
               background: '#170e5e',
@@ -327,7 +332,7 @@ export function KitchenDisplayPage() {
           </div>
         )}
 
-        {isLoading && !tickets.length ? (
+        {ticketsState === 'loading' ? (
           <div
             style={{
               display: 'flex',
@@ -343,9 +348,16 @@ export function KitchenDisplayPage() {
               {__t('pos.kitchen_display_page.s4', __t('pos.kitchen_display_page.s4', "جاري مزامنة تذاكر المطبخ النشطة..."))}
             </div>
           </div>
-        ) : tickets.length === 0 ? (
-          <KdsStandbyState />
+        ) : ticketsState === 'disconnected' ? (
+          <KdsDisconnectedState onRetry={() => void refetch()} />
         ) : (
+          <>
+            {ticketsState === 'stale' && (
+              <KdsDisconnectedState variant="banner" onRetry={() => void refetch()} />
+            )}
+            {ticketsState === 'standby' ? (
+              <KdsStandbyState />
+            ) : (
           <div
             style={{
               display: 'grid',
@@ -372,6 +384,8 @@ export function KitchenDisplayPage() {
                 />
               ))}
           </div>
+            )}
+          </>
         )}
       </main>
 

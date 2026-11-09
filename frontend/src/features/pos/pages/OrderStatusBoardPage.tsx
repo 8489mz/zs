@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrderStatusBoard } from '@/features/pos/hooks/useOrderStatusBoard';
+import { KdsDisconnectedState } from '@/features/pos/components/kds/KdsStandbyState';
 import { DisplayLanguageToggle } from '@/shared/components/DisplayLanguageToggle';
 import { useIsolatedDisplayLanguage } from '@/features/pos/hooks/useIsolatedDisplayLanguage';
 import { ClockIcon, ArrowRightIcon } from '@/shared/components/icons/AppIcons';
@@ -67,7 +68,7 @@ export function OrderStatusBoardPage() {
   };
 
   // Poll KDS tickets via feature hook
-  const { preparingTickets, readyTickets } = useOrderStatusBoard();
+  const { preparingTickets, readyTickets, screenState, refetch } = useOrderStatusBoard();
 
   // Detect newly ready tickets to trigger acoustic chime
   useEffect(() => {
@@ -228,6 +229,20 @@ export function OrderStatusBoardPage() {
           overflow: 'hidden',
         }}
       >
+        {/* INV-REST-KDS-LOUD-FAILURE: a failed query never renders the calm
+            "no orders" columns — disconnected replaces them, stale banners
+            above them. */}
+        {screenState === 'disconnected' ? (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <KdsDisconnectedState onRetry={() => void refetch()} />
+          </div>
+        ) : (
+          <>
+            {screenState === 'stale' && (
+              <div style={{ gridColumn: '1 / -1' }}>
+                <KdsDisconnectedState variant="banner" onRetry={() => void refetch()} />
+              </div>
+            )}
         {/* COLUMN 1: PREPARING (قيد التجهيز) */}
         <section
           style={{
@@ -477,6 +492,8 @@ export function OrderStatusBoardPage() {
             )}
           </div>
         </section>
+          </>
+        )}
       </main>
 
       {/* Bottom Footer Info */}

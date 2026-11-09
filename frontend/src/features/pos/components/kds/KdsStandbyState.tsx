@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React from 'react';
-import { CheckShieldIcon, UtensilsIcon, CheckIcon } from '@/shared/components/icons/AppIcons';
+import { CheckShieldIcon, UtensilsIcon, CheckIcon, AlertTriangleIcon } from '@/shared/components/icons/AppIcons';
 
 export const KdsStandbyState: React.FC = () => {
   const { t } = useTranslation();
@@ -132,3 +132,159 @@ export const KdsStandbyState: React.FC = () => {
   );
 };
 
+
+/*
+ * INV-REST-KDS-LOUD-FAILURE (R-B6): the loud disconnected state. Rendered
+ * instead of the calm standby whenever the tickets query has failed — never
+ * beside it, never as a small hint. The 'full' variant is the whole main
+ * area when there is nothing to show; the 'banner' variant sits above
+ * stale tickets that are still on screen and says they may be out of date.
+ * The query already refetches every few seconds, so the retry button is a
+ * manual shortcut, not the only recovery path.
+ */
+export function KdsDisconnectedState({ variant = 'full', onRetry }: { variant?: 'full' | 'banner'; onRetry: () => void }) {
+  const { t } = useTranslation();
+  const retryLabel = t('pos.kds.kds_disconnected_state.s2', 'إعادة المحاولة الآن');
+
+  if (variant === 'banner') {
+    return (
+      <div
+        style={{
+          backgroundColor: '#dc2626',
+          color: '#ffffff',
+          borderRadius: '12px',
+          padding: '12px 18px',
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap',
+          boxShadow: '0 3px 8px rgba(220, 38, 38, 0.25)',
+        }}
+      >
+        <AlertTriangleIcon size={22} color="#ffffff" />
+        <div style={{ flex: 1, minWidth: '200px' }}>
+          <div style={{ fontSize: '14px', fontWeight: 900 }}>
+            {t('pos.kds.kds_disconnected_state.s0', 'انقطع الاتصال بخادم المطبخ')}
+          </div>
+          <div style={{ fontSize: '12px', color: '#fecaca', marginTop: '2px' }}>
+            {t('pos.kds.kds_disconnected_state.s3', 'البيانات المعروضة قديمة — قد تكون هناك طلبات جديدة لم تصل بعد.')}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onRetry}
+          style={{
+            background: '#ffffff',
+            color: '#dc2626',
+            border: 'none',
+            borderRadius: '8px',
+            padding: '8px 16px',
+            fontSize: '13px',
+            fontWeight: 800,
+            cursor: 'pointer',
+          }}
+        >
+          {retryLabel}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        maxWidth: '850px',
+        margin: '20px auto 0',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: '#fef2f2',
+          borderRadius: '16px',
+          border: '2px solid #dc2626',
+          padding: '36px',
+          textAlign: 'center',
+          boxShadow: '0 4px 18px rgba(220, 38, 38, 0.12)',
+        }}
+      >
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: '50%',
+            background: '#fee2e2',
+            border: '1px solid #fecaca',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 16px',
+          }}
+        >
+          <AlertTriangleIcon size={28} color="#dc2626" />
+        </div>
+
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            backgroundColor: '#dc2626',
+            color: '#ffffff',
+            fontSize: '12px',
+            fontWeight: 800,
+            padding: '4px 14px',
+            borderRadius: '20px',
+            marginBottom: '12px',
+          }}
+        >
+          <span
+            style={{
+              width: '7px',
+              height: '7px',
+              borderRadius: '50%',
+              backgroundColor: '#ffffff',
+              display: 'inline-block',
+            }}
+          />
+          <span>{t('pos.kds.kds_disconnected_state.s0', 'انقطع الاتصال بخادم المطبخ')}</span>
+        </div>
+
+        <h2 style={{ margin: '0 0 8px', fontSize: '20px', fontWeight: 900, color: '#991b1b' }}>
+          {t('pos.kds.kds_disconnected_state.s1', 'تعذّر الوصول إلى تذاكر المطبخ — لا تظهر طلبات جديدة هنا حتى يعود الاتصال')}
+        </h2>
+        <p
+          style={{
+            margin: '0 auto 20px',
+            fontSize: '13px',
+            color: '#7f1d1d',
+            maxWidth: '520px',
+            lineHeight: 1.6,
+          }}
+        >
+          {t('pos.kds.kds_disconnected_state.s4', 'تحقق من الشبكة أو من الخادم، أو أعد المحاولة الآن. الطلبات التي أُرسلت أثناء الانقطاع لن تظهر إلا بعد عودة الاتصال.')}
+        </p>
+        <button
+          type="button"
+          onClick={onRetry}
+          style={{
+            background: '#dc2626',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: '8px',
+            padding: '10px 22px',
+            fontSize: '14px',
+            fontWeight: 800,
+            cursor: 'pointer',
+            boxShadow: '0 2px 8px rgba(220, 38, 38, 0.35)',
+          }}
+        >
+          {retryLabel}
+        </button>
+      </div>
+    </div>
+  );
+};
