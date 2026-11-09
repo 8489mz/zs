@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RestaurantOperationsDialog } from './RestaurantOperationsDialog';
 import { toast } from '@/shared/components/system-alert';
 import { PlusCircleIcon, TrashIcon, CheckCircleIcon } from '@/shared/components/icons/AppIcons';
@@ -54,18 +54,32 @@ export function PosTipPoolModal({
   const [distributionMethod, setDistributionMethod] = useState<'roles' | 'hours' | 'equal'>('roles');
   const [notes] = useState('');
 
-  // Default team members
-  const [staffList, setStaffList] = useState<StaffMember[]>([
-    { employeeId: 1, employeeName: 'أحمد محمود', roleName: 'waiter', hoursWorked: 8, pointWeight: 1.2 },
-    { employeeId: 2, employeeName: 'محمد سعيد', roleName: 'waiter', hoursWorked: 8, pointWeight: 1.2 },
-    { employeeId: 3, employeeName: 'كريم عادل', roleName: 'captain', hoursWorked: 8, pointWeight: 1.5 },
-    { employeeId: 4, employeeName: 'عمر ياسين', roleName: 'barista', hoursWorked: 8, pointWeight: 1.0 },
-    { employeeId: 5, employeeName: 'الشيف إبراهيم', roleName: 'kitchen', hoursWorked: 8, pointWeight: 0.8 },
-  ]);
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
 
-  const [newStaffName, setNewStaffName] = useState('');
+  // INV-REST-TIP-STAFF-REAL: the roster is a REAL picker fed by the
+  // restaurant-scoped staff list (active hr_employees of this tenant).
+  // The old code seeded five invented employees (ids 1-5) and let a
+  // typed-in name invent an id from the clock — neither is a person,
+  // and the server (which validates every id against hr_employees)
+  // would refuse the pool. The list starts empty; nobody is on the
+  // roster until a real employee is picked below.
+  const { data: staffCandidates = [], isLoading: staffLoading } = useQuery({
+    queryKey: ['restaurant-tip-pool-staff'],
+    queryFn: () => restaurantAdvancedFnbApi.getTipPoolStaff(),
+    enabled: open,
+  });
+  // The endpoint already returns active employees only; filter again
+  // client-side so an inactive row can never be picked even if the
+  // payload ever changes. Role is NOT in HR data (no waiter/captain
+  // field — only free-form job titles), so no job-title → role mapping
+  // is invented: the role stays the per-person select below.
+  const activeStaff = staffCandidates.filter((e) => e.status === 'active');
+  const availableStaff = activeStaff.filter(
+    (e) => !staffList.some((s) => s.employeeId === Number(e.id)),
+  );
+
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [newStaffRole, setNewStaffRole] = useState('waiter');
-  const [newStaffHours] = useState(8);
 
   // INV-FE1-FRONTEND-BOOK-DIGITS: tip totals round at the tenant's
   // book digits (global system currency; the `currency` prop is a
@@ -142,22 +156,35 @@ export function PosTipPoolModal({
   });
 
   const handleAddStaff = () => {
-    if (!newStaffName.trim()) {
-      toast.warning('يرجى إدخال اسم الموظف');
+    // INV-REST-TIP-STAFF-REAL: only a picked real employee joins the
+    // roster, with the wire id converted to the DTO's number — never a
+    // typed-in name, never an invented id. The wire id is a string;
+    // a NaN conversion is refused instead of being sent to the server.
+    const picked = activeStaff.find((e) => e.id === selectedEmployeeId);
+    if (!picked) {
+      toast.warning('يرجى اختيار موظف من القائمة');
       return;
     }
-    const newId = Date.now();
+    const employeeId = Number(picked.id);
+    if (!Number.isSafeInteger(employeeId) || employeeId <= 0) {
+      toast.warning('معرف الموظف المختار غير صالح');
+      return;
+    }
+    if (staffList.some((s) => s.employeeId === employeeId)) {
+      toast.warning('الموظف مضاف بالفعل إلى الوردية');
+      return;
+    }
     setStaffList([
       ...staffList,
       {
-        employeeId: newId,
-        employeeName: newStaffName.trim(),
+        employeeId,
+        employeeName: picked.displayName,
         roleName: newStaffRole,
-        hoursWorked: Number(newStaffHours) || 8,
+        hoursWorked: picked.expectedDailyHours ?? 8,
         pointWeight: roleWeights[newStaffRole] || 1,
       },
     ]);
-    setNewStaffName('');
+    setSelectedEmployeeId('');
   };
 
   const handleRemoveStaff = (id: number) => {
@@ -293,16 +320,28 @@ export function PosTipPoolModal({
               {t('pos.pos_workspace.pos_tip_pool_modal.s12', "طاقم الوردية المستحق للإكرامية (")}{staffList.length} {t('pos.pos_workspace.pos_tip_pool_modal.s13', "موظف)")}
             </span>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <input
-                type="text"
-                placeholder={t('pos.pos_workspace.pos_tip_pool_modal.s14', "اسم الموظف...")}
-                value={newStaffName}
-                onChange={(e) => setNewStaffName(e.target.value)}
-                style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', width: '130px' }}
-              />
+              <select
+                value={selectedEmployeeId}
+                onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                disabled={staffLoading || availableStaff.length === 0}
+                aria-label={t('pos.pos_workspace.pos_tip_pool_modal.s34', "اختر موظفاً من القائمة")}
+                style={{ padding: '4px 6px', fontSize: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', width: '150px' }}
+              >
+                <option value="">
+                  {staffLoading
+                    ? t('pos.pos_workspace.pos_tip_pool_modal.s35', "جارٍ تحميل الموظفين…")
+                    : t('pos.pos_workspace.pos_tip_pool_modal.s36', "اختر موظفاً…")}
+                </option>
+                {availableStaff.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.displayName}
+                  </option>
+                ))}
+              </select>
               <select
                 value={newStaffRole}
                 onChange={(e) => setNewStaffRole(e.target.value)}
+                aria-label={t('pos.pos_workspace.pos_tip_pool_modal.s40', "الدور الوظيفي للموظف المختار")}
                 style={{ padding: '4px 6px', fontSize: '12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
               >
                 <option value="waiter">{t('pos.pos_workspace.pos_tip_pool_modal.s15', "ويتر صالة")}</option>
@@ -314,6 +353,7 @@ export function PosTipPoolModal({
               <button
                 type="button"
                 onClick={handleAddStaff}
+                disabled={staffLoading || availableStaff.length === 0}
                 style={{
                   padding: '4px 10px',
                   borderRadius: '6px',
@@ -347,6 +387,17 @@ export function PosTipPoolModal({
                 </tr>
               </thead>
               <tbody>
+                {staffList.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '16px 12px', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>
+                      {staffLoading
+                        ? t('pos.pos_workspace.pos_tip_pool_modal.s37', "جارٍ تحميل قائمة الموظفين…")
+                        : activeStaff.length === 0
+                          ? t('pos.pos_workspace.pos_tip_pool_modal.s38', "لا يوجد موظفون نشطون — لا يمكن حفظ مجمع إكراميات بدون طاقم")
+                          : t('pos.pos_workspace.pos_tip_pool_modal.s39', "لم تتم إضافة أي موظف بعد — اختر موظفاً من القائمة أعلاه")}
+                    </td>
+                  </tr>
+                )}
                 {previewAllocations.map((staff, idx) => (
                   <tr key={staff.employeeId} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#fff' : '#fcfcfd' }}>
                     <td style={{ padding: '8px 12px', fontWeight: 700, color: '#0f172a' }}>{staff.employeeName}</td>

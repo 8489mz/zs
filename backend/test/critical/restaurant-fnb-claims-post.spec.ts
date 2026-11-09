@@ -42,6 +42,16 @@
  * string — but the save path always JSON-encodes, so production never
  * stores it that way; flagged as a follow-up for R3-D.)
  *
+ * R6-D (INV-REST-TIP-STAFF-REAL): the picker half — getTipPoolStaff is
+ * the restaurant-scoped staff list the modal reads (the HR endpoint
+ * needs hrEmployees/hrAttendance, which the manager caller who opens the
+ * modal does not necessarily hold, so it cannot be the source). Cases
+ * (25)-(27) pin it: only active employees of this tenant are listed,
+ * and an inactive or other-tenant employee in the pool is refused with
+ * UNKNOWN_EMPLOYEE before any insert. The ghost-id case (19) already
+ * pinned the forged-id refusal; the server half was already enforced
+ * (R3-E) — R6-D adds the picker and pins the status/tenant edges.
+ *
  * RED PROOF: on the unfixed tree the comp cases fail (a bad saleId, a
  * missing PIN and a cashier caller all succeed and no journal exists) and
  * the tip cases fail (invented totals, a second pool and a double confirm
@@ -125,7 +135,8 @@ const DDL = `
     allocated_amount numeric, is_paid boolean DEFAULT false, paid_at timestamptz,
     created_at timestamptz DEFAULT NOW());
   CREATE TABLE hr_employees (id bigint PRIMARY KEY, tenant_id text, account_id text, employee_no text,
-    first_name text, last_name text, display_name text, status text);
+    first_name text, last_name text, display_name text, status text,
+    branch_id bigint, expected_daily_hours numeric);
 `;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -178,10 +189,17 @@ async function seedBase(db: Kysely<Database>, opts: { settingsDiscountId?: numbe
     lock_date_all: null, lock_date_non_adviser: null, lock_date_tax: null,
   }).execute();
   await anyDb.insertInto('customers').values({ id: 7, tenant_id: TENANT, balance: 0 }).execute();
-  for (const id of [1, 2, 3]) {
+  for (const row of [
+    { id: 1, branch_id: 1, expected_daily_hours: 8, status: 'active', tenant_id: TENANT },
+    { id: 2, branch_id: 1, expected_daily_hours: 6, status: 'active', tenant_id: TENANT },
+    { id: 3, branch_id: 2, expected_daily_hours: null, status: 'active', tenant_id: TENANT },
+    { id: 4, branch_id: 1, expected_daily_hours: 8, status: 'inactive', tenant_id: TENANT },
+    { id: 5, branch_id: 1, expected_daily_hours: 8, status: 'active', tenant_id: 't2' },
+  ]) {
     await anyDb.insertInto('hr_employees').values({
-      id, tenant_id: TENANT, account_id: ACCOUNT, employee_no: `E${id}`,
-      first_name: `Emp${id}`, last_name: 'Test', display_name: `Employee ${id}`, status: 'active',
+      id: row.id, tenant_id: row.tenant_id, account_id: ACCOUNT, employee_no: `E${row.id}`,
+      first_name: `Emp${row.id}`, last_name: 'Test', display_name: `Employee ${row.id}`,
+      status: row.status, branch_id: row.branch_id, expected_daily_hours: row.expected_daily_hours,
     }).execute();
   }
 }
@@ -756,6 +774,67 @@ async function main(): Promise<void> {
       );
       assert.equal(await countRows(pg, 'restaurant_tip_pools'), 0);
       console.log('  (24) pool with no collected tips fails passed');
+    }
+  }
+
+  // (25) INV-REST-TIP-STAFF-REAL: the picker list holds only ACTIVE
+  // employees of THIS tenant — the inactive row (4) and the other
+  // tenant's row (5) never reach the modal — with the display name,
+  // branch and expected daily hours the picker needs.
+  {
+    await resetDb(pg);
+    {
+      await seedBase(db);
+      const service = buildService(db);
+      const staff: any = await service.getTipPoolStaff(managerScope);
+      assert.deepEqual(staff.map((s: any) => s.id), ['1', '2', '3']);
+      assert.equal(staff[0].displayName, 'Employee 1');
+      assert.equal(staff[0].branchId, '1');
+      assert.equal(staff[0].expectedDailyHours, 8);
+      assert.equal(staff[1].expectedDailyHours, 6);
+      assert.equal(staff[2].branchId, '2');
+      assert.equal(staff[2].expectedDailyHours, null);
+      console.log('  (25) tip staff list holds only active employees of this tenant passed');
+    }
+  }
+
+  // (26) INV-REST-TIP-STAFF-REAL: an INACTIVE employee in the pool is
+  // refused — only status 'active' counts — before any insert.
+  {
+    await resetDb(pg);
+    {
+      await seedBase(db);
+      const service = buildService(db);
+      await expectAppError(
+        service.calculateAndSaveTipPool(managerScope, tipDto({
+          staff: [{ employeeId: 4, employeeName: 'Employee 4', roleName: 'waiter', hoursWorked: 8, pointWeight: 1 }],
+        })),
+        'UNKNOWN_EMPLOYEE',
+        422,
+      );
+      assert.equal(await countRows(pg, 'restaurant_tip_pools'), 0);
+      assert.equal(await countRows(pg, 'restaurant_tip_pool_distributions'), 0);
+      console.log('  (26) pool with an inactive employee fails passed');
+    }
+  }
+
+  // (27) INV-REST-TIP-STAFF-REAL: another tenant's employee id is
+  // refused the same way — the validation is tenant-scoped.
+  {
+    await resetDb(pg);
+    {
+      await seedBase(db);
+      const service = buildService(db);
+      await expectAppError(
+        service.calculateAndSaveTipPool(managerScope, tipDto({
+          staff: [{ employeeId: 5, employeeName: 'Employee 5', roleName: 'waiter', hoursWorked: 8, pointWeight: 1 }],
+        })),
+        'UNKNOWN_EMPLOYEE',
+        422,
+      );
+      assert.equal(await countRows(pg, 'restaurant_tip_pools'), 0);
+      assert.equal(await countRows(pg, 'restaurant_tip_pool_distributions'), 0);
+      console.log('  (27) pool with another tenant employee fails passed');
     }
   }
 

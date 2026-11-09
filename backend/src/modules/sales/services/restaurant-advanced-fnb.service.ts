@@ -274,6 +274,36 @@ export class RestaurantAdvancedFnbService {
     }));
   }
 
+  /**
+   * INV-REST-TIP-STAFF-REAL: the narrow staff list the tip-pool picker
+   * reads. GET /api/hr/employees is NOT the source: it requires
+   * hrEmployees or hrAttendance, which the manager caller who opens the
+   * tip modal (admin role, or pos_manager / manage_restaurant) does not
+   * necessarily hold — PermissionsGuard checks permission strings only,
+   * so a tenant admin or a pos_manager cashier would 403 on exactly the
+   * call the modal needs. This endpoint is tenant-scoped, returns active
+   * employees only, and exposes id + displayName + branchId +
+   * expectedDailyHours only — no salary, no PIN status, no HR detail —
+   * so granting cashiers hrEmployees was never an option.
+   */
+  async getTipPoolStaff(scope: TenantScope) {
+    const rows = await this.db
+      .selectFrom('hr_employees')
+      .select(['id', 'display_name', 'branch_id', 'expected_daily_hours', 'status'])
+      .where('tenant_id', '=', scope.tenantId)
+      .where('status', '=', 'active')
+      .orderBy('display_name', 'asc')
+      .execute();
+    return rows.map((row) => ({
+      id: String(row.id),
+      displayName: String(row.display_name || ''),
+      branchId: row.branch_id != null ? String(row.branch_id) : null,
+      expectedDailyHours:
+        row.expected_daily_hours != null ? Number(row.expected_daily_hours) : null,
+      status: 'active' as const,
+    }));
+  }
+
   async calculateAndSaveTipPool(scope: TenantScope, dto: CalculateTipPoolDto) {
     // INV-REST-FNB-CLAIMS-POST: only a manager caller may create a pool.
     this.assertManagerCaller(scope);

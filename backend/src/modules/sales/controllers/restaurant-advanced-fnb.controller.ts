@@ -56,6 +56,18 @@ export class RestaurantAdvancedFnbController {
     return this.service.getTipPools(scope, shiftDate);
   }
 
+  // INV-REST-TIP-STAFF-REAL: the tip-pool picker's staff list. A plain
+  // @AllowAuthenticated() GET (the class already carries it) — the
+  // payload is active employees' id + displayName + branchId +
+  // expectedDailyHours only, so there is no HR detail to gate behind
+  // hrEmployees, and the manager caller who opens the modal does not
+  // necessarily hold that permission (see the service comment).
+  @Get('staff')
+  async getTipPoolStaff(@Req() req: RequestWithAuth) {
+    const scope = requireTenantScope(req.authContext!);
+    return this.service.getTipPoolStaff(scope);
+  }
+
   @Post('tip-pools/calculate')
   async calculateAndSaveTipPool(
     @Req() req: RequestWithAuth,

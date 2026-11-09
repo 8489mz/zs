@@ -38,6 +38,16 @@ export interface RestaurantTipPool {
   distributions: TipPoolDistribution[];
 }
 
+export interface RestaurantTipPoolStaffMember {
+  id: string;
+  displayName: string;
+  branchId?: string | null;
+  expectedDailyHours?: number | null;
+  // Always 'active' from /api/sales/restaurant/staff; the modal still
+  // filters on it defensively so an inactive row can never be picked.
+  status: string;
+}
+
 export interface RestaurantTableZone {
   id: number;
   zone_code: string;
@@ -208,6 +218,18 @@ export const restaurantAdvancedFnbApi = {
     return apiGet<RestaurantTipPool[]>('/api/sales/restaurant/tip-pools', params);
   },
 
+  // INV-REST-TIP-STAFF-REAL: the tip-pool picker's staff list — active
+  // employees of this tenant, id + displayName + branchId +
+  // expectedDailyHours only. It hits /api/sales/restaurant/staff, NOT
+  // /api/hr/employees: the HR endpoint requires hrEmployees or
+  // hrAttendance, which the manager caller who opens the tip modal does
+  // not necessarily hold. An HTTP call through the shared apiGet, never
+  // a cross-feature import — the feature-boundary check forbids
+  // @/features/hr/api imports from pos files.
+  getTipPoolStaff: async (): Promise<RestaurantTipPoolStaffMember[]> => {
+    return apiGet<RestaurantTipPoolStaffMember[]>('/api/sales/restaurant/staff');
+  },
+
   calculateTipPool: async (dto: {
     shiftDate: string;
     shiftName?: string;
@@ -296,6 +318,7 @@ export const restaurantAdvancedFnbApi = {
     tableNumber?: string;
     compType: 'vip_guest' | 'customer_complaint' | 'staff_meal' | 'promotional_tasting';
     managerName: string;
+    managerPin?: string;
     amount: number;
     itemsSummary?: string;
     notes?: string;
