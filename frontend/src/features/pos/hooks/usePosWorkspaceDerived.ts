@@ -3,6 +3,7 @@ import { formatCurrency } from '@/lib/format';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { paymentLabel } from '@/features/pos/lib/pos-workspace.helpers';
+import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 import { getProductPrice, isNegativeStockSalesAllowed } from '@/features/pos/lib/pos.domain';
 import type { PaymentChannel, PaymentType, PosProductFilter } from '@/features/pos/hooks/usePosWorkspace';
 import type { PosItem, PosPriceType } from '@/features/pos/types/pos.types';
@@ -151,8 +152,7 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
 
   const totals = useMemo(() => {
     const subTotal = params.cart.reduce((sum, item) => {
-      const modifiersTotal = (item.modifiers || []).reduce((modSum: number, mod: any) => modSum + Number(mod.price || 0), 0);
-      return sum + (item.qty * (item.price + modifiersTotal));
+      return sum + calcCartLineTotal(item);
     }, 0);
     const manualDiscount = Math.max(0, Number(params.discount || 0));
     const pointRedeemValue = Number(params.settings?.loyaltyPointRedeemValue ?? 0.1);

@@ -1,5 +1,6 @@
 import { printPostedSaleReceipt, printKitchenTicket, printGuestCheck } from '@/lib/pos-printing';
 import { computeDraftTotal } from '@/features/pos/lib/pos-workspace.helpers';
+import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 import type { PosWorkspaceActionParams } from '@/features/pos/hooks/usePosWorkspaceActionGroups';
 
 function getSaleKey(params: PosWorkspaceActionParams) {
@@ -99,8 +100,7 @@ export function createPosWorkspaceReceiptActions(params: PosWorkspaceActionParam
     }
     const cashierName = (params.ownOpenShift as any)?.openedByName || params.authUserName || '—';
     const subtotal = params.cart.reduce((sum, item) => {
-      const modifiersTotal = (item.modifiers || []).reduce((modSum: number, mod: any) => modSum + Number(mod.price || 0), 0);
-      return sum + (item.qty * (item.price + modifiersTotal));
+      return sum + calcCartLineTotal(item);
     }, 0);
     printGuestCheck({
       tableNumber: params.tableNumber || '1',

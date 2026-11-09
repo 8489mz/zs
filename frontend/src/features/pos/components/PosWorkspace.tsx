@@ -33,6 +33,7 @@ import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { isLikelyBarcodeQuery } from '@/features/pos/lib/pos-product-lookup';
 import { normalizePosSaleMode, usePosSaleMode } from '@/features/pos/lib/pos-sale-mode';
 import { matchProductByCode } from '@/features/pos/lib/pos-workspace.helpers';
+import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 import { parseWeightedBarcode, matchProductByWeightedCode } from '@/features/pos/lib/weighted-barcode';
 import { parseQuantityPrefixQuery } from '@/features/pos/lib/pos-quantity-prefix';
 import { lookupProductByBarcodeFromStorage } from '@/features/pos/lib/pos-catalog-storage';
@@ -729,8 +730,7 @@ export function PosWorkspace() {
             const matchingDraft = pos.heldDrafts.find((d) => String(d.id) === String(draftId) || String(d.tableNumber).trim() === String(tableNum).trim());
             if (matchingDraft) {
               const subtotal = (matchingDraft.cart || []).reduce((sum, item) => {
-                const modifiersTotal = (item.modifiers || []).reduce((modSum: number, mod: any) => modSum + Number(mod.price || 0), 0);
-                return sum + (item.qty * (item.price + modifiersTotal));
+                return sum + calcCartLineTotal(item);
               }, 0);
               const bookDigits = currencyMoneyDigits(pos.settingsQuery.data?.currency || getGlobalSystemCurrency());
               const discount = roundMoneyValue(Number(matchingDraft.discount || 0), bookDigits);

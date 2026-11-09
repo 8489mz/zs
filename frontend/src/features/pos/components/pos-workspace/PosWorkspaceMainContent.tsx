@@ -17,6 +17,7 @@ import { formatCurrency } from '@/lib/format';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import type { PosSaleMode } from '@/features/pos/lib/pos-sale-mode';
 import type { PosPriceType } from '@/features/pos/types/pos.types';
+import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 import type { RefObject } from 'react';
 
 interface PosWorkspaceMainContentProps {
@@ -442,8 +443,7 @@ export function PosWorkspaceMainContent({
                 <div className="pos-mobile-floating-cart-items-drawer">
                   <div className="pos-mobile-floating-cart-items-list">
                     {pos.cart.map((item, idx) => {
-                      const modifiersTotal = (item.modifiers || []).reduce((sum, mod) => sum + Number(mod.price || 0), 0);
-                      const lineTotal = Number(item.qty || 0) * (Number(item.price || 0) + modifiersTotal);
+                      const lineTotal = calcCartLineTotal(item);
                       return (
                         <div key={item.lineKey || idx} className="pos-mobile-floating-cart-item-row">
                           <div className="pos-mobile-floating-cart-item-name-col">

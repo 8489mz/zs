@@ -9,6 +9,7 @@ import { ProductIcon } from '@/shared/components/icons/product-svg-catalog';
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
 import type { Product } from '@/types/domain';
 import type { PosCartPanelProps } from './posCartPanel.types';
+import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 
 const PosCartItemRow = memo(function PosCartItemRow({
   item,
@@ -35,8 +36,7 @@ const PosCartItemRow = memo(function PosCartItemRow({
 }: any) {
   const { t: __t } = useTranslation();
   const { t } = useTranslation();
-  const modifiersTotal = (item.modifiers || []).reduce((sum: any, mod: any) => sum + Number(mod.price || 0), 0);
-  const lineTotal = item.qty * (item.price + modifiersTotal);
+  const lineTotal = calcCartLineTotal(item);
   const itemCode = String(item.itemCode || '').trim();
   const isWeightedLine = item.isWeighted === true;
   const minQty = isWeightedLine ? 0.001 : 1;
