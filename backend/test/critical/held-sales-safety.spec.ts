@@ -299,6 +299,20 @@ async function run(): Promise<void> {
         cashAmount: 0,
         cardAmount: 0,
         discount: 0,
+        /* INV-REST-HOLD-RECALL-TRUTH (R5-B): mapHeldSalesRows now returns
+         * the held header fields; the fake rows carry none of the new
+         * columns, so the mapper defaults apply here. */
+        deliveryFee: 0,
+        deliveryRepId: '',
+        collectionStatus: '',
+        tipAmount: 0,
+        loyaltyPointsRedeemed: 0,
+        pagerNumber: '',
+        deliveryFeeMode: '',
+        onlineOrderId: undefined,
+        diningCourse: '',
+        guestCount: undefined,
+        guestCheckPrintedAt: null,
         note: '',
         search: '',
         tableNumber: '',
@@ -331,6 +345,20 @@ async function run(): Promise<void> {
         cashAmount: 0,
         cardAmount: 0,
         discount: 0,
+        /* INV-REST-HOLD-RECALL-TRUTH (R5-B): mapHeldSalesRows now returns
+         * the held header fields; the fake rows carry none of the new
+         * columns, so the mapper defaults apply here. */
+        deliveryFee: 0,
+        deliveryRepId: '',
+        collectionStatus: '',
+        tipAmount: 0,
+        loyaltyPointsRedeemed: 0,
+        pagerNumber: '',
+        deliveryFeeMode: '',
+        onlineOrderId: undefined,
+        diningCourse: '',
+        guestCount: undefined,
+        guestCheckPrintedAt: null,
         note: '',
         search: '',
         tableNumber: '',

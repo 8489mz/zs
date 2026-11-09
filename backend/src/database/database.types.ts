@@ -1101,6 +1101,17 @@ export interface HeldSaleTable {
   created_by: number | null;
   delivery_rep_id: number | null;
   collection_status: 'cod' | 'prepaid_by_rep' | 'prepaid_online' | null;
+  /* INV-REST-HOLD-RECALL-TRUTH (R5-B, migration 0310). All nullable in
+   * the DB (old drafts have no values) — nullable here too, so Kysely
+   * keeps them optional on insert. */
+  tip_amount: number | null;
+  loyalty_points_redeemed: number | null;
+  pager_number: string | null;
+  delivery_fee_mode: string | null;
+  online_order_id: number | null;
+  dining_course: string | null;
+  guest_count: number | null;
+  guest_check_printed_at: ColumnType<Date, string | undefined, never>;
   created_at: ColumnType<Date, string | undefined, never>;
   updated_at: ColumnType<Date, string | Date | undefined, string | Date | undefined>;
   paid_online?: boolean;

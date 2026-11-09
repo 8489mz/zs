@@ -609,6 +609,7 @@ export function syncPosCartStock(cart: PosItem[], products: Product[], options: 
   let changed = false;
   let removedCount = 0;
   let clampedCount = 0;
+  let heldUnavailableCount = 0;
 
   const nextCart = cart.flatMap((item) => {
     const product = products.find((entry) => String(entry.id) === String(item.productId));
@@ -617,6 +618,24 @@ export function syncPosCartStock(cart: PosItem[], products: Product[], options: 
     const isWeighted = item.isWeighted === true;
     const minQty = getMinimumSaleQuantity(isWeighted);
     const stockLimit = (options.allowNegativeStockSales || !!product.hasBom) ? UNBOUNDED_STOCK_LIMIT : getResolvedStockLimit(product, unit, isWeighted);
+    /* INV-REST-HOLD-RECALL-TRUTH (R5-B): a held price is the agreed
+     * price. A line restored from a hold (priceHeldAt) is never
+     * repriced and never silently deleted: a stock-out held line is
+     * KEPT and flagged so the cashier decides (remove or replace);
+     * submit still enforces stock. Only the stock figures refresh. */
+    if (item.priceHeldAt != null) {
+      const heldUnavailable = stockLimit < minQty;
+      if (heldUnavailable) heldUnavailableCount += 1;
+      if (
+        heldUnavailable !== Boolean(item.heldUnavailable)
+        || Number(stockLimit) !== Number(item.stockLimit)
+        || Number(product.stock || 0) !== Number(item.currentStock)
+      ) {
+        changed = true;
+        return [{ ...item, stockLimit, currentStock: Number(product.stock || 0), heldUnavailable }];
+      }
+      return [item];
+    }
     if (stockLimit < minQty) {
       changed = true;
       removedCount += 1;
@@ -666,6 +685,7 @@ export function syncPosCartStock(cart: PosItem[], products: Product[], options: 
     cart: changed ? nextCart : cart,
     removedCount,
     clampedCount,
+    heldUnavailableCount,
   };
 }
 

@@ -237,6 +237,12 @@ export function mapHeldSalesRows(
     const itemModifiers = isEnvelope ? rawModifiers.mods : (Array.isArray(rawModifiers) ? rawModifiers : []);
     const itemSeat = isEnvelope && rawModifiers.seatNumber != null ? Number(rawModifiers.seatNumber) : ((item as any).seat_number ? Number((item as any).seat_number) : undefined);
     const itemCourse = isEnvelope && rawModifiers.course ? String(rawModifiers.course) : ((item as any).course || undefined);
+    /* INV-REST-HOLD-RECALL-TRUTH (R5-B): the held line fields ride in the
+     * modifiers envelope under `held`. The stored lineKey is preferred
+     * over rebuilding it (the rebuild drops the combo/recall suffix and
+     * collapses two identical lines to one key); old drafts without a
+     * `held` block fall back to the rebuild. */
+    const held = isEnvelope && rawModifiers.held && typeof rawModifiers.held === 'object' ? rawModifiers.held : null;
 
     itemsByDraft.get(key)!.push({
       productId: item.product_id ? String(item.product_id) : '',
@@ -246,11 +252,18 @@ export function mapHeldSalesRows(
       unitName: item.unit_name || 'قطعة',
       unitMultiplier: Number(item.unit_multiplier || 1),
       priceType: item.price_type || 'retail',
-      lineKey: `${item.product_id || ''}::${item.unit_name || 'قطعة'}::${item.price_type || 'retail'}`,
+      lineKey: held?.lineKey ? String(held.lineKey) : `${item.product_id || ''}::${item.unit_name || 'قطعة'}::${item.price_type || 'retail'}`,
       modifiers: itemModifiers,
       ...(typeof item.notes === 'string' && item.notes.trim() ? { notes: item.notes } : {}),
       ...(itemSeat != null ? { seatNumber: itemSeat } : {}),
       ...(itemCourse != null ? { course: itemCourse } : {}),
+      ...(held?.unitId ? { unitId: String(held.unitId) } : {}),
+      ...(Array.isArray(held?.serials) ? { serials: held.serials.map((entry: unknown) => String(entry)) } : {}),
+      ...(held?.originalPrice != null ? { originalPrice: Number(held.originalPrice) } : {}),
+      ...(held?.offerDiscount != null ? { offerDiscount: Number(held.offerDiscount) } : {}),
+      ...(held?.offerName ? { offerName: String(held.offerName) } : {}),
+      ...(held?.isWeighted != null ? { isWeighted: Boolean(held.isWeighted) } : {}),
+      ...(Array.isArray(held?.quantityChunks) ? { quantityChunks: held.quantityChunks.map((entry: unknown) => Number(entry)) } : {}),
     });
   }
 
@@ -265,6 +278,24 @@ export function mapHeldSalesRows(
     cashAmount: Number(row.cash_amount || 0),
     cardAmount: Number(row.card_amount || 0),
     discount: Number(row.discount || 0),
+    /* INV-REST-HOLD-RECALL-TRUTH (R5-B): the header fields recall
+     * restores. deliveryFee was never returned before (the select never
+     * fetched it), so a recalled delivery order came back with fee 0. */
+    deliveryFee: Number(row.delivery_fee || 0),
+    deliveryRepId: row.delivery_rep_id ? String(row.delivery_rep_id) : '',
+    collectionStatus: row.collection_status ? String(row.collection_status) : '',
+    tipAmount: Number(row.tip_amount || 0),
+    loyaltyPointsRedeemed: Number(row.loyalty_points_redeemed || 0),
+    pagerNumber: row.pager_number ? String(row.pager_number) : '',
+    deliveryFeeMode: row.delivery_fee_mode ? String(row.delivery_fee_mode) : '',
+    onlineOrderId: row.online_order_id ? Number(row.online_order_id) : undefined,
+    diningCourse: row.dining_course ? String(row.dining_course) : '',
+    guestCount: row.guest_count != null ? Number(row.guest_count) : undefined,
+    /* timestamptz comes back as a Date from the driver — normalise to
+     * ISO so recall restores the same string the hold sent. */
+    guestCheckPrintedAt: row.guest_check_printed_at instanceof Date
+      ? row.guest_check_printed_at.toISOString()
+      : (row.guest_check_printed_at ? String(row.guest_check_printed_at) : null),
     note: row.note || '',
     search: row.search || '',
     tableNumber: row.table_number || '',

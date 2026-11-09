@@ -31,6 +31,16 @@ export function usePosWorkspaceEffects({
   guestCount,
   guestCheckPrintedAt,
   orderType,
+  deliveryFee,
+  deliveryRepId,
+  collectionStatus,
+  tipAmount,
+  loyaltyPointsRedeemed,
+  pagerNumber,
+  diningCourse,
+  deliveryFeeMode,
+  branchId,
+  locationId,
 
   products,
   setCart,
@@ -77,8 +87,16 @@ export function usePosWorkspaceEffects({
   guestCount?: number;
   guestCheckPrintedAt?: string | null;
   orderType: string;
+  deliveryFee?: number;
   deliveryRepId?: string;
   collectionStatus?: string;
+  tipAmount?: number;
+  loyaltyPointsRedeemed?: number;
+  pagerNumber?: string;
+  diningCourse?: string;
+  deliveryFeeMode?: 'freelance_courier' | 'store_fleet' | string;
+  branchId?: string;
+  locationId?: string;
 
   products: Product[];
   setCart: (value: PosItem[] | ((current: PosItem[]) => PosItem[])) => void;
@@ -120,6 +138,14 @@ export function usePosWorkspaceEffects({
         quickCustomerPhone,
         quickCustomerAddress,
         discount,
+        deliveryFee,
+        deliveryRepId,
+        collectionStatus,
+        tipAmount,
+        loyaltyPointsRedeemed,
+        pagerNumber,
+        diningCourse,
+        deliveryFeeMode,
         paidAmount,
         cashAmount,
         cardAmount,
@@ -133,12 +159,27 @@ export function usePosWorkspaceEffects({
         guestCount,
         guestCheckPrintedAt,
         orderType,
-        branchId: '',
-        locationId: '',
+        branchId: branchId || '',
+        locationId: locationId || '',
       }));
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [cart, customerId, quickCustomerName, quickCustomerPhone, quickCustomerAddress, discount, paidAmount, cashAmount, cardAmount, transferAmount, paymentType, paymentChannel, note, search, priceType, tableNumber, guestCount, guestCheckPrintedAt, orderType]);
+  }, [cart, customerId, quickCustomerName, quickCustomerPhone, quickCustomerAddress, discount, deliveryFee, deliveryRepId, collectionStatus, tipAmount, loyaltyPointsRedeemed, pagerNumber, diningCourse, deliveryFeeMode, paidAmount, cashAmount, cardAmount, transferAmount, paymentType, paymentChannel, note, search, priceType, tableNumber, guestCount, guestCheckPrintedAt, orderType, branchId, locationId]);
+
+  /* INV-REST-HOLD-RECALL-TRUTH (R5-B): the 300 ms debounce has no flush
+   * on unmount — navigating away within 300 ms of the last edit lost
+   * that edit. The latest snapshot is persisted synchronously when the
+   * workspace unmounts, but only while a cart exists (an empty cart
+   * means the draft was held / submitted / cleared already). */
+  const latestDraftRef = useRef({ cart, customerId, quickCustomerName, quickCustomerPhone, quickCustomerAddress, discount, deliveryFee, deliveryRepId, collectionStatus, tipAmount, loyaltyPointsRedeemed, pagerNumber, diningCourse, deliveryFeeMode, paidAmount, cashAmount, cardAmount, transferAmount, paymentType, paymentChannel, note, search, priceType, tableNumber, guestCount, guestCheckPrintedAt, orderType, branchId, locationId });
+  latestDraftRef.current = { cart, customerId, quickCustomerName, quickCustomerPhone, quickCustomerAddress, discount, deliveryFee, deliveryRepId, collectionStatus, tipAmount, loyaltyPointsRedeemed, pagerNumber, diningCourse, deliveryFeeMode, paidAmount, cashAmount, cardAmount, transferAmount, paymentType, paymentChannel, note, search, priceType, tableNumber, guestCount, guestCheckPrintedAt, orderType, branchId, locationId };
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    return () => {
+      const latest = latestDraftRef.current;
+      if (latest.cart.length) persistDraftSnapshot(buildDraftState(latest));
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -150,10 +191,13 @@ export function usePosWorkspaceEffects({
     const result = syncPosCartStock(cart, products, { allowNegativeStockSales: isNegativeStockSalesAllowed(settings), digits: currencyMoneyDigits(settings?.currency || getGlobalSystemCurrency()) });
     if (result.cart === cart) return;
     setCart(result.cart);
-    if (result.removedCount || result.clampedCount) {
+    if (result.removedCount || result.clampedCount || result.heldUnavailableCount) {
       const parts = [];
       if (result.removedCount) parts.push(`تم حذف ${result.removedCount} صنف غير متاح في الموقع الحالي`);
       if (result.clampedCount) parts.push(`تم تعديل كمية ${result.clampedCount} صنف حسب المخزون المتاح`);
+      /* INV-REST-HOLD-RECALL-TRUTH (R5-B): a stock-out held line is kept
+       * and flagged, never silently deleted — the cashier decides. */
+      if (result.heldUnavailableCount) parts.push(`${result.heldUnavailableCount} صنف معلّق غير متاح حالياً — أزله أو بدّله`);
       setSubmitMessage(`${parts.join('، ')}.`);
     }
   }, [cart, products, settings, setCart, setSubmitMessage]);

@@ -10,7 +10,7 @@ import { storefrontApi } from '@/features/storefront/api/storefront.api';
 import { queryClient } from '@/app/providers';
 import { getFriendlyApiErrorMessage } from '@/lib/api-error-message';
 import { getSubmitSaleErrorMessage } from '@/features/pos/lib/pos-submit-error';
-import { stripSaleItemNameFields } from '@/features/pos/contracts';
+import { buildHeldSnapshot, restoreHeldSnapshot, writeRecalledBranchLocation } from '@/features/pos/lib/pos-held-snapshot';
 import { getPosTerminalCode } from '@/features/pos/lib/pos-offline-sync';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
@@ -432,13 +432,46 @@ export function createPosWorkspaceAsyncActions(
       return;
     }
     try {
-      const sanitizedItems = params.cart.map((item) => ({
+      /* INV-REST-HOLD-RECALL-TRUTH (R5-B): the hold sends the single
+       * versioned snapshot — every header field and every line field.
+       * The old sanitizedItems kept only product/qty/price/names and
+       * dropped lineKey / unitId / serials / offer fields, and the
+       * payload never sent tip / loyalty / pager / mode / online order /
+       * dining / guests / check-printed at all. */
+      const snapshot = buildHeldSnapshot({
+        cart: params.cart,
+        customerId: params.customerId,
+        discount: params.discount,
+        tipAmount: params.tipAmount,
+        loyaltyPointsRedeemed: params.loyaltyPointsRedeemed,
+        deliveryFee: params.deliveryFee,
+        deliveryFeeMode: params.deliveryFeeMode,
+        deliveryRepId: params.deliveryRepId,
+        collectionStatus: params.collectionStatus,
+        cashAmount: params.cashAmount,
+        cardAmount: params.cardAmount,
+        transferAmount: params.transferAmount,
+        paymentType: params.paymentType,
+        paymentChannel: params.paymentChannel,
+        note: params.note,
+        search: params.search,
+        priceType: params.priceType,
+        branchId: params.branchId || (params.currentBranch?.id != null ? String(params.currentBranch.id) : ''),
+        locationId: params.locationId || (params.currentLocation?.id != null ? String(params.currentLocation.id) : ''),
+        orderType: params.orderType,
+        tableNumber: params.tableNumber,
+        pagerNumber: params.pagerNumber,
+        diningCourse: params.diningCourse,
+        guestCount: params.guestCount,
+        guestCheckPrintedAt: params.guestCheckPrintedAt,
+        onlineOrderId: readActiveOnlineOrderId() > 0 ? readActiveOnlineOrderId() : undefined,
+      });
+      const sanitizedItems = snapshot.cart.map((item) => ({
         productId: Number(item.productId || 0),
         qty: Number(item.qty || 0),
         price: Number(item.price || 0),
         name: String(item.name || '').trim(),
-        nameEn: (item as any).nameEn || (item as any).name_en || undefined,
-        name_en: (item as any).name_en || (item as any).nameEn || undefined,
+        unitId: item.unitId ? String(item.unitId) : undefined,
         unitName: String(item.unitName || '').trim(),
         unitMultiplier: Number(item.unitMultiplier || 1),
         priceType: item.priceType === 'wholesale' ? 'wholesale' : 'retail',
@@ -446,30 +479,41 @@ export function createPosWorkspaceAsyncActions(
         modifiers: item.modifiers || [],
         seatNumber: item.seatNumber ? Number(item.seatNumber) : undefined,
         course: item.course || undefined,
+        lineKey: item.lineKey || undefined,
+        serials: item.serials,
+        originalPrice: item.originalPrice,
+        offerDiscount: item.offerDiscount,
+        offerName: item.offerName,
+        isWeighted: item.isWeighted,
+        quantityChunks: item.quantityChunks,
       }));
       await params.saveHeldDraftMutation.mutateAsync({
-        customerId: params.customerId || null,
-        paymentType: params.paymentType,
-        discount: params.discount,
-        deliveryFee: params.deliveryFee,
-        note: params.note,
-        search: params.search,
-        priceType: params.priceType,
-        branchId: params.branchId || (params.currentBranch?.id != null ? String(params.currentBranch.id) : null),
-        locationId: params.locationId || (params.currentLocation?.id != null ? String(params.currentLocation.id) : null),
-        cashAmount: params.cashAmount,
-        cardAmount: params.cardAmount,
-        transferAmount: params.transferAmount,
-        paymentChannel: params.paymentChannel,
-        orderType: params.orderType,
-        tableNumber: params.tableNumber,
-        ...(params.deliveryRepId && Number(params.deliveryRepId) > 0 ? {
-          deliveryRepId: Number(params.deliveryRepId),
-          collectionStatus: params.collectionStatus || 'cod',
-        } : {}),
-        // HeldSaleItemDto has no nameEn / name_en and the validation pipe forbids
-        // non-whitelisted fields, so strip them from the server payload.
-        items: stripSaleItemNameFields(sanitizedItems),
+        customerId: snapshot.customerId || null,
+        paymentType: snapshot.paymentType,
+        discount: snapshot.discount,
+        deliveryFee: snapshot.deliveryFee,
+        tipAmount: snapshot.tipAmount,
+        loyaltyPointsRedeemed: snapshot.loyaltyPointsRedeemed,
+        pagerNumber: snapshot.pagerNumber || undefined,
+        deliveryFeeMode: snapshot.deliveryFeeMode,
+        onlineOrderId: snapshot.onlineOrderId,
+        diningCourse: snapshot.diningCourse,
+        guestCount: snapshot.guestCount,
+        guestCheckPrintedAt: snapshot.guestCheckPrintedAt || undefined,
+        note: snapshot.note,
+        search: snapshot.search,
+        priceType: snapshot.priceType,
+        branchId: snapshot.branchId || null,
+        locationId: snapshot.locationId || null,
+        cashAmount: snapshot.cashAmount,
+        cardAmount: snapshot.cardAmount,
+        transferAmount: snapshot.transferAmount,
+        paymentChannel: snapshot.paymentChannel,
+        orderType: snapshot.orderType,
+        tableNumber: snapshot.tableNumber,
+        deliveryRepId: Number(snapshot.deliveryRepId) > 0 ? Number(snapshot.deliveryRepId) : undefined,
+        collectionStatus: snapshot.collectionStatus || 'cod',
+        items: sanitizedItems,
       });
       // R4-E I13: no kitchen print here anymore — a held draft never reaches
       // the KDS, so printing it as "sent to the kitchen" lied. The automatic
@@ -484,15 +528,37 @@ export function createPosWorkspaceAsyncActions(
     } catch (error) {
       params.setSubmitMessage(getFriendlyApiErrorMessage(error, 'تعذر حفظ الفاتورة المعلقة'));
       params.requestBarcodeFocus();
+      /* INV-REST-HOLD-RECALL-TRUTH (R5-B): a failed auto-hold must abort
+       * the recall that follows it — the live cart is unrecoverable once
+       * overwritten. The old code swallowed the error and returned
+       * normally, so a failed hold still wiped the live cart. */
+      throw error;
     }
   }
 
   async function recallDraft(draftId: string) {
     const draft = params.heldDrafts.find((entry) => entry.id === draftId);
     if (!draft) return;
-    
-    // Ensure recalled items have a lineKey and preserved restaurant properties
-    const restoredCart = (draft.cart || []).map((item: any, index: number) => ({
+
+    /* INV-REST-HOLD-RECALL-TRUTH (R5-B): delete-before-restore. The
+     * draft object is already in memory, so deleting first loses
+     * nothing — and a failed delete can no longer leave the same order
+     * twice (once in the cart, once still held). The old order
+     * (setCart, then delete with no try/catch) did exactly that. */
+    try {
+      await params.deleteHeldDraftMutation.mutateAsync(draftId);
+    } catch (error) {
+      params.setSubmitMessage(getFriendlyApiErrorMessage(error, 'تعذّر حذف الفاتورة المعلقة — لم يتم الاسترجاع'));
+      params.requestBarcodeFocus();
+      throw error;
+    }
+
+    /* Restore every field from the single versioned snapshot. The
+     * lineKey synthesis line below is UNCHANGED on purpose (R5-C owns
+     * it): the stored lineKey now flows through restoreHeldSnapshot,
+     * and only a missing one is synthesised here. */
+    const { cart, header } = restoreHeldSnapshot(draft);
+    const restoredCart = cart.map((item: any, index: number) => ({
       ...item,
       notes: item.notes || '',
       modifiers: Array.isArray(item.modifiers) ? item.modifiers : [],
@@ -500,39 +566,59 @@ export function createPosWorkspaceAsyncActions(
       course: item.course || undefined,
       lineKey: item.lineKey || `${item.productId}::${item.unitName || 'unit'}::${item.priceType || 'retail'}::recalled-${index}`
     }));
-    
+
+    /* M32: restore the draft's branch/location (they are already in the
+     * payload). There is no branch setter — the override lives in
+     * usePosWorkspace, fed by this write + event. */
+    writeRecalledBranchLocation(header.branchId, header.locationId);
+    /* The online order id lives in localStorage, and clearDraftSnapshot
+     * deletes it on reset — so a recalled storefront order restores it
+     * here, or the re-approval it triggers is lost. */
+    if (header.onlineOrderId) {
+      try {
+        localStorage.setItem('zs_pos_online_order_id', String(header.onlineOrderId));
+      } catch {
+        /* storage unavailable: the order id is lost, the sale still posts. */
+      }
+    }
+
     params.setCart(restoredCart);
-    params.setCustomerId(draft.customerId || '');
-    params.setQuickCustomerName((draft as any).customerName || (draft as any).quickCustomerName || '');
-    params.setQuickCustomerPhone((draft as any).customerPhone || (draft as any).quickCustomerPhone || '');
-    params.setQuickCustomerAddress((draft as any).customerAddress || (draft as any).quickCustomerAddress || '');
-    params.setDiscount(Number(draft.discount || 0));
-    params.setDeliveryFee(Number((draft as any).deliveryFee || 0));
-    params.setCashAmount(Number(draft.cashAmount || 0));
-    params.setCardAmount(Number(draft.cardAmount || 0));
+    params.setCustomerId(header.customerId || '');
+    params.setQuickCustomerName(header.quickCustomerName || '');
+    params.setQuickCustomerPhone(header.quickCustomerPhone || '');
+    params.setQuickCustomerAddress(header.quickCustomerAddress || '');
+    params.setDiscount(Number(header.discount || 0));
+    params.setDeliveryFee(Number(header.deliveryFee || 0));
+    params.setTipAmount?.(Number(header.tipAmount || 0));
+    params.setLoyaltyPointsRedeemed?.(Number(header.loyaltyPointsRedeemed || 0));
+    params.setPagerNumber?.(header.pagerNumber || '');
+    params.setGuestCount?.(Number(header.guestCount || 1));
+    params.setGuestCheckPrintedAt?.(header.guestCheckPrintedAt || null);
+    params.setDiningCourse?.(header.diningCourse || 'main');
+    params.setCashAmount(Number(header.cashAmount || 0));
+    params.setCardAmount(Number(header.cardAmount || 0));
     params.setTransferAmount(
       Number(
-        draft.transferAmount
-        || ((draft.paymentChannel === 'wallet' || draft.paymentChannel === 'instapay')
-          ? draft.paidAmount || 0
+        header.transferAmount
+        || ((header.paymentChannel === 'wallet' || header.paymentChannel === 'instapay')
+          ? header.paidAmount || 0
           : 0),
       ),
     );
-    params.setPaymentType(draft.paymentType);
-    params.setPaymentChannel(draft.paymentChannel);
-    params.setNote(draft.note);
-    params.setSearch(draft.search);
-    params.setPriceType(draft.priceType);
-    params.setOrderType(draft.orderType || 'takeaway');
-    params.setTableNumber(draft.tableNumber || '');
-    params.setDeliveryRepId(draft.deliveryRepId || '');
-    params.setCollectionStatus(draft.collectionStatus || 'cod');
-    if ((draft as any).deliveryFeeMode) {
-      params.setDeliveryFeeMode((draft as any).deliveryFeeMode);
+    params.setPaymentType(header.paymentType);
+    params.setPaymentChannel(header.paymentChannel);
+    params.setNote(header.note);
+    params.setSearch(header.search);
+    params.setPriceType(header.priceType);
+    params.setOrderType(header.orderType || 'takeaway');
+    params.setTableNumber(header.tableNumber || '');
+    params.setDeliveryRepId(header.deliveryRepId || '');
+    params.setCollectionStatus(header.collectionStatus || 'cod');
+    if (header.deliveryFeeMode) {
+      params.setDeliveryFeeMode(header.deliveryFeeMode);
     }
     params.setDiscountApprovalGranted(false);
     params.setDiscountApprovalSecret('');
-    await params.deleteHeldDraftMutation.mutateAsync(draftId);
     params.setPostSaleSaleKey('');
     params.setSubmitMessage('تم استرجاع الفاتورة المعلقة');
     params.requestBarcodeFocus();

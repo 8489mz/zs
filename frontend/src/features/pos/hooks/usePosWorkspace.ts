@@ -15,6 +15,7 @@ import type { PosItem, PosPriceType } from '@/features/pos/types/pos.types';
 import { usePosCustomerDisplayBroadcaster } from '@/features/pos/hooks/usePosCustomerDisplayBroadcaster';
 import { useAuthStore } from '@/stores/auth-store';
 import { loadPosWorkspaceStorage } from '@/features/pos/lib/pos.persistence';
+import { RECALLED_BRANCH_EVENT, clearRecalledBranchLocation, readRecalledBranchLocation } from '@/features/pos/lib/pos-held-snapshot';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits } from '@/shared/utils/money';
 import { computePaidAmount } from '@/features/pos/lib/pos-paid-amount';
@@ -26,6 +27,11 @@ export type PaymentChannel = 'cash' | 'card' | 'wallet' | 'instapay' | 'credit' 
 export type PosProductFilter = 'all' | 'offers' | 'priced' | 'low' | 'recent' | 'raw_materials' | 'services';
 
 export interface PosDraftSnapshot {
+  /* INV-REST-HOLD-RECALL-TRUTH (R5-B): one versioned snapshot shape for
+   * the server held draft, the localStorage live draft and the in-memory
+   * state. buildHeldSnapshot / buildDraftState / mapHeldSalesRows map the
+   * same field list; the spec asserts they stay in sync. */
+  snapshotVersion?: number;
   cart: PosItem[];
   customerId: string;
   customerName?: string;
@@ -36,6 +42,10 @@ export interface PosDraftSnapshot {
   quickCustomerAddress?: string;
   discount: number;
   deliveryFee: number;
+  tipAmount?: number;
+  loyaltyPointsRedeemed?: number;
+  pagerNumber?: string;
+  deliveryFeeMode?: 'freelance_courier' | 'store_fleet' | string;
   paidAmount: number;
   cashAmount: number;
   cardAmount: number;
@@ -90,9 +100,54 @@ export function usePosWorkspace() {
     locations: locationsQuery.data || [],
   });
 
+  /* M32 (R5-B): branch/location are derived from settings and have no
+   * setter, so a recalled draft's branch/location rides as an override
+   * here. recallDraft writes it (storage + event); it clears when the
+   * cart empties (hold / submit / manual clear). On mount it is seeded
+   * from the stored live draft when that draft still has a cart, so a
+   * refresh mid-recall keeps the branch. */
+  const [recalledBranchId, setRecalledBranchId] = useState<string>(() => {
+    try {
+      const stored = loadPosWorkspaceStorage().draft;
+      const recalled = readRecalledBranchLocation();
+      if (recalled.branchId) return recalled.branchId;
+      return stored && (stored.cart || []).length > 0 ? String(stored.branchId || '') : '';
+    } catch {
+      return '';
+    }
+  });
+  const [recalledLocationId, setRecalledLocationId] = useState<string>(() => {
+    try {
+      const stored = loadPosWorkspaceStorage().draft;
+      const recalled = readRecalledBranchLocation();
+      if (recalled.locationId) return recalled.locationId;
+      return stored && (stored.cart || []).length > 0 ? String(stored.locationId || '') : '';
+    } catch {
+      return '';
+    }
+  });
+  useEffect(() => {
+    const handleRecalledBranch = (event: Event) => {
+      const detail = (event as CustomEvent<{ branchId: string; locationId: string }>).detail || { branchId: '', locationId: '' };
+      setRecalledBranchId(String(detail.branchId || ''));
+      setRecalledLocationId(String(detail.locationId || ''));
+    };
+    window.addEventListener(RECALLED_BRANCH_EVENT, handleRecalledBranch);
+    return () => window.removeEventListener(RECALLED_BRANCH_EVENT, handleRecalledBranch);
+  }, []);
+  useEffect(() => {
+    if (state.cart.length === 0 && (recalledBranchId || recalledLocationId)) {
+      clearRecalledBranchLocation();
+      setRecalledBranchId('');
+      setRecalledLocationId('');
+    }
+  }, [state.cart.length, recalledBranchId, recalledLocationId]);
+  const effectiveBranchId = recalledBranchId || operationalContext.branchId;
+  const effectiveLocationId = recalledLocationId || operationalContext.locationId;
+
   const catalogWarmup = usePosCatalogWarmup({
-    branchId: operationalContext.branchId,
-    locationId: operationalContext.locationId,
+    branchId: effectiveBranchId,
+    locationId: effectiveLocationId,
   });
 
   // INV-POS-CATEGORY-TILE-FILTER: the selected category is workspace state,
@@ -101,7 +156,7 @@ export function usePosWorkspace() {
   // browse window (first 300 by name) client-side.
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
 
-  const { saleProducts, catalogProducts, productsQuery } = usePosCatalog(state.search, operationalContext.branchId, operationalContext.locationId, state.productFilter, selectedCategoryId);
+  const { saleProducts, catalogProducts, productsQuery } = usePosCatalog(state.search, effectiveBranchId, effectiveLocationId, state.productFilter, selectedCategoryId);
 
   const createSale = usePosSaleMutation();
   const queryClient = useQueryClient();
@@ -138,8 +193,8 @@ export function usePosWorkspace() {
     paymentType: state.paymentType,
     paymentChannel: state.paymentChannel,
     customerId: state.customerId,
-    branchId: operationalContext.branchId,
-    locationId: operationalContext.locationId,
+    branchId: effectiveBranchId,
+    locationId: effectiveLocationId,
     tableNumber: state.tableNumber,
     search: state.search,
     lastSale: state.lastSale,
@@ -170,8 +225,16 @@ export function usePosWorkspace() {
     guestCount: state.guestCount,
     guestCheckPrintedAt: state.guestCheckPrintedAt,
     orderType: state.orderType,
+    deliveryFee: state.deliveryFee,
     deliveryRepId: state.deliveryRepId,
     collectionStatus: state.collectionStatus,
+    tipAmount: state.tipAmount,
+    loyaltyPointsRedeemed: state.loyaltyPointsRedeemed,
+    pagerNumber: state.pagerNumber,
+    diningCourse: state.diningCourse,
+    deliveryFeeMode: state.deliveryFeeMode,
+    branchId: effectiveBranchId,
+    locationId: effectiveLocationId,
     quickCustomerName: state.quickCustomerName,
     quickCustomerPhone: state.quickCustomerPhone,
     quickCustomerAddress: state.quickCustomerAddress,
@@ -273,6 +336,19 @@ export function usePosWorkspace() {
       state.setPagerNumber((nextDraft as any).pagerNumber || '');
       state.setOrderType(nextDraft.orderType || 'takeaway');
       state.setNote(nextDraft.note || '');
+      /* INV-REST-HOLD-RECALL-TRUTH (R5-B): the handler existed but
+       * restored 0 / '' for these — the autosave never persisted them.
+       * Now that buildDraftState maps them, restore them too. */
+      state.setTipAmount(Number((nextDraft as any).tipAmount || 0));
+      state.setLoyaltyPointsRedeemed(Number((nextDraft as any).loyaltyPointsRedeemed || 0));
+      state.setDeliveryRepId(nextDraft.deliveryRepId || '');
+      state.setCollectionStatus(nextDraft.collectionStatus || 'cod');
+      state.setDiningCourse((nextDraft as any).diningCourse || 'main');
+      state.setGuestCount(Number((nextDraft as any).guestCount || 1));
+      state.setGuestCheckPrintedAt((nextDraft as any).guestCheckPrintedAt || null);
+      if ((nextDraft as any).deliveryFeeMode) {
+        state.setDeliveryFeeMode((nextDraft as any).deliveryFeeMode);
+      }
       state.setSubmitMessage('تم استلام ودمج طلب المتجر في سلة الكاشير بنجاح');
     };
     window.addEventListener('zs_pos_reload_draft', handleReloadDraft);
@@ -322,8 +398,8 @@ export function usePosWorkspace() {
     setSearch: state.setSearch,
     priceType: state.priceType,
     setPriceType: state.setPriceType,
-    branchId: operationalContext.branchId,
-    locationId: operationalContext.locationId,
+    branchId: effectiveBranchId,
+    locationId: effectiveLocationId,
     tableNumber: state.tableNumber,
     setTableNumber: state.setTableNumber,
     pagerNumber: state.pagerNumber,
@@ -470,8 +546,8 @@ export function usePosWorkspace() {
     selectedLineKey: state.selectedLineKey,
     setSelectedLineKey: state.setSelectedLineKey,
     priceType: state.priceType,
-    branchId: operationalContext.branchId,
-    locationId: operationalContext.locationId,
+    branchId: effectiveBranchId,
+    locationId: effectiveLocationId,
     productFilter: state.productFilter,
     setProductFilter: state.setProductFilter,
     selectedCategoryId,

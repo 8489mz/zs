@@ -248,10 +248,21 @@ export function PosWorkspace() {
 
   const requestRecallHeldDraftByIndex = useCallback(async (index: number) => {
     const draftId = pos.heldDraftSummaries[index]?.id;
-    if (draftId) {
+    if (!draftId) return;
+    /* INV-REST-HOLD-RECALL-TRUTH (R5-B): the keyboard path had no
+     * auto-hold at all — it wiped the live cart. Hold first; a failed
+     * hold (or a failed recall) aborts and leaves the dialog open.
+     * holdDraft / recallDraft already report the failure in the submit
+     * message. */
+    try {
+      if (pos.cart.length > 0) {
+        await pos.holdDraft();
+      }
       await pos.recallDraft(draftId);
-      setHeldDraftsDialogOpen(false);
+    } catch {
+      return;
     }
+    setHeldDraftsDialogOpen(false);
   }, [pos]);
 
   const requestItemModifiers = useCallback((lineKey: string) => {
@@ -807,10 +818,18 @@ export function PosWorkspace() {
             toast.success(`تم إجلاس الضيف على طاولة ${tableNum} بعدد ${guestCount} أفراد.`);
           }}
           onRecallDraft={async (draftId) => {
-            if (pos.cart.length > 0) {
-              await pos.holdDraft();
+            /* INV-REST-HOLD-RECALL-TRUTH (R5-B): a failed auto-hold
+             * aborts the recall — the live cart is unrecoverable once
+             * overwritten. holdDraft / recallDraft already report the
+             * failure in the submit message. */
+            try {
+              if (pos.cart.length > 0) {
+                await pos.holdDraft();
+              }
+              await pos.recallDraft(draftId);
+            } catch {
+              return;
             }
-            await pos.recallDraft(draftId);
           }}
           onDeleteDraft={async (draftId) => {
             await pos.deleteDraft(draftId);
@@ -940,11 +959,15 @@ export function PosWorkspace() {
             setShortcutRecallDraftId('');
             focusBarcodeEntry();
           }}
-          onRecall={async (draftId) => { 
+          onRecall={async (draftId) => {
+            /* INV-REST-HOLD-RECALL-TRUTH (R5-B): a failed auto-hold
+             * aborts the recall — the live cart is unrecoverable once
+             * overwritten. The throw reaches PosHeldDraftsDialog, which
+             * keeps the dialog open and shows the error. */
             if (pos.cart.length > 0) {
               await pos.holdDraft();
             }
-            await pos.recallDraft(draftId); 
+            await pos.recallDraft(draftId);
           }}
           onDelete={async (draftId) => { await pos.deleteDraft(draftId); }}
           onClearAll={async () => { await pos.clearHeldDrafts(); }}

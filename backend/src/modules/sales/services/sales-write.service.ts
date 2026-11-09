@@ -4408,6 +4408,16 @@ export class SalesWriteService {
           modifiers: item.modifiers || [],
           seatNumber: item.seatNumber ? Number(item.seatNumber) : undefined,
           course: item.course ? String(item.course).trim() : undefined,
+          /* INV-REST-HOLD-RECALL-TRUTH (R5-B): the item fields the old
+           * hold dropped. They ride in the modifiers JSON envelope. */
+          lineKey: item.lineKey ? String(item.lineKey) : undefined,
+          unitId: item.unitId ? String(item.unitId) : undefined,
+          serials: Array.isArray(item.serials) ? item.serials.map((entry) => String(entry)) : undefined,
+          originalPrice: item.originalPrice != null ? Number(item.originalPrice) : undefined,
+          offerDiscount: item.offerDiscount != null ? Number(item.offerDiscount) : undefined,
+          offerName: item.offerName ? String(item.offerName) : undefined,
+          isWeighted: item.isWeighted != null ? Boolean(item.isWeighted) : undefined,
+          quantityChunks: Array.isArray(item.quantityChunks) ? item.quantityChunks.map((entry) => Number(entry)) : undefined,
         }))
         .filter((entry) => entry.productId > 0 && entry.qty > 0);
 
@@ -4520,7 +4530,21 @@ export class SalesWriteService {
           branch_id: payload.branchId ? Number(payload.branchId) : null,
           location_id: payload.locationId ? Number(payload.locationId) : null,
           delivery_rep_id: (payload as any).deliveryRepId ? Number((payload as any).deliveryRepId) : null,
-          collection_status: (payload as any).deliveryRepId ? ((payload as any).collectionStatus || null) : null,
+          /* INV-REST-HOLD-RECALL-TRUTH (R5-B): persist the stated
+           * collection status whenever the hold names one — the old code
+           * stored it only when a rep was set, so a prepaid_online order
+           * with no rep yet came back as COD. */
+          collection_status: (payload as any).collectionStatus ? String((payload as any).collectionStatus) : null,
+          /* INV-REST-HOLD-RECALL-TRUTH (R5-B, 0310 columns): the header
+           * fields the old hold dropped. */
+          tip_amount: Number(payload.tipAmount || 0),
+          loyalty_points_redeemed: Number(payload.loyaltyPointsRedeemed || 0),
+          pager_number: payload.pagerNumber ? String(payload.pagerNumber).trim() : null,
+          delivery_fee_mode: payload.deliveryFeeMode ? String(payload.deliveryFeeMode) : null,
+          online_order_id: payload.onlineOrderId ? Number(payload.onlineOrderId) : null,
+          dining_course: payload.diningCourse ? String(payload.diningCourse).trim() : null,
+          guest_count: payload.guestCount != null ? Number(payload.guestCount) : null,
+          guest_check_printed_at: payload.guestCheckPrintedAt ? String(payload.guestCheckPrintedAt) : null,
           created_by: auth.userId,
           tenant_id: scope.tenantId,
           account_id: scope.accountId,
@@ -4531,12 +4555,29 @@ export class SalesWriteService {
       const id = Number(heldInsert.id);
       for (const item of items) {
         const itemModifiers = item.modifiers || [];
-        const hasExtraMeta = item.seatNumber != null || Boolean(item.course);
+        /* INV-REST-HOLD-RECALL-TRUTH (R5-B): the held line fields ride in
+         * the existing modifiers JSON envelope (the seat/course precedent
+         * below) — no second migration. isWeighted:false and
+         * offerDiscount:0 are real values, so presence is tested with
+         * != null / length, never truthiness. */
+        const heldMeta: Record<string, unknown> = {
+          ...(item.lineKey ? { lineKey: item.lineKey } : {}),
+          ...(item.unitId ? { unitId: item.unitId } : {}),
+          ...(Array.isArray(item.serials) && item.serials.length ? { serials: item.serials } : {}),
+          ...(item.originalPrice != null ? { originalPrice: item.originalPrice } : {}),
+          ...(item.offerDiscount != null ? { offerDiscount: item.offerDiscount } : {}),
+          ...(item.offerName ? { offerName: item.offerName } : {}),
+          ...(item.isWeighted != null ? { isWeighted: item.isWeighted } : {}),
+          ...(Array.isArray(item.quantityChunks) && item.quantityChunks.length ? { quantityChunks: item.quantityChunks } : {}),
+        };
+        const hasHeldMeta = Object.keys(heldMeta).length > 0;
+        const hasExtraMeta = item.seatNumber != null || Boolean(item.course) || hasHeldMeta;
         const finalModifiers = hasExtraMeta
           ? {
               mods: Array.isArray(itemModifiers) ? itemModifiers : [],
               ...(item.seatNumber != null ? { seatNumber: item.seatNumber } : {}),
               ...(item.course ? { course: item.course } : {}),
+              ...(hasHeldMeta ? { held: heldMeta } : {}),
             }
           : itemModifiers;
 

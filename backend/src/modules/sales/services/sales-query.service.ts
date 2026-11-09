@@ -271,7 +271,11 @@ export class SalesQueryService {
       .leftJoin('customers as c', 'c.id', 'hs.customer_id')
       .select([
         'hs.id', 'hs.customer_id', 'hs.payment_type', 'hs.payment_channel', 'hs.paid_amount', 'hs.cash_amount', 'hs.card_amount',
-        'hs.discount', 'hs.note', 'hs.search', 'hs.table_number', 'hs.order_type', 'hs.price_type', 'hs.branch_id', 'hs.location_id', 'hs.created_by', 'hs.created_at', 'c.name as customer_name',
+        'hs.discount', 'hs.delivery_fee', 'hs.delivery_rep_id', 'hs.collection_status', 'hs.note', 'hs.search', 'hs.table_number', 'hs.order_type', 'hs.price_type', 'hs.branch_id', 'hs.location_id', 'hs.created_by', 'hs.created_at',
+        /* INV-REST-HOLD-RECALL-TRUTH (R5-B, 0310 columns): the header
+         * fields mapHeldSalesRows returns. Without them in the select the
+         * mapper reads undefined and recall restores defaults. */
+        'hs.tip_amount', 'hs.loyalty_points_redeemed', 'hs.pager_number', 'hs.delivery_fee_mode', 'hs.online_order_id', 'hs.dining_course', 'hs.guest_count', 'hs.guest_check_printed_at', 'c.name as customer_name',
       ])
       .where(this.tenantPredicate(auth, 'hs'))
       .$if(!canManageHeldSales, (qb) => qb.where('hs.created_by', '=', ownerUserId ?? -1))

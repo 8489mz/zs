@@ -29,6 +29,13 @@ export interface PosItem {
   quantityChunks?: number[];
   trackSerials?: boolean;
   serials?: string[];
+  /* INV-REST-HOLD-RECALL-TRUTH (R5-B): marker set by restoreHeldSnapshot
+   * on lines restored from a hold; syncPosCartStock freezes the price of
+   * such lines instead of repricing from the current catalog. */
+  priceHeldAt?: number;
+  /* INV-REST-HOLD-RECALL-TRUTH (R5-B): a held line whose stock ran out is
+   * kept and flagged, never silently deleted; submit still enforces stock. */
+  heldUnavailable?: boolean;
   imageUrl?: string;
   icon?: string;
 }

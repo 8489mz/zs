@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsIn, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 
 class HeldSaleItemDto {
   @Type(() => Number)
@@ -41,6 +41,47 @@ class HeldSaleItemDto {
 
   @IsOptional()
   modifiers?: any;
+
+  /* INV-REST-HOLD-RECALL-TRUTH (R5-B): the item fields the old hold
+   * dropped. They ride in the modifiers JSON envelope (the seat/course
+   * precedent) — see saveHeldSale / mapHeldSalesRows. */
+  @IsOptional()
+  @IsString()
+  lineKey?: string;
+
+  @IsOptional()
+  @IsString()
+  unitId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  serials?: string[];
+
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  originalPrice?: number;
+
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  offerDiscount?: number;
+
+  @IsOptional()
+  @IsString()
+  offerName?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isWeighted?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  quantityChunks?: number[];
 
   @Type(() => Number)
   @IsOptional()
@@ -147,6 +188,48 @@ export class HeldSaleDto {
   @IsOptional()
   @IsIn(['cod', 'prepaid_by_rep', 'prepaid_online'])
   collectionStatus?: 'cod' | 'prepaid_by_rep' | 'prepaid_online';
+
+  /* INV-REST-HOLD-RECALL-TRUTH (R5-B): the header fields the old hold
+   * dropped. They map 1:1 to the 0310 columns on held_sales. */
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  tipAmount?: number;
+
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  loyaltyPointsRedeemed?: number;
+
+  @IsOptional()
+  @IsString()
+  pagerNumber?: string;
+
+  @IsOptional()
+  @IsIn(['freelance_courier', 'store_fleet'])
+  deliveryFeeMode?: 'freelance_courier' | 'store_fleet';
+
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  onlineOrderId?: number;
+
+  @IsOptional()
+  @IsString()
+  diningCourse?: string;
+
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  guestCount?: number;
+
+  @IsOptional()
+  @IsString()
+  guestCheckPrintedAt?: string;
 
   @IsArray()
   @ArrayMinSize(1)

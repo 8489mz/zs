@@ -30,16 +30,27 @@ export function PosHeldDraftsDialog({
 }: PosHeldDraftsDialogProps) {
   const { t } = useTranslation();
   const [pendingRecallId, setPendingRecallId] = useState('');
+  const [recallError, setRecallError] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const requestRecall = useCallback(async (draftId: string) => {
     setPendingRecallId(draftId);
+    setRecallError('');
     try {
       await onRecall(draftId);
+    } catch (error) {
+      /* INV-REST-HOLD-RECALL-TRUTH (R5-B): the old finally closed the
+       * dialog even when recall failed, hiding the error — and the cart
+       * was already replaced, so the order could live twice. Stay open
+       * and show the error; the live cart is untouched (recall deletes
+       * the server draft before restoring, and aborts on delete
+       * failure). */
+      setRecallError(error instanceof Error ? error.message : 'تعذّر استرجاع الفاتورة المعلقة');
+      return;
     } finally {
       setPendingRecallId('');
-      onClose();
     }
+    onClose();
   }, [onRecall, onClose]);
 
   useEffect(() => {
@@ -176,6 +187,11 @@ export function PosHeldDraftsDialog({
         </div>
 
         {/* Drafts List */}
+        {recallError ? (
+          <div style={{ marginBottom: '12px', padding: '10px 14px', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', fontSize: '0.85rem', fontWeight: 600 }}>
+            {recallError}
+          </div>
+        ) : null}
         {heldDrafts.length ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '52vh', overflowY: 'auto', paddingRight: '2px', paddingLeft: '2px' }}>
             {heldDrafts.map((draft, idx) => {

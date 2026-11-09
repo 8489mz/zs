@@ -102,6 +102,19 @@ export function buildDraftState(initial?: Partial<PosDraftSnapshot>): PosDraftSn
     guestCheckPrintedAt: (initial as any)?.guestCheckPrintedAt || null,
     orderType: (initial?.cart?.length || cPhone || (initial as any)?.onlineOrderId) ? (initial?.orderType || 'takeaway') : 'takeaway',
     onlineOrderId: (initial as any)?.onlineOrderId ? Number((initial as any).onlineOrderId) : undefined,
+    /* INV-REST-HOLD-RECALL-TRUTH (R5-B): the fields the old autosave
+     * never persisted — the localStorage path dropped them even though
+     * the state held them, so a refresh reset tip/loyalty/pager/mode
+     * and flipped a prepaid delivery back to COD. */
+    deliveryRepId: (initial as any)?.deliveryRepId ? String((initial as any).deliveryRepId) : '',
+    collectionStatus: (initial as any)?.collectionStatus || 'cod',
+    tipAmount: Number((initial as any)?.tipAmount || 0),
+    loyaltyPointsRedeemed: Number((initial as any)?.loyaltyPointsRedeemed || 0),
+    pagerNumber: (initial as any)?.pagerNumber || '',
+    deliveryFeeMode: (initial as any)?.deliveryFeeMode === 'store_fleet' || (initial as any)?.deliveryFeeMode === 'freelance_courier'
+      ? (initial as any).deliveryFeeMode
+      : 'freelance_courier',
+    snapshotVersion: 1,
   };
 }
 
