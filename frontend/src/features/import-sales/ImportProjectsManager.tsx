@@ -211,9 +211,9 @@ export default function ImportProjectsManager() {
   // are now the selectable preset in feasibility-preset.ts.
   const [items, setItems] = useState<Array<{
     name: string;
-    // I1-P1: link to the real inventory item. The feasibility engine
-    // rebuilds its output items without this field, so handleRunFeasibility
-    // re-attaches it by index before storing the result.
+    // I1-P1: link to the real inventory item. I6-A: the feasibility
+    // engine carries this through to its output items natively, so
+    // the stored study keeps the link per line, in any order.
     productId?: number | '';
     partNumber?: string;
     oemNumber?: string;
@@ -533,20 +533,12 @@ export default function ImportProjectsManager() {
         travelAndSourcingCostEgp: Number(travelEgp),
         targetMarkupPercent: Number(targetMarkup),
       });
-      // I1-P1: the feasibility engine rebuilds its output items
-      // without productId, so re-attach the link the user picked,
-      // by index (the engine maps items in input order). Without
-      // this, feasibility_data loses the link and the PI pull copies
-      // only name/qty/price, leaving the PO chain dead. The engine
-      // itself (import-feasibility.engine.ts) is out of scope for
-      // this package; carrying productId through it is the follow-up.
-      const resWithLinks = {
-        ...res,
-        items: Array.isArray(res.items)
-          ? res.items.map((ri: any, i: number) => ({ ...ri, productId: normalizedItems[i]?.productId || undefined }))
-          : res.items,
-      };
-      setFeasibilityResult(resWithLinks);
+      // I6-A: the engine now carries productId natively on each
+      // output item, so the result is stored as returned — no
+      // index-based re-attach. The old re-attach assumed the engine
+      // preserved input order; a reordered study would have linked
+      // the wrong product to each line.
+      setFeasibilityResult(res);
       toast.success('تم احتساب دراسة الجدوى والسيناريوهات بنجاح');
     } catch (err: any) {
       toast.error('حدث خطأ أثناء احتساب الجدوى: ' + (err.message || 'خطأ غير معروف'));

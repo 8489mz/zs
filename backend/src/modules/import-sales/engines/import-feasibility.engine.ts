@@ -14,6 +14,10 @@ import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../account
 
 export interface FeasibilityItemInput {
   name: string;
+  /** I6-A: link to the real inventory item. Carried through to the
+   * output natively so the PI/PO pull no longer depends on input
+   * order; the frontend index-based re-attach is removed. */
+  productId?: number;
   hsCode?: string;
   qty: number;
   factoryPriceUsd: number;
@@ -46,6 +50,10 @@ export interface FeasibilityCalculationInput {
 
 export interface FeasibilityItemOutput {
   name: string;
+  /** I6-A: the linked inventory item id, carried from the input
+   * item of the same line — never re-derived by index. Undefined
+   * when the line was never linked to a real item. */
+  productId?: number;
   hsCode?: string;
   qty: number;
   factoryPriceUsd: number;
@@ -228,6 +236,11 @@ export function calculateImportFeasibility(input: FeasibilityCalculationInput): 
 
     return {
       name: item.name,
+      // I6-A: carry the link natively. Only a finite number is a
+      // link — a free-text '' (unlinked form line) must never be
+      // stored as a product id.
+      productId:
+        typeof item.productId === 'number' && Number.isFinite(item.productId) ? item.productId : undefined,
       hsCode: item.hsCode,
       qty,
       factoryPriceUsd: unitPriceUsd,

@@ -632,6 +632,9 @@ export class CalculateFeasibilityDto {
   @IsArray()
   items!: Array<{
     name: string;
+    /** I6-A: link to the real inventory item, carried through the
+     * feasibility engine to the output items natively. */
+    productId?: number;
     hsCode?: string;
     qty: number;
     factoryPriceUsd: number;
