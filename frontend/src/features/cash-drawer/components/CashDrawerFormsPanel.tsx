@@ -64,7 +64,7 @@ interface CashBankAccountRow {
   accountType?: string | null;
   normalBalance?: string | null;
   isActive?: boolean | null;
-  flags?: { isCashBank?: boolean | null } | null;
+  flags?: { isCashBank?: boolean } | null;
 }
 const EMPTY_DETAIL_ROWS: Array<{ amount?: number }> = [];
 

@@ -64,7 +64,7 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
 
-const idleMutation = { isPending: false, isError: false, isSuccess: false, error: null, reset: vi.fn() };
+const idleMutation = { isPending: false, isError: false, isSuccess: false, error: null, reset: vi.fn(), mutate: vi.fn() };
 
 function Harness({ onMovementSubmit = vi.fn() }: { onMovementSubmit?: () => void }) {
   const movementForm = useForm<MovementValues>({
