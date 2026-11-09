@@ -274,9 +274,17 @@ export function PosCheckoutCustomerSection({
 
       {pos.customerId && (pos.settings?.loyaltyEnabled === true) && (loyaltyPoints > 0 || (pos.loyaltyPointsRedeemed || 0) > 0) ? (() => {
         const pointValue = Number(pos.settings?.loyaltyPointRedeemValue ?? 0.1);
-        const minPoints = Number(pos.settings?.loyaltyMinRedeemPoints ?? 50);
+        const minPoints = Number(pos.settings?.loyaltyMinRedeemPoints ?? 0);
         const maxPct = Number(pos.settings?.loyaltyMaxDiscountPercentage ?? 100);
-        const discountInCurrency = roundMoneyValue((pos.loyaltyPointsRedeemed || 0) * pointValue, bookDigits);
+        /* INV-REST-LOYALTY-TRUTH (R6-C, I10): the banner used to show the
+         * UNCAPPED product (points x pointValue) while the totals line
+         * next to it uses the capped loyaltyDiscount — with a tenant cap
+         * below 100% the banner overstated the discount actually given.
+         * Display the already-capped totals value instead; the cap math
+         * itself stays in the derived hook. The minimum gate below used
+         * to default to 50 while the backend defaults to 0 — the display
+         * gate now uses the backend's default. */
+        const discountInCurrency = Number(pos.totals?.loyaltyDiscount || 0);
         const totalValueInCurrency = roundMoneyValue(loyaltyPoints * pointValue, bookDigits);
         const subTotal = Number(pos.totals?.subTotal || 0);
 

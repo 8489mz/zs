@@ -139,6 +139,19 @@ export interface SplitOrderTotals {
   tipAmount: number;
   deliveryFee: number;
   total: number;
+  /* INV-REST-LOYALTY-TRUTH (R6-C): discountValue is the COMBINED
+   * discount (manual + loyalty, usePosWorkspaceDerived.ts:180), so the
+   * snapshot must carry the split or the modal cannot post a part
+   * without double-counting (Trap 1: the backend adds the loyalty
+   * discount to the payload discount). manualDiscount is the manual
+   * share only; loyaltyPointsRedeemed / loyaltyPointRedeemValue /
+   * loyaltyMaxDiscountPercentage are the order's redeemed points and
+   * the tenant loyalty settings (defaults 0.1 / 100, same as the
+   * derived hook and the backend). */
+  manualDiscount: number;
+  loyaltyPointsRedeemed: number;
+  loyaltyPointRedeemValue: number;
+  loyaltyMaxDiscountPercentage: number;
 }
 
 export interface SplitBillAmounts {
@@ -149,6 +162,16 @@ export interface SplitBillAmounts {
   tipAmount: number;
   deliveryFee: number;
   total: number;
+  /* INV-REST-LOYALTY-TRUTH (R6-C): discount above is the bill's TOTAL
+   * discount (manual + loyalty, as displayed). The two parts are kept
+   * separate because the payload must send them separately: discount =
+   * manualDiscount only, loyaltyPointsRedeemed = the bill's points
+   * share — the backend recomputes the loyalty discount per part and
+   * adds it. Sending the combined discount AND the points would grant
+   * the loyalty discount twice (Trap 1). */
+  manualDiscount: number;
+  loyaltyPointsRedeemed: number;
+  loyaltyDiscount: number;
 }
 
 /** Maximum drift between the sum of bill totals and the order total that
@@ -159,29 +182,131 @@ export function splitRoundingTolerance(billCount: number, bookDigits: MoneyDigit
   return (Math.max(0, billCount) + 1) * 0.5 * Math.pow(10, -bookDigits);
 }
 
+/** INV-REST-LOYALTY-TRUTH (R6-C repair): the stranded loyalty value —
+ * the exact money value of the order's redeemed points that no bill could
+ * place. Each part's points cap is floor(partMaxDiscount / pointValue)
+ * (Trap 2: points are never forced past a cap), so when the order's
+ * points do not divide across the parts — 201 points over two 10.05
+ * bills place only 100 + 100 — the leftover points stay UNREDEEMED
+ * with the customer and the bills' loyalty discounts sum to LESS than
+ * the order's loyalty discount by exactly (stranded points x pointValue).
+ * The bills therefore sum to orderTotal + this value, not to orderTotal:
+ * it is bounded (never more than the unplaced points' value), exact
+ * (rounded once, at book digits, from integer points), and economically
+ * neutral — the customer pays the stranded value extra but keeps a point
+ * worth exactly that value, so it is not a hidden charge. The paid-sum
+ * guard and the distributed-sum display both allow exactly this much
+ * extra, and nothing more. */
+export function calcStrandedLoyaltyValue(
+  totalPoints: number,
+  allocatedPoints: number[],
+  pointValue: number,
+  bookDigits: MoneyDigits,
+): number {
+  const strandedPoints =
+    Math.max(0, Math.floor(Number(totalPoints || 0))) -
+    allocatedPoints.reduce((s, p) => s + Math.max(0, Math.floor(Number(p || 0))), 0);
+  const value = Number(pointValue || 0);
+  if (strandedPoints <= 0 || !(value > 0)) return 0;
+  return Math.max(0, roundMoneyValue(strandedPoints * value, bookDigits));
+}
+
 /** The paid-sum guard (B10): the split may close settled only when the paid
- * bills sum to the order total, within the provable rounding tolerance. */
+ * bills sum to the order total, within the provable rounding tolerance —
+ * plus the stranded loyalty value (see calcStrandedLoyaltyValue): bills
+ * legitimately sum to orderTotal + stranded value when points strand, so
+ * the guard allows exactly that much extra. A genuine shortfall beyond
+ * tolerance + stranded value still refuses — the guard's purpose
+ * (undistributed items, stale snapshot) is preserved. */
 export function isSplitPaidSumSettled(
   paidTotal: number,
   orderTotal: number,
   billCount: number,
   bookDigits: MoneyDigits,
+  strandedLoyaltyValue = 0,
 ): boolean {
   return (
     Math.abs(Number(paidTotal || 0) - Number(orderTotal || 0)) <=
-    splitRoundingTolerance(billCount, bookDigits) + 1e-9
+    splitRoundingTolerance(billCount, bookDigits) + Math.max(0, Number(strandedLoyaltyValue || 0)) + 1e-9
   );
+}
+
+/** INV-REST-LOYALTY-TRUTH (R6-C): allocate the order's redeemed loyalty
+ * points across the bills, pro-rata by real line subtotal — POINTS, not
+ * money. The backend recomputes the loyalty discount per part from the
+ * points it is sent, so the modal must send points, never a money
+ * share of the order's loyalty discount.
+ *
+ * Trap 2 (cap vs points burned): the backend caps the DISCOUNT but
+ * burns ALL sent points, so a part may never be sent more points than
+ * its cap allows: floor(partMaxDiscount / pointValue) where
+ * partMaxDiscount = roundMoney(partSubtotal x maxPct / 100). Points
+ * lost to a cap floor are NOT forced onto the last bill (unlike
+ * money): forcing them would exceed that bill's cap and burn points
+ * for discount never given. Leftover points cascade only to parts
+ * with headroom, in largest-remainder order; points that cannot be
+ * placed anywhere stay UNREDEEMED. The flooring remainder goes one
+ * point at a time in largest-remainder order (ties to the earlier
+ * bill, so 3 points over 2 equal bills is 2+1, never 1.5). */
+export function allocateSplitLoyaltyPoints(
+  billSubtotals: number[],
+  totalPoints: number,
+  pointValue: number,
+  maxPct: number,
+  bookDigits: MoneyDigits,
+): number[] {
+  const points = Math.max(0, Math.floor(Number(totalPoints || 0)));
+  const value = Number(pointValue || 0);
+  const pct = Math.max(0, Number(maxPct ?? 100));
+  const out = billSubtotals.map(() => 0);
+  if (points <= 0 || !(value > 0)) return out;
+  const caps = billSubtotals.map((raw) => {
+    const subtotal = Math.max(0, Number(raw || 0));
+    if (subtotal <= 0) return 0;
+    const partMaxDiscount = roundMoneyValue((subtotal * pct) / 100, bookDigits);
+    return Math.max(0, Math.floor(partMaxDiscount / value));
+  });
+  const orderSubtotal = billSubtotals.reduce((s, raw) => s + Math.max(0, Number(raw || 0)), 0);
+  if (orderSubtotal <= 0) return out;
+  const remainders = billSubtotals.map((raw, i) => {
+    const share = (points * Math.max(0, Number(raw || 0))) / orderSubtotal;
+    out[i] = Math.min(Math.floor(share), caps[i]);
+    return { i, frac: share - Math.floor(share) };
+  });
+  let remaining = points - out.reduce((s, n) => s + n, 0);
+  const order = remainders
+    .filter((r) => caps[r.i] > out[r.i])
+    .sort((a, b) => b.frac - a.frac || a.i - b.i);
+  while (remaining > 0) {
+    const eligible = order.filter((entry) => out[entry.i] < caps[entry.i]);
+    if (eligible.length === 0) break;
+    for (const entry of eligible) {
+      if (remaining <= 0) break;
+      out[entry.i] += 1;
+      remaining -= 1;
+    }
+  }
+  return out;
 }
 
 /** Split the order's discount / service charge / tip / delivery fee across
  * the bills pro-rata by real line subtotal (qty x (price + modifiers));
  * the last non-empty bill takes each component's remainder so the shares
  * sum exactly. Tax is computed per bill with the same formula the backend
- * uses (taxable = lines - discount + service charge), never allocated. */
+ * uses (taxable = lines - discount + service charge), never allocated.
+ * INV-REST-LOYALTY-TRUTH (R6-C): order.discountValue here is the MANUAL
+ * discount only — the caller passes {...snapshot, discountValue:
+ * snapshot.manualDiscount}. The loyalty share arrives as POINTS
+ * (loyaltyPoints, allocated by allocateSplitLoyaltyPoints); each bill's
+ * loyalty discount is derived FROM those points (min(points x
+ * pointValue, partMaxDiscount)), never from the snapshot's combined
+ * discountValue, so the bill amounts, the posted parts and the
+ * paid-sum guard agree. */
 export function allocateSplitBillAmounts(
   billSubtotals: number[],
   order: SplitOrderTotals,
   bookDigits: MoneyDigits,
+  loyaltyPoints?: number[],
 ): SplitBillAmounts[] {
   const zero = (): SplitBillAmounts => ({
     subtotal: 0,
@@ -191,6 +316,9 @@ export function allocateSplitBillAmounts(
     tipAmount: 0,
     deliveryFee: 0,
     total: 0,
+    manualDiscount: 0,
+    loyaltyPointsRedeemed: 0,
+    loyaltyDiscount: 0,
   });
   const orderSubtotal = Math.max(0, Number(order.subTotal || 0));
   let lastIndex = -1;
@@ -214,12 +342,25 @@ export function allocateSplitBillAmounts(
   const serviceCharges = allocate(order.serviceCharge);
   const tips = allocate(order.tipAmount);
   const deliveryFees = allocate(order.deliveryFee);
+  const pointValue = Number(order.loyaltyPointRedeemValue ?? 0.1);
+  const maxPct = Math.max(0, Number(order.loyaltyMaxDiscountPercentage ?? 100));
+  const loyaltyDiscounts = billSubtotals.map((rawSubtotal, i) => {
+    const subtotal = Math.max(0, Number(rawSubtotal || 0));
+    const pts = Math.max(0, Math.floor(Number(loyaltyPoints?.[i] || 0)));
+    if (subtotal <= 0 || pts <= 0 || !(pointValue > 0)) return 0;
+    const partMaxDiscount = roundMoneyValue((subtotal * maxPct) / 100, bookDigits);
+    return Math.min(roundMoneyValue(pts * pointValue, bookDigits), partMaxDiscount, subtotal);
+  });
   const rate = Math.max(0, Number(order.taxRate || 0));
   return billSubtotals.map((rawSubtotal, i) => {
     const subtotal = Math.max(0, Number(rawSubtotal || 0));
     if (subtotal <= 0) return zero();
     // A bill's discount can never exceed its own lines.
-    const discount = Math.min(discounts[i], subtotal);
+    const loyaltyDiscount = loyaltyDiscounts[i];
+    const discount = Math.min(discounts[i] + loyaltyDiscount, subtotal);
+    // The manual share actually sent: the combined discount capped at
+    // the bill's lines, less the loyalty part the backend recomputes.
+    const manualDiscount = Math.max(0, roundMoneyValue(discount - loyaltyDiscount, bookDigits));
     const serviceCharge = serviceCharges[i];
     const tipAmount = tips[i];
     const deliveryFee = deliveryFees[i];
@@ -241,6 +382,9 @@ export function allocateSplitBillAmounts(
       tipAmount,
       deliveryFee,
       total,
+      manualDiscount,
+      loyaltyPointsRedeemed: Math.max(0, Math.floor(Number(loyaltyPoints?.[i] || 0))),
+      loyaltyDiscount,
     };
   });
 }
@@ -339,6 +483,17 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
       tipAmount: Number(pos.totals?.tipAmount || 0),
       deliveryFee: Number(pos.totals?.deliveryFee || 0),
       total: Number(pos.totals?.total || 0),
+      // INV-REST-LOYALTY-TRUTH (R6-C): snapshot the loyalty split at
+      // open, next to the money snapshot — never re-read live totals
+      // at pay time (paying one bill syncs remaining items back into
+      // the cart and live totals shrink, I32). manualDiscount is the
+      // manual share only (derived hook, pos.discount fallback); the
+      // point value / cap percent come from the tenant settings with
+      // the same defaults as the derived hook and the backend.
+      manualDiscount: Number(pos.totals?.manualDiscount ?? pos.discount ?? 0),
+      loyaltyPointsRedeemed: Number(pos.loyaltyPointsRedeemed || 0),
+      loyaltyPointRedeemValue: Number(pos.settings?.loyaltyPointRedeemValue ?? 0.1),
+      loyaltyMaxDiscountPercentage: Number(pos.settings?.loyaltyMaxDiscountPercentage ?? 100),
     };
     setOrderSnapshot(snapshot);
     // 1. Initialize split bills: Bill 1 gets all current cart items, Bill 2 starts empty
@@ -408,6 +563,14 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
   // Real bill amounts (B10): each bill's share of the order's discount,
   // service charge, tip and delivery fee, plus its own tax by the backend
   // formula — computed from the opening snapshot, never the live totals.
+  // INV-REST-LOYALTY-TRUTH (R6-C): the MANUAL discount is allocated by
+  // allocateSplitBillAmounts (discountValue = manualDiscount only) and
+  // the POINTS by allocateSplitLoyaltyPoints; each bill's loyalty
+  // discount is derived from its allocated points. The bill amounts
+  // are therefore manual share + discount-from-allocated-points, never
+  // the snapshot's combined discountValue — otherwise the posted part
+  // totals drift from billAmounts and isSplitPaidSumSettled refuses
+  // to close.
   const billAmounts: SplitBillAmounts[] = useMemo(() => {
     if (!orderSnapshot) {
       return bills.map(() => ({
@@ -418,11 +581,42 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
         tipAmount: 0,
         deliveryFee: 0,
         total: 0,
+        manualDiscount: 0,
+        loyaltyPointsRedeemed: 0,
+        loyaltyDiscount: 0,
       }));
     }
     const subtotals = bills.map((b) => b.items.reduce((s, i) => s + calcCartLineTotal(i), 0));
-    return allocateSplitBillAmounts(subtotals, orderSnapshot, bookDigits);
+    const loyaltyPoints = allocateSplitLoyaltyPoints(
+      subtotals,
+      orderSnapshot.loyaltyPointsRedeemed,
+      orderSnapshot.loyaltyPointRedeemValue,
+      orderSnapshot.loyaltyMaxDiscountPercentage,
+      bookDigits,
+    );
+    return allocateSplitBillAmounts(
+      subtotals,
+      { ...orderSnapshot, discountValue: orderSnapshot.manualDiscount },
+      bookDigits,
+      loyaltyPoints,
+    );
   }, [bills, orderSnapshot, bookDigits]);
+
+  // INV-REST-LOYALTY-TRUTH (R6-C repair): the stranded loyalty value for
+  // THIS split — the order's redeemed points minus the points the bills
+  // actually placed, times the point value (see calcStrandedLoyaltyValue).
+  // One value, computed once from the same billAmounts both checks below
+  // read, so the close guard and the distributed-sum display can never
+  // disagree: the display must not warn while closing is allowed.
+  const strandedLoyaltyValue: number = useMemo(() => {
+    if (!orderSnapshot) return 0;
+    return calcStrandedLoyaltyValue(
+      orderSnapshot.loyaltyPointsRedeemed,
+      billAmounts.map((a) => a.loyaltyPointsRedeemed),
+      orderSnapshot.loyaltyPointRedeemValue,
+      bookDigits,
+    );
+  }, [orderSnapshot, billAmounts, bookDigits]);
 
   // Add extra split bill
   const handleAddBill = () => {
@@ -565,6 +759,11 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
       // real line values plus its allocated share of the order's discount,
       // tax, service charge and tip. The old payload sent discount 0,
       // taxRate 0, no service charge/tip and paid = price x qty only.
+      // INV-REST-LOYALTY-TRUTH (R6-C): the payload sends the MANUAL
+      // discount only plus this bill's points share. The backend
+      // recomputes the loyalty discount per part, capped, and deducts
+      // the points once per part. Sending the combined discount AND
+      // the points would grant the loyalty discount twice (Trap 1).
       const amounts = billAmounts[billIndex] ?? {
         subtotal: 0,
         discount: 0,
@@ -573,6 +772,9 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
         tipAmount: 0,
         deliveryFee: 0,
         total: 0,
+        manualDiscount: 0,
+        loyaltyPointsRedeemed: 0,
+        loyaltyDiscount: 0,
       };
       const billTotal = amounts.total;
       await pos.createSale.mutateAsync({
@@ -581,7 +783,8 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
         customerId: String(pos.customerId || ''),
         paymentType: 'cash',
         paymentChannel,
-        discount: amounts.discount,
+        discount: amounts.manualDiscount,
+        loyaltyPointsRedeemed: amounts.loyaltyPointsRedeemed,
         deliveryFee: amounts.deliveryFee,
         taxRate: Number(orderSnapshot?.taxRate ?? pos.totals?.taxRate ?? 0),
         pricesIncludeTax: Boolean(orderSnapshot?.pricesIncludeTax ?? pos.totals?.pricesIncludeTax),
@@ -606,14 +809,18 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
       const remainingUnpaid = updatedBills.filter((b) => !b.isPaid && b.items.length > 0);
       if (remainingUnpaid.length === 0) {
         // Everything settled — but only if the paid bills actually sum to
-        // the order total (B10 guard). Beyond rounding tolerance this means
-        // real money is missing (undistributed items, stale snapshot):
-        // refuse to close settled and say so.
+        // the order total (B10 guard). Beyond rounding tolerance PLUS the
+        // stranded loyalty value this means real money is missing
+        // (undistributed items, stale snapshot): refuse to close settled
+        // and say so. The stranded value is allowed because the bills
+        // legitimately sum to orderTotal + stranded value when points
+        // strand — the customer keeps the stranded point, worth exactly
+        // that value — and the guard accepts exactly that much, no more.
         const paidSum = updatedBills
           .filter((b) => b.isPaid)
           .reduce((s, b) => s + (billAmounts[bills.findIndex((x) => x.id === b.id)]?.total ?? 0), 0);
         const nonEmptyCount = updatedBills.filter((b) => b.items.length > 0).length;
-        if (!isSplitPaidSumSettled(paidSum, totalAmount, nonEmptyCount, bookDigits)) {
+        if (!isSplitPaidSumSettled(paidSum, totalAmount, nonEmptyCount, bookDigits, strandedLoyaltyValue)) {
           setStatusMessage(
             `تحذير: مجموع الشيكات المحصلة (${formatCurrency(paidSum)}) لا يطابق إجمالي الطلب (${formatCurrency(totalAmount)}) — لم يتم إغلاق التقسيم. راجع توزيع الأصناف.`,
           );
@@ -649,13 +856,19 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
     const cardTotal = guests.filter((g) => g.method === 'card').reduce((s, g) => s + g.amount, 0);
     const transferTotal = guests.filter((g) => g.method === 'transfer').reduce((s, g) => s + g.amount, 0);
     try {
+      // INV-REST-LOYALTY-TRUTH (R6-C): the even split posts ONE sale for
+      // the whole order, so it sends the MANUAL discount only (the
+      // snapshot's discountValue minus the loyalty share) plus the
+      // order's FULL redeemed points — one deduction, one log row, on
+      // the final sale. Guests collect money only; the points move once.
       await pos.createSale.mutateAsync({
         source: 'pos',
         cart: pos.cart,
         customerId: String(pos.customerId || ''),
         paymentType: 'cash',
         paymentChannel: resolveSplitPaymentChannel(cashTotal, cardTotal, transferTotal),
-        discount: Number(orderSnapshot?.discountValue ?? pos.discount ?? 0),
+        discount: Number(orderSnapshot?.manualDiscount ?? pos.discount ?? 0),
+        loyaltyPointsRedeemed: Number(orderSnapshot?.loyaltyPointsRedeemed || 0),
         deliveryFee: Number(orderSnapshot?.deliveryFee ?? 0),
         taxRate: Number(orderSnapshot?.taxRate ?? pos.totals?.taxRate ?? 0),
         pricesIncludeTax: Boolean(orderSnapshot?.pricesIncludeTax ?? pos.totals?.pricesIncludeTax),
@@ -745,6 +958,9 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
           tipAmount: 0,
           deliveryFee: 0,
           total: 0,
+          manualDiscount: 0,
+          loyaltyPointsRedeemed: 0,
+          loyaltyDiscount: 0,
         };
         const billTableNumber = pos.tableNumber ? `${pos.tableNumber} - شيك ${i + 1}` : '';
         const sanitizedItems = b.items.map((item) => ({
@@ -828,11 +1044,15 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
   if (!open) return null;
 
   // The distributed sum is the sum of the REAL bill totals (lines +
-  // allocated extras), not the price-only sums.
+  // allocated extras), not the price-only sums. It legitimately exceeds
+  // the order total by the stranded loyalty value (see
+  // calcStrandedLoyaltyValue) — the display allows exactly that much, so
+  // it never warns while the close guard allows closing.
   const totalSplitSum = billAmounts.reduce((sum, a) => sum + a.total, 0);
   const nonEmptyBillCount = bills.filter((b) => b.items.length > 0).length;
   const splitSumMismatch =
-    Math.abs(totalSplitSum - totalAmount) > splitRoundingTolerance(nonEmptyBillCount, bookDigits) + 1e-9;
+    Math.abs(totalSplitSum - totalAmount) >
+    splitRoundingTolerance(nonEmptyBillCount, bookDigits) + strandedLoyaltyValue + 1e-9;
 
   return (
     <DialogShell
