@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/shared/ui/button';
 import {
@@ -16,6 +17,7 @@ import { useQuery } from '@tanstack/react-query';
 import { http } from '@/lib/http';
 
 export default function ImportFxTreasuryManager() {
+  const navigate = useNavigate();
   const { data: fxData, isLoading, refetch } = useFxPortfolioQuery();
   const recordAcquisitionMutation = useRecordFxAcquisitionMutation();
 
@@ -104,9 +106,14 @@ export default function ImportFxTreasuryManager() {
     e.preventDefault();
     // No live registered rate for the currency: there is no rate to
     // post at. Fail here, naming the fix (register the rate), instead
-    // of posting user-invented amounts.
+    // of posting user-invented amounts. INV-IMPORT-FX-RATE-REGISTRATION
+    // (I9-E): the registration screen is real now — /accounting/forex
+    // ("تقييم العملات وفروق الصرف") carries the تسجيل سعر الصرف card —
+    // so the message names that screen instead of a "شاشة العملات"
+    // the user could never find, and the dialog below offers the
+    // navigation to it instead of a dead end.
     if (!hasLiveRate) {
-      toast.error(`سعر صرف ${currency} غير مسجل؛ سجّل السعر من شاشة العملات قبل تسجيل التدبير`);
+      toast.error(`سعر صرف ${currency} غير مسجل؛ سجّل السعر من شاشة العملات (المحاسبة ← تقييم العملات وفروق الصرف) قبل تسجيل التدبير`);
       return;
     }
     // Both legs must be chosen explicitly, and they must differ —
@@ -421,6 +428,37 @@ export default function ImportFxTreasuryManager() {
               style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
             />
           </div>
+
+          {/* INV-IMPORT-FX-RATE-REGISTRATION (I9-E): with no registered
+              rate the submit must stay blocked (fail-closed), but a
+              dead end is not a fix — offer the one action that
+              unblocks it: registering the rate on the currencies
+              screen. */}
+          {!hasLiveRate && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                padding: '10px 14px',
+                backgroundColor: '#fef3c7',
+                border: '1px solid #fcd34d',
+                borderRadius: 8,
+              }}
+            >
+              <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#92400e' }}>
+                لا يوجد سعر صرف مسجل لـ {currency} — سجّل السعر أولاً لتأكيد التدبير
+              </span>
+              <button
+                type="button"
+                onClick={() => navigate('/accounting/forex')}
+                style={{ padding: '8px 16px', borderRadius: 6, border: 'none', backgroundColor: '#170e5e', color: '#ffffff', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
+              >
+                تسجيل سعر الصرف
+              </button>
+            </div>
+          )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
             <button

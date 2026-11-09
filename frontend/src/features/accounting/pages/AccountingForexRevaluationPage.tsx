@@ -49,6 +49,51 @@ export const AccountingForexRevaluationPage: React.FC = () => {
     return { accountId: Number(account.id), foreignBalance: Number(entered) };
   });
 
+  // INV-IMPORT-FX-RATE-REGISTRATION (I9-E): the rate-registration
+  // form. POST /api/accounting/currencies (forexApi.upsertCurrency)
+  // existed with ZERO callers anywhere in the frontend, and this
+  // page only listed the registered rates read-only — so a fresh
+  // tenant had no USD rate and no screen to add one, and the FX
+  // treasury's "سجّل السعر من شاشة العملات" named a screen that did
+  // not exist. This card is that screen: the admin enters the real
+  // rate (bank / central bank), the live resolver reads it from here
+  // on. No rate is ever invented or seeded — only the base currency
+  // (rate 1) is seeded by listCurrencies.
+  const [rateCurrency, setRateCurrency] = useState<string>('USD');
+  const [rateValue, setRateValue] = useState<string>('');
+  const rateCurrencyNames: Record<string, string> = {
+    USD: 'الدولار الأمريكي',
+    CNY: 'اليوان الصيني',
+    EUR: 'اليورو الأوروبي',
+  };
+  const rateCurrencyOptions = Array.from(new Set([
+    'USD', 'CNY', 'EUR',
+    ...currencies.filter((c) => !c.isBase).map((c) => c.code),
+  ]));
+  const selectedRateRow = currencies.find((c) => c.code === rateCurrency);
+  const upsertRateMutation = useMutation({
+    mutationFn: async () => {
+      const rate = Number(rateValue);
+      if (!Number.isFinite(rate) || rate <= 0) {
+        throw new Error(t('accounting.accounting_forex_revaluation_page.s39', 'أدخل سعر صرف موجباً صحيحاً.'));
+      }
+      return await forexApi.upsertCurrency({
+        currencyCode: rateCurrency,
+        currencyName: rateCurrencyNames[rateCurrency] || selectedRateRow?.name || rateCurrency,
+        exchangeRate: rate,
+      });
+    },
+    onSuccess: () => {
+      toast.success(t('accounting.accounting_forex_revaluation_page.s40', 'تم تسجيل سعر الصرف؛ أصبح متاحاً لتدبير العملة ودراسات الجدوى.'));
+      queryClient.invalidateQueries({ queryKey: ['forex-currencies'] });
+      queryClient.invalidateQueries({ queryKey: ['accounting-currencies'] });
+      setRateValue('');
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || t('accounting.accounting_forex_revaluation_page.s41', 'فشل تسجيل سعر الصرف.'));
+    },
+  });
+
   // 2. Fetch past runs
   const { data: pastRuns = [], isLoading: isRunsLoading } = useQuery({
     queryKey: ['forex-runs'],
@@ -234,6 +279,87 @@ export const AccountingForexRevaluationPage: React.FC = () => {
                   </strong>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Rate Registration Card (INV-IMPORT-FX-RATE-REGISTRATION, I9-E):
+              the only screen that writes a live rate. The currencies bar
+              above lists rates read-only; without this card no rate could
+              ever be registered from the UI and every FX flow (treasury
+              arrangement, feasibility approval, PI conversion) failed
+              closed with "no rate registered". */}
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '12px',
+              border: '1px solid #e2e8f0',
+              padding: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+            }}
+          >
+            <h3 style={{ fontSize: 'var(--font-section-title)', fontWeight: 700, margin: 0, color: '#0f172a' }}>
+              {t('accounting.accounting_forex_revaluation_page.s42', "تسجيل / تحديث سعر الصرف (شاشة العملات)")}
+            </h3>
+            <span style={{ fontSize: 'var(--font-body)', color: '#64748b' }}>
+              {t('accounting.accounting_forex_revaluation_page.s43', "سجّل السعر الحقيقي من البنك أو البنك المركزي؛ تدبير العملة ودراسات الجدوى والتحويلات تقرأ هذا السعر مباشرة، ولا يجوز افتراض سعر غير مسجل.")}
+            </span>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '12px', alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: 'var(--font-body)', fontWeight: 600, color: '#334155' }}>
+                  {t('accounting.accounting_forex_revaluation_page.s44', "العملة الأجنبية:")}
+                </label>
+                <select
+                  value={rateCurrency}
+                  onChange={(e) => { setRateCurrency(e.target.value); setRateValue(''); }}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: 'var(--font-body)',
+                    outline: 'none',
+                  }}
+                >
+                  {rateCurrencyOptions.map((code) => (
+                    <option key={code} value={code}>
+                      {rateCurrencyNames[code] || currencies.find((c) => c.code === code)?.name || code} ({code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: 'var(--font-body)', fontWeight: 600, color: '#334155' }}>
+                  {t('accounting.accounting_forex_revaluation_page.s45', "سعر الصرف المسجل (ج.م لكل وحدة):")}
+                </label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  value={rateValue}
+                  onChange={(e) => setRateValue(e.target.value)}
+                  placeholder={selectedRateRow ? `${t('accounting.accounting_forex_revaluation_page.s46', "المسجل حالياً:")} ${Number(selectedRateRow.exchangeRate).toFixed(4)}` : t('accounting.accounting_forex_revaluation_page.s47', "غير مسجل بعد — أدخل السعر")}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: 'var(--font-body)',
+                    fontWeight: 700,
+                    outline: 'none',
+                    width: '100%',
+                  }}
+                />
+              </div>
+
+              <Button
+                variant="primary"
+                onClick={() => upsertRateMutation.mutate()}
+                disabled={upsertRateMutation.isPending || !rateValue}
+                style={{ height: '40px', padding: '0 20px' }}
+              >
+                {upsertRateMutation.isPending ? t('accounting.accounting_forex_revaluation_page.s48', "جاري التسجيل...") : t('accounting.accounting_forex_revaluation_page.s49', "تسجيل سعر الصرف")}
+              </Button>
             </div>
           </div>
 

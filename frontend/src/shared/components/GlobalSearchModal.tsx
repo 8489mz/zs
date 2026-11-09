@@ -7,7 +7,7 @@ import { ClientPortal } from '@/shared/components/ClientPortal';
 import { useToolbarStore } from '@/stores/toolbar-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { navigationItems } from '@/app/router/registry';
-import { canAccessNavigationItem } from '@/app/router/access';
+import { canAccessNavigationItem, matchesNavigationSearch } from '@/app/router/access';
 import { normalizeArabicSearchKey } from '@/lib/arabic-normalization';
 import { productsApi } from '@/features/products/api/products.api';
 import { salesApi } from '@/features/sales/api/sales.api';
@@ -66,7 +66,7 @@ export function GlobalSearchModal() {
     return navigationItems
       .filter((item) => canAccessNavigationItem(user, item))
       .filter((item) => isRouteAllowedInVertical(currentVertical, item.key || item.to, settings))
-      .filter((item) => normalizeArabicSearchKey(item.label).includes(normalizedQuery))
+      .filter((item) => matchesNavigationSearch(item, normalizedQuery))
       .slice(0, 6);
   }, [hasQuery, user, currentVertical, settings, normalizedQuery]);
 

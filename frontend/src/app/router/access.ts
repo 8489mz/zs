@@ -1,4 +1,5 @@
 import { isDesktopOfflineApp, isPlatformAdmin } from '@/shared/system/runtime-environment';
+import { normalizeArabicSearchKey } from '@/lib/arabic-normalization';
 
 import type { NavigationItemDefinition } from '@/app/router/types';
 import type { AuthUser } from '@/types/auth';
@@ -714,6 +715,19 @@ export function canAccessNavigationItem(user: AuthUser | null | undefined, item:
   if (isPlatformAdmin(user)) return true;
   if (!hasRequiredFeature(item.to, user) || (item.key && !hasRequiredFeature(item.key, user))) return false;
   return hasAnyPermission(user, getRoutePermissionRequirement(item.key || item.to));
+}
+
+// INV-IMPORT-FX-RATE-REGISTRATION (I9-E): one search predicate for
+// every place that filters navigation items (global search modal,
+// sidebar search). The label alone is not enough: the forex screen's
+// label is "تقييم العملات وفروق الصرف" while users search for
+// "سعر الصرف" — without the item's keywords the screen is
+// unfindable even though it exists. `normalizedQuery` must already
+// be passed through normalizeArabicSearchKey by the caller.
+export function matchesNavigationSearch(item: NavigationItemDefinition, normalizedQuery: string): boolean {
+  if (!normalizedQuery) return true;
+  if (normalizeArabicSearchKey(item.label).includes(normalizedQuery)) return true;
+  return (item.keywords || []).some((keyword) => normalizeArabicSearchKey(keyword).includes(normalizedQuery));
 }
 
 export function findFirstAccessibleRoute(user: AuthUser | null | undefined, navigationItems: NavigationItemDefinition[]) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { NavigationItemDefinition } from '@/app/router/types';
-import { canAccessNavigationItem, canAccessPath, findFirstAccessibleRoute, getFirstAccessibleRoute, getRoutePermissionRequirement, hasAnyPermission } from '@/app/router/access';
+import { canAccessNavigationItem, canAccessPath, findFirstAccessibleRoute, getFirstAccessibleRoute, getRoutePermissionRequirement, hasAnyPermission, matchesNavigationSearch } from '@/app/router/access';
+import { normalizeArabicSearchKey } from '@/lib/arabic-normalization';
 import { useAuthStore } from '@/stores/auth-store';
 import type { AuthUser } from '@/types/auth';
 
@@ -120,5 +121,45 @@ describe('router access guards', () => {
     } finally {
       useAuthStore.setState({ tenant: null });
     }
+  });
+});
+
+// INV-IMPORT-FX-RATE-REGISTRATION (I9-E): the R11 search failure —
+// the forex screen existed at /accounting/forex but the global menu
+// search for "سعر الصرف" found nothing, because the search matched
+// only the label "تقييم العملات وفروق الصرف (IAS 21)", which does
+// not contain "سعر الصرف". Keywords close that gap.
+describe('matchesNavigationSearch', () => {
+  const forexItem: NavigationItemDefinition = {
+    key: 'accounting-forex',
+    label: 'تقييم العملات وفروق الصرف (IAS 21)',
+    to: '/accounting/forex',
+    keywords: ['سعر الصرف', 'أسعار الصرف', 'تسجيل سعر الصرف', 'سعر الدولار', 'العملات'],
+  };
+
+  it('finds the forex screen for "سعر الصرف" through its keywords', () => {
+    const query = normalizeArabicSearchKey('سعر الصرف');
+    // The label alone does NOT contain the query — this is the R11 gap.
+    expect(normalizeArabicSearchKey(forexItem.label).includes(query)).toBe(false);
+    expect(matchesNavigationSearch(forexItem, query)).toBe(true);
+    expect(matchesNavigationSearch(forexItem, normalizeArabicSearchKey('أسعار الصرف'))).toBe(true);
+    expect(matchesNavigationSearch(forexItem, normalizeArabicSearchKey('تسجيل سعر الصرف'))).toBe(true);
+  });
+
+  it('still matches through the label when the query is in it', () => {
+    expect(matchesNavigationSearch(forexItem, normalizeArabicSearchKey('العملات'))).toBe(true);
+    expect(matchesNavigationSearch(forexItem, normalizeArabicSearchKey('فروق الصرف'))).toBe(true);
+  });
+
+  it('does not match unrelated items or queries', () => {
+    expect(matchesNavigationSearch(forexItem, normalizeArabicSearchKey('المخزون'))).toBe(false);
+    expect(matchesNavigationSearch(
+      { key: 'inventory', label: 'المخزون', to: '/inventory' },
+      normalizeArabicSearchKey('سعر الصرف'),
+    )).toBe(false);
+  });
+
+  it('matches everything on an empty query', () => {
+    expect(matchesNavigationSearch(forexItem, '')).toBe(true);
   });
 });

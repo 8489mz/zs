@@ -9,7 +9,7 @@ import { authApi } from '@/shared/api/auth';
 import { resetAuthenticatedClient } from '@/lib/query-client-session';
 import { DEFAULT_STORE_NAME, useAuthStore } from '@/stores/auth-store';
 import { navigationItems } from '@/app/router/registry';
-import { canAccessNavigationItem, isDesktopOfflineApp, isPlatformAdmin } from '@/app/router/access';
+import { canAccessNavigationItem, matchesNavigationSearch, isDesktopOfflineApp, isPlatformAdmin } from '@/app/router/access';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { PasswordRotationGate } from '@/shared/system/password-rotation-gate';
 import { SystemStatusBanner } from '@/shared/system/system-status-banner';
@@ -1827,8 +1827,8 @@ export function AppShell({ children }: PropsWithChildren) {
 
   const filteredPrimaryNavigationItems = useMemo(() => {
     if (!isSearchingSidebar) return visiblePrimaryNavigationItems;
-    return visiblePrimaryNavigationItems.filter((item) => 
-      normalizeArabicSearchKey(item.label).includes(normalizedSidebarQuery)
+    return visiblePrimaryNavigationItems.filter((item) =>
+      matchesNavigationSearch(item, normalizedSidebarQuery)
     );
   }, [isSearchingSidebar, normalizedSidebarQuery, visiblePrimaryNavigationItems]);
 
@@ -1846,8 +1846,8 @@ export function AppShell({ children }: PropsWithChildren) {
         };
       }
 
-      const matchingItems = groupItems.filter((item) => 
-        normalizeArabicSearchKey(item.label).includes(normalizedSidebarQuery) ||
+      const matchingItems = groupItems.filter((item) =>
+        matchesNavigationSearch(item, normalizedSidebarQuery) ||
         normalizeArabicSearchKey(group.label).includes(normalizedSidebarQuery)
       );
 

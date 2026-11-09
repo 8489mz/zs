@@ -108,7 +108,7 @@ export const accountingRouteModule: FeatureRouteModule = {
     { key: 'accounting-cheques', label: 'حافظة الشيكات (PDC)', to: '/accounting/cheques' },
     { key: 'accounting-withholding-tax', label: 'الخصم والإضافة (نموذج 41)', to: '/accounting/withholding-tax' },
     { key: 'accounting-fiscal-years', label: 'إقفال السنوات المالية', to: '/accounting/fiscal-years' },
-    { key: 'accounting-forex', label: 'تقييم العملات وفروق الصرف (IAS 21)', to: '/accounting/forex' },
+    { key: 'accounting-forex', label: 'تقييم العملات وفروق الصرف (IAS 21)', to: '/accounting/forex', keywords: ['سعر الصرف', 'أسعار الصرف', 'تسجيل سعر الصرف', 'سعر الدولار', 'العملات'] },
     { key: 'accounting-balance-sheet', label: 'التقارير والقوائم المالية', to: '/accounting/balance-sheet', activePaths: ['/accounting/balance-sheet', '/accounting/financial-summary', '/accounting/trial-balance'] },
     { key: 'accounting-trial-balance', label: 'ميزان المراجعة', to: '/accounting/trial-balance', activePaths: ['/accounting/trial-balance'] },
     { key: 'accounting-cash-flow', label: 'قائمة التدفقات النقدية', to: '/accounting/cash-flow' },
