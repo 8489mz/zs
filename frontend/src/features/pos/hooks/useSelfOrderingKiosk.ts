@@ -321,17 +321,54 @@ export function buildKioskOrderPayload(
 }
 
 /**
- * INV-REST-KIOSK-ORDER-TRUTH: the kiosk shows the server's refusal
- * verbatim only when the refusal names the closed shift — a customer at
- * a closed restaurant must know retrying will not help and should go to
- * the counter instead. Every other failure keeps the generic visible
- * error from R2-A (the server's other messages are validation or network
- * noise the customer cannot act on).
+ * INV-REST-KIOSK-ERROR-TRUTH (T1): the kiosk shows the server's business
+ * refusal verbatim — a 400/422 ApiError carrying a real message (not
+ * entitled, pickup disabled, product unavailable, out of stock, modifier
+ * contract) is the server's answer, never a network failure, and the
+ * customer must see the real reason. The closed-shift refusal stays
+ * verbatim as before (it is a 400 too, but it also passes through as a
+ * plain Error with no status). The generic error is kept ONLY for
+ * genuine network/timeout/unknown errors: no usable message, a
+ * network/timeout ApiError (status 0/408), a plain network-flavoured
+ * error, or a non-business status (401/500/...). A 400/422 whose message
+ * is only http.ts's own fallback ('تعذر تنفيذ العملية المطلوبة.') means
+ * the server sent nothing usable, so it is generic too.
  */
+const KIOSK_ORDER_GENERIC_ERROR =
+  'تعذّر إرسال الطلب إلى النظام. تحقق من الاتصال وحاول مرة أخرى.';
+const HTTP_FALLBACK_MESSAGE = 'تعذر تنفيذ العملية المطلوبة.';
+const NETWORK_MESSAGE_MARKERS = [
+  'network error',
+  'failed to fetch',
+  'fetch failed',
+  'networkerror',
+  'تعذر الاتصال بالخادم',
+  'انتهت مهلة الطلب',
+];
+
 export function resolveKioskOrderErrorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : '';
+  const message = error instanceof Error ? error.message.trim() : '';
   if (message && message.includes('وردية مفتوحة')) return message;
-  return 'تعذّر إرسال الطلب إلى النظام. تحقق من الاتصال وحاول مرة أخرى.';
+  if (!message) return KIOSK_ORDER_GENERIC_ERROR;
+  const record = (error ?? {}) as { status?: unknown; code?: unknown; name?: unknown };
+  const status = typeof record.status === 'number' ? record.status : null;
+  const code = typeof record.code === 'string' ? record.code.toLowerCase() : '';
+  const name = typeof record.name === 'string' ? record.name.toLowerCase() : '';
+  // Genuine network/timeout failures are generic — never dressed up as
+  // a business refusal. http.ts throws these as ApiError(status 0,
+  // code 'network_error') and ApiError(status 408, code 'timeout').
+  if (status === 0 || status === 408 || code === 'network_error' || code === 'timeout' || name === 'aborterror') {
+    return KIOSK_ORDER_GENERIC_ERROR;
+  }
+  const lowered = message.toLowerCase();
+  if (NETWORK_MESSAGE_MARKERS.some((marker) => lowered.includes(marker))) {
+    return KIOSK_ORDER_GENERIC_ERROR;
+  }
+  // A business refusal: 400/422 with a real server message.
+  if ((status === 400 || status === 422) && message !== HTTP_FALLBACK_MESSAGE) {
+    return message;
+  }
+  return KIOSK_ORDER_GENERIC_ERROR;
 }
 
 /**

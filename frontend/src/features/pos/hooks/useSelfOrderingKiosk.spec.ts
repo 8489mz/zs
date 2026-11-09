@@ -16,6 +16,15 @@
  * all; a retried finalize reuses one idempotency key per attempt; and a
  * closed-shift refusal is shown verbatim instead of the generic error.
  *
+ * T1 (INV-REST-KIOSK-ERROR-TRUTH): the live trial proved the old
+ * verbatim rule was too narrow — only the shift refusal passed through,
+ * so a real business refusal (not entitled / pickup disabled / product
+ * unavailable / out of stock) looked like a network failure. The
+ * resolveKioskOrderErrorMessage cases below now pin the new truth: a
+ * 400/422 ApiError with a real message is shown verbatim, and the
+ * generic error is kept ONLY for genuine network/timeout/unknown
+ * errors. The shift-gate verbatim case stays as-is.
+ *
  * Base note: these helpers did not exist at base, so there is no meaningful
  * "fails at base" run for them — the base behaviour is proven by reading the
  * old code (catch block identical to success; QR button passing 'paid';
@@ -25,6 +34,7 @@
  * no idempotency key was ever sent. */
 
 import { describe, expect, it } from 'vitest';
+import { ApiError } from '@/lib/http';
 import {
   resolveKioskSlug,
   resolveKioskFinalizeOutcome,
@@ -313,18 +323,53 @@ describe('buildKioskOrderPayload (R-I56 + idempotency)', () => {
   });
 });
 
-describe('resolveKioskOrderErrorMessage (R-I56 shift gate)', () => {
+describe('resolveKioskOrderErrorMessage (R-I56 shift gate + T1 business-refusal truth)', () => {
+  const generic = 'تعذّر إرسال الطلب إلى النظام. تحقق من الاتصال وحاول مرة أخرى.';
+
   it('shows the closed-shift refusal verbatim — retrying will not help', () => {
     const message = 'لا توجد وردية مفتوحة حالياً — لا يمكن استقبال طلبات جديدة';
     expect(resolveKioskOrderErrorMessage(new Error(message))).toBe(message);
   });
 
-  it('keeps the generic visible error for anything else', () => {
-    const generic = 'تعذّر إرسال الطلب إلى النظام. تحقق من الاتصال وحاول مرة أخرى.';
-    expect(resolveKioskOrderErrorMessage(new Error('تعذر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.'))).toBe(generic);
+  it('shows a 400 business refusal verbatim — the server reason, not a network failure', () => {
+    // The live trial proved the cost: the entitlement refusal looked like
+    // a connection failure because every non-shift message became generic.
+    const refusals = [
+      'المتجر الإلكتروني غير مفعّل لهذه المنشأة أو غير مشمول في باقتها، ولا يمكن استقبال طلبات جديدة',
+      'خدمة الاستلام الذاتي من الفرع غير مفعلة لهذا المتجر',
+      'المنتج غير متاح حالياً',
+      'الكمية المطلوبة غير متوفرة في المخزون',
+    ];
+    for (const message of refusals) {
+      expect(resolveKioskOrderErrorMessage(new ApiError(message, 400))).toBe(message);
+    }
+  });
+
+  it('shows a 422 business refusal verbatim (modifier contract / validation)', () => {
+    const message = 'اختيار المجموعة "الصوص" غير صحيح — راجع اختياراتك';
+    expect(resolveKioskOrderErrorMessage(new ApiError(message, 422))).toBe(message);
+  });
+
+  it('keeps the generic error for genuine network / timeout / unknown errors only', () => {
+    expect(
+      resolveKioskOrderErrorMessage(
+        new ApiError('تعذر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.', 0, { code: 'network_error' }),
+      ),
+    ).toBe(generic);
+    expect(
+      resolveKioskOrderErrorMessage(new ApiError('انتهت مهلة الطلب. حاول مرة أخرى.', 408, { code: 'timeout' })),
+    ).toBe(generic);
     expect(resolveKioskOrderErrorMessage(new Error('Network Error'))).toBe(generic);
+    expect(resolveKioskOrderErrorMessage(new Error('تعذر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.'))).toBe(generic);
     expect(resolveKioskOrderErrorMessage(undefined)).toBe(generic);
     expect(resolveKioskOrderErrorMessage('some string')).toBe(generic);
+  });
+
+  it('keeps the generic error when the server sent no usable message, or the failure is not a business refusal', () => {
+    expect(resolveKioskOrderErrorMessage(new ApiError('', 400))).toBe(generic);
+    expect(resolveKioskOrderErrorMessage(new ApiError('تعذر تنفيذ العملية المطلوبة.', 400))).toBe(generic);
+    expect(resolveKioskOrderErrorMessage(new ApiError('حدث خطأ غير متوقع في الخادم.', 500))).toBe(generic);
+    expect(resolveKioskOrderErrorMessage(new ApiError('غير مصرح لك بالوصول.', 401))).toBe(generic);
   });
 });
 

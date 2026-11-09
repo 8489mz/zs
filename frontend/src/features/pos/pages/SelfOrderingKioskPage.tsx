@@ -556,12 +556,12 @@ export function SelfOrderingKioskPage() {
       setIsQrModalOpen(false);
       setResetCountdown(opts.paymentStatus === 'paid' ? 15 : 25);
     } catch (err) {
-      // INV-REST-KIOSK-ORDER-TRUTH: a failed createOrder shows a visible
-      // error and keeps the cart and the open modal, so the customer can
-      // retry with the SAME idempotency key. It never invents a ticket
-      // and never carries a 'paid' the server never saw. A closed-shift
-      // refusal is shown verbatim (retrying will not help); anything else
-      // keeps the generic error.
+      // INV-REST-KIOSK-ERROR-TRUTH (T1): a failed createOrder shows a
+      // visible error and keeps the cart and the open modal, so the
+      // customer can retry with the SAME idempotency key. It never
+      // invents a ticket and never carries a 'paid' the server never saw.
+      // A server business refusal (400/422) is shown verbatim; only a
+      // genuine network/timeout/unknown failure keeps the generic error.
       const message = resolveKioskOrderErrorMessage(err);
       setOrderError(message);
       toast.error(message);
