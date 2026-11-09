@@ -47,22 +47,20 @@ postSalesReturn over PGlite (Part F):
   goods leg postSale stripped (service share removed, discount
   netted) — never the exclusive formula.
 - Return then settle does not double-relieve: settling the
-  REDUCED amount (total - remaining fee) posts the reduced fee
-  and lands 2115 at zero, and a stale full-fee amount fails
-  closed with DELIVERY_SETTLEMENT_INVALID instead of debiting
-  the full fee a second time. (Correction recorded: the
-  settlement never read a ledger balance — 2115 has no per-sale
-  subledger — the remainder is derived from the sale's prior
-  return journals, the same source as the cumulative cap.)
+  REDUCED amount (remaining receivable - remaining fee) posts the
+  reduced fee and lands 2115 at zero, credits 1130 by the
+  remaining receivable (not the original total), and a stale
+  full-fee amount fails closed with DELIVERY_SETTLEMENT_INVALID
+  instead of debiting the full fee a second time.
 
-KNOWN LIMIT, NOT PINNED HERE: the journal now records the full
-refund (total + reliefs), but the treasury / store-credit /
-customer-ledger writers in returns.service still move only the
-return total — topping those up is an owed follow-up outside
-this package's file list. Likewise the delivery-reps callers
-still compute the settlement amount from the original fee, so
-after a return they hit the fail-closed settlement above until
-their amount is topped up the same way.
+CLOSED BY R7-A (INV-REST-RETURN-PAYOUT-TRUTH): the F1/F2 limits
+above are now pinned in backend/test/critical/returns-payout-truth.spec.ts —
+returns.service allocates total + reliefs (shared
+computeSalesReturnRelief), so the treasury / store-credit /
+customer-ledger writers move the full refund; the delivery-reps
+callers settle the remaining receivable minus the remaining fee;
+and F9 below now asserts the settlement credits 1130 by the
+remaining receivable (77), not the original total (142).
 */
 
 import 'reflect-metadata';
@@ -365,7 +363,7 @@ async function main() {
         payment_type text DEFAULT 'cash', collection_status text, status text DEFAULT 'posted');
       CREATE TABLE sale_payments (tenant_id text, sale_id bigint, payment_channel text, amount numeric);
       CREATE TABLE sale_items (id bigint PRIMARY KEY, tenant_id text, sale_id bigint, product_id bigint, qty numeric, cost_price numeric, unit_multiplier numeric, modifiers jsonb);
-      CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text, doc_no text, return_type text, invoice_id bigint, settlement_mode text, refund_method text, refund_allocations jsonb, total numeric, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT '2026-10-01');
+      CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text, doc_no text, return_type text, invoice_id bigint, settlement_mode text, refund_method text, refund_allocations jsonb, total numeric, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT '2026-10-01', exchange_tip_relief numeric(15, 3), exchange_courier_relief numeric(15, 3));
       CREATE TABLE return_items (id bigint PRIMARY KEY, return_document_id bigint, tenant_id text, product_id bigint, sale_item_id bigint, qty numeric, unit_total numeric, line_total numeric, cost_price numeric, allocated_tax numeric);
       CREATE TABLE accounting_cheques (id bigint PRIMARY KEY, tenant_id text, type text, status text, journal_entry_id bigint);
       INSERT INTO accounting_settings VALUES
@@ -506,10 +504,10 @@ async function main() {
       for (const row of rows.rows) byCode.set(row.code, { debit: Number(row.debit), credit: Number(row.credit) });
       return byCode;
     };
-    const seedReturnSale = async (saleId: number, opts: { subtotal: number; discount?: number; tax?: number; total: number; tip?: number; fee?: number; mode?: string | null; service?: number; inclusive?: boolean }) => {
+    const seedReturnSale = async (saleId: number, opts: { subtotal: number; discount?: number; tax?: number; total: number; tip?: number; fee?: number; mode?: string | null; service?: number; inclusive?: boolean; paid?: number; customer?: number | null }) => {
       await pg.exec(`
         INSERT INTO sales(id,tenant_id,doc_no,customer_id,subtotal,discount,tax_amount,total,paid_amount,delivery_fee,delivery_fee_mode,service_charge,tip_amount,prices_include_tax)
-          VALUES (${saleId},'t1','S${saleId}',NULL,${opts.subtotal},${opts.discount ?? 0},${opts.tax ?? 0},${opts.total},${opts.total},${opts.fee ?? 0},${opts.mode ? `'${opts.mode}'` : 'NULL'},${opts.service ?? 0},${opts.tip ?? 0},${opts.inclusive ? 'true' : 'false'});
+          VALUES (${saleId},'t1','S${saleId}',${opts.customer ?? 'NULL'},${opts.subtotal},${opts.discount ?? 0},${opts.tax ?? 0},${opts.total},${opts.paid ?? opts.total},${opts.fee ?? 0},${opts.mode ? `'${opts.mode}'` : 'NULL'},${opts.service ?? 0},${opts.tip ?? 0},${opts.inclusive ? 'true' : 'false'});
         INSERT INTO sale_items VALUES (${saleId * 10},'t1',${saleId},10,2,0,1,'[]');
       `);
     };
@@ -629,26 +627,34 @@ async function main() {
     const f8b = await journalBySource('sales_return', 10);
     assert.equal(f8b.get('1110')?.credit, 65);
 
-    // F9: return then settle does not double-relieve. After the
-    // half return (courier relief 10, 2115 balance 10), settling
-    // the REDUCED amount (142 - 10 = 132) posts the reduced fee
-    // (10) and lands 2115 at zero; a stale full-fee amount (122)
-    // fails closed with DELIVERY_SETTLEMENT_INVALID instead of
-    // debiting the full 20 a second time.
-    await seedReturnSale(29, tippedFreelance);
-    await seedReturn(11, 29, 50, 0);
+    // F9 (R7-A F2): return then settle does not double-relieve AND
+    // does not over-credit 1130. The COD sale (paid 0, customer
+    // 25) is returned for half the goods; the return's receivable
+    // leg (65) already credited 1130, so the remaining receivable
+    // is 77 and the remaining fee is 10. Settling the REDUCED
+    // amount (77 - 10 = 67) posts the reduced fee (10), collects
+    // 67 cash, credits 1130 by 77 (not the original 142), and
+    // lands both 2115 and 1130 at zero. Both stale amounts fail
+    // closed: 122 (total - original fee) and 132 (total -
+    // remaining fee) throw DELIVERY_SETTLEMENT_INVALID.
+    await seedReturnSale(29, { ...tippedFreelance, paid: 0, customer: 25 });
+    await seedReturn(11, 29, 50, 0, '[{"tender":"receivable","amount":65}]');
     await inTx(trx => posting.postSalesReturn(trx, 11, auth));
-    const settle29 = await inTx(trx => posting.postDeliveryRepSettlement(trx, 29, 132, null, null, auth));
+    const settle29 = await inTx(trx => posting.postDeliveryRepSettlement(trx, 29, 67, null, null, auth));
     assert.equal(settle29.posted, true);
     const f9 = await journalBySource('delivery_rep_settlement', 29);
     assert.equal(f9.get('2115')?.debit, 10);
-    assert.equal(f9.get('1110')?.debit, 132);
-    assert.equal(f9.get('1130')?.credit, 142);
-    await seedReturnSale(30, tippedFreelance);
-    await seedReturn(12, 30, 50, 0);
+    assert.equal(f9.get('1110')?.debit, 67);
+    assert.equal(f9.get('1130')?.credit, 77);
+    await seedReturnSale(30, { ...tippedFreelance, paid: 0, customer: 25 });
+    await seedReturn(12, 30, 50, 0, '[{"tender":"receivable","amount":65}]');
     await inTx(trx => posting.postSalesReturn(trx, 12, auth));
     await assert.rejects(
       inTx(trx => posting.postDeliveryRepSettlement(trx, 30, 122, null, null, auth)),
+      (err: any) => err.code === 'DELIVERY_SETTLEMENT_INVALID',
+    );
+    await assert.rejects(
+      inTx(trx => posting.postDeliveryRepSettlement(trx, 30, 132, null, null, auth)),
       (err: any) => err.code === 'DELIVERY_SETTLEMENT_INVALID',
     );
 

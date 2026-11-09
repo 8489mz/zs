@@ -858,13 +858,34 @@ export class ReturnsService {
     }
 
     const total = calculateReturnDocumentTotal(normalizedLines, moneyDigits);
+    // R7-A (INV-REST-RETURN-PAYOUT-TRUTH) F1, Option A: compute the
+    // tip / courier-fee relief BEFORE allocating, and allocate the
+    // refund total + relief — the same numbers postSalesReturn
+    // journals (computeSalesReturnRelief, one function for both).
+    // Before this fix the allocations summed to the return total
+    // alone while the journal credited total + relief, so the
+    // treasury / store-credit / customer-ledger writers below
+    // moved totalRelief too little on the last tender. The
+    // large-cash-refund approval check below now reads the FINAL
+    // cash leg by construction. The exchange path is exempt: a
+    // prepared exchange return grants store credit for the return
+    // total only — its relief rides in the new sale's journal,
+    // not in a refund payout.
+    const returnTaxAmount = normalizedLines.reduce((sum, line) => sum + Number(line.allocatedTax || 0), 0);
+    const netReturnAmount = Math.max(0, total - returnTaxAmount);
+    const returnRelief = exchangePrepared
+      ? { tipRelief: 0, courierRelief: 0, totalRelief: 0 }
+      : await this.accountingPosting.computeSalesReturnRelief(
+        trx, scope.tenantId, sale, total, netReturnAmount, null,
+      );
+    const refundTotal = roundBookMoney(total + returnRelief.totalRelief, moneyDigits);
     const overrideRequested = Boolean(String(payload.refundOverrideReason || '').trim());
     const overrideAllowed = Boolean(approvedByName) || auth.role === 'admin' || auth.role === 'super_admin';
     if (overrideRequested && !overrideAllowed) throw new AppError('تجاوز سقف وسيلة الاسترداد يتطلب اعتماد مشرف', 'REFUND_OVERRIDE_MANAGER_REQUIRED', 403);
     const refundAllocations = allocateRefundTenders({
       digits: moneyDigits,
       requested: settlementMode === 'store_credit' ? 'store_credit' : refundMethod,
-      amount: total,
+      amount: refundTotal,
       originalCashPaid, originalNonCashPaid,
       originalDebt: Math.max(0, Number(sale.total || 0) - Number(sale.store_credit_used || 0) - Math.max(originalPaid, Number(sale.paid_amount || 0))),
       previousCashRefunded, previousNonCashRefunded, previousDebtReversed,
@@ -913,9 +934,12 @@ export class ReturnsService {
     // the return stays visible while the customer balance stays
     // exactly unchanged. 'sale_return_refund' is a distinct type so
     // no reader mistakes the refund leg for another reversal.
+    // R7-A F1: the pair shows the ACTUAL refund (total + relief),
+    // as the journal credits it — the legs still net to zero, so
+    // the customer balance stays exactly unchanged.
     if (customerId && !postedReceivableLeg && total > 0) {
-      await this.addCustomerLedgerEntry(trx, customerId, -total, 'sale_return', 'sale return ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id);
-      await this.addCustomerLedgerEntry(trx, customerId, total, 'sale_return_refund', 'sale return refund ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id);
+      await this.addCustomerLedgerEntry(trx, customerId, -refundTotal, 'sale_return', 'sale return ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id);
+      await this.addCustomerLedgerEntry(trx, customerId, refundTotal, 'sale_return_refund', 'sale return refund ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id);
     }
 
     // Reconcile Customer Loyalty Points on Return (ZS-070)

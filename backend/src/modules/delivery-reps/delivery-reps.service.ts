@@ -452,9 +452,19 @@ export class DeliveryRepsService {
         branchId = openShift.branchId;
         locationId = openShift.locationId;
 
+        // R7-A (INV-REST-RETURN-PAYOUT-TRUTH) F2: settle the
+        // REMAINING amounts, not the original sale row. A prior
+        // return already reversed part of the receivable (and
+        // relieved part of the fee), so total - originalFee fails
+        // closed in postDeliveryRepSettlement, and crediting the
+        // full total would over-credit 1130. The basis is the
+        // single source of truth shared with the posting gate.
+        const basis = await this.accountingPosting.deliverySettlementBasis(trx, saleId, actor);
         const deliveryFeeMode = (sale as any).delivery_fee_mode || await this.getDeliveryFeeMode(trx, actor);
-        const deliveryFee = Number((sale as any).delivery_fee || 0);
-        const settledCashAmount = deliveryFeeMode === 'store_fleet' ? Number(sale.total) : Math.max(0, Number(sale.total) - deliveryFee);
+        const remainingFee = deliveryFeeMode === 'store_fleet' ? 0 : basis.remainingFee;
+        const { tenantId: settleTenantId } = requireTenantScope(actor);
+        const settleDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, settleTenantId));
+        const settledCashAmount = roundMoney(Math.max(0, basis.remainingReceivable - remainingFee), settleDigits);
 
         if (settledCashAmount > 0) {
           const repRow = sale.delivery_rep_id ? await trx.selectFrom('delivery_representatives').select(['name']).where('id', '=', Number(sale.delivery_rep_id)).where(this.tenantPredicate(actor)).executeTakeFirst() : null;
@@ -462,7 +472,7 @@ export class DeliveryRepsService {
           await trx.insertInto('treasury_transactions').values({
             txn_type: 'cash_in',
             amount: settledCashAmount,
-            note: `تسوية أوردر دليفري رقم #${saleId} من ${repLabel}${deliveryFee > 0 && deliveryFeeMode === 'freelance_courier' ? ` (مخصوماً منها ${deliveryFee} ج رسوم المندوب)` : ''}`,
+            note: `تسوية أوردر دليفري رقم #${saleId} من ${repLabel}${remainingFee > 0 && deliveryFeeMode === 'freelance_courier' ? ` (مخصوماً منها ${remainingFee} ج رسوم المندوب)` : ''}`,
             reference_type: 'cashier_shift',
             reference_id: shiftId,
             branch_id: branchId,
@@ -472,8 +482,8 @@ export class DeliveryRepsService {
           }).execute();
         }
 
-        if (sale.customer_id) {
-          await this.salesFinance.createCustomerLedgerEntry(trx, sale.customer_id, -Number(sale.total), `تسديد من مندوب للأوردر #${saleId}`, saleId, actor);
+        if (sale.customer_id && basis.remainingReceivable > 0) {
+          await this.salesFinance.createCustomerLedgerEntry(trx, sale.customer_id, -basis.remainingReceivable, `تسديد من مندوب للأوردر #${saleId}`, saleId, actor);
         }
 
         await this.accountingPosting.postDeliveryRepSettlement(trx, saleId, settledCashAmount, branchId, locationId, actor);
@@ -579,13 +589,29 @@ export class DeliveryRepsService {
         throw new AppError('بعض طلبات المندوب مدفوعة جزئياً وتتطلب تسوية منفصلة', 'DELIVERY_PARTIAL_PAYMENT_RECONCILIATION_REQUIRED', 409);
       }
       const defaultMode = await this.getDeliveryFeeMode(trx, actor);
-      const cashDue = (order: typeof unsettledOrders[number]) => (order.delivery_fee_mode || defaultMode) === 'store_fleet' ? Number(order.total) : Math.max(0, Number(order.total) - Number(order.delivery_fee || 0));
       // Cash due is money: round at the tenant's book digits. Currency
       // resolves on the transaction handle (never the pool) inside the
       // open transaction; the old 2-decimal cut dropped a 3-decimal tenant's
       // fils before the amount was posted to treasury.
       const { tenantId } = requireTenantScope(actor);
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, tenantId));
+      // R7-A (INV-REST-RETURN-PAYOUT-TRUTH) F2: cash due is the
+      // REMAINING receivable minus the REMAINING fee per order
+      // (deliverySettlementBasis, shared with the posting gate) —
+      // a prior return already reversed part of each order's
+      // receivable and relieved part of its fee. The basis is read
+      // up front so the AMOUNT_MISMATCH pre-check and the per-order
+      // posts below agree on the same numbers.
+      const basisByOrderId = new Map<number, { remainingReceivable: number; remainingFee: number }>();
+      for (const order of unsettledOrders) {
+        basisByOrderId.set(Number(order.id), await this.accountingPosting.deliverySettlementBasis(trx, Number(order.id), actor));
+      }
+      const cashDue = (order: typeof unsettledOrders[number]) => {
+        const basis = basisByOrderId.get(Number(order.id))!;
+        return (order.delivery_fee_mode || defaultMode) === 'store_fleet'
+          ? basis.remainingReceivable
+          : Math.max(0, roundMoney(basis.remainingReceivable - basis.remainingFee, moneyDigits));
+      };
       const actualTotal = roundMoney(unsettledOrders.reduce((sum, order) => sum + cashDue(order), 0), moneyDigits);
 
       if (Math.abs(actualTotal - expectedAmount) > 0.01) {
@@ -597,21 +623,26 @@ export class DeliveryRepsService {
       const repRow = await trx.selectFrom('delivery_representatives').select(['name']).where('id', '=', repId).where(this.tenantPredicate(actor)).executeTakeFirst();
       const repLabel = repRow?.name ? `${repRow.name} (#${repId})` : `مندوب #${repId}`;
 
-      await trx.insertInto('treasury_transactions').values({
-        txn_type: 'cash_in',
-        amount: actualTotal,
-        note: `تسوية أوردرات دليفري (${saleIds.length} أوردر) من ${repLabel}`,
-        reference_type: 'cashier_shift',
-        reference_id: openShift.id,
-        branch_id: openShift.branchId,
-        location_id: openShift.locationId,
-        created_by: actor.userId,
-        ...this.tenantFields(actor)
-      }).execute();
+      // R7-A F2: no cash row when the batch hands over nothing
+      // (every order fully returned) — a zero treasury row is noise.
+      if (actualTotal > 0) {
+        await trx.insertInto('treasury_transactions').values({
+          txn_type: 'cash_in',
+          amount: actualTotal,
+          note: `تسوية أوردرات دليفري (${saleIds.length} أوردر) من ${repLabel}`,
+          reference_type: 'cashier_shift',
+          reference_id: openShift.id,
+          branch_id: openShift.branchId,
+          location_id: openShift.locationId,
+          created_by: actor.userId,
+          ...this.tenantFields(actor)
+        }).execute();
+      }
 
       for (const order of unsettledOrders) {
-        if (order.customer_id) {
-          await this.salesFinance.createCustomerLedgerEntry(trx, order.customer_id, -Number(order.total), `تسديد من مندوب للأوردر #${order.id}`, order.id, actor);
+        const basis = basisByOrderId.get(Number(order.id))!;
+        if (order.customer_id && basis.remainingReceivable > 0) {
+          await this.salesFinance.createCustomerLedgerEntry(trx, order.customer_id, -basis.remainingReceivable, `تسديد من مندوب للأوردر #${order.id}`, order.id, actor);
         }
         await this.accountingPosting.postDeliveryRepSettlement(trx, order.id, cashDue(order), openShift.branchId, openShift.locationId, actor);
       }
