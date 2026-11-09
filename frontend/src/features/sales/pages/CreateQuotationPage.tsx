@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCreateQuotationForm, type CreateQuotationPayload, type QuotationItem } from '../hooks/useCreateQuotationForm';
+import { salesOrdersApi } from '../api/sales-orders.api';
 import { useProductsQuery } from '@/shared/hooks/use-catalog-queries';
 import { useAppToolbar } from '@/stores/toolbar-store';
 import { PageHeader } from '@/shared/components/page-header';
@@ -125,6 +126,103 @@ export function CreateQuotationPage() {
     }));
   }, [catalogProducts]);
 
+  // INV-QUOTATION-RESERVED-STOCK-DISPLAY: the picker suggestion
+  // shows ONLY the reserved-aware availability — never the catalog
+  // stock (p.stock = products.stock_qty, on-hand before reservations,
+  // in no warehouse in particular). A quotation has no warehouse, so
+  // the read is the GLOBAL availability (locationId null): the backend
+  // returns availableAtLocation = globalAvailable =
+  // stock_qty - reserved_qty in that case, exactly the arithmetic the
+  // approval check enforces when no warehouse is chosen. Availability
+  // is fetched for the options the dropdown is about to show (same
+  // predicate and 8-option cap as SearchableCombobox), when the
+  // dropdown opens and, debounced, while the user types.
+  const [availabilityByProduct, setAvailabilityByProduct] = useState<Record<number, number>>({});
+
+  const refreshAvailability = useCallback(async (productIds: number[]) => {
+    const ids = [...new Set(productIds.filter((id) => Number(id) > 0))];
+    if (ids.length === 0) return;
+    const results = await Promise.all(
+      ids.map(async (productId) => {
+        try {
+          const res = await salesOrdersApi.availability(productId, null);
+          return [productId, Number(res.availableAtLocation ?? 0)] as const;
+        } catch {
+          return [productId, undefined] as const;
+        }
+      }),
+    );
+    setAvailabilityByProduct((prev) => {
+      const next = { ...prev };
+      for (const [productId, available] of results) {
+        if (available !== undefined) next[productId] = available;
+      }
+      return next;
+    });
+  }, []);
+
+  const pickerRefreshTimerRef = useRef<number | null>(null);
+
+  const visibleProductIds = useCallback(
+    (query: string) => {
+      const q = (query || '').trim();
+      const matched = productOptions.filter(
+        (p) =>
+          matchesArabic(p.name, q) ||
+          (p.barcode ? p.barcode.includes(q) : false) ||
+          (p.sku ? p.sku.toLowerCase().includes(q.toLowerCase()) : false),
+      );
+      return matched.slice(0, 8).map((p) => p.rawId);
+    },
+    [productOptions],
+  );
+
+  const refreshPickerAvailability = useCallback(
+    (query: string) => {
+      const ids = visibleProductIds(query);
+      if (ids.length > 0) void refreshAvailability(ids);
+    },
+    [visibleProductIds, refreshAvailability],
+  );
+
+  const schedulePickerAvailabilityRefresh = useCallback(
+    (query: string) => {
+      if (pickerRefreshTimerRef.current) window.clearTimeout(pickerRefreshTimerRef.current);
+      pickerRefreshTimerRef.current = window.setTimeout(() => refreshPickerAvailability(query), 250);
+    },
+    [refreshPickerAvailability],
+  );
+
+  useEffect(
+    () => () => {
+      if (pickerRefreshTimerRef.current) window.clearTimeout(pickerRefreshTimerRef.current);
+    },
+    [],
+  );
+
+  // Whenever a line's product changes, re-read the availability of
+  // every line product — the same read the approval check enforces —
+  // and show it on the line.
+  const lineProductIdsKey = items.map((it) => it.productId).filter((id) => id > 0).join(',');
+  useEffect(() => {
+    const ids = items.map((it) => it.productId).filter((id) => id > 0);
+    if (ids.length > 0) void refreshAvailability(ids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineProductIdsKey, refreshAvailability]);
+
+  useEffect(() => {
+    setItems((prev) => {
+      let changed = false;
+      const next = prev.map((it) => {
+        const avail = it.productId > 0 ? availabilityByProduct[it.productId] : undefined;
+        if (avail === undefined || avail === it.stockOnHand) return it;
+        changed = true;
+        return { ...it, stockOnHand: avail };
+      });
+      return changed ? next : prev;
+    });
+  }, [availabilityByProduct]);
+
   // Draft Management
   const formData = useMemo(
     () => ({
@@ -179,7 +277,14 @@ export function CreateQuotationPage() {
       if (restored.discountValue !== undefined) setDiscountValue(restored.discountValue);
       if (restored.notes) setNotes(restored.notes);
       if (restored.termsConditions) setTermsConditions(restored.termsConditions);
-      if (restored.items && Array.isArray(restored.items)) setItems(restored.items);
+      if (restored.items && Array.isArray(restored.items)) {
+        // INV-QUOTATION-RESERVED-STOCK-DISPLAY: a saved stockOnHand
+        // is stale the moment another order reserves the stock — never
+        // show the persisted number as if it were live. A restored
+        // line starts at 0 (like a fresh line) until the reserved-aware
+        // read returns and the sync effect fills it in.
+        setItems(restored.items.map((it: any) => ({ ...it, stockOnHand: 0 })));
+      }
     },
   });
 
@@ -305,6 +410,10 @@ export function CreateQuotationPage() {
   };
 
   const handleProductSelect = (itemId: number, option: any) => {
+    // INV-QUOTATION-RESERVED-STOCK-DISPLAY: the line starts at the
+    // known reserved-aware availability (0 until the read returns),
+    // never the catalog stock — then re-read it live.
+    const knownAvailability = availabilityByProduct[option.rawId];
     handleUpdateItem(itemId, {
       productId: option.rawId,
       productName: option.name,
@@ -312,9 +421,10 @@ export function CreateQuotationPage() {
       unitPrice: option.price,
       unit_price: option.price,
       unitName: option.unit || 'قطعة',
-      stockOnHand: option.stock,
+      stockOnHand: knownAvailability ?? 0,
       barcode: option.barcode || '',
     });
+    void refreshAvailability([option.rawId]);
   };
 
   // I10-A (R8): the two submit intents are different documents.
@@ -734,16 +844,33 @@ export function CreateQuotationPage() {
                           inputClassName="purchase-prototype-field-input purchase-prototype-combobox-input purchase-prototype-combobox-input-inline"
                           placeholder={t('sales.create_quotation_page.s42', "ابحث عن صنف بالاسم أو الباركود...")}
                           value={item.productName || item.product_name || ''}
-                          onChange={(value) => handleUpdateItem(item.id, { productName: value, product_name: value })}
+                          onChange={(value) => {
+                            handleUpdateItem(item.id, { productName: value, product_name: value });
+                            schedulePickerAvailabilityRefresh(value);
+                          }}
                           options={productOptions}
                           getLabel={(p) => p.name}
-                          getMeta={(p) => [p.barcode, p.price > 0 ? `${formatCurrency(p.price)}` : undefined, `رصيد: ${p.stock}`].filter(Boolean).join(' · ')}
+                          getMeta={(p) => {
+                            // INV-QUOTATION-RESERVED-STOCK-DISPLAY: the
+                            // suggestion shows ONLY the reserved-aware
+                            // availability. The catalog stock (p.stock)
+                            // ignores reservations — it showed
+                            // "رصيد: 10" for a product whose 10 units
+                            // were already reserved. Unknown until the
+                            // read returns: no stock segment at all,
+                            // never a number from another source.
+                            const avail = availabilityByProduct[p.rawId];
+                            return [p.barcode, p.price > 0 ? `${formatCurrency(p.price)}` : undefined, avail === undefined ? undefined : `رصيد: ${avail}`].filter(Boolean).join(' · ');
+                          }}
                           search={(p, query) =>
                             matchesArabic(p.name, query) ||
                             (p.barcode ? p.barcode.includes(query) : false) ||
                             (p.sku ? p.sku.toLowerCase().includes(query.toLowerCase()) : false)
                           }
                           onSelect={(option) => handleProductSelect(item.id, option)}
+                          onOpenChange={(open) => {
+                            if (open) schedulePickerAvailabilityRefresh(item.productName);
+                          }}
                           showDropdownOnEmpty={true}
                           emptyLabel={t('sales.create_quotation_page.s43', "صنف جديد (يمكنك المتابعة بالاسم المدخل)")}
                         />
