@@ -26,6 +26,15 @@
  *   picked name;
  * - typing a name manually (no list pick) still submits as a walk-in
  *   customer with customerId null.
+ *
+ * I10-A: "اعتماد وحفظ عرض السعر" saved a DRAFT (live re-test
+ * 2026-11-09 §5(d): QUO-183760 stayed مسودة). Both buttons called
+ * the same handleSubmit and the payload carried no status, while
+ * the backend hardcoded status 'draft' — so the approve button was
+ * a dead promise and no UI path could ever move a quotation out of
+ * draft. The approve-vs-draft cases below pin the wire: approve
+ * sends status 'sent' with the approval toast, save-as-draft sends
+ * status 'draft' with the draft toast.
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -124,6 +133,14 @@ function submitQuotation() {
   fireEvent.click(screen.getByRole('button', { name: 'اعتماد عرض السعر' }));
 }
 
+function submitQuotationApproveAndSave() {
+  fireEvent.click(screen.getByRole('button', { name: 'اعتماد وحفظ عرض السعر' }));
+}
+
+function submitQuotationSaveDraft() {
+  fireEvent.click(screen.getByRole('button', { name: 'حفظ كمسودة' }));
+}
+
 describe('CreateQuotationPage customer picker', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -165,5 +182,42 @@ describe('CreateQuotationPage customer picker', () => {
     expect(payload.customerId).toBeNull();
     expect(payload.customerName).toBe('عميل نقدي');
     expect(mocks.toastError).not.toHaveBeenCalledWith('يرجى تحديد اسم العميل لإصدار عرض السعر');
+  });
+});
+
+describe('CreateQuotationPage approve vs save-as-draft', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    mocks.createQuotation.mockResolvedValue({ ok: true, quotation: { id: 1 } });
+  });
+
+  it('"اعتماد وحفظ عرض السعر" creates the quotation as sent, not a draft', async () => {
+    renderPage();
+
+    await pickCustomerFromList();
+    fillOneLineItem();
+    submitQuotationApproveAndSave();
+
+    await waitFor(() => expect(mocks.createQuotation).toHaveBeenCalledTimes(1));
+    const payload = mocks.createQuotation.mock.calls[0][0] as any;
+    expect(payload.status).toBe('sent');
+    await waitFor(() =>
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('تم اعتماد وحفظ عرض السعر بنجاح'),
+    );
+  });
+
+  it('"حفظ كمسودة" creates the quotation as a draft', async () => {
+    renderPage();
+
+    await pickCustomerFromList();
+    fillOneLineItem();
+    submitQuotationSaveDraft();
+
+    await waitFor(() => expect(mocks.createQuotation).toHaveBeenCalledTimes(1));
+    const payload = mocks.createQuotation.mock.calls[0][0] as any;
+    expect(payload.status).toBe('draft');
+    await waitFor(() =>
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('تم إنشاء وحفظ عرض السعر بنجاح'),
+    );
   });
 });

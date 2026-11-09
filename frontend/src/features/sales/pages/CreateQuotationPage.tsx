@@ -317,7 +317,13 @@ export function CreateQuotationPage() {
     });
   };
 
-  const handleSubmit = () => {
+  // I10-A (R8): the two submit intents are different documents.
+  // "حفظ كمسودة" keeps the quotation a draft; "اعتماد ..." issues
+  // it (status 'sent'). Previously both buttons called this with no
+  // argument and the payload carried no status, so the backend
+  // hardcoded 'draft' and the approve button silently produced a
+  // draft (live QUO-183760).
+  const handleSubmit = (approve: boolean) => {
     if (!customerName.trim()) {
       toast.error('يرجى تحديد اسم العميل لإصدار عرض السعر');
       return;
@@ -338,6 +344,7 @@ export function CreateQuotationPage() {
       customerPhone: customerPhone.trim() || undefined,
       customerAddress: customerAddress.trim() || undefined,
       validUntil: validUntil || undefined,
+      status: approve ? 'sent' : 'draft',
       subtotal: calculations.rawSubtotal,
       discountAmount: calculations.totalDiscount,
       taxAmount: calculations.taxTotal,
@@ -403,14 +410,14 @@ export function CreateQuotationPage() {
               </Button>
               <Button
                 variant="secondary"
-                onClick={handleSubmit}
+                onClick={() => handleSubmit(false)}
                 disabled={isSubmitting}
               >
                 {t('sales.create_quotation_page.s7', "حفظ كمسودة")}
               </Button>
               <Button
                 variant="primary"
-                onClick={handleSubmit}
+                onClick={() => handleSubmit(true)}
                 disabled={isSubmitting}
                 style={{ backgroundColor: '#170e5e', color: '#ffffff', minWidth: '130px' }}
               >
@@ -1080,7 +1087,7 @@ export function CreateQuotationPage() {
               <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <Button
                   variant="primary"
-                  onClick={handleSubmit}
+                  onClick={() => handleSubmit(true)}
                   disabled={isSubmitting}
                   style={{
                     backgroundColor: '#170e5e',

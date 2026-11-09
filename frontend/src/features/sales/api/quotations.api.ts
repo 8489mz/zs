@@ -62,6 +62,10 @@ export interface CreateQuotationPayload {
   notes?: string;
   termsConditions?: string;
   terms_conditions?: string;
+  // I10-A (R8): creation-time status — 'sent' when the user clicks
+  // approve-and-save, 'draft' when saving as a draft. The backend
+  // whitelists this to 'sent' | 'draft' only.
+  status?: 'draft' | 'sent';
   items: QuotationItem[];
 }
 

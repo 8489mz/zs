@@ -125,7 +125,13 @@ export class QuotationsService {
           tax_amount: dto.taxAmount || 0,
           total_amount: dto.totalAmount,
           valid_until: dto.validUntil ? new Date(dto.validUntil) : null,
-          status: 'draft',
+          // I10-A (R8): honour the creation-time approval. The
+          // create page's approve-and-save button sends 'sent';
+          // anything else (including 'accepted' / 'converted',
+          // which no creation path may mint) fails closed to
+          // 'draft'. Previously this line hardcoded 'draft', so
+          // the approve button silently produced a draft.
+          status: dto.status === 'sent' ? 'sent' : 'draft',
           notes: dto.notes?.trim() || null,
           terms_conditions: dto.termsConditions?.trim() || null,
           created_by: auth.userId ? Number(auth.userId) : null,
