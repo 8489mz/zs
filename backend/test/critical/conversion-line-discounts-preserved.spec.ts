@@ -161,8 +161,8 @@ async function main() {
     const orders = new SalesOrdersService(db as any, stubSalesWrite);
     const quotations = new QuotationsService(db as any, stubSalesWrite);
 
-    async function seedOrder(id: number, rows: Array<{ quantity: number; unitPrice: number; discount: number; total: number }>, discountAmount: number, totalAmount: number): Promise<void> {
-      await db.insertInto('sales_orders').values({ id, tenant_id: 't1', account_id: 'a1', order_number: `SO-${id}`, customer_name: 'Cust', branch_id: 1, discount_amount: discountAmount, total_amount: totalAmount, status: 'confirmed' } as any).execute();
+    async function seedOrder(id: number, rows: Array<{ quantity: number; unitPrice: number; discount: number; total: number }>, discountAmount: number, totalAmount: number, taxAmount = 0): Promise<void> {
+      await db.insertInto('sales_orders').values({ id, tenant_id: 't1', account_id: 'a1', order_number: `SO-${id}`, customer_name: 'Cust', branch_id: 1, discount_amount: discountAmount, tax_amount: taxAmount, total_amount: totalAmount, status: 'confirmed' } as any).execute();
       for (const row of rows) {
         await db.insertInto('sales_order_items').values({ tenant_id: 't1', account_id: 'a1', sales_order_id: id, product_id: 1, quantity: row.quantity, unit_price: row.unitPrice, discount: row.discount, total: row.total } as any).execute();
       }
@@ -180,7 +180,7 @@ async function main() {
     await seedOrder(1, [
       { quantity: 2, unitPrice: 50, discount: 5, total: 95 },
       { quantity: 1, unitPrice: 30, discount: 5, total: 25 },
-    ], 10, 136.8);
+    ], 10, 136.8, 16.8);
     const ok1 = await orders.convertToSale(1, AUTH);
     assert.equal(Number((ok1 as any).saleId), 99);
     assert.equal(calls, 1);
@@ -213,7 +213,7 @@ async function main() {
 
     // 3. Header-discount-only order is unchanged: 1x100, header 7.
     // Net 93 + 14% tax 13.02 = 106.02.
-    await seedOrder(2, [{ quantity: 1, unitPrice: 100, discount: 0, total: 100 }], 7, 106.02);
+    await seedOrder(2, [{ quantity: 1, unitPrice: 100, discount: 0, total: 100 }], 7, 106.02, 13.02);
     await orders.convertToSale(2, AUTH);
     assert.equal(calls, 3);
     assert.deepEqual(lastPayload.items.map((item: any) => item.lineDiscount), [0]);

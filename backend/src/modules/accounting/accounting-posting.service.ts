@@ -1137,6 +1137,103 @@ export class AccountingPostingService {
     return this.salesReturnCogsResidual(queryable, tenantId, Number(sale.id), bookDigits, returnedQtyBySaleItemId);
   }
 
+  /**
+   * R4-A (INV-REST-SALE-MONEY-TRUTH): split the old single sale-revenue
+   * credit into its true legs. Used by BOTH postSale and postSaleEdit
+   * — the duplicated formula across the two functions was itself a
+   * root cause, so the split lives here exactly once.
+   *
+   * Exclusive-tax case: Cr 4100 = subtotal; Cr 4200 = service charge
+   * (+ the delivery fee when the store's own fleet delivered it);
+   * Cr 2115 = delivery fee when a freelance courier delivered it
+   * (a NULL stored mode defaults to freelance, matching the
+   * sales writer's default); Cr 2147 = tip. The legs sum exactly
+   * to the old single revenueCredit, so the journal balance is
+   * preserved by construction.
+   *
+   * Tax-inclusive case: the same legs, but the tax embedded in the
+   * goods + service-charge base is stripped pro-rata (residual to
+   * 4100). The ex-tax base is (subtotal + serviceCharge) - taxAmount
+   * — the discount is deliberately NOT netted here: it is carried
+   * by the separate Dr 4300 leg, so netting it would double-count
+   * it and unbalance the journal by the discount. (A corrupt tax
+   * larger than the base keeps the old single-line shape so the
+   * journal still balances instead of throwing on a negative leg.)
+   *
+   * The 4200/2115/2147 accounts resolve lazily, only when their leg
+   * is non-zero, so an ordinary sale with no extras creates no new
+   * accounts. 4200 is NOT auto-created: it is seeded by the COA
+   * migration (as postService already assumes); 2115/2147
+   * auto-create from the knownAccounts map above.
+   */
+  private async addSaleRevenueCreditLegs(
+    queryable: DbOrTx,
+    tenantId: string,
+    add: (line: JournalLineDraft) => void,
+    input: {
+      subtotal: number;
+      taxAmount: number;
+      deliveryFee: number;
+      deliveryFeeMode: string | null | undefined;
+      serviceCharge: number;
+      tipAmount: number;
+      pricesIncludeTax: boolean;
+      revenueCredit: number;
+      goodsAccountId: number;
+      branchId: number | null;
+      locationId: number | null;
+      contextLabel: string;
+    },
+    bookDigits: MoneyDigits,
+  ): Promise<void> {
+    const { subtotal, taxAmount, deliveryFee, serviceCharge, tipAmount } = input;
+    const isStoreFleet = String(input.deliveryFeeMode || '').trim() === 'store_fleet';
+    const deliveryPayable = isStoreFleet ? 0 : deliveryFee;
+    const deliveryRevenue = isStoreFleet ? deliveryFee : 0;
+
+    let legs: { goods: number; service: number; deliveryPayable: number; deliveryRevenue: number; tip: number };
+    if (input.pricesIncludeTax) {
+      const base = this.toMoney(subtotal + serviceCharge - taxAmount, bookDigits);
+      const denom = subtotal + serviceCharge;
+      if (base < 0) {
+        legs = { goods: input.revenueCredit, service: 0, deliveryPayable: 0, deliveryRevenue: 0, tip: 0 };
+      } else {
+        const serviceLeg = denom > 0 ? this.toMoney((base * serviceCharge) / denom, bookDigits) : 0;
+        legs = {
+          goods: this.toMoney(base - serviceLeg, bookDigits),
+          service: serviceLeg,
+          deliveryPayable,
+          deliveryRevenue,
+          tip: tipAmount,
+        };
+      }
+    } else {
+      legs = { goods: subtotal, service: serviceCharge, deliveryPayable, deliveryRevenue, tip: tipAmount };
+    }
+
+    const scope = { partnerType: 'none' as const, partnerId: null, branchId: input.branchId, locationId: input.locationId };
+    if (legs.goods > 0) {
+      add({ accountId: input.goodsAccountId, description: `إيراد مبيعات ${input.contextLabel}`, debit: 0, credit: legs.goods, ...scope });
+    }
+    if (legs.service > 0 || legs.deliveryRevenue > 0) {
+      const serviceAccountId = await this.resolveSystemAccountByCode(queryable, tenantId, '4200');
+      if (legs.service > 0) {
+        add({ accountId: serviceAccountId, description: `رسم خدمة ${input.contextLabel}`, debit: 0, credit: legs.service, ...scope });
+      }
+      if (legs.deliveryRevenue > 0) {
+        add({ accountId: serviceAccountId, description: `إيراد رسوم توصيل ${input.contextLabel}`, debit: 0, credit: legs.deliveryRevenue, ...scope });
+      }
+    }
+    if (legs.deliveryPayable > 0) {
+      const courierAccountId = await this.resolveSystemAccountByCode(queryable, tenantId, '2115');
+      add({ accountId: courierAccountId, description: `رسوم توصيل مستحقة لمندوب حر ${input.contextLabel}`, debit: 0, credit: legs.deliveryPayable, ...scope });
+    }
+    if (legs.tip > 0) {
+      const tipsAccountId = await this.resolveSystemAccountByCode(queryable, tenantId, '2147');
+      add({ accountId: tipsAccountId, description: `إكراميات مستحقة للموظفين ${input.contextLabel}`, debit: 0, credit: legs.tip, ...scope });
+    }
+  }
+
   async postSale(queryable: Transaction<Database>, saleId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number }> {
     this.assertTransaction(queryable, 'postSale');
     const scope = requireTenantScope(auth);
@@ -1322,16 +1419,20 @@ export class AccountingPostingService {
     }
 
     if (revenueCredit > 0) {
-      addBookLine({
-        accountId: salesRevenueAccountId,
-        description: 'إيراد مبيعات الفاتورة',
-        debit: 0,
-        credit: revenueCredit,
-        partnerType: 'none',
-        partnerId: null,
+      await this.addSaleRevenueCreditLegs(queryable, scope.tenantId, addBookLine, {
+        subtotal,
+        taxAmount,
+        deliveryFee,
+        deliveryFeeMode: (sale as any).delivery_fee_mode,
+        serviceCharge,
+        tipAmount,
+        pricesIncludeTax: Boolean(sale.prices_include_tax),
+        revenueCredit,
+        goodsAccountId: salesRevenueAccountId,
         branchId: sale.branch_id ? Number(sale.branch_id) : null,
         locationId: sale.location_id ? Number(sale.location_id) : null,
-      });
+        contextLabel: 'الفاتورة',
+      }, bookDigits);
     }
 
     if (taxAmount > 0) {
@@ -1657,15 +1758,19 @@ export class AccountingPostingService {
     }
 
     if (revenueCredit > 0) {
-      this.addLine(lines, {
-        accountId: salesRevenueAccountId,
-        description: 'إيراد تعديل فاتورة بيع',
-        debit: 0,
-        credit: revenueCredit,
-        partnerType: 'none',
-        partnerId: null,
+      await this.addSaleRevenueCreditLegs(queryable, scope.tenantId, (line) => this.addLine(lines, line, bookDigits), {
+        subtotal,
+        taxAmount,
+        deliveryFee,
+        deliveryFeeMode: (sale as any).delivery_fee_mode,
+        serviceCharge,
+        tipAmount,
+        pricesIncludeTax: Boolean(sale.prices_include_tax),
+        revenueCredit,
+        goodsAccountId: salesRevenueAccountId,
         branchId: sale.branch_id ? Number(sale.branch_id) : null,
         locationId: sale.location_id ? Number(sale.location_id) : null,
+        contextLabel: 'تعديل فاتورة بيع',
       }, bookDigits);
     }
 
@@ -3248,6 +3353,10 @@ export class AccountingPostingService {
       '5190': 'expense', '5300': 'expense', '6900': 'expense', '6950': 'expense', '3200': 'equity',
       '1150': 'asset', '2150': 'liability', '4300': 'contra_revenue', '4400': 'contra_revenue',
       '7110': 'revenue', '7210': 'expense', '7290': 'expense',
+      // R4-A (INV-REST-SALE-MONEY-TRUTH): tips collected are a
+      // liability and freelance-courier fees are a payable, never
+      // revenue — so both codes are dedicated liabilities.
+      '2147': 'liability', '2115': 'liability',
     };
     if (account && dedicatedTypes[code] && account.account_type !== dedicatedTypes[code]) throw new AppError('Dedicated system account has an incompatible type', 'SYSTEM_ACCOUNT_TYPE_MISMATCH', 409);
     if (!account) {
@@ -3277,6 +3386,14 @@ export class AccountingPostingService {
         '6200': { name_ar: 'الرواتب والأجور ومكافأة نهاية الخدمة', name_en: 'Salaries, Wages & EOS', type: 'expense', group: 'operating_expenses', balance: 'debit' },
         '6210': { name_ar: 'تأمينات اجتماعية - حصة صاحب العمل', name_en: 'Employer Social Insurance Expense', type: 'expense', group: 'operating_expenses', balance: 'debit' },
         '2140': { name_ar: 'رواتب ومستحقات مستحقة الدفع', name_en: 'Payroll & Settlements Payable', type: 'liability', group: 'current_liabilities', balance: 'credit' },
+        // R4-A (INV-REST-SALE-MONEY-TRUTH): tips collected are held
+        // for the staff (relieved by the tip-pool payout
+        // Dr 2147 / Cr 1110/1120); freelance-courier fees are owed
+        // to the courier (relieved by the delivery settlement
+        // Dr 2115). Both auto-create on first post via this map —
+        // no settings migration, no accounting_settings column.
+        '2147': { name_ar: 'إكراميات مستحقة للموظفين', name_en: 'Tips Payable', type: 'liability', group: 'current_liabilities', balance: 'credit' },
+        '2115': { name_ar: 'مستحقات مناديب توصيل', name_en: 'Courier Fees Payable', type: 'liability', group: 'payable', balance: 'credit' },
         '2145': { name_ar: 'تأمينات اجتماعية مستحقة السداد', name_en: 'Social Insurance Payable', type: 'liability', group: 'current_liabilities', balance: 'credit' },
         '2146': { name_ar: 'ضريبة كسب عمل مستحقة', name_en: 'Income Tax Withholding Payable', type: 'liability', group: 'current_liabilities', balance: 'credit' },
         '1160': { name_ar: 'سلف وقروض العاملين', name_en: 'Employee Advances & Loans', type: 'asset', group: 'current_assets', balance: 'debit' },
@@ -4839,8 +4956,15 @@ export class AccountingPostingService {
     if (fee < 0 || (fee > 0 && Math.abs(fee - Number(sale.delivery_fee || 0)) > this.maxAllowedDifference(bookDigits))) throw new AppError('Delivery settlement does not reconcile with courier fee', 'DELIVERY_SETTLEMENT_INVALID', 409);
     const lines: JournalLineDraft[] = [];
     if (fee > 0) {
-      const expenseId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '6400');
-      addBookLine({ accountId: expenseId, description: 'رسوم مندوب حر مخصومة من التحصيل', debit: fee, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
+      // R4-A (INV-REST-SALE-MONEY-TRUTH): the sale now posts the
+      // freelance fee as Cr 2115 (Courier Fees Payable), so the
+      // settlement relieves that payable — it must NOT book Dr 6400
+      // expense, or the fee would hit P&L twice and 2115 would never
+      // be relieved. The fee leg only fires for a freelance courier:
+      // both settlement callers pass the full total (fee 0) for a
+      // store-fleet sale, whose fee is 4200 revenue at sale time.
+      const courierPayableId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '2115');
+      addBookLine({ accountId: courierPayableId, description: 'رسوم مندوب حر مخصومة من التحصيل', debit: fee, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
     }
     addBookLine({
       accountId: cashAccountId,

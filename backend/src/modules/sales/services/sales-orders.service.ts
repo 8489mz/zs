@@ -12,6 +12,7 @@ import { reserveLocationStock, releaseLocationStock, getLocationAvailability } f
 import { idempotencyStorage } from '../../../core/idempotency/idempotency.context';
 import { IdempotencyService } from '../../../core/idempotency/idempotency.service';
 import { conversionRecoverySaleId, decideConversionRecovery, resolveConversionDiscounts, resolveConversionPaymentTerms } from '../helpers/sales-write.helper';
+import { recomputeSalesOrderMoney, assertSalesOrderMoney } from '../helpers/sales-order-money.helper';
 
 @Injectable()
 export class SalesOrdersService {
@@ -316,6 +317,26 @@ export class SalesOrdersService {
       !Number.isFinite(item.quantity) || item.quantity <= 0 || !Number.isFinite(item.unitPrice) || item.unitPrice < 0)) {
       throw new BadRequestException('أمر البيع يحتاج بنوداً بكميات وأسعار صالحة');
     }
+    // R4-A (INV-REST-SALE-MONEY-TRUTH): a missing name used to throw
+    // a bare TypeError (500) from dto.customerName.trim() inside the
+    // transaction — fail closed with a 400 instead.
+    if (typeof dto.customerName !== 'string' || !dto.customerName.trim()) {
+      throw new BadRequestException('اسم العميل مطلوب لأمر البيع');
+    }
+    // R4-A (INV-REST-SALE-MONEY-TRUTH): the header totals are
+    // client-supplied and were stored verbatim — per-line totals,
+    // the gross subtotal, and subtotal - discount + tax must all
+    // reconcile with the lines before anything is stored or
+    // reserved. Throws SALES_ORDER_LINE_MISMATCH /
+    // SALES_ORDER_TOTAL_MISMATCH (400).
+    assertSalesOrderMoney(
+      recomputeSalesOrderMoney(dto.items, dto.discountAmount ?? 0, dto.taxAmount ?? 0),
+      {
+        lineTotals: dto.items.map((item) => item.total),
+        subtotal: dto.subtotal,
+        total: dto.totalAmount,
+      },
+    );
     const initialStatus = shouldReserve ? 'confirmed' : 'draft';
 
     const result = await this.db.transaction().execute(async (trx) => {
@@ -859,6 +880,27 @@ export class SalesOrdersService {
         order.discount_amount,
       );
 
+      // R4-A (INV-REST-SALE-MONEY-TRUTH): the stored total_amount is
+      // client-supplied and was paid verbatim as the cash leg — a
+      // stored total inflated with extras became overpayment/change,
+      // a deflated one threw INVALID_PAID_AMOUNT or silently became
+      // credit. Assert the stored total equals the recomputed total
+      // (throws SALES_ORDER_TOTAL_MISMATCH before any sale is
+      // created) and build the cash payment from the RECOMPUTED
+      // total, never from the stored one. Per-line totals are
+      // deliberately not asserted here: a stale per-line total is
+      // inert display data at conversion.
+      const recomputedOrderMoney = recomputeSalesOrderMoney(
+        items.map((item) => ({
+          quantity: item.quantity,
+          unitPrice: item.unit_price,
+          discount: item.discount,
+        })),
+        order.discount_amount,
+        order.tax_amount,
+      );
+      assertSalesOrderMoney(recomputedOrderMoney, { total: order.total_amount });
+
       // Prepare sale items
       const saleItems = items.map((item, index) => ({
         productId: Number(item.product_id),
@@ -868,7 +910,7 @@ export class SalesOrdersService {
         unitName: item.unit_name || undefined,
       }));
 
-      const totalAmount = Number(order.total_amount);
+      const totalAmount = recomputedOrderMoney.total;
 
       // INV-CONVERSION-PAYMENT-TERMS-CARRIED: carry the stored
       // payment_terms ('cash' | 'credit', van pre-sales only) into the

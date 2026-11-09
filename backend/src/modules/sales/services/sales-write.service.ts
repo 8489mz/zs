@@ -28,6 +28,7 @@ import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollecti
 import { allocateSaleTenders, type SaleTenderChannel } from '../engines/sale-tender.engine';
 import { allocateInvoiceDiscount } from '../engines/invoice-discount.engine';
 import { resolveSaleTaxRate } from '../engines/sale-tax-rate.engine';
+import { resolveSaleServiceCharge } from '../engines/sale-service-charge.engine';
 import { assertSaleNotZatcaSigned } from '../../tax-integration/services/zatca/zatca-invoice-status';
 import { diffContributions, negateContribution, tripSaleContribution, type TripSaleContribution } from '../../delivery-reps/van-trip-counters.engine';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
@@ -241,6 +242,12 @@ export class SalesWriteService {
     'taxRate', 'tax_rate', 'allowNegativeStockSales', 'allowSellingBelowStock', 'loyaltyEnabled',
     'loyaltyPointsPer100Egp', 'loyaltyPointRedeemValue', 'loyaltyMinRedeemPoints',
     'loyaltyMaxDiscountPercentage', 'requireCashierShiftForSales', 'deliveryFeeMode',
+    // R4-A (INV-REST-SALE-MONEY-TRUTH): the dine-in service charge is
+    // recomputed server-side, so its tenant settings must be fetched
+    // here too (camelCase is the live key; the snake spellings are a
+    // fallback only — they have no writer).
+    'restaurantServiceChargeEnabled', 'restaurantServiceChargePercent',
+    'restaurant_service_charge_enabled', 'restaurant_service_charge_rate',
     'invoiceNumberingScheme',
   ];
   private static readonly tenantSettingsMapCache = new Map<string, { map: Map<string, any>; expiresAt: number }>();
@@ -1551,6 +1558,24 @@ export class SalesWriteService {
       const unapprovedDiscount = Math.max(0, roundSaleResidual(roundSaleResidual(normalized.discount - Number(approvedTerms?.approvedDiscount || 0), moneyDigits) + lineDiscountTotal, moneyDigits));
       await this.assertDiscountChangeAllowed(trx, auth, unapprovedDiscount, normalized.managerPin, subtotal);
       if (effectiveDiscount > subtotal) throw new AppError('Discount cannot exceed subtotal', 'INVALID_DISCOUNT', 400);
+      // R4-A (INV-REST-SALE-MONEY-TRUTH): the dine-in service charge
+      // is a tenant decision, not a client assertion — same shape as
+      // the Tax F1 gate above. The engine returns null for a non-POS
+      // source (the charge stays exactly as sent) and 0 for a
+      // non-dine-in order or a disabled charge; otherwise it
+      // recomputes (subtotal - effectiveDiscount) x percent at book
+      // digits. This overwrite happens BEFORE computeInvoiceTotals,
+      // so the stored sales.service_charge, the totals, the tender
+      // allocation and postSale all consume the recomputed truth.
+      const recomputedServiceCharge = resolveSaleServiceCharge({
+        orderType: normalized.orderType,
+        source: normalized.source,
+        enabled: settingsMap.get('restaurantServiceChargeEnabled') ?? settingsMap.get('restaurant_service_charge_enabled'),
+        percent: settingsMap.get('restaurantServiceChargePercent') ?? settingsMap.get('restaurant_service_charge_rate'),
+        netBase: subtotal - effectiveDiscount,
+        digits: moneyDigits,
+      });
+      if (recomputedServiceCharge !== null) normalized.serviceCharge = recomputedServiceCharge;
       // Pre-round the sale-side totals to book digits before allocation
       // (INV-SALE-TAX-BOOK-DIGITS-PRE-ROUND): computeInvoiceTotals
       // always rounds to 3 decimals, but the allocation engine fails
@@ -3093,6 +3118,21 @@ export class SalesWriteService {
         normalized.taxRate,
         taxSettingsMap.get('taxRate') ?? taxSettingsMap.get('tax_rate'),
       );
+      // R4-A (INV-REST-SALE-MONEY-TRUTH): same server recompute as
+      // createSale — an edit re-derives the charge from the tenant
+      // settings, so an edit cannot rewrite a posted invoice's
+      // service charge from a tampered payload. The base here is
+      // subtotal - normalized.discount (updateSale has no loyalty
+      // path); the overwrite happens BEFORE computeInvoiceTotals.
+      const recomputedEditServiceCharge = resolveSaleServiceCharge({
+        orderType: normalized.orderType,
+        source: normalized.source,
+        enabled: taxSettingsMap.get('restaurantServiceChargeEnabled') ?? taxSettingsMap.get('restaurant_service_charge_enabled'),
+        percent: taxSettingsMap.get('restaurantServiceChargePercent') ?? taxSettingsMap.get('restaurant_service_charge_rate'),
+        netBase: subtotal - normalized.discount,
+        digits: moneyDigits,
+      });
+      if (recomputedEditServiceCharge !== null) normalized.serviceCharge = recomputedEditServiceCharge;
       const { taxAmount, total } = roundSaleInvoiceTotals(
         computeInvoiceTotals(subtotal, normalized.discount, normalized.taxRate, normalized.pricesIncludeTax, normalized.deliveryFee, normalized.serviceCharge, Number((normalized as any).tipAmount || 0)),
         moneyDigits,
