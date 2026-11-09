@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { Card } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
@@ -8,6 +8,8 @@ import { CheckIcon, UsersIcon, ReceiptIcon, PlusIcon, TrashIcon } from '@/shared
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { calcCartLineTotal, calcModifiersTotal } from '@/features/pos/lib/pos-modifier-totals';
+import { stripSaleItemNameFields } from '@/features/pos/contracts';
 import type { PosItem } from '@/features/pos/types/pos.types';
 
 interface PosSplitBillModalProps {
@@ -29,8 +31,189 @@ interface EvenSplitGuest {
   id: number;
   name: string;
   amount: number;
+  // `collected` = the cashier took this guest's money; `paid` = the final
+  // sale actually posted. They are different on purpose (I33): a guest is
+  // never shown as paid before any sale exists.
+  collected: boolean;
   paid: boolean;
   method: 'cash' | 'card' | 'transfer';
+}
+
+/* INV-REST-SPLIT-REAL-TOTALS (R-B10/B11/B12/I32/I33): a split bill totals
+ * the REAL line values plus the order's extras, allocated across the
+ * bills. The order totals are snapshotted when the modal opens (see the
+ * init effect) — the bills always price against that snapshot, never
+ * against the live workspace totals, because paying one bill syncs the
+ * remaining items back into the workspace cart and the live totals shrink.
+ * The backend recomputes tax from the rate (computeInvoiceTotals), so a
+ * bill's tax is computed here with the same formula from the bill's own
+ * pieces; only the tax rounding can drift, and the settled guard tolerates
+ * exactly that provable bound — never a real mismatch. */
+
+export interface SplitOrderTotals {
+  subTotal: number;
+  discountValue: number;
+  serviceCharge: number;
+  taxRate: number;
+  pricesIncludeTax: boolean;
+  tipAmount: number;
+  deliveryFee: number;
+  total: number;
+}
+
+export interface SplitBillAmounts {
+  subtotal: number;
+  discount: number;
+  serviceCharge: number;
+  taxAmount: number;
+  tipAmount: number;
+  deliveryFee: number;
+  total: number;
+}
+
+/** Maximum drift between the sum of bill totals and the order total that
+ * per-bill tax rounding alone can explain: half a book-digit unit per bill
+ * plus half a unit for the order's own rounding. Anything beyond this is a
+ * real mismatch (undistributed items, stale snapshot) and must block settling. */
+export function splitRoundingTolerance(billCount: number, bookDigits: number): number {
+  return (Math.max(0, billCount) + 1) * 0.5 * Math.pow(10, -bookDigits);
+}
+
+/** The paid-sum guard (B10): the split may close settled only when the paid
+ * bills sum to the order total, within the provable rounding tolerance. */
+export function isSplitPaidSumSettled(
+  paidTotal: number,
+  orderTotal: number,
+  billCount: number,
+  bookDigits: number,
+): boolean {
+  return (
+    Math.abs(Number(paidTotal || 0) - Number(orderTotal || 0)) <=
+    splitRoundingTolerance(billCount, bookDigits) + 1e-9
+  );
+}
+
+/** Split the order's discount / service charge / tip / delivery fee across
+ * the bills pro-rata by real line subtotal (qty x (price + modifiers));
+ * the last non-empty bill takes each component's remainder so the shares
+ * sum exactly. Tax is computed per bill with the same formula the backend
+ * uses (taxable = lines - discount + service charge), never allocated. */
+export function allocateSplitBillAmounts(
+  billSubtotals: number[],
+  order: SplitOrderTotals,
+  bookDigits: number,
+): SplitBillAmounts[] {
+  const zero = (): SplitBillAmounts => ({
+    subtotal: 0,
+    discount: 0,
+    serviceCharge: 0,
+    taxAmount: 0,
+    tipAmount: 0,
+    deliveryFee: 0,
+    total: 0,
+  });
+  const orderSubtotal = Math.max(0, Number(order.subTotal || 0));
+  let lastIndex = -1;
+  billSubtotals.forEach((s, i) => {
+    if (Number(s || 0) > 0) lastIndex = i;
+  });
+  const allocate = (amount: number): number[] => {
+    const total = Math.max(0, Number(amount || 0));
+    const out = billSubtotals.map(() => 0);
+    let allocated = 0;
+    billSubtotals.forEach((_s, i) => {
+      if (i === lastIndex) return;
+      const share = orderSubtotal > 0 ? Math.max(0, Number(billSubtotals[i] || 0)) / orderSubtotal : 0;
+      out[i] = roundMoneyValue(total * share, bookDigits);
+      allocated += out[i];
+    });
+    if (lastIndex >= 0) out[lastIndex] = Math.max(0, roundMoneyValue(total - allocated, bookDigits));
+    return out;
+  };
+  const discounts = allocate(order.discountValue);
+  const serviceCharges = allocate(order.serviceCharge);
+  const tips = allocate(order.tipAmount);
+  const deliveryFees = allocate(order.deliveryFee);
+  const rate = Math.max(0, Number(order.taxRate || 0));
+  return billSubtotals.map((rawSubtotal, i) => {
+    const subtotal = Math.max(0, Number(rawSubtotal || 0));
+    if (subtotal <= 0) return zero();
+    // A bill's discount can never exceed its own lines.
+    const discount = Math.min(discounts[i], subtotal);
+    const serviceCharge = serviceCharges[i];
+    const tipAmount = tips[i];
+    const deliveryFee = deliveryFees[i];
+    const taxable = Math.max(0, roundMoneyValue(subtotal - discount + serviceCharge, bookDigits));
+    const taxAmount =
+      rate > 0
+        ? order.pricesIncludeTax
+          ? roundMoneyValue(taxable - taxable / (1 + rate / 100), bookDigits)
+          : roundMoneyValue((taxable * rate) / 100, bookDigits)
+        : 0;
+    const total = order.pricesIncludeTax
+      ? roundMoneyValue(taxable + deliveryFee + tipAmount, bookDigits)
+      : roundMoneyValue(taxable + taxAmount + deliveryFee + tipAmount, bookDigits);
+    return {
+      subtotal: roundMoneyValue(subtotal, bookDigits),
+      discount,
+      serviceCharge,
+      taxAmount,
+      tipAmount,
+      deliveryFee,
+      total,
+    };
+  });
+}
+
+/** Fractional split (B11): split one line into equal parts of its FULL value
+ * (qty x (price + modifiers)). A part carries NO modifiers — the modifier
+ * value is inside the part price. Copying the full modifier list onto every
+ * part double-charges it: burger 100 + cheese 20 split in 2 used to post
+ * 140 instead of 120. Returns null for a zero/negative line. */
+export function buildFractionalParts(
+  item: PosItem,
+  partsCount: 2 | 3 | 4,
+  bookDigits: number,
+): PosItem[] | null {
+  const fullValue = calcCartLineTotal(item);
+  if (!(fullValue > 0)) return null;
+  const baseName = String(item.name || '')
+    .replace(/\s*\((نصف حصة|حصة)\s*[\d/]+\)/g, '')
+    .trim();
+  const basePart = roundMoneyValue(fullValue / partsCount, bookDigits);
+  const parts: number[] = [];
+  let allocated = 0;
+  for (let p = 0; p < partsCount; p++) {
+    const isLast = p === partsCount - 1;
+    const val = isLast ? roundMoneyValue(fullValue - allocated, bookDigits) : basePart;
+    allocated += val;
+    parts.push(val);
+  }
+  return parts.map((price, p) => ({
+    ...item,
+    qty: 1,
+    price,
+    modifiers: [],
+    name: `${baseName} (حصة ${p + 1}/${partsCount})`,
+    lineKey: `${item.productId}::frac${p + 1}::${Date.now()}::${Math.random()}`,
+  }));
+}
+
+/** The payment channel of a mixed final sale, mirroring handleSubmit: cash
+ * plus anything else is 'mixed'; a transfer-only sale is 'instapay' (the
+ * modal has no wallet/instapay distinction, same as handleSubmit's default). */
+export function resolveSplitPaymentChannel(
+  cashTotal: number,
+  cardTotal: number,
+  transferTotal: number,
+): 'cash' | 'card' | 'instapay' | 'mixed' {
+  const cash = Number(cashTotal || 0);
+  const card = Number(cardTotal || 0);
+  const transfer = Number(transferTotal || 0);
+  if (cash > 0 && (card > 0 || transfer > 0)) return 'mixed';
+  if (transfer > 0) return 'instapay';
+  if (card > 0) return 'card';
+  return 'cash';
 }
 
 export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosSplitBillModalProps) {
@@ -46,54 +229,77 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
   const [guestCount, setGuestCount] = useState<number>(2);
   const [evenGuests, setEvenGuests] = useState<EvenSplitGuest[]>([]);
 
+  // INV-REST-SPLIT-REAL-TOTALS (I32): the order totals are snapshotted when
+  // the modal opens. The bills always price against this snapshot, never
+  // against the live workspace totals — paying one bill syncs the remaining
+  // items back into the workspace cart and the live totals shrink, which
+  // would re-price every unpaid bill mid-split.
+  const [orderSnapshot, setOrderSnapshot] = useState<SplitOrderTotals | null>(null);
+
   // INV-FE1-FRONTEND-BOOK-DIGITS: split shares round at the tenant's
   // book digits; the last guest/bill takes the remainder so shares
   // sum exactly to the total.
   const bookDigits = currencyMoneyDigits(pos.settings?.currency || pos.settingsQuery?.data?.currency || getGlobalSystemCurrency());
-  const totalAmount = Number(pos.totals?.total || 0);
+  const totalAmount = Number(orderSnapshot?.total ?? pos.totals?.total ?? 0);
 
-  // Sync state whenever modal opens or cart changes
+  // Initialise once per opening (I32): the old deps [open, pos.cart,
+  // pos.totals?.total] re-initialised every bill and every guest — Bill 1 =
+  // whole cart, Bill 2 empty, all isPaid false — on ANY cart change, and
+  // handlePayBill itself calls pos.setCart(remainingItems), so paying one
+  // bill of three collapsed the whole split. The modal's own handlers own
+  // the bills/guests after opening; nothing re-initialises them.
   useEffect(() => {
-    if (open) {
-      // 1. Initialize split bills: Bill 1 gets all current cart items, Bill 2 starts empty
-      const initialBills: SplitBill[] = [
-        {
-          id: 'main',
-          name: 'الشيك 1 (الرئيسي)',
-          items: (pos.cart || []).map((i) => ({ ...i })),
-          isPaid: false,
-        },
-        {
-          id: 'split-2',
-          name: 'الشيك 2',
-          items: [],
-          isPaid: false,
-        },
-      ];
-      setBills(initialBills);
+    if (!open) return;
+    const snapshot: SplitOrderTotals = {
+      subTotal: Number(pos.totals?.subTotal || 0),
+      discountValue: Number(pos.totals?.discountValue || 0),
+      serviceCharge: Number(pos.totals?.serviceCharge || 0),
+      taxRate: Number(pos.totals?.taxRate || 0),
+      pricesIncludeTax: Boolean(pos.totals?.pricesIncludeTax),
+      tipAmount: Number(pos.totals?.tipAmount || 0),
+      deliveryFee: Number(pos.totals?.deliveryFee || 0),
+      total: Number(pos.totals?.total || 0),
+    };
+    setOrderSnapshot(snapshot);
+    // 1. Initialize split bills: Bill 1 gets all current cart items, Bill 2 starts empty
+    const initialBills: SplitBill[] = [
+      {
+        id: 'main',
+        name: 'الشيك 1 (الرئيسي)',
+        items: (pos.cart || []).map((i) => ({ ...i })),
+        isPaid: false,
+      },
+      {
+        id: 'split-2',
+        name: 'الشيك 2',
+        items: [],
+        isPaid: false,
+      },
+    ];
+    setBills(initialBills);
 
-      // 2. Initialize even guests split
-      const currentTotal = Number(pos.totals?.total || 0);
-      const perGuest = currentTotal > 0 ? roundMoneyValue(currentTotal / guestCount, bookDigits) : 0;
-      const newGuests: EvenSplitGuest[] = [];
-      let allocated = 0;
-      for (let i = 1; i <= guestCount; i++) {
-        const isLast = i === guestCount;
-        const amt = isLast ? roundMoneyValue(currentTotal - allocated, bookDigits) : perGuest;
-        allocated += amt;
-        newGuests.push({
-          id: i,
-          name: `الضيف ${i}`,
-          amount: amt,
-          paid: false,
-          method: 'cash',
-        });
-      }
-      setEvenGuests(newGuests);
-      setStatusMessage('');
-      setIsProcessingPayment(false);
+    // 2. Initialize even guests split
+    const currentTotal = snapshot.total;
+    const perGuest = currentTotal > 0 ? roundMoneyValue(currentTotal / guestCount, bookDigits) : 0;
+    const newGuests: EvenSplitGuest[] = [];
+    let allocated = 0;
+    for (let i = 1; i <= guestCount; i++) {
+      const isLast = i === guestCount;
+      const amt = isLast ? roundMoneyValue(currentTotal - allocated, bookDigits) : perGuest;
+      allocated += amt;
+      newGuests.push({
+        id: i,
+        name: `الضيف ${i}`,
+        amount: amt,
+        collected: false,
+        paid: false,
+        method: 'cash',
+      });
     }
-  }, [open, pos.cart, pos.totals?.total]);
+    setEvenGuests(newGuests);
+    setStatusMessage('');
+    setIsProcessingPayment(false);
+  }, [open]);
 
   // Re-calculate even splits when guestCount changes
   const handleGuestCountChange = (count: number) => {
@@ -111,12 +317,32 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
         id: i,
         name: `الضيف ${i}`,
         amount: amt,
+        collected: false,
         paid: false,
         method: 'cash',
       });
     }
     setEvenGuests(newGuests);
   };
+
+  // Real bill amounts (B10): each bill's share of the order's discount,
+  // service charge, tip and delivery fee, plus its own tax by the backend
+  // formula — computed from the opening snapshot, never the live totals.
+  const billAmounts: SplitBillAmounts[] = useMemo(() => {
+    if (!orderSnapshot) {
+      return bills.map(() => ({
+        subtotal: 0,
+        discount: 0,
+        serviceCharge: 0,
+        taxAmount: 0,
+        tipAmount: 0,
+        deliveryFee: 0,
+        total: 0,
+      }));
+    }
+    const subtotals = bills.map((b) => b.items.reduce((s, i) => s + calcCartLineTotal(i), 0));
+    return allocateSplitBillAmounts(subtotals, orderSnapshot, bookDigits);
+  }, [bills, orderSnapshot, bookDigits]);
 
   // Add extra split bill
   const handleAddBill = () => {
@@ -262,11 +488,14 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
       if (itemIdx === -1) return prev;
       const targetItem = fromBill.items[itemIdx];
 
-      const totalItemVal = Number(targetItem.price || 0) * Number(targetItem.qty || 1);
-      if (totalItemVal <= 0) return prev;
-
-      // Clean base name if already fractionally split
-      const baseName = targetItem.name.replace(/\s*\((نصف حصة|حصة)\s*[\d/]+\)/g, '').trim();
+      // INV-REST-SPLIT-REAL-TOTALS (B11): the parts are shares of the line's
+      // FULL value (price + modifiers) and carry no modifiers — the old code
+      // split price-only and copied the full modifier list onto every part.
+      const parts = buildFractionalParts(targetItem, partsCount, bookDigits);
+      if (!parts) return prev;
+      const baseName = String(targetItem.name || '')
+        .replace(/\s*\((نصف حصة|حصة)\s*[\d/]+\)/g, '')
+        .trim();
 
       // Ensure we have enough unpaid bills to distribute to
       let currentBills = [...prev];
@@ -280,31 +509,13 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
         });
       }
 
-      // Calculate parts with penny-accurate rounding
-      const unpaidBills = currentBills.filter((b) => !b.isPaid);
-      const basePartVal = roundMoneyValue(totalItemVal / partsCount, bookDigits);
-      let allocated = 0;
-      const parts: number[] = [];
-
-      for (let p = 0; p < partsCount; p++) {
-        const isLast = p === partsCount - 1;
-        const val = isLast ? roundMoneyValue(totalItemVal - allocated, bookDigits) : basePartVal;
-        allocated += val;
-        parts.push(val);
-      }
-
       // Distribute: Part 0 stays in fromBill (replacing targetItem), others go to other unpaid bills
+      const unpaidBills = currentBills.filter((b) => !b.isPaid);
       const otherUnpaidBills = unpaidBills.filter((b) => b.id !== fromBillId);
       const updatedBills = currentBills.map((b) => {
         if (b.id === fromBillId) {
           const newItems = [...b.items];
-          newItems[itemIdx] = {
-            ...targetItem,
-            qty: 1,
-            price: parts[0],
-            name: `${baseName} (حصة 1/${partsCount})`,
-            lineKey: `${targetItem.productId}::frac1::${Date.now()}::${Math.random()}`,
-          };
+          newItems[itemIdx] = parts[0];
           return { ...b, items: newItems };
         }
         return b;
@@ -318,16 +529,7 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
           if (bIdx !== -1) {
             updatedBills[bIdx] = {
               ...updatedBills[bIdx],
-              items: [
-                ...updatedBills[bIdx].items,
-                {
-                  ...targetItem,
-                  qty: 1,
-                  price: parts[p],
-                  name: `${baseName} (حصة ${p + 1}/${partsCount})`,
-                  lineKey: `${targetItem.productId}::frac${p + 1}::${Date.now()}::${Math.random()}`,
-                },
-              ],
+              items: [...updatedBills[bIdx].items, parts[p]],
             };
           }
         }
@@ -338,49 +540,74 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
     });
   };
 
-  // Compute total for each bill
-  const getBillTotal = (items: PosItem[]) => {
-    return items.reduce((acc, item) => acc + (Number(item.price || 0) * Number(item.qty || 0)), 0);
-  };
-
   // Pay individual split bill
   const handlePayBill = async (billId: string, paymentChannel: 'cash' | 'card') => {
-    const targetBill = bills.find((b) => b.id === billId);
+    const billIndex = bills.findIndex((b) => b.id === billId);
+    const targetBill = billIndex >= 0 ? bills[billIndex] : undefined;
     if (!targetBill || !targetBill.items.length || targetBill.isPaid) return;
 
     setIsProcessingPayment(true);
     setStatusMessage('');
 
     try {
-      const billSum = getBillTotal(targetBill.items);
+      // INV-REST-SPLIT-REAL-TOTALS (B10): the bill posts its REAL total —
+      // real line values plus its allocated share of the order's discount,
+      // tax, service charge and tip. The old payload sent discount 0,
+      // taxRate 0, no service charge/tip and paid = price x qty only.
+      const amounts = billAmounts[billIndex] ?? {
+        subtotal: 0,
+        discount: 0,
+        serviceCharge: 0,
+        taxAmount: 0,
+        tipAmount: 0,
+        deliveryFee: 0,
+        total: 0,
+      };
+      const billTotal = amounts.total;
       await pos.createSale.mutateAsync({
         source: 'pos',
         cart: targetBill.items,
         customerId: String(pos.customerId || ''),
         paymentType: 'cash',
         paymentChannel,
-        discount: 0,
-        deliveryFee: 0,
-        taxRate: 0,
-        pricesIncludeTax: false,
-        paidAmount: billSum,
-        tenderedAmount: billSum,
-        payments: [{ paymentChannel, amount: billSum }],
-        expectedTotal: billSum,
+        discount: amounts.discount,
+        deliveryFee: amounts.deliveryFee,
+        taxRate: Number(orderSnapshot?.taxRate ?? pos.totals?.taxRate ?? 0),
+        pricesIncludeTax: Boolean(orderSnapshot?.pricesIncludeTax ?? pos.totals?.pricesIncludeTax),
+        paidAmount: billTotal,
+        tenderedAmount: billTotal,
+        payments: [{ paymentChannel, amount: billTotal }],
+        expectedTotal: billTotal,
         orderType: pos.orderType,
         tableNumber: pos.tableNumber ? `${pos.tableNumber} (مجزأ)` : undefined,
         note: `فاتورة مجزأة من طاولة ${pos.tableNumber || ''} - ${targetBill.name}`,
+        serviceCharge: amounts.serviceCharge,
+        tipAmount: amounts.tipAmount,
       });
 
       // Mark this bill as paid
       const updatedBills = bills.map((b) => (b.id === billId ? { ...b, isPaid: true, paymentMethod: paymentChannel } : b));
       setBills(updatedBills);
 
-      setStatusMessage(`تم تحصيل ${targetBill.name} بنجاح بقيمة ${formatCurrency(billSum)}.`);
+      setStatusMessage(`تم تحصيل ${targetBill.name} بنجاح بقيمة ${formatCurrency(billTotal)}.`);
 
       // Check if all bills are now paid
       const remainingUnpaid = updatedBills.filter((b) => !b.isPaid && b.items.length > 0);
       if (remainingUnpaid.length === 0) {
+        // Everything settled — but only if the paid bills actually sum to
+        // the order total (B10 guard). Beyond rounding tolerance this means
+        // real money is missing (undistributed items, stale snapshot):
+        // refuse to close settled and say so.
+        const paidSum = updatedBills
+          .filter((b) => b.isPaid)
+          .reduce((s, b) => s + (billAmounts[bills.findIndex((x) => x.id === b.id)]?.total ?? 0), 0);
+        const nonEmptyCount = updatedBills.filter((b) => b.items.length > 0).length;
+        if (!isSplitPaidSumSettled(paidSum, totalAmount, nonEmptyCount, bookDigits)) {
+          setStatusMessage(
+            `تحذير: مجموع الشيكات المحصلة (${formatCurrency(paidSum)}) لا يطابق إجمالي الطلب (${formatCurrency(totalAmount)}) — لم يتم إغلاق التقسيم. راجع توزيع الأصناف.`,
+          );
+          return;
+        }
         // Everything settled! Clear active cart
         pos.setCart([]);
         pos.setTableNumber('');
@@ -398,58 +625,79 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
     }
   };
 
+  // Post the even-split final sale once every guest's share is collected.
+  // INV-REST-SPLIT-REAL-TOTALS (I33): the final sale carries the REAL
+  // tax/service/delivery/tip of the order and the payment channel of the
+  // actual mix — the old sale sent taxRate 0, deliveryFee 0, no service
+  // charge/tip and hardcoded 'cash' while the payments were mixed. Only a
+  // successful post marks the guests paid; a failed post leaves paid false
+  // (the collected flags stay, so the cashier retries posting without
+  // re-collecting money that was already taken).
+  const finalizeEvenSplit = async (guests: EvenSplitGuest[]): Promise<boolean> => {
+    const cashTotal = guests.filter((g) => g.method === 'cash').reduce((s, g) => s + g.amount, 0);
+    const cardTotal = guests.filter((g) => g.method === 'card').reduce((s, g) => s + g.amount, 0);
+    const transferTotal = guests.filter((g) => g.method === 'transfer').reduce((s, g) => s + g.amount, 0);
+    try {
+      await pos.createSale.mutateAsync({
+        source: 'pos',
+        cart: pos.cart,
+        customerId: String(pos.customerId || ''),
+        paymentType: 'cash',
+        paymentChannel: resolveSplitPaymentChannel(cashTotal, cardTotal, transferTotal),
+        discount: Number(orderSnapshot?.discountValue ?? pos.discount ?? 0),
+        deliveryFee: Number(orderSnapshot?.deliveryFee ?? 0),
+        taxRate: Number(orderSnapshot?.taxRate ?? pos.totals?.taxRate ?? 0),
+        pricesIncludeTax: Boolean(orderSnapshot?.pricesIncludeTax ?? pos.totals?.pricesIncludeTax),
+        paidAmount: totalAmount,
+        tenderedAmount: totalAmount,
+        payments: [
+          ...(cashTotal > 0 ? [{ paymentChannel: 'cash' as const, amount: cashTotal }] : []),
+          ...(cardTotal > 0 ? [{ paymentChannel: 'card' as const, amount: cardTotal }] : []),
+          ...(transferTotal > 0 ? [{ paymentChannel: 'instapay' as const, amount: transferTotal }] : []),
+        ],
+        expectedTotal: totalAmount,
+        orderType: pos.orderType,
+        tableNumber: pos.tableNumber,
+        note: `سداد مجزأ بالتساوي على ${guestCount} ضيوف`,
+        serviceCharge: Number(orderSnapshot?.serviceCharge ?? 0),
+        tipAmount: Number(orderSnapshot?.tipAmount ?? 0),
+      });
+
+      setEvenGuests(guests.map((g) => ({ ...g, paid: true })));
+      pos.setCart([]);
+      pos.setTableNumber('');
+      if (onSplitCompleted) onSplitCompleted();
+      setTimeout(() => onClose(), 1200);
+      return true;
+    } catch (err: any) {
+      setStatusMessage(
+        `${err?.message || 'تعذر ترحيل البيع المجزأ'} — المبالغ المحصلة من الضيوف محفوظة، أعد محاولة الترحيل من الأسفل.`,
+      );
+      return false;
+    }
+  };
+
   // Even split payment for single guest
   const handlePayGuest = async (guestId: number, method: 'cash' | 'card' | 'transfer') => {
     const guest = evenGuests.find((g) => g.id === guestId);
-    if (!guest || guest.paid) return;
+    if (!guest || guest.paid || guest.collected) return;
 
     setIsProcessingPayment(true);
     setStatusMessage('');
 
     try {
-      // Record payment for this share
-      setEvenGuests((prev) =>
-        prev.map((g) => (g.id === guestId ? { ...g, paid: true, method } : g))
-      );
+      // Record the collection — the money was taken — but the guest is NOT
+      // paid yet: no sale exists until every share is collected and the
+      // final sale posts (I33). The old code set paid: true here, before
+      // any backend call, and the catch never reverted it.
+      const updated = evenGuests.map((g) => (g.id === guestId ? { ...g, collected: true, method } : g));
+      setEvenGuests(updated);
 
-      setStatusMessage(`تم سداد نصيب ${guest.name} بقيمة ${formatCurrency(guest.amount)} بنجاح.`);
+      setStatusMessage(`تم تحصيل نصيب ${guest.name} بقيمة ${formatCurrency(guest.amount)} — يرحّل البيع عند اكتمال جميع الضيوف.`);
 
-      // If all guests paid, finalize full sale!
-      const updated = evenGuests.map((g) => (g.id === guestId ? { ...g, paid: true, method } : g));
-      const allPaid = updated.every((g) => g.paid);
-
-      if (allPaid) {
-        const cashTotal = updated.filter((g) => g.method === 'cash').reduce((s, g) => s + g.amount, 0);
-        const cardTotal = updated.filter((g) => g.method === 'card').reduce((s, g) => s + g.amount, 0);
-        const transferTotal = updated.filter((g) => g.method === 'transfer').reduce((s, g) => s + g.amount, 0);
-
-        await pos.createSale.mutateAsync({
-          source: 'pos',
-          cart: pos.cart,
-          customerId: String(pos.customerId || ''),
-          paymentType: 'cash',
-          paymentChannel: 'cash',
-          discount: Number(pos.discount || 0),
-          deliveryFee: 0,
-          taxRate: 0,
-          pricesIncludeTax: false,
-          paidAmount: totalAmount,
-          tenderedAmount: totalAmount,
-          payments: [
-            ...(cashTotal > 0 ? [{ paymentChannel: 'cash' as const, amount: cashTotal }] : []),
-            ...(cardTotal > 0 ? [{ paymentChannel: 'card' as const, amount: cardTotal }] : []),
-            ...(transferTotal > 0 ? [{ paymentChannel: 'instapay' as const, amount: transferTotal }] : []),
-          ],
-          expectedTotal: totalAmount,
-          orderType: pos.orderType,
-          tableNumber: pos.tableNumber,
-          note: `سداد مجزأ بالتساوي على ${guestCount} ضيوف`,
-        });
-
-        pos.setCart([]);
-        pos.setTableNumber('');
-        if (onSplitCompleted) onSplitCompleted();
-        setTimeout(() => onClose(), 1200);
+      // If all guests collected, post the final sale now.
+      if (updated.every((g) => g.collected)) {
+        await finalizeEvenSplit(updated);
       }
     } catch (err: any) {
       setStatusMessage(err?.message || 'تعذر تسجيل سداد الضيف');
@@ -467,13 +715,91 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
     setStatusMessage('');
 
     try {
+      // INV-REST-SPLIT-REAL-TOTALS (B12): each bill is saved by calling the
+      // held-draft mutation DIRECTLY with that bill's own items and its own
+      // table/check label. The old loop did pos.setCart(b.items) +
+      // pos.setTableNumber(...) + await pos.holdDraft() per bill — but
+      // setCart/setTableNumber are plain useState setters and holdDraft
+      // reads the render-captured snapshot params, so the loop never
+      // re-rendered between iterations and EVERY draft saved the ORIGINAL
+      // full cart under the ORIGINAL table number. No setCart/setTableNumber
+      // happens here at all until the end (reset to empty).
       for (let i = 0; i < validBills.length; i++) {
         const b = validBills[i];
-        pos.setCart(b.items);
-        if (pos.tableNumber) {
-          pos.setTableNumber(`${pos.tableNumber} - شيك ${i + 1}`);
+        const amounts = billAmounts[bills.findIndex((x) => x.id === b.id)] ?? {
+          subtotal: 0,
+          discount: 0,
+          serviceCharge: 0,
+          taxAmount: 0,
+          tipAmount: 0,
+          deliveryFee: 0,
+          total: 0,
+        };
+        const billTableNumber = pos.tableNumber ? `${pos.tableNumber} - شيك ${i + 1}` : '';
+        const sanitizedItems = b.items.map((item) => ({
+          productId: Number(item.productId || 0),
+          qty: Number(item.qty || 0),
+          price: Number(item.price || 0),
+          name: String(item.name || '').trim(),
+          nameEn: (item as any).nameEn || (item as any).name_en || undefined,
+          name_en: (item as any).name_en || (item as any).nameEn || undefined,
+          unitName: String(item.unitName || '').trim(),
+          unitMultiplier: Number(item.unitMultiplier || 1),
+          priceType: item.priceType === 'wholesale' ? 'wholesale' : 'retail',
+          notes: String(item.notes || '').trim(),
+          modifiers: item.modifiers || [],
+          seatNumber: item.seatNumber ? Number(item.seatNumber) : undefined,
+          course: item.course || undefined,
+        }));
+        await pos.saveHeldDraftMutation.mutateAsync({
+          customerId: pos.customerId || null,
+          paymentType: pos.paymentType,
+          discount: amounts.discount,
+          deliveryFee: amounts.deliveryFee,
+          note: pos.note,
+          search: pos.search,
+          priceType: pos.priceType,
+          branchId: pos.branchId || (pos.currentBranch?.id != null ? String(pos.currentBranch.id) : null),
+          locationId: pos.locationId || (pos.currentLocation?.id != null ? String(pos.currentLocation.id) : null),
+          cashAmount: 0,
+          cardAmount: 0,
+          transferAmount: 0,
+          paymentChannel: pos.paymentChannel,
+          orderType: pos.orderType,
+          tableNumber: billTableNumber,
+          ...(pos.deliveryRepId && Number(pos.deliveryRepId) > 0
+            ? {
+                deliveryRepId: Number(pos.deliveryRepId),
+                collectionStatus: pos.collectionStatus || 'cod',
+              }
+            : {}),
+          // HeldSaleItemDto forbids non-whitelisted fields, so strip the
+          // name keys from the server payload (same as holdDraft).
+          items: stripSaleItemNameFields(sanitizedItems),
+        });
+
+        // Kitchen ticket for THIS bill's own items (same condition as
+        // holdDraft) — the old loop printed the full original cart once
+        // per bill. The cashier name is not exposed on the modal's pos,
+        // so split-draft tickets print without it.
+        if (pos.settings?.restaurantModuleEnabled && pos.settings?.posAutoPrintKitchenReceipt) {
+          try {
+            const { printKitchenTicket } = await import('@/lib/pos-printing/kitchen');
+            printKitchenTicket(
+              {
+                tableNumber: billTableNumber,
+                orderType: pos.orderType,
+                guestCount: pos.guestCount,
+                note: pos.note,
+                items: sanitizedItems,
+                date: new Date().toISOString(),
+              } as any,
+              pos.settings,
+            );
+          } catch {
+            // Non-blocking print
+          }
         }
-        await pos.holdDraft();
       }
 
       pos.setCart([]);
@@ -490,7 +816,12 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
 
   if (!open) return null;
 
-  const totalSplitSum = bills.reduce((sum, b) => sum + getBillTotal(b.items), 0);
+  // The distributed sum is the sum of the REAL bill totals (lines +
+  // allocated extras), not the price-only sums.
+  const totalSplitSum = billAmounts.reduce((sum, a) => sum + a.total, 0);
+  const nonEmptyBillCount = bills.filter((b) => b.items.length > 0).length;
+  const splitSumMismatch =
+    Math.abs(totalSplitSum - totalAmount) > splitRoundingTolerance(nonEmptyBillCount, bookDigits) + 1e-9;
 
   return (
     <DialogShell
@@ -635,7 +966,9 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
                 }}
               >
                 {bills.map((bill, _billIdx) => {
-                  const billTotal = getBillTotal(bill.items);
+                  // INV-REST-SPLIT-REAL-TOTALS (B10): the column shows what
+                  // the guest actually pays (lines + allocated extras).
+                  const billTotal = billAmounts[_billIdx]?.total ?? 0;
                   const otherBills = bills.filter((b) => b.id !== bill.id && !b.isPaid);
 
                   return (
@@ -748,13 +1081,13 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
                                     {item.name}
                                   </div>
                                   <div style={{ fontWeight: 800, color: '#170e5e', whiteSpace: 'nowrap', marginInlineStart: '6px' }}>
-                                    {formatCurrency(item.qty * item.price)}
+                                    {formatCurrency(calcCartLineTotal(item))}
                                   </div>
                                 </div>
 
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <span style={{ color: '#64748b', fontSize: '11px' }}>
-                                    {item.qty} × {formatCurrency(item.price)}
+                                    {item.qty} × {formatCurrency(Number(item.price || 0) + calcModifiersTotal(item.modifiers))}
                                   </span>
 
                                   {/* Item Transfer Buttons */}
@@ -933,6 +1266,11 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
                   <span style={{ fontSize: '12px', color: '#64748b' }}>
                     {t('pos.pos_workspace.pos_split_bill_modal.s34', "المجموع الموزع:")} <strong style={{ color: '#0f172a' }}>{formatCurrency(totalSplitSum)}</strong> {t('pos.pos_workspace.pos_split_bill_modal.s35', "من أصل")} <strong style={{ color: '#170e5e' }}>{formatCurrency(totalAmount)}</strong>
                   </span>
+                  {splitSumMismatch && (
+                    <span style={{ fontSize: '12px', color: '#dc2626', fontWeight: 800 }}>
+                      {t('pos.pos_workspace.pos_split_bill_modal.s50', "تحذير: المجموع الموزع لا يطابق إجمالي الطلب — راجع توزيع الأصناف قبل التحصيل.")}
+                    </span>
+                  )}
                 </div>
 
                 <Button type="button" variant="secondary" onClick={onClose} disabled={isProcessingPayment}>
@@ -1025,6 +1363,12 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
                           <CheckIcon size={16} />
                           <span>{t('pos.pos_workspace.pos_split_bill_modal.s41', "تم السداد (")}{guest.method === 'card' ? t('pos.pos_workspace.pos_split_bill_modal.s42', "شبكة") : guest.method === 'transfer' ? t('pos.pos_workspace.pos_split_bill_modal.s43', "تحويل") : t('pos.pos_workspace.pos_split_bill_modal.s44', "نقد")})</span>
                         </div>
+                      ) : guest.collected ? (
+                        // INV-REST-SPLIT-REAL-TOTALS (I33): the money was
+                        // taken but no sale posted yet — collected, not paid.
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#92400e', fontWeight: 800, fontSize: '12.5px' }}>
+                          <span>{t('pos.pos_workspace.pos_split_bill_modal.s51', "تم التحصيل — بانتظار ترحيل البيع (")}{guest.method === 'card' ? t('pos.pos_workspace.pos_split_bill_modal.s42', "شبكة") : guest.method === 'transfer' ? t('pos.pos_workspace.pos_split_bill_modal.s43', "تحويل") : t('pos.pos_workspace.pos_split_bill_modal.s44', "نقد")})</span>
+                        </div>
                       ) : (
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <Button
@@ -1053,12 +1397,27 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
               </div>
 
               {/* Progress Summary */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '10px', flexWrap: 'wrap', gap: '10px' }}>
                 <div style={{ fontSize: '12.5px', color: '#475569' }}>
                   {t('pos.pos_workspace.pos_split_bill_modal.s47', "تم تحصيل:")} <strong style={{ color: '#16a34a' }}>
-                    {formatCurrency(evenGuests.filter((g) => g.paid).reduce((s, g) => s + g.amount, 0))}
+                    {formatCurrency(evenGuests.filter((g) => g.collected).reduce((s, g) => s + g.amount, 0))}
                   </strong> {t('pos.pos_workspace.pos_split_bill_modal.s48', "من أصل")} <strong style={{ color: '#0f172a' }}>{formatCurrency(totalAmount)}</strong>
                 </div>
+
+                {/* INV-REST-SPLIT-REAL-TOTALS (I33): every share collected
+                    but the final sale failed to post — retry the posting
+                    without re-collecting money that was already taken. */}
+                {evenGuests.length > 0 && evenGuests.every((g) => g.collected) && !evenGuests.every((g) => g.paid) && (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    disabled={isProcessingPayment}
+                    onClick={() => void finalizeEvenSplit(evenGuests)}
+                    style={{ minHeight: '32px', fontSize: '12px', padding: '0 14px' }}
+                  >
+                    {t('pos.pos_workspace.pos_split_bill_modal.s52', "إعادة محاولة ترحيل البيع")}
+                  </Button>
+                )}
 
                 <Button type="button" variant="secondary" onClick={onClose} disabled={isProcessingPayment}>
                   {t('pos.pos_workspace.pos_split_bill_modal.s49', "إغلاق")}
