@@ -182,13 +182,21 @@ export function AccountingJournalEntriesPage() {
             getRowKey={(row) => row.id}
             onRowClick={(row) => handleSelectEntry(row.id)}
             rowTitle={() => t('accounting.accounting_journal_entries_page.s9', "عرض تفاصيل القيد")}
-            defaultSort={{ columnId: 'date', direction: 'desc' }}
+            defaultSort={{ columnId: 'entryNo', direction: 'desc' }}
             columns={[
               {
                 id: 'entryNo',
                 header: t('accounting.accounting_journal_entries_page.s10', "رقم القيد"),
                 sortable: true,
-                sortValue: (row) => Number(row.id || 0),
+                // Numeric document order from the visible number itself
+                // (JE-00015026 -> 15026). The row identity must NOT be
+                // the sort key: the gapless allocator numbers journals
+                // from MAX(entry_no) + 1 while the identity is burned
+                // by failed inserts, so id order is not document order.
+                sortValue: (row) => {
+                  const match = /(\d+)\s*$/.exec(row.entryNo || '');
+                  return match ? Number(match[1]) : 0;
+                },
                 render: (row) => (
                   <span
                     style={{

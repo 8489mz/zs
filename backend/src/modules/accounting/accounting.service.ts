@@ -660,20 +660,34 @@ export class AccountingService {
       rowsQuery = rowsQuery.where('je.source_type', '=', filters.sourceType.trim());
     }
 
-    const lastSeenId = Math.max(0, Number(filters.lastSeenId || filters.cursor || 0));
-    if (lastSeenId > 0) {
+    // List order is document order (entry_no), never the row identity or
+    // the entry date. JE-00015026 is dated 2026-11-08 while JE-00015009
+    // is dated 2026-11-09, so a date order puts the newer document after
+    // the older one; and the identity is burned by failed inserts while
+    // the visible number comes from the gapless allocator (MAX(entry_no)
+    // + 1) — id order is not document order either. entry_no is
+    // fixed-width (JE- + 8 zero-padded digits), so its lexicographic
+    // order is its numeric order; je.id desc is only the tiebreak.
+    const cursor = typeof filters.cursor === 'string' ? filters.cursor.trim() : '';
+    const lastSeenId = Math.max(0, Number(filters.lastSeenId || 0));
+    if (cursor) {
+      rowsQuery = rowsQuery.where('je.entry_no', '<', cursor);
+    } else if (lastSeenId > 0) {
+      // Legacy id cursor (no caller sends it; the page uses page/pageSize).
+      // Kept so an old caller still pages the same rows, now in document order.
       rowsQuery = rowsQuery.where('je.id', '<', lastSeenId);
     }
 
     const totalRow = await countQuery.select((eb) => eb.fn.countAll<number>().as('count')).executeTakeFirst();
     const totalItems = Number(totalRow?.count || 0);
     const rows = await rowsQuery
+      .orderBy('je.entry_no', 'desc')
       .orderBy('je.id', 'desc')
       .limit(pageSize)
-      .offset(lastSeenId > 0 ? 0 : offset)
+      .offset(cursor || lastSeenId > 0 ? 0 : offset)
       .execute();
 
-    const nextCursor = rows.length === pageSize ? String(rows[rows.length - 1].id) : null;
+    const nextCursor = rows.length === pageSize ? rows[rows.length - 1].entry_no : null;
 
     return {
       entries: rows.map((row) => ({
