@@ -1781,6 +1781,85 @@ export const useCreateSourcingTripMutation = () => {
 // ==========================================
 // RECEIVING INSPECTIONS, LATE EXPENSES & FEASIBILITY CONVERSION
 // ==========================================
+// ==========================================
+// RECEIVING INSPECTIONS, LATE EXPENSES & FEASIBILITY CONVERSION
+// ==========================================
+
+// The GRN stage value: a receiving-stage QC row IS the shipment's GRN
+// approval. The backend refuses a second receiving row for the same
+// shipment and refuses any once the receipt is posted
+// (INV-IMPORT-GRN-APPROVAL-POSTED-GATE).
+export const GRN_RECEIVING_STAGE = 'receiving';
+
+// The GRN dialog collects inspector/warehouse/notes plus per-item
+// damaged quantities, but the backend DTO (CreateQcInspectionDto)
+// declares only stage, inspectionDate, inspectorName, sampleSize,
+// passedQuantity, failedQuantity, defectNotes, status, projectId and
+// shipmentId. The global validation pipe runs with whitelist +
+// forbidNonWhitelisted, so sending the dialog shape verbatim failed
+// every submit before the service. Map it to exactly the DTO fields:
+// the warehouse is the receipt's warehouse (already stored on the
+// shipment), the per-item rows collapse into the inspection totals,
+// and 'approved' maps to the QC status 'passed'.
+export function buildReceivingInspectionPayload(rawDto: any): Record<string, unknown> {
+  const items: any[] = Array.isArray(rawDto?.items) ? rawDto.items : [];
+  let sampleSize = 0;
+  let passedQuantity = 0;
+  let failedQuantity = 0;
+  for (const item of items) {
+    const received = Number(item.receivedQty ?? item.received_quantity ?? item.quantity ?? 0);
+    const accepted = Number(item.acceptedQty ?? item.accepted_quantity ?? received);
+    const damaged = Number(item.damagedQty ?? item.damaged_quantity ?? 0);
+    const shortage = Number(item.shortageQty ?? item.shortage_quantity ?? 0);
+    sampleSize += received;
+    passedQuantity += Math.max(0, accepted);
+    failedQuantity += Math.max(0, damaged + shortage);
+  }
+  // Local calendar parts, never UTC toISOString: around midnight the
+  // UTC date is the previous day in UTC+2.
+  const now = new Date();
+  const inspectionDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const payload: Record<string, unknown> = {
+    stage: GRN_RECEIVING_STAGE,
+    inspectionDate,
+    status: rawDto?.overallStatus === 'approved' || !rawDto?.overallStatus ? 'passed' : String(rawDto.overallStatus),
+  };
+  if (rawDto?.shipmentId !== undefined) payload.shipmentId = rawDto.shipmentId;
+  if (rawDto?.projectId !== undefined) payload.projectId = rawDto.projectId;
+  if (rawDto?.inspectorName) payload.inspectorName = rawDto.inspectorName;
+  if (items.length) {
+    payload.sampleSize = sampleSize;
+    payload.passedQuantity = passedQuantity;
+    payload.failedQuantity = failedQuantity;
+  }
+  const notes = rawDto?.notes ?? rawDto?.defectNotes;
+  if (notes) payload.defectNotes = String(notes);
+  return payload;
+}
+
+// The global http layer maps code VALIDATION_ERROR to the generic
+// 'البيانات المدخلة غير صحيحة.' and drops the backend's specific
+// field message. The raw payload survives on ApiError.details, so
+// read the specific message back out here instead of showing the
+// generic text. Backend named errors ([IMPORT_...]) already arrive
+// with their specific message as err.message and pass through.
+export function receivingInspectionErrorMessage(err: any): string {
+  const generic = 'البيانات المدخلة غير صحيحة.';
+  const raw = err?.details?.error ?? err?.details ?? {};
+  const specific =
+    (typeof raw?.message === 'string' ? raw.message : '') ||
+    (Array.isArray(raw?.details?.messages) ? String(raw.details.messages[0] || '') : '') ||
+    '';
+  if (
+    specific.trim() &&
+    specific.trim() !== generic &&
+    specific.trim() !== 'البيانات المرسلة غير صحيحة.'
+  ) {
+    return specific.trim();
+  }
+  return err?.message || 'تعذر حفظ محضر الفحص والاستلام';
+}
+
 export const useCreateReceivingInspectionMutation = (defaultShipmentId?: string) => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -1788,7 +1867,7 @@ export const useCreateReceivingInspectionMutation = (defaultShipmentId?: string)
       const shipmentId = dto?.shipmentId || defaultShipmentId;
       return await http<any>('/api/import-sales/qc-inspections', {
         method: 'POST',
-        body: JSON.stringify({ ...dto, shipmentId }),
+        body: JSON.stringify({ ...buildReceivingInspectionPayload(dto), shipmentId }),
       });
     },
     onSuccess: (_data, variables: any) => {

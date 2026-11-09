@@ -1452,6 +1452,37 @@ export class ImportSalesService {
   }
 
   async createQcInspection(tenantId: string, dto: CreateQcInspectionDto) {
+    // GRN (receiving) inspections are the approval of a shipment's
+    // receipt: once the receipt is posted the approval must never be
+    // offered again and must never record a second time (fail-closed).
+    // The receipt state is read from the stored receipt, never from a
+    // caller-supplied flag. Other QC stages (e.g. pre-shipment checks
+    // in China) are not receipt approvals and are unaffected.
+    if (dto.shipmentId && dto.stage === 'receiving') {
+      const receipt = await this.db
+        .selectFrom('import_inventory_receipts')
+        .select(['id', 'state'])
+        .where('tenant_id', '=', tenantId)
+        .where('shipment_id', '=', dto.shipmentId)
+        .executeTakeFirst();
+      if (receipt?.state === 'posted') {
+        throw new BadRequestException(
+          'سند استلام هذه الشحنة مرحّل بالفعل؛ لا يمكن اعتماد محضر فحص واستلام ثانٍ. [IMPORT_GRN_RECEIPT_ALREADY_POSTED]',
+        );
+      }
+      const existing = await this.db
+        .selectFrom('import_qc_inspections')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('shipment_id', '=', dto.shipmentId)
+        .where('stage', '=', 'receiving')
+        .executeTakeFirst();
+      if (existing) {
+        throw new BadRequestException(
+          'تم اعتماد محضر الفحص والاستلام لهذه الشحنة بالفعل؛ لا يمكن اعتماده مرة ثانية. [IMPORT_GRN_ALREADY_RECORDED]',
+        );
+      }
+    }
     return await this.db
       .insertInto('import_qc_inspections')
       .values({

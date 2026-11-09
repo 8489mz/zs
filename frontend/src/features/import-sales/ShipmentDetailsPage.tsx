@@ -14,6 +14,7 @@ import {
   useRecordLateShipmentExpenseMutation,
   useReversePostedReceiptMutation,
   useResolveLegacyReceiptMutation,
+  receivingInspectionErrorMessage,
   lateExpenseAllocationSummary,
   type ShipmentItem 
 } from './api/shipments.api';
@@ -578,7 +579,13 @@ export default function ShipmentDetailsPage() {
           }
           actions={
             <div className="actions compact-actions">
-              <Button variant="secondary" onClick={() => { setGrnLocationId(receiptLocationId || ''); setIsGrnOpen(true); }} style={{ borderColor: '#15803d', color: '#15803d', fontWeight: 600 }}>محضر فحص واستلام (GRN)</Button>
+              {/* GRN approval is never offered once the receipt is posted:
+                  the posted badge above already shows the receipt state,
+                  and the backend refuses a posted-receipt approval
+                  fail-closed (INV-IMPORT-GRN-APPROVAL-POSTED-GATE). */}
+              {data.inventory_receipt?.state !== 'posted' && (
+                <Button variant="secondary" onClick={() => { setGrnLocationId(receiptLocationId || ''); setIsGrnOpen(true); }} style={{ borderColor: '#15803d', color: '#15803d', fontWeight: 600 }}>محضر فحص واستلام (GRN)</Button>
+              )}
               {data.status === 'Arrived' && (
                 <Button variant="secondary" onClick={() => setIsLateExpenseOpen(true)} style={{ borderColor: '#b45309', color: '#b45309', fontWeight: 600 }}>مصروف متأخر بعد الوصول</Button>
               )}
@@ -1056,10 +1063,10 @@ export default function ShipmentDetailsPage() {
                     },
                     {
                       onSuccess: (res: any) => {
-                        toast.success(`تم اعتماد محضر الفحص والاستلام رقم ${res?.grn_number || ''} بنجاح`);
+                        toast.success('تم اعتماد محضر الفحص والاستلام بنجاح');
                         setIsGrnOpen(false);
                       },
-                      onError: (err: any) => toast.error(err?.message || 'تعذر حفظ محضر الفحص والاستلام'),
+                      onError: (err: any) => toast.error(receivingInspectionErrorMessage(err)),
                     },
                   );
                 }}
