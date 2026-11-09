@@ -74,6 +74,40 @@ export function todayLocalDateKey(referenceDate?: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * Business-day key (YYYY-MM-DD) of an entry instant in the TENANT's
+ * timezone (INV-IMPORT-JE-LIST-TENANT-TIMEZONE-DATE, proposed). Mirrors
+ * the backend's resolveBusinessDateKey contract: a string that is
+ * already a calendar day (YYYY-MM-DD) passes through untouched -- it is
+ * a day, not an instant, and reinterpreting it in a timezone would
+ * shift it. A timestamptz instant (what the API returns for
+ * journal_entries.entry_date) is read in the tenant's zone, never from
+ * the UTC ISO slice: JE-00015025 posted at 00:03 EET on 2026-11-09
+ * arrives as 2026-11-08T22:03:00.000Z, and String(...).slice(0, 10)
+ * displayed the wrong day, 2026-11-08. An unknown/invalid zone falls
+ * back to the browser-local calendar day (todayLocalDateKey), the same
+ * fallback the tenant-timezone displays elsewhere use.
+ */
+export function formatTenantDateKey(value?: string | Date | null, timeZone = 'Africa/Cairo'): string {
+  if (!value) return '—';
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const instant = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(instant.getTime())) return String(value);
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(instant);
+    const map: Record<string, string> = {};
+    for (const p of parts) map[p.type] = p.value;
+    return `${map.year}-${map.month}-${map.day}`;
+  } catch {
+    return todayLocalDateKey(instant);
+  }
+}
+
 export function formatDateOnly(value?: string | Date) {
   if (!value) return '—';
   let year = '';

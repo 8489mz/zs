@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { Button } from '@/shared/ui/button';
-import { formatCurrency, formatCurrencyWithSymbol, formatDateOnly } from '@/lib/format';
+import { formatCurrency, formatCurrencyWithSymbol, formatTenantDateKey } from '@/lib/format';
+import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { PrinterIcon, CalendarIcon } from '@/shared/components/icons/AppIcons';
 
 interface CostCenterReportModalProps {
@@ -26,6 +27,8 @@ export function CostCenterReportModal({
   onToDateChange,
 }: CostCenterReportModalProps) {
   const { t } = useTranslation();
+  const { data: settings } = useSettingsQuery();
+  const tenantTimezone = settings?.timezone || 'Africa/Cairo';
   if (!centerId) return null;
 
   const centerTitle = `كشف حركات وتقرير مركز التكلفة: ${reportData?.center?.name || '...'} (${reportData?.center?.code || ''})`;
@@ -127,7 +130,7 @@ export function CostCenterReportModal({
                   ) : (
                     reportData.entries.map((ent: any, i: number) => (
                       <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '10px 14px' }}>{formatDateOnly(ent.entryDate)}</td>
+                        <td style={{ padding: '10px 14px' }}>{formatTenantDateKey(ent.entryDate, tenantTimezone)}</td>
                         <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontWeight: 700 }}>#{ent.entryNumber}</td>
                         <td style={{ padding: '10px 14px', fontWeight: 600 }}>{ent.accountName}</td>
                         <td style={{ padding: '10px 14px', color: '#64748b' }}>{ent.description || '—'}</td>

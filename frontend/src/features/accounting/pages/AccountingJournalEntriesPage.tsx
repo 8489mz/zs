@@ -6,7 +6,8 @@ import { PageHeader } from '@/shared/components/page-header';
 import { QueryFeedback } from '@/shared/components/query-feedback';
 import { Button } from '@/shared/ui/button';
 import { FormSection } from '@/shared/components/form-section';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatTenantDateKey } from '@/lib/format';
+import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { accountingApi, type JournalEntryDetail, type JournalEntryLine, type JournalEntryListItem } from '@/features/accounting/api/accounting.api';
 import { ManualJournalEntryDialog } from '../components/ManualJournalEntryDialog';
 import { PlusIcon } from '@/shared/components/icons/AppIcons';
@@ -77,6 +78,9 @@ export function AccountingJournalEntriesPage() {
   const [shouldAutoScrollToDetails, setShouldAutoScrollToDetails] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const detailsRef = useRef<HTMLDivElement | null>(null);
+
+  const { data: settings } = useSettingsQuery();
+  const tenantTimezone = settings?.timezone || 'Africa/Cairo';
 
   const query = useQuery({
     queryKey: ['accounting', 'journal-entries', page, pageSize],
@@ -206,7 +210,7 @@ export function AccountingJournalEntriesPage() {
               {
                 id: 'date',
                 header: t('accounting.accounting_journal_entries_page.s11', "التاريخ"),
-                render: (row) => String(row.entryDate || '').slice(0, 10),
+                render: (row) => formatTenantDateKey(row.entryDate, tenantTimezone),
                 sortable: true,
                 sortValue: (row) => row.entryDate,
               },
@@ -293,7 +297,7 @@ export function AccountingJournalEntriesPage() {
                 <div className="page-stack">
                   <div className="grid-2">
                     <div><strong>{t('accounting.accounting_journal_entries_page.s22', "رقم القيد:")}</strong> {detailEntry.entryNo}</div>
-                    <div><strong>{t('accounting.accounting_journal_entries_page.s23', "التاريخ:")}</strong> {String(detailEntry.entryDate || '').slice(0, 10)}</div>
+                    <div><strong>{t('accounting.accounting_journal_entries_page.s23', "التاريخ:")}</strong> {formatTenantDateKey(detailEntry.entryDate, tenantTimezone)}</div>
                     <div><strong>{t('accounting.accounting_journal_entries_page.s24', "المصدر:")}</strong> {mapSourceLabel(detailEntry.sourceType || '', isEn)}</div>
                     <div><strong>{t('accounting.accounting_journal_entries_page.s25', "الحالة:")}</strong> {mapStatusLabel(detailEntry.status || '', isEn)}</div>
                     <div><strong>{t('accounting.accounting_journal_entries_page.s26', "الوصف:")}</strong> {(isEn ? translateUiText(detailEntry.description || '') || detailEntry.description : detailEntry.description) || '-'}</div>
