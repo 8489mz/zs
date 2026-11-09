@@ -30,6 +30,7 @@ import { settlePosExchange } from '../sales/engines/pos-exchange.engine';
 import { selectPurchaseReturnSerials, selectPurchaseReturnBatch } from './helpers/purchase-return-traceability.helper';
 import { restoreImportLotsFromSalesReturn } from '../import-sales/helpers/import-lot-allocation.helper';
 import { buildInvoiceReturnedQuantities } from './helpers/return-invoice-quantities.helper';
+import { resolveRequireCashierShiftForSales } from '../sales/services/sales-authorization.service';
 
 export interface ExchangeReturnContext {
   returnId: number;
@@ -66,10 +67,32 @@ export class ReturnsService {
     return shift?.id ? { id: Number(shift.id), docNo: shift.doc_no || `SHIFT-${shift.id}` } : null;
   }
 
+  // INV-REST-RETURN-SHIFT-GATE (R7-E, I23 returns half): the cash-refund
+  // gate honours requireCashierShiftForSales, read on the transaction
+  // handle (never the pool handle inside an open transaction). Only an
+  // explicitly-off setting lets a cash refund through without an open
+  // shift; true / missing fails closed to the old unconditional rule.
+  // The pure resolver is imported, not the sales service: the sales
+  // module already uses ReturnsService, so injecting it would cycle.
+  private async requireCashierShiftForReturns(trx: Kysely<Database>, auth: AuthContext): Promise<boolean> {
+    const row = await trx.selectFrom('settings').select(['value'])
+      .where('key', '=', 'requireCashierShiftForSales')
+      .where(this.tenantPredicate(auth))
+      .executeTakeFirst();
+    if (!row?.value) return true;
+    let parsed: unknown = row.value;
+    try {
+      parsed = JSON.parse(String(row.value));
+    } catch {
+      // Legacy unquoted value (e.g. false stored as plain text).
+    }
+    return resolveRequireCashierShiftForSales(new Map([['requireCashierShiftForSales', parsed]]));
+  }
+
   private async addTreasuryTransaction(trx: Kysely<Database>, txnType: string, amount: number, note: string, returnDocumentId: number, auth: AuthContext, branchId: number | null, locationId: number | null, cashRefund = false): Promise<void> {
     const currentShift = cashRefund ? await this.findOwnOpenShift(trx, auth, branchId) : null;
     const isPrivileged = ['admin', 'super_admin'].includes(auth.role);
-    if (cashRefund && !currentShift && !isPrivileged) throw new AppError('يجب فتح وردية على فرع الفاتورة قبل صرف مرتجع نقدي', 'OPEN_SHIFT_REQUIRED', 400);
+    if (cashRefund && !currentShift && !isPrivileged && await this.requireCashierShiftForReturns(trx, auth)) throw new AppError('يجب فتح وردية على فرع الفاتورة قبل صرف مرتجع نقدي', 'OPEN_SHIFT_REQUIRED', 400);
     await trx.insertInto('treasury_transactions').values({ txn_type: txnType, amount, note: currentShift ? `${note} - ${currentShift.docNo}` : note, reference_type: currentShift ? 'cashier_shift' : 'return_document', reference_id: currentShift ? currentShift.id : returnDocumentId, return_document_id: returnDocumentId, branch_id: branchId, location_id: locationId, created_by: auth.userId, ...this.tenantFields(auth) }).execute();
     if (currentShift) {
       await sql`update cashier_shifts set expected_cash = coalesce(expected_cash, 0) + ${amount}, updated_at = now()

@@ -72,10 +72,12 @@ export class SalesAuthorizationService {
    * means the tenant runs without shifts, so the gate passes with
    * no open shift. true, or a missing / unrecognised value, fails
    * closed to the old unconditional rule: an open shift is
-   * required. Only the POS / cash-sale gate uses this (see
-   * createSale); the drawer-open, sale-edit, return-refund and
-   * van-remittance gates stay strict on purpose — they guard cash
-   * movements, not the sale setting.
+   * required. The POS / cash-sale gate uses this (see
+   * createSale), and since INV-REST-RETURN-SHIFT-GATE (R7-E) the
+   * return-refund gate does too (returns.service honours the same
+   * setting through the pure resolver); the drawer-open, sale-edit
+   * and van-remittance gates stay strict on purpose — they guard
+   * cash movements, not the sale setting.
    */
   async hasOpenCashierShiftForSale(
     queryable: DbOrTx,
