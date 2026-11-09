@@ -23,13 +23,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import DigitalSignagePage, { buildSignagePromoItems } from './DigitalSignagePage';
-import { productsApi } from '@/features/products/api/products.api';
 import type { Product, ProductOffer } from '@/types/domain';
 
-const listPageMock = vi.mocked(productsApi.listPage);
+// Hoisted mock: the spec must not import the api module directly — the
+// page-composition check flags a direct api import in any file under
+// pages/, specs included. The page under test goes through the mocked
+// module; the spec only ever touches this hoisted fn.
+const listPageMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/features/products/api/products.api', () => ({
-  productsApi: { listPage: vi.fn() },
+  productsApi: { listPage: listPageMock },
 }));
 
 vi.mock('@/features/pos/lib/pos-customer-display-bridge', () => ({
