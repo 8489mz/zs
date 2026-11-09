@@ -42,7 +42,11 @@ export function CreateQuotationPage() {
   const navigate = useNavigate();
 
   // Customer & Header State
-  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+  // Customer ids are STRINGS end to end (Customer.id: string; BIGINT ids
+  // arrive from the API as strings). Keep the selected id a string so the
+  // lookup below can match it; convert to a number only at the payload
+  // boundary, where the API expects customerId: number | null.
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
@@ -160,7 +164,10 @@ export function CreateQuotationPage() {
     data: formData,
     isEmpty: (d) => !d.customerName?.trim() && !d.items?.some((it: any) => Boolean(it.productName?.trim() || it.product_name?.trim())),
     onRestore: (restored) => {
-      if (restored.selectedCustomerId !== undefined) setSelectedCustomerId(restored.selectedCustomerId);
+      if (restored.selectedCustomerId !== undefined) {
+        // Drafts saved before the string-id fix may hold a number; normalise.
+        setSelectedCustomerId(restored.selectedCustomerId == null ? null : String(restored.selectedCustomerId));
+      }
       if (restored.customerName) setCustomerName(restored.customerName);
       if (restored.customerPhone) setCustomerPhone(restored.customerPhone);
       if (restored.customerAddress) setCustomerAddress(restored.customerAddress);
@@ -225,9 +232,16 @@ export function CreateQuotationPage() {
 
   // Handlers
   const handleCustomerSelect = (customerIdStr: string) => {
-    const id = Number(customerIdStr);
-    setSelectedCustomerId(id);
-    const customer = customers.find((c: any) => c.id === id);
+    if (!customerIdStr) {
+      // "عميل نقدي / اختيار من القائمة..." — walk-in customer, no link.
+      setSelectedCustomerId(null);
+      return;
+    }
+    setSelectedCustomerId(customerIdStr);
+    // Compare as strings: Customer.id is a string, so comparing against
+    // Number(customerIdStr) could never match and the pick silently
+    // dropped the name/phone/address (the I3-D4 live defect).
+    const customer = customers.find((c: any) => String(c.id) === customerIdStr);
     if (customer) {
       setCustomerName(customer.name || '');
       setCustomerPhone(customer.phone || '');
@@ -319,7 +333,7 @@ export function CreateQuotationPage() {
     }
 
     const payload: CreateQuotationPayload = {
-      customerId: selectedCustomerId || null,
+      customerId: selectedCustomerId ? Number(selectedCustomerId) : null,
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim() || undefined,
       customerAddress: customerAddress.trim() || undefined,
