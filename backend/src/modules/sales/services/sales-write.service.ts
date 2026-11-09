@@ -165,6 +165,37 @@ export class SalesWriteService {
   }
 
 
+  /** R8-A INV-REST-FLAT-ADDON-COSTING: flat legacy addons are
+   * addons-table rows, not products — a modifier with no optionId
+   * whose productId is an addons row carries no stock and must be
+   * costed from addons.cost_price, never from products.cost_price.
+   * One indexed read of the single source of truth (the addons
+   * table, the same table the R4-C price pre-pass reads); each gate
+   * below resolves it where it needs it instead of threading the
+   * pre-pass truth object through every lock call site. Returns
+   * addon id -> cost_price for the modifiers on these items. */
+  private async loadFlatAddonCosts(
+    trx: Kysely<Database> | Transaction<Database>,
+    tenantId: string,
+    items: any[],
+  ): Promise<Map<number, number>> {
+    const ids = new Set<number>();
+    for (const item of items) {
+      for (const mod of (Array.isArray(item.modifiers) ? item.modifiers : [])) {
+        // Same optionId derivation as resolveSaleModifierCosts: a
+        // modifier carrying an option is a group option, never a flat
+        // addon, whatever its productId is.
+        const optionId = Number(mod.optionId || mod.option_id || mod.id || 0);
+        const productId = Number(mod.productId || mod.componentProductId || mod.component_product_id || 0);
+        if (optionId <= 0 && productId > 0) ids.add(productId);
+      }
+    }
+    if (!ids.size) return new Map();
+    const rows = await trx.selectFrom('addons').select(['id', 'cost_price'])
+      .where('tenant_id', '=', tenantId).where('id', 'in', [...ids]).execute();
+    return new Map(rows.map((row) => [Number(row.id), Number(row.cost_price)]));
+  }
+
   /** Cost every restaurant component at the LOCKED tenant product WAC, never
    * at user-supplied modifier.costPrice or modifier.consumptionQty. */
   private async resolveSaleModifierCosts(
@@ -188,6 +219,11 @@ export class SalesWriteService {
     const costRows = await trx.selectFrom('products').select(['id','cost_price'])
       .where('tenant_id','=',tenantId).where('id','in',ids).execute();
     const costs = new Map(costRows.map(row => [Number(row.id),Number(row.cost_price)]));
+    // R8-A: flat addons cost addons.cost_price, not a product WAC.
+    // Loaded only when the restaurant feature is on — with it off the
+    // early return below still costs every modifier at 0 (R4-C scope
+    // boundary, unchanged).
+    const addonCosts = restaurantEnabled ? await this.loadFlatAddonCosts(trx, tenantId, items) : new Map<number, number>();
     for (const item of items) {
       let modifiersCost = 0;
       item.modifiers = (Array.isArray(item.modifiers) ? item.modifiers : []).map((mod: any) => {
@@ -208,10 +244,17 @@ export class SalesWriteService {
         if (!Number.isFinite(stockUnits) || stockUnits <= 0 ||
             Math.abs(stockUnits - Number(stockUnits.toFixed(3))) > 0.00000001)
           throw new AppError('Invalid restaurant modifier stock units','RESTAURANT_MODIFIER_QUANTITY_INVALID',422);
-        if (componentId > 0 && (!costs.has(componentId) || item.isService))
+        // R8-A: a flat addon (no option, component is an addons row, no
+        // product WAC) costs addons.cost_price at rate 1 — no
+        // consumption_qty, which belongs to group options only. The
+        // client-sent costPrice stays ignored; the server re-derives.
+        const addonUnitCost = !option && componentId > 0 && !costs.has(componentId)
+          ? addonCosts.get(componentId) : undefined;
+        if (componentId > 0 && ((addonUnitCost === undefined && !costs.has(componentId)) || item.isService))
           throw new AppError('Restaurant modifier component cannot be consumed from this line',
             'RESTAURANT_MODIFIER_STOCK_INVALID',422);
-        const unitWac = componentId > 0 ? Number(costs.get(componentId)) : 0;
+        const unitWac = addonUnitCost !== undefined ? addonUnitCost
+          : (componentId > 0 ? Number(costs.get(componentId)) : 0);
         if (!Number.isFinite(unitWac) || unitWac < 0)
           throw new AppError('Invalid modifier inventory WAC','RESTAURANT_MODIFIER_COST_INVALID',422);
         modifiersCost += stockUnits * unitWac;
@@ -532,13 +575,19 @@ export class SalesWriteService {
   ): Promise<void> {
     const productIds = new Set<number>();
     const optionIds = new Set<number>();
+    // R8-A INV-REST-FLAT-ADDON-COSTING: flat addons are addons-table
+    // rows, not products — they must not enter the product lock set,
+    // or lockStockProducts throws PRODUCT_NOT_FOUND for an id that was
+    // never a product. Resolved from the addons table, once, here.
+    const flatAddonCosts = await this.loadFlatAddonCosts(trx, scope.tenantId, items);
     for (const item of items) {
       const id = Number(item.productId ?? item.product_id);
       if (id > 0) productIds.add(id);
       for (const modifier of Array.isArray(item.modifiers) ? item.modifiers : []) {
         const modifierId = Number(modifier.productId || modifier.componentProductId || modifier.component_product_id);
-        if (modifierId > 0) productIds.add(modifierId);
         const optId = Number(modifier.optionId || modifier.option_id || modifier.id);
+        const isFlatAddon = !(optId > 0) && modifierId > 0 && flatAddonCosts.has(modifierId);
+        if (modifierId > 0 && !isFlatAddon) productIds.add(modifierId);
         if (optId > 0 && !modifierId) optionIds.add(optId);
       }
     }
@@ -2076,6 +2125,10 @@ export class SalesWriteService {
       // locked in a deterministic global order. Client-supplied item order is arbitrary, so two
       // concurrent sales carrying the same products in opposite order would deadlock (SQLSTATE 40P01).
       // Sorting by productId enforces one canonical lock order across all concurrent transactions.
+      // R8-A INV-REST-FLAT-ADDON-COSTING: flat addons carry no stock —
+      // the deduction loop below must skip them entirely (no lock, no
+      // movement, no allocation). Cost without stock.
+      const flatAddonCosts = await this.loadFlatAddonCosts(trx, scope.tenantId, preparedItems);
       const stockOrderedItems = [...preparedItems].sort((a, b) => Number(a.productId || 0) - Number(b.productId || 0));
 
       for (const item of stockOrderedItems) {
@@ -2272,7 +2325,12 @@ export class SalesWriteService {
             const rawModProductId = Number(mod.productId || 0);
             const consumptionRate = Number(mod.consumptionQty || 1);
 
-            if (rawModProductId > 0) {
+            // R8-A: a flat addon (no optionId, productId is an addons
+            // row) has no stock to deduct — skip the whole loop body.
+            const isFlatAddon = rawModProductId > 0
+              && !Number(mod.optionId || mod.option_id || mod.id || 0)
+              && flatAddonCosts.has(rawModProductId);
+            if (rawModProductId > 0 && !isFlatAddon) {
               const modifierQty = Number((Number(mod.qty || 1) * Number(item.qty || 1) * consumptionRate).toFixed(3));
               
               let modRemainingQty = modifierQty;
@@ -2554,12 +2612,13 @@ export class SalesWriteService {
                 } as any)
                 .execute();
 
-              await sql`
-                update cashier_shifts
-                set expected_cash = greatest(0, coalesce(expected_cash, 0) - ${normalized.deliveryFee}),
-                    updated_at = now()
-                where tenant_id = ${scope.tenantId} and id = ${openShift.id}
-              `.execute(trx);
+              // R8-A (M12): no stored expected_cash update here — the
+              // live recompute (computeShiftCashDrawerMovements) already
+              // nets this treasury leg for open shifts, and the close
+              // path recomputes and overwrites; writing it here
+              // subtracted the fee twice, and hr.service reads the
+              // stored value as a fallback. The treasury leg above is
+              // the record of the payout.
             }
           }
         }
@@ -3565,6 +3624,9 @@ export class SalesWriteService {
       }
 
       // Deadlock prevention: identical canonical lock ordering as createSale (see note there).
+      // R8-A INV-REST-FLAT-ADDON-COSTING: flat addons carry no stock —
+      // the deduction loop below must skip them entirely (see createSale).
+      const flatAddonCosts = await this.loadFlatAddonCosts(trx, scope.tenantId, preparedItems);
       const stockOrderedItems = [...preparedItems].sort((a, b) => Number(a.productId || 0) - Number(b.productId || 0));
 
       for (const item of stockOrderedItems) {
@@ -3740,7 +3802,11 @@ export class SalesWriteService {
 
         if (item.modifiers && Array.isArray(item.modifiers) && this.planFeatureService.hasFeature(auth.planId, auth.extraFeatures, 'restaurant')) {
           for (const mod of item.modifiers) {
-            if (mod.productId) {
+            // R8-A: flat addons have no stock to deduct (see createSale).
+            const isFlatAddon = Number(mod.productId || 0) > 0
+              && !Number(mod.optionId || mod.option_id || mod.id || 0)
+              && flatAddonCosts.has(Number(mod.productId));
+            if (mod.productId && !isFlatAddon) {
               const modifierQty = Number((Number(mod.qty || 1) * Number(item.qty || 1) * Number(mod.consumptionQty || 1)).toFixed(3));
               
               let modRemainingQty = modifierQty;
