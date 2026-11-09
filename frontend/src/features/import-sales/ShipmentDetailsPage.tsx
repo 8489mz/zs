@@ -27,6 +27,7 @@ import { ContainerAutopsyModal } from './ContainerAutopsyModal';
 import { ContainerPreordersModal } from './ContainerPreordersModal';
 import { StandardDialog } from '@/shared/components/StandardDialog';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { isCashBankAccount } from '@/features/accounting';
 import { suppliersApi } from '@/shared/api/suppliers.api';
 import { http } from '@/lib/http';
 import { referenceDataApi } from '@/services/reference-data.api';
@@ -337,7 +338,11 @@ export default function ShipmentDetailsPage() {
   const treasuryAccounts = (accountsData?.accounts || (Array.isArray(accountsData) ? accountsData : []))
     .filter((a: any) => {
       if (a.isParent || a.code === '1100' || a.name === 'الأصول المتداولة' || a.name_ar === 'الأصول المتداولة') return false;
-      return a.isCashBank || a.code === '1110' || a.code === '1120' || a.code === '1160' || a.accountGroup === 'cash_bank';
+      // INV-IMPORT-ISCASHBANK-SWEEP (I5): the flags arm goes through the
+      // shared helper — the old top-level `a.isCashBank` read was always
+      // undefined. The code / accountGroup fallback arms are kept
+      // unchanged, so the offered set is not narrowed.
+      return isCashBankAccount(a) || a.code === '1110' || a.code === '1120' || a.code === '1160' || a.accountGroup === 'cash_bank';
     });
   const { data: warehouseLocations = [] } = useQuery({ queryKey: ['locations'], queryFn: referenceDataApi.locations });
 

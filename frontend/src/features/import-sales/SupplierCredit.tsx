@@ -4,6 +4,7 @@ import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { http } from '@/lib/http';
+import { isCashBankAccount } from '@/features/accounting';
 import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/shared/ui/button';
 import { LoadingState } from '@/shared/ui/loading-state';
@@ -79,7 +80,12 @@ export default function SupplierCredit() {
   });
   const cashBankAccounts = useMemo(() => {
     const list = accountsData?.accounts || (Array.isArray(accountsData) ? accountsData : []);
-    return (list as any[]).filter((a: any) => a.accountGroup === 'current_assets' || a.isCashBank);
+    // INV-IMPORT-ISCASHBANK-SWEEP (I5): cash/bank accounts only. The old
+    // current_assets accountGroup arm offered ONLY the three
+    // parent accounts (1100/1160/1170), which the backend bank role
+    // rejects — and the `a.isCashBank` arm never matched, because the
+    // flag lives under `flags`, not top-level.
+    return (list as any[]).filter((a: any) => isCashBankAccount(a));
   }, [accountsData]);
 
   // Combine China suppliers and general suppliers without empty metadata filters

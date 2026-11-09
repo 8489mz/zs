@@ -22,6 +22,7 @@ import {
 import { toast } from '@/shared/components/system-alert';
 import { useQuery } from '@tanstack/react-query';
 import { http } from '@/lib/http';
+import { isCashBankAccount } from '@/features/accounting';
 
 export function CustomsBrokerManager() {
   const { data: brokers = [], refetch } = useCustomsBrokersQuery();
@@ -83,8 +84,13 @@ export function CustomsBrokerManager() {
     queryKey: ['accounts-list'],
     queryFn: () => http<any>('/api/accounting/accounts').catch(() => ({ accounts: [] })),
   });
+  // INV-IMPORT-ISCASHBANK-SWEEP (I5): cash/bank accounts only. The old
+  // current_assets accountGroup arm offered ONLY the three
+  // parent accounts (1100/1160/1170), which the backend bank role
+  // rejects (is_cash_bank false) — and the `a.isCashBank` arm never
+  // matched, because the flag lives under `flags`, not top-level.
   const treasuryAccounts = (accountsData?.accounts || (Array.isArray(accountsData) ? accountsData : [])).filter(
-    (a: any) => a.accountGroup === 'current_assets' || a.isCashBank
+    (a: any) => isCashBankAccount(a),
   );
 
   const { data: brokerStatement, isLoading: isStatementLoading, refetch: refetchStatement } = useCustomsBrokerStatementQuery(

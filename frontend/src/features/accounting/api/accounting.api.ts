@@ -28,6 +28,20 @@ export type AccountingAccount = {
   sortOrder: number;
 };
 
+// INV-IMPORT-ISCASHBANK-SWEEP (I5): the accounts endpoint nests the
+// cash/bank flag under `flags` — AccountingAccount has NO top-level
+// `isCashBank`, so a top-level `a.isCashBank` read is always undefined
+// and a filter built on it matches nothing (the deposit treasury
+// dropdown offered zero accounts live). Every cash/bank dropdown
+// filter must go through this helper. Re-exported from the feature's
+// public index (`@/features/accounting`) because the frontend
+// feature-boundary guard forbids deep cross-feature imports.
+export function isCashBankAccount(
+  a: { flags?: { isCashBank?: boolean } | null } | null | undefined,
+): boolean {
+  return a?.flags?.isCashBank === true;
+}
+
 export type JournalEntryListItem = {
   id: string;
   entryNo: string;

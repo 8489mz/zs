@@ -17,6 +17,7 @@ import {
 import { toast } from '@/shared/components/system-alert';
 import { useQuery } from '@tanstack/react-query';
 import { http } from '@/lib/http';
+import { isCashBankAccount } from '@/features/accounting';
 
 export function ContainerDepositsManager() {
   const { data: deposits = [], refetch } = useContainerDepositsQuery();
@@ -59,7 +60,7 @@ export function ContainerDepositsManager() {
   // current-asset accounts (e.g. 1100 "الأصول المتداولة") only lets
   // the user pick an account the backend must reject.
   const treasuryAccounts = (accountsData?.accounts || (Array.isArray(accountsData) ? accountsData : [])).filter(
-    (a: any) => a.isCashBank === true,
+    (a: any) => isCashBankAccount(a),
   );
 
   const handleRecordDeposit = async (e: React.FormEvent) => {
