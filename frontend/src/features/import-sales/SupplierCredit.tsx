@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { http } from '@/lib/http';
 import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/shared/ui/button';
+import { LoadingState } from '@/shared/ui/loading-state';
 import { formatCurrency } from '@/lib/format';
 import { useSuppliersQuery } from '@/shared/hooks/use-catalog-queries';
 import { useTreasury } from '@/shared/hooks/use-treasury';
@@ -126,6 +127,15 @@ export default function SupplierCredit() {
 
   const totalDebtEgp = factories.reduce((sum, s) => sum + Number(s.balance || 0), 0);
   const availableEgp = treasuryQuery.data?.summary?.net || 0;
+  // INV-IMPORT-SUPPLIER-CREDIT-READ: the debt total and the factory count
+  // are computed from the supplier queries, so while either query is still
+  // pending they must render as dashes behind a loading state — never the
+  // false 0.00 total / 0 factories the screen showed in the live trial
+  // before the data arrived (same false-empty family I2-P7 fixed on the
+  // other import screens; the posted receipt is visible once loaded
+  // because listChinaSuppliers carries the synced suppliers.balance).
+  const isFactoriesLoading = chinaSuppliersQuery.isLoading || suppliersQuery.isLoading;
+  const isTreasuryLoading = treasuryQuery.isLoading;
 
   const egpNum = Number(amountEgp) || 0;
   const foreignNum = Number(amountForeign) || 0;
@@ -247,12 +257,13 @@ export default function SupplierCredit() {
         />
 
         {/* KPI Metrics Cards */}
+        {isFactoriesLoading && <LoadingState title="جاري تحميل مديونية المصانع..." />}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '14px', marginBottom: '16px' }}>
           <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
             <div>
               <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#64748b' }}>إجمالي مديونية المصانع (الدفتري)</div>
               <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>
-                {totalDebtEgp.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}><CurrencySymbol /></span>
+                {isFactoriesLoading ? '—' : (<>{totalDebtEgp.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}><CurrencySymbol /></span></>)}
               </div>
             </div>
             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#eff6ff', border: '1px solid #dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1e40af' }}>
@@ -264,7 +275,7 @@ export default function SupplierCredit() {
             <div>
               <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#64748b' }}>الرصيد المتاح بالخزينة النقدية</div>
               <div style={{ fontSize: '1.35rem', fontWeight: 800, color: availableEgp < 0 ? '#dc2626' : '#0f172a', marginTop: '4px' }}>
-                {formatCurrency(availableEgp)}
+                {isTreasuryLoading ? '—' : formatCurrency(availableEgp)}
               </div>
             </div>
             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#f0fdf4', border: '1px solid #dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#15803d' }}>
@@ -276,7 +287,7 @@ export default function SupplierCredit() {
             <div>
               <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#64748b' }}>المصانع والشركات المسجلة</div>
               <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>
-                {factories.length} <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#64748b' }}>مصنع</span>
+                {isFactoriesLoading ? '—' : factories.length} <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#64748b' }}>مصنع</span>
               </div>
             </div>
             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
@@ -320,9 +331,13 @@ export default function SupplierCredit() {
                   value={selectedSupplier}
                   onChange={e => { setSelectedSupplier(e.target.value); setSelectedPiId(''); }}
                   required
-                  disabled={transferMutation.isPending}
+                  disabled={transferMutation.isPending || isFactoriesLoading}
                 >
-                  <option value="">-- اختر المصنع الأجنبي --</option>
+                  {isFactoriesLoading ? (
+                    <option value="">جاري تحميل المصانع...</option>
+                  ) : (
+                    <option value="">-- اختر المصنع الأجنبي --</option>
+                  )}
                   {factories.map(f => (
                     <option key={f.id} value={f.id}>
                       {f.name} {f.city ? `(${f.city})` : ''} {f.chineseName ? `- ${f.chineseName}` : ''}
