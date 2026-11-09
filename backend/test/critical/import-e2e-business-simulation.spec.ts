@@ -877,7 +877,7 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
     VALUES
       ('tenant-e2e', 'tenant-e2e', '1110', 'الصندوق والنقدية', 'Cash', 'asset', 'current_assets', 'debit', true, true, false, false, false, false),
       ('tenant-e2e', 'tenant-e2e', '1120', 'بنك مصر - حساب العملات الأجنبية', 'Foreign Currency Bank', 'asset', 'current_assets', 'debit', true, true, false, false, false, false),
-      ('tenant-e2e', 'tenant-e2e', '1130', 'عهد المخلصين الجمركيين', 'Customs Broker Advances', 'asset', 'current_assets', 'debit', true, false, false, false, false, false),
+      ('tenant-e2e', 'tenant-e2e', '1181', 'عهد المخلصين الجمركيين', 'Customs Broker Advances', 'asset', 'current_assets', 'debit', true, false, false, false, false, false),
       ('tenant-e2e', 'tenant-e2e', '1140', 'مخزون بضاعة بالطريق والمستودعات', 'Inventory Asset', 'asset', 'current_assets', 'debit', true, false, true, false, false, false),
       ('tenant-e2e', 'tenant-e2e', '1150', 'ضريبة القيمة المضافة القابلة للاسترداد', 'Refundable VAT Asset', 'asset', 'current_assets', 'debit', true, false, false, false, false, true),
       ('tenant-e2e', 'tenant-e2e', '1180', 'تأمينات حاويات مستردة لدى التوكيلات', 'Container Security Deposits', 'asset', 'current_assets', 'debit', true, false, false, false, false, false),

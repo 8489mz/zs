@@ -184,7 +184,16 @@ export function CustomsBrokerManager() {
       return;
     }
     try {
-      await liquidateExpenseMutation.mutateAsync({
+      // INV-IMPORT-BROKER-ADVANCE-ACCOUNT: the toast reads the
+      // posted state off the settlement response itself
+      // (capitalization_state) — one source of truth with the
+      // ledger. A revalued/expensed/VAT settlement already posted
+      // its journal, so it must never claim to await a second
+      // approval; a folded settlement posts no journal yet (the
+      // cost enters the GL at receipt). The separate maker-checker
+      // verification stays visible per expense in the statement
+      // table ("بانتظار التحقق") — it is not the settlement state.
+      const settled: any = await liquidateExpenseMutation.mutateAsync({
         brokerId: selectedBrokerId,
         advanceId: targetAdvanceId,
         projectId: selectedProjectId || undefined,
@@ -196,10 +205,13 @@ export function CustomsBrokerManager() {
         isRefundableVat,
         notes: liquidateNotes || undefined,
       });
+      const settlementState = settled?.capitalization_state ?? settled?.data?.capitalization_state;
       toast.success(
-        isRefundableVat || !isCapitalized
-          ? 'تمت تصفية المصروف وقيده وخصمه من رصيد العهدة؛ بانتظار التحقق بموافقة ثانية'
-          : 'تمت تسوية المصروف وسُجلت رسملته (تدخل التكلفة عند الاستلام أو عبر التسوية)؛ بانتظار التحقق بموافقة ثانية'
+        settlementState === 'revalued'
+          ? 'تمت تسوية المصروف وترحيل قيدها (مخزون / عهدة المخلص)'
+          : settlementState === 'vat_asset' || settlementState === 'expensed' || isRefundableVat || !isCapitalized
+            ? 'تمت تصفية المصروف وقيده وخصمه من رصيد العهدة'
+            : 'تمت تسوية المصروف وسُجلت رسملته (تدخل التكلفة عند الاستلام)'
       );
       setIsLiquidateOpen(false);
       setLiquidateReceiptNo('');

@@ -210,9 +210,21 @@ export class ImportSalesService {
         if (account.is_payable === true || account.code === '2110') return false;
       }
       // broker_advance MUST NOT be cash/bank, inventory, or generic current assets
+      // INV-IMPORT-BROKER-ADVANCE-ACCOUNT: it must NEVER be the
+      // Customers control account either. Live trial phase 2
+      // (JE-00015026/JE-00015027) posted a broker custody advance
+      // and its settlement through 1130 "العملاء" because the
+      // candidate list below started with 1130 and the seeded COA
+      // has no 1181/1230 row: the first candidate always won.
+      // 1130 is a receivable control account (is_receivable,
+      // is_control_account); broker custody is not a customer
+      // receivable, and a partner-less broker leg on it pollutes
+      // the customer subledger. Reject any receivable account
+      // and code 1130 here so even a settings-designated or
+      // caller-preferred 1130 fails closed instead of posting.
       if (role === 'broker_advance') {
-        if (account.is_cash_bank || account.is_inventory || account.is_payable) return false;
-        if (['1110', '1120', '1140', '1100'].includes(account.code)) return false;
+        if (account.is_cash_bank || account.is_inventory || account.is_payable || account.is_receivable) return false;
+        if (['1110', '1120', '1130', '1140', '1100'].includes(account.code)) return false;
       }
       // container_deposit MUST NOT be cash/bank, inventory, or generic current assets
       if (role === 'container_deposit') {
@@ -283,7 +295,16 @@ export class ImportSalesService {
       bank: ['1120', '1110'],
       forex_loss: ['5201', '5190'],
       forex_gain: ['4201', '4190'],
-      broker_advance: ['1130', '1181', '1230'],
+      // INV-IMPORT-BROKER-ADVANCE-ACCOUNT: 1130 (Customers) was
+      // the first candidate here and always won on a seeded COA,
+      // which has no 1181/1230 row — so every broker advance
+      // posted Dr 1130 (live JE-00015026/JE-00015027). The broker
+      // advance belongs to its own dedicated advance account:
+      // 1181 "عهد المخلصين الجمركيين" when the tenant created
+      // it, else 1230. With neither present the resolver fails
+      // closed with a clear message instead of silently posting
+      // a broker advance to the Customers ledger.
+      broker_advance: ['1181', '1230'],
       container_deposit: ['1180', '1182', '1240'],
       customer_advance: ['2130', '2120'],
       vat_receivable: ['1160', '1150'],

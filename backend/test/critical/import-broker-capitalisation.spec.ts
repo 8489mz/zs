@@ -27,8 +27,10 @@ posting boundary:
   supplier payable for landed-minus-folded, Cr broker-advance
   asset for the folded amount — the supplier subledger rises
   by the payable only, and the link/expense flip to 'consumed'.
-  The 1130-code advance account exercises the partner-ledger
-  exemption: the partner-less advance leg must not throw.
+  The 1181-code advance account (INV-IMPORT-BROKER-ADVANCE-
+  ACCOUNT: 1130 Customers must never carry broker custody)
+  exercises the partner-ledger exemption: the partner-less
+  advance leg must not throw.
 - Revaluation (post-receipt): liquidation spreads through the
   late-expense core — WAC, lot and item landed costs move by
   the spread, one journal Dr inventory / Cr broker-advance with
@@ -114,7 +116,7 @@ async function makeDb(): Promise<Kysely<Database>> {
       (22, 't1', 't1', '2110', 'موردون', 'Payables', 'liability', 'liabilities', true, false, false, true, false, false),
       (23, 't1', 't1', '5100', 'تكلفة', 'COGS', 'expense', 'expenses', true, false, false, false, false, false),
       (24, 't1', 't1', '1010', 'بنك', 'Bank', 'asset', 'assets', true, true, false, false, false, false),
-      (25, 't1', 't1', '1130', 'عهد مخلصين', 'Broker advances', 'asset', 'assets', true, false, false, false, false, false),
+      (25, 't1', 't1', '1181', 'عهد مخلصين', 'Broker advances', 'asset', 'assets', true, false, false, false, false, false),
       (26, 't1', 't1', '1160', 'ضريبة مستردة', 'VAT receivable', 'asset', 'assets', true, false, false, false, false, false);
     INSERT INTO suppliers VALUES (1, 't1', 't1', 'Supplier A', '', '', 0, true, NOW());
     INSERT INTO stock_locations VALUES (10, 't1', NULL);
