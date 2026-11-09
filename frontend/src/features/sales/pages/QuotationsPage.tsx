@@ -52,6 +52,12 @@ export function QuotationsPage() {
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
       toast.success(`تم تحويل عرض السعر بنجاح إلى فاتورة بيع رقم #${(res as any).saleId || (res as any).sale_id}`);
     },
+    // I3-D3: this mutation had NO onError, so a failed conversion
+    // stayed silent (quotation left "مسودة" with no message). A
+    // conversion that cannot happen must fail loudly, naming the problem.
+    onError: (err: any) => {
+      toast.error(err?.message || 'فشل تحويل عرض السعر إلى فاتورة');
+    },
   });
 
   const deleteMutation = useMutation({

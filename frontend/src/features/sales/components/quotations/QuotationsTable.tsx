@@ -3,6 +3,7 @@ import React from 'react';
 import { Quotation } from '@/features/sales/api/quotations.api';
 import { Trash2Icon } from '@/shared/components/icons/AppIcons';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
+import { systemConfirm } from '@/shared/components/system-alert';
 
 interface QuotationsTableProps {
   quotations: Quotation[];
@@ -74,8 +75,18 @@ export function QuotationsTable({
                     <button
                       type="button"
                       disabled={isConvertPending}
-                      onClick={() => {
-                        if (confirm(`هل أنت متأكد من تحويل عرض السعر #${q.quotation_number} إلى فاتورة بيع نهائية؟`)) {
+                      onClick={async () => {
+                        // I3-D3: NEVER gate on the synchronous raw confirm(...)
+                        // here. SystemAlertProvider replaces window.confirm
+                        // with a shim that always returns false, so this
+                        // convert was a silent no-op (no request, no toast).
+                        const ok = await systemConfirm({
+                          title: 'تحويل عرض السعر إلى فاتورة',
+                          message: `هل أنت متأكد من تحويل عرض السعر #${q.quotation_number} إلى فاتورة بيع نهائية؟`,
+                          confirmText: 'تحويل لفاتورة',
+                          cancelText: 'إلغاء',
+                        });
+                        if (ok) {
                           onConvert(q.id);
                         }
                       }}

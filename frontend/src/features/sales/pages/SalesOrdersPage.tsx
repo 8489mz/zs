@@ -20,7 +20,7 @@ import { useProductsQuery } from '@/shared/hooks/use-catalog-queries';
 import { SalesOrdersTable } from '../components/SalesOrdersTable';
 import { CreateSalesOrderModal } from '../components/CreateSalesOrderModal';
 import { SalesOrderDetailsModal } from '../components/SalesOrderDetailsModal';
-import { toast } from '@/shared/components/system-alert';
+import { toast, systemConfirm } from '@/shared/components/system-alert';
 
 export function SalesOrdersPage() {
   const { t } = useTranslation();
@@ -260,8 +260,19 @@ export function SalesOrdersPage() {
               setIsDetailsModalOpen(true);
             }}
             onConfirm={(id) => confirmMutation.mutate(id)}
-            onConvert={(order) => {
-              if (confirm(`هل تريد تحويل أمر البيع رقم ${order.order_number} إلى فاتورة بيع فعلية وخصم المخزون؟`)) {
+            onConvert={async (order) => {
+              // I3-D3: NEVER gate on the synchronous raw confirm(...) here.
+              // SystemAlertProvider replaces window.confirm with a shim
+              // that always returns false, so a confirm(...) gate made
+              // this convert a silent no-op (no request, no toast).
+              // systemConfirm is the async enterprise confirm.
+              const ok = await systemConfirm({
+                title: 'تحويل أمر البيع إلى فاتورة',
+                message: `هل تريد تحويل أمر البيع رقم ${order.order_number} إلى فاتورة بيع فعلية وخصم المخزون؟`,
+                confirmText: 'تحويل إلى فاتورة',
+                cancelText: 'إلغاء',
+              });
+              if (ok) {
                 convertMutation.mutate(order.id);
               }
             }}
@@ -292,8 +303,17 @@ export function SalesOrdersPage() {
         open={isDetailsModalOpen}
         onClose={() => setIsDetailsModalOpen(false)}
         onConfirm={(id) => confirmMutation.mutate(id)}
-        onConvert={(id, num) => {
-          if (confirm(`هل تريد تحويل أمر البيع رقم ${num} إلى فاتورة بيع فعلية؟`)) {
+        onConvert={async (id, num) => {
+          // I3-D3: see the list onConvert above — raw confirm(...) always
+          // returns false under the SystemAlertProvider shim, so the
+          // details-dialog convert was a silent no-op too.
+          const ok = await systemConfirm({
+            title: 'تحويل أمر البيع إلى فاتورة',
+            message: `هل تريد تحويل أمر البيع رقم ${num} إلى فاتورة بيع فعلية؟`,
+            confirmText: 'تحويل إلى فاتورة',
+            cancelText: 'إلغاء',
+          });
+          if (ok) {
             convertMutation.mutate(id);
           }
         }}
