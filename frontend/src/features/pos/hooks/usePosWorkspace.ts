@@ -508,6 +508,12 @@ export function usePosWorkspace() {
     createSale,
     catalogWarmup,
     quickCustomerMutation: mutations.quickCustomerMutation,
+    // INV-REST-SPLIT-REAL-TOTALS (R3-A repair): the split modal calls the
+    // held-draft mutation directly per bill, so the hook must expose it.
+    // It was only passed into the action creators (for holdDraft) and never
+    // returned, so the modal's pos.saveHeldDraftMutation was undefined at
+    // runtime as well as a type error.
+    saveHeldDraftMutation: mutations.saveHeldDraftMutation,
     discountAuthorizationMutation: mutations.discountAuthorizationMutation,
     refetchCatalogs,
     ...derived,

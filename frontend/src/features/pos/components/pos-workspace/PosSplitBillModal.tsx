@@ -7,7 +7,7 @@ import { formatCurrency } from '@/lib/format';
 import { CheckIcon, UsersIcon, ReceiptIcon, PlusIcon, TrashIcon } from '@/shared/components/icons/AppIcons';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
-import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { currencyMoneyDigits, roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
 import { calcCartLineTotal, calcModifiersTotal } from '@/features/pos/lib/pos-modifier-totals';
 import { stripSaleItemNameFields } from '@/features/pos/contracts';
 import type { PosItem } from '@/features/pos/types/pos.types';
@@ -75,7 +75,7 @@ export interface SplitBillAmounts {
  * per-bill tax rounding alone can explain: half a book-digit unit per bill
  * plus half a unit for the order's own rounding. Anything beyond this is a
  * real mismatch (undistributed items, stale snapshot) and must block settling. */
-export function splitRoundingTolerance(billCount: number, bookDigits: number): number {
+export function splitRoundingTolerance(billCount: number, bookDigits: MoneyDigits): number {
   return (Math.max(0, billCount) + 1) * 0.5 * Math.pow(10, -bookDigits);
 }
 
@@ -85,7 +85,7 @@ export function isSplitPaidSumSettled(
   paidTotal: number,
   orderTotal: number,
   billCount: number,
-  bookDigits: number,
+  bookDigits: MoneyDigits,
 ): boolean {
   return (
     Math.abs(Number(paidTotal || 0) - Number(orderTotal || 0)) <=
@@ -101,7 +101,7 @@ export function isSplitPaidSumSettled(
 export function allocateSplitBillAmounts(
   billSubtotals: number[],
   order: SplitOrderTotals,
-  bookDigits: number,
+  bookDigits: MoneyDigits,
 ): SplitBillAmounts[] {
   const zero = (): SplitBillAmounts => ({
     subtotal: 0,
@@ -173,7 +173,7 @@ export function allocateSplitBillAmounts(
 export function buildFractionalParts(
   item: PosItem,
   partsCount: 2 | 3 | 4,
-  bookDigits: number,
+  bookDigits: MoneyDigits,
 ): PosItem[] | null {
   const fullValue = calcCartLineTotal(item);
   if (!(fullValue > 0)) return null;

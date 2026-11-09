@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/stores/auth-store';
 import { DisplayLanguageToggle } from '@/shared/components/DisplayLanguageToggle';
