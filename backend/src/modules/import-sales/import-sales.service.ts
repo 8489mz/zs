@@ -1764,10 +1764,35 @@ export class ImportSalesService {
         .where('tenant_id', '=', tenantId).where('id', '=', Number(dto.supplierId)).executeTakeFirst();
       if (!supplier) throw new BadRequestException('المورد لا ينتمي لهذه المنشأة.');
     }
+    // INV-IMPORT-LANDED-COST-DUTY-VAT: when the shipment is
+    // created from a project, carry the feasibility study's duty
+    // % / VAT % / insurance onto it, so both stages agree without
+    // re-typing the rates. Precedence: an explicit DTO value wins;
+    // then the study's stored value (an explicit 0% is a real 0%,
+    // not a missing value); then the feasibility engine's own
+    // defaults (5% duty / 14% VAT — the rates the study itself
+    // computed with when the operator never touched them).
+    // Insurance has no engine default: missing means uninsured.
+    // A shipment with no project carries nothing and defaults
+    // to 0% / 0% / 0 at the insert below.
+    let carriedDutyRate: number | undefined;
+    let carriedVatRate: number | undefined;
+    let carriedInsuranceUsd: number | undefined;
     if (dto.projectId) {
-      const project = await this.db.selectFrom('import_projects').select(['id', 'status'])
+      const project = await this.db.selectFrom('import_projects').select(['id', 'status', 'feasibility_data'])
         .where('tenant_id', '=', tenantId).where('id', '=', dto.projectId).executeTakeFirst();
       if (!project || project.status === 'closed') throw new BadRequestException('مشروع الاستيراد غير متاح لهذه المنشأة.');
+      const feas = typeof project.feasibility_data === 'string'
+        ? JSON.parse(project.feasibility_data || '{}')
+        : (project.feasibility_data || {});
+      const studyRate = (value: unknown, fallback: number): number => {
+        const n = Number(value);
+        return Number.isFinite(n) && n >= 0 ? n : fallback;
+      };
+      carriedDutyRate = studyRate(feas.customsDutyRatePercent, 5);
+      carriedVatRate = studyRate(feas.vatRatePercent, 14);
+      const insurance = Number(feas.insuranceUsd);
+      carriedInsuranceUsd = Number.isFinite(insurance) && insurance >= 0 ? insurance : 0;
     }
     // Same container on the same bill of lading is the same
     // shipment recorded twice. One B/L legitimately covers many
@@ -1814,6 +1839,12 @@ export class ImportSalesService {
         demurrage_rate_per_day: dto.demurrageRatePerDay,
         customs_declaration_no: dto.customsDeclarationNo,
         vat_refundable_egp: dto.vatRefundableEgp,
+        // INV-IMPORT-LANDED-COST-DUTY-VAT: explicit DTO values
+        // win; otherwise the feasibility carry above; otherwise
+        // the column DEFAULT 0 (no project, no tax).
+        customs_duty_rate_percent: dto.customsDutyRatePercent ?? carriedDutyRate ?? 0,
+        vat_rate_percent: dto.vatRatePercent ?? carriedVatRate ?? 0,
+        insurance_cost_usd: dto.insuranceCostUsd ?? carriedInsuranceUsd ?? 0,
         is_consolidated: dto.isConsolidated,
         cost_allocation_method: dto.costAllocationMethod,
         exchange_rate_at_arrival: dto.exchangeRateAtArrival !== undefined
@@ -2207,6 +2238,15 @@ export class ImportSalesService {
       transportSupplierId: number;
       demurrageSupplierId: number;
       unallocableCostReason: string;
+      // INV-IMPORT-LANDED-COST-DUTY-VAT: the itemized tax rates
+      // and the CIF insurance. Duty/VAT are rate-derived (CIF x
+      // rate), so the payee check keys on the rates, not on a
+      // stored amount; insurance rides with the freight payee
+      // (the forwarder arranges it), duty/VAT with the customs
+      // payee (the broker settles them). No new payee type.
+      customsDutyRatePercent: number;
+      vatRatePercent: number;
+      insuranceCostUsd: number;
     },
   ): Promise<void> {
     // The folded sums are only read when a foldable bucket is
@@ -2238,9 +2278,11 @@ export class ImportSalesService {
         // the USD cost converted at the effective arrival rate. A
         // nonzero USD cost with no usable rate yet is still a real
         // cost — the rate itself is guarded separately before arrival.
+        // INV-IMPORT-LANDED-COST-DUTY-VAT: the CIF insurance
+        // rides with the freight (same forwarder, same payee).
         netAmount: rate !== null && Number.isFinite(rate) && rate > 0
-          ? effective.shippingCostUsd * rate
-          : effective.shippingCostUsd,
+          ? (effective.shippingCostUsd + effective.insuranceCostUsd) * rate
+          : effective.shippingCostUsd + effective.insuranceCostUsd,
         payeeId: effective.freightSupplierId,
       },
       {
@@ -2270,6 +2312,24 @@ export class ImportSalesService {
       if (effective.unallocableCostReason) continue;
       throw new BadRequestException(`لا يمكن ترحيل بند التكلفة (${component.label}) بلا مورد محدد: حدد مورد البند أو سجل سبب عدم قابلية التخصيص قبل الترحيل. [IMPORT_COMPONENT_PAYEE_REQUIRED]`);
     }
+    // INV-IMPORT-LANDED-COST-DUTY-VAT: duty/VAT are customs dues
+    // even when the flat customs fee is zero, so the flat-fee
+    // component above cannot be the gate for them. A nonzero
+    // rate needs the customs payee (or a recorded unallocable
+    // reason), with the same existence check as every other
+    // component. The amounts are derived at receipt time (CIF x
+    // rate), so this pre-flight keys on the rates.
+    if (effective.customsDutyRatePercent > 0 || effective.vatRatePercent > 0) {
+      if (Number.isSafeInteger(effective.customsSupplierId) && effective.customsSupplierId > 0) {
+        const supplier = await trx.selectFrom('suppliers').select('id')
+          .where('tenant_id', '=', tenantId).where('id', '=', effective.customsSupplierId).executeTakeFirst();
+        if (!supplier) {
+          throw new BadRequestException(`مورد بند التكلفة (ضريبة جمركية وقيمة مضافة) غير موجود في هذه المنشأة؛ حدد مورداً حقيقياً قبل الترحيل. [IMPORT_COMPONENT_PAYEE_REQUIRED]`);
+        }
+      } else if (!effective.unallocableCostReason) {
+        throw new BadRequestException(`لا يمكن ترحيل بند التكلفة (ضريبة جمركية وقيمة مضافة) بلا مورد محدد: حدد مورد البند أو سجل سبب عدم قابلية التخصيص قبل الترحيل. [IMPORT_COMPONENT_PAYEE_REQUIRED]`);
+      }
+    }
   }
 
   async updateShipmentCosts(tenantId: string, userId: number, shipmentId: string, dto: UpdateShipmentCostsDto) {
@@ -2280,6 +2340,12 @@ export class ImportSalesService {
         ['shippingCostUsd', 'shipping_cost_usd'], ['customsCostEgp', 'customs_cost_egp'],
         ['internalTransportCostEgp', 'internal_transport_cost_egp'],
         ['exchangeRateAtArrival', 'exchange_rate_at_arrival'],
+        // INV-IMPORT-LANDED-COST-DUTY-VAT: itemized tax rates (%
+        // at 2dp, same scale as the other EGP costs) and the CIF
+        // insurance in USD (2dp, like the freight).
+        ['customsDutyRatePercent', 'customs_duty_rate_percent'],
+        ['vatRatePercent', 'vat_rate_percent'],
+        ['insuranceCostUsd', 'insurance_cost_usd'],
       ] as const;
       const payload: Updateable<ImportShipmentTable> = {};
       let financialChange = false;
@@ -2385,6 +2451,9 @@ export class ImportSalesService {
           (dto.customsCostEgp !== undefined && numOrZero(dto.customsCostEgp) !== numOrZero(shipment.customs_cost_egp)) ||
           (dto.internalTransportCostEgp !== undefined && numOrZero(dto.internalTransportCostEgp) !== numOrZero(shipment.internal_transport_cost_egp)) ||
           (dto.actualDemurrageFees !== undefined && numOrZero(dto.actualDemurrageFees) !== numOrZero(shipment.actual_demurrage_fees)) ||
+          (dto.customsDutyRatePercent !== undefined && numOrZero(dto.customsDutyRatePercent) !== numOrZero(shipment.customs_duty_rate_percent)) ||
+          (dto.vatRatePercent !== undefined && numOrZero(dto.vatRatePercent) !== numOrZero(shipment.vat_rate_percent)) ||
+          (dto.insuranceCostUsd !== undefined && numOrZero(dto.insuranceCostUsd) !== numOrZero(shipment.insurance_cost_usd)) ||
           (dto.exchangeRateAtArrival !== undefined && (storedRate === null || numOrZero(dto.exchangeRateAtArrival) !== storedRate)) ||
           (dto.freightSupplierId !== undefined && numOrZero(dto.freightSupplierId) !== numOrZero((shipment as any).freight_supplier_id)) ||
           (dto.customsSupplierId !== undefined && numOrZero(dto.customsSupplierId) !== numOrZero((shipment as any).customs_supplier_id)) ||
@@ -2414,6 +2483,9 @@ export class ImportSalesService {
             transportSupplierId: dto.transportSupplierId !== undefined ? numOrZero(dto.transportSupplierId) : numOrZero((shipment as any).transport_supplier_id),
             demurrageSupplierId: dto.demurrageSupplierId !== undefined ? numOrZero(dto.demurrageSupplierId) : numOrZero((shipment as any).demurrage_supplier_id),
             unallocableCostReason: dto.unallocableCostReason !== undefined ? String(dto.unallocableCostReason ?? '').trim() : String((shipment as any).unallocable_cost_reason ?? '').trim(),
+            customsDutyRatePercent: dto.customsDutyRatePercent !== undefined ? numOrZero(dto.customsDutyRatePercent) : numOrZero(shipment.customs_duty_rate_percent),
+            vatRatePercent: dto.vatRatePercent !== undefined ? numOrZero(dto.vatRatePercent) : numOrZero(shipment.vat_rate_percent),
+            insuranceCostUsd: dto.insuranceCostUsd !== undefined ? numOrZero(dto.insuranceCostUsd) : numOrZero(shipment.insurance_cost_usd),
           });
         }
       }
@@ -2429,6 +2501,11 @@ export class ImportSalesService {
         const frozenFields: Array<[keyof UpdateShipmentCostsDto, keyof ImportShipmentTable]> = [
           ['actualDemurrageFees','actual_demurrage_fees'], ['vatRefundableEgp','vat_refundable_egp'],
           ['costAllocationMethod','cost_allocation_method'], ['projectId','project_id'],
+          // INV-IMPORT-LANDED-COST-DUTY-VAT: the tax rates and
+          // the CIF insurance freeze with the receipt — the
+          // receipt journal was posted on them.
+          ['customsDutyRatePercent','customs_duty_rate_percent'], ['vatRatePercent','vat_rate_percent'],
+          ['insuranceCostUsd','insurance_cost_usd'],
           ['freightType','freight_type'], ['containerSize','container_size'],
           ['portOfLoading','port_of_loading'], ['portOfDischarge','port_of_discharge'],
           ['cbmVolume','cbm_volume'], ['grossWeightKg','gross_weight_kg'],
@@ -2479,6 +2556,9 @@ export class ImportSalesService {
         delete payload.shipping_cost_usd;
         delete payload.customs_cost_egp;
         delete payload.internal_transport_cost_egp;
+        delete payload.customs_duty_rate_percent;
+        delete payload.vat_rate_percent;
+        delete payload.insurance_cost_usd;
         delete payload.exchange_rate_at_arrival;
         delete payload.status;
       } else {
@@ -2723,27 +2803,47 @@ export class ImportSalesService {
       const bucket = String((row as any).cost_bucket || '');
       foldedByBucket.set(bucket, (foldedByBucket.get(bucket) || 0) + Number(row.amount_egp || 0));
     }
+    // INV-IMPORT-LANDED-COST-DUTY-VAT: duty/VAT itemized on the
+    // same CIF basis as the landed-cost engine, from the raw USD
+    // values so the engine total and the split agree to the cent:
+    // CIF = (goods + freight + insurance) x the arrival rate;
+    // duty on CIF, VAT on (CIF + duty), intermediates unrounded
+    // exactly like the engine. The insurance rides with the
+    // freight payee, duty/VAT with the customs payee — no new
+    // payee type, no new GL account.
+    const cifUsd = items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.factory_unit_price_usd || 0), 0)
+      + Number(shipment.shipping_cost_usd || 0) + Number(shipment.insurance_cost_usd || 0);
+    const cifEgp = cifUsd * arrivalRateForSplit;
+    const rawDutyEgp = cifEgp * (Math.max(0, Number(shipment.customs_duty_rate_percent || 0)) / 100);
     const bucketTotals = {
       freight: roundMoney(Number(shipment.shipping_cost_usd || 0) * arrivalRateForSplit, digits),
       customs: roundMoney(Number(shipment.customs_cost_egp || 0), digits),
       transport: roundMoney(Number(shipment.internal_transport_cost_egp || 0), digits),
       demurrage: roundMoney(Number(shipment.actual_demurrage_fees || 0), digits),
+      insurance: roundMoney(Number(shipment.insurance_cost_usd || 0) * arrivalRateForSplit, digits),
+      duty: roundMoney(rawDutyEgp, digits),
+      vat: roundMoney((cifEgp + rawDutyEgp) * (Math.max(0, Number(shipment.vat_rate_percent || 0)) / 100), digits),
     };
     const netWeights = [
       Math.max(0, bucketTotals.freight),
       Math.max(0, bucketTotals.customs - (foldedByBucket.get('customs_cost_egp') || 0)),
       Math.max(0, bucketTotals.transport - (foldedByBucket.get('internal_transport_cost_egp') || 0)),
       Math.max(0, bucketTotals.demurrage - (foldedByBucket.get('actual_demurrage_fees') || 0)),
+      Math.max(0, bucketTotals.duty),
+      Math.max(0, bucketTotals.vat),
+      Math.max(0, bucketTotals.insurance),
     ];
     const payableOverhead = roundMoney(overheadResidual - foldedBrokerTotal, digits);
     if (payableOverhead < -0.005) {
       throw new BadRequestException('إجمالي مصروفات المخلص المرسملة يتجاوز الأعباء المستحقة؛ راجع بنود تكلفة الشحنة قبل الترحيل. [IMPORT_BROKER_CAPITALIZATION_EXCEEDS_LANDED]');
     }
-    const overheadKeys = ['freight', 'customs', 'transport', 'demurrage'] as const;
-    const overheadLabels: Record<string, string> = { freight: 'شحن بحري', customs: 'جمارك وتخليص', transport: 'نقل داخلي', demurrage: 'غرامات تأخير وأرضيات' };
+    const overheadKeys = ['freight', 'customs', 'transport', 'demurrage', 'duty', 'vat', 'insurance'] as const;
+    const overheadLabels: Record<string, string> = { freight: 'شحن بحري', customs: 'جمارك وتخليص', transport: 'نقل داخلي', demurrage: 'غرامات تأخير وأرضيات', duty: 'رسوم جمركية (ضريبة)', vat: 'ضريبة قيمة مضافة', insurance: 'تأمين شحن' };
     const overheadPayeeColumns: Record<string, string> = {
       freight: 'freight_supplier_id', customs: 'customs_supplier_id',
       transport: 'transport_supplier_id', demurrage: 'demurrage_supplier_id',
+      duty: 'customs_supplier_id', vat: 'customs_supplier_id',
+      insurance: 'freight_supplier_id',
     };
     const overheadShares = apportionByBucketShares(payableOverhead, netWeights, digits);
     const unallocableReason = typeof (shipment as any).unallocable_cost_reason === 'string'
@@ -3408,6 +3508,12 @@ export class ImportSalesService {
       demurrageFeesEgp: Number(shipment.actual_demurrage_fees ?? 0),
       vatRefundableEgp: Number(shipment.vat_refundable_egp ?? 0),
       vatIsRefundable: true,
+      // INV-IMPORT-LANDED-COST-DUTY-VAT: the itemized tax rates
+      // and the CIF insurance stored on the shipment; a NULL
+      // reads as 0 so legacy rows keep their old totals.
+      insuranceCostUsd: Number(shipment.insurance_cost_usd ?? 0),
+      customsDutyRatePercent: Number(shipment.customs_duty_rate_percent ?? 0),
+      vatRatePercent: Number(shipment.vat_rate_percent ?? 0),
       allocationMethod: method,
       moneyDigits: digits,
     });
@@ -8366,9 +8472,21 @@ export class ImportSalesService {
     const transportEgp = Number(shipment.internal_transport_cost_egp || 0);
     const demurrageEgp = Number(shipment.actual_demurrage_fees || 0);
     const lateExpensesEgp = Number(shipment.late_expenses_total_egp || 0);
+    // INV-IMPORT-LANDED-COST-DUTY-VAT: the open estimate must carry
+    // the same duty/VAT breakdown as the receipt — duty on CIF
+    // (goods + freight + insurance at the arrival rate), VAT on
+    // (CIF + duty), intermediates unrounded, exactly like the
+    // landed-cost engine. Without them the sheet contradicted its
+    // own posted value for any shipment with rates (estimate
+    // 900.00 vs posted 1,107.60 for the trial goods). Rates and
+    // insurance default to 0, so unrated shipments are unchanged.
+    const insuranceEgp = Number(shipment.insurance_cost_usd || 0) * exRate;
+    const cifEgp = factoryTotalEgp + shippingEgp + insuranceEgp;
+    const dutyEgp = cifEgp * (Number(shipment.customs_duty_rate_percent || 0) / 100);
+    const vatEgp = (cifEgp + dutyEgp) * (Number(shipment.vat_rate_percent || 0) / 100);
 
     const totalLandedCostEgp =
-      factoryTotalEgp + shippingEgp + customsEgp + transportEgp + demurrageEgp + lateExpensesEgp;
+      factoryTotalEgp + shippingEgp + customsEgp + transportEgp + demurrageEgp + lateExpensesEgp + insuranceEgp + dutyEgp + vatEgp;
 
     // Frozen vs open figures (INV-IMPORT-PROFIT-HONESTY). The
     // posted receipt journal is frozen evidence: its inventory
@@ -8595,6 +8713,9 @@ export class ImportSalesService {
         transportEgp: Number(transportEgp.toFixed(2)),
         demurrageEgp: Number(demurrageEgp.toFixed(2)),
         lateExpensesEgp: Number(lateExpensesEgp.toFixed(2)),
+        insuranceEgp: roundMoney(insuranceEgp, currencyMoneyDigits('EGP')),
+        dutyEgp: roundMoney(dutyEgp, currencyMoneyDigits('EGP')),
+        vatEgp: roundMoney(vatEgp, currencyMoneyDigits('EGP')),
         totalLandedCostEgp: Number(totalLandedCostEgp.toFixed(2)),
         landedCostBasis: postedLandedValueEgp !== null ? 'posted_receipt_journal' : 'shipment_field_estimates',
         postedLandedValueEgp,

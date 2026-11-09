@@ -88,6 +88,32 @@ export class CreateShipmentDto {
   @IsNumber()
   vatRefundableEgp?: number;
 
+  // INV-IMPORT-LANDED-COST-DUTY-VAT: itemized customs tax,
+  // carried from the feasibility study when the shipment is
+  // created from it (explicit values win; a missing study rate
+  // falls back to the feasibility engine's own 5% / 14%
+  // defaults). The flat customs_cost_egp stays a clearance fee,
+  // never the tax. insuranceCostUsd belongs in the CIF basis
+  // (goods + freight + insurance), without which the shipment
+  // could never reproduce the study's duty/VAT.
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  customsDutyRatePercent?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  vatRatePercent?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  insuranceCostUsd?: number;
+
   @IsOptional()
   @IsBoolean()
   isConsolidated?: boolean;
@@ -281,6 +307,29 @@ export class UpdateShipmentCostsDto {
   @Type(() => Number)
   @IsNumber()
   vatRefundableEgp?: number;
+
+  // INV-IMPORT-LANDED-COST-DUTY-VAT: see CreateShipmentDto —
+  // the itemized customs tax rates and the CIF insurance. They
+  // freeze with the posted receipt (service), like the other
+  // valuation fields; a nonzero rate needs the customs payee
+  // (or a recorded unallocable reason) before the receipt posts.
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  customsDutyRatePercent?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  vatRatePercent?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  insuranceCostUsd?: number;
 
   @IsOptional()
   @IsBoolean()

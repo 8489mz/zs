@@ -182,6 +182,17 @@ export default function ShipmentDetailsPage() {
   const [transportCost, setTransportCost] = useState('');
   const [transportAcc, setTransportAcc] = useState('');
 
+  // INV-IMPORT-LANDED-COST-DUTY-VAT: itemized customs tax.
+  // Empty means "no change" — the stored rate is shown in the
+  // placeholder, like the other cost inputs. Duty is charged on
+  // CIF (goods + freight + insurance) and VAT on (CIF + duty),
+  // capitalized into landed cost exactly as the feasibility
+  // study computes them; the flat "جمارك" fee above stays a
+  // clearance fee, never the tax.
+  const [dutyRate, setDutyRate] = useState('');
+  const [vatRate, setVatRate] = useState('');
+  const [insuranceCost, setInsuranceCost] = useState('');
+
   // Explicit payee per cost component (INV-IMPORT-SUPPLIER-ATTRIBUTION):
   // empty means "no change" — the stored payee is shown in the first
   // option. A nonzero component with no payee and no recorded reason
@@ -375,9 +386,20 @@ export default function ShipmentDetailsPage() {
         return Number.isSafeInteger(n) && n > 0 ? n : 0;
       };
       const effectiveReason = (unallocableCostReason !== '' ? unallocableCostReason : String(data.unallocable_cost_reason || '')).trim();
+      // INV-IMPORT-LANDED-COST-DUTY-VAT: a nonzero duty/VAT rate
+      // needs the customs payee even when the flat customs fee
+      // is zero — the rates are the tax, the flat fee is not.
+      // The sentinel amount 1 only marks "this component is
+      // nonzero"; the backend remains the authority on the
+      // derived amounts at the confirm itself.
+      const effectiveRate = (formValue: string, stored: unknown): number => {
+        const n = formValue !== '' ? Number(formValue) : Number(stored || 0);
+        return Number.isFinite(n) ? n : 0;
+      };
       const missingPayeeComponents: Array<{ label: string; amount: number; payeeId: number }> = [
         { label: 'شحن بحري', amount: effectiveCost(shippingCost, data.shipping_cost_usd), payeeId: effectivePayee(freightSupplier, data.freight_supplier_id) },
         { label: 'جمارك وتخليص', amount: effectiveCost(customsCost, data.customs_cost_egp), payeeId: effectivePayee(customsSupplier, data.customs_supplier_id) },
+        { label: 'ضريبة جمركية وقيمة مضافة', amount: (effectiveRate(dutyRate, (data as any).customs_duty_rate_percent) > 0 || effectiveRate(vatRate, (data as any).vat_rate_percent) > 0) ? 1 : 0, payeeId: effectivePayee(customsSupplier, data.customs_supplier_id) },
         { label: 'نقل داخلي', amount: effectiveCost(transportCost, data.internal_transport_cost_egp), payeeId: effectivePayee(transportSupplier, data.transport_supplier_id) },
         { label: 'غرامات تأخير وأرضيات', amount: effectiveCost('', data.actual_demurrage_fees), payeeId: effectivePayee(demurrageSupplier, data.demurrage_supplier_id) },
       ];
@@ -398,11 +420,16 @@ export default function ShipmentDetailsPage() {
       // fundingType field — which the shared costs DTO type gains
       // at merge — passes as an assignable property, not an excess
       // literal property. The backend accepts and persists it now.
+      // The duty/VAT/insurance fields below ride the same named
+      // value for the same reason (INV-IMPORT-LANDED-COST-DUTY-VAT).
       const costsPayload = {
         shippingCostUsd: shippingCost ? Number(shippingCost) : undefined,
         shippingAccountId: shippingAcc || undefined,
         customsCostEgp: customsCost ? Number(customsCost) : undefined,
         customsAccountId: customsAcc || undefined,
+        customsDutyRatePercent: dutyRate ? Number(dutyRate) : undefined,
+        vatRatePercent: vatRate ? Number(vatRate) : undefined,
+        insuranceCostUsd: insuranceCost ? Number(insuranceCost) : undefined,
         internalTransportCostEgp: transportCost ? Number(transportCost) : undefined,
         transportAccountId: transportAcc || undefined,
         freightSupplierId: freightSupplier ? Number(freightSupplier) : undefined,
@@ -426,6 +453,9 @@ export default function ShipmentDetailsPage() {
       setShippingAcc('');
       setCustomsAcc('');
       setTransportAcc('');
+      setDutyRate('');
+      setVatRate('');
+      setInsuranceCost('');
       setFreightSupplier('');
       setCustomsSupplier('');
       setTransportSupplier('');
@@ -645,6 +675,38 @@ export default function ShipmentDetailsPage() {
                   {treasuryAccounts.map((a: any) => <option key={a.id} value={a.id}>سداد من: {a.nameAr || a.name_ar || a.name}</option>)}
                 </select>
               </div>
+              <small style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', marginTop: '3px' }}>
+                رسم تخليص ثابت — ليس الضريبة؛ نسبة الرسوم الجمركية وضريبة القيمة المضافة في الحقلين التاليين.
+              </small>
+            </div>
+
+            {/* INV-IMPORT-LANDED-COST-DUTY-VAT: itemized customs
+                tax, carried from the feasibility study. Duty is
+                charged on CIF (goods + freight + insurance) and
+                VAT on (CIF + duty), capitalized into landed cost
+                exactly as the study computes them. */}
+            <div className="form-group">
+              <label>تكلفة التأمين (بالدولار)</label>
+              <input type="number" step="0.01" className="input" placeholder={`الحالي: $${(data as any).insurance_cost_usd || 0}`} value={insuranceCost} onChange={e => setInsuranceCost(e.target.value)} />
+              <small style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', marginTop: '3px' }}>
+                يدخل في أساس CIF لحساب الرسوم الجمركية والضريبة.
+              </small>
+            </div>
+
+            <div className="form-group">
+              <label>نسبة الرسوم الجمركية (%)</label>
+              <input type="number" step="0.01" className="input" placeholder={`الحالي: ${(data as any).customs_duty_rate_percent || 0}%`} value={dutyRate} onChange={e => setDutyRate(e.target.value)} />
+              <small style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', marginTop: '3px' }}>
+                تُحسب على قيمة CIF (بضاعة + شحن + تأمين) وتُرحَّل ضمن التكلفة المحملة.
+              </small>
+            </div>
+
+            <div className="form-group">
+              <label>نسبة ضريبة القيمة المضافة (%)</label>
+              <input type="number" step="0.01" className="input" placeholder={`الحالي: ${(data as any).vat_rate_percent || 0}%`} value={vatRate} onChange={e => setVatRate(e.target.value)} />
+              <small style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', marginTop: '3px' }}>
+                تُحسب على (CIF + الرسوم الجمركية) وتُرسمل ضمن التكلفة المحملة مثل دراسة الجدوى.
+              </small>
             </div>
 
             <div className="form-group">

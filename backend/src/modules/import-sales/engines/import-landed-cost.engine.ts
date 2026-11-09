@@ -38,6 +38,20 @@ export interface LandedCostCalculationInput {
   vatRefundableEgp?: number;
   vatIsRefundable?: boolean;
   allocationMethod?: 'value' | 'weight' | 'cbm';
+  /**
+   * INV-IMPORT-LANDED-COST-DUTY-VAT: itemized customs tax, carried
+   * from the feasibility study. Duty is charged on CIF (goods +
+   * freight + insurance at the arrival rate) and VAT on (CIF +
+   * duty) — the same bases the feasibility engine uses — and both
+   * are capitalized into landed cost, matching feasibility's
+   * default (non-refundable) treatment. The flat customsCostEgp
+   * above stays a clearance-style fee, never the tax. All three
+   * default to 0, so shipments created without a feasibility
+   * keep the old totals.
+   */
+  insuranceCostUsd?: number;
+  customsDutyRatePercent?: number;
+  vatRatePercent?: number;
   /** Book digits for the money outputs; defaults to EGP's (2), as in calculateImportFeasibility. */
   moneyDigits?: MoneyDigits;
 }
@@ -62,6 +76,11 @@ export interface LandedCostCalculationResult {
   totalOverheadEgp: number;
   vatRefundableEgp: number;
   allocationMethod: 'value' | 'weight' | 'cbm';
+  /** INV-IMPORT-LANDED-COST-DUTY-VAT: itemized tax basis, all at book digits. */
+  cifValueEgp: number;
+  insuranceEgp: number;
+  dutyEgp: number;
+  vatEgp: number;
   items: LandedCostItemResult[];
 }
 
@@ -90,8 +109,6 @@ export function calculateLandedCostBreakdown(input: LandedCostCalculationInput):
   const vatIsRefundable = input.vatIsRefundable ?? true;
   const nonRefundableVatEgp = vatIsRefundable ? 0 : vatRefundableEgp;
 
-  const totalOverheadEgp = roundMoney(shippingEgp + customsEgp + transportEgp + demurrageEgp + clearanceEgp + nonRefundableVatEgp, digits);
-
   // Aggregate bases
   let totalUsdValue = 0;
   let totalWeightKg = 0;
@@ -107,6 +124,26 @@ export function calculateLandedCostBreakdown(input: LandedCostCalculationInput):
     totalWeightKg += qty * weight;
     totalCbm += qty * cbm;
   }
+
+  // INV-IMPORT-LANDED-COST-DUTY-VAT: duty/VAT on the same CIF
+  // basis as the feasibility engine — goods + freight + insurance
+  // at the arrival rate; duty on CIF, VAT on (CIF + duty). The
+  // intermediates stay unrounded exactly like the feasibility
+  // engine; only the reported components round at book digits,
+  // and the overhead below uses those rounded values so the
+  // parts sum exactly to the posted total. A missing rate is 0%
+  // (explicit zero handling, as in the feasibility engine).
+  const shippingUsd = Math.max(0, Number(input.shippingCostUsd) || 0);
+  const insuranceUsd = Math.max(0, Number(input.insuranceCostUsd) || 0);
+  const insuranceEgp = roundMoney(insuranceUsd * rate, digits);
+  const dutyRate = Math.max(0, Number(input.customsDutyRatePercent) || 0) / 100;
+  const vatRate = Math.max(0, Number(input.vatRatePercent) || 0) / 100;
+  const cifValueEgp = (totalUsdValue + shippingUsd + insuranceUsd) * rate;
+  const rawDutyEgp = cifValueEgp * dutyRate;
+  const dutyEgp = roundMoney(rawDutyEgp, digits);
+  const vatEgp = roundMoney((cifValueEgp + rawDutyEgp) * vatRate, digits);
+
+  const totalOverheadEgp = roundMoney(shippingEgp + insuranceEgp + customsEgp + transportEgp + demurrageEgp + clearanceEgp + nonRefundableVatEgp + dutyEgp + vatEgp, digits);
 
   // Canonical allocation: the rounded book total is split with
   // allocateLandedCosts so the parts sum exactly to the total
@@ -177,6 +214,10 @@ export function calculateLandedCostBreakdown(input: LandedCostCalculationInput):
     totalOverheadEgp,
     vatRefundableEgp: roundMoney(vatRefundableEgp, digits),
     allocationMethod: method,
+    cifValueEgp: roundMoney(cifValueEgp, digits),
+    insuranceEgp,
+    dutyEgp,
+    vatEgp,
     items: itemsResult,
   };
 }

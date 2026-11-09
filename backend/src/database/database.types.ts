@@ -5828,6 +5828,11 @@ export interface ImportShipmentTable {
   actual_demurrage_fees?: ImportNumeric;
   customs_declaration_no?: string | null;
   vat_refundable_egp?: ImportNumeric;
+  /** Duty % / VAT % carried from the feasibility study (INV-IMPORT-LANDED-COST-DUTY-VAT). 0 = no tax. */
+  customs_duty_rate_percent?: ImportNumeric;
+  vat_rate_percent?: ImportNumeric;
+  /** Insured freight value in USD; part of the CIF basis for duty/VAT (same invariant). */
+  insurance_cost_usd?: ImportNumeric;
   is_consolidated?: boolean | null;
   cost_allocation_method?: string | null;
   late_expenses_total_egp?: ImportNumeric;
