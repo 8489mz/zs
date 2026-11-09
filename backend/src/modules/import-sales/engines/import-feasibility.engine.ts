@@ -109,6 +109,17 @@ export interface FeasibilityScenarioOutput {
 }
 
 export interface FeasibilityCalculationResult {
+  /** I8-B (INV-IMPORT-FEASIBILITY-FX-PERSIST): the commercial and
+   * customs rates this study was priced at, echoed so the stored
+   * study carries them. The engine result IS the stored study: the
+   * approval handler persists it as the project's feasibility_data,
+   * and convertFeasibilityToProject (and the shipment-import path)
+   * read exchangeRateCommercial from the STORED study. Before this
+   * echo the rate was consumed for pricing and then dropped, so
+   * every approval of a recalculated study failed with
+   * IMPORT_EXCHANGE_RATE_REQUIRED even after re-entering FX 50. */
+  exchangeRateCommercial: number;
+  exchangeRateCustoms: number;
   totalFactoryCostUsd: number;
   totalFactoryCostEgp: number;
   internationalShippingUsd: number;
@@ -423,6 +434,10 @@ export function calculateImportFeasibility(input: FeasibilityCalculationInput): 
     avgSellingPriceWorst > 0 ? Math.ceil(worstAccountingCost / avgSellingPriceWorst) : totalUnitsCount;
 
   return {
+    // I8-B: echo the rates actually used, so the stored study
+    // carries them (see the interface note above).
+    exchangeRateCommercial: commRate,
+    exchangeRateCustoms: custRate,
     totalFactoryCostUsd: roundMoney(totalFactoryCostUsd, digits),
     totalFactoryCostEgp: roundMoney(totalFactoryCostEgp, digits),
     internationalShippingUsd: roundMoney(shippingUsd, digits),

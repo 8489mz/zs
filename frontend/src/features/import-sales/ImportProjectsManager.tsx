@@ -629,6 +629,13 @@ export default function ImportProjectsManager() {
       setItems(data.items);
       if (data.rates?.commercialExchangeRate) setCommRate(data.rates.commercialExchangeRate);
       if (data.rates?.customsExchangeRate) setCustRate(data.rates.customsExchangeRate);
+      // I8-B (INV-IMPORT-FEASIBILITY-FX-PERSIST): the engine result
+      // now echoes the rates it was priced at as top-level fields;
+      // restore them so a reopened study shows (and recalculates at)
+      // its own rate instead of a stale rate left over from another
+      // project. The legacy rates.* shape above stays as a fallback.
+      if (data.exchangeRateCommercial) setCommRate(Number(data.exchangeRateCommercial));
+      if (data.exchangeRateCustoms) setCustRate(Number(data.exchangeRateCustoms));
       if (data.costs?.shippingUsd) setShippingUsd(data.costs.shippingUsd);
       if (data.costs?.insuranceUsd) setInsuranceUsd(data.costs.insuranceUsd);
       if (data.costs?.clearanceAndPortFeesEgp) setClearanceEgp(data.costs.clearanceAndPortFeesEgp);
