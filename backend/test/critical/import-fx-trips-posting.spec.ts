@@ -17,7 +17,9 @@ WHAT THIS PINS, driving the real recordFxAcquisition,
 getFxPortfolio, postSourcingTripExpense and
 generatePeriodProfitReport on PGlite through the real posting
 boundary:
-- FX: one transaction inserts the acquisition (currency
+- FX: one transaction resolves the LIVE registered rate through
+  resolveFxRate (never from the amounts), derives the EGP cost as
+  foreignAmount x live rate, inserts the acquisition (currency
   uppercased at write), posts one balanced journal Dr
   destination / Cr source for the EGP cost, and writes two
   treasury legs (+destination / -source) keyed by the
@@ -25,12 +27,15 @@ boundary:
   an optional transfer link is recorded only when the
   transfer belongs to the tenant and its currency matches
   (case-insensitively) — the link is attribution, never a
-  settlement.
+  settlement. A supplied rate or cost must agree with the live
+  rate (rate 0.0001, cost one piastre) or the acquisition
+  rejects with IMPORT_FX_RATE_MISMATCH; with no rate
+  registered for the currency it fails closed.
 - Currency normalisation: a legacy 'usd' row and a new 'USD'
   acquisition unify under one 'USD' portfolio key with the
   correct weighted average; no 'usd' key survives.
-- Fail-closed: a supplied exchangeRate that disagrees with
-  the amounts, the same source and destination account
+- Fail-closed: a supplied exchangeRate that disagrees with the
+  live registered rate, the same source and destination account
   (including the resolver-default single-account case), a
   transfer link with a mismatched currency, and a missing
   account with no resolver default — each writes nothing.
@@ -97,7 +102,7 @@ async function makeDb(): Promise<Kysely<Database>> {
     CREATE TABLE stock_locations (id bigint PRIMARY KEY, tenant_id text, branch_id bigint);
     CREATE TABLE stock_movements (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, movement_type text, qty numeric, before_qty numeric, after_qty numeric, unit_cost numeric, total_cost numeric, reason text, note text, reference_type text, reference_id bigint, import_receipt_id bigint, created_by bigint, branch_id bigint, location_id bigint, created_at timestamptz DEFAULT NOW());
     INSERT INTO settings VALUES ('t1', 'currency', '"EGP"');
-    INSERT INTO currency_exchange_rates (tenant_id, currency_code, exchange_rate, is_base) VALUES ('t1', 'EGP', 1, true), ('t1', 'USD', 50, false);
+    INSERT INTO currency_exchange_rates (tenant_id, currency_code, exchange_rate, is_base) VALUES ('t1', 'EGP', 1, true), ('t1', 'USD', 50, false), ('t1', 'EUR', 50, false);
     INSERT INTO accounting_settings VALUES (1, 't1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 22, 21, NULL, 23, NOW());
     INSERT INTO accounting_accounts VALUES
       (21, 't1', 't1', '1140', 'مخزون', 'Inventory', 'asset', 'assets', true, false, true, false, false, false),
@@ -161,12 +166,12 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       const acquisition: any = await service.recordFxAcquisition('t1', 1, {
-        currency: 'usd', foreignAmount: 10000, egpCost: 485000,
+        currency: 'usd', foreignAmount: 10000, egpCost: 500000,
         acquisitionDate: '2026-01-10', source: 'bank',
         bankAccountId: '24', sourceAccountId: '27', notes: 'auction',
       });
       assert.equal(acquisition.currency, 'USD', 'Currency is stored normalised');
-      assert.equal(Number(acquisition.effective_exchange_rate), 48.5, 'Rate is computed from the amounts');
+      assert.equal(Number(acquisition.effective_exchange_rate), 50, 'Rate is the live registered rate, not computed from the amounts');
       assert.ok(acquisition.journal_entry_id, 'The journal is linked on the acquisition row');
       assert.ok(Number(acquisition.serial_id) > 0, 'The serial exists for journal/treasury references');
       assert.equal(acquisition.supplier_payment_id, null, 'Unlinked by default');
@@ -177,17 +182,17 @@ async function main(): Promise<void> {
       assert.equal(lines.length, 2, 'Exactly two journal lines');
       const debits = lines.reduce((s: number, l: any) => s + Number(l.debit), 0);
       const credits = lines.reduce((s: number, l: any) => s + Number(l.credit), 0);
-      assert.equal(debits, 485000);
-      assert.equal(credits, 485000, 'The journal balances');
+      assert.equal(debits, 500000);
+      assert.equal(credits, 500000, 'The journal balances');
       const dest = lines.find((l: any) => Number(l.account_id) === 24);
       const src = lines.find((l: any) => Number(l.account_id) === 27);
-      assert.equal(Number(dest.debit), 485000, 'Destination is debited');
-      assert.equal(Number(src.credit), 485000, 'Source is credited');
+      assert.equal(Number(dest.debit), 500000, 'Destination is debited');
+      assert.equal(Number(src.credit), 500000, 'Source is credited');
       const legs: any[] = await (db as any).selectFrom('treasury_transactions').selectAll().execute();
       assert.equal(legs.length, 2, 'Two treasury legs');
       assert.equal(legs.reduce((s: number, l: any) => s + Number(l.amount), 0), 0, 'Treasury legs net to zero in EGP book value');
-      assert.ok(legs.some((l: any) => Number(l.amount) === 485000 && Number(l.reference_id) === Number(acquisition.serial_id)));
-      assert.ok(legs.some((l: any) => Number(l.amount) === -485000 && Number(l.reference_id) === Number(acquisition.serial_id)));
+      assert.ok(legs.some((l: any) => Number(l.amount) === 500000 && Number(l.reference_id) === Number(acquisition.serial_id)));
+      assert.ok(legs.some((l: any) => Number(l.amount) === -500000 && Number(l.reference_id) === Number(acquisition.serial_id)));
       assert.ok(legs.every((l: any) => l.txn_type === 'import_fx_acquisition'));
     } finally {
       await db.destroy();
@@ -206,29 +211,33 @@ async function main(): Promise<void> {
         bank_account_id: 24, notes: 'legacy memo row',
       } as never).execute();
       await service.recordFxAcquisition('t1', 1, {
-        currency: 'USD', foreignAmount: 10000, egpCost: 485000,
+        currency: 'USD', foreignAmount: 10000, egpCost: 500000,
         acquisitionDate: '2026-01-10', source: 'bank',
         bankAccountId: '24', sourceAccountId: '27',
       });
       const portfolio: any = await service.getFxPortfolio('t1');
       assert.deepEqual(Object.keys(portfolio.portfolio), ['USD'], 'One bucket, not two');
       assert.equal(portfolio.portfolio.USD.totalForeign, 15000);
-      assert.equal(portfolio.portfolio.USD.totalEgp, 735000);
-      assert.equal(portfolio.portfolio.USD.weightedAvgRate, 49, 'Weighted average across both spellings');
+      assert.equal(portfolio.portfolio.USD.totalEgp, 750000);
+      assert.equal(portfolio.portfolio.USD.weightedAvgRate, 50, 'Weighted average across both spellings');
     } finally {
       await db.destroy();
     }
   }
 
-  // Case 3: a supplied rate that disagrees with the amounts
-  // fails closed and writes nothing; a matching supplied rate
-  // is accepted.
+  // Case 3: a supplied rate that disagrees with the LIVE rate
+  // fails closed and writes nothing; a supplied rate matching
+  // the live rate is accepted. (INV-IMPORT-FX-TREASURY-LIVE-RATE:
+  // the old "disagrees with the amounts" rule is gone — the rate
+  // is never derived from the amounts. The trial's exact pre-fill
+  // 10,000 / 485,000 now rejects against the live 50; see
+  // import-fx-treasury-live-rate.spec.ts.)
   {
     const db = await makeDb();
     try {
       const service = makeService(db);
       const base = {
-        currency: 'USD', foreignAmount: 10000, egpCost: 485000,
+        currency: 'USD', foreignAmount: 10000, egpCost: 500000,
         acquisitionDate: '2026-01-10', source: 'bank',
         bankAccountId: '24', sourceAccountId: '27',
       };
@@ -239,8 +248,8 @@ async function main(): Promise<void> {
       assert.equal(await countRows(db, 'import_fx_acquisitions'), 0, 'Nothing written on rejection');
       assert.equal(await countRows(db, 'journal_entries'), 0);
       assert.equal(await countRows(db, 'treasury_transactions'), 0);
-      const ok: any = await service.recordFxAcquisition('t1', 1, { ...base, exchangeRate: 48.5 });
-      assert.equal(Number(ok.effective_exchange_rate), 48.5, 'A matching supplied rate is accepted');
+      const ok: any = await service.recordFxAcquisition('t1', 1, { ...base, exchangeRate: 50 });
+      assert.equal(Number(ok.effective_exchange_rate), 50, 'A supplied rate matching the live rate is accepted');
     } finally {
       await db.destroy();
     }
@@ -254,7 +263,7 @@ async function main(): Promise<void> {
     try {
       const service = makeService(db);
       const base = {
-        currency: 'USD', foreignAmount: 10000, egpCost: 485000,
+        currency: 'USD', foreignAmount: 10000, egpCost: 500000,
         acquisitionDate: '2026-01-10', source: 'bank',
       };
       await expectReject(
@@ -402,7 +411,7 @@ async function main(): Promise<void> {
       const service = makeService(db);
       await expectReject(
         service.recordFxAcquisition('t1', 1, {
-          currency: 'USD', foreignAmount: 10000, egpCost: 485000,
+          currency: 'USD', foreignAmount: 10000, egpCost: 500000,
           acquisitionDate: '2026-01-10', source: 'bank',
         }),
         /حساب/, 'No account anywhere must fail closed',

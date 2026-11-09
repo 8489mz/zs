@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/shared/ui/button';
 import {
@@ -24,20 +24,69 @@ export default function ImportFxTreasuryManager() {
   // Form State
   const [currency, setCurrency] = useState('USD');
   const [foreignAmount, setForeignAmount] = useState<number>(10000);
-  const [egpCost, setEgpCost] = useState<number>(485000);
   const [sourceProvider, setSourceProvider] = useState('اعتماد بنكي رسمي');
   const [treasuryAccountId, setTreasuryAccountId] = useState('');
   const [sourceTreasuryAccountId, setSourceTreasuryAccountId] = useState('');
   const [notes, setNotes] = useState('');
+
+  // INV-IMPORT-FX-TREASURY-LIVE-RATE (I4-D7): the rate comes from the
+  // live registered rates (GET /api/accounting/currencies — the same
+  // rows resolveFxRate reads server-side), never from user-entered
+  // amounts. The EGP cost is the RESULT of that rate
+  // (foreignAmount x live rate) and is displayed read-only; the
+  // mutation sends the live rate and the backend re-resolves it and
+  // derives the cost itself. With no registered rate for the
+  // currency there is nothing to post — submit stays blocked.
+  const { data: currenciesData } = useQuery({
+    queryKey: ['accounting-currencies'],
+    queryFn: () => http<any>('/api/accounting/currencies').catch(() => ({ currencies: [] })),
+  });
+  const liveRateRaw = (currenciesData?.currencies || []).find(
+    (c: any) => String(c.code || '').trim().toUpperCase() === currency,
+  )?.exchangeRate;
+  const liveRate = Number(liveRateRaw);
+  const hasLiveRate = Number.isFinite(liveRate) && liveRate > 0;
+  const egpCost = hasLiveRate ? Number((foreignAmount * liveRate).toFixed(2)) : 0;
 
   // Fetch Treasury Accounts
   const { data: accountsData } = useQuery({
     queryKey: ['accounts-list'],
     queryFn: () => http<any>('/api/accounting/accounts').catch(() => ({ accounts: [] })),
   });
-  const bankAccounts = (accountsData?.accounts || (Array.isArray(accountsData) ? accountsData : [])).filter(
-    (a: any) => a.accountGroup === 'current_assets' || a.isCashBank
+  // INV-IMPORT-FX-TREASURY-LIVE-RATE (I4-D7): only cash/bank accounts
+  // are eligible as a treasury source/destination — the backend
+  // 'bank' role rejects anything with is_cash_bank false, so offering
+  // parent current-asset accounts only lets the user pick an account
+  // the backend must reject. Two traps in the old filter:
+  // (a) the endpoint nests the flag as flags.isCashBank, so a
+  // top-level a.isCashBank is always undefined and that arm never
+  // matched a real cash/bank account; (b) real cash/bank leaves
+  // (1110 الخزينة / 1120 البنك) carry accountGroup 'cash_bank', NOT
+  // 'current_assets', so the group arm admitted exactly the parent
+  // accounts (1100 الأصول المتداولة / 1160 عهد وسلف موظفين /
+  // 1170 مصروفات مدفوعة مقدمًا) and never the accounts the backend
+  // accepts. The live trial offered only those three parents and all
+  // three were rejected — correctly. Offer only what the backend
+  // accepts: active asset accounts flagged cash/bank.
+  const bankAccounts = useMemo(
+    () =>
+      (accountsData?.accounts || (Array.isArray(accountsData) ? accountsData : [])).filter(
+        (a: any) => a?.isActive !== false && a?.accountType === 'asset' && a?.flags?.isCashBank === true,
+      ),
+    [accountsData],
   );
+
+  // The posting moves EGP from the source account to the destination
+  // account: the two must differ, or there is no movement to post.
+  // Default them to two DIFFERENT eligible accounts — the old form
+  // left both unset so both resolved to the same settings bank
+  // account and every submit died with IMPORT_FX_SAME_ACCOUNT.
+  useEffect(() => {
+    if (bankAccounts.length >= 2 && !treasuryAccountId && !sourceTreasuryAccountId) {
+      setTreasuryAccountId(String(bankAccounts[0].id));
+      setSourceTreasuryAccountId(String(bankAccounts[1].id));
+    }
+  }, [bankAccounts, treasuryAccountId, sourceTreasuryAccountId]);
 
   // This endpoint returns historic purchases, not an audited foreign-currency cash balance.
   const portfolio = Object.entries(fxData?.portfolio || {}).map(([currency, raw]) => {
@@ -51,22 +100,33 @@ export default function ImportFxTreasuryManager() {
   const cnyItem = portfolio.find((p: any) => p.currency === 'CNY');
   const totalEgpDeployed = portfolio.reduce((sum: number, p: any) => sum + Number(p.total_egp_cost || 0), 0);
 
-  const computedRate = foreignAmount > 0 ? (egpCost / foreignAmount).toFixed(4) : '0';
-
   const handleRecordAcquisition = async (e: React.FormEvent) => {
     e.preventDefault();
-    // The posting moves EGP from the source account to the
-    // destination account: the two must differ, or there is no
-    // movement to post.
-    if (sourceTreasuryAccountId && treasuryAccountId && sourceTreasuryAccountId === treasuryAccountId) {
+    // No live registered rate for the currency: there is no rate to
+    // post at. Fail here, naming the fix (register the rate), instead
+    // of posting user-invented amounts.
+    if (!hasLiveRate) {
+      toast.error(`سعر صرف ${currency} غير مسجل؛ سجّل السعر من شاشة العملات قبل تسجيل التدبير`);
+      return;
+    }
+    // Both legs must be chosen explicitly, and they must differ —
+    // the posting moves EGP from the source to the destination.
+    if (!sourceTreasuryAccountId || !treasuryAccountId) {
+      toast.error('اختر حساب المصدر وحساب الوجهة من حسابات النقدية/البنك');
+      return;
+    }
+    if (sourceTreasuryAccountId === treasuryAccountId) {
       toast.error('حساب مصدر التدبير يجب أن يختلف عن حساب الوجهة');
       return;
     }
     try {
+      // The live rate is sent (the payload builder derives the EGP
+      // cost from it); the backend re-resolves the same live rate and
+      // derives the cost itself — no user-entered amount is a source.
       await recordAcquisitionMutation.mutateAsync({
         currency,
         foreignAmount: Number(foreignAmount),
-        egpCost: Number(egpCost),
+        exchangeRate: liveRate,
         source: 'bank',
         bankAccountId: treasuryAccountId || undefined,
         sourceAccountId: sourceTreasuryAccountId || undefined,
@@ -268,25 +328,25 @@ export default function ImportFxTreasuryManager() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: 4 }}>
-                التكلفة الإجمالية بالجنيه (EGP)
+                التكلفة الإجمالية بالجنيه (EGP) — من السعر الحي
               </label>
               <input
                 type="number"
-                required
-                value={egpCost}
-                onChange={(e) => setEgpCost(Number(e.target.value))}
-                style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
+                disabled
+                value={hasLiveRate ? egpCost : ''}
+                placeholder={hasLiveRate ? undefined : 'لا يوجد سعر مسجل'}
+                style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', borderRadius: 6, fontSize: '12.5px', fontWeight: 700, color: '#170e5e' }}
               />
             </div>
 
             <div>
               <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: 4 }}>
-                سعر الصرف المحسوب (ج.م)
+                سعر الصرف الحي المسجل (ج.م)
               </label>
               <input
                 type="text"
                 disabled
-                value={computedRate}
+                value={hasLiveRate ? liveRate.toFixed(4) : 'غير مسجل — سجّل السعر من شاشة العملات'}
                 style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', borderRadius: 6, fontSize: '12.5px', fontWeight: 700, color: '#170e5e' }}
               />
             </div>
@@ -300,9 +360,10 @@ export default function ImportFxTreasuryManager() {
               <select
                 value={sourceTreasuryAccountId}
                 onChange={(e) => setSourceTreasuryAccountId(e.target.value)}
+                required
                 style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
               >
-                <option value="">-- الحساب الافتراضي للبنك --</option>
+                <option value="">-- اختر حساب المصدر --</option>
                 {bankAccounts.map((acc: any) => (
                   <option key={acc.id} value={acc.id}>
                     {acc.nameAr || acc.nameEn || acc.code}
@@ -335,6 +396,7 @@ export default function ImportFxTreasuryManager() {
               <select
                 value={treasuryAccountId}
                 onChange={(e) => setTreasuryAccountId(e.target.value)}
+                required
                 style={{ width: '100%', height: 36, padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: '12.5px' }}
               >
                 <option value="">-- اختيار الحساب البنكي --</option>

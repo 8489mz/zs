@@ -1659,12 +1659,14 @@ export const useFxPortfolioQuery = () => {
 };
 
 /**
- * INV-IMPORT-ESTIMATES-HONEST: builds the FX-acquisition POST payload.
- * The EGP cost is NEVER invented: when the caller supplies neither an
- * explicit EGP cost nor an explicit exchange rate, this throws before any
- * request is sent instead of silently pricing the acquisition at an
- * assumed rate of 50. The backend trusts egpCost and posts a treasury
- * journal from it, so a silent fallback here would post invented money.
+ * INV-IMPORT-ESTIMATES-HONEST + INV-IMPORT-FX-TREASURY-LIVE-RATE
+ * (I4-D7): builds the FX-acquisition POST payload. The EGP cost is
+ * NEVER invented: when the caller supplies neither an explicit EGP
+ * cost nor an explicit exchange rate, this throws before any request
+ * is sent instead of silently pricing the acquisition at an assumed
+ * rate of 50. The backend re-resolves the live rate server-side and
+ * derives (or validates) the EGP cost from it, so a cost computed
+ * here from a live rate is an echo, never the source of the rate.
  */
 export function buildFxAcquisitionPayload(dto: any): Record<string, unknown> {
   const foreignAmount = Number(dto.foreignAmount ?? dto.foreign_amount ?? 0);

@@ -1551,11 +1551,20 @@ export class RecordFxAcquisitionDto {
   @IsPositive()
   foreignAmount!: number;
 
+  // INV-IMPORT-FX-TREASURY-LIVE-RATE (I4-D7): the EGP cost is the
+  // RESULT of the live rate (foreignAmount x live rate), never its
+  // source — so it is optional. When omitted the service derives it
+  // from the live-resolved rate; when supplied it must agree with
+  // the live rate within one piastre or the acquisition rejects.
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
-  egpCost!: number;
+  egpCost?: number;
 
+  // INV-IMPORT-FX-TREASURY-LIVE-RATE (I4-D7): a supplied rate is an
+  // echo, never a source — the service re-resolves the live rate and
+  // rejects a supplied rate that disagrees with it (0.0001).
   @IsOptional()
   @Type(() => Number)
   @IsNumber()

@@ -8845,10 +8845,14 @@ export class ImportSalesService {
   // -------------------------------------------------------------
   async recordFxAcquisition(tenantId: string, userId: number, dto: RecordFxAcquisitionDto) {
     const foreignAmount = Number(dto.foreignAmount);
-    const egpCost = Number(dto.egpCost);
-    if (!Number.isFinite(foreignAmount) || foreignAmount <= 0 ||
-        !Number.isFinite(egpCost) || egpCost <= 0) {
+    if (!Number.isFinite(foreignAmount) || foreignAmount <= 0) {
       throw new BadRequestException('مبالغ تدبير العملة يجب أن تكون أرقاماً موجبة صحيحة.');
+    }
+    if (dto.egpCost !== undefined && dto.egpCost !== null) {
+      const suppliedCost = Number(dto.egpCost);
+      if (!Number.isFinite(suppliedCost) || suppliedCost <= 0) {
+        throw new BadRequestException('مبالغ تدبير العملة يجب أن تكون أرقاماً موجبة صحيحة.');
+      }
     }
     // Currency is stored normalised: 'usd' and 'USD' are one
     // currency, never two portfolio buckets.
@@ -8856,16 +8860,32 @@ export class ImportSalesService {
     if (!/^[A-Z]{3}$/.test(currency)) {
       throw new BadRequestException('عملة تدبير العملة يجب أن تكون رمزاً من ثلاثة أحرف (مثال: USD). [IMPORT_FX_CURRENCY_INVALID]');
     }
-    const effectiveRate = egpCost / foreignAmount;
-    const effectiveRate4dp = Number(effectiveRate.toFixed(4));
-    if (dto.exchangeRate !== undefined && dto.exchangeRate !== null) {
-      const supplied = Number(dto.exchangeRate);
-      if (!Number.isFinite(supplied) || supplied <= 0 || Math.abs(supplied - effectiveRate4dp) > 0.0001) {
-        throw new BadRequestException('سعر الصرف المرسل لا يطابق المبالغ (تكلفة الجنيه ÷ المبلغ الأجنبي)؛ صحح السعر أو المبالغ. [IMPORT_FX_RATE_MISMATCH]');
-      }
-    }
     const acquisitionDate = dto.acquisitionDate || await resolveBusinessDateKey(this.db, tenantId, new Date());
     return await this.db.transaction().execute(async (trx) => {
+      // INV-IMPORT-FX-TREASURY-LIVE-RATE (I4-D7): the rate is NEVER
+      // derived from the user-entered amounts — it resolves live
+      // through the shared resolver (resolveFxRate), failing closed
+      // when no rate is registered for the currency. The amounts are
+      // the RESULT of the rate: the EGP cost is foreignAmount x live
+      // rate, and a caller-supplied cost or rate must agree with the
+      // live rate (cost within one piastre, rate within 0.0001) or
+      // the acquisition rejects with IMPORT_FX_RATE_MISMATCH.
+      const liveRate = await resolveFxRate(trx as any, tenantId, currency);
+      const liveRate4dp = Number(liveRate.toFixed(4));
+      if (dto.exchangeRate !== undefined && dto.exchangeRate !== null) {
+        const supplied = Number(dto.exchangeRate);
+        if (!Number.isFinite(supplied) || supplied <= 0 || Math.abs(supplied - liveRate4dp) > 0.0001) {
+          throw new BadRequestException(`سعر الصرف المرسل (${supplied}) لا يطابق سعر الصرف الحي المسجل (${liveRate4dp})؛ حدّث السعر المسجل أولاً أو صحح السعر. [IMPORT_FX_RATE_MISMATCH]`);
+        }
+      }
+      const expectedEgpCost = roundMoney(foreignAmount * liveRate, currencyMoneyDigits('EGP'));
+      let egpCost = expectedEgpCost;
+      if (dto.egpCost !== undefined && dto.egpCost !== null) {
+        const suppliedCost = Number(dto.egpCost);
+        if (Math.abs(suppliedCost - expectedEgpCost) > 0.01) {
+          throw new BadRequestException(`تكلفة الجنيه المرسلة (${suppliedCost}) لا تطابق السعر الحي المسجل (${liveRate4dp} × ${foreignAmount} = ${expectedEgpCost})؛ صحح المبالغ أو حدّث السعر المسجل. [IMPORT_FX_RATE_MISMATCH]`);
+        }
+      }
       // Optional transfer link: the transfer must belong to this
       // tenant and its currency must match the acquisition. The
       // link is attribution only — it never settles the transfer.
@@ -8897,8 +8917,8 @@ export class ImportSalesService {
           tenant_id: tenantId,
           currency,
           foreign_amount: dto.foreignAmount,
-          egp_cost: dto.egpCost,
-          effective_exchange_rate: effectiveRate4dp,
+          egp_cost: egpCost,
+          effective_exchange_rate: liveRate4dp,
           acquisition_date: acquisitionDate,
           source: dto.source || 'bank',
           bank_account_id: destinationAccountId,
@@ -8921,7 +8941,7 @@ export class ImportSalesService {
         tenantId,
         accountId: tenantId,
         entryDate: new Date(acquisitionDate),
-        description: `تدبير عملة ${currency} ${foreignAmount} بسعر ${effectiveRate4dp} (تكلفة ${egpCost} ج.م)`,
+        description: `تدبير عملة ${currency} ${foreignAmount} بسعر ${liveRate4dp} (تكلفة ${egpCost} ج.م)`,
         branchId: null,
         locationId: null,
         createdBy: userId,
