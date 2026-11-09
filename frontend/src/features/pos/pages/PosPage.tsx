@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { PosWorkspace } from '@/features/pos/components/PosWorkspace';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { FeatureGate } from '@/shared/components/feature-gate';
+import { getPosAvailability } from '@/features/pos/lib/pos-availability';
 
 export function PosPage() {
   const { t } = useTranslation();
@@ -15,25 +16,17 @@ export function PosPage() {
     );
   }
 
-  const rawIndustry = String(settings?.businessIndustry || settings?.activityType || '').toLowerCase();
-  const isWholesaleVertical =
-    rawIndustry === 'wholesale_van' ||
-    rawIndustry === 'wholesale' ||
-    rawIndustry === 'distribution' ||
-    rawIndustry === 'توزيع' ||
-    rawIndustry === 'فان' ||
-    rawIndustry === 'مناديب' ||
-    rawIndustry.includes('توزيع') ||
-    rawIndustry.includes('فان') ||
-    rawIndustry.includes('wholesale');
-  const isWarehousingVertical =
-    rawIndustry === 'warehousing' ||
-    rawIndustry === 'warehouse' ||
-    rawIndustry === 'wms' ||
-    rawIndustry.includes('مخازن') ||
-    rawIndustry.includes('مستودع');
-  const isNonRetailVertical = isWholesaleVertical || isWarehousingVertical || rawIndustry === 'contracting' || rawIndustry === 'maritime' || rawIndustry === 'services';
-  const isPosDisabled = settings?.posModuleEnabled === false || isNonRetailVertical;
+  // I5-D1: the availability rule lives in pos-availability.ts (single source
+  // of truth shared with the sales register header). The vertical flags below
+  // only pick which reason paragraph the disabled state shows.
+  const availability = getPosAvailability(settings);
+  const isWholesaleVertical = availability.reason === 'wholesale';
+  const isWarehousingVertical = availability.reason === 'warehousing';
+  const isNonRetailVertical = availability.available === false && availability.reason !== 'module-off';
+  const isPosDisabled = !availability.available;
+  // I5-D1: the current operation mode is what the trial read as "broken" —
+  // name it explicitly instead of a bare "غير مفعّل".
+  const isEnterpriseMode = settings?.enableEnterpriseFeatures === true;
 
   if (isPosDisabled) {
     return (
@@ -92,6 +85,11 @@ export function PosPage() {
               ? t('pos.pos_page.s3', "هذا الحساب مخصص لقطاع تخصصي (مشاريع مقاولات أو شحن ولوجستيات أو خدمات) لا يعتمد على نقاط البيع المباشرة.")
               : t('pos.pos_page.s4', "تم تعطيل موديول نقطة البيع والكاشير في إعدادات المنشأة. يمكنك تفعيله من شاشة إعدادات الموديولات.")}
           </p>
+          {isEnterpriseMode && (
+            <p style={{ fontSize: '13px', color: '#1d4ed8', lineHeight: 1.6, marginBottom: '24px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 14px' }}>
+              {t('pos.pos_page.s8', "النمط الحالي: مؤسسة تجارية متقدمة (Enterprise Trading) — نقاط البيع مغلقة عن قصد في هذا النمط، وتتم المبيعات عبر أوامر البيع ثم تحويلها إلى فواتير.")}
+            </p>
+          )}
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
             {isWarehousingVertical && (
               <button
@@ -137,6 +135,28 @@ export function PosPage() {
                 {t('pos.pos_page.s5', "سيارات التوزيع (الفان)")}
               </button>
             )}
+            {isEnterpriseMode && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.location.href = '/sales/orders';
+                  }
+                }}
+                style={{
+                  background: '#170e5e',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '10px 22px',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                {t('pos.pos_page.s9', "أوامر البيع")}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -145,9 +165,9 @@ export function PosPage() {
                 }
               }}
               style={{
-                background: isWholesaleVertical || isWarehousingVertical ? '#f1f5f9' : '#170e5e',
-                color: isWholesaleVertical || isWarehousingVertical ? '#334155' : '#ffffff',
-                border: isWholesaleVertical || isWarehousingVertical ? '1px solid #cbd5e1' : 'none',
+                background: isWholesaleVertical || isWarehousingVertical || isEnterpriseMode ? '#f1f5f9' : '#170e5e',
+                color: isWholesaleVertical || isWarehousingVertical || isEnterpriseMode ? '#334155' : '#ffffff',
+                border: isWholesaleVertical || isWarehousingVertical || isEnterpriseMode ? '1px solid #cbd5e1' : 'none',
                 borderRadius: '8px',
                 padding: '10px 22px',
                 fontSize: '14px',

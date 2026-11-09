@@ -17,6 +17,7 @@ import {
 } from '@/features/sales/lib/sales-workspace.helpers';
 import { useHasAnyPermission } from '@/shared/hooks/use-permission';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
+import { isPosAvailable } from '@/features/pos';
 import { userDirectoryApi } from '@/shared/api/user-directory';
 import type { Sale } from '@/types/domain';
 import { useTranslation } from "react-i18next";
@@ -113,7 +114,16 @@ export function SalesWorkspace() {
   return (
     <div className="page-stack page-shell sales-workspace" dir="rtl">
       <main className="document-prototype-column" style={{ paddingBottom: '32px', maxWidth: '1280px' }}>
-        <SalesWorkspaceHeader totalItems={totalItems} description={headerDescription} onCopySummary={copySalesSummary} />
+        <SalesWorkspaceHeader
+          totalItems={totalItems}
+          description={headerDescription}
+          onCopySummary={copySalesSummary}
+          // I5-D1: hide the "فتح الكاشير" entry while settings are still
+          // loading (no false entry) and whenever POS is off for this
+          // tenant — the button used to link unconditionally to /pos and
+          // dead-end on the disabled page.
+          showPosButton={Boolean(settingsQuery.data) && isPosAvailable(settingsQuery.data)}
+        />
         {editFeedback ? <div className="success-box">{editFeedback}</div> : null}
 
         <SalesRegisterCard

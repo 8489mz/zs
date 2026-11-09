@@ -1910,7 +1910,9 @@
       "s3": "This account is intended for my sector specialization (contracting projects, shipping and logistics, or services) and does not rely on direct sales points.",
       "s4": "POS and cashier module has been disabled in the facility settings. You can enable it from the modules settings screen.",
       "s0": "Checking POS settings...",
-      "s1": "Point of Sale module (Cashier) is not activated"
+      "s1": "Point of Sale module (Cashier) is not activated",
+      "s8": "Current mode: Enterprise Trading — POS is intentionally off in this mode; sales run through sales orders, then converted to invoices.",
+      "s9": "Sales orders"
     },
     "self_ordering_kiosk_page": {
       "s3": "Dine In",
