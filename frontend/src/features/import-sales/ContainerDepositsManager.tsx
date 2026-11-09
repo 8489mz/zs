@@ -53,8 +53,13 @@ export function ContainerDepositsManager() {
     queryKey: ['accounts-list'],
     queryFn: () => http<any>('/api/accounting/accounts').catch(() => ({ accounts: [] })),
   });
+  // INV-IMPORT-CONTAINER-DEPOSIT (I3-D8): only cash/bank accounts are
+  // eligible as the deposit payment account — the backend 'bank' role
+  // rejects anything with isCashBank false, so offering parent
+  // current-asset accounts (e.g. 1100 "الأصول المتداولة") only lets
+  // the user pick an account the backend must reject.
   const treasuryAccounts = (accountsData?.accounts || (Array.isArray(accountsData) ? accountsData : [])).filter(
-    (a: any) => a.accountGroup === 'current_assets' || a.isCashBank
+    (a: any) => a.isCashBank === true,
   );
 
   const handleRecordDeposit = async (e: React.FormEvent) => {

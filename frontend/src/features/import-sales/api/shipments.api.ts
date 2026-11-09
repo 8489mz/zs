@@ -1128,10 +1128,13 @@ export const useRecordContainerDepositMutation = () => {
         paymentDate: dto.paymentDate || dto.payment_date || new Date().toISOString().slice(0, 10),
         expectedReturnDate: dto.expectedReturnDate || dto.freeDaysDeadline || dto.expected_return_date || undefined,
         treasuryAccountId: dto.treasuryAccountId || dto.treasury_account_id || undefined,
-        receiptNo: dto.receiptNo || dto.receipt_no || undefined,
-        idempotencyKey: dto.idempotencyKey || `DEP-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         notes: dto.notes || undefined,
       };
+      // INV-IMPORT-CONTAINER-DEPOSIT (I3-D8): do NOT send receiptNo or
+      // idempotencyKey — RecordContainerDepositDto declares neither, the
+      // global whitelist + forbidNonWhitelisted pipe rejects them, and
+      // the service has no deposit idempotency handling, so sending
+      // them made every deposit fail before the service ran.
       return await http<any>('/api/import-sales/container-deposits', {
         method: 'POST',
         body: JSON.stringify(payload),

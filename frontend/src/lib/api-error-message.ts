@@ -348,6 +348,19 @@ export function getFriendlyApiErrorMessage(error: unknown, fallback?: string): s
     }
   }
 
+  // INV-IMPORT-CONTAINER-DEPOSIT (I3-D8): a VALIDATION_ERROR carries a
+  // field-specific backend message ("الحقل X غير مسموح إرساله."). The
+  // code map below would replace it with the generic "البيانات المدخلة
+  // غير صحيحة.", hiding which field failed. Prefer the specific
+  // message for this code only; every other code keeps its mapped
+  // text, and the generic backend fallback still maps to generic.
+  if (code && code.trim().toUpperCase() === 'VALIDATION_ERROR') {
+    const trimmed = (message || '').trim().replace(/[.،]+$/, '');
+    if (trimmed && trimmed !== 'البيانات المدخلة غير صحيحة' && trimmed !== 'البيانات المرسلة غير صحيحة') {
+      return message;
+    }
+  }
+
   const fromCode = mapByCode(code, error, message);
   if (fromCode) return fromCode;
 
