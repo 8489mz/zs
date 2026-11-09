@@ -1062,7 +1062,7 @@ export default function ShipmentDetailsPage() {
                       items: itemsPayload,
                     },
                     {
-                      onSuccess: (res: any) => {
+                      onSuccess: () => {
                         toast.success('تم اعتماد محضر الفحص والاستلام بنجاح');
                         setIsGrnOpen(false);
                       },
