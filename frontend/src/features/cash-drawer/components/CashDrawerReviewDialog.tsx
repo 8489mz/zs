@@ -41,6 +41,8 @@ interface CashDrawerReviewDialogProps {
   managerNote: string;
   onManagerNoteChange: (value: string) => void;
   onApprove: () => void;
+  /** INV-REST-SHIFT-CLOSE-CONTROL (I22): reject reopens the shift; no variance journal is posted. */
+  onReject?: () => void;
   onClose: () => void;
   isPending: boolean;
   isError: boolean;
@@ -103,12 +105,21 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
   const deliveryCashIn = shift ? Number(shift.cashDrawerDeliveryCashInTotal || 0) : 0;
   const manualCashIn = shift ? Number(shift.cashDrawerManualCashInTotal || 0) : 0;
 
+  // INV-REST-SHIFT-CLOSE-CONTROL (I25): the review variance uses
+  // the same expected-cash components as the server — collections
+  // and cancelled-sale cash included — or the review would show a
+  // phantom variance on shifts that have them.
+  const customerCollections = shift ? Number(shift.customerCollectionsTotal || 0) : 0;
+  const cancelledSaleCash = shift ? Number(shift.cancelledSaleCashTotal || 0) : 0;
+
   const dynamicExpectedCash = shift ? (
     Number(shift.openingCash || 0) +
     Number(shift.cashSalesTotal || 0) +
     Number(shift.serviceCashTotal || 0) +
     manualCashIn +
-    deliveryCashIn -
+    deliveryCashIn +
+    customerCollections +
+    cancelledSaleCash -
     totalDeductions
   ) : 0;
 
@@ -123,6 +134,26 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
   , bookDigits);
 
   const totalShiftDiscrepancy = toMoney(dynamicVariance + electronicDiff, bookDigits);
+
+  // INV-REST-SHIFT-CLOSE-CONTROL (I22): a mismatch is any
+  // declared/computed delta, count delta, or itemised-detail
+  // delta from the server reconciliation (falling back to the
+  // client-computed diffs when the shift predates the package).
+  // Approving a mismatch — and any rejection — needs a note of
+  // at least 10 characters; the server enforces the same rule.
+  const hasReviewMismatch = useMemo(() => {
+    const rec = shift?.reconciliation;
+    if (rec) {
+      return (['card', 'wallet', 'instapay'] as const).some((channel) => {
+        const row = rec[channel];
+        return !!row && (row.delta !== 0 || row.countDelta !== 0 || (row.detailDelta || 0) !== 0);
+      });
+    }
+    return dynamicVariance !== 0 || electronicDiff !== 0;
+  }, [shift?.reconciliation, dynamicVariance, electronicDiff]);
+  const reviewNoteValue = String(props.managerNote || '').trim();
+  const approveBlockedByNote = hasReviewMismatch && reviewNoteValue.length < 10;
+  const rejectBlockedByNote = reviewNoteValue.length < 10;
 
   const isKwd = getGlobalSystemCurrency() === 'KWD';
 
@@ -834,12 +865,12 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <Field label={t('cash_drawer.cash_drawer_review_dialog.s73', "ملاحظة المشرف للاعتماد (اختياري)")}>
+                <Field label={hasReviewMismatch ? t('cash_drawer.cash_drawer_review_dialog.s80', "ملاحظة المشرف للاعتماد (إلزامية عند وجود فرق — 10 أحرف على الأقل)") : t('cash_drawer.cash_drawer_review_dialog.s73', "ملاحظة المشرف للاعتماد (اختياري)")}>
                   <input
                     type="text"
                     value={props.managerNote}
                     onChange={(event) => props.onManagerNoteChange(event.target.value)}
-                    placeholder={t('cash_drawer.cash_drawer_review_dialog.s74', "اكتب ملاحظة قصيرة للمراجعة...")}
+                    placeholder={hasReviewMismatch ? t('cash_drawer.cash_drawer_review_dialog.s81', "اشرح سبب الفرق قبل الاعتماد...") : t('cash_drawer.cash_drawer_review_dialog.s74', "اكتب ملاحظة قصيرة للمراجعة...")}
                     disabled={props.isPending}
                     style={{ fontSize: '0.8rem', padding: '4px 8px' }}
                   />
@@ -869,7 +900,12 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
                 <Button variant="secondary" onClick={props.onClose} disabled={props.isPending} style={{ padding: compactView ? '5px 14px' : '7px 18px', fontSize: '0.82rem' }}>
                   {t('cash_drawer.cash_drawer_review_dialog.s77', "إلغاء")}
                 </Button>
-                <Button variant="primary" onClick={props.onApprove} disabled={props.isPending} style={{ padding: '5px 16px', fontSize: '0.82rem' }}>
+                {props.onReject ? (
+                  <Button variant="secondary" onClick={props.onReject} disabled={props.isPending || rejectBlockedByNote} title={rejectBlockedByNote ? t('cash_drawer.cash_drawer_review_dialog.s82', "اكتب سبب الرفض (10 أحرف على الأقل) أولاً") : undefined} style={{ padding: '5px 16px', fontSize: '0.82rem' }}>
+                    {t('cash_drawer.cash_drawer_review_dialog.s83', "رفض وإعادة فتح الوردية")}
+                  </Button>
+                ) : null}
+                <Button variant="primary" onClick={props.onApprove} disabled={props.isPending || approveBlockedByNote} title={approveBlockedByNote ? t('cash_drawer.cash_drawer_review_dialog.s84', "يوجد فرق؛ اكتب ملاحظة مراجعة (10 أحرف على الأقل) قبل الاعتماد") : undefined} style={{ padding: '5px 16px', fontSize: '0.82rem' }}>
                   {props.isPending ? t('cash_drawer.cash_drawer_review_dialog.s78', "جاري اعتماد الإغلاق...") : t('cash_drawer.cash_drawer_review_dialog.s79', "اعتماد الإغلاق النهائي")}
                 </Button>
               </div>

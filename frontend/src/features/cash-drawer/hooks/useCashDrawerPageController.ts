@@ -42,6 +42,20 @@ export interface CloseShiftValues {
   instapayDetails: Array<{ amount?: number; reference?: string }>;
   note: string;
   managerPin?: string;
+  /**
+   * INV-REST-SHIFT-CLOSE-CONTROL (I21): the second approver's
+   * secret, required when |variance| is over the
+   * shortage-tolerance cap. Sent only when the close actually
+   * needs it; the server decides.
+   */
+  approverSecret?: string;
+  /**
+   * INV-REST-SHIFT-CLOSE-CONTROL (I20): override for a close
+   * blocked by open tables / draft sales — a different manager's
+   * secret plus a reason of at least 10 characters.
+   */
+  openTablesOverrideSecret?: string;
+  openTablesOverrideReason?: string;
 }
 
 export type CashDrawerConfirmAction =
@@ -88,6 +102,9 @@ export function useCashDrawerPageController() {
       instapayDetails: [],
       note: '',
       managerPin: '',
+      approverSecret: '',
+      openTablesOverrideSecret: '',
+      openTablesOverrideReason: '',
     },
   });
 
@@ -125,6 +142,9 @@ export function useCashDrawerPageController() {
       instapayDetails: [],
       note: '',
       managerPin: '',
+      approverSecret: '',
+      openTablesOverrideSecret: '',
+      openTablesOverrideReason: '',
     }),
     onReviewSuccess: () => {
       setReviewManagerNote('');
@@ -311,10 +331,10 @@ export function useCashDrawerPageController() {
     setReviewTargetShift(null);
   };
 
-  const submitPendingReview = async () => {
+  const submitPendingReview = async (decision: 'approve' | 'reject' = 'approve') => {
     if (!reviewTargetShift?.id) return;
     try {
-      await reviewMutation.mutateAsync({ shiftId: String(reviewTargetShift.id), note: reviewManagerNote });
+      await reviewMutation.mutateAsync({ shiftId: String(reviewTargetShift.id), decision, note: reviewManagerNote });
     } catch {
       // mutation hook exposes the error state for the dialog.
     }

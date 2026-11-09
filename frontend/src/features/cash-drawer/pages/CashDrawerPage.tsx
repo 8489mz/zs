@@ -254,7 +254,8 @@ export function CashDrawerPage() {
         shift={controller.reviewTargetShift}
         managerNote={controller.reviewManagerNote}
         onManagerNoteChange={controller.setReviewManagerNote}
-        onApprove={() => void controller.submitPendingReview()}
+        onApprove={() => void controller.submitPendingReview('approve')}
+        onReject={() => void controller.submitPendingReview('reject')}
         onClose={controller.closeReviewDialog}
         isPending={controller.reviewMutation.isPending}
         isError={controller.reviewMutation.isError}

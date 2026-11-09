@@ -67,8 +67,14 @@ export function generateCashDrawerSettlementReceiptHtml(
   const manualCashIn = Number(shift.cashDrawerManualCashInTotal || 0);
   const totalInflows = Number(shift.cashDrawerCashInTotal || (manualCashIn + deliveryCashIn));
   const openingCash = Number(shift.openingCash || 0);
+  // INV-REST-SHIFT-CLOSE-CONTROL (I25): the two expected-cash
+  // components the Z-report used to omit. Without them the
+  // report's expected cash understated the drawer on every shift
+  // with a customer collection or a cancelled cash sale.
+  const customerCollections = Number(shift.customerCollectionsTotal || 0);
+  const cancelledSaleCash = Number(shift.cancelledSaleCashTotal || 0);
 
-  const dynamicExpectedCash = openingCash + rawCashSales + totalInflows - totalOutflows;
+  const dynamicExpectedCash = openingCash + rawCashSales + totalInflows - totalOutflows + customerCollections + cancelledSaleCash;
   const drawerVariance = (shift.declaredCash ?? shift.countedCash) != null
     ? declaredCash - dynamicExpectedCash
     : Number(shift.variance || 0);
@@ -284,6 +290,16 @@ export function generateCashDrawerSettlementReceiptHtml(
         <div style="display: flex; justify-content: space-between;">
           <span>(+) تحصيلات مناديب دليفري:</span>
           <strong>+${formatCurrency(deliveryCashIn)}</strong>
+        </div>` : ''}
+        ${customerCollections > 0 ? `
+        <div style="display: flex; justify-content: space-between;">
+          <span>(+) تحصيلات عملاء نقدي:</span>
+          <strong>+${formatCurrency(customerCollections)}</strong>
+        </div>` : ''}
+        ${cancelledSaleCash > 0 ? `
+        <div style="display: flex; justify-content: space-between;">
+          <span>(+) نقدية فواتير ملغاة:</span>
+          <strong>+${formatCurrency(cancelledSaleCash)}</strong>
         </div>` : ''}
         <div style="display: flex; justify-content: space-between;">
           <span>(-) إجمالي المنصرف من الدرج:</span>

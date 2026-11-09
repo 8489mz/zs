@@ -26,4 +26,20 @@ export class CloseCashierShiftDto {
   @IsOptional() @IsArray() @ArrayMaxSize(2000) @ValidateNested({ each: true }) @Type(() => CloseOperationDetailDto) @Transform(({ value }) => Array.isArray(value) ? value : []) instapayDetails?: CloseOperationDetailDto[];
   @IsOptional() @IsString() @MaxLength(500) note?: string;
   @IsString() @MaxLength(100) managerPin!: string;
+  /**
+   * INV-REST-SHIFT-CLOSE-CONTROL (I21): the second approver's
+   * secret, required when |variance| is over the shortage-tolerance
+   * cap. Verified by account password (a manager/admin other than
+   * the closer) — the shared manager PIN carries no identity, so
+   * it cannot prove a second person and is rejected for this use.
+   */
+  @IsOptional() @IsString() @MaxLength(100) approverSecret?: string;
+  /**
+   * INV-REST-SHIFT-CLOSE-CONTROL (I20): override for a close
+   * blocked by open tables / draft sales. Same identity rule as
+   * approverSecret, plus a reason of at least 10 characters,
+   * stamped into close_note.
+   */
+  @IsOptional() @IsString() @MaxLength(100) openTablesOverrideSecret?: string;
+  @IsOptional() @IsString() @MaxLength(500) openTablesOverrideReason?: string;
 }

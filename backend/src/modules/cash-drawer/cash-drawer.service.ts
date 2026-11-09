@@ -1,7 +1,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Kysely, sql } from '../../database/kysely';
 import { AppError } from '../../common/errors/app-error';
-import { assertCashDrawerAmount, assertCashDrawerCountedCash, assertCashDrawerNote, buildCashDrawerShiftDocNo, computeCashDrawerVariance, filterCashDrawerRows, mapCashDrawerShiftRow, normalizeCashDrawerMovementType, normalizeShiftOpenPayload, paginateCashDrawerRows, summarizeCashDrawerRows, toSignedCashDrawerAmount, buildShiftCashReturnItem, isDrawerCashTender, isCashDrawerTransferType } from './helpers/cash-drawer.helper';
+import { assertCashDrawerAmount, assertCashDrawerCountedCash, assertCashDrawerNote, buildCashDrawerShiftDocNo, buildExpectedCashBreakdown, computeCashDrawerVariance, filterCashDrawerRows, mapCashDrawerShiftRow, normalizeCashDrawerMovementType, normalizeShiftOpenPayload, paginateCashDrawerRows, requiresSecondApproval, summarizeCashDrawerRows, toSignedCashDrawerAmount, buildShiftCashReturnItem, isDrawerCashTender, isCashDrawerTransferType } from './helpers/cash-drawer.helper';
 import type { BlindCloseChannelReconciliation, BlindCloseReconciliation, CashDrawerMovementType } from './helpers/cash-drawer.helper';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
@@ -55,6 +55,9 @@ type ShiftRow = {
   opening_cash?: number | string | null;
   opening_note?: string | null;
   status?: string | null;
+  terminal_code?: string | null;
+  customerCollectionsTotal?: number | string | null;
+  cancelledSaleCashTotal?: number | string | null;
   expected_cash?: number | string | null;
   counted_cash?: number | string | null;
   variance?: number | string | null;
@@ -94,7 +97,7 @@ type ShiftSalesBreakdown = {
 };
 type ShiftSaleReturnTotals = { saleReturnCashRefundTotal: number; saleReturnCardRefundTotal: number; saleReturnTotal: number };
 type CloseOperationDetailInput = { amount?: number; reference?: string };
-type BlindCloseMetadata = { blindClose: true; declared: { cash: number; cardTotal: number; cardCount: number; walletTotal: number; walletCount: number; instapayTotal: number; instapayCount: number }; detailTotals: { card: number; wallet: number; instapay: number }; details: { card: Array<{ amount: number; reference?: string }>; wallet: Array<{ amount: number; reference?: string }>; instapay: Array<{ amount: number; reference?: string }> }; managerReview?: { note: string; reviewedById: number; reviewedByName: string; reviewedAt: string }; reconciliation?: BlindCloseReconciliation; postCloseCorrections?: Array<PostCloseCorrectionStamp>; note: string };
+type BlindCloseMetadata = { blindClose: true; declared: { cash: number; cardTotal: number; cardCount: number; walletTotal: number; walletCount: number; instapayTotal: number; instapayCount: number }; detailTotals: { card: number; wallet: number; instapay: number }; details: { card: Array<{ amount: number; reference?: string }>; wallet: Array<{ amount: number; reference?: string }>; instapay: Array<{ amount: number; reference?: string }> }; managerReview?: { note: string; reviewedById: number; reviewedByName: string; reviewedAt: string }; rejection?: { note: string; rejectedById: number; rejectedByName: string; rejectedAt: string }; reconciliation?: BlindCloseReconciliation; postCloseCorrections?: Array<PostCloseCorrectionStamp>; note: string };
 
 /**
  * One stamped post-close correction (INV-CLOSED-SHIFT-POST-CLOSE-REFRESH):
@@ -106,7 +109,7 @@ type BlindCloseMetadata = { blindClose: true; declared: { cash: number; cardTota
 export type PostCloseCorrectionStamp = {
   at: string;
   saleId: number;
-  kind: 'edit' | 'cancel';
+  kind: 'edit' | 'cancel' | 'offline_sync';
   previousExpectedCash: number;
   correctedExpectedCash: number;
   previousVariance: number;
@@ -333,7 +336,9 @@ export class CashDrawerService {
    * historical rule), OR when no shift of its creator covers it and
    * this open shift is the only open shift covering it on the
    * branch/location (a sale posted by another login at the same
-   * terminal). The fallback never claims rep-custody cash: a sale
+   * terminal), OR — INV-REST-SHIFT-CLOSE-CONTROL (I24) — when the
+   * sale carries this shift's POS station code (pos_terminal_code)
+   * and its creator has no covering shift. The fallback never claims rep-custody cash: a sale
    * whose collection_status is prepaid_by_rep (van field cash and
    * rep-prepaid deliveries) stays with its creator's shift only.
    * Call sites always alias the sales table `s`. Only columns that
@@ -341,6 +346,32 @@ export class CashDrawerService {
    * van_trip_id: minimal harnesses do not seed them).
    */
   private shiftSaleCashAttribution(tenantId: string, shift: ShiftRow, openerId: number) {
+    // INV-REST-SHIFT-CLOSE-CONTROL (I24): a sale also belongs to a
+    // shift when it carries that shift's POS station code and its
+    // creator has no shift covering it. The terminal uniquely
+    // identifies the station (partial unique index), so no
+    // exactly-one-open-shift count is needed here — but the
+    // creator-no-covering-shift guard is kept, or a sale whose
+    // creator DOES have a shift would be claimed twice. Never
+    // sales.terminal_id: that is the EDC card-terminal id, null
+    // on cash sales; the station code is pos_terminal_code.
+    const terminalCode = String(shift.terminal_code || '').trim();
+    const terminalBranch = terminalCode
+      ? sql<boolean>`or (
+          s.pos_terminal_code = ${terminalCode}
+          and coalesce(s.collection_status, '') <> 'prepaid_by_rep'
+          and not exists (
+            select 1 from cashier_shifts cs
+            where cs.tenant_id = ${tenantId} and cs.opened_by = s.created_by
+              and s.created_at >= cs.created_at
+              and (cs.closed_at is null or s.created_at <= cs.closed_at)
+              and (cs.branch_id is null or s.branch_id is null or cs.branch_id = s.branch_id)
+              and (cs.location_id is null or s.location_id is null or cs.location_id = s.location_id)
+          )
+          and (${shift.branch_id || null}::int is null or s.branch_id is null or s.branch_id = ${Number(shift.branch_id || 0) || null})
+          and (${shift.location_id || null}::int is null or s.location_id is null or s.location_id = ${Number(shift.location_id || 0) || null})
+        )`
+      : sql<boolean>``;
     const fallback = String(shift.status || 'open') === 'open'
       ? sql<boolean>`or (
           coalesce(s.collection_status, '') <> 'prepaid_by_rep'
@@ -359,7 +390,7 @@ export class CashDrawerService {
               and (cs2.branch_id is null or s.branch_id is null or cs2.branch_id = s.branch_id)
               and (cs2.location_id is null or s.location_id is null or cs2.location_id = s.location_id)
           ) = 1
-        )`
+        ) ${terminalBranch}`
       : sql<boolean>`or false`;
     return sql<boolean>`(
         s.created_by = ${openerId}
@@ -608,7 +639,21 @@ export class CashDrawerService {
     const customerCollections = await this.computeShiftCustomerCollections(shift, auth, queryable, bookDigits);
     const cancelledCheckoutCash = await this.computeShiftCancelledSaleCashReceipts(shift, auth, queryable, bookDigits);
     const netDrawerMovement = movements.cashInTotal - movements.cashOutTotal;
-    return this.toBookMoney(Number(shift.opening_cash || 0) + netDrawerMovement + breakdown.cashSalesTotal + cancelledCheckoutCash + services.serviceCashTotal + customerCollections - saleReturnTotals.saleReturnCashRefundTotal - supplierPaymentsTotal - expensesTotal, bookDigits);
+    // INV-REST-SHIFT-CLOSE-CONTROL (I25): the sum is the one pure
+    // buildExpectedCashBreakdown — the same rows the close card and
+    // the Z-report render — so the stored figure and the shown
+    // figure can never drift apart again.
+    return buildExpectedCashBreakdown({
+      openingCash: Number(shift.opening_cash || 0),
+      netDrawerMovement,
+      cashSalesTotal: breakdown.cashSalesTotal,
+      cancelledSaleCashTotal: cancelledCheckoutCash,
+      serviceCashTotal: services.serviceCashTotal,
+      customerCollectionsTotal: customerCollections,
+      saleReturnCashRefundTotal: saleReturnTotals.saleReturnCashRefundTotal,
+      supplierPaymentsTotal,
+      expensesTotal,
+    }, bookDigits).total;
   }
 
   private async fetchShiftMovementItems(shiftId: number, shift: ShiftRow, auth: AuthContext): Promise<Array<{
@@ -799,6 +844,11 @@ export class CashDrawerService {
     const expensesTotal = await this.computeShiftExpensesTotal(row, auth);
     const movementItems = await this.fetchShiftMovementItems(shiftId, row, auth);
     const attributedSaleCash = await this.computeShiftAttributedSaleCash(row, auth);
+    // INV-REST-SHIFT-CLOSE-CONTROL (I25): the two expected-cash
+    // components the close card used to hide are hydrated here so
+    // the row the frontend renders already carries them.
+    const customerCollectionsTotal = await this.computeShiftCustomerCollections(row, auth);
+    const cancelledSaleCashTotal = await this.computeShiftCancelledSaleCashReceipts(row, auth);
     const expectedCash = String(row.status || 'open') === 'open' ? await this.computeShiftExpectedCashFromShift(row, auth, salesBreakdown, serviceBreakdown) : Number(row.expected_cash || 0);
     return {
       ...row,
@@ -834,13 +884,15 @@ export class CashDrawerService {
       sale_return_cash_refund_total: saleReturnTotals.saleReturnCashRefundTotal,
       sale_return_card_refund_total: saleReturnTotals.saleReturnCardRefundTotal,
       sale_return_total: saleReturnTotals.saleReturnTotal,
+      customerCollectionsTotal,
+      cancelledSaleCashTotal,
       movement_items: movementItems,
     };
   }
 
   private async rawList(auth: AuthContext, filterStatus?: string): Promise<Array<Record<string, unknown>>> {
     const scope = this.scope(auth);
-    let query = sql<ShiftRow>`select s.id, s.doc_no, s.branch_id, s.location_id, s.opened_by, s.opening_cash, s.opening_note, s.status, s.expected_cash, s.counted_cash, s.variance, s.close_note, s.closed_by, s.closed_at, s.created_at, coalesce(b.name, '') as branch_name, coalesce(l.name, '') as location_name, coalesce(ou.username, '') as opened_by_name, coalesce(cu.username, '') as closed_by_name from cashier_shifts s left join branches b on b.id = s.branch_id and b.tenant_id = s.tenant_id left join stock_locations l on l.id = s.location_id and l.tenant_id = s.tenant_id left join users ou on ou.id = s.opened_by and ou.tenant_id = s.tenant_id left join users cu on cu.id = s.closed_by and cu.tenant_id = s.tenant_id where s.tenant_id = ${scope.tenantId}`;
+    let query = sql<ShiftRow>`select s.id, s.doc_no, s.branch_id, s.location_id, s.opened_by, s.opening_cash, s.opening_note, s.status, s.terminal_code, s.expected_cash, s.counted_cash, s.variance, s.close_note, s.closed_by, s.closed_at, s.created_at, coalesce(b.name, '') as branch_name, coalesce(l.name, '') as location_name, coalesce(ou.username, '') as opened_by_name, coalesce(cu.username, '') as closed_by_name from cashier_shifts s left join branches b on b.id = s.branch_id and b.tenant_id = s.tenant_id left join stock_locations l on l.id = s.location_id and l.tenant_id = s.tenant_id left join users ou on ou.id = s.opened_by and ou.tenant_id = s.tenant_id left join users cu on cu.id = s.closed_by and cu.tenant_id = s.tenant_id where s.tenant_id = ${scope.tenantId}`;
     if (filterStatus === 'open') {
       query = sql<ShiftRow>`${query} and s.status = 'open'`;
     } else if (filterStatus === 'closed') {
@@ -924,7 +976,7 @@ export class CashDrawerService {
   async refreshClosedShiftSummary(
     queryable: Kysely<Database>,
     shiftId: number,
-    stamp: { saleId: number; kind: 'edit' | 'cancel'; reason: string; auth: AuthContext },
+    stamp: { saleId: number; kind: 'edit' | 'cancel' | 'offline_sync'; reason: string; auth: AuthContext },
   ): Promise<{
     refreshed: boolean;
     previousExpectedCash: number;
@@ -991,7 +1043,8 @@ export class CashDrawerService {
       const corrections = [...(parsed.postCloseCorrections || []), stamp];
       return this.serializeBlindCloseNote({ ...parsed, postCloseCorrections: corrections });
     }
-    const line = `تصحيح بعد الإغلاق [${stamp.at}]: فاتورة S-${stamp.saleId} (${stamp.kind === 'edit' ? 'تعديل' : 'إلغاء'}) — المتوقع من ${stamp.previousExpectedCash} إلى ${stamp.correctedExpectedCash}، الفرق من ${stamp.previousVariance} إلى ${stamp.correctedVariance}، السبب: ${stamp.reason}، بواسطة ${stamp.byUsername}.`;
+    const kindLabel = stamp.kind === 'edit' ? 'تعديل' : stamp.kind === 'offline_sync' ? 'مزامنة أوفلاين' : 'إلغاء';
+    const line = `تصحيح بعد الإغلاق [${stamp.at}]: فاتورة S-${stamp.saleId} (${kindLabel}) — المتوقع من ${stamp.previousExpectedCash} إلى ${stamp.correctedExpectedCash}، الفرق من ${stamp.previousVariance} إلى ${stamp.correctedVariance}، السبب: ${stamp.reason}، بواسطة ${stamp.byUsername}.`;
     const existing = String(rawNote || '').trim();
     return existing ? `${existing}\n\n${line}` : line;
   }
@@ -1006,9 +1059,71 @@ export class CashDrawerService {
     return { cashierShifts: paged.rows, pagination: paged.pagination, summary: summarizeCashDrawerRows(filtered, digits), viewerRole: auth.role };
   }
 
-  async openCashierShift(payload: { openingCash?: number; note?: string; branchId?: number | string | null; locationId?: number | string | null; password?: string; managerPin?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
+  /**
+   * INV-REST-SHIFT-CLOSE-CONTROL (I21): the second-approval cap is
+   * the SAME cashierShortageTolerance the variance posting reads
+   * (accounting-posting.service.ts getCashierShortageTolerance):
+   * unset → one minor unit; an explicitly configured value —
+   * including 0 — honoured exactly; unparseable or negative → 0;
+   * a read error → 0. A second cap would let the close gate and
+   * the GL charge disagree about what "within tolerance" means.
+   */
+  private async getCashierShortageTolerance(queryable: Kysely<Database>, tenantId: string, digits: MoneyDigits): Promise<number> {
+    try {
+      const row = await queryable
+        .selectFrom('settings')
+        .select('value')
+        .where('tenant_id', '=', tenantId)
+        .where('key', '=', 'cashierShortageTolerance')
+        .executeTakeFirst();
+      if (row == null || row.value == null || String(row.value).trim() === '') return 10 ** -digits;
+      let raw: unknown = row.value;
+      try { raw = JSON.parse(String(row.value)); } catch { /* plain scalar */ }
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * INV-REST-SHIFT-CLOSE-CONTROL (I20): what still strands a
+   * close — held (open-table) sales of the opener on this branch
+   * from this shift's window, and draft sales of the opener in
+   * the window. Both are read under the shift-row lock on the
+   * transaction handle, so a table held a millisecond before the
+   * close cannot slip through.
+   */
+  private async findOpenTablesBlockingClose(
+    queryable: Kysely<Database>,
+    tenantId: string,
+    shift: ShiftRow,
+  ): Promise<{ heldCount: number; heldTables: string[]; draftCount: number; totalCount: number }> {
+    const openerId = Number(shift.opened_by || 0);
+    const branchId = shift.branch_id ? Number(shift.branch_id) : null;
+    const held = await sql<{ table_number?: string | null }>`
+      select table_number from held_sales
+      where tenant_id = ${tenantId} and created_by = ${openerId}
+        and created_at >= ${shift.created_at}
+        and (${branchId}::int is null or branch_id is null or branch_id = ${branchId})
+    `.execute(queryable);
+    const drafts = await sql<{ id?: number }>`
+      select id from sales
+      where tenant_id = ${tenantId} and status = 'draft' and created_by = ${openerId}
+        and created_at >= ${shift.created_at}
+        and (${branchId}::int is null or branch_id is null or branch_id = ${branchId})
+    `.execute(queryable);
+    const heldTables = (held.rows || [])
+      .map((row) => String(row.table_number || '').trim())
+      .filter(Boolean);
+    const heldCount = (held.rows || []).length;
+    const draftCount = (drafts.rows || []).length;
+    return { heldCount, heldTables, draftCount, totalCount: heldCount + draftCount };
+  }
+
+  async openCashierShift(payload: { openingCash?: number; note?: string; branchId?: number | string | null; locationId?: number | string | null; password?: string; managerPin?: string; terminalCode?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = this.scope(auth);
-    const { openingCash, note, branchId, locationId, password } = normalizeShiftOpenPayload(payload);
+    const { openingCash, note, branchId, locationId, password, terminalCode } = normalizeShiftOpenPayload(payload);
     if (!Number.isFinite(openingCash) || openingCash < 0 || openingCash > 1_000_000_000_000) {
       throw new AppError('رصيد الافتتاح يجب أن يكون رقماً صالحاً وغير سالب', 'OPENING_CASH_INVALID', 400);
     }
@@ -1062,7 +1177,23 @@ export class CashDrawerService {
         .where('tenant_id', '=', scope.tenantId).where('opened_by', '=', auth.userId)
         .where('status', '=', 'open').executeTakeFirst();
       if (active) throw new AppError('يوجد وردية مفتوحة بالفعل لهذا المستخدم', 'SHIFT_ALREADY_OPEN', 400);
-      const inserted = await sql<{ id?: number }>`insert into cashier_shifts (doc_no, branch_id, location_id, opened_by, opening_cash, opening_note, status, expected_cash, tenant_id, account_id) values (null, ${resolvedBranchId}, ${locationId}, ${auth.userId}, ${openingCash}, ${note}, 'open', ${openingCash}, ${scope.tenantId}, ${scope.accountId}) returning id`.execute(trx);
+      // INV-REST-SHIFT-CLOSE-CONTROL (I24): one open shift per
+      // branch+terminal. A second login at the same station must
+      // not open a parallel shift — its cash would attribute to
+      // no shift. The partial unique index is the race backstop;
+      // the pre-check is the readable error.
+      if (terminalCode) {
+        const occupied = await sql<{ id?: number }>`select id from cashier_shifts where tenant_id = ${scope.tenantId} and status = 'open' and terminal_code = ${terminalCode} and branch_id is not distinct from ${resolvedBranchId} limit 1`.execute(trx);
+        if (occupied.rows?.[0]?.id) throw new AppError('توجد وردية مفتوحة بالفعل على هذه المحطة في الفرع', 'SHIFT_TERMINAL_OCCUPIED', 400);
+      }
+      let inserted: { rows: Array<{ id?: number }> };
+      try {
+        inserted = await sql<{ id?: number }>`insert into cashier_shifts (doc_no, branch_id, location_id, opened_by, opening_cash, opening_note, status, expected_cash, tenant_id, account_id, terminal_code) values (null, ${resolvedBranchId}, ${locationId}, ${auth.userId}, ${openingCash}, ${note}, 'open', ${openingCash}, ${scope.tenantId}, ${scope.accountId}, ${terminalCode}) returning id`.execute(trx);
+      } catch (err) {
+        const code = (err as { code?: unknown })?.code;
+        if (code === '23505') throw new AppError('توجد وردية مفتوحة بالفعل على هذه المحطة في الفرع', 'SHIFT_TERMINAL_OCCUPIED', 400);
+        throw err;
+      }
       const shiftId = Number(inserted.rows?.[0]?.id || 0);
       if (!shiftId) throw new AppError('Could not open cashier shift', 'SHIFT_OPEN_FAILED', 400);
       await sql`update cashier_shifts set doc_no = ${buildCashDrawerShiftDocNo(shiftId)} where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
@@ -1197,7 +1328,7 @@ export class CashDrawerService {
     return { ok: true, cashierShifts: listing.cashierShifts, pagination: listing.pagination, summary: listing.summary };
   }
 
-  async closeCashierShift(shiftId: number, payload: { countedCash?: number; cardDeclaredTotal?: number; cardOperationCount?: number; walletDeclaredTotal?: number; walletOperationCount?: number; instapayDeclaredTotal?: number; instapayOperationCount?: number; cardDetails?: Array<{ amount?: number; reference?: string }>; walletDetails?: Array<{ amount?: number; reference?: string }>; instapayDetails?: Array<{ amount?: number; reference?: string }>; note?: string; managerPin?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
+  async closeCashierShift(shiftId: number, payload: { countedCash?: number; cardDeclaredTotal?: number; cardOperationCount?: number; walletDeclaredTotal?: number; walletOperationCount?: number; instapayDeclaredTotal?: number; instapayOperationCount?: number; cardDetails?: Array<{ amount?: number; reference?: string }>; walletDetails?: Array<{ amount?: number; reference?: string }>; instapayDetails?: Array<{ amount?: number; reference?: string }>; note?: string; managerPin?: string; approverSecret?: string; openTablesOverrideSecret?: string; openTablesOverrideReason?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = this.scope(auth);
     if (!(shiftId > 0)) throw new AppError('الوردية غير موجودة', 'SHIFT_NOT_FOUND', 404);
     const shift = await this.getShift(shiftId, auth);
@@ -1206,7 +1337,6 @@ export class CashDrawerService {
     if (Number(shift.opened_by || 0) !== Number(auth.userId || 0) && auth.role !== 'super_admin') throw new AppError('غير مسموح لك بإغلاق هذه الوردية', 'SHIFT_FORBIDDEN', 403);
     const countedCash = Number(payload.countedCash || 0);
     const note = String(payload.note || '').trim();
-    const isBlindCloseCashier = String(auth.role || '').trim() === 'cashier';
     assertCashDrawerCountedCash(countedCash);
     await this.assertCurrentUserPassword(String(payload.managerPin || '').trim(), auth);
     const cardOperationCount = this.normalizeOperationCount(payload.cardOperationCount);
@@ -1220,9 +1350,6 @@ export class CashDrawerService {
     const cardDetails = this.normalizeOperationDetails(payload.cardDetails, cardOperationCount, closeDigits);
     const walletDetails = this.normalizeOperationDetails(payload.walletDetails, walletOperationCount, closeDigits);
     const instapayDetails = this.normalizeOperationDetails(payload.instapayDetails, instapayOperationCount, closeDigits);
-    const blindCloseMeta: BlindCloseMetadata | null = isBlindCloseCashier ? { blindClose: true, declared: { cash: this.toBookMoney(countedCash, closeDigits), cardTotal: this.toBookMoney(payload.cardDeclaredTotal || 0, closeDigits), cardCount: cardOperationCount, walletTotal: this.toBookMoney(payload.walletDeclaredTotal || 0, closeDigits), walletCount: walletOperationCount, instapayTotal: this.toBookMoney(payload.instapayDeclaredTotal || 0, closeDigits), instapayCount: instapayOperationCount }, detailTotals: { card: this.toBookMoney(cardDetails.reduce((sum, row) => sum + row.amount, 0), closeDigits), wallet: this.toBookMoney(walletDetails.reduce((sum, row) => sum + row.amount, 0), closeDigits), instapay: this.toBookMoney(instapayDetails.reduce((sum, row) => sum + row.amount, 0), closeDigits) }, details: { card: cardDetails, wallet: walletDetails, instapay: instapayDetails }, note } : null;
-    const closeStatus = isBlindCloseCashier ? 'pending_review' : 'closed';
-    const closeNoteValue = blindCloseMeta ? this.serializeBlindCloseNote(blindCloseMeta) : note;
 
     await this.tx.runInTransaction(this.db, async (trx) => {
       const lockedShift = await trx
@@ -1239,15 +1366,78 @@ export class CashDrawerService {
       // Compute on the transaction, not on the pool: reading via this.db uses a separate connection
       // that cannot see anything written in this transaction, and reads outside the row lock taken above.
       const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+      const noteStamps: string[] = [];
+
+      // INV-REST-SHIFT-CLOSE-CONTROL (I21): blind close keys off
+      // the OPENER's role, not the closer's. A super_admin closing
+      // a cashier's shift used to skip declaration + review
+      // entirely; now the shift goes to pending_review like the
+      // cashier's own close. When the opener row is gone, fall
+      // back to the closer's role (the old rule).
+      const openerRow = await trx.selectFrom('users').select('role')
+        .where('id', '=', Number(lockedShift.opened_by || 0))
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .executeTakeFirst();
+      const openerRole = String((openerRow as { role?: unknown } | undefined)?.role || '').trim();
+      const isBlindClose = openerRole ? openerRole === 'cashier' : String(auth.role || '').trim() === 'cashier';
+      const blindCloseMeta: BlindCloseMetadata | null = isBlindClose ? { blindClose: true, declared: { cash: this.toBookMoney(countedCash, closeDigits), cardTotal: this.toBookMoney(payload.cardDeclaredTotal || 0, closeDigits), cardCount: cardOperationCount, walletTotal: this.toBookMoney(payload.walletDeclaredTotal || 0, closeDigits), walletCount: walletOperationCount, instapayTotal: this.toBookMoney(payload.instapayDeclaredTotal || 0, closeDigits), instapayCount: instapayOperationCount }, detailTotals: { card: this.toBookMoney(cardDetails.reduce((sum, row) => sum + row.amount, 0), closeDigits), wallet: this.toBookMoney(walletDetails.reduce((sum, row) => sum + row.amount, 0), closeDigits), instapay: this.toBookMoney(instapayDetails.reduce((sum, row) => sum + row.amount, 0), closeDigits) }, details: { card: cardDetails, wallet: walletDetails, instapay: instapayDetails }, note } : null;
+      const closeStatus = isBlindClose ? 'pending_review' : 'closed';
+
+      // INV-REST-SHIFT-CLOSE-CONTROL (I20): closing mid-service
+      // strands real tables, so open tables / draft sales block
+      // the close. Only a DIFFERENT manager's secret (account
+      // password — the shared PIN has no identity) plus a reason
+      // of at least 10 characters overrides, and the override is
+      // stamped into the close note.
+      const openTables = await this.findOpenTablesBlockingClose(trx, scope.tenantId, lockedShift as ShiftRow);
+      if (openTables.totalCount > 0) {
+        const overrideSecret = String(payload.openTablesOverrideSecret || '').trim();
+        const overrideReason = String(payload.openTablesOverrideReason || '').trim();
+        if (!overrideSecret) {
+          const tables = openTables.heldTables.length > 0 ? ` (طاولات: ${openTables.heldTables.join('، ')})` : '';
+          throw new AppError(`لا يمكن إغلاق الوردية: توجد ${openTables.heldCount} طاولة مفتوحة${tables} و${openTables.draftCount} فاتورة مسودة`, 'SHIFT_CLOSE_OPEN_TABLES', 400);
+        }
+        if (overrideReason.length < 10) throw new AppError('اكتب سبب تجاوز الطاولات المفتوحة (10 أحرف على الأقل)', 'SHIFT_CLOSE_OVERRIDE_REASON_REQUIRED', 400);
+        const override = await authorizeManagerSecret(trx, auth, overrideSecret);
+        if (override.mode !== 'account' || !override.authorizedById || override.authorizedById === Number(auth.userId)) {
+          throw new AppError('تجاوز الطاولات المفتوحة يتطلب اعتماد مدير آخر غير من يغلق الوردية', 'SHIFT_CLOSE_OVERRIDE_IDENTITY_REQUIRED', 400);
+        }
+        const tables = openTables.heldTables.length > 0 ? ` (طاولات: ${openTables.heldTables.join('، ')})` : '';
+        noteStamps.push(`تجاوز طاولات مفتوحة: ${openTables.heldCount} طاولة${tables} + ${openTables.draftCount} فاتورة مسودة — السبب: ${overrideReason} — بواسطة ${override.authorizedByName}`);
+      }
+
       const expectedCash = await this.computeShiftExpectedCashFromShift(lockedShift as ShiftRow, auth, undefined, undefined, trx);
       const variance = computeCashDrawerVariance(countedCash, expectedCash, digits);
       // Any real variance needs a note: the old 0.01 cutoff let a KWD
       // cashier close a shift 9 fils short with no explanation at all.
-      if (!isBlindCloseCashier && variance !== 0) assertCashDrawerNote(note);
+      if (!isBlindClose && variance !== 0) assertCashDrawerNote(note);
+
+      // INV-REST-SHIFT-CLOSE-CONTROL (I21): a variance over the
+      // shortage-tolerance cap needs a second approver — a
+      // manager/admin other than the closer, by account password —
+      // and a note of at least 10 characters. The approver's auth
+      // is passed into the variance posting, so
+      // variance_approved_by is the approver, not the closer.
+      // Blind closes skip this: the reviewer approves at review.
+      let postingAuth = auth;
+      if (closeStatus === 'closed' && requiresSecondApproval(variance, await this.getCashierShortageTolerance(trx, scope.tenantId, digits))) {
+        const approverSecret = String(payload.approverSecret || '').trim();
+        if (!approverSecret) throw new AppError('الفرق فوق حد التسامح يتطلب اعتماد مدير ثانٍ', 'SHIFT_SECOND_APPROVAL_REQUIRED', 400);
+        const approval = await authorizeManagerSecret(trx, auth, approverSecret);
+        if (approval.mode !== 'account' || !approval.authorizedById || approval.authorizedById === Number(auth.userId)) {
+          throw new AppError('اعتماد الفرق يتطلب مديراً آخر غير من يغلق الوردية', 'SHIFT_SECOND_APPROVER_MUST_DIFFER', 400);
+        }
+        assertCashDrawerNote(note, 'SHIFT_SECOND_APPROVAL_NOTE_REQUIRED', 10);
+        postingAuth = { ...auth, userId: approval.authorizedById, username: approval.authorizedByName };
+        noteStamps.push(`اعتماد فرق فوق حد التسامح بواسطة ${approval.authorizedByName}`);
+      }
+
+      const stampedNote = [...(note ? [note] : []), ...noteStamps].join('\n\n');
+      const closeNoteValue = blindCloseMeta ? this.serializeBlindCloseNote({ ...blindCloseMeta, note: stampedNote }) : stampedNote;
 
       await sql`update cashier_shifts set status = ${closeStatus}, expected_cash = ${expectedCash}, counted_cash = ${countedCash}, variance = ${variance}, close_note = ${closeNoteValue}, closed_by = ${auth.userId}, closed_at = now() where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
       if (closeStatus === 'closed') {
-        await this.accountingPosting.postCashierShiftVariance(trx, shiftId, auth);
+        await this.accountingPosting.postCashierShiftVariance(trx, shiftId, postingAuth);
       }
     });
 
@@ -1269,12 +1459,15 @@ export class CashDrawerService {
    * come from the breakdown's operation counts. Declared figures
    * are re-rounded to book digits so shifts closed at 2dp before
    * this package reconcile against their stored values unchanged.
-   * A mismatch never blocks review: it is recorded, and the cash
-   * variance posting is untouched.
+   * INV-REST-SHIFT-CLOSE-CONTROL (I22): the reconciliation also
+   * compares the itemised detail totals against the declared
+   * totals (detailDelta). A mismatch never blocks review by
+   * itself — it is recorded — but approving one now requires a
+   * >=10-char note (see reviewCashierShiftClose).
    */
   private async computeBlindCloseReconciliation(
     shift: ShiftRow,
-    declared: { cardTotal: number; cardCount: number; walletTotal: number; walletCount: number; instapayTotal: number; instapayCount: number },
+    declared: { cardTotal: number; cardCount: number; walletTotal: number; walletCount: number; instapayTotal: number; instapayCount: number; detailTotals?: { card: number; wallet: number; instapay: number } },
     auth: AuthContext,
     queryable: Kysely<Database>,
     digits: MoneyDigits,
@@ -1282,43 +1475,68 @@ export class CashDrawerService {
     const breakdown = await this.computeShiftSalesBreakdown(shift, auth, queryable, digits);
     const services = await this.computeShiftServiceBreakdown(shift, auth, queryable, digits);
     const returns = await this.computeShiftSaleReturnTotals(shift, auth, queryable, digits);
-    const channel = (declaredTotal: number, declaredCount: number, computed: number, computedCount: number): BlindCloseChannelReconciliation => ({
+    const channel = (declaredTotal: number, declaredCount: number, computed: number, computedCount: number, detailTotal: number): BlindCloseChannelReconciliation => ({
       declared: this.toBookMoney(declaredTotal, digits),
       computed: this.toBookMoney(computed, digits),
       delta: this.toBookMoney(declaredTotal - computed, digits),
       declaredCount,
       computedCount,
       countDelta: declaredCount - computedCount,
+      detailTotal: this.toBookMoney(detailTotal, digits),
+      detailDelta: this.toBookMoney(detailTotal - declaredTotal, digits),
     });
+    const details = declared.detailTotals || { card: 0, wallet: 0, instapay: 0 };
     return {
-      card: channel(declared.cardTotal, declared.cardCount, breakdown.cardSalesTotal + services.serviceCardTotal - returns.saleReturnCardRefundTotal, breakdown.cardOperationCount),
-      wallet: channel(declared.walletTotal, declared.walletCount, breakdown.walletSalesTotal, breakdown.walletOperationCount),
-      instapay: channel(declared.instapayTotal, declared.instapayCount, breakdown.instapaySalesTotal, breakdown.instapayOperationCount),
+      card: channel(declared.cardTotal, declared.cardCount, breakdown.cardSalesTotal + services.serviceCardTotal - returns.saleReturnCardRefundTotal, breakdown.cardOperationCount, Number(details.card || 0)),
+      wallet: channel(declared.walletTotal, declared.walletCount, breakdown.walletSalesTotal, breakdown.walletOperationCount, Number(details.wallet || 0)),
+      instapay: channel(declared.instapayTotal, declared.instapayCount, breakdown.instapaySalesTotal, breakdown.instapayOperationCount, Number(details.instapay || 0)),
     };
   }
 
-  async reviewCashierShiftClose(shiftId: number, payload: { note?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
+  /**
+   * INV-REST-SHIFT-CLOSE-CONTROL (I22): the review is a decision.
+   * 'approve' closes the shift and posts the variance — but any
+   * mismatch (declared/computed delta, count delta, or
+   * itemised-detail delta) requires a note of at least 10
+   * characters. 'reject' reopens the shift (status back to open,
+   * counted cash / variance / closer cleared, reason stamped) and
+   * posts NO variance journal: the cashier re-counts and closes
+   * again. The old always-approve behaviour silently closed
+   * mismatched shifts.
+   */
+  async reviewCashierShiftClose(shiftId: number, payload: { decision?: string; note?: string }, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = this.scope(auth);
     if (!(shiftId > 0)) throw new AppError('الوردية غير موجودة', 'SHIFT_NOT_FOUND', 404);
     if (!this.canReviewPendingShift(auth)) throw new AppError('غير مسموح لك بمراجعة إغلاق الوردية', 'SHIFT_REVIEW_FORBIDDEN', 403);
+    const decision = String((payload as { decision?: unknown }).decision || '').trim();
+    if (decision !== 'approve' && decision !== 'reject') throw new AppError('حدد قرار المراجعة: اعتماد أو رفض', 'SHIFT_REVIEW_DECISION_REQUIRED', 400);
     const shift = await this.getShift(shiftId, auth);
     if (!shift) throw new AppError('الوردية غير موجودة', 'SHIFT_NOT_FOUND', 404);
     if (String(shift.status || '') !== 'pending_review') throw new AppError('الوردية ليست في انتظار مراجعة المدير', 'SHIFT_NOT_PENDING_REVIEW', 400);
     const managerNote = String(payload.note || '').trim();
+    if (decision === 'reject' && managerNote.length < 10) {
+      throw new AppError('اكتب سبب الرفض (10 أحرف على الأقل) قبل إعادة فتح الوردية', 'SHIFT_REVIEW_NOTE_REQUIRED', 400);
+    }
     const rawCloseNote = String(shift.close_note || '');
     const parsedBlindClose = this.parseBlindCloseNote(rawCloseNote);
     let closeNoteValue = rawCloseNote;
     let reconciliation: BlindCloseReconciliation | null = null;
-    if (parsedBlindClose) {
-      parsedBlindClose.managerReview = { note: managerNote, reviewedById: Number(auth.userId || 0), reviewedByName: String(auth.username || ''), reviewedAt: new Date().toISOString() };
-      closeNoteValue = this.serializeBlindCloseNote(parsedBlindClose);
-    } else if (managerNote) {
-      closeNoteValue = rawCloseNote ? `${rawCloseNote}\n\nملاحظة مراجعة المدير: ${managerNote}` : `ملاحظة مراجعة المدير: ${managerNote}`;
-    }
 
     await this.tx.runInTransaction(this.db, async (trx) => {
       const lockedShift = await trx.selectFrom('cashier_shifts').selectAll().where('id', '=', shiftId).where('tenant_id', '=', scope.tenantId).forUpdate().executeTakeFirst();
       if (!lockedShift || lockedShift.status !== 'pending_review') throw new AppError('الوردية ليست في انتظار مراجعة المدير', 'SHIFT_NOT_PENDING_REVIEW', 409);
+
+      if (decision === 'reject') {
+        if (parsedBlindClose) {
+          parsedBlindClose.rejection = { note: managerNote, rejectedById: Number(auth.userId || 0), rejectedByName: String(auth.username || ''), rejectedAt: new Date().toISOString() };
+          closeNoteValue = this.serializeBlindCloseNote(parsedBlindClose);
+        } else {
+          const line = `رفض مراجعة المدير: ${managerNote} — بواسطة ${String(auth.username || '')}`;
+          closeNoteValue = rawCloseNote ? `${rawCloseNote}\n\n${line}` : line;
+        }
+        await sql`update cashier_shifts set status = 'open', counted_cash = null, variance = null, close_note = ${closeNoteValue}, closed_by = null, closed_at = null, updated_at = now() where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
+        return;
+      }
 
       if (parsedBlindClose) {
         const digits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
@@ -1331,13 +1549,28 @@ export class CashDrawerService {
             walletCount: Number(parsedBlindClose.declared?.walletCount || 0),
             instapayTotal: Number(parsedBlindClose.declared?.instapayTotal || 0),
             instapayCount: Number(parsedBlindClose.declared?.instapayCount || 0),
+            detailTotals: {
+              card: Number(parsedBlindClose.detailTotals?.card || 0),
+              wallet: Number(parsedBlindClose.detailTotals?.wallet || 0),
+              instapay: Number(parsedBlindClose.detailTotals?.instapay || 0),
+            },
           },
           auth,
           trx,
           digits,
         );
+        const hasMismatch = (['card', 'wallet', 'instapay'] as const).some((channelName) => {
+          const channel = reconciliation?.[channelName];
+          return !!channel && (channel.delta !== 0 || channel.countDelta !== 0 || channel.detailDelta !== 0);
+        });
+        if (hasMismatch && managerNote.length < 10) {
+          throw new AppError('يوجد فرق في إقرار الإغلاق؛ اكتب ملاحظة مراجعة (10 أحرف على الأقل) قبل الاعتماد', 'SHIFT_REVIEW_NOTE_REQUIRED', 400);
+        }
+        parsedBlindClose.managerReview = { note: managerNote, reviewedById: Number(auth.userId || 0), reviewedByName: String(auth.username || ''), reviewedAt: new Date().toISOString() };
         parsedBlindClose.reconciliation = reconciliation;
         closeNoteValue = this.serializeBlindCloseNote(parsedBlindClose);
+      } else if (managerNote) {
+        closeNoteValue = rawCloseNote ? `${rawCloseNote}\n\nملاحظة مراجعة المدير: ${managerNote}` : `ملاحظة مراجعة المدير: ${managerNote}`;
       }
 
       await sql`update cashier_shifts set status = 'closed', close_note = ${closeNoteValue}, closed_by = coalesce(closed_by, ${auth.userId}), closed_at = coalesce(closed_at, now()), updated_at = now() where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);

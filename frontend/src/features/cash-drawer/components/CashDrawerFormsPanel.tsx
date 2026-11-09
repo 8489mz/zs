@@ -74,6 +74,11 @@ function normalizeCount(value: unknown): number {
   return Math.floor(parsed);
 }
 
+function closeErrorCode(error: unknown): string {
+  const candidate = error as { code?: unknown } | null;
+  return typeof candidate?.code === 'string' ? candidate.code : '';
+}
+
 function summarizeDetails(rows: Array<{ amount?: number }>, digits: MoneyDigits): number {
   if (!Array.isArray(rows)) return 0;
   return roundMoneyValue(
@@ -544,6 +549,13 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
   const closeSaleReturnCashRefundTotal = Number(selectedCloseShift?.saleReturnCashRefundTotal || 0);
   const closeExpensesTotal = Number(selectedCloseShift?.expensesTotal || 0);
   const closeSupplierPaymentsTotal = Number(selectedCloseShift?.supplierPaymentsTotal || 0);
+  // INV-REST-SHIFT-CLOSE-CONTROL (I25): the two expected-cash
+  // components the close card used to hide, plus the opening cash
+  // the footnote used to mention without showing.
+  const closeOpeningCash = Number(selectedCloseShift?.openingCash || 0);
+  const closeCustomerCollectionsTotal = Number(selectedCloseShift?.customerCollectionsTotal || 0);
+  const closeCancelledSaleCashTotal = Number(selectedCloseShift?.cancelledSaleCashTotal || 0);
+  const showOpenTablesOverride = closeErrorCode(props.closeMutation.error) === 'SHIFT_CLOSE_OPEN_TABLES';
 
   const cardOperationCount = normalizeCount(selectedCloseShift?.cardOperationCount ?? props.closeForm.watch('cardOperationCount'));
   const walletOperationCount = normalizeCount(selectedCloseShift?.walletOperationCount ?? props.closeForm.watch('walletOperationCount'));
@@ -1402,6 +1414,10 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
                   <div className="close-shift-financial-card">
                     <div className="close-shift-financial-grid">
                       <div className="close-shift-fin-item">
+                        <span className="close-shift-fin-label">{t('cash_drawer.cash_drawer_forms_panel.s116', "رصيد الفتح")}</span>
+                        <strong className="close-shift-fin-value">{formatCurrency(closeOpeningCash)}</strong>
+                      </div>
+                      <div className="close-shift-fin-item">
                         <span className="close-shift-fin-label">{t('cash_drawer.cash_drawer_forms_panel.s77', "مبيعات نقدي")}</span>
                         <strong className="close-shift-fin-value tone-green">{formatCurrency(closeCashSalesTotal)}</strong>
                       </div>
@@ -1453,6 +1469,18 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
                           <strong className="close-shift-fin-value tone-red">-{formatCurrency(closeSupplierPaymentsTotal)}</strong>
                         </div>
                       ) : null}
+                      {closeCustomerCollectionsTotal > 0 ? (
+                        <div className="close-shift-fin-item">
+                          <span className="close-shift-fin-label">{t('cash_drawer.cash_drawer_forms_panel.s117', "تحصيلات عملاء نقدي")}</span>
+                          <strong className="close-shift-fin-value tone-green">+{formatCurrency(closeCustomerCollectionsTotal)}</strong>
+                        </div>
+                      ) : null}
+                      {closeCancelledSaleCashTotal > 0 ? (
+                        <div className="close-shift-fin-item">
+                          <span className="close-shift-fin-label">{t('cash_drawer.cash_drawer_forms_panel.s118', "نقدية فواتير ملغاة")}</span>
+                          <strong className="close-shift-fin-value tone-green">+{formatCurrency(closeCancelledSaleCashTotal)}</strong>
+                        </div>
+                      ) : null}
                       <div className="close-shift-fin-item close-shift-fin-highlight">
                         <span className="close-shift-fin-label">{t('cash_drawer.cash_drawer_forms_panel.s86', "إجمالي مبيعات الفواتير")}</span>
                         <strong className="close-shift-fin-value tone-primary">{formatCurrency(closeShiftSalesTotal)}</strong>
@@ -1477,18 +1505,18 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
                       ) : null}
                     </div>
                     <div className="close-shift-fin-footnote">
-                      {t('cash_drawer.cash_drawer_forms_panel.s90', "النقدية المتوقعة = رصيد الفتح + مبيعات وخدمات النقدي - مرتجعات النقدي + حركات الدرج - المصروفات - دفعات الموردين.")}
+                      {t('cash_drawer.cash_drawer_forms_panel.s90', "النقدية المتوقعة = رصيد الفتح + مبيعات وخدمات النقدي + تحصيلات العملاء + نقدية الفواتير الملغاة - مرتجعات النقدي + حركات الدرج - المصروفات - دفعات الموردين.")}
                     </div>
                   </div>
                 ) : null}
                 <Field label={t('cash_drawer.cash_drawer_forms_panel.s91', "المبلغ المعدود")}><input type="number" min="0" step="0.01" className="no-spin-arrows" {...props.closeForm.register('countedCash', { valueAsNumber: true })} disabled={props.closeMutation.isPending} onFocus={(e) => e.target.select()} /></Field>
-                
+
                 <div className="close-shift-auth-row">
                   <div className="close-shift-note-col">
                     <Field label={t('cash_drawer.cash_drawer_forms_panel.s92', "ملاحظة الإغلاق")}>
                       <input
                         type="text"
-                        placeholder={Math.abs(props.closeVariancePreview) >= 0.01 ? t('cash_drawer.cash_drawer_forms_panel.s93', "اشرح سبب الفرق قبل إغلاق الوردية") : t('cash_drawer.cash_drawer_forms_panel.s94', "اختياري عند عدم وجود فرق")}
+                        placeholder={props.closeVariancePreview !== 0 ? t('cash_drawer.cash_drawer_forms_panel.s93', "اشرح سبب الفرق قبل إغلاق الوردية") : t('cash_drawer.cash_drawer_forms_panel.s94', "اختياري عند عدم وجود فرق")}
                         {...props.closeForm.register('note')}
                         disabled={props.closeMutation.isPending}
                         style={{ width: '100%' }}
@@ -1518,12 +1546,81 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
                   </div>
                 </div>
 
-                <div className={Math.abs(props.closeVariancePreview) >= 0.01 ? 'warning-box' : 'muted small'} style={{ gridColumn: '1 / -1' }}>
+                <div className={props.closeVariancePreview !== 0 ? 'warning-box' : 'muted small'} style={{ gridColumn: '1 / -1' }}>
                   {t('cash_drawer.cash_drawer_forms_panel.s97', "الفرق المتوقع بعد الإغلاق:")} <strong>{formatCurrency(props.closeVariancePreview)}</strong>
-                  {Math.abs(props.closeVariancePreview) >= 0.01 ? t('cash_drawer.cash_drawer_forms_panel.s98', " — يلزم كتابة ملاحظة قبل إغلاق وردية نقطة البيع مع وجود فرق.") : ''}
+                  {props.closeVariancePreview !== 0 ? t('cash_drawer.cash_drawer_forms_panel.s98', " — يلزم كتابة ملاحظة قبل إغلاق وردية نقطة البيع مع وجود فرق.") : ''}
                 </div>
+
+                {props.closeVariancePreview !== 0 ? (
+                  <div className="close-shift-auth-row" style={{ gridColumn: '1 / -1' }}>
+                    <div className="close-shift-note-col">
+                      <Field label={t('cash_drawer.cash_drawer_forms_panel.s119', "اعتماد مدير ثانٍ (عند تجاوز حد التسامح)")}>
+                        <input
+                          type="text"
+                          className="secure-password-field"
+                          placeholder={t('cash_drawer.cash_drawer_forms_panel.s120', "كلمة مرور مدير آخر غير من يغلق الوردية")}
+                          autoComplete="off"
+                          data-lpignore="true"
+                          data-1p-ignore="true"
+                          data-form-type="other"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
+                          {...props.closeForm.register('approverSecret')}
+                          disabled={props.closeMutation.isPending}
+                          style={{ width: '100%' }}
+                        />
+                      </Field>
+                    </div>
+                    <div className="close-shift-pin-col">
+                      <div className="muted small" style={{ paddingTop: '22px' }}>
+                        {t('cash_drawer.cash_drawer_forms_panel.s121', "الفرق فوق حد التسامح يتطلب اعتماد مدير آخر وسبباً لا يقل عن 10 أحرف في ملاحظة الإغلاق.")}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </>
             )}
+
+            {showOpenTablesOverride ? (
+              <div style={{ gridColumn: '1 / -1', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '12px 16px' }}>
+                <div style={{ fontWeight: 800, color: '#92400e', marginBottom: '8px' }}>
+                  {t('cash_drawer.cash_drawer_forms_panel.s122', "توجد طاولات مفتوحة أو فواتير مسودة في هذه الوردية. للإغلاق رغم ذلك يلزم تجاوز من مدير آخر.")}
+                </div>
+                <div className="close-shift-auth-row">
+                  <div className="close-shift-note-col">
+                    <Field label={t('cash_drawer.cash_drawer_forms_panel.s123', "كلمة مرور المدير المعتمد للتجاوز")}>
+                      <input
+                        type="text"
+                        className="secure-password-field"
+                        placeholder={t('cash_drawer.cash_drawer_forms_panel.s124', "كلمة مرور مدير آخر غير من يغلق الوردية")}
+                        autoComplete="off"
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-form-type="other"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                        {...props.closeForm.register('openTablesOverrideSecret')}
+                        disabled={props.closeMutation.isPending}
+                        style={{ width: '100%' }}
+                      />
+                    </Field>
+                  </div>
+                  <div className="close-shift-pin-col">
+                    <Field label={t('cash_drawer.cash_drawer_forms_panel.s125', "سبب التجاوز (10 أحرف على الأقل)")}>
+                      <input
+                        type="text"
+                        placeholder={t('cash_drawer.cash_drawer_forms_panel.s126', "مثال: الطاولة ستنتقل إلى وردية المساء")}
+                        {...props.closeForm.register('openTablesOverrideReason')}
+                        disabled={props.closeMutation.isPending}
+                        style={{ width: '100%' }}
+                      />
+                    </Field>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <MutationFeedback isError={props.closeMutation.isError} isSuccess={props.closeMutation.isSuccess} error={props.closeMutation.error} errorFallback={t('cash_drawer.cash_drawer_forms_panel.s99', "تعذر إغلاق وردية نقطة البيع")} successText={t('cash_drawer.cash_drawer_forms_panel.s100', "تم إغلاق وردية نقطة البيع بنجاح.")} />
             {props.closeMutation.isSuccess && selectedCloseShift ? (
@@ -1559,7 +1656,7 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
               <SubmitButton
                 type="submit"
                 isPending={props.closeMutation.isPending}
-                disabled={offlinePendingCount !== 0 || !props.closeForm.watch('shiftId') || (!isBlindCloseMode && Math.abs(props.closeVariancePreview) >= 0.01 && !props.closeNoteValue) || !props.closeForm.watch('managerPin')}
+                disabled={offlinePendingCount !== 0 || !props.closeForm.watch('shiftId') || (!isBlindCloseMode && props.closeVariancePreview !== 0 && !props.closeNoteValue) || !props.closeForm.watch('managerPin')}
                 idleText={isBlindCloseMode ? t('cash_drawer.cash_drawer_forms_panel.s102', "إرسال إقرار الإغلاق") : t('cash_drawer.cash_drawer_forms_panel.s103', "إغلاق وردية نقطة البيع")}
                 pendingText={t('cash_drawer.cash_drawer_forms_panel.s104', "جارٍ الإغلاق...")}
                 style={{ flex: 1, minHeight: '42px', fontSize: '0.95rem', fontWeight: 800 }}

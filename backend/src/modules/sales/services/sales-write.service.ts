@@ -43,6 +43,7 @@ import { CashierFraudRadarService } from './cashier-fraud-radar.service';
 import { PlanFeatureService } from '../../../core/auth/services/plan-feature.service';
 import { ReturnsService, type ExchangeReturnContext } from '../../returns/returns.service';
 import { CashDrawerService } from '../../cash-drawer/cash-drawer.service';
+import { validateOfflineCreatedAt } from '../../cash-drawer/helpers/cash-drawer.helper';
 import { allocateSaleFromImportLots, isAnomalousImportLotShortfall, restoreImportLotsFromCancelledSale } from '../../import-sales/helpers/import-lot-allocation.helper';
 
 /**
@@ -1630,7 +1631,13 @@ export class SalesWriteService {
       const collectibleTotal = calculateCollectibleTotal(total, normalized.storeCreditUsed, moneyDigits);
       
       if (normalized.source === 'pos') {
-        const hasOpenShift = await this.authz.hasOpenCashierShift(trx, auth, normalized.branchId);
+        // INV-REST-SHIFT-CLOSE-CONTROL (I23): the POS gate honours
+        // requireCashierShiftForSales — tenants that run without
+        // shifts (wholesale/van/contracting/maritime, where the
+        // setting is forced false) are no longer told shifts are
+        // off while sales still demand one. Missing setting fails
+        // closed to demanding a shift.
+        const hasOpenShift = await this.authz.hasOpenCashierShiftForSale(trx, auth, normalized.branchId, settingsMap);
         if (!hasOpenShift) throw new AppError('Open cashier shift is required before posting a POS sale', 'OPEN_SHIFT_REQUIRED', 400);
       } else if (normalized.paymentType !== 'credit' && (normalized.payments.some((entry) => entry.paymentChannel === 'cash') || normalized.paymentChannel === 'cash')) {
         // INV-ADMIN-CASH-SALE-SHIFT-REQUIRED: every cash receipt
@@ -1639,7 +1646,9 @@ export class SalesWriteService {
         // no shift attribution and surfaced as a false overage at
         // close. Admins can hold shifts (openCashierShift exempts
         // them from branch assignment), so this never deadlocks.
-        const hasOpenShift = await this.authz.hasOpenCashierShift(trx, auth, normalized.branchId);
+        // The setting-aware gate applies here too: a tenant that
+        // runs without shifts must not be blocked on a cash sale.
+        const hasOpenShift = await this.authz.hasOpenCashierShiftForSale(trx, auth, normalized.branchId, settingsMap);
         if (!hasOpenShift) throw new AppError('Open cashier shift is required before posting a cash sale', 'OPEN_SHIFT_REQUIRED', 400);
       }
 
@@ -1745,6 +1754,17 @@ export class SalesWriteService {
       }
 
       const offlineDocNo = String(payload.offlineDocNo || '').trim();
+      // INV-REST-SHIFT-CLOSE-CONTROL (I26): an offline sale keeps
+      // its ORIGINAL timestamp (savedAt) as created_at, so it lands
+      // in the shift whose window actually held it instead of the
+      // next shift's. An invalid timestamp rejects outright — never
+      // silently clamped to sync time.
+      const offlineCreatedAt = validateOfflineCreatedAt(payload.offlineCreatedAt);
+      // INV-REST-SHIFT-CLOSE-CONTROL (I24): the POS station code,
+      // stored on the sale so its cash attributes to its station's
+      // shift. Read off the DTO directly: normalizeSalePayload
+      // does not carry it, and this is the only read site.
+      const posTerminalCode = String(payload.terminalCode || '').trim() || null;
       let saleNote = normalized.note;
       if (offlineDocNo && !saleNote.includes(offlineDocNo)) {
         const offlineTag = `[إيصال أوفلاين: ${offlineDocNo}]`;
@@ -1802,6 +1822,12 @@ export class SalesWriteService {
           card_scheme: normalized.cardScheme || null,
           card_last_four: normalized.cardLastFour || null,
           pager_number: normalized.pagerNumber || null,
+          // INV-REST-SHIFT-CLOSE-CONTROL (I24/I26): the station
+          // code for shift attribution, and the offline sale's
+          // original timestamp (only when the client sent a valid
+          // one — otherwise the column default NOW() applies).
+          pos_terminal_code: posTerminalCode,
+          ...(offlineCreatedAt ? { created_at: offlineCreatedAt.toISOString() } : {}),
           tenant_id: scope.tenantId,
           account_id: scope.accountId,
         } as any)
@@ -2405,6 +2431,18 @@ export class SalesWriteService {
               .execute();
           }
         }
+      }
+
+      // INV-REST-SHIFT-CLOSE-CONTROL (I26): a backdated offline
+      // sale may belong to a shift that already closed. Correct
+      // that shift's stored figures now, inside this transaction,
+      // so the close record reflects the sale that actually
+      // happened inside its window. A no-op when no closed shift
+      // contains the timestamp.
+      if (offlineCreatedAt) {
+        await this.refreshClosedShiftsForBackdatedOfflineSale(
+          trx, offlineCreatedAt, id, normalized.branchId, normalized.locationId, auth, scope.tenantId,
+        );
       }
 
       return id;
@@ -3701,11 +3739,58 @@ export class SalesWriteService {
    * service was not wired: a post-close change must never silently
    * leave the closed shift stale.
    */
+  /**
+   * INV-REST-SHIFT-CLOSE-CONTROL (I26): after a backdated offline
+   * sale has been written in this transaction, refresh every
+   * closed / pending_review shift whose [created_at, closed_at]
+   * window contains the sale's ORIGINAL timestamp. The sale was
+   * already counted by the open shift on read; only already-closed
+   * shifts need their stored figures corrected, with a stamp.
+   */
+  private async refreshClosedShiftsForBackdatedOfflineSale(
+    trx: Kysely<Database> | Transaction<Database>,
+    offlineCreatedAt: Date,
+    saleId: number,
+    branchId: number | null,
+    locationId: number | null,
+    auth: AuthContext,
+    tenantId: string,
+  ): Promise<void> {
+    if (!this.cashDrawerService) {
+      throw new AppError('تعذر تحديث أرقام الوردية المغلقة: خدمة الورديات غير موصولة.', 'SHIFT_REFRESH_UNAVAILABLE', 500);
+    }
+    // A null sale branch/location matches any shift scope (the
+    // same null-means-any rule as the attribution predicate); a
+    // set one matches only its own scope or an unscoped shift.
+    let shiftsQuery = trx
+      .selectFrom('cashier_shifts')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('status', 'in', ['closed', 'pending_review'])
+      .where('created_at', '<=', offlineCreatedAt)
+      .where((eb) => eb.or([
+        eb('closed_at', '>=', offlineCreatedAt),
+        eb('closed_at', 'is', null),
+      ]));
+    if (branchId != null) {
+      shiftsQuery = shiftsQuery.where((eb) => eb.or([eb('branch_id', 'is', null), eb('branch_id', '=', branchId)]));
+    }
+    if (locationId != null) {
+      shiftsQuery = shiftsQuery.where((eb) => eb.or([eb('location_id', 'is', null), eb('location_id', '=', locationId)]));
+    }
+    const shifts = await shiftsQuery.execute();
+    for (const shift of shifts) {
+      await this.refreshClosedShiftForPostCloseChange(
+        trx, Number(shift.id), saleId, 'offline_sync', 'مزامنة فاتورة أوفلاين بتاريخها الأصلي', auth,
+      );
+    }
+  }
+
   private async refreshClosedShiftForPostCloseChange(
     trx: Kysely<Database> | Transaction<Database>,
     shiftId: number,
     saleId: number,
-    kind: 'edit' | 'cancel',
+    kind: 'edit' | 'cancel' | 'offline_sync',
     reason: string,
     auth: AuthContext,
   ): Promise<void> {

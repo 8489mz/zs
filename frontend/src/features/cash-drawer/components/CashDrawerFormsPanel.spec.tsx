@@ -119,6 +119,82 @@ async function chooseType(label: string): Promise<void> {
   fireEvent.click(await screen.findByText(label));
 }
 
+/* R4-B / INV-REST-SHIFT-CLOSE-CONTROL (I25): the close card must
+ * show the opening-cash row plus the two expected-cash components
+ * the server counts but the card used to hide — customer
+ * collections and cancelled-sale cash — when they are nonzero,
+ * and must hide the two component rows when they are zero.
+ * The 0.01 note gates are also pinned here: any nonzero rounded
+ * preview requires a note (the server gates on any-nonzero book
+ * variance), so a 0.005 preview must not ask for a note while a
+ * 0.01 preview must.
+ */
+
+const closeShiftWithTotals = {
+  id: '1', openedByName: 'أمين الصندوق', docNo: 'SHIFT-1',
+  openingCash: 100, cashSalesTotal: 50, cardSalesTotal: 0, walletSalesTotal: 0,
+  instapaySalesTotal: 0, creditSalesTotal: 0, serviceCashTotal: 0,
+  saleReturnCashRefundTotal: 0, cashDrawerMovementTotal: 0,
+  customerCollectionsTotal: 30, cancelledSaleCashTotal: 20,
+};
+
+function CloseHarness({ shift = closeShiftWithTotals, variancePreview = 0 }: { shift?: Record<string, unknown>; variancePreview?: number }) {
+  const movementForm = useForm<MovementValues>({
+    defaultValues: { shiftId: '1', type: 'cash_in', amount: 100, note: 'تغذية', managerPin: '' },
+  });
+  const openForm = useForm<OpenShiftValues>({
+    defaultValues: { openingCash: 0, note: '', branchId: '', locationId: '' },
+  });
+  const closeForm = useForm<CloseShiftValues>({
+    defaultValues: {
+      shiftId: '1', countedCash: 200, cardDeclaredTotal: 0, cardOperationCount: 0,
+      walletDeclaredTotal: 0, walletOperationCount: 0, instapayDeclaredTotal: 0,
+      instapayOperationCount: 0, cardDetails: [], walletDetails: [], instapayDetails: [],
+      note: '', managerPin: '1234',
+    },
+  });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return (
+    <QueryClientProvider client={queryClient}>
+      <CashDrawerFormsPanel
+        activeForm="close"
+        onCloseForm={vi.fn()}
+        branches={[]}
+        locations={[]}
+        openOptions={[shift as never]}
+        myOpenShift={shift as never}
+        openForm={openForm}
+        movementForm={movementForm}
+        closeForm={closeForm}
+        openMutation={idleMutation}
+        movementMutation={idleMutation}
+        closeMutation={idleMutation}
+        closeExpectedCash={200}
+        closeVariancePreview={variancePreview}
+        closeNoteValue=""
+        onMovementSubmit={vi.fn()}
+        onCloseSubmit={vi.fn()}
+      />
+    </QueryClientProvider>
+  );
+}
+
+describe('CashDrawerFormsPanel close card expected-cash rows (I25)', () => {
+  it('shows the opening-cash row and both new component rows when nonzero', () => {
+    render(<CloseHarness />);
+    expect(screen.getByText('رصيد الفتح')).toBeTruthy();
+    expect(screen.getByText('تحصيلات عملاء نقدي')).toBeTruthy();
+    expect(screen.getByText('نقدية فواتير ملغاة')).toBeTruthy();
+  });
+
+  it('hides the collections and cancelled rows when both are zero', () => {
+    render(<CloseHarness shift={{ ...closeShiftWithTotals, customerCollectionsTotal: 0, cancelledSaleCashTotal: 0 }} />);
+    expect(screen.getByText('رصيد الفتح')).toBeTruthy();
+    expect(screen.queryByText('تحصيلات عملاء نقدي')).toBeNull();
+    expect(screen.queryByText('نقدية فواتير ملغاة')).toBeNull();
+  });
+});
+
 describe('CashDrawerFormsPanel movement types', () => {
   it('offers the two safe-transfer types alongside cash_in and cash_out', async () => {
     render(<Harness />);

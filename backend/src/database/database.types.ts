@@ -1016,6 +1016,8 @@ export interface SalesTable {
   service_charge?: number | null;
   tip_amount?: number | null;
   guest_count?: number | null;
+  /** INV-REST-SHIFT-CLOSE-CONTROL (I24): the POS station code (NOT the EDC terminal_id). */
+  pos_terminal_code?: string | null;
   guest_check_printed_at?: ColumnType<Date, string | Date | undefined, string | Date | undefined> | null;
   dispatched_at?: ColumnType<Date | null, string | Date | null | undefined, string | Date | null | undefined>;
   delivered_at?: ColumnType<Date | null, string | Date | null | undefined, string | Date | null | undefined>;
@@ -1220,6 +1222,8 @@ export interface CashierShiftTable {
   opening_cash?: number | null;
   opening_note?: string | null;
   status: string;
+  /** INV-REST-SHIFT-CLOSE-CONTROL (I24): the POS station code of this shift. */
+  terminal_code?: string | null;
   expected_cash: number | null;
   counted_cash: number | null;
   variance?: number | null;

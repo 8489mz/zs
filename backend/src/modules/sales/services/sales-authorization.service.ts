@@ -8,6 +8,21 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 
 type DbOrTx = Kysely<Database> | Transaction<Database>;
 
+/**
+ * INV-REST-SHIFT-CLOSE-CONTROL (I23): resolve the
+ * requireCashierShiftForSales setting from a checkout settings
+ * map (values are already JSON-parsed by getTenantSettingsMap).
+ * Only an explicit false / 'false' / 0 / '0' disables the shift
+ * requirement; anything else — including a missing key — enforces
+ * it, so a tenant that never configured the setting keeps the old
+ * behaviour instead of silently dropping the gate.
+ */
+export function resolveRequireCashierShiftForSales(settingsMap?: Map<string, unknown>): boolean {
+  const raw = settingsMap?.get('requireCashierShiftForSales');
+  if (raw === false || raw === 'false' || raw === 0 || raw === '0') return false;
+  return true;
+}
+
 @Injectable()
 export class SalesAuthorizationService {
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
@@ -49,6 +64,27 @@ export class SalesAuthorizationService {
     query = branchId == null ? query.where('branch_id', 'is', null) : query.where('branch_id', '=', branchId);
     const row = await query.orderBy('id', 'desc').forUpdate().executeTakeFirst();
     return Boolean(row?.id);
+  }
+
+  /**
+   * INV-REST-SHIFT-CLOSE-CONTROL (I23): the setting-aware sale
+   * gate. requireCashierShiftForSales false (boolean or string)
+   * means the tenant runs without shifts, so the gate passes with
+   * no open shift. true, or a missing / unrecognised value, fails
+   * closed to the old unconditional rule: an open shift is
+   * required. Only the POS / cash-sale gate uses this (see
+   * createSale); the drawer-open, sale-edit, return-refund and
+   * van-remittance gates stay strict on purpose — they guard cash
+   * movements, not the sale setting.
+   */
+  async hasOpenCashierShiftForSale(
+    queryable: DbOrTx,
+    auth: AuthContext,
+    branchId?: number | null,
+    settingsMap?: Map<string, unknown>,
+  ): Promise<boolean> {
+    if (!resolveRequireCashierShiftForSales(settingsMap)) return true;
+    return this.hasOpenCashierShift(queryable, auth, branchId);
   }
 
   async authorizeDiscountOverride(

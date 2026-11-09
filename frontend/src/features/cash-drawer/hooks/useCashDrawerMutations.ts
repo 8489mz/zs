@@ -9,6 +9,7 @@ import {
   normalizeCashDrawerMovementRequestPayload,
   type CashDrawerMovementRequestAttempt,
 } from '@/features/cash-drawer/lib/cash-drawer-movement-request-key';
+import { getPosTerminalCode } from '@/features/pos/lib/pos-offline-sync';
 
 interface OpenShiftValues {
   openingCash: number;
@@ -41,10 +42,14 @@ interface CloseShiftValues {
   instapayDetails?: Array<{ amount?: number; reference?: string }>;
   note: string;
   managerPin?: string;
+  approverSecret?: string;
+  openTablesOverrideSecret?: string;
+  openTablesOverrideReason?: string;
 }
 
 interface ReviewShiftValues {
   shiftId: string;
+  decision: 'approve' | 'reject';
   note?: string;
 }
 
@@ -68,6 +73,10 @@ export function useCashDrawerMutations(actions?: {
         branchId: values.branchId || '',
         locationId: values.locationId || '',
         password: values.password || undefined,
+        // INV-REST-SHIFT-CLOSE-CONTROL (I24): the station code is
+        // stamped on the open, so the shift — and later its sales —
+        // are attributable to this terminal.
+        terminalCode: getPosTerminalCode(),
       }),
     onSuccess: async () => {
       await refreshAll();
@@ -129,7 +138,14 @@ export function useCashDrawerMutations(actions?: {
           ? values.instapayDetails.map((d) => ({ amount: Number(d.amount || 0), reference: d.reference }))
           : [],
         note: values.note || '',
-        managerPin: values.managerPin || ''
+        managerPin: values.managerPin || '',
+        // INV-REST-SHIFT-CLOSE-CONTROL (I20/I21): the second
+        // approver's secret and the open-tables override travel
+        // only when the cashier filled them; the server decides
+        // whether they are required.
+        approverSecret: values.approverSecret || undefined,
+        openTablesOverrideSecret: values.openTablesOverrideSecret || undefined,
+        openTablesOverrideReason: values.openTablesOverrideReason || undefined,
       }),
     onSuccess: async (_data, variables) => {
       queryClient.setQueryData(queryKeys.cashierShiftsPage('open:pos'), (old: any) => {
@@ -147,6 +163,9 @@ export function useCashDrawerMutations(actions?: {
   const reviewMutation = useMutation({
     mutationFn: (values: ReviewShiftValues) =>
       cashDrawerApi.reviewClose(values.shiftId, {
+        // INV-REST-SHIFT-CLOSE-CONTROL (I22): the review is a
+        // decision — approve closes and posts, reject reopens.
+        decision: values.decision,
         note: String(values.note || '').trim(),
       }),
     onSuccess: async () => {

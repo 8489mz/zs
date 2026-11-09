@@ -43,6 +43,9 @@ type CashDrawerShiftSource = {
   sale_return_cash_refund_total?: number | string | null;
   sale_return_card_refund_total?: number | string | null;
   sale_return_total?: number | string | null;
+  customerCollectionsTotal?: number | string | null;
+  cancelledSaleCashTotal?: number | string | null;
+  terminal_code?: string | null;
   opening_cash?: number | string | null;
   opening_note?: string | null;
   status?: string | null;
@@ -113,6 +116,16 @@ export type BlindCloseChannelReconciliation = {
   declaredCount: number;
   computedCount: number;
   countDelta: number;
+  /**
+   * INV-REST-SHIFT-CLOSE-CONTROL (I22): the sum of the itemised
+   * operation details the cashier entered for this channel, and its
+   * difference from the declared total. A declaration whose details
+   * do not add up to the declared total is a mismatch even when the
+   * declared total happens to equal the computed total — the old
+   * reconciliation never read detailTotals at all.
+   */
+  detailTotal: number;
+  detailDelta: number;
 };
 
 export type BlindCloseReconciliation = {
@@ -281,6 +294,13 @@ export function mapCashDrawerShiftRow(row: CashDrawerShiftSource): CashDrawerMap
     saleReturnCashRefundTotal: Number(row.sale_return_cash_refund_total || 0),
     saleReturnCardRefundTotal: Number(row.sale_return_card_refund_total || 0),
     saleReturnTotal: Number(row.sale_return_total || 0),
+    // INV-REST-SHIFT-CLOSE-CONTROL (I25): the two expected-cash
+    // components the close card and the Z-report used to omit.
+    // Hydrated by hydrateShiftRow; 0 on rows closed before the
+    // package (the columns are computed live, never stored).
+    customerCollectionsTotal: Number(row.customerCollectionsTotal || 0),
+    cancelledSaleCashTotal: Number(row.cancelledSaleCashTotal || 0),
+    terminalCode: row.terminal_code ? String(row.terminal_code) : null,
     openingCash: Number(row.opening_cash || 0),
     openingNote: row.opening_note || '',
     status: row.status || 'open',
@@ -324,9 +344,11 @@ export function buildCashDrawerShiftDocNo(shiftId: number, date: Date = new Date
   return formatDailyDocumentNumber('SHIFT', shiftId, date);
 }
 
-export function normalizeShiftOpenPayload(payload: { openingCash?: number; note?: string; branchId?: number | string | null; locationId?: number | string | null; password?: string; managerPin?: string }): { openingCash: number; note: string; branchId: number | null; locationId: number | null; password?: string } {
+export function normalizeShiftOpenPayload(payload: { openingCash?: number; note?: string; branchId?: number | string | null; locationId?: number | string | null; password?: string; managerPin?: string; terminalCode?: string }): { openingCash: number; note: string; branchId: number | null; locationId: number | null; password?: string; terminalCode: string | null } {
   const rawPassword = payload.password || payload.managerPin;
-  return { openingCash: Number(payload.openingCash || 0), note: String(payload.note || '').trim(), branchId: payload.branchId ? Number(payload.branchId) : null, locationId: payload.locationId ? Number(payload.locationId) : null, password: rawPassword ? String(rawPassword).trim() : undefined };
+  const terminalCode = String(payload.terminalCode || '').trim().toUpperCase();
+  if (terminalCode.length > 32) throw new AppError('رمز المحطة غير صالح', 'SHIFT_TERMINAL_CODE_INVALID', 400);
+  return { openingCash: Number(payload.openingCash || 0), note: String(payload.note || '').trim(), branchId: payload.branchId ? Number(payload.branchId) : null, locationId: payload.locationId ? Number(payload.locationId) : null, password: rawPassword ? String(rawPassword).trim() : undefined, terminalCode: terminalCode || null };
 }
 
 export function assertCashDrawerAmount(amount: number): void { if (!(amount > 0)) throw new AppError('المبلغ يجب أن يكون أكبر من صفر', 'AMOUNT_INVALID', 400); }
@@ -375,4 +397,89 @@ export function buildShiftCashReturnItem(row: {
 /** Mirror shift cash total's coalesced tender rule for itemized supplier payouts. */
 export function isDrawerCashTender(channel: string | null | undefined): boolean {
   return channel == null || channel === '' || channel === 'cash';
+}
+
+/**
+ * INV-REST-SHIFT-CLOSE-CONTROL (I21): a variance needs a second
+ * approver only when its magnitude is strictly over the cap. A
+ * variance exactly at the cap is within tolerance; zero never
+ * needs approval. The cap is the cashierShortageTolerance setting
+ * (one minor unit when unset), read by the service — this function
+ * is only the comparison, so the spec pins the boundary, not the
+ * settings read.
+ */
+export function requiresSecondApproval(variance: number, cap: number): boolean {
+  return Math.abs(variance) > cap;
+}
+
+export type ExpectedCashBreakdownRow = { key: string; label: string; amount: number };
+export type ExpectedCashBreakdownInput = {
+  openingCash: number;
+  netDrawerMovement: number;
+  cashSalesTotal: number;
+  cancelledSaleCashTotal: number;
+  serviceCashTotal: number;
+  customerCollectionsTotal: number;
+  saleReturnCashRefundTotal: number;
+  supplierPaymentsTotal: number;
+  expensesTotal: number;
+};
+
+/**
+ * INV-REST-SHIFT-CLOSE-CONTROL (I25): the ONE expected-cash
+ * breakdown. Every component of computeShiftExpectedCashFromShift
+ * is a signed row here, so rows-sum-to-total is checkable and the
+ * close card / Z-report render the same components the server
+ * sums. Deductions carry negative amounts; the total is the sum
+ * of the rounded rows, never a second rounding of unrounded parts.
+ */
+export function buildExpectedCashBreakdown(
+  input: ExpectedCashBreakdownInput,
+  digits: MoneyDigits = 2,
+): { rows: ExpectedCashBreakdownRow[]; total: number } {
+  const row = (key: string, label: string, amount: number): ExpectedCashBreakdownRow => ({
+    key,
+    label,
+    amount: roundMoney(amount, digits),
+  });
+  const rows: ExpectedCashBreakdownRow[] = [
+    row('openingCash', 'رصيد الفتح', Number(input.openingCash || 0)),
+    row('netDrawerMovement', 'صافي حركات الدرج', Number(input.netDrawerMovement || 0)),
+    row('cashSales', 'مبيعات نقدي', Number(input.cashSalesTotal || 0)),
+    row('cancelledSaleCash', 'نقدية فواتير ملغاة', Number(input.cancelledSaleCashTotal || 0)),
+    row('serviceCash', 'خدمات نقدي', Number(input.serviceCashTotal || 0)),
+    row('customerCollections', 'تحصيلات عملاء نقدي', Number(input.customerCollectionsTotal || 0)),
+    row('saleReturnsCash', 'مرتجعات نقدي', -Number(input.saleReturnCashRefundTotal || 0)),
+    row('supplierPayments', 'دفعات موردين', -Number(input.supplierPaymentsTotal || 0)),
+    row('expenses', 'مصروفات مسجلة', -Number(input.expensesTotal || 0)),
+  ];
+  return { rows, total: roundMoney(rows.reduce((sum, entry) => sum + entry.amount, 0), digits) };
+}
+
+export function sumExpectedCashRows(rows: ExpectedCashBreakdownRow[]): number {
+  return rows.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+}
+
+/**
+ * INV-REST-SHIFT-CLOSE-CONTROL (I26): validate an offline sale's
+ * client timestamp. Returns the parsed Date, or null when the
+ * client sent nothing (an online sale). A supplied value that is
+ * unparseable, before 2000-01-01 (garbage/epoch), or more than
+ * five minutes in the future (clock skew allowance — the value is
+ * still stored exactly as sent, never clamped) rejects with
+ * OFFLINE_TIMESTAMP_INVALID. The server never silently rewrites
+ * the timestamp: a wrong device clock must surface, not move the
+ * sale into another shift's window unnoticed.
+ */
+export function validateOfflineCreatedAt(value: unknown, now: Date = new Date()): Date | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (!Number.isFinite(parsed.getTime())) {
+    throw new AppError('تاريخ الفاتورة الأوفلاين غير صالح', 'OFFLINE_TIMESTAMP_INVALID', 400);
+  }
+  if (parsed.getTime() < Date.UTC(2000, 0, 1) || parsed.getTime() > now.getTime() + 5 * 60 * 1000) {
+    throw new AppError('تاريخ الفاتورة الأوفلاين خارج النطاق المسموح', 'OFFLINE_TIMESTAMP_INVALID', 400);
+  }
+  return parsed;
 }

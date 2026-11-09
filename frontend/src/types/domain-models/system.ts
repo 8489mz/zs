@@ -49,11 +49,35 @@ export interface ShiftMovementItem {
   createdAt: string;
 }
 
+export interface BlindCloseChannelReconciliation {
+  declared: number;
+  computed: number;
+  delta: number;
+  declaredCount: number;
+  computedCount: number;
+  countDelta: number;
+  detailTotal?: number;
+  detailDelta?: number;
+}
+
+export interface BlindCloseReconciliation {
+  card: BlindCloseChannelReconciliation;
+  wallet: BlindCloseChannelReconciliation;
+  instapay: BlindCloseChannelReconciliation;
+}
+
 export interface CashierShift {
   id: string;
   docNo: string;
   status: string;
   openingCash: number;
+  /** INV-REST-SHIFT-CLOSE-CONTROL (I24): the POS station code of this shift. */
+  terminalCode?: string | null;
+  /** INV-REST-SHIFT-CLOSE-CONTROL (I25): expected-cash components the close card and Z-report render. */
+  customerCollectionsTotal?: number;
+  cancelledSaleCashTotal?: number;
+  /** INV-REST-SHIFT-CLOSE-CONTROL (I22): the server's declared-vs-computed reconciliation, when reviewed. */
+  reconciliation?: BlindCloseReconciliation | null;
   expectedCash: number;
   countedCash: number;
   cashSalesTotal?: number;

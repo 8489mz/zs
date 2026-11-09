@@ -110,6 +110,29 @@ export class UpsertSaleDto {
   @IsString()
   offlineDocNo?: string;
 
+  /**
+   * INV-REST-SHIFT-CLOSE-CONTROL (I26): the offline sale's
+   * original client timestamp (savedAt). createSale stores it as
+   * created_at when valid, so the sale lands in the shift whose
+   * window actually held it — never silently re-dated to sync
+   * time. Rejected with OFFLINE_TIMESTAMP_INVALID when
+   * unparseable, out of range, or in the future.
+   */
+  @IsOptional()
+  @IsString()
+  offlineCreatedAt?: string;
+
+  /**
+   * INV-REST-SHIFT-CLOSE-CONTROL (I24): the POS station code
+   * (getPosTerminalCode, e.g. T4A2), stored on sales as
+   * pos_terminal_code so a sale attributes to its station's shift.
+   * Never the EDC card-terminal id (terminalId) — that is a
+   * different device and is null on cash sales.
+   */
+  @IsOptional()
+  @IsString()
+  terminalCode?: string;
+
   @Type(() => Number)
   @IsOptional()
   @IsNumber()
