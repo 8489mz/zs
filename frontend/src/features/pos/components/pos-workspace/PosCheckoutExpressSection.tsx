@@ -64,13 +64,31 @@ export function PosCheckoutExpressSection({
     (pos.settingsQuery?.data as any)?.posTerminalEnabled
   ), [pos.settings?.posTerminalEnabled, pos.settingsQuery?.data]);
 
+  // INV-REST-EXPRESS-AMOUNT-SYNC: the typed received amount must be in
+  // workspace state BEFORE confirm runs. handleSubmit reads the legs from
+  // render-captured params, so the setCashAmount/setCardAmount calls in the
+  // confirm handler itself arrive one render too late — and the F2 path
+  // never sets them at all. Sync the legs here, on every change of the
+  // received amount or the active preset, from the same source of truth the
+  // tendered amount already follows. When neither cash nor card is active
+  // the legs are left untouched: credit legs are zeroed by the workspace
+  // itself, and a detailed-view split belongs to the detailed view until
+  // express confirm overwrites it, exactly as today.
   useEffect(() => {
     if (isPaymentActive('cash')) {
+      pos.setCashAmount?.(effectiveReceivedCash);
+      pos.setCardAmount?.(0);
+      pos.setTransferAmount?.(0);
       pos.setTenderedAmount?.(effectiveReceivedCash);
+    } else if (isPaymentActive('card')) {
+      pos.setCardAmount?.(total);
+      pos.setCashAmount?.(0);
+      pos.setTransferAmount?.(0);
+      pos.setTenderedAmount?.(0);
     } else {
       pos.setTenderedAmount?.(0);
     }
-  }, [effectiveReceivedCash, isPaymentActive, pos]);
+  }, [effectiveReceivedCash, isPaymentActive, pos, total]);
 
   const handleConfirmManualPayment = () => {
     const code = manualAuthCode.trim() || 'MANUAL-OK';
@@ -594,7 +612,7 @@ export function PosCheckoutExpressSection({
           type="button"
           onClick={() => {
             onSelectPaymentPreset('cash');
-            pos.setCashAmount?.(effectiveReceivedCash || total);
+            pos.setCashAmount?.(effectiveReceivedCash);
             pos.setCardAmount?.(0);
             pos.setTransferAmount?.(0);
             pos.setPaymentChannel?.('cash');
@@ -988,7 +1006,7 @@ export function PosCheckoutExpressSection({
                   return;
                 }
                 if (isPaymentActive('cash')) {
-                  pos.setCashAmount?.(effectiveReceivedCash || total);
+                  pos.setCashAmount?.(effectiveReceivedCash);
                   pos.setCardAmount?.(0);
                   pos.setPaymentChannel?.('cash');
                   onConfirmSale(effectiveReceivedCash);
