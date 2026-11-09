@@ -11,6 +11,7 @@ import { UpsertSaleDto } from '../dto/upsert-sale.dto';
 import { idempotencyStorage } from '../../../core/idempotency/idempotency.context';
 import { IdempotencyService, IDEMPOTENCY_STUCK_PROCESSING_MS } from '../../../core/idempotency/idempotency.service';
 import { conversionRecoverySaleId, decideConversionRecovery, resolveConversionDiscounts, resolveConversionPaymentTerms } from '../helpers/sales-write.helper';
+import { recomputeSalesOrderMoney, assertQuotationMoney } from '../helpers/sales-order-money.helper';
 
 @Injectable()
 export class QuotationsService {
@@ -477,7 +478,30 @@ export class QuotationsService {
         unitName: item.unit_name || undefined,
       }));
 
-      const totalAmount = Number(quotation.total_amount);
+      // R6-E (INV-REST-SALE-MONEY-TRUTH-2): the stored total_amount
+      // is client-supplied and was paid verbatim as the cash leg — a
+      // stored total inflated with extras became overpayment/change,
+      // a deflated one threw INVALID_PAID_AMOUNT or silently became
+      // credit. Assert the stored total equals the recomputed total
+      // (throws QUOTATION_TOTAL_MISMATCH before any sale is created)
+      // and build the cash payment from the RECOMPUTED total, never
+      // from the stored one. Per-line totals are deliberately not
+      // asserted here: a stale per-line total is inert display data
+      // at conversion. Same shape as the sales-order conversion;
+      // the assert sits inside this try, so a mismatch reverts the
+      // 'converting' claim exactly like a discount mismatch.
+      const recomputedQuotationMoney = recomputeSalesOrderMoney(
+        items.map((item) => ({
+          quantity: item.quantity,
+          unitPrice: item.unit_price,
+          discount: item.discount,
+        })),
+        quotation.discount_amount,
+        quotation.tax_amount,
+      );
+      assertQuotationMoney(recomputedQuotationMoney, { total: quotation.total_amount });
+
+      const totalAmount = recomputedQuotationMoney.total;
 
       // INV-CONVERSION-PAYMENT-TERMS-CARRIED: quotations carry no
       // payment-terms column, so the only representable shape is the

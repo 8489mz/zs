@@ -54,6 +54,35 @@ function failTotal(): never {
   );
 }
 
+function failQuotationTotal(): never {
+  throw new AppError(
+    'إجمالي عرض السعر لا يطابق البنود والخصم والضريبة',
+    'QUOTATION_TOTAL_MISMATCH',
+    400,
+  );
+}
+
+/**
+ * R6-E (INV-REST-SALE-MONEY-TRUTH-2): the quotation-conversion
+ * assertion — the same recompute as sales orders, but with a
+ * quotation-named error. The sales-order code above stays
+ * sales-order-named; do not relabel it. Only the total is
+ * asserted: per-line totals are inert display data at
+ * conversion, the same rule as the order path.
+ */
+export function assertQuotationMoney(
+  recomputed: SalesOrderMoney,
+  stored: {
+    total?: number | string | null;
+  },
+): void {
+  if (stored.total !== undefined) {
+    const expected = Number(stored.total ?? 0);
+    if (!Number.isFinite(expected)) failQuotationTotal();
+    if (Math.abs(expected - recomputed.total) > SALES_ORDER_MONEY_TOLERANCE) failQuotationTotal();
+  }
+}
+
 export function recomputeSalesOrderMoney(
   items: SalesOrderMoneyItem[],
   discountAmount: number | string | null,

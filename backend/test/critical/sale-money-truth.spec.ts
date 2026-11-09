@@ -30,9 +30,39 @@ WHAT THIS PINS:
   a garbled percent throws before any write, and a non-POS
   dine-in payload keeps the charge it sent.
 
-WHAT THIS DELIBERATELY DOES NOT PIN: postSalesReturn never
-relieves 2147/2115 on a partial return of a tipped/courier sale
-(known follow-up, out of scope for this package).
+WHAT R6-E (INV-REST-SALE-MONEY-TRUTH-2) PINS, driving the real
+postSalesReturn over PGlite (Part F):
+- A partial return relieves 2147/2115 pro-rata by returned net
+  goods over the sale's net goods base (half the goods -> half
+  the tip and half the courier fee); a full return relieves both
+  fully; a return of a sale with no tip/fee posts no 2147/2115
+  lines; a store-fleet return touches neither 2115 nor 4200.
+- The relief is part of the REFUND: the refund credit side grows
+  by the reliefs (stored allocations summing to the return total
+  are topped up in-memory on the last tender; a set already
+  summing to total + reliefs is used as-is, never double-topped).
+- A second partial return of the same sale does not over-relieve:
+  the cumulative cap (original credited minus prior return
+  relief) bounds it. Tax-inclusive sales use the same ex-tax
+  goods leg postSale stripped (service share removed, discount
+  netted) — never the exclusive formula.
+- Return then settle does not double-relieve: settling the
+  REDUCED amount (total - remaining fee) posts the reduced fee
+  and lands 2115 at zero, and a stale full-fee amount fails
+  closed with DELIVERY_SETTLEMENT_INVALID instead of debiting
+  the full fee a second time. (Correction recorded: the
+  settlement never read a ledger balance — 2115 has no per-sale
+  subledger — the remainder is derived from the sale's prior
+  return journals, the same source as the cumulative cap.)
+
+KNOWN LIMIT, NOT PINNED HERE: the journal now records the full
+refund (total + reliefs), but the treasury / store-credit /
+customer-ledger writers in returns.service still move only the
+return total — topping those up is an owed follow-up outside
+this package's file list. Likewise the delivery-reps callers
+still compute the settlement amount from the original fee, so
+after a return they hit the fail-closed settlement above until
+their amount is topped up the same way.
 */
 
 import 'reflect-metadata';
@@ -109,6 +139,15 @@ function buildCreateSaleService(settingsRows: any[], captured: Array<{ table: st
         // R5-A: the R4-C modifier-contract gate queries the product's
         // linked modifier groups even when the line carries no
         // modifiers. The fixture product has none, so this is empty.
+        return chainable({ execute: async () => [] });
+      }
+      if (table === 'restaurant_86_items') {
+        // R6-E: R5-B's 86 gate (migration 0310) queries this table
+        // at line validation, before totals; the fixture product is
+        // not 86'd, so this is empty. Without it every Part D case
+        // dies in the mock instead of reaching the sales insert —
+        // the spec was already red at base 4388c207 for exactly
+        // this gap (proven by a stashed base run).
         return chainable({ execute: async () => [] });
       }
       if (table === 'branches') {
@@ -326,6 +365,8 @@ async function main() {
         payment_type text DEFAULT 'cash', collection_status text, status text DEFAULT 'posted');
       CREATE TABLE sale_payments (tenant_id text, sale_id bigint, payment_channel text, amount numeric);
       CREATE TABLE sale_items (id bigint PRIMARY KEY, tenant_id text, sale_id bigint, product_id bigint, qty numeric, cost_price numeric, unit_multiplier numeric, modifiers jsonb);
+      CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text, doc_no text, return_type text, invoice_id bigint, settlement_mode text, refund_method text, refund_allocations jsonb, total numeric, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT '2026-10-01');
+      CREATE TABLE return_items (id bigint PRIMARY KEY, return_document_id bigint, tenant_id text, product_id bigint, sale_item_id bigint, qty numeric, unit_total numeric, line_total numeric, cost_price numeric, allocated_tax numeric);
       CREATE TABLE accounting_cheques (id bigint PRIMARY KEY, tenant_id text, type text, status text, journal_entry_id bigint);
       INSERT INTO accounting_settings VALUES
         (1,'t1','a1',1110,1120,1130,2110,1140,4100,4300,5100,2120,1150,NULL,NULL,NULL,NULL,NULL,NULL);
@@ -333,7 +374,7 @@ async function main() {
     // 4200 is seeded (the COA migration seeds it in production);
     // 2115/2147 are deliberately NOT seeded: they must auto-create
     // on first post via resolveSystemAccountByCode.
-    for (const code of [1110, 1120, 1130, 1140, 2120, 4100, 4200, 4300, 5100, 2150]) {
+    for (const code of [1110, 1120, 1130, 1140, 2120, 4100, 4200, 4300, 4400, 5100, 2150]) {
       await pg.query('INSERT INTO accounting_accounts(id,tenant_id,account_id,code) VALUES ($1,$2,$3,$4)',
         [code, 't1', 'a1', String(code)]);
     }
@@ -449,6 +490,167 @@ async function main() {
     assert.equal(await amount(settlement.journalEntryId!, courierId, 'debit'), 20);
     assert.equal(await amount(settlement.journalEntryId!, 1110, 'debit'), 100);
     assert.equal(await amount(settlement.journalEntryId!, 1130, 'credit'), 120);
+
+    // Part F (R6-E): postSalesReturn relieves 2147/2115.
+    // Cost is 0 on every line here on purpose: the COGS mirror
+    // is pinned by its own spec, and a zero saved cost keeps the
+    // reversal at 0 so these cases prove the relief legs alone.
+    const journalBySource = async (sourceType: string, sourceId: number) => {
+      const entries = await (db as any).selectFrom('journal_entries').select('id')
+        .where('source_type', '=', sourceType).where('source_id', '=', sourceId).execute() as Array<{ id: number }>;
+      assert.equal(entries.length, 1, `expected exactly one ${sourceType} journal for ${sourceId}`);
+      const rows = await pg.query<{ code: string; debit: string; credit: string }>(
+        `SELECT a.code, l.debit, l.credit FROM journal_entry_lines l JOIN accounting_accounts a ON a.id = l.account_id WHERE l.journal_entry_id = $1`,
+        [Number(entries[0].id)]);
+      const byCode = new Map<string, { debit: number; credit: number }>();
+      for (const row of rows.rows) byCode.set(row.code, { debit: Number(row.debit), credit: Number(row.credit) });
+      return byCode;
+    };
+    const seedReturnSale = async (saleId: number, opts: { subtotal: number; discount?: number; tax?: number; total: number; tip?: number; fee?: number; mode?: string | null; service?: number; inclusive?: boolean }) => {
+      await pg.exec(`
+        INSERT INTO sales(id,tenant_id,doc_no,customer_id,subtotal,discount,tax_amount,total,paid_amount,delivery_fee,delivery_fee_mode,service_charge,tip_amount,prices_include_tax)
+          VALUES (${saleId},'t1','S${saleId}',NULL,${opts.subtotal},${opts.discount ?? 0},${opts.tax ?? 0},${opts.total},${opts.total},${opts.fee ?? 0},${opts.mode ? `'${opts.mode}'` : 'NULL'},${opts.service ?? 0},${opts.tip ?? 0},${opts.inclusive ? 'true' : 'false'});
+        INSERT INTO sale_items VALUES (${saleId * 10},'t1',${saleId},10,2,0,1,'[]');
+      `);
+    };
+    const seedReturn = async (returnId: number, saleId: number, total: number, allocatedTax: number, allocations?: string) => {
+      await pg.exec(`
+        INSERT INTO return_documents(id,tenant_id,doc_no,return_type,invoice_id,settlement_mode,refund_method,refund_allocations,total)
+          VALUES (${returnId},'t1','ZR${returnId}','sale',${saleId},'','cash',${allocations ? `'${allocations}'::jsonb` : 'NULL'},${total});
+        INSERT INTO return_items(id,return_document_id,tenant_id,product_id,sale_item_id,qty,cost_price,allocated_tax)
+          VALUES (${returnId * 10},${returnId},'t1',10,${saleId * 10},1,0,${allocatedTax});
+      `);
+    };
+    const tippedFreelance = { subtotal: 100, total: 142, tip: 10, fee: 20, mode: 'freelance_courier', service: 12 };
+
+    // F1: partial return of a tipped freelance sale relieves both
+    // pro-rata — half the goods (50/100) -> half the tip (5) and
+    // half the courier fee (10); the refund is 50 + 15 = 65.
+    await seedReturnSale(20, tippedFreelance);
+    await seedReturn(1, 20, 50, 0);
+    const ret1 = await inTx(trx => posting.postSalesReturn(trx, 1, auth));
+    assert.equal(ret1.posted, true);
+    const f1 = await journalBySource('sales_return', 1);
+    assert.equal(f1.get('4400')?.debit, 50);
+    assert.equal(f1.get('2147')?.debit, 5);
+    assert.equal(f1.get('2115')?.debit, 10);
+    assert.equal(f1.get('1110')?.credit, 65);
+
+    // F2: partial return of a freelance sale with no tip relieves
+    // only 2115 (10); no 2147 line exists.
+    await seedReturnSale(21, { subtotal: 100, total: 132, fee: 20, mode: 'freelance_courier', service: 12 });
+    await seedReturn(2, 21, 50, 0);
+    await inTx(trx => posting.postSalesReturn(trx, 2, auth));
+    const f2 = await journalBySource('sales_return', 2);
+    assert.equal(f2.get('2115')?.debit, 10);
+    assert.equal(f2.get('2147'), undefined);
+    assert.equal(f2.get('1110')?.credit, 60);
+
+    // F3: full return relieves both fully (10 + 20); refund 130.
+    await seedReturnSale(22, tippedFreelance);
+    await seedReturn(3, 22, 100, 0);
+    await inTx(trx => posting.postSalesReturn(trx, 3, auth));
+    const f3 = await journalBySource('sales_return', 3);
+    assert.equal(f3.get('4400')?.debit, 100);
+    assert.equal(f3.get('2147')?.debit, 10);
+    assert.equal(f3.get('2115')?.debit, 20);
+    assert.equal(f3.get('1110')?.credit, 130);
+
+    // F4: store-fleet return relieves the tip only (5) — the fee
+    // went to Cr 4200 revenue, so no 2115 leg exists, and a return
+    // does not relieve 4200 either (no 4200 line in the journal).
+    await seedReturnSale(23, { subtotal: 100, total: 132, tip: 10, fee: 20, mode: 'store_fleet', service: 12 });
+    await seedReturn(4, 23, 50, 0);
+    await inTx(trx => posting.postSalesReturn(trx, 4, auth));
+    const f4 = await journalBySource('sales_return', 4);
+    assert.equal(f4.get('2147')?.debit, 5);
+    assert.equal(f4.get('2115'), undefined);
+    assert.equal(f4.get('4200'), undefined);
+    assert.equal(f4.get('1110')?.credit, 55);
+
+    // F5: cumulative cap — two 60% returns of the same sale. The
+    // first relieves 6 + 12 (refund 78); the second is capped at
+    // the remainder (4 + 8, refund 72), not a second 6 + 12: two
+    // 60% returns must not relieve 120%.
+    await seedReturnSale(24, tippedFreelance);
+    await seedReturn(5, 24, 60, 0);
+    await inTx(trx => posting.postSalesReturn(trx, 5, auth));
+    const f5a = await journalBySource('sales_return', 5);
+    assert.equal(f5a.get('2147')?.debit, 6);
+    assert.equal(f5a.get('2115')?.debit, 12);
+    assert.equal(f5a.get('1110')?.credit, 78);
+    await seedReturn(6, 24, 60, 0);
+    await inTx(trx => posting.postSalesReturn(trx, 6, auth));
+    const f5b = await journalBySource('sales_return', 6);
+    assert.equal(f5b.get('2147')?.debit, 4);
+    assert.equal(f5b.get('2115')?.debit, 8);
+    assert.equal(f5b.get('1110')?.credit, 72);
+
+    // F6: a return of a sale with no tip/fee posts no 2147/2115
+    // lines at all; the refund is exactly the return total.
+    await seedReturnSale(25, { subtotal: 100, total: 100 });
+    await seedReturn(7, 25, 40, 0);
+    await inTx(trx => posting.postSalesReturn(trx, 7, auth));
+    const f6 = await journalBySource('sales_return', 7);
+    assert.equal(f6.get('2147'), undefined);
+    assert.equal(f6.get('2115'), undefined);
+    assert.equal(f6.get('4400')?.debit, 40);
+    assert.equal(f6.get('1110')?.credit, 40);
+
+    // F7: tax-inclusive sale — the relief ratio uses the ex-tax
+    // goods leg postSale stripped (subtotal 100 + service 12 -
+    // tax 13.30 = 98.70, service share ~10.58, discount 10 ->
+    // base ~78.12), NOT the exclusive subtotal - discount (90).
+    // Half the goods back: net return 39.06 (45 - 5.94 tax) ->
+    // ratio 0.5 -> tip relief 5, refund 50. (The exclusive
+    // formula would have relieved only 39.06/90 of the tip.)
+    await seedReturnSale(26, { subtotal: 100, discount: 10, tax: 13.30, total: 102, tip: 10, service: 12, inclusive: true });
+    await seedReturn(8, 26, 45, 5.94);
+    await inTx(trx => posting.postSalesReturn(trx, 8, auth));
+    const f7 = await journalBySource('sales_return', 8);
+    assert.equal(f7.get('4400')?.debit, 39.06);
+    assert.equal(f7.get('2120')?.debit, 5.94);
+    assert.equal(f7.get('2147')?.debit, 5);
+    assert.equal(f7.get('2115'), undefined);
+    assert.equal(f7.get('1110')?.credit, 50);
+
+    // F8: stored allocations summing to the return total (50) are
+    // topped up in-memory on the last tender — the cash credit is
+    // 65, not 50. F8b: a stored set already summing to total +
+    // reliefs (65) is used as-is, never double-topped (still 65).
+    await seedReturnSale(27, tippedFreelance);
+    await seedReturn(9, 27, 50, 0, '[{"tender":"cash","amount":50}]');
+    await inTx(trx => posting.postSalesReturn(trx, 9, auth));
+    const f8 = await journalBySource('sales_return', 9);
+    assert.equal(f8.get('1110')?.credit, 65);
+    await seedReturnSale(28, tippedFreelance);
+    await seedReturn(10, 28, 50, 0, '[{"tender":"cash","amount":65}]');
+    await inTx(trx => posting.postSalesReturn(trx, 10, auth));
+    const f8b = await journalBySource('sales_return', 10);
+    assert.equal(f8b.get('1110')?.credit, 65);
+
+    // F9: return then settle does not double-relieve. After the
+    // half return (courier relief 10, 2115 balance 10), settling
+    // the REDUCED amount (142 - 10 = 132) posts the reduced fee
+    // (10) and lands 2115 at zero; a stale full-fee amount (122)
+    // fails closed with DELIVERY_SETTLEMENT_INVALID instead of
+    // debiting the full 20 a second time.
+    await seedReturnSale(29, tippedFreelance);
+    await seedReturn(11, 29, 50, 0);
+    await inTx(trx => posting.postSalesReturn(trx, 11, auth));
+    const settle29 = await inTx(trx => posting.postDeliveryRepSettlement(trx, 29, 132, null, null, auth));
+    assert.equal(settle29.posted, true);
+    const f9 = await journalBySource('delivery_rep_settlement', 29);
+    assert.equal(f9.get('2115')?.debit, 10);
+    assert.equal(f9.get('1110')?.debit, 132);
+    assert.equal(f9.get('1130')?.credit, 142);
+    await seedReturnSale(30, tippedFreelance);
+    await seedReturn(12, 30, 50, 0);
+    await inTx(trx => posting.postSalesReturn(trx, 12, auth));
+    await assert.rejects(
+      inTx(trx => posting.postDeliveryRepSettlement(trx, 30, 122, null, null, auth)),
+      (err: any) => err.code === 'DELIVERY_SETTLEMENT_INVALID',
+    );
 
     // Every saved journal balances exactly.
     const unbalanced = await pg.query(`SELECT journal_entry_id FROM journal_entry_lines GROUP BY journal_entry_id HAVING sum(debit) <> sum(credit)`);

@@ -2114,6 +2114,73 @@ export class AccountingPostingService {
     return { reversed: true, journalEntryId: entryId };
   }
 
+  /**
+   * R6-E (INV-REST-SALE-MONEY-TRUTH-2): tip / courier-fee relief
+   * already posted by earlier returns of the same sale, read back
+   * from their posted return journals. Prior returns are found via
+   * return_documents.invoice_id; their journals via
+   * journal_entries.source_type IN ('sales_return','return'). The
+   * 2147/2115 legs carry partnerType 'none', so there is no
+   * per-sale subledger to read — the posted return journals ARE
+   * the record. Exchange-collected returns post no return
+   * journal (their lines ride inside the new sale's journal), so
+   * relief collected by an exchange is not counted here; a later
+   * return of other lines of the same sale could then over-relieve
+   * — a known edge, see the postSalesReturn comment.
+   */
+  private async priorSalesReturnRelief(
+    queryable: DbOrTx,
+    tenantId: string,
+    saleId: number,
+    excludeReturnId: number | null,
+  ): Promise<{ tip: number; courier: number }> {
+    const empty = { tip: 0, courier: 0 };
+    let priorReturnsQuery = queryable
+      .selectFrom('return_documents')
+      .select('id')
+      .where('invoice_id', '=', saleId)
+      .where('return_type', '=', 'sale')
+      .where(sql<boolean>`tenant_id = ${tenantId}`);
+    if (excludeReturnId != null) {
+      priorReturnsQuery = priorReturnsQuery.where('id', '!=', excludeReturnId);
+    }
+    const priorReturns = await priorReturnsQuery.execute();
+    if (priorReturns.length === 0) return empty;
+    const priorJournals = await queryable
+      .selectFrom('journal_entries')
+      .select('id')
+      .where('source_type', 'in', ['sales_return', 'return'])
+      .where('source_id', 'in', priorReturns.map((row) => Number(row.id)))
+      .where(sql<boolean>`tenant_id = ${tenantId}`)
+      .where('status', 'in', ['draft', 'posted'])
+      .execute();
+    if (priorJournals.length === 0) return empty;
+    const reliefAccounts = await queryable
+      .selectFrom('accounting_accounts')
+      .select(['id', 'code'])
+      .where('tenant_id', '=', tenantId)
+      .where('code', 'in', ['2147', '2115'])
+      .execute();
+    const accountIdByCode = new Map(reliefAccounts.map((row) => [String(row.code), Number(row.id)]));
+    const sums = await queryable
+      .selectFrom('journal_entry_lines')
+      .select([
+        'account_id',
+        sql<number>`coalesce(sum(debit), 0)`.as('relieved'),
+      ])
+      .where('journal_entry_id', 'in', priorJournals.map((row) => Number(row.id)))
+      .where(sql<boolean>`tenant_id = ${tenantId}`)
+      .groupBy('account_id')
+      .execute();
+    const relieved = { tip: 0, courier: 0 };
+    for (const row of sums) {
+      const amount = Number((row as any).relieved || 0);
+      if (Number((row as any).account_id) === accountIdByCode.get('2147')) relieved.tip += amount;
+      if (Number((row as any).account_id) === accountIdByCode.get('2115')) relieved.courier += amount;
+    }
+    return relieved;
+  }
+
   async postSalesReturn(queryable: Transaction<Database>, returnId: number, auth: AuthContext,
     collectExchangeLines?: (lines: JournalLineDraft[]) => void): Promise<{ posted: boolean; journalEntryId: number | null }> {
     this.assertTransaction(queryable, 'postSalesReturn');
@@ -2155,7 +2222,12 @@ export class AccountingPostingService {
     const sale = returnDocument.invoice_id
       ? await queryable
         .selectFrom('sales')
-        .select(['id', 'doc_no', 'payment_type', 'customer_id', 'tax_amount', 'total'])
+        // R6-E (INV-REST-SALE-MONEY-TRUTH-2): the relief below needs
+        // the sale's money columns — the return document carries
+        // none of them (no tip/delivery columns exist on it).
+        .select(['id', 'doc_no', 'payment_type', 'customer_id', 'tax_amount', 'total',
+          'subtotal', 'discount', 'tip_amount', 'delivery_fee', 'delivery_fee_mode',
+          'service_charge', 'prices_include_tax'])
         .where('id', '=', Number(returnDocument.invoice_id))
         .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
         .executeTakeFirst()
@@ -2208,6 +2280,72 @@ export class AccountingPostingService {
     const taxAmount = Number(returnTax?.unallocated_lines || 0) === 0
       ? toBookMoney(returnTax?.allocated_tax || 0) : toBookMoney(total * taxRatio);
     const netReturnAmount = toBookMoney(Math.max(0, total - taxAmount));
+
+    // R6-E (INV-REST-SALE-MONEY-TRUTH-2): relieve the tip /
+    // courier-fee payables the original sale credited (Cr 2147 /
+    // Cr 2115 in addSaleRevenueCreditLegs), pro-rata by the
+    // returned net goods value over the sale's net goods base.
+    // - Exclusive-tax base: subtotal - discount (the net goods
+    //   value the customer paid; the discount rides Dr 4300).
+    // - Tax-inclusive base: the SAME ex-tax goods leg postSale
+    //   stripped — (subtotal + serviceCharge - tax) with the
+    //   service share removed — net of the discount the return
+    //   lines carry. Reusing the exclusive formula here would
+    //   over-relieve (its subtotal still holds the embedded tax).
+    //   A corrupt tax larger than the base keeps postSale's old
+    //   single-line shape (no 2147/2115 legs exist), so no relief
+    //   is owed either.
+    // - Tip only when the sale credited one; courier only for a
+    //   freelance delivery (NULL mode counts as freelance, as in
+    //   addSaleRevenueCreditLegs). A store-fleet fee went to
+    //   Cr 4200 revenue, which a return does not relieve either.
+    // - FUNDING (decision, recorded): the relief is part of the
+    //   REFUND — the customer is refunded the relieved shares on
+    //   top of the return total, so the refund credit side below
+    //   grows by tipRelief + courierRelief. The rejected shape
+    //   (fund it by shrinking Dr 4400) misstates sales returns
+    //   and under-refunds the customer; it is only correct if the
+    //   business keeps the extras, in which case no relief is
+    //   owed at all.
+    // - CUMULATIVE CAP: this return's relief is capped at
+    //   originalCredited - priorRelief (prior returns of the same
+    //   sale, via priorSalesReturnRelief); without it two 60%
+    //   returns relieve 120%.
+    const saleSubtotal = toBookMoney((sale as any)?.subtotal ?? 0);
+    const saleDiscount = toBookMoney((sale as any)?.discount ?? 0);
+    const saleTip = toBookMoney((sale as any)?.tip_amount ?? 0);
+    const saleDeliveryFee = toBookMoney((sale as any)?.delivery_fee ?? 0);
+    const saleDeliveryMode = String((sale as any)?.delivery_fee_mode ?? '').trim();
+    const isStoreFleetDelivery = saleDeliveryMode === 'store_fleet';
+    const saleServiceCharge = toBookMoney((sale as any)?.service_charge ?? 0);
+    const saleTaxAmount = toBookMoney((sale as any)?.tax_amount ?? 0);
+    const salePricesIncludeTax = Boolean((sale as any)?.prices_include_tax);
+    let netGoodsBase = 0;
+    if (sale) {
+      if (salePricesIncludeTax) {
+        const strippedBase = toBookMoney(saleSubtotal + saleServiceCharge - saleTaxAmount);
+        if (strippedBase >= 0) {
+          const inclusiveDenom = saleSubtotal + saleServiceCharge;
+          const serviceLeg = inclusiveDenom > 0
+            ? toBookMoney((strippedBase * saleServiceCharge) / inclusiveDenom) : 0;
+          netGoodsBase = toBookMoney(Math.max(0, strippedBase - serviceLeg - saleDiscount));
+        }
+      } else {
+        netGoodsBase = toBookMoney(Math.max(0, saleSubtotal - saleDiscount));
+      }
+    }
+    const reliefRatio = sale && total > 0 && netGoodsBase > 0
+      ? Math.min(1, Math.max(0, netReturnAmount / netGoodsBase)) : 0;
+    let tipRelief = saleTip > 0 && reliefRatio > 0 ? toBookMoney(saleTip * reliefRatio) : 0;
+    let courierRelief = saleDeliveryFee > 0 && !isStoreFleetDelivery && reliefRatio > 0
+      ? toBookMoney(saleDeliveryFee * reliefRatio) : 0;
+    if (sale && (tipRelief > 0 || courierRelief > 0)) {
+      const priorRelief = await this.priorSalesReturnRelief(queryable, scope.tenantId, Number(sale.id), returnId);
+      tipRelief = toBookMoney(Math.max(0, Math.min(tipRelief, saleTip - priorRelief.tip)));
+      courierRelief = toBookMoney(Math.max(0, Math.min(courierRelief, saleDeliveryFee - priorRelief.courier)));
+    }
+    const totalRelief = toBookMoney(tipRelief + courierRelief);
+
     const customerPartnerId = sale?.customer_id ? Number(sale.customer_id) : null;
     const lines: JournalLineDraft[] = [];
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
@@ -2241,27 +2379,89 @@ export class AccountingPostingService {
       });
     }
 
+    // R6-E (INV-REST-SALE-MONEY-TRUTH-2): the relief debits. The
+    // accounts resolve lazily, only when their leg is non-zero, so
+    // an ordinary return with no tip/fee creates no new accounts.
+    // A return followed by a freelance settlement must not
+    // double-relieve 2115: postDeliveryRepSettlement validates its
+    // fee against the REMAINING courier fee (original minus prior
+    // return relief), so the reduced amount settles and a stale
+    // full-fee amount fails closed instead of over-relieving.
+    if (tipRelief > 0) {
+      const tipsAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '2147');
+      addBookLine({
+        accountId: tipsAccountId,
+        description: `تخفيض إكراميات مستحقة للموظفين من مرتجع فاتورة رقم ${invoiceNo}`,
+        debit: tipRelief,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
+    }
+    if (courierRelief > 0) {
+      const courierAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '2115');
+      addBookLine({
+        accountId: courierAccountId,
+        description: `تخفيض رسوم توصيل مستحقة لمندوب حر من مرتجع فاتورة رقم ${invoiceNo}`,
+        debit: courierRelief,
+        credit: 0,
+        partnerType: 'none',
+        partnerId: null,
+        branchId,
+        locationId,
+      });
+    }
+
     const settlementMode = String(returnDocument.settlement_mode || '').trim().toLowerCase();
     const refundMethod = String(returnDocument.refund_method || '').trim().toLowerCase();
     const originalSalePaymentType = String(sale?.payment_type || '').trim().toLowerCase();
 
     if (total > 0) {
+      // R6-E (INV-REST-SALE-MONEY-TRUTH-2): the refund covers the
+      // return total PLUS the relieved tip/courier shares (see the
+      // funding decision above), so the refund target is
+      // total + totalRelief and the allocations must sum to it.
+      // Stored allocations were built by returns.service from the
+      // return total alone (goods + tax), so a stored set summing
+      // to total is topped up in-memory on its last tender — the
+      // customer is actually paid the extra through that tender.
+      // A stored set already summing to the refund target (a
+      // caller that included the reliefs) is used as-is; anything
+      // else fails closed below. The stored document itself is not
+      // rewritten here: the journal is the refund record, and the
+      // treasury / store-credit / customer-ledger writers in
+      // returns.service still move only the return total — topping
+      // those up is an owed follow-up outside this package.
+      const refundTarget = toBookMoney(total + totalRelief);
       const allocations = refundAllocations ?? [{
         tender: settlementMode === 'store_credit' ? 'store_credit'
           : originalSalePaymentType === 'credit' ? 'receivable'
             : refundMethod === 'cash' ? 'cash' : 'card',
-        amount: total,
+        amount: refundTarget,
       }];
-      const rawAllocated = allocations.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
-      if (Math.abs(rawAllocated - total) > this.maxAllowedDifference(bookDigits)) {
-        throw new Error(`Refund tenders do not balance for return ${returnId}: allocated=${rawAllocated} total=${total}`);
+      let effectiveAllocations = allocations;
+      if (refundAllocations && totalRelief > 0) {
+        const storedSum = toBookMoney(allocations.reduce((sum, entry) => sum + Number(entry.amount || 0), 0));
+        if (Math.abs(storedSum - refundTarget) <= this.maxAllowedDifference(bookDigits)) {
+          effectiveAllocations = allocations;
+        } else if (Math.abs(storedSum - total) <= this.maxAllowedDifference(bookDigits)) {
+          effectiveAllocations = allocations.map((entry, index) => index === allocations.length - 1
+            ? { ...entry, amount: toBookMoney(Number(entry.amount || 0) + totalRelief) }
+            : entry);
+        }
+      }
+      const rawAllocated = effectiveAllocations.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+      if (Math.abs(rawAllocated - refundTarget) > this.maxAllowedDifference(bookDigits)) {
+        throw new Error(`Refund tenders do not balance for return ${returnId}: allocated=${rawAllocated} total=${refundTarget}`);
       }
       let allocatedTotalSoFar = 0;
-      for (let i = 0; i < allocations.length; i++) {
-        const allocation = allocations[i];
-        const isLast = i === allocations.length - 1;
+      for (let i = 0; i < effectiveAllocations.length; i++) {
+        const allocation = effectiveAllocations[i];
+        const isLast = i === effectiveAllocations.length - 1;
         const lineAmount = isLast
-          ? toBookMoney(total - allocatedTotalSoFar)
+          ? toBookMoney(refundTarget - allocatedTotalSoFar)
           : toBookMoney(allocation.amount);
         allocatedTotalSoFar = toBookMoney(allocatedTotalSoFar + lineAmount);
         const accountId = allocation.tender === 'store_credit' ? storeCreditAccountId
@@ -4953,7 +5153,23 @@ export class AccountingPostingService {
 
     const totalDebt = toBookMoney(sale.total);
     const fee = toBookMoney(totalDebt - amount);
-    if (fee < 0 || (fee > 0 && Math.abs(fee - Number(sale.delivery_fee || 0)) > this.maxAllowedDifference(bookDigits))) throw new AppError('Delivery settlement does not reconcile with courier fee', 'DELIVERY_SETTLEMENT_INVALID', 409);
+    // R6-E (INV-REST-SALE-MONEY-TRUTH-2): the fee is validated
+    // against the REMAINING courier fee, not the original one. A
+    // partial return relieves part of 2115 (postSalesReturn), so
+    // settling the reduced amount must post the reduced fee and
+    // land 2115 at exactly zero — while a stale caller passing
+    // total - originalFee fails closed here instead of debiting
+    // the full fee a second time and driving 2115 negative.
+    // (Correction to the grounding premise: this function never
+    // read a ledger balance — 2115 carries no per-sale subledger
+    // (partnerType 'none') — so the remainder is derived from the
+    // sale's prior return journals, the same source as the
+    // cumulative cap. The delivery-reps callers still compute the
+    // stale amount from the sale row; topping their amount up is
+    // an owed follow-up outside this package.)
+    const priorRelief = await this.priorSalesReturnRelief(queryable, scope.tenantId, saleId, null);
+    const remainingFee = toBookMoney(Math.max(0, Number(sale.delivery_fee || 0) - priorRelief.courier));
+    if (fee < 0 || (fee > 0 && Math.abs(fee - remainingFee) > this.maxAllowedDifference(bookDigits))) throw new AppError('Delivery settlement does not reconcile with courier fee', 'DELIVERY_SETTLEMENT_INVALID', 409);
     const lines: JournalLineDraft[] = [];
     if (fee > 0) {
       // R4-A (INV-REST-SALE-MONEY-TRUTH): the sale now posts the
