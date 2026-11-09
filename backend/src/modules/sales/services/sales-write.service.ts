@@ -27,7 +27,7 @@ import { normalizeSalePayload } from '../helpers/sales-payload.helper';
 import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateRemainingDebt, calculateRestoredStockQuantity, calculateStoreCreditBalance, computeSaleAllocationLegs, findBelowFloorSaleItems, paidAmountExceedsRecordedPayments, resolvePostedSalePaymentChannel, restoreFrozenSaleLineCosts, roundSaleInvoiceTotals, roundSaleResidual } from '../helpers/sales-write.helper';
 import { enforceRestaurantModifierContract as enforceModifierContractPure, type ModifierGroupRule, type ModifierPriceTruth } from '../helpers/restaurant-modifier-contract.helper';
 import { assertProductsNot86ed } from './restaurant-advanced-fnb.service';
-import { allocateSaleTenders, type SaleTenderChannel } from '../engines/sale-tender.engine';
+import { allocateSaleTenders, shouldSuppressTenderFallback, type SaleTenderChannel } from '../engines/sale-tender.engine';
 import { assertPosSubmitGates } from '../engines/pos-submit-gates.engine';
 import { allocateInvoiceDiscount } from '../engines/invoice-discount.engine';
 import { resolveSaleTaxRate } from '../engines/sale-tax-rate.engine';
@@ -1794,10 +1794,24 @@ export class SalesWriteService {
         if (!hasOpenShift) throw new AppError('Open cashier shift is required before posting a cash sale', 'OPEN_SHIFT_REQUIRED', 400);
       }
 
+      // INV-REST-COD-TENDER-TRUTH (R7-D): a no-legs COD delivery must
+      // post as an unpaid receivable (paid 0), never as fully-paid
+      // cash. The status is read off the raw payload here:
+      // normalizeSalePayload never carries collectionStatus into
+      // `normalized`, so this is the only place the allocation can
+      // see it. Computed BEFORE allocateSaleTenders: the fallback
+      // fires inside the allocation, and the isCod derivation below
+      // reads the post-allocation paidAmount.
+      const suppressTenderFallback = shouldSuppressTenderFallback({
+        orderType: normalized.orderType,
+        collectionStatus: (payload as any).collectionStatus,
+        paymentType: normalized.paymentType,
+      });
       const tenderAllocation = allocateSaleTenders({
         paymentType: normalized.paymentType, payments: normalized.payments, collectibleTotal,
         fallbackChannel: (['card', 'wallet', 'instapay'].includes(normalized.paymentChannel) ? normalized.paymentChannel : 'cash') as SaleTenderChannel,
         tenderedCash: normalized.tenderedAmount, digits: moneyDigits,
+        suppressFallback: suppressTenderFallback,
       });
       const payments = tenderAllocation.payments;
       const paidAmount = tenderAllocation.appliedAmount;
@@ -3375,10 +3389,23 @@ export class SalesWriteService {
         if (normalized.storeCreditUsed > Number(customer.store_credit_balance || 0) + 0.0001) throw new AppError('Store credit exceeds available balance', 'STORE_CREDIT_EXCEEDED', 400);
       }
 
+      // INV-REST-COD-TENDER-TRUTH (R7-D): same suppression as
+      // createSale — an edit of a COD sale with no legs must not
+      // invent a cash leg either. The status comes from the raw
+      // payload, falling back to the stored sale's collection_status
+      // when the edit does not restate it (updateSale never rewrites
+      // that column, and normalizeSalePayload never carries it).
+      const editCollectionStatus = (payload as any).collectionStatus ?? (sale as any).collection_status ?? null;
+      const suppressEditTenderFallback = shouldSuppressTenderFallback({
+        orderType: normalized.orderType,
+        collectionStatus: editCollectionStatus,
+        paymentType: normalized.paymentType,
+      });
       const tenderAllocation = allocateSaleTenders({
         paymentType: normalized.paymentType, payments: normalized.payments, collectibleTotal,
         fallbackChannel: (['card', 'wallet', 'instapay'].includes(normalized.paymentChannel) ? normalized.paymentChannel : 'cash') as SaleTenderChannel,
         tenderedCash: normalized.tenderedAmount, digits: moneyDigits,
+        suppressFallback: suppressEditTenderFallback,
       });
       const payments = tenderAllocation.payments;
       const paidAmount = tenderAllocation.appliedAmount;
@@ -3391,7 +3418,16 @@ export class SalesWriteService {
       // (dashboard), so the helper returns early for them.
       const isPartialCredit = normalized.source !== 'pos' && Boolean(normalized.customerId) && paidAmount + 0.0001 < collectibleTotal;
       const effectivePaymentType = (isPartialCredit || normalized.paymentType === 'credit') ? 'credit' : 'cash';
-      if (effectivePaymentType !== 'credit' && paidAmount + 0.0001 < collectibleTotal) throw new AppError('Paid amount cannot be less than invoice total', 'INVALID_PAID_AMOUNT', 400);
+      // INV-REST-COD-TENDER-TRUTH (R7-D): the edit path had NO COD
+      // carve-out here at all — masked until now because the fallback
+      // always filled paidAmount to the total. Mirror createSale's
+      // isCodDelivery exactly (same status sources, same underpaid
+      // disjunct): an underpaid delivery edit is a COD receivable,
+      // not an INVALID_PAID_AMOUNT. A non-delivery underpaid edit
+      // still throws, as before.
+      const isCodDeliveryEdit = String(normalized.orderType || '').trim() === 'delivery' &&
+        (editCollectionStatus === 'cod' || editCollectionStatus === 'pending' || paidAmount + 0.0001 < collectibleTotal);
+      if (effectivePaymentType !== 'credit' && !isCodDeliveryEdit && paidAmount + 0.0001 < collectibleTotal) throw new AppError('Paid amount cannot be less than invoice total', 'INVALID_PAID_AMOUNT', 400);
       assertPosSubmitGates({
         source: normalized.source,
         customerId: normalized.customerId,
