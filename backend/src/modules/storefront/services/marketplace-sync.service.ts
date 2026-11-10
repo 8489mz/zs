@@ -21,6 +21,11 @@ import {
   MARKETPLACE_WEBHOOK_SIGNATURE_HEADER,
   type MarketplaceTenantCandidate,
 } from '../engines/marketplace-webhook-event.engine';
+import { PlanFeatureService } from '../../../core/auth/services/plan-feature.service';
+import {
+  isStorefrontEntitledForOrders,
+  STOREFRONT_NOT_ENTITLED_MESSAGE,
+} from '../engines/storefront-entitlement.engine';
 
 export interface AmazonConfig {
   enabled: boolean;
@@ -446,6 +451,11 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     private readonly audit: AuditService,
     private readonly accountingPosting: AccountingPostingService,
     @Optional() private readonly whatsappService?: WhatsAppGatewayService,
+    // D-SF-06 (INV-SF-SIMULATE-ORDER-GATE): the same canonical plan
+    // resolver createOnlineOrder uses. Optional like there, so a missing
+    // resolver fails closed in the gate below instead of crashing DI.
+    // AuthModule is @Global, so this resolves in production.
+    @Optional() private readonly planFeatureService?: PlanFeatureService,
   ) {}
 
   onModuleInit() {
@@ -888,6 +898,21 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     auth: AuthContext,
   ): Promise<{ success: boolean; orderId: number; orderNumber: string; totalAmount: number; reservedProductName: string }> {
     const scope = requireTenantScope(auth);
+
+    // D-SF-06 (INV-SF-SIMULATE-ORDER-GATE): a simulated order is a paid
+    // order like any other — it must pass the same storefront entitlement
+    // gate as createOnlineOrder, before any product is picked and before
+    // any stock or money moves. Fail-closed: a missing tenant row or a
+    // missing plan resolver refuses, exactly like createOnlineOrder.
+    const tenant = await this.db
+      .selectFrom('tenants')
+      .select(['plan_id', 'extra_features', 'activity_type', 'status', 'trial_ends_at'])
+      .where('id', '=', scope.tenantId)
+      .executeTakeFirst();
+    if (!tenant || !this.planFeatureService || !isStorefrontEntitledForOrders(tenant, this.planFeatureService)) {
+      throw new BadRequestException(STOREFRONT_NOT_ENTITLED_MESSAGE);
+    }
+
     const mappings = await this.getSettingJson<MarketplaceSkuMapping[]>('marketplace_sku_mappings', scope.tenantId, []);
 
     // Find mapped product or fallback to first active product in DB
@@ -927,7 +952,18 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     }
 
     const orderQty = 1;
-    const unitPrice = Number(product.retail_price || 150);
+    // D-SF-06 (INV-SF-SIMULATE-ORDER-GATE): no fallback price. A product
+    // with a zero or missing retail price cannot be billed — the old
+    // fallback silently invented a 150 charge for a product the merchant
+    // never priced. Fail closed with a specific error naming the product,
+    // before any order or stock move.
+    const rawPrice = Number(product.retail_price);
+    if (!Number.isFinite(rawPrice) || rawPrice <= 0) {
+      throw new BadRequestException(
+        `Product "${product.name}" (id ${product.id}) has no retail price, so a simulated marketplace order cannot be priced; set a retail price for the product instead of billing a fallback amount`,
+      );
+    }
+    const unitPrice = rawPrice;
     const totalAmount = unitPrice * orderQty;
     const orderNumber = `${marketplace === 'amazon' ? 'AMZ' : 'NON'}-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
 

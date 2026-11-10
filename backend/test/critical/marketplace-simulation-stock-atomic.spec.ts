@@ -42,6 +42,7 @@ import { Kysely } from 'kysely';
 import { PGliteDialect } from 'kysely-pglite-dialect';
 import { Database } from '../../src/database/database.types';
 import { MarketplaceSyncService } from '../../src/modules/storefront/services/marketplace-sync.service';
+import { PlanFeatureService } from '../../src/core/auth/services/plan-feature.service';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
 const TENANT = 't-mkt';
@@ -65,14 +66,28 @@ async function main(): Promise<void> {
   const anyDb = db as any;
   try {
     await pg.exec(`
+      CREATE TABLE tenants (id text PRIMARY KEY, plan_id text, extra_features text, activity_type text, status text, trial_ends_at timestamptz);
       CREATE TABLE settings (key text NOT NULL, value text, tenant_id text NOT NULL, account_id text NOT NULL, PRIMARY KEY (tenant_id, key));
       CREATE TABLE products (id bigserial PRIMARY KEY, name text NOT NULL, barcode text, retail_price numeric NOT NULL DEFAULT 0, stock_qty numeric NOT NULL DEFAULT 0, reserved_qty numeric NOT NULL DEFAULT 0, tenant_id text NOT NULL, account_id text NOT NULL, is_active boolean NOT NULL DEFAULT true, updated_at timestamptz DEFAULT NOW());
       CREATE TABLE product_location_stock (id bigserial PRIMARY KEY, product_id bigint NOT NULL, branch_id bigint, location_id bigint, qty numeric NOT NULL DEFAULT 0 CHECK (qty >= 0), reserved_qty numeric NOT NULL DEFAULT 0, tenant_id text NOT NULL, account_id text NOT NULL, updated_at timestamptz DEFAULT NOW());
       CREATE TABLE online_orders (id bigserial PRIMARY KEY, tenant_id text NOT NULL, account_id text NOT NULL, order_number text NOT NULL, customer_name text, customer_phone text, customer_address text, customer_notes text, items_json text, subtotal numeric NOT NULL DEFAULT 0, delivery_fee numeric NOT NULL DEFAULT 0, total_amount numeric NOT NULL DEFAULT 0, status text NOT NULL, payment_method text, payment_status text, gateway_provider text, shipping_carrier text, created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW());
     `);
 
+    // INV-SF-SIMULATE-ORDER-GATE: simulateIncomingOrder is entitlement-
+    // gated, so this harness seeds an entitled tenant (ecommerce profile
+    // carries the storefront by default) and passes the real plan
+    // resolver with an empty plan cache.
+    await anyDb
+      .insertInto('tenants')
+      .values({
+        id: TENANT, plan_id: 'plan_basic', extra_features: '[]',
+        activity_type: 'ecommerce', status: 'active', trial_ends_at: null,
+      })
+      .execute();
+
     const auditStub = { log: async () => undefined };
-    const service = new MarketplaceSyncService(db, auditStub as never, {} as never);
+    const checker = new PlanFeatureService(undefined as any);
+    const service = new MarketplaceSyncService(db, auditStub as never, {} as never, undefined, checker as never);
     (service as any).syncInventory = async () => ({ syncedCount: 0, updatedMappings: [] });
 
     async function seedProduct(stock: number): Promise<number> {
