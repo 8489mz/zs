@@ -117,6 +117,9 @@ export interface ReturnRecord {
   productName: string;
   qty: number;
   total: number;
+  tipRelief?: number;
+  courierRelief?: number;
+  refundTotal?: number;
   note: string;
   createdAt?: string;
   date?: string;

@@ -15,6 +15,12 @@ export function ReturnsSelectedReturnCard({
   onCopy: () => void;
 }) {
   const { t } = useTranslation();
+  // T10-D: the actual refund is the stored goods total plus the
+  // relief recorded on the document. Old documents carry no relief
+  // fields, so they fall back to the stored total.
+  const tipRelief = Number(selectedReturn?.tipRelief || 0);
+  const courierRelief = Number(selectedReturn?.courierRelief || 0);
+  const refundTotal = Number(selectedReturn?.refundTotal ?? (Number(selectedReturn?.total || 0) + tipRelief + courierRelief));
 
   return (
     <div className="workspace-panel returns-detail-card-shell" style={{ background: '#ffffff', borderRadius: '12px', padding: '16px' }}>
@@ -147,6 +153,22 @@ export function ReturnsSelectedReturnCard({
                 <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: 600 }}>{t('returns.col_date', 'التاريخ')}</span>
                 <strong style={{ fontSize: '11.5px', color: '#0f172a' }}><bdi dir="ltr">{formatDate(getReturnDateValue(selectedReturn))}</bdi></strong>
               </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>{t('returns.refund_goods', 'قيمة البضاعة')}:</span>
+                <strong style={{ fontSize: '12.5px', color: '#0f172a' }}>{formatCurrency(Number(selectedReturn.total || 0))}</strong>
+              </div>
+              {tipRelief > 0 ? (
+                <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>{t('returns.relief_tip', 'استرداد الإكرامية')}:</span>
+                  <strong style={{ fontSize: '12.5px', color: '#0f172a' }}>{formatCurrency(tipRelief)}</strong>
+                </div>
+              ) : null}
+              {courierRelief > 0 ? (
+                <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>{t('returns.relief_courier', 'استرداد رسوم التوصيل')}:</span>
+                  <strong style={{ fontSize: '12.5px', color: '#0f172a' }}>{formatCurrency(courierRelief)}</strong>
+                </div>
+              ) : null}
               <div style={{
                 gridColumn: '1 / -1',
                 background: '#f8fafc',
@@ -159,7 +181,7 @@ export function ReturnsSelectedReturnCard({
                 marginTop: '4px',
               }}>
                 <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#334155' }}>{t('returns.total_refunded', 'الإجمالي المسترد:')}</span>
-                <strong style={{ fontSize: '1.1rem', fontWeight: 800, color: '#2563eb' }}>{formatCurrency(Number(selectedReturn.total || 0))}</strong>
+                <strong style={{ fontSize: '1.1rem', fontWeight: 800, color: '#2563eb' }}>{formatCurrency(refundTotal)}</strong>
               </div>
             </div>
           </div>

@@ -111,6 +111,29 @@ export function ReturnsWorkspace() {
   const returnedQtyByLine = invoiceReturnQuantitiesQuery.data?.returnedQtyByLine || {};
   const blockedProductIds = invoiceReturnQuantitiesQuery.data?.blockedProductIds || [];
   const returnHistoryReady = Boolean(selectedInvoice && invoiceReturnQuantitiesQuery.isSuccess && !invoiceReturnQuantitiesQuery.isFetching);
+  // T10-D: the expected refund comes from the backend relief preview
+  // (the same computeSalesReturnRelief createSaleReturn uses), never
+  // from a second local copy of the ratio. The preview only exists
+  // for sale returns; purchase returns keep the lines total.
+  const reliefPreviewItemsKey = selectedReturnItems.map(({ item, qty }) => `${item.id || item.productId}:${qty}`).join(',');
+  const reliefPreviewQuery = useQuery({
+    queryKey: ['returns-relief-preview', form.type, selectedInvoice?.id, reliefPreviewItemsKey],
+    queryFn: () => returnsApi.preview({
+      type: form.type,
+      invoiceId: Number(selectedInvoice!.id),
+      items: selectedReturnItems.map(({ item, qty }) => ({
+        productId: Number(item.productId || 0),
+        productName: item.name,
+        qty,
+        saleItemId: form.type === 'sale' ? Number(item.id || 0) : undefined,
+        purchaseItemId: form.type === 'purchase' ? Number(item.id || 0) : undefined,
+      })),
+    }),
+    enabled: isCreateOpen && form.type === 'sale' && Boolean(selectedInvoice?.id) && selectedReturnItems.length > 0,
+    staleTime: 0,
+  });
+  const reliefPreview = form.type === 'sale' ? reliefPreviewQuery.data : undefined;
+  const isReliefPreviewLoading = Boolean(isCreateOpen && form.type === 'sale' && selectedReturnItems.length > 0 && reliefPreviewQuery.isFetching);
   const settlementNeedsRefundMethod = form.settlementMode === 'refund';
   const canUseCreditSettlement = form.type === 'sale' && Boolean(selectedInvoice && 'customerId' in selectedInvoice && selectedInvoice.customerId);
 
@@ -129,7 +152,11 @@ export function ReturnsWorkspace() {
       Number(item.qty || 0), qty, returnedQtyByLine, blockedProductIds, returnHistoryReady));
   const selectedItemsCount = selectedReturnItems.length;
   const selectedQtyTotal = selectedReturnItems.reduce((sum, entry) => sum + Number(entry.qty || 0), 0);
-  const expectedReturnValue = selectedReturnItems.reduce((sum, entry) => sum + Number(entry.lineTotal || 0), 0);
+  const linesReturnValue = selectedReturnItems.reduce((sum, entry) => sum + Number(entry.lineTotal || 0), 0);
+  // T10-D: with a preview the expected refund is what the backend
+  // will actually pay (goods + relief); without one (purchase
+  // returns, or before the preview lands) it stays the lines total.
+  const expectedReturnValue = reliefPreview ? Number(reliefPreview.refundTotal || 0) : linesReturnValue;
   // Manager approval is required only for a large cash refund; the
   // backend enforces the same threshold authoritatively.
   const largeCashRefundThreshold = Number((settingsQuery.data as any)?.posLargeCashRefundThreshold ?? 500);
@@ -461,6 +488,8 @@ export function ReturnsWorkspace() {
           selectedItemsCount={selectedItemsCount}
           selectedQtyTotal={selectedQtyTotal}
           expectedReturnValue={expectedReturnValue}
+          reliefPreview={reliefPreview}
+          isReliefPreviewLoading={isReliefPreviewLoading}
           canUseCreditSettlement={canUseCreditSettlement}
           settlementNeedsRefundMethod={settlementNeedsRefundMethod}
           isBusy={createMutation.isPending}

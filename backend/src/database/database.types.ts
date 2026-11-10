@@ -1166,6 +1166,8 @@ export interface ReturnDocumentTable {
   exchange_sale_id: number | null;
   exchange_tip_relief: number | null;
   exchange_courier_relief: number | null;
+  tip_relief: number | null;
+  courier_relief: number | null;
   total: number;
   note: string;
   branch_id: number | null;

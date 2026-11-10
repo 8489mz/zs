@@ -30,6 +30,28 @@ export interface ReturnsListResponse {
 }
 
 
+export interface ReturnReliefPreview {
+  goodsTotal: number;
+  tipRelief: number;
+  courierRelief: number;
+  totalRelief: number;
+  refundTotal: number;
+}
+
+export interface ReturnReliefPreviewItem {
+  productId: number;
+  productName?: string;
+  qty: number;
+  saleItemId?: number;
+  purchaseItemId?: number;
+}
+
+export interface ReturnReliefPreviewPayload {
+  type: 'sale' | 'purchase';
+  invoiceId: string | number;
+  items: ReturnReliefPreviewItem[];
+}
+
 export const returnsApi = {
   list: async () => unwrapArray<ReturnRecord>(await http<ReturnRecord[] | { returns: ReturnRecord[] }>('/api/returns'), 'returns'),
   listPage: (params: ReturnsListParams) => http<ReturnsListResponse>(`/api/returns${buildQueryString(params)}`),
@@ -51,6 +73,14 @@ export const returnsApi = {
   getInvoiceReturnedQuantities: (type: 'sale' | 'purchase', invoiceId: string | number) =>
     http<{ returnedQtyByLine: Record<string, number>; blockedProductIds: string[] }>(
       `/api/returns/invoices/${type}/${encodeURIComponent(String(invoiceId))}/quantities`),
+  // T10-D: the refund the backend will actually pay (goods + tip /
+  // courier relief, from computeSalesReturnRelief). The dialog reads
+  // this preview — it never re-computes the relief ratio locally.
+  preview: (payload: ReturnReliefPreviewPayload) =>
+    http<ReturnReliefPreview>('/api/returns/preview', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   getReturnOperationStatus: (idempotencyKey: string) =>
     http<{ status: string; documentId?: string | null; response?: unknown }>(
       `/api/operations/${encodeURIComponent('POST:/api/returns')}/${encodeURIComponent(idempotencyKey)}/status`),

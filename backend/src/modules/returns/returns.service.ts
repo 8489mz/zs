@@ -42,7 +42,7 @@ export interface ExchangeReturnContext {
 }
 
 type ReturnInputItem = { productId: number; productName: string; qty: number; saleItemId?: number; purchaseItemId?: number; batchId?: number; serials?: string[] };
-type ReturnDocumentInput = { returnType: 'sale' | 'purchase'; invoiceId: number; settlementMode: string; refundMethod: string; total: number; note: string; branchId: number | null; locationId: number | null; refundAllocations?: Array<{ tender: RefundTender | 'payable'; amount: number }> };
+type ReturnDocumentInput = { returnType: 'sale' | 'purchase'; invoiceId: number; settlementMode: string; refundMethod: string; total: number; note: string; branchId: number | null; locationId: number | null; refundAllocations?: Array<{ tender: RefundTender | 'payable'; amount: number }>; tipRelief?: number; courierRelief?: number };
 
 @Injectable()
 export class ReturnsService {
@@ -209,6 +209,8 @@ export class ReturnsService {
       settlement_mode: row.settlementMode,
       refund_method: row.refundMethod,
       refund_allocations: row.refundAllocations ? JSON.stringify(row.refundAllocations) : null,
+      tip_relief: row.tipRelief ?? null,
+      courier_relief: row.courierRelief ?? null,
       total: row.total,
       note: row.note,
       branch_id: row.branchId,
@@ -263,6 +265,8 @@ export class ReturnsService {
         'rd.note',
         'rd.settlement_mode',
         'rd.refund_method',
+        'rd.tip_relief',
+        'rd.courier_relief',
         'rd.created_at',
         'rd.created_by',
         'u.username as created_by_name',
@@ -314,6 +318,8 @@ export class ReturnsService {
         'rd.settlement_mode',
         'rd.refund_method',
         'rd.total',
+        'rd.tip_relief',
+        'rd.courier_relief',
         'rd.note',
         'rd.created_at',
         'rd.created_by',
@@ -357,6 +363,9 @@ export class ReturnsService {
         invoiceDocNo: row.invoice_doc_no || '',
         partyName: row.party_name || '',
         total: Number(row.total || 0),
+        tipRelief: Number(row.tip_relief || 0),
+        courierRelief: Number(row.courier_relief || 0),
+        refundTotal: Number(row.total || 0) + Number(row.tip_relief || 0) + Number(row.courier_relief || 0),
         note: row.note || '',
         settlementMode: row.settlement_mode || '',
         refundMethod: row.refund_method || '',
@@ -403,6 +412,78 @@ export class ReturnsService {
       .where('rd.tenant_id', '=', tenantId).where('ri.tenant_id', '=', tenantId)
       .groupBy(['ri.product_id', 'ri.sale_item_id', 'ri.purchase_item_id']).execute();
     return buildInvoiceReturnedQuantities(returnType, rows);
+  }
+
+  /* INV-REST-RETURN-RELIEF-TRUTH (T10-D): the return dialog must show
+   * the refund the backend will actually pay. The dialog cannot
+   * compute relief itself — the ratio and the cumulative cap live in
+   * computeSalesReturnRelief — so the preview runs the same pure
+   * helpers createSaleReturn uses (buildSaleReturnLine,
+   * calculateReturnDocumentTotal, computeSalesReturnRelief) over the
+   * selected lines, read-only: no document, no stock move, no
+   * journal, no treasury row. Relief exists only on sales; a
+   * purchase preview fails closed instead of inventing a figure
+   * through the relief path. */
+  async previewReturnRelief(payload: CreateReturnDto, auth: AuthContext): Promise<{ goodsTotal: number; tipRelief: number; courierRelief: number; totalRelief: number; refundTotal: number }> {
+    if (payload.type !== 'sale') throw new AppError('معاينة الاسترداد متاحة لمرتجعات البيع فقط', 'RETURN_TYPE_INVALID', 400);
+    const scope = this.scope(auth);
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
+    const items = normalizeReturnItems(payload);
+    const sale = await this.db.selectFrom('sales').selectAll().where('id', '=', Number(payload.invoiceId)).where('status', '=', 'posted').where(this.tenantPredicate(auth)).executeTakeFirst();
+    if (!sale) throw new AppError('Invoice not found', 'INVOICE_NOT_FOUND', 404);
+    const saleItems = await this.db.selectFrom('sale_items').selectAll().where('sale_id', '=', Number(payload.invoiceId)).where(this.tenantPredicate(auth)).orderBy('id', 'asc').execute();
+    const returnedRows = await this.db
+      .selectFrom('return_items as ri')
+      .innerJoin('return_documents as rd', (join) => join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'))
+      .select([
+        'ri.product_id',
+        'ri.sale_item_id',
+        (eb) => eb.fn.coalesce(eb.fn.sum<number>('ri.qty'), sql<number>`0`).as('total_qty'),
+        (eb) => eb.fn.coalesce(eb.fn.sum<number>('ri.line_total'), sql<number>`0`).as('total_amount'),
+        (eb) => eb.fn.coalesce(eb.fn.sum<number>('ri.allocated_tax'), sql<number>`0`).as('total_tax'),
+      ])
+      .where('rd.return_type', '=', 'sale')
+      .where('rd.invoice_id', '=', Number(payload.invoiceId))
+      .where(this.tenantPredicate(auth, 'rd'))
+      .where(this.tenantPredicate(auth, 'ri'))
+      .groupBy(['ri.product_id', 'ri.sale_item_id'])
+      .execute();
+    const returnedQtyByLine = new Map<number, number>();
+    const returnedAmountByLine = new Map<number, number>();
+    const returnedTaxByLine = new Map<number, number>();
+    for (const r of returnedRows) {
+      if (!r.sale_item_id) continue;
+      returnedQtyByLine.set(Number(r.sale_item_id), Number(r.total_qty || 0));
+      returnedAmountByLine.set(Number(r.sale_item_id), Number(r.total_amount || 0));
+      returnedTaxByLine.set(Number(r.sale_item_id), Number(r.total_tax || 0));
+    }
+    const normalizedLines: Array<{ productId: number; productName: string; qty: number; unitTotal: number; lineTotal: number; allocatedTax: number }> = [];
+    for (const requestItem of [...items].sort((a, b) => a.productId - b.productId)) {
+      const matchingLines = saleItems.filter((entry) => Number(entry.product_id) === requestItem.productId);
+      if (!requestItem.saleItemId && matchingLines.length > 1) {
+        throw new AppError('حدد سطر الفاتورة الأصلي للصنف المتكرر', 'SALE_ITEM_ID_REQUIRED', 400);
+      }
+      const saleItem = requestItem.saleItemId
+        ? matchingLines.find((entry) => Number(entry.id) === requestItem.saleItemId)
+        : matchingLines[0];
+      if (!saleItem) throw new AppError('Return item not found', 'NOT_FOUND', 404);
+      const saleLineId = Number(saleItem.id);
+      const product = await this.db.selectFrom('products').select(['id', 'stock_qty']).where('id', '=', requestItem.productId).where(this.tenantPredicate(auth)).executeTakeFirst();
+      if (!product) throw new AppError('Product not found', 'PRODUCT_NOT_FOUND', 404);
+      normalizedLines.push(buildSaleReturnLine(saleItem, product, requestItem, {
+        qty: returnedQtyByLine.get(saleLineId) || 0,
+        amount: returnedAmountByLine.get(saleLineId) || 0,
+        tax: returnedTaxByLine.get(saleLineId) || 0,
+      }, moneyDigits));
+    }
+    const goodsTotal = calculateReturnDocumentTotal(normalizedLines, moneyDigits);
+    const returnTaxAmount = normalizedLines.reduce((sum, line) => sum + Number(line.allocatedTax || 0), 0);
+    const netReturnAmount = Math.max(0, goodsTotal - returnTaxAmount);
+    const returnRelief = await this.accountingPosting.computeSalesReturnRelief(
+      this.db, scope.tenantId, sale, goodsTotal, netReturnAmount, null,
+    );
+    const refundTotal = roundBookMoney(goodsTotal + returnRelief.totalRelief, moneyDigits);
+    return { goodsTotal, tipRelief: returnRelief.tipRelief, courierRelief: returnRelief.courierRelief, totalRelief: returnRelief.totalRelief, refundTotal };
   }
 
   private async getManagerPin(trx: Kysely<Database>, auth: AuthContext): Promise<string> {
@@ -480,6 +561,7 @@ export class ReturnsService {
 
   async createReturn(payload: CreateReturnDto, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = this.scope(auth);
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const idemCtx = idempotencyStorage.getStore();
 
     // Verify manager permission if cashier doesn't have direct return privileges.
@@ -506,7 +588,25 @@ export class ReturnsService {
         ? await this.createSaleReturn(trx, payload, normalizedItems, auth, approvedByName, undefined, approvalRequest)
         : await this.createPurchaseReturn(trx, payload, normalizedItems, auth, approvalRequest);
 
-      const res = { ok: true, createdIds: returnIds, id: returnIds[0], returnDocumentId: returnIds[0] };
+      // T10-D: the create response carries the refund the backend
+      // actually pays (goods + relief, as stored on the document),
+      // so the dialog never has to guess it from the lines total.
+      // Read inside this same transaction so the idempotent replay
+      // stores the same figures.
+      const createdDoc = await trx.selectFrom('return_documents')
+        .select(['total', 'tip_relief', 'courier_relief'])
+        .where('id', '=', returnIds[0])
+        .where('tenant_id', '=', scope.tenantId)
+        .executeTakeFirst();
+      const goodsTotal = Number(createdDoc?.total || 0);
+      const tipRelief = Number(createdDoc?.tip_relief || 0);
+      const courierRelief = Number(createdDoc?.courier_relief || 0);
+      const res = {
+        ok: true, createdIds: returnIds, id: returnIds[0], returnDocumentId: returnIds[0],
+        goodsTotal, tipRelief, courierRelief,
+        totalRelief: roundBookMoney(tipRelief + courierRelief, moneyDigits),
+        refundTotal: roundBookMoney(goodsTotal + tipRelief + courierRelief, moneyDigits),
+      };
 
       // Idempotency: commit inside the EXACT SAME business transaction (CORE-004)
       if (idemCtx && idemCtx.idempotencyKey && idemCtx.operationType) {
@@ -534,7 +634,6 @@ export class ReturnsService {
           .where('tenant_id', '=', scope.tenantId)
           .executeTakeFirst()
       : undefined;
-    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const totalText = doc ? Number(doc.total || 0).toFixed(moneyDigits) : '';
     const docPart = doc?.doc_no ? ` (${doc.doc_no})` : '';
     const auditText = approvedByName
@@ -935,6 +1034,7 @@ export class ReturnsService {
       returnType: 'sale', invoiceId: Number(payload.invoiceId), settlementMode,
       refundMethod: refundAllocations.length === 1 ? refundAllocations[0].tender : 'mixed',
       refundAllocations, total, note: returnNote, branchId: sale.branch_id, locationId: sale.location_id,
+      tipRelief: returnRelief.tipRelief, courierRelief: returnRelief.courierRelief,
     }, auth);
     for (const line of normalizedLines) await this.insertReturnItem(trx, { returnDocumentId, productId: line.productId, productName: line.productName, qty: line.qty, unitTotal: line.unitTotal, lineTotal: line.lineTotal, allocatedTax: line.allocatedTax, costPrice: line.costPrice, saleItemId: line.saleItemId }, auth);
     const customerId = sale.customer_id ? Number(sale.customer_id) : null;

@@ -234,7 +234,8 @@ async function main(): Promise<void> {
       await pg.exec(`
         CREATE TABLE customers (id bigint PRIMARY KEY, tenant_id text, balance numeric, credit_limit numeric, store_credit_balance numeric, customer_type text, loyalty_points numeric, is_active boolean);
         CREATE TABLE sales (id bigint PRIMARY KEY, tenant_id text, customer_id bigint, total numeric, status text, created_at timestamptz);
-        CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text, return_type text, invoice_id bigint);
+        CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text, return_type text, invoice_id bigint,
+      tip_relief numeric(15, 3), courier_relief numeric(15, 3));
         INSERT INTO customers VALUES (1, 't1', 0.005, 100.13, 0, 'cash', 0, true), (2, 't3', 0.005, 100.13, 0, 'cash', 0, true);
       `);
       await seedCurrency(db, 't1', 'KWD');
@@ -264,7 +265,8 @@ async function main(): Promise<void> {
         CREATE TABLE products (id bigint PRIMARY KEY, tenant_id text, is_active boolean);
         CREATE TABLE sales (id bigint PRIMARY KEY, tenant_id text);
         CREATE TABLE purchases (id bigint PRIMARY KEY, tenant_id text);
-        CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text);
+        CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text,
+      tip_relief numeric(15, 3), courier_relief numeric(15, 3));
         CREATE TABLE expenses (id bigint PRIMARY KEY, tenant_id text);
         CREATE TABLE treasury_transactions (id bigint PRIMARY KEY, tenant_id text, amount numeric);
         CREATE TABLE backup_snapshots (id bigint PRIMARY KEY, tenant_id text);
@@ -440,7 +442,8 @@ async function main(): Promise<void> {
     try {
       await pg.exec(`
         CREATE TABLE return_items (id bigint PRIMARY KEY, return_document_id bigint, product_id bigint, product_name text, qty numeric, line_total numeric, tenant_id text);
-        CREATE TABLE return_documents (id bigint PRIMARY KEY, doc_no text, return_type text, invoice_id bigint, note text, settlement_mode text, refund_method text, created_at timestamptz, created_by bigint, tenant_id text);
+        CREATE TABLE return_documents (id bigint PRIMARY KEY, doc_no text, return_type text, invoice_id bigint, note text, settlement_mode text, refund_method text, created_at timestamptz, created_by bigint, tenant_id text,
+      tip_relief numeric(15, 3), courier_relief numeric(15, 3));
         CREATE TABLE users (id bigint PRIMARY KEY, username text, tenant_id text);
         CREATE TABLE sales (id bigint PRIMARY KEY, doc_no text, order_type text, customer_id bigint, tenant_id text);
         CREATE TABLE customers (id bigint PRIMARY KEY, name text, tenant_id text);
@@ -540,7 +543,8 @@ async function main(): Promise<void> {
         CREATE TABLE accounting_posting_failures (id bigserial PRIMARY KEY, tenant_id text, source_type text, source_id bigint, resolved_at timestamptz, last_attempt_at timestamptz);
         CREATE TABLE sales (id bigint PRIMARY KEY, tenant_id text, account_id text, doc_no text, customer_id bigint, customer_name text, payment_type text, payment_channel text, subtotal numeric DEFAULT 0, discount numeric DEFAULT 0, delivery_fee numeric DEFAULT 0, delivery_fee_mode text, service_charge numeric DEFAULT 0, tip_amount numeric DEFAULT 0, tax_rate numeric DEFAULT 0, tax_amount numeric DEFAULT 0, prices_include_tax boolean DEFAULT false, total numeric DEFAULT 0, paid_amount numeric DEFAULT 0, applied_amount numeric DEFAULT 0, tendered_amount numeric DEFAULT 0, change_amount numeric DEFAULT 0, store_credit_used numeric DEFAULT 0, note text, status text, collection_status text, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT NOW(), updated_at timestamptz);
         CREATE TABLE sale_payments (id bigserial PRIMARY KEY, tenant_id text, account_id text, sale_id bigint, payment_channel text, amount numeric, applied_amount numeric, tendered_amount numeric, change_amount numeric, card_rrn text, card_auth_code text, terminal_id text, terminal_auth_code text, terminal_rrn text, card_scheme text, card_last_four text);
-        CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text, doc_no text, note text, return_type text, invoice_id bigint, settlement_mode text, refund_method text, refund_allocations jsonb, total numeric, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT '2026-10-02');
+        CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text, doc_no text, note text, return_type text, invoice_id bigint, settlement_mode text, refund_method text, refund_allocations jsonb, total numeric, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT '2026-10-02',
+      tip_relief numeric(15, 3), courier_relief numeric(15, 3));
         CREATE TABLE services (id bigserial PRIMARY KEY, tenant_id text, created_by bigint, service_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, payment_channel text, amount numeric);
         CREATE TABLE supplier_payments (id bigint PRIMARY KEY, tenant_id text, supplier_id bigint, created_by bigint, payment_date timestamptz, created_at timestamptz, branch_id bigint, location_id bigint, payment_channel text, amount numeric, note text);
         CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, name text);

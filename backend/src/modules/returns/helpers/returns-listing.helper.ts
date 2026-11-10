@@ -15,6 +15,9 @@ export type ReturnListRow = {
   productName: string;
   qty: number;
   total: number;
+  tipRelief: number;
+  courierRelief: number;
+  refundTotal: number;
   note: string;
   settlementMode: string;
   refundMethod: string;
@@ -53,6 +56,9 @@ export function mapReturnRows(rows: Array<Record<string, unknown>>): ReturnListR
         productName: '',
         qty: 0,
         total: 0,
+        tipRelief: Number(row.tip_relief || 0),
+        courierRelief: Number(row.courier_relief || 0),
+        refundTotal: 0,
         note: String(row.note || ''),
         settlementMode: String(row.settlement_mode || 'refund'),
         refundMethod: String(row.refund_method || ''),
@@ -78,6 +84,10 @@ export function mapReturnRows(rows: Array<Record<string, unknown>>): ReturnListR
 
   const result = Array.from(docMap.values());
   for (const doc of result) {
+    // T10-D: the register shows the actual refund (goods + relief),
+    // not the goods-only total. Relief is a document-level figure,
+    // identical on every item row of the document.
+    doc.refundTotal = roundMoney(doc.total + doc.tipRelief + doc.courierRelief, 3);
     if (doc.items!.length === 1) {
       doc.productName = doc.items![0].productName;
       doc.productId = doc.items![0].productId;

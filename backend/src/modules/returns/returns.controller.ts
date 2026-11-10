@@ -38,6 +38,17 @@ export class ReturnsController {
     return this.returnsService.getReturnById(id, req.authContext!);
   }
 
+  /* INV-REST-RETURN-RELIEF-TRUTH (T10-D): the return dialog reads
+   * the refund from the backend preview — the same
+   * computeSalesReturnRelief createSaleReturn uses — never a local
+   * copy of the ratio. Registered before the POST /api/returns
+   * create route; it takes the same body shape as a create. */
+  @Post('returns/preview')
+  @RequirePermissions('returns')
+  previewReturnRelief(@Body() payload: CreateReturnDto, @Req() req: RequestWithAuth): Promise<{ goodsTotal: number; tipRelief: number; courierRelief: number; totalRelief: number; refundTotal: number }> {
+    return this.returnsService.previewReturnRelief(payload, req.authContext!);
+  }
+
   @Post('returns')
   @RequirePermissions('returns')
   @UseInterceptors(IdempotencyInterceptor)

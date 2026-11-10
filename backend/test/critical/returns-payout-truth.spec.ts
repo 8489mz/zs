@@ -177,7 +177,8 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       invoice_id bigint, settlement_mode text, refund_method text, refund_allocations jsonb, total numeric, note text,
       branch_id bigint, location_id bigint, created_by bigint DEFAULT 1, created_at timestamptz DEFAULT '2026-10-02',
       exchange_return_id bigint, exchange_sale_id bigint,
-      exchange_tip_relief numeric(15, 3), exchange_courier_relief numeric(15, 3));
+      exchange_tip_relief numeric(15, 3), exchange_courier_relief numeric(15, 3),
+      tip_relief numeric(15, 3), courier_relief numeric(15, 3));
     CREATE TABLE return_items (id bigserial PRIMARY KEY, tenant_id text, account_id text, return_document_id bigint,
       product_id bigint, product_name text, qty numeric, unit_total numeric, line_total numeric,
       allocated_tax numeric, cost_price numeric, sale_item_id bigint, purchase_item_id bigint);

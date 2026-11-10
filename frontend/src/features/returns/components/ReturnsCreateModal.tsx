@@ -6,6 +6,7 @@ import { CustomSelect } from '@/shared/ui/custom-select';
 import { MutationFeedback } from '@/shared/components/mutation-feedback';
 import { ReturnsInvoiceItemsTable } from '@/features/returns/components/ReturnsInvoiceItemsTable';
 import { formatCurrency, formatCurrencyWithSymbol } from '@/lib/format';
+import type { ReturnReliefPreview } from '@/features/returns/api/returns.api';
 import type { ReturnFormState } from '@/features/returns/lib/returns-workspace.helpers';
 import type { Purchase, PurchaseItem, Sale, SaleItem } from '@/types/domain';
 
@@ -21,6 +22,8 @@ type Props = {
   selectedItemsCount: number;
   selectedQtyTotal: number;
   expectedReturnValue: number;
+  reliefPreview?: ReturnReliefPreview | null;
+  isReliefPreviewLoading?: boolean;
   canUseCreditSettlement: boolean;
   settlementNeedsRefundMethod: boolean;
   isBusy: boolean;
@@ -54,6 +57,8 @@ export function ReturnsCreateModal(props: Props) {
     selectedItemsCount,
     selectedQtyTotal,
     expectedReturnValue,
+    reliefPreview = null,
+    isReliefPreviewLoading = false,
     canUseCreditSettlement,
     settlementNeedsRefundMethod,
     isBusy,
@@ -324,6 +329,31 @@ export function ReturnsCreateModal(props: Props) {
                   <strong style={{ color: '#0284c7' }}>{selectedQtyTotal} {t('returns.item_unit_piece', 'قطعة')}</strong>
                 </div>
 
+                {/* T10-D: the refund breakdown from the backend relief
+                    preview — goods + tip relief + courier relief. The
+                    hero total below is the preview refundTotal, i.e.
+                    what the backend will actually pay. */}
+                {reliefPreview ? (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                      <span>{t('returns.relief_goods', 'قيمة البضاعة المرتجعة')}:</span>
+                      <strong style={{ color: '#0f172a' }}>{formatCurrency(Number(reliefPreview.goodsTotal || 0))}</strong>
+                    </div>
+                    {Number(reliefPreview.tipRelief || 0) > 0 ? (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                        <span>{t('returns.relief_tip', 'استرداد الإكرامية')}:</span>
+                        <strong style={{ color: '#0f172a' }}>{formatCurrency(Number(reliefPreview.tipRelief || 0))}</strong>
+                      </div>
+                    ) : null}
+                    {Number(reliefPreview.courierRelief || 0) > 0 ? (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                        <span>{t('returns.relief_courier', 'استرداد رسوم التوصيل')}:</span>
+                        <strong style={{ color: '#0f172a' }}>{formatCurrency(Number(reliefPreview.courierRelief || 0))}</strong>
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+
                 {/* Hero Total Refund Box */}
                 <div
                   style={{
@@ -355,7 +385,7 @@ export function ReturnsCreateModal(props: Props) {
                 type="button"
                 variant="primary"
                 onClick={onOpenConfirm}
-                disabled={!selectedInvoice || selectedItemsCount === 0 || isBusy || (!returnQuantitiesValid && !canRetryUnresolved)}
+                disabled={!selectedInvoice || selectedItemsCount === 0 || isBusy || isReliefPreviewLoading || (!returnQuantitiesValid && !canRetryUnresolved)}
                 style={{
                   width: '100%',
                   padding: '10px',
