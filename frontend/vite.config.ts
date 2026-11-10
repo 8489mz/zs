@@ -21,7 +21,14 @@ const getBuildTag = () => {
   const d = new Date();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
-  return `${mm}${dd}-0001`;
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  const ms = String(d.getMilliseconds()).padStart(3, '0');
+  // Never a same-day constant: two builds on the same day must not share a
+  // worker URL, or the PWA banner dismiss cannot tell a new build from the
+  // dismissed one. Time of day to the millisecond makes each build unique.
+  return `${mm}${dd}-${hh}${min}${ss}${ms}`;
 };
 
 export default defineConfig(({ mode }) => {

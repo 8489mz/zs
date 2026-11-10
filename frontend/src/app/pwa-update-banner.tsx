@@ -6,11 +6,15 @@
  * the new worker takes control ('pwa-updated'). If that signal never arrives
  * (the prompt registration never claims the current page), a short fallback
  * timer reloads anyway: the activated worker controls the fresh navigation.
- * Dismissing hides the banner for this session, keyed to the waiting
+ * Dismissing hides the banner for this session, keyed to the WAITING
  * worker's script URL (which carries the build id), so a re-announce of the
  * SAME worker stays dismissed while a genuinely new build shows it again.
- * When the worker cannot be identified at all, the dismissal still holds
- * for the session under a single fallback key. The banner is a small pill
+ * The identity always comes from registration.waiting first: the Workbox
+ * getSW() lookup can return the ACTIVE worker's URL instead, so it is only
+ * a fallback. When the worker cannot be identified at all, the dismissal
+ * still holds for the session under a separate fallback key that is never
+ * stored as a worker identity and never matches a real worker URL. The
+ * banner is a small pill
  * pinned to the bottom-left corner, never a full-width bar. Nothing here
  * reloads on deploy, focus, or visibility — the reload below runs only
  * after the user's click. */
@@ -19,12 +23,16 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Workbox } from 'workbox-window';
 
-/** Session key for the dismissed update. The stored value is the waiting
- * worker's script URL, so a new build re-shows the banner. */
+/** Session key for the dismissed update. The stored value is the WAITING
+ * worker's script URL, so a new build re-shows the banner. Only a real
+ * worker URL may ever be stored under this key. */
 const DISMISSED_KEY = 'zs_pwa_update_dismissed';
-/** Stored when the waiting worker cannot be identified: the dismissal then
- * holds for the session, since no worker can be told apart from another. */
-const UNKNOWN_WORKER = 'unknown';
+/** Session key set when a worker that cannot be identified at all is
+ * dismissed. It holds only the marker '1': it is never a worker identity
+ * and is never compared against a worker URL, so an unidentified dismissal
+ * holds for the session without ever matching a real worker. */
+const DISMISSED_UNIDENTIFIED_KEY = 'zs_pwa_update_dismissed_unidentified';
+const DISMISSED_UNIDENTIFIED_VALUE = '1';
 /** How long to wait for the new worker to take control after the user's
  * click before reloading anyway. */
 const APPLY_RELOAD_FALLBACK_MS = 3000;
@@ -45,23 +53,43 @@ function writeDismissed(workerId: string): void {
   }
 }
 
-/** Identify the waiting worker by its script URL, which carries the build
- * id (`/sw.js?v=<build id>`). The Workbox instance knows its waiting worker
- * (getSW); the registration lookup is the fallback. Returns null only when
- * the worker cannot be identified at all. */
+function readDismissedUnidentified(): boolean {
+  try {
+    return sessionStorage.getItem(DISMISSED_UNIDENTIFIED_KEY) === DISMISSED_UNIDENTIFIED_VALUE;
+  } catch {
+    return false;
+  }
+}
+
+function writeDismissedUnidentified(): void {
+  try {
+    sessionStorage.setItem(DISMISSED_UNIDENTIFIED_KEY, DISMISSED_UNIDENTIFIED_VALUE);
+  } catch {
+    // Storage unavailable: the banner still hides for this mount.
+  }
+}
+
+/** Identify the WAITING worker by its script URL, which carries the build
+ * id (`/sw.js?v=<build id>`). The registration lookup is authoritative:
+ * `registration.waiting` IS the worker being announced. The Workbox
+ * `getSW()` lookup is only a fallback — workbox-window resolves it to the
+ * controlling (active) worker whenever the page is controlled by a worker
+ * whose URL matches the registered URL, so with a new build waiting it
+ * returns the OLD build's URL instead of the waiting worker's. Returns null
+ * only when the worker cannot be identified at all. */
 async function resolveWaitingWorkerId(wb: Workbox): Promise<string | null> {
+  try {
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration?.waiting?.scriptURL) return registration.waiting.scriptURL;
+    }
+  } catch {
+    // Fall through to the Workbox lookup.
+  }
   try {
     if (typeof wb.getSW === 'function') {
       const sw = await wb.getSW();
       if (sw?.scriptURL) return sw.scriptURL;
-    }
-  } catch {
-    // Fall through to the registration lookup.
-  }
-  try {
-    if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.getRegistration();
-      return registration?.waiting?.scriptURL ?? null;
     }
   } catch {
     // Unidentifiable worker.
@@ -80,9 +108,14 @@ export function PwaUpdateBanner() {
       const wb = (event as CustomEvent<{ workbox?: Workbox }>).detail?.workbox;
       if (!wb) return;
       void resolveWaitingWorkerId(wb).then((id) => {
-        const workerId = id ?? UNKNOWN_WORKER;
-        if (readDismissed() === workerId) return;
-        setWaitingId(workerId);
+        if (id === null) {
+          // No identity: only the unidentified-dismissal marker can hide
+          // this announce — a stored worker URL must never match it.
+          if (readDismissedUnidentified()) return;
+        } else if (readDismissed() === id) {
+          return;
+        }
+        setWaitingId(id);
         setWorkbox(wb);
         setApplying(false);
       });
@@ -118,7 +151,13 @@ export function PwaUpdateBanner() {
   };
 
   const handleDismiss = () => {
-    writeDismissed(waitingId ?? UNKNOWN_WORKER);
+    if (waitingId === null) {
+      // Unidentifiable worker: hold the dismissal for the session under the
+      // separate marker — never store a made-up identity under the URL key.
+      writeDismissedUnidentified();
+    } else {
+      writeDismissed(waitingId);
+    }
     setWaitingId(null);
     setWorkbox(null);
   };

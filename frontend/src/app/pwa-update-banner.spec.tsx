@@ -1,18 +1,24 @@
-/* PWA update prompt (INV-PWA-UPDATE-PROMPT + INV-REST-PWA-BANNER-TRUTH):
- * the banner appears only when a waiting worker announces itself, and only
- * the user's click takes over. Drives the real PwaUpdateBanner component:
- * no banner before the event, banner after it, the takeover armed only after
- * the click, dismiss hides it. The banner is a small bottom-left pill.
- * Dismissal persists in sessionStorage keyed to the waiting worker's script
- * URL (which carries the build id): a re-announce of the SAME worker stays
- * dismissed, a genuinely NEW worker shows the banner again, and a worker
- * that cannot be identified at all still stays dismissed for the session.
- * The reload itself (both the 'pwa-updated' path and the ~3s fallback timer
- * after the click) lives in the banner and is pinned by
- * no-forced-reload.spec.ts; jsdom cannot observe a reload call — its
- * location object is non-configurable and non-writable — so this spec proves
- * the arming and the timer wiring, and the timer firing is verified by hand
- * from the runner log ("Not implemented: navigation" once per reload). */
+/* PWA update prompt (INV-PWA-UPDATE-PROMPT + INV-REST-PWA-BANNER-TRUTH +
+ * INV-REST-PWA-DISMISS-KEY-TRUTH): the banner appears only when a waiting
+ * worker announces itself, and only the user's click takes over. Drives the
+ * real PwaUpdateBanner component: no banner before the event, banner after
+ * it, the takeover armed only after the click, dismiss hides it. The banner
+ * is a small bottom-left pill. Dismissal persists in sessionStorage keyed to
+ * the WAITING worker's script URL (which carries the build id): a re-announce
+ * of the SAME worker stays dismissed, a genuinely NEW worker shows the
+ * banner again. The identity is always the waiting worker
+ * (registration.waiting.scriptURL first): the Workbox getSW() path can return
+ * the ACTIVE worker's URL instead, so it is only a fallback — the same worker
+ * resolved via either path stays hidden, and a dismiss never stores the
+ * active worker's URL. A worker that cannot be identified at all is
+ * dismissed under a separate session marker, never stored as a worker
+ * identity, so it can never match a real worker URL. The reload itself (both
+ * the 'pwa-updated' path and the ~3s fallback timer after the click) lives in
+ * the banner and is pinned by no-forced-reload.spec.ts; jsdom cannot observe
+ * a reload call — its location object is non-configurable and non-writable —
+ * so this spec proves the arming and the timer wiring, and the timer firing
+ * is verified by hand from the runner log ("Not implemented: navigation" once
+ * per reload). */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
@@ -21,6 +27,7 @@ import path from 'node:path';
 import { PwaUpdateBanner } from '@/app/pwa-update-banner';
 
 const DISMISSED_KEY = 'zs_pwa_update_dismissed';
+const DISMISSED_UNIDENTIFIED_KEY = 'zs_pwa_update_dismissed_unidentified';
 const BANNER_TEXT = 'يتوفر تحديث جديد للتطبيق';
 
 function fakeWorkbox(scriptURL: string | null, messageSkipWaiting = vi.fn()) {
@@ -30,6 +37,26 @@ function fakeWorkbox(scriptURL: string | null, messageSkipWaiting = vi.fn()) {
       ? {}
       : { getSW: vi.fn().mockResolvedValue({ scriptURL }) }),
   };
+}
+
+/** Stub navigator.serviceWorker so the banner's registration.waiting path
+ * can be driven in jsdom (which ships no serviceWorker). Returns the
+ * getRegistration mock so a test can move the waiting worker to a new URL. */
+function mockServiceWorkerRegistration(waitingScriptURL: string | null) {
+  const getRegistration = vi.fn().mockResolvedValue(
+    waitingScriptURL === null
+      ? { waiting: null }
+      : { waiting: { scriptURL: waitingScriptURL } },
+  );
+  Object.defineProperty(window.navigator, 'serviceWorker', {
+    value: { getRegistration },
+    configurable: true,
+  });
+  return getRegistration;
+}
+
+function unmockServiceWorkerRegistration() {
+  delete (window.navigator as unknown as Record<string, unknown>).serviceWorker;
 }
 
 async function announceUpdate(workbox: unknown) {
@@ -62,11 +89,13 @@ async function announceUpdateHidden(workbox: unknown) {
 describe('PwaUpdateBanner', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    unmockServiceWorkerRegistration();
   });
 
   afterEach(() => {
     vi.useRealTimers();
     sessionStorage.clear();
+    unmockServiceWorkerRegistration();
   });
 
   it('shows nothing until a waiting worker announces an update', () => {
@@ -141,7 +170,73 @@ describe('PwaUpdateBanner', () => {
     expect(screen.getByText(BANNER_TEXT)).toBeInTheDocument();
   });
 
-  it('dismiss holds for the session when the worker cannot be identified', async () => {
+  it('keys the dismiss to the WAITING worker when getSW returns the ACTIVE worker', async () => {
+    // workbox-window getSW() resolves to the controlling (active) worker
+    // whenever the page is controlled by a worker whose URL matches the
+    // registered URL — so with a new build waiting, getSW() returns the OLD
+    // build's URL while registration.waiting is the NEW build. The dismiss
+    // must be keyed to the waiting worker, never to the active one.
+    const getRegistration = mockServiceWorkerRegistration('/sw.js?v=build-b');
+    expect(getRegistration).toBeDefined();
+    render(<PwaUpdateBanner />);
+
+    await announceUpdate(fakeWorkbox('/sw.js?v=build-a'));
+    expect(screen.getByText(BANNER_TEXT)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'لاحقًا' }));
+    expect(screen.queryByText(BANNER_TEXT)).not.toBeInTheDocument();
+    // The waiting worker's URL, not the active worker's.
+    expect(sessionStorage.getItem(DISMISSED_KEY)).toBe('/sw.js?v=build-b');
+  });
+
+  it('dismiss stays hidden when the same worker re-announces via the other path', async () => {
+    const messageSkipWaiting = vi.fn();
+    render(<PwaUpdateBanner />);
+
+    // Dismiss resolved via getSW (no serviceWorker in jsdom), re-announce
+    // resolved via registration.waiting with the SAME URL: stays hidden.
+    await announceUpdate(fakeWorkbox('/sw.js?v=build-b', messageSkipWaiting));
+    fireEvent.click(screen.getByRole('button', { name: 'لاحقًا' }));
+    expect(sessionStorage.getItem(DISMISSED_KEY)).toBe('/sw.js?v=build-b');
+
+    mockServiceWorkerRegistration('/sw.js?v=build-b');
+    await announceUpdateHidden(fakeWorkbox(null, messageSkipWaiting));
+
+    // And the reverse direction: dismiss via registration.waiting, then a
+    // re-announce resolved via getSW with the same URL stays hidden too.
+    unmockServiceWorkerRegistration();
+    sessionStorage.clear();
+    mockServiceWorkerRegistration('/sw.js?v=build-b');
+    await announceUpdate(fakeWorkbox(null, messageSkipWaiting));
+    expect(screen.getByText(BANNER_TEXT)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'لاحقًا' }));
+    expect(sessionStorage.getItem(DISMISSED_KEY)).toBe('/sw.js?v=build-b');
+
+    unmockServiceWorkerRegistration();
+    await announceUpdateHidden(fakeWorkbox('/sw.js?v=build-b', messageSkipWaiting));
+  });
+
+  it('a genuinely NEW worker re-shows even when getSW still returns the old ACTIVE worker', async () => {
+    const messageSkipWaiting = vi.fn();
+    const getRegistration = mockServiceWorkerRegistration('/sw.js?v=build-b');
+    render(<PwaUpdateBanner />);
+
+    // Dismiss the waiting build-b (getSW still reports the active build-a).
+    await announceUpdate(fakeWorkbox('/sw.js?v=build-a', messageSkipWaiting));
+    fireEvent.click(screen.getByRole('button', { name: 'لاحقًا' }));
+    expect(sessionStorage.getItem(DISMISSED_KEY)).toBe('/sw.js?v=build-b');
+
+    // Same waiting worker, re-announced: stays hidden.
+    await announceUpdateHidden(fakeWorkbox('/sw.js?v=build-a', messageSkipWaiting));
+
+    // A genuinely new waiting worker arrives; getSW still reports the old
+    // active worker. The banner must re-show for the new worker.
+    getRegistration.mockResolvedValue({ waiting: { scriptURL: '/sw.js?v=build-c' } });
+    await announceUpdate(fakeWorkbox('/sw.js?v=build-a', messageSkipWaiting));
+    expect(screen.getByText(BANNER_TEXT)).toBeInTheDocument();
+  });
+
+  it('dismiss holds for the session when the worker cannot be identified, but never matches a real worker', async () => {
     render(<PwaUpdateBanner />);
 
     // A workbox without getSW (and no serviceWorker in jsdom): no identity.
@@ -150,9 +245,18 @@ describe('PwaUpdateBanner', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'لاحقًا' }));
     expect(screen.queryByText(BANNER_TEXT)).not.toBeInTheDocument();
-    expect(sessionStorage.getItem(DISMISSED_KEY)).toBe('unknown');
+    // No worker identity is ever stored for an unidentifiable worker: the
+    // 'unknown' sentinel must never appear as a stored identity.
+    expect(sessionStorage.getItem(DISMISSED_KEY)).toBeNull();
+    expect(sessionStorage.getItem(DISMISSED_UNIDENTIFIED_KEY)).toBe('1');
 
+    // Still unidentifiable on re-announce: the session dismissal holds.
     await announceUpdateHidden(fakeWorkbox(null));
+
+    // But the unidentified dismissal never matches a real worker URL: once
+    // a worker CAN be identified, the banner shows for it.
+    await announceUpdate(fakeWorkbox('/sw.js?v=build-a'));
+    expect(screen.getByText(BANNER_TEXT)).toBeInTheDocument();
   });
 
   it('arms the fallback reload timer only after the user clicks apply', async () => {
@@ -193,5 +297,18 @@ describe('PwaUpdateBanner', () => {
     expect(banner).toContain('window.setTimeout(reloadOnce, APPLY_RELOAD_FALLBACK_MS)');
     expect(banner).toContain('window.clearTimeout(fallback)');
     expect(banner).toContain('APPLY_RELOAD_FALLBACK_MS = 3000');
+  });
+
+  it('build tag fallback is unique per build, never a same-day constant', () => {
+    const configPath = path.join(__dirname, '..', '..', 'vite.config.ts');
+    const config = fs.readFileSync(configPath, 'utf8');
+
+    // Two same-day builds must not share a worker URL: the fallback used to
+    // be the same-day constant MMDD-0001, so a dismiss could never tell a
+    // new build from the dismissed one.
+    expect(config).not.toContain('-0001');
+    // The fallback carries the time of day down to the millisecond.
+    expect(config).toContain('getHours');
+    expect(config).toContain('getMilliseconds');
   });
 });
