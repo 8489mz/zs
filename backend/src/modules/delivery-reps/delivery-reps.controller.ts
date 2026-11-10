@@ -81,7 +81,7 @@ export class DeliveryRepsController {
   @RequirePermissions('deliveryReps')
   settleOrder(
     @Param('saleId', ParseIntPipe) saleId: number,
-    @Body() body: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string },
+    @Body() body: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string; countedCashAmount?: number },
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.service.settleOrder(saleId, req.authContext!, body);

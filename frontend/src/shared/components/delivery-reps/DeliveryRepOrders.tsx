@@ -17,6 +17,17 @@ function getLocalDateStr(date: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+/* INV-SF-SINGLE-SETTLE-COUNTED-CASH (D-SF-01): the cash the rep
+ * should hand over — the order total for a store-fleet delivery,
+ * the total minus the freelance courier fee otherwise. This is
+ * only the dialog's default: the cashier counts the physical cash
+ * and corrects it, and the backend books exactly what was typed. */
+function cashDueOf(order: any): number {
+  const total = Number(order?.total || 0);
+  if (order?.deliveryFeeMode === 'store_fleet') return total;
+  return Math.max(0, total - Number(order?.deliveryFee || 0));
+}
+
 export function DeliveryRepOrders({ repId }: { repId: number | null }) {
   const { t: __t } = useTranslation();
   const queryClient = useQueryClient();
@@ -26,6 +37,7 @@ export function DeliveryRepOrders({ repId }: { repId: number | null }) {
   const [expectedAmountInput, setExpectedAmountInput] = useState('');
   const [feedbackPopup, setFeedbackPopup] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [orderToSettle, setOrderToSettle] = useState<any | null>(null);
+  const [countedCashInput, setCountedCashInput] = useState('');
   const [viewingSaleId, setViewingSaleId] = useState<number | null>(null);
 
   const ordersQuery = useQuery({
@@ -51,7 +63,8 @@ export function DeliveryRepOrders({ repId }: { repId: number | null }) {
   });
 
   const settleOrderMutation = useMutation({
-    mutationFn: (saleId: number) => deliveryRepsApi.settleOrder(saleId),
+    mutationFn: ({ saleId, countedCashAmount }: { saleId: number; countedCashAmount?: number }) =>
+      deliveryRepsApi.settleOrder(saleId, { countedCashAmount }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['delivery-rep-orders'] });
       queryClient.invalidateQueries({ queryKey: ['delivery-rep-summary'] });
@@ -294,6 +307,7 @@ export function DeliveryRepOrders({ repId }: { repId: number | null }) {
                         variant="secondary" 
                         onClick={() => {
                           setOrderToSettle(order);
+                          setCountedCashInput(String(cashDueOf(order)));
                         }}
                         disabled={settleOrderMutation.isPending}
                         style={{ fontSize: '12px', padding: '4px 12px' }}
@@ -466,18 +480,65 @@ export function DeliveryRepOrders({ repId }: { repId: number | null }) {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px', paddingTop: '16px', borderTop: '1px dashed #cbd5e1' }}>
                 <span style={{ color: '#64748b', alignSelf: 'center' }}>{__t('shared.delivery_reps.delivery_rep_orders.s63', "المبلغ المطلوب تحصيله:")}</span>
-                <strong style={{ color: '#dc2626', fontSize: '1.2rem' }}>{formatCurrency(orderToSettle.total)}</strong>
+                <strong style={{ color: '#dc2626', fontSize: '1.2rem' }}>{formatCurrency(cashDueOf(orderToSettle))}</strong>
               </div>
+              {Number(orderToSettle.deliveryFee || 0) > 0 && orderToSettle.deliveryFeeMode !== 'store_fleet' ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '12px', color: '#64748b' }}>
+                  <span>{__t('shared.delivery_reps.delivery_rep_orders.s65', "إجمالي الطلب (منها أجرة المندوب):")}</span>
+                  <span>{formatCurrency(Number(orderToSettle.total))} ({formatCurrency(Number(orderToSettle.deliveryFee))})</span>
+                </div>
+              ) : null}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', paddingTop: '16px', borderTop: '1px dashed #cbd5e1' }}>
+                <span style={{ color: '#64748b', alignSelf: 'center' }}>{__t('shared.delivery_reps.delivery_rep_orders.s66', "المبلغ المستلم فعلاً من المندوب:")}</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={countedCashInput}
+                  onChange={(e) => setCountedCashInput(e.target.value)}
+                  style={{ width: '160px', padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '14px', fontWeight: 700, textAlign: 'left', background: '#ffffff' }}
+                />
+              </div>
+              {(() => {
+                const due = cashDueOf(orderToSettle);
+                const counted = Number(countedCashInput);
+                if (countedCashInput === '' || !Number.isFinite(counted) || counted < 0) {
+                  return (
+                    <div style={{ color: '#dc2626', fontSize: '12px', marginTop: '8px', fontWeight: 600 }}>
+                      {__t('shared.delivery_reps.delivery_rep_orders.s67', "أدخل المبلغ المستلم فعلاً — رقم لا يقل عن صفر.")}
+                    </div>
+                  );
+                }
+                const diff = Math.round((counted - due) * 100) / 100;
+                if (diff < 0) {
+                  return (
+                    <div style={{ color: '#b45309', fontSize: '12px', marginTop: '8px', fontWeight: 600 }}>
+                      {__t('shared.delivery_reps.delivery_rep_orders.s68', "عجز:")} {formatCurrency(Math.abs(diff))} — {__t('shared.delivery_reps.delivery_rep_orders.s69', "يُقيد على حساب فروق التسوية (7200).")}
+                    </div>
+                  );
+                }
+                if (diff > 0) {
+                  return (
+                    <div style={{ color: '#15803d', fontSize: '12px', marginTop: '8px', fontWeight: 600 }}>
+                      {__t('shared.delivery_reps.delivery_rep_orders.s70', "زيادة:")} {formatCurrency(diff)} — {__t('shared.delivery_reps.delivery_rep_orders.s71', "تُقيد على حساب فروق التسوية (7100).")}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
           </div>
         ) : ''}
         confirmLabel={__t('shared.delivery_reps.delivery_rep_orders.s64', "تأكيد السداد")}
         isBusy={settleOrderMutation.isPending}
-        onCancel={() => setOrderToSettle(null)}
+        onCancel={() => { setOrderToSettle(null); setCountedCashInput(''); }}
         onConfirm={async () => {
           if (!orderToSettle) return;
-          await settleOrderMutation.mutateAsync(orderToSettle.id);
+          const counted = Number(countedCashInput);
+          if (countedCashInput === '' || !Number.isFinite(counted) || counted < 0) return;
+          await settleOrderMutation.mutateAsync({ saleId: orderToSettle.id, countedCashAmount: counted });
           setOrderToSettle(null);
+          setCountedCashInput('');
         }}
       />
     </div>

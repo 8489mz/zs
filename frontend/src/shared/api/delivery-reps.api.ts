@@ -58,6 +58,8 @@ export interface SettleOrderPayload {
   gpsLat?: number;
   gpsLng?: number;
   notes?: string;
+  /** Cash the rep actually handed over, counted by the cashier. When omitted the book cash due is settled, as before. */
+  countedCashAmount?: number;
 }
 
 export interface DeliveryOrder {
@@ -65,6 +67,7 @@ export interface DeliveryOrder {
   docNo: string;
   total: number;
   deliveryFee?: number;
+  deliveryFeeMode?: string | null;
   customerName: string;
   customerPhone?: string | null;
   customerAddress?: string | null;

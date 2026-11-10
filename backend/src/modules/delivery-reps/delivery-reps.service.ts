@@ -280,6 +280,7 @@ export class DeliveryRepsService {
         'sales.doc_no as docNo',
         'sales.total',
         'sales.delivery_fee as deliveryFee',
+        'sales.delivery_fee_mode as deliveryFeeMode',
         'customers.name as customerName',
         'customers.phone as customerPhone',
         'customers.address as customerAddress',
@@ -417,8 +418,9 @@ export class DeliveryRepsService {
   async settleOrder(
     saleId: number,
     actor: AuthContext,
-    payload?: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string }
+    payload?: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string; countedCashAmount?: number }
   ): Promise<Record<string, unknown>> {
+    let settlementSummary: { countedCash: number; expectedCash: number; variance: number } | null = null;
     await this.db.transaction().execute(async (trx) => {
       const sale = await trx
         .selectFrom('sales')
@@ -439,6 +441,21 @@ export class DeliveryRepsService {
         // The current GL posting contract expects the entire invoice as an
         // outstanding receivable. Refuse partially paid orders until reconciled.
         throw new AppError('طلب الدليفري محصل جزئياً ويتطلب تسوية منفصلة قبل إقفال عهدة المندوب', 'DELIVERY_PARTIAL_PAYMENT_RECONCILIATION_REQUIRED', 409);
+      }
+      // INV-SF-SINGLE-SETTLE-COUNTED-CASH (D-SF-01): a counted
+      // cash amount is validated up front, before any write. It
+      // must be a non-negative number; a positive counted amount
+      // on a non-COD order has no cash to settle and fails closed
+      // instead of being silently ignored (a zero amount on a
+      // non-COD order is a no-op and is ignored).
+      if (payload?.countedCashAmount !== undefined && payload?.countedCashAmount !== null) {
+        const rawCounted = Number(payload.countedCashAmount);
+        if (!Number.isFinite(rawCounted) || rawCounted < 0) {
+          throw new AppError('Counted cash amount must be a non-negative number', 'SETTLEMENT_AMOUNT_INVALID', 400);
+        }
+        if (!isCourierCash && rawCounted > 0) {
+          throw new AppError('Counted cash applies only to cash-on-delivery orders', 'DELIVERY_SETTLEMENT_COUNTED_CASH_NOT_APPLICABLE', 400);
+        }
       }
 
       let shiftId: number | null = null;
@@ -464,15 +481,35 @@ export class DeliveryRepsService {
         const remainingFee = deliveryFeeMode === 'store_fleet' ? 0 : basis.remainingFee;
         const { tenantId: settleTenantId } = requireTenantScope(actor);
         const settleDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, settleTenantId));
-        const settledCashAmount = roundMoney(Math.max(0, basis.remainingReceivable - remainingFee), settleDigits);
+        const cashDue = roundMoney(Math.max(0, basis.remainingReceivable - remainingFee), settleDigits);
+        // INV-SF-SINGLE-SETTLE-COUNTED-CASH (D-SF-01): the cash
+        // the rep actually handed over, counted by the cashier.
+        // When no counted amount is supplied (older clients, the
+        // driver mobile page) it defaults to the book cash due,
+        // preserving the old behaviour exactly. A counted amount
+        // is never silently replaced by the book amount: a
+        // shortage is booked to 7200 and an overage to 7100 by
+        // postDeliveryRepSettlement, and the receivable is cleared
+        // by cash received + variance, never by unreceived cash.
+        const countedCash = payload?.countedCashAmount !== undefined && payload?.countedCashAmount !== null
+          ? roundMoney(Number(payload.countedCashAmount), settleDigits)
+          : null;
+        const settledCashAmount = countedCash ?? cashDue;
+        const settlementVariance = roundMoney(settledCashAmount - cashDue, settleDigits);
+        settlementSummary = { countedCash: settledCashAmount, expectedCash: cashDue, variance: settlementVariance };
 
         if (settledCashAmount > 0) {
           const repRow = sale.delivery_rep_id ? await trx.selectFrom('delivery_representatives').select(['name']).where('id', '=', Number(sale.delivery_rep_id)).where(this.tenantPredicate(actor)).executeTakeFirst() : null;
           const repLabel = repRow?.name ? `${repRow.name} (#${sale.delivery_rep_id})` : `مندوب #${sale.delivery_rep_id}`;
+          const varianceNote = settlementVariance < 0
+            ? ` (عجز ${roundMoney(Math.abs(settlementVariance), settleDigits)} ج)`
+            : settlementVariance > 0
+              ? ` (زيادة ${settlementVariance} ج)`
+              : '';
           await trx.insertInto('treasury_transactions').values({
             txn_type: 'cash_in',
             amount: settledCashAmount,
-            note: `تسوية أوردر دليفري رقم #${saleId} من ${repLabel}${remainingFee > 0 && deliveryFeeMode === 'freelance_courier' ? ` (مخصوماً منها ${remainingFee} ج رسوم المندوب)` : ''}`,
+            note: `تسوية أوردر دليفري رقم #${saleId} من ${repLabel}${remainingFee > 0 && deliveryFeeMode === 'freelance_courier' ? ` (مخصوماً منها ${remainingFee} ج رسوم المندوب)` : ''}${varianceNote}`,
             reference_type: 'cashier_shift',
             reference_id: shiftId,
             branch_id: branchId,
@@ -486,7 +523,7 @@ export class DeliveryRepsService {
           await this.salesFinance.createCustomerLedgerEntry(trx, sale.customer_id, -basis.remainingReceivable, `تسديد من مندوب للأوردر #${saleId}`, saleId, actor);
         }
 
-        await this.accountingPosting.postDeliveryRepSettlement(trx, saleId, settledCashAmount, branchId, locationId, actor);
+        await this.accountingPosting.postDeliveryRepSettlement(trx, saleId, cashDue, branchId, locationId, actor, { countedCash: settledCashAmount });
       }
 
       const updateData: Record<string, any> = {
@@ -521,7 +558,7 @@ export class DeliveryRepsService {
     });
 
     await this.audit.log('تسوية طلب توصيل', `تمت تسوية الطلب #${saleId} بواسطة ${actor.username}`, actor);
-    return { ok: true };
+    return { ok: true, ...(settlementSummary ? settlementSummary : {}) };
   }
 
   async getRepSummary(repId: number, actor: AuthContext): Promise<Record<string, unknown>> {

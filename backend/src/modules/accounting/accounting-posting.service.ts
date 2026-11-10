@@ -5302,13 +5302,30 @@ export class AccountingPostingService {
       throw e;
     }
   }
-  async postDeliveryRepSettlement(queryable: DbOrTx, saleId: number, amount: number, branchId: number | null, locationId: number | null, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+  async postDeliveryRepSettlement(queryable: DbOrTx, saleId: number, amount: number, branchId: number | null, locationId: number | null, auth: AuthContext, opts?: { countedCash?: number }): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
     const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
 
     if (!Number.isFinite(amount) || amount < 0) throw new AppError('Invalid delivery settlement', 'DELIVERY_SETTLEMENT_INVALID', 400);
+    // INV-SF-SINGLE-SETTLE-COUNTED-CASH (D-SF-01): `amount` is the
+    // BOOK cash due, as before. `opts.countedCash` is the cash the
+    // rep actually handed over, counted by the cashier — supplied
+    // only by settleOrder. When it is absent the counted cash is
+    // the book amount and the posting is exactly the old one. A
+    // counted amount that differs from the book amount is a
+    // shortage (Dr 7200) or an overage (Cr 7100), mirroring
+    // postVanTripSettlement — unreceived cash is never booked as
+    // received. A computed book amount that does not reconcile
+    // with the remaining fee still fails closed below (the R7-A
+    // gate): a human-counted difference is a variance to book,
+    // a computed difference is a caller bug to reject.
+    const bookCash = toBookMoney(amount);
+    const countedCash = opts?.countedCash !== undefined && opts?.countedCash !== null
+      ? toBookMoney(opts.countedCash)
+      : bookCash;
+    if (!Number.isFinite(countedCash) || countedCash < 0) throw new AppError('Invalid delivery settlement', 'DELIVERY_SETTLEMENT_INVALID', 400);
 
     const existing = await queryable.selectFrom('journal_entries')
       .select('id')
@@ -5337,18 +5354,30 @@ export class AccountingPostingService {
     // collection against a still-owed fee (e.g. the rest was
     // covered by store credit) fails closed for manual
     // reconciliation instead of silently dropping the fee.
+    // A stale book amount (total - original fee, total -
+    // remaining fee) throws DELIVERY_SETTLEMENT_INVALID here —
+    // pinned by sale-money-truth F9 and returns-payout-truth.
     const basis = await this.deliverySettlementBasis(queryable, saleId, auth);
     const remainingReceivable = basis.remainingReceivable;
     const remainingFee = basis.remainingFee;
-    const fee = toBookMoney(remainingReceivable - amount);
+    const fee = toBookMoney(remainingReceivable - bookCash);
     if (fee < 0 || Math.abs(fee - remainingFee) > this.maxAllowedDifference(bookDigits)) throw new AppError('Delivery settlement does not reconcile with courier fee', 'DELIVERY_SETTLEMENT_INVALID', 409);
+    // INV-SF-SINGLE-SETTLE-COUNTED-CASH (D-SF-01): the difference
+    // between the counted cash and the reconciled book cash is
+    // the variance — a shortage (Dr 7200) or an overage
+    // (Cr 7100), mirroring postVanTripSettlement. When counted
+    // == book the variance is zero and the legs are exactly the
+    // old ones (Dr 2115 fee + Dr 1110 cash / Cr 1130 receivable).
+    const variance = toBookMoney(countedCash - bookCash);
     // A fully-returned order has nothing left to collect and no
     // fee left to relieve: post no (empty) journal — the
     // receivable is already zero via the return journal — and let
     // the caller mark the order settled. insertPostedJournal
     // throws EMPTY_JOURNAL on zero lines, so this returns before
-    // the lines are built.
-    if (remainingReceivable === 0 && amount === 0) return { posted: false, journalEntryId: null };
+    // the lines are built. (A counted amount on a fully-returned
+    // order is not "nothing": it is a pure overage, booked below
+    // as Dr 1110 / Cr 7100.)
+    if (remainingReceivable === 0 && countedCash === 0) return { posted: false, journalEntryId: null };
     const lines: JournalLineDraft[] = [];
     if (fee > 0) {
       // R4-A (INV-REST-SALE-MONEY-TRUTH): the sale now posts the
@@ -5361,10 +5390,17 @@ export class AccountingPostingService {
       const courierPayableId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '2115');
       addBookLine({ accountId: courierPayableId, description: 'رسوم مندوب حر مخصومة من التحصيل', debit: fee, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
     }
+    if (variance < -this.maxAllowedDifference(bookDigits)) {
+      const shortageAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7200');
+      addBookLine({ accountId: shortageAccountId, description: `عجز تسوية مندوب لفاتورة #${sale.doc_no || saleId}`, debit: Math.abs(variance), credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
+    } else if (variance > this.maxAllowedDifference(bookDigits)) {
+      const overageAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7100');
+      addBookLine({ accountId: overageAccountId, description: `زيادة تسوية مندوب لفاتورة #${sale.doc_no || saleId}`, debit: 0, credit: variance, partnerType: 'none', partnerId: null, branchId, locationId });
+    }
     addBookLine({
       accountId: cashAccountId,
       description: `تحصيل من مندوب عن فاتورة #${sale.doc_no || saleId}`,
-      debit: amount,
+      debit: countedCash,
       credit: 0,
       partnerType: 'none',
       partnerId: null,
