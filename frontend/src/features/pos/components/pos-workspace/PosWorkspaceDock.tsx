@@ -231,14 +231,10 @@ export function PosWorkspaceDock({
             }}
           >
             <span className="pos-dock-btn-desktop-text">
-              {settings?.restaurantModuleEnabled
-                ? t('pos.pos_workspace.pos_workspace_dock.s4', "إرسال للمطبخ F4")
-                : t('pos.pos_workspace.pos_workspace_dock.s5', "تعليق F4")}
+              {t('pos.pos_workspace.pos_workspace_dock.s5', "تعليق F4")}
             </span>
             <span className="pos-dock-btn-mobile-text">
-              {settings?.restaurantModuleEnabled
-                ? t('pos.pos_workspace.pos_workspace_dock.s6', "المطبخ")
-                : t('pos.pos_workspace.pos_workspace_dock.s7', "تعليق")}
+              {t('pos.pos_workspace.pos_workspace_dock.s7', "تعليق")}
             </span>
           </Button>
 
