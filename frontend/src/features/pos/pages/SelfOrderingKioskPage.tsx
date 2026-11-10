@@ -31,6 +31,7 @@ import {
   useSelfOrderingKiosk,
   resolveKioskSlug,
   filterKioskMenuItems,
+  kioskMenuTotalPages,
   useKiosk86Items,
   resolveKioskFinalizeOutcome,
   kioskConfirmationCopy,
@@ -300,8 +301,23 @@ export function SelfOrderingKioskPage() {
   }, [orderConfirmedData, resetCountdown]);
 
   // Load catalog & actions via feature hook
-  const { catalogData, isCatalogLoading, checkUpsell, getProductModifiers, createOrder, listTerminals, initiateTerminalCharge } =
-    useSelfOrderingKiosk(currentSlug);
+  // INV-REST-KIOSK-MENU-SCALE (T10-B): the menu is ONE server page at
+  // a time (50 cards max). Category and search travel to the server as
+  // categoryId/q — the browser never holds the whole catalog — and the
+  // page renders only the current page, with a pager below the grid.
+  const {
+    catalogData,
+    isCatalogLoading,
+    catalogPage,
+    setCatalogPage,
+    catalogTotalCount,
+    catalogHasMore,
+    checkUpsell,
+    getProductModifiers,
+    createOrder,
+    listTerminals,
+    initiateTerminalCharge,
+  } = useSelfOrderingKiosk(currentSlug, { categoryId: selectedCategory, search: searchQuery });
 
   const eightySixedIds = useKiosk86Items(currentSlug);
 
@@ -311,18 +327,11 @@ export function SelfOrderingKioskPage() {
   );
   const categories = useMemo(() => catalogData?.categories || [], [catalogData]);
 
-  // فلترة الأصناف حسب القسم وبحث النص
-  const filteredProducts = useMemo(() => {
-    return products.filter((p: any) => {
-      const matchesCategory =
-        selectedCategory === 'all' || Number(p.categoryId) === Number(selectedCategory);
-      const matchesSearch =
-        !searchQuery.trim() ||
-        String(p.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        String(p.description || '').toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
-    });
-  }, [products, selectedCategory, searchQuery]);
+  // The grid renders this page only: at most KIOSK_CATALOG_PAGE_SIZE
+  // cards (the hook already caps the page). The server total — not the
+  // rendered list — says how big the menu is.
+  const filteredProducts = products;
+  const totalPages = kioskMenuTotalPages(catalogTotalCount);
 
   const checkUpsellForProduct = async (product: any) => {
     try {
@@ -1565,14 +1574,13 @@ export function SelfOrderingKioskPage() {
                   fontWeight: 600,
                 }}
               >
-                {products.length} {__t('pos.self_ordering_kiosk_page.s45', __t('pos.self_ordering_kiosk_page.s45', "وجبة"))}
+                {catalogTotalCount} {__t('pos.self_ordering_kiosk_page.s45', __t('pos.self_ordering_kiosk_page.s45', "وجبة"))}
               </span>
             </button>
 
             {/* قائمة الأقسام */}
             {categories.map((c: any) => {
               const isCatActive = selectedCategory !== 'all' && Number(selectedCategory) === Number(c.id);
-              const countInCat = products.filter((p: any) => Number(p.categoryId) === Number(c.id)).length;
 
               return (
                 <button
@@ -1597,15 +1605,6 @@ export function SelfOrderingKioskPage() {
                 >
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {c.name}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: '10.5px',
-                      color: isCatActive ? '#cbd5e1' : '#64748b',
-                      fontWeight: 600,
-                    }}
-                  >
-                    {countInCat} {__t('pos.self_ordering_kiosk_page.s46', __t('pos.self_ordering_kiosk_page.s46', "وجبة"))}
                   </span>
                 </button>
               );
@@ -1842,6 +1841,59 @@ export function SelfOrderingKioskPage() {
                   );
                 })}
               </div>
+              {/* INV-REST-KIOSK-MENU-SCALE (T10-B): the pager — the grid
+              above renders one server page only, so the customer pages
+              through the menu instead of the tab rendering all of it.
+              Hidden when the whole menu fits on one page. */}
+              {totalPages > 1 && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '12px',
+                    padding: '12px 0 20px',
+                  }}
+                >
+                  <button
+                    type="button"
+                    disabled={catalogPage <= 1}
+                    onClick={() => setCatalogPage(Math.max(1, catalogPage - 1))}
+                    style={{
+                      padding: '9px 18px',
+                      borderRadius: '10px',
+                      border: '1px solid #e2e8f0',
+                      backgroundColor: catalogPage <= 1 ? '#f1f5f9' : '#ffffff',
+                      color: catalogPage <= 1 ? '#94a3b8' : '#0f172a',
+                      fontSize: '13px',
+                      fontWeight: 800,
+                      cursor: catalogPage <= 1 ? 'default' : 'pointer',
+                    }}
+                  >
+                    {__t('pos.self_ordering_kiosk_page.s142', 'السابق')}
+                  </button>
+                  <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#475569' }}>
+                    {__t('pos.self_ordering_kiosk_page.s143', 'صفحة')} {catalogPage} {__t('pos.self_ordering_kiosk_page.s144', 'من')} {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={!catalogHasMore && catalogPage >= totalPages}
+                    onClick={() => setCatalogPage(Math.min(totalPages, catalogPage + 1))}
+                    style={{
+                      padding: '9px 18px',
+                      borderRadius: '10px',
+                      border: '1px solid #e2e8f0',
+                      backgroundColor: !catalogHasMore && catalogPage >= totalPages ? '#f1f5f9' : '#170e5e',
+                      color: !catalogHasMore && catalogPage >= totalPages ? '#94a3b8' : '#ffffff',
+                      fontSize: '13px',
+                      fontWeight: 800,
+                      cursor: !catalogHasMore && catalogPage >= totalPages ? 'default' : 'pointer',
+                    }}
+                  >
+                    {__t('pos.self_ordering_kiosk_page.s145', 'التالي')}
+                  </button>
+                </div>
+              )}
             )}
           </main>
 

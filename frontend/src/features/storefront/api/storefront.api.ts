@@ -264,6 +264,58 @@ export const storefrontApi = {
     return resolveStorefrontCatalogResponse(res, slug);
   },
 
+  /*
+   * INV-REST-KIOSK-MENU-SCALE (T10-B): ONE server page of the catalog —
+   * the call the kiosk menu uses instead of getCatalog. The server
+   * clamps pageSize to 200 and answers with page/pageSize/totalCount/
+   * hasMore; categoryId and q filter on the server, so the browser
+   * never holds (or filters) the whole catalog. Like getCatalog, no
+   * try/catch here on purpose — an http error must reach the caller,
+   * never come back as a menu. The response is normalized exactly like
+   * getCatalog (store stamp, numeric ids, resolved media), and the
+   * paging fields ride through from the server payload.
+   */
+  getCatalogPage: async (
+    slug: string,
+    opts: { page?: number; pageSize?: number; categoryId?: number; q?: string } = {},
+  ): Promise<
+    StorefrontCatalogResponse & {
+      storeSlug: string;
+      storeName: string | null;
+      page: number;
+      pageSize: number;
+      totalCount: number;
+      hasMore: boolean;
+    }
+  > => {
+    const page = Math.min(10_000, Math.max(1, Math.trunc(Number(opts.page) || 1)));
+    const pageSize = Math.min(200, Math.max(1, Math.trunc(Number(opts.pageSize) || 50)));
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('pageSize', String(pageSize));
+    if (opts.categoryId && Number(opts.categoryId) > 0) {
+      params.set('categoryId', String(Number(opts.categoryId)));
+    }
+    const q = String(opts.q || '').trim();
+    if (q) params.set('q', q);
+    const res = await http<
+      StorefrontCatalogResponse & {
+        page?: number;
+        pageSize?: number;
+        totalCount?: number;
+        hasMore?: boolean;
+      }
+    >(`/api/storefront/${encodeURIComponent(slug)}/catalog?${params.toString()}`);
+    const normalized = resolveStorefrontCatalogResponse(res, slug);
+    return {
+      ...normalized,
+      page: Number(res.page ?? page),
+      pageSize: Number(res.pageSize ?? pageSize),
+      totalCount: Number(res.totalCount ?? 0),
+      hasMore: Boolean(res.hasMore),
+    };
+  },
+
   getSearchSuggestions: async (slug: string, q: string) => {
     const lang = typeof localStorage !== 'undefined' && localStorage.getItem('zs_storefront_lang') === 'en' ? 'en' : 'ar';
     const { localizeCategory, localizeProduct } = await import('../lib/storefront-translations');

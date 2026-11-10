@@ -165,6 +165,57 @@ describe('storefront getCatalog never serves the demo menu (INV-REST-STOREFRONT-
   });
 });
 
+describe('storefront getCatalogPage serves one server page (T10-B INV-REST-KIOSK-MENU-SCALE)', () => {
+  const serverPage = {
+    ...serverCatalog,
+    page: 2,
+    pageSize: 50,
+    totalCount: 10_000,
+    hasMore: true,
+  };
+
+  it('requests page + pageSize on the catalog URL — never the whole catalog', async () => {
+    httpMock.mockResolvedValueOnce(serverPage);
+    const res = await storefrontApi.getCatalogPage('test10k', { page: 2, pageSize: 50 });
+    expect(httpMock).toHaveBeenCalledTimes(1);
+    expect(httpMock).toHaveBeenCalledWith('/api/storefront/test10k/catalog?page=2&pageSize=50');
+    expect(res.products.map((p) => p.id)).toEqual([16812, 16813]);
+    expect(res.page).toBe(2);
+    expect(res.pageSize).toBe(50);
+    expect(res.totalCount).toBe(10_000);
+    expect(res.hasMore).toBe(true);
+    expect(res.storeSlug).toBe('test10k');
+  });
+
+  it('passes categoryId and q through so search/category filter server-side', async () => {
+    httpMock.mockResolvedValueOnce({ ...serverPage, page: 1, totalCount: 1, hasMore: false });
+    const res = await storefrontApi.getCatalogPage('test10k', {
+      page: 1,
+      pageSize: 50,
+      categoryId: 7,
+      q: 'مشويات',
+    });
+    const url = String(httpMock.mock.calls[0][0]);
+    expect(url).toContain('page=1');
+    expect(url).toContain('pageSize=50');
+    expect(url).toContain('categoryId=7');
+    expect(url).toContain(`q=${encodeURIComponent('مشويات')}`);
+    expect(res.totalCount).toBe(1);
+    expect(res.hasMore).toBe(false);
+  });
+
+  it('defaults to page 1 and clamps pageSize to the server max of 200', async () => {
+    httpMock.mockResolvedValueOnce({ ...serverPage, page: 1, pageSize: 200 });
+    await storefrontApi.getCatalogPage('test10k', { pageSize: 500 });
+    expect(httpMock).toHaveBeenCalledWith('/api/storefront/test10k/catalog?page=1&pageSize=200');
+  });
+
+  it('rejects on HTTP error instead of resolving a menu', async () => {
+    httpMock.mockRejectedValueOnce(new Error('Request failed with status code 404'));
+    await expect(storefrontApi.getCatalogPage('no-such-store', { page: 1 })).rejects.toThrow('404');
+  });
+});
+
 describe('storefront quote/search/details never serve demo data (INV-REST-QUOTECART-NO-DEMO)', () => {
   const quotePayload = {
     items: [{ productId: 16812, quantity: 2 }],

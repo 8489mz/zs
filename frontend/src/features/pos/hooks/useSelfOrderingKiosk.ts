@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { storefrontApi } from '@/features/storefront';
 import { posApi } from '@/features/pos/api/pos.api';
 import { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced-fnb.api';
@@ -187,7 +188,43 @@ export function useKiosk86Items(currentSlug: string | null | undefined): Array<n
     staleTime: 30_000,
     refetchInterval: 30_000,
   });
-  return items86.map((item) => item.product_id);
+  // INV-REST-KIOSK-MENU-SCALE (T10-B): the mapped ids are memoized on
+  // the query data — the old code mapped a NEW array on every render,
+  // so the 10 s clock tick busted the page's products/filteredProducts
+  // memos and reconciled the whole menu grid again on every tick.
+  return useMemo(() => items86.map((item) => item.product_id), [items86]);
+}
+
+/**
+ * INV-REST-KIOSK-MENU-SCALE (T10-B): the kiosk menu is ONE server page
+ * at a time — never the whole catalog. The trial tenant holds 10,000
+ * products; fetching and rendering them all as cards in one pass froze
+ * the tab, and the clock tick re-rendered them every 10 s.
+ *
+ * KIOSK_CATALOG_PAGE_SIZE (50) is the page the hook asks the server
+ * for (server max 200) and the hard cap on the rendered window:
+ * boundKioskMenuWindow slices any page down to it, so even a server
+ * that ignored pageSize could never hand the grid more than one page.
+ * kioskMenuTotalPages turns the server's totalCount into the page
+ * count the pager shows.
+ */
+export const KIOSK_CATALOG_PAGE_SIZE = 50;
+
+export function boundKioskMenuWindow<T>(items: T[], limit: number = KIOSK_CATALOG_PAGE_SIZE): T[] {
+  if (!items || items.length === 0) return [];
+  return items.length <= limit ? items : items.slice(0, limit);
+}
+
+export function kioskMenuTotalPages(totalCount: number, pageSize: number = KIOSK_CATALOG_PAGE_SIZE): number {
+  return Math.max(1, Math.ceil(Math.max(0, Math.floor(Number(totalCount) || 0)) / Math.max(1, pageSize)));
+}
+
+/** Server-side menu filter: category and search travel to the server
+ * as categoryId/q — the browser never holds the whole catalog to
+ * filter it. 'all' means no category filter. */
+export interface KioskMenuFilter {
+  categoryId?: number | 'all';
+  search?: string;
 }
 
 export type KioskPaymentStatus = 'paid' | 'unpaid' | 'pending';
@@ -473,26 +510,68 @@ export function kioskConfirmationCopy(
   };
 }
 
-export function useSelfOrderingKiosk(storeSlug: string | null | undefined) {
+export function useSelfOrderingKiosk(storeSlug: string | null | undefined, menuFilter: KioskMenuFilter = {}) {
   const cleanSlug = resolveKioskSlug([storeSlug]);
+  const categoryId =
+    menuFilter.categoryId === 'all' || menuFilter.categoryId === undefined
+      ? undefined
+      : Number(menuFilter.categoryId);
+  const search = String(menuFilter.search || '').trim();
+
+  // INV-REST-KIOSK-MENU-SCALE (T10-B): search is debounced 300 ms so
+  // typing a word fires one server query, not one per keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // The menu page. A new slug, category or search restarts at page 1 —
+  // page 3 of "all" is meaningless once the filter changes.
+  const [catalogPage, setCatalogPage] = useState(1);
+  useEffect(() => {
+    setCatalogPage(1);
+  }, [cleanSlug, categoryId, debouncedSearch]);
 
   const { data: catalogData, isLoading: isCatalogLoading } = useQuery({
-    queryKey: ['kiosk-catalog', cleanSlug ?? ''],
+    queryKey: ['kiosk-catalog-page', cleanSlug ?? '', catalogPage, categoryId ?? 0, debouncedSearch],
     queryFn: async () => {
+      const emptyPage = {
+        categories: [],
+        products: [],
+        page: 1,
+        pageSize: KIOSK_CATALOG_PAGE_SIZE,
+        totalCount: 0,
+        hasMore: false,
+      };
       // INV-REST-KIOSK-NO-FICTION: no slug means no store, so no menu —
       // fail closed. And exactly one catalog attempt: the requested store
       // only. A failed or empty catalog stays empty; there is no fallback
       // chain to another tenant's menu or to the POS catalog.
-      if (!cleanSlug) return { categories: [], products: [] };
+      if (!cleanSlug) return emptyPage;
       try {
-        const cat = await storefrontApi.getCatalog(cleanSlug);
-        if (cat && cat.products && cat.products.length > 0) return cat;
+        const cat = await storefrontApi.getCatalogPage(cleanSlug, {
+          page: catalogPage,
+          pageSize: KIOSK_CATALOG_PAGE_SIZE,
+          categoryId,
+          q: debouncedSearch || undefined,
+        });
+        if (cat && cat.products) {
+          return {
+            ...cat,
+            products: boundKioskMenuWindow(cat.products),
+            totalCount: Number(cat.totalCount ?? 0),
+            hasMore: Boolean(cat.hasMore),
+          };
+        }
       } catch {
         // fall through to the empty catalog below
       }
-      return { categories: [], products: [] };
+      return emptyPage;
     },
     staleTime: 60_000,
+    // Paging keeps the previous page visible while the next loads.
+    placeholderData: keepPreviousData,
   });
 
   const checkUpsell = async (productId: number) => {
@@ -546,6 +625,14 @@ export function useSelfOrderingKiosk(storeSlug: string | null | undefined) {
   return {
     catalogData,
     isCatalogLoading,
+    // INV-REST-KIOSK-MENU-SCALE (T10-B): the page the grid renders.
+    // catalogData.products holds at most KIOSK_CATALOG_PAGE_SIZE cards;
+    // catalogTotalCount is the server's total for the current filter,
+    // so the pager (not the rendered list) says how big the menu is.
+    catalogPage,
+    setCatalogPage,
+    catalogTotalCount: Number(catalogData?.totalCount ?? 0),
+    catalogHasMore: Boolean(catalogData?.hasMore),
     checkUpsell,
     getProductModifiers,
     createOrder,
