@@ -25,7 +25,7 @@ export const CfdScanningView: React.FC<CfdScanningViewProps> = ({
         <div className="cfd-cart-header">
           <div className="cfd-cart-header-title">
             <ShoppingCartIcon size={20} color="#170e5e" />
-            <span>{t('pos.customer_display.cfd_scanning_view.s0', "سلة المشتريات الحالية")}</span>
+            <span>{t('pos.customer_display.cfd_scanning_view.s0', "السلة الحالية")}</span>
             <span className="cfd-item-count-badge">
               {payload.itemCount} {payload.itemCount === 1 ? t('pos.customer_display.cfd_scanning_view.s1', "صنف") : t('pos.customer_display.cfd_scanning_view.s2', "أصناف")}
             </span>

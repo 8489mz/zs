@@ -416,7 +416,7 @@ export function PosDisplaysModal({ open, onClose, isRestaurantActive }: PosDispl
       tag: 'تلفزيون الصالة',
       renderIcon: (size: number, color = '#170e5e') => <LaptopIcon size={size} color={color} />,
       description: 'بث ترويجي حي على شاشات التلفزيون لعرض المنتجات والتخفيضات الكبرى وقوائم الأسعار دورياً مع رمز QR.',
-      hint: 'تلفزيون المعرض · TV Signage',
+      hint: 'تلفزيون · TV Signage',
       features: [
         'بث ترويجي دوري للمنتجات والتخفيضات',
         'تحديث حي وتلقائي لقوائم الأسعار والكتالوج',

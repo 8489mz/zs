@@ -19,7 +19,7 @@ export const CfdCompletedView: React.FC<CfdCompletedViewProps> = ({ payload }) =
 
         <div className="cfd-completed-title">{t('pos.customer_display.cfd_completed_view.s0', "تمت عملية الشراء بنجاح!")}</div>
         <div className="cfd-completed-subtitle">
-          {t('pos.customer_display.cfd_completed_view.s1', "شكراً لتسوقكم معنا في")} {payload.storeName}{t('pos.customer_display.cfd_completed_view.s2', ". نسعد دائماً بخدمتكم ونتطلع لرؤيتكم قريباً!")}
+          {t('pos.customer_display.cfd_completed_view.s1', "شكراً لزيارتكم في")} {payload.storeName}{t('pos.customer_display.cfd_completed_view.s2', ". نسعد دائماً بخدمتكم ونتطلع لرؤيتكم قريباً!")}
         </div>
 
         {payload.completedSale && (

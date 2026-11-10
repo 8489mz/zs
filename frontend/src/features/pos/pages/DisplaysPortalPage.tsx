@@ -51,8 +51,8 @@ export function DisplaysPortalPage() {
     {
       key: 'signage',
       title: 'شاشة العروض والأسعار (Digital Signage)',
-      description: 'بث ترويجي حي على شاشات التلفزيون والمعرض، يعرض المنتجات والتخفيضات الكبرى دورياً مع رمز QR للتسوق من الهاتف.',
-      badge: 'صالة العرض والتلفزيون',
+      description: 'بث ترويجي حي على شاشات التلفزيون، يعرض المنتجات والتخفيضات الكبرى دورياً مع رمز QR للتصفح والطلب من الهاتف.',
+      badge: 'شاشات التلفزيون',
       path: '/signage',
       windowName: 'DigitalSignageWindow',
       icon: <LaptopIcon size={26} color="#170e5e" />,
@@ -113,7 +113,7 @@ export function DisplaysPortalPage() {
         >
           <PageHeader
             title={t('pos.displays_portal_page.s1', "شاشات العرض والتفاعل")}
-            description={t('pos.displays_portal_page.s2', "مركز تشغيل شاشات العرض المباشرة التفاعلية لنقاط البيع وصالة العرض ومحطات التحضير والمطبخ")}
+            description={t('pos.displays_portal_page.s2', "مركز تشغيل شاشات العرض المباشرة التفاعلية لنقاط البيع ومحطات التحضير والمطبخ")}
             badge={<span className="nav-pill">{cards.length} {t('pos.displays_portal_page.s3', "شاشات مفعلة")}</span>}
           />
 

@@ -48,7 +48,7 @@ export const CfdIdleView: React.FC<CfdIdleViewProps> = ({
                 {t('pos.customer_display.cfd_idle_view.s0', "أهلاً وسهلاً بكم في")} {storeName}
               </h2>
               <p className="cfd-idle-subheadline">
-                {t('pos.customer_display.cfd_idle_view.s1', "نسعد بخدمتكم وتوفير أفضل تجربة تسوق. تفضل بتقديم مشترياتك للكاشير وسيقوم بمسحها على الفور.")}
+                {t('pos.customer_display.cfd_idle_view.s1', "نسعد بخدمتكم. تفضل بتقديم مشترياتك للكاشير وسيقوم بمسحها على الفور.")}
               </p>
             </div>
           </div>
@@ -88,8 +88,8 @@ export const CfdIdleView: React.FC<CfdIdleViewProps> = ({
             <div className="cfd-trust-item">
               <ShieldCheckIcon size={18} color="#170e5e" />
               <div>
-                <div className="cfd-trust-title">{t('pos.customer_display.cfd_idle_view.s4', "ضمان واستبدال فوري")}</div>
-                <div className="cfd-trust-sub">{t('pos.customer_display.cfd_idle_view.s5', "جودة وأصالة معتمدة 100%")}</div>
+                <div className="cfd-trust-title">{t('pos.customer_display.cfd_idle_view.s4', "خدمة العملاء")}</div>
+                <div className="cfd-trust-sub">{t('pos.customer_display.cfd_idle_view.s5', "نسعد بخدمتكم دائماً")}</div>
               </div>
             </div>
 
@@ -97,7 +97,7 @@ export const CfdIdleView: React.FC<CfdIdleViewProps> = ({
               <CreditCardIcon size={18} color="#170e5e" />
               <div>
                 <div className="cfd-trust-title">{t('pos.customer_display.cfd_idle_view.s6', "سداد إلكتروني آمن")}</div>
-                <div className="cfd-trust-sub">{t('pos.customer_display.cfd_idle_view.s7', "InstaPay وفيزا ومحافظ")}</div>
+                <div className="cfd-trust-sub">{t('pos.customer_display.cfd_idle_view.s7', "اسأل الكاشير عن طرق السداد المتاحة")}</div>
               </div>
             </div>
           </div>
@@ -137,20 +137,9 @@ export const CfdIdleView: React.FC<CfdIdleViewProps> = ({
             </div>
           </div>
 
-          <div className="cfd-kiosk-payments-box">
-            <div className="cfd-payments-header">
-              <CreditCardIcon size={16} color="#170e5e" />
-              <span>{t('pos.customer_display.cfd_idle_view.s14', "وسائل الدفع المقبولة بصالة البيع")}</span>
-            </div>
-
-            <div className="cfd-payments-badges-grid">
-              <div className="cfd-payment-chip instapay">{t('pos.customer_display.cfd_idle_view.s15', "InstaPay فوري")}</div>
-              <div className="cfd-payment-chip cards">{t('pos.customer_display.cfd_idle_view.s16', "فيزا وماستركارد")}</div>
-              <div className="cfd-payment-chip meeza">{t('pos.customer_display.cfd_idle_view.s17', "كروت ميزة")}</div>
-              <div className="cfd-payment-chip wallets">{t('pos.customer_display.cfd_idle_view.s18', "المحافظ والموبايل كاش")}</div>
-              <div className="cfd-payment-chip cash">{t('pos.customer_display.cfd_idle_view.s19', "نقداً بالجنيه المصري")}</div>
-            </div>
-          </div>
+          {/* INV-REST-DISPLAY-ZERO-SHOWROOM (T14-D): the accepted-payment-methods
+            * block is dropped, not reworded — no data source lists the accepted
+            * methods, so no method is named here. */}
         </div>
       </div>
 

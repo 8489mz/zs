@@ -9,8 +9,6 @@ import { buildQrSvg } from '@/lib/qrcode';
 import {
   TagIcon,
   AwardIcon,
-  CreditCardIcon,
-  TruckIcon,
 } from '@/shared/components/icons/AppIcons';
 import { useIsolatedDisplayLanguage } from '@/features/pos/hooks/useIsolatedDisplayLanguage';
 import { CfdHeader } from '../components/customer-display/CfdHeader';
@@ -18,36 +16,30 @@ import { CfdIdleView, type PromotionItem } from '../components/customer-display/
 import { CfdScanningView } from '../components/customer-display/CfdScanningView';
 import { CfdCompletedView } from '../components/customer-display/CfdCompletedView';
 
-const DEFAULT_PROMOTIONS: PromotionItem[] = [
-  {
-    id: 'promo-1',
-    title: 'عروض وتخفيضات حصرية بالمعرض',
-    subtitle: 'اكتشف عروضنا اليومية المتجددة على تشكيلة واسعة من المنتجات المختارة بعناية بأفضل الأسعار التنافسية.',
-    badge: 'توفير استثنائي',
-    icon: <TagIcon size={26} color="#170e5e" />,
-  },
-  {
-    id: 'promo-2',
-    title: 'برنامج ولاء ومكافآت العملاء',
-    subtitle: 'اجمع نقاطاً مع كل فاتورة شراء واستبدلها بخصومات مالية فورية على مشترياتك القادمة.',
-    badge: 'نقاط ومكافآت',
-    icon: <AwardIcon size={26} color="#170e5e" />,
-  },
-  {
-    id: 'promo-3',
-    title: 'سداد إلكتروني فوري وسلس',
-    subtitle: 'ادفع بأمان وسرعة عبر تطبيق InstaPay أو المحافظ الإلكترونية وكروت الدفع البنكي.',
-    badge: 'دفع ذكي',
-    icon: <CreditCardIcon size={26} color="#170e5e" />,
-  },
-  {
-    id: 'promo-4',
-    title: 'خدمة التوصيل السريع للمنازل',
-    subtitle: 'اطلب من خلال المتجر الإلكتروني أو الواتساب لتصلك مشترياتك حتى باب بيتك بأسرع وقت.',
-    badge: 'دليفري سريع',
-    icon: <TruckIcon size={26} color="#170e5e" />,
-  },
-];
+/* INV-REST-DISPLAY-ZERO-SHOWROOM (T14-D): the idle rotation is neutral
+ * welcome + loyalty only. The old hardcoded showroom promos (showroom
+ * offers, InstaPay/cards payment claims, delivery/WhatsApp claims) are
+ * gone: none of them is data-driven — the page reads only the live-sale
+ * payload — so no invented perk or payment method is shown. The welcome
+ * promo is driven by the real storeName from the payload. */
+export function buildDefaultPromotions(storeName: string): PromotionItem[] {
+  return [
+    {
+      id: 'promo-welcome',
+      title: `أهلاً وسهلاً بكم في ${storeName}`,
+      subtitle: 'نسعد بخدمتكم في كل زيارة.',
+      badge: 'أهلاً بكم',
+      icon: <TagIcon size={26} color="#170e5e" />,
+    },
+    {
+      id: 'promo-loyalty',
+      title: 'برنامج ولاء ومكافآت العملاء',
+      subtitle: 'اجمع نقاطاً مع كل فاتورة شراء واستبدلها بخصومات مالية فورية على مشترياتك القادمة.',
+      badge: 'نقاط ومكافآت',
+      icon: <AwardIcon size={26} color="#170e5e" />,
+    },
+  ];
+}
 
 export function CustomerFacingDisplayPage() {
   const { currentLang, toggleLanguage } = useIsolatedDisplayLanguage('cfd_ui_lang');
@@ -107,14 +99,19 @@ export function CustomerFacingDisplayPage() {
     return () => clearInterval(timer);
   }, []);
 
+  const promotions = useMemo(
+    () => buildDefaultPromotions(payload.storeName),
+    [payload.storeName],
+  );
+
   // 3. Promotional banner rotation for Idle state
   useEffect(() => {
     if (payload.status !== 'idle') return;
     const interval = setInterval(() => {
-      setPromoIndex((prev) => (prev + 1) % DEFAULT_PROMOTIONS.length);
+      setPromoIndex((prev) => (prev + 1) % promotions.length);
     }, 6000);
     return () => clearInterval(interval);
-  }, [payload.status]);
+  }, [payload.status, promotions]);
 
   // 4. Auto-revert completed screen back to idle after 12 seconds
   useEffect(() => {
@@ -200,7 +197,7 @@ export function CustomerFacingDisplayPage() {
         {payload.status === 'idle' && (
           <CfdIdleView
             storeName={payload.storeName}
-            promotions={DEFAULT_PROMOTIONS}
+            promotions={promotions}
             promoIndex={promoIndex}
             setPromoIndex={setPromoIndex}
             loyaltyQrSvg={loyaltyQrSvg}
