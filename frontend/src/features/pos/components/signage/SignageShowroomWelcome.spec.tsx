@@ -32,10 +32,10 @@ const SHOWROOM_STRINGS = [
 function renderBoard(props: Record<string, unknown> = {}) {
   const utils = render(
     <SignageShowroomWelcome
+      {...(props as unknown as Parameters<typeof SignageShowroomWelcome>[0])}
       storeName="مطعم الاختبار"
       qrSvgUrl="https://example.invalid/qr.svg"
       theme="dark"
-      {...(props as unknown as Parameters<typeof SignageShowroomWelcome>[0])}
     />,
   );
   return utils;
