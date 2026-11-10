@@ -679,7 +679,13 @@ export function PosWorkspace() {
         }}
         onOpenSplitBill={isRestaurantActive ? () => setSplitBillOpen(true) : undefined}
         onConfirmSale={(managerPin, tenderedAmount) => {
-          void pos.handleSubmit({ managerPin, tenderedAmount }).then(() => {
+          // T10-A (INV-REST-COMBO-TOTALS-TRUTH): close ONLY on a real
+          // post. handleSubmit resolves false on every gate refusal
+          // and on any server refusal (e.g. the 422 totals mismatch),
+          // so the dialog stays open and the cashier keeps the cart
+          // and the reason instead of a silent close (F1 + F8).
+          void pos.handleSubmit({ managerPin, tenderedAmount }).then((posted) => {
+            if (!posted) return;
             setCheckoutDialogOpen(false);
             focusBarcodeEntry();
           });

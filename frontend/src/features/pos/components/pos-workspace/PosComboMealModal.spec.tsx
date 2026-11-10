@@ -16,15 +16,26 @@
  * onClose() unconditionally, so the false case fails there. The
  * default mock returns true — the old vi.fn() mocks returned
  * undefined, which the fixed modal treats as failure. */
+/* T10-A (INV-REST-COMBO-TOTALS-TRUTH): the modal must price from the
+ * shape the POS lookup actually returns — mapPosProduct carries
+ * retailPrice only (catalog-product.service.ts:1273), no price and no
+ * retail_price. At base the modal read p?.price || p?.retail_price,
+ * so every step priced at 0.00 in production while this spec's old
+ * snake_case fixture (price: 60, retail_price: 60) hid it. The
+ * PRODUCTS fixture below is the real lookup shape; the cases pin the
+ * step prices, the total, and the emitted payload against it. The
+ * legacy snake_case shape is kept working via the reader's fallback
+ * chain and pinned by the last case. */
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { PosComboMealModal } from './PosComboMealModal';
+import { formatCurrency } from '@/lib/format';
 
 const PRODUCTS = [
-  { id: 1, name: 'Burger', price: 60, retail_price: 60, stock: 10 },
-  { id: 2, name: 'Fries', price: 25, retail_price: 25, stock: 10 },
-  { id: 3, name: 'Cola', price: 15, retail_price: 15, stock: 10 },
+  { id: 1, name: 'Burger', retailPrice: 60, stock: 10 },
+  { id: 2, name: 'Fries', retailPrice: 25, stock: 10 },
+  { id: 3, name: 'Cola', retailPrice: 15, stock: 10 },
 ];
 
 function renderModal(props: Partial<Parameters<typeof PosComboMealModal>[0]> = {}) {
@@ -166,5 +177,88 @@ describe('PosComboMealModal — close only on successful add (R8-C)', () => {
     fireEvent.click(confirm);
     expect(onAddComboToCart).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+  }, 30000);
+});
+
+describe('PosComboMealModal — prices from the real POS lookup shape (T10-A)', () => {
+  // Trial-shaped prices: main 99, side 75, drink 25 — the shape the
+  // trial's 99/174 mismatch came from (side stamped 0 at base).
+  const TRIAL_PRODUCTS = [
+    { id: 1, name: 'Burger', retailPrice: 99, stock: 10 },
+    { id: 2, name: 'Fries', retailPrice: 75, stock: 10 },
+    { id: 3, name: 'Cola', retailPrice: 25, stock: 10 },
+  ];
+
+  function buildTrialCombo() {
+    const { onAddComboToCart, onClose } = renderModal({ products: TRIAL_PRODUCTS });
+    const mainButtons = screen.getAllByRole('button', { name: /Burger/ });
+    fireEvent.click(mainButtons[mainButtons.length - 1]);
+    fireEvent.click(screen.getByRole('button', { name: /2\. الصنف الجانبي/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Fries/ }));
+    fireEvent.click(screen.getByRole('button', { name: /3\. المشروب/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Cola/ }));
+    return { onAddComboToCart, onClose };
+  }
+
+  it('shows real step prices and the summed total from retailPrice only', () => {
+    const { onAddComboToCart } = renderModal({ products: TRIAL_PRODUCTS });
+    // Step 1: the main card prices at its retailPrice, never 0.00.
+    expect(screen.getAllByText(formatCurrency(99)).length).toBeGreaterThan(0);
+    const mainButtons = screen.getAllByRole('button', { name: /Burger/ });
+    fireEvent.click(mainButtons[mainButtons.length - 1]);
+    // Step 2: the side card prices at its retailPrice.
+    fireEvent.click(screen.getByRole('button', { name: /2\. الصنف الجانبي/ }));
+    expect(screen.getAllByText(formatCurrency(75)).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /Fries/ }));
+    // Step 3: the drink card prices at its retailPrice.
+    fireEvent.click(screen.getByRole('button', { name: /3\. المشروب/ }));
+    expect(screen.getAllByText(formatCurrency(25)).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /Cola/ }));
+    // The summary and the confirm button carry the summed total 199.
+    const confirm = screen.getByRole('button', { name: /إضافة وجبة الكومبو/ });
+    expect(confirm.textContent).toContain(formatCurrency(199));
+    expect(onAddComboToCart).not.toHaveBeenCalled();
+  }, 30000);
+
+  it('emits the payload with real retail prices, not stamped 0.00', () => {
+    const { onAddComboToCart, onClose } = buildTrialCombo();
+    fireEvent.click(screen.getByRole('button', { name: /إضافة وجبة الكومبو/ }));
+
+    expect(onAddComboToCart).toHaveBeenCalledTimes(1);
+    const combo = onAddComboToCart.mock.calls[0][0];
+    expect(combo.productId).toBe(1);
+    // The line price is the main's retailPrice; the modifiers carry
+    // the same retailPrice the server re-prices combo components to,
+    // so the frontend total (199) agrees with the server total.
+    expect(combo.price).toBe(99);
+    expect(combo.modifiers).toEqual([
+      { productId: 2, name: 'طبق جانبي: Fries', price: 75, qty: 1, isComboComponent: true },
+      { productId: 3, name: 'مشروب: Cola', price: 25, qty: 1, isComboComponent: true },
+    ]);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  }, 30000);
+
+  it('still prices legacy snake_case products via the fallback chain', () => {
+    const legacy = [
+      { id: 1, name: 'Burger', price: 60, retail_price: 60, stock: 10 },
+      { id: 2, name: 'Fries', price: 25, retail_price: 25, stock: 10 },
+      { id: 3, name: 'Cola', price: 15, retail_price: 15, stock: 10 },
+    ];
+    const { onAddComboToCart } = renderModal({ products: legacy });
+    const mainButtons = screen.getAllByRole('button', { name: /Burger/ });
+    fireEvent.click(mainButtons[mainButtons.length - 1]);
+    fireEvent.click(screen.getByRole('button', { name: /2\. الصنف الجانبي/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Fries/ }));
+    fireEvent.click(screen.getByRole('button', { name: /3\. المشروب/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Cola/ }));
+    fireEvent.click(screen.getByRole('button', { name: /إضافة وجبة الكومبو/ }));
+
+    expect(onAddComboToCart).toHaveBeenCalledTimes(1);
+    const combo = onAddComboToCart.mock.calls[0][0];
+    expect(combo.price).toBe(60);
+    expect(combo.modifiers).toEqual([
+      { productId: 2, name: 'طبق جانبي: Fries', price: 25, qty: 1, isComboComponent: true },
+      { productId: 3, name: 'مشروب: Cola', price: 15, qty: 1, isComboComponent: true },
+    ]);
   }, 30000);
 });

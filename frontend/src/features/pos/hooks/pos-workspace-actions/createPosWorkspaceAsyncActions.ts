@@ -88,27 +88,27 @@ export function createPosWorkspaceAsyncActions(
     }
   }
 
-  async function handleSubmit(options: SubmitOptions = {}) {
-    if (params.createSale.isPending) return;
+  async function handleSubmit(options: SubmitOptions = {}): Promise<boolean> {
+    if (params.createSale.isPending) return false;
     if (!params.hasOperationalSetup) {
       params.setSubmitMessage('أكمل تعريف المتجر ونقطة التشغيل قبل أول فاتورة.');
       params.requestBarcodeFocus();
-      return;
+      return false;
     }
     if (!params.hasCatalogReady) {
       params.setSubmitMessage('أضف الأصناف أولًا قبل استخدام شاشة الكاشير.');
       params.requestBarcodeFocus();
-      return;
+      return false;
     }
     if (params.requiresCashierShift && !params.ownOpenShift) {
       params.setSubmitMessage('افتح وردية كاشير أولًا قبل تسجيل فاتورة نقدية أو بطاقة.');
       params.requestBarcodeFocus();
-      return;
+      return false;
     }
     if (params.hasZeroPriceLine) {
       params.setSubmitMessage('يوجد صنف بسعر صفر. راجع التسعير قبل إتمام البيع.');
       params.requestBarcodeFocus();
-      return;
+      return false;
     }
     // INV-REST-PAID-GATES-2 (R4-D, I27): the derived gate carries the
     // violation flags the checks above do not (unapproved discount /
@@ -118,7 +118,7 @@ export function createPosWorkspaceAsyncActions(
     if (!params.canSubmitSale) {
       params.setSubmitMessage(params.canSubmitHint || 'أكمل المطلوب أولًا قبل تأكيد البيع.');
       params.requestBarcodeFocus();
-      return;
+      return false;
     }
 
     const total = Number(params.totals.total || 0);
@@ -135,7 +135,7 @@ export function createPosWorkspaceAsyncActions(
     if (initialCashAmount < 0 || initialCardAmount < 0 || initialTransferAmount < 0) {
       params.setSubmitMessage('مبالغ الدفع لا يمكن أن تكون سالبة. راجع المبالغ قبل تأكيد البيع.');
       params.requestBarcodeFocus();
-      return;
+      return false;
     }
     // INV-REST-PAID-DEFINITION: the gate paid is the same all-legs sum as
     // the display and the payload — no channel may drop a leg. (Before:
@@ -185,7 +185,7 @@ export function createPosWorkspaceAsyncActions(
     if (params.hasCreditWithoutCustomer && !settleAsCash) {
       params.setSubmitMessage('اختر عميلًا أولًا لأن البيع الآجل يحتاج حساب عميل.');
       params.requestBarcodeFocus();
-      return;
+      return false;
     }
 
     const effectivePaymentType = settleAsCash || settleAsCard || settleAsTransfer ? 'cash' : params.paymentType;
@@ -228,20 +228,20 @@ export function createPosWorkspaceAsyncActions(
     if (isPartialCreditWithCustomer && effectivePaymentType !== 'credit') {
       params.setSubmitMessage('المبلغ المدفوع أقل من الإجمالي. أكمل المدفوع أو حوّل العملية إلى آجل صراحةً.');
       params.requestBarcodeFocus();
-      return;
+      return false;
     }
     const isUnderpaid = effectivePaymentType !== 'credit' && !isCodDelivery && effectivePaidAmount < total;
 
     if (effectivePaymentType === 'credit' && !effectiveCustomerId) {
       params.setSubmitMessage('اختر عميلًا أولًا لأن البيع الآجل يجب أن يسجل على حساب العميل.');
       params.requestBarcodeFocus();
-      return;
+      return false;
     }
 
     if (isUnderpaid) {
       params.setSubmitMessage('المبلغ المدفوع أقل من المطلوب. أكمل المدفوع أو اختر بيعًا آجلًا.');
       params.requestBarcodeFocus();
-      return;
+      return false;
     }
 
     if (settleAsCash) {
@@ -271,7 +271,7 @@ export function createPosWorkspaceAsyncActions(
       && Math.abs(effectiveCardAmount - approvedAmount) > 0.0001) {
       params.setSubmitMessage('المبلغ المعتمد من ماكينة الدفع لا يطابق مبلغ البطاقة. راجع المبلغ قبل تأكيد البيع.');
       params.requestBarcodeFocus();
-      return;
+      return false;
     }
 
     params.setPostSaleSaleKey('');
@@ -410,9 +410,13 @@ export function createPosWorkspaceAsyncActions(
         : `تم حفظ فاتورة البيع بنجاح${docNo ? `: ${docNo}` : ''}.`;
       params.setSubmitMessage(`${baseMsg}${kitchenPrintWarning} ${getPostSalePrintHint(postSalePrintMode)}`);
       params.requestBarcodeFocus();
+      // T10-A: only a posted sale reports success — the checkout
+      // dialog closes on this value, never unconditionally.
+      return true;
     } catch (error) {
       params.setSubmitMessage(getSubmitSaleErrorMessage(error));
       params.requestBarcodeFocus();
+      return false;
     }
   }
 

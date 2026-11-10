@@ -58,8 +58,16 @@ interface PosComboMealModalProps {
   }) => boolean; // R8-C: true = the combo line is in the cart, false = it is not
 }
 
+/* T10-A (INV-REST-COMBO-TOTALS-TRUTH): read the price field the POS
+ * lookup actually returns. mapPosProduct carries retailPrice only
+ * (catalog-product.service.ts:1273) — no price, no retail_price — so
+ * the old p?.price || p?.retail_price reader priced every step at
+ * 0.00 and stamped 0.00 combo-component modifiers, which the server
+ * then re-priced to DB retail_price and 422'd SALE_TOTAL_MISMATCH.
+ * retailPrice is authoritative (it IS the DB retail_price the server
+ * re-prices to); the snake_case fallbacks keep legacy shapes working. */
 function productPrice(p: any): number {
-  return Number(p?.price || p?.retail_price || 0);
+  return Number((p?.retailPrice ?? p?.retail_price ?? p?.price) || 0);
 }
 
 export function PosComboMealModal({
