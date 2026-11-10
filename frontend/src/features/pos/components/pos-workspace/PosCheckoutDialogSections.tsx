@@ -1992,6 +1992,39 @@ export function PosCheckoutDeliverySection({ pos, deliveryReps, isMobile: isMobi
           </Button>
         ))}
       </div>
+
+      {/* INV-REST-COD-COLLECTION-TRUTH (T11-D): the effective
+       * collection status, in words, before confirm — the cashier
+       * sees who holds the cash (courier / rep / gateway) instead of
+       * discovering it on the posted invoice. An unstated status is
+       * COD: the courier collects, nothing is prepaid. */}
+      <div
+        data-testid="pos-collection-status-summary"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '2px',
+          width: '100%',
+          boxSizing: 'border-box',
+          padding: '8px 10px',
+          borderRadius: '6px',
+          border: `1px solid ${pos.collectionStatus === 'cod' || !pos.collectionStatus ? '#fde68a' : '#bbf7d0'}`,
+          background: pos.collectionStatus === 'cod' || !pos.collectionStatus ? '#fffbeb' : '#f0fdf4',
+        }}
+      >
+        <span style={{ fontSize: '12px', fontWeight: 800, color: '#170e5e' }}>
+          {`التحصيل: ${pos.collectionStatus === 'prepaid_by_rep' ? 'خالص من المندوب' : pos.collectionStatus === 'prepaid_online' ? 'خالص أونلاين' : 'تحصيل من العميل'}`}
+        </span>
+        <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#475569', lineHeight: 1.5 }}>
+          {pos.collectionStatus === 'prepaid_by_rep'
+            ? 'المبلغ مع المندوب — لا يُحصَّل من العميل عند التسليم.'
+            : pos.collectionStatus === 'prepaid_online'
+              ? 'المبلغ مدفوع مسبقاً عبر القناة الإلكترونية — لا يُحصَّل من العميل عند التسليم.'
+              : selectedRep
+                ? `المندوب ${selectedRep.name} يحصّل المبلغ عند التسليم — لم يُسجَّل أي نقد بعد.`
+                : 'المندوب يحصّل المبلغ عند التسليم — لم يُسجَّل أي نقد بعد. اختر المندوب قبل التأكيد.'}
+        </span>
+      </div>
     </div>
   );
 }

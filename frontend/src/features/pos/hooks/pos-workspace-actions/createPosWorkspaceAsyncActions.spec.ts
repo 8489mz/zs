@@ -217,3 +217,63 @@ describe('createPosWorkspaceAsyncActions — handleSubmit reports its outcome (T
     expect(params.createSale.mutateAsync).not.toHaveBeenCalled();
   });
 });
+
+/* T11-D (INV-REST-COD-COLLECTION-TRUTH): the submit payload always
+ * carries an explicit collectionStatus for a delivery. An unstated
+ * status is 'cod' (the courier collects); prepaid is an explicit
+ * choice, never a default. At base the payload forwarded
+ * params.collectionStatus raw, so a delivery whose state lost the
+ * status reached the backend unstated and the backend inferred
+ * prepaid from the full cash tender. Non-deliveries send the status
+ * unchanged. */
+describe('createPosWorkspaceAsyncActions — delivery submit always states collectionStatus (T11-D)', () => {
+  const deliveryOverrides = {
+    orderType: 'delivery',
+    deliveryRepId: '1',
+    cashAmount: 174,
+    paidAmount: 174,
+  } as Partial<PosWorkspaceActionParams>;
+
+  it('defaults an unstated delivery collection status to cod', async () => {
+    const { actions, mutateAsync } = makeActions(
+      { ...deliveryOverrides, collectionStatus: undefined as unknown as PosWorkspaceActionParams['collectionStatus'] },
+    );
+
+    const result = await actions.handleSubmit({});
+
+    expect(result).toBe(true);
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mutateAsync.mock.calls[0][0]).toMatchObject({ orderType: 'delivery', collectionStatus: 'cod' });
+  });
+
+  it('defaults an empty delivery collection status to cod', async () => {
+    const { actions, mutateAsync } = makeActions(
+      { ...deliveryOverrides, collectionStatus: '' as PosWorkspaceActionParams['collectionStatus'] },
+    );
+
+    const result = await actions.handleSubmit({});
+
+    expect(result).toBe(true);
+    expect(mutateAsync.mock.calls[0][0]).toMatchObject({ orderType: 'delivery', collectionStatus: 'cod' });
+  });
+
+  it('keeps an explicit prepaid_online delivery status', async () => {
+    const { actions, mutateAsync } = makeActions({ ...deliveryOverrides, collectionStatus: 'prepaid_online' });
+
+    const result = await actions.handleSubmit({});
+
+    expect(result).toBe(true);
+    expect(mutateAsync.mock.calls[0][0]).toMatchObject({ orderType: 'delivery', collectionStatus: 'prepaid_online' });
+  });
+
+  it('leaves a non-delivery status unchanged', async () => {
+    const { actions, mutateAsync } = makeActions(
+      { collectionStatus: undefined as unknown as PosWorkspaceActionParams['collectionStatus'] },
+    );
+
+    const result = await actions.handleSubmit({});
+
+    expect(result).toBe(true);
+    expect((mutateAsync.mock.calls[0][0] as Record<string, unknown>).collectionStatus).toBeUndefined();
+  });
+});

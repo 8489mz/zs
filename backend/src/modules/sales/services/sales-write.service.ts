@@ -1856,10 +1856,39 @@ export class SalesWriteService {
         collectionStatus: (payload as any).collectionStatus,
         paymentType: normalized.paymentType,
       });
+      // INV-REST-COD-COLLECTION-TRUTH (T11-D, D-T11-1): a delivery
+      // WITH a courier rep must never infer prepaid from full payment
+      // alone. An absent collectionStatus + a courier means the
+      // courier collects: the cash legs that rode in on the default
+      // cash channel are NOT money in hand, so they are withheld
+      // from the tender allocation (paid 0, COD receivable, rep
+      // custody) instead of posting a cash leg that settlement then
+      // refuses (paid_amount > 0.009). Prepaid needs an explicit
+      // prepaid status or an online-channel leg (wallet/instapay) —
+      // a verifiable gateway receipt. Card legs are kept as declared
+      // (bank money, not cash in hand). Non-courier deliveries,
+      // credit sales and explicit statuses keep the existing
+      // inference exactly. The rep id is parsed here only; the
+      // delivery block below still validates that the rep exists.
+      const rawCollectionStatusForTender = String((payload as any).collectionStatus || '').trim();
+      const tenderCourierRepId = Number((payload as any).deliveryRepId || 0);
+      const hasOnlineChannelTender = normalized.payments.some(
+        (entry) => entry.paymentChannel === 'wallet' || entry.paymentChannel === 'instapay',
+      );
+      const inferCodFromCourier = String(normalized.orderType || '').trim() === 'delivery'
+        && !rawCollectionStatusForTender
+        && normalized.paymentType !== 'credit'
+        && Number.isFinite(tenderCourierRepId) && tenderCourierRepId > 0
+        && !hasOnlineChannelTender;
+      const strippedCashLegs = inferCodFromCourier
+        && normalized.payments.some((entry) => entry.paymentChannel === 'cash');
+      const tenderPayments = inferCodFromCourier
+        ? normalized.payments.filter((entry) => entry.paymentChannel !== 'cash')
+        : normalized.payments;
       const tenderAllocation = allocateSaleTenders({
-        paymentType: normalized.paymentType, payments: normalized.payments, collectibleTotal,
+        paymentType: normalized.paymentType, payments: tenderPayments, collectibleTotal,
         fallbackChannel: (['card', 'wallet', 'instapay'].includes(normalized.paymentChannel) ? normalized.paymentChannel : 'cash') as SaleTenderChannel,
-        tenderedCash: normalized.tenderedAmount, digits: moneyDigits,
+        tenderedCash: strippedCashLegs ? 0 : normalized.tenderedAmount, digits: moneyDigits,
         suppressFallback: suppressTenderFallback,
       });
       const payments = tenderAllocation.payments;
@@ -1936,7 +1965,15 @@ export class SalesWriteService {
         if (rawCollectionStatus && !['cod', 'prepaid_by_rep', 'prepaid_online'].includes(rawCollectionStatus)) {
           throw new AppError('حالة تحصيل الدليفري غير صالحة', 'DELIVERY_COLLECTION_STATUS_INVALID', 400);
         }
-        collectionStatus = rawCollectionStatus || (hasUnpaidAmount ? 'cod' : 'prepaid_online');
+        // INV-REST-COD-COLLECTION-TRUTH (T11-D, D-T11-1): the
+        // courier inference above already withheld the cash legs, so
+        // a courier delivery with no stated status lands here unpaid
+        // — it is COD, never prepaid_online, even when the tender
+        // arrived fully paid in cash. An online-channel tender keeps
+        // prepaid_online (see the inference above); non-courier
+        // deliveries keep the existing fallback.
+        collectionStatus = rawCollectionStatus
+          || (inferCodFromCourier ? 'cod' : (hasUnpaidAmount ? 'cod' : 'prepaid_online'));
       }
 
       const isCodDelivery = isDelivery && (collectionStatus === 'cod' || collectionStatus === 'pending' || paidAmount + 0.0001 < collectibleTotal);

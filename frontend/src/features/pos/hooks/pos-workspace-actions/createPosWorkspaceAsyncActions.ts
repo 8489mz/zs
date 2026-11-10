@@ -276,6 +276,15 @@ export function createPosWorkspaceAsyncActions(
 
     params.setPostSaleSaleKey('');
 
+    // INV-REST-COD-COLLECTION-TRUTH (T11-D): a delivery must always
+    // name its collection status explicitly — the backend must never
+    // have to infer it. An unstated status is 'cod' (the courier
+    // collects); prepaid is an explicit choice, never a default.
+    // Non-deliveries send the status unchanged.
+    const effectiveCollectionStatus = params.orderType === 'delivery'
+      ? (params.collectionStatus || 'cod')
+      : params.collectionStatus;
+
     const activeOnlineOrderId = readActiveOnlineOrderId();
 
     try {
@@ -314,7 +323,7 @@ export function createPosWorkspaceAsyncActions(
         guestCount: params.guestCount,
         guestCheckPrintedAt: params.guestCheckPrintedAt,
         deliveryRepId: params.deliveryRepId,
-        collectionStatus: params.collectionStatus,
+        collectionStatus: effectiveCollectionStatus,
         deliveryFeeMode: params.deliveryFeeMode,
         tipAmount: Number(params.tipAmount || 0),
         // O62: tells the server this cart is a storefront order, so it re-approves that order's own
