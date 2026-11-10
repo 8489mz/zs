@@ -1,10 +1,13 @@
-/* POS cash follows the discounted total (INV-INVOICE-DETAIL-AMOUNTS): when
- * the discount changes and the cash field was simply filled to the old
+/* POS cash follows the total (INV-INVOICE-DETAIL-AMOUNTS): when the grand
+ * total changes for any reason (discount, tip, loyalty redemption, delivery
+ * fee, items added/removed) and the cash field was simply filled to the old
  * total (single cash payment, no card/transfer split), the cash field is
- * re-filled to the new total — so entering a 10% discount on a 150.00 sale
- * moves cash 150.00 to 135.00 instead of leaving a phantom 15.00 remaining.
- * A manually tendered amount, a split payment, a credit sale, or a total
- * change with no discount change must leave the cash field untouched.
+ * re-filled to the new total — so Trial 8's stale cash (85.00 left standing
+ * while the total fell to 65.00 after tip + redemption, then rose to 80.00
+ * after the 15.00 delivery fee) now follows the total to 65.00 then 80.00.
+ * A manually tendered amount, a split payment, a credit sale, or an
+ * unchanged total must leave the cash field untouched. Re-syncing UP when
+ * the total rises is the accepted trade-off, already accepted for discounts.
  */
 import { renderHook, act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -90,7 +93,7 @@ function setup() {
   return { setters, render };
 }
 
-describe('POS cash follows the total when the discount changes', () => {
+describe('POS cash follows the total', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -133,12 +136,67 @@ describe('POS cash follows the total when the discount changes', () => {
     expect(setters.setCashAmount).not.toHaveBeenCalled();
   });
 
-  it('leaves cash untouched when the total changes without a discount change', () => {
+  it('re-syncs tracking cash when tip + redemption drop the total (Trial 8: 85 to 65)', () => {
+    const { setters, render } = setup();
+    const { rerender } = render({ discount: 0, total: 85, cashAmount: 85, cardAmount: 0, transferAmount: 0, paymentType: 'cash' });
+
+    act(() => {
+      rerender({ discount: 0, total: 65, cashAmount: 85, cardAmount: 0, transferAmount: 0, paymentType: 'cash' });
+    });
+
+    expect(setters.setCashAmount).toHaveBeenCalledWith(65);
+  });
+
+  it('re-syncs tracking cash when the delivery fee raises the total (Trial 8: 65 to 80)', () => {
+    const { setters, render } = setup();
+    const { rerender } = render({ discount: 0, total: 65, cashAmount: 65, cardAmount: 0, transferAmount: 0, paymentType: 'cash' });
+
+    act(() => {
+      rerender({ discount: 0, total: 80, cashAmount: 65, cardAmount: 0, transferAmount: 0, paymentType: 'cash' });
+    });
+
+    expect(setters.setCashAmount).toHaveBeenCalledWith(80);
+  });
+
+  it('re-syncs tracking cash UP when the total rises (accepted trade-off)', () => {
     const { setters, render } = setup();
     const { rerender } = render({ discount: 0, total: 150, cashAmount: 150, cardAmount: 0, transferAmount: 0, paymentType: 'cash' });
 
     act(() => {
       rerender({ discount: 0, total: 160, cashAmount: 150, cardAmount: 0, transferAmount: 0, paymentType: 'cash' });
+    });
+
+    expect(setters.setCashAmount).toHaveBeenCalledWith(160);
+  });
+
+  it('leaves a manually tendered cash amount untouched when the total changes without a discount change', () => {
+    const { setters, render } = setup();
+    const { rerender } = render({ discount: 0, total: 150, cashAmount: 200, cardAmount: 0, transferAmount: 0, paymentType: 'cash' });
+
+    act(() => {
+      rerender({ discount: 0, total: 135, cashAmount: 200, cardAmount: 0, transferAmount: 0, paymentType: 'cash' });
+    });
+
+    expect(setters.setCashAmount).not.toHaveBeenCalled();
+  });
+
+  it('leaves a split payment untouched when the total changes without a discount change', () => {
+    const { setters, render } = setup();
+    const { rerender } = render({ discount: 0, total: 150, cashAmount: 100, cardAmount: 50, transferAmount: 0, paymentType: 'cash' });
+
+    act(() => {
+      rerender({ discount: 0, total: 135, cashAmount: 100, cardAmount: 50, transferAmount: 0, paymentType: 'cash' });
+    });
+
+    expect(setters.setCashAmount).not.toHaveBeenCalled();
+  });
+
+  it('leaves cash untouched when the total does not change', () => {
+    const { setters, render } = setup();
+    const { rerender } = render({ discount: 0, total: 150, cashAmount: 150, cardAmount: 0, transferAmount: 0, paymentType: 'cash' });
+
+    act(() => {
+      rerender({ discount: 0, total: 150, cashAmount: 150, cardAmount: 0, transferAmount: 0, paymentType: 'cash' });
     });
 
     expect(setters.setCashAmount).not.toHaveBeenCalled();

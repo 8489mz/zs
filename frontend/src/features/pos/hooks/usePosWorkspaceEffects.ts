@@ -215,23 +215,22 @@ export function usePosWorkspaceEffects({
     persistLastSale(lastSale);
   }, [lastSale]);
 
-  // INV-INVOICE-DETAIL-AMOUNTS: the cash field follows the grand total when
-  // the discount changes — but ONLY when the cash field was simply tracking
-  // the total (single cash payment, exactly filled to the previous total via
-  // the preset / 'كامل' fill). A manually tendered amount (cash != old total)
-  // or a split payment (card / transfer present) is real money the cashier
-  // already holds, so it is left untouched; a credit sale never has cash.
-  // Total changes from anything else (items added/removed, delivery fee)
-  // deliberately do NOT move the cash field.
-  const prevDiscountRef = useRef(discount);
+  // INV-INVOICE-DETAIL-AMOUNTS: the cash field follows the grand total
+  // whenever the total changes — but ONLY when the cash field was simply
+  // tracking the total (single cash payment, exactly filled to the previous
+  // total via the preset / 'كامل' fill). A manually tendered amount
+  // (cash != old total) or a split payment (card / transfer present) is real
+  // money the cashier already holds, so it is left untouched; a credit sale
+  // never has cash. Trial 8 proved the old discount-only trigger wrong:
+  // tip + redemption dropped the total 85.00 to 65.00 and the 15.00 delivery
+  // fee raised it to 80.00, yet cash stayed stale at 85.00 because the
+  // discount never changed. Any total change (discount, tip, redemption,
+  // delivery fee, items added/removed) now re-syncs tracking cash.
   const prevTotalRef = useRef(total ?? 0);
   useEffect(() => {
-    const prevDiscount = prevDiscountRef.current;
     const prevTotal = prevTotalRef.current;
-    prevDiscountRef.current = discount;
     prevTotalRef.current = total ?? 0;
     if (total === undefined) return;
-    if (discount === prevDiscount) return;
     if (Number(total) === Number(prevTotal)) return;
     if (paymentType === 'credit') return;
     if (Number(cardAmount || 0) !== 0 || Number(transferAmount || 0) !== 0) return;
