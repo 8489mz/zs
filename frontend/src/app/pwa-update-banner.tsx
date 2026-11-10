@@ -6,13 +6,14 @@
  * the new worker takes control ('pwa-updated'). If that signal never arrives
  * (the prompt registration never claims the current page), a short fallback
  * timer reloads anyway: the activated worker controls the fresh navigation.
- * Dismissing hides the banner for this session, keyed to the WAITING
+ * Dismissing hides the banner per build across tabs (localStorage, not
+ * per-tab sessionStorage), keyed to the WAITING
  * worker's script URL (which carries the build id), so a re-announce of the
  * SAME worker stays dismissed while a genuinely new build shows it again.
  * The identity always comes from registration.waiting first: the Workbox
  * getSW() lookup can return the ACTIVE worker's URL instead, so it is only
  * a fallback. When the worker cannot be identified at all, the dismissal
- * still holds for the session under a separate fallback key that is never
+ * still holds per build across tabs under a separate fallback key that is never
  * stored as a worker identity and never matches a real worker URL. The
  * banner is a small pill
  * pinned to the bottom-left corner, never a full-width bar. Nothing here
@@ -23,14 +24,14 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Workbox } from 'workbox-window';
 
-/** Session key for the dismissed update. The stored value is the WAITING
+/** Persistent (localStorage) key for the dismissed update. The stored value is the WAITING
  * worker's script URL, so a new build re-shows the banner. Only a real
  * worker URL may ever be stored under this key. */
 const DISMISSED_KEY = 'zs_pwa_update_dismissed';
-/** Session key set when a worker that cannot be identified at all is
+/** Persistent (localStorage) key set when a worker that cannot be identified at all is
  * dismissed. It holds only the marker '1': it is never a worker identity
  * and is never compared against a worker URL, so an unidentified dismissal
- * holds for the session without ever matching a real worker. */
+ * holds per build across tabs without ever matching a real worker. */
 const DISMISSED_UNIDENTIFIED_KEY = 'zs_pwa_update_dismissed_unidentified';
 const DISMISSED_UNIDENTIFIED_VALUE = '1';
 /** How long to wait for the new worker to take control after the user's
@@ -39,7 +40,7 @@ const APPLY_RELOAD_FALLBACK_MS = 3000;
 
 function readDismissed(): string | null {
   try {
-    return sessionStorage.getItem(DISMISSED_KEY);
+    return localStorage.getItem(DISMISSED_KEY);
   } catch {
     return null;
   }
@@ -47,7 +48,7 @@ function readDismissed(): string | null {
 
 function writeDismissed(workerId: string): void {
   try {
-    sessionStorage.setItem(DISMISSED_KEY, workerId);
+    localStorage.setItem(DISMISSED_KEY, workerId);
   } catch {
     // Storage unavailable: the banner still hides for this mount.
   }
@@ -55,7 +56,7 @@ function writeDismissed(workerId: string): void {
 
 function readDismissedUnidentified(): boolean {
   try {
-    return sessionStorage.getItem(DISMISSED_UNIDENTIFIED_KEY) === DISMISSED_UNIDENTIFIED_VALUE;
+    return localStorage.getItem(DISMISSED_UNIDENTIFIED_KEY) === DISMISSED_UNIDENTIFIED_VALUE;
   } catch {
     return false;
   }
@@ -63,7 +64,7 @@ function readDismissedUnidentified(): boolean {
 
 function writeDismissedUnidentified(): void {
   try {
-    sessionStorage.setItem(DISMISSED_UNIDENTIFIED_KEY, DISMISSED_UNIDENTIFIED_VALUE);
+    localStorage.setItem(DISMISSED_UNIDENTIFIED_KEY, DISMISSED_UNIDENTIFIED_VALUE);
   } catch {
     // Storage unavailable: the banner still hides for this mount.
   }
@@ -152,8 +153,8 @@ export function PwaUpdateBanner() {
 
   const handleDismiss = () => {
     if (waitingId === null) {
-      // Unidentifiable worker: hold the dismissal for the session under the
-      // separate marker — never store a made-up identity under the URL key.
+      // Unidentifiable worker: hold the dismissal per build across tabs
+      // under the separate marker — never store a made-up identity under the URL key.
       writeDismissedUnidentified();
     } else {
       writeDismissed(waitingId);

@@ -1,17 +1,20 @@
 /* PWA update prompt (INV-PWA-UPDATE-PROMPT + INV-REST-PWA-BANNER-TRUTH +
- * INV-REST-PWA-DISMISS-KEY-TRUTH): the banner appears only when a waiting
+ * INV-REST-PWA-DISMISS-KEY-TRUTH + INV-REST-PWA-DISMISS-PER-BUILD): the banner appears only when a waiting
  * worker announces itself, and only the user's click takes over. Drives the
  * real PwaUpdateBanner component: no banner before the event, banner after
  * it, the takeover armed only after the click, dismiss hides it. The banner
- * is a small bottom-left pill. Dismissal persists in sessionStorage keyed to
+ * is a small bottom-left pill. Dismissal persists in localStorage keyed to
  * the WAITING worker's script URL (which carries the build id): a re-announce
  * of the SAME worker stays dismissed, a genuinely NEW worker shows the
- * banner again. The identity is always the waiting worker
+ * banner again. Dismissal is per build across tabs (localStorage, not
+ * per-tab sessionStorage): dismissing in one tab suppresses the SAME
+ * build's banner in other tabs, and a new build still re-shows it. The
+ * identity is always the waiting worker
  * (registration.waiting.scriptURL first): the Workbox getSW() path can return
  * the ACTIVE worker's URL instead, so it is only a fallback — the same worker
  * resolved via either path stays hidden, and a dismiss never stores the
  * active worker's URL. A worker that cannot be identified at all is
- * dismissed under a separate session marker, never stored as a worker
+ * dismissed under a separate per-build marker, never stored as a worker
  * identity, so it can never match a real worker URL. The reload itself (both
  * the 'pwa-updated' path and the ~3s fallback timer after the click) lives in
  * the banner and is pinned by no-forced-reload.spec.ts; jsdom cannot observe
@@ -88,13 +91,13 @@ async function announceUpdateHidden(workbox: unknown) {
 
 describe('PwaUpdateBanner', () => {
   beforeEach(() => {
-    sessionStorage.clear();
+    localStorage.clear();
     unmockServiceWorkerRegistration();
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    sessionStorage.clear();
+    localStorage.clear();
     unmockServiceWorkerRegistration();
   });
 
@@ -160,7 +163,7 @@ describe('PwaUpdateBanner', () => {
     expect(screen.queryByText(BANNER_TEXT)).not.toBeInTheDocument();
     expect(messageSkipWaiting).not.toHaveBeenCalled();
     // The dismissal is stored keyed to the waiting worker's script URL.
-    expect(sessionStorage.getItem(DISMISSED_KEY)).toBe('/sw.js?v=build-a');
+    expect(localStorage.getItem(DISMISSED_KEY)).toBe('/sw.js?v=build-a');
 
     // Same worker, announced again (even as a fresh object): stays hidden.
     await announceUpdateHidden(fakeWorkbox('/sw.js?v=build-a', messageSkipWaiting));
@@ -186,7 +189,7 @@ describe('PwaUpdateBanner', () => {
     fireEvent.click(screen.getByRole('button', { name: 'لاحقًا' }));
     expect(screen.queryByText(BANNER_TEXT)).not.toBeInTheDocument();
     // The waiting worker's URL, not the active worker's.
-    expect(sessionStorage.getItem(DISMISSED_KEY)).toBe('/sw.js?v=build-b');
+    expect(localStorage.getItem(DISMISSED_KEY)).toBe('/sw.js?v=build-b');
   });
 
   it('dismiss stays hidden when the same worker re-announces via the other path', async () => {
@@ -197,7 +200,7 @@ describe('PwaUpdateBanner', () => {
     // resolved via registration.waiting with the SAME URL: stays hidden.
     await announceUpdate(fakeWorkbox('/sw.js?v=build-b', messageSkipWaiting));
     fireEvent.click(screen.getByRole('button', { name: 'لاحقًا' }));
-    expect(sessionStorage.getItem(DISMISSED_KEY)).toBe('/sw.js?v=build-b');
+    expect(localStorage.getItem(DISMISSED_KEY)).toBe('/sw.js?v=build-b');
 
     mockServiceWorkerRegistration('/sw.js?v=build-b');
     await announceUpdateHidden(fakeWorkbox(null, messageSkipWaiting));
@@ -205,12 +208,12 @@ describe('PwaUpdateBanner', () => {
     // And the reverse direction: dismiss via registration.waiting, then a
     // re-announce resolved via getSW with the same URL stays hidden too.
     unmockServiceWorkerRegistration();
-    sessionStorage.clear();
+    localStorage.clear();
     mockServiceWorkerRegistration('/sw.js?v=build-b');
     await announceUpdate(fakeWorkbox(null, messageSkipWaiting));
     expect(screen.getByText(BANNER_TEXT)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'لاحقًا' }));
-    expect(sessionStorage.getItem(DISMISSED_KEY)).toBe('/sw.js?v=build-b');
+    expect(localStorage.getItem(DISMISSED_KEY)).toBe('/sw.js?v=build-b');
 
     unmockServiceWorkerRegistration();
     await announceUpdateHidden(fakeWorkbox('/sw.js?v=build-b', messageSkipWaiting));
@@ -224,7 +227,7 @@ describe('PwaUpdateBanner', () => {
     // Dismiss the waiting build-b (getSW still reports the active build-a).
     await announceUpdate(fakeWorkbox('/sw.js?v=build-a', messageSkipWaiting));
     fireEvent.click(screen.getByRole('button', { name: 'لاحقًا' }));
-    expect(sessionStorage.getItem(DISMISSED_KEY)).toBe('/sw.js?v=build-b');
+    expect(localStorage.getItem(DISMISSED_KEY)).toBe('/sw.js?v=build-b');
 
     // Same waiting worker, re-announced: stays hidden.
     await announceUpdateHidden(fakeWorkbox('/sw.js?v=build-a', messageSkipWaiting));
@@ -236,7 +239,7 @@ describe('PwaUpdateBanner', () => {
     expect(screen.getByText(BANNER_TEXT)).toBeInTheDocument();
   });
 
-  it('dismiss holds for the session when the worker cannot be identified, but never matches a real worker', async () => {
+  it('dismiss holds per build across tabs when the worker cannot be identified, but never matches a real worker', async () => {
     render(<PwaUpdateBanner />);
 
     // A workbox without getSW (and no serviceWorker in jsdom): no identity.
@@ -247,10 +250,10 @@ describe('PwaUpdateBanner', () => {
     expect(screen.queryByText(BANNER_TEXT)).not.toBeInTheDocument();
     // No worker identity is ever stored for an unidentifiable worker: the
     // 'unknown' sentinel must never appear as a stored identity.
-    expect(sessionStorage.getItem(DISMISSED_KEY)).toBeNull();
-    expect(sessionStorage.getItem(DISMISSED_UNIDENTIFIED_KEY)).toBe('1');
+    expect(localStorage.getItem(DISMISSED_KEY)).toBeNull();
+    expect(localStorage.getItem(DISMISSED_UNIDENTIFIED_KEY)).toBe('1');
 
-    // Still unidentifiable on re-announce: the session dismissal holds.
+    // Still unidentifiable on re-announce: the per-build dismissal holds.
     await announceUpdateHidden(fakeWorkbox(null));
 
     // But the unidentified dismissal never matches a real worker URL: once
