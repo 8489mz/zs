@@ -331,10 +331,23 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
     }
   }
 
+  /* T11-A (INV-REST-COMBO-SUBMIT-TRUTH, G3): emptying the cart by
+   * deleting the line left the mismatch banner (submitMessage) standing
+   * until a reload — only resetDraftState cleared it. Clear it (and
+   * reset the createSale mutation error) when the cart becomes empty,
+   * never on every remove: a removal that leaves items keeps the
+   * banner. The emptiness decision reads the same params.cart snapshot
+   * the action creator closed over (as setQty does); the setCart
+   * updater stays the source of truth for the installed cart. */
   function removeItem(lineKey: string) {
+    const cartBecomesEmpty = removePosItem(params.cart, lineKey).length === 0;
     params.setCart((current) => removePosItem(current, lineKey));
     if (params.selectedLineKey === lineKey) params.setSelectedLineKey('');
     params.setPostSaleSaleKey('');
+    if (cartBecomesEmpty) {
+      params.setSubmitMessage('');
+      params.createSale.reset?.();
+    }
   }
 
   function fillPaidAmount() {

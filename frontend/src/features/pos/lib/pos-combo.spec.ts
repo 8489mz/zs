@@ -169,3 +169,79 @@ describe('applyComboToCart (R-B9)', () => {
     expect(suffixed[1].lineKey).toBe(`${plainCart[0].lineKey}::combo-7`);
   });
 });
+
+/* T11-A (INV-REST-COMBO-SUBMIT-TRUTH): the stamp must refuse a 0
+ * component price when the catalog price is non-zero — fail loud, do
+ * not stamp a 0 the server will re-price to DB retail_price and then
+ * 422 SALE_TOTAL_MISMATCH. At base the stamp takes the modal's prices
+ * at face value, so every refusal case below passes the stamp and the
+ * cart lands with the 0. A genuinely free component (catalog price 0)
+ * still stamps at 0. The refusal happens before any cart write, so a
+ * refused combo leaves the cart untouched. */
+describe('applyComboToCart — refuses a 0 component price (T11-A)', () => {
+  it('refuses a 0 main price when the catalog price is non-zero', () => {
+    expect(() => applyComboToCart([], burger, { ...combo, price: 0 }, {
+      priceType: 'retail',
+      digits: 2,
+      comboLineId: 'combo-t11a-1',
+    })).toThrow(/صفر/);
+  });
+
+  it('leaves the cart untouched when the main price is refused', () => {
+    const plainCart = addPosItem([], { ...burger, id: 'fries', name: 'بطاطس', stock: 5 }, { priceType: 'retail', digits: 2 });
+    expect(() => applyComboToCart(plainCart, burger, { ...combo, price: 0 }, {
+      priceType: 'retail',
+      digits: 2,
+      comboLineId: 'combo-t11a-2',
+    })).toThrow(/صفر/);
+    expect(plainCart).toHaveLength(1);
+    expect(plainCart[0].name).toBe('بطاطس');
+  });
+
+  it('refuses a 0 modifier price when its catalog price is non-zero', () => {
+    const zeroSide = {
+      ...combo,
+      modifiers: [
+        { name: 'طبق جانبي: بطاطس', price: 0, catalogPrice: 75 },
+        { name: 'مشروب: عصير', price: 15, catalogPrice: 15 },
+      ],
+    };
+    expect(() => applyComboToCart([], burger, zeroSide, {
+      priceType: 'retail',
+      digits: 2,
+      comboLineId: 'combo-t11a-3',
+    })).toThrow(/بطاطس/);
+  });
+
+  it('allows a genuinely free side (catalog price 0) at 0', () => {
+    const freeSide = {
+      ...combo,
+      modifiers: [
+        { name: 'طبق جانبي: بطاطس', price: 0, catalogPrice: 0 },
+        { name: 'مشروب: عصير', price: 15, catalogPrice: 15 },
+      ],
+    };
+    const { cart } = applyComboToCart([], burger, freeSide, {
+      priceType: 'retail',
+      digits: 2,
+      comboLineId: 'combo-t11a-4',
+    });
+
+    expect(cart).toHaveLength(1);
+    expect(cart[0].price).toBe(100);
+    expect(lineTotal(cart[0])).toBe(115);
+  });
+
+  it('allows a 0 main price when the catalog price is 0', () => {
+    const freeMain: Product = { ...burger, retailPrice: 0 };
+    const { cart } = applyComboToCart([], freeMain, { ...combo, price: 0 }, {
+      priceType: 'retail',
+      digits: 2,
+      comboLineId: 'combo-t11a-5',
+    });
+
+    expect(cart).toHaveLength(1);
+    expect(cart[0].price).toBe(0);
+    expect(lineTotal(cart[0])).toBe(27);
+  });
+});

@@ -133,7 +133,7 @@ export interface PosWorkspaceActionParams {
   canSubmitHint: string;
   heldDrafts: HeldPosDraft[];
   quickCustomerMutation: { mutateAsync: (payload: { name: string; phone: string; address: string; balance: number; type: Customer['type']; creditLimit: number }) => Promise<unknown> };
-  createSale: { mutateAsync: (payload: CreatePosSaleInput) => Promise<unknown>; isError?: boolean; isPending?: boolean };
+  createSale: { mutateAsync: (payload: CreatePosSaleInput) => Promise<unknown>; isError?: boolean; isPending?: boolean; reset?: () => void };
   saveHeldDraftMutation: { mutateAsync: (payload: unknown) => Promise<unknown> };
   deleteHeldDraftMutation: { mutateAsync: (draftId: string) => Promise<unknown> };
   clearHeldDraftsMutation: { mutateAsync: () => Promise<unknown> };

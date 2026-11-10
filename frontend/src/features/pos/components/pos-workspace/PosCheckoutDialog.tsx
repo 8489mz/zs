@@ -361,6 +361,20 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
           overflow: 'hidden'
         }}
       >
+        {/* T11-A (INV-REST-COMBO-SUBMIT-TRUTH, follow-up A): the dialog
+         * stays open on a failed submit, so the failure reason must be
+         * visible INSIDE it — it previously lived only in the footer
+         * banner underneath. Same message and tone as PosCartFooter:
+         * error when the sale mutation errored, success otherwise. */}
+        {pos.submitMessage && (pos.createSale?.isError || !pos.canShowLastSaleActions) ? (
+          <div
+            role="alert"
+            className={pos.createSale?.isError ? 'error-box pos-compact-message' : 'success-box pos-compact-message'}
+            style={{ marginBottom: '8px' }}
+          >
+            <div>{pos.submitMessage}</div>
+          </div>
+        ) : null}
         {checkoutViewMode === 'express' ? (
           /* Express Handheld Touch Mode */
           <div

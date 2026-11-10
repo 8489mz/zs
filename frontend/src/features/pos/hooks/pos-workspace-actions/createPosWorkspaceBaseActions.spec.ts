@@ -380,4 +380,80 @@ describe('createPosWorkspaceBaseActions', () => {
       expect(setTransferAmount).toHaveBeenCalledWith(80);
     });
   });
+
+  /* T11-A (INV-REST-COMBO-SUBMIT-TRUTH, G3): the mismatch banner is
+   * submitMessage, and emptying the cart by deleting the line left it
+   * standing until a reload — only resetDraftState cleared it. At base
+   * removeItem never clears it and never resets the createSale error,
+   * so the first and third cases below fail there; the middle case
+   * pins the boundary (the banner must survive a removal that leaves
+   * items in the cart). */
+  describe('removeItem clears the stale submit banner when the cart empties (T11-A)', () => {
+    const line: PosItem = {
+      lineKey: 'p1::u1::retail',
+      productId: 'p1',
+      name: 'Tea',
+      itemCode: 'p1',
+      unitId: 'u1',
+      unitName: 'قطعة',
+      unitMultiplier: 1,
+      price: 10,
+      costPrice: 5,
+      qty: 1,
+      stockLimit: 10,
+      currentStock: 10,
+      minStock: 0,
+      priceType: 'retail',
+    };
+
+    it('clears submitMessage and resets the createSale error when the last line is removed', () => {
+      const setSubmitMessage = vi.fn();
+      const reset = vi.fn();
+      const setCart = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        cart: [line],
+        setSubmitMessage,
+        setCart,
+        createSale: { mutateAsync: vi.fn(), reset },
+      }));
+
+      actions.removeItem('p1::u1::retail');
+
+      expect(setSubmitMessage).toHaveBeenCalledWith('');
+      expect(reset).toHaveBeenCalledTimes(1);
+      const updater = setCart.mock.calls[0][0];
+      expect(typeof updater === 'function' ? updater([line]) : updater).toEqual([]);
+    });
+
+    it('keeps the banner when removing a line leaves items in the cart', () => {
+      const otherLine: PosItem = { ...line, lineKey: 'p2::u1::retail', productId: 'p2', name: 'Coffee' };
+      const setSubmitMessage = vi.fn();
+      const reset = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        cart: [line, otherLine],
+        setSubmitMessage,
+        createSale: { mutateAsync: vi.fn(), reset },
+      }));
+
+      actions.removeItem('p1::u1::retail');
+
+      expect(setSubmitMessage).not.toHaveBeenCalledWith('');
+      expect(reset).not.toHaveBeenCalled();
+    });
+
+    it('clears the banner when the last line is removed by decrementing its quantity to zero', () => {
+      const setSubmitMessage = vi.fn();
+      const reset = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        cart: [line],
+        setSubmitMessage,
+        createSale: { mutateAsync: vi.fn(), reset },
+      }));
+
+      actions.changeLineQtyByDelta('p1::u1::retail', -1);
+
+      expect(setSubmitMessage).toHaveBeenCalledWith('');
+      expect(reset).toHaveBeenCalledTimes(1);
+    });
+  });
 });

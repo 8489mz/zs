@@ -538,7 +538,16 @@ export interface ComboSelection {
   productName: string;
   /** Modal base price of the main (totalComboPrice minus the modifier deltas). */
   price: number;
-  modifiers: Array<{ name: string; price: number }>;
+  modifiers: Array<{
+    name: string;
+    price: number;
+    /** T11-A (INV-REST-COMBO-SUBMIT-TRUTH): the catalog price the
+     * modal read this component from. A 0 price against a non-zero
+     * catalog price is refused below — the server re-prices such a
+     * component to DB retail_price and the cross-check 422s. Absent
+     * for callers that carry no catalog price (no refusal then). */
+    catalogPrice?: number;
+  }>;
   notes?: string;
 }
 
@@ -562,6 +571,25 @@ export function applyComboToCart(
   combo: ComboSelection,
   options: ApplyComboToCartOptions,
 ): { cart: PosItem[]; lineKey: string } {
+  /* T11-A (INV-REST-COMBO-SUBMIT-TRUTH): refuse a 0 component price
+   * when the catalog price is non-zero — fail loud, before any cart
+   * write, so a refused combo leaves the cart untouched. The server
+   * re-prices a stamped 0 to DB retail_price and the R5-A cross-check
+   * 422s SALE_TOTAL_MISMATCH; the server is right, so the stamp must
+   * never emit the 0. A genuinely free component (catalog price 0)
+   * still stamps at 0. The catalog price is read exactly as the line
+   * pricer reads it (getProductPrice: wholesale falls back to retail). */
+  const catalogMainPrice = Number(options.priceType === 'wholesale'
+    ? product.wholesalePrice || product.retailPrice || 0
+    : product.retailPrice || 0);
+  if (!(Number(combo.price) > 0) && catalogMainPrice > 0) {
+    throw new Error('لا يمكن إضافة الوجبة بسعر صفر: سعر الصنف الرئيسي في الكتالوج أكبر من صفر.');
+  }
+  for (const modifier of combo.modifiers || []) {
+    if (!(Number(modifier.price) > 0) && Number(modifier.catalogPrice || 0) > 0) {
+      throw new Error(`لا يمكن إضافة الوجبة: سعر «${modifier.name}» صفر رغم أن سعره في الكتالوج أكبر من صفر.`);
+    }
+  }
   const comboLineId = options.comboLineId || `combo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const lineKey = buildComboLineKey(product, options.priceType, comboLineId);
   const isService = product.itemType === 'service' || (product as any).item_type === 'service';

@@ -40,6 +40,11 @@ export interface ComboModifier {
   productId: number;
   name: string;
   price: number;
+  /** T11-A (INV-REST-COMBO-SUBMIT-TRUTH): the catalog price this
+   * modifier was read from, so the stamp (applyComboToCart) can refuse
+   * a 0 it would otherwise re-price to DB retail_price. Always the
+   * same productPrice() read as `price` — the stamp compares the two. */
+  catalogPrice?: number;
   qty: number;
   isComboComponent: boolean;
 }
@@ -68,6 +73,32 @@ interface PosComboMealModalProps {
  * re-prices to); the snake_case fallbacks keep legacy shapes working. */
 function productPrice(p: any): number {
   return Number((p?.retailPrice ?? p?.retail_price ?? p?.price) || 0);
+}
+
+/* T11-A (INV-REST-COMBO-SUBMIT-TRUTH): a product with no usable price
+ * in any known shape must never render as a silent 0.00 card — the
+ * 0.00 display is what the trial showed for priced products, and a
+ * stamped 0 is what the server re-prices and 422s. A price is usable
+ * when any known shape holds a finite number (an explicit 0 is usable:
+ * a genuinely free item still renders 0.00 and still adds). A product
+ * is unpriced when no shape holds a finite number, or when the reader
+ * yields 0 while another known shape carries a non-zero price (the
+ * reader and the catalog disagree — never trust the 0). */
+function hasUsablePrice(p: any): boolean {
+  return [p?.retailPrice, p?.retail_price, p?.price].some(
+    (v) => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v)),
+  );
+}
+
+function hasNonZeroPrice(p: any): boolean {
+  return [p?.retailPrice, p?.retail_price, p?.price].some(
+    (v) => Number.isFinite(Number(v)) && Number(v) !== 0,
+  );
+}
+
+function isUnpricedProduct(p: any): boolean {
+  if (!p) return false;
+  return !hasUsablePrice(p) || (productPrice(p) === 0 && hasNonZeroPrice(p));
 }
 
 export function PosComboMealModal({
@@ -123,8 +154,20 @@ export function PosComboMealModal({
   const basePrice = productPrice(selectedMain);
   const totalComboPrice = basePrice + productPrice(selectedSide) + productPrice(selectedDrink);
 
+  // T11-A: the selected components with no trustworthy price — the
+  // loud failure names them, blocks the add, and never renders a 0.00
+  // card for them.
+  const unpricedSelectedNames = Array.from(new Set(
+    [selectedMain, selectedSide, selectedDrink]
+      .filter((p) => p && isUnpricedProduct(p))
+      .map((p) => String(p.name || '')),
+  ));
+
   const handleConfirmCombo = () => {
     if (!selectedMain) return;
+    // T11-A: defense in depth — the confirm button is disabled while
+    // any selected component is unpriced, but never stamp a 0 either.
+    if (unpricedSelectedNames.length > 0) return;
 
     const modifiers: ComboModifier[] = [];
     if (selectedSide) {
@@ -132,6 +175,7 @@ export function PosComboMealModal({
         productId: Number(selectedSide.id),
         name: `طبق جانبي: ${selectedSide.name}`,
         price: productPrice(selectedSide),
+        catalogPrice: productPrice(selectedSide),
         qty: 1,
         isComboComponent: true,
       });
@@ -141,6 +185,7 @@ export function PosComboMealModal({
         productId: Number(selectedDrink.id),
         name: `مشروب: ${selectedDrink.name}`,
         price: productPrice(selectedDrink),
+        catalogPrice: productPrice(selectedDrink),
         qty: 1,
         isComboComponent: true,
       });
@@ -216,7 +261,7 @@ export function PosComboMealModal({
                 type="button"
                 variant="primary"
                 onClick={() => setCurrentStep((s) => (s + 1) as any)}
-                disabled={!selectedMain}
+                disabled={!selectedMain || isUnpricedProduct(selectedMain)}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -237,7 +282,7 @@ export function PosComboMealModal({
                 type="button"
                 variant="primary"
                 onClick={handleConfirmCombo}
-                disabled={!selectedMain}
+                disabled={!selectedMain || unpricedSelectedNames.length > 0}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -259,6 +304,27 @@ export function PosComboMealModal({
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%', boxSizing: 'border-box' }}>
+        {/* T11-A (INV-REST-COMBO-SUBMIT-TRUTH): loud missing-price
+         * failure — the modal never renders a silent 0.00 card for a
+         * product whose catalog price is non-zero; it names the
+         * product and blocks the add instead. */}
+        {unpricedSelectedNames.length > 0 && (
+          <div
+            role="alert"
+            style={{
+              background: '#fef2f2',
+              border: '1.5px solid #f87171',
+              color: '#b91c1c',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              fontWeight: 700,
+              fontSize: '12px',
+              flexShrink: 0,
+            }}
+          >
+            لا يوجد سعر صالح للأصناف التالية: {unpricedSelectedNames.join('، ')} — راجع سعر الصنف في الكتالوج قبل الإضافة.
+          </div>
+        )}
         {/* Step Progress Indicators */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', flexShrink: 0 }}>
           {[
@@ -381,7 +447,7 @@ export function PosComboMealModal({
                       {isSelected && <CheckCircleIcon size={14} color="#170e5e" />}
                     </div>
                     <div style={{ fontSize: '13px', fontWeight: 900, color: '#170e5e', marginTop: '4px' }}>
-                      {formatCurrency(productPrice(prod))}
+                      {isUnpricedProduct(prod) ? <span style={{ color: '#b91c1c' }}>لا يوجد سعر</span> : formatCurrency(productPrice(prod))}
                     </div>
                   </button>
                 );
@@ -457,7 +523,7 @@ export function PosComboMealModal({
                       {isSelected && <CheckCircleIcon size={14} color="#170e5e" />}
                     </div>
                     <div style={{ fontSize: '12px', fontWeight: 800, color: '#15803d', marginTop: '4px' }}>
-                      {formatCurrency(productPrice(prod))}
+                      {isUnpricedProduct(prod) ? <span style={{ color: '#b91c1c' }}>لا يوجد سعر</span> : formatCurrency(productPrice(prod))}
                     </div>
                   </button>
                 );
@@ -533,7 +599,7 @@ export function PosComboMealModal({
                       {isSelected && <CheckCircleIcon size={14} color="#170e5e" />}
                     </div>
                     <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#15803d', marginTop: '3px' }}>
-                      {formatCurrency(productPrice(prod))}
+                      {isUnpricedProduct(prod) ? <span style={{ color: '#b91c1c' }}>لا يوجد سعر</span> : formatCurrency(productPrice(prod))}
                     </div>
                   </button>
                 );

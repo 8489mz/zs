@@ -76,8 +76,8 @@ describe('PosComboMealModal — real catalog products (I52)', () => {
     expect(combo.productId).toBe(1);
     expect(combo.price).toBe(60);
     expect(combo.modifiers).toEqual([
-      { productId: 2, name: 'طبق جانبي: Fries', price: 25, qty: 1, isComboComponent: true },
-      { productId: 3, name: 'مشروب: Cola', price: 15, qty: 1, isComboComponent: true },
+      { productId: 2, name: 'طبق جانبي: Fries', price: 25, qty: 1, isComboComponent: true, catalogPrice: 25 },
+      { productId: 3, name: 'مشروب: Cola', price: 15, qty: 1, isComboComponent: true, catalogPrice: 15 },
     ]);
     // R8-C: a successful add closes the modal exactly once.
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -180,6 +180,132 @@ describe('PosComboMealModal — close only on successful add (R8-C)', () => {
   }, 30000);
 });
 
+/* T11-A (INV-REST-COMBO-SUBMIT-TRUTH): the modal must never render a
+ * silent 0.00 card for a product whose catalog price is non-zero — it
+ * fails LOUD instead (error state naming the product, add blocked).
+ * At base an unpriced product renders at 0.00 and the confirm happily
+ * stamps a 0 modifier, which the server then re-prices to DB
+ * retail_price and 422s SALE_TOTAL_MISMATCH. A genuinely free product
+ * (an explicit 0 in a known shape, no other shape carrying a price)
+ * still adds at 0 — the loud failure must not block free items. */
+describe('PosComboMealModal — loud failure on an unpriced product (T11-A)', () => {
+  const UNPRICED_SIDE = [
+    { id: 1, name: 'Burger', retailPrice: 60, stock: 10 },
+    { id: 2, name: 'Fries', stock: 10 },
+    { id: 3, name: 'Cola', retailPrice: 15, stock: 10 },
+  ];
+
+  function pickUnpricedSide() {
+    const utils = renderModal({ products: UNPRICED_SIDE });
+    fireEvent.click(screen.getByRole('button', { name: /2\. الصنف الجانبي/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Fries/ }));
+    return utils;
+  }
+
+  it('shows a loud missing-price error and blocks the add for a product with no price in any known shape', () => {
+    const { onAddComboToCart } = pickUnpricedSide();
+
+    // The error names the product — no silent 0.00 card.
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain('لا يوجد سعر صالح');
+    expect(alert.textContent).toContain('Fries');
+    expect(screen.getByText('لا يوجد سعر')).toBeInTheDocument();
+    expect(screen.queryByText(formatCurrency(0))).toBeNull();
+
+    // The add is blocked: the confirm stays disabled on step 3 and
+    // nothing is emitted even if it is clicked.
+    fireEvent.click(screen.getByRole('button', { name: /3\. المشروب/ }));
+    const confirm = screen.getByRole('button', { name: /إضافة وجبة الكومبو/ });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(onAddComboToCart).not.toHaveBeenCalled();
+  }, 30000);
+
+  it('fails loud when the reader yields 0 while another known shape carries a non-zero price', () => {
+    const mixed = [
+      { id: 1, name: 'Burger', retailPrice: 60, stock: 10 },
+      { id: 2, name: 'Fries', retailPrice: 0, price: 75, stock: 10 },
+      { id: 3, name: 'Cola', retailPrice: 15, stock: 10 },
+    ];
+    const { onAddComboToCart } = renderModal({ products: mixed });
+    fireEvent.click(screen.getByRole('button', { name: /2\. الصنف الجانبي/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Fries/ }));
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain('لا يوجد سعر صالح');
+    expect(alert.textContent).toContain('Fries');
+    expect(screen.queryByText(formatCurrency(0))).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /3\. المشروب/ }));
+    expect(screen.getByRole('button', { name: /إضافة وجبة الكومبو/ })).toBeDisabled();
+    expect(onAddComboToCart).not.toHaveBeenCalled();
+  }, 30000);
+
+  it('fails loud on open when the preselected main itself is unpriced', () => {
+    const unpricedMain = [
+      { id: 1, name: 'Burger', stock: 10 },
+      { id: 2, name: 'Fries', retailPrice: 25, stock: 10 },
+      { id: 3, name: 'Cola', retailPrice: 15, stock: 10 },
+    ];
+    renderModal({ products: unpricedMain });
+
+    // The main is preselected on open, so the error is visible at once.
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain('لا يوجد سعر صالح');
+    expect(alert.textContent).toContain('Burger');
+    expect(screen.getByRole('button', { name: /الخطوة التالية/ })).toBeDisabled();
+  }, 30000);
+
+  it('still adds a genuinely free product (explicit 0, no other shape carrying a price)', () => {
+    const freeSide = [
+      { id: 1, name: 'Burger', retailPrice: 60, stock: 10 },
+      { id: 2, name: 'Fries', retailPrice: 0, stock: 10 },
+      { id: 3, name: 'Cola', retailPrice: 15, stock: 10 },
+    ];
+    const { onAddComboToCart, onClose } = renderModal({ products: freeSide });
+    fireEvent.click(screen.getByRole('button', { name: /2\. الصنف الجانبي/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Fries/ }));
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /3\. المشروب/ }));
+    fireEvent.click(screen.getByRole('button', { name: /إضافة وجبة الكومبو/ }));
+
+    expect(onAddComboToCart).toHaveBeenCalledTimes(1);
+    expect(onAddComboToCart.mock.calls[0][0].modifiers).toEqual([
+      expect.objectContaining({ productId: 2, name: 'طبق جانبي: Fries', price: 0, qty: 1, isComboComponent: true }),
+    ]);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  }, 30000);
+
+  it('stamps prices that sum to the displayed total', () => {
+    const TRIAL_PRODUCTS = [
+      { id: 1, name: 'Burger', retailPrice: 99, stock: 10 },
+      { id: 2, name: 'Fries', retailPrice: 75, stock: 10 },
+      { id: 3, name: 'Cola', retailPrice: 25, stock: 10 },
+    ];
+    const { onAddComboToCart } = renderModal({ products: TRIAL_PRODUCTS });
+    const mainButtons = screen.getAllByRole('button', { name: /Burger/ });
+    fireEvent.click(mainButtons[mainButtons.length - 1]);
+    fireEvent.click(screen.getByRole('button', { name: /2\. الصنف الجانبي/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Fries/ }));
+    fireEvent.click(screen.getByRole('button', { name: /3\. المشروب/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Cola/ }));
+
+    // The displayed total the customer agreed to.
+    const confirm = screen.getByRole('button', { name: /إضافة وجبة الكومبو/ });
+    expect(confirm.textContent).toContain(formatCurrency(199));
+    fireEvent.click(confirm);
+
+    expect(onAddComboToCart).toHaveBeenCalledTimes(1);
+    const combo = onAddComboToCart.mock.calls[0][0];
+    const stampedTotal = combo.price + combo.modifiers.reduce((sum: number, mod: { price: number }) => sum + mod.price, 0);
+    expect(stampedTotal).toBe(199);
+    // T11-A: each modifier also carries the catalog price it was read
+    // from, so the stamp can refuse a 0 it would otherwise re-price.
+    expect(combo.modifiers.map((mod: { catalogPrice: number }) => mod.catalogPrice)).toEqual([75, 25]);
+  }, 30000);
+});
+
 describe('PosComboMealModal — prices from the real POS lookup shape (T10-A)', () => {
   // Trial-shaped prices: main 99, side 75, drink 25 — the shape the
   // trial's 99/174 mismatch came from (side stamped 0 at base).
@@ -232,8 +358,8 @@ describe('PosComboMealModal — prices from the real POS lookup shape (T10-A)', 
     // so the frontend total (199) agrees with the server total.
     expect(combo.price).toBe(99);
     expect(combo.modifiers).toEqual([
-      { productId: 2, name: 'طبق جانبي: Fries', price: 75, qty: 1, isComboComponent: true },
-      { productId: 3, name: 'مشروب: Cola', price: 25, qty: 1, isComboComponent: true },
+      { productId: 2, name: 'طبق جانبي: Fries', price: 75, qty: 1, isComboComponent: true, catalogPrice: 75 },
+      { productId: 3, name: 'مشروب: Cola', price: 25, qty: 1, isComboComponent: true, catalogPrice: 25 },
     ]);
     expect(onClose).toHaveBeenCalledTimes(1);
   }, 30000);
@@ -257,8 +383,8 @@ describe('PosComboMealModal — prices from the real POS lookup shape (T10-A)', 
     const combo = onAddComboToCart.mock.calls[0][0];
     expect(combo.price).toBe(60);
     expect(combo.modifiers).toEqual([
-      { productId: 2, name: 'طبق جانبي: Fries', price: 25, qty: 1, isComboComponent: true },
-      { productId: 3, name: 'مشروب: Cola', price: 15, qty: 1, isComboComponent: true },
+      { productId: 2, name: 'طبق جانبي: Fries', price: 25, qty: 1, isComboComponent: true, catalogPrice: 25 },
+      { productId: 3, name: 'مشروب: Cola', price: 15, qty: 1, isComboComponent: true, catalogPrice: 15 },
     ]);
   }, 30000);
 });
