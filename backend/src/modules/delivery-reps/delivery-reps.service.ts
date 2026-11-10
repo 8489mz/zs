@@ -23,7 +23,7 @@ import { assertSecurePasscode } from '../../core/auth/utils/password-policy';
 
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { SalesFinanceService } from '../sales/services/sales-finance.service';
 
 const DRIVER_TOKEN_ERRORS: PortalTokenErrorSpec = {
@@ -323,7 +323,27 @@ export class DeliveryRepsService {
     }
 
     const orders = await query.orderBy('sales.created_at', 'desc').orderBy('sales.id', 'desc').limit(pageSize + 1).offset(offset).execute();
-    return { ok: true, orders: orders.slice(0, pageSize), pagination: { page, pageSize, hasMore: orders.length > pageSize } };
+    // INV-SF-REP-CUSTODY-NET-RETURNS (D-SF-10): each row carries
+    // its remaining cash due from deliverySettlementBasis, so the
+    // row and the badge agree with the settle gate. `total` stays
+    // the invoice total; `remainingAmount` is what the rep still
+    // owes for this order (0 for a fully-returned order). Only
+    // the page rows are priced (pageSize <= 200), never the
+    // lookahead row.
+    const pageRows = orders.slice(0, pageSize);
+    const defaultMode = await this.getDeliveryFeeMode(this.db, actor);
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+    const ordersWithRemaining = [];
+    for (const row of pageRows) {
+      const remainingAmount = await this.repOrderCashDue(
+        { id: Number(row.id), delivery_fee_mode: row.deliveryFeeMode ?? null },
+        defaultMode,
+        moneyDigits,
+        actor,
+      );
+      ordersWithRemaining.push({ ...row, remainingAmount });
+    }
+    return { ok: true, orders: ordersWithRemaining, pagination: { page, pageSize, hasMore: orders.length > pageSize } };
   }
 
   async listSettlements(repId: number, actor: AuthContext, filters?: { dateFrom?: string; dateTo?: string; page?: number; pageSize?: number }): Promise<Record<string, unknown>> {
@@ -561,6 +581,32 @@ export class DeliveryRepsService {
     return { ok: true, ...(settlementSummary ? settlementSummary : {}) };
   }
 
+  /**
+   * INV-SF-REP-CUSTODY-NET-RETURNS (D-SF-10): the cash a rep still
+   * owes (pending) or has handed over (collected) for ONE order,
+   * derived from deliverySettlementBasis — the single source of
+   * truth the settle gates and postDeliveryRepSettlement already
+   * use — never from gross sales.total. A prior return already
+   * reversed part of the receivable (and relieved part of the
+   * fee), so the gross total charges the rep for money the
+   * customer no longer owes (live divergence 131.60: return
+   * ZR-261110-0601 reversed the sale JE while the badge kept
+   * 131.60). The formula is settleAllOrders' cashDue exactly:
+   * store-fleet owes the remaining receivable; a freelance
+   * courier owes it minus the remaining fee, floored at zero.
+   */
+  private async repOrderCashDue(
+    order: { id: number; delivery_fee_mode: string | null },
+    defaultMode: 'freelance_courier' | 'store_fleet',
+    moneyDigits: MoneyDigits,
+    actor: AuthContext,
+  ): Promise<number> {
+    const basis = await this.accountingPosting.deliverySettlementBasis(this.db, Number(order.id), actor);
+    return (order.delivery_fee_mode || defaultMode) === 'store_fleet'
+      ? basis.remainingReceivable
+      : Math.max(0, roundMoney(basis.remainingReceivable - basis.remainingFee, moneyDigits));
+  }
+
   async getRepSummary(repId: number, actor: AuthContext): Promise<Record<string, unknown>> {
     const rep = await this.db
       .selectFrom('delivery_representatives')
@@ -571,23 +617,45 @@ export class DeliveryRepsService {
     if (!rep) throw new AppError('Delivery representative not found', 'NOT_FOUND', 404);
 
     const defaultMode = await this.getDeliveryFeeMode(this.db, actor);
-    const summary = await this.db
+    const { tenantId } = requireTenantScope(actor);
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+    // INV-SF-REP-CUSTODY-NET-RETURNS (D-SF-10): the summary is
+    // computed from deliverySettlementBasis per order — the same
+    // single source of truth the settle gates and the posting
+    // use — not from gross sales.total. A fully-returned
+    // unsettled order contributes 0 (its receivable is already
+    // zero via the return journal), so the phantom clears without
+    // any status flip; a settled-then-returned order likewise
+    // stops counting the returned share as collected. Per-order
+    // basis calls match the settleAllOrders precedent (<= 200
+    // orders); re-implementing the basis in SQL would create the
+    // second computation this fix exists to delete.
+    const orders = await this.db
       .selectFrom('sales')
-      .select([
-        sql<number>`count(*)`.as('total_orders'),
-        sql<number>`sum(case when delivery_status = 'settled' then total else 0 end)`.as('collected_amount'),
-        sql<number>`sum(case when (delivery_status != 'settled' or delivery_status is null) and collection_status = 'cod' then case when coalesce(delivery_fee_mode, ${defaultMode}) = 'store_fleet' then total else greatest(0, total - coalesce(delivery_fee, 0)) end else 0 end)`.as('pending_amount')
-      ])
+      .select(['id', 'delivery_fee_mode', 'delivery_status', 'collection_status'])
       .where('delivery_rep_id', '=', repId)
       .where(this.tenantPredicate(actor))
-      .executeTakeFirst();
+      .execute();
+    let collectedAmount = 0;
+    let pendingAmount = 0;
+    for (const order of orders) {
+      const cashDue = await this.repOrderCashDue(
+        { id: Number(order.id), delivery_fee_mode: order.delivery_fee_mode ?? null },
+        defaultMode, moneyDigits, actor,
+      );
+      if (order.delivery_status === 'settled') {
+        collectedAmount += cashDue;
+      } else if (order.collection_status === 'cod') {
+        pendingAmount += cashDue;
+      }
+    }
 
     return {
       ok: true,
       summary: {
-        totalOrders: Number(summary?.total_orders || 0),
-        collectedAmount: Number(summary?.collected_amount || 0),
-        pendingAmount: Number(summary?.pending_amount || 0),
+        totalOrders: orders.length,
+        collectedAmount: roundMoney(collectedAmount, moneyDigits),
+        pendingAmount: roundMoney(pendingAmount, moneyDigits),
       }
     };
   }
