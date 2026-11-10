@@ -1042,7 +1042,21 @@ export class ReturnsService {
     for (const allocation of refundAllocations) {
       if (allocation.tender === 'store_credit' && customerId) await this.addStoreCredit(trx, customerId, allocation.amount, auth);
       else if (allocation.tender === 'receivable' && customerId) {
-        await this.addCustomerLedgerEntry(trx, customerId, -allocation.amount, 'sale_return', 'sale return ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id);
+        // D-SF-02 (INV-SF-COD-CUSTODY-GL): the receivable left the
+        // customer's books at dispatch, so a pre-settle return must
+        // not take it off the customer ledger again — the balance
+        // is already zero for this order. Post the net-zero pair
+        // (same shape as the fully-settled case below) so the
+        // return stays visible in the statement while the balance
+        // stays exactly unchanged. A settled sale keeps the old
+        // single leg.
+        if (await this.accountingPosting.hasDeliveryCustodyReclassification(trx, Number(sale.id), auth)
+          && String((sale as any).delivery_status || '') !== 'settled') {
+          await this.addCustomerLedgerEntry(trx, customerId, -allocation.amount, 'sale_return', 'sale return ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id);
+          await this.addCustomerLedgerEntry(trx, customerId, allocation.amount, 'sale_return_refund', 'sale return refund ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id);
+        } else {
+          await this.addCustomerLedgerEntry(trx, customerId, -allocation.amount, 'sale_return', 'sale return ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id);
+        }
         postedReceivableLeg = true;
       }
       else if (allocation.tender === 'cash') await this.addTreasuryTransaction(trx, 'sale_return_refund', -allocation.amount, 'sale return ' + returnDocNo, returnDocumentId, auth, sale.branch_id, sale.location_id, true);

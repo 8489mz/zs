@@ -539,7 +539,13 @@ export class DeliveryRepsService {
           }).execute();
         }
 
-        if (sale.customer_id && basis.remainingReceivable > 0) {
+        // D-SF-02 (INV-SF-COD-CUSTODY-GL): the receivable left the
+        // customer's books at dispatch (custody transfer), so the
+        // settle must not credit the customer ledger again — it
+        // would drive the balance negative. A sale settled without
+        // dispatch keeps the old credit.
+        if (sale.customer_id && basis.remainingReceivable > 0
+          && !(await this.accountingPosting.hasDeliveryCustodyReclassification(trx, saleId, actor))) {
           await this.salesFinance.createCustomerLedgerEntry(trx, sale.customer_id, -basis.remainingReceivable, `تسديد من مندوب للأوردر #${saleId}`, saleId, actor);
         }
 
@@ -746,7 +752,12 @@ export class DeliveryRepsService {
 
       for (const order of unsettledOrders) {
         const basis = basisByOrderId.get(Number(order.id))!;
-        if (order.customer_id && basis.remainingReceivable > 0) {
+        // D-SF-02 (INV-SF-COD-CUSTODY-GL): same as settleOrder —
+        // the receivable already left the customer's books at
+        // dispatch, so the batch settle must not credit the
+        // customer ledger again.
+        if (order.customer_id && basis.remainingReceivable > 0
+          && !(await this.accountingPosting.hasDeliveryCustodyReclassification(trx, Number(order.id), actor))) {
           await this.salesFinance.createCustomerLedgerEntry(trx, order.customer_id, -basis.remainingReceivable, `تسديد من مندوب للأوردر #${order.id}`, order.id, actor);
         }
         await this.accountingPosting.postDeliveryRepSettlement(trx, order.id, cashDue(order), openShift.branchId, openShift.locationId, actor);
@@ -1147,6 +1158,10 @@ export class DeliveryRepsService {
       }
       const now = new Date();
       const notifications: Array<{ recipientPhone: string; orderNumber: string; text: string }> = [];
+      // D-SF-02 (INV-SF-COD-CUSTODY-GL): the sales dispatched in this
+      // transaction (direct ids + online-order links) are the ones
+      // whose receivable moves to courier custody below.
+      const dispatchedSaleIds: number[] = [...saleIds];
 
       if (saleIds.length) {
         const sales = await trx.selectFrom('sales')
@@ -1191,6 +1206,7 @@ export class DeliveryRepsService {
         }).where('id','in',onlineOrderIds).where(this.tenantPredicate(actor)).execute();
 
         const linkedSaleIds = orders.map(o => o.sale_id).filter((id): id is number => Boolean(id) && Number(id) > 0);
+        dispatchedSaleIds.push(...linkedSaleIds);
         if (linkedSaleIds.length > 0) {
           await trx.updateTable('sales').set({
             order_type: 'delivery',
@@ -1207,6 +1223,20 @@ export class DeliveryRepsService {
             orderNumber: order.order_number,
             text: `عزيزي العميل، طلبك رقم #${order.order_number} في الطريق إليك مع كابتن التوصيل ${rep.name} (${rep.phone || ''}). نتمنى لك وجبة شهية!`,
           });
+        }
+      }
+      // D-SF-02 (INV-SF-COD-CUSTODY-GL): dispatch moves the COD
+      // receivable off the customer to courier custody — GL
+      // reclassification plus the customer-ledger leg that takes
+      // the customer balance to zero for the order, in this same
+      // transaction. Prepaid / fully-returned sales are a no-op
+      // inside the reclassification (remaining 0). A re-dispatch
+      // to the same rep is idempotent there and writes no second
+      // ledger leg.
+      for (const dispatchedSaleId of dispatchedSaleIds) {
+        const reclass = await this.accountingPosting.postDeliveryCustodyReclassification(trx, dispatchedSaleId, rep.id, actor);
+        if (reclass.posted && reclass.amount > 0 && reclass.customerId) {
+          await this.salesFinance.addCustomerLedgerLeg(trx, reclass.customerId, -reclass.amount, 'delivery_custody_transfer', `نقل عهدة فاتورة #${reclass.docNo} إلى مندوب التوصيل ${rep.name}`, 'sale', dispatchedSaleId, actor);
         }
       }
       return { rep, notifications };

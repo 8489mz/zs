@@ -1979,6 +1979,43 @@ export class AccountingPostingService {
       }
     }
 
+    // D-SF-02 (INV-SF-COD-CUSTODY-GL): a dispatched COD sale carries
+    // a custody-reclassification journal (Dr 1130 custody / Cr 1130
+    // customer). Reversing only the sale journal would strand the
+    // custody debit and drive the customer leg negative, so the
+    // reversal also negates the reclassification journal's lines.
+    // The pair is balanced, so the balance check below still holds.
+    let reclassEntryId: number | null = null;
+    const reclassEntry = await queryable.selectFrom('journal_entries').select(['id'])
+      .where('source_type', '=', 'delivery_custody_reclassification')
+      .where('source_id', '=', saleId)
+      .where('status', '=', 'posted')
+      .where('reversed_by_entry_id', 'is', null)
+      .where('tenant_id', '=', scope.tenantId)
+      .executeTakeFirst();
+    if (reclassEntry) {
+      reclassEntryId = Number(reclassEntry.id);
+      const reclassLines = await queryable.selectFrom('journal_entry_lines')
+        .select(['account_id', 'cost_center_id', 'description', 'debit', 'credit', 'partner_type', 'partner_id', 'branch_id', 'location_id'])
+        .where('journal_entry_id', '=', reclassEntryId)
+        .where('tenant_id', '=', scope.tenantId)
+        .orderBy('id', 'asc')
+        .execute();
+      for (const line of reclassLines) {
+        reversalLines.push({
+          accountId: Number(line.account_id),
+          costCenterId: line.cost_center_id ? Number(line.cost_center_id) : null,
+          description: `عكس: ${line.description || 'قيد عهدة مندوب'}`,
+          debit: toBookMoney(line.credit),
+          credit: toBookMoney(line.debit),
+          partnerType: (line.partner_type as 'none' | 'customer' | 'supplier') || 'none',
+          partnerId: line.partner_id ? Number(line.partner_id) : null,
+          branchId: line.branch_id ? Number(line.branch_id) : null,
+          locationId: line.location_id ? Number(line.location_id) : null,
+        });
+      }
+    }
+
     const totalDebit = toBookMoney(reversalLines.reduce((sum, line) => sum + line.debit, 0));
     const totalCredit = toBookMoney(reversalLines.reduce((sum, line) => sum + line.credit, 0));
     if (Math.abs(totalDebit - totalCredit) > this.maxAllowedDifference(bookDigits)) {
@@ -1999,6 +2036,11 @@ export class AccountingPostingService {
       lines: reversalLines,
       reversalOfEntryId: Number(sourceJournal.id),
     });
+
+    if (reclassEntryId) {
+      await queryable.updateTable('journal_entries').set({ reversed_by_entry_id: entryId, updated_at: sql`NOW()` })
+        .where('id', '=', reclassEntryId).where('tenant_id', '=', scope.tenantId).execute();
+    }
 
     this.logger.warn(`Posted sale reversal journal for sale ${saleId} as entry ${entryId}`);
     return { reversed: true, journalEntryId: entryId };
@@ -2298,6 +2340,145 @@ export class AccountingPostingService {
   }
 
   /**
+   * D-SF-02 (INV-SF-COD-CUSTODY-GL): the receivable a courier is
+   * carrying moves off the customer the moment the order is
+   * dispatched — Dr 1130 partnerType 'none' (courier custody, the
+   * van pattern: postSale already books van field cash as 1130
+   * 'none' "عهدة نقدية لدى مندوب التوزيع") / Cr 1130 partnerType
+   * 'customer'. The caller (dispatchOrders) moves the customer
+   * ledger in the same transaction via its own ledger leg; this
+   * method posts only the GL half.
+   *
+   * Decisions (recorded):
+   * - partnerType 'none', NOT 'delivery_rep': the DB check
+   *   constraint on journal_entry_lines (migration
+   *   2040000000110) allows only
+   *   ('none','customer','supplier','employee'), and
+   *   syncPostedPartnerLedger throws for any control-account line
+   *   whose partner is not customer/supplier. A new partner type
+   *   would need a migration plus a sync exemption for every
+   *   control-account reader. The van precedent already books
+   *   courier custody as 1130 'none'; the rep is identified by
+   *   the description + sales.delivery_rep_id, never by a new
+   *   partner value.
+   * - The amount is the REMAINING receivable
+   *   (deliverySettlementBasis), not the original total: a return
+   *   before dispatch already reversed part of it on the customer
+   *   leg, and reclassifying the full total would drive the
+   *   customer leg negative.
+   * - Idempotent on (source_type, source_id): a re-dispatch to
+   *   the same rep re-runs this and finds the posted entry.
+   * - Fail-closed (not a silent no-op) when the sale is not in
+   *   courier custody at call time: the caller just marked it
+   *   out_for_delivery, so anything else is a caller bug. A
+   *   prepaid / fully-returned sale is a silent no-op instead:
+   *   there is no receivable to move.
+   */
+  async postDeliveryCustodyReclassification(
+    queryable: Transaction<Database>,
+    saleId: number,
+    repId: number,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null; amount: number; customerId: number | null; docNo: string }> {
+    this.assertTransaction(queryable, 'postDeliveryCustodyReclassification');
+    const scope = requireTenantScope(auth);
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
+    const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
+    await this.ensureTenantFoundation(queryable, auth);
+
+    const sale = await queryable
+      .selectFrom('sales')
+      .select(['customer_id', 'doc_no', 'delivery_status', 'delivery_rep_id', 'branch_id', 'location_id'])
+      .where('id', '=', saleId)
+      .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+      .executeTakeFirst();
+    if (!sale) throw new AppError('Order not found', 'ORDER_NOT_FOUND', 404);
+    const docNo = (sale as any).doc_no || `Z-${saleId}`;
+    if (String((sale as any).delivery_status || '') !== 'out_for_delivery') {
+      throw new AppError('Only a dispatched delivery order can move its receivable to courier custody', 'DELIVERY_CUSTODY_RECLASSIFICATION_INVALID', 409);
+    }
+    if (Number((sale as any).delivery_rep_id || 0) !== Number(repId)) {
+      throw new AppError('Order is not in this representative\'s custody', 'DELIVERY_CUSTODY_RECLASSIFICATION_INVALID', 409);
+    }
+    const customerId = (sale as any).customer_id ? Number((sale as any).customer_id) : null;
+
+    const existing = await queryable.selectFrom('journal_entries').select('id')
+      .where('source_type', '=', 'delivery_custody_reclassification')
+      .where('source_id', '=', saleId)
+      .where('tenant_id', '=', scope.tenantId)
+      .where('status', '=', 'posted')
+      .executeTakeFirst();
+    if (existing) return { posted: false, journalEntryId: Number(existing.id), amount: 0, customerId, docNo };
+
+    const basis = await this.deliverySettlementBasis(queryable, saleId, auth);
+    const amount = toBookMoney(basis.remainingReceivable);
+    if (!(amount > 0)) return { posted: false, journalEntryId: null, amount: 0, customerId, docNo };
+    if (!customerId) return { posted: false, journalEntryId: null, amount: 0, customerId, docNo };
+
+    const customerAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, null, '1130');
+    const branchId = (sale as any).branch_id ? Number((sale as any).branch_id) : null;
+    const locationId = (sale as any).location_id ? Number((sale as any).location_id) : null;
+    const lines: JournalLineDraft[] = [];
+    const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
+    addBookLine({
+      accountId: customerAccountId,
+      description: `عهدة نقدية لدى مندوب التوصيل من فاتورة #${docNo}`,
+      debit: amount,
+      credit: 0,
+      partnerType: 'none',
+      partnerId: null,
+      branchId,
+      locationId,
+    });
+    addBookLine({
+      accountId: customerAccountId,
+      description: `نقل مديونية عميل إلى عهدة مندوب التوصيل للفاتورة #${docNo}`,
+      debit: 0,
+      credit: amount,
+      partnerType: 'customer',
+      partnerId: customerId,
+      branchId,
+      locationId,
+    });
+    const entryId = await this.insertPostedJournal(queryable, {
+      sourceType: 'delivery_custody_reclassification',
+      sourceId: saleId,
+      tenantId: scope.tenantId,
+      accountId: scope.accountId,
+      entryDate: new Date(),
+      description: `قيد نقل مديونية فاتورة #${docNo} إلى عهدة مندوب التوصيل`,
+      branchId,
+      locationId,
+      createdBy: auth.userId,
+      postedBy: auth.userId,
+      lines,
+    });
+    return { posted: true, journalEntryId: entryId, amount, customerId, docNo };
+  }
+
+  /**
+   * D-SF-02 (INV-SF-COD-CUSTODY-GL): does this sale already carry a
+   * posted custody reclassification? The settle / return / reversal
+   * legs credit the custody leg instead of the customer leg exactly
+   * when this is true, so a pre-dispatch settle or return keeps the
+   * old customer-leg behaviour.
+   */
+  async hasDeliveryCustodyReclassification(
+    queryable: DbOrTx,
+    saleId: number,
+    auth: AuthContext,
+  ): Promise<boolean> {
+    const scope = requireTenantScope(auth);
+    const existing = await queryable.selectFrom('journal_entries').select('id')
+      .where('source_type', '=', 'delivery_custody_reclassification')
+      .where('source_id', '=', saleId)
+      .where('tenant_id', '=', scope.tenantId)
+      .where('status', '=', 'posted')
+      .executeTakeFirst();
+    return Boolean(existing);
+  }
+
+  /**
    * R7-A (INV-REST-RETURN-PAYOUT-TRUTH) F1: the tip / courier-fee
    * relief a return owes, shared by postSalesReturn (the journal)
    * and ReturnsService.createSaleReturn (the payout loop) so both
@@ -2517,6 +2698,14 @@ export class AccountingPostingService {
     );
 
     const customerPartnerId = sale?.customer_id ? Number(sale.customer_id) : null;
+    // D-SF-02 (INV-SF-COD-CUSTODY-GL): a return of a dispatched COD
+    // sale nets the courier custody leg, not the customer leg — the
+    // receivable left the customer's books at dispatch, so a
+    // customer-leg credit here would drive it negative while the
+    // custody debit stands. The 'store_credit' tender is untouched.
+    const saleInCourierCustody = sale?.id
+      ? await this.hasDeliveryCustodyReclassification(queryable, Number(sale.id), auth)
+      : false;
     const lines: JournalLineDraft[] = [];
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
     const branchId = returnDocument.branch_id ? Number(returnDocument.branch_id) : null;
@@ -2636,13 +2825,14 @@ export class AccountingPostingService {
           : allocation.tender === 'receivable' ? customerAccountId
             : allocation.tender === 'cash' ? cashAccountId : bankAccountId;
         const partner = allocation.tender === 'store_credit' || allocation.tender === 'receivable';
+        const custodyReceivable = allocation.tender === 'receivable' && saleInCourierCustody;
         addBookLine({
           accountId,
           description: `تسوية مرتجع فاتورة رقم ${invoiceNo} - ${allocation.tender}`,
           debit: 0,
           credit: lineAmount,
-          partnerType: partner && customerPartnerId ? 'customer' : 'none',
-          partnerId: partner ? customerPartnerId : null,
+          partnerType: custodyReceivable ? 'none' : (partner && customerPartnerId ? 'customer' : 'none'),
+          partnerId: custodyReceivable ? null : (partner ? customerPartnerId : null),
           branchId,
           locationId,
         });
@@ -5407,6 +5597,13 @@ export class AccountingPostingService {
       branchId,
       locationId,
     });
+    // D-SF-02 (INV-SF-COD-CUSTODY-GL): the receivable was moved to
+    // courier custody at dispatch, so the settlement credits the
+    // custody leg (partnerType 'none'), never the customer leg —
+    // crediting the customer would drive it negative while the
+    // custody debit stands. A sale settled without dispatch keeps
+    // the old customer-leg credit.
+    const inCourierCustody = await this.hasDeliveryCustodyReclassification(queryable, saleId, auth);
     addBookLine({
       accountId: customerAccountId,
       description: `تسديد مديونية فاتورة #${sale.doc_no || saleId}`,
@@ -5416,8 +5613,8 @@ export class AccountingPostingService {
       // receivable leg, so crediting the full total would
       // over-credit 1130 by the returned share.
       credit: remainingReceivable,
-      partnerType: sale.customer_id ? 'customer' : 'none',
-      partnerId: sale.customer_id ? Number(sale.customer_id) : null,
+      partnerType: inCourierCustody ? 'none' : (sale.customer_id ? 'customer' : 'none'),
+      partnerId: inCourierCustody ? null : (sale.customer_id ? Number(sale.customer_id) : null),
       branchId,
       locationId,
     });
