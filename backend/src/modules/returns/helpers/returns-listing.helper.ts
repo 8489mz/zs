@@ -117,7 +117,7 @@ export function filterReturnRows(rows: ReturnListRow[], query: Record<string, un
 export function summarizeReturnRows(rows: ReturnListRow[], today: string, moneyDigits: MoneyDigits = 2, timeZone?: string) {
   return {
     totalItems: new Set(rows.map((row) => row.id)).size,
-    totalAmount: roundMoney(rows.reduce((sum, row) => sum + Number(row.total || 0), 0), moneyDigits),
+    totalAmount: roundMoney(rows.reduce((sum, row) => sum + Number(row.refundTotal ?? row.total ?? 0), 0), moneyDigits),
     salesReturns: new Set(rows.filter((row) => row.returnType === 'sale').map((row) => row.id)).size,
     purchaseReturns: new Set(rows.filter((row) => row.returnType === 'purchase').map((row) => row.id)).size,
     todayCount: new Set(rows.filter((row) => returnDateKey(row.createdAt, timeZone) === today).map((row) => row.id)).size,

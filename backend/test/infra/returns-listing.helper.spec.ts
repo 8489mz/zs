@@ -27,4 +27,20 @@ assert.deepEqual(summarizeReturnRows(rows, '2026-04-09'), {
   latestDocNo: 'RET-10',
 });
 
+// T12-H3 (INV-REST-RETURN-LIST-REFUND-TRUTH): the server summary must
+// total the actual refund (goods + relief), not the goods-only total.
+// The tipped document below refunds 85 (75 goods + 10 tip relief);
+// on the base summarizeReturnRows sums row.total, so totalAmount is 75.
+const reliefRows = mapReturnRows([
+  { id: 3, return_document_id: 12, doc_no: 'ZR-261110-0596', return_type: 'sale', invoice_id: 22, product_id: 4, product_name: 'Meal', qty: 1, line_total: 75, tip_relief: 10, courier_relief: 0, note: 'tipped', settlement_mode: 'refund', refund_method: 'cash', created_at: '2026-11-10T10:00:00.000Z' },
+]);
+
+assert.equal(reliefRows[0].refundTotal, 85);
+assert.equal(summarizeReturnRows(reliefRows, '2026-11-10').totalAmount, 85);
+
+// Fallback: a row without refundTotal still totals its goods figure.
+const legacyRow = { ...reliefRows[0] };
+delete (legacyRow as Partial<typeof reliefRows[0]>).refundTotal;
+assert.equal(summarizeReturnRows([legacyRow], '2026-11-10').totalAmount, 75);
+
 console.log('returns listing helper checks passed');

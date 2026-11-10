@@ -4,7 +4,7 @@ import { Button } from '@/shared/ui/button';
 import { Field } from '@/shared/ui/field';
 import { SearchToolbar } from '@/shared/components/search-toolbar';
 import { formatCurrency, formatDate } from '@/lib/format';
-import { getReturnDateValue, returnTypeLabel } from '@/features/returns/lib/returns-workspace.helpers';
+import { actualReturnRefund, getReturnDateValue, returnTypeLabel } from '@/features/returns/lib/returns-workspace.helpers';
 import type { ReturnRecord } from '@/types/domain';
 
 type Props = {
@@ -134,7 +134,7 @@ export function ReturnsRegisterCard({
               { key: 'party', header: t('returns.col_party', 'الجهة / العميل'), cell: (row) => row.partyName || '—' },
               { key: 'product', header: t('returns.col_product', 'الصنف'), cell: (row) => row.productName || '—' },
               { key: 'qty', header: t('returns.col_qty', 'الكمية'), cell: (row) => row.qty },
-              { key: 'total', header: t('returns.col_total', 'المسترد'), cell: (row) => formatCurrency(row.total) },
+              { key: 'total', header: t('returns.col_total', 'المسترد'), cell: (row) => formatCurrency(actualReturnRefund(row)) },
               { key: 'note', header: t('returns.col_note', 'ملاحظات'), cell: (row) => row.note || '—' },
               { key: 'date', header: t('returns.col_date', 'التاريخ'), cell: (row) => formatDate(getReturnDateValue(row)) },
               { key: 'createdBy', header: t('returns.col_created_by', 'منفذ المرتجع'), cell: (row) => row.createdByName || row.createdBy || '—' },

@@ -61,3 +61,25 @@ describe('ReturnsWorkspace register summary stat (T11-C)', () => {
     expect(screen.queryByText('125.00')).not.toBeInTheDocument();
   });
 });
+
+/* T12-H3 (INV-REST-RETURN-LIST-REFUND-TRUTH): the returns list
+ * "المسترد" column must show the actual refund per document
+ * (goods + relief), not the goods-only total. On the base the column
+ * renders row.total, so the first row shows 75.00 and the second
+ * 50.00; after the fix they show 85.00 and 65.00. */
+describe('ReturnsWorkspace register list column (T12-H3)', () => {
+  it('shows the actual refund per row (85.00 / 65.00) instead of the goods-only totals', async () => {
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <MemoryRouter>
+          <ReturnsWorkspace />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('85.00')).toBeInTheDocument();
+    expect(screen.getByText('65.00')).toBeInTheDocument();
+    expect(screen.queryByText('75.00')).not.toBeInTheDocument();
+    expect(screen.queryByText('50.00')).not.toBeInTheDocument();
+  });
+});
