@@ -77,6 +77,7 @@ describe('display-copy zero-showroom (INV-REST-DISPLAY-ZERO-SHOWROOM)', () => {
     const ar = readJson('src/locales/ar.json');
     const pos = ar.pos as Record<string, Record<string, Record<string, string>>>;
     const customerDisplay = pos.customer_display;
+    const displaysPortal = pos.displays_portal_page as unknown as Record<string, string>;
     const k6Values: Array<[string, string]> = [
       ['cfd_idle_view.s1', customerDisplay.cfd_idle_view.s1],
       ['cfd_idle_view.s4', customerDisplay.cfd_idle_view.s4],
@@ -90,7 +91,7 @@ describe('display-copy zero-showroom (INV-REST-DISPLAY-ZERO-SHOWROOM)', () => {
       ['cfd_idle_view.s19', customerDisplay.cfd_idle_view.s19],
       ['cfd_scanning_view.s0', customerDisplay.cfd_scanning_view.s0],
       ['cfd_completed_view.s1', customerDisplay.cfd_completed_view.s1],
-      ['displays_portal_page.s2', pos.displays_portal_page.s2],
+      ['displays_portal_page.s2', displaysPortal.s2],
       ['pos_displays_modal.s2', pos.pos_workspace.pos_displays_modal.s2],
       ['pos_displays_modal.s3', pos.pos_workspace.pos_displays_modal.s3],
     ];
