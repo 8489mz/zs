@@ -264,6 +264,21 @@ export function usePublicStorefront(cleanSlug: string) {
     setCartItems([]);
   }, []);
 
+  // D-SF-04: a search is global — typing a search term clears the selected
+  // category, so a search started from a category page returns matches from
+  // every category (the same scope as the predictive-search suggestions,
+  // which never send a category). Clearing the term leaves the category
+  // cleared; picking a category clears the search (handleSelectCategory in
+  // PublicStorefrontPage), so the two filters never silently narrow each
+  // other. The page also navigates off the category route when a search
+  // starts, so the URL cannot re-apply the stale category.
+  const handleSearchChange = useCallback((term: string) => {
+    setSearchTerm(term);
+    if (term.trim()) {
+      setSelectedCategory('all');
+    }
+  }, []);
+
   const handleGoHome = useCallback(() => {
     setSearchTerm('');
     setSelectedCategory('all');
@@ -500,6 +515,7 @@ export function usePublicStorefront(cleanSlug: string) {
     info,
     searchTerm,
     setSearchTerm,
+    handleSearchChange,
     selectedCategory,
     setSelectedCategory,
     inStockOnly,

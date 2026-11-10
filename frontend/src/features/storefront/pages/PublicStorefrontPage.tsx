@@ -75,6 +75,7 @@ export function PublicStorefrontPage() {
     info,
     searchTerm,
     setSearchTerm,
+    handleSearchChange: handleHookSearchChange,
     selectedCategory,
     setSelectedCategory,
     inStockOnly,
@@ -181,6 +182,21 @@ export function PublicStorefrontPage() {
   const handleLoadMore = useCallback(() => {
     setVisibleCount((prev) => prev + ITEMS_PER_PAGE);
   }, [setVisibleCount]);
+
+  // D-SF-04: a search is global. Typing a term from a category page leaves
+  // the category route (/c/:id or ?category=) — navigate home so the URL
+  // cannot re-apply the stale category on reload, back/forward, or when a
+  // quick-view closes (closeProduct restores the category URL from the route
+  // params). The hook clears the category state for the same term.
+  const handleSearchChange = useCallback(
+    (term: string) => {
+      if (term.trim() && selectedCategory !== 'all') {
+        navigate(storeHomePath);
+      }
+      handleHookSearchChange(term);
+    },
+    [navigate, storeHomePath, selectedCategory, handleHookSearchChange],
+  );
 
   // Handle Category Selection with full Browser History & URL sync (Amazon-grade UX)
   const handleSelectCategory = useCallback(
@@ -511,7 +527,7 @@ export function PublicStorefrontPage() {
       <StorefrontHeader
         info={info}
         searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
+        onSearchChange={handleSearchChange}
         cartCount={cartCount}
         cartTotal={cartSubtotal}
         onOpenCart={handleOpenCart}
