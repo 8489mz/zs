@@ -2249,8 +2249,10 @@ export class StorefrontService {
               // ride on it — stored as a JSON string exactly like
               // createSale stores sale_items.modifiers, which the KDS
               // parses (string or array). A line with no modifiers
-              // keeps null, as before.
-              modifiers: (it as any).modifiers?.length ? JSON.stringify((it as any).modifiers) : null,
+              // stores '[]', never null: the column is JSONB NOT NULL
+              // DEFAULT '[]', so an explicit null rolls the whole
+              // order back on Postgres 23502 (INV-REST-KIOSK-OWN-CATALOG-TRUTH).
+              modifiers: (it as any).modifiers?.length ? JSON.stringify((it as any).modifiers) : '[]',
             })
             .execute();
         }

@@ -320,6 +320,7 @@ const ARABIC_TO_ENGLISH_ERRORS: Record<string, string> = {
   'تعذر حفظ الفاتورة المعلقة': 'Failed to save held invoice.',
   'تم تعليق الفاتورة الحالية ويمكن استرجاعها لاحقًا': 'Current invoice held successfully.',
   'يوجد حقل مطلوب لم يتم إدخاله': 'A required field is missing.',
+  'الإضافات مطلوبة': 'Modifiers are required.',
   'هذه البيانات مستخدمة بالفعل': 'This record already exists.',
   'لا يمكن تنفيذ العملية لأن هناك بيانات مرتبطة بها': 'Cannot execute operation because related records exist.',
   'قيمة غير صحيحة في أحد الحقول': 'Invalid value in one of the fields.',

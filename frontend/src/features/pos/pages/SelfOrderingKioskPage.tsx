@@ -50,6 +50,8 @@ import {
 import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 import { KioskModifierPickerModal } from '@/features/pos/components/kiosk/KioskModifierPickerModal';
 import { getStoreHostSlug } from '@/lib/store-public-url';
+import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
+import { buildInstaPayQrPayload } from '@/lib/payment-qr';
 import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
 
 interface KioskCartItem {
@@ -68,11 +70,13 @@ interface KioskCartItem {
 }
 
 /**
- * محرك صور الوجبات الذكي:
- * يربط كل تصنيف ووجبة بصورة فوتوغرافية احترافية عالية الدقة والشهية،
- * بحيث تكون الصورة هي البطل الرئيسي للكارت (تشغل 70% من المساحة).
+ * INV-REST-KIOSK-OWN-CATALOG-TRUTH (T14-B): a kiosk card shows the
+ * product's own photo only. There is no keyword food-photo fallback:
+ * an item with no imageUrl gets NO photo — never a steak/fries photo
+ * for a DVR — so the menu can never show a picture the tenant did not
+ * put on that item.
  */
-function getSmartProductImage(product: any): string {
+export function getKioskProductImage(product: any): string {
   if (
     product.imageUrl &&
     typeof product.imageUrl === 'string' &&
@@ -80,63 +84,23 @@ function getSmartProductImage(product: any): string {
   ) {
     return product.imageUrl;
   }
+  return '';
+}
 
-  const name = String(product.name || '').toLowerCase();
-  const cat = String(product.categoryName || '').toLowerCase();
+/**
+ * INV-REST-KIOSK-OWN-CATALOG-TRUTH (T14-B): the tenant's real InstaPay
+ * payee, from settings.instapayAddress. The '01018017523' value is the
+ * settings schema's placeholder default (settings/contracts.ts,
+ * payment-qr.ts) — it names nobody the tenant configured, so it counts
+ * as UNSET: a QR that pays the wrong person (or nobody) is worse than
+ * no QR option at all, so the option is hidden instead.
+ */
+export const KIOSK_INSTAPAY_PLACEHOLDER = '01018017523';
 
-  // مشويات وكفتة
-  if (name.includes('كفت') || name.includes('مشو') || cat.includes('فحم') || cat.includes('مشو') || name.includes('كباب')) {
-    return 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=500&q=80';
-  }
-  // حواوشي وفطائر
-  if (name.includes('حواوش') || name.includes('فطير')) {
-    return 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=500&q=80';
-  }
-  // شاورما وصواريخ ومارين
-  if (name.includes('صاروخ') || name.includes('شاورما') || name.includes('رول') || name.includes('مارين')) {
-    return 'https://images.unsplash.com/photo-1561651823-34feb02250e4?w=500&q=80';
-  }
-  // مكرونات وباستا
-  if (name.includes('مكرون') || name.includes('باستا') || cat.includes('مكرون')) {
-    return 'https://images.unsplash.com/photo-1546549032-9571cd6b27df?w=500&q=80';
-  }
-  // شيش ودجاج وبانيه وزنجر واستربس
-  if (name.includes('شيش') || name.includes('فراخ') || name.includes('دجاج') || name.includes('بانية') || name.includes('زنجر') || name.includes('استربس')) {
-    return 'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=500&q=80';
-  }
-  // فرايز وبطاطس
-  if (name.includes('فرايز') || name.includes('بطاطس') || cat.includes('فرايز')) {
-    return 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&q=80';
-  }
-  // برجر
-  if (name.includes('برجر') || name.includes('burger')) {
-    return 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500&q=80';
-  }
-  // بيتزا
-  if (name.includes('بيتزا') || name.includes('pizza')) {
-    return 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=500&q=80';
-  }
-  // مشروبات ومياه
-  if (name.includes('بيبسي') || name.includes('كولا') || name.includes('عصير') || name.includes('مشروب') || name.includes('ماء') || cat.includes('مشروب')) {
-    return 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=500&q=80';
-  }
-  // حلويات
-  if (name.includes('حلو') || name.includes('كيك') || name.includes('شوكولات') || name.includes('ايس كريم') || name.includes('سودا')) {
-    return 'https://images.unsplash.com/photo-1551024601-bec78aea704b?w=500&q=80';
-  }
-  // هواتف وآيفون (لمتجر الأجهزة)
-  if (name.includes('آيفون') || name.includes('iphone')) {
-    return 'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=500&q=80';
-  }
-  if (name.includes('هاتف') || name.includes('سامسونج') || name.includes('أوبو') || name.includes('انفينيكس') || name.includes('ريلمي') || cat.includes('هواتف')) {
-    return 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=500&q=80';
-  }
-  if (name.includes('شاحن') || name.includes('باور بانك') || name.includes('كابل') || name.includes('سماعة') || cat.includes('إكسسوار')) {
-    return 'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=500&q=80';
-  }
-
-  // وجبة رئيسية فاخرة افتراضية
-  return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=500&q=80';
+export function resolveKioskInstapayPayee(instapayAddress?: string | null): string | null {
+  const address = String(instapayAddress || '').trim();
+  if (!address || address === KIOSK_INSTAPAY_PLACEHOLDER) return null;
+  return address;
 }
 
 export function SelfOrderingKioskPage() {
@@ -146,6 +110,13 @@ export function SelfOrderingKioskPage() {
   const [searchParams] = useSearchParams();
   const querySlug = searchParams.get('store') || searchParams.get('slug');
   const tenant = useAuthStore((s: any) => s.tenant);
+  const user = useAuthStore((s: any) => s.user);
+  const { data: settings } = useSettingsQuery({ enabled: Boolean(user) });
+  // INV-REST-KIOSK-OWN-CATALOG-TRUTH (T14-B): the QR payee is the
+  // tenant's own configured InstaPay address. Without one the QR
+  // option is hidden below, never a placeholder payee.
+  const instapayPayee = resolveKioskInstapayPayee(settings?.instapayAddress);
+  const hasRealInstapayPayee = instapayPayee !== null;
   const hostSlug = getStoreHostSlug();
   const localSlug = typeof localStorage !== 'undefined' ? localStorage.getItem('zs_last_company_code') : null;
 
@@ -154,7 +125,7 @@ export function SelfOrderingKioskPage() {
   // slug and no mapping of one tenant onto another tenant's menu: an
   // unknown/missing slug resolves to null and the kiosk fails closed.
   const initialSlug = resolveKioskSlug([routeSlug, querySlug, tenant?.slug, hostSlug, localSlug]);
-  const [currentSlug, setCurrentSlug] = useState<string | null>(initialSlug);
+  const [currentSlug] = useState<string | null>(initialSlug);
 
   // The brand is the tenant's own business name; never a hardcoded
   // restaurant name for a store this kiosk may not be.
@@ -373,7 +344,7 @@ export function SelfOrderingKioskPage() {
   };
 
   const addPlainCartLine = (product: any) => {
-    const smartImg = getSmartProductImage(product);
+    const smartImg = getKioskProductImage(product);
     setCart((prev) =>
       addKioskCartLine(prev, {
         productId: product.id,
@@ -396,7 +367,7 @@ export function SelfOrderingKioskPage() {
     const picker = modifierPicker;
     if (!picker) return;
     const product = picker.product;
-    const smartImg = getSmartProductImage(product);
+    const smartImg = getKioskProductImage(product);
     if (picker.editingLineKey) {
       setCart((prev) => updateKioskCartLineModifiers(prev, picker.editingLineKey as string, modifiers));
     } else {
@@ -469,6 +440,19 @@ export function SelfOrderingKioskPage() {
   // against the number they will actually pay — the old base-only sum
   // hid their paid extras until the server total arrived.
   const totalCartAmount = kioskCartTotal(cart);
+
+  // INV-REST-KIOSK-OWN-CATALOG-TRUTH (T14-B): the QR is built locally
+  // from the tenant's real payee — never from an external QR host and
+  // never with the tenant slug as payee.
+  const instapayQr = useMemo(() => {
+    if (!hasRealInstapayPayee || !isQrModalOpen) return null;
+    return buildInstaPayQrPayload({
+      address: instapayPayee as string,
+      amount: totalCartAmount,
+      invoiceRef: qrRef || undefined,
+      size: 190,
+    });
+  }, [hasRealInstapayPayee, instapayPayee, totalCartAmount, qrRef, isQrModalOpen]);
 
   // INV-REST-KIOSK-ORDER-TRUTH: the confirm button stays disabled until
   // the required order info is present (table for dine-in, real phone
@@ -611,6 +595,15 @@ export function SelfOrderingKioskPage() {
 
     if (paymentChoice === 'qr_mobile') {
       // 2. الدفع بمسح رمز QR بالهاتف: فتح نافذة الرمز والمؤقت
+      // INV-REST-KIOSK-OWN-CATALOG-TRUTH (T14-B): the modal renders
+      // orderError, so a previous attempt's error is cleared on open —
+      // it must not survive into the fresh dialog. And without a real
+      // payee the QR option never opens at all.
+      setOrderError(null);
+      if (!hasRealInstapayPayee) {
+        toast.warning('الدفع عبر إنستاباي غير متاح — لم يتم إعداد عنوان الدفع في الإعدادات.');
+        return;
+      }
       const ref = `QR-${Date.now().toString().slice(-6)}`;
       setQrRef(ref);
       setQrCountdown(120);
@@ -747,52 +740,6 @@ export function SelfOrderingKioskPage() {
             }}
           >
             <UtensilsIcon size={46} color="#ffffff" />
-          </div>
-
-          {/* تبديل الكتالوج التجريبي */}
-          <div
-            style={{
-              display: 'inline-flex',
-              backgroundColor: '#e2e8f0',
-              borderRadius: '24px',
-              padding: '4px',
-              marginBottom: '26px',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setCurrentSlug('almhnds')}
-              style={{
-                border: 'none',
-                backgroundColor: currentSlug === 'almhnds' ? '#170e5e' : 'transparent',
-                color: currentSlug === 'almhnds' ? '#ffffff' : '#475569',
-                padding: '8px 20px',
-                borderRadius: '20px',
-                fontSize: '12.5px',
-                fontWeight: 800,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {__t('pos.self_ordering_kiosk_page.s0', __t('pos.self_ordering_kiosk_page.s0', "مطعم المشويات والسندوتشات (75 وجبة)"))}
-            </button>
-            <button
-              type="button"
-              onClick={() => setCurrentSlug('zs')}
-              style={{
-                border: 'none',
-                backgroundColor: currentSlug === 'zs' ? '#170e5e' : 'transparent',
-                color: currentSlug === 'zs' ? '#ffffff' : '#475569',
-                padding: '8px 20px',
-                borderRadius: '20px',
-                fontSize: '12.5px',
-                fontWeight: 800,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {__t('pos.self_ordering_kiosk_page.s1', __t('pos.self_ordering_kiosk_page.s1', "متجر الأجهزة والهواتف"))}
-            </button>
           </div>
 
           <h1 style={{ fontSize: '32px', fontWeight: 900, color: '#0f172a', margin: '0 0 12px' }}>
@@ -1193,8 +1140,9 @@ export function SelfOrderingKioskPage() {
 
   // INV-REST-KIOSK-NO-FICTION: no known store slug means this kiosk shows
   // no menu at all — never another tenant's menu and never an empty menu
-  // that looks like a store with no food. The operator picks a store with
-  // the switcher below, or fixes the kiosk link.
+  // that looks like a store with no food. The operator fixes the kiosk
+  // link; the kiosk serves only its resolved slug (T14-B removed the
+  // demo-catalog switcher that let any visitor browse another tenant).
   if (!currentSlug) {
     return (
       <div
@@ -1226,42 +1174,8 @@ export function SelfOrderingKioskPage() {
             {__t('pos.self_ordering_kiosk_page.s135', __t('pos.self_ordering_kiosk_page.s135', "الكشك غير مرتبط بمتجر"))}
           </h2>
           <p style={{ fontSize: '13.5px', color: '#64748b', lineHeight: 1.6, margin: '0 0 20px' }}>
-            {__t('pos.self_ordering_kiosk_page.s136', __t('pos.self_ordering_kiosk_page.s136', "لا يوجد متجر معروف لهذا الكشك. اطلب من الموظف ضبط رابط المتجر أو اختيار المتجر من الأزرار بالأسفل."))}
+            {__t('pos.self_ordering_kiosk_page.s136', __t('pos.self_ordering_kiosk_page.s136', "لا يوجد متجر معروف لهذا الكشك. اطلب من الموظف ضبط رابط المتجر."))}
           </p>
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-            <button
-              type="button"
-              onClick={() => setCurrentSlug('almhnds')}
-              style={{
-                border: 'none',
-                backgroundColor: '#170e5e',
-                color: '#ffffff',
-                padding: '10px 18px',
-                borderRadius: '12px',
-                fontSize: '13px',
-                fontWeight: 800,
-                cursor: 'pointer',
-              }}
-            >
-              {__t('pos.self_ordering_kiosk_page.s0', __t('pos.self_ordering_kiosk_page.s0', "مطعم المشويات والسندوتشات (75 وجبة)"))}
-            </button>
-            <button
-              type="button"
-              onClick={() => setCurrentSlug('zs')}
-              style={{
-                border: 'none',
-                backgroundColor: '#170e5e',
-                color: '#ffffff',
-                padding: '10px 18px',
-                borderRadius: '12px',
-                fontSize: '13px',
-                fontWeight: 800,
-                cursor: 'pointer',
-              }}
-            >
-              {__t('pos.self_ordering_kiosk_page.s1', __t('pos.self_ordering_kiosk_page.s1', "متجر الأجهزة والهواتف"))}
-            </button>
-          </div>
         </div>
       </div>
     );
@@ -1445,54 +1359,6 @@ export function SelfOrderingKioskPage() {
               </div>
             )}
 
-            <div
-              style={{
-                display: 'inline-flex',
-                backgroundColor: '#f1f5f9',
-                borderRadius: '10px',
-                padding: '2px',
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setCurrentSlug('almhnds');
-                  setSelectedCategory('all');
-                }}
-                style={{
-                  border: 'none',
-                  backgroundColor: currentSlug === 'almhnds' ? '#170e5e' : 'transparent',
-                  color: currentSlug === 'almhnds' ? '#ffffff' : '#64748b',
-                  padding: '5px 12px',
-                  borderRadius: '8px',
-                  fontSize: '11px',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                }}
-              >
-                {__t('pos.self_ordering_kiosk_page.s40', __t('pos.self_ordering_kiosk_page.s40', "المطعم"))}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setCurrentSlug('zs');
-                  setSelectedCategory('all');
-                }}
-                style={{
-                  border: 'none',
-                  backgroundColor: currentSlug === 'zs' ? '#170e5e' : 'transparent',
-                  color: currentSlug === 'zs' ? '#ffffff' : '#64748b',
-                  padding: '5px 12px',
-                  borderRadius: '8px',
-                  fontSize: '11px',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                }}
-              >
-                {__t('pos.self_ordering_kiosk_page.s41', __t('pos.self_ordering_kiosk_page.s41', "الأجهزة"))}
-              </button>
-            </div>
-
             <button
               type="button"
               onClick={handleFullReset}
@@ -1574,7 +1440,7 @@ export function SelfOrderingKioskPage() {
                   fontWeight: 600,
                 }}
               >
-                {catalogTotalCount} {__t('pos.self_ordering_kiosk_page.s45', __t('pos.self_ordering_kiosk_page.s45', "وجبة"))}
+                {catalogTotalCount} {__t('pos.self_ordering_kiosk_page.s45_item', __t('pos.self_ordering_kiosk_page.s45_item', "صنف"))}
               </span>
             </button>
 
@@ -1673,7 +1539,7 @@ export function SelfOrderingKioskPage() {
                     productLines.length === 1 && !(productLines[0].modifiers?.length)
                       ? productLines[0]
                       : null;
-                  const smartImg = getSmartProductImage(p);
+                  const smartImg = getKioskProductImage(p);
 
                   return (
                     <div
@@ -1698,17 +1564,32 @@ export function SelfOrderingKioskPage() {
                           backgroundColor: '#f1f5f9',
                         }}
                       >
-                        <img
-                          src={smartImg}
-                          alt={p.name}
-                          loading="lazy"
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            display: 'block',
-                          }}
-                        />
+                        {smartImg ? (
+                          <img
+                            src={smartImg}
+                            alt={p.name}
+                            loading="lazy"
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              display: 'block',
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: '#f8fafc',
+                            }}
+                          >
+                            <ShoppingBagIcon size={40} color="#cbd5e1" />
+                          </div>
+                        )}
                         {inCartQty > 0 && (
                           <span
                             style={{
@@ -2497,7 +2378,7 @@ export function SelfOrderingKioskPage() {
             >
               {__t('pos.self_ordering_kiosk_page.s75', __t('pos.self_ordering_kiosk_page.s75', "اختر طريقة الدفع:"))}
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: hasRealInstapayPayee ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)', gap: '10px' }}>
               {/* خيار 1: ماكينة الفيزا بالكشك */}
               <button
                 type="button"
@@ -2553,7 +2434,8 @@ export function SelfOrderingKioskPage() {
                 </div>
               </button>
 
-              {/* خيار 2: مسح رمز QR بالهاتف */}
+              {/* خيار 2: مسح رمز QR بالهاتف — مخفي دون عنوان إنستاباي حقيقي */}
+              {hasRealInstapayPayee && (
               <button
                 type="button"
                 onClick={() => setPaymentChoice('qr_mobile')}
@@ -2607,6 +2489,7 @@ export function SelfOrderingKioskPage() {
                   {__t('pos.self_ordering_kiosk_page.s81', __t('pos.self_ordering_kiosk_page.s81', "إنستاباي أو المحافظ"))}
                 </div>
               </button>
+              )}
 
               {/* خيار 3: دفع عند الكاونتر */}
               <button
@@ -3026,12 +2909,14 @@ export function SelfOrderingKioskPage() {
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {hasRealInstapayPayee && (
                 <Button
                   type="button"
                   variant="primary"
                   onClick={() => {
                     setIsTerminalModalOpen(false);
                     setPaymentChoice('qr_mobile');
+                    setOrderError(null);
                     const ref = `QR-${Date.now().toString().slice(-6)}`;
                     setQrRef(ref);
                     setQrCountdown(120);
@@ -3053,6 +2938,7 @@ export function SelfOrderingKioskPage() {
                   <QrCodeIcon size={16} color="#ffffff" />
                   <span>{__t('pos.self_ordering_kiosk_page.s109', __t('pos.self_ordering_kiosk_page.s109', "الدفع بمسح رمز QR بالهاتف"))}</span>
                 </Button>
+                )}
 
                 <Button
                   type="button"
@@ -3130,16 +3016,27 @@ export function SelfOrderingKioskPage() {
               justifyContent: 'center',
             }}
           >
-            <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
-                `instapay://pay?to=${currentSlug}&amount=${totalCartAmount}&ref=${qrRef}&name=${encodeURIComponent(
-                  storeDisplayName
-                )}`
-              )}`}
-              alt={__t('pos.self_ordering_kiosk_page.s116', __t('pos.self_ordering_kiosk_page.s116', "رمز QR للدفع"))}
-              style={{ width: '190px', height: '190px', borderRadius: '10px', display: 'block' }}
-            />
+            {/* INV-REST-KIOSK-OWN-CATALOG-TRUTH (T14-B): the QR is
+                rendered locally (buildInstaPayQrPayload -> buildQrSvg)
+                and pays the tenant's real InstaPay address — no
+                external QR host, no slug as payee. The option is
+                hidden entirely when no real payee is configured, so
+                this box only ever renders with one. */}
+            {instapayQr && (
+              <div
+                dangerouslySetInnerHTML={{ __html: instapayQr.qrSvg }}
+                role="img"
+                aria-label={__t('pos.self_ordering_kiosk_page.s116', __t('pos.self_ordering_kiosk_page.s116', "رمز QR للدفع"))}
+                style={{ width: '190px', height: '190px', borderRadius: '10px', display: 'block' }}
+              />
+            )}
           </div>
+
+          {instapayPayee && (
+            <div style={{ fontSize: '12px', fontWeight: 800, color: '#475569', marginBottom: '16px' }}>
+              {__t('pos.self_ordering_kiosk_page.s116_payee', __t('pos.self_ordering_kiosk_page.s116_payee', "التحويل إلى:"))} <span dir="ltr">{instapayPayee}</span>
+            </div>
+          )}
 
           {/* Amount Box */}
           <div

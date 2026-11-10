@@ -27,6 +27,23 @@ function run(): void {
     details: { column: 'national_id' },
   });
 
+  // INV-REST-KIOSK-OWN-CATALOG-TRUTH (T14-B): a 23502 on the
+  // sale_items.modifiers column names the field end to end — the
+  // kiosk trial showed only the generic "required field" fallback
+  // because `modifiers` was missing from the named map, which masked
+  // a database error as a missing form field.
+  const notNullModifiers = mapToHttpException({
+    code: '23502',
+    column: 'modifiers',
+    message: 'null value in column "modifiers" of relation "sale_items" violates not-null constraint',
+  });
+  assert.equal(notNullModifiers.getStatus(), 400);
+  assert.deepEqual(notNullModifiers.getResponse(), {
+    message: '\u0627\u0644\u0625\u0636\u0627\u0641\u0627\u062a \u0645\u0637\u0644\u0648\u0628\u0629.',
+    code: 'DB_NOT_NULL_VIOLATION',
+    details: { column: 'modifiers' },
+  });
+
   const duplicate = mapToHttpException({
     code: '23505',
     constraint: 'hr_employees_employee_no_key',
