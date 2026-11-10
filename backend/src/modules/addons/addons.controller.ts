@@ -62,6 +62,7 @@ export class AddonsController {
   }
 
   @Get('products/:productId/modifiers')
+  @RequirePermissions('products')
   getProductModifiers(@Param('productId', ParseIntPipe) productId: number, @Req() req: RequestWithAuth) {
     return this.addonsService.getProductModifiers(productId, req.authContext!);
   }
