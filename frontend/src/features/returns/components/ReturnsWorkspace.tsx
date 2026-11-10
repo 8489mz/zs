@@ -115,6 +115,18 @@ export function ReturnsWorkspace() {
   // (the same computeSalesReturnRelief createSaleReturn uses), never
   // from a second local copy of the ratio. The preview only exists
   // for sale returns; purchase returns keep the lines total.
+  // (selectedReturnItems is declared just above: the preview block
+  // reads it, so it must precede this block — TDZ otherwise.)
+  const selectedReturnItems = useMemo(() => invoiceItems
+    .map((item) => {
+      const lineId = String(item.id || item.productId || '');
+      const qty = Number(selectedItems[lineId] || 0);
+      const baseQty = Number(item.qty || 0);
+      const lineTotal = qty > 0 ? qty * (baseQty > 0 ? Number(item.total || 0) / baseQty : 0) : 0;
+      return { item, qty, lineTotal };
+    })
+    .filter((entry) => entry.qty > 0), [invoiceItems, selectedItems]);
+
   const reliefPreviewItemsKey = selectedReturnItems.map(({ item, qty }) => `${item.id || item.productId}:${qty}`).join(',');
   const reliefPreviewQuery = useQuery({
     queryKey: ['returns-relief-preview', form.type, selectedInvoice?.id, reliefPreviewItemsKey],
@@ -136,16 +148,6 @@ export function ReturnsWorkspace() {
   const isReliefPreviewLoading = Boolean(isCreateOpen && form.type === 'sale' && selectedReturnItems.length > 0 && reliefPreviewQuery.isFetching);
   const settlementNeedsRefundMethod = form.settlementMode === 'refund';
   const canUseCreditSettlement = form.type === 'sale' && Boolean(selectedInvoice && 'customerId' in selectedInvoice && selectedInvoice.customerId);
-
-  const selectedReturnItems = useMemo(() => invoiceItems
-    .map((item) => {
-      const lineId = String(item.id || item.productId || '');
-      const qty = Number(selectedItems[lineId] || 0);
-      const baseQty = Number(item.qty || 0);
-      const lineTotal = qty > 0 ? qty * (baseQty > 0 ? Number(item.total || 0) / baseQty : 0) : 0;
-      return { item, qty, lineTotal };
-    })
-    .filter((entry) => entry.qty > 0), [invoiceItems, selectedItems]);
 
   const returnQuantitiesValid = selectedReturnItems.length > 0 && selectedReturnItems.every(({ item, qty }) =>
     isSelectedReturnQuantityValid(String(item.id || ''), String(item.productId || ''),

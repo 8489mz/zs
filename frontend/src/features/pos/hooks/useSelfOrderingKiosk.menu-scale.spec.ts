@@ -201,7 +201,7 @@ describe('useSelfOrderingKiosk paged menu (T10-B)', () => {
     const { result, rerender } = renderHook(
       ({ categoryId }: { categoryId?: number | 'all' }) =>
         useSelfOrderingKiosk('test10k', { categoryId }),
-      { wrapper: createWrapper(), initialProps: { categoryId: 'all' as const } },
+      { wrapper: createWrapper(), initialProps: { categoryId: 'all' as number | 'all' } },
     );
     await waitFor(() => expect(result.current.catalogData?.products).toHaveLength(50));
     act(() => {

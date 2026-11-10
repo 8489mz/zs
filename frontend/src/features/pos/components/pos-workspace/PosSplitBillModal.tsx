@@ -449,10 +449,12 @@ export function resolveSplitPaymentChannel(
  * so they cannot drift apart again. The shape mirrors handleSubmit
  * (createPosWorkspaceAsyncActions): the live branch/location first,
  * falling back to the derived current branch/location. */
-export function resolveSplitSaleBranch(pos: Pick<
-  PosWorkspaceState,
-  'branchId' | 'currentBranch' | 'locationId' | 'currentLocation'
->): { branchId: string | null; locationId: string | null } {
+export function resolveSplitSaleBranch(pos: {
+  branchId?: string | null;
+  currentBranch?: { id: string | number; name: string } | null;
+  locationId?: string | null;
+  currentLocation?: { id: string | number; name: string } | null;
+}): { branchId: string | null; locationId: string | null } {
   return {
     branchId: pos.branchId || (pos.currentBranch?.id != null ? String(pos.currentBranch.id) : null),
     locationId: pos.locationId || (pos.currentLocation?.id != null ? String(pos.currentLocation.id) : null),

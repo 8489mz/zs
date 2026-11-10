@@ -19,7 +19,7 @@ interface PosWorkspaceActions {
   handleQuickAddCodeSubmit: (rawCode?: string, productsOverride?: Product[]) => boolean;
   handleQuickCustomerSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   approveDiscountOverride: (password: string) => Promise<unknown>;
-  handleSubmit: (options?: { fastCash?: boolean; managerPin?: string; tenderedAmount?: number }) => Promise<void>;
+  handleSubmit: (options?: { fastCash?: boolean; managerPin?: string; tenderedAmount?: number }) => Promise<boolean>;
   exportHeldDrafts: () => void;
   holdDraft: () => Promise<void>;
   recallDraft: (draftId: string) => Promise<void>;
