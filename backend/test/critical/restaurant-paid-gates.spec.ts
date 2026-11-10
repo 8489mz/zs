@@ -916,6 +916,60 @@ async function main(): Promise<void> {
     }
   });
 
+  // 23. T12-H1, the Trial 4 shape: COD + customer + cash + paid 0
+  // posts unpaid — paid 0, cash type, 'cod', Dr 1130 for the full
+  // 530 with no Dr 1110 leg, and a customer-ledger debt of 530.
+  // (Passes at base via R7-D; pinned here as the trial shape the
+  // frontend gate used to block.)
+  await check('T12-H1 COD + customer + cash + paid 0 posts unpaid', async () => {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedShift(db, 1, 2);
+      const { sales } = buildServices(db);
+      const saleId = await createAndGetId(sales, codPayload(), cashierAuth);
+      const row = await saleFullRow(db, saleId);
+      assert.equal(Number(row.total), 530, 'goods 500 + courier fee 30');
+      assert.equal(Number(row.paid_amount), 0, 'nothing has been paid yet');
+      assert.equal(row.payment_type, 'cash', 'a COD sale stays a cash-type sale, never reclassified to credit');
+      assert.equal(row.collection_status, 'cod', 'the explicit COD status is stored');
+      assert.deepEqual(await paymentRows(db, saleId), [], 'no sale_payments row exists for the unpaid COD sale');
+      const journal = await journalByCode(db, 'sale', saleId);
+      assert.equal(journal.get('1130')?.debit, 530, 'the full total is a customer receivable');
+      assert.equal(journal.get('1110'), undefined, 'no cash-in-till leg exists for money with the courier');
+      const legs = await ledgerRows(db, 7);
+      assert.ok(
+        legs.some((leg) => Number(leg.reference_id) === saleId && Number(leg.amount) === 530),
+        'the unpaid 530 is a customer-ledger debt on this sale',
+      );
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  // 24. T12-H1, the آجل control: an explicitly-credit delivery with
+  // a customer and paid 0 still posts unpaid as credit — the COD
+  // cash-leg refusal touches only explicit-'cod' sales with a
+  // declared cash leg, never the credit path.
+  await check('T12-H1 explicit credit delivery + customer + paid 0 still posts unpaid as credit', async () => {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedShift(db, 1, 2);
+      const { sales } = buildServices(db);
+      const saleId = await createAndGetId(sales, posPayload(100, {
+        customerId: 7, paymentType: 'credit', paymentChannel: 'credit',
+        payments: [], tenderedAmount: 0,
+        orderType: 'delivery', deliveryRepId: 1,
+      }), cashierAuth);
+      const row = await saleRow(db, saleId);
+      assert.equal(row.payment_type, 'credit', 'explicit credit posts as credit');
+      assert.equal(Number(row.paid_amount), 0, 'the credit sale is unpaid');
+    } finally {
+      await db.destroy();
+    }
+  });
+
   if (failures.length) throw new Error(`${failures.length} paid-gate case(s) failed: ${failures.join(', ')}`);
   console.log('Restaurant paid gates tests passed');
 }

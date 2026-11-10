@@ -39,6 +39,23 @@ BASE-RED: the main case fails on the unmodified inference
 (collection_status 'prepaid_online', paid 530, Dr 1110) and passes
 after the fix. Cases 2-4 pass at base and must keep passing.
 
+T12-H1 (INV-REST-COD-UNPAID-POST-TRUTH) ADDS, same harness:
+- 7. An explicit-'cod' delivery carrying a declared cash leg that
+  covers the FULL total is REFUSED with the specific code
+  SALE_COD_CASH_LEG_CONTRADICTION (D-T12-H1: refuse, not strip —
+  a declared cash leg is money in hand; silently dropping it
+  would lose money). Base-red: at base it posts paid 530. A
+  PARTIAL cash leg still posts as typed (test 19 in
+  restaurant-paid-gates.spec.ts); the refusal fires only on the
+  genuine contradiction, paid in full.
+- 8. The Trial 4 shape — COD + customer + cash + paid 0 — posts
+  unpaid (paid 0, cash type, 'cod', Dr 1130, no Dr 1110).
+- 9. getSaleById returns collection_status='cod' for a COD sale
+  (the read fix: both select lists in sales-query.service.ts now
+  carry collection_status / delivery_status / delivery_fee_mode).
+  Base-red: at base the mapper reads null and the dialogs claim
+  prepaid.
+
 HOW THIS IS DRIVEN: the real createSale on PGlite, with the real
 authorization, finance, query, posting, idempotency and audit
 services (same harness as restaurant-paid-gates.spec.ts).
@@ -449,6 +466,86 @@ async function main(): Promise<void> {
       const journal = await journalByCode(db, 'sale', saleId);
       assert.equal(journal.get('1130')?.debit, 530, 'the full total stays receivable');
       assert.equal(journal.get('1110'), undefined, 'no cash leg exists');
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  // 7. T12-H1 (D-T12-H1: refuse, not strip): an explicit-'cod'
+  // delivery carrying a declared cash leg that covers the FULL
+  // total is REFUSED with the specific code. At base it posted
+  // paid 530 with collection_status 'cod' — cash in hand AND
+  // courier-collects at once. A partial cash leg still posts as
+  // typed (restaurant-paid-gates.spec.ts test 19); only the
+  // paid-in-full contradiction is refused.
+  await check("T12-H1 explicit 'cod' + full declared cash leg is refused with SALE_COD_CASH_LEG_CONTRADICTION", async () => {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedShift(db, 1, 2);
+      const { sales } = buildServices(db);
+      await assert.rejects(
+        createAndGetId(sales, trialPayload({ collectionStatus: 'cod' }), cashierAuth),
+        (err: any) => err && err.code === 'SALE_COD_CASH_LEG_CONTRADICTION',
+      );
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  // 8. T12-H1, the Trial 4 shape: COD + customer + cash + paid 0
+  // posts unpaid — paid 0, cash type, 'cod', Dr 1130 for the full
+  // 530 with no Dr 1110 leg, a customer-ledger debt of 530, and
+  // no sale_payments row. (Passes at base via R7-D; pinned here
+  // as the trial shape the frontend gate used to block.)
+  await check('T12-H1 COD + customer + cash + paid 0 posts unpaid', async () => {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedShift(db, 1, 2);
+      const { sales } = buildServices(db);
+      const saleId = await createAndGetId(sales, trialPayload({
+        collectionStatus: 'cod', payments: [], tenderedAmount: 0,
+      }), cashierAuth);
+      const row = await saleFullRow(db, saleId);
+      assert.equal(Number(row.total), 530, 'goods 500 + courier fee 30');
+      assert.equal(Number(row.paid_amount), 0, 'nothing has been paid yet');
+      assert.equal(row.payment_type, 'cash', 'a COD sale stays a cash-type sale, never reclassified to credit');
+      assert.equal(row.collection_status, 'cod', 'the explicit COD status is stored');
+      assert.equal(Number(row.delivery_rep_id), 1, 'the rep carries the custody');
+      assert.deepEqual(await paymentRows(db, saleId), [], 'no sale_payments row exists for the unpaid COD sale');
+      const journal = await journalByCode(db, 'sale', saleId);
+      assert.equal(journal.get('1130')?.debit, 530, 'the full total is a customer receivable');
+      assert.equal(journal.get('1110'), undefined, 'no cash-in-till leg exists for money with the courier');
+      const legs = await ledgerRows(db, 7);
+      assert.ok(
+        legs.some((leg) => Number(leg.reference_id) === saleId && Number(leg.amount) === 530),
+        'the unpaid 530 is a customer-ledger debt on this sale',
+      );
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  // 9. T12-H1, the read fix: getSaleById returns the stored COD
+  // status (and the pending delivery status) instead of null, so
+  // the sale dialogs stop claiming 'prepaid'. Base-red: at base
+  // both select lists in sales-query.service.ts omitted
+  // collection_status and the mapper read null.
+  await check("T12-H1 getSaleById returns collection_status='cod' for a COD sale", async () => {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedShift(db, 1, 2);
+      const { sales } = buildServices(db);
+      const saleId = await createAndGetId(sales, trialPayload({
+        collectionStatus: 'cod', payments: [], tenderedAmount: 0,
+      }), cashierAuth);
+      const authz = new SalesAuthorizationService(db);
+      const query = new SalesQueryService(db, authz);
+      const full: any = await query.getSaleById(saleId, cashierAuth);
+      assert.equal(full?.sale?.collectionStatus, 'cod', 'the mapped sale carries the stored COD status');
+      assert.equal(full?.sale?.deliveryStatus, 'pending', 'the mapped sale carries the stored delivery status');
     } finally {
       await db.destroy();
     }

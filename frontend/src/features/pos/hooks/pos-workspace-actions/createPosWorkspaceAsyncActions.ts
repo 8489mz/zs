@@ -224,8 +224,13 @@ export function createPosWorkspaceAsyncActions(
     // underpaid sale with a customer is BLOCKED here — the cashier
     // completes the payment or switches explicitly to the credit
     // preset and re-confirms. (The old code flipped it to credit.)
+    // INV-REST-COD-UNPAID-POST-TRUTH (T12-H1): a COD delivery is
+    // exempt — the courier collects the unpaid remainder, so an
+    // underpaid COD sale with a customer posts unpaid instead of
+    // being blocked. Mirrors contracts.ts:165 and the isUnderpaid
+    // check below, which both already carry the exemption.
     const isPartialCreditWithCustomer = Boolean(effectiveCustomerId) && effectivePaidAmount < total;
-    if (isPartialCreditWithCustomer && effectivePaymentType !== 'credit') {
+    if (isPartialCreditWithCustomer && effectivePaymentType !== 'credit' && !isCodDelivery) {
       params.setSubmitMessage('المبلغ المدفوع أقل من الإجمالي. أكمل المدفوع أو حوّل العملية إلى آجل صراحةً.');
       params.requestBarcodeFocus();
       return false;

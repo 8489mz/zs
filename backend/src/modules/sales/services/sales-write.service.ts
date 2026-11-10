@@ -1893,6 +1893,30 @@ export class SalesWriteService {
       });
       const payments = tenderAllocation.payments;
       const paidAmount = tenderAllocation.appliedAmount;
+      // INV-REST-COD-UNPAID-POST-TRUTH (T12-H1, D-T12-H1): an
+      // explicit-'cod' delivery carrying a declared cash leg that
+      // covers the FULL total is REFUSED, never silently stripped —
+      // a declared cash leg is money the cashier says is in hand,
+      // while COD means the courier collects it at the door; both
+      // cannot be true. The refusal fires only on the genuine
+      // contradiction (paid in full): a PARTIAL cash leg posts
+      // exactly as typed (cash in hand now, remainder COD — see
+      // restaurant-paid-gates.spec.ts test 19), and the T11-D
+      // absent-status strip above stays as-is. The frontend gate
+      // fix makes the normal COD path send no cash leg at all, so
+      // this backstop fires only on a stale or foreign caller. The
+      // specific code + message reach the cashier verbatim through
+      // getSubmitSaleErrorMessage (pos-submit-error.ts).
+      const hasDeclaredCashLeg = normalized.payments.some(
+        (entry) => entry.paymentChannel === 'cash' && Number(entry.amount || 0) > 0,
+      );
+      if (rawCollectionStatusForTender === 'cod' && hasDeclaredCashLeg && paidAmount + 0.0001 >= collectibleTotal) {
+        throw new AppError(
+          'الدليفري بنظام الدفع عند الاستلام لا يقبل مبلغًا نقديًا يغطي الإجمالي كاملًا: النقد المعلن يعني أن المبلغ في الخزينة، بينما COD يعني أن المندوب سيحصّله عند التسليم. صحّح المبلغ النقدي أو غيّر حالة التحصيل.',
+          'SALE_COD_CASH_LEG_CONTRADICTION',
+          400,
+        );
+      }
       const remainingDebt = roundMoney(Math.max(0, collectibleTotal - paidAmount), moneyDigits);
       const isDelivery = String(normalized.orderType || '').trim() === 'delivery';
 

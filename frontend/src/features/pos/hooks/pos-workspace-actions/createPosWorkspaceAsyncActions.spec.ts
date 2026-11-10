@@ -277,3 +277,74 @@ describe('createPosWorkspaceAsyncActions — delivery submit always states colle
     expect((mutateAsync.mock.calls[0][0] as Record<string, unknown>).collectionStatus).toBeUndefined();
   });
 });
+
+/* T12-H1 (INV-REST-COD-UNPAID-POST-TRUTH): the
+ * isPartialCreditWithCustomer gate in handleSubmit refused ANY
+ * underpaid sale with a customer unless it was credit — with no COD
+ * exemption — so a COD delivery to a named customer with نقدي and
+ * paid 0 could never post unpaid (Trial 4: the cashier had to fill
+ * cash to the total, paid 90, looking prepaid, or switch to آجل).
+ * The gate now mirrors contracts.ts:165 and the isUnderpaid check
+ * below it, which both already exempt COD deliveries: the courier
+ * collects the unpaid remainder. At base the first case fails (the
+ * gate refuses, handleSubmit returns false, nothing posts). */
+describe('createPosWorkspaceAsyncActions — COD unpaid post truth (T12-H1)', () => {
+  const codUnpaidOverrides = {
+    orderType: 'delivery',
+    deliveryRepId: '1',
+    collectionStatus: 'cod',
+    customerId: '7',
+    cashAmount: 0,
+    cardAmount: 0,
+    transferAmount: 0,
+    paidAmount: 0,
+  } as Partial<PosWorkspaceActionParams>;
+
+  it('passes a COD delivery with a customer and paid 0 through the gate and posts it unpaid', async () => {
+    const { actions, mutateAsync } = makeActions(codUnpaidOverrides);
+
+    const result = await actions.handleSubmit({});
+
+    expect(result).toBe(true);
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mutateAsync.mock.calls[0][0]).toMatchObject({
+      orderType: 'delivery',
+      collectionStatus: 'cod',
+      paymentType: 'cash',
+      paidAmount: 0,
+      payments: [],
+    });
+  });
+
+  it('still refuses a non-COD underpaid sale with a customer unless it is credit', async () => {
+    const { actions, params, mutateAsync } = makeActions({
+      orderType: 'takeaway',
+      customerId: '7',
+      cashAmount: 0,
+      paidAmount: 0,
+    });
+
+    const result = await actions.handleSubmit({});
+
+    expect(result).toBe(false);
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(params.setSubmitMessage).toHaveBeenCalledWith(expect.stringContaining('حوّل العملية إلى آجل'));
+  });
+
+  it('passes a non-COD underpaid sale with a customer once it is explicitly credit', async () => {
+    const { actions, mutateAsync } = makeActions({
+      orderType: 'takeaway',
+      customerId: '7',
+      paymentType: 'credit',
+      cashAmount: 0,
+      paidAmount: 0,
+    });
+
+    const result = await actions.handleSubmit({});
+
+    expect(result).toBe(true);
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mutateAsync.mock.calls[0][0]).toMatchObject({ paymentType: 'credit' });
+  });
+});
+

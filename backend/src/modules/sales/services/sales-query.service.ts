@@ -49,6 +49,11 @@ export class SalesQueryService {
         's.subtotal', 's.discount', 's.tax_rate', 's.tax_amount', 's.prices_include_tax', 's.total', 's.paid_amount', 's.tendered_amount', 's.change_amount', 's.store_credit_used', 's.delivery_fee',
         's.status', 's.note', 's.table_number', 's.order_type', 's.branch_id', 's.location_id', 's.created_by as created_by_id', 's.created_at', 'b.name as branch_name', 'l.name as location_name', 'u.username as created_by_name', 'u.username as created_by_username',
         's.delivery_rep_id', 'dr.name as delivery_rep_name',
+        // INV-REST-COD-UNPAID-POST-TRUTH (T12-H1): the mapper reads
+        // collection_status / delivery_status / delivery_fee_mode off
+        // the row — omitting them here made every sale render
+        // collectionStatus null and the dialogs claim prepaid.
+        's.collection_status', 's.delivery_status', 's.delivery_fee_mode',
         sql<number>`COUNT(*) OVER()`.as('total_count'),
         sql<number>`COALESCE(SUM(s.total) OVER(), 0)`.as('agg_total_sales'),
         sql<number>`COALESCE(SUM(CASE WHEN s.payment_type = 'cash' OR s.payment_channel = 'cash' THEN s.total ELSE 0 END) OVER(), 0)`.as('agg_cash_total'),
@@ -251,6 +256,10 @@ export class SalesQueryService {
         's.subtotal', 's.discount', 's.tax_rate', 's.tax_amount', 's.prices_include_tax', 's.total', 's.paid_amount', 's.tendered_amount', 's.change_amount', 's.store_credit_used', 's.delivery_fee',
         's.status', 's.note', 's.table_number', 's.order_type', 's.branch_id', 's.location_id', 's.created_by as created_by_id', 's.created_at', 'b.name as branch_name', 'l.name as location_name', 'u.username as created_by_name', 'u.username as created_by_username',
         's.delivery_rep_id', 'dr.name as delivery_rep_name',
+        // INV-REST-COD-UNPAID-POST-TRUTH (T12-H1): same read as the
+        // list query above — getSaleById must return the stored
+        // collection_status or every sale renders prepaid.
+        's.collection_status', 's.delivery_status', 's.delivery_fee_mode',
       ])
       .where('s.id', '=', id)
       .where(this.tenantPredicate(auth, 's'))
