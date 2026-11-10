@@ -1068,8 +1068,14 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
         }
       }
 
-      pos.setCart([]);
-      pos.setTableNumber('');
+      // Everything saved as held checks — same canonical reset as
+      // handlePayBill / finalizeEvenSplit (INV-REST-SPLIT-RESET-TRUTH,
+      // T13-N2): it clears the cart and table AND zeroes the redeemed
+      // loyalty points and the tip, clears the customer and wipes the
+      // persisted draft snapshot, so no redemption survives into the
+      // next checkout (or a reload). The old manual setCart([]) +
+      // setTableNumber('') left all of them behind.
+      pos.resetPosDraft();
       setStatusMessage('تم حفظ الشيكات المجزأة كطلبات معلقة منفصلة بنجاح.');
       if (onSplitCompleted) onSplitCompleted();
       setTimeout(() => onClose(), 1200);

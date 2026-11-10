@@ -70,21 +70,26 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
       ? Number.MAX_SAFE_INTEGER
       : resolveAvailableQty(product, Number(unit?.multiplier || 1), isWeighted);
     const requestedQty = Number(options.quantity ?? 1);
-    const currentQty = findLineQty(params.cart, lineKey);
+    // T13-N2 (INV-REST-WORKSPACE-EXTRAS-RESET, NEW-3): the stock
+    // check used to read the render-captured params.cart — but the
+    // products panel is memoised and skips re-rendering when only
+    // the cart changes, so it can invoke this handler through a
+    // stale closure whose cart still holds a deleted line, and the
+    // cashier got a phantom "الموجود في السلة 1" refusal for an
+    // empty cart. The live quantity is now read inside the setCart
+    // updater (the same captured-error pattern this function
+    // already uses for addPosItem): the updater runs against the
+    // installed cart, so the check sees the cart as it really is.
+    // The availableQty <= 0 branch needs no cart read at all — its
+    // message is the same whatever the cart holds.
+    let liveCurrentQty = 0;
+    let stockRefusal = false;
 
     if (!allowNegativeStockSales && availableQty <= 0) {
       const globalStock = Number((product as any).globalStock || 0);
       const friendlyMessage = globalStock > 0
         ? 'الصنف موجود، لكنه غير متاح في مخزون هذا الفرع.'
-        : getAddProductErrorMessage(null, product, { availableQty, currentQty, requestedQty, isWeighted });
-      params.setSubmitMessage(friendlyMessage);
-      params.setScannerMessage(friendlyMessage);
-      params.requestBarcodeFocus();
-      return false;
-    }
-
-    if (!allowNegativeStockSales && currentQty > 0 && currentQty >= availableQty) {
-      const friendlyMessage = getAddProductErrorMessage(null, product, { availableQty, currentQty, requestedQty, isWeighted });
+        : getAddProductErrorMessage(null, product, { availableQty, currentQty: 0, requestedQty, isWeighted });
       params.setSubmitMessage(friendlyMessage);
       params.setScannerMessage(friendlyMessage);
       params.requestBarcodeFocus();
@@ -94,6 +99,11 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
     try {
       let caughtError: unknown = null;
       params.setCart((currentCart) => {
+        liveCurrentQty = findLineQty(currentCart, lineKey);
+        if (!allowNegativeStockSales && liveCurrentQty > 0 && liveCurrentQty >= availableQty) {
+          stockRefusal = true;
+          return currentCart;
+        }
         try {
           return addPosItem(currentCart, product, {
             priceType: params.priceType,
@@ -111,6 +121,13 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
           return currentCart;
         }
       });
+      if (stockRefusal) {
+        const friendlyMessage = getAddProductErrorMessage(null, product, { availableQty, currentQty: liveCurrentQty, requestedQty, isWeighted });
+        params.setSubmitMessage(friendlyMessage);
+        params.setScannerMessage(friendlyMessage);
+        params.requestBarcodeFocus();
+        return false;
+      }
       if (caughtError) throw caughtError;
       params.setSelectedLineKey(lineKey);
       params.setLastAddedLineKey(lineKey);
@@ -122,7 +139,7 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
       params.requestBarcodeFocus();
       return true;
     } catch (error) {
-      const message = getAddProductErrorMessage(error, product, { availableQty, currentQty, requestedQty, isWeighted });
+      const message = getAddProductErrorMessage(error, product, { availableQty, currentQty: liveCurrentQty, requestedQty, isWeighted });
       params.setSubmitMessage(message);
       params.setScannerMessage(message);
       params.requestBarcodeFocus();
@@ -336,9 +353,12 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
    * until a reload — only resetDraftState cleared it. Clear it (and
    * reset the createSale mutation error) when the cart becomes empty,
    * never on every remove: a removal that leaves items keeps the
-   * banner. The emptiness decision reads the same params.cart snapshot
-   * the action creator closed over (as setQty does); the setCart
-   * updater stays the source of truth for the installed cart. */
+   * banner. T13-N2 (INV-REST-WORKSPACE-EXTRAS-RESET, NEW-2): the same
+   * branch also zeroes the tip and the redeemed points — they
+   * survived the empty cart the same way. The emptiness decision
+   * reads the same params.cart snapshot the action creator closed
+   * over (as setQty does); the setCart updater stays the source of
+   * truth for the installed cart. */
   function removeItem(lineKey: string) {
     const cartBecomesEmpty = removePosItem(params.cart, lineKey).length === 0;
     params.setCart((current) => removePosItem(current, lineKey));
@@ -347,6 +367,14 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
     if (cartBecomesEmpty) {
       params.setSubmitMessage('');
       params.createSale.reset?.();
+      // T13-N2 (INV-REST-WORKSPACE-EXTRAS-RESET, NEW-2): the tip
+      // and the redeemed points survived the empty cart — the tip
+      // is in the persist deps, so a reload restored tip 10 with
+      // 0 items. Zero both here, mirroring resetPosDraftState's
+      // extras. The customer stays attached (no setCustomerId):
+      // emptying the cart is not starting a new sale.
+      params.setTipAmount?.(0);
+      params.setLoyaltyPointsRedeemed?.(0);
     }
   }
 

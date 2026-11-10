@@ -836,10 +836,11 @@ describe('PosSplitBillModal — save as drafts saves each bill under its own che
     expect(first.items.map((i: { productId: number }) => i.productId)).toEqual([1]);
     expect(second.tableNumber).toBe('5 - شيك 2');
     expect(second.items.map((i: { productId: number }) => i.productId)).toEqual([2]);
-    // The workspace cart is only reset at the end — never overwritten per bill.
-    expect(mockPos.setCart).toHaveBeenCalledTimes(1);
-    expect(mockPos.setCart).toHaveBeenCalledWith([]);
-    expect(mockPos.setTableNumber).toHaveBeenCalledWith('');
+    // The workspace is reset at the end — never overwritten per bill —
+    // by the canonical reset (T13-N2), not the old manual cart+table clear.
+    expect(mockPos.setCart).not.toHaveBeenCalledWith([]);
+    expect(mockPos.setTableNumber).not.toHaveBeenCalledWith('');
+    expect(mockPos.resetPosDraft).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -1321,5 +1322,94 @@ describe('PosSplitBillModal — settling a split resets the workspace draft (T12
     expect(mockPos.resetPosDraft).toHaveBeenCalledTimes(1);
     expect(mockPos.setCart).not.toHaveBeenCalledWith([]);
     expect(onSplitCompleted).toHaveBeenCalledTimes(1);
+  });
+});
+
+/* T13-N2 (INV-REST-WORKSPACE-EXTRAS-RESET, H4 third branch): T12-H4
+ * patched handlePayBill and finalizeEvenSplit but NOT
+ * handleSaveAsSeparateHeldChecks — it still ended with only
+ * setCart([]) + setTableNumber(''), so the redemption (and tip,
+ * customer, draft snapshot) survived a save-as-held split and
+ * restored on reload. The fix calls the same canonical
+ * pos.resetPosDraft() in the save-as-held success path.
+ *
+ * What this spec pins: each bill is saved as its own held check
+ * carrying its own points share (the redemption is spent into the
+ * held checks, not left behind), the workspace is reset by the
+ * canonical reset exactly once, the manual setCart([]) is gone,
+ * and a failed save resets nothing (the workspace stays intact
+ * for a retry). What it does NOT pin: the reload half — the mock
+ * pos is a plain object with stub setters, there is no
+ * localStorage draft snapshot and no real usePosWorkspaceState to
+ * re-initialise from it. That half is pinned where the reset
+ * actually lives: createPosWorkspaceBaseActions.spec.ts runs the
+ * real resetPosDraft and reads back through the production
+ * loadPosWorkspaceStorage (a fresh mount finds no draft). The
+ * recall half needs no new pin: recall restores the points from
+ * the held draft itself (usePosWorkspace.ts:359), and the points
+ * asserted here are exactly what each held check carries. */
+describe('PosSplitBillModal — saving split checks as held drafts resets the workspace draft (T13-N2)', () => {
+  function loyaltyPos() {
+    const a = item({ lineKey: 'LA', productId: '1', name: 'صنف أ', price: 100, modifiers: [] });
+    const b = item({ lineKey: 'LB', productId: '2', name: 'صنف ب', price: 100, modifiers: [] });
+    // Manual 20 + 100 points at 0.1 = 10 loyalty, combined 30, total 170.
+    const totals = orderTotals({
+      subTotal: 200,
+      discountValue: 30,
+      manualDiscount: 20,
+      loyaltyPointsRedeemed: 100,
+      loyaltyPointRedeemValue: 0.1,
+      loyaltyMaxDiscountPercentage: 100,
+      serviceCharge: 0,
+      taxRate: 0,
+      tipAmount: 0,
+      total: 170,
+    });
+    return createMockPos([a, b], totals, {
+      loyaltyPointsRedeemed: 100,
+      discount: 20,
+      loyaltyPointRedeemValue: 0.1,
+      loyaltyMaxDiscountPercentage: 100,
+      customerId: '7',
+    });
+  }
+
+  it('saves each bill as its own held check and resets the workspace — no redemption survives into the next checkout', async () => {
+    const mockPos = loyaltyPos();
+    const { onSplitCompleted } = renderModal(mockPos);
+
+    // Move item B to Bill 2 — the save-as-held button needs
+    // two non-empty bills.
+    const moveButtons = screen.getAllByTitle('نقل إلى الشيك 2');
+    fireEvent.click(moveButtons[1]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'حفظ الشيكات كطلبات معلقة منفصلة في الصالة' }));
+    await waitFor(() => expect(mockPos.saveHeldDraftMutation.mutateAsync).toHaveBeenCalledTimes(2));
+    // Each held check carries its own bill's points share — 50
+    // and 50 of the order's 100 — so recall restores exactly the
+    // held points and the workspace itself holds none.
+    const first = mockPos.saveHeldDraftMutation.mutateAsync.mock.calls[0][0];
+    const second = mockPos.saveHeldDraftMutation.mutateAsync.mock.calls[1][0];
+    expect(first.loyaltyPointsRedeemed).toBe(50);
+    expect(second.loyaltyPointsRedeemed).toBe(50);
+    // Settled: exactly one canonical reset, and the manual cart
+    // clear is gone — setCart([]) must never be called on this path.
+    expect(mockPos.resetPosDraft).toHaveBeenCalledTimes(1);
+    expect(mockPos.setCart).not.toHaveBeenCalledWith([]);
+    expect(onSplitCompleted).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not reset when saving the held checks fails — the workspace stays intact for a retry', async () => {
+    const mockPos = loyaltyPos();
+    mockPos.saveHeldDraftMutation.mutateAsync.mockRejectedValue(new Error('تعذر الحفظ'));
+    renderModal(mockPos);
+
+    const moveButtons = screen.getAllByTitle('نقل إلى الشيك 2');
+    fireEvent.click(moveButtons[1]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'حفظ الشيكات كطلبات معلقة منفصلة في الصالة' }));
+    await waitFor(() => expect(mockPos.saveHeldDraftMutation.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mockPos.resetPosDraft).not.toHaveBeenCalled();
+    expect(mockPos.setCart).not.toHaveBeenCalledWith([]);
   });
 });

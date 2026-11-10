@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPosWorkspaceBaseActions } from '@/features/pos/hooks/pos-workspace-actions/createPosWorkspaceBaseActions';
+import { buildDraftState, clearDraftSnapshot, loadPosWorkspaceStorage, persistDraftSnapshot } from '@/features/pos/lib/pos.persistence';
 import type { PosWorkspaceActionParams } from '@/features/pos/hooks/usePosWorkspaceActionGroups';
 import type { PosItem } from '@/features/pos/types/pos.types';
 import type { Product } from '@/types/domain';
@@ -454,6 +455,189 @@ describe('createPosWorkspaceBaseActions', () => {
 
       expect(setSubmitMessage).toHaveBeenCalledWith('');
       expect(reset).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  /* T13-N2 (INV-REST-WORKSPACE-EXTRAS-RESET, NEW-2): emptying the
+   * cart by deleting the last line left the tip and the redeemed
+   * points standing — the tip is in the persist deps, so a reload
+   * restored tip 10 with 0 items (المطلوب دفعه 10.00, no items).
+   * removeItem's cart-becomes-empty branch now zeroes both,
+   * mirroring resetPosDraftState's extras. The customer stays
+   * attached: emptying the cart is not starting a new sale, so
+   * setCustomerId must never be called here. At base neither
+   * setter is called, so the first case below fails there; the
+   * second case pins the boundary (extras survive a removal that
+   * leaves items in the cart). */
+  describe('removeItem zeroes order extras when the cart empties (T13-N2)', () => {
+    const line: PosItem = {
+      lineKey: 'p1::u1::retail',
+      productId: 'p1',
+      name: 'Tea',
+      itemCode: 'p1',
+      unitId: 'u1',
+      unitName: 'قطعة',
+      unitMultiplier: 1,
+      price: 10,
+      costPrice: 5,
+      qty: 1,
+      stockLimit: 10,
+      currentStock: 10,
+      minStock: 0,
+      priceType: 'retail',
+    };
+
+    it('zeroes tipAmount and loyaltyPointsRedeemed when the last line is removed — the customer stays attached', () => {
+      const setTipAmount = vi.fn();
+      const setLoyaltyPointsRedeemed = vi.fn();
+      const setCustomerId = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        cart: [line],
+        customerId: '7',
+        tipAmount: 10,
+        loyaltyPointsRedeemed: 100,
+        setTipAmount,
+        setLoyaltyPointsRedeemed,
+        setCustomerId,
+      }));
+
+      actions.removeItem('p1::u1::retail');
+
+      expect(setTipAmount).toHaveBeenCalledWith(0);
+      expect(setLoyaltyPointsRedeemed).toHaveBeenCalledWith(0);
+      expect(setCustomerId).not.toHaveBeenCalled();
+    });
+
+    it('keeps tip and loyalty when removing a line leaves items in the cart', () => {
+      const otherLine: PosItem = { ...line, lineKey: 'p2::u1::retail', productId: 'p2', name: 'Coffee' };
+      const setTipAmount = vi.fn();
+      const setLoyaltyPointsRedeemed = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        cart: [line, otherLine],
+        tipAmount: 10,
+        loyaltyPointsRedeemed: 100,
+        setTipAmount,
+        setLoyaltyPointsRedeemed,
+      }));
+
+      actions.removeItem('p1::u1::retail');
+
+      expect(setTipAmount).not.toHaveBeenCalled();
+      expect(setLoyaltyPointsRedeemed).not.toHaveBeenCalled();
+    });
+  });
+
+  /* T13-N2 (INV-REST-WORKSPACE-EXTRAS-RESET, NEW-3): the stock check
+   * read the render-captured params.cart, but the products panel is
+   * memoised (arePropsEqual ignores onAddProduct), so after the cart
+   * changes it can still hold the OLD handleAddProduct closure whose
+   * cart still lists a deleted line — the cashier got a phantom
+   * "الموجود في السلة 1" refusal for an empty cart. The check now
+   * reads the live cart inside the setCart updater. The harness
+   * reproduces the stale closure exactly: the actions are built with
+   * the stale cart (one line, qty 1, stock 1 — at the limit), while
+   * the setCart mock installs updates against the live cart. At base
+   * the first case refuses (currentQty 1 >= availableQty 1 from the
+   * snapshot) and fails; the second case pins the live refusal with
+   * the identical wording, so the message itself is unchanged. */
+  describe('handleAddProduct reads the live cart for the stock check (T13-N2)', () => {
+    const oneInStock: Product = { ...product, stock: 1 };
+    const line: PosItem = {
+      lineKey: 'p1::u1::retail',
+      productId: 'p1',
+      name: 'Tea',
+      itemCode: 'p1',
+      unitId: 'u1',
+      unitName: 'قطعة',
+      unitMultiplier: 1,
+      price: 10,
+      costPrice: 5,
+      qty: 1,
+      stockLimit: 1,
+      currentStock: 1,
+      minStock: 0,
+      priceType: 'retail',
+    };
+
+    function staleClosureActions(liveCart: PosItem[]) {
+      const setCart = vi.fn((updater: PosItem[] | ((cart: PosItem[]) => PosItem[])) => (
+        typeof updater === 'function' ? updater(liveCart) : updater
+      ));
+      const setSubmitMessage = vi.fn();
+      const setScannerMessage = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        cart: [line],
+        setCart,
+        setSubmitMessage,
+        setScannerMessage,
+      }));
+      return { actions, setCart, setSubmitMessage, setScannerMessage };
+    }
+
+    it('re-adds a deleted item through a stale closure: no phantom-count refusal when the live cart is empty', () => {
+      const { actions, setCart, setSubmitMessage } = staleClosureActions([]);
+
+      const result = actions.handleAddProduct(oneInStock);
+
+      expect(result).toBe(true);
+      expect(setSubmitMessage).not.toHaveBeenCalledWith(expect.stringContaining('الموجود في السلة'));
+      const installed = setCart.mock.results[0]?.value as PosItem[];
+      expect(installed.map((entry) => entry.productId)).toEqual(['p1']);
+      expect(installed[0]?.qty).toBe(1);
+    });
+
+    it('still refuses when the LIVE cart really holds the item at the stock limit — same wording as before', () => {
+      const { actions, setSubmitMessage } = staleClosureActions([line]);
+
+      const result = actions.handleAddProduct(oneInStock);
+
+      expect(result).toBe(false);
+      expect(setSubmitMessage).toHaveBeenCalledWith(
+        'لا يمكن إضافة كمية أكبر. المتاح من الصنف 1، والموجود في السلة 1.',
+      );
+    });
+  });
+
+  /* T13-N2 — the reload half of the save-as-held reset: the canonical
+   * reset must wipe the persisted draft snapshot, or a reload
+   * re-initialises the workspace from it and the redemption is back.
+   * This pins it through the real production read path —
+   * loadPosWorkspaceStorage is what usePosWorkspaceState mounts
+   * from — not through a mock: seed a draft carrying 100 redeemed
+   * points, run the real resetPosDraft, and a fresh load finds no
+   * draft at all. At base this behaviour already held for the two
+   * patched split branches (they call the same reset); the new
+   * save-as-held branch joins them, so this case passes at base
+   * and guards the shared reset itself. */
+  describe('resetPosDraft wipes the persisted draft snapshot (T13-N2)', () => {
+    it('clears the stored draft so a fresh mount finds no redemption to restore', () => {
+      clearDraftSnapshot();
+      persistDraftSnapshot(buildDraftState({
+        cart: [],
+        customerId: '7',
+        loyaltyPointsRedeemed: 100,
+        tipAmount: 10,
+      }));
+      expect(loadPosWorkspaceStorage().draft?.loyaltyPointsRedeemed).toBe(100);
+
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        setTipAmount: vi.fn(),
+        setLoyaltyPointsRedeemed: vi.fn(),
+        setDeliveryFee: vi.fn(),
+        setOrderType: vi.fn(),
+        setTableNumber: vi.fn(),
+        setDeliveryRepId: vi.fn(),
+        setCollectionStatus: vi.fn(),
+        setTransferAmount: vi.fn(),
+        setQuickCustomerName: vi.fn(),
+        setQuickCustomerPhone: vi.fn(),
+        setQuickCustomerAddress: vi.fn(),
+      }));
+
+      actions.resetPosDraft();
+
+      expect(loadPosWorkspaceStorage().draft).toBeNull();
+      clearDraftSnapshot();
     });
   });
 });
