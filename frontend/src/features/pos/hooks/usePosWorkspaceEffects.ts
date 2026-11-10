@@ -32,15 +32,19 @@ export function usePosWorkspaceEffects({
   guestCheckPrintedAt,
   orderType,
   deliveryFee,
+  setDeliveryFee,
   deliveryRepId,
   collectionStatus,
   tipAmount,
+  setTipAmount,
   loyaltyPointsRedeemed,
+  setLoyaltyPointsRedeemed,
   pagerNumber,
   diningCourse,
   deliveryFeeMode,
   branchId,
   locationId,
+  createSale,
 
   products,
   setCart,
@@ -88,10 +92,14 @@ export function usePosWorkspaceEffects({
   guestCheckPrintedAt?: string | null;
   orderType: string;
   deliveryFee?: number;
+  setDeliveryFee?: (value: number) => void;
   deliveryRepId?: string;
   collectionStatus?: string;
   tipAmount?: number;
+  setTipAmount?: (value: number) => void;
   loyaltyPointsRedeemed?: number;
+  setLoyaltyPointsRedeemed?: (value: number) => void;
+  createSale?: { reset?: () => void } | null;
   pagerNumber?: string;
   diningCourse?: string;
   deliveryFeeMode?: 'freelance_courier' | 'store_fleet' | string;
@@ -243,10 +251,27 @@ export function usePosWorkspaceEffects({
     }
   }, [cashAmount, cardAmount, transferAmount, paymentChannel, paymentType, setCashAmount, setCardAmount, setTransferAmount, setPaymentChannel]);
 
+  /* T15-A (INV-REST-TRASH-DELETE-EXTRAS-TRUTH, K1): the empty-cart
+   * reaction lives here, in the effect — NOT in removeItem. T14-A
+   * zeroed the extras from inside removeItem by reading a flag
+   * assigned inside the setCart updater, but React runs a functional
+   * updater at re-render, never inside the setState call, so the
+   * flag was still false at the check and the branch never fired
+   * live (Trial 8: trash-delete left an empty cart at 25.00).
+   * Effects run after render against the installed cart, so this
+   * covers every empty-cart path (trash, stepper-to-zero, clear)
+   * in the one canonical place. The customer stays attached (no
+   * setCustomerId): emptying the cart is not starting a new sale.
+   * Firing on mount is harmless — the extras are 0 then. */
   useEffect(() => {
     if (!cart.length) {
       if (selectedLineKey) setSelectedLineKey('');
       if (discountApprovalSecret) setDiscountApprovalSecret('');
+      if (tipAmount) setTipAmount?.(0);
+      if (loyaltyPointsRedeemed) setLoyaltyPointsRedeemed?.(0);
+      if (deliveryFee) setDeliveryFee?.(0);
+      if (submitMessage) setSubmitMessage('');
+      createSale?.reset?.();
       return;
     }
     if (selectedLineKey && cart.some((item) => item.lineKey === selectedLineKey)) return;
@@ -254,7 +279,7 @@ export function usePosWorkspaceEffects({
     if (preferredLineKey && preferredLineKey !== selectedLineKey) {
       setSelectedLineKey(preferredLineKey);
     }
-  }, [cart, discountApprovalSecret, lastAddedLineKey, selectedLineKey, setDiscountApprovalSecret, setSelectedLineKey]);
+  }, [cart, discountApprovalSecret, lastAddedLineKey, selectedLineKey, setDiscountApprovalSecret, setSelectedLineKey, tipAmount, loyaltyPointsRedeemed, deliveryFee, submitMessage, setTipAmount, setLoyaltyPointsRedeemed, setDeliveryFee, setSubmitMessage, createSale]);
 
   useEffect(() => {
     if (!lastAddedLineKey || typeof window === 'undefined') return;

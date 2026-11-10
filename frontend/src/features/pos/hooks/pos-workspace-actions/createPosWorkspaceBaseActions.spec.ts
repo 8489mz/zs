@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderHook } from '@testing-library/react';
 import { createPosWorkspaceBaseActions } from '@/features/pos/hooks/pos-workspace-actions/createPosWorkspaceBaseActions';
+import { usePosWorkspaceEffects } from '@/features/pos/hooks/usePosWorkspaceEffects';
 import { applyPosOrderTypeChange } from '@/features/pos/hooks/usePosWorkspace';
 import { buildDraftState, clearDraftSnapshot, loadPosWorkspaceStorage, persistDraftSnapshot } from '@/features/pos/lib/pos.persistence';
 import type { PosWorkspaceActionParams } from '@/features/pos/hooks/usePosWorkspaceActionGroups';
@@ -110,12 +112,17 @@ function makeParams(overrides: Partial<PosWorkspaceActionParams> = {}): PosWorks
   } as PosWorkspaceActionParams;
 }
 
-/* A setCart mock that installs updates against the LIVE cart, the way
- * React runs a functional updater: the updater is invoked with the
- * installed cart and its return value is the installed result.
- * removeItem's emptiness decision lives inside that updater (T14-A),
- * so a plain vi.fn() that never invokes it would leave the decision
- * unmade and the zeroing unasserted. */
+/* A setCart mock that installs updates against the LIVE cart. It
+ * executes the updater synchronously — which is NOT React's timing
+ * (React queues a functional updater and runs it at re-render, never
+ * inside the setState call), only its value semantics. It is valid
+ * for asserting what an updater RETURNS against the live cart
+ * (handleAddProduct's stock check), and NEVER for asserting a
+ * synchronous side effect after setCart: T14-A's zeroing passed
+ * under this mock while never firing live (Trial 8), because the
+ * flag it read was assigned inside the updater. Tests of the
+ * empty-cart reaction use the empty-cart effect (T15-A) or a plain
+ * non-executing vi.fn() setCart (production semantics). */
 function liveCartSetCart(liveCart: PosItem[]) {
   return vi.fn((updater: PosItem[] | ((cart: PosItem[]) => PosItem[])) => (
     typeof updater === 'function' ? updater(liveCart) : updater
@@ -405,159 +412,237 @@ describe('createPosWorkspaceBaseActions', () => {
     });
   });
 
-  /* T11-A (INV-REST-COMBO-SUBMIT-TRUTH, G3): the mismatch banner is
-   * submitMessage, and emptying the cart by deleting the line left it
-   * standing until a reload — only resetDraftState cleared it. At base
-   * removeItem never clears it and never resets the createSale error,
-   * so the first and third cases below fail there; the middle case
-   * pins the boundary (the banner must survive a removal that leaves
-   * items in the cart). */
-  describe('removeItem clears the stale submit banner when the cart empties (T11-A)', () => {
-    const line: PosItem = {
-      lineKey: 'p1::u1::retail',
-      productId: 'p1',
-      name: 'Tea',
-      itemCode: 'p1',
-      unitId: 'u1',
-      unitName: 'قطعة',
-      unitMultiplier: 1,
-      price: 10,
-      costPrice: 5,
-      qty: 1,
-      stockLimit: 10,
-      currentStock: 10,
-      minStock: 0,
-      priceType: 'retail',
-    };
-
-    it('clears submitMessage and resets the createSale error when the last line is removed', () => {
-      const setSubmitMessage = vi.fn();
-      const reset = vi.fn();
-      const setCart = liveCartSetCart([line]);
-      const actions = createPosWorkspaceBaseActions(makeParams({
-        cart: [line],
-        setSubmitMessage,
-        setCart,
-        createSale: { mutateAsync: vi.fn(), reset },
-      }));
-
-      actions.removeItem('p1::u1::retail');
-
-      expect(setSubmitMessage).toHaveBeenCalledWith('');
-      expect(reset).toHaveBeenCalledTimes(1);
-      expect(setCart.mock.results[0]?.value).toEqual([]);
-    });
-
-    it('keeps the banner when removing a line leaves items in the cart', () => {
-      const otherLine: PosItem = { ...line, lineKey: 'p2::u1::retail', productId: 'p2', name: 'Coffee' };
-      const setSubmitMessage = vi.fn();
-      const reset = vi.fn();
-      const setCart = liveCartSetCart([line, otherLine]);
-      const actions = createPosWorkspaceBaseActions(makeParams({
-        cart: [line, otherLine],
-        setSubmitMessage,
-        setCart,
-        createSale: { mutateAsync: vi.fn(), reset },
-      }));
-
-      actions.removeItem('p1::u1::retail');
-
-      expect(setSubmitMessage).not.toHaveBeenCalledWith('');
-      expect(reset).not.toHaveBeenCalled();
-    });
-
-    it('clears the banner when the last line is removed by decrementing its quantity to zero', () => {
-      const setSubmitMessage = vi.fn();
-      const reset = vi.fn();
-      const actions = createPosWorkspaceBaseActions(makeParams({
-        cart: [line],
-        setCart: liveCartSetCart([line]),
-        setSubmitMessage,
-        createSale: { mutateAsync: vi.fn(), reset },
-      }));
-
-      actions.changeLineQtyByDelta('p1::u1::retail', -1);
-
-      expect(setSubmitMessage).toHaveBeenCalledWith('');
-      expect(reset).toHaveBeenCalledTimes(1);
-    });
+  /* T15-A (INV-REST-TRASH-DELETE-EXTRAS-TRUTH, K1): the T11-A /
+ * T13-N2 / T14-A describes that used to live here asserted that
+ * removeItem itself zeroes the extras, clears the banner and resets
+ * createSale — under liveCartSetCart, which executes the updater
+ * synchronously. That is not production semantics: React runs the
+ * updater at re-render, never inside setState, so the flag T14-A
+ * read was still false at the check and the branch never fired
+ * live (Trial 8: trash-delete left an empty cart at 25.00). The
+ * reaction moved to the empty-cart effect in
+ * usePosWorkspaceEffects; removeItem only removes the line. The
+ * behaviours are re-pinned at their new home (the effect spec) and
+ * end to end below — nothing is dropped, only moved. */
+describe('trash-delete end to end with production setCart semantics (T15-A)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
   });
 
-  /* T13-N2 (INV-REST-WORKSPACE-EXTRAS-RESET, NEW-2): emptying the
-   * cart by deleting the last line left the tip and the redeemed
-   * points standing — the tip is in the persist deps, so a reload
-   * restored tip 10 with 0 items (المطلوب دفعه 10.00, no items).
-   * removeItem's cart-becomes-empty branch now zeroes both,
-   * mirroring resetPosDraftState's extras. The customer stays
-   * attached: emptying the cart is not starting a new sale, so
-   * setCustomerId must never be called here. At base neither
-   * setter is called, so the first case below fails there; the
-   * second case pins the boundary (extras survive a removal that
-   * leaves items in the cart). */
-  describe('removeItem zeroes order extras when the cart empties (T13-N2)', () => {
-    const line: PosItem = {
-      lineKey: 'p1::u1::retail',
-      productId: 'p1',
-      name: 'Tea',
-      itemCode: 'p1',
-      unitId: 'u1',
-      unitName: 'قطعة',
-      unitMultiplier: 1,
-      price: 10,
-      costPrice: 5,
-      qty: 1,
-      stockLimit: 10,
-      currentStock: 10,
-      minStock: 0,
-      priceType: 'retail',
-    };
-
-    it('zeroes tipAmount and loyaltyPointsRedeemed when the last line is removed — the customer stays attached', () => {
-      const setTipAmount = vi.fn();
-      const setLoyaltyPointsRedeemed = vi.fn();
-      const setCustomerId = vi.fn();
-      const actions = createPosWorkspaceBaseActions(makeParams({
-        cart: [line],
-        setCart: liveCartSetCart([line]),
-        customerId: '7',
-        tipAmount: 10,
-        loyaltyPointsRedeemed: 100,
-        setTipAmount,
-        setLoyaltyPointsRedeemed,
-        setCustomerId,
-      }));
-
-      actions.removeItem('p1::u1::retail');
-
-      expect(setTipAmount).toHaveBeenCalledWith(0);
-      expect(setLoyaltyPointsRedeemed).toHaveBeenCalledWith(0);
-      expect(setCustomerId).not.toHaveBeenCalled();
-    });
-
-    it('keeps tip and loyalty when removing a line leaves items in the cart', () => {
-      const otherLine: PosItem = { ...line, lineKey: 'p2::u1::retail', productId: 'p2', name: 'Coffee' };
-      const setTipAmount = vi.fn();
-      const setLoyaltyPointsRedeemed = vi.fn();
-      const setDeliveryFee = vi.fn();
-      const actions = createPosWorkspaceBaseActions(makeParams({
-        cart: [line, otherLine],
-        setCart: liveCartSetCart([line, otherLine]),
-        tipAmount: 10,
-        loyaltyPointsRedeemed: 100,
-        setTipAmount,
-        setLoyaltyPointsRedeemed,
-        setDeliveryFee,
-      }));
-
-      actions.removeItem('p1::u1::retail');
-
-      expect(setTipAmount).not.toHaveBeenCalled();
-      expect(setLoyaltyPointsRedeemed).not.toHaveBeenCalled();
-      expect(setDeliveryFee).not.toHaveBeenCalled();
-    });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
   });
 
-  /* T13-N2 (INV-REST-WORKSPACE-EXTRAS-RESET, NEW-3): the stock check
+  const line: PosItem = {
+    lineKey: 'p1::u1::retail',
+    productId: 'p1',
+    name: 'Tea',
+    itemCode: 'p1',
+    unitId: 'u1',
+    unitName: 'قطعة',
+    unitMultiplier: 1,
+    price: 75,
+    costPrice: 5,
+    qty: 1,
+    stockLimit: 10,
+    currentStock: 10,
+    minStock: 0,
+    priceType: 'retail',
+  };
+
+  it('trash-delete with a plain non-executing setCart zeroes the extras through the empty-cart effect — NOT inside removeItem', () => {
+    // Production semantics: React queues the functional updater and
+    // runs it at re-render, never inside the setState call. A plain
+    // vi.fn() reproduces that: the updater is captured, never run.
+    // At base this test FAILS: the empty-cart effect never called
+    // the zeroing setters, so the empty cart kept tip 10 + fee 15.
+    const setCart = vi.fn();
+    const setTipAmount = vi.fn();
+    const setLoyaltyPointsRedeemed = vi.fn();
+    const setDeliveryFee = vi.fn();
+    const setSubmitMessage = vi.fn();
+    const reset = vi.fn();
+    const setSelectedLineKey = vi.fn();
+    const setPostSaleSaleKey = vi.fn();
+    const setCustomerId = vi.fn();
+    const actions = createPosWorkspaceBaseActions(makeParams({
+      cart: [line],
+      setCart,
+      selectedLineKey: 'p1::u1::retail',
+      setSelectedLineKey,
+      setPostSaleSaleKey,
+      customerId: '7',
+      setCustomerId,
+      tipAmount: 10,
+      loyaltyPointsRedeemed: 200,
+      deliveryFee: 15,
+      setTipAmount,
+      setLoyaltyPointsRedeemed,
+      setDeliveryFee,
+      setSubmitMessage,
+      createSale: { mutateAsync: vi.fn(), reset },
+    }));
+
+    actions.removeItem('p1::u1::retail');
+
+    // removeItem itself zeroes NOTHING: the updater has not run yet.
+    expect(setTipAmount).not.toHaveBeenCalled();
+    expect(setLoyaltyPointsRedeemed).not.toHaveBeenCalled();
+    expect(setDeliveryFee).not.toHaveBeenCalled();
+    expect(setSubmitMessage).not.toHaveBeenCalled();
+    expect(reset).not.toHaveBeenCalled();
+    expect(setCustomerId).not.toHaveBeenCalled();
+    expect(setSelectedLineKey).toHaveBeenCalledWith('');
+    expect(setPostSaleSaleKey).toHaveBeenCalledWith('');
+    // The updater, when React runs it at re-render, removes the line.
+    const updater = setCart.mock.calls[0][0] as (cart: PosItem[]) => PosItem[];
+    expect(updater([line])).toEqual([]);
+
+    // The re-render installs the empty cart; the empty-cart effect
+    // then zeroes the extras, clears the banner and resets the sale.
+    renderHook(() => usePosWorkspaceEffects({
+      cart: [],
+      customerId: '7',
+      discount: 0,
+      paidAmount: 0,
+      total: 0,
+      cashAmount: 0,
+      setCashAmount: vi.fn(),
+      cardAmount: 0,
+      setCardAmount: vi.fn(),
+      transferAmount: 0,
+      setTransferAmount: vi.fn(),
+      paymentType: 'cash',
+      paymentChannel: 'cash',
+      setPaymentChannel: vi.fn(),
+      note: '',
+      search: '',
+      priceType: 'retail',
+      tableNumber: '',
+      orderType: 'delivery',
+      deliveryFee: 15,
+      setDeliveryFee,
+      tipAmount: 10,
+      setTipAmount,
+      loyaltyPointsRedeemed: 200,
+      setLoyaltyPointsRedeemed,
+      products: [],
+      setCart: vi.fn(),
+      submitMessage: 'mismatch banner',
+      setSubmitMessage,
+      recentProductIds: [],
+      lastSale: null,
+      lastAddedLineKey: '',
+      setLastAddedLineKey: vi.fn(),
+      selectedLineKey: '',
+      setSelectedLineKey: vi.fn(),
+      discountApprovalSecret: '',
+      setDiscountApprovalSecret: vi.fn(),
+      createSale: { reset },
+    }));
+
+    expect(setTipAmount).toHaveBeenCalledTimes(1);
+    expect(setTipAmount).toHaveBeenCalledWith(0);
+    expect(setLoyaltyPointsRedeemed).toHaveBeenCalledWith(0);
+    expect(setDeliveryFee).toHaveBeenCalledWith(0);
+    expect(setSubmitMessage).toHaveBeenCalledWith('');
+    expect(reset).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('removeItem never zeroes extras or clears the banner itself (T15-A)', () => {
+  const line: PosItem = {
+    lineKey: 'p1::u1::retail',
+    productId: 'p1',
+    name: 'Tea',
+    itemCode: 'p1',
+    unitId: 'u1',
+    unitName: 'قطعة',
+    unitMultiplier: 1,
+    price: 75,
+    costPrice: 5,
+    qty: 1,
+    stockLimit: 10,
+    currentStock: 10,
+    minStock: 0,
+    priceType: 'retail',
+  };
+  const otherLine: PosItem = { ...line, lineKey: 'p2::u1::retail', productId: 'p2', name: 'Coffee', price: 10 };
+
+  function plainSetCartActions(cart: PosItem[]) {
+    const setCart = vi.fn();
+    const setTipAmount = vi.fn();
+    const setLoyaltyPointsRedeemed = vi.fn();
+    const setDeliveryFee = vi.fn();
+    const setSubmitMessage = vi.fn();
+    const reset = vi.fn();
+    const setCustomerId = vi.fn();
+    const actions = createPosWorkspaceBaseActions(makeParams({
+      cart,
+      setCart,
+      selectedLineKey: 'p1::u1::retail',
+      setSelectedLineKey: vi.fn(),
+      setPostSaleSaleKey: vi.fn(),
+      customerId: '7',
+      setCustomerId,
+      tipAmount: 10,
+      loyaltyPointsRedeemed: 200,
+      deliveryFee: 15,
+      setTipAmount,
+      setLoyaltyPointsRedeemed,
+      setDeliveryFee,
+      setSubmitMessage,
+      createSale: { mutateAsync: vi.fn(), reset },
+    }));
+    return { actions, setCart, setTipAmount, setLoyaltyPointsRedeemed, setDeliveryFee, setSubmitMessage, reset, setCustomerId };
+  }
+
+  it('removing the last line with a plain non-executing setCart zeroes nothing itself — the effect owns that — and the customer stays attached', () => {
+    const { actions, setCart, setTipAmount, setLoyaltyPointsRedeemed, setDeliveryFee, setSubmitMessage, reset, setCustomerId } = plainSetCartActions([line]);
+
+    actions.removeItem('p1::u1::retail');
+
+    expect(setCart).toHaveBeenCalledWith(expect.any(Function));
+    expect(setTipAmount).not.toHaveBeenCalled();
+    expect(setLoyaltyPointsRedeemed).not.toHaveBeenCalled();
+    expect(setDeliveryFee).not.toHaveBeenCalled();
+    expect(setSubmitMessage).not.toHaveBeenCalled();
+    expect(reset).not.toHaveBeenCalled();
+    expect(setCustomerId).not.toHaveBeenCalled();
+  });
+
+  it('removing a line that leaves items keeps the extras — and the updater removes only that line', () => {
+    const { actions, setCart, setTipAmount, setLoyaltyPointsRedeemed, setDeliveryFee, setSubmitMessage, reset } = plainSetCartActions([line, otherLine]);
+
+    actions.removeItem('p1::u1::retail');
+
+    expect(setTipAmount).not.toHaveBeenCalled();
+    expect(setLoyaltyPointsRedeemed).not.toHaveBeenCalled();
+    expect(setDeliveryFee).not.toHaveBeenCalled();
+    expect(setSubmitMessage).not.toHaveBeenCalled();
+    expect(reset).not.toHaveBeenCalled();
+    const updater = setCart.mock.calls[0][0] as (cart: PosItem[]) => PosItem[];
+    expect(updater([line, otherLine])).toEqual([otherLine]);
+  });
+
+  it('stepper-to-zero goes through the same removeItem and zeroes nothing itself', () => {
+    const { actions, setCart, setTipAmount, setLoyaltyPointsRedeemed, setDeliveryFee, setSubmitMessage, reset } = plainSetCartActions([line]);
+
+    const result = actions.changeLineQtyByDelta('p1::u1::retail', -1);
+
+    expect(result).toBe(true);
+    expect(setTipAmount).not.toHaveBeenCalled();
+    expect(setLoyaltyPointsRedeemed).not.toHaveBeenCalled();
+    expect(setDeliveryFee).not.toHaveBeenCalled();
+    expect(setSubmitMessage).not.toHaveBeenCalled();
+    expect(reset).not.toHaveBeenCalled();
+    const updater = setCart.mock.calls[0][0] as (cart: PosItem[]) => PosItem[];
+    expect(updater([line])).toEqual([]);
+  });
+});
+
+/* T13-N2 (INV-REST-WORKSPACE-EXTRAS-RESET, NEW-3): the stock check
    * read the render-captured params.cart, but the products panel is
    * memoised (arePropsEqual ignores onAddProduct), so after the cart
    * changes it can still hold the OLD handleAddProduct closure whose
@@ -668,95 +753,6 @@ describe('createPosWorkspaceBaseActions', () => {
 
       expect(loadPosWorkspaceStorage().draft).toBeNull();
       clearDraftSnapshot();
-    });
-  });
-
-  /* T14-A (INV-REST-WORKSPACE-EXTRAS-LIVE-RESET, K1 + NEW (b)): Trial 6
-   * deleted the only item via the trash icon with tip 10 + 200 redeemed
-   * points + a 15.00 delivery fee set, and the empty cart still
-   * totalled 15.00 with the tip/loyalty standing. The zeroing branch
-   * never ran because removeItem read the closed-over params.cart
-   * snapshot: the memoised products panel can invoke the handler
-   * through a stale closure. Emptiness is now decided inside the
-   * setCart updater against the LIVE cart, and the empty branch
-   * zeroes tip + loyalty + deliveryFee (P2 zeroed tip/loyalty only).
-   * Total 0 follows from the derived formula once those land: an
-   * empty cart has subTotal 0, loyaltyDiscount 0 (0 points redeemed),
-   * deliveryFee 0 and tipAmount 0, so total = 0 + 0 + 0. The first
-   * case reproduces the trial exactly — the stale snapshot still
-   * lists a second line the live cart no longer has, so at base the
-   * snapshot says "not empty" and nothing is zeroed. The second case
-   * pins the decision the other way: a snapshot that says "empty"
-   * must NOT zero extras the live cart still owes. */
-  describe('removeItem zeroes ALL order extras when the LIVE cart empties (T14-A)', () => {
-    const line: PosItem = {
-      lineKey: 'p1::u1::retail',
-      productId: 'p1',
-      name: 'Tea',
-      itemCode: 'p1',
-      unitId: 'u1',
-      unitName: 'قطعة',
-      unitMultiplier: 1,
-      price: 75,
-      costPrice: 5,
-      qty: 1,
-      stockLimit: 10,
-      currentStock: 10,
-      minStock: 0,
-      priceType: 'retail',
-    };
-    const otherLine: PosItem = { ...line, lineKey: 'p2::u1::retail', productId: 'p2', name: 'Coffee', price: 10 };
-
-    it('zeroes tip, loyalty AND deliveryFee when the only line is deleted with a STALE params.cart snapshot', () => {
-      const setTipAmount = vi.fn();
-      const setLoyaltyPointsRedeemed = vi.fn();
-      const setDeliveryFee = vi.fn();
-      const setSubmitMessage = vi.fn();
-      const reset = vi.fn();
-      const setCart = liveCartSetCart([line]);
-      const actions = createPosWorkspaceBaseActions(makeParams({
-        cart: [line, otherLine],
-        setCart,
-        tipAmount: 10,
-        loyaltyPointsRedeemed: 200,
-        deliveryFee: 15,
-        setTipAmount,
-        setLoyaltyPointsRedeemed,
-        setDeliveryFee,
-        setSubmitMessage,
-        createSale: { mutateAsync: vi.fn(), reset },
-      }));
-
-      actions.removeItem('p1::u1::retail');
-
-      expect(setCart.mock.results[0]?.value).toEqual([]);
-      expect(setTipAmount).toHaveBeenCalledWith(0);
-      expect(setLoyaltyPointsRedeemed).toHaveBeenCalledWith(0);
-      expect(setDeliveryFee).toHaveBeenCalledWith(0);
-      expect(setSubmitMessage).toHaveBeenCalledWith('');
-      expect(reset).toHaveBeenCalledTimes(1);
-    });
-
-    it('keeps the extras when the LIVE cart still holds a line the stale snapshot has already lost', () => {
-      const setTipAmount = vi.fn();
-      const setLoyaltyPointsRedeemed = vi.fn();
-      const setDeliveryFee = vi.fn();
-      const actions = createPosWorkspaceBaseActions(makeParams({
-        cart: [line],
-        setCart: liveCartSetCart([line, otherLine]),
-        tipAmount: 10,
-        loyaltyPointsRedeemed: 200,
-        deliveryFee: 15,
-        setTipAmount,
-        setLoyaltyPointsRedeemed,
-        setDeliveryFee,
-      }));
-
-      actions.removeItem('p1::u1::retail');
-
-      expect(setTipAmount).not.toHaveBeenCalled();
-      expect(setLoyaltyPointsRedeemed).not.toHaveBeenCalled();
-      expect(setDeliveryFee).not.toHaveBeenCalled();
     });
   });
 

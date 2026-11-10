@@ -348,51 +348,30 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
     }
   }
 
-  /* T11-A (INV-REST-COMBO-SUBMIT-TRUTH, G3): emptying the cart by
-   * deleting the line left the mismatch banner (submitMessage) standing
-   * until a reload — only resetDraftState cleared it. Clear it (and
-   * reset the createSale mutation error) when the cart becomes empty,
-   * never on every remove: a removal that leaves items keeps the
-   * banner. T13-N2 (INV-REST-WORKSPACE-EXTRAS-RESET, NEW-2): the same
-   * branch also zeroes the tip and the redeemed points — they
-   * survived the empty cart the same way. T14-A
-   * (INV-REST-WORKSPACE-EXTRAS-LIVE-RESET, K1 + NEW (b)): the
-   * emptiness decision used to read the closed-over params.cart
-   * snapshot — the same stale closure the NEW-3 live-cart fix removed
-   * from handleAddProduct. The trash-delete path runs through a
-   * memoised panel that can hold an old closure, so the snapshot can
-   * still list a line the live cart no longer has (or miss one it
-   * still has) and the branch is skipped (or fires wrongly). The
-   * decision is now made inside the setCart functional updater, which
-   * runs against the installed cart — the same canonical pattern as
-   * the NEW-3 fix. The empty branch also zeroes the delivery fee:
-   * P2 zeroed tip/loyalty only, but the fee is added to the total
-   * unconditionally, so an empty cart still totalled the fee (15.00
-   * in Trial 6). */
+  /* T11-A (INV-REST-COMBO-SUBMIT-TRUTH, G3) / T13-N2
+   * (INV-REST-WORKSPACE-EXTRAS-RESET, NEW-2) / T14-A
+   * (INV-REST-WORKSPACE-EXTRAS-LIVE-RESET, K1 + NEW (b)): emptying
+   * the cart by deleting the line used to leave the mismatch banner
+   * (submitMessage), the tip, the redeemed points and the delivery
+   * fee standing — the fee is added to the total unconditionally, so
+   * an empty cart still totalled the fee (15.00 in Trial 6).
+   * T15-A (INV-REST-TRASH-DELETE-EXTRAS-TRUTH, K1): the reaction
+   * NO LONGER lives here. T14-A read a flag assigned inside the
+   * setCart updater synchronously right after — but React runs a
+   * functional updater at re-render, never inside the setState
+   * call, so the flag was still false at the check and the branch
+   * never fired live (Trial 8: empty cart 25.00). The reaction
+   * moved to the empty-cart effect in usePosWorkspaceEffects, which
+   * runs after render against the installed cart and covers every
+   * empty-cart path (trash, stepper-to-zero, clear). removeItem
+   * only removes the line; it never zeroes extras, clears the
+   * banner, or resets createSale itself — and it never detaches
+   * the customer (no setCustomerId): emptying the cart is not
+   * starting a new sale. */
   function removeItem(lineKey: string) {
-    let cartBecomesEmpty = false;
-    params.setCart((current) => {
-      const nextCart = removePosItem(current, lineKey);
-      cartBecomesEmpty = nextCart.length === 0;
-      return nextCart;
-    });
+    params.setCart((current) => removePosItem(current, lineKey));
     if (params.selectedLineKey === lineKey) params.setSelectedLineKey('');
     params.setPostSaleSaleKey('');
-    if (cartBecomesEmpty) {
-      params.setSubmitMessage('');
-      params.createSale.reset?.();
-      // T13-N2 (INV-REST-WORKSPACE-EXTRAS-RESET, NEW-2): the tip
-      // and the redeemed points survived the empty cart — the tip
-      // is in the persist deps, so a reload restored tip 10 with
-      // 0 items. Zero both here, mirroring resetPosDraftState's
-      // extras. The customer stays attached (no setCustomerId):
-      // emptying the cart is not starting a new sale.
-      params.setTipAmount?.(0);
-      params.setLoyaltyPointsRedeemed?.(0);
-      // T14-A (INV-REST-WORKSPACE-EXTRAS-LIVE-RESET, NEW (b)):
-      // the delivery fee too — see the block comment above.
-      params.setDeliveryFee(0);
-    }
   }
 
   function fillPaidAmount() {
