@@ -123,12 +123,6 @@ function makeParams(overrides: Partial<PosWorkspaceActionParams> = {}): PosWorks
  * flag it read was assigned inside the updater. Tests of the
  * empty-cart reaction use the empty-cart effect (T15-A) or a plain
  * non-executing vi.fn() setCart (production semantics). */
-function liveCartSetCart(liveCart: PosItem[]) {
-  return vi.fn((updater: PosItem[] | ((cart: PosItem[]) => PosItem[])) => (
-    typeof updater === 'function' ? updater(liveCart) : updater
-  ));
-}
-
 describe('createPosWorkspaceBaseActions', () => {
   it('adds products against the latest cart state instead of reintroducing stale deleted lines', () => {
     const staleDeletedCart: PosItem[] = [{

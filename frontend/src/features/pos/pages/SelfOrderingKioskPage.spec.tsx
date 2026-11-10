@@ -280,7 +280,7 @@ function readJsonT15C(rel: string): Record<string, unknown> {
 function kioskLocale(
   locale: Record<string, unknown>,
 ): Record<string, string> {
-  const pos = locale.pos as Record<string, Record<string, Record<string, string>>>;
+  const pos = locale.pos as Record<string, Record<string, string>>;
   return pos.self_ordering_kiosk_page;
 }
 
