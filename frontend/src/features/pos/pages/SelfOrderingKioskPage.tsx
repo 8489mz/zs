@@ -1650,6 +1650,7 @@ export function SelfOrderingKioskPage() {
                 </div>
               </div>
             ) : (
+              <>
               <div
                 style={{
                   display: 'grid',
@@ -1894,6 +1895,7 @@ export function SelfOrderingKioskPage() {
                   </button>
                 </div>
               )}
+              </>
             )}
           </main>
 
