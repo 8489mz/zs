@@ -57,6 +57,7 @@
   "features/pos/pages/DigitalSignagePage.signage-vertical.spec.tsx imports another page module (./DigitalSignagePage)",
   "features/pos/pages/DigitalSignagePage.spec.tsx imports another page module (./DigitalSignagePage)",
   "features/pos/pages/KitchenDisplayPage.spec.tsx imports another page module (./KitchenDisplayPage)",
+  "features/pos/pages/SelfOrderingKioskPage.spec.tsx imports another page module (./SelfOrderingKioskPage)",
   "features/products/pages/ImeiHistoryPage.spec.tsx imports another page module (./ImeiHistoryPage)",
   "features/settings/components/forms/tabs/GeneralSettingsTab.tsx imports app layer directly (@/app/router/access)",
   "features/settings/components/forms/tabs/ModulesSettingsTab.tsx imports app layer directly (@/app/router/access)",
