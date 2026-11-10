@@ -77,6 +77,47 @@ function getSaleKey(sale: { docNo?: string | number; id?: string | number } | nu
   return String(sale?.docNo || sale?.id || '');
 }
 
+/* T14-A (INV-REST-WORKSPACE-EXTRAS-LIVE-RESET, NEW (b)): the
+ * delivery-extras switch for an order-type change, as a pure
+ * function so the base-actions spec can pin it without rendering
+ * the whole workspace hook. Leaving delivery clears the delivery
+ * fee, the courier and the collection status REGARDLESS of where
+ * the fee came from — the old inline code cleared the fee only
+ * when it equalled the settings defaultDeliveryFee, so a zone-set
+ * fee (15.00 from "توصيل عادي 15") survived a switch to takeaway
+ * and the COD summary box stayed. The collection status resets to
+ * '' — the same unstated sentinel resetPosDraftState and
+ * usePosWorkspaceState use for a non-delivery workspace (never
+ * 'cod': a takeaway has nothing to collect). Entering delivery
+ * still applies the settings default fee/mode when none is set. */
+export function applyPosOrderTypeChange(
+  current: string,
+  resolved: string,
+  settings: { defaultDeliveryFee?: number | string; deliveryFeeMode?: string } | null | undefined,
+  deliveryFee: number,
+  setters: {
+    setDeliveryFee: (fee: number) => void;
+    setDeliveryFeeMode: (mode: 'freelance_courier' | 'store_fleet') => void;
+    setDeliveryRepId: (id: string) => void;
+    setCollectionStatus: (status: string) => void;
+  },
+): void {
+  const defaultDeliveryFee = Number((settings as any)?.defaultDeliveryFee || 0);
+  const defaultMode = (settings as any)?.deliveryFeeMode;
+  if (resolved === 'delivery') {
+    if (defaultDeliveryFee > 0 && (!deliveryFee || deliveryFee === 0)) {
+      setters.setDeliveryFee(defaultDeliveryFee);
+    }
+    if (defaultMode === 'store_fleet' || defaultMode === 'freelance_courier') {
+      setters.setDeliveryFeeMode(defaultMode);
+    }
+  } else if (current === 'delivery' && (resolved === 'takeaway' || resolved === 'dine_in')) {
+    setters.setDeliveryFee(0);
+    setters.setDeliveryRepId('');
+    setters.setCollectionStatus('');
+  }
+}
+
 export function usePosWorkspace() {
   const state = usePosWorkspaceState();
   const customersQuery = useQuery({ queryKey: queryKeys.posCustomers, queryFn: () => posApi.customers({ limit: 50 }), staleTime: posReferenceStaleTime });
@@ -303,23 +344,15 @@ export function usePosWorkspace() {
   const handleSetOrderType = useCallback((next: string | ((current: string) => string)) => {
     state.setOrderType((current) => {
       const resolved = typeof next === 'function' ? next(current) : next;
-      const defaultDeliveryFee = Number((settingsQuery.data as any)?.defaultDeliveryFee || 0);
-      const defaultMode = (settingsQuery.data as any)?.deliveryFeeMode;
-      if (resolved === 'delivery') {
-        if (defaultDeliveryFee > 0 && (!state.deliveryFee || state.deliveryFee === 0)) {
-          state.setDeliveryFee(defaultDeliveryFee);
-        }
-        if (defaultMode === 'store_fleet' || defaultMode === 'freelance_courier') {
-          state.setDeliveryFeeMode(defaultMode);
-        }
-      } else if (current === 'delivery' && (resolved === 'takeaway' || resolved === 'dine_in')) {
-        if (defaultDeliveryFee > 0 && state.deliveryFee === defaultDeliveryFee) {
-          state.setDeliveryFee(0);
-        }
-      }
+      applyPosOrderTypeChange(current, resolved, settingsQuery.data as any, state.deliveryFee, {
+        setDeliveryFee: state.setDeliveryFee,
+        setDeliveryFeeMode: state.setDeliveryFeeMode,
+        setDeliveryRepId: state.setDeliveryRepId,
+        setCollectionStatus: state.setCollectionStatus,
+      });
       return resolved;
     });
-  }, [settingsQuery.data, state.deliveryFee, state.setDeliveryFee, state.setDeliveryFeeMode, state.setOrderType]);
+  }, [settingsQuery.data, state.deliveryFee, state.setDeliveryFee, state.setDeliveryFeeMode, state.setDeliveryRepId, state.setCollectionStatus, state.setOrderType]);
 
   useEffect(() => {
     const defaultMode = (settingsQuery.data as any)?.deliveryFeeMode;

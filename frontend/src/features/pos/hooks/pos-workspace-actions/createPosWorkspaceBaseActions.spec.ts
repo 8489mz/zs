@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPosWorkspaceBaseActions } from '@/features/pos/hooks/pos-workspace-actions/createPosWorkspaceBaseActions';
+import { applyPosOrderTypeChange } from '@/features/pos/hooks/usePosWorkspace';
 import { buildDraftState, clearDraftSnapshot, loadPosWorkspaceStorage, persistDraftSnapshot } from '@/features/pos/lib/pos.persistence';
 import type { PosWorkspaceActionParams } from '@/features/pos/hooks/usePosWorkspaceActionGroups';
 import type { PosItem } from '@/features/pos/types/pos.types';
@@ -35,6 +36,16 @@ function makeParams(overrides: Partial<PosWorkspaceActionParams> = {}): PosWorks
     setCustomerId: vi.fn(),
     discount: 0,
     setDiscount: vi.fn(),
+    tipAmount: 0,
+    setTipAmount: vi.fn(),
+    loyaltyPointsRedeemed: 0,
+    setLoyaltyPointsRedeemed: vi.fn(),
+    deliveryFee: 0,
+    setDeliveryFee: vi.fn(),
+    deliveryRepId: '',
+    setDeliveryRepId: vi.fn(),
+    collectionStatus: '',
+    setCollectionStatus: vi.fn(),
     discountApprovalGranted: false,
     setDiscountApprovalGranted: vi.fn(),
     discountApprovalSecret: '',
@@ -97,6 +108,18 @@ function makeParams(overrides: Partial<PosWorkspaceActionParams> = {}): PosWorks
     discountAuthorizationMutation: { mutateAsync: vi.fn() },
     ...overrides,
   } as PosWorkspaceActionParams;
+}
+
+/* A setCart mock that installs updates against the LIVE cart, the way
+ * React runs a functional updater: the updater is invoked with the
+ * installed cart and its return value is the installed result.
+ * removeItem's emptiness decision lives inside that updater (T14-A),
+ * so a plain vi.fn() that never invokes it would leave the decision
+ * unmade and the zeroing unasserted. */
+function liveCartSetCart(liveCart: PosItem[]) {
+  return vi.fn((updater: PosItem[] | ((cart: PosItem[]) => PosItem[])) => (
+    typeof updater === 'function' ? updater(liveCart) : updater
+  ));
 }
 
 describe('createPosWorkspaceBaseActions', () => {
@@ -410,7 +433,7 @@ describe('createPosWorkspaceBaseActions', () => {
     it('clears submitMessage and resets the createSale error when the last line is removed', () => {
       const setSubmitMessage = vi.fn();
       const reset = vi.fn();
-      const setCart = vi.fn();
+      const setCart = liveCartSetCart([line]);
       const actions = createPosWorkspaceBaseActions(makeParams({
         cart: [line],
         setSubmitMessage,
@@ -422,17 +445,18 @@ describe('createPosWorkspaceBaseActions', () => {
 
       expect(setSubmitMessage).toHaveBeenCalledWith('');
       expect(reset).toHaveBeenCalledTimes(1);
-      const updater = setCart.mock.calls[0][0];
-      expect(typeof updater === 'function' ? updater([line]) : updater).toEqual([]);
+      expect(setCart.mock.results[0]?.value).toEqual([]);
     });
 
     it('keeps the banner when removing a line leaves items in the cart', () => {
       const otherLine: PosItem = { ...line, lineKey: 'p2::u1::retail', productId: 'p2', name: 'Coffee' };
       const setSubmitMessage = vi.fn();
       const reset = vi.fn();
+      const setCart = liveCartSetCart([line, otherLine]);
       const actions = createPosWorkspaceBaseActions(makeParams({
         cart: [line, otherLine],
         setSubmitMessage,
+        setCart,
         createSale: { mutateAsync: vi.fn(), reset },
       }));
 
@@ -447,6 +471,7 @@ describe('createPosWorkspaceBaseActions', () => {
       const reset = vi.fn();
       const actions = createPosWorkspaceBaseActions(makeParams({
         cart: [line],
+        setCart: liveCartSetCart([line]),
         setSubmitMessage,
         createSale: { mutateAsync: vi.fn(), reset },
       }));
@@ -493,6 +518,7 @@ describe('createPosWorkspaceBaseActions', () => {
       const setCustomerId = vi.fn();
       const actions = createPosWorkspaceBaseActions(makeParams({
         cart: [line],
+        setCart: liveCartSetCart([line]),
         customerId: '7',
         tipAmount: 10,
         loyaltyPointsRedeemed: 100,
@@ -512,18 +538,22 @@ describe('createPosWorkspaceBaseActions', () => {
       const otherLine: PosItem = { ...line, lineKey: 'p2::u1::retail', productId: 'p2', name: 'Coffee' };
       const setTipAmount = vi.fn();
       const setLoyaltyPointsRedeemed = vi.fn();
+      const setDeliveryFee = vi.fn();
       const actions = createPosWorkspaceBaseActions(makeParams({
         cart: [line, otherLine],
+        setCart: liveCartSetCart([line, otherLine]),
         tipAmount: 10,
         loyaltyPointsRedeemed: 100,
         setTipAmount,
         setLoyaltyPointsRedeemed,
+        setDeliveryFee,
       }));
 
       actions.removeItem('p1::u1::retail');
 
       expect(setTipAmount).not.toHaveBeenCalled();
       expect(setLoyaltyPointsRedeemed).not.toHaveBeenCalled();
+      expect(setDeliveryFee).not.toHaveBeenCalled();
     });
   });
 
@@ -638,6 +668,177 @@ describe('createPosWorkspaceBaseActions', () => {
 
       expect(loadPosWorkspaceStorage().draft).toBeNull();
       clearDraftSnapshot();
+    });
+  });
+
+  /* T14-A (INV-REST-WORKSPACE-EXTRAS-LIVE-RESET, K1 + NEW (b)): Trial 6
+   * deleted the only item via the trash icon with tip 10 + 200 redeemed
+   * points + a 15.00 delivery fee set, and the empty cart still
+   * totalled 15.00 with the tip/loyalty standing. The zeroing branch
+   * never ran because removeItem read the closed-over params.cart
+   * snapshot: the memoised products panel can invoke the handler
+   * through a stale closure. Emptiness is now decided inside the
+   * setCart updater against the LIVE cart, and the empty branch
+   * zeroes tip + loyalty + deliveryFee (P2 zeroed tip/loyalty only).
+   * Total 0 follows from the derived formula once those land: an
+   * empty cart has subTotal 0, loyaltyDiscount 0 (0 points redeemed),
+   * deliveryFee 0 and tipAmount 0, so total = 0 + 0 + 0. The first
+   * case reproduces the trial exactly — the stale snapshot still
+   * lists a second line the live cart no longer has, so at base the
+   * snapshot says "not empty" and nothing is zeroed. The second case
+   * pins the decision the other way: a snapshot that says "empty"
+   * must NOT zero extras the live cart still owes. */
+  describe('removeItem zeroes ALL order extras when the LIVE cart empties (T14-A)', () => {
+    const line: PosItem = {
+      lineKey: 'p1::u1::retail',
+      productId: 'p1',
+      name: 'Tea',
+      itemCode: 'p1',
+      unitId: 'u1',
+      unitName: 'قطعة',
+      unitMultiplier: 1,
+      price: 75,
+      costPrice: 5,
+      qty: 1,
+      stockLimit: 10,
+      currentStock: 10,
+      minStock: 0,
+      priceType: 'retail',
+    };
+    const otherLine: PosItem = { ...line, lineKey: 'p2::u1::retail', productId: 'p2', name: 'Coffee', price: 10 };
+
+    it('zeroes tip, loyalty AND deliveryFee when the only line is deleted with a STALE params.cart snapshot', () => {
+      const setTipAmount = vi.fn();
+      const setLoyaltyPointsRedeemed = vi.fn();
+      const setDeliveryFee = vi.fn();
+      const setSubmitMessage = vi.fn();
+      const reset = vi.fn();
+      const setCart = liveCartSetCart([line]);
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        cart: [line, otherLine],
+        setCart,
+        tipAmount: 10,
+        loyaltyPointsRedeemed: 200,
+        deliveryFee: 15,
+        setTipAmount,
+        setLoyaltyPointsRedeemed,
+        setDeliveryFee,
+        setSubmitMessage,
+        createSale: { mutateAsync: vi.fn(), reset },
+      }));
+
+      actions.removeItem('p1::u1::retail');
+
+      expect(setCart.mock.results[0]?.value).toEqual([]);
+      expect(setTipAmount).toHaveBeenCalledWith(0);
+      expect(setLoyaltyPointsRedeemed).toHaveBeenCalledWith(0);
+      expect(setDeliveryFee).toHaveBeenCalledWith(0);
+      expect(setSubmitMessage).toHaveBeenCalledWith('');
+      expect(reset).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the extras when the LIVE cart still holds a line the stale snapshot has already lost', () => {
+      const setTipAmount = vi.fn();
+      const setLoyaltyPointsRedeemed = vi.fn();
+      const setDeliveryFee = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        cart: [line],
+        setCart: liveCartSetCart([line, otherLine]),
+        tipAmount: 10,
+        loyaltyPointsRedeemed: 200,
+        deliveryFee: 15,
+        setTipAmount,
+        setLoyaltyPointsRedeemed,
+        setDeliveryFee,
+      }));
+
+      actions.removeItem('p1::u1::retail');
+
+      expect(setTipAmount).not.toHaveBeenCalled();
+      expect(setLoyaltyPointsRedeemed).not.toHaveBeenCalled();
+      expect(setDeliveryFee).not.toHaveBeenCalled();
+    });
+  });
+
+  /* T14-A (INV-REST-WORKSPACE-EXTRAS-LIVE-RESET, NEW (b)): switching
+   * the order type from delivery to takeaway left a zone-set fee
+   * standing, because handleSetOrderType cleared the fee only when it
+   * equalled the settings defaultDeliveryFee — and it never touched
+   * the courier or the collection status, so the COD summary box
+   * ("التحصيل: تحصيل من العميل") stayed. The switch now clears fee +
+   * rep + status regardless of fee source, through the production
+   * helper applyPosOrderTypeChange (the same code handleSetOrderType
+   * calls). The COD box is gone with it: PosCheckoutDialog renders
+   * the rep-required box only when orderType is 'delivery' AND
+   * collectionStatus is 'cod', and the checkout delivery section —
+   * the COD summary box — only renders for a delivery order, so a
+   * takeaway with status '' shows neither. At base the first case
+   * fails: the settings default is 0, so the old
+   * `defaultDeliveryFee > 0 && fee === default` guard never fires
+   * and the 15.00 fee survives. */
+  describe('leaving delivery clears delivery extras regardless of fee source (T14-A)', () => {
+    function orderTypeSetters() {
+      return {
+        setDeliveryFee: vi.fn(),
+        setDeliveryFeeMode: vi.fn(),
+        setDeliveryRepId: vi.fn(),
+        setCollectionStatus: vi.fn(),
+      };
+    }
+
+    it('delivery → takeaway with a zone-set fee (15.00, NOT the settings default) clears fee, rep and collection status', () => {
+      const setters = orderTypeSetters();
+
+      applyPosOrderTypeChange('delivery', 'takeaway', { defaultDeliveryFee: 0 }, 15, setters);
+
+      expect(setters.setDeliveryFee).toHaveBeenCalledWith(0);
+      expect(setters.setDeliveryRepId).toHaveBeenCalledWith('');
+      expect(setters.setCollectionStatus).toHaveBeenCalledWith('');
+    });
+
+    it('delivery → takeaway also clears a fee that DOES equal the settings default', () => {
+      const setters = orderTypeSetters();
+
+      applyPosOrderTypeChange('delivery', 'takeaway', { defaultDeliveryFee: 15 }, 15, setters);
+
+      expect(setters.setDeliveryFee).toHaveBeenCalledWith(0);
+      expect(setters.setDeliveryRepId).toHaveBeenCalledWith('');
+      expect(setters.setCollectionStatus).toHaveBeenCalledWith('');
+    });
+
+    it('delivery → dine_in clears the same three extras', () => {
+      const setters = orderTypeSetters();
+
+      applyPosOrderTypeChange('delivery', 'dine_in', { defaultDeliveryFee: 5 }, 15, setters);
+
+      expect(setters.setDeliveryFee).toHaveBeenCalledWith(0);
+      expect(setters.setDeliveryRepId).toHaveBeenCalledWith('');
+      expect(setters.setCollectionStatus).toHaveBeenCalledWith('');
+    });
+
+    it('keeps delivery extras when the order type does not leave delivery', () => {
+      const staying = orderTypeSetters();
+      applyPosOrderTypeChange('delivery', 'delivery', { defaultDeliveryFee: 0 }, 15, staying);
+      expect(staying.setDeliveryFee).not.toHaveBeenCalled();
+      expect(staying.setDeliveryRepId).not.toHaveBeenCalled();
+      expect(staying.setCollectionStatus).not.toHaveBeenCalled();
+
+      const entering = orderTypeSetters();
+      applyPosOrderTypeChange('takeaway', 'takeaway', { defaultDeliveryFee: 0 }, 0, entering);
+      expect(entering.setDeliveryFee).not.toHaveBeenCalled();
+      expect(entering.setDeliveryRepId).not.toHaveBeenCalled();
+      expect(entering.setCollectionStatus).not.toHaveBeenCalled();
+    });
+
+    it('takeaway → delivery still applies the settings default fee when none is set', () => {
+      const setters = orderTypeSetters();
+
+      applyPosOrderTypeChange('takeaway', 'delivery', { defaultDeliveryFee: 10, deliveryFeeMode: 'store_fleet' }, 0, setters);
+
+      expect(setters.setDeliveryFee).toHaveBeenCalledWith(10);
+      expect(setters.setDeliveryFeeMode).toHaveBeenCalledWith('store_fleet');
+      expect(setters.setDeliveryRepId).not.toHaveBeenCalled();
+      expect(setters.setCollectionStatus).not.toHaveBeenCalled();
     });
   });
 });
