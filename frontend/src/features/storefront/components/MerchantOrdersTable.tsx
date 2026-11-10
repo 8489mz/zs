@@ -1,7 +1,12 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { OnlineOrderRecord } from '../types/storefront.types';
+import { deliveryRepsApi, type DeliveryRep } from '@/shared/api/delivery-reps.api';
+import { toast } from '@/shared/components/system-alert';
+import { DialogShell } from '@/shared/components/dialog-shell';
+import { CustomSelect } from '@/shared/ui/custom-select';
 import {
   PackageIcon,
   TruckIcon,
@@ -54,6 +59,179 @@ function formatOrderTotal(amount: number, orderCurrency?: string | null): string
   const decimals = isThreeDecimalCurrency(code) ? 3 : (code === 'EGP' && amount % 1 === 0 ? 0 : 2);
   const symbol = getCurrencySymbol(code);
   return `${amount.toFixed(decimals)} ${symbol}`;
+}
+
+/* Resolves the rep already assigned to an order (at conversion) from the
+ * active-rep list. The order record carries the rep name/phone but no rep id,
+ * so the match is by exact name, tie-broken by phone when several active reps
+ * share a name. Returns null when the assigned rep cannot be identified
+ * unambiguously (renamed, deactivated, or never assigned) — the merchant then
+ * picks a rep explicitly in the dispatch dialog instead of dispatching to a
+ * guessed rep. */
+export function resolveDispatchRepId(
+  order: Pick<OnlineOrderRecord, 'deliveryRepName' | 'deliveryRepPhone'>,
+  reps: DeliveryRep[],
+): number | null {
+  const activeReps = reps.filter((r) => (r as any).is_active !== false && (r as any).isActive !== false);
+  const name = (order.deliveryRepName || '').trim();
+  if (!name) return null;
+  const byName = activeReps.filter((r) => (r.name || '').trim() === name);
+  if (byName.length === 0) return null;
+  if (byName.length === 1) return byName[0].id;
+  const phone = (order.deliveryRepPhone || '').replace(/\D/g, '');
+  if (!phone) return null;
+  const byPhone = byName.filter((r) => (r.phone || '').replace(/\D/g, '') === phone);
+  return byPhone.length === 1 ? byPhone[0].id : null;
+}
+
+/* Dispatches one invoiced online order through dispatchOrders (the same
+ * endpoint the restaurant dispatcher modal uses), so online_orders.status
+ * becomes 'shipped' AND the linked sale's delivery_status becomes
+ * 'out_for_delivery' in one backend transaction. The old
+ * updateOrderStatus(id, 'shipped') path only flipped the order row and left
+ * the courier queue showing the order as pending collection (D-SF-05). */
+function MerchantDispatchDialog({ order, onClose }: { order: OnlineOrderRecord; onClose: () => void }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [selectedRepId, setSelectedRepId] = useState<number | ''>('');
+
+  const repsQuery = useQuery({
+    queryKey: ['delivery-reps'],
+    queryFn: deliveryRepsApi.list,
+    staleTime: 60 * 1000,
+  });
+  const reps: DeliveryRep[] = (repsQuery.data as any) || [];
+  const activeReps = useMemo(
+    () => reps.filter((r) => (r as any).is_active !== false && (r as any).isActive !== false),
+    [repsQuery.data],
+  );
+  const resolvedRepId = useMemo(() => resolveDispatchRepId(order, reps), [order, repsQuery.data]);
+  // A manual pick wins; otherwise the rep assigned at conversion is pre-selected.
+  const effectiveRepId = selectedRepId !== '' ? selectedRepId : resolvedRepId ?? '';
+
+  const dispatchMutation = useMutation({
+    mutationFn: (repId: number) =>
+      deliveryRepsApi.dispatchOrders({ repId, onlineOrderIds: [order.id] }),
+    onSuccess: (data) => {
+      toast.success(data?.message || t('storefront.merchant_orders_table.s41', 'تم تسليم الطلب للمندوب'));
+      void queryClient.invalidateQueries({ queryKey: ['storefront-admin-orders'] });
+      void queryClient.invalidateQueries({ queryKey: ['storefront-admin-orders-counts'] });
+      onClose();
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || t('storefront.merchant_orders_table.s42', 'تعذر تسليم الطلب للمندوب'));
+    },
+  });
+
+  const repOptions = [
+    { value: '', label: t('storefront.merchant_orders_table.s43', '-- اختر مندوب التوصيل --') },
+    ...activeReps.map((r) => ({
+      value: String(r.id),
+      label: `${r.name}${r.phone ? ' (' + r.phone + ')' : ''}`,
+    })),
+  ];
+
+  return (
+    <DialogShell
+      open
+      onClose={onClose}
+      width="min(500px, 95vw)"
+      ariaLabel={`Dispatch order #${order.orderNumber} to courier`}
+    >
+      <div style={{ padding: '20px 24px', direction: 'rtl' }}>
+        <h3 style={{ margin: 0, fontSize: '16.5px', fontWeight: 800, color: '#170e5e' }}>
+          {t('storefront.merchant_orders_table.s44', 'تسليم الطلب #')}{order.orderNumber}
+        </h3>
+        <span style={{ fontSize: '12px', color: '#64748b' }}>
+          {t('storefront.merchant_orders_table.s45', 'تسليم الطلب والفاتورة لمندوب التوصيل — تظهر الحالة "خرج للتوصيل" في قائمة التاجر وقائمة المندوب معاً.')}
+        </span>
+
+        <div style={{ marginTop: '16px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>
+            <TruckIcon size={14} color="#170e5e" />
+            <span>{t('storefront.merchant_orders_table.s46', 'مندوب التوصيل:')}</span>
+          </label>
+          {repsQuery.isLoading ? (
+            <div style={{ fontSize: '12.5px', color: '#64748b', padding: '8px 0' }}>
+              {t('storefront.merchant_orders_table.s47', 'جاري تحميل قائمة المناديب...')}
+            </div>
+          ) : repsQuery.isError ? (
+            <div style={{ fontSize: '12.5px', color: '#b91c1c', padding: '8px 0' }}>
+              {t('storefront.merchant_orders_table.s48', 'تعذر تحميل قائمة المناديب — أغلق النافذة وأعد المحاولة.')}
+            </div>
+          ) : activeReps.length === 0 ? (
+            <div style={{ fontSize: '12.5px', color: '#b91c1c', padding: '8px 0' }}>
+              {t('storefront.merchant_orders_table.s49', 'لا يوجد مندوب توصيل نشط — فعّل مندوباً أولاً قبل التسليم.')}
+            </div>
+          ) : (
+            <CustomSelect
+              value={effectiveRepId ? String(effectiveRepId) : ''}
+              onChange={(val) => setSelectedRepId(val ? Number(val) : '')}
+              options={repOptions}
+              placeholder={t('storefront.merchant_orders_table.s50', 'اختر مندوب التوصيل...')}
+            />
+          )}
+          <span style={{ display: 'block', fontSize: '11px', color: '#64748b', marginTop: '6px', lineHeight: 1.4 }}>
+            {order.deliveryRepName
+              ? t('storefront.merchant_orders_table.s51', 'المندوب المعين عند إصدار الفاتورة:') + ` ${order.deliveryRepName}${order.deliveryRepPhone ? ' (' + order.deliveryRepPhone + ')' : ''}`
+              : t('storefront.merchant_orders_table.s52', 'لم يتم تعيين مندوب عند إصدار الفاتورة — اختر مندوباً للتسليم.')}
+            {resolvedRepId === null && order.deliveryRepName
+              ? ' ' + t('storefront.merchant_orders_table.s53', '(تعذر مطابقة المندوب المعين مع قائمة المناديب النشطين — اختر مندوباً يدوياً.)')
+              : ''}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '20px' }}>
+          <button
+            type="button"
+            onClick={() => {
+              if (effectiveRepId === '') return;
+              dispatchMutation.mutate(effectiveRepId);
+            }}
+            disabled={effectiveRepId === '' || dispatchMutation.isPending || repsQuery.isLoading}
+            style={{
+              background: '#170e5e',
+              color: '#ffffff',
+              padding: '11px 16px',
+              fontSize: '13.5px',
+              fontWeight: 800,
+              borderRadius: '9px',
+              border: 'none',
+              cursor: effectiveRepId === '' || dispatchMutation.isPending ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              boxShadow: '0 2px 5px rgba(23,14,94,0.25)',
+              opacity: effectiveRepId === '' || dispatchMutation.isPending ? 0.6 : 1,
+            }}
+          >
+            <TruckIcon size={14} color="#ffffff" />
+            <span>{dispatchMutation.isPending ? t('storefront.merchant_orders_table.s54', 'جاري التسليم...') : t('storefront.merchant_orders_table.s55', 'تسليم للمندوب')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              background: '#ffffff',
+              border: '1.5px solid #cbd5e1',
+              color: '#334155',
+              padding: '10px 16px',
+              fontSize: '13px',
+              fontWeight: 700,
+              borderRadius: '9px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <span>{t('storefront.merchant_orders_table.s56', 'إلغاء')}</span>
+          </button>
+        </div>
+      </div>
+    </DialogShell>
+  );
 }
 
 function OrderShippingDropdown({
@@ -396,6 +574,7 @@ export function MerchantOrdersTable({
 }: MerchantOrdersTableProps) {
   const { t, i18n } = useTranslation();
   const isEn = i18n.language === 'en';
+  const [dispatchOrder, setDispatchOrder] = useState<OnlineOrderRecord | null>(null);
   if (isLoading) {
     return (
       <div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>
@@ -638,7 +817,7 @@ export function MerchantOrdersTable({
                     ) : order.status === 'processing' && order.saleId ? (
                       <button
                         type="button"
-                        onClick={() => onUpdateStatus(order.id, 'shipped')}
+                        onClick={() => setDispatchOrder(order)}
                         disabled={isUpdatingStatus}
                         title={t('storefront.merchant_orders_table.s30', "تسليم الأوردر والفاتورة لمندوب التوصيل")}
                         style={{
@@ -841,6 +1020,9 @@ export function MerchantOrdersTable({
           })}
         </tbody>
       </table>
+      {dispatchOrder && (
+        <MerchantDispatchDialog order={dispatchOrder} onClose={() => setDispatchOrder(null)} />
+      )}
     </div>
   );
 }
