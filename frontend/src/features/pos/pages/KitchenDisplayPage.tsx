@@ -10,6 +10,7 @@ import {
 import { ClockIcon } from '@/shared/components/icons/AppIcons';
 import { KdsHeader } from '../components/kds/KdsHeader';
 import { useIsolatedDisplayLanguage } from '@/features/pos/hooks/useIsolatedDisplayLanguage';
+import { useVisibleRefetch } from '@/features/pos/hooks/useVisibleRefetch';
 import { KdsKpiStrip } from '../components/kds/KdsKpiStrip';
 import { KdsFilterBar } from '../components/kds/KdsFilterBar';
 import { KdsStandbyState, KdsDisconnectedState } from '../components/kds/KdsStandbyState';
@@ -120,6 +121,14 @@ export function KitchenDisplayPage() {
       }),
     refetchInterval: 5000,
   });
+
+  // INV-REST-FLOOR-VERIFY-REFETCH (T13-A, H7): the 5s poll stalls in a
+  // background tab and the global QueryClient disables focus refetch, so
+  // returning to the KDS tab never refetched. Refetch on visibilitychange
+  // -> visible, bypassing staleTime; the 5s poll itself is unchanged, and
+  // the 15s 86-items query above is a different board (the 86 modal
+  // badge), not the ticket view, so it is left alone.
+  useVisibleRefetch(['kds-tickets', selectedStation, selectedOrderType]);
 
   const tickets = data?.tickets || [];
   const ticketsState = resolveKitchenTicketsState({ isLoading, isError, ticketCount: tickets.length });

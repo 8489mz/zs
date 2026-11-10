@@ -13,6 +13,14 @@
  * awaits the refetch before the caller closes the dialog — so the lists
  * show the draft on table 5 immediately. A missing source is an error,
  * never a success toast.
+ *
+ * INV-REST-FLOOR-VERIFY-REFETCH (T13-A): the write resolving is not proof
+ * it landed — a rename the server accepts but never applies, or a save
+ * that resolves without persisting, still left the floor showing the old
+ * table under a success toast. After the refetch the handler re-reads the
+ * held-drafts cache and only reports success when the re-read shows the
+ * order on the target table and nothing left on the source; anything
+ * else is a named error, never a success.
  */
 import type { QueryClient } from '@tanstack/react-query';
 import { queryClient as appQueryClient } from '@/app/providers';
@@ -123,6 +131,47 @@ export type TableTransferOutcome =
   | { status: 'held-saved' }
   | { status: 'error'; message: string };
 
+/* The re-read after a transfer write: refreshHeldDrafts (invalidate +
+ * await refetch) is the read path — this just surfaces what it landed.
+ * An empty cache means the re-read never landed, which the verifier
+ * below treats as unverified, never as success. */
+export function readHeldDrafts(queryClient: QueryClient): TransferSourceDraft[] {
+  return queryClient.getQueryData<TransferSourceDraft[]>(queryKeys.posHeldDrafts) ?? [];
+}
+
+export interface TransferVerification {
+  from: string;
+  to: string;
+  /* Branch (a): the renamed draft must be the one on the target table. */
+  draftId?: string | number;
+  /* Branch (b): the saved draft is new, so the target table must hold
+   * strictly more drafts than before the write — a pre-existing draft
+   * on the target must not stand in for the one just saved. */
+  minTargetCount?: number;
+}
+
+/* Verify-after-write: the re-read must show the transferred order on
+ * the target table and nothing left on the source. Either half failing
+ * means the write cannot be proven to have landed. */
+export function verifyTransferLanded(
+  heldDrafts: TransferSourceDraft[],
+  verification: TransferVerification,
+): boolean {
+  const wantTarget = normalizeTableNumber(verification.to);
+  const wantSource = normalizeTableNumber(verification.from);
+  const onTarget = heldDrafts.filter((d) => normalizeTableNumber(d.tableNumber) === wantTarget);
+  const onSource = heldDrafts.filter((d) => normalizeTableNumber(d.tableNumber) === wantSource);
+  if (onSource.length > 0) return false;
+  if (verification.draftId !== undefined) {
+    return onTarget.some((d) => String(d.id) === String(verification.draftId));
+  }
+  return onTarget.length > (verification.minTargetCount ?? 0);
+}
+
+function transferVerifyFailedMessage(from: string, to: string): string {
+  return `تعذر التحقق من نقل الطلب من طاولة ${from} إلى طاولة ${to} بعد الحفظ — لم يظهر الطلب على طاولة ${to} بعد إعادة القراءة. تحقق من قائمة الطاولات قبل إعادة المحاولة.`;
+}
+
 export interface TableTransferInput extends TransferHeldDraftPayloadInput {
   queryClient?: QueryClient;
   from: string;
@@ -160,12 +209,18 @@ export async function transferTableOrder(input: TableTransferInput): Promise<Tab
       };
     }
     await refreshHeldDrafts(queryClient);
+    if (
+      !verifyTransferLanded(readHeldDrafts(queryClient), { from, to, draftId: sourceDraft.id })
+    ) {
+      return { status: 'error', message: transferVerifyFailedMessage(from, to) };
+    }
     return { status: 'renamed', draftId: sourceDraft.id };
   }
 
   const isLiveCartOnSource =
     input.cart.length > 0 && normalizeTableNumber(input.tableNumber) === normalizeTableNumber(from);
   if (isLiveCartOnSource) {
+    const targetCountBefore = findTransferSourceDrafts(input.heldDrafts, to).length;
     try {
       await input.saveHeldDraft(buildTransferHeldDraftPayload(input));
     } catch (error) {
@@ -175,6 +230,15 @@ export async function transferTableOrder(input: TableTransferInput): Promise<Tab
       };
     }
     await refreshHeldDrafts(queryClient);
+    if (
+      !verifyTransferLanded(readHeldDrafts(queryClient), {
+        from,
+        to,
+        minTargetCount: targetCountBefore,
+      })
+    ) {
+      return { status: 'error', message: transferVerifyFailedMessage(from, to) };
+    }
     return { status: 'held-saved' };
   }
 

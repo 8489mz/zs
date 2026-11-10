@@ -12,7 +12,7 @@
  * tickets query still renders the loud disconnected state (R2-D).
  */
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -129,6 +129,12 @@ function renderPage() {
       </MemoryRouter>
     </QueryClientProvider>,
   );
+}
+
+/* jsdom reports its own visibilityState; the visibility tests drive it
+ * explicitly so the hidden -> visible transition is deterministic. */
+function setVisibilityState(state: 'visible' | 'hidden') {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
 }
 
 describe('KitchenDisplayPage KDS un-mark toggle feedback (INV-REST-KDS-TOGGLE-FEEDBACK)', () => {
@@ -307,4 +313,63 @@ describe('KitchenDisplayPage KPI strip outage truth (INV-REST-KPI-OUTAGE-TRUTH)'
     expect(screen.queryByText(DISCONNECTED_MARKER)).not.toBeInTheDocument();
     expect(screen.getByText('فتة شاورما')).toBeInTheDocument();
   }, 15000);
+});
+
+/* INV-REST-FLOOR-VERIFY-REFETCH (T13-A, H7): the tickets query polls
+ * every 5s, but browsers throttle timers in background tabs, and the
+ * global QueryClient disables focus refetch outright — so a ticket
+ * posted while the KDS tab was hidden only appeared after a manual
+ * reload. The page now refetches on visibilitychange -> visible,
+ * bypassing staleTime; the 5s poll itself is unchanged.
+ *
+ * Base-red: at base there is no visibility listener, so the ticket only
+ * appears at the next 5s poll — the 1s findByText window below expires
+ * first and the test fails.
+ */
+describe('KitchenDisplayPage visibility refetch (INV-REST-FLOOR-VERIFY-REFETCH)', () => {
+  beforeEach(() => {
+    getTicketsMock.mockClear();
+    get86ItemsMock.mockResolvedValue([]);
+    advanceStatusMock.mockResolvedValue({ ticketId: 1, newStatus: 'ready' });
+    recallLastServedMock.mockResolvedValue({ recalled: false });
+  });
+
+  afterEach(() => {
+    setVisibilityState('visible');
+  });
+
+  it('shows a ticket posted while the tab was hidden as soon as the tab returns — no manual reload, no 5s poll wait', async () => {
+    // First load: the kitchen is empty.
+    getTicketsMock.mockResolvedValueOnce(ticketsResponse([]));
+    // Every later fetch sees the ticket the cashier posted meanwhile.
+    getTicketsMock.mockResolvedValue(
+      ticketsResponse([
+        ticketWithItems([
+          { id: 21, name: 'كباب حلبي', qty: 1, status: 'pending', station: 'grill' },
+        ]),
+      ]),
+    );
+    renderPage();
+
+    // The empty kitchen renders its standby state.
+    await screen.findByText('لا توجد طلبات معلقة بالمطبخ في الوقت الراهن');
+    expect(getTicketsMock).toHaveBeenCalledTimes(1);
+
+    // The tab goes to the background (poll throttled); the cashier posts
+    // the sale on the POS tab. No poll tick runs while hidden.
+    setVisibilityState('hidden');
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(getTicketsMock).toHaveBeenCalledTimes(1);
+
+    // Returning to the tab refetches immediately: the ticket appears
+    // well inside findByText's 1s window — the 5s poll has not fired.
+    setVisibilityState('visible');
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await screen.findByText('كباب حلبي');
+    expect(getTicketsMock.mock.calls.length).toBeGreaterThan(1);
+  });
 });
