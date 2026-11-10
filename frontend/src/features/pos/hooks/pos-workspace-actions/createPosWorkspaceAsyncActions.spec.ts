@@ -224,8 +224,10 @@ describe('createPosWorkspaceAsyncActions — handleSubmit reports its outcome (T
  * choice, never a default. At base the payload forwarded
  * params.collectionStatus raw, so a delivery whose state lost the
  * status reached the backend unstated and the backend inferred
- * prepaid from the full cash tender. Non-deliveries send the status
- * unchanged. */
+ * prepaid from the full cash tender. Non-deliveries send no
+ * collection status at all (T13-N1, INV-REST-COD-DELIVERY-ONLY):
+ * COD is a delivery concept, and a stray 'cod' on a takeaway /
+ * dine-in state must never reach the backend. */
 describe('createPosWorkspaceAsyncActions — delivery submit always states collectionStatus (T11-D)', () => {
   const deliveryOverrides = {
     orderType: 'delivery',
@@ -345,6 +347,118 @@ describe('createPosWorkspaceAsyncActions — COD unpaid post truth (T12-H1)', ()
     expect(result).toBe(true);
     expect(mutateAsync).toHaveBeenCalledTimes(1);
     expect(mutateAsync.mock.calls[0][0]).toMatchObject({ paymentType: 'credit' });
+  });
+});
+
+/* T13-N1 (INV-REST-COD-DELIVERY-ONLY): COD is a delivery concept
+ * only. Two defects shared one root (the raw UI status was treated
+ * as global): (a) the gate's isCodDelivery read the RAW state, so a
+ * delivery whose state had lost the status ('cod' -> undefined)
+ * failed the check and the 0-cash COD attempt was blocked by the
+ * underpaid gate — Trial 5 J2, the agent had followed the refusal's
+ * "غيّر حالة التحصيل" instruction; (b) the payload forwarded the
+ * state verbatim for non-deliveries, so every ordinary takeaway
+ * carried 'cod' (the unconditional state default) and the backend
+ * refusal — which had no orderType check — refused its full-cash
+ * confirm — Trial 5 NEW-1. The gate and the payload now share one
+ * effective status, computed once: deliveries state it ('cod' when
+ * unstated), non-deliveries send none. At base the first case fails
+ * (the gate refuses, nothing posts) and the payload assertions fail
+ * (the stale 'cod' is sent).
+ *
+ * D-T13-N1 (COD = courier receivable, user decision 2026-11-10): a
+ * COD delivery posts with paid 0 and cash 0 in the drawer — the debt
+ * sits on the courier until he returns the money, so no COD path may
+ * arrive at the gate with a pre-filled cash amount. The assume-full
+ * branches already exclude COD deliveries, but at base the exclusion
+ * read the raw status and missed unstated-status COD: with
+ * allowNegativeStockSales on, cash was auto-filled to the total and
+ * the sale arrived paid in full. The last case pins the zeroing holds
+ * on the confirm path even with that setting on. */
+describe('createPosWorkspaceAsyncActions — COD is delivery-only (T13-N1)', () => {
+  it('passes a delivery with an unstated status, a customer and paid 0 through the gate and posts it unpaid', async () => {
+    const { actions, mutateAsync } = makeActions({
+      orderType: 'delivery',
+      deliveryRepId: '1',
+      collectionStatus: undefined as unknown as PosWorkspaceActionParams['collectionStatus'],
+      customerId: '7',
+      cashAmount: 0,
+      cardAmount: 0,
+      transferAmount: 0,
+      paidAmount: 0,
+    });
+
+    const result = await actions.handleSubmit({});
+
+    expect(result).toBe(true);
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mutateAsync.mock.calls[0][0]).toMatchObject({
+      orderType: 'delivery',
+      collectionStatus: 'cod',
+      paymentType: 'cash',
+      paidAmount: 0,
+      payments: [],
+    });
+  });
+
+  it('posts a takeaway full-cash sale with a stale cod state and sends no collectionStatus', async () => {
+    const { actions, mutateAsync } = makeActions({
+      orderType: 'takeaway',
+      collectionStatus: 'cod',
+      cashAmount: 174,
+      paidAmount: 174,
+    });
+
+    const result = await actions.handleSubmit({});
+
+    expect(result).toBe(true);
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect((mutateAsync.mock.calls[0][0] as Record<string, unknown>).collectionStatus).toBeUndefined();
+    expect(mutateAsync.mock.calls[0][0]).toMatchObject({ orderType: 'takeaway', paidAmount: 174 });
+  });
+
+  it('posts a dine-in full-cash sale with a stale cod state and sends no collectionStatus', async () => {
+    const { actions, mutateAsync } = makeActions({
+      orderType: 'dine_in',
+      tableNumber: '5',
+      collectionStatus: 'cod',
+      cashAmount: 174,
+      paidAmount: 174,
+    });
+
+    const result = await actions.handleSubmit({});
+
+    expect(result).toBe(true);
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect((mutateAsync.mock.calls[0][0] as Record<string, unknown>).collectionStatus).toBeUndefined();
+    expect(mutateAsync.mock.calls[0][0]).toMatchObject({ orderType: 'dine_in', paidAmount: 174 });
+  });
+
+  it('never auto-fills cash to the total on a COD confirm, even with below-stock sales allowed (D-T13-N1)', async () => {
+    const { actions, params, mutateAsync } = makeActions({
+      orderType: 'delivery',
+      deliveryRepId: '1',
+      collectionStatus: undefined as unknown as PosWorkspaceActionParams['collectionStatus'],
+      customerId: '7',
+      cashAmount: 0,
+      cardAmount: 0,
+      transferAmount: 0,
+      paidAmount: 0,
+      settings: { allowNegativeStockSales: true },
+    });
+
+    const result = await actions.handleSubmit({});
+
+    expect(result).toBe(true);
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mutateAsync.mock.calls[0][0]).toMatchObject({
+      orderType: 'delivery',
+      collectionStatus: 'cod',
+      paymentType: 'cash',
+      paidAmount: 0,
+      payments: [],
+    });
+    expect(params.setCashAmount).not.toHaveBeenCalled();
   });
 });
 

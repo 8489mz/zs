@@ -56,6 +56,24 @@ T12-H1 (INV-REST-COD-UNPAID-POST-TRUTH) ADDS, same harness:
   Base-red: at base the mapper reads null and the dialogs claim
   prepaid.
 
+T13-N1 (INV-REST-COD-DELIVERY-ONLY) ADDS, same harness:
+- 10. A takeaway sale carrying a stray collectionStatus 'cod' +
+  a full declared cash leg POSTS (paid in full, Dr 1110, stored
+  collection_status null — COD is a delivery concept, and a
+  takeaway has no courier to collect). At base the T12-H1
+  refusal had no orderType check and refused it with
+  SALE_COD_CASH_LEG_CONTRADICTION — the Trial 5 NEW-1 shape.
+- 11. Same for dine-in (orderType 'dine_in', table named):
+  posts paid in full with no refusal. (Cases 7-8 above keep
+  pinning the delivery side: explicit-'cod' delivery + full
+  cash still refused, COD + customer + paid 0 still posts
+  unpaid.)
+D-T13-N1 (COD = courier receivable, user decision 2026-11-10):
+a COD delivery posts paid 0 with cash 0 in the drawer — the
+debt sits on the courier until he returns the money (cases 1,
+2 and 8 above are that model end to end: custody, settlement,
+unpaid post).
+
 HOW THIS IS DRIVEN: the real createSale on PGlite, with the real
 authorization, finance, query, posting, idempotency and audit
 services (same harness as restaurant-paid-gates.spec.ts).
@@ -546,6 +564,67 @@ async function main(): Promise<void> {
       const full: any = await query.getSaleById(saleId, cashierAuth);
       assert.equal(full?.sale?.collectionStatus, 'cod', 'the mapped sale carries the stored COD status');
       assert.equal(full?.sale?.deliveryStatus, 'pending', 'the mapped sale carries the stored delivery status');
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  // 10. T13-N1 (INV-REST-COD-DELIVERY-ONLY): a TAKEAWAY sale
+  // carrying a stray collectionStatus 'cod' + a full declared cash
+  // leg POSTS — COD is a delivery concept, and a takeaway has no
+  // courier to collect. Paid in full, Dr 1110, stored
+  // collection_status null. At base the T12-H1 refusal had no
+  // orderType check and refused it with
+  // SALE_COD_CASH_LEG_CONTRADICTION — the Trial 5 NEW-1 shape
+  // (the frontend defaulted every workspace to 'cod').
+  await check("T13-N1 takeaway + stray 'cod' + full cash leg posts", async () => {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedShift(db, 1, 2);
+      const { sales } = buildServices(db);
+      const saleId = await createAndGetId(sales, {
+        items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
+        discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
+        payments: [{ paymentChannel: 'cash', amount: 100 }], tenderedAmount: 100,
+        branchId: 1, locationId: 10, source: 'pos',
+        customerId: 7, orderType: 'takeaway', collectionStatus: 'cod',
+      }, cashierAuth);
+      const row = await saleFullRow(db, saleId);
+      assert.equal(Number(row.total), 100, 'one Widget 101 at 100');
+      assert.equal(Number(row.paid_amount), 100, 'the cash leg posts in full');
+      assert.equal(row.collection_status, null, 'a non-delivery stores no collection status');
+      const journal = await journalByCode(db, 'sale', saleId);
+      assert.equal(journal.get('1110')?.debit, 100, 'the cash debits the till');
+      assert.equal(journal.get('1130'), undefined, 'no receivable exists for a paid takeaway');
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  // 11. T13-N1: same for DINE-IN (orderType 'dine_in', table
+  // named): a stray 'cod' + a full cash leg posts paid in full
+  // with no refusal. At base it was refused like the takeaway.
+  await check("T13-N1 dine-in + stray 'cod' + full cash leg posts", async () => {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedShift(db, 1, 2);
+      const { sales } = buildServices(db);
+      const saleId = await createAndGetId(sales, {
+        items: [{ productId: 101, qty: 1, price: 100, priceType: 'retail', unitMultiplier: 1 }],
+        discount: 0, taxRate: 0, paymentType: 'cash', paymentChannel: 'cash',
+        payments: [{ paymentChannel: 'cash', amount: 100 }], tenderedAmount: 100,
+        branchId: 1, locationId: 10, source: 'pos',
+        customerId: 7, orderType: 'dine_in', tableNumber: '5', collectionStatus: 'cod',
+      }, cashierAuth);
+      const row = await saleFullRow(db, saleId);
+      assert.equal(Number(row.total), 100, 'one Widget 101 at 100');
+      assert.equal(Number(row.paid_amount), 100, 'the cash leg posts in full');
+      assert.equal(row.collection_status, null, 'a non-delivery stores no collection status');
+      const journal = await journalByCode(db, 'sale', saleId);
+      assert.equal(journal.get('1110')?.debit, 100, 'the cash debits the till');
+      assert.equal(journal.get('1130'), undefined, 'no receivable exists for a paid dine-in');
     } finally {
       await db.destroy();
     }

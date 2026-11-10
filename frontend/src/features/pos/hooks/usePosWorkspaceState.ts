@@ -40,7 +40,13 @@ export function usePosWorkspaceState() {
     (storedDraft as any)?.guestCheckPrintedAt || null
   );
   const [deliveryRepId, setDeliveryRepId] = useState(storedDraft?.deliveryRepId || '');
-  const [collectionStatus, setCollectionStatus] = useState(storedDraft?.collectionStatus || 'cod');
+  // INV-REST-COD-DELIVERY-ONLY (T13-N1): the 'cod' default applies
+  // to deliveries only — a takeaway/dine-in workspace must not start
+  // life as COD. An unstated status is '' (the same unstated
+  // sentinel the submit path already treats as "no status").
+  const [collectionStatus, setCollectionStatus] = useState(
+    storedDraft?.collectionStatus || (storedDraft?.orderType === 'delivery' ? 'cod' : ''),
+  );
   const [deliveryFeeMode, setDeliveryFeeMode] = useState<'freelance_courier' | 'store_fleet'>((storedDraft as any)?.deliveryFeeMode || 'freelance_courier');
   const [orderType, setOrderType] = useState(storedDraft?.orderType || 'takeaway');
   const [cart, setCart] = useState<PosItem[]>(storedDraft?.cart || []);

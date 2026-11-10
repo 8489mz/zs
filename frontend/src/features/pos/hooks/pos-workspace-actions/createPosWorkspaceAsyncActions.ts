@@ -152,7 +152,18 @@ export function createPosWorkspaceAsyncActions(
 
     // Smooth negative-stock cashier flow: when below-stock sales are allowed and no amount was typed,
     // treat a normal cash invoice as fully paid instead of blocking it with an underpaid warning.
-    const isCodDelivery = params.orderType === 'delivery' && params.collectionStatus === 'cod';
+    // INV-REST-COD-DELIVERY-ONLY (T13-N1): the gate reads the
+    // EFFECTIVE collection status — the same value the payload sends
+    // below — not the raw UI state. A delivery with no stated status
+    // is 'cod' (the courier collects); a non-delivery has no
+    // collection status at all, so it can never be a COD delivery
+    // however stale the raw state is. (Before: a delivery whose
+    // state had lost the status failed this check and the 0-cash
+    // COD attempt was blocked by the underpaid gate — Trial 5, J2.)
+    const effectiveCollectionStatus = params.orderType === 'delivery'
+      ? (params.collectionStatus || 'cod')
+      : undefined;
+    const isCodDelivery = params.orderType === 'delivery' && effectiveCollectionStatus === 'cod';
 
     const shouldAssumeFullCashPayment = !forceFastCash
       && !isCodDelivery
@@ -281,14 +292,11 @@ export function createPosWorkspaceAsyncActions(
 
     params.setPostSaleSaleKey('');
 
-    // INV-REST-COD-COLLECTION-TRUTH (T11-D): a delivery must always
-    // name its collection status explicitly — the backend must never
-    // have to infer it. An unstated status is 'cod' (the courier
-    // collects); prepaid is an explicit choice, never a default.
-    // Non-deliveries send the status unchanged.
-    const effectiveCollectionStatus = params.orderType === 'delivery'
-      ? (params.collectionStatus || 'cod')
-      : params.collectionStatus;
+    // INV-REST-COD-COLLECTION-TRUTH (T11-D) + INV-REST-COD-DELIVERY-ONLY
+    // (T13-N1): the effective status is computed above, next to the gate,
+    // so the gate and the payload can never disagree about what counts as
+    // COD. A delivery always states a status ('cod' when unstated);
+    // a non-delivery sends no collection status at all.
 
     const activeOnlineOrderId = readActiveOnlineOrderId();
 

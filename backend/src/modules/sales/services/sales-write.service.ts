@@ -1906,13 +1906,19 @@ export class SalesWriteService {
       // fix makes the normal COD path send no cash leg at all, so
       // this backstop fires only on a stale or foreign caller. The
       // specific code + message reach the cashier verbatim through
-      // getSubmitSaleErrorMessage (pos-submit-error.ts).
+      // getSubmitSaleErrorMessage (pos-submit-error.ts). T13-N1
+      // (INV-REST-COD-DELIVERY-ONLY): delivery-only — the
+      // contradiction exists only when a courier collects at the
+      // door; a takeaway/dine-in sale carrying a stray 'cod' status
+      // posts its cash leg normally. The message names the آجل path
+      // explicitly: the old "غيّر حالة التحصيل" invited a status
+      // change that then blocked the 0-cash attempt (Trial 5, J2).
       const hasDeclaredCashLeg = normalized.payments.some(
         (entry) => entry.paymentChannel === 'cash' && Number(entry.amount || 0) > 0,
       );
-      if (rawCollectionStatusForTender === 'cod' && hasDeclaredCashLeg && paidAmount + 0.0001 >= collectibleTotal) {
+      if (String(normalized.orderType || '').trim() === 'delivery' && rawCollectionStatusForTender === 'cod' && hasDeclaredCashLeg && paidAmount + 0.0001 >= collectibleTotal) {
         throw new AppError(
-          'الدليفري بنظام الدفع عند الاستلام لا يقبل مبلغًا نقديًا يغطي الإجمالي كاملًا: النقد المعلن يعني أن المبلغ في الخزينة، بينما COD يعني أن المندوب سيحصّله عند التسليم. صحّح المبلغ النقدي أو غيّر حالة التحصيل.',
+          'الدليفري بنظام الدفع عند الاستلام لا يقبل مبلغًا نقديًا يغطي الإجمالي كاملًا: النقد المعلن يعني أن المبلغ في الخزينة، بينما COD يعني أن المندوب سيحصّله عند التسليم. صحّح المبلغ النقدي أو حوّل العملية إلى آجل صراحةً.',
           'SALE_COD_CASH_LEG_CONTRADICTION',
           400,
         );

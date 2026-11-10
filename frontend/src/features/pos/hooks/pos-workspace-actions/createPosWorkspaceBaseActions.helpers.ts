@@ -89,7 +89,9 @@ export function resetPosDraftState(params: PosWorkspaceActionParams) {
   params.setOrderType('takeaway');
   params.setTableNumber('');
   params.setDeliveryRepId('');
-  params.setCollectionStatus('cod');
+  // INV-REST-COD-DELIVERY-ONLY (T13-N1): the reset lands on takeaway,
+  // so there is no COD status to restore — unstated, never 'cod'.
+  params.setCollectionStatus('');
   params.setSubmitMessage('');
   params.setPostSaleSaleKey('');
   clearDraftSnapshot();
