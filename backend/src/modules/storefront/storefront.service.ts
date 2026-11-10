@@ -3411,6 +3411,16 @@ export class StorefrontService {
     if (order.status === 'cancelled') {
       throw new BadRequestException('لا يمكن تأكيد سداد طلب ملغي');
     }
+    // SF-1 D-SF-09: the conditional UPDATE below also excludes these two
+    // statuses, so rejecting them here with a specific message keeps the
+    // generic "changed during confirmation" error from ever firing for a
+    // status the pre-checks just approved.
+    if (order.status === 'payment_failed') {
+      throw new BadRequestException('تعذر تأكيد سداد طلب فشل دفعه الإلكتروني؛ راجع حالة الطلب أولاً');
+    }
+    if (order.status === 'review_required') {
+      throw new BadRequestException('تعذر تأكيد سداد طلب بانتظار المراجعة؛ راجع حالة الطلب أولاً');
+    }
     if (order.sale_id) {
       throw new BadRequestException('تم إصدار فاتورة لهذا الطلب بالفعل؛ يُسجَّل التحصيل من شاشة الفاتورة');
     }
@@ -3443,7 +3453,24 @@ export class StorefrontService {
       throw new BadRequestException('تغيرت حالة الطلب أثناء التأكيد، يرجى تحديث الصفحة');
     }
 
-    return { ok: true, paymentStatus: 'paid' };
+    // SF-1 D-SF-09: return the stored row, never an optimistic flip — the
+    // caller must see the payment status the database actually holds.
+    const confirmed = await this.db
+      .selectFrom('online_orders')
+      .select(['id', 'payment_status', 'gateway_provider', 'paid_at'])
+      .where('id', '=', id)
+      .where(sql<boolean>`tenant_id = ${tenantId}`)
+      .executeTakeFirst();
+    if (!confirmed || confirmed.payment_status !== 'paid') {
+      throw new BadRequestException('لم يتم حفظ تأكيد السداد؛ يرجى تحديث الصفحة وإعادة المحاولة');
+    }
+
+    return {
+      ok: true,
+      paymentStatus: confirmed.payment_status,
+      gatewayProvider: confirmed.gateway_provider,
+      paidAt: confirmed.paid_at ? new Date(confirmed.paid_at).toISOString() : null,
+    };
   }
 
   async convertToSale(id: number, actor: AuthContext, explicitRepId?: number) {

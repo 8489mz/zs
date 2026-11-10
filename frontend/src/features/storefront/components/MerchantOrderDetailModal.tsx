@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { getGlobalSystemCurrency, getCurrencySymbol, isThreeDecimalCurrency } from '@/lib/currencies';
 import { DialogShell } from '@/shared/components/dialog-shell';
+import { systemConfirm, toast } from '@/shared/components/system-alert';
 import type { OnlineOrderRecord } from '../types/storefront.types';
 import {
   PackageIcon,
@@ -241,9 +242,29 @@ export function MerchantOrderDetailModal({
                 <button
                   type="button"
                   disabled={isConfirmingPayment}
-                  onClick={() => {
-                    if (window.confirm(`تأكيد استلام تحويل بمبلغ ${order.totalAmount.toLocaleString()} للطلب #${order.orderNumber}؟`)) {
-                      onConfirmPayment(order.id);
+                  onClick={async () => {
+                    // SF-1 D-SF-09: NEVER use window.confirm here. The global
+                    // SystemAlertProvider replaces window.confirm with a shim
+                    // that fires the async enterprise dialog, discards its
+                    // promise and always returns false — so the old
+                    // `if (window.confirm(...)) onConfirmPayment(...)` guard
+                    // never ran, no request was ever sent and no toast ever
+                    // appeared, while the order stayed pending. Await the
+                    // async systemConfirm instead, so the merchant's answer
+                    // actually reaches the confirm call.
+                    try {
+                      const confirmed = await systemConfirm({
+                        title: 'تأكيد استلام التحويل',
+                        message: `تأكيد استلام تحويل بمبلغ ${order.totalAmount.toLocaleString()} للطلب #${order.orderNumber}؟`,
+                        confirmText: 'تأكيد الاستلام',
+                        cancelText: 'تراجع',
+                        variant: 'primary',
+                      });
+                      if (confirmed) {
+                        onConfirmPayment(order.id);
+                      }
+                    } catch {
+                      toast.error('تعذر تأكيد استلام التحويل؛ حاول مرة أخرى');
                     }
                   }}
                   style={{

@@ -611,9 +611,10 @@ export const storefrontApi = {
       body: JSON.stringify({ status, saleId }),
     }),
 
-  /** Merchant confirms an InstaPay / wallet transfer actually arrived (SF-3). */
+  /** Merchant confirms an InstaPay / wallet transfer actually arrived (SF-3).
+   * The server returns the stored row (SF-1 D-SF-09), never an optimistic flip. */
   confirmOrderPayment: (id: number, reference?: string) =>
-    http<{ ok: boolean; paymentStatus: string }>(`/api/storefront/admin/orders/${id}/confirm-payment`, {
+    http<{ ok: boolean; paymentStatus: string; gatewayProvider?: string | null; paidAt?: string | null }>(`/api/storefront/admin/orders/${id}/confirm-payment`, {
       method: 'POST',
       body: JSON.stringify({ reference }),
     }),
