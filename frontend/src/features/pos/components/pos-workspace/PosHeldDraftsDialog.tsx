@@ -14,6 +14,11 @@ interface PosHeldDraftsDialogProps {
   onRecall: (draftId: string) => Promise<void>;
   onDelete: (draftId: string) => Promise<void>;
   onClearAll: () => Promise<void>;
+  /* INV-REST-FLOOR-TRANSFER-TRUTH (T10-E, F6): the dialog offered only
+   * Recall / Delete — a held draft's table could only be changed as a
+   * side effect of a whole-table transfer. Optional so existing callers
+   * without a rename path keep working. */
+  onRename?: (draftId: string, toTable: string) => Promise<void>;
   settings?: any;
 }
 
@@ -26,12 +31,47 @@ export function PosHeldDraftsDialog({
   onRecall,
   onDelete,
   onClearAll,
+  onRename,
   settings,
 }: PosHeldDraftsDialogProps) {
   const { t } = useTranslation();
   const [pendingRecallId, setPendingRecallId] = useState('');
   const [recallError, setRecallError] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [renamingDraftId, setRenamingDraftId] = useState('');
+  const [renameValue, setRenameValue] = useState('');
+  const [renameError, setRenameError] = useState('');
+  const [renamePending, setRenamePending] = useState(false);
+
+  /* INV-REST-FLOOR-TRANSFER-TRUTH (T10-E, F6): renaming a held draft's
+   * table reuses renameHeldDraftTable via onRename (same post-rename
+   * invalidation as a transfer). A failed rename stays open with the
+   * error, like a failed recall; renaming to the same table is a no-op. */
+  const requestRename = useCallback(async (draftId: string) => {
+    const trimmed = renameValue.trim();
+    if (!trimmed) {
+      setRenameError(t('pos.pos_workspace.pos_held_drafts_dialog.s24', 'أدخل رقم الطاولة.'));
+      return;
+    }
+    const current = heldDrafts.find((d) => d.id === draftId)?.tableNumber;
+    if (current && trimmed === String(current).trim()) {
+      setRenamingDraftId('');
+      setRenameError('');
+      return;
+    }
+    if (!onRename) return;
+    setRenamePending(true);
+    setRenameError('');
+    try {
+      await onRename(draftId, trimmed);
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : 'تعذّر تغيير الطاولة');
+      return;
+    } finally {
+      setRenamePending(false);
+    }
+    setRenamingDraftId('');
+  }, [heldDrafts, onRename, renameValue, t]);
 
   const requestRecall = useCallback(async (draftId: string) => {
     setPendingRecallId(draftId);
@@ -187,9 +227,9 @@ export function PosHeldDraftsDialog({
         </div>
 
         {/* Drafts List */}
-        {recallError ? (
+        {recallError || renameError ? (
           <div style={{ marginBottom: '12px', padding: '10px 14px', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', fontSize: '0.85rem', fontWeight: 600 }}>
-            {recallError}
+            {recallError || renameError}
           </div>
         ) : null}
         {heldDrafts.length ? (
@@ -254,56 +294,158 @@ export function PosHeldDraftsDialog({
 
                   {/* Right: Action Buttons */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <button
-                      type="button"
-                      disabled={isPending}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void requestRecall(draft.id);
-                      }}
-                      style={{
-                        padding: '7px 16px',
-                        fontSize: '0.82rem',
-                        fontWeight: 700,
-                        borderRadius: '7px',
-                        border: '1px solid #0f172a',
-                        background: '#0f172a',
-                        color: '#ffffff',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                      }}
-                    >
-                      {isPending ? t('pos.pos_workspace.pos_held_drafts_dialog.s13', "جاري الاسترجاع...") : t('pos.pos_workspace.pos_held_drafts_dialog.s14', "استرجاع")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void onDelete(draft.id);
-                      }}
-                      style={{
-                        padding: '7px 12px',
-                        fontSize: '0.82rem',
-                        borderRadius: '7px',
-                        border: '1px solid #e2e8f0',
-                        background: 'transparent',
-                        color: '#64748b',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.color = '#dc2626';
-                        e.currentTarget.style.borderColor = '#fca5a5';
-                        e.currentTarget.style.background = '#fef2f2';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.color = '#64748b';
-                        e.currentTarget.style.borderColor = '#e2e8f0';
-                        e.currentTarget.style.background = 'transparent';
-                      }}
-                    >
-                      {t('pos.pos_workspace.pos_held_drafts_dialog.s15', "حذف")}
-                    </button>
+                    {renamingDraftId === draft.id ? (
+                      <>
+                        <input
+                          type="text"
+                          value={renameValue}
+                          autoFocus
+                          disabled={renamePending}
+                          aria-label={t('pos.pos_workspace.pos_held_drafts_dialog.s23', 'رقم الطاولة الجديدة')}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              void requestRename(draft.id);
+                            }
+                            if (e.key === 'Escape') {
+                              e.preventDefault();
+                              setRenamingDraftId('');
+                              setRenameError('');
+                            }
+                          }}
+                          style={{
+                            width: '84px',
+                            height: '32px',
+                            padding: '0 10px',
+                            fontSize: '0.85rem',
+                            fontWeight: 700,
+                            borderRadius: '7px',
+                            border: '1px solid #0f172a',
+                            background: '#ffffff',
+                            color: '#0f172a',
+                            textAlign: 'center',
+                          }}
+                        />
+                        <button
+                          type="button"
+                          disabled={renamePending}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void requestRename(draft.id);
+                          }}
+                          style={{
+                            padding: '7px 14px',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            borderRadius: '7px',
+                            border: '1px solid #0f172a',
+                            background: '#0f172a',
+                            color: '#ffffff',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {renamePending ? t('pos.pos_workspace.pos_held_drafts_dialog.s25', 'جارٍ الحفظ...') : t('pos.pos_workspace.pos_held_drafts_dialog.s21', 'حفظ')}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={renamePending}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRenamingDraftId('');
+                            setRenameError('');
+                          }}
+                          style={{
+                            padding: '7px 12px',
+                            fontSize: '0.82rem',
+                            borderRadius: '7px',
+                            border: '1px solid #e2e8f0',
+                            background: 'transparent',
+                            color: '#64748b',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {t('pos.pos_workspace.pos_held_drafts_dialog.s22', 'إلغاء')}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void requestRecall(draft.id);
+                          }}
+                          style={{
+                            padding: '7px 16px',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            borderRadius: '7px',
+                            border: '1px solid #0f172a',
+                            background: '#0f172a',
+                            color: '#ffffff',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          {isPending ? t('pos.pos_workspace.pos_held_drafts_dialog.s13', "جاري الاسترجاع...") : t('pos.pos_workspace.pos_held_drafts_dialog.s14', "استرجاع")}
+                        </button>
+                        {onRename ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRenamingDraftId(draft.id);
+                              setRenameValue(String(draft.tableNumber || ''));
+                              setRenameError('');
+                            }}
+                            style={{
+                              padding: '7px 12px',
+                              fontSize: '0.82rem',
+                              borderRadius: '7px',
+                              border: '1px solid #e2e8f0',
+                              background: 'transparent',
+                              color: '#334155',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            {t('pos.pos_workspace.pos_held_drafts_dialog.s20', 'تغيير الطاولة')}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void onDelete(draft.id);
+                          }}
+                          style={{
+                            padding: '7px 12px',
+                            fontSize: '0.82rem',
+                            borderRadius: '7px',
+                            border: '1px solid #e2e8f0',
+                            background: 'transparent',
+                            color: '#64748b',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.color = '#dc2626';
+                            e.currentTarget.style.borderColor = '#fca5a5';
+                            e.currentTarget.style.background = '#fef2f2';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.color = '#64748b';
+                            e.currentTarget.style.borderColor = '#e2e8f0';
+                            e.currentTarget.style.background = 'transparent';
+                          }}
+                        >
+                          {t('pos.pos_workspace.pos_held_drafts_dialog.s15', "حذف")}
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               );

@@ -40,7 +40,7 @@ interface PosTablesFloorPlanDialogProps {
   onRecallDraft: (draftId: string) => Promise<void>;
   onDeleteDraft?: (draftId: string) => Promise<void>;
   onClearAllDrafts?: () => Promise<void>;
-  onTransferTable?: (fromTable: string, toTable: string) => void;
+  onTransferTable?: (fromTable: string, toTable: string) => void | Promise<void>;
   onMergeTable?: (fromTable: string, toTable: string) => void;
   onTransferItems?: (sourceTable: string, targetTable: string, items: TransferableCartItem[]) => Promise<void> | void;
   initialTab?: 'floor' | 'list';
@@ -386,7 +386,12 @@ export function PosTablesFloorPlanDialog({
             return;
           }
         } else if (onTransferTable) {
-          onTransferTable(currentTableNumber, tableNum);
+          /* INV-REST-FLOOR-TRANSFER-TRUTH (T10-E, F6): the transfer
+           * handler invalidates the held-drafts query and awaits the
+           * refetch — wait for it before closing, so the floor shows
+           * the draft on its new table immediately instead of the
+           * pre-transfer snapshot. */
+          await onTransferTable(currentTableNumber, tableNum);
           setIsTransferring(false);
           onClose();
           return;

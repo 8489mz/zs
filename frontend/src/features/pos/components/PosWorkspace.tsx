@@ -27,9 +27,8 @@ import {
   printCurrentPosDraft,
 } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import { posApi } from '@/features/pos/api/pos.api';
-import { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced-fnb.api';
-import { getFriendlyApiErrorMessage } from '@/lib/api-error-message';
 import { applyPosLineTransfer, isNegativeStockSalesAllowed, repriceCartLine, getProductItemCode, getSaleUnit, summarizeCartQuantities } from '@/features/pos/lib/pos.domain';
+import { renameHeldDraftTableAndRefresh, transferTableOrder } from '@/features/pos/lib/pos-table-transfer';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { isLikelyBarcodeQuery } from '@/features/pos/lib/pos-product-lookup';
@@ -846,71 +845,43 @@ export function PosWorkspace() {
             await pos.clearHeldDrafts();
           }}
           onTransferTable={async (from, to) => {
-            // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I35): real whole-table
-            // transfer — the old handler only renamed in-memory state, so
-            // after a reload the floor, the draft and the QR order
-            // disagreed. Two cases:
-            // (a) the source order is already a held draft: rename it
-            // server-side via renameHeldDraftTable, which updates ONLY
-            // held_sales.table_number (no re-save of the draft).
-            // (b) the source order is the live cart: save it as a held
-            // draft on the target table via the existing saveHeldDraft
-            // (the server enforces one-draft-per-table, so a 409 here
-            // means the target filled in the meantime), then clear the
-            // live cart and set the table. The cart is cleared only
-            // after the save succeeds — never before.
-            const sourceDraft = pos.heldDrafts.find(
-              (d) => String(d.tableNumber).trim() === String(from).trim(),
-            );
-            if (sourceDraft) {
-              try {
-                await restaurantAdvancedFnbApi.renameHeldDraftTable(Number(sourceDraft.id), to);
-                pos.setTableNumber(to);
-                pos.setSubmitMessage(`تم نقل الطلب بنجاح من طاولة ${from} إلى طاولة ${to}.`);
-              } catch (error) {
-                pos.setSubmitMessage(getFriendlyApiErrorMessage(error, `تعذر نقل الطلب من طاولة ${from} إلى طاولة ${to}`));
-              }
+            // INV-REST-FLOOR-TRANSFER-TRUTH (T10-E, F6): one shared
+            // handler — the old inline copy persisted via raw API calls
+            // and never invalidated the held-drafts query, so the draft
+            // existed on table 5 while every list still showed the
+            // pre-transfer snapshot; its fall-through also toasted
+            // success while persisting nothing. The handler routes the
+            // live-cart save through saveHeldDraftMutation, invalidates
+            // + awaits the held-drafts refetch, and reports a missing
+            // source as an error instead of a success.
+            const outcome = await transferTableOrder({
+              from,
+              to,
+              heldDrafts: pos.heldDrafts,
+              tableNumber: pos.tableNumber,
+              cart: pos.cart,
+              customerId: pos.customerId,
+              paymentType: pos.paymentType,
+              discount: pos.discount,
+              deliveryFee: pos.deliveryFee,
+              note: pos.note,
+              search: pos.search,
+              priceType: pos.priceType,
+              branchId: pos.branchId,
+              locationId: pos.locationId,
+              cashAmount: pos.cashAmount,
+              cardAmount: pos.cardAmount,
+              transferAmount: pos.transferAmount,
+              paymentChannel: pos.paymentChannel,
+              orderType: pos.orderType,
+              saveHeldDraft: (payload) => pos.saveHeldDraftMutation.mutateAsync(payload),
+            });
+            if (outcome.status === 'error') {
+              pos.setSubmitMessage(outcome.message);
               return;
             }
-            if (pos.cart.length > 0 && pos.tableNumber === from) {
-              try {
-                await posApi.saveHeldDraft({
-                  customerId: pos.customerId || null,
-                  paymentType: pos.paymentType,
-                  discount: pos.discount,
-                  deliveryFee: pos.deliveryFee,
-                  note: pos.note,
-                  search: pos.search,
-                  priceType: pos.priceType,
-                  branchId: pos.branchId || null,
-                  locationId: pos.locationId || null,
-                  cashAmount: pos.cashAmount,
-                  cardAmount: pos.cardAmount,
-                  transferAmount: pos.transferAmount,
-                  paymentChannel: pos.paymentChannel,
-                  orderType: pos.orderType || 'dine_in',
-                  tableNumber: to,
-                  items: pos.cart.map((item: any) => ({
-                    productId: Number(item.productId || 0),
-                    qty: Number(item.qty || 0),
-                    price: Number(item.price || 0),
-                    name: String(item.name || '').trim(),
-                    unitName: String(item.unitName || '').trim(),
-                    unitMultiplier: Number(item.unitMultiplier || 1),
-                    priceType: item.priceType === 'wholesale' ? 'wholesale' : 'retail',
-                    notes: String(item.notes || '').trim(),
-                    modifiers: item.modifiers || [],
-                    seatNumber: item.seatNumber ? Number(item.seatNumber) : undefined,
-                    course: item.course || undefined,
-                  })),
-                });
-                pos.setCart([]);
-                pos.setTableNumber(to);
-                pos.setSubmitMessage(`تم نقل الطلب بنجاح من طاولة ${from} إلى طاولة ${to}.`);
-              } catch (error) {
-                pos.setSubmitMessage(getFriendlyApiErrorMessage(error, `تعذر نقل الطلب من طاولة ${from} إلى طاولة ${to}`));
-              }
-              return;
+            if (outcome.status === 'held-saved') {
+              pos.setCart([]);
             }
             pos.setTableNumber(to);
             pos.setSubmitMessage(`تم نقل الطلب بنجاح من طاولة ${from} إلى طاولة ${to}.`);
@@ -1017,6 +988,15 @@ export function PosWorkspace() {
           }}
           onDelete={async (draftId) => { await pos.deleteDraft(draftId); }}
           onClearAll={async () => { await pos.clearHeldDrafts(); }}
+          onRename={async (draftId, toTable) => {
+            /* INV-REST-FLOOR-TRANSFER-TRUTH (T10-E, F6): the dialog's
+             * rename control reuses renameHeldDraftTable with the same
+             * post-rename invalidation as a transfer. The throw reaches
+             * PosHeldDraftsDialog, which keeps the dialog open and shows
+             * the error. */
+            const outcome = await renameHeldDraftTableAndRefresh({ draftId, toTable });
+            if (outcome.status === 'error') throw new Error(outcome.message);
+          }}
           settings={pos.settingsQuery.data}
         />
       )}
