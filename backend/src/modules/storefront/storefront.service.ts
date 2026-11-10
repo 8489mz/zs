@@ -3473,6 +3473,52 @@ export class StorefrontService {
     };
   }
 
+  /**
+   * SF-2 D-SF-11: compensate a failed conversion. The SF-6 lock is a
+   * standalone auto-commit write, so a failure after it (stock refusal,
+   * missing branch location, any createSale throw) leaves the order in
+   * 'processing' unless it is put back. Customer cancel/edit and the
+   * expiry reaper all require 'pending', and updateOrderStatus refuses
+   * moving backwards — so without this restore the order is stranded
+   * with no UI escape. The restore is conditional (still 'processing',
+   * still no invoice) so a concurrent conversion that already posted is
+   * never clobbered; a restore failure is logged, never thrown, so it
+   * cannot mask the original error.
+   */
+  private async restorePendingAfterFailedConversion(orderId: number, tenantId: string, tookLock: boolean): Promise<void> {
+    if (!tookLock) return;
+    try {
+      await this.db
+        .updateTable('online_orders')
+        .set({ status: 'pending', updated_at: new Date() })
+        .where('id', '=', orderId)
+        .where(sql<boolean>`tenant_id = ${tenantId}`)
+        .where('status', '=', 'processing')
+        .where('sale_id', 'is', null)
+        .execute();
+    } catch (restoreErr) {
+      this.logger.warn(`D-SF-11 restore to pending failed for online order ${orderId}: ${String((restoreErr as any)?.message || restoreErr)}`);
+    }
+  }
+
+  /**
+   * SF-2 D-SF-11: the storefront placement promise for this tenant —
+   * the same isOutOfStockOrderingAllowed rule placement used when the
+   * order was taken. Fails closed (false) when the tenant row cannot
+   * be read, so a missing tenant never silently allows negative stock.
+   */
+  private async resolveStorefrontOutOfStockAllowance(tenantId: string): Promise<boolean> {
+    const tenant = await this.db
+      .selectFrom('tenants')
+      .select(['slug', 'activity_type'])
+      .where('id', '=', tenantId)
+      .executeTakeFirst()
+      .catch(() => undefined);
+    if (!tenant) return false;
+    const settings = await this.getTenantSettingsMap(tenantId);
+    return isOutOfStockOrderingAllowed(settings, tenant.slug, tenant.activity_type);
+  }
+
   async convertToSale(id: number, actor: AuthContext, explicitRepId?: number) {
     const { tenantId, accountId } = requireTenantScope(actor);
     const order = await this.getOrder(id, actor);
@@ -3487,14 +3533,20 @@ export class StorefrontService {
     }
 
     // SF-6: take the order before billing it, then bill the version that is now locked.
+    // SF-2 D-SF-11: the lock below is a standalone auto-commit write. Everything after it runs
+    // inside the try that follows, so a failure restores 'pending' instead of stranding the
+    // order in 'processing'. The try body is intentionally NOT re-indented: re-indenting
+    // ~250 lines would bury the fix in noise; the contract is the try/catch pair itself.
+    let tookConversionLock = false;
     if (order.status === 'pending') {
-      await this.db
+      const lockResult = await this.db
         .updateTable('online_orders')
         .set({ status: 'processing', updated_at: new Date() })
         .where('id', '=', id)
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .where('status', '=', 'pending')
-        .execute();
+        .executeTakeFirst();
+      tookConversionLock = Number(lockResult?.numUpdatedRows || 0) > 0;
       const lockedOrder = await this.getOrder(id, actor);
       Object.assign(order, lockedOrder);
       if (lockedOrder.status === 'cancelled') {
@@ -3502,6 +3554,7 @@ export class StorefrontService {
       }
     }
 
+    try {
     // 1. Auto-Register / Find Customer in Customers Directory
     const cleanCustomerPhone = (order.customer_phone || '').replace(/\D/g, '');
     let customer = await this.db
@@ -3622,6 +3675,18 @@ export class StorefrontService {
       }
     }
 
+    // SF-2 D-SF-11: ONE stock gate for storefront orders. Placement
+    // allowed this order under isOutOfStockOrderingAllowed (the
+    // storefront's own promise: storefront_allow_out_of_stock /
+    // restaurant / default tenant); conversion re-refused it under the
+    // separate POS allowNegativeStockSales setting, so an order the
+    // store was allowed to take could never convert. The placement
+    // setting now governs the conversion too, through the internal-only
+    // SystemApprovedSaleTerms (never part of the HTTP DTO, so no client
+    // can claim it). Walk-in POS sales pass no flag and keep the POS
+    // setting alone.
+    const storefrontAllowOutOfStock = await this.resolveStorefrontOutOfStockAllowance(tenantId);
+
     // 3. Call SalesService to create formal sale delivery invoice.
     // SF-3: the invoice is born "collected" only when a real gateway webhook or a merchant user
     // confirmed the money. Choosing InstaPay at checkout, or paying in the sandbox simulator, is
@@ -3680,6 +3745,8 @@ export class StorefrontService {
       saleResult = await this.salesService.createSale(salePayload, actor, {
         approvedDiscount: orderDiscount,
         approvedUnitPrices,
+        // SF-2 D-SF-11: the storefront placement promise (see above).
+        allowNegativeStock: storefrontAllowOutOfStock,
       });
     } catch (err: any) {
       if (err?.code === 'ORDER_ALREADY_INVOICED' || err?.message?.includes('تم تحويل هذا الطلب')) {
@@ -3720,6 +3787,15 @@ export class StorefrontService {
       customerId: customer?.id,
       deliveryRepName: repName,
     };
+    } catch (err) {
+      // SF-2 D-SF-11: the lock already committed — put the order back to
+      // 'pending' (no invoice exists on this path; the already-invoiced
+      // branch above returns instead of throwing). The restore is
+      // conditional on still-'processing' + still-no-invoice, so a
+      // concurrent conversion that posted is never clobbered.
+      await this.restorePendingAfterFailedConversion(id, tenantId, tookConversionLock);
+      throw err;
+    }
   }
 
   async prepareOrderForPos(id: number, actor: AuthContext) {
@@ -3737,16 +3813,22 @@ export class StorefrontService {
     // 'pending' here is what stops the customer from editing or cancelling it from the storefront
     // while the cashier bills the version they loaded (both customer routes require 'pending').
     // Before this, the order stayed 'pending' until the sale was posted.
+    // SF-2 D-SF-11: same defect class as convertToSale — the lock is a standalone auto-commit
+    // write, so a failure after it must restore 'pending' (same try/catch contract below; the
+    // try body is intentionally NOT re-indented, see convertToSale).
+    let tookPosLock = false;
     if (order.status === 'pending') {
-      await this.db
+      const lockResult = await this.db
         .updateTable('online_orders')
         .set({ status: 'processing', updated_at: new Date() })
         .where('id', '=', id)
         .where(sql<boolean>`tenant_id = ${tenantId}`)
         .where('status', '=', 'pending')
-        .execute();
+        .executeTakeFirst();
+      tookPosLock = Number(lockResult?.numUpdatedRows || 0) > 0;
     }
 
+    try {
     // Re-read after taking the order, so the cart gets exactly the version that is now locked
     // (a customer edit may have landed between the first read and the status change).
     const lockedOrder = await this.getOrder(id, actor);
@@ -3856,6 +3938,12 @@ export class StorefrontService {
       paymentMethod: order.payment_method || 'cod',
       isNewCustomer,
     };
+    } catch (err) {
+      // SF-2 D-SF-11: the lock already committed and no sale was posted
+      // on this path — put the order back to 'pending'.
+      await this.restorePendingAfterFailedConversion(id, tenantId, tookPosLock);
+      throw err;
+    }
   }
 
   async getStorefrontSettings(actor: AuthContext) {

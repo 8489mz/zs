@@ -65,6 +65,14 @@ export interface SystemApprovedSaleTerms {
   approvedDiscount?: number;
   /** productId -> approved unit price; a line at exactly this price skips the price-edit gate. */
   approvedUnitPrices?: Record<number, number>;
+  /**
+   * SF-2 D-SF-11: the storefront placement promise for this order —
+   * isOutOfStockOrderingAllowed already let the store take it, so the
+   * conversion must not re-refuse it on the separate POS
+   * allowNegativeStockSales setting. Internal-only like the other
+   * fields: set server-side by StorefrontService, never from a request.
+   */
+  allowNegativeStock?: boolean;
 }
 
 /**
@@ -1241,6 +1249,9 @@ export class SalesWriteService {
     return {
       approvedDiscount: Math.max(Number(existing?.approvedDiscount || 0), Math.max(0, Number(order.discount_amount || 0))),
       approvedUnitPrices,
+      // SF-2 D-SF-11: the caller-computed terms are rebuilt here, so the
+      // storefront placement promise must ride along or it is lost.
+      allowNegativeStock: existing?.allowNegativeStock === true,
     };
   }
 
@@ -1500,7 +1511,12 @@ export class SalesWriteService {
         eligibleLocations = resolveBranchSellableLocations(branch, normalized.branchId, allLocs);
       }
 
-      const allowNegativeStockSales = await this.getAllowNegativeStockSales(trx, scope.tenantId);
+      // SF-2 D-SF-11: one stock gate for storefront orders — the
+      // conversion honours the storefront placement promise carried in
+      // the approved terms (an order the store was allowed to take must
+      // be convertible), OR the POS negative-stock policy. Walk-in POS
+      // sales carry no terms flag and keep the POS setting alone.
+      const allowNegativeStockSales = (await this.getAllowNegativeStockSales(trx, scope.tenantId)) || effectiveTerms?.allowNegativeStock === true;
 
       const productIds = Array.from(new Set(normalized.items.map((it) => it.productId)));
       const productRows = productIds.length > 0
