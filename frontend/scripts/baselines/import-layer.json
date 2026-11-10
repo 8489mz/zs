@@ -54,6 +54,7 @@
   "features/maritime-freight/pages/MaritimeWorkspacePage.tsx imports another page module (./MaritimeRfqsPage)",
   "features/maritime-freight/pages/MaritimeWorkspacePage.tsx imports another page module (./MaritimeSettingsPage)",
   "features/portals-hub/pages/PortalsHubPage.spec.tsx imports another page module (./PortalsHubPage)",
+  "features/pos/pages/DigitalSignagePage.signage-vertical.spec.tsx imports another page module (./DigitalSignagePage)",
   "features/pos/pages/DigitalSignagePage.spec.tsx imports another page module (./DigitalSignagePage)",
   "features/pos/pages/KitchenDisplayPage.spec.tsx imports another page module (./KitchenDisplayPage)",
   "features/products/pages/ImeiHistoryPage.spec.tsx imports another page module (./ImeiHistoryPage)",
