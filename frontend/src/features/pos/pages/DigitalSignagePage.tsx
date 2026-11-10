@@ -6,6 +6,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { productsApi } from '@/features/products/api/products.api';
 import type { Product, ProductOffer } from '@/types/domain';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
+import { useAuthStore } from '@/stores/auth-store';
+import { resolveCurrentVertical } from '@/shared/verticals/vertical-scope';
 import { subscribeSignageOffersUpdate } from '@/features/pos/lib/pos-customer-display-bridge';
 import { SignagePromoItem, SignageTheme } from '../components/signage/types';
 import { useIsolatedDisplayLanguage } from '@/features/pos/hooks/useIsolatedDisplayLanguage';
@@ -136,6 +138,13 @@ export function DigitalSignagePage() {
   const queryClient = useQueryClient();
   const settingsQuery = useSettingsQuery();
   const settings = settingsQuery.data;
+  /* INV-REST-SIGNAGE-VERTICAL-TRUTH (T11-E, F7): the tenant vertical
+   * comes from the same source the rest of the app uses — tenant
+   * activityType / settings via resolveCurrentVertical (the AuditPage
+   * pattern: auth-store tenant + settings). No new data source. */
+  const tenant = useAuthStore((state) => state.tenant);
+  const vertical = resolveCurrentVertical(tenant, settings);
+  const isRestaurant = vertical === 'restaurant';
 
   const navigate = useNavigate();
   const [theme, setTheme] = useState<SignageTheme>(() => {
@@ -161,9 +170,25 @@ export function DigitalSignagePage() {
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState<boolean>(false);
   const [showNavDrawer, setShowNavDrawer] = useState<boolean>(false);
-  const [customTickerText, setCustomTickerText] = useState<string>(
-    'أهلاً بكم في صالة العرض • عروض وتخفيضات كبرى على مدار الأسبوع • امسح كود الـ QR للتسوق من هاتفك فورياً • نضمن لكم أعلى جودة بأفضل سعر'
-  );
+  /* INV-REST-SIGNAGE-VERTICAL-TRUTH (T11-E, F7): the ticker default
+   * was hardcoded showroom copy ('أهلاً بكم في صالة العرض • عروض
+   * وتخفيضات كبرى …') for every tenant. The default is now neutral
+   * for retail and restaurant-aware for a restaurant tenant; it
+   * applies only while the merchant has not typed a custom ticker
+   * (customTickerText stays empty until they do, and the drawer
+   * shows the effective default as its placeholder). A custom ticker
+   * always wins over either default. */
+  const [customTickerText, setCustomTickerText] = useState<string>('');
+  const effectiveTickerText = customTickerText.trim()
+    ? customTickerText
+    : t(
+        isRestaurant
+          ? 'pos.signage.ticker_default_restaurant'
+          : 'pos.signage.ticker_default',
+        isRestaurant
+          ? 'أهلاً بكم في مطعمنا • تصفح قائمة اليوم واطلب من هاتفك عبر رمز الـ QR • طازج يومياً'
+          : 'أهلاً بكم • امسح رمز الـ QR للتصفح والطلب من هاتفك • عروض جديدة كل يوم',
+      );
   const [viewFilter, setViewFilter] = useState<'offers' | 'all'>('offers');
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
@@ -450,7 +475,14 @@ export function DigitalSignagePage() {
               }}
             />
             <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-            <span>{t('pos.digital_signage_page.loading', 'جاري تجهيز وبث عروض صالة العرض...')}</span>
+            <span>
+              {t(
+                isRestaurant
+                  ? 'pos.digital_signage_page.loading_restaurant'
+                  : 'pos.digital_signage_page.loading',
+                isRestaurant ? 'جاري تجهيز قائمة اليوم...' : 'جاري تجهيز وبث عروض صالة العرض...'
+              )}
+            </span>
           </div>
         ) : productsQuery.isError ? (
           <div
@@ -510,6 +542,7 @@ export function DigitalSignagePage() {
             storeName={storeName}
             qrSvgUrl={qrSvgUrl}
             theme={theme}
+            vertical={vertical}
             hasFilterOffers={viewFilter === 'offers'}
             onSwitchToAllProducts={() => setViewFilter('all')}
           />
@@ -527,7 +560,7 @@ export function DigitalSignagePage() {
 
       {/* Bottom Live Marquee Ticker Bar */}
       <SignageMarqueeFooter
-        customTickerText={customTickerText}
+        customTickerText={effectiveTickerText}
         isPaused={isPaused}
         onTogglePause={() => setIsPaused((prev) => !prev)}
         currentIndex={currentIndex}
@@ -545,6 +578,7 @@ export function DigitalSignagePage() {
           onViewFilterChange={setViewFilter}
           customTickerText={customTickerText}
           onCustomTickerTextChange={setCustomTickerText}
+          tickerPlaceholder={effectiveTickerText}
           theme={theme}
           onThemeChange={handleThemeChange}
         />

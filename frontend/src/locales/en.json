@@ -1857,7 +1857,39 @@
         "s3": "Browse our featured products at competitive prices with certified warranty",
         "s6": "Preview the product before purchase",
         "s7": "Secure electronic payment"
-      }
+      },
+      "welcome": {
+        "badge": "Smart Interactive Showroom",
+        "live_status": "Welcome",
+        "desc": "Your first destination for the best products and exclusive deals at competitive prices with certified warranty. Shop directly from the showroom or order from your phone right away.",
+        "perk1_title": "Instant inspection and trial",
+        "perk1_desc": "Preview and inspect all products before completing your purchase",
+        "perk2_title": "Secure electronic payment",
+        "perk2_desc": "We accept Visa, Mastercard, InstaPay, and smart wallets",
+        "perk3_title": "Instant pickup and delivery",
+        "perk3_desc": "Collect your purchases directly from the showroom or get fast delivery",
+        "perk4_title": "Certified warranty and official invoices",
+        "perk4_desc": "All sales are documented with certified electronic invoices",
+        "qr_title": "Browse and order instantly from your phone",
+        "qr_desc": "Point your phone camera at the QR code to browse all showroom sections and products with updated prices and instant delivery.",
+        "show_all_products": "Show all showroom products",
+        "restaurant_badge": "Restaurant Menu",
+        "restaurant_live_status": "Welcome to our restaurant",
+        "restaurant_desc": "Today’s menu is in your hands — browse the dishes and order from your table or your phone, and get your order hot and fresh.",
+        "restaurant_perk1_title": "Today’s Menu",
+        "restaurant_perk1_desc": "Browse today’s dishes and updated prices",
+        "restaurant_perk2_title": "Order from Your Table",
+        "restaurant_perk2_desc": "Scan the QR code and order without waiting for the waiter",
+        "restaurant_perk3_title": "Dine-in, Takeaway & Delivery",
+        "restaurant_perk3_desc": "Enjoy your meal with us or have it delivered to your home",
+        "restaurant_perk4_title": "Fresh Every Day",
+        "restaurant_perk4_desc": "Fresh ingredients prepared daily in our kitchen",
+        "restaurant_qr_title": "Browse the menu and order from your phone",
+        "restaurant_qr_desc": "Point your phone camera at the QR code to browse today’s menu and order directly from your table.",
+        "restaurant_show_all_products": "Show the full menu"
+      },
+      "ticker_default": "Welcome • Scan the QR code to browse and order from your phone • New offers every day",
+      "ticker_default_restaurant": "Welcome to our restaurant • Browse today’s menu and order from your phone via the QR code • Fresh daily"
     },
     "displays_portal_page": {
       "s0": "Display & Interactive Screens",
@@ -2096,7 +2128,9 @@
       "s1": "Monitoring and collecting all meal dishes across multiple stations (grill, hot, bar, desserts) and delivering the order complete"
     },
     "digital_signage_page": {
-      "s0": "Loading showroom offers and products..."
+      "s0": "Loading showroom offers and products...",
+      "loading": "Preparing and broadcasting showroom offers...",
+      "loading_restaurant": "Preparing today’s menu..."
     },
     "operation_completed": "Operation Completed",
     "zones": {

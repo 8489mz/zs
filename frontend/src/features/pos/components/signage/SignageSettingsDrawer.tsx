@@ -11,6 +11,10 @@ interface SignageSettingsDrawerProps {
   onViewFilterChange: (filter: 'offers' | 'all') => void;
   customTickerText: string;
   onCustomTickerTextChange: (text: string) => void;
+  /* INV-REST-SIGNAGE-VERTICAL-TRUTH (T11-E): the drawer textarea
+   * holds only a merchant-typed ticker; while empty, the effective
+   * (neutral / vertical-aware) default shows as its placeholder. */
+  tickerPlaceholder?: string;
   theme?: SignageTheme;
   onThemeChange?: (theme: SignageTheme) => void;
 }
@@ -23,6 +27,7 @@ export const SignageSettingsDrawer: React.FC<SignageSettingsDrawerProps> = ({
   onViewFilterChange,
   customTickerText,
   onCustomTickerTextChange,
+  tickerPlaceholder,
   theme = 'dark',
   onThemeChange,
 }) => {
@@ -258,6 +263,7 @@ export const SignageSettingsDrawer: React.FC<SignageSettingsDrawerProps> = ({
           <textarea
             value={customTickerText}
             onChange={(e) => onCustomTickerTextChange(e.target.value)}
+            placeholder={tickerPlaceholder}
             rows={3}
             style={{
               width: '100%',
