@@ -565,7 +565,7 @@ export function SelfOrderingKioskPage() {
 
   const handleCheckoutSubmit = async () => {
     if (cart.length === 0) {
-      toast.warning('السلة فارغة، يرجى اختيار وجباتك أولاً');
+      toast.warning('السلة فارغة، يرجى اختيار أصنافك أولاً');
       return;
     }
 
@@ -1305,7 +1305,7 @@ export function SelfOrderingKioskPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={__t('pos.self_ordering_kiosk_page.s39', __t('pos.self_ordering_kiosk_page.s39', "ابحث عن وجبة أو مشروب..."))}
+              placeholder={__t('pos.self_ordering_kiosk_page.s39', __t('pos.self_ordering_kiosk_page.s39', "ابحث عن صنف..."))}
               style={{
                 width: '100%',
                 height: '38px',
@@ -1493,7 +1493,7 @@ export function SelfOrderingKioskPage() {
                 <div style={{ display: 'inline-block', marginBottom: '12px' }}>
                   <RefreshCwIcon size={28} color="#170e5e" />
                 </div>
-                <div style={{ fontSize: '15px', fontWeight: 800 }}>{__t('pos.self_ordering_kiosk_page.s47', __t('pos.self_ordering_kiosk_page.s47', "جارٍ تحميل قائمة الوجبات..."))}</div>
+                <div style={{ fontSize: '15px', fontWeight: 800 }}>{__t('pos.self_ordering_kiosk_page.s47', __t('pos.self_ordering_kiosk_page.s47', "جارٍ تحميل قائمة الأصناف..."))}</div>
               </div>
             ) : filteredProducts.length === 0 ? (
               <div
@@ -1509,7 +1509,7 @@ export function SelfOrderingKioskPage() {
               >
                 <UtensilsIcon size={36} color="#cbd5e1" />
                 <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a', marginTop: '10px' }}>
-                  {__t('pos.self_ordering_kiosk_page.s48', __t('pos.self_ordering_kiosk_page.s48', "لا توجد وجبات في هذا القسم"))}
+                  {__t('pos.self_ordering_kiosk_page.s48', __t('pos.self_ordering_kiosk_page.s48', "لا توجد أصناف في هذا القسم"))}
                 </div>
                 <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
                   {__t('pos.self_ordering_kiosk_page.s49', __t('pos.self_ordering_kiosk_page.s49', "جرب اختيار قسم آخر أو إلغاء كلمة البحث"))}
@@ -1809,7 +1809,7 @@ export function SelfOrderingKioskPage() {
                   {__t('pos.self_ordering_kiosk_page.s52', __t('pos.self_ordering_kiosk_page.s52', "صينية طلبك"))}
                 </h3>
                 <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                  {diningMode === 'dine_in' ? __t('pos.self_ordering_kiosk_page.s53', __t('pos.self_ordering_kiosk_page.s53', "تناول بالصالة")) : __t('pos.self_ordering_kiosk_page.s54', __t('pos.self_ordering_kiosk_page.s54', "استلام سفري"))} • {totalItemsCount} {__t('pos.self_ordering_kiosk_page.s55', __t('pos.self_ordering_kiosk_page.s55', "وجبة"))}
+                  {diningMode === 'dine_in' ? __t('pos.self_ordering_kiosk_page.s53', __t('pos.self_ordering_kiosk_page.s53', "تناول بالصالة")) : __t('pos.self_ordering_kiosk_page.s54', __t('pos.self_ordering_kiosk_page.s54', "استلام سفري"))} • {totalItemsCount} {__t('pos.self_ordering_kiosk_page.s55', __t('pos.self_ordering_kiosk_page.s55', "صنف"))}
                 </div>
               </div>
 
@@ -1874,7 +1874,7 @@ export function SelfOrderingKioskPage() {
                     {__t('pos.self_ordering_kiosk_page.s57', __t('pos.self_ordering_kiosk_page.s57', "صينيتك فارغة حالياً"))}
                   </div>
                   <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
-                    {__t('pos.self_ordering_kiosk_page.s58', __t('pos.self_ordering_kiosk_page.s58', "اختر وجباتك المفضلة من القائمة لتظهر هنا فوراً"))}
+                    {__t('pos.self_ordering_kiosk_page.s58', __t('pos.self_ordering_kiosk_page.s58', "اختر أصنافك المفضلة من القائمة لتظهر هنا فوراً"))}
                   </div>
                 </div>
               ) : (
@@ -2033,8 +2033,8 @@ export function SelfOrderingKioskPage() {
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span style={{ fontSize: '11.5px', color: '#64748b' }}>{__t('pos.self_ordering_kiosk_page.s59', __t('pos.self_ordering_kiosk_page.s59', "عدد الوجبات:"))}</span>
-                <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>{totalItemsCount} {__t('pos.self_ordering_kiosk_page.s60', __t('pos.self_ordering_kiosk_page.s60', "وجبة"))}</span>
+                <span style={{ fontSize: '11.5px', color: '#64748b' }}>{__t('pos.self_ordering_kiosk_page.s59', __t('pos.self_ordering_kiosk_page.s59', "عدد الأصناف:"))}</span>
+                <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>{totalItemsCount} {__t('pos.self_ordering_kiosk_page.s60', __t('pos.self_ordering_kiosk_page.s60', "صنف"))}</span>
               </div>
               <div
                 style={{
@@ -2159,7 +2159,7 @@ export function SelfOrderingKioskPage() {
                   {diningMode === 'dine_in' ? __t('pos.self_ordering_kiosk_page.s66', __t('pos.self_ordering_kiosk_page.s66', "تناول بالصالة (Dine In)")) : __t('pos.self_ordering_kiosk_page.s67', __t('pos.self_ordering_kiosk_page.s67', "استلام سفري (Takeaway)"))}
                 </div>
                 <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '1px' }}>
-                  {__t('pos.self_ordering_kiosk_page.s68', __t('pos.self_ordering_kiosk_page.s68', "إجمالي"))} {totalItemsCount} {__t('pos.self_ordering_kiosk_page.s69', __t('pos.self_ordering_kiosk_page.s69', "وجبة في الصينية"))}
+                  {__t('pos.self_ordering_kiosk_page.s68', __t('pos.self_ordering_kiosk_page.s68', "إجمالي"))} {totalItemsCount} {__t('pos.self_ordering_kiosk_page.s69', __t('pos.self_ordering_kiosk_page.s69', "صنف في الصينية"))}
                 </div>
               </div>
             </div>
