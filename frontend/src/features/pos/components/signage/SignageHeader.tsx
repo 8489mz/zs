@@ -2,7 +2,6 @@ import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { DisplayLanguageToggle } from '@/shared/components/DisplayLanguageToggle';
 import { SignageTheme } from './types';
-import type { BusinessVertical } from '@/shared/verticals/vertical-scope';
 import {
   ShoppingCartIcon,
   Maximize2Icon,
@@ -25,13 +24,14 @@ interface SignageHeaderProps {
   onToggleLanguage?: () => void;
   theme?: SignageTheme;
   onToggleTheme?: () => void;
-  /* INV-REST-SIGNAGE-OFFER-BOARD-TRUTH (T12-H2): the board header
-   * carried showroom copy ('بث مباشر بصالة العرض') for every tenant.
-   * The vertical arrives from the page (same resolveCurrentVertical
-   * source as the T11-E empty-state board); a restaurant tenant sees
-   * the restaurant header, every other vertical keeps the showroom
-   * header byte-for-byte. */
-  vertical?: BusinessVertical;
+  /* INV-REST-SIGNAGE-DYNAMIC (T13-H2): the derived line under the
+   * store name comes from the items on screen — live offer count
+   * + top category names — never a fictional business identity.
+   * offerCount is the number of items on screen; displayMode
+   * tells whether they are offers or assorted catalog items. */
+  offerCount?: number;
+  topCategories?: { name: string; count: number }[];
+  displayMode?: 'offers' | 'catalog';
 }
 
 export const SignageHeader: React.FC<SignageHeaderProps> = ({
@@ -47,11 +47,18 @@ export const SignageHeader: React.FC<SignageHeaderProps> = ({
   onToggleLanguage,
   theme = 'dark',
   onToggleTheme,
-  vertical = 'retail_general',
+  offerCount = 0,
+  topCategories = [],
+  displayMode = 'offers',
 }) => {
   const { t } = useTranslation();
   const isDark = theme === 'dark';
-  const isRestaurant = vertical === 'restaurant';
+  const categorySuffix =
+    topCategories.length > 0 ? ` • ${topCategories.map((c) => c.name).join('، ')}` : '';
+  const derivedLine =
+    displayMode === 'catalog'
+      ? `أصناف معروضة: ${offerCount}${categorySuffix}`
+      : `العروض المعروضة: ${offerCount}${categorySuffix}`;
 
   return (
     <>
@@ -132,12 +139,7 @@ export const SignageHeader: React.FC<SignageHeaderProps> = ({
                   }}
                 />
                 <span>
-                  {t(
-                    isRestaurant
-                      ? 'pos.signage.signage_header.restaurant_s0'
-                      : 'pos.signage.signage_header.s0',
-                    isRestaurant ? 'بث مباشر من المطعم' : 'بث مباشر بصالة العرض'
-                  )}
+                  {t('pos.signage.signage_header.live_badge', 'بث مباشر')}
                 </span>
               </span>
             </div>
@@ -149,14 +151,7 @@ export const SignageHeader: React.FC<SignageHeaderProps> = ({
                 fontWeight: 600,
               }}
             >
-              {t(
-                isRestaurant
-                  ? 'pos.signage.signage_header.restaurant_s1'
-                  : 'pos.signage.signage_header.s1',
-                isRestaurant
-                  ? 'شاشة قائمة اليوم وأطباق المطعم • Restaurant Menu Board'
-                  : 'شاشة العروض الترويجية والصفقات الحصرية • Digital Showroom Board'
-              )}
+              {derivedLine}
             </p>
           </div>
         </div>

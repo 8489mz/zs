@@ -6,8 +6,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { productsApi } from '@/features/products/api/products.api';
 import type { Product, ProductOffer } from '@/types/domain';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
-import { useAuthStore } from '@/stores/auth-store';
-import { resolveCurrentVertical } from '@/shared/verticals/vertical-scope';
 import { subscribeSignageOffersUpdate } from '@/features/pos/lib/pos-customer-display-bridge';
 import { SignagePromoItem, SignageTheme } from '../components/signage/types';
 import { useIsolatedDisplayLanguage } from '@/features/pos/hooks/useIsolatedDisplayLanguage';
@@ -116,10 +114,14 @@ export function buildSignagePromoItems(
     items.push({
       id: p.id,
       name: p.name,
+      /* INV-REST-SIGNAGE-DYNAMIC (T13-H2): no invented category — a
+       * product with no category carries an empty categoryName and
+       * the board omits the category slot instead of naming a
+       * category that does not exist. */
       categoryName:
         (p as unknown as { category?: { name?: string | null } }).category?.name ||
         p.categoryName ||
-        'القسم الرئيسي',
+        '',
       originalPrice: retail,
       promoPrice: displayPrice,
       discountPercent,
@@ -132,19 +134,100 @@ export function buildSignagePromoItems(
   return items;
 }
 
+export interface SignageTopCategory {
+  name: string;
+  count: number;
+}
+
+/* INV-REST-SIGNAGE-DYNAMIC (T13-H2): every derived line on the board
+ * comes from these pure helpers over real tenant data — the ticker,
+ * the header line and the category block. No helper invents copy:
+ * a datum with no source is omitted (empty category names are
+ * skipped; a ticker with nothing to derive falls back to the
+ * store-name + QR line). */
+export function topCategoriesByCount(
+  items: SignagePromoItem[],
+  limit = 4,
+): SignageTopCategory[] {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    const name = (item.categoryName || '').trim();
+    if (!name) continue;
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'ar'))
+    .slice(0, limit);
+}
+
+/* INV-REST-SIGNAGE-DYNAMIC (T13-H2, user decision 2026-11-10): the
+ * zero-offers board shows a varied sample of the store's available
+ * catalog. Round-robin across categories — one item per category
+ * per round — so the sample is assorted, never the first N products
+ * of a single category. Deterministic (no randomness): the same
+ * catalog always yields the same board. */
+export const SIGNAGE_ASSORTED_SAMPLE_SIZE = 8;
+
+export function buildAssortedSample(
+  items: SignagePromoItem[],
+  limit = SIGNAGE_ASSORTED_SAMPLE_SIZE,
+): SignagePromoItem[] {
+  const groups = new Map<string, SignagePromoItem[]>();
+  for (const item of items) {
+    const key = (item.categoryName || '').trim();
+    const group = groups.get(key);
+    if (group) group.push(item);
+    else groups.set(key, [item]);
+  }
+  const queues = [...groups.values()];
+  const sample: SignagePromoItem[] = [];
+  let round = 0;
+  while (sample.length < limit) {
+    let took = false;
+    for (const queue of queues) {
+      if (sample.length >= limit) break;
+      const next = queue[round];
+      if (next) {
+        sample.push(next);
+        took = true;
+      }
+    }
+    if (!took) break;
+    round += 1;
+  }
+  return sample;
+}
+
+/* INV-REST-SIGNAGE-DYNAMIC (T13-H2): the ticker derivation. The
+ * merchant's stored ticker text always wins; otherwise the ticker
+ * is built from the live items on screen (real names + real
+ * discount percents); otherwise a neutral store-name + QR line.
+ * No hardcoded default of any kind. */
+export function deriveSignageTicker(args: {
+  storeName: string;
+  customTickerText: string;
+  promoItems: SignagePromoItem[];
+}): string {
+  const custom = args.customTickerText.trim();
+  if (custom) return custom;
+  const discounted = args.promoItems
+    .filter((item) => item.discountPercent > 0)
+    .slice(0, 3);
+  if (discounted.length > 0) {
+    return discounted
+      .map((item) => `خصم ${item.discountPercent}% على ${item.name}`)
+      .join(' • ');
+  }
+  return `${args.storeName} • امسح رمز الـ QR للتصفح والطلب من هاتفك`;
+}
+
 export function DigitalSignagePage() {
   const { currentLang, toggleLanguage } = useIsolatedDisplayLanguage('signage_ui_lang');
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const settingsQuery = useSettingsQuery();
   const settings = settingsQuery.data;
-  /* INV-REST-SIGNAGE-VERTICAL-TRUTH (T11-E, F7): the tenant vertical
-   * comes from the same source the rest of the app uses — tenant
-   * activityType / settings via resolveCurrentVertical (the AuditPage
-   * pattern: auth-store tenant + settings). No new data source. */
-  const tenant = useAuthStore((state) => state.tenant);
-  const vertical = resolveCurrentVertical(tenant, settings);
-  const isRestaurant = vertical === 'restaurant';
 
   const navigate = useNavigate();
   const [theme, setTheme] = useState<SignageTheme>(() => {
@@ -170,25 +253,12 @@ export function DigitalSignagePage() {
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState<boolean>(false);
   const [showNavDrawer, setShowNavDrawer] = useState<boolean>(false);
-  /* INV-REST-SIGNAGE-VERTICAL-TRUTH (T11-E, F7): the ticker default
-   * was hardcoded showroom copy ('أهلاً بكم في صالة العرض • عروض
-   * وتخفيضات كبرى …') for every tenant. The default is now neutral
-   * for retail and restaurant-aware for a restaurant tenant; it
-   * applies only while the merchant has not typed a custom ticker
-   * (customTickerText stays empty until they do, and the drawer
-   * shows the effective default as its placeholder). A custom ticker
-   * always wins over either default. */
+  /* INV-REST-SIGNAGE-DYNAMIC (T13-H2): the ticker is derived, never
+   * a hardcoded default — see deriveSignageTicker. The merchant's
+   * stored text wins, else real offer names + real discount
+   * percents, else a neutral store-name + QR line. The drawer
+   * shows the effective ticker as its placeholder. */
   const [customTickerText, setCustomTickerText] = useState<string>('');
-  const effectiveTickerText = customTickerText.trim()
-    ? customTickerText
-    : t(
-        isRestaurant
-          ? 'pos.signage.ticker_default_restaurant'
-          : 'pos.signage.ticker_default',
-        isRestaurant
-          ? 'أهلاً بكم في مطعمنا • تصفح قائمة اليوم واطلب من هاتفك عبر رمز الـ QR • طازج يومياً'
-          : 'أهلاً بكم • امسح رمز الـ QR للتصفح والطلب من هاتفك • عروض جديدة كل يوم',
-      );
   const [viewFilter, setViewFilter] = useState<'offers' | 'all'>('offers');
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
@@ -277,16 +347,78 @@ export function DigitalSignagePage() {
     [rawProducts, viewFilter],
   );
 
+  const storeName = settings?.storeName || 'مؤسستنا التجارية';
+  const currencyCode = settings?.currency || getGlobalSystemCurrency();
+  const storefrontUrl = typeof window !== 'undefined' ? `${window.location.origin}/storefront` : '';
+
+  /* INV-REST-SIGNAGE-DYNAMIC (T13-H2, user decision 2026-11-10):
+   * with ZERO offers the board shows ASSORTED items from the
+   * store's available catalog — varied across categories, never
+   * just the first N products and never a single category — drawn
+   * from the real catalog via the existing 'all' view. The fetch
+   * runs only when the offers view settled with nothing to show;
+   * the assorted items are labelled as catalog items (never as
+   * offers) and carry their real prices with no invented discount. */
+  const catalogQuery = useQuery({
+    queryKey: ['signage-products', 'catalog-all'],
+    queryFn: async () => {
+      const res = await productsApi.listPage({ page: 1, pageSize: 40, view: 'all' });
+      return res.products || [];
+    },
+    enabled:
+      viewFilter === 'offers' &&
+      !productsQuery.isLoading &&
+      !productsQuery.isError &&
+      promoItems.length === 0,
+    refetchInterval: 25000,
+  });
+  const catalogProducts = catalogQuery.data || [];
+  const assortedItems: SignagePromoItem[] = useMemo(
+    () =>
+      viewFilter === 'offers'
+        ? buildAssortedSample(buildSignagePromoItems(catalogProducts, 'all'))
+        : [],
+    [catalogProducts, viewFilter],
+  );
+
+  // The board shows the offers when there are any; otherwise the
+  // assorted catalog sample; otherwise (empty catalog) the empty
+  // state. 'catalog' also covers the explicit 'all' view, whose
+  // items are catalog items, not offers.
+  const displayItems: SignagePromoItem[] =
+    promoItems.length > 0 ? promoItems : assortedItems;
+  const displayMode: 'offers' | 'catalog' =
+    promoItems.length > 0
+      ? viewFilter === 'offers'
+        ? 'offers'
+        : 'catalog'
+      : assortedItems.length > 0
+        ? 'catalog'
+        : 'offers';
+  const topCategories = useMemo(() => topCategoriesByCount(displayItems), [displayItems]);
+  const effectiveTickerText = useMemo(
+    () =>
+      deriveSignageTicker({
+        storeName,
+        customTickerText,
+        promoItems: displayItems,
+      }),
+    [storeName, customTickerText, displayItems],
+  );
+  // First assorted fetch still in flight (no catalog data yet): the
+  // board shows the loading spinner, not the empty state.
+  const isAssortedLoading = catalogQuery.isFetching && catalogQuery.data === undefined;
+
   // Safeguard index if item list shrinks
   useEffect(() => {
-    if (currentIndex >= promoItems.length && promoItems.length > 0) {
+    if (currentIndex >= displayItems.length && displayItems.length > 0) {
       setCurrentIndex(0);
     }
-  }, [promoItems.length, currentIndex]);
+  }, [displayItems.length, currentIndex]);
 
   // Automatic Carousel Ticker
   useEffect(() => {
-    if (!promoItems.length || isPaused) return;
+    if (!displayItems.length || isPaused) return;
 
     const tickIntervalMs = 100;
     const totalTicks = (slideIntervalSec * 1000) / tickIntervalMs;
@@ -299,15 +431,15 @@ export function DigitalSignagePage() {
 
       if (tickCount >= totalTicks) {
         tickCount = 0;
-        setCurrentIndex((prev) => (prev + 1) % promoItems.length);
+        setCurrentIndex((prev) => (prev + 1) % displayItems.length);
         setProgressPercent(0);
       }
     }, tickIntervalMs);
 
     return () => clearInterval(timer);
-  }, [isPaused, promoItems.length, slideIntervalSec, currentIndex]);
+  }, [isPaused, displayItems.length, slideIntervalSec, currentIndex]);
 
-  const activeItem = promoItems[currentIndex] || null;
+  const activeItem = displayItems[currentIndex] || null;
 
   const handleToggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -316,10 +448,6 @@ export function DigitalSignagePage() {
       document.exitFullscreen().catch(() => {});
     }
   };
-
-  const storeName = settings?.storeName || 'مؤسستنا التجارية';
-  const currencyCode = settings?.currency || getGlobalSystemCurrency();
-  const storefrontUrl = typeof window !== 'undefined' ? `${window.location.origin}/storefront` : '';
 
   const isDark = theme === 'dark';
 
@@ -347,11 +475,10 @@ export function DigitalSignagePage() {
       }}
     >
       {/* Top Header Bar */}
-      {/* INV-REST-SIGNAGE-OFFER-BOARD-TRUTH (T12-H2): the page
-        * already resolved the vertical for the loading text and the
-        * empty state, but the four offer-board components never
-        * received it and rendered showroom copy unconditionally.
-        * The same vertical is now passed to all four. */}
+      {/* INV-REST-SIGNAGE-DYNAMIC (T13-H2): no vertical prop — the
+        * board is the same for every tenant. The header's derived
+        * line comes from the items on screen (live offer count +
+        * top categories), never from a hardcoded business identity. */}
       <SignageHeader
         currentLang={currentLang}
         onToggleLanguage={toggleLanguage}
@@ -365,7 +492,9 @@ export function DigitalSignagePage() {
         onToggleNavMenu={() => setShowNavDrawer((prev) => !prev)}
         theme={theme}
         onToggleTheme={handleToggleTheme}
-        vertical={vertical}
+        offerCount={displayItems.length}
+        topCategories={topCategories}
+        displayMode={displayMode}
       />
 
       {/* INV-REST-SIGNAGE-REFETCH-INDICATOR (R8-D): a background refetch
@@ -449,12 +578,11 @@ export function DigitalSignagePage() {
           <SignageHeroCard
             activeItem={activeItem}
             currentIndex={currentIndex}
-            totalItems={promoItems.length}
+            totalItems={displayItems.length}
             currencyCode={currencyCode}
             theme={theme}
-            vertical={vertical}
           />
-        ) : productsQuery.isLoading ? (
+        ) : productsQuery.isLoading || isAssortedLoading ? (
           <div
             style={{
               display: 'flex',
@@ -482,14 +610,7 @@ export function DigitalSignagePage() {
               }}
             />
             <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-            <span>
-              {t(
-                isRestaurant
-                  ? 'pos.digital_signage_page.loading_restaurant'
-                  : 'pos.digital_signage_page.loading',
-                isRestaurant ? 'جاري تجهيز قائمة اليوم...' : 'جاري تجهيز وبث عروض صالة العرض...'
-              )}
-            </span>
+            <span>{t('pos.digital_signage_page.loading', 'جاري تحميل العروض...')}</span>
           </div>
         ) : productsQuery.isError ? (
           <div
@@ -549,20 +670,20 @@ export function DigitalSignagePage() {
             storeName={storeName}
             qrSvgUrl={qrSvgUrl}
             theme={theme}
-            vertical={vertical}
             hasFilterOffers={viewFilter === 'offers'}
             onSwitchToAllProducts={() => setViewFilter('all')}
           />
         )}
 
         <SignageSideDeck
-          promoItems={promoItems}
+          promoItems={displayItems}
           currentIndex={currentIndex}
           onSelectItem={(idx) => setCurrentIndex(idx)}
           currencyCode={currencyCode}
           qrSvgUrl={qrSvgUrl}
           theme={theme}
-          vertical={vertical}
+          displayMode={displayMode}
+          topCategories={topCategories}
         />
       </main>
 
@@ -572,9 +693,8 @@ export function DigitalSignagePage() {
         isPaused={isPaused}
         onTogglePause={() => setIsPaused((prev) => !prev)}
         currentIndex={currentIndex}
-        totalItems={promoItems.length}
+        totalItems={displayItems.length}
         theme={theme}
-        vertical={vertical}
       />
 
       {/* Settings Modal Drawer */}

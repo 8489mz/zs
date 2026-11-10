@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { SignageTheme } from './types';
-import type { BusinessVertical } from '@/shared/verticals/vertical-scope';
 
 interface SignageMarqueeFooterProps {
   customTickerText: string;
@@ -10,11 +9,10 @@ interface SignageMarqueeFooterProps {
   currentIndex: number;
   totalItems: number;
   theme?: SignageTheme;
-  /* INV-REST-SIGNAGE-OFFER-BOARD-TRUTH (T12-H2): same vertical
-   * prop as the header — the 'نشرة العروض' label is showroom copy
-   * for a restaurant tenant. The scrolling ticker text itself is
-   * already vertical-aware (page-level effectiveTickerText). */
-  vertical?: BusinessVertical;
+  /* INV-REST-SIGNAGE-DYNAMIC (T13-H2): the scrolling ticker text
+   * arrives derived from the page (merchant text, else live offer
+   * names + percents, else a neutral store-name + QR line). The
+   * label describes what is on the board — no business identity. */
 }
 
 export const SignageMarqueeFooter: React.FC<SignageMarqueeFooterProps> = ({
@@ -24,11 +22,9 @@ export const SignageMarqueeFooter: React.FC<SignageMarqueeFooterProps> = ({
   currentIndex,
   totalItems,
   theme = 'dark',
-  vertical = 'retail_general',
 }) => {
   const { t } = useTranslation();
   const isDark = theme === 'dark';
-  const isRestaurant = vertical === 'restaurant';
   const MarqueeTag = 'marquee' as any;
 
   return (
@@ -72,12 +68,7 @@ export const SignageMarqueeFooter: React.FC<SignageMarqueeFooterProps> = ({
           }}
         />
         <span>
-          {t(
-            isRestaurant
-              ? 'pos.signage.signage_marquee_footer.restaurant_s0'
-              : 'pos.signage.signage_marquee_footer.s0',
-            isRestaurant ? 'نشرة قائمة اليوم' : 'نشرة العروض'
-          )}
+          {t('pos.signage.signage_marquee_footer.today_offers', 'عروض اليوم')}
         </span>
       </div>
 

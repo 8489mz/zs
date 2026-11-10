@@ -1,15 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { SignagePromoItem, SignageTheme } from './types';
-import type { BusinessVertical } from '@/shared/verticals/vertical-scope';
-import {
-  TagIcon,
-  AwardIcon,
-  QrCodeIcon,
-  CreditCardIcon,
-  TruckIcon,
-  ShieldCheckIcon,
-} from '@/shared/components/icons/AppIcons';
+import { TagIcon, AwardIcon, QrCodeIcon } from '@/shared/components/icons/AppIcons';
 
 interface SignageSideDeckProps {
   promoItems: SignagePromoItem[];
@@ -18,11 +10,14 @@ interface SignageSideDeckProps {
   currencyCode: string;
   qrSvgUrl: string;
   theme?: SignageTheme;
-  /* INV-REST-SIGNAGE-OFFER-BOARD-TRUTH (T12-H2): same vertical
-   * prop as the header — the deck title, the empty-queue
-   * placeholder and the four perk cells all carried showroom copy
-   * for every tenant. */
-  vertical?: BusinessVertical;
+  /* INV-REST-SIGNAGE-DYNAMIC (T13-H2): the deck heading and the
+   * category block are derived from the items on screen.
+   * displayMode tells whether they are offers or assorted catalog
+   * items; topCategories are the { name, count } entries from
+   * topCategoriesByCount. No payment / delivery / quality claims —
+   * there is no data source for them, so those slots are dropped. */
+  displayMode?: 'offers' | 'catalog';
+  topCategories?: { name: string; count: number }[];
 }
 
 export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
@@ -32,13 +27,18 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
   currencyCode,
   qrSvgUrl,
   theme = 'dark',
-  vertical = 'retail_general',
+  displayMode = 'offers',
+  topCategories = [],
 }) => {
   const { t } = useTranslation();
   const isDark = theme === 'dark';
-  const isRestaurant = vertical === 'restaurant';
 
   const upcomingItems = promoItems.filter((_, idx) => idx !== currentIndex);
+  const deckTitle =
+    displayMode === 'catalog'
+      ? t('pos.signage.signage_side_deck.catalog_items', 'أصناف من الكتالوج')
+      : t('pos.signage.signage_side_deck.more_offers', 'عروض أخرى');
+  const firstCategory = (promoItems[0]?.categoryName || '').trim();
 
   return (
     <div
@@ -85,14 +85,7 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <TagIcon size={17} color={isDark ? '#38bdf8' : '#170e5e'} />
-            <span>
-              {t(
-                isRestaurant
-                  ? 'pos.signage.signage_side_deck.restaurant_s0'
-                  : 'pos.signage.signage_side_deck.s0',
-                isRestaurant ? 'أطباق إضافية من القائمة' : 'عروض إضافية بالمعرض'
-              )}
-            </span>
+            <span>{deckTitle}</span>
           </div>
           <span
             style={{
@@ -104,7 +97,9 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
               fontWeight: 700,
             }}
           >
-            {promoItems.length} {t('pos.signage.signage_side_deck.s1', 'عرض متوفر')}
+            {displayMode === 'catalog'
+              ? `${promoItems.length} صنف معروض`
+              : `${promoItems.length} عرض متوفر`}
           </span>
         </div>
 
@@ -145,12 +140,7 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
                   color: isDark ? '#ffffff' : '#0f172a',
                 }}
               >
-                {t(
-                  isRestaurant
-                    ? 'pos.signage.signage_side_deck.restaurant_s2'
-                    : 'pos.signage.signage_side_deck.s2',
-                  isRestaurant ? 'عروض وأطباق قائمة اليوم' : 'صفقات وتخفيضات المعرض'
-                )}
+                {deckTitle}
               </h4>
               <span
                 style={{
@@ -160,14 +150,11 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
                   marginTop: '3px',
                 }}
               >
-                {t(
-                  isRestaurant
-                    ? 'pos.signage.signage_side_deck.restaurant_s3'
-                    : 'pos.signage.signage_side_deck.s3',
-                  isRestaurant
-                    ? 'تصفح أطباقنا المميزة بأسعار واضحة وطازجة على مدار اليوم'
-                    : 'تصفح منتجاتنا المميزة بأسعار تنافسية وضمان معتمد على مدار اليوم'
-                )}
+                {firstCategory
+                  ? `من قسم ${firstCategory}`
+                  : displayMode === 'catalog'
+                    ? t('pos.signage.signage_side_deck.no_more_items', 'لا توجد أصناف أخرى حالياً')
+                    : t('pos.signage.signage_side_deck.no_more_offers', 'لا توجد عروض أخرى حالياً')}
               </span>
             </div>
           </div>
@@ -254,7 +241,9 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
         )}
       </div>
 
-      {/* 2. Showroom Perks (2x2 Balanced Grid) */}
+      {/* 2. Top categories by item count — real data only (T13-H2).
+        * Replaces the hardcoded perks block: no payment, delivery or
+        * quality claims, because there is no data source for them. */}
       <div
         style={{
           backgroundColor: isDark ? 'linear-gradient(145deg, #0f172a 0%, #0b1120 100%)' : '#ffffff',
@@ -280,245 +269,68 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
             gap: '8px',
           }}
         >
-          <AwardIcon size={16} color={isDark ? '#fbbf24' : '#170e5e'} />
+          <TagIcon size={16} color={isDark ? '#38bdf8' : '#170e5e'} />
           <span>
-            {t(
-              isRestaurant
-                ? 'pos.signage.signage_side_deck.restaurant_s4'
-                : 'pos.signage.signage_side_deck.s4',
-              isRestaurant ? 'مزايا الطلب في مطعمنا' : 'مزايا التسوق في صالة العرض'
-            )}
+            {displayMode === 'catalog'
+              ? t('pos.signage.signage_side_deck.categories_catalog', 'أقسام الكتالوج')
+              : t('pos.signage.signage_side_deck.categories_offers', 'أقسام العروض')}
           </span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+        {topCategories.length === 0 ? (
           <div
             style={{
-              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc',
-              padding: '10px 12px',
-              borderRadius: '12px',
-              border: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid #e2e8f0',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
+              fontSize: '12px',
+              color: isDark ? '#94a3b8' : '#64748b',
+              fontWeight: 600,
             }}
           >
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                backgroundColor: isDark ? 'rgba(56, 189, 248, 0.15)' : '#e0f2fe',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <AwardIcon size={16} color={isDark ? '#38bdf8' : '#0284c7'} />
-            </div>
-            <div>
-              <div
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  color: isDark ? '#f8fafc' : '#0f172a',
-                }}
-              >
-                {t(
-                  isRestaurant
-                    ? 'pos.signage.signage_side_deck.restaurant_s5'
-                    : 'pos.signage.signage_side_deck.s5',
-                  isRestaurant ? 'طازج كل يوم' : 'فحص وتجربة فورية'
-                )}
-              </div>
-              <div
-                style={{
-                  fontSize: '10.5px',
-                  color: isDark ? '#94a3b8' : '#64748b',
-                  marginTop: '1px',
-                }}
-              >
-                {t(
-                  isRestaurant
-                    ? 'pos.signage.signage_side_deck.restaurant_s6'
-                    : 'pos.signage.signage_side_deck.s6',
-                  isRestaurant
-                    ? 'مكونات طازجة تُحضّر يومياً في مطبخنا'
-                    : 'معاينة المنتج قبل الشراء'
-                )}
-              </div>
-            </div>
+            {displayMode === 'catalog'
+              ? t('pos.signage.signage_side_deck.no_items', 'لا توجد أصناف حالياً')
+              : t('pos.signage.signage_side_deck.no_offers', 'لا توجد عروض حالياً')}
           </div>
-
-          <div
-            style={{
-              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc',
-              padding: '10px 12px',
-              borderRadius: '12px',
-              border: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid #e2e8f0',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-            }}
-          >
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                backgroundColor: isDark ? 'rgba(52, 211, 153, 0.15)' : '#dcfce7',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <CreditCardIcon size={16} color={isDark ? '#34d399' : '#16a34a'} />
-            </div>
-            <div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {topCategories.map((cat) => (
               <div
+                key={cat.name}
                 style={{
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  color: isDark ? '#f8fafc' : '#0f172a',
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc',
+                  padding: '10px 12px',
+                  borderRadius: '12px',
+                  border: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid #e2e8f0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '10px',
                 }}
               >
-                {t(
-                  isRestaurant
-                    ? 'pos.signage.signage_side_deck.restaurant_s7'
-                    : 'pos.signage.signage_side_deck.s7',
-                  isRestaurant ? 'دفع آمن بأي طريقة' : 'دفع إلكتروني آمن'
-                )}
+                <span
+                  style={{
+                    fontSize: '12.5px',
+                    fontWeight: 800,
+                    color: isDark ? '#f8fafc' : '#0f172a',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {cat.name}
+                </span>
+                <span
+                  style={{
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    color: isDark ? '#94a3b8' : '#64748b',
+                    flexShrink: 0,
+                  }}
+                >
+                  {displayMode === 'catalog' ? `${cat.count} صنف` : `${cat.count} عرض`}
+                </span>
               </div>
-              <div
-                style={{
-                  fontSize: '10.5px',
-                  color: isDark ? '#94a3b8' : '#64748b',
-                  marginTop: '1px',
-                }}
-              >
-                {t('pos.signage.signage_side_deck.s8', 'InstaPay ومحافظ وفيزا')}
-              </div>
-            </div>
+            ))}
           </div>
-
-          <div
-            style={{
-              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc',
-              padding: '10px 12px',
-              borderRadius: '12px',
-              border: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid #e2e8f0',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-            }}
-          >
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : '#fef3c7',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <TruckIcon size={16} color={isDark ? '#fbbf24' : '#d97706'} />
-            </div>
-            <div>
-              <div
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  color: isDark ? '#f8fafc' : '#0f172a',
-                }}
-              >
-                {t(
-                  isRestaurant
-                    ? 'pos.signage.side_deck.restaurant_pickup_title'
-                    : 'pos.signage.side_deck.pickup_title',
-                  isRestaurant ? 'صالة وسفري وتوصيل' : 'استلام فوري'
-                )}
-              </div>
-              <div
-                style={{
-                  fontSize: '10.5px',
-                  color: isDark ? '#94a3b8' : '#64748b',
-                  marginTop: '1px',
-                }}
-              >
-                {t(
-                  isRestaurant
-                    ? 'pos.signage.side_deck.restaurant_pickup_desc'
-                    : 'pos.signage.side_deck.pickup_desc',
-                  isRestaurant
-                    ? 'تناول طعامك معنا أو اطلبه إلى بيتك'
-                    : 'تسليم مباشر بالصالة'
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc',
-              padding: '10px 12px',
-              borderRadius: '12px',
-              border: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid #e2e8f0',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-            }}
-          >
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                backgroundColor: isDark ? 'rgba(129, 140, 248, 0.15)' : '#e0e7ff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <ShieldCheckIcon size={16} color={isDark ? '#818cf8' : '#4f46e5'} />
-            </div>
-            <div>
-              <div
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  color: isDark ? '#f8fafc' : '#0f172a',
-                }}
-              >
-                {t(
-                  isRestaurant
-                    ? 'pos.signage.side_deck.restaurant_warranty_title'
-                    : 'pos.signage.side_deck.warranty_title',
-                  isRestaurant ? 'جودة مضمونة' : 'ضمان معتمد'
-                )}
-              </div>
-              <div
-                style={{
-                  fontSize: '10.5px',
-                  color: isDark ? '#94a3b8' : '#64748b',
-                  marginTop: '1px',
-                }}
-              >
-                {t(
-                  isRestaurant
-                    ? 'pos.signage.side_deck.restaurant_warranty_desc'
-                    : 'pos.signage.side_deck.warranty_desc',
-                  isRestaurant ? 'أطباق طازجة بجودة مضمونة' : 'فاتورة وضمان استبدال'
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* 3. Interactive Scan & Shop QR Hub */}
@@ -585,7 +397,7 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
           >
             {t(
               'pos.signage.signage_side_deck.s10',
-              'وجّه كاميرا هاتفك نحو رمز الـ QR لتصفح كامل الكتالوج والطلب والتوصيل بضغطة واحدة!'
+              'وجّه كاميرا هاتفك نحو رمز الـ QR لتصفح الكتالوج والطلب من هاتفك.'
             )}
           </p>
         </div>

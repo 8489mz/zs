@@ -288,15 +288,25 @@ function renderPage() {
 }
 
 describe('DigitalSignagePage wiring (R-B5 fallback + R-B6 error state)', () => {
-  it('never falls back to the full-price catalog when the offers view is empty', async () => {
+  it('never presents the full-price catalog as offers when the offers view is empty', async () => {
     listPageMock.mockResolvedValue({ products: [] });
     renderPage();
 
-    // The welcome screen (not a product) is the honest empty state.
-    await screen.findAllByText('متجر الاختبار');
-    expect(listPageMock).toHaveBeenCalledTimes(1);
+    // The welcome screen (not a product) is the honest empty state
+    // when the catalog itself is empty. The offers query still fires
+    // with view 'offers'; the catalog is fetched explicitly (view
+    // 'all') only to build the assorted zero-offers board — never
+    // disguised as offers. Wait for the welcome board itself: the
+    // side deck's category block also carries the no-offers line,
+    // so it resolves while the catalog fetch is still in flight.
+    await screen.findByText('لوحة العروض');
     expect(listPageMock).toHaveBeenCalledWith(
       expect.objectContaining({ view: 'offers' }),
+    );
+    await waitFor(() =>
+      expect(listPageMock).toHaveBeenCalledWith(
+        expect.objectContaining({ view: 'all' }),
+      ),
     );
   });
 

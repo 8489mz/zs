@@ -1,32 +1,35 @@
-/* INV-REST-SIGNAGE-VERTICAL-TRUTH (T11-E, F7) — page wiring: the
- * DigitalSignagePage must resolve the tenant vertical from the same
- * source the rest of the app uses (tenant activityType / settings,
- * via resolveCurrentVertical) and hand it to the zero-offers board,
- * and the bottom ticker must default to neutral / vertical-aware
- * copy instead of the hardcoded showroom ticker ('أهلاً بكم في صالة
- * العرض • عروض وتخفيضات كبرى …'). At base the page never resolves
- * a vertical, always renders the showroom board, and always seeds
- * the ticker with showroom copy.
- *
- * Board assertions are scoped to board-only strings (the board
- * badge and the show-all button).
- *
- * T12-H2 extends this to the offer board itself
- * (INV-REST-SIGNAGE-OFFER-BOARD-TRUTH): with real offers on
- * screen the header, hero card, side deck and marquee footer all
- * receive the same vertical, so a restaurant tenant sees
- * restaurant copy everywhere and zero showroom strings, while
- * other verticals keep the showroom board byte-for-byte. The
- * empty-queue placeholder only renders with a single offer, so
- * it gets its own test below.
+/* INV-REST-SIGNAGE-DYNAMIC (T13-H2) — the board is dynamic, not a
+ * hardcoded variant: store name, offer names / prices / discounts,
+ * category names and the ticker all come from tenant data. At base
+ * (6dcf2b60) the four offer-board components branched on a resolved
+ * vertical and rendered showroom copy for retail tenants and
+ * restaurant copy for restaurant tenants, the ticker defaulted to
+ * hardcoded strings, a product with no category was handed an
+ * invented category, and the zero-offers board was a welcome board
+ * full of invented perks. The user decision (2026-11-10) refines
+ * the empty state: with zero offers the board shows an ASSORTED
+ * sample of the store's available catalog — varied across
+ * categories, never just the first N products of one category —
+ * drawn from the real catalog via the existing 'all' view. The
+ * truly-empty board (no offers AND an empty catalog) is a neutral
+ * no-offers line + store name + QR hub + the switch to the full
+ * catalog. These tests pin: real data rendered, zero
+ * hardcoded-variant strings anywhere, the ticker derivation, the
+ * assortment across categories, and the neutral empty state.
  */
 
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import DigitalSignagePage from './DigitalSignagePage';
-import { useAuthStore } from '@/stores/auth-store';
+import DigitalSignagePage, {
+  buildAssortedSample,
+  buildSignagePromoItems,
+  deriveSignageTicker,
+  topCategoriesByCount,
+} from './DigitalSignagePage';
+import type { SignagePromoItem } from '../components/signage/types';
+import type { Product } from '@/types/domain';
 
 // Hoisted mocks: the spec must not import the api module directly —
 // the page-composition check flags a direct api import in any file
@@ -73,204 +76,346 @@ function renderPage() {
   );
 }
 
-function setRestaurantTenant() {
-  useAuthStore.setState({
-    tenant: {
-      id: 't1',
-      accountId: 'a1',
-      slug: 'restaurant-tenant',
-      businessName: 'مطعم الاختبار',
-      activityType: 'restaurant',
-      status: 'active',
-      isTrial: false,
-      trialEndsAt: null,
-      trialDaysRemaining: null,
-    },
-  });
+function promoItem(overrides: Partial<SignagePromoItem> = {}): SignagePromoItem {
+  return {
+    id: 'p1',
+    name: 'صنف 1',
+    categoryName: 'أصناف',
+    originalPrice: 100,
+    promoPrice: 80,
+    discountPercent: 20,
+    savingAmount: 20,
+    badge: 'عرض خاص',
+    barcode: 'B1',
+    imageUrl: '',
+    ...overrides,
+  };
+}
+
+function makeOfferProducts(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `p${i + 1}`,
+    name: `طبق ${i + 1}`,
+    retailPrice: 100,
+    promotionalPrice: 80,
+    offers: [],
+    badge: '',
+    categoryName: 'أطباق رئيسية',
+    barcode: `B${i + 1}`,
+    imageUrl: '',
+  }));
+}
+
+function makeCatalogProducts() {
+  // No offers at all: three categories, uneven sizes, listed in
+  // first-seen order (drinks, mains, desserts).
+  const rows: { id: string; name: string; categoryName: string }[] = [
+    { id: 'd1', name: 'مشروب 1', categoryName: 'مشروبات' },
+    { id: 'd2', name: 'مشروب 2', categoryName: 'مشروبات' },
+    { id: 'd3', name: 'مشروب 3', categoryName: 'مشروبات' },
+    { id: 'm1', name: 'طبق 1', categoryName: 'أطباق رئيسية' },
+    { id: 'm2', name: 'طبق 2', categoryName: 'أطباق رئيسية' },
+    { id: 'm3', name: 'طبق 3', categoryName: 'أطباق رئيسية' },
+    { id: 's1', name: 'حلوى 1', categoryName: 'حلويات' },
+  ];
+  return rows.map((row) => ({
+    ...row,
+    retailPrice: 50,
+    offers: [],
+    badge: '',
+    barcode: `B${row.id}`,
+    imageUrl: '',
+  }));
+}
+
+// Every hardcoded-variant string the board used to render (both
+// showroom and restaurant variants), plus the blanket substrings
+// that catch any of them. The dynamic board must contain NONE of
+// these, whatever the tenant.
+const FORBIDDEN_STRINGS = [
+  'صالة العرض',
+  'المعرض',
+  'Digital Showroom Board',
+  'Restaurant Menu Board',
+  'بث مباشر بصالة العرض',
+  'بث مباشر من المطعم',
+  'شاشة العروض الترويجية',
+  'تسليم فوري من صالة العرض',
+  'تحضير طازج في مطبخنا',
+  'متوفر بصالة العرض',
+  'متوفر في قائمة اليوم',
+  'عروض إضافية بالمعرض',
+  'أطباق إضافية من القائمة',
+  'صفقات وتخفيضات المعرض',
+  'عروض وأطباق قائمة اليوم',
+  'تصفح منتجاتنا المميزة',
+  'تصفح أطباقنا المميزة',
+  'مزايا التسوق في صالة العرض',
+  'مزايا الطلب في مطعمنا',
+  'فحص وتجربة فورية',
+  'معاينة المنتج قبل الشراء',
+  'معاينة وفحص حقيقي',
+  'منتج أصلي ومضمون',
+  'دفع إلكتروني آمن',
+  'دفع آمن بأي طريقة',
+  'استلام فوري',
+  'تسليم فوري',
+  'تسليم مباشر بالصالة',
+  'ضمان معتمد',
+  'فاتورة وضمان استبدال',
+  'جودة مضمونة',
+  'نشرة العروض',
+  'نشرة قائمة اليوم',
+  'قائمة اليوم',
+  'قائمة المطعم',
+  'أهلاً بكم في مطعمنا',
+  'أهلاً بكم في صالة العرض',
+  'أهلاً بكم',
+  'طازج يومياً',
+  'طازج كل يوم',
+  'عروض جديدة كل يوم',
+  'عروض وتخفيضات كبرى',
+  'فيزا',
+  'ماستركارد',
+  'InstaPay',
+  'اطلب من طاولتك',
+  'صالة وسفري',
+  'تصفح القائمة واطلب',
+  'عرض كافة منتجات الصالة',
+  'عرض القائمة كاملة',
+  'صالة العرض التفاعلية',
+  'وجهتكم الأولى',
+  'الصفقات الحصرية',
+  'التوصيل بضغطة واحدة',
+  'التوصيل الفوري',
+  'القسم الرئيسي',
+  'جاري تجهيز قائمة اليوم',
+  'جاري تجهيز وبث عروض',
+];
+
+function expectNoForbiddenStrings(container: HTMLElement) {
+  const text = container.textContent || '';
+  for (const forbidden of FORBIDDEN_STRINGS) {
+    expect(text).not.toContain(forbidden);
+  }
 }
 
 afterEach(() => {
-  useAuthStore.setState({ tenant: null });
   mockSettings.current = { storeName: 'متجر الاختبار', currency: 'EGP' };
 });
 
-describe('DigitalSignagePage vertical wiring (INV-REST-SIGNAGE-VERTICAL-TRUTH)', () => {
-  it('a restaurant tenant (settings activityType) with zero offers sees the restaurant board, never the showroom board', async () => {
-    mockSettings.current = {
-      storeName: 'مطعم الاختبار',
-      currency: 'EGP',
-      activityType: 'restaurant',
-    };
-    listPageMock.mockResolvedValue({ products: [] });
-    renderPage();
-
-    await screen.findByText('قائمة اليوم');
-    expect(screen.queryByText('صالة العرض التفاعلية الذكية')).not.toBeInTheDocument();
-    expect(screen.getByText('عرض القائمة كاملة')).toBeInTheDocument();
-    expect(screen.queryByText('عرض كافة منتجات الصالة')).not.toBeInTheDocument();
+describe('deriveSignageTicker (INV-REST-SIGNAGE-DYNAMIC)', () => {
+  it('the merchant stored ticker text always wins', () => {
+    expect(
+      deriveSignageTicker({
+        storeName: 'متجر الاختبار',
+        customTickerText: '  عرض خاص اليوم  ',
+        promoItems: [promoItem()],
+      }),
+    ).toBe('عرض خاص اليوم');
   });
 
-  it('a restaurant tenant (tenant activityType, no settings activityType) sees the restaurant board', async () => {
-    setRestaurantTenant();
-    listPageMock.mockResolvedValue({ products: [] });
-    renderPage();
-
-    await screen.findByText('قائمة اليوم');
-    expect(screen.queryByText('صالة العرض التفاعلية الذكية')).not.toBeInTheDocument();
+  it('derives the ticker from live offers — real names + real discount percents', () => {
+    expect(
+      deriveSignageTicker({
+        storeName: 'متجر الاختبار',
+        customTickerText: '',
+        promoItems: [
+          promoItem({ name: 'طبق 1', discountPercent: 20 }),
+          promoItem({ name: 'طبق 2', discountPercent: 0 }),
+          promoItem({ name: 'طبق 3', discountPercent: 15 }),
+        ],
+      }),
+    ).toBe('خصم 20% على طبق 1 • خصم 15% على طبق 3');
   });
 
-  it('a restaurant tenant (restaurantModuleEnabled flag) sees the restaurant board', async () => {
-    mockSettings.current = {
-      storeName: 'مطعم الاختبار',
-      currency: 'EGP',
-      restaurantModuleEnabled: true,
-    };
-    listPageMock.mockResolvedValue({ products: [] });
-    renderPage();
-
-    await screen.findByText('قائمة اليوم');
-    expect(screen.queryByText('صالة العرض التفاعلية الذكية')).not.toBeInTheDocument();
+  it('takes at most the first three discounted offers', () => {
+    expect(
+      deriveSignageTicker({
+        storeName: 'متجر الاختبار',
+        customTickerText: '',
+        promoItems: [1, 2, 3, 4].map((n) =>
+          promoItem({ name: `صنف ${n}`, discountPercent: 10 }),
+        ),
+      }),
+    ).toBe('خصم 10% على صنف 1 • خصم 10% على صنف 2 • خصم 10% على صنف 3');
   });
 
-  it('a retail tenant with zero offers still sees the showroom board', async () => {
-    listPageMock.mockResolvedValue({ products: [] });
-    renderPage();
-
-    await screen.findByText('صالة العرض التفاعلية الذكية');
-    expect(screen.queryByText('قائمة اليوم')).not.toBeInTheDocument();
-  });
-
-  it('the ticker defaults to restaurant copy for a restaurant tenant, never the showroom ticker', async () => {
-    mockSettings.current = {
-      storeName: 'مطعم الاختبار',
-      currency: 'EGP',
-      activityType: 'restaurant',
-    };
-    listPageMock.mockResolvedValue({ products: [] });
-    const { container } = renderPage();
-
-    await screen.findByText('قائمة اليوم');
-    expect(container.textContent).toContain('طازج يومياً');
-    expect(container.textContent).not.toContain('عروض وتخفيضات كبرى');
-  });
-
-  it('the ticker defaults to neutral copy for a retail tenant, never the showroom ticker', async () => {
-    listPageMock.mockResolvedValue({ products: [] });
-    const { container } = renderPage();
-
-    await screen.findByText('صالة العرض التفاعلية الذكية');
-    expect(container.textContent).toContain('عروض جديدة كل يوم');
-    expect(container.textContent).not.toContain('عروض وتخفيضات كبرى');
-    expect(container.textContent).not.toContain('أهلاً بكم في صالة العرض');
+  it('falls back to a neutral store-name + QR line when nothing is on offer', () => {
+    expect(
+      deriveSignageTicker({
+        storeName: 'متجر الاختبار',
+        customTickerText: '',
+        promoItems: [promoItem({ discountPercent: 0 })],
+      }),
+    ).toBe('متجر الاختبار • امسح رمز الـ QR للتصفح والطلب من هاتفك');
   });
 });
 
-describe('DigitalSignagePage offer board vertical (INV-REST-SIGNAGE-OFFER-BOARD-TRUTH)', () => {
-  function makeOfferProducts(count: number) {
-    return Array.from({ length: count }, (_, i) => ({
-      id: `p${i + 1}`,
-      name: `طبق ${i + 1}`,
+describe('topCategoriesByCount (INV-REST-SIGNAGE-DYNAMIC)', () => {
+  it('counts by category, most items first, and skips empty categories', () => {
+    const top = topCategoriesByCount([
+      promoItem({ categoryName: 'مشروبات' }),
+      promoItem({ categoryName: 'أطباق رئيسية' }),
+      promoItem({ categoryName: 'مشروبات' }),
+      promoItem({ categoryName: '' }),
+      promoItem({ categoryName: 'حلويات' }),
+    ]);
+    expect(top).toEqual([
+      { name: 'مشروبات', count: 2 },
+      { name: 'أطباق رئيسية', count: 1 },
+      { name: 'حلويات', count: 1 },
+    ]);
+  });
+
+  it('respects the limit', () => {
+    const top = topCategoriesByCount(
+      [
+        promoItem({ categoryName: 'أ' }),
+        promoItem({ categoryName: 'ب' }),
+        promoItem({ categoryName: 'ج' }),
+      ],
+      2,
+    );
+    expect(top).toHaveLength(2);
+  });
+});
+
+describe('buildAssortedSample (INV-REST-SIGNAGE-DYNAMIC)', () => {
+  it('round-robins across categories — never the first N of one category', () => {
+    const items = [
+      promoItem({ id: 'a1', name: 'أ 1', categoryName: 'أ' }),
+      promoItem({ id: 'a2', name: 'أ 2', categoryName: 'أ' }),
+      promoItem({ id: 'a3', name: 'أ 3', categoryName: 'أ' }),
+      promoItem({ id: 'b1', name: 'ب 1', categoryName: 'ب' }),
+      promoItem({ id: 'b2', name: 'ب 2', categoryName: 'ب' }),
+      promoItem({ id: 'b3', name: 'ب 3', categoryName: 'ب' }),
+      promoItem({ id: 'c1', name: 'ج 1', categoryName: 'ج' }),
+    ];
+    expect(buildAssortedSample(items, 3).map((item) => item.id)).toEqual(['a1', 'b1', 'c1']);
+    expect(buildAssortedSample(items).map((item) => item.id)).toEqual([
+      'a1',
+      'b1',
+      'c1',
+      'a2',
+      'b2',
+      'a3',
+      'b3',
+    ]);
+  });
+
+  it('respects the limit and returns an empty sample for an empty catalog', () => {
+    expect(buildAssortedSample([], 8)).toEqual([]);
+    const single = [promoItem({ categoryName: 'أ' }), promoItem({ categoryName: 'أ' })];
+    expect(buildAssortedSample(single, 1)).toHaveLength(1);
+  });
+});
+
+describe('buildSignagePromoItems category truth (INV-REST-SIGNAGE-DYNAMIC)', () => {
+  it('a product with no category gets an empty categoryName, never an invented one', () => {
+    const product = {
+      id: 'p1',
+      name: 'بلا قسم',
       retailPrice: 100,
-      promotionalPrice: 80,
       offers: [],
-      badge: '',
-      categoryName: 'أطباق رئيسية',
-      barcode: `B${i + 1}`,
-      imageUrl: '',
-    }));
-  }
+    } as unknown as Product;
+    const [item] = buildSignagePromoItems([product], 'all', '2026-11-09');
+    expect(item.categoryName).toBe('');
+  });
+});
 
-  function setRestaurantSettings() {
-    mockSettings.current = {
-      storeName: 'مطعم الاختبار',
-      currency: 'EGP',
-      activityType: 'restaurant',
-    };
-  }
-
-  // Every showroom string the four offer-board components used to
-  // render unconditionally (header, hero card, side deck, marquee
-  // footer), plus the blanket substrings that catch any of them.
-  const SHOWROOM_STRINGS = [
-    'صالة العرض',
-    'المعرض',
-    'Digital Showroom Board',
-    'بث مباشر بصالة العرض',
-    'شاشة العروض الترويجية والصفقات الحصرية',
-    'تسليم فوري من صالة العرض',
-    'متوفر بصالة العرض',
-    'عروض إضافية بالمعرض',
-    'صفقات وتخفيضات المعرض',
-    'تصفح منتجاتنا المميزة',
-    'مزايا التسوق في صالة العرض',
-    'فحص وتجربة فورية',
-    'معاينة المنتج قبل الشراء',
-    'دفع إلكتروني آمن',
-    'استلام فوري',
-    'تسليم مباشر بالصالة',
-    'ضمان معتمد',
-    'فاتورة وضمان استبدال',
-    'نشرة العروض',
-  ];
-
-  it('a restaurant tenant with 40 offers sees zero showroom strings and the restaurant board', async () => {
-    setRestaurantSettings();
+describe('DigitalSignagePage dynamic board (INV-REST-SIGNAGE-DYNAMIC)', () => {
+  it('renders real store, offer and category data with zero hardcoded-variant strings', async () => {
     listPageMock.mockResolvedValue({ products: makeOfferProducts(40) });
     const { container } = renderPage();
 
     await screen.findByText('طبق 1');
 
-    for (const showroom of SHOWROOM_STRINGS) {
-      expect(container.textContent).not.toContain(showroom);
-    }
-    expect(screen.getByText('بث مباشر من المطعم')).toBeInTheDocument();
-    expect(
-      screen.getByText('شاشة قائمة اليوم وأطباق المطعم • Restaurant Menu Board')
-    ).toBeInTheDocument();
-    expect(screen.getByText('تحضير طازج في مطبخنا')).toBeInTheDocument();
-    expect(screen.getByText('متوفر في قائمة اليوم')).toBeInTheDocument();
-    expect(screen.getByText('أطباق إضافية من القائمة')).toBeInTheDocument();
-    expect(screen.getByText('مزايا الطلب في مطعمنا')).toBeInTheDocument();
-    expect(screen.getByText('طازج كل يوم')).toBeInTheDocument();
-    expect(screen.getByText('مكونات طازجة تُحضّر يومياً في مطبخنا')).toBeInTheDocument();
-    expect(screen.getByText('دفع آمن بأي طريقة')).toBeInTheDocument();
-    expect(screen.getByText('صالة وسفري وتوصيل')).toBeInTheDocument();
-    expect(screen.getByText('جودة مضمونة')).toBeInTheDocument();
-    expect(screen.getByText('نشرة قائمة اليوم')).toBeInTheDocument();
+    expectNoForbiddenStrings(container);
+    expect(screen.getByText('متجر الاختبار')).toBeInTheDocument();
+    expect(container.textContent).toContain('80.00');
+    expect(container.textContent).toContain('خصم 20%');
+    expect(screen.getByText('من قسم أطباق رئيسية')).toBeInTheDocument();
+    expect(screen.getByText('العروض المعروضة: 40 • أطباق رئيسية')).toBeInTheDocument();
+    expect(screen.getByText('عروض أخرى')).toBeInTheDocument();
+    expect(screen.getByText('أقسام العروض')).toBeInTheDocument();
+    expect(container.textContent).toContain('40 عرض');
+    expect(container.textContent).toContain(
+      'خصم 20% على طبق 1 • خصم 20% على طبق 2 • خصم 20% على طبق 3',
+    );
+    expect(screen.getByText('عروض اليوم')).toBeInTheDocument();
+    expect(screen.getByText('بث مباشر')).toBeInTheDocument();
   });
 
-  it('a restaurant tenant with a single offer sees the restaurant empty-queue placeholder', async () => {
-    setRestaurantSettings();
+  it('a single offer shows the derived empty-queue placeholder', async () => {
     listPageMock.mockResolvedValue({ products: makeOfferProducts(1) });
     const { container } = renderPage();
 
     await screen.findByText('طبق 1');
 
-    expect(screen.getByText('عروض وأطباق قائمة اليوم')).toBeInTheDocument();
-    expect(screen.getByText('تصفح أطباقنا المميزة بأسعار واضحة وطازجة على مدار اليوم')).toBeInTheDocument();
-    expect(container.textContent).not.toContain('صفقات وتخفيضات المعرض');
-    expect(container.textContent).not.toContain('تصفح منتجاتنا المميزة');
+    expectNoForbiddenStrings(container);
+    // Deck heading + empty-queue placeholder share the derived title.
+    expect(screen.getAllByText('عروض أخرى')).toHaveLength(2);
+    expect(screen.getAllByText('من قسم أطباق رئيسية')).toHaveLength(2);
   });
 
-  it('a retail tenant with 40 offers still sees the showroom board byte-for-byte', async () => {
-    listPageMock.mockResolvedValue({ products: makeOfferProducts(40) });
+  it('a restaurant tenant sees the SAME dynamic board — no restaurant variant', async () => {
+    mockSettings.current = {
+      storeName: 'مطعم الاختبار',
+      currency: 'EGP',
+      activityType: 'restaurant',
+    };
+    listPageMock.mockResolvedValue({ products: makeOfferProducts(3) });
     const { container } = renderPage();
 
     await screen.findByText('طبق 1');
 
-    expect(screen.getByText('بث مباشر بصالة العرض')).toBeInTheDocument();
-    expect(screen.getByText('تسليم فوري من صالة العرض')).toBeInTheDocument();
-    expect(screen.getByText('متوفر بصالة العرض')).toBeInTheDocument();
-    expect(screen.getByText('عروض إضافية بالمعرض')).toBeInTheDocument();
-    expect(screen.getByText('مزايا التسوق في صالة العرض')).toBeInTheDocument();
-    expect(screen.getByText('فحص وتجربة فورية')).toBeInTheDocument();
-    expect(screen.getByText('دفع إلكتروني آمن')).toBeInTheDocument();
-    expect(screen.getByText('ضمان معتمد')).toBeInTheDocument();
-    expect(screen.getByText('نشرة العروض')).toBeInTheDocument();
-    expect(container.textContent).not.toContain('بث مباشر من المطعم');
-    expect(container.textContent).not.toContain('تحضير طازج في مطبخنا');
-    expect(container.textContent).not.toContain('متوفر في قائمة اليوم');
-    expect(container.textContent).not.toContain('نشرة قائمة اليوم');
-    expect(container.textContent).not.toContain('مزايا الطلب في مطعمنا');
+    expectNoForbiddenStrings(container);
+    expect(screen.getByText('مطعم الاختبار')).toBeInTheDocument();
+    expect(screen.getByText('عروض أخرى')).toBeInTheDocument();
+    expect(container.textContent).toContain('خصم 20% على طبق 1');
+  });
+
+  it('zero offers shows assorted catalog items from across categories, never a single-category slice', async () => {
+    listPageMock.mockImplementation(({ view }: { view: string }) =>
+      Promise.resolve({ products: view === 'offers' ? [] : makeCatalogProducts() }),
+    );
+    const { container } = renderPage();
+
+    await screen.findByText('مشروب 1');
+
+    expectNoForbiddenStrings(container);
+    // Hero + deck span three different categories.
+    expect(screen.getByText('طبق 1')).toBeInTheDocument();
+    expect(screen.getByText('حلوى 1')).toBeInTheDocument();
+    expect(screen.getByText('أصناف من الكتالوج')).toBeInTheDocument();
+    expect(screen.getByText('أقسام الكتالوج')).toBeInTheDocument();
+    expect(container.textContent).toContain('أصناف معروضة: 7');
+    expect(container.textContent).toContain('3 صنف');
+    expect(container.textContent).toContain(
+      'متجر الاختبار • امسح رمز الـ QR للتصفح والطلب من هاتفك',
+    );
+    expect(screen.queryByText('لا توجد عروض حالياً')).not.toBeInTheDocument();
+  });
+
+  it('zero offers and an empty catalog shows the neutral empty state, never invented copy', async () => {
+    listPageMock.mockResolvedValue({ products: [] });
+    const { container } = renderPage();
+
+    // Wait for the welcome board itself ('لوحة العروض' renders only
+    // there) — the side deck's category block also carries the
+    // no-offers line, so waiting on that text alone resolves while
+    // the assorted-catalog fetch is still in flight.
+    await screen.findByText('لوحة العروض');
+
+    expectNoForbiddenStrings(container);
+    expect(screen.getAllByText('متجر الاختبار')).toHaveLength(2);
+    expect(screen.getAllByText('لا توجد عروض حالياً')).toHaveLength(2);
+    expect(screen.getByText('عرض كل المنتجات')).toBeInTheDocument();
+    expect(screen.getByText('لوحة العروض')).toBeInTheDocument();
+    expect(screen.getByText('العروض المعروضة: 0')).toBeInTheDocument();
+    expect(container.textContent).toContain(
+      'متجر الاختبار • امسح رمز الـ QR للتصفح والطلب من هاتفك',
+    );
   });
 });

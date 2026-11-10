@@ -1,32 +1,52 @@
-/* INV-REST-SIGNAGE-VERTICAL-TRUTH (T11-E, F7): the zero-offers board
- * must be vertical-aware. At base (1816a953) SignageShowroomWelcome
- * renders one hardcoded showroom board for every tenant — badge
- * 'صالة العرض التفاعلية الذكية', Visa/Mastercard/InstaPay payment
- * copy, 'ضمان معتمد', 'صالة العرض' everywhere — even for a
- * restaurant tenant whose screen should show today's menu and
- * table ordering. Only storeName ever came from tenant settings and
- * the pos.signage.welcome.* keys exist in neither locale file, so
- * every string above is a hardcoded fallback. The "0 offers" count
- * itself is honest (R8-D) and is not changed by this package.
+/* INV-REST-SIGNAGE-DYNAMIC (T13-H2): the truly-empty board — no
+ * offers AND an empty catalog — is a neutral empty state: store
+ * name + a no-offers line + the real QR hub + the switch to the
+ * full catalog. At base (6dcf2b60) this board carried invented
+ * showroom copy for every tenant (payment methods, warranty,
+ * inspection claims) and restaurant copy for restaurant tenants.
+ * None of that survives: a datum with no source is omitted, not
+ * invented, and the board is identical for every tenant.
  *
- * These tests pin: a restaurant tenant NEVER sees showroom copy on
- * the board and DOES see the restaurant board (today's menu +
- * order-from-your-phone QR); a retail tenant still sees the
- * showroom board (no regression for the vertical the board was
- * built for).
+ * These tests pin: the store name and the neutral line render; zero
+ * hardcoded-variant strings appear; the switch button offers the
+ * full catalog under a neutral label; the board does not change
+ * with the tenant vertical.
  */
 
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SignageShowroomWelcome } from './SignageShowroomWelcome';
 
-const SHOWROOM_STRINGS = [
+const FORBIDDEN_STRINGS = [
   'صالة العرض',
+  'المعرض',
   'فيزا',
   'ماستركارد',
   'InstaPay',
   'ضمان معتمد',
   'فحص وتجربة',
+  'معاينة وفحص',
+  'تسليم فوري',
+  'استلام فوري',
+  'دفع إلكتروني آمن',
+  'دفع آمن',
+  'فاتورة وضمان',
+  'قائمة اليوم',
+  'قائمة المطعم',
+  'أهلاً بكم في مطعمنا',
+  'اطلب من طاولتك',
+  'صالة وسفري',
+  'طازج كل يوم',
+  'طازج يومياً',
+  'تصفح القائمة واطلب',
+  'عرض كافة منتجات الصالة',
+  'عرض القائمة كاملة',
+  'صالة العرض التفاعلية',
+  'وجهتكم الأولى',
+  'الصفقات الحصرية',
+  'التوصيل الفوري',
+  'التوصيل بضغطة واحدة',
+  'القسم الرئيسي',
 ];
 
 function renderBoard(props: Record<string, unknown> = {}) {
@@ -41,35 +61,41 @@ function renderBoard(props: Record<string, unknown> = {}) {
   return utils;
 }
 
-describe('SignageShowroomWelcome vertical truth (INV-REST-SIGNAGE-VERTICAL-TRUTH)', () => {
-  it('a restaurant tenant never sees showroom copy on the zero-offers board', () => {
-    const { container } = renderBoard({ vertical: 'restaurant' });
+describe('SignageShowroomWelcome empty state (INV-REST-SIGNAGE-DYNAMIC)', () => {
+  it('shows the store name and a neutral no-offers line, never invented copy', () => {
+    const { container } = renderBoard();
     const text = container.textContent || '';
-    for (const forbidden of SHOWROOM_STRINGS) {
+    for (const forbidden of FORBIDDEN_STRINGS) {
       expect(text).not.toContain(forbidden);
     }
-  });
-
-  it('a restaurant tenant sees the restaurant board: today’s menu and order-from-your-phone', () => {
-    const { container } = renderBoard({ vertical: 'restaurant' });
     expect(screen.getByText('مطعم الاختبار')).toBeInTheDocument();
-    expect(container.textContent).toContain('قائمة اليوم');
-    expect(container.textContent).toContain('تصفح القائمة واطلب من هاتفك');
+    expect(screen.getByText('لا توجد عروض حالياً')).toBeInTheDocument();
+    expect(screen.getByText('لوحة العروض')).toBeInTheDocument();
   });
 
-  it('a restaurant tenant is offered the full menu, not the showroom catalogue', () => {
+  it('offers the real catalog under a neutral label, with the neutral QR hub', () => {
     renderBoard({
-      vertical: 'restaurant',
       hasFilterOffers: true,
       onSwitchToAllProducts: vi.fn(),
     });
-    expect(screen.getByText('عرض القائمة كاملة')).toBeInTheDocument();
+    expect(screen.getByText('عرض كل المنتجات')).toBeInTheDocument();
+    expect(screen.getByText('تصفح الكتالوج واطلب من هاتفك')).toBeInTheDocument();
     expect(screen.queryByText('عرض كافة منتجات الصالة')).not.toBeInTheDocument();
+    expect(screen.queryByText('عرض القائمة كاملة')).not.toBeInTheDocument();
   });
 
-  it('a retail tenant still sees the showroom board (no regression)', () => {
-    const { container } = renderBoard();
-    expect(container.textContent).toContain('صالة العرض التفاعلية الذكية');
-    expect(container.textContent).toContain('فيزا');
+  it('shows no switch button when the offers filter is not active', () => {
+    renderBoard();
+    expect(screen.queryByText('عرض كل المنتجات')).not.toBeInTheDocument();
+  });
+
+  it('is the same board whatever vertical is passed — no variant copy', () => {
+    const { container } = renderBoard({ vertical: 'restaurant' });
+    const text = container.textContent || '';
+    for (const forbidden of FORBIDDEN_STRINGS) {
+      expect(text).not.toContain(forbidden);
+    }
+    expect(screen.getByText('لا توجد عروض حالياً')).toBeInTheDocument();
+    expect(screen.getByText('لوحة العروض')).toBeInTheDocument();
   });
 });

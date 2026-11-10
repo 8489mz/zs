@@ -1801,32 +1801,23 @@
       "signage_header": {
         "s3": "Back to System",
         "s6": "Fullscreen",
-        "s0": "Live broadcast in the showroom",
         "s2": "Return to system or dashboard (Esc)",
         "s4": "Open the main menu and navigate quickly between sections",
         "s5": "Quick list",
-        "s1": "Promotional and exclusive deal display screen • Digital Showroom Board",
         "s7": "Screen settings and display speed",
-        "restaurant_s0": "Live broadcast from the restaurant",
-        "restaurant_s1": "Today’s menu and restaurant dishes screen • Restaurant Menu Board"
+        "live_badge": "Live"
       },
       "signage_hero_card": {
         "s0": "Discount",
         "s1": "From",
         "s2": "Product Code:",
         "s5": "Previous Price",
-        "s3": "Original product and 100% guaranteed",
-        "s4": "Immediate delivery from the showroom",
-        "s6": "Save",
-        "s7": "Available in the showroom",
-        "restaurant_s4": "Freshly prepared in our kitchen",
-        "restaurant_s7": "Available on today’s menu"
+        "s6": "Save"
       },
       "signage_marquee_footer": {
         "s2": "Pause",
-        "s0": "Offers bulletin",
         "s1": "Resume",
-        "restaurant_s0": "Today’s menu bulletin"
+        "today_offers": "Today’s offers"
       },
       "signage_nav_drawer": {
         "s5": "Quick search......",
@@ -1851,63 +1842,24 @@
         "s2": "5 seconds (fast)"
       },
       "signage_side_deck": {
-        "s1": "Available offer)",
-        "s8": "InstaPay, wallets, and Visa",
-        "s10": "Point your phone camera at the QR code to browse the full catalog, order, and deliver with one click!",
-        "s4": "Benefits of shopping in the showroom",
-        "s5": "Instant inspection and trial",
+        "s10": "Point your phone camera at the QR code to browse the catalog and order from your phone.",
         "s9": "Order Immediately from Your Phone",
-        "s0": "Additional offers in the showroom",
-        "s2": "Exhibition deals and discounts",
-        "s3": "Browse our featured products at competitive prices with certified warranty",
-        "s6": "Preview the product before purchase",
-        "s7": "Secure electronic payment",
-        "restaurant_s0": "More dishes from the menu",
-        "restaurant_s2": "Today’s menu offers and dishes",
-        "restaurant_s3": "Browse our featured dishes at clear prices, fresh all day",
-        "restaurant_s4": "Benefits of ordering at our restaurant",
-        "restaurant_s5": "Fresh every day",
-        "restaurant_s6": "Fresh ingredients prepared daily in our kitchen",
-        "restaurant_s7": "Secure payment any way you like"
-      },
-      "side_deck": {
-        "restaurant_pickup_title": "Dine-in, Takeaway & Delivery",
-        "restaurant_pickup_desc": "Enjoy your meal with us or have it delivered to your home",
-        "restaurant_warranty_title": "Quality guaranteed",
-        "restaurant_warranty_desc": "Fresh dishes with guaranteed quality"
+        "more_offers": "More offers",
+        "catalog_items": "Items from the catalog",
+        "categories_offers": "Offer categories",
+        "categories_catalog": "Catalog categories",
+        "no_more_offers": "No more offers right now",
+        "no_more_items": "No more items right now",
+        "no_offers": "No offers right now",
+        "no_items": "No items right now"
       },
       "welcome": {
-        "badge": "Smart Interactive Showroom",
-        "live_status": "Welcome",
-        "desc": "Your first destination for the best products and exclusive deals at competitive prices with certified warranty. Shop directly from the showroom or order from your phone right away.",
-        "perk1_title": "Instant inspection and trial",
-        "perk1_desc": "Preview and inspect all products before completing your purchase",
-        "perk2_title": "Secure electronic payment",
-        "perk2_desc": "We accept Visa, Mastercard, InstaPay, and smart wallets",
-        "perk3_title": "Instant pickup and delivery",
-        "perk3_desc": "Collect your purchases directly from the showroom or get fast delivery",
-        "perk4_title": "Certified warranty and official invoices",
-        "perk4_desc": "All sales are documented with certified electronic invoices",
-        "qr_title": "Browse and order instantly from your phone",
-        "qr_desc": "Point your phone camera at the QR code to browse all showroom sections and products with updated prices and instant delivery.",
-        "show_all_products": "Show all showroom products",
-        "restaurant_badge": "Restaurant Menu",
-        "restaurant_live_status": "Welcome to our restaurant",
-        "restaurant_desc": "Today’s menu is in your hands — browse the dishes and order from your table or your phone, and get your order hot and fresh.",
-        "restaurant_perk1_title": "Today’s Menu",
-        "restaurant_perk1_desc": "Browse today’s dishes and updated prices",
-        "restaurant_perk2_title": "Order from Your Table",
-        "restaurant_perk2_desc": "Scan the QR code and order without waiting for the waiter",
-        "restaurant_perk3_title": "Dine-in, Takeaway & Delivery",
-        "restaurant_perk3_desc": "Enjoy your meal with us or have it delivered to your home",
-        "restaurant_perk4_title": "Fresh Every Day",
-        "restaurant_perk4_desc": "Fresh ingredients prepared daily in our kitchen",
-        "restaurant_qr_title": "Browse the menu and order from your phone",
-        "restaurant_qr_desc": "Point your phone camera at the QR code to browse today’s menu and order directly from your table.",
-        "restaurant_show_all_products": "Show the full menu"
-      },
-      "ticker_default": "Welcome • Scan the QR code to browse and order from your phone • New offers every day",
-      "ticker_default_restaurant": "Welcome to our restaurant • Browse today’s menu and order from your phone via the QR code • Fresh daily"
+        "board_label": "Offers board",
+        "no_offers": "No offers right now",
+        "qr_title": "Browse the catalog and order from your phone",
+        "qr_desc": "Point your phone camera at the QR code to browse the catalog and order from your phone.",
+        "show_all_products": "Show all products"
+      }
     },
     "displays_portal_page": {
       "s0": "Display & Interactive Screens",
@@ -2146,9 +2098,7 @@
       "s1": "Monitoring and collecting all meal dishes across multiple stations (grill, hot, bar, desserts) and delivering the order complete"
     },
     "digital_signage_page": {
-      "s0": "Loading showroom offers and products...",
-      "loading": "Preparing and broadcasting showroom offers...",
-      "loading_restaurant": "Preparing today’s menu..."
+      "loading": "Loading offers..."
     },
     "operation_completed": "Operation Completed",
     "zones": {

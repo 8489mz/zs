@@ -1,14 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { SignagePromoItem, SignageTheme } from './types';
-import type { BusinessVertical } from '@/shared/verticals/vertical-scope';
-import {
-  TagIcon,
-  AwardIcon,
-  TruckIcon,
-  PackageIcon,
-  CheckShieldIcon,
-} from '@/shared/components/icons/AppIcons';
+import { TagIcon, PackageIcon } from '@/shared/components/icons/AppIcons';
 
 interface SignageHeroCardProps {
   activeItem: SignagePromoItem;
@@ -16,10 +9,11 @@ interface SignageHeroCardProps {
   totalItems: number;
   currencyCode: string;
   theme?: SignageTheme;
-  /* INV-REST-SIGNAGE-OFFER-BOARD-TRUTH (T12-H2): same vertical
-   * prop as the header — a restaurant tenant must not see the
-   * showroom delivery / availability badges. */
-  vertical?: BusinessVertical;
+  /* INV-REST-SIGNAGE-DYNAMIC (T13-H2): the card shows the real
+   * product (name / prices / discount / merchant badge / image)
+   * plus an availability line derived from the product's real
+   * category. No invented quality, freshness, delivery or
+   * inspection claims — there is no data source for them. */
 }
 
 export const SignageHeroCard: React.FC<SignageHeroCardProps> = ({
@@ -28,11 +22,9 @@ export const SignageHeroCard: React.FC<SignageHeroCardProps> = ({
   totalItems,
   currencyCode,
   theme = 'dark',
-  vertical = 'retail_general',
 }) => {
   const { t } = useTranslation();
   const isDark = theme === 'dark';
-  const isRestaurant = vertical === 'restaurant';
 
   return (
     <div
@@ -246,77 +238,6 @@ export const SignageHeroCard: React.FC<SignageHeroCardProps> = ({
               </div>
             )}
 
-            {/* Highlights / Trust Badges */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                marginTop: '16px',
-                flexWrap: 'wrap',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  backgroundColor: isDark ? 'rgba(56, 189, 248, 0.12)' : '#e0f2fe',
-                  color: isDark ? '#38bdf8' : '#0369a1',
-                  padding: '5px 12px',
-                  borderRadius: '8px',
-                  border: isDark ? '1px solid rgba(56, 189, 248, 0.25)' : '1px solid #bae6fd',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                <AwardIcon size={14} color={isDark ? '#38bdf8' : '#0284c7'} />
-                <span>{t('pos.signage.signage_hero_card.s3', 'منتج أصلي ومضمون 100%')}</span>
-              </span>
-
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  backgroundColor: isDark ? 'rgba(52, 211, 153, 0.12)' : '#dcfce7',
-                  color: isDark ? '#34d399' : '#15803d',
-                  padding: '5px 12px',
-                  borderRadius: '8px',
-                  border: isDark ? '1px solid rgba(52, 211, 153, 0.25)' : '1px solid #bbf7d0',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                <TruckIcon size={14} color={isDark ? '#34d399' : '#16a34a'} />
-                <span>
-                  {t(
-                    isRestaurant
-                      ? 'pos.signage.signage_hero_card.restaurant_s4'
-                      : 'pos.signage.signage_hero_card.s4',
-                    isRestaurant ? 'تحضير طازج في مطبخنا' : 'تسليم فوري من صالة العرض'
-                  )}
-                </span>
-              </span>
-
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  backgroundColor: isDark ? 'rgba(129, 140, 248, 0.12)' : '#eef2ff',
-                  color: isDark ? '#818cf8' : '#4338ca',
-                  padding: '5px 12px',
-                  borderRadius: '8px',
-                  border: isDark ? '1px solid rgba(129, 140, 248, 0.25)' : '1px solid #c7d2fe',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                <CheckShieldIcon size={14} color={isDark ? '#818cf8' : '#4f46e5'} />
-                <span>{t('pos.signage.signage_hero_card.warranty', 'معاينة وفحص حقيقي قبل الاستلام')}</span>
-              </span>
-            </div>
           </div>
         </div>
       </div>
@@ -394,33 +315,30 @@ export const SignageHeroCard: React.FC<SignageHeroCardProps> = ({
           </div>
         </div>
 
+        {/* Availability — the product's real category, omitted when
+          * the product has none (T13-H2: no invented copy). */}
         <div>
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              backgroundColor: isDark ? '#2563eb' : '#170e5e',
-              color: '#ffffff',
-              fontSize: '14.5px',
-              fontWeight: 800,
-              padding: '12px 22px',
-              borderRadius: '12px',
-              boxShadow: isDark
-                ? '0 6px 18px rgba(37, 99, 235, 0.4)'
-                : '0 4px 14px rgba(23, 14, 94, 0.25)',
-            }}
-          >
-            <PackageIcon size={18} color="#ffffff" />
-            <span>
-              {t(
-                isRestaurant
-                  ? 'pos.signage.signage_hero_card.restaurant_s7'
-                  : 'pos.signage.signage_hero_card.s7',
-                isRestaurant ? 'متوفر في قائمة اليوم' : 'متوفر بصالة العرض'
-              )}
+          {activeItem.categoryName ? (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: isDark ? '#2563eb' : '#170e5e',
+                color: '#ffffff',
+                fontSize: '14.5px',
+                fontWeight: 800,
+                padding: '12px 22px',
+                borderRadius: '12px',
+                boxShadow: isDark
+                  ? '0 6px 18px rgba(37, 99, 235, 0.4)'
+                  : '0 4px 14px rgba(23, 14, 94, 0.25)',
+              }}
+            >
+              <PackageIcon size={18} color="#ffffff" />
+              <span>{`من قسم ${activeItem.categoryName}`}</span>
             </span>
-          </span>
+          ) : null}
         </div>
       </div>
     </div>
