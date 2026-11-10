@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { SignagePromoItem, SignageTheme } from './types';
+import type { BusinessVertical } from '@/shared/verticals/vertical-scope';
 import {
   TagIcon,
   AwardIcon,
@@ -17,6 +18,11 @@ interface SignageSideDeckProps {
   currencyCode: string;
   qrSvgUrl: string;
   theme?: SignageTheme;
+  /* INV-REST-SIGNAGE-OFFER-BOARD-TRUTH (T12-H2): same vertical
+   * prop as the header — the deck title, the empty-queue
+   * placeholder and the four perk cells all carried showroom copy
+   * for every tenant. */
+  vertical?: BusinessVertical;
 }
 
 export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
@@ -26,9 +32,11 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
   currencyCode,
   qrSvgUrl,
   theme = 'dark',
+  vertical = 'retail_general',
 }) => {
   const { t } = useTranslation();
   const isDark = theme === 'dark';
+  const isRestaurant = vertical === 'restaurant';
 
   const upcomingItems = promoItems.filter((_, idx) => idx !== currentIndex);
 
@@ -77,7 +85,14 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <TagIcon size={17} color={isDark ? '#38bdf8' : '#170e5e'} />
-            <span>{t('pos.signage.signage_side_deck.s0', 'عروض إضافية بالمعرض')}</span>
+            <span>
+              {t(
+                isRestaurant
+                  ? 'pos.signage.signage_side_deck.restaurant_s0'
+                  : 'pos.signage.signage_side_deck.s0',
+                isRestaurant ? 'أطباق إضافية من القائمة' : 'عروض إضافية بالمعرض'
+              )}
+            </span>
           </div>
           <span
             style={{
@@ -130,7 +145,12 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
                   color: isDark ? '#ffffff' : '#0f172a',
                 }}
               >
-                {t('pos.signage.signage_side_deck.s2', 'صفقات وتخفيضات المعرض')}
+                {t(
+                  isRestaurant
+                    ? 'pos.signage.signage_side_deck.restaurant_s2'
+                    : 'pos.signage.signage_side_deck.s2',
+                  isRestaurant ? 'عروض وأطباق قائمة اليوم' : 'صفقات وتخفيضات المعرض'
+                )}
               </h4>
               <span
                 style={{
@@ -141,8 +161,12 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
                 }}
               >
                 {t(
-                  'pos.signage.signage_side_deck.s3',
-                  'تصفح منتجاتنا المميزة بأسعار تنافسية وضمان معتمد على مدار اليوم'
+                  isRestaurant
+                    ? 'pos.signage.signage_side_deck.restaurant_s3'
+                    : 'pos.signage.signage_side_deck.s3',
+                  isRestaurant
+                    ? 'تصفح أطباقنا المميزة بأسعار واضحة وطازجة على مدار اليوم'
+                    : 'تصفح منتجاتنا المميزة بأسعار تنافسية وضمان معتمد على مدار اليوم'
                 )}
               </span>
             </div>
@@ -257,7 +281,14 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
           }}
         >
           <AwardIcon size={16} color={isDark ? '#fbbf24' : '#170e5e'} />
-          <span>{t('pos.signage.signage_side_deck.s4', 'مزايا التسوق في صالة العرض')}</span>
+          <span>
+            {t(
+              isRestaurant
+                ? 'pos.signage.signage_side_deck.restaurant_s4'
+                : 'pos.signage.signage_side_deck.s4',
+              isRestaurant ? 'مزايا الطلب في مطعمنا' : 'مزايا التسوق في صالة العرض'
+            )}
+          </span>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
@@ -294,7 +325,12 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
                   color: isDark ? '#f8fafc' : '#0f172a',
                 }}
               >
-                {t('pos.signage.signage_side_deck.s5', 'فحص وتجربة فورية')}
+                {t(
+                  isRestaurant
+                    ? 'pos.signage.signage_side_deck.restaurant_s5'
+                    : 'pos.signage.signage_side_deck.s5',
+                  isRestaurant ? 'طازج كل يوم' : 'فحص وتجربة فورية'
+                )}
               </div>
               <div
                 style={{
@@ -303,7 +339,14 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
                   marginTop: '1px',
                 }}
               >
-                {t('pos.signage.signage_side_deck.s6', 'معاينة المنتج قبل الشراء')}
+                {t(
+                  isRestaurant
+                    ? 'pos.signage.signage_side_deck.restaurant_s6'
+                    : 'pos.signage.signage_side_deck.s6',
+                  isRestaurant
+                    ? 'مكونات طازجة تُحضّر يومياً في مطبخنا'
+                    : 'معاينة المنتج قبل الشراء'
+                )}
               </div>
             </div>
           </div>
@@ -341,7 +384,12 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
                   color: isDark ? '#f8fafc' : '#0f172a',
                 }}
               >
-                {t('pos.signage.signage_side_deck.s7', 'دفع إلكتروني آمن')}
+                {t(
+                  isRestaurant
+                    ? 'pos.signage.signage_side_deck.restaurant_s7'
+                    : 'pos.signage.signage_side_deck.s7',
+                  isRestaurant ? 'دفع آمن بأي طريقة' : 'دفع إلكتروني آمن'
+                )}
               </div>
               <div
                 style={{
@@ -388,7 +436,12 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
                   color: isDark ? '#f8fafc' : '#0f172a',
                 }}
               >
-                {t('pos.signage.side_deck.pickup_title', 'استلام فوري')}
+                {t(
+                  isRestaurant
+                    ? 'pos.signage.side_deck.restaurant_pickup_title'
+                    : 'pos.signage.side_deck.pickup_title',
+                  isRestaurant ? 'صالة وسفري وتوصيل' : 'استلام فوري'
+                )}
               </div>
               <div
                 style={{
@@ -397,7 +450,14 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
                   marginTop: '1px',
                 }}
               >
-                {t('pos.signage.side_deck.pickup_desc', 'تسليم مباشر بالصالة')}
+                {t(
+                  isRestaurant
+                    ? 'pos.signage.side_deck.restaurant_pickup_desc'
+                    : 'pos.signage.side_deck.pickup_desc',
+                  isRestaurant
+                    ? 'تناول طعامك معنا أو اطلبه إلى بيتك'
+                    : 'تسليم مباشر بالصالة'
+                )}
               </div>
             </div>
           </div>
@@ -435,7 +495,12 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
                   color: isDark ? '#f8fafc' : '#0f172a',
                 }}
               >
-                {t('pos.signage.side_deck.warranty_title', 'ضمان معتمد')}
+                {t(
+                  isRestaurant
+                    ? 'pos.signage.side_deck.restaurant_warranty_title'
+                    : 'pos.signage.side_deck.warranty_title',
+                  isRestaurant ? 'جودة مضمونة' : 'ضمان معتمد'
+                )}
               </div>
               <div
                 style={{
@@ -444,7 +509,12 @@ export const SignageSideDeck: React.FC<SignageSideDeckProps> = ({
                   marginTop: '1px',
                 }}
               >
-                {t('pos.signage.side_deck.warranty_desc', 'فاتورة وضمان استبدال')}
+                {t(
+                  isRestaurant
+                    ? 'pos.signage.side_deck.restaurant_warranty_desc'
+                    : 'pos.signage.side_deck.warranty_desc',
+                  isRestaurant ? 'أطباق طازجة بجودة مضمونة' : 'فاتورة وضمان استبدال'
+                )}
               </div>
             </div>
           </div>

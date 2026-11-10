@@ -347,6 +347,11 @@ export function DigitalSignagePage() {
       }}
     >
       {/* Top Header Bar */}
+      {/* INV-REST-SIGNAGE-OFFER-BOARD-TRUTH (T12-H2): the page
+        * already resolved the vertical for the loading text and the
+        * empty state, but the four offer-board components never
+        * received it and rendered showroom copy unconditionally.
+        * The same vertical is now passed to all four. */}
       <SignageHeader
         currentLang={currentLang}
         onToggleLanguage={toggleLanguage}
@@ -360,6 +365,7 @@ export function DigitalSignagePage() {
         onToggleNavMenu={() => setShowNavDrawer((prev) => !prev)}
         theme={theme}
         onToggleTheme={handleToggleTheme}
+        vertical={vertical}
       />
 
       {/* INV-REST-SIGNAGE-REFETCH-INDICATOR (R8-D): a background refetch
@@ -446,6 +452,7 @@ export function DigitalSignagePage() {
             totalItems={promoItems.length}
             currencyCode={currencyCode}
             theme={theme}
+            vertical={vertical}
           />
         ) : productsQuery.isLoading ? (
           <div
@@ -555,6 +562,7 @@ export function DigitalSignagePage() {
           currencyCode={currencyCode}
           qrSvgUrl={qrSvgUrl}
           theme={theme}
+          vertical={vertical}
         />
       </main>
 
@@ -566,6 +574,7 @@ export function DigitalSignagePage() {
         currentIndex={currentIndex}
         totalItems={promoItems.length}
         theme={theme}
+        vertical={vertical}
       />
 
       {/* Settings Modal Drawer */}

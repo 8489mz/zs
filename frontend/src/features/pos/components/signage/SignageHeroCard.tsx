@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { SignagePromoItem, SignageTheme } from './types';
+import type { BusinessVertical } from '@/shared/verticals/vertical-scope';
 import {
   TagIcon,
   AwardIcon,
@@ -15,6 +16,10 @@ interface SignageHeroCardProps {
   totalItems: number;
   currencyCode: string;
   theme?: SignageTheme;
+  /* INV-REST-SIGNAGE-OFFER-BOARD-TRUTH (T12-H2): same vertical
+   * prop as the header — a restaurant tenant must not see the
+   * showroom delivery / availability badges. */
+  vertical?: BusinessVertical;
 }
 
 export const SignageHeroCard: React.FC<SignageHeroCardProps> = ({
@@ -23,9 +28,11 @@ export const SignageHeroCard: React.FC<SignageHeroCardProps> = ({
   totalItems,
   currencyCode,
   theme = 'dark',
+  vertical = 'retail_general',
 }) => {
   const { t } = useTranslation();
   const isDark = theme === 'dark';
+  const isRestaurant = vertical === 'restaurant';
 
   return (
     <div
@@ -282,7 +289,14 @@ export const SignageHeroCard: React.FC<SignageHeroCardProps> = ({
                 }}
               >
                 <TruckIcon size={14} color={isDark ? '#34d399' : '#16a34a'} />
-                <span>{t('pos.signage.signage_hero_card.s4', 'تسليم فوري من صالة العرض')}</span>
+                <span>
+                  {t(
+                    isRestaurant
+                      ? 'pos.signage.signage_hero_card.restaurant_s4'
+                      : 'pos.signage.signage_hero_card.s4',
+                    isRestaurant ? 'تحضير طازج في مطبخنا' : 'تسليم فوري من صالة العرض'
+                  )}
+                </span>
               </span>
 
               <span
@@ -398,7 +412,14 @@ export const SignageHeroCard: React.FC<SignageHeroCardProps> = ({
             }}
           >
             <PackageIcon size={18} color="#ffffff" />
-            <span>{t('pos.signage.signage_hero_card.s7', 'متوفر بصالة العرض')}</span>
+            <span>
+              {t(
+                isRestaurant
+                  ? 'pos.signage.signage_hero_card.restaurant_s7'
+                  : 'pos.signage.signage_hero_card.s7',
+                isRestaurant ? 'متوفر في قائمة اليوم' : 'متوفر بصالة العرض'
+              )}
+            </span>
           </span>
         </div>
       </div>

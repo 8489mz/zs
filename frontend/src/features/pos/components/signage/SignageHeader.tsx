@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { DisplayLanguageToggle } from '@/shared/components/DisplayLanguageToggle';
 import { SignageTheme } from './types';
+import type { BusinessVertical } from '@/shared/verticals/vertical-scope';
 import {
   ShoppingCartIcon,
   Maximize2Icon,
@@ -24,6 +25,13 @@ interface SignageHeaderProps {
   onToggleLanguage?: () => void;
   theme?: SignageTheme;
   onToggleTheme?: () => void;
+  /* INV-REST-SIGNAGE-OFFER-BOARD-TRUTH (T12-H2): the board header
+   * carried showroom copy ('بث مباشر بصالة العرض') for every tenant.
+   * The vertical arrives from the page (same resolveCurrentVertical
+   * source as the T11-E empty-state board); a restaurant tenant sees
+   * the restaurant header, every other vertical keeps the showroom
+   * header byte-for-byte. */
+  vertical?: BusinessVertical;
 }
 
 export const SignageHeader: React.FC<SignageHeaderProps> = ({
@@ -39,9 +47,11 @@ export const SignageHeader: React.FC<SignageHeaderProps> = ({
   onToggleLanguage,
   theme = 'dark',
   onToggleTheme,
+  vertical = 'retail_general',
 }) => {
   const { t } = useTranslation();
   const isDark = theme === 'dark';
+  const isRestaurant = vertical === 'restaurant';
 
   return (
     <>
@@ -121,7 +131,14 @@ export const SignageHeader: React.FC<SignageHeaderProps> = ({
                     boxShadow: '0 0 8px #10b981',
                   }}
                 />
-                <span>{t('pos.signage.signage_header.s0', 'بث مباشر بصالة العرض')}</span>
+                <span>
+                  {t(
+                    isRestaurant
+                      ? 'pos.signage.signage_header.restaurant_s0'
+                      : 'pos.signage.signage_header.s0',
+                    isRestaurant ? 'بث مباشر من المطعم' : 'بث مباشر بصالة العرض'
+                  )}
+                </span>
               </span>
             </div>
             <p
@@ -133,8 +150,12 @@ export const SignageHeader: React.FC<SignageHeaderProps> = ({
               }}
             >
               {t(
-                'pos.signage.signage_header.s1',
-                'شاشة العروض الترويجية والصفقات الحصرية • Digital Showroom Board'
+                isRestaurant
+                  ? 'pos.signage.signage_header.restaurant_s1'
+                  : 'pos.signage.signage_header.s1',
+                isRestaurant
+                  ? 'شاشة قائمة اليوم وأطباق المطعم • Restaurant Menu Board'
+                  : 'شاشة العروض الترويجية والصفقات الحصرية • Digital Showroom Board'
               )}
             </p>
           </div>

@@ -1806,7 +1806,9 @@
         "s4": "Open the main menu and navigate quickly between sections",
         "s5": "Quick list",
         "s1": "Promotional and exclusive deal display screen • Digital Showroom Board",
-        "s7": "Screen settings and display speed"
+        "s7": "Screen settings and display speed",
+        "restaurant_s0": "Live broadcast from the restaurant",
+        "restaurant_s1": "Today’s menu and restaurant dishes screen • Restaurant Menu Board"
       },
       "signage_hero_card": {
         "s0": "Discount",
@@ -1816,12 +1818,15 @@
         "s3": "Original product and 100% guaranteed",
         "s4": "Immediate delivery from the showroom",
         "s6": "Save",
-        "s7": "Available in the showroom"
+        "s7": "Available in the showroom",
+        "restaurant_s4": "Freshly prepared in our kitchen",
+        "restaurant_s7": "Available on today’s menu"
       },
       "signage_marquee_footer": {
         "s2": "Pause",
         "s0": "Offers bulletin",
-        "s1": "Resume"
+        "s1": "Resume",
+        "restaurant_s0": "Today’s menu bulletin"
       },
       "signage_nav_drawer": {
         "s5": "Quick search......",
@@ -1856,7 +1861,20 @@
         "s2": "Exhibition deals and discounts",
         "s3": "Browse our featured products at competitive prices with certified warranty",
         "s6": "Preview the product before purchase",
-        "s7": "Secure electronic payment"
+        "s7": "Secure electronic payment",
+        "restaurant_s0": "More dishes from the menu",
+        "restaurant_s2": "Today’s menu offers and dishes",
+        "restaurant_s3": "Browse our featured dishes at clear prices, fresh all day",
+        "restaurant_s4": "Benefits of ordering at our restaurant",
+        "restaurant_s5": "Fresh every day",
+        "restaurant_s6": "Fresh ingredients prepared daily in our kitchen",
+        "restaurant_s7": "Secure payment any way you like"
+      },
+      "side_deck": {
+        "restaurant_pickup_title": "Dine-in, Takeaway & Delivery",
+        "restaurant_pickup_desc": "Enjoy your meal with us or have it delivered to your home",
+        "restaurant_warranty_title": "Quality guaranteed",
+        "restaurant_warranty_desc": "Fresh dishes with guaranteed quality"
       },
       "welcome": {
         "badge": "Smart Interactive Showroom",
