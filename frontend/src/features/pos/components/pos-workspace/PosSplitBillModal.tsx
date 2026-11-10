@@ -440,6 +440,25 @@ export function resolveSplitPaymentChannel(
   return 'cash';
 }
 
+/* T10-C (INV-REST-SPLIT-COLLECT-BRANCH): the ONE branch/location
+ * resolution for every sale the modal posts. The two collect paths
+ * used to omit branchId/locationId entirely, so the backend POS gate
+ * refused every collect with POS_BRANCH_REQUIRED 400 — while the
+ * held-save path sent them, so saving the checks worked and
+ * collecting them failed. All three call sites spread this helper,
+ * so they cannot drift apart again. The shape mirrors handleSubmit
+ * (createPosWorkspaceAsyncActions): the live branch/location first,
+ * falling back to the derived current branch/location. */
+export function resolveSplitSaleBranch(pos: Pick<
+  PosWorkspaceState,
+  'branchId' | 'currentBranch' | 'locationId' | 'currentLocation'
+>): { branchId: string | null; locationId: string | null } {
+  return {
+    branchId: pos.branchId || (pos.currentBranch?.id != null ? String(pos.currentBranch.id) : null),
+    locationId: pos.locationId || (pos.currentLocation?.id != null ? String(pos.currentLocation.id) : null),
+  };
+}
+
 export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosSplitBillModalProps) {
   const { t } = useTranslation();
   const [splitMode, setSplitMode] = useState<'items' | 'even'>('items');
@@ -779,6 +798,7 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
       const billTotal = amounts.total;
       await pos.createSale.mutateAsync({
         source: 'pos',
+        ...resolveSplitSaleBranch(pos),
         cart: targetBill.items,
         customerId: String(pos.customerId || ''),
         paymentType: 'cash',
@@ -863,6 +883,7 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
       // the final sale. Guests collect money only; the points move once.
       await pos.createSale.mutateAsync({
         source: 'pos',
+        ...resolveSplitSaleBranch(pos),
         cart: pos.cart,
         customerId: String(pos.customerId || ''),
         paymentType: 'cash',
@@ -995,8 +1016,7 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
           note: pos.note,
           search: pos.search,
           priceType: pos.priceType,
-          branchId: pos.branchId || (pos.currentBranch?.id != null ? String(pos.currentBranch.id) : null),
-          locationId: pos.locationId || (pos.currentLocation?.id != null ? String(pos.currentLocation.id) : null),
+          ...resolveSplitSaleBranch(pos),
           cashAmount: 0,
           cardAmount: 0,
           transferAmount: 0,

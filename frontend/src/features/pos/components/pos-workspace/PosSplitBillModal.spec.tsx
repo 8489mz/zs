@@ -70,6 +70,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { buildPosSalePayload } from '@/features/pos/contracts';
 import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 import {
   PosSplitBillModal,
@@ -81,6 +82,7 @@ import {
   moveSplitBillItem,
   moveSplitBillItems,
   resolveSplitPaymentChannel,
+  resolveSplitSaleBranch,
   splitRoundingTolerance,
   type SplitOrderTotals,
 } from './PosSplitBillModal';
@@ -1079,5 +1081,121 @@ describe('PosSplitBillModal — split moves never collapse lines that differ onl
     expect(next[0].items).toHaveLength(0);
     expect(next[1].items).toHaveLength(2);
     expect(next[1].items.reduce((sum, line) => sum + calcCartLineTotal(line), 0)).toBe(220);
+  });
+});
+
+/* T10-C (INV-REST-SPLIT-COLLECT-BRANCH): both collect paths posted the
+ * sale with no branchId/locationId, so the backend POS gate refused
+ * every collect with POS_BRANCH_REQUIRED 400 — while the same modal's
+ * held-save path sent the branch, so saving the checks worked and
+ * collecting them failed. The payload the modal hands to createSale
+ * must carry the workspace branch/location, and the real payload
+ * builder must pass them through (it maps a missing branch to null,
+ * which is exactly what the gate rejects). */
+describe('PosSplitBillModal — split-collect carries the workspace branch/location (T10-C)', () => {
+  function splitPos() {
+    const burger = item({ lineKey: 'L1', productId: '1', name: 'برجر', modifiers: [cheese] });
+    const fries = item({ lineKey: 'L2', productId: '2', name: 'بطاطس', price: 50, qty: 2, modifiers: [] });
+    const totals = orderTotals({
+      subTotal: 220,
+      discountValue: 20,
+      serviceCharge: 20,
+      taxRate: 14,
+      tipAmount: 10,
+      total: 260.8,
+    });
+    return createMockPos([burger, fries], totals);
+  }
+
+  it('posts a split-bill collect with the workspace branch and location', async () => {
+    const mockPos = splitPos();
+    renderModal(mockPos);
+
+    fireEvent.click(screen.getByRole('button', { name: 'تحصيل نقد' }));
+
+    await waitFor(() => expect(mockPos.createSale.mutateAsync).toHaveBeenCalledTimes(1));
+    const payload = mockPos.createSale.mutateAsync.mock.calls[0][0];
+    expect(payload.branchId).toBe('1');
+    expect(payload.locationId).toBe('1');
+    // The real builder is what turns this input into the HTTP payload:
+    // a missing branch becomes null there, and the backend gate 400s.
+    const built = buildPosSalePayload(payload);
+    expect(built.branchId).toBe('1');
+    expect(built.locationId).toBe('1');
+  });
+
+  it('posts the even-split final sale with the workspace branch and location', async () => {
+    const mockPos = splitPos();
+    renderModal(mockPos);
+    fireEvent.click(screen.getByRole('button', { name: 'تقسيم بالتساوي (ضيوف)' }));
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'سداد نقد' })[0]);
+    await waitFor(() => expect(screen.getByText(/تم التحصيل/)).toBeTruthy());
+    expect(mockPos.createSale.mutateAsync).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'سداد نقد' })[0]);
+    await waitFor(() => expect(mockPos.createSale.mutateAsync).toHaveBeenCalledTimes(1));
+    const payload = mockPos.createSale.mutateAsync.mock.calls[0][0];
+    expect(payload.branchId).toBe('1');
+    expect(payload.locationId).toBe('1');
+    const built = buildPosSalePayload(payload);
+    expect(built.branchId).toBe('1');
+    expect(built.locationId).toBe('1');
+  });
+
+  it('falls back to the derived current branch/location when the live ids are empty', async () => {
+    const mockPos = {
+      ...splitPos(),
+      branchId: '',
+      locationId: '',
+      currentBranch: { id: 3, name: 'الفرع 3' },
+      currentLocation: { id: 7, name: 'المخزن 7' },
+    };
+    renderModal(mockPos as never);
+
+    fireEvent.click(screen.getByRole('button', { name: 'تحصيل نقد' }));
+
+    await waitFor(() => expect(mockPos.createSale.mutateAsync).toHaveBeenCalledTimes(1));
+    const payload = mockPos.createSale.mutateAsync.mock.calls[0][0];
+    expect(payload.branchId).toBe('3');
+    expect(payload.locationId).toBe('7');
+    const built = buildPosSalePayload(payload);
+    expect(built.branchId).toBe('3');
+    expect(built.locationId).toBe('7');
+  });
+});
+
+describe('resolveSplitSaleBranch (T10-C)', () => {
+  it('prefers the live branch/location ids', () => {
+    expect(
+      resolveSplitSaleBranch({
+        branchId: '1',
+        currentBranch: { id: 3 } as never,
+        locationId: '2',
+        currentLocation: { id: 7 } as never,
+      }),
+    ).toEqual({ branchId: '1', locationId: '2' });
+  });
+
+  it('falls back to the derived current branch/location when the live ids are empty', () => {
+    expect(
+      resolveSplitSaleBranch({
+        branchId: '',
+        currentBranch: { id: 3 } as never,
+        locationId: '',
+        currentLocation: { id: 7 } as never,
+      }),
+    ).toEqual({ branchId: '3', locationId: '7' });
+  });
+
+  it('returns nulls when neither the live ids nor a current branch/location exist', () => {
+    expect(
+      resolveSplitSaleBranch({
+        branchId: '',
+        currentBranch: null,
+        locationId: '',
+        currentLocation: null,
+      }),
+    ).toEqual({ branchId: null, locationId: null });
   });
 });
