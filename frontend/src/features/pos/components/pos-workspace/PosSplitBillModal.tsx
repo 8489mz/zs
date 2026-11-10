@@ -848,9 +848,14 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
           );
           return;
         }
-        // Everything settled! Clear active cart
-        pos.setCart([]);
-        pos.setTableNumber('');
+        // Everything settled! Reset the whole workspace draft — the
+        // same reset handleSubmit/hold use (INV-REST-SPLIT-RESET-TRUTH):
+        // it clears the cart and table AND zeroes the redeemed loyalty
+        // points, clears the customer and wipes the persisted draft
+        // snapshot, so the redemption cannot survive into the next
+        // checkout (or a reload). The old manual setCart([]) +
+        // setTableNumber('') left all three behind.
+        pos.resetPosDraft();
         if (onSplitCompleted) onSplitCompleted();
         setTimeout(() => onClose(), 1200);
       } else {
@@ -911,8 +916,11 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
       });
 
       setEvenGuests(guests.map((g) => ({ ...g, paid: true })));
-      pos.setCart([]);
-      pos.setTableNumber('');
+      // Everything settled — same canonical reset as handlePayBill
+      // (INV-REST-SPLIT-RESET-TRUTH): clears cart/table, zeroes the
+      // redeemed points, clears the customer and wipes the draft
+      // snapshot, so no redemption survives into the next checkout.
+      pos.resetPosDraft();
       if (onSplitCompleted) onSplitCompleted();
       setTimeout(() => onClose(), 1200);
       return true;

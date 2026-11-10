@@ -527,6 +527,7 @@ function createMockPos(
     holdDraft: vi.fn(),
     setCart: vi.fn(),
     setTableNumber: vi.fn(),
+    resetPosDraft: vi.fn(),
   };
 }
 
@@ -572,9 +573,10 @@ describe('PosSplitBillModal — paying a bill posts the real total (B10)', () =>
     expect(payload.tenderedAmount).toBe(260.8);
     expect(payload.expectedTotal).toBe(260.8);
     expect(payload.payments).toEqual([{ paymentChannel: 'cash', amount: 260.8 }]);
-    // Settled: the workspace cart is cleared.
-    expect(mockPos.setCart).toHaveBeenCalledWith([]);
-    expect(mockPos.setTableNumber).toHaveBeenCalledWith('');
+    // Settled: the workspace draft is reset — the canonical reset
+    // subsumes the old manual cart/table clear (and zeroes the
+    // redeemed points, clears the customer and wipes the snapshot).
+    expect(mockPos.resetPosDraft).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -639,9 +641,9 @@ describe('PosSplitBillModal — split bills redeem loyalty points once, per bill
       0,
     );
     expect(totalRedeemed).toBe(100);
-    // Settled: 85 + 85 = the order total 170, so the split closes.
-    expect(mockPos.setCart).toHaveBeenCalledWith([]);
-    expect(mockPos.setTableNumber).toHaveBeenCalledWith('');
+    // Settled: 85 + 85 = the order total 170, so the split closes —
+    // via the canonical workspace reset, not the manual cart clear.
+    expect(mockPos.resetPosDraft).toHaveBeenCalledTimes(1);
   });
 
   it('posts the even split as one sale with the manual discount only and the order’s full redeemed points', async () => {
@@ -739,10 +741,9 @@ describe('PosSplitBillModal — split bills redeem loyalty points once, per bill
     );
     expect(totalRedeemed).toBe(200);
     // Settled: 0.05 + 0.05 = order total 0 + stranded 0.10, so the
-    // split closes and the cart clears — the cashier is not stuck with
-    // a posted-but-unsettled split.
-    expect(mockPos.setCart).toHaveBeenCalledWith([]);
-    expect(mockPos.setTableNumber).toHaveBeenCalledWith('');
+    // split closes and the workspace resets — the cashier is not stuck
+    // with a posted-but-unsettled split.
+    expect(mockPos.resetPosDraft).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -1197,5 +1198,128 @@ describe('resolveSplitSaleBranch (T10-C)', () => {
         currentLocation: null,
       }),
     ).toEqual({ branchId: null, locationId: null });
+  });
+});
+
+/* T12-H4 (INV-REST-SPLIT-RESET-TRUTH): Trial 4 proved a loyalty
+ * redemption survives a settled split — after a split sale redeemed
+ * 214 points, the next new checkout opened with the same 214 points
+ * still applied, for a customer holding only 12. The redemption lives
+ * in the workspace state (loyaltyPointsRedeemed, initialised from the
+ * stored draft) and the canonical reset resetPosDraftState zeroes it,
+ * clears the customer and wipes the draft snapshot — but the split
+ * paths never called it: both settled branches did only
+ * setCart([]) + setTableNumber(''), so the stale points survived even
+ * a reload (the snapshot persisted them; the state re-initialised
+ * from it). The fix calls pos.resetPosDraft() — the same reset
+ * handleSubmit/hold use — in both settled branches instead of the
+ * manual cart+table clear. The partial-pay branch must NOT reset:
+ * the remaining bills are still open and their items sync back to the
+ * active cart with the same customer and the same redemption.
+ *
+ * What this spec pins: the modal calls the canonical reset exactly
+ * once when a split settles (per-bill and even-split paths), never
+ * while bills are still unpaid, never via the manual setCart([]),
+ * and onSplitCompleted still fires. What it does NOT pin: the reload
+ * half — that a fresh mount no longer restores the redemption. This
+ * harness cannot observe it: the mock pos is a plain object with stub
+ * setters, there is no localStorage draft snapshot and no real
+ * usePosWorkspaceState to re-initialise from it. The snapshot wipe
+ * lives in the shared resetPosDraftState -> clearDraftSnapshot(),
+ * the same code handleSubmit/hold already use, so the call pinned
+ * here is the only code path that can produce it; the reload
+ * behaviour needs a live re-trial (re-seed loyalty first), not a
+ * second mock. */
+describe('PosSplitBillModal — settling a split resets the workspace draft (T12-H4)', () => {
+  function loyaltyPos() {
+    const a = item({ lineKey: 'LA', productId: '1', name: 'صنف أ', price: 100, modifiers: [] });
+    const b = item({ lineKey: 'LB', productId: '2', name: 'صنف ب', price: 100, modifiers: [] });
+    // Manual 20 + 100 points at 0.1 = 10 loyalty, combined 30, total 170.
+    const totals = orderTotals({
+      subTotal: 200,
+      discountValue: 30,
+      manualDiscount: 20,
+      loyaltyPointsRedeemed: 100,
+      loyaltyPointRedeemValue: 0.1,
+      loyaltyMaxDiscountPercentage: 100,
+      serviceCharge: 0,
+      taxRate: 0,
+      tipAmount: 0,
+      total: 170,
+    });
+    return createMockPos([a, b], totals, {
+      loyaltyPointsRedeemed: 100,
+      discount: 20,
+      loyaltyPointRedeemValue: 0.1,
+      loyaltyMaxDiscountPercentage: 100,
+      customerId: '7',
+    });
+  }
+
+  it('resets the workspace only when the last bill settles — never on a partial pay', async () => {
+    const mockPos = loyaltyPos();
+    const { onSplitCompleted } = renderModal(mockPos);
+
+    // Move item B to Bill 2.
+    const moveButtons = screen.getAllByTitle('نقل إلى الشيك 2');
+    fireEvent.click(moveButtons[1]);
+
+    // Pay Bill 1 (cash): 100 - 10 manual - 5 loyalty = 85.
+    fireEvent.click(screen.getAllByRole('button', { name: 'تحصيل نقد' })[0]);
+    await waitFor(() => expect(mockPos.createSale.mutateAsync).toHaveBeenCalledTimes(1));
+    // Partial pay: the remaining items sync back to the active cart
+    // and the workspace is NOT reset — Bill 2 is still open, same
+    // customer, same redemption.
+    expect(mockPos.resetPosDraft).not.toHaveBeenCalled();
+    expect(mockPos.setCart).toHaveBeenCalledWith([expect.objectContaining({ name: 'صنف ب' })]);
+    expect(mockPos.setCart).not.toHaveBeenCalledWith([]);
+    expect(onSplitCompleted).not.toHaveBeenCalled();
+
+    // Pay Bill 2: the other 85 — now everything is settled.
+    fireEvent.click(screen.getAllByRole('button', { name: 'تحصيل نقد' })[0]);
+    await waitFor(() => expect(mockPos.createSale.mutateAsync).toHaveBeenCalledTimes(2));
+    // Settled: exactly one canonical reset, and the manual cart
+    // clear is gone — setCart([]) must never be called on this path.
+    expect(mockPos.resetPosDraft).toHaveBeenCalledTimes(1);
+    expect(mockPos.setCart).not.toHaveBeenCalledWith([]);
+    expect(onSplitCompleted).toHaveBeenCalledTimes(1);
+  });
+
+  it('resets the workspace when the even split finalises — never while guests are still collecting', async () => {
+    const a = item({ lineKey: 'LA', productId: '1', name: 'صنف أ', price: 100, modifiers: [] });
+    const totals = orderTotals({
+      subTotal: 100,
+      discountValue: 30,
+      manualDiscount: 20,
+      loyaltyPointsRedeemed: 100,
+      loyaltyPointRedeemValue: 0.1,
+      loyaltyMaxDiscountPercentage: 100,
+      serviceCharge: 0,
+      taxRate: 0,
+      tipAmount: 0,
+      total: 70,
+    });
+    const mockPos = createMockPos([a], totals, {
+      loyaltyPointsRedeemed: 100,
+      discount: 20,
+      loyaltyPointRedeemValue: 0.1,
+      loyaltyMaxDiscountPercentage: 100,
+      customerId: '7',
+    });
+    const { onSplitCompleted } = renderModal(mockPos);
+    fireEvent.click(screen.getByRole('button', { name: 'تقسيم بالتساوي (ضيوف)' }));
+
+    // First guest collects: no sale posts yet, no reset either.
+    fireEvent.click(screen.getAllByRole('button', { name: 'سداد نقد' })[0]);
+    await waitFor(() => expect(screen.getByText(/تم التحصيل/)).toBeTruthy());
+    expect(mockPos.createSale.mutateAsync).not.toHaveBeenCalled();
+    expect(mockPos.resetPosDraft).not.toHaveBeenCalled();
+
+    // Second guest collects: the final sale posts and the split settles.
+    fireEvent.click(screen.getAllByRole('button', { name: 'سداد نقد' })[0]);
+    await waitFor(() => expect(mockPos.createSale.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(mockPos.resetPosDraft).toHaveBeenCalledTimes(1);
+    expect(mockPos.setCart).not.toHaveBeenCalledWith([]);
+    expect(onSplitCompleted).toHaveBeenCalledTimes(1);
   });
 });
