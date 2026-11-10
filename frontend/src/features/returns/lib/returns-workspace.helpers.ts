@@ -26,6 +26,20 @@ export function getReturnDateValue(row: ReturnRecord) {
   return row.createdAt || row.date || '';
 }
 
+// T11-C: the actual refund a return document paid is the stored
+// goods total plus the relief recorded on it. Documents created
+// before the relief columns existed carry no refundTotal, so the
+// refund is rebuilt from goods + relief; legacy documents with no
+// relief at all fall back to the stored goods total.
+export function actualReturnRefund(row: ReturnRecord): number {
+  if (row.refundTotal !== null && row.refundTotal !== undefined) return Number(row.refundTotal || 0);
+  return Number(row.total || 0) + Number(row.tipRelief || 0) + Number(row.courierRelief || 0);
+}
+
+export function sumActualReturnRefunds(rows: ReturnRecord[]): number {
+  return rows.reduce((sum, row) => sum + actualReturnRefund(row), 0);
+}
+
 export function returnTypeLabel(row: ReturnRecord, t?: (key: string, def: string) => string) {
   const isPurchase = getReturnTypeValue(row) === 'purchase';
   if (t) {
@@ -45,7 +59,7 @@ export function printReturnsRegister(rows: ReturnRecord[], meta?: { totalItems?:
       <td>${escapeHtml(formatDate(getReturnDateValue(row)))}</td>
     </tr>
   `).join('');
-  const total = Number(meta?.totalAmount ?? rows.reduce((sum, row) => sum + Number(row.total || 0), 0));
+  const total = Number(meta?.totalAmount ?? sumActualReturnRefunds(rows));
   const totalItems = Number(meta?.totalItems ?? rows.length);
   printHtmlDocument('سجل المرتجعات', `
     <h1>سجل المرتجعات</h1>

@@ -124,3 +124,52 @@ describe('ReturnsCreateModal relief lines (T10-D)', () => {
     expect(screen.getByRole('button', { name: 'تسجيل وتأكيد مرتجع البيع' })).toBeDisabled();
   });
 });
+
+/* T11-C (INV-REST-RETURN-RELIEF-LOUD-TRUTH): a failed relief preview
+ * must fail LOUD — the error is shown, the displayed amount is
+ * flagged as unverified, and confirm stays blocked until the
+ * preview loads or the retry succeeds. On the base the modal has no
+ * preview-error prop and renders nothing, so these cases fail there
+ * and pass after the fix. */
+describe('ReturnsCreateModal relief preview failure (T11-C)', () => {
+  it('renders the preview error and disables confirm while the preview is errored', () => {
+    renderModal({
+      expectedReturnValue: 75,
+      isReliefPreviewError: true,
+      reliefPreviewError: 'تعذر الاتصال بالخادم.',
+      onRetryReliefPreview: vi.fn(),
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/تعذّر حساب مبلغ الاسترداد/);
+    expect(screen.getByRole('alert')).toHaveTextContent(/تعذر الاتصال بالخادم/);
+    expect(screen.getByRole('button', { name: 'تسجيل وتأكيد مرتجع البيع' })).toBeDisabled();
+  });
+
+  it('offers a retry that calls back to the workspace preview query', () => {
+    const onRetryReliefPreview = vi.fn();
+    renderModal({
+      expectedReturnValue: 75,
+      isReliefPreviewError: true,
+      onRetryReliefPreview,
+    });
+
+    screen.getByRole('button', { name: /إعادة حساب الاسترداد/ }).click();
+    expect(onRetryReliefPreview).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the preview loading state instead of a silent unverified total', () => {
+    renderModal({ isReliefPreviewLoading: true });
+
+    expect(screen.getByRole('status')).toHaveTextContent(/جارٍ حساب مبلغ الاسترداد/);
+    expect(screen.getByRole('button', { name: 'تسجيل وتأكيد مرتجع البيع' })).toBeDisabled();
+  });
+
+  it('does not show the preview error when the preview succeeds', () => {
+    renderModal({
+      reliefPreview: { goodsTotal: 75, tipRelief: 10, courierRelief: 0, totalRelief: 10, refundTotal: 85 },
+    });
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'تسجيل وتأكيد مرتجع البيع' })).not.toBeDisabled();
+  });
+});

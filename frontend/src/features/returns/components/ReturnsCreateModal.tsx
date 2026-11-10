@@ -24,6 +24,13 @@ type Props = {
   expectedReturnValue: number;
   reliefPreview?: ReturnReliefPreview | null;
   isReliefPreviewLoading?: boolean;
+  // T11-C: a failed relief preview must fail LOUD — the error is
+  // shown, the displayed amount is flagged as unverified, and
+  // confirm stays blocked until the preview loads or the retry
+  // succeeds. Never silently fall back to the lines total.
+  isReliefPreviewError?: boolean;
+  reliefPreviewError?: string | null;
+  onRetryReliefPreview?: () => void;
   canUseCreditSettlement: boolean;
   settlementNeedsRefundMethod: boolean;
   isBusy: boolean;
@@ -59,6 +66,9 @@ export function ReturnsCreateModal(props: Props) {
     expectedReturnValue,
     reliefPreview = null,
     isReliefPreviewLoading = false,
+    isReliefPreviewError = false,
+    reliefPreviewError = null,
+    onRetryReliefPreview,
     canUseCreditSettlement,
     settlementNeedsRefundMethod,
     isBusy,
@@ -354,6 +364,28 @@ export function ReturnsCreateModal(props: Props) {
                   </>
                 ) : null}
 
+                {/* T11-C: a failed preview fails LOUD — the error is
+                    shown with a retry, the amount below is flagged
+                    as unverified, and confirm stays blocked. */}
+                {isReliefPreviewError ? (
+                  <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', padding: '12px 14px', fontSize: '12.5px', color: '#991b1b' }}>
+                    <div style={{ fontWeight: 800, marginBottom: '4px' }}>تعذّر حساب مبلغ الاسترداد من الخادم — القيمة المعروضة هي قيمة البضاعة فقط ولم تُؤكَّد بعد.</div>
+                    {reliefPreviewError ? (
+                      <div style={{ color: '#b91c1c', marginBottom: '8px' }}>{reliefPreviewError}</div>
+                    ) : null}
+                    {onRetryReliefPreview ? (
+                      <Button type="button" variant="secondary" onClick={onRetryReliefPreview} style={{ padding: '6px 12px', fontSize: '12.5px' }}>
+                        إعادة حساب الاسترداد
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+                {isReliefPreviewLoading && !isReliefPreviewError ? (
+                  <div role="status" style={{ color: '#9a3412', fontSize: '12.5px' }}>
+                    جارٍ حساب مبلغ الاسترداد من الخادم…
+                  </div>
+                ) : null}
+
                 {/* Hero Total Refund Box */}
                 <div
                   style={{
@@ -385,7 +417,7 @@ export function ReturnsCreateModal(props: Props) {
                 type="button"
                 variant="primary"
                 onClick={onOpenConfirm}
-                disabled={!selectedInvoice || selectedItemsCount === 0 || isBusy || isReliefPreviewLoading || (!returnQuantitiesValid && !canRetryUnresolved)}
+                disabled={!selectedInvoice || selectedItemsCount === 0 || isBusy || isReliefPreviewLoading || isReliefPreviewError || (!returnQuantitiesValid && !canRetryUnresolved)}
                 style={{
                   width: '100%',
                   padding: '10px',

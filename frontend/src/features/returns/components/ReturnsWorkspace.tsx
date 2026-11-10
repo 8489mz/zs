@@ -24,6 +24,7 @@ import {
   printReturnsRegister,
   ReturnFormState,
   returnTypeLabel,
+  sumActualReturnRefunds,
 } from '@/features/returns/lib/returns-workspace.helpers';
 import { formatCurrency, formatDate } from '@/lib/format';
 import type { Purchase, PurchaseItem, Sale, SaleItem } from '@/types/domain';
@@ -146,6 +147,14 @@ export function ReturnsWorkspace() {
   });
   const reliefPreview = form.type === 'sale' ? reliefPreviewQuery.data : undefined;
   const isReliefPreviewLoading = Boolean(isCreateOpen && form.type === 'sale' && selectedReturnItems.length > 0 && reliefPreviewQuery.isFetching);
+  // T11-C: a failed preview must fail LOUD, never silently fall back
+  // to the lines total. The error (with its server message) goes to
+  // the modal, which shows it and blocks confirm until the preview
+  // loads or the retry succeeds.
+  const isReliefPreviewError = Boolean(isCreateOpen && form.type === 'sale' && selectedReturnItems.length > 0 && reliefPreviewQuery.isError);
+  const reliefPreviewError = isReliefPreviewError
+    ? (reliefPreviewQuery.error instanceof Error ? reliefPreviewQuery.error.message : 'تعذر حساب مبلغ الاسترداد.')
+    : null;
   const settlementNeedsRefundMethod = form.settlementMode === 'refund';
   const canUseCreditSettlement = form.type === 'sale' && Boolean(selectedInvoice && 'customerId' in selectedInvoice && selectedInvoice.customerId);
 
@@ -167,7 +176,22 @@ export function ReturnsWorkspace() {
   const summary = query.data?.summary;
   const salesReturns = Number(summary?.salesReturns || 0);
   const purchaseReturns = Number(summary?.purchaseReturns || 0);
-  const total = Number(summary?.totalAmount || 0);
+  // T11-C (follow-up D): the server summary totalAmount sums goods
+  // totals only, while each document already carries its actual
+  // refund (goods + relief). The register stat sweeps the same
+  // filtered register via the existing listAll paging and sums the
+  // actual refunds; the goods-only server total is only the
+  // fallback while the sweep loads or if it fails.
+  const registerRefundQuery = useQuery({
+    queryKey: ['returns', 'register-refund-total', search, viewFilter, employeeFilter],
+    queryFn: async () => {
+      const payload = await returnsApi.listAll({ search, filter: viewFilter, employee: employeeFilter });
+      return sumActualReturnRefunds(payload.returns || []);
+    },
+    enabled: activeTab === 'register',
+    staleTime: 30_000,
+  });
+  const total = registerRefundQuery.isSuccess ? Number(registerRefundQuery.data || 0) : Number(summary?.totalAmount || 0);
   const selectedReturn = findReturnInRegisterOrRadar(selectedReturnId, rows, radarRows);
 
   useEffect(() => {
@@ -374,7 +398,7 @@ export function ReturnsWorkspace() {
 
   const printReturns = async () => {
     const payload = await returnsApi.listAll(buildReturnRegisterExportQuery({ search, filter: viewFilter, employee: employeeFilter }));
-    printReturnsRegister(payload.returns || [], { totalItems: payload.summary?.totalItems, totalAmount: payload.summary?.totalAmount });
+    printReturnsRegister(payload.returns || [], { totalItems: payload.summary?.totalItems, totalAmount: sumActualReturnRefunds(payload.returns || []) });
   };
 
   const handleRegisterSearchChange = (value: string) => {
@@ -492,6 +516,9 @@ export function ReturnsWorkspace() {
           expectedReturnValue={expectedReturnValue}
           reliefPreview={reliefPreview}
           isReliefPreviewLoading={isReliefPreviewLoading}
+          isReliefPreviewError={isReliefPreviewError}
+          reliefPreviewError={reliefPreviewError}
+          onRetryReliefPreview={() => void reliefPreviewQuery.refetch()}
           canUseCreditSettlement={canUseCreditSettlement}
           settlementNeedsRefundMethod={settlementNeedsRefundMethod}
           isBusy={createMutation.isPending}
@@ -504,6 +531,10 @@ export function ReturnsWorkspace() {
           onSetItemQty={setItemQty}
           onSetSerials={(itemId, value) => { if (!returnAttempt.current) setSelectedSerials((current) => ({ ...current, [itemId]: value })); }}
           onOpenConfirm={() => {
+            // T11-C: never open the confirm dialog on an unverified
+            // refund — the preview must have loaded successfully
+            // (or the retry must have succeeded) first.
+            if (isReliefPreviewError || isReliefPreviewLoading) return;
             if ((returnHistoryReady && returnQuantitiesValid) || returnOutcomeUncertain) {
               setConfirmReturn(true);
             }
