@@ -36,6 +36,23 @@
  * serverQuote) is NOT pinned here: the modal spec has no rendering
  * harness (it only tests exported validation helpers), and no harness
  * was invented — the one-line .catch change is pinned by code review.
+ *
+ * D-SF-07 (INV-SF-DEMO-FEE-35-REMOVED): the last demo fallback in this
+ * file was getInfo — on ANY http error it returned DEMO_STOREFRONT_INFO
+ * (deliveryFee 35) stamped with the requested slug, so a dead info fetch
+ * rendered a demo store and the checkout modal showed the stale 35 as
+ * the delivery fee when the server quote also failed. getInfo now lets
+ * the ApiError propagate; the public page fails closed on
+ * infoQuery.isError with an explicit error screen, and the hook's
+ * empty-info default carries deliveryFee 0. The modal itself needs no
+ * change: it has no 35 literal and its fee comes only from the props
+ * (server quote, delivery zone, info.deliveryFee) — with the getInfo
+ * fallback gone, no 35 can reach it. RED PROOF: at base the error case
+ * below resolves demo info (deliveryFee 35); after the fix it rejects.
+ * Verified by temporarily restoring the old catch in place and
+ * re-running this spec (red: the 2 error cases fail, exit 1), then
+ * re-applying the fix with the same targeted edit (green: 21 passed,
+ * exit 0).
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -325,5 +342,55 @@ describe('storefront quote/search/details never serve demo data (INV-REST-QUOTEC
     expect(res.product.price).toBe(131.6);
     expect(res.related.map((p) => p.id)).toEqual([16813]);
     expect(res.crossSell).toEqual([]);
+  });
+});
+
+describe('storefront getInfo never serves demo info (INV-SF-DEMO-FEE-35-REMOVED)', () => {
+  const serverInfo = {
+    tenantId: 't-1',
+    slug: 'almhnds',
+    businessName: 'مطعم المهندس',
+    enabled: true,
+    title: 'مطعم المهندس',
+    bio: '',
+    announcement: '',
+    bannerUrl: '',
+    deliveryFee: 15,
+    freeShippingEnabled: true,
+    freeShippingMinOrder: 300,
+    minOrder: 0,
+    whatsappPhone: '',
+    currency: 'EGP',
+    smartDealsEnabled: false,
+  };
+
+  it('rejects on HTTP error instead of resolving demo info with deliveryFee 35', async () => {
+    httpMock.mockRejectedValueOnce(new Error('Request failed with status code 404'));
+    await expect(storefrontApi.getInfo('no-such-store')).rejects.toThrow('404');
+    expect(httpMock).toHaveBeenCalledTimes(1);
+    expect(httpMock).toHaveBeenCalledWith('/api/storefront/no-such-store/info');
+  });
+
+  it('rejects on a network failure too — never a demo store', async () => {
+    httpMock.mockRejectedValueOnce(new Error('Network Error'));
+    await expect(storefrontApi.getInfo('almhnds')).rejects.toThrow('Network Error');
+    expect(httpMock).toHaveBeenCalledTimes(1);
+    expect(httpMock).toHaveBeenCalledWith('/api/storefront/almhnds/info');
+  });
+
+  it('returns exactly the server info — the server fee, never 35', async () => {
+    httpMock.mockResolvedValueOnce(serverInfo);
+    const res = await storefrontApi.getInfo('almhnds');
+    expect(res.deliveryFee).toBe(15);
+    expect(res.deliveryFee).not.toBe(35);
+    expect(res.slug).toBe('almhnds');
+    expect(res.freeShippingMinOrder).toBe(300);
+    expect(res.currency).toBe('EGP');
+  });
+
+  it('passes a zero server fee through instead of substituting 35', async () => {
+    httpMock.mockResolvedValueOnce({ ...serverInfo, deliveryFee: 0 });
+    const res = await storefrontApi.getInfo('almhnds');
+    expect(res.deliveryFee).toBe(0);
   });
 });

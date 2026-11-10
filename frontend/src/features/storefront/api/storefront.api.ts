@@ -106,13 +106,20 @@ export function resolveStorefrontCatalogResponse(
 
 export const storefrontApi = {
   // Public APIs (No auth needed)
+  // INV-SF-DEMO-FEE-35-REMOVED (D-SF-07): getInfo never serves demo info.
+  // The old catch returned DEMO_STOREFRONT_INFO (deliveryFee 35,
+  // free-shipping threshold 300, minOrder 50) stamped with the requested
+  // slug on ANY http error, so a dead info fetch rendered a demo store
+  // and the checkout modal displayed the stale 35 as the delivery fee
+  // whenever the server quote also failed — while the charged amount
+  // stayed server-side. The error now propagates to the caller: the
+  // public page fails closed on infoQuery.isError with an explicit
+  // error screen, and the hook's empty-info default carries
+  // deliveryFee 0, never 35. Same fail-closed shape as getCatalog
+  // (R3-C) and quoteCart (R6-A).
   getInfo: async (slug: string) => {
-    try {
-      const res = await http<StorefrontInfo>(`/api/storefront/${encodeURIComponent(slug)}/info`);
-      return withResolvedInfoMedia(res);
-    } catch {
-      return withResolvedInfoMedia({ ...DEMO_STOREFRONT_INFO, slug: slug || DEMO_STOREFRONT_INFO.slug });
-    }
+    const res = await http<StorefrontInfo>(`/api/storefront/${encodeURIComponent(slug)}/info`);
+    return withResolvedInfoMedia(res);
   },
 
   getTablesQr: (slug: string, from = 1, to = 20) =>
@@ -437,9 +444,10 @@ export const storefrontApi = {
    * the demo delivery fee 35.00 despite free delivery, and the order never
    * reached admin because nothing was ever persisted. The checkout modal
    * already shows the thrown error message (setErrorMsg), so the shopper
-   * sees the real named reason instead of a fake success. Demo fallbacks
-   * stay for read-only browsing (getInfo/getCatalog/quote); only the order
-   * write loses its fabrication.
+   * sees the real named reason instead of a fake success. The read paths
+   * lost their demo fallbacks the same way (getCatalog R3-C, quoteCart
+   * R6-A, getInfo D-SF-07); the only DEMO_STOREFRONT_INFO uses left in
+   * this file are currency fallbacks that resolve to 'EGP'.
    */
   createOrder: async (slug: string, payload: CreateOnlineOrderPayload): Promise<CreateOnlineOrderResponse> => {
     return await http<CreateOnlineOrderResponse>(`/api/storefront/${encodeURIComponent(slug)}/orders`, {
