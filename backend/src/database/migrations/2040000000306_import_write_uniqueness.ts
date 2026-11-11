@@ -21,6 +21,7 @@ import { sql } from 'kysely';
  * must be deduped first, never silently dropped.
  *
  * (b) Container deposits: import_container_deposits gains
+ * serial_id BIGSERIAL (if missing from older creation schemas),
  * idempotency_key VARCHAR(128) NOT NULL + a unique index on
  * (tenant_id, idempotency_key). The natural key
  * (tenant_id, shipment_id, container_no) is already unique
@@ -37,7 +38,8 @@ import { sql } from 'kysely';
  * container) so no legacy replay identity is lost.
  *
  * (c) Floating-goods preorders: import_container_preorders
- * gains the same idempotency_key column + unique index. Unlike
+ * gains serial_id BIGSERIAL (if missing) + the same
+ * idempotency_key column + unique index. Unlike
  * deposits there is NO natural unique constraint here —
  * preorder_no is a fresh randomUUID per row — so a retry after
  * a network drop inserted a second reservation, consumed B/L
@@ -65,16 +67,20 @@ export async function up(db: any): Promise<void> {
       WHERE stage = 'receiving' AND shipment_id IS NOT NULL
   `.execute(db);
 
+  await sql`ALTER TABLE "import_container_deposits" ADD COLUMN IF NOT EXISTS "serial_id" BIGSERIAL`.execute(db);
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_import_container_deposits_serial_id ON "import_container_deposits" (serial_id)`.execute(db);
   await sql`ALTER TABLE "import_container_deposits" ADD COLUMN IF NOT EXISTS "idempotency_key" VARCHAR(128)`.execute(db);
-  await sql`UPDATE "import_container_deposits" SET "idempotency_key" = 'legacy:' || serial_id::text WHERE "idempotency_key" IS NULL`.execute(db);
+  await sql`UPDATE "import_container_deposits" SET "idempotency_key" = 'legacy:' || COALESCE(serial_id::text, id::text) WHERE "idempotency_key" IS NULL`.execute(db);
   await sql`ALTER TABLE "import_container_deposits" ALTER COLUMN "idempotency_key" SET NOT NULL`.execute(db);
   await sql`
     CREATE UNIQUE INDEX IF NOT EXISTS uq_import_container_deposits_tenant_idempotency
       ON import_container_deposits (tenant_id, idempotency_key)
   `.execute(db);
 
+  await sql`ALTER TABLE "import_container_preorders" ADD COLUMN IF NOT EXISTS "serial_id" BIGSERIAL`.execute(db);
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_import_container_preorders_serial_id ON "import_container_preorders" (serial_id)`.execute(db);
   await sql`ALTER TABLE "import_container_preorders" ADD COLUMN IF NOT EXISTS "idempotency_key" VARCHAR(128)`.execute(db);
-  await sql`UPDATE "import_container_preorders" SET "idempotency_key" = 'legacy:' || serial_id::text WHERE "idempotency_key" IS NULL`.execute(db);
+  await sql`UPDATE "import_container_preorders" SET "idempotency_key" = 'legacy:' || COALESCE(serial_id::text, id::text) WHERE "idempotency_key" IS NULL`.execute(db);
   await sql`ALTER TABLE "import_container_preorders" ALTER COLUMN "idempotency_key" SET NOT NULL`.execute(db);
   await sql`
     CREATE UNIQUE INDEX IF NOT EXISTS uq_import_container_preorders_tenant_idempotency

@@ -44,5 +44,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Lightweight Background Thermal Print Server for PC PDF & ESC/POS -->
+        <service
+            android:name=".PrintServerService"
+            android:enabled="true"
+            android:exported="true" />
     </application>
 </manifest>

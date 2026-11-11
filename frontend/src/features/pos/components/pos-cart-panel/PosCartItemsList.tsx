@@ -43,6 +43,8 @@ const PosCartItemRow = memo(function PosCartItemRow({
    * visible rows summing above the shown total. */
   const lineTotal = calcCartLineNetTotal(item);
   const lineDiscount = calcCartLineDiscount(item);
+  const [isEditingDiscount, setIsEditingDiscount] = useState(false);
+  const hasLineDiscount = lineDiscount > 0;
   /* R5-A (INV-REST-TOTALS-TRUTH-2, M19): the line total already
    * includes modifiers (R-B8), but the price column and the per-unit
    * hint showed the bare base price — the unit price a modifier sale
@@ -347,32 +349,131 @@ const PosCartItemRow = memo(function PosCartItemRow({
           * permission, same lock as the header discount. The action
           * clamps the amount to the line gross at book digits. */}
         {typeof onLineDiscountChange === 'function' && (
-          <span
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px', fontSize: '10.5px', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            {t('pos.line_discount_short', 'خصم')}
-            <input
-              type="number"
-              aria-label={t('pos.line_discount', 'خصم الصنف')}
-              value={Number(item.lineDiscount || 0) > 0 ? String(item.lineDiscount) : ''}
-              placeholder="0"
-              min={0}
-              max={calcCartLineTotal(item)}
-              step="0.01"
-              disabled={!canApplyDiscount}
-              onChange={(event) => {
-                const parsed = Number(event.target.value);
-                onLineDiscountChange(item.lineKey, Number.isFinite(parsed) && parsed > 0 ? parsed : 0);
+          hasLineDiscount || isEditingDiscount ? (
+            <span
+              className="pos-cart-line-discount-wrap"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '2px',
+                marginTop: '2px',
+                fontSize: '10.5px',
+                color: hasLineDiscount ? '#047857' : '#64748b',
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                background: hasLineDiscount ? '#ecfdf5' : '#f8fafc',
+                border: `1px solid ${hasLineDiscount ? '#a7f3d0' : '#e2e8f0'}`,
+                borderRadius: '4px',
+                padding: '1px 3px',
+                boxSizing: 'border-box',
+                lineHeight: 1,
               }}
-              style={{ width: '64px', height: '22px', fontSize: '11px', padding: '1px 4px', border: '1px solid #cbd5e1', borderRadius: '5px', textAlign: 'center', direction: 'ltr' }}
-            />
-          </span>
-        )}
-        {lineDiscount > 0 && (
-          <span style={{ fontSize: '10.5px', color: '#065f46', fontWeight: 700, marginTop: '1px', whiteSpace: 'nowrap' }}>
-            - {formatCurrencyWithCode(lineDiscount)}
-          </span>
+              onClick={(event) => event.stopPropagation()}
+            >
+              <span style={{ fontSize: '10px', color: hasLineDiscount ? '#047857' : '#64748b', fontWeight: 700, userSelect: 'none' }}>
+                {t('pos.line_discount_short', 'خصم')}
+              </span>
+              <input
+                type="number"
+                className="pos-cart-discount-input"
+                aria-label={t('pos.line_discount', 'خصم الصنف')}
+                value={Number(item.lineDiscount || 0) > 0 ? String(item.lineDiscount) : ''}
+                placeholder="0"
+                min={0}
+                max={calcCartLineTotal(item)}
+                step="0.01"
+                disabled={!canApplyDiscount}
+                autoFocus={isEditingDiscount}
+                onBlur={() => {
+                  if (!Number(item.lineDiscount || 0)) {
+                    setIsEditingDiscount(false);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === 'Escape') {
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                onChange={(event) => {
+                  const parsed = Number(event.target.value);
+                  onLineDiscountChange(item.lineKey, Number.isFinite(parsed) && parsed > 0 ? parsed : 0);
+                }}
+                style={{
+                  width: '42px',
+                  height: '18px',
+                  minHeight: '18px',
+                  maxHeight: '18px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  padding: '0 3px',
+                  border: `1px solid ${hasLineDiscount ? '#6ee7b7' : '#cbd5e1'}`,
+                  borderRadius: '3px',
+                  textAlign: 'center',
+                  direction: 'ltr',
+                  background: '#ffffff',
+                  color: hasLineDiscount ? '#047857' : '#0f172a',
+                  boxSizing: 'border-box',
+                  outline: 'none',
+                }}
+              />
+              {hasLineDiscount && (
+                <button
+                  type="button"
+                  className="pos-cart-clear-discount-btn"
+                  title={t('common.remove', 'إلغاء الخصم')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onLineDiscountChange(item.lineKey, 0);
+                    setIsEditingDiscount(false);
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '0 2px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#059669',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="pos-cart-add-discount-btn"
+              disabled={!canApplyDiscount}
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsEditingDiscount(true);
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '2px',
+                marginTop: '2px',
+                fontSize: '10.5px',
+                fontWeight: 600,
+                color: '#94a3b8',
+                background: 'transparent',
+                border: 'none',
+                cursor: canApplyDiscount ? 'pointer' : 'default',
+                padding: '1px 4px',
+                borderRadius: '4px',
+                lineHeight: 1,
+                whiteSpace: 'nowrap',
+              }}
+              title={t('pos.line_discount', 'إضافة خصم على الصنف')}
+            >
+              + {t('pos.line_discount_short', 'خصم')}
+            </button>
+          )
         )}
         {item.qty > 1 && (
           <span

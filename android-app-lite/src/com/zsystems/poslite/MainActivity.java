@@ -71,6 +71,16 @@ public class MainActivity extends Activity {
             WebView.setWebContentsDebuggingEnabled(true);
         }
 
+        // Start Dedicated Lightweight Background Print Server (Port 8080 & 9100 for PC PDF Printing)
+        try {
+            Intent serviceIntent = new Intent(this, PrintServerService.class);
+            if (Build.VERSION.SDK_INT >= 26) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+        } catch (Exception ignored) {}
+
         requestWindowFeature(Window.FEATURE_NO_TITLE);
 
         // 1. Force Hardware Acceleration on Window level for smooth 60fps

@@ -127,4 +127,34 @@ describe('PosCartItemsList', () => {
 
     expect(screen.queryByLabelText(/خصم الصنف/)).not.toBeInTheDocument();
   });
+  it('renders subtle add discount button for undiscounted row and opens micro input on click', () => {
+    const onLineDiscountChange = vi.fn();
+    render(
+      <PosCartItemsList
+        cart={cart}
+        lastAddedLineKey=""
+        selectedLineKey=""
+        canApplyDiscount
+        onQtyChange={vi.fn()}
+        onLineDiscountChange={onLineDiscountChange}
+        onRemoveItem={vi.fn()}
+        onSelectLine={vi.fn()}
+        onItemNoteChange={vi.fn()}
+      />,
+    );
+
+    // Initial state: input is not shown, "+ خصم" button is shown
+    expect(screen.queryByLabelText(/خصم الصنف/)).not.toBeInTheDocument();
+    const addButtons = screen.getAllByRole('button', { name: /خصم/ });
+    expect(addButtons.length).toBeGreaterThan(0);
+
+    // Clicking "+ خصم" reveals the micro input
+    fireEvent.click(addButtons[0]);
+    const input = screen.getByLabelText(/خصم الصنف/) as HTMLInputElement;
+    expect(input).toBeInTheDocument();
+
+    // Changing value calls the handler
+    fireEvent.change(input, { target: { value: '25' } });
+    expect(onLineDiscountChange).toHaveBeenCalledWith(cart[0].lineKey, 25);
+  });
 });
