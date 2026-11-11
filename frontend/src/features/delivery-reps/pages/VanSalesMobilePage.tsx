@@ -3327,7 +3327,7 @@ export default function VanSalesMobilePage() {
                   onSubmitSettle={async (
                     supervisorPin?: string,
                     countedStock?: { productId: number; countedQty: number }[],
-                    chargeStockVarianceToRep?: boolean,
+                    nightStockApproved?: boolean,
                   ) => {
                     const isBlind = Boolean(data?.isBlindSettlement);
                     const expectedToRemit = Number((data.trip as any)?.expectedCashToRemit ?? data.trip?.cashCollected ?? 0);
@@ -3356,12 +3356,20 @@ export default function VanSalesMobilePage() {
                     }
 
                     const activeCustId = activeVisit?.customerId;
+                    // INV-VAN-SELF-SETTLE-PIN-REQUIRED: the rep's phone
+                    // never sends chargeStockVarianceToRep — the backend
+                    // treats a driver-path shortage as pending until a
+                    // supervisor decides from the admin side.
+                    // nightStockApproved is the supervisor's explicit
+                    // approval (authorized by the PIN) to keep stock
+                    // in the van overnight; without it the backend
+                    // refuses the settlement when stock remains.
                     settleTripMutation.mutate({
                       tripId: data.trip!.id,
                       countedCash: Number(finalCountedCash),
                       unloadRemainingToWarehouse: unloadRemaining,
                       countedStock,
-                      chargeStockVarianceToRep,
+                      nightStockApproved,
                       activeVisitCustomerId: activeCustId,
                       supervisorPin,
                     });

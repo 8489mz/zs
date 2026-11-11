@@ -977,7 +977,11 @@ export const vanSalesApi = {
     countedCash: number;
     unloadRemainingToWarehouse: boolean;
     countedStock?: { productId: number; countedQty: number }[];
-    chargeStockVarianceToRep?: boolean;
+    // INV-VAN-SELF-SETTLE-PIN-REQUIRED: the rep's phone never sends a
+    // charge/waive decision. nightStockApproved is the supervisor's
+    // explicit approval (authorized by the supervisor PIN) to keep
+    // remaining stock in the van overnight instead of unloading it.
+    nightStockApproved?: boolean;
     endOdometer?: number;
     activeVisitCustomerId?: number;
     notes?: string;

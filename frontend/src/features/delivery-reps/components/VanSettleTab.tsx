@@ -77,10 +77,15 @@ interface VanSettleTabProps {
   onCountedCashChange: (val: string) => void;
   unloadRemaining: boolean;
   onUnloadRemainingChange: (val: boolean) => void;
+  // INV-VAN-SELF-SETTLE-PIN-REQUIRED: no charge/waive argument — the
+  // rep's phone never sends that decision; a shortage stays pending
+  // until a supervisor decides from the admin side. nightStockApproved
+  // is the supervisor's explicit approval (authorized by the PIN) to
+  // keep remaining stock in the van overnight instead of unloading it.
   onSubmitSettle: (
     supervisorPin?: string,
     countedStock?: { productId: number; countedQty: number }[],
-    chargeStockVarianceToRep?: boolean,
+    nightStockApproved?: boolean,
   ) => void;
   isSubmitting: boolean;
   requireSupervisorPin?: boolean;
@@ -115,7 +120,11 @@ export const VanSettleTab: React.FC<VanSettleTabProps> = ({
   const [showStockAudit, setShowStockAudit] = useState<boolean>(false);
   const [countedStockMap, setCountedStockMap] = useState<Record<number, string>>({});
   const [stockAuditSearch, setStockAuditSearch] = useState<string>('');
-  const [chargeStockVarianceToRep, setChargeStockVarianceToRep] = useState<boolean>(true);
+  // INV-VAN-SELF-SETTLE-PIN-REQUIRED: explicit supervisor approval to
+  // keep remaining stock in the van overnight. Defaults off; the
+  // supervisor authorizes it with the PIN at settle time. Merely not
+  // unloading never approves it.
+  const [nightStockApproved, setNightStockApproved] = useState<boolean>(false);
 
   const handleMatchAllStock = () => {
     const nextMap: Record<number, string> = {};
@@ -1039,34 +1048,11 @@ export const VanSettleTab: React.FC<VanSettleTabProps> = ({
                   })}
                 </div>
 
-                {/* Charge stock variance checkbox */}
-                {stockAuditSummary.shortageCount > 0 && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 8px',
-                      backgroundColor: '#fff1f2',
-                      borderRadius: '6px',
-                      border: '1px solid #fecdd3',
-                      fontSize: '11px',
-                      color: '#9f1239',
-                      fontWeight: 700,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      id="chargeStockVariance"
-                      checked={chargeStockVarianceToRep}
-                      onChange={(e) => setChargeStockVarianceToRep(e.target.checked)}
-                      style={{ accentColor: '#170e5e', cursor: 'pointer' }}
-                    />
-                    <label htmlFor="chargeStockVariance" style={{ cursor: 'pointer' }}>
-                      {t('delivery_reps.van_settle_tab.s50', "تحميل تكلفة عجز المخزون (")}{stockAuditSummary.totalShortageCost.toFixed(2)} {t('delivery_reps.van_settle_tab.s51', "ج.م) على عهدة المندوب المالية")}
-                    </label>
-                  </div>
-                )}
+                {/* INV-VAN-SELF-SETTLE-PIN-REQUIRED: the rep-side
+                charge/waive checkbox is removed — the rep never decides
+                whether his own stock shortage is charged to him or
+                waived. A shortage now stays pending on the rep until a
+                supervisor settles or waives it from the admin side. */}
               </div>
             )}
           </div>
@@ -1095,6 +1081,36 @@ export const VanSettleTab: React.FC<VanSettleTabProps> = ({
             {t('delivery_reps.van_settle_tab.s52', "تفريغ البضاعة المتبقية في السيارة (")}{inventory.length} {t('delivery_reps.van_settle_tab.s53', "صنف) وإعادتها للمستودع تلقائياً")}
           </label>
         </div>
+
+        {/* INV-VAN-SELF-SETTLE-PIN-REQUIRED: explicit supervisor approval
+        to keep remaining stock in the van overnight. Shown only when
+        stock would stay in the van (not unloading). Defaults off — the
+        supervisor ticks it and authorizes it with the PIN; without it
+        the settlement is refused (NIGHT_STOCK_UNAPPROVED). */}
+        {!unloadRemaining && inventory.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 10px',
+              backgroundColor: '#fffbeb',
+              borderRadius: '8px',
+              border: '1px solid #fde68a',
+            }}
+          >
+            <input
+              type="checkbox"
+              id="nightStockCheck"
+              checked={nightStockApproved}
+              onChange={(e) => setNightStockApproved(e.target.checked)}
+              style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#170e5e' }}
+            />
+            <label htmlFor="nightStockCheck" style={{ fontSize: '11.5px', fontWeight: 700, color: '#92400e', cursor: 'pointer' }}>
+              {t('delivery_reps.van_settle_tab.s59', "إبقاء البضاعة المتبقية في السيارة لليوم التالي بموافقة صريحة من المشرف (يُعتمد برمز PIN المشرف)")}
+            </label>
+          </div>
+        )}
 
         {/* Maker-Checker Supervisor PIN Authorization for Final Settlement */}
         {requireSupervisorPin && (
@@ -1202,7 +1218,7 @@ export const VanSettleTab: React.FC<VanSettleTabProps> = ({
                 }))
               : undefined;
 
-            onSubmitSettle(supervisorPin.trim() || undefined, countedStockArray, chargeStockVarianceToRep);
+            onSubmitSettle(supervisorPin.trim() || undefined, countedStockArray, !unloadRemaining && nightStockApproved);
           }}
           disabled={isSubmitting}
           style={{

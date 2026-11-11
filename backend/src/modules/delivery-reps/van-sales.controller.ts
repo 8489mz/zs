@@ -123,7 +123,16 @@ export class VanSalesController {
       endOdometer?: number;
       unloadRemainingToWarehouse: boolean;
       countedStock?: { productId: number; countedQty: number }[];
+      // INV-VAN-SELF-SETTLE-PIN-REQUIRED: a driver-supplied value here
+      // is IGNORED — the rep never decides whether his own shortage is
+      // charged or waived. The field stays in the type so older phone
+      // builds keep sending it without a 400; the service treats the
+      // shortage as pending until a supervisor decides.
       chargeStockVarianceToRep?: boolean;
+      // Explicit supervisor-approved overnight retention, requested by
+      // the rep and authorized by the supervisor PIN below. Merely not
+      // unloading is NOT approval.
+      nightStockApproved?: boolean;
       activeVisitCustomerId?: number;
       notes?: string;
       supervisorPin?: string;
@@ -136,52 +145,44 @@ export class VanSalesController {
     // sales stay blocked by the strict verifier elsewhere.
     const driver = await this.deliveryRepsService.verifyDriverTokenForSettlement(authHeader);
     const pinToVerify = String(body?.supervisorPin || body?.supervisorOverridePin || '').trim();
-    const isPinRequired = await this.vanSalesService.isSupervisorPinRequiredForSettlement(driver.tenantId);
 
-    let pinVerification: {
-      approved: boolean;
-      supervisorId?: number;
-      supervisorName?: string;
-      supervisorRole?: string;
-    } | null = null;
-
-    if (isPinRequired) {
-      if (!pinToVerify) {
-        await this.vanSalesService.recordSuspicionEvent({
-          tenantId: driver.tenantId,
-          accountId: driver.accountId,
-          repId: driver.repId,
+    // INV-VAN-SELF-SETTLE-PIN-REQUIRED: self-settlement from the
+    // driver's phone ALWAYS requires a supervisor PIN — mandatory, not
+    // opt-in by default. The old path let the PIN be skipped whenever
+    // the tenant setting was absent (default false), so the service
+    // received no authContext and its maker-checker check never ran.
+    // A missing PIN fails closed here, and a verified PIN always
+    // produces the supervisor authContext below, so maker-checker runs
+    // on every driver settle. The rep's own PIN is refused inside
+    // verifySupervisorPin (MAKER_CHECKER_SELF_APPROVAL).
+    if (!pinToVerify) {
+      await this.vanSalesService.recordSuspicionEvent({
+        tenantId: driver.tenantId,
+        accountId: driver.accountId,
+        repId: driver.repId,
+        tripId: body?.tripId,
+        eventCode: AUDIT_EVENT_CODES.VAN_SUSPICION_UNAUTHORIZED_LOAD_OR_SETTLE,
+        severity: 'critical',
+        titleAr: 'محاولة إغلاق وتصفية رحلة ذاتياً بدون رمز اعتماد المشرف (PIN)',
+        detailsAr: `حاول المندوب اعتماد وتصفية الرحلة #${body?.tripId} نهائياً من تطبيق المندوب دون إدخال رمز اعتماد المشرف.`,
+        metadata: {
           tripId: body?.tripId,
-          eventCode: AUDIT_EVENT_CODES.VAN_SUSPICION_UNAUTHORIZED_LOAD_OR_SETTLE,
-          severity: 'critical',
-          titleAr: 'محاولة إغلاق وتصفية رحلة ذاتياً بدون رمز اعتماد المشرف (PIN)',
-          detailsAr: `حاول المندوب اعتماد وتصفية الرحلة #${body?.tripId} نهائياً من تطبيق المندوب دون إدخال رمز اعتماد المشرف.`,
-          metadata: {
-            tripId: body?.tripId,
-            countedCash: body?.countedCash,
-          },
-        });
-        throw new AppError(
-          'إغلاق وتصفية رحلة التوزيع نهائياً من تطبيق المندوب يتطلب رمز اعتماد المشرف (Supervisor PIN)؛ أو يمكنك مراجعة المشرف لاعتمادها من لوحة الإدارة',
-          'SETTLEMENT_REQUIRES_SUPERVISOR_PIN',
-          403,
-        );
-      }
-      pinVerification = await this.vanSalesService.verifySupervisorPin(
-        driver.tenantId,
-        pinToVerify,
-        driver.repId,
-      );
-    } else if (pinToVerify) {
-      // Optional PIN verification if supplied
-      pinVerification = await this.vanSalesService.verifySupervisorPin(
-        driver.tenantId,
-        pinToVerify,
-        driver.repId,
+          countedCash: body?.countedCash,
+        },
+      });
+      throw new AppError(
+        'إغلاق وتصفية رحلة التوزيع نهائياً من تطبيق المندوب يتطلب رمز اعتماد المشرف (Supervisor PIN)؛ أو يمكنك مراجعة المشرف لاعتمادها من لوحة الإدارة',
+        'SETTLEMENT_REQUIRES_SUPERVISOR_PIN',
+        403,
       );
     }
+    const pinVerification = await this.vanSalesService.verifySupervisorPin(
+      driver.tenantId,
+      pinToVerify,
+      driver.repId,
+    );
 
-    const supervisorAuthContext = pinVerification ? {
+    const supervisorAuthContext = {
       userId: Number(pinVerification.supervisorId || 0),
       sessionId: 'supervisor-pin-settlement',
       username: String(pinVerification.supervisorName || 'supervisor'),
@@ -189,7 +190,13 @@ export class VanSalesController {
       permissions: ['deliveryReps', 'sales', 'inventory', 'accounting'] as any,
       tenantId: driver.tenantId,
       accountId: driver.accountId,
-    } : undefined;
+    };
+
+    // Night stock is approved only when the rep explicitly asks to keep
+    // the stock overnight AND the supervisor PIN authorizes it. Not
+    // unloading, on its own, never approves overnight retention — the
+    // engine fails closed (NIGHT_STOCK_UNAPPROVED) without both.
+    const nightStockApproved = Boolean(body.nightStockApproved) && Boolean(pinVerification);
 
     return this.vanSalesService.settleTrip(
       driver.repId,
@@ -200,12 +207,10 @@ export class VanSalesController {
         countedCash: body.countedCash,
         unloadRemainingToWarehouse: body.unloadRemainingToWarehouse,
         countedStock: body.countedStock,
-        chargeStockVarianceToRep: body.chargeStockVarianceToRep,
-        nightStockApproved: !body.unloadRemainingToWarehouse,
-        nightStockNotes: !body.unloadRemainingToWarehouse
-          ? (pinVerification?.supervisorName
-              ? `تم الإبقاء على البضاعة في سيارة التوزيع لليوم التالي باعتماد المشرف (${pinVerification.supervisorName})`
-              : 'تم الإبقاء على البضاعة في سيارة التوزيع لليوم التالي')
+        chargeStockVarianceDecidedBySupervisor: false,
+        nightStockApproved,
+        nightStockNotes: nightStockApproved
+          ? `تم الإبقاء على البضاعة في سيارة التوزيع لليوم التالي باعتماد المشرف (${pinVerification.supervisorName})`
           : undefined,
         endOdometer: body.endOdometer,
         activeVisitCustomerId: body.activeVisitCustomerId,
@@ -923,7 +928,11 @@ export class VanSalesAdminController {
         nightStockApproved: body.nightStockApproved,
         nightStockNotes: body.nightStockNotes,
         endOdometer: body.endOdometer,
+        // INV-VAN-SELF-SETTLE-PIN-REQUIRED: this endpoint runs under a
+        // supervisor/admin session, so the flag IS the supervisor's
+        // charge/waive decision at settle time and is honored as-is.
         chargeStockVarianceToRep: body.chargeStockVarianceToRep,
+        chargeStockVarianceDecidedBySupervisor: true,
         notes: body.notes,
       },
       req.authContext,

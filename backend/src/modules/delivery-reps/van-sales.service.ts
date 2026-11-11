@@ -330,6 +330,11 @@ export class VanSalesService {
   /**
    * Checks whether the tenant requires supervisor PIN authorization for settling van trips.
    * Configurable via system settings (vanSettlementRequireSupervisorPin).
+   * INV-VAN-SELF-SETTLE-PIN-REQUIRED: the PIN is required by DEFAULT
+   * (fail closed). Only an explicit false setting disables it — a
+   * missing row or an unparseable value never silently turns the PIN
+   * off, because the driver settle endpoint must never let a rep
+   * self-settle his own trip.
    */
   async isSupervisorPinRequiredForSettlement(tenantId: string): Promise<boolean> {
     const row = await this.anyDb
@@ -343,12 +348,13 @@ export class VanSalesService {
         ]),
       )
       .executeTakeFirst();
-    if (!row?.value) return false;
+    if (!row?.value) return true;
     try {
       const parsed = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
-      return Boolean(parsed === true || parsed === 'true' || parsed === 1 || parsed === '1');
+      if (parsed === false || parsed === 'false' || parsed === 0 || parsed === '0') return false;
+      return true;
     } catch {
-      return row.value === 'true' || row.value === '1';
+      return row.value === 'false' || row.value === '0' ? false : true;
     }
   }
 
@@ -4015,6 +4021,12 @@ export class VanSalesService {
       nightStockNotes?: string;
       endOdometer?: number;
       chargeStockVarianceToRep?: boolean;
+      // INV-VAN-SELF-SETTLE-PIN-REQUIRED: whether the charge/waive
+      // flag above was decided by a supervisor (admin settle path).
+      // The driver path passes false: the rep's phone never decides
+      // whether his own shortage is charged or waived. Callers that
+      // pass neither (legacy direct callers) keep the old behavior.
+      chargeStockVarianceDecidedBySupervisor?: boolean;
       activeVisitCustomerId?: number;
       notes?: string;
     },
@@ -4114,6 +4126,22 @@ export class VanSalesService {
         throw new AppError(makerChecker.errorMessageAr!, makerChecker.reasonCode!, 403);
       }
     }
+
+    // INV-VAN-SELF-SETTLE-PIN-REQUIRED: the rep never decides whether
+    // his own stock shortage is charged to him or waived to warehouse
+    // losses. Only a supervisor's decision counts (admin settle path,
+    // chargeStockVarianceDecidedBySupervisor === true). On the driver
+    // path no supervisor charge/waive decision exists, so the shortage
+    // stays pending on the rep (fail closed) until a supervisor settles
+    // or waives it via settleRepFinancialItem — it is never silently
+    // written off by the person charged. Legacy direct callers pass no
+    // decision flag and keep the old behavior.
+    const effectiveChargeToRep =
+      payload.chargeStockVarianceDecidedBySupervisor === true
+        ? Boolean(payload.chargeStockVarianceToRep)
+        : payload.chargeStockVarianceDecidedBySupervisor === false
+          ? true
+          : Boolean(payload.chargeStockVarianceToRep);
 
     // Odometer validation
     const effectiveEndOdometer = payload.endOdometer !== undefined ? payload.endOdometer : (trip.end_odometer !== null ? Number(trip.end_odometer) : undefined);
@@ -4449,11 +4477,11 @@ export class VanSalesService {
             trip_id: payload.tripId,
             entry_type: 'stock_shortage',
             amount: totalStockVarianceCost,
-            status: payload.chargeStockVarianceToRep ? 'pending' : 'waived',
-            settled_at: payload.chargeStockVarianceToRep ? null : sql`NOW()`,
-            settled_by: payload.chargeStockVarianceToRep ? null : (actorUserId || null),
-            settlement_method: payload.chargeStockVarianceToRep ? null : 'waiver',
-            notes: `عجز جرد بضاعة رحلة #${payload.tripId} ${payload.chargeStockVarianceToRep ? '(محمل على المندوب)' : '(خسائر مستودع معفاة)'}`,
+            status: effectiveChargeToRep ? 'pending' : 'waived',
+            settled_at: effectiveChargeToRep ? null : sql`NOW()`,
+            settled_by: effectiveChargeToRep ? null : (actorUserId || null),
+            settlement_method: effectiveChargeToRep ? null : 'waiver',
+            notes: `عجز جرد بضاعة رحلة #${payload.tripId} ${effectiveChargeToRep ? '(محمل على المندوب)' : '(خسائر مستودع معفاة)'}`,
             created_at: sql`NOW()`,
             updated_at: sql`NOW()`,
           })
@@ -4522,7 +4550,7 @@ export class VanSalesService {
           branchId,
           locationId: vanLocationId,
           stockShortageAmount: totalStockVarianceCost,
-          chargeStockVarianceToRep: Boolean(payload.chargeStockVarianceToRep),
+          chargeStockVarianceToRep: effectiveChargeToRep,
         },
         systemAuth,
       );
@@ -4593,7 +4621,7 @@ export class VanSalesService {
           countedCash,
           cashVariance,
           stockVarianceAmount: totalStockVarianceCost,
-          chargeStockVarianceToRep: Boolean(payload.chargeStockVarianceToRep),
+          chargeStockVarianceToRep: effectiveChargeToRep,
         },
       });
     }
