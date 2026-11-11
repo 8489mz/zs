@@ -49,6 +49,8 @@ import { VanFleetService } from './services/van-fleet.service';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { isOfferActive, pickBestApplicableOffer, todayLocalIsoDate } from '../sales/helpers/sales-write.helper';
+import { resolveSaleTaxRate } from '../sales/engines/sale-tax-rate.engine';
+import { computeInvoiceTotals } from '../../common/utils/invoice-totals';
 import { computeCashDrawerVariance } from '../cash-drawer/helpers/cash-drawer.helper';
 import { VanRequisitionsService } from './services/van-requisitions.service';
 import { DAY_KEY_TO_ARABIC, normalizeDayKey } from './van-routes-schedule.util';
@@ -2619,6 +2621,56 @@ export class VanSalesService {
         }
       }
 
+      // INV-VAN-SALE-TAX-OPTIONAL: the van sale posts the tenant's
+      // configured tax rate, or 0 when the owner never enabled tax
+      // on sales (Tax F1: optional per business owner). The driver
+      // sends no tax rate, so the configured rate is both the
+      // payload and the configured value for resolveSaleTaxRate —
+      // an absent or unparseable setting resolves to 0, never a
+      // throw. Tax is added ON TOP of the price (prices_include_tax
+      // stays false): computeInvoiceTotals on the net base
+      // (subtotal - discount, cash discount already applied above)
+      // returns the tax and the tax-inclusive total, rounded once
+      // at book digits via toBookMoney. Placed here, directly
+      // before the insert, so the stored tax_rate/tax_amount, the
+      // paid_amount for card/InstaPay (totalSale), the trip totals,
+      // the customer balance and postSale (which reads
+      // sale.tax_amount only) all consume the same tax-inclusive
+      // total. The cash/credit split is topped up by the tax: cash
+      // collects the whole tax-inclusive total, credit owes it,
+      // and a split sale's unpaid remainder grows by the tax (cash
+      // already collected stays as collected). NOTE: the credit
+      // limit and card gates above ran on the pre-tax amount; the
+      // tax portion is added after them.
+      const taxSettingRows = await trxAny
+        .selectFrom('settings')
+        .select(['key', 'value'])
+        .where('tenant_id', '=', tenantId)
+        .where('key', 'in', ['taxRate', 'tax_rate'])
+        .execute();
+      let configuredTaxRate: unknown;
+      for (const row of taxSettingRows) {
+        const rawValue = (row as any).value;
+        let parsedValue: unknown = rawValue;
+        try {
+          parsedValue = typeof rawValue === 'string' ? JSON.parse(rawValue) : rawValue;
+        } catch {
+          parsedValue = rawValue;
+        }
+        if ((row as any).key === 'taxRate') {
+          configuredTaxRate = parsedValue;
+          break;
+        }
+        if (configuredTaxRate === undefined) configuredTaxRate = parsedValue;
+      }
+      const vanTaxRate = resolveSaleTaxRate(configuredTaxRate, configuredTaxRate);
+      const vanTotals = computeInvoiceTotals(subtotalSale, discountSale, vanTaxRate, false, 0, 0, 0);
+      const vanTaxAmount = toBookMoney(vanTotals.taxAmount);
+      totalSale = toBookMoney(vanTotals.total);
+      if (isCash) cashPaid = totalSale;
+      else if (isCredit) creditOwed = totalSale;
+      else if (isSplit) creditOwed = toBookMoney(totalSale - cashPaid);
+
       const tempDocNo = `TMP-VAN-${Date.now()}`;
       const insertedSale = await trxAny
         .insertInto('sales')
@@ -2627,6 +2679,8 @@ export class VanSalesService {
           total: totalSale,
           subtotal: subtotalSale,
           discount: discountSale,
+          tax_rate: vanTaxRate,
+          tax_amount: vanTaxAmount,
           // Cash/Credit collected in the field sits with the rep (or customer receivable) until settleTrip,
           // whereas verified Card/Bank/InstaPay payments settle directly to Bank via sale_payments.
           paid_amount: (isCard || isInstapay) ? totalSale : 0,
