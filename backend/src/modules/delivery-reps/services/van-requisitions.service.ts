@@ -400,7 +400,12 @@ export class VanRequisitionsService {
   }
 
   async markRequisitionDispatched(tenantId: string, requisitionId: number, tripId: number, reviewedByUserId: number) {
-    await this.anyDb
+    // INV-VAN-TRIP-LOCKED-STATE-RECHECK: the old unconditional update
+    // let two concurrent dispatches both mark the same requisition
+    // 'dispatched' (and, via approveAndDispatchRequisition, load its
+    // stock twice). The status predicate makes the flip atomic: the
+    // loser affects zero rows and fails closed instead of re-marking.
+    const updated = await this.anyDb
       .updateTable('van_load_requisitions')
       .set({
         status: 'dispatched',
@@ -411,7 +416,13 @@ export class VanRequisitionsService {
       })
       .where('id', '=', requisitionId)
       .where('tenant_id', '=', tenantId)
+      .where('status', '=', 'pending')
+      .returning('id')
       .execute();
+    if (updated.length !== 1) {
+      throw new AppError('طلب التحميل تمت معالجته بالفعل', 'ALREADY_DISPATCHED', 400);
+    }
+    return { ok: true, requisitionId, tripId };
   }
 
   async rejectLoadRequisition(tenantId: string, requisitionId: number, rejectionReason: string, reviewedByUserId: number) {

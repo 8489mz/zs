@@ -1361,6 +1361,25 @@ export class VanSalesService {
     await this.db.transaction().execute(async (trx) => {
       const trxAny = trx as any;
 
+      // INV-VAN-TRIP-LOCKED-STATE-RECHECK: the pre-check above runs on
+      // an unlocked read, so two concurrent opens both pass it. This
+      // locked re-check is the first statement of the transaction; the
+      // partial unique index uq_van_trips_one_open_per_rep (migration
+      // 2040000000314) is the backstop for the zero-row case a FOR
+      // UPDATE read cannot lock (see the .catch on the transaction
+      // below, which translates its violation to TRIP_ALREADY_OPEN).
+      const lockedExistingTrip = await trxAny
+        .selectFrom('van_sales_trips')
+        .select(['id'])
+        .where('rep_id', '=', repId)
+        .where('tenant_id', '=', tenantId)
+        .where('status', '=', 'open')
+        .forUpdate()
+        .executeTakeFirst();
+      if (lockedExistingTrip) {
+        throw new AppError('توجد رحلة توزيع مفتوحة بالفعل لهذا المندوب، يرجى تصفيتها أولاً قبل فتح رحلة جديدة', 'TRIP_ALREADY_OPEN', 400);
+      }
+
       if (hasItemsToLoad) {
         if (sourceLocId === vanLoc.id) {
           throw new AppError('لا يمكن أن يكون المستودع المصدر هو نفس سيارة المندوب', 'INVALID_SOURCE_WAREHOUSE', 400);
@@ -1516,6 +1535,16 @@ export class VanSalesService {
           systemAuth,
         );
       }
+    }).catch((err: any) => {
+      // INV-VAN-TRIP-LOCKED-STATE-RECHECK: the unique-index backstop
+      // (uq_van_trips_one_open_per_rep) fired — a concurrent open won
+      // the race. Translate only that index's violation; any other
+      // error (journal dedup, stock) rethrows untouched.
+      const message = String(err?.message || '');
+      if (message.includes('uq_van_trips_one_open_per_rep')) {
+        throw new AppError('توجد رحلة توزيع مفتوحة بالفعل لهذا المندوب، يرجى تصفيتها أولاً قبل فتح رحلة جديدة', 'TRIP_ALREADY_OPEN', 400);
+      }
+      throw err;
     });
 
     return {
@@ -1961,8 +1990,8 @@ export class VanSalesService {
       throw new AppError('رحلة التوزيع المحددة مغلقة أو غير صالحة', 'INVALID_TRIP', 400);
     }
 
-    const vanLocId = Number(trip.van_location_id);
-    const branchId = trip.vanBranchId ? Number(trip.vanBranchId) : null;
+    let vanLocId = Number(trip.van_location_id);
+    let branchId = trip.vanBranchId ? Number(trip.vanBranchId) : null;
 
     let resolvedCustomerId: number | null = payload.customerId ? Number(payload.customerId) : null;
     let customerName = payload.customerName || 'عميل نقدي ميداني';
@@ -2033,8 +2062,34 @@ export class VanSalesService {
     let toBookMoney: (value: unknown) => number = (value) => Number(value ?? 0);
 
     await this.db.transaction().execute(async (trx) => {
-      await assertBusinessAccountingDate(trx, tenantId, new Date(), true);
       const trxAny = trx as any;
+      // INV-VAN-TRIP-LOCKED-STATE-RECHECK: the trip read above runs on
+      // an unlocked handle, so a trip settled between it and this
+      // transaction would still sell from a closed van. Re-read the
+      // governing row under lock FIRST, before any other work, and
+      // sell only from the locked row's location/branch.
+      const lockedTrip = await trxAny
+        .selectFrom('van_sales_trips')
+        .select(['id', 'van_location_id', 'status'])
+        .where('id', '=', payload.tripId)
+        .where('tenant_id', '=', tenantId)
+        .where('rep_id', '=', repId)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!lockedTrip || lockedTrip.status !== 'open') {
+        throw new AppError('رحلة التوزيع المحددة مغلقة أو غير صالحة', 'INVALID_TRIP', 400);
+      }
+      // Sell only from the locked row's location/branch, never from the
+      // unlocked pre-check snapshot.
+      vanLocId = Number(lockedTrip.van_location_id);
+      const lockedVanLocRow = await trxAny
+        .selectFrom('stock_locations')
+        .select(['branch_id'])
+        .where('id', '=', vanLocId)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      branchId = lockedVanLocRow?.branch_id ? Number(lockedVanLocRow.branch_id) : null;
+      await assertBusinessAccountingDate(trx, tenantId, new Date(), true);
       // Book digits resolved once on THIS transaction handle (P2 pattern,
       // fail closed on a base-currency/rate mismatch, P0-1/P0-2/P0-3).
       // Every money derivation below rounds once with this helper; the
@@ -3117,8 +3172,8 @@ export class VanSalesService {
     const cust = await this.anyDb.selectFrom('customers').select(['id', 'name']).where('id', '=', payload.customerId).where('tenant_id', '=', tenantId).executeTakeFirst();
     if (!cust) throw new AppError('العميل غير موجود', 'CUSTOMER_NOT_FOUND', 404);
 
-    const branchId = trip.vanBranchId ? Number(trip.vanBranchId) : null;
-    const vanLocId = trip.van_location_id ? Number(trip.van_location_id) : null;
+    let branchId = trip.vanBranchId ? Number(trip.vanBranchId) : null;
+    let vanLocId = trip.van_location_id ? Number(trip.van_location_id) : null;
     let receiptNo = '';
     let finalBalance = 0;
     let repPreviousBalance = 0;
@@ -3126,6 +3181,35 @@ export class VanSalesService {
 
     await this.db.transaction().execute(async (trx) => {
       const trxAny = trx as any;
+
+      // INV-VAN-TRIP-LOCKED-STATE-RECHECK: the trip read above runs on
+      // an unlocked handle, so a trip settled between it and this
+      // transaction would still collect cash into a closed trip.
+      // Re-read the governing row under lock FIRST, before the
+      // customer lock and any other work, and collect only from the
+      // locked row's location/branch.
+      const lockedTrip = await trxAny
+        .selectFrom('van_sales_trips')
+        .select(['id', 'van_location_id', 'status'])
+        .where('id', '=', payload.tripId)
+        .where('tenant_id', '=', tenantId)
+        .where('rep_id', '=', repId)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!lockedTrip || lockedTrip.status !== 'open') {
+        throw new AppError('رحلة التوزيع المحددة مغلقة أو تمت تصفيتها، ولا يمكن تسجيل تحصيل جديد عليها', 'INVALID_TRIP', 400);
+      }
+      vanLocId = lockedTrip.van_location_id ? Number(lockedTrip.van_location_id) : null;
+      const lockedVanLocRow = vanLocId
+        ? await trxAny
+          .selectFrom('stock_locations')
+          .select(['branch_id'])
+          .where('id', '=', vanLocId)
+          .where('tenant_id', '=', tenantId)
+          .executeTakeFirst()
+        : null;
+      const lockedBranchId = lockedVanLocRow?.branch_id ? Number(lockedVanLocRow.branch_id) : null;
+      branchId = lockedBranchId;
 
       const lockedCust = await trxAny
         .selectFrom('customers')
@@ -3966,26 +4050,21 @@ export class VanSalesService {
       throw new AppError(odometerResult.errorMessageAr!, 'INVALID_ODOMETER', 400);
     }
 
-    // Fetch total trip expenses recorded for this trip
-    const tripExpensesRow = await this.anyDb
-      .selectFrom('van_trip_expenses')
-      .select(sql<number>`cast(coalesce(sum(amount), 0) as numeric)`.as('totalExpenses'))
-      .where('trip_id', '=', payload.tripId)
-      .where('tenant_id', '=', tenantId)
-      .executeTakeFirst();
-    const totalTripExpenses = Number(tripExpensesRow?.totalExpenses || 0);
-
-    const grossCashCollected = Number(trip.cash_collected || 0);
-    // INV-VAN-SETTLE-BOOK-DIGITS-VARIANCE: the settle cash variance is
-    // computed at tenant book digits through the shared drawer helper,
-    // exactly like submitTripSettlement (was hardcoded toFixed(2), so
-    // a KWD 0.005 variance vanished and submit/settle disagreed by a
-    // fils on the same trip). The expected side is rounded to book
-    // digits before the variance is taken, matching the submit path.
-    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
-    const expectedCash = roundMoney(grossCashCollected - totalTripExpenses, bookDigits);
+    // INV-VAN-TRIP-LOCKED-STATE-RECHECK: the money inputs below used
+    // to be read here, on the pool handle before the transaction — a
+    // sale, collection, or expense posted between this read and the
+    // settlement commit settled the trip on stale cash. The inputs are
+    // now re-read inside the transaction, under the trip row lock
+    // (step 0 below), and only the locked values are ever used. The
+    // pre-check trip read above stays for the rep/odometer fast-fail
+    // only; it no longer feeds any money.
+    let totalTripExpenses = 0;
+    let grossCashCollected = 0;
+    let expectedCash = 0;
+    let cashVariance = 0;
+    let bookDigits: MoneyDigits = 2;
+    let lockedTripTotals: any = null;
     const countedCash = Number(payload.countedCash || 0);
-    const cashVariance = computeCashDrawerVariance(countedCash, expectedCash, bookDigits);
     let unloadedItemsCount = 0;
     let totalStockVarianceCost = 0;
     let totalUnloadedCost = 0;
@@ -4005,7 +4084,7 @@ export class VanSalesService {
       // 'settled' and fails closed instead of repeating the effects.
       const lockedTrip = await trxAny
         .selectFrom('van_sales_trips')
-        .select(['id', 'status'])
+        .select(['id', 'status', 'van_location_id', 'source_warehouse_id', 'cash_collected', 'vehicle_id', 'sales_amount', 'credit_sales', 'returns_amount', 'cash_refunds', 'total_instapay_sales', 'total_instapay_collections'])
         .where('id', '=', payload.tripId)
         .where('tenant_id', '=', tenantId)
         .where('rep_id', '=', repId)
@@ -4018,8 +4097,29 @@ export class VanSalesService {
         throw new AppError('تم تصفية هذه الرحلة بالفعل؛ لا يمكن تصفيتها مرة أخرى', 'TRIP_ALREADY_SETTLED', 409);
       }
 
+      // 0b. Re-read the money inputs inside the transaction, under the
+      // lock above: the expenses total and the collected cash as of
+      // this instant — never the pre-transaction snapshot. The
+      // INV-VAN-SETTLE-BOOK-DIGITS-VARIANCE rule still applies: the
+      // variance is computed at tenant book digits through the shared
+      // drawer helper, exactly like submitTripSettlement, and the
+      // expected side is rounded to book digits before the variance
+      // is taken.
+      bookDigits = currencyMoneyDigits(await tenantBaseCurrency(trxAny, tenantId));
+      const lockedExpensesRow = await trxAny
+        .selectFrom('van_trip_expenses')
+        .select(sql<number>`cast(coalesce(sum(amount), 0) as numeric)`.as('totalExpenses'))
+        .where('trip_id', '=', payload.tripId)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      totalTripExpenses = Number(lockedExpensesRow?.totalExpenses || 0);
+      grossCashCollected = Number(lockedTrip.cash_collected || 0);
+      lockedTripTotals = lockedTrip;
+      expectedCash = roundMoney(grossCashCollected - totalTripExpenses, bookDigits);
+      cashVariance = computeCashDrawerVariance(countedCash, expectedCash, bookDigits);
+
       // 1. Fetch current remaining van stock
-      const vanLocationId = Number(trip.van_location_id);
+      const vanLocationId = Number(lockedTrip.van_location_id);
       const remainingStocks = await trxAny
         .selectFrom('product_location_stock as pls')
         .innerJoin('products as p', 'p.id', 'pls.product_id')
@@ -4065,9 +4165,9 @@ export class VanSalesService {
             accountId,
             userId: actorUserId || null,
             movementType: 'van_stock_shortage',
-            note: `عجز جرد سيارة توزيع - رحلة #${trip.id}`,
+            note: `عجز جرد سيارة توزيع - رحلة #${payload.tripId}`,
             referenceType: 'van_sales_trip',
-            referenceId: Number(trip.id),
+            referenceId: Number(payload.tripId),
             skipGlobalUpdate: false,
             unitCost: itemVariance.costPrice,
           });
@@ -4140,26 +4240,26 @@ export class VanSalesService {
             movementType: 'van_unload_out',
             note: 'تصفية رحلة - خروج من السيارة',
             referenceType: 'van_sales_trip',
-            referenceId: Number(trip.id),
+            referenceId: Number(payload.tripId),
             skipGlobalUpdate: false,
             unitCost: cost,
           });
 
           // INV-VAN-FEFO-BATCHES: the batches return with the goods.
-          await this.moveVanPharmacyBatches(trx, { tenantId, accountId }, pid, qty, vanLocationId, Number(trip.source_warehouse_id));
+          await this.moveVanPharmacyBatches(trx, { tenantId, accountId }, pid, qty, vanLocationId, Number(lockedTrip.source_warehouse_id));
 
           // In to warehouse
           await this.moveVanStock(trx, {
             productId: pid,
             delta: qty,
-            locationId: Number(trip.source_warehouse_id),
+            locationId: Number(lockedTrip.source_warehouse_id),
             tenantId,
             accountId,
             userId: actorUserId || null,
             movementType: 'van_unload_in',
             note: 'تصفية رحلة - عودة للمستودع',
             referenceType: 'van_sales_trip',
-            referenceId: Number(trip.id),
+            referenceId: Number(payload.tripId),
             skipGlobalUpdate: false,
             unitCost: cost,
           });
@@ -4170,14 +4270,14 @@ export class VanSalesService {
       }
 
       // 5. Update vehicle current odometer if vehicle was tracked
-      if (trip.vehicle_id && effectiveEndOdometer !== undefined) {
+      if (lockedTrip.vehicle_id && effectiveEndOdometer !== undefined) {
         await trxAny
           .updateTable('fleet_vehicles')
           .set({
             current_odometer: effectiveEndOdometer,
             updated_at: sql`NOW()`,
           })
-          .where('id', '=', Number(trip.vehicle_id))
+          .where('id', '=', Number(lockedTrip.vehicle_id))
           .where('tenant_id', '=', tenantId)
           .execute();
       }
@@ -4374,7 +4474,7 @@ export class VanSalesService {
           payload.tripId,
           {
             sourceLocationId: vanLocationId,
-            targetLocationId: Number(trip.source_warehouse_id),
+            targetLocationId: Number(lockedTrip.source_warehouse_id),
             totalCost: totalUnloadedCost,
             branchId,
             type: 'unload',
@@ -4408,11 +4508,14 @@ export class VanSalesService {
       });
     }
 
-    const salesAmount = Number(trip.sales_amount || 0);
-    const creditSales = Number(trip.credit_sales || 0);
+    // INV-VAN-TRIP-LOCKED-STATE-RECHECK: the return echo reads the
+    // locked row's aggregates (captured inside the transaction below),
+    // never the pre-transaction snapshot.
+    const salesAmount = Number(lockedTripTotals.sales_amount || 0);
+    const creditSales = Number(lockedTripTotals.credit_sales || 0);
     const cashSales = Math.max(0, salesAmount - creditSales);
-    const returnsAmount = Number(trip.returns_amount || 0);
-    const cashRefunds = Number(trip.cash_refunds || 0);
+    const returnsAmount = Number(lockedTripTotals.returns_amount || 0);
+    const cashRefunds = Number(lockedTripTotals.cash_refunds || 0);
     const creditReturns = Math.max(0, returnsAmount - cashRefunds);
     const collectionsTotal = Math.max(0, roundMoney(grossCashCollected - cashSales + cashRefunds, bookDigits));
 
@@ -4438,9 +4541,9 @@ export class VanSalesService {
       returnsAmount,
       cashRefunds,
       creditReturns,
-      totalInstapaySales: Number(trip.total_instapay_sales || 0),
-      totalInstapayCollections: Number(trip.total_instapay_collections || 0),
-      expectedBankTransfers: roundMoney(Number(trip.total_instapay_sales || 0) + Number(trip.total_instapay_collections || 0), bookDigits),
+      totalInstapaySales: Number(lockedTripTotals.total_instapay_sales || 0),
+      totalInstapayCollections: Number(lockedTripTotals.total_instapay_collections || 0),
+      expectedBankTransfers: roundMoney(Number(lockedTripTotals.total_instapay_sales || 0) + Number(lockedTripTotals.total_instapay_collections || 0), bookDigits),
       stockVariances: (stockAuditResult as any)?.itemVariances || [],
     };
   }
@@ -6830,7 +6933,21 @@ export class VanSalesService {
       const trxAny = trx as any;
 
       for (const item of items) {
-        if (item.status !== 'pending') {
+        // INV-VAN-TRIP-LOCKED-STATE-RECHECK: the status above comes
+        // from a snapshot read before the transaction, so two
+        // concurrent pushes both see 'pending' and both insert a
+        // payroll adjustment for the same shortage. Re-read the row
+        // under lock and flip it with a status predicate, checking
+        // the affected row — the loser sees 'pushed_to_payroll' here
+        // and records a failure instead of a second deduction.
+        const lockedItem = await trxAny
+          .selectFrom('van_rep_financial_settlements')
+          .select(['id', 'status', 'amount'])
+          .where('id', '=', item.id)
+          .where('tenant_id', '=', tenantId)
+          .forUpdate()
+          .executeTakeFirst();
+        if (!lockedItem || lockedItem.status !== 'pending') {
           results.push({
             id: Number(item.id),
             repName: item.repName,
@@ -6867,7 +6984,7 @@ export class VanSalesService {
           }
         }
 
-        await trxAny
+        const flipped = await trxAny
           .updateTable('van_rep_financial_settlements')
           .set({
             status: 'pushed_to_payroll',
@@ -6879,7 +6996,19 @@ export class VanSalesService {
           })
           .where('id', '=', item.id)
           .where('tenant_id', '=', tenantId)
+          .where('status', '=', 'pending')
+          .returning('id')
           .execute();
+        if (flipped.length !== 1) {
+          results.push({
+            id: Number(item.id),
+            repName: item.repName,
+            amount: Number(item.amount),
+            success: false,
+            message: 'البند تمت تسويته مسبقاً',
+          });
+          continue;
+        }
 
         // If resolvedEmployeeId is available, insert into hr_employee_adjustments for HR payroll integration
         if (resolvedEmployeeId) {

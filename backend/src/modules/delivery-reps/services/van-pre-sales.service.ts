@@ -1334,7 +1334,13 @@ export class VanPreSalesService {
       throw new AppError('تم تحويل طلب الحجز إلى فاتورة مبيعات مسبقاً', 'ORDER_ALREADY_CONVERTED', 400);
     }
 
-    if (order.status !== 'approved') {
+    // 'converting' is let through to the claim below on purpose — the
+    // claim fails, and the re-read there decides whether the
+    // conversion is in flight (ORDER_CONVERSION_IN_PROGRESS) or
+    // already done. Rejecting it here would make that decision
+    // unreachable (the same reason sales-orders convertToSale lets
+    // 'converting' through).
+    if (order.status !== 'approved' && order.status !== 'converting') {
       throw new AppError('يجب اعتماد طلب الحجز أولاً قبل تحويله إلى فاتورة مبيعات', 'ORDER_NOT_APPROVED', 400);
     }
 
@@ -1381,18 +1387,53 @@ export class VanPreSalesService {
         })),
     );
 
-    // 1. Release order reservation before calling createSale
-    if (releaseItems.length > 0) {
-      await this.db.transaction().execute(async (trx) => {
-        await releaseLocationStock(trx as any, {
-          tenantId,
-          accountId,
-          branchId,
-          locationId: whLocId,
-          items: releaseItems,
-        });
-      });
+    // INV-VAN-TRIP-LOCKED-STATE-RECHECK: the old shape ran three
+    // separate transactions — release the reservation, create the sale,
+    // then flip the order — with only snapshot status checks between
+    // them. Two concurrent converts both released the same reservation
+    // (double-freeing stock), both created a sale, and both flipped
+    // the order. The new shape follows the canonical sales-order
+    // conversion (INV-SALES-ORDER-CONVERSION-STOCK-LEGS /
+    // INV-CONVERSION-LIFECYCLE-RACES, sales-orders.service
+    // convertToSale): claim the order approved -> 'converting' with a
+    // conditional update (the atomic guard — the loser affects zero
+    // rows), hand the reservation to createSale as a
+    // SalesOrderConversionRelease so it is released INSIDE the sale
+    // transaction under the product locks (createSale verifies the
+    // 'converting' state first), and flip 'converting' -> 'converted'
+    // with a status predicate. A failed sale reverts the claim to
+    // 'approved'; no re-reserve is ever needed, because the
+    // reservation was only ever released inside the sale transaction
+    // and a failed sale rolls it back with itself. createSale owns
+    // its own transaction, so the claim + in-sale release +
+    // conditional flip is the atomic unit — the same unit the
+    // canonical conversion uses.
+    const claimed = await this.anyDb
+      .updateTable('sales_orders')
+      .set({ status: 'converting', updated_at: sql`NOW()` })
+      .where('id', '=', orderId)
+      .where('tenant_id', '=', tenantId)
+      .where('status', '=', 'approved')
+      .returning('id')
+      .executeTakeFirst();
+    if (!claimed) {
+      const current = await this.anyDb
+        .selectFrom('sales_orders')
+        .select(['status', 'sale_id'])
+        .where('id', '=', orderId)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      if (current?.status === 'converted' && current.sale_id) {
+        throw new AppError('تم تحويل طلب الحجز إلى فاتورة مبيعات مسبقاً', 'ORDER_ALREADY_CONVERTED', 400);
+      }
+      if (current?.status === 'converting') {
+        throw new AppError('طلب الحجز قيد التحويل حالياً', 'ORDER_CONVERSION_IN_PROGRESS', 409);
+      }
+      throw new AppError('يجب اعتماد طلب الحجز أولاً قبل تحويله إلى فاتورة مبيعات', 'ORDER_NOT_APPROVED', 400);
     }
+    const conversionRelease = releaseItems.length > 0
+      ? { salesOrderId: orderId, branchId, locationId: whLocId, items: releaseItems }
+      : undefined;
 
     const paymentType: 'cash' | 'credit' =
       payload?.paymentType || (order.payment_terms === 'credit' ? 'credit' : 'cash');
@@ -1456,29 +1497,32 @@ export class VanPreSalesService {
       saleResult = await this.salesService.createSale(salePayload, auth, {
         approvedDiscount: Number(order.discount_amount || 0),
         approvedUnitPrices,
-      });
+      }, conversionRelease);
     } catch (err) {
-      // Compensate: restore stock reservation if sale creation fails
-      if (releaseItems.length > 0) {
-        await this.db.transaction().execute(async (trx) => {
-          await reserveLocationStock(trx as any, {
-            tenantId,
-            accountId,
-            branchId,
-            locationId: whLocId,
-            items: releaseItems,
-          });
-        });
-      }
+      // Revert the 'converting' claim to 'approved'. No re-reserve:
+      // the reservation was only ever released inside the sale
+      // transaction, so a failed sale rolled it back with the sale.
+      await this.anyDb
+        .updateTable('sales_orders')
+        .set({ status: 'approved', updated_at: sql`NOW()` })
+        .where('id', '=', orderId)
+        .where('tenant_id', '=', tenantId)
+        .where('status', '=', 'converting')
+        .execute();
       throw err;
     }
 
     const saleId = Number(saleResult?.sale?.id || saleResult?.id || 0);
     const docNo = String(saleResult?.sale?.docNo || saleResult?.sale?.doc_no || saleResult?.docNo || '') || null;
 
+    // Conditional flip: only the converter that still holds the
+    // 'converting' claim may mark the order converted. Zero affected
+    // rows means the claim moved under us — fail closed loudly (the
+    // sale already committed, so this needs manual reconciliation,
+    // never a silent second flip).
     await this.db.transaction().execute(async (trx) => {
       const trxAny = trx as any;
-      await trxAny
+      const updated = await trxAny
         .updateTable('sales_orders')
         .set({
           status: 'converted',
@@ -1487,7 +1531,12 @@ export class VanPreSalesService {
         })
         .where('id', '=', orderId)
         .where('tenant_id', '=', tenantId)
+        .where('status', '=', 'converting')
+        .returning('id')
         .execute();
+      if (updated.length !== 1) {
+        throw new AppError('تعذر تأكيد تحويل طلب الحجز بعد إنشاء الفاتورة؛ يلزم تدخل يدوي', 'ORDER_CONVERSION_MARK_FAILED', 500);
+      }
 
       await trxAny
         .updateTable('sales_order_items')

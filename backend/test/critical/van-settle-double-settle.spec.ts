@@ -18,6 +18,10 @@ WHAT THIS PINS, driving the real settleTrip with mock DB objects:
   connection: the outer trip read (the pre-check) runs exactly once.
 - An open trip passes the guard and reaches the stock read (the mock
   refuses it, which is the expected proof the guard did not block it).
+  The money re-read (INV-VAN-TRIP-LOCKED-STATE-RECHECK: expenses sum
+  + collected cash + base currency, all inside the transaction under
+  the trip lock) runs between the guard and the stock read, so the
+  mock answers those three tables and still refuses the stock read.
 */
 
 import 'reflect-metadata';
@@ -47,6 +51,18 @@ function buildService(opts: { preCheckTrip: any; inTxTrip: any; counters: any })
           return originalForUpdate();
         };
         return builder;
+      }
+      // INV-VAN-TRIP-LOCKED-STATE-RECHECK: after the guard, settleTrip
+      // re-reads the money inputs inside the transaction (base currency,
+      // expenses sum) before the stock read — the mock answers those.
+      if (table === 'settings') {
+        return chainable({ executeTakeFirst: async () => ({ value: 'EGP' }) });
+      }
+      if (table === 'currency_exchange_rates') {
+        return chainable({ execute: async () => [{ currency_code: 'EGP', exchange_rate: 1 }] });
+      }
+      if (table === 'van_trip_expenses') {
+        return chainable({ executeTakeFirst: async () => ({ totalExpenses: 0 }) });
       }
       throw new Error(`unexpected in-transaction query on table ${table}: the double-settle guard must fire first`);
     },

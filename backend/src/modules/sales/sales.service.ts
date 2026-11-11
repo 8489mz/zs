@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { HeldSaleDto } from './dto/held-sale.dto';
 import { PosAuditEventDto } from './dto/pos-audit-event.dto';
-import { UpsertSaleDto } from './dto/upsert-sale.dto';
+import { UpsertSaleDto, SalesOrderConversionRelease } from './dto/upsert-sale.dto';
 import { SalesQueryService } from './services/sales-query.service';
 import { SalesWriteService, type SystemApprovedSaleTerms } from './services/sales-write.service';
 
@@ -21,8 +21,8 @@ export class SalesService {
     return this.query.getSaleById(id, auth);
   }
 
-  async createSale(payload: UpsertSaleDto, auth: AuthContext, approvedTerms?: SystemApprovedSaleTerms): Promise<Record<string, unknown>> {
-    return this.write.createSale(payload, auth, approvedTerms);
+  async createSale(payload: UpsertSaleDto, auth: AuthContext, approvedTerms?: SystemApprovedSaleTerms, conversionRelease?: SalesOrderConversionRelease): Promise<Record<string, unknown>> {
+    return this.write.createSale(payload, auth, approvedTerms, conversionRelease);
   }
 
   async authorizeDiscountOverride(secret: string, auth: AuthContext): Promise<Record<string, unknown>> {
