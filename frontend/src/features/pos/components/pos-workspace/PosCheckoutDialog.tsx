@@ -20,7 +20,6 @@ import { PosCreditLimitNotice } from './PosCreditLimitNotice';
 import { PosTotalsBreakdown } from '@/features/pos/components/pos-cart-panel/PosTotalsBreakdown';
 import { summarizeCartQuantities } from '@/features/pos/lib/pos.domain';
 import { toast } from '@/shared/components/system-alert';
-import { useAuthStore } from '@/stores/auth-store';
 import { usePosUiCustomization } from '@/features/pos/hooks/usePosUiCustomization';
 import { isKuwait, isSaudi } from '@/lib/currencies';
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
@@ -52,8 +51,6 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
   const onCloseRef = useRef(onClose);
   const createSalePendingRef = useRef(Boolean(pos.createSale.isPending));
   
-  const { user } = useAuthStore();
-  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
   const isDiscountLocked = !pos.canApplyDiscount;
   const isRestaurant = pos.settingsQuery?.data?.restaurantModuleEnabled === true;
 
