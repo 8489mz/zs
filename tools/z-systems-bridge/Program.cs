@@ -6,7 +6,9 @@ using System.Text;
 using System.Threading;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Printing;
+using System.Drawing.Text;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.Web.Script.Serialization;
@@ -17,7 +19,7 @@ namespace ZSystems.HardwareBridge
     static class Program
     {
         private const int Port = 18181;
-        private static readonly JavaScriptSerializer Serializer = new JavaScriptSerializer();
+        private static readonly JavaScriptSerializer Serializer = new JavaScriptSerializer() { MaxJsonLength = int.MaxValue };
         private static readonly DateTime StartTime = DateTime.UtcNow;
         private static readonly List<HttpListenerResponse> SseClients = new List<HttpListenerResponse>();
         private static readonly object SseLock = new object();
@@ -26,14 +28,86 @@ namespace ZSystems.HardwareBridge
         private static readonly object WindowsPrintLock = new object();
         private static HttpListener _listener;
         private static NotifyIcon _trayIcon;
+        private static Control _uiDispatcher;
 
         private static readonly string ConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bridge-config.json");
         private static string CloudServerUrl = "https://app.zsystemai.com";
         private static string TenantId = "dev-tenant";
         private static string BridgeKey = "";
         private static bool IsCloudRelayConnected = false;
-        private static MenuItem _tenantMenuItem;
-        private static MenuItem _relayStatusMenuItem;
+        private static ContextMenuStrip _trayMenu;
+        private static ToolStripMenuItem _tenantMenuItem;
+        private static ToolStripMenuItem _relayStatusMenuItem;
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool DestroyIcon(IntPtr handle);
+
+        private static Icon CreateBrandTrayIcon()
+        {
+            try
+            {
+                using (Bitmap bmp = new Bitmap(32, 32))
+                using (Graphics g = Graphics.FromImage(bmp))
+                {
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                    g.Clear(Color.Transparent);
+
+                    // Rounded squircle background in Z-Systems Royal Navy (#170e5e)
+                    using (GraphicsPath path = new GraphicsPath())
+                    {
+                        int radius = 14;
+                        Rectangle rect = new Rectangle(1, 1, 29, 29);
+                        path.AddArc(rect.X, rect.Y, radius, radius, 180, 90);
+                        path.AddArc(rect.Right - radius, rect.Y, radius, radius, 270, 90);
+                        path.AddArc(rect.Right - radius, rect.Bottom - radius, radius, radius, 0, 90);
+                        path.AddArc(rect.X, rect.Bottom - radius, radius, radius, 90, 90);
+                        path.CloseFigure();
+
+                        using (LinearGradientBrush bgBrush = new LinearGradientBrush(
+                            rect,
+                            Color.FromArgb(255, 34, 21, 122),
+                            Color.FromArgb(255, 23, 14, 94),
+                            45f))
+                        {
+                            g.FillPath(bgBrush, path);
+                        }
+
+                        using (Pen borderPen = new Pen(Color.FromArgb(180, 99, 102, 241), 1.2f))
+                        {
+                            g.DrawPath(borderPen, path);
+                        }
+                    }
+
+                    // Bold white "Z" monogram centered
+                    using (Font font = new Font("Segoe UI", 15.5f, FontStyle.Bold, GraphicsUnit.Pixel))
+                    using (StringFormat sf = new StringFormat())
+                    using (Brush textBrush = new SolidBrush(Color.White))
+                    {
+                        sf.Alignment = StringAlignment.Center;
+                        sf.LineAlignment = StringAlignment.Center;
+                        g.DrawString("Z", font, textBrush, new RectangleF(1f, 1.5f, 29f, 28f), sf);
+                    }
+
+                    // Emerald green online status indicator dot at bottom-right
+                    using (Brush ringBrush = new SolidBrush(Color.White))
+                    using (Brush dotBrush = new SolidBrush(Color.FromArgb(255, 16, 185, 129)))
+                    {
+                        g.FillEllipse(ringBrush, 20, 20, 11, 11);
+                        g.FillEllipse(dotBrush, 21.5f, 21.5f, 8f, 8f);
+                    }
+
+                    IntPtr hIcon = bmp.GetHicon();
+                    Icon cloned = (Icon)Icon.FromHandle(hIcon).Clone();
+                    DestroyIcon(hIcon);
+                    return cloned;
+                }
+            }
+            catch
+            {
+                return SystemIcons.Application;
+            }
+        }
 
         private static void LoadConfig()
         {
@@ -82,9 +156,14 @@ namespace ZSystems.HardwareBridge
         {
             try
             {
+                if (_trayMenu != null && _trayMenu.InvokeRequired)
+                {
+                    _trayMenu.BeginInvoke((MethodInvoker)UpdateTrayMenuLabels);
+                    return;
+                }
                 if (_tenantMenuItem != null)
                 {
-                    _tenantMenuItem.Text = string.Format("المنشأة: {0}", string.IsNullOrEmpty(TenantId) ? "غير محدد" : TenantId);
+                    _tenantMenuItem.Text = string.Format("المنشأة: \u200E{0}", string.IsNullOrEmpty(TenantId) ? "غير محدد" : TenantId);
                 }
                 if (_relayStatusMenuItem != null)
                 {
@@ -97,7 +176,8 @@ namespace ZSystems.HardwareBridge
         private static void ShowConfigDialog()
         {
             Form form = new Form();
-            form.Text = "إعدادات الربط السحابي - Z-Systems Bridge";
+            form.Text = "إعدادات الربط السحابي - Z-Systems Bridge v1.2.0";
+            form.Icon = CreateBrandTrayIcon();
             form.RightToLeft = RightToLeft.Yes;
             form.RightToLeftLayout = true;
             form.Width = 480;
@@ -194,7 +274,7 @@ namespace ZSystems.HardwareBridge
             {
                 { "tenantId", TenantId },
                 { "machineName", Environment.MachineName },
-                { "bridgeVersion", "1.1.0" }
+                { "bridgeVersion", "1.2.0" }
             };
 
             byte[] bytes = Encoding.UTF8.GetBytes(Serializer.Serialize(pollPayload));
@@ -372,33 +452,49 @@ namespace ZSystems.HardwareBridge
                 File.AppendAllText(logPath, "Step 4: TrayIcon\n");
 
                 // 5. Create System Tray Icon
+                Icon brandIcon = CreateBrandTrayIcon();
                 _trayIcon = new NotifyIcon();
-                _trayIcon.Icon = SystemIcons.Shield;
-                _trayIcon.Text = "جسر Z-Systems للعتاد (نشط - 127.0.0.1:18181)";
+                _trayIcon.Icon = brandIcon;
+                _trayIcon.Text = "جسر Z-Systems للعتاد v1.2.0 — متصل (127.0.0.1:18181)";
                 _trayIcon.Visible = true;
 
-                ContextMenu menu = new ContextMenu();
-                menu.MenuItems.Add(new MenuItem("جسر Z-Systems للعتاد v1.1.0") { Enabled = false });
-                menu.MenuItems.Add(new MenuItem("الحالة: متصل (127.0.0.1:18181)") { Enabled = false });
-                _tenantMenuItem = new MenuItem(string.Format("المنشأة: {0}", string.IsNullOrEmpty(TenantId) ? "غير محدد" : TenantId)) { Enabled = false };
-                menu.MenuItems.Add(_tenantMenuItem);
-                _relayStatusMenuItem = new MenuItem("التتابع السحابي: جاري المحاولة...") { Enabled = false };
-                menu.MenuItems.Add(_relayStatusMenuItem);
-                menu.MenuItems.Add("-");
-                menu.MenuItems.Add("إعدادات الربط والمنشأة (Cloud Sync)...", (s, e) => ShowConfigDialog());
-                menu.MenuItems.Add("فتح لوحة التشخيص والفحص", (s, e) =>
+                _trayMenu = new ContextMenuStrip();
+                _trayMenu.RightToLeft = RightToLeft.Yes;
+                _trayMenu.ShowImageMargin = false;
+                _trayMenu.Font = new Font("Segoe UI", 9.25f, FontStyle.Regular);
+
+                ToolStripMenuItem headerItem = new ToolStripMenuItem("جسر Z-Systems للعتاد — الإصدار 1.2.0")
+                {
+                    Enabled = false,
+                    Font = new Font("Segoe UI", 9.5f, FontStyle.Bold)
+                };
+                _trayMenu.Items.Add(headerItem);
+
+                ToolStripMenuItem statusItem = new ToolStripMenuItem("الحالة: متصل — \u200E127.0.0.1:18181\u200E") { Enabled = false };
+                _trayMenu.Items.Add(statusItem);
+
+                _tenantMenuItem = new ToolStripMenuItem(string.Format("المنشأة: \u200E{0}", string.IsNullOrEmpty(TenantId) ? "غير محدد" : TenantId)) { Enabled = false };
+                _trayMenu.Items.Add(_tenantMenuItem);
+
+                _relayStatusMenuItem = new ToolStripMenuItem("التتابع السحابي: جاري المحاولة...") { Enabled = false };
+                _trayMenu.Items.Add(_relayStatusMenuItem);
+
+                _trayMenu.Items.Add(new ToolStripSeparator());
+                _trayMenu.Items.Add("إعدادات الربط السحابي والمنشأة...", null, (s, e) => ShowConfigDialog());
+                _trayMenu.Items.Add("فتح لوحة التشخيص والفحص", null, (s, e) =>
                 {
                     try { System.Diagnostics.Process.Start("http://127.0.0.1:18181/diagnostics"); } catch {}
                 });
-                menu.MenuItems.Add("-");
-                menu.MenuItems.Add("إيقاف وخروج", (s, e) =>
+                _trayMenu.Items.Add(new ToolStripSeparator());
+                _trayMenu.Items.Add("إيقاف الخدمة وخروج", null, (s, e) =>
                 {
                     DialogResult confirm = MessageBox.Show(
                         "هل أنت متأكد من رغبتك في إيقاف جسر Z-Systems للعتاد؟\n\nتنبيه: إيقاف الجسر سيعطل التخاطب مع ماكينات الدفع وطابعات الفواتير في الكاشير.",
                         "تأكيد إيقاف الخدمة",
                         MessageBoxButtons.YesNo,
                         MessageBoxIcon.Warning,
-                        MessageBoxDefaultButton.Button2
+                        MessageBoxDefaultButton.Button2,
+                        MessageBoxOptions.RightAlign | MessageBoxOptions.RtlReading
                     );
                     if (confirm == DialogResult.Yes)
                     {
@@ -408,7 +504,7 @@ namespace ZSystems.HardwareBridge
                     }
                 });
 
-                _trayIcon.ContextMenu = menu;
+                _trayIcon.ContextMenuStrip = _trayMenu;
                 _trayIcon.DoubleClick += (s, e) =>
                 {
                     try { System.Diagnostics.Process.Start("http://127.0.0.1:18181/diagnostics"); } catch {}
@@ -421,6 +517,9 @@ namespace ZSystems.HardwareBridge
                     "الجسر نشط الآن في الخلفية وجاهز للربط مع نقاط البيع والماكينات.",
                     ToolTipIcon.Info
                 );
+
+                _uiDispatcher = new Control();
+                IntPtr dispatcherHandle = _uiDispatcher.Handle;
 
                 Application.Run(new ApplicationContext());
                 }
@@ -486,6 +585,8 @@ namespace ZSystems.HardwareBridge
         {
             if (string.IsNullOrEmpty(origin)) return true; // Native local clients send no Origin header
             if (string.Equals(origin, "https://app.zsystemai.com", StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(origin, "http://127.0.0.1:18181", StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(origin, "http://localhost:18181", StringComparison.OrdinalIgnoreCase)) return true;
             // Other verified deployments/development origins must be explicitly provisioned by the operator.
             foreach (string trusted in (Environment.GetEnvironmentVariable("ZS_BRIDGE_ALLOWED_ORIGINS") ?? "").Split(','))
             {
@@ -600,7 +701,7 @@ namespace ZSystems.HardwareBridge
                     context.Response.StatusCode = 200;
                     context.Response.ContentType = "text/event-stream";
                     context.Response.Headers["Cache-Control"] = "no-cache";
-                    byte[] initBytes = Encoding.UTF8.GetBytes("data: {\"type\":\"connected\",\"version\":\"1.0.0\"}\n\n");
+                    byte[] initBytes = Encoding.UTF8.GetBytes("data: {\"type\":\"connected\",\"version\":\"1.2.0\"}\n\n");
                     context.Response.OutputStream.Write(initBytes, 0, initBytes.Length);
                     context.Response.OutputStream.Flush();
 
@@ -611,11 +712,11 @@ namespace ZSystems.HardwareBridge
                     return;
                 }
 
-                // Read request body for POST endpoints
+                // Read request body for POST endpoints (always UTF-8: browsers omit charset on application/json)
                 string body = "";
                 if (context.Request.HasEntityBody)
                 {
-                    using (StreamReader reader = new StreamReader(context.Request.InputStream, context.Request.ContentEncoding))
+                    using (StreamReader reader = new StreamReader(context.Request.InputStream, Encoding.UTF8))
                     {
                         body = reader.ReadToEnd();
                     }
@@ -624,7 +725,11 @@ namespace ZSystems.HardwareBridge
                 Dictionary<string, object> jsonBody = new Dictionary<string, object>();
                 if (!string.IsNullOrEmpty(body))
                 {
-                    try { jsonBody = Serializer.Deserialize<Dictionary<string, object>>(body); } catch {}
+                    try
+                    {
+                        jsonBody = Serializer.Deserialize<Dictionary<string, object>>(body);
+                    }
+                    catch {}
                 }
 
                 // Never let unauthenticated loopback clients repoint this bridge to an attacker server.
@@ -1157,7 +1262,11 @@ namespace ZSystems.HardwareBridge
                 string html = body.ContainsKey("html") ? Convert.ToString(body["html"]) : "";
                 string deviceName = body.ContainsKey("deviceName") ? Convert.ToString(body["deviceName"]) : "";
                 string pageSize = body.ContainsKey("pageSize") ? Convert.ToString(body["pageSize"]) : "A4";
-                int receiptWidthMm = body.ContainsKey("receiptWidthMm") ? Convert.ToInt32(body["receiptWidthMm"]) : 80;
+                int receiptWidthMm = 80;
+                if (body.ContainsKey("receiptWidthMm") && body["receiptWidthMm"] != null)
+                {
+                    try { receiptWidthMm = Convert.ToInt32(body["receiptWidthMm"]); } catch { receiptWidthMm = 80; }
+                }
 
                 if (string.IsNullOrWhiteSpace(html))
                 {
@@ -1169,33 +1278,54 @@ namespace ZSystems.HardwareBridge
                     ? new PrinterSettings().PrinterName
                     : deviceName.Trim();
 
-                bool printerExists = false;
+                string matchedPrinterName = null;
                 foreach (string name in PrinterSettings.InstalledPrinters)
                 {
-                    if (string.Equals(name, printerName, StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(name, printerName, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(name.Trim(), printerName.Trim(), StringComparison.OrdinalIgnoreCase))
                     {
-                        printerExists = true;
+                        matchedPrinterName = name;
                         break;
                     }
                 }
-                if (!printerExists)
+                if (matchedPrinterName == null)
                 {
                     SendJson(context, 400, new Dictionary<string, object> { { "success", false }, { "error", "الطابعة غير موجودة على هذا الجهاز: " + printerName } });
                     return;
                 }
+                printerName = matchedPrinterName;
 
                 // A4 (794px at 96dpi) or receipt width (58mm ~ 220px, 80mm ~ 302px).
                 int viewportWidth = string.Equals(pageSize, "receipt", StringComparison.OrdinalIgnoreCase)
                     ? (receiptWidthMm == 58 ? 220 : 302)
                     : 794;
 
+                BroadcastSse("printer_status", new Dictionary<string, object>
+                {
+                    { "status", "printing" },
+                    { "printer", printerName },
+                    { "message", "جاري إرسال الإيصال إلى طابعة ويندوز: " + printerName }
+                });
+
                 string error = PrintHtmlOnWindowsPrinter(html, printerName, viewportWidth);
                 if (error == null)
                 {
+                    BroadcastSse("printer_status", new Dictionary<string, object>
+                    {
+                        { "status", "printed" },
+                        { "printer", printerName },
+                        { "message", "تمت الطباعة الصامتة بنجاح على: " + printerName }
+                    });
                     SendJson(context, 200, new Dictionary<string, object> { { "success", true }, { "printer", printerName } });
                 }
                 else
                 {
+                    BroadcastSse("printer_status", new Dictionary<string, object>
+                    {
+                        { "status", "error" },
+                        { "printer", printerName },
+                        { "message", "فشلت الطباعة الصامتة: " + error }
+                    });
                     SendJson(context, 500, new Dictionary<string, object> { { "success", false }, { "error", error } });
                 }
             }
@@ -1281,11 +1411,12 @@ namespace ZSystems.HardwareBridge
         private static string PrintHtmlOnWindowsPrinter(string html, string printerName, int viewportWidth)
         {
             string error = null;
-            ManualResetEvent done = new ManualResetEvent(false);
-            Thread sta = new Thread(delegate()
+            MethodInvoker doPrint = delegate()
             {
                 string previousDefault = null;
+                Form hostForm = null;
                 WebBrowser browser = null;
+                string tempHtmlPath = null;
                 Dictionary<string, object> savedPageSetup = null;
                 try
                 {
@@ -1296,7 +1427,6 @@ namespace ZSystems.HardwareBridge
                         if (!SetDefaultPrinter(printerName))
                         {
                             error = "تعذر تعيين الطابعة الافتراضية: " + printerName;
-                            done.Set();
                             return;
                         }
                     }
@@ -1306,59 +1436,64 @@ namespace ZSystems.HardwareBridge
                     // backgrounds on, so the table header prints as designed.
                     savedPageSetup = ApplyWindowsPrintPageSetup();
 
+                    // Write HTML to a real UTF-8 BOM temp file so ieframe.dll's
+                    // print template has a valid file:// URL and UTF-8 stream
+                    // (DocumentText / about:blank silently fails to spool on
+                    // many Windows print drivers).
+                    tempHtmlPath = Path.Combine(Path.GetTempPath(), "zs-receipt-" + Guid.NewGuid().ToString("N") + ".html");
+                    File.WriteAllText(tempHtmlPath, html, new UTF8Encoding(true));
+
+                    hostForm = new Form();
+                    hostForm.FormBorderStyle = FormBorderStyle.None;
+                    hostForm.ShowInTaskbar = false;
+                    hostForm.StartPosition = FormStartPosition.Manual;
+                    hostForm.Location = new Point(-32000, -32000);
+                    hostForm.Size = new Size(viewportWidth, 1100);
+
                     browser = new WebBrowser();
-                    // Force the underlying ActiveX handle to exist before loading.
-                    IntPtr handle = browser.Handle;
+                    browser.Dock = DockStyle.Fill;
                     browser.Width = viewportWidth;
                     browser.Height = 1100;
                     browser.ScrollBarsEnabled = false;
-                    bool printRequested = false;
-                    DateTime printStartedAt = DateTime.MinValue;
-                    browser.DocumentCompleted += delegate(object sender, WebBrowserDocumentCompletedEventArgs e)
-                    {
-                        try
-                        {
-                            // Fire once for the top-level document, not for frames.
-                            if (e.Url == browser.Url && !printRequested)
-                            {
-                                printRequested = true;
-                                browser.Print();
-                                // Print() only queues the hidden ieframe print
-                                // template; the wait below pumps it.
-                                printStartedAt = DateTime.UtcNow;
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            error = ex.Message;
-                            done.Set();
-                        }
-                    };
-                    browser.DocumentText = html;
+                    browser.ScriptErrorsSuppressed = true;
+                    hostForm.Controls.Add(browser);
 
-                    // Message pump: keep the STA thread alive until Print() runs
-                    // or the deadline hits. DoEvents lets the DocumentCompleted
-                    // event fire on this same thread.
-                    DateTime deadline = DateTime.UtcNow.AddSeconds(45);
-                    while (!done.WaitOne(0))
+                    // Force underlying HWND and ActiveX handles to exist before navigation.
+                    IntPtr formHandle = hostForm.Handle;
+                    IntPtr handle = browser.Handle;
+
+                    browser.Navigate(new Uri(tempHtmlPath).AbsoluteUri);
+
+                    DateTime loadDeadline = DateTime.UtcNow.AddSeconds(20);
+                    while (browser.ReadyState != WebBrowserReadyState.Complete || browser.IsBusy)
                     {
-                        if (printRequested && DateTime.UtcNow >= printStartedAt.AddSeconds(3))
+                        if (DateTime.UtcNow > loadDeadline)
                         {
-                            // Print() returns as soon as the hidden ieframe print
-                            // template is queued; the template reads the (still
-                            // switched) default printer and spools on this same
-                            // STA thread, so keep pumping 3s after Print() returns
-                            // before restoring the default printer / disposing.
-                            done.Set();
-                            break;
-                        }
-                        if (DateTime.UtcNow > deadline)
-                        {
-                            error = "انتهت مهلة الطباعة (45 ثانية) ولم تكتمل الطباعة";
-                            break;
+                            error = "انتهت مهلة تجهيز قالب الطباعة (20 ثانية)";
+                            return;
                         }
                         Application.DoEvents();
-                        Thread.Sleep(50);
+                        Thread.Sleep(10);
+                    }
+
+                    // Pump 60ms after Complete so inline data:image logos and SVG barcodes finish layout.
+                    DateTime settleUntil = DateTime.UtcNow.AddMilliseconds(60);
+                    while (DateTime.UtcNow < settleUntil)
+                    {
+                        Application.DoEvents();
+                        Thread.Sleep(15);
+                    }
+
+                    browser.Print();
+
+                    // Print() queues the hidden ieframe print template asynchronously on the main STA UI thread;
+                    // pump messages for 600ms so ieframe.dll opens the default printer and spools to winspool.drv,
+                    // while deferring browser/temp-file disposal for 2.5s via a UI timer.
+                    DateTime printStartedAt = DateTime.UtcNow;
+                    while (DateTime.UtcNow < printStartedAt.AddMilliseconds(600))
+                    {
+                        Application.DoEvents();
+                        Thread.Sleep(15);
                     }
                 }
                 catch (Exception ex)
@@ -1367,7 +1502,6 @@ namespace ZSystems.HardwareBridge
                 }
                 finally
                 {
-                    try { if (browser != null) browser.Dispose(); } catch {}
                     try { if (savedPageSetup != null) RestoreWindowsPrintPageSetup(savedPageSetup); } catch {}
                     try
                     {
@@ -1377,19 +1511,43 @@ namespace ZSystems.HardwareBridge
                         }
                     }
                     catch {}
-                    done.Set();
+
+                    WebBrowser browserToDispose = browser;
+                    Form formToDispose = hostForm;
+                    string fileToDelete = tempHtmlPath;
+                    System.Windows.Forms.Timer cleanupTimer = new System.Windows.Forms.Timer();
+                    cleanupTimer.Interval = 2500;
+                    cleanupTimer.Tick += delegate(object s, EventArgs ev)
+                    {
+                        cleanupTimer.Stop();
+                        cleanupTimer.Dispose();
+                        try { if (browserToDispose != null) browserToDispose.Dispose(); } catch {}
+                        try { if (formToDispose != null) formToDispose.Dispose(); } catch {}
+                        try { if (fileToDelete != null && File.Exists(fileToDelete)) File.Delete(fileToDelete); } catch {}
+                    };
+                    cleanupTimer.Start();
                 }
-            });
-            sta.SetApartmentState(ApartmentState.STA);
-            sta.IsBackground = true;
-            sta.Start();
-            // Backstop: the STA thread signals done in every path (45s deadline
-            // plus Print time). If it still hangs, report a timeout and let the
-            // background thread restore the default printer when it unwinds.
-            bool finished = done.WaitOne(TimeSpan.FromSeconds(60));
-            if (!finished && error == null)
+            };
+
+            if (_uiDispatcher != null && _uiDispatcher.IsHandleCreated)
             {
-                error = "انتهت مهلة الطباعة (60 ثانية) ولم تكتمل الطباعة";
+                _uiDispatcher.Invoke(doPrint);
+            }
+            else
+            {
+                ManualResetEvent done = new ManualResetEvent(false);
+                Thread sta = new Thread(delegate()
+                {
+                    try { doPrint(); } finally { done.Set(); }
+                });
+                sta.SetApartmentState(ApartmentState.STA);
+                sta.IsBackground = true;
+                sta.Start();
+                bool finished = done.WaitOne(TimeSpan.FromSeconds(60));
+                if (!finished && error == null)
+                {
+                    error = "انتهت مهلة الطباعة (60 ثانية) ولم تكتمل الطباعة";
+                }
             }
             return error;
         }

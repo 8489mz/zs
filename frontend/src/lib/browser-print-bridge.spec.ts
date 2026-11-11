@@ -123,6 +123,25 @@ describe('printHtmlDocument bridge silent print', () => {
     expect(window.open).not.toHaveBeenCalled();
   });
 
+  it('resolves posWindowsPrinterName from queryKeys.posSettings when queryKeys.settings is absent', async () => {
+    queryClient.removeQueries({ queryKey: queryKeys.settings });
+    queryClient.setQueryData(queryKeys.posSettings, { posWindowsPrinterName: 'POSPrinter POS80' });
+    vi.mocked(HardwareBridgeClient.isAvailable).mockResolvedValue(true);
+    vi.mocked(HardwareBridgeClient.printWindows).mockResolvedValue({ success: true, printer: 'POSPrinter POS80' });
+
+    printHtmlDocument('receipt', '<div>total 25.00</div>', { pageSize: 'receipt' });
+
+    await vi.waitFor(() => {
+      expect(HardwareBridgeClient.printWindows).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deviceName: 'POSPrinter POS80',
+          pageSize: 'receipt',
+        }),
+      );
+    });
+    queryClient.removeQueries({ queryKey: queryKeys.posSettings });
+  });
+
   it('never contacts the bridge when no Windows printer is configured', async () => {
     queryClient.setQueryData(queryKeys.settings, {});
 

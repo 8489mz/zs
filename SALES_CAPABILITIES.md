@@ -44,6 +44,15 @@
   - `frontend/src/features/pos/components/PosProductsPanel.tsx`
   - `frontend/src/styles/partials/mobile-layout.css`
 
+### 262. الطباعة الصامتة اللحظية عبر جسر العتاد المحلي (v1.2.0) والإغلاق التلقائي لنافذة إتمام البيع (Instant Silent Windows Printing via Hardware Bridge v1.2.0 & Post-Sale Auto-Close - 11 November 2026)
+* **حالة القدرة:** 🟢 مكتملة ومختبرة (11 نوفمبر 2026).
+* **المسارات المتأثرة:** جسر العتاد المحلي على ويندوز (`tools/z-systems-bridge`)، ومحرك طباعة إيصالات نقاط البيع (`frontend/src/lib/browser.ts`, `frontend/src/lib/pos-printing.ts`, `frontend/src/lib/pos-printing/hardware.ts`)، ونافذة نجاح البيع (`PosWorkspace.tsx`).
+* **الحلول والضوابط المنفذة:**
+  1. **جسر العتاد المحلي (`tools/z-systems-bridge/Program.cs` - v1.2.0):** أيقونة شريط مهام مؤسسية مخصصة بشعار `Z` على خلفية كحلية (`#170e5e`) مع مؤشر اتصال أخضر وقائمة سياق عربية باتجاه `RightToLeft.Yes`، ورفع `MaxJsonLength = int.MaxValue` مع قراءة جسم الطلب بترميز `Encoding.UTF8` الصريح، وتنفيذ `PrintHtmlOnWindowsPrinter` على الخيط الرئيسي (`_uiDispatcher.Invoke`) عبر ملف HTML مؤقت بترميز UTF-8 BOM داخل `Form` مخفية، وتقليص زمن الضخ المتزامن إلى `600ms` مع تأجيل حذف الملف المؤقت عبر `Timer` خلفي.
+  2. **محرك الطباعة في الواجهة (`browser.ts`, `pos-printing.ts`, `hardware.ts`, `kitchen.ts`):** قراءة إعدادات الطباعة من `queryKeys.settings ?? queryKeys.posSettings` وتمرير `windowsPrinterName` صراحةً في `openReceiptDocument` و `printKitchenTicket`، وتخطي فحص المنافذ الخام (`8080` و `9100`) في `printPostedSaleReceipt` و `tryPrintViaHardware` عند تحديد طابعة ويندوز (`posWindowsPrinterName`).
+  3. **إغلاق نافذة نجاح البيع تلقائياً عند الطباعة (`PosWorkspace.tsx`):** ربط أزرار الطباعة (`F2`, `F4`, `F10`, طباعة المطبخ) بإغلاق `PosSaleSuccessDialog` واستدعاء `completePostSaleCycle` وإعادة التركيز لحقل الباركود فوراً.
+* **أدلة الاختبار:** `npm --prefix frontend run test -- --run src/lib/browser-print-bridge.spec.ts src/lib/pos-printing/hardware.spec.ts src/features/pos/components/pos-workspace/PosSaleSuccessDialog.spec.tsx src/features/pos/components/PosWorkspace.keyboard-safety.spec.tsx` (29/29 اختباراً ناجحاً).
+
 ## فهرس الأقسام المنقولة
 
 - [قدرة: منظومة الدفع والـ QR الذكي متعدد القنوات (Z-Pay Multi-Channel Smart Payment Hub) لماكينات Sunmi ونقاط البيع — ✅ مفعّلة ومكتملة 100% (أكتوبر 2026)](#cap-004)

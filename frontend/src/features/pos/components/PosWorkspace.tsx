@@ -1059,11 +1059,36 @@ export function PosWorkspace() {
           setSaleSuccessDialogOpen(false);
           focusBarcodeEntry();
         }}
-        onPrintReceipt={pos.printReceiptNow}
-        onPrintDualReceipt={pos.printDualReceiptNow}
-        onPrintA4={pos.printA4Now}
-        onPrintKitchen={pos.printKitchenNow}
-        onPrintBoth={pos.printBothNow}
+        onPrintReceipt={() => {
+          pos.printReceiptNow();
+          pos.completePostSaleCycle('تمت طباعة الريسيت. جاهز لعميل جديد.');
+          setSaleSuccessDialogOpen(false);
+          focusBarcodeEntry();
+        }}
+        onPrintDualReceipt={() => {
+          pos.printDualReceiptNow();
+          pos.completePostSaleCycle('تمت طباعة نسختي الريسيت (العميل + المحل). جاهز لعميل جديد.');
+          setSaleSuccessDialogOpen(false);
+          focusBarcodeEntry();
+        }}
+        onPrintA4={() => {
+          pos.printA4Now();
+          pos.completePostSaleCycle('تم فتح طباعة A4. جاهز لعميل جديد.');
+          setSaleSuccessDialogOpen(false);
+          focusBarcodeEntry();
+        }}
+        onPrintKitchen={() => {
+          pos.printKitchenNow();
+          pos.completePostSaleCycle('تم طباعة شيت المطبخ. جاهز لعميل جديد.');
+          setSaleSuccessDialogOpen(false);
+          focusBarcodeEntry();
+        }}
+        onPrintBoth={() => {
+          pos.printBothNow();
+          pos.completePostSaleCycle('تمت طباعة الريسيت وشيت المطبخ. جاهز لعميل جديد.');
+          setSaleSuccessDialogOpen(false);
+          focusBarcodeEntry();
+        }}
       />
 
       {reprintModalOpen && (

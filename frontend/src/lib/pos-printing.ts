@@ -33,6 +33,7 @@ export function openReceiptDocument(
     pageSize: options.pageSize === 'receipt' ? 'receipt' : 'A4',
     extraStyles: getInvoiceStyles(compact),
     deviceName: options.settings?.posElectronCashierPrinter || undefined,
+    windowsPrinterName: options.settings?.posWindowsPrinterName || undefined,
     receiptWidthMm: options.settings?.receiptWidthMm === 58 ? 58 : 80,
     hideHeader: true,
   });
@@ -208,7 +209,18 @@ export async function printPostedSaleReceipt(sale: Sale, options: PrintReceiptOp
   }
 
   // 2. Hardware printer via local socket/service (Port 9100 or Port 8080)
-  if (effectiveOptions.pageSize === 'receipt') {
+  // Skip probing raw 9100/8080 sockets when a Windows printer (Z-Systems Bridge :18181)
+  // or Electron printer is configured, unless an explicit raw hardware URL/IP is set.
+  const hasWindowsOrElectronPrinter = Boolean(
+    effectiveOptions.settings?.posWindowsPrinterName ||
+    effectiveOptions.settings?.posElectronCashierPrinter ||
+    (typeof window !== 'undefined' && (window as any).electronPrinter?.printHtmlSilent)
+  );
+  const hasExplicitRawHardware = Boolean(
+    (effectiveOptions.settings as any)?.posHardwarePrinterUrl ||
+    effectiveOptions.settings?.posNetworkThermalPrinterIp
+  );
+  if (effectiveOptions.pageSize === 'receipt' && (!hasWindowsOrElectronPrinter || hasExplicitRawHardware)) {
     try {
       const printedViaHardware = await tryPrintViaHardware(sale, effectiveOptions);
       if (printedViaHardware) {

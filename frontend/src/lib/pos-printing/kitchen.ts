@@ -253,5 +253,6 @@ export function printKitchenTicket(
     pageSize: 'receipt',
     extraStyles: getKitchenTicketStyles(),
     deviceName: settings?.posElectronKitchenPrinter || undefined,
+    windowsPrinterName: settings?.posWindowsPrinterName || undefined,
   });
 }

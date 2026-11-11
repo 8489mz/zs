@@ -175,7 +175,9 @@ function normalizeCachedSettings(raw: unknown): Partial<AppSettings> {
 }
 
 export function resolvePrintSettings() {
-  const cachedSettings = normalizeCachedSettings(queryClient.getQueryData(queryKeys.settings));
+  const cachedSettings = normalizeCachedSettings(
+    queryClient.getQueryData(queryKeys.settings) ?? queryClient.getQueryData(queryKeys.posSettings)
+  );
   const sessionStoreName = useAuthStore.getState().storeName;
   const resolvedStoreName = String(cachedSettings.storeName || sessionStoreName || DEFAULT_STORE_NAME).trim() || DEFAULT_STORE_NAME;
   return {
@@ -239,6 +241,7 @@ export interface PrintDocumentOptions {
   autoClose?: boolean;
   documentDirection?: 'rtl' | 'ltr';
   deviceName?: string;
+  windowsPrinterName?: string;
   receiptWidthMm?: 58 | 80;
   hideHeader?: boolean;
 }
@@ -616,7 +619,7 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
   // contentWindow.print() shows the usual dialog without a popup.
   // print() needs no user activation, so no window has to be opened
   // synchronously before the async bridge attempt.
-  const windowsPrinterName = branding.windowsPrinterName;
+  const windowsPrinterName = String(options.windowsPrinterName || branding.windowsPrinterName || '').trim();
   const bridgeAttemptPlanned = Boolean(windowsPrinterName);
 
   const printViaDialog = () => {
