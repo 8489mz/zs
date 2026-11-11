@@ -1,10 +1,16 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { Kysely, sql } from '../../../database/kysely';
+import { Kysely, Transaction, sql } from '../../../database/kysely';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { normalizeArabicSearch } from '../../../common/utils/arabic-search.util';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
+import { TransactionHelper } from '../../../database/helpers/transaction.helper';
+import { setScopedStockQty } from '../../../common/utils/location-stock-ledger';
+import { AppError } from '../../../common/errors/app-error';
+import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 
 export interface CreateBinDto {
   locationId: number;
@@ -46,13 +52,124 @@ export interface QuickAuditUpdateDto {
 
 @Injectable()
 export class WarehouseBinsService {
-  constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
+  constructor(
+    @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
+    private readonly tx: TransactionHelper,
+    private readonly accountingPosting: AccountingPostingService,
+  ) {}
 
   private assertInventoryAccess(auth: AuthContext): void {
     if (auth.role === 'super_admin' || auth.role === 'admin' || auth.permissions.includes('inventory')) {
       return;
     }
     throw new ForbiddenException('Missing required inventory permissions');
+  }
+
+  /**
+   * INV-BIN-LEDGER-JOURNAL: a bin allocation is a slice of the location
+   * stock, never a second stock of its own. Every bin write runs in one
+   * transaction, locks products before product_location_stock before the
+   * allocation row (canonical lock order), and records a stock_movements
+   * row so a bin total can never diverge from location stock without a
+   * trace. Quantities are 3dp throughout; only money rounds, at book digits.
+   */
+  private round3(value: number | string | null | undefined): number {
+    return Number((Number(value || 0) + Number.EPSILON).toFixed(3));
+  }
+
+  private validateBinQty(value: unknown, label: string): number {
+    const qty = Number(value);
+    if (!Number.isFinite(qty) || qty < 0) {
+      throw new BadRequestException(`${label} must be zero or greater (received ${String(value)})`);
+    }
+    if (Math.abs(qty * 1000 - Math.round(qty * 1000)) > 0.000001) {
+      throw new BadRequestException(`${label} must have at most three decimal places (received ${String(value)})`);
+    }
+    return this.round3(qty);
+  }
+
+  private async recordBinMovement(
+    trx: Transaction<Database>,
+    args: {
+      scope: { tenantId: string; accountId: string };
+      productId: number;
+      movementType: string;
+      delta: number;
+      beforeQty: number;
+      afterQty: number;
+      referenceType: string;
+      binId: number;
+      branchId: number | null;
+      locationId: number | null;
+      unitCost: number;
+      createdBy: number | null;
+    },
+  ): Promise<number> {
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, args.scope.tenantId));
+    const totalCost = roundMoney(Math.abs(args.delta) * args.unitCost, moneyDigits);
+    const inserted = await trx
+      .insertInto('stock_movements')
+      .values({
+        product_id: args.productId,
+        movement_type: args.movementType,
+        qty: args.delta,
+        before_qty: args.beforeQty,
+        after_qty: args.afterQty,
+        reason: args.referenceType,
+        note: '',
+        reference_type: args.referenceType,
+        reference_id: args.binId,
+        branch_id: args.branchId,
+        location_id: args.locationId,
+        created_by: args.createdBy,
+        tenant_id: args.scope.tenantId,
+        account_id: args.scope.accountId,
+        unit_cost: args.unitCost,
+        total_cost: totalCost,
+      } as any)
+      .returning('id')
+      .executeTakeFirst();
+    if (!inserted?.id) {
+      throw new AppError('Failed to capture stock movement ID for bin posting', 'MOVEMENT_INSERT_FAILED', 500);
+    }
+    return Number(inserted.id);
+  }
+
+  private async upsertAllocation(
+    trx: Transaction<Database>,
+    args: {
+      scope: { tenantId: string; accountId: string };
+      binId: number;
+      productId: number;
+      quantity: number;
+      isPrimary: boolean;
+      existingId: number | null;
+    },
+  ): Promise<void> {
+    if (args.existingId) {
+      await trx
+        .updateTable('product_bin_allocations')
+        .set({
+          quantity: args.quantity,
+          is_primary: args.isPrimary,
+          updated_at: sql`NOW()`,
+        } as any)
+        .where('id', '=', args.existingId)
+        .where('tenant_id', '=', args.scope.tenantId)
+        .execute();
+    } else {
+      await trx
+        .insertInto('product_bin_allocations')
+        .values({
+          tenant_id: args.scope.tenantId,
+          account_id: args.scope.accountId,
+          bin_id: args.binId,
+          product_id: args.productId,
+          quantity: args.quantity,
+          is_primary: args.isPrimary,
+        })
+        .execute();
+    }
   }
 
   async listBins(query: { locationId?: number; search?: string }, auth: AuthContext): Promise<any[]> {
@@ -397,122 +514,287 @@ export class WarehouseBinsService {
     throw new NotFoundException(`لم يتم العثور على رف أو صنف يطابق الباركود: ${query}`);
   }
 
+  /**
+   * PURE REALLOCATION: quickReassignProduct only re-slices an unchanged
+   * location quantity between bins, so it moves NO location stock and
+   * posts NO journal. The bin slice is capped at the location stock
+   * minus what other bins in the same location already hold, so the
+   * bin total can never exceed the location stock. The slice delta is
+   * still recorded as a stock_movements row (bin_reassign) so the
+   * audit trail exists. A bin-to-bin move is two calls: shrink the
+   * source bin first, then grow the target bin.
+   */
   async quickReassignProduct(dto: QuickReassignDto, auth: AuthContext): Promise<any> {
     this.assertInventoryAccess(auth);
     const scope = requireTenantScope(auth);
+    const quantity = this.validateBinQty(dto.quantity, 'Bin quantity');
 
-    const bin = await this.db
-      .selectFrom('warehouse_bins')
-      .selectAll()
-      .where('id', '=', dto.binId)
-      .where('tenant_id', '=', scope.tenantId)
-      .executeTakeFirst();
-
-    if (!bin) throw new NotFoundException('مكان التخزين غير موجود');
-
-    const product = await this.db
-      .selectFrom('products')
-      .selectAll()
-      .where('id', '=', dto.productId)
-      .where('tenant_id', '=', scope.tenantId)
-      .executeTakeFirst();
-
-    if (!product) throw new NotFoundException('الصنف غير موجود');
-
-    const existing = await this.db
-      .selectFrom('product_bin_allocations')
-      .selectAll()
-      .where('bin_id', '=', dto.binId)
-      .where('product_id', '=', dto.productId)
-      .where('tenant_id', '=', scope.tenantId)
-      .executeTakeFirst();
-
-    if (existing) {
-      await this.db
-        .updateTable('product_bin_allocations')
-        .set({
-          quantity: dto.quantity,
-          is_primary: Boolean(dto.isPrimary),
-          updated_at: sql`NOW()`,
-        } as any)
-        .where('id', '=', existing.id)
+    return this.tx.runInTransaction(this.db, async (trx) => {
+      const bin = await trx
+        .selectFrom('warehouse_bins')
+        .selectAll()
+        .where('id', '=', dto.binId)
         .where('tenant_id', '=', scope.tenantId)
-        .execute();
-    } else {
-      await this.db
-        .insertInto('product_bin_allocations')
-        .values({
-          tenant_id: scope.tenantId,
-          account_id: scope.accountId,
-          bin_id: dto.binId,
-          product_id: dto.productId,
-          quantity: dto.quantity,
-          is_primary: Boolean(dto.isPrimary),
-        })
-        .execute();
-    }
+        .executeTakeFirst();
 
-    if (dto.isPrimary) {
-      await this.db
-        .updateTable('products')
-        .set({
-          primary_bin_id: dto.binId,
-          bin_location: bin.code,
-          updated_at: sql`NOW()`,
-        } as any)
+      if (!bin) throw new NotFoundException('مكان التخزين غير موجود');
+
+      const locationId = Number(bin.location_id);
+      const location = await trx
+        .selectFrom('stock_locations')
+        .selectAll()
+        .where('id', '=', locationId)
+        .where('tenant_id', '=', scope.tenantId)
+        .executeTakeFirst();
+      const branchId = location?.branch_id == null ? null : Number(location.branch_id);
+
+      // Canonical lock order: products before product_location_stock before allocations.
+      const product = await trx
+        .selectFrom('products')
+        .selectAll()
         .where('id', '=', dto.productId)
         .where('tenant_id', '=', scope.tenantId)
-        .execute();
-    }
+        .forUpdate()
+        .executeTakeFirst();
 
-    return { success: true };
+      if (!product) throw new NotFoundException('الصنف غير موجود');
+
+      const locationStock = await trx
+        .selectFrom('product_location_stock')
+        .select(['qty'])
+        .where('product_id', '=', dto.productId)
+        .where('location_id', '=', locationId)
+        .where('tenant_id', '=', scope.tenantId)
+        .forUpdate()
+        .executeTakeFirst();
+      const locationQty = this.round3(locationStock?.qty ?? 0);
+
+      const other = await trx
+        .selectFrom('product_bin_allocations as pba')
+        .innerJoin('warehouse_bins as wb', (join) =>
+          join.onRef('wb.id', '=', 'pba.bin_id').on('wb.tenant_id', '=', scope.tenantId),
+        )
+        .select(sql<number>`COALESCE(SUM(pba.quantity), 0)`.as('total'))
+        .where('pba.product_id', '=', dto.productId)
+        .where('pba.tenant_id', '=', scope.tenantId)
+        .where('wb.location_id', '=', locationId)
+        .where('pba.bin_id', '!=', dto.binId)
+        .executeTakeFirst();
+      const otherBinsQty = this.round3(other?.total ?? 0);
+      const maxQty = this.round3(locationQty - otherBinsQty);
+      if (quantity > maxQty) {
+        throw new BadRequestException(
+          `Bin quantity ${quantity} exceeds available location stock ${locationQty} for this product ` +
+            `(${otherBinsQty} already allocated to other bins in the same location; at most ${maxQty} can sit in this bin)`,
+        );
+      }
+
+      const existing = await trx
+        .selectFrom('product_bin_allocations')
+        .selectAll()
+        .where('bin_id', '=', dto.binId)
+        .where('product_id', '=', dto.productId)
+        .where('tenant_id', '=', scope.tenantId)
+        .forUpdate()
+        .executeTakeFirst();
+      const prevQty = this.round3(existing?.quantity ?? 0);
+      const delta = this.round3(quantity - prevQty);
+
+      await this.upsertAllocation(trx, {
+        scope,
+        binId: dto.binId,
+        productId: dto.productId,
+        quantity,
+        isPrimary: Boolean(dto.isPrimary),
+        existingId: existing ? Number(existing.id) : null,
+      });
+
+      if (dto.isPrimary) {
+        await trx
+          .updateTable('products')
+          .set({
+            primary_bin_id: dto.binId,
+            bin_location: bin.code,
+            updated_at: sql`NOW()`,
+          } as any)
+          .where('id', '=', dto.productId)
+          .where('tenant_id', '=', scope.tenantId)
+          .execute();
+      }
+
+      // Reallocation only: a movement row for the trail, no journal —
+      // the location stock (and therefore the books) did not move.
+      let movementId: number | null = null;
+      if (delta !== 0) {
+        movementId = await this.recordBinMovement(trx, {
+          scope,
+          productId: dto.productId,
+          movementType: 'bin_reassign',
+          delta,
+          beforeQty: prevQty,
+          afterQty: quantity,
+          referenceType: 'bin_reassign',
+          binId: dto.binId,
+          branchId,
+          locationId,
+          unitCost: Number(product.cost_price || 0),
+          createdBy: auth.userId ?? null,
+        });
+      }
+
+      return { success: true, previousQty: prevQty, quantity, delta, movementId };
+    });
   }
 
+  /**
+   * PHYSICAL COUNT: quickAuditUpdate takes the counted bin slice as
+   * truth and moves the location stock by exactly the bin delta, in
+   * the same transaction as the allocation write, the movement row
+   * and the journal. Mirrors the stock-count path: setScopedStockQty
+   * (disableAutoDrain) for the location write, the ACTUAL scoped
+   * delta for the movement, and the existing adjustment posting
+   * (postInventoryAdjustment) for the journal leg — Dr 1140 / Cr 7100
+   * on a gain, Dr 5200 / Cr 1140 on a loss, at the movement total.
+   * A count that would drive the location stock below zero fails
+   * closed: pre-existing shadow stock is corrected with an inventory
+   * adjustment first, never by minting negative stock.
+   */
   async quickAuditUpdate(dto: QuickAuditUpdateDto, auth: AuthContext): Promise<any> {
     this.assertInventoryAccess(auth);
     const scope = requireTenantScope(auth);
+    const countedQty = this.validateBinQty(dto.countedQty, 'Counted quantity');
 
-    const allocation = await this.db
-      .selectFrom('product_bin_allocations')
-      .selectAll()
-      .where('bin_id', '=', dto.binId)
-      .where('product_id', '=', dto.productId)
-      .where('tenant_id', '=', scope.tenantId)
-      .executeTakeFirst();
-
-    const prevQty = allocation ? Number(allocation.quantity || 0) : 0;
-    const variance = dto.countedQty - prevQty;
-
-    if (allocation) {
-      await this.db
-        .updateTable('product_bin_allocations')
-        .set({
-          quantity: dto.countedQty,
-          updated_at: sql`NOW()`,
-        } as any)
-        .where('id', '=', allocation.id)
+    return this.tx.runInTransaction(this.db, async (trx) => {
+      const bin = await trx
+        .selectFrom('warehouse_bins')
+        .selectAll()
+        .where('id', '=', dto.binId)
         .where('tenant_id', '=', scope.tenantId)
-        .execute();
-    } else {
-      await this.db
-        .insertInto('product_bin_allocations')
-        .values({
-          tenant_id: scope.tenantId,
-          account_id: scope.accountId,
-          bin_id: dto.binId,
-          product_id: dto.productId,
-          quantity: dto.countedQty,
-          is_primary: false,
-        })
-        .execute();
-    }
+        .executeTakeFirst();
 
-    return {
-      success: true,
-      previousQty: prevQty,
-      countedQty: dto.countedQty,
-      variance,
-      message: variance === 0 ? 'الكمية مطابقة تماماً للمسجل في النظام' : `تم تسجيل فروق جرد في الرف بمقدار (${variance > 0 ? '+' : ''}${variance})`,
-    };
+      if (!bin) throw new NotFoundException('مكان التخزين غير موجود');
+
+      const locationId = Number(bin.location_id);
+      const location = await trx
+        .selectFrom('stock_locations')
+        .selectAll()
+        .where('id', '=', locationId)
+        .where('tenant_id', '=', scope.tenantId)
+        .executeTakeFirst();
+      const branchId = location?.branch_id == null ? null : Number(location.branch_id);
+
+      // Canonical lock order: products before product_location_stock before allocations.
+      const product = await trx
+        .selectFrom('products')
+        .selectAll()
+        .where('id', '=', dto.productId)
+        .where('tenant_id', '=', scope.tenantId)
+        .forUpdate()
+        .executeTakeFirst();
+
+      if (!product) throw new NotFoundException('الصنف غير موجود');
+
+      const allocation = await trx
+        .selectFrom('product_bin_allocations')
+        .selectAll()
+        .where('bin_id', '=', dto.binId)
+        .where('product_id', '=', dto.productId)
+        .where('tenant_id', '=', scope.tenantId)
+        .forUpdate()
+        .executeTakeFirst();
+
+      const prevQty = this.round3(allocation?.quantity ?? 0);
+      const variance = this.round3(countedQty - prevQty);
+
+      const locationStock = await trx
+        .selectFrom('product_location_stock')
+        .select(['qty'])
+        .where('product_id', '=', dto.productId)
+        .where('location_id', '=', locationId)
+        .where('tenant_id', '=', scope.tenantId)
+        .forUpdate()
+        .executeTakeFirst();
+      const locationBefore = this.round3(locationStock?.qty ?? 0);
+      let locationAfter = locationBefore;
+      let movementId: number | null = null;
+      let journalEntryId: number | null = null;
+
+      if (variance !== 0) {
+        const targetQty = this.round3(locationBefore + variance);
+        if (targetQty < 0) {
+          throw new BadRequestException(
+            `Bin audit cannot reduce location stock below zero: bin held ${prevQty}, counted ${countedQty}, ` +
+              `location holds ${locationBefore} — correct the location stock with an inventory adjustment first`,
+          );
+        }
+        const stockChange = await setScopedStockQty(trx, {
+          productId: dto.productId,
+          branchId,
+          locationId,
+          tenantId: scope.tenantId,
+          accountId: scope.accountId,
+          nextQty: targetQty,
+          disableAutoDrain: true,
+          errorCode: 'INSUFFICIENT_STOCK',
+          errorMessage: 'Bin audit cannot drive location stock below zero',
+        });
+        // INV-STOCK-COUNT-ACTUAL-DELTA: the movement, its cost and the
+        // journal all follow the ACTUAL scoped delta, not the requested one.
+        const actualDelta = this.round3(stockChange.scopeAfter - stockChange.scopeBefore);
+        locationAfter = stockChange.scopeAfter;
+
+        await this.upsertAllocation(trx, {
+          scope,
+          binId: dto.binId,
+          productId: dto.productId,
+          quantity: countedQty,
+          isPrimary: Boolean(allocation?.is_primary ?? false),
+          existingId: allocation ? Number(allocation.id) : null,
+        });
+
+        if (actualDelta !== 0) {
+          movementId = await this.recordBinMovement(trx, {
+            scope,
+            productId: dto.productId,
+            movementType: 'adjust',
+            delta: actualDelta,
+            beforeQty: stockChange.scopeBefore,
+            afterQty: stockChange.scopeAfter,
+            referenceType: 'bin_audit',
+            binId: dto.binId,
+            branchId,
+            locationId,
+            unitCost: Number(product.cost_price || 0),
+            createdBy: auth.userId ?? null,
+          });
+          const posting = await this.accountingPosting.postInventoryAdjustment(trx, movementId, auth);
+          if (posting.hasFinancialImpact && !posting.journalEntryId) {
+            throw new AppError(`Bin audit movement ${movementId} has no journal entry`, 'LEDGER_POSTING_MISSING', 500);
+          }
+          journalEntryId = posting.journalEntryId;
+        }
+      } else {
+        await this.upsertAllocation(trx, {
+          scope,
+          binId: dto.binId,
+          productId: dto.productId,
+          quantity: countedQty,
+          isPrimary: Boolean(allocation?.is_primary ?? false),
+          existingId: allocation ? Number(allocation.id) : null,
+        });
+      }
+
+      return {
+        success: true,
+        previousQty: prevQty,
+        countedQty,
+        variance,
+        locationBefore,
+        locationAfter,
+        movementId,
+        journalEntryId,
+        message: variance === 0 ? 'الكمية مطابقة تماماً للمسجل في النظام' : `تم تسجيل فروق جرد في الرف بمقدار (${variance > 0 ? '+' : ''}${variance})`,
+      };
+    });
   }
 }
