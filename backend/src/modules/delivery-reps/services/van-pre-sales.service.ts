@@ -108,7 +108,7 @@ export class VanPreSalesService {
         .where('id', '=', preferredLocationId)
         .where('tenant_id', '=', tenantId)
         .where('is_active', '=', true)
-        .where('location_type', 'not in', ['van_stock', 'damaged', 'in_transit'])
+        .where('location_type', 'not in', ['van_stock', 'damaged', 'in_transit', 'quarantine'])
         .executeTakeFirst();
       if (explicit) return Number(explicit.id);
     }
@@ -122,7 +122,7 @@ export class VanPreSalesService {
         .where('pls.product_id', 'in', productIds)
         .where('pls.tenant_id', '=', tenantId)
         .where('sl.is_active', '=', true)
-        .where('sl.location_type', 'not in', ['van_stock', 'damaged', 'in_transit'])
+        .where('sl.location_type', 'not in', ['van_stock', 'damaged', 'in_transit', 'quarantine'])
         .groupBy('sl.id')
         .orderBy('total_qty', 'desc')
         .executeTakeFirst();
@@ -149,7 +149,7 @@ export class VanPreSalesService {
       .select(['sl.id'])
       .where('b.tenant_id', '=', tenantId)
       .where('sl.is_active', '=', true)
-      .where('sl.location_type', 'not in', ['van_stock', 'damaged', 'in_transit'])
+      .where('sl.location_type', 'not in', ['van_stock', 'damaged', 'in_transit', 'quarantine'])
       .orderBy('b.id', 'asc')
       .executeTakeFirst();
     if (branchDefault) return Number(branchDefault.id);
@@ -160,7 +160,7 @@ export class VanPreSalesService {
       .select(['id'])
       .where('tenant_id', '=', tenantId)
       .where('is_active', '=', true)
-      .where('location_type', 'not in', ['van_stock', 'damaged', 'in_transit'])
+      .where('location_type', 'not in', ['van_stock', 'damaged', 'in_transit', 'quarantine'])
       .orderBy('id', 'asc')
       .executeTakeFirst();
     if (operationalWh) return Number(operationalWh.id);

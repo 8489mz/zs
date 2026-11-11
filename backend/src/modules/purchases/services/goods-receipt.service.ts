@@ -180,9 +180,17 @@ export class GoodsReceiptService {
     }
     const quarantineIds = [...new Set(dto.lines.map((line) => Number(line.quarantineLocationId || 0)).filter((id) => id > 0))];
     if (quarantineIds.length) {
-      const quarantineLocations = await this.db.selectFrom('stock_locations').select('id')
+      const quarantineLocations = await this.db.selectFrom('stock_locations').select(['id', 'location_type'])
         .where('id', 'in', quarantineIds).where('tenant_id', '=', scope.tenantId).execute();
       if (quarantineLocations.length !== quarantineIds.length) throw new NotFoundException('مكان الحجر لا يتبع المنشأة.');
+      // INV-GRN-REAL-QUARANTINE: a quarantine pointer is only real
+      // when the location is typed quarantine — any other type stays
+      // sellable, so accepting it here would recreate the name-only
+      // bug (goods entering normal sellable stock under a quarantine
+      // label). Fail closed at creation, not at posting.
+      if (quarantineLocations.some((loc) => String(loc.location_type || '') !== 'quarantine')) {
+        throw new BadRequestException('مكان الحجر يجب أن يكون مخزناً من نوع حجر صحي؛ لا يجوز تحويل مخزن بيع عادي إلى حجر.');
+      }
     }
     if (dto.purchaseOrderId) {
       const order = await this.db.selectFrom('purchase_orders').select(['id', 'supplier_id', 'status'])
@@ -536,10 +544,50 @@ export class GoodsReceiptService {
         .executeTakeFirst();
       const grnBranchId = grnLocation?.branch_id != null ? Number(grnLocation.branch_id) : null;
 
+      // INV-GRN-REAL-QUARANTINE: resolve every quarantine location
+      // up front, with its branch, and re-check the type at posting
+      // time — the type may have changed since the draft was created,
+      // and a line whose quarantine pointer no longer names a real
+      // quarantine location must fail closed instead of silently
+      // posting sellable stock.
+      const quarantineLocationIds = [...new Set(grn.lines.map((line: any) => Number(line.quarantineLocationId || 0)).filter((id: number) => id > 0))];
+      const quarantineLocationsById = new Map<number, { branchId: number | null }>();
+      if (quarantineLocationIds.length) {
+        const quarantineRows = await trx
+          .selectFrom('stock_locations')
+          .select(['id', 'branch_id', 'location_type'])
+          .where('id', 'in', quarantineLocationIds)
+          .where('tenant_id', '=', scope.tenantId)
+          .execute();
+        for (const row of quarantineRows) {
+          if (String(row.location_type || '') !== 'quarantine') {
+            throw new BadRequestException('مكان الحجر في إذن الاستلام ليس مخزن حجر صحي؛ أوقف الترحيل قبل دخول بضاعة محجوزة إلى مخزن بيع.');
+          }
+          quarantineLocationsById.set(Number(row.id), { branchId: row.branch_id != null ? Number(row.branch_id) : null });
+        }
+        if (quarantineLocationsById.size !== quarantineLocationIds.length) {
+          throw new NotFoundException('مكان الحجر في إذن الاستلام غير موجود في المنشأة.');
+        }
+      }
+
       // 2. Update physical inventory for accepted quantities & write audit movements
       for (const line of [...grn.lines].sort((a, b) => Number(a.productId) - Number(b.productId))) {
         const accepted = Number(line.acceptedQty || 0);
         if (accepted > 0) {
+          // INV-GRN-REAL-QUARANTINE: an accepted line with a
+          // quarantine location posts to the QUARANTINE location, not
+          // the receipt warehouse — the old code posted every line to
+          // grn.locationId and the quarantine id never appeared in
+          // the acceptance path, so quarantined goods entered normal
+          // stock and were sellable immediately. The global balance
+          // and the WAC still move (the goods are owned inventory,
+          // Dr 1140 posts on receipt exactly as before); only the
+          // location leg changes.
+          const quarantineLocationId = Number(line.quarantineLocationId || 0) || null;
+          const targetLocationId = quarantineLocationId ?? grn.locationId;
+          const targetBranchId = quarantineLocationId
+            ? quarantineLocationsById.get(quarantineLocationId)!.branchId
+            : grnBranchId;
           const lineUnitCost = Number(line.unitCost || 0);
           if (!Number.isFinite(lineUnitCost) || lineUnitCost <= 0 || roundMoney(accepted * lineUnitCost, moneyDigits) <= 0) {
             throw new BadRequestException(`لا يمكن ترحيل استلام الصنف ${line.productId} بدون تكلفة مالية صالحة.`);
@@ -563,8 +611,8 @@ export class GoodsReceiptService {
           const stockChange = await applyStockDelta(trx, {
             productId: Number(line.productId),
             delta: accepted,
-            branchId: grnBranchId,
-            locationId: grn.locationId,
+            branchId: targetBranchId,
+            locationId: targetLocationId,
             tenantId: scope.tenantId,
             accountId: scope.accountId || scope.tenantId,
             allowNegative: true, // a receipt only adds; never reject it on a negative-stock rule
@@ -618,8 +666,8 @@ export class GoodsReceiptService {
               note: `إذن استلام مخزني GRN - ${grn.docNo}`,
               reference_type: 'goods_receipt',
               reference_id: grn.id,
-              branch_id: grnBranchId,
-              location_id: grn.locationId,
+              branch_id: targetBranchId,
+              location_id: targetLocationId,
               created_by: auth.userId,
             })
             .execute();
@@ -642,7 +690,7 @@ export class GoodsReceiptService {
             }
             const existingBatch = await trx.selectFrom('pharmacy_batches').select(['id', 'quantity', 'expiry_date'])
               .where('tenant_id', '=', scope.tenantId).where('product_id', '=', Number(line.productId))
-              .where('location_id', '=', grn.locationId).where('batch_number', '=', batchNumber)
+              .where('location_id', '=', targetLocationId).where('batch_number', '=', batchNumber)
               .forUpdate().executeTakeFirst();
             if (existingBatch) {
               if (String(existingBatch.expiry_date).slice(0, 10) !== expiryDate) {
@@ -657,7 +705,7 @@ export class GoodsReceiptService {
                 tenant_id: scope.tenantId, account_id: scope.accountId,
                 product_id: Number(line.productId), drug_id: drug?.id || null,
                 batch_number: batchNumber, expiry_date: expiryDate, quantity: accepted,
-                unit_cost: lineUnitCost, location_id: grn.locationId,
+                unit_cost: lineUnitCost, location_id: targetLocationId,
                 supplier_name: grn.supplierName || null, status: 'active', notes: `وارد ${grn.docNo}`,
               }).execute();
             }

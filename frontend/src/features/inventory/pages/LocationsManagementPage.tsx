@@ -17,6 +17,7 @@ import { EditIcon, TrashIcon, PlusIcon } from '@/shared/components/icons/AppIcon
 const LOCATION_TYPE_OPTIONS = [
   { value: 'internal_warehouse', label: 'مخزن داخلي (لا يظهر كأرصدة فروع)' },
   { value: 'branch_stock', label: 'رصيد فرع (متاح للبيع)' },
+  { value: 'quarantine', label: 'حجر صحي (غير متاح للبيع)' },
 ];
 
 export function LocationsManagementPage() {
@@ -30,7 +31,7 @@ export function LocationsManagementPage() {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [branchId, setBranchId] = useState('');
-  const [locationType, setLocationType] = useState<'internal_warehouse' | 'branch_stock'>('internal_warehouse');
+  const [locationType, setLocationType] = useState<'internal_warehouse' | 'branch_stock' | 'quarantine'>('internal_warehouse');
 
   const branchOptions = useMemo(() => [
     { value: '', label: 'بدون ربط (فرع رئيسي)' },
@@ -86,7 +87,7 @@ export function LocationsManagementPage() {
     { key: 'id', header: 'الرقم', cell: (row) => row.id },
     { key: 'name', header: 'الاسم', cell: (row) => row.name },
     { key: 'code', header: 'الكود', cell: (row) => row.code || '-' },
-    { key: 'locationType', header: 'النوع', cell: (row) => row.locationType === 'branch_stock' ? 'رصيد فرع' : 'مخزن داخلي' },
+    { key: 'locationType', header: 'النوع', cell: (row) => row.locationType === 'branch_stock' ? 'رصيد فرع' : row.locationType === 'quarantine' ? 'حجر صحي' : 'مخزن داخلي' },
     { key: 'branchName', header: 'الفرع', cell: (row) => (row as any).branchName || row.branchId || 'الرئيسي' },
     {
       key: 'actions',
@@ -166,7 +167,7 @@ export function LocationsManagementPage() {
           <Field label={t('inventory.locations_management_page.s18', "نوع المخزن")}>
             <CustomSelect
               value={locationType}
-              onChange={(val) => setLocationType(val as 'internal_warehouse' | 'branch_stock')}
+              onChange={(val) => setLocationType(val as 'internal_warehouse' | 'branch_stock' | 'quarantine')}
               options={LOCATION_TYPE_OPTIONS}
               disabled={createMutation.isPending || updateMutation.isPending}
               placeholder={t('inventory.locations_management_page.s19', "اختر نوع المخزن")}

@@ -24,6 +24,7 @@ import {
   shouldTriggerNCR,
   suggestNCRSeverity,
 } from '../engines/quality-control.engine';
+import { relocateStockBetweenLocations } from '../../../common/utils/location-stock-ledger';
 
 @Injectable()
 export class QualityAssuranceService {
@@ -177,6 +178,19 @@ export class QualityAssuranceService {
         })
         .execute();
 
+      // INV-GRN-REAL-QUARANTINE: a passed (or conditionally passed)
+      // goods-receipt inspection releases the QA-approved quantity
+      // out of quarantine into the receipt's own warehouse, in this
+      // same transaction — the inspection and the release commit
+      // together or not at all. A failed inspection releases nothing:
+      // the rejected quantity stays quarantined for disposition
+      // (scrap / return to vendor). A reference that names no
+      // quarantined GRN line is a no-op, so every other inspection
+      // (work orders, deliveries, ad-hoc) behaves exactly as before.
+      if (dto.referenceDocType === 'goods_receipt' && evalResult.status !== 'failed' && Number(dto.acceptedQty) > 0) {
+        await this.releaseQuarantinedReceipt(trx, tenantId, scope.accountId, Number(auth.userId), dto);
+      }
+
       // Trigger NCR if inspection failed or rejected > 0
       if (shouldTriggerNCR(evalResult.status, dto.rejectedQty) && dto.autoCreateNcrOnFail !== false) {
         const countRes = await trx
@@ -217,6 +231,134 @@ export class QualityAssuranceService {
       reason: evalResult.reason,
       autoNcrNumber,
     };
+  }
+
+  /**
+   * INV-GRN-REAL-QUARANTINE: release the QA-approved quantity of a
+   * quarantined receipt line into the receipt's own warehouse.
+   *
+   * The inspector types the receipt number in the modal (or the GRN
+   * line id), so the reference resolves two ways: a numeric line id,
+   * or a goods_receipt_notes doc_no. Only lines of this product that
+   * actually carry a quarantine_location_id move; anything else is a
+   * no-op and the inspection proceeds unchanged.
+   *
+   * Fail-closed, in the caller's transaction: a missing quarantine
+   * location, a missing target warehouse, an approved quantity above
+   * the quarantined lines, or insufficient quarantined stock all
+   * throw, rolling back the inspection insert too — no partial move
+   * and no inspection recorded for a release that never happened.
+   * No journal posts here: the GRN receipt already posted Dr 1140 /
+   * Cr 2125 for the full accepted value, and the move is location
+   * only, so both legs reuse the classified location-only transfer
+   * types (a new type would throw in the WAC flow engine's
+   * stockMovementGlobalDelta) with reason 'quarantine_release'.
+   */
+  private async releaseQuarantinedReceipt(
+    trx: any,
+    tenantId: string,
+    accountId: string,
+    userId: number,
+    dto: CreateQCInspectionDto,
+  ): Promise<void> {
+    const reference = String(dto.referenceDocId || '').trim();
+    if (!reference) return;
+
+    let lines: any[] = [];
+    if (/^\d+$/.test(reference)) {
+      lines = await trx.selectFrom('goods_receipt_lines').selectAll()
+        .where('id', '=', Number(reference))
+        .where('tenant_id', '=', tenantId)
+        .where('product_id', '=', Number(dto.productId))
+        .where('quarantine_location_id', 'is not', null)
+        .execute();
+    }
+    if (lines.length === 0) {
+      const grn = await trx.selectFrom('goods_receipt_notes').select('id')
+        .where('doc_no', '=', reference)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      if (!grn) return;
+      lines = await trx.selectFrom('goods_receipt_lines').selectAll()
+        .where('grn_id', '=', Number(grn.id))
+        .where('tenant_id', '=', tenantId)
+        .where('product_id', '=', Number(dto.productId))
+        .where('quarantine_location_id', 'is not', null)
+        .orderBy('id', 'asc')
+        .execute();
+    }
+    if (lines.length === 0) return;
+
+    let remaining = Number(dto.acceptedQty);
+    for (const line of lines) {
+      if (remaining <= 0) break;
+      const releaseQty = Math.min(remaining, Number(line.accepted_qty || 0));
+      if (releaseQty <= 0) continue;
+      const quarantineLocationId = Number(line.quarantine_location_id);
+      const grn = await trx.selectFrom('goods_receipt_notes').select(['id', 'doc_no', 'location_id'])
+        .where('id', '=', Number(line.grn_id))
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      if (!grn) throw new NotFoundException(`إذن الاستلام المرتبط بسطر الحجر رقم ${line.id} غير موجود.`);
+      const targetLocationId = Number(grn.location_id);
+      const quarantineLocation = await trx.selectFrom('stock_locations').select(['id', 'branch_id'])
+        .where('id', '=', quarantineLocationId)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      if (!quarantineLocation) throw new NotFoundException(`مكان الحجر رقم ${quarantineLocationId} غير موجود؛ تعذر إفراج الكمية المحجوزة.`);
+      const targetLocation = await trx.selectFrom('stock_locations').select(['id', 'branch_id'])
+        .where('id', '=', targetLocationId)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      if (!targetLocation) throw new NotFoundException(`مخزن الاستلام المستهدف رقم ${targetLocationId} غير موجود؛ تعذر إفراج الكمية المحجوزة.`);
+      const fromBranchId = quarantineLocation.branch_id != null ? Number(quarantineLocation.branch_id) : null;
+      const toBranchId = targetLocation.branch_id != null ? Number(targetLocation.branch_id) : null;
+      const unitCost = line.landed_unit_cost != null ? Number(line.landed_unit_cost) : Number(line.unit_cost || 0);
+      const moved = await relocateStockBetweenLocations(trx, {
+        productId: Number(dto.productId),
+        qty: releaseQty,
+        fromBranchId,
+        fromLocationId: quarantineLocationId,
+        toBranchId,
+        toLocationId: targetLocationId,
+        tenantId,
+        accountId,
+      });
+      const movementBase = {
+        tenant_id: tenantId,
+        account_id: accountId,
+        product_id: Number(dto.productId),
+        unit_cost: unitCost,
+        total_cost: Number((releaseQty * unitCost).toFixed(6)),
+        reason: 'quarantine_release',
+        note: `إفراج حجر صحي من إذن الاستلام ${grn.doc_no} — سطر ${line.id}`,
+        reference_type: 'goods_receipt',
+        reference_id: Number(grn.id),
+        created_by: userId,
+      };
+      await trx.insertInto('stock_movements').values({
+        ...movementBase,
+        movement_type: 'transfer_send',
+        qty: -releaseQty,
+        before_qty: moved.sourceBefore,
+        after_qty: moved.sourceAfter,
+        branch_id: fromBranchId,
+        location_id: quarantineLocationId,
+      }).execute();
+      await trx.insertInto('stock_movements').values({
+        ...movementBase,
+        movement_type: 'transfer_receive',
+        qty: releaseQty,
+        before_qty: moved.targetBefore,
+        after_qty: moved.targetAfter,
+        branch_id: toBranchId,
+        location_id: targetLocationId,
+      }).execute();
+      remaining = Number((remaining - releaseQty).toFixed(3));
+    }
+    if (remaining > 0) {
+      throw new BadRequestException(`الكمية المقبولة في الفحص (${dto.acceptedQty}) تتجاوز الكمية المحجوزة صحياً لهذا الصنف في إذن الاستلام؛ راجع سطور الحجر قبل الاعتماد.`);
+    }
   }
 
   async getInspections(

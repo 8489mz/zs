@@ -20,6 +20,7 @@ import type { Location } from '@/types/domain';
 const LOCATION_TYPE_OPTIONS = [
   { value: 'internal_warehouse', label: 'مخزن داخلي (لا يظهر كأرصدة فروع)' },
   { value: 'branch_stock', label: 'رصيد فرع (متاح للبيع)' },
+  { value: 'quarantine', label: 'حجر صحي (غير متاح للبيع)' },
 ];
 
 function formatLocationType(type?: string) {
@@ -32,6 +33,7 @@ function formatLocationType(type?: string) {
     warehouse: 'مستودع',
     transit: 'مخزن ترانزيت',
     damaged: 'مخزن تالف',
+    quarantine: 'حجر صحي (غير متاح للبيع)',
     van_stock: 'سيارة توزيع (فان)',
   };
   return map[type] || type;
@@ -56,7 +58,7 @@ export function WarehousesGridPage() {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [branchId, setBranchId] = useState('');
-  const [locationType, setLocationType] = useState<'internal_warehouse' | 'branch_stock'>('internal_warehouse');
+  const [locationType, setLocationType] = useState<'internal_warehouse' | 'branch_stock' | 'quarantine'>('internal_warehouse');
 
   const branchOptions = useMemo(() => [
     { value: '', label: 'بدون ربط (فرع رئيسي)' },
@@ -453,7 +455,7 @@ export function WarehousesGridPage() {
           <Field label={t('inventory.warehouses_grid_page.s26', "نوع المخزن")}>
             <CustomSelect
               value={locationType}
-              onChange={(val) => setLocationType(val as 'internal_warehouse' | 'branch_stock')}
+              onChange={(val) => setLocationType(val as 'internal_warehouse' | 'branch_stock' | 'quarantine')}
               options={LOCATION_TYPE_OPTIONS}
               disabled={createMutation.isPending || updateMutation.isPending}
               placeholder={t('inventory.warehouses_grid_page.s27', "اختر نوع المخزن")}

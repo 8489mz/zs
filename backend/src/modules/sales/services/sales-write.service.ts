@@ -755,7 +755,7 @@ export class SalesWriteService {
       .where(sql<boolean>`pls.tenant_id = ${params.tenantId}`)
       .where(sql<boolean>`pls.qty > 0`)
       .where('sl.is_active', '=', true)
-      .where('sl.location_type', 'not in', ['damaged', 'in_transit']);
+      .where('sl.location_type', 'not in', ['damaged', 'in_transit', 'quarantine']);
 
     if (excludedIds.size > 0) {
       otherLocationsQuery = otherLocationsQuery.where('pls.location_id', 'not in', Array.from(excludedIds));
@@ -1531,8 +1531,8 @@ export class SalesWriteService {
           );
         }
 
-        if (['damaged', 'in_transit'].includes(defaultLocation.location_type || '')) {
-          throw new AppError('المخزن الافتراضي لا يجوز أن يكون مخزن تالف أو بضاعة بالطريق',
+        if (['damaged', 'in_transit', 'quarantine'].includes(defaultLocation.location_type || '')) {
+          throw new AppError('المخزن الافتراضي لا يجوز أن يكون مخزن تالف أو بضاعة بالطريق أو حجر صحي',
             'POS_DEFAULT_LOCATION_NOT_SELLABLE', 409);
         }
         if (defaultLocation.branch_id != null && Number(defaultLocation.branch_id) !== Number(normalized.branchId)) {
@@ -1553,8 +1553,8 @@ export class SalesWriteService {
         if (!selectedLocation || !selectedLocation.is_active) {
           throw new AppError('مخزن البيع غير موجود أو غير نشط', 'SALE_LOCATION_UNAVAILABLE', 409);
         }
-        if (['damaged', 'in_transit'].includes(selectedLocation.location_type || '')) {
-          throw new AppError('لا يمكن بيع المخزون التالف أو البضاعة بالطريق', 'SALE_LOCATION_NOT_SELLABLE', 409);
+        if (['damaged', 'in_transit', 'quarantine'].includes(selectedLocation.location_type || '')) {
+          throw new AppError('لا يمكن بيع المخزون التالف أو البضاعة بالطريق أو المحجوز صحياً', 'SALE_LOCATION_NOT_SELLABLE', 409);
         }
       }
 
@@ -3020,8 +3020,8 @@ export class SalesWriteService {
           );
         }
 
-        if (['damaged', 'in_transit'].includes(defaultLocation.location_type || '')) {
-          throw new AppError('المخزن الافتراضي لا يجوز أن يكون مخزن تالف أو بضاعة بالطريق',
+        if (['damaged', 'in_transit', 'quarantine'].includes(defaultLocation.location_type || '')) {
+          throw new AppError('المخزن الافتراضي لا يجوز أن يكون مخزن تالف أو بضاعة بالطريق أو حجر صحي',
             'POS_DEFAULT_LOCATION_NOT_SELLABLE', 409);
         }
         if (defaultLocation.branch_id != null && Number(defaultLocation.branch_id) !== Number(normalized.branchId)) {
@@ -3042,8 +3042,8 @@ export class SalesWriteService {
         if (!selectedLocation || !selectedLocation.is_active) {
           throw new AppError('مخزن البيع غير موجود أو غير نشط', 'SALE_LOCATION_UNAVAILABLE', 409);
         }
-        if (['damaged', 'in_transit'].includes(selectedLocation.location_type || '')) {
-          throw new AppError('لا يمكن بيع المخزون التالف أو البضاعة بالطريق', 'SALE_LOCATION_NOT_SELLABLE', 409);
+        if (['damaged', 'in_transit', 'quarantine'].includes(selectedLocation.location_type || '')) {
+          throw new AppError('لا يمكن بيع المخزون التالف أو البضاعة بالطريق أو المحجوز صحياً', 'SALE_LOCATION_NOT_SELLABLE', 409);
         }
       }
 
@@ -3053,7 +3053,7 @@ export class SalesWriteService {
           .select(['id', 'location_type', 'branch_id'])
           .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
           .where('is_active', '=', true)
-          .where('location_type', 'not in', ['damaged', 'in_transit'])
+          .where('location_type', 'not in', ['damaged', 'in_transit', 'quarantine'])
           .execute();
           
         const defaultLocId = branch.default_stock_location_id;

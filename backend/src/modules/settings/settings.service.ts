@@ -781,7 +781,7 @@ export class SettingsService {
     if (locationType === 'in_transit') {
       throw new AppError('لا يمكن إنشاء المخزن ليكون قيد النقل يدوياً', 'INVALID_LOCATION_TYPE', 400);
     }
-    const validTypes = ['internal_warehouse', 'external_warehouse', 'branch_stock', 'damaged'];
+    const validTypes = ['internal_warehouse', 'external_warehouse', 'branch_stock', 'damaged', 'quarantine'];
     if (!validTypes.includes(locationType)) {
       throw new AppError('نوع المخزن غير صالح', 'INVALID_LOCATION_TYPE', 400);
     }
@@ -888,7 +888,7 @@ export class SettingsService {
     if (payload.locationType === 'in_transit' && location.location_type !== 'in_transit') {
       throw new AppError('لا يمكن إنشاء أو تعديل المخزن ليكون قيد النقل يدوياً', 'INVALID_LOCATION_TYPE', 400);
     }
-    const validTypes = ['internal_warehouse', 'external_warehouse', 'branch_stock', 'damaged', 'in_transit'];
+    const validTypes = ['internal_warehouse', 'external_warehouse', 'branch_stock', 'damaged', 'in_transit', 'quarantine'];
     if (!validTypes.includes(locationType)) {
       throw new AppError('نوع المخزن غير صالح', 'INVALID_LOCATION_TYPE', 400);
     }

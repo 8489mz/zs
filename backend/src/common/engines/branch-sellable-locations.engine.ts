@@ -32,8 +32,8 @@ export type SellableBranch = {
 
 export type SellableLocation = { id: number; branchId: number | null };
 
-/** المخازن التي لا يُباع منها بحال: التالف وما هو في الطريق. */
-const NEVER_SELLABLE_TYPES = new Set(['damaged', 'in_transit']);
+/** المخازن التي لا يُباع منها بحال: التالف وما هو في الطريق والمحجوز صحياً. */
+const NEVER_SELLABLE_TYPES = new Set(['damaged', 'in_transit', 'quarantine']);
 
 export const ALL_OPERATIONAL_LOCATIONS = 'all_operational_locations';
 

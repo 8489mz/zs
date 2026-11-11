@@ -335,7 +335,7 @@ export interface StockLocationTable {
   name: string;
   code: ColumnType<string, string | undefined, string | undefined>;
   branch_id: number | null;
-  location_type: 'branch_stock' | 'internal_warehouse' | 'external_warehouse' | 'damaged' | 'in_transit';
+  location_type: 'branch_stock' | 'internal_warehouse' | 'external_warehouse' | 'damaged' | 'in_transit' | 'van_stock' | 'quarantine';
   is_active: boolean;
 }
 

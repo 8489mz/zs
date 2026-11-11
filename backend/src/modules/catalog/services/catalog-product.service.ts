@@ -777,7 +777,7 @@ export class CatalogProductService {
           .select(['id', 'location_type', 'branch_id'])
           .where(this.tenantPredicate(actor))
           .where('is_active', '=', true)
-          .where('location_type', 'not in', ['damaged', 'in_transit'])
+          .where('location_type', 'not in', ['damaged', 'in_transit', 'quarantine'])
           .execute();
           
         const defaultLocId = branch.default_stock_location_id;
