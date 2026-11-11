@@ -7,6 +7,14 @@
  * a merchant repricing an option between cart-add and submit. Reject
  * (422) only when NO server price truth exists for a modifier.
  *
+ * FROZEN OVERRIDE (SF-3 D-SF-03): an online order converts at the
+ * modifier prices the server fixed at placement — the agreed amount.
+ * When approvedPrices carries a modifier's key (option:<id> or
+ * product:<id>), that price wins over current truth and no
+ * missing-truth error is raised for it; the merchant's later reprice
+ * (or deletion) of the option applies to new orders only. Walk-in and
+ * direct sales pass no approved prices and keep the re-price policy.
+ *
  * Price truth, in lookup order:
  * - A mod with optionId is a configured group option: its price is the
  *   pos_modifier_options.price, whatever the client sent. A negative
@@ -104,8 +112,13 @@ function unverifiedPrice(modName: string): AppError {
 }
 
 /** Resolve one modifier's server price. Throws when no truth exists. */
-export function resolveModifierPrice(mod: ModifierLike, truth: ModifierPriceTruth): number {
+export function resolveModifierPrice(mod: ModifierLike, truth: ModifierPriceTruth, approvedPrices?: Record<string, number>): number {
   const optionId = modifierOptionId(mod);
+  // SF-3 D-SF-03: a frozen modifier converts at its order-time price.
+  if (optionId > 0 && approvedPrices?.[`option:${optionId}`] !== undefined) {
+    const frozen = Number(approvedPrices[`option:${optionId}`]);
+    if (Number.isFinite(frozen) && frozen >= 0) return frozen;
+  }
   if (optionId > 0) {
     const option = truth.options.get(optionId);
     if (!option) {
@@ -120,6 +133,10 @@ export function resolveModifierPrice(mod: ModifierLike, truth: ModifierPriceTrut
     return price;
   }
   const productId = modifierProductId(mod);
+  if (productId > 0 && approvedPrices?.[`product:${productId}`] !== undefined) {
+    const frozen = Number(approvedPrices[`product:${productId}`]);
+    if (Number.isFinite(frozen) && frozen >= 0) return frozen;
+  }
   if (isComboComponentMod(mod)) {
     if (productId <= 0 || !truth.products.has(productId)) throw unverifiedPrice(String(mod.name || ''));
     const retail = Number(truth.products.get(productId));
@@ -145,13 +162,14 @@ export function resolveModifierPrice(mod: ModifierLike, truth: ModifierPriceTrut
 export function rewriteModifierPrices<T extends SaleItemLike>(
   items: T[],
   truth: ModifierPriceTruth,
+  approvedPrices?: Record<string, number>,
 ): T[] {
   return items.map((item) => {
     const modifiers = Array.isArray(item.modifiers) ? item.modifiers : [];
     if (modifiers.length === 0) return item;
     return {
       ...item,
-      modifiers: modifiers.map((mod) => ({ ...mod, price: resolveModifierPrice(mod, truth) })),
+      modifiers: modifiers.map((mod) => ({ ...mod, price: resolveModifierPrice(mod, truth, approvedPrices) })),
     };
   });
 }
@@ -216,8 +234,9 @@ export function enforceRestaurantModifierContract<T extends SaleItemLike>(
   items: T[],
   truth: ModifierPriceTruth,
   linkedGroups: Map<number, ModifierGroupRule[]>,
+  approvedPrices?: Record<string, number>,
 ): T[] {
-  const repriced = rewriteModifierPrices(items, truth);
+  const repriced = rewriteModifierPrices(items, truth, approvedPrices);
   validateModifierGroupRules(repriced, linkedGroups, truth);
   return repriced;
 }

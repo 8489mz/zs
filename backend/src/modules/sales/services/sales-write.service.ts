@@ -73,6 +73,15 @@ export interface SystemApprovedSaleTerms {
    * fields: set server-side by StorefrontService, never from a request.
    */
   allowNegativeStock?: boolean;
+  /**
+   * SF-3 D-SF-03: modifier prices frozen at order time, keyed by
+   * `option:<optionId>` or `product:<productId>`; a line whose modifier
+   * has an approved price converts at that price instead of being
+   * re-priced from current server truth. Internal-only like the other
+   * fields: built server-side from the stored order row by
+   * resolveOnlineOrderTerms, never from a request.
+   */
+  approvedModifierPrices?: Record<string, number>;
 }
 
 /**
@@ -209,6 +218,7 @@ export class SalesWriteService {
   private async resolveSaleModifierCosts(
     trx: Kysely<Database> | Transaction<Database>, items: any[],
     tenantId: string, restaurantEnabled: boolean,
+    approvedModifierPrices?: Record<string, number>,
   ): Promise<void> {
     const optionIds = new Set<number>();
     const componentIds = new Set<number>();
@@ -238,7 +248,11 @@ export class SalesWriteService {
         if (!restaurantEnabled) return {...mod,costPrice:0};
         const optionId = Number(mod.optionId || mod.option_id || mod.id || 0);
         const option = optionId ? options.get(optionId) : undefined;
-        if (optionId && !option) throw new AppError('Restaurant modifier option missing',
+        // SF-3 D-SF-03: a frozen option deleted after placement costs
+        // from its stored component (or 0 when it has none) instead of
+        // throwing — the sale price is already frozen by the pre-pass.
+        const frozenOption = optionId > 0 && !option && approvedModifierPrices?.[`option:${optionId}`] !== undefined;
+        if (optionId && !option && !frozenOption) throw new AppError('Restaurant modifier option missing',
           'RESTAURANT_MODIFIER_OPTION_INVALID',422);
         const directId = Number(mod.productId || mod.componentProductId || mod.component_product_id || 0);
         const configuredId = Number(option?.component_product_id || 0);
@@ -290,6 +304,7 @@ export class SalesWriteService {
   private async enforceRestaurantModifierContract(
     trx: Kysely<Database> | Transaction<Database>, items: any[],
     tenantId: string, restaurantEnabled: boolean,
+    approvedModifierPrices?: Record<string, number>,
   ): Promise<void> {
     if (!restaurantEnabled) return;
     const optionIds = new Set<number>();
@@ -344,7 +359,24 @@ export class SalesWriteService {
         linkedGroups.set(Number(link.product_id), list);
       }
     }
-    const repriced = enforceModifierContractPure(items, truth, linkedGroups);
+    // SF-3 D-SF-03: a frozen option deleted after placement keeps its
+    // stored price AND its stored group, so the order still converts at
+    // the agreed amount and still counts toward its group instead of
+    // throwing RESTAURANT_MODIFIER_OPTION_INVALID.
+    if (approvedModifierPrices) {
+      for (const item of items) {
+        for (const mod of (Array.isArray(item.modifiers) ? item.modifiers : [])) {
+          const optionId = Number(mod.optionId || mod.option_id || 0);
+          if (optionId > 0 && approvedModifierPrices[`option:${optionId}`] !== undefined && !truth.options.has(optionId)) {
+            truth.options.set(optionId, {
+              price: approvedModifierPrices[`option:${optionId}`],
+              groupId: Number(mod.groupId || mod.group_id || 0),
+            });
+          }
+        }
+      }
+    }
+    const repriced = enforceModifierContractPure(items, truth, linkedGroups, approvedModifierPrices);
     repriced.forEach((item, index) => { items[index].modifiers = item.modifiers; });
   }
 
@@ -1246,9 +1278,27 @@ export class SalesWriteService {
       if (productId > 0 && Number.isFinite(unitPrice) && unitPrice >= 0) approvedUnitPrices[productId] = unitPrice;
     }
 
+    // SF-3 D-SF-03: the stored modifiers were validated + re-priced by the
+    // server at placement — freeze those prices, keyed the way the
+    // contract resolves them (option first, then product). The order row
+    // is the authority; an internal caller's older map never overrides it.
+    const approvedModifierPrices: Record<string, number> = { ...(existing?.approvedModifierPrices || {}) };
+    for (const item of items) {
+      const modifiers = Array.isArray((item as any).modifiers) ? (item as any).modifiers : [];
+      for (const mod of modifiers) {
+        const optionId = Number(mod?.optionId || mod?.option_id || 0);
+        const productId = Number(mod?.productId || mod?.componentProductId || mod?.component_product_id || 0);
+        const price = Number(mod?.price);
+        if (!Number.isFinite(price) || price < 0) continue;
+        if (optionId > 0) approvedModifierPrices[`option:${optionId}`] = price;
+        else if (productId > 0) approvedModifierPrices[`product:${productId}`] = price;
+      }
+    }
+
     return {
       approvedDiscount: Math.max(Number(existing?.approvedDiscount || 0), Math.max(0, Number(order.discount_amount || 0))),
       approvedUnitPrices,
+      approvedModifierPrices,
       // SF-2 D-SF-11: the caller-computed terms are rebuilt here, so the
       // storefront placement promise must ride along or it is lost.
       allowNegativeStock: existing?.allowNegativeStock === true,
@@ -1310,6 +1360,10 @@ export class SalesWriteService {
       await this.enforceRestaurantModifierContract(
         trx, normalized.items, scope.tenantId,
         this.planFeatureService.hasFeature(auth.planId, auth.extraFeatures, 'restaurant'),
+        // SF-3 D-SF-03: an online order converts at its frozen modifier
+        // prices (resolveOnlineOrderTerms above); a walk-in sale passes
+        // none and keeps re-pricing from current truth.
+        effectiveTerms?.approvedModifierPrices,
       );
       // INV-REST-FNB-TRUTH-2 (R-I11): 86 enforcement at line
       // validation, before totals and before any stock lock — an
@@ -2202,7 +2256,10 @@ export class SalesWriteService {
       await this.lockSaleStockRows(trx, scope, preparedItems);
       await this.autoProduceShortfall(trx, autoProduceItems, id, normalized.branchId, normalized.locationId, scope, auth);
       await this.resolveSaleModifierCosts(trx, preparedItems, scope.tenantId,
-        this.planFeatureService.hasFeature(auth.planId, auth.extraFeatures, 'restaurant'));
+        this.planFeatureService.hasFeature(auth.planId, auth.extraFeatures, 'restaurant'),
+        // SF-3 D-SF-03: an online order costs its frozen modifiers the
+        // same way it prices them; a walk-in sale passes none.
+        effectiveTerms?.approvedModifierPrices);
 
       // Deadlock prevention: stock rows (products + product_location_stock) must always be
       // locked in a deterministic global order. Client-supplied item order is arbitrary, so two
