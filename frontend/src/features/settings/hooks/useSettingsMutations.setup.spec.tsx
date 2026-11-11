@@ -126,6 +126,7 @@ const baseSettingsMutationValues = {
   printShowLoyaltyPoints: true,
   posKitchenPrinterEnabled: false,
   posCashDrawerPrinterEnabled: false,
+  posNetworkThermalPrinterPort: 9100,
   posKitchenPrinterAuto: false,
   posKitchenPrinterMode: 'detailed' as const,
   posKitchenLanguage: 'ar' as const,
