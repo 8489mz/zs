@@ -11,14 +11,20 @@ request_key rep-shortage-cash:<itemId>) linked to the receiving shift, and
 the status flip, all in ONE transaction. The receiving shift is the
 settler's own open shift first, else the latest open shift on the branch of
 the trip's van location; no open shift fails the whole settle closed with
-OPEN_SHIFT_REQUIRED. A waiver stays record-only. Cash on a
-bonus/commission item fails closed: those leave through payroll, never
-through this cash receipt. The receipt voucher is deterministic
-(REC-<date>-<itemId>), never a random number.
+OPEN_SHIFT_REQUIRED. A cash-shortage waiver stays record-only. A
+stock-shortage waiver reverses the rep custody debit trip settlement
+booked (Dr 7200 / Cr 1160, source rep_shortage_waiver) in the same
+transaction, before the status flip, so a posting failure leaves the row
+pending; a zero-amount stock-shortage waiver flips with no journal, and
+a second waiver on the same item fails ALREADY_SETTLED with no second
+journal. Cash on a bonus/commission item fails closed: those leave
+through payroll, never through this cash receipt. The receipt voucher is
+deterministic (REC-<date>-<itemId>), never a random number.
 
 WHAT IS DRIVEN: the real settleRepFinancialItem (real tenant-currency
 resolution at book digits, real postRepShortageCashCollection journal,
-real shift resolution, real treasury insert) plus the real
+real postRepShortageWaiver journal, real shift resolution, real treasury
+insert) plus the real
 CashDrawerService.computeShiftExpectedCash, on PGlite. GL totals are
 summed from the posted journal lines, never re-implemented.
 
@@ -201,6 +207,10 @@ async function journalEntries(db: Kysely<Database>): Promise<Array<Record<string
   return (db as any).selectFrom('journal_entries').selectAll().where('source_type', '=', 'rep_shortage_cash_collection').execute();
 }
 
+async function waiverJournalEntries(db: Kysely<Database>): Promise<Array<Record<string, any>>> {
+  return (db as any).selectFrom('journal_entries').selectAll().where('source_type', '=', 'rep_shortage_waiver').execute();
+}
+
 async function journalLeg(db: Kysely<Database>, entryId: number, accountId: number, side: 'debit' | 'credit'): Promise<number> {
   const rows = await (db as any).selectFrom('journal_entry_lines')
     .select([side])
@@ -333,7 +343,8 @@ async function main(): Promise<void> {
     console.log('  no open shift fails closed passed');
   }
 
-  // 5. Waiver stays record-only: no journal, no treasury row, no voucher.
+  // 5. Cash-shortage waiver stays record-only: no journal, no treasury
+  // row, no voucher.
   {
     const { pg, db } = await makeDb();
     try {
@@ -345,9 +356,11 @@ async function main(): Promise<void> {
       const result = await van.settleRepFinancialItem(TENANT, ACCOUNT, 105, { method: 'waiver' }, adminAuth);
       assert.equal(result.status, 'waived');
       assert.equal(result.receiptVoucherNo, null);
+      assert.equal(result.journalEntryId, null, 'a cash-shortage waiver returns no journal id');
       assert.equal((await itemRow(db, 105)).status, 'waived');
       assert.equal((await treasuryRows(db)).length, 0, 'a waiver moves no cash');
       assert.equal((await journalEntries(db)).length, 0, 'a waiver posts no journal');
+      assert.equal((await waiverJournalEntries(db)).length, 0, 'a cash-shortage waiver posts no waiver journal either');
       assert.equal(await drawer.computeShiftExpectedCash(1, adminAuth), 0);
     } finally {
       await db.destroy();
@@ -425,7 +438,92 @@ async function main(): Promise<void> {
     console.log('  unknown method fails closed passed');
   }
 
-  // 9. Source + invariant pins: the collection posting exists in the
+  // 9. Stock-shortage waiver reverses the rep custody debit: exactly
+  // one balanced journal (Dr 7200 / Cr 1160), status waived, no
+  // treasury row, no voucher, and the journal id is returned.
+  {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedShift(db, 1, 1);
+      await seedTrip(db);
+      await seedSettlementItem(db, 109, 'stock_shortage', 40);
+      const { van, drawer } = buildServices(db);
+      const result = await van.settleRepFinancialItem(TENANT, ACCOUNT, 109, { method: 'waiver' }, adminAuth);
+      assert.equal(result.status, 'waived');
+      assert.equal(result.receiptVoucherNo, null);
+      assert.ok(Number(result.journalEntryId) > 0, 'the waiver journal id is returned');
+      assert.equal((await itemRow(db, 109)).status, 'waived');
+      assert.equal((await treasuryRows(db)).length, 0, 'a waiver moves no cash');
+      assert.equal(await drawer.computeShiftExpectedCash(1, adminAuth), 0, 'no drawer row, so no shift expects cash');
+      assert.equal((await journalEntries(db)).length, 0, 'no cash-collection journal');
+      const entries = await waiverJournalEntries(db);
+      assert.equal(entries.length, 1, 'exactly one waiver journal');
+      assert.equal(Number(entries[0].id), Number(result.journalEntryId), 'the returned id is the posted waiver journal');
+      assert.equal(Number(entries[0].branch_id), 1, 'the journal carries the trip van-location branch');
+      assert.equal(Number(entries[0].location_id), 10, 'the journal carries the trip van location');
+      assert.equal(await journalLeg(db, Number(entries[0].id), 7200, 'debit'), 40, 'the custody debit is taken to expense');
+      assert.equal(await journalLeg(db, Number(entries[0].id), 1160, 'credit'), 40, 'the rep custody balance is cleared');
+      assert.equal(await journalLeg(db, Number(entries[0].id), 7200, 'credit'), 0);
+      assert.equal(await journalLeg(db, Number(entries[0].id), 1160, 'debit'), 0);
+      assert.equal(await journalLeg(db, Number(entries[0].id), 1110, 'debit'), 0, 'no cash leg on a waiver');
+      assert.equal(await journalLeg(db, Number(entries[0].id), 1140, 'credit'), 0, 'inventory is untouched by the waiver');
+    } finally {
+      await db.destroy();
+    }
+    console.log('  stock shortage waiver reverses rep custody passed');
+  }
+
+  // 10. A second waiver on the same item fails ALREADY_SETTLED and
+  // posts no second journal (the dedup pre-check plus the
+  // status-predicate flip).
+  {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedShift(db, 1, 1);
+      await seedTrip(db);
+      await seedSettlementItem(db, 110, 'stock_shortage', 40);
+      const { van } = buildServices(db);
+      const first = await van.settleRepFinancialItem(TENANT, ACCOUNT, 110, { method: 'waiver' }, adminAuth);
+      assert.equal(first.status, 'waived');
+      await assert.rejects(
+        () => van.settleRepFinancialItem(TENANT, ACCOUNT, 110, { method: 'waiver' }, adminAuth),
+        /ALREADY_SETTLED/,
+      );
+      assert.equal((await itemRow(db, 110)).status, 'waived');
+      assert.equal((await waiverJournalEntries(db)).length, 1, 'still one waiver journal');
+      assert.equal((await treasuryRows(db)).length, 0, 'still no treasury row');
+    } finally {
+      await db.destroy();
+    }
+    console.log('  duplicate waiver never doubles passed');
+  }
+
+  // 11. Zero-amount stock-shortage waiver flips with no journal:
+  // there is nothing to reverse.
+  {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedShift(db, 1, 1);
+      await seedTrip(db);
+      await seedSettlementItem(db, 111, 'stock_shortage', 0);
+      const { van } = buildServices(db);
+      const result = await van.settleRepFinancialItem(TENANT, ACCOUNT, 111, { method: 'waiver' }, adminAuth);
+      assert.equal(result.status, 'waived');
+      assert.equal(result.receiptVoucherNo, null);
+      assert.equal(result.journalEntryId, null, 'no journal for a zero amount');
+      assert.equal((await itemRow(db, 111)).status, 'waived');
+      assert.equal((await waiverJournalEntries(db)).length, 0, 'no waiver journal');
+      assert.equal((await treasuryRows(db)).length, 0, 'no treasury row');
+    } finally {
+      await db.destroy();
+    }
+    console.log('  zero-amount stock shortage waiver flips with no journal passed');
+  }
+
+  // 12. Source + invariant pins: the collection posting exists in the
   // posting service and the settle names the invariant; the invariant
   // entry exists exactly once (tail order is NOT pinned — the flexible
   // invariant method appends it wherever the file ends).
@@ -434,9 +532,12 @@ async function main(): Promise<void> {
     const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
     assert.ok(vanSource.includes('INV-REP-SHORTAGE-CASH-SETTLE'), 'settleRepFinancialItem names the invariant');
     assert.ok(vanSource.includes('postRepShortageCashCollection'), 'the settle calls the collection posting');
+    assert.ok(vanSource.includes('postRepShortageWaiver'), 'the waiver calls the waiver reversal posting');
     assert.ok(vanSource.includes('rep-shortage-cash:'), 'the deterministic treasury request key exists');
     const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/accounting-posting.service.ts'), 'utf8');
     assert.ok(postingSource.includes('rep_shortage_cash_collection'), 'the collection journal source type exists');
+    assert.ok(postingSource.includes('rep_shortage_waiver'), 'the waiver journal source type exists');
+    assert.ok(postingSource.includes('INV-VAN-REP-SHORTAGE-WAIVER-REVERSAL'), 'the waiver posting names the invariant');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(invariants.split('INV-REP-SHORTAGE-CASH-SETTLE').length - 1, 1, 'the invariant entry must exist exactly once');
     console.log('  source + invariant pins passed');

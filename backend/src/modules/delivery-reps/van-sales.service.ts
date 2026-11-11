@@ -7021,7 +7021,12 @@ export class VanSalesService {
    * settle waits, then fails closed instead of collecting the same cash
    * twice. Cash is available only for shortage items: bonuses and
    * commissions leave through payroll, never through this cash receipt.
-   * A waiver stays record-only, exactly as before.
+   * A waiver of a cash shortage (or a bonus/commission item) stays
+   * record-only, exactly as before. A waiver of a pending stock
+   * shortage charged to the rep reverses the trip-settlement custody
+   * debit (INV-VAN-REP-SHORTAGE-WAIVER-REVERSAL: Dr 7200 / Cr 1160)
+   * in the same transaction, before the status flip, so a posting
+   * failure leaves the row pending instead of stranding Dr 1160.
    */
   async settleRepFinancialItem(
     tenantId: string,
@@ -7060,6 +7065,51 @@ export class VanSalesService {
         : item.notes;
 
       if (payload.method === 'waiver') {
+        // INV-VAN-REP-SHORTAGE-WAIVER-REVERSAL: a pending stock
+        // shortage was charged to the rep at trip settlement
+        // (Dr 1160 / Cr 1140). Waiving it must reverse that custody
+        // debit (Dr 7200 / Cr 1160) in this same transaction, BEFORE
+        // the status flip, so a posting throw leaves the row
+        // pending. Cash-shortage waivers need no reversal (Dr 7200
+        // already stands) and bonus/commission waivers post nothing.
+        // A zero (or negative) stock shortage has nothing to reverse.
+        let journalEntryId: number | null = null;
+        const waiverEntryType = String(item.entry_type || '');
+        if (waiverEntryType === 'stock_shortage') {
+          const waiverBookDigits = currencyMoneyDigits(await tenantBaseCurrency(trxAny, tenantId));
+          const waiverAmount = roundMoney(Number(item.amount || 0), waiverBookDigits);
+          if (waiverAmount > 0) {
+            // Branch/location mirror settleTrip: the trip's van
+            // location, branch from that location's row; null when
+            // the trip or the location row is missing.
+            let waiverLocationId: number | null = null;
+            let waiverBranchId: number | null = null;
+            if (item.trip_id) {
+              const waiverTrip = await trxAny
+                .selectFrom('van_sales_trips')
+                .select(['van_location_id'])
+                .where('id', '=', Number(item.trip_id))
+                .where('tenant_id', '=', tenantId)
+                .executeTakeFirst();
+              waiverLocationId = waiverTrip?.van_location_id ? Number(waiverTrip.van_location_id) : null;
+              if (waiverLocationId) {
+                const waiverVanLocRow = await trxAny
+                  .selectFrom('stock_locations')
+                  .select(['branch_id'])
+                  .where('id', '=', waiverLocationId)
+                  .where('tenant_id', '=', tenantId)
+                  .executeTakeFirst();
+                waiverBranchId = waiverVanLocRow?.branch_id ? Number(waiverVanLocRow.branch_id) : null;
+              }
+            }
+            journalEntryId = await this.accountingPosting.postRepShortageWaiver(
+              trx,
+              id,
+              { amount: waiverAmount, branchId: waiverBranchId, locationId: waiverLocationId },
+              authContext,
+            );
+          }
+        }
         const waived = await trxAny
           .updateTable('van_rep_financial_settlements')
           .set({
@@ -7084,6 +7134,7 @@ export class VanSalesService {
           id,
           status: 'waived',
           receiptVoucherNo: null,
+          journalEntryId,
         };
       }
 
