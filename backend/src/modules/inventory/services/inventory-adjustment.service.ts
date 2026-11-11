@@ -5,7 +5,7 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../../common/errors/app-error';
 import { ensureNonNegativeStock } from '../../../common/utils/financial-integrity';
-import { applyStockDelta, previewAssignedLocationStockQty, setScopedStockQty } from '../../../common/utils/location-stock-ledger';
+import { applyStockDelta, getLocationAvailability, previewConsumableStockQty } from '../../../common/utils/location-stock-ledger';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { Database } from '../../../database/database.types';
@@ -81,9 +81,18 @@ export class InventoryAdjustmentService {
       const rawCost = Number(product.cost_price || 0);
       const unitCost = Number.isFinite(rawCost) && rawCost > 0 ? rawCost : 0;
       const stockScope = { tenantId: scope.tenantId, accountId: scope.accountId, productId: payload.productId, branchId: effectiveBranchId, locationId: payload.locationId };
+      // INV-ADJUST-SINGLE-QTY-BASIS: one quantity basis for `adjust` --
+      // AVAILABLE. The requested target is the available quantity the
+      // dialog shows, so the before-quantity must be read on that same
+      // basis: location qty minus reserved plus unassigned available,
+      // capped by the global available (previewConsumableStockQty).
+      // The old read (the location-only available preview) also
+      // disagreed with the write whenever unassigned stock
+      // existed. With no location the basis is the global available
+      // (stock minus reserved), not the raw global counter.
       const beforeQty = payload.locationId
-        ? await previewAssignedLocationStockQty(trx, stockScope)
-        : Number(product.stock_qty || 0);
+        ? await previewConsumableStockQty(trx, stockScope)
+        : Number(Math.max(0, Number(product.stock_qty || 0) - Number(product.reserved_qty || 0)).toFixed(3));
       let afterQty = beforeQty;
       let movementQty = requestedQty;
       let stockChange: { scopeBefore: number; scopeAfter: number; globalBefore: number; globalAfter: number; };
@@ -121,10 +130,21 @@ export class InventoryAdjustmentService {
       }
 
       if (payload.actionType === 'adjust') {
+        // INV-ADJUST-SINGLE-QTY-BASIS: the requested target is an
+        // AVAILABLE quantity, so the write moves by the available
+        // delta (requested - beforeQty) instead of setting the raw
+        // scoped quantity to the target. The old raw setter wrote
+        // the raw location qty from the target: with 10 on hand / 2
+        // (8 available) saving the displayed 8 set raw 10 -> 8 and
+        // booked a phantom -2 loss (Dr 5200 / Cr 1140). A delta write
+        // moves raw and available by the same amount because
+        // reservations are untouched, so the movement and the journal
+        // agree with the requested target. A zero delta still reaches
+        // the no-change guard below.
         afterQty = requestedQty;
-        stockChange = await setScopedStockQty(trx, {
+        stockChange = await applyStockDelta(trx, {
           ...stockScope,
-          nextQty: afterQty,
+          delta: Number((requestedQty - beforeQty).toFixed(3)),
           disableAutoDrain: tracked,
           errorCode: 'INSUFFICIENT_STOCK',
           errorMessage: 'Cannot deduct more than current stock',
@@ -197,6 +217,12 @@ export class InventoryAdjustmentService {
       if (posting.hasFinancialImpact && !posting.journalEntryId) {
         throw new AppError(`Inventory adjustment ${insertedMovement.id} has no journal entry`, 'LEDGER_POSTING_MISSING', 500);
       }
+      // before/after stay the ledger's raw scoped quantities: the
+      // movement chain and the frontend cache patch (scopeAfter is
+      // written back as the raw location qty) both read them as
+      // on-hand. Their DIFFERENCE is the available delta above, so
+      // the movement and the journal agree with the requested target
+      // while reservations stay untouched.
       result = { productId: payload.productId, locationId: payload.locationId, beforeQty: stockChange.scopeBefore, afterQty: stockChange.scopeAfter, scopeBefore: stockChange.scopeBefore, scopeAfter: stockChange.scopeAfter, globalBefore: stockChange.globalBefore, globalAfter: stockChange.globalAfter };
 
       await this.audit.logWithExecutor(trx, 'تعديل مخزون', `تم تعديل مخزون الصنف #${payload.productId} من ${result.beforeQty} إلى ${result.afterQty} بسبب ${payload.reason}`, auth);
@@ -221,5 +247,39 @@ export class InventoryAdjustmentService {
     });
 
     return finalResponse;
+  }
+
+  // INV-ADJUST-SINGLE-QTY-BASIS: the read side of the dialog prefill.
+  // The adjustment dialog shows the location's AVAILABLE quantity, so
+  // it needs the same read the backend targets: the ledger's
+  // read-only getLocationAvailability (location qty minus reserved
+  // plus unassigned available, capped by the global available). It
+  // never writes, so a display read can never mutate stock. The
+  // sales-orders availability endpoint serves the same ledger
+  // function but is gated on the `sales` permission, which an
+  // inventory-only user may not hold; this inventory-permissioned
+  // read is the one the dialog uses. With no location the display
+  // figure is the global available, exactly like the approval check.
+  async getProductLocationAvailability(productId: number, locationId: number | null, auth: AuthContext): Promise<Record<string, unknown>> {
+    const scope = requireTenantScope(auth);
+    if (!Number.isFinite(productId) || productId <= 0) {
+      throw new AppError('Product not found', 'PRODUCT_NOT_FOUND', 404);
+    }
+    let branchId: number | null = null;
+    if (locationId != null) {
+      const location = await this.scopeService.assertLocationScope(locationId, auth, false, 'read');
+      branchId = location.branchId;
+    }
+    const availability = await getLocationAvailability(this.db, {
+      tenantId: scope.tenantId,
+      accountId: scope.accountId,
+      productId,
+      locationId,
+      branchId,
+    });
+    if (locationId == null) {
+      return { ...availability, availableAtLocation: availability.globalAvailable };
+    }
+    return { ...availability };
   }
 }

@@ -68,6 +68,12 @@ export const inventoryApi = {
   locations: async () => unwrapArray<Location>(await http<Location[] | { locations: Location[] }>('/api/locations?includeInactive=true'), 'locations'),
   report: async () => unwrapByKey<InventoryReport>(await http<InventoryReport | { inventory: InventoryReport }>('/api/reports/inventory'), 'inventory', {} as InventoryReport),
   locationStocks: async () => unwrapArray<{ productId: string; locationId: string; qty: number }>(await http<{ stocks: { productId: string; locationId: string; qty: number }[] }>('/api/location-stocks'), 'stocks'),
+  // INV-ADJUST-SINGLE-QTY-BASIS: the adjustment dialog's prefill read --
+  // the location's available qty on the same basis the adjustment
+  // targets (location qty minus reserved plus unassigned available,
+  // capped by the global available). Read-only; served by the
+  // inventory-permissioned endpoint, not the sales-gated one.
+  productAvailability: async (productId: number, locationId: number | null) => http<{ productId: number; locationId: number | null; branchId: number | null; locationQty: number; locationReservedQty: number; unassignedQty: number; unassignedReservedQty: number; availableAtLocation: number; globalAvailable: number }>(`/api/inventory/product-availability?productId=${productId}${locationId != null ? `&locationId=${locationId}` : ''}`),
   locationCategories: async (locationId: number) => unwrapArray<{ id: string; name: string }>(await http<{ categories: { id: string; name: string }[] }>(`/api/locations/${locationId}/categories`), 'categories'),
   locationCategoryProducts: async (locationId: number, categoryId: string | number) => unwrapArray<{ id: string; name: string; barcode: string; stockQty: number; globalStockQty?: number }>(await http<{ products: { id: string; name: string; barcode: string; stockQty: number; globalStockQty?: number }[] }>(`/api/locations/${locationId}/categories/${categoryId}/products`), 'products'),
   assignProductsToLocation: async (locationId: number, productIds: number[]) => await http<{ success: boolean }>(`/api/locations/${locationId}/assign-products`, { method: 'POST', body: JSON.stringify({ productIds }) }),

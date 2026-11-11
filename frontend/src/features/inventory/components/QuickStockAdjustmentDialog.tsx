@@ -9,6 +9,8 @@ import { toast } from '@/shared/components/system-alert';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
 import type { Branch, Location, Product } from '@/types/domain';
 import { useDamagedStockMutation, useInventoryAdjustmentMutation } from '@/features/inventory/hooks/useInventoryMutations';
+import { inventoryApi } from '@/features/inventory/api/inventory.api';
+import { resolveAdjustmentPrefill } from '@/features/inventory/lib/adjustment-prefill';
 import { SINGLE_STORE_MODE } from '@/config/product-scope';
 import {
   damagedStockSchema,
@@ -115,12 +117,65 @@ export function QuickStockAdjustmentDialog({
   const adjustmentMutation = useInventoryAdjustmentMutation(handleAdjustmentSuccess);
   const damagedMutation = useDamagedStockMutation(handleDamagedSuccess);
 
+  // INV-ADJUST-SINGLE-QTY-BASIS: the `adjust` target is an AVAILABLE
+  // quantity, so the dialog must prefill from the selected location's
+  // available qty -- never from the global raw product.stock. The
+  // live figure comes from the inventory availability read; while it
+  // is pending (or failed) the selected location's raw qty is the
+  // fallback, and only then the global stock. prefillQtyRef tracks
+  // the last prefill so a late availability read only overwrites a
+  // qty the user has not edited yet.
+  const [locationAvailable, setLocationAvailable] = useState<number | null>(null);
+  const prefillQtyRef = useRef<number>(0);
+  const selectedLocationId = adjustmentForm.watch('locationId');
+  const selectedLocationQty = useMemo(() => {
+    if (!product || !selectedLocationId) return null;
+    const row = locationStocks.find(
+      (s) => String(s.productId) === String(product.id) && String(s.locationId) === String(selectedLocationId),
+    );
+    return row ? Number(row.qty || 0) : null;
+  }, [product, selectedLocationId, locationStocks]);
+  const currentStock = resolveAdjustmentPrefill({
+    availableQty: locationAvailable,
+    locationQty: selectedLocationQty,
+    globalStock: product?.stock,
+  });
+
+  useEffect(() => {
+    if (!open || !product) return;
+    const productId = Number(product.id);
+    if (!Number.isFinite(productId)) return;
+    const locId = selectedLocationId ? Number(selectedLocationId) : null;
+    let cancelled = false;
+    inventoryApi
+      .productAvailability(productId, locId != null && Number.isFinite(locId) ? locId : null)
+      .then((availability) => {
+        if (!cancelled) setLocationAvailable(Number(availability.availableAtLocation || 0));
+      })
+      .catch(() => {
+        if (!cancelled) setLocationAvailable(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, product, selectedLocationId]);
+
+  // When the live availability lands, adopt it as the prefill -- but
+  // only if the user has not typed a qty of their own yet.
+  useEffect(() => {
+    if (!open || locationAvailable == null) return;
+    if (adjustmentForm.getValues('actionType') !== 'adjust') return;
+    if (Number(adjustmentForm.getValues('qty') || 0) !== prefillQtyRef.current) return;
+    adjustmentForm.setValue('qty', locationAvailable);
+    prefillQtyRef.current = locationAvailable;
+  }, [open, locationAvailable, adjustmentForm]);
+
   // Initialize form when product changes or dialog opens
   useEffect(() => {
     if (!open || !product) return;
 
     setActiveTab('adjust');
-    const currentStock = Number(product.stock || 0);
+    setLocationAvailable(null);
 
     let defaultLocId = '';
     let defaultBranchId = '';
@@ -145,10 +200,23 @@ export function QuickStockAdjustmentDialog({
       if (locationList[0]?.branchId) defaultBranchId = String(locationList[0].branchId);
     }
 
+    // Opening prefill: the default location's raw qty until the live
+    // availability read lands (the effect above then adopts it when
+    // the qty is still untouched).
+    const openingRow = defaultLocId
+      ? locationStocks.find((s) => String(s.productId) === String(product.id) && String(s.locationId) === String(defaultLocId))
+      : undefined;
+    const openingStock = resolveAdjustmentPrefill({
+      availableQty: null,
+      locationQty: openingRow ? Number(openingRow.qty || 0) : null,
+      globalStock: product.stock,
+    });
+    prefillQtyRef.current = openingStock;
+
     adjustmentForm.reset({
       productId: String(product.id),
       actionType: 'adjust',
-      qty: currentStock,
+      qty: openingStock,
       reason: 'جرد مخزني',
       note: '',
       branchId: defaultBranchId,
@@ -183,10 +251,10 @@ export function QuickStockAdjustmentDialog({
     return () => clearTimeout(timer);
   }, [open, activeTab]);
 
-  // Live preview calculations
+  // Live preview calculations (currentStock is the location's
+  // available qty, derived above -- never the global raw stock)
   const adjustmentActionType = adjustmentForm.watch('actionType');
   const adjustmentQty = Number(adjustmentForm.watch('qty') || 0);
-  const currentStock = Number(product?.stock || 0);
 
   const newStockAfterAdjustment = useMemo(() => {
     if (adjustmentActionType === 'adjust') return adjustmentQty;
@@ -217,7 +285,7 @@ export function QuickStockAdjustmentDialog({
       open={open}
       onClose={onClose}
       title={t('inventory.quick_stock_adjustment_dialog.s0', "تسوية وتعديل رصيد المخزون")}
-      subtitle={product ? `الصنف: ${product.name} (الرصيد الحالي: ${product.stock})` : t('inventory.quick_stock_adjustment_dialog.s1', "إجراء حركة تسوية أو تسجيل تالف سريع للمخزون")}
+      subtitle={product ? `الصنف: ${product.name} (الرصيد الحالي: ${currentStock})` : t('inventory.quick_stock_adjustment_dialog.s1', "إجراء حركة تسوية أو تسجيل تالف سريع للمخزون")}
       width="min(760px, 95vw)"
       minHeight="auto"
       footerActions={
@@ -321,8 +389,8 @@ export function QuickStockAdjustmentDialog({
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
               <div style={{ textAlign: 'center', background: '#ffffff', padding: '4px 12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                 <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>{t('inventory.quick_stock_adjustment_dialog.s7', "الرصيد الحالي")}</div>
-                <div style={{ fontSize: '1rem', fontWeight: 800, color: Number(product.stock || 0) <= 0 ? '#ef4444' : '#059669' }}>
-                  {product.stock} <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b' }}>{unitName}</span>
+                <div style={{ fontSize: '1rem', fontWeight: 800, color: Number(currentStock || 0) <= 0 ? '#ef4444' : '#059669' }}>
+                  {currentStock} <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748b' }}>{unitName}</span>
                 </div>
               </div>
               <div style={{ textAlign: 'center', background: '#ffffff', padding: '4px 12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
@@ -370,6 +438,7 @@ export function QuickStockAdjustmentDialog({
                         field.onChange(val);
                         if (val === 'adjust') {
                           adjustmentForm.setValue('qty', currentStock);
+                          prefillQtyRef.current = currentStock;
                         } else {
                           adjustmentForm.setValue('qty', 0);
                         }

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { RequirePermissions, AllowAuthenticated } from '../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
@@ -31,6 +31,24 @@ export class InventoryController {
   @AllowAuthenticated()
   getAllLocationStocks(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.inventoryService.getAllLocationStocks(req.authContext!);
+  }
+
+  // INV-ADJUST-SINGLE-QTY-BASIS: the adjustment dialog's prefill read
+  // -- the location's available qty on the same basis the adjustment
+  // targets. Read-only; declared before any ':id' route so the
+  // literal segment is never captured as a parameter.
+  @Get('inventory/product-availability')
+  @RequirePermissions('inventory')
+  getProductLocationAvailability(
+    @Query('productId', ParseIntPipe) productId: number,
+    @Query('locationId') locationId: string | undefined,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
+    const parsed = locationId === undefined || locationId === '' ? null : Number(locationId);
+    if (parsed !== null && !Number.isFinite(parsed)) {
+      throw new BadRequestException('المخزن غير صالح');
+    }
+    return this.inventoryService.getProductLocationAvailability(productId, parsed, req.authContext!);
   }
 
   @Get('inventory/advanced-overview')

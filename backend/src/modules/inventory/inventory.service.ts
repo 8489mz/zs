@@ -42,6 +42,13 @@ export class InventoryService {
     return this.scopeService.getAllLocationStocks(auth);
   }
 
+  // INV-ADJUST-SINGLE-QTY-BASIS: read-only availability for the
+  // adjustment dialog prefill, on the same available basis the
+  // adjustment targets. Thin delegation; the ledger owns the math.
+  getProductLocationAvailability(productId: number, locationId: number | null, auth: AuthContext): Promise<Record<string, unknown>> {
+    return this.adjustmentService.getProductLocationAvailability(productId, locationId, auth);
+  }
+
   getAdvancedOverview(auth: AuthContext): Promise<Record<string, unknown>> {
     return this.scopeService.getAdvancedOverview(auth);
   }
