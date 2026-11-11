@@ -116,7 +116,12 @@ const serviceRequirements = [
   ['src/modules/sales/services/sales-write.service.ts', ['applyStockDelta', 'previewConsumableStockQty']],
   ['src/modules/purchases/services/purchases-write.service.ts', ['applyStockDelta', 'previewConsumableStockQty']],
   ['src/modules/returns/returns.service.ts', ['applyStockDelta', 'previewConsumableStockQty']],
-  ['src/modules/inventory/services/inventory-adjustment.service.ts', ['applyStockDelta', 'setScopedStockQty']],
+  // INV-ADJUST-SINGLE-QTY-BASIS (H1): the adjust service must NOT call setScopedStockQty —
+  // the raw setter from the available target booked phantom losses, so its canonical
+  // ledger integration is the available delta (applyStockDelta) capped by the
+  // consumable preview (previewConsumableStockQty), pinned by
+  // inventory-adjustment-single-basis.spec.ts:334. Both tokens are real calls.
+  ['src/modules/inventory/services/inventory-adjustment.service.ts', ['applyStockDelta', 'previewConsumableStockQty']],
   ['src/modules/inventory/services/inventory-count.service.ts', ['applyStockDelta', 'setScopedStockQty', 'previewAssignedLocationStockQty']],
   ['src/modules/inventory/services/inventory-transfer.service.ts', ['applyStockDelta']],
   ['src/modules/settings/services/settings-import.service.ts', ['applyStockDelta']],
