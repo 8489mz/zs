@@ -84,6 +84,10 @@ function normalizeSaleItem(item: unknown) {
     qty: firstNumber(record, ['qty', 'quantity'], 0),
     price: firstNumber(record, ['price', 'unitPrice', 'unit_price'], 0),
     total: firstNumber(record, ['total', 'lineTotal', 'line_total'], 0),
+    /* INV-POS-LINE-DISCOUNT: the per-line discount stored in
+     * sale_items.line_discount, so the invoice detail shows which
+     * piece was discounted. */
+    lineDiscount: firstNumber(record, ['lineDiscount', 'line_discount'], 0),
     unitName,
     unitMultiplier: firstNumber(record, ['unitMultiplier', 'unit_multiplier'], 1),
     cost: firstNumber(record, ['cost', 'costPrice', 'cost_price'], 0),

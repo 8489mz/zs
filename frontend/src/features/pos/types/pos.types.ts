@@ -13,6 +13,13 @@ export interface PosItem {
   price: number;
   originalPrice?: number;
   offerDiscount?: number;
+  /* INV-POS-LINE-DISCOUNT: the per-line TOTAL discount (amount, same
+   * unit as the backend SaleItemDto.lineDiscount), granted on this
+   * cart line only — e.g. one clearance piece in a 4-piece sale. It
+   * is subtracted from the line gross before the header discount, and
+   * is stored per line so the invoice shows which piece was
+   * discounted. Absent (undefined) means no line discount. */
+  lineDiscount?: number;
   costPrice: number;
   qty: number;
   stockLimit: number;

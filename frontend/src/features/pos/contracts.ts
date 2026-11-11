@@ -1,7 +1,7 @@
 import type { PosItem } from '@/features/pos/types/pos.types';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
-import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
+import { calcCartLineDiscount, calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 
 export type PaymentType = 'cash' | 'credit';
 export type PaymentChannel = 'cash' | 'card' | 'wallet' | 'instapay' | 'credit' | 'mixed';
@@ -118,6 +118,12 @@ function normalizeCart(items: PosItem[]) {
     price: normalizeMoney(Number(item.price || 0)),
     originalPrice: item.originalPrice ? normalizeMoney(Number(item.originalPrice)) : undefined,
     offerDiscount: item.offerDiscount ? normalizeMoney(Number(item.offerDiscount)) : undefined,
+    /* INV-POS-LINE-DISCOUNT: the per-line TOTAL discount (amount) for
+     * this line only. Sent only when > 0 — the backend treats a
+     * missing lineDiscount as none. buildLegacyPosSalePayload shares
+     * this normalizer but re-maps through its own whitelist, so the
+     * discount must be named there too. */
+    lineDiscount: item.lineDiscount ? normalizeMoney(Number(item.lineDiscount)) : undefined,
     offerName: item.offerName || undefined,
     priceType: item.priceType,
     notes: item.notes,
@@ -153,7 +159,19 @@ export function validatePosSaleInput(input: CreatePosSaleInput) {
   // I44: a zero total is not a sale (the 100%-discount case). The old
   // check only rejected a negative total.
   if (Number(input.expectedTotal || 0) <= 0) throw new Error('إجمالي الفاتورة غير صالح');
-  const cartLineSubtotal = input.cart.reduce((sum, item) => sum + calcCartLineTotal(item), 0);
+  /* INV-POS-LINE-DISCOUNT: a per-line discount is an AMOUNT on one
+   * line's total — it must sit inside [0, line gross], the same bound
+   * the backend enforces (INVALID_DISCOUNT). The header discount is
+   * then checked against the NET subtotal (gross minus line
+   * discounts), because the backend's stored subtotal is already net
+   * of line discounts. */
+  for (const item of input.cart) {
+    const lineGross = calcCartLineTotal(item);
+    const lineDiscount = Number(item.lineDiscount || 0);
+    if (lineDiscount < 0) throw new Error('خصم الصنف لا يمكن أن يكون سالبًا');
+    if (lineDiscount > lineGross + 0.001) throw new Error(`خصم الصنف أكبر من إجمالي الصنف ${item.name}`);
+  }
+  const cartLineSubtotal = input.cart.reduce((sum, item) => sum + calcCartLineTotal(item) - calcCartLineDiscount(item), 0);
   if (Number(input.discount || 0) > cartLineSubtotal) throw new Error('الخصم أكبر من إجمالي الأصناف');
   // I42: a dine-in sale must name its table.
   if (input.orderType === 'dine_in' && !String(input.tableNumber || '').trim()) throw new Error('اختر طاولة أولًا لطلبات الصالة');
@@ -333,7 +351,12 @@ export function buildLegacyPosSalePayload(input: CreatePosSaleInput) {
       price: item.price,
       priceType: item.priceType,
       notes: item.notes,
-      modifiers: item.modifiers
+      modifiers: item.modifiers,
+      /* INV-POS-LINE-DISCOUNT: this whitelist re-map drops every
+       * field it does not name — the per-line discount must be named
+       * here too, or the legacy retry path silently drops it (the
+       * online builder carries it via normalizeCart). */
+      lineDiscount: item.lineDiscount,
     }))
   };
 }

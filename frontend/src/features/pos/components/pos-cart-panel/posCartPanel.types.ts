@@ -48,7 +48,7 @@ export interface PosCartPanelProps {
   heldDrafts: HeldPosDraftSummary[];
   isError: boolean;
   isPending: boolean;
-  totals: { subTotal: number; discountValue: number; deliveryFee: number; taxAmount: number; total: number };
+  totals: { subTotal: number; discountValue: number; lineDiscountTotal?: number; deliveryFee: number; taxAmount: number; total: number };
   changeAmount: number;
   amountDue: number;
   hasOpenShift: boolean;
@@ -82,6 +82,11 @@ export interface PosCartPanelProps {
   onRequestDiscountAuthorization: () => void;
   onNoteChange: (value: string) => void;
   onQtyChange: (lineKey: string, qty: number) => void;
+  /* INV-POS-LINE-DISCOUNT: per-line TOTAL discount (amount) for one
+   * cart line. Optional like onItemModifiersClick: panels that do not
+   * render the line-discount input leave it unset and the input stays
+   * hidden; the POS cart panel always passes it. */
+  onLineDiscountChange?: (lineKey: string, discount: number) => void;
   onItemNoteChange: (lineKey: string, notes: string) => void;
   onItemModifiersClick?: (lineKey: string) => void;
   onAddLineSerial?: (lineKey: string, serial: string) => void;

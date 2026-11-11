@@ -158,6 +158,14 @@ export function PosScannedInvoiceModal({
                           {item.offerName}
                         </div>
                       ) : null}
+                      {/* INV-POS-LINE-DISCOUNT: the line's own discount —
+                       * the total column is already net of it, so the
+                       * note is what reconciles qty x price to it. */}
+                      {Number(item.lineDiscount || 0) > 0 ? (
+                        <div style={{ fontSize: '11.5px', color: '#065f46', fontWeight: 600, marginTop: '2px' }}>
+                          {t('pos.line_discount', 'خصم الصنف')}: - {formatCurrency(Number(item.lineDiscount))}
+                        </div>
+                      ) : null}
                     </td>
                     <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>
                       {item.qty} {item.unitName || t('pos.pos_workspace.pos_scanned_invoice_modal.s14', "قطعة")}

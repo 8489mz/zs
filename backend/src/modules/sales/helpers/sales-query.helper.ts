@@ -42,6 +42,11 @@ export function mapSaleRows(
       offerDiscount: offerMeta?.offerDiscount ? Number(offerMeta.offerDiscount) : undefined,
       offerName: offerMeta?.offerName || undefined,
       total: Number(item.line_total || 0),
+      /* INV-POS-LINE-DISCOUNT: the line's own discount, stored by
+       * createSale / updateSale in sale_items.line_discount (NULL on
+       * pre-migration rows reads as zero). netLineTotal is already net
+       * of it; the detail card and the receipt show it per line. */
+      lineDiscount: Number(item.line_discount || 0),
       netLineTotal: item.net_line_total == null ? null : Number(item.net_line_total),
       allocatedTax: item.allocated_tax == null ? null : Number(item.allocated_tax),
       unitName: item.unit_name || 'قطعة',
@@ -261,6 +266,7 @@ export function mapHeldSalesRows(
       ...(Array.isArray(held?.serials) ? { serials: held.serials.map((entry: unknown) => String(entry)) } : {}),
       ...(held?.originalPrice != null ? { originalPrice: Number(held.originalPrice) } : {}),
       ...(held?.offerDiscount != null ? { offerDiscount: Number(held.offerDiscount) } : {}),
+      ...(held?.lineDiscount != null ? { lineDiscount: Number(held.lineDiscount) } : {}),
       ...(held?.offerName ? { offerName: String(held.offerName) } : {}),
       ...(held?.isWeighted != null ? { isWeighted: Boolean(held.isWeighted) } : {}),
       ...(Array.isArray(held?.quantityChunks) ? { quantityChunks: held.quantityChunks.map((entry: unknown) => Number(entry)) } : {}),

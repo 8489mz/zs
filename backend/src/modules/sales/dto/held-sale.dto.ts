@@ -70,6 +70,17 @@ class HeldSaleItemDto {
   @Min(0)
   offerDiscount?: number;
 
+  /* INV-POS-LINE-DISCOUNT: the per-line TOTAL discount (same unit as
+   * SaleItemDto.lineDiscount). A held line keeps its own discount so
+   * recall + submit posts the agreed price; without this field the
+   * DTO's forbid-non-whitelisted pipe rejects any held draft that
+   * carries one. */
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  lineDiscount?: number;
+
   @IsOptional()
   @IsString()
   offerName?: string;

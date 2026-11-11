@@ -71,7 +71,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { buildPosSalePayload } from '@/features/pos/contracts';
-import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
+import { calcCartLineNetTotal, calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 import {
   PosSplitBillModal,
   allocateSplitBillAmounts,
@@ -146,6 +146,25 @@ describe('allocateSplitBillAmounts (B10)', () => {
     );
     expect(bill.total).toBe(120);
     expect(bill.subtotal).toBe(120);
+  });
+
+  /* INV-POS-LINE-DISCOUNT: the allocator runs on NET bill subtotals
+   * (gross minus per-line discounts) against the NET order subtotal,
+   * so the pro-rata shares sum to 1 and a bill's header discount is
+   * capped at its net subtotal — the backend's cap. Gross inputs
+   * would over-allocate the header discount to the last bill. */
+  it('allocates the header discount pro-rata on net subtotals', () => {
+    const [first, second] = allocateSplitBillAmounts(
+      [70, 100],
+      orderTotals({ subTotal: 170, discountValue: 30, serviceCharge: 0, taxRate: 0, tipAmount: 0, total: 140 }),
+      DIGITS,
+    );
+    expect(first.subtotal).toBe(70);
+    expect(first.discount).toBe(12.35);
+    expect(first.total).toBe(57.65);
+    expect(second.subtotal).toBe(100);
+    expect(second.discount).toBe(17.65);
+    expect(second.total).toBe(82.35);
   });
 
   it('allocates discount, service charge, tax and tip across bills and sums exactly to the order total', () => {
@@ -367,6 +386,26 @@ describe('buildFractionalParts (B11)', () => {
   it('returns null for a zero line', () => {
     expect(buildFractionalParts(item({ price: 0 }), 2, DIGITS)).toBeNull();
   });
+
+  /* INV-POS-LINE-DISCOUNT: the line's discount splits pro-rata with
+   * the price — copying the full discount onto every part would
+   * multiply it. The last part takes the rounding remainder, so the
+   * shares sum exactly to the line discount. */
+  it('splits a discounted line discount pro-rata across parts', () => {
+    const shirts = item({ qty: 2, price: 100, lineDiscount: 30 });
+    const parts = buildFractionalParts(shirts, 2, DIGITS);
+    expect(parts).not.toBeNull();
+    expect(parts!.map((p) => p.price)).toEqual([100, 100]);
+    expect(parts!.map((p) => p.lineDiscount)).toEqual([15, 15]);
+    expect(parts!.reduce((s, p) => s + calcCartLineNetTotal(p), 0)).toBe(170);
+  });
+
+  it('gives the last part the discount remainder so shares sum exactly', () => {
+    const shirts = item({ qty: 1, price: 100, lineDiscount: 10 });
+    const parts = buildFractionalParts(shirts, 3, DIGITS);
+    expect(parts!.map((p) => p.lineDiscount)).toEqual([3.33, 3.33, 3.34]);
+    expect(parts!.reduce((s, p) => s + Number(p.lineDiscount || 0), 0)).toBe(10);
+  });
 });
 
 describe('resolveSplitPaymentChannel (I33)', () => {
@@ -577,6 +616,38 @@ describe('PosSplitBillModal — paying a bill posts the real total (B10)', () =>
     // subsumes the old manual cart/table clear (and zeroes the
     // redeemed points, clears the customer and wipes the snapshot).
     expect(mockPos.resetPosDraft).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('PosSplitBillModal — a discounted line pays its net total (INV-POS-LINE-DISCOUNT)', () => {
+  it('posts the net bill total and carries the per-line discount on the posted line', async () => {
+    const shirts = item({ lineKey: 'L1', productId: '1', name: 'قميص', qty: 2, price: 100, lineDiscount: 30, modifiers: [] });
+    const trousers = item({ lineKey: 'L2', productId: '2', name: 'بنطلون', price: 50, qty: 1, modifiers: [] });
+    const totals = {
+      ...orderTotals({
+        subTotal: 250,
+        discountValue: 0,
+        serviceCharge: 0,
+        taxRate: 0,
+        tipAmount: 0,
+        total: 220,
+      }),
+      netSubTotal: 220,
+    } as SplitOrderTotals;
+    const mockPos = createMockPos([shirts, trousers], totals);
+    renderModal(mockPos);
+
+    fireEvent.click(screen.getByRole('button', { name: 'تحصيل نقد' }));
+
+    await waitFor(() => expect(mockPos.createSale.mutateAsync).toHaveBeenCalledTimes(1));
+    const payload = mockPos.createSale.mutateAsync.mock.calls[0][0];
+    // Bill subtotals and the snapshot subtotal are NET (220, not the
+    // gross 250), so the posted total is the net total.
+    expect(payload.expectedTotal).toBe(220);
+    expect(payload.paidAmount).toBe(220);
+    expect(payload.cart).toHaveLength(2);
+    expect(payload.cart[0].lineDiscount).toBe(30);
+    expect(payload.cart[1].lineDiscount).toBeUndefined();
   });
 });
 

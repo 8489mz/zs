@@ -224,6 +224,77 @@ assert.deepEqual(
   },
 );
 
+/* INV-POS-LINE-DISCOUNT: a per-line TOTAL discount is subtracted from
+ * the line gross (qty x (price + modifiers)) before any header
+ * allocation, and the discount itself rides on the prepared line so
+ * createSale / updateSale can store it in sale_items.line_discount.
+ * The clothes-shop case: 2 pieces at 100 with 30 off one piece only —
+ * the line posts 170, and the invoice still shows which piece was
+ * discounted. A discount equal to the gross nets the line to zero;
+ * anything over the gross, or a negative discount, fails closed. */
+assert.deepEqual(
+  buildPreparedSaleItem(
+    { id: 3, name: 'Sugar', stock_qty: '10', cost_price: '2' },
+    { productId: 3, qty: 2, price: 100, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail', notes: '', modifiers: [], lineDiscount: 30 },
+    { moneyDigits: 2 },
+  ),
+  {
+    productId: 3,
+    productName: 'Sugar',
+    productNameEn: null,
+    qty: 2,
+    unitPrice: 100,
+    lineDiscount: 30,
+    lineTotal: 170,
+    unitName: 'قطعة',
+    unitMultiplier: 1,
+    priceType: 'retail',
+    costPrice: 2,
+    requiredQty: 2,
+    beforeQty: 10,
+    afterQty: 8,
+    notes: '',
+    modifiers: [],
+    isService: false,
+  },
+);
+
+assert.equal(
+  buildPreparedSaleItem(
+    { id: 3, name: 'Sugar', stock_qty: '10', cost_price: '2' },
+    { productId: 3, qty: 2, price: 50, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail', notes: '', modifiers: [], lineDiscount: 100 },
+    { moneyDigits: 2 },
+  ).lineTotal,
+  0,
+);
+
+assert.equal(
+  buildPreparedSaleItem(
+    { id: 3, name: 'Sugar', stock_qty: '10', cost_price: '2' },
+    { productId: 3, qty: 2, price: 100, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail', notes: '', modifiers: [{ price: 10, qty: 1 }], lineDiscount: 20 },
+    { moneyDigits: 2 },
+  ).lineTotal,
+  200,
+);
+
+assert.throws(
+  () => buildPreparedSaleItem(
+    { id: 3, name: 'Sugar', stock_qty: '10', cost_price: '2' },
+    { productId: 3, qty: 1, price: 100, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail', notes: '', modifiers: [], lineDiscount: 100.01 },
+    { moneyDigits: 2 },
+  ),
+  (error: unknown) => error instanceof AppError && error.code === 'INVALID_DISCOUNT',
+);
+
+assert.throws(
+  () => buildPreparedSaleItem(
+    { id: 3, name: 'Sugar', stock_qty: '10', cost_price: '2' },
+    { productId: 3, qty: 1, price: 100, unitName: 'قطعة', unitMultiplier: 1, priceType: 'retail', notes: '', modifiers: [], lineDiscount: -5 },
+    { moneyDigits: 2 },
+  ),
+  (error: unknown) => error instanceof AppError && error.code === 'INVALID_DISCOUNT',
+);
+
 async function runStockDeltaChecks(): Promise<void> {
   assert.equal(
     buildPreparedSaleItem(

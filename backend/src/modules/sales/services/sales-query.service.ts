@@ -167,7 +167,7 @@ export class SalesQueryService {
     const [items, payments, linkedReturns] = await Promise.all([
       this.db
         .selectFrom('sale_items')
-        .select(['id', 'sale_id', 'product_id', 'product_name', 'product_name_en', 'qty', 'unit_price', 'line_total', 'net_line_total', 'allocated_tax', 'unit_name', 'unit_multiplier', 'cost_price', 'price_type', 'modifiers', 'serials'])
+        .select(['id', 'sale_id', 'product_id', 'product_name', 'product_name_en', 'qty', 'unit_price', 'line_total', 'line_discount', 'net_line_total', 'allocated_tax', 'unit_name', 'unit_multiplier', 'cost_price', 'price_type', 'modifiers', 'serials'])
         .where('sale_id', 'in', saleIds)
         .where(this.tenantPredicate(auth))
         .orderBy('sale_id', 'asc')

@@ -8,7 +8,7 @@ import { CheckIcon, UsersIcon, ReceiptIcon, PlusIcon, TrashIcon } from '@/shared
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
-import { calcCartLineTotal, calcModifiersTotal } from '@/features/pos/lib/pos-modifier-totals';
+import { calcCartLineDiscount, calcCartLineNetTotal, calcCartLineTotal, calcModifiersTotal } from '@/features/pos/lib/pos-modifier-totals';
 import { stripSaleItemNameFields } from '@/features/pos/contracts';
 import type { PosItem } from '@/features/pos/types/pos.types';
 
@@ -131,6 +131,11 @@ interface EvenSplitGuest {
  * exactly that provable bound — never a real mismatch. */
 
 export interface SplitOrderTotals {
+  /* INV-POS-LINE-DISCOUNT: subTotal is the NET subtotal (gross minus
+   * the per-line discounts) — the bill subtotals below are net too,
+   * so the pro-rata shares sum to 1 and the header-discount cap
+   * (bill discount <= bill subtotal) matches the backend, which
+   * stores the subtotal net of line discounts. */
   subTotal: number;
   discountValue: number;
   serviceCharge: number;
@@ -393,7 +398,11 @@ export function allocateSplitBillAmounts(
  * (qty x (price + modifiers)). A part carries NO modifiers — the modifier
  * value is inside the part price. Copying the full modifier list onto every
  * part double-charges it: burger 100 + cheese 20 split in 2 used to post
- * 140 instead of 120. Returns null for a zero/negative line. */
+ * 140 instead of 120. Returns null for a zero/negative line.
+ * INV-POS-LINE-DISCOUNT: the line's discount splits pro-rata with the
+ * price (same base/last-remainder pattern), clamped to the part price —
+ * copying the FULL discount onto every part would multiply it, and a
+ * rounding hair above the part price would fail closed at submit. */
 export function buildFractionalParts(
   item: PosItem,
   partsCount: 2 | 3 | 4,
@@ -413,11 +422,25 @@ export function buildFractionalParts(
     allocated += val;
     parts.push(val);
   }
+  const lineDiscount = calcCartLineDiscount(item);
+  const baseDiscountPart = lineDiscount > 0 ? roundMoneyValue(lineDiscount / partsCount, bookDigits) : 0;
+  const discountParts: number[] = [];
+  let discountAllocated = 0;
+  for (let p = 0; p < partsCount; p++) {
+    const isLast = p === partsCount - 1;
+    const val = isLast ? roundMoneyValue(lineDiscount - discountAllocated, bookDigits) : baseDiscountPart;
+    discountAllocated += val;
+    discountParts.push(Math.max(0, Math.min(val, parts[p])));
+  }
   return parts.map((price, p) => ({
     ...item,
     qty: 1,
     price,
     modifiers: [],
+    /* The spread above would carry the FULL line discount onto every
+     * part; the split share replaces it (undefined when the line
+     * carries no discount). */
+    lineDiscount: discountParts[p] > 0 ? discountParts[p] : undefined,
     name: `${baseName} (حصة ${p + 1}/${partsCount})`,
     lineKey: `${item.productId}::frac${p + 1}::${Date.now()}::${Math.random()}`,
   }));
@@ -496,7 +519,10 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
   useEffect(() => {
     if (!open) return;
     const snapshot: SplitOrderTotals = {
-      subTotal: Number(pos.totals?.subTotal || 0),
+      /* INV-POS-LINE-DISCOUNT: the snapshot subtotal is the NET
+       * subtotal — the bill subtotals below are net too, so the
+       * pro-rata shares sum to 1. */
+      subTotal: Number((pos.totals?.netSubTotal ?? pos.totals?.subTotal) || 0),
       discountValue: Number(pos.totals?.discountValue || 0),
       serviceCharge: Number(pos.totals?.serviceCharge || 0),
       taxRate: Number(pos.totals?.taxRate || 0),
@@ -607,7 +633,11 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
         loyaltyDiscount: 0,
       }));
     }
-    const subtotals = bills.map((b) => b.items.reduce((s, i) => s + calcCartLineTotal(i), 0));
+    /* INV-POS-LINE-DISCOUNT: bill subtotals are NET of the per-line
+     * discounts — a bill's header discount is capped at its own
+     * subtotal, and the backend caps it at the net subtotal, so
+     * gross bill subtotals could 400 at submit. */
+    const subtotals = bills.map((b) => b.items.reduce((s, i) => s + calcCartLineNetTotal(i), 0));
     const loyaltyPoints = allocateSplitLoyaltyPoints(
       subtotals,
       orderSnapshot.loyaltyPointsRedeemed,
@@ -1006,6 +1036,11 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
           priceType: item.priceType === 'wholesale' ? 'wholesale' : 'retail',
           notes: String(item.notes || '').trim(),
           modifiers: item.modifiers || [],
+          /* INV-POS-LINE-DISCOUNT: the held check keeps the line's own
+           * discount — HeldSaleItemDto whitelists it and the held
+           * recall maps it back, so a split bill saved as a held
+           * check does not lose the discount. */
+          lineDiscount: Number(item.lineDiscount || 0) > 0 ? Number(item.lineDiscount) : undefined,
           seatNumber: item.seatNumber ? Number(item.seatNumber) : undefined,
           course: item.course || undefined,
         }));
@@ -1357,9 +1392,20 @@ export function PosSplitBillModal({ open, pos, onClose, onSplitCompleted }: PosS
                                     {item.name}
                                   </div>
                                   <div style={{ fontWeight: 800, color: '#170e5e', whiteSpace: 'nowrap', marginInlineStart: '6px' }}>
-                                    {formatCurrency(calcCartLineTotal(item))}
+                                    {formatCurrency(calcCartLineNetTotal(item))}
                                   </div>
                                 </div>
+
+                                {/* INV-POS-LINE-DISCOUNT: the line's own
+                                 * discount, so the visible bill items sum
+                                 * to the bill subtotal. */}
+                                {calcCartLineDiscount(item) > 0 && (
+                                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                    <span style={{ color: '#065f46', fontSize: '11px', fontWeight: 700 }}>
+                                      خصم الصنف: - {formatCurrency(calcCartLineDiscount(item))}
+                                    </span>
+                                  </div>
+                                )}
 
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <span style={{ color: '#64748b', fontSize: '11px' }}>

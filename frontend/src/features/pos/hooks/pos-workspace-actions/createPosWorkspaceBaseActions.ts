@@ -7,6 +7,7 @@ import {
   repriceCartLine,
   updatePosItemQtyWithOptions,
   updatePosItemNotes,
+  updatePosItemLineDiscount,
   updatePosItemModifiers,
   updatePosItemSeat,
 } from '@/features/pos/lib/pos.domain';
@@ -302,6 +303,21 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
     }
   }
 
+  /* INV-POS-LINE-DISCOUNT: per-line TOTAL discount (amount) for one
+   * cart line. updatePosItemLineDiscount clamps to the line gross at
+   * book digits, so the cart can never hold a discount the backend
+   * would refuse. */
+  function setLineDiscount(lineKey: string, discount: number) {
+    try {
+      const nextCart = updatePosItemLineDiscount(params.cart, lineKey, discount, bookDigits);
+      params.setSelectedLineKey(lineKey);
+      params.setCart(nextCart);
+      params.setSubmitMessage('');
+    } catch (error) {
+      params.setSubmitMessage(error instanceof Error ? error.message : 'تعذر تعديل خصم الصنف.');
+    }
+  }
+
   function setItemModifiers(lineKey: string, modifiers: any[]) {
     try {
       const nextCart = updatePosItemModifiers(params.cart, lineKey, modifiers);
@@ -544,6 +560,7 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
     selectCartLine,
     setQty,
     setItemNote,
+    setLineDiscount,
     setItemModifiers,
     setItemSeat,
     addLineSerial,

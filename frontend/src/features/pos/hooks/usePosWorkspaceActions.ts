@@ -37,6 +37,9 @@ interface PosWorkspaceActions {
   completePostSaleCycle: (message?: string) => void;
   setQty: (lineKey: string, qty: number) => void;
   setItemNote: (lineKey: string, notes: string) => void;
+  /* INV-POS-LINE-DISCOUNT: per-line TOTAL discount (amount) for one
+   * cart line. */
+  setLineDiscount: (lineKey: string, discount: number) => void;
   addLineSerial: (lineKey: string, serial: string) => void;
   removeLineSerial: (lineKey: string, serial: string) => void;
   setItemModifiers: (lineKey: string, modifiers: any[]) => void;
@@ -131,6 +134,7 @@ export function createPosWorkspaceActions(params: PosWorkspaceActionParams): Pos
     exportHeldDrafts: base.exportHeldDrafts,
     setQty: base.setQty,
     setItemNote: base.setItemNote,
+    setLineDiscount: base.setLineDiscount,
     addLineSerial: base.addLineSerial,
     removeLineSerial: base.removeLineSerial,
     setItemModifiers: base.setItemModifiers,

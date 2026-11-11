@@ -17,6 +17,9 @@ interface PosCustomerDisplayBroadcasterParams {
     subTotal: number;
     discountAmount?: number;
     discountValue?: number;
+    /* INV-POS-LINE-DISCOUNT: the sum of the per-line discounts, so
+     * the customer display can show its own "خصم الأصناف" row. */
+    lineDiscountTotal?: number;
     taxAmount: number;
     total: number;
     serviceCharge?: number;
@@ -110,6 +113,11 @@ export function usePosCustomerDisplayBroadcaster({
       items,
       subtotal: roundMoneyValue(totals.subTotal, digits),
       discount: roundMoneyValue((totals.discountAmount ?? totals.discountValue) || 0, digits),
+      /* INV-POS-LINE-DISCOUNT: the line discounts travel separately
+       * from the header discount — the display items are already net
+       * of them, so the breakdown needs its own row or the visible
+       * rows would sum above the total. */
+      lineDiscountTotal: roundMoneyValue(Number(totals.lineDiscountTotal || 0), digits),
       tax: roundMoneyValue(totals.taxAmount, digits),
       serviceCharge: roundMoneyValue(Number(totals.serviceCharge || 0), digits),
       deliveryFee: roundMoneyValue(Number(totals.deliveryFee || 0), digits),

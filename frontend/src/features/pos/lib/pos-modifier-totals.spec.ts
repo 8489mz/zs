@@ -4,7 +4,7 @@
  * on screen and on the receipt while the posted sale charged the full amount. */
 
 import { describe, it, expect } from 'vitest';
-import { calcModifiersTotal, calcCartLineTotal, buildCustomerDisplayItems } from './pos-modifier-totals';
+import { calcModifiersTotal, calcCartLineDiscount, calcCartLineNetTotal, calcCartLineTotal, buildCustomerDisplayItems } from './pos-modifier-totals';
 
 describe('pos-modifier-totals (R-B8)', () => {
   describe('calcModifiersTotal', () => {
@@ -98,6 +98,59 @@ describe('pos-modifier-totals (R-B8)', () => {
       expect(items[0].lineTotal).toBe(150);
       expect(items[0].price).toBe(50);
       expect(items[0].modifiers).toEqual([]);
+    });
+  });
+});
+
+/* INV-POS-LINE-DISCOUNT: the per-line discount in force is the entered
+ * amount clamped to [0, line gross]; the net line total is the gross
+ * minus that discount, matching the backend's buildPreparedSaleItem
+ * lineTotal exactly. The customer display shows the net total. */
+describe('pos-modifier-totals line discount (INV-POS-LINE-DISCOUNT)', () => {
+  describe('calcCartLineDiscount', () => {
+    it('returns the entered discount inside the gross', () => {
+      expect(calcCartLineDiscount({ qty: 2, price: 100, lineDiscount: 30 })).toBe(30);
+    });
+
+    it('returns 0 for a line without a discount', () => {
+      expect(calcCartLineDiscount({ qty: 2, price: 100 })).toBe(0);
+      expect(calcCartLineDiscount({ qty: 2, price: 100, lineDiscount: 0 })).toBe(0);
+    });
+
+    it('clamps a discount above the line gross to the gross', () => {
+      expect(calcCartLineDiscount({ qty: 2, price: 100, lineDiscount: 250 })).toBe(200);
+    });
+
+    it('counts modifiers toward the gross cap', () => {
+      expect(calcCartLineDiscount({ qty: 1, price: 100, modifiers: [{ price: 20, qty: 1 }], lineDiscount: 150 })).toBe(120);
+    });
+
+    it('ignores a negative discount', () => {
+      expect(calcCartLineDiscount({ qty: 2, price: 100, lineDiscount: -5 })).toBe(0);
+    });
+  });
+
+  describe('calcCartLineNetTotal', () => {
+    it('subtracts the line discount from the gross', () => {
+      expect(calcCartLineNetTotal({ qty: 2, price: 100, lineDiscount: 30 })).toBe(170);
+    });
+
+    it('nets a fully-discounted line to zero', () => {
+      expect(calcCartLineNetTotal({ qty: 1, price: 50, lineDiscount: 50 })).toBe(0);
+    });
+
+    it('is the gross when there is no line discount', () => {
+      expect(calcCartLineNetTotal({ qty: 2, price: 100, modifiers: [{ price: 20, qty: 2 }] })).toBe(280);
+    });
+  });
+
+  describe('buildCustomerDisplayItems line discount', () => {
+    it('shows the net line total and the line discount', () => {
+      const items = buildCustomerDisplayItems([
+        { productId: '1', lineKey: 'L1', name: 'قميص', qty: 2, price: 100, modifiers: [], lineDiscount: 30 },
+      ]);
+      expect(items[0].lineTotal).toBe(170);
+      expect(items[0].lineDiscount).toBe(30);
     });
   });
 });

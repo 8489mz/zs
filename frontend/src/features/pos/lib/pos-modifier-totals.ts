@@ -15,6 +15,9 @@ export interface PosCartLineLike {
   qty?: unknown;
   price?: unknown;
   modifiers?: PosModifierLike[] | null;
+  /* INV-POS-LINE-DISCOUNT: the per-line TOTAL discount (amount) on
+   * this line, if any. */
+  lineDiscount?: unknown;
 }
 
 /** Per-line modifier surcharge: sum of price * qty, matching the backend exactly
@@ -29,6 +32,25 @@ export function calcModifiersTotal(modifiers: PosModifierLike[] | null | undefin
 /** Full line total: qty * (price + modifiersTotal), matching the backend exactly. */
 export function calcCartLineTotal(item: PosCartLineLike): number {
   return Number(item.qty || 0) * (Number(item.price || 0) + calcModifiersTotal(item.modifiers));
+}
+
+/* INV-POS-LINE-DISCOUNT: the per-line discount actually in force for
+ * one cart line — the entered amount, clamped to [0, line gross].
+ * The backend fails closed above the gross (INVALID_DISCOUNT); every
+ * frontend site that subtracts a line discount clamps through here so
+ * display, receipt and posting can never drift apart. Unrounded: the
+ * caller rounds at book digits, like every other money helper here. */
+export function calcCartLineDiscount(item: PosCartLineLike): number {
+  const gross = calcCartLineTotal(item);
+  const entered = Number(item.lineDiscount || 0);
+  if (!Number.isFinite(entered) || entered <= 0) return 0;
+  return Math.min(entered, Math.max(0, gross));
+}
+
+/** Net line total: gross minus the line's own discount, matching the
+ * backend's buildPreparedSaleItem lineTotal exactly. */
+export function calcCartLineNetTotal(item: PosCartLineLike): number {
+  return calcCartLineTotal(item) - calcCartLineDiscount(item);
 }
 
 /** One cart line as the customer display sees it. R5-A (INV-REST-TOTALS-
@@ -60,6 +82,10 @@ export interface CustomerDisplayItemLike {
   qty: number;
   price: number;
   lineTotal: number;
+  /* INV-POS-LINE-DISCOUNT: the line's own discount (0 when none), so
+   * the customer display can show why the line total is below
+   * qty x price. */
+  lineDiscount?: number;
   barcode?: string;
   categoryName?: string;
   modifiers: Array<{ name: string; qty: number; price: number }>;
@@ -79,7 +105,11 @@ export function buildCustomerDisplayItems(cart: CustomerDisplayCartLineLike[]): 
       name: String(item.name || ''),
       qty: Number(item.qty || 0),
       price: effectiveUnitPrice,
-      lineTotal: calcCartLineTotal(item),
+      /* INV-POS-LINE-DISCOUNT: the display line total is the NET total
+       * (gross minus the line's own discount) — the gross figure would
+       * leave the visible lines summing above the shown total. */
+      lineTotal: calcCartLineNetTotal(item),
+      lineDiscount: calcCartLineDiscount(item),
       barcode: String(item.sourceBarcode || item.itemCode || '') || undefined,
       categoryName: item.categoryName ? String(item.categoryName) : undefined,
       modifiers,

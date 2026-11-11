@@ -107,7 +107,7 @@ function renderMetaPanel(rows: Array<{ label: string; value?: string | number | 
   `;
 }
 
-function renderItemsTable(items: Array<{ name?: string; unitName?: string; qty?: number; price?: number; originalPrice?: number; offerDiscount?: number; offerName?: string; total?: number; modifiers?: any[]; serials?: string[] }>, compact = false, settings?: Partial<AppSettings> | null) {
+function renderItemsTable(items: Array<{ name?: string; unitName?: string; qty?: number; price?: number; originalPrice?: number; offerDiscount?: number; offerName?: string; lineDiscount?: number; total?: number; modifiers?: any[]; serials?: string[] }>, compact = false, settings?: Partial<AppSettings> | null) {
   const body = (items || []).map((item, index) => {
     const modifiersHtml = item.modifiers?.length 
       ? `<div class="item-modifiers" style="font-size: 0.85em; color: #000; margin-top: 2px;">
@@ -140,6 +140,12 @@ function renderItemsTable(items: Array<{ name?: string; unitName?: string; qty?:
     const componentsHtml = (hasOffer && showItemOffers && comboComponentsText)
       ? `<div class="item-offer-line" style="font-size: 0.74em; color: #444; margin-top: 1px; font-weight: 500; line-height: 1.15; letter-spacing: -0.25px;">${escapeHtml(comboComponentsText)}</div>`
       : '';
+    /* INV-POS-LINE-DISCOUNT: the line's own discount, under its name —
+     * the total cell is already net of it, so the customer sees why
+     * the line total is below qty x price. */
+    const lineDiscountHtml = Number(item.lineDiscount || 0) > 0
+      ? `<div class="item-line-discount" style="font-size: 0.82em; line-height: 1.2; color: #000; margin-top: 1px;">خصم الصنف: -${formatReceiptMoney(Number(item.lineDiscount), settings)}</div>`
+      : '';
     const priceCellContent = (hasOffer && showItemOffers)
       ? `<div style="line-height: 1.15; text-align: center;">
           <del style="display: block; text-decoration: line-through; text-decoration-thickness: 1px; color: #444; font-size: 0.82em; font-weight: 400; opacity: 0.85;">${formatReceiptMoney(origPrice, settings)}</del>
@@ -154,7 +160,7 @@ function renderItemsTable(items: Array<{ name?: string; unitName?: string; qty?:
     return `
     <tr>
       ${compact ? '' : `<td class="index-cell">${formatReceiptNumber(index + 1, settings)}</td>`}
-      <td class="name-cell">${escapeHtml(item.name || '—')}${englishNameHtml}${inlineOfferBadge}${componentsHtml}${modifiersHtml}${serialsHtml}</td>
+      <td class="name-cell">${escapeHtml(item.name || '—')}${englishNameHtml}${inlineOfferBadge}${componentsHtml}${lineDiscountHtml}${modifiersHtml}${serialsHtml}</td>
       ${compact ? '' : `<td class="unit-cell">${escapeHtml(item.unitName || 'قطعة')}</td>`}
       <td class="qty-cell">${formatReceiptQuantity(Number(item.qty || 0), settings)}</td>
       <td class="price-cell">${priceCellContent}</td>
@@ -400,7 +406,7 @@ function renderTotals(options: {
   paidAmount?: number;
   tenderedAmount?: number;
   changeAmount?: number;
-  items: Array<{ qty?: number; price?: number; originalPrice?: number; offerDiscount?: number }>;
+  items: Array<{ qty?: number; price?: number; originalPrice?: number; offerDiscount?: number; lineDiscount?: number }>;
   settings?: Partial<AppSettings> | null;
   compact?: boolean;
   isReturn?: boolean;
@@ -410,6 +416,13 @@ function renderTotals(options: {
   payments?: Sale['payments'];
   isMerchantCopy?: boolean;
 }) {
+  /* INV-POS-LINE-DISCOUNT: options.subtotal is the NET subtotal
+   * (gross minus per-line discounts) — the backend's stored subtotal
+   * for posted sales, and the draft preview passes the derived
+   * netSubTotal. The gross figure shown as "الإجمالي قبل الخصومات"
+   * is rebuilt here by adding the line discounts back. */
+  const totalLineDiscount = (options.items || []).reduce((sum, item) => sum + Number(item.lineDiscount || 0), 0);
+  const hasLineDiscount = totalLineDiscount > 0.0001;
   const totalPieces = (options.items || []).reduce((sum, item) => sum + Number(item.qty || 0), 0);
   const paidAmount = Number(options.paidAmount || 0);
   const tenderedAmount = Number(options.tenderedAmount || 0);
@@ -433,7 +446,7 @@ function renderTotals(options: {
     return sum + (unitDiscount * Number(item.qty || 0));
   }, 0);
   const hasOffersSavings = totalOffersSavings > 0.0001;
-  const totalAllSavings = totalOffersSavings + Number(options.discount || 0);
+  const totalAllSavings = totalOffersSavings + totalLineDiscount + Number(options.discount || 0);
   
   let discountLabel = hasOffersSavings ? 'خصم إضافي' : 'الخصم';
   if (hasDiscount && Number(options.subtotal || 0) > 0) {
@@ -445,7 +458,7 @@ function renderTotals(options: {
     }
   }
 
-  const grossSubtotal = Number(options.subtotal || 0) + totalOffersSavings;
+  const grossSubtotal = Number(options.subtotal || 0) + totalLineDiscount + totalOffersSavings;
 
   const rows = options.isReturn ? [
     ...(showTax && hasTax ? [
@@ -479,6 +492,17 @@ function renderTotals(options: {
         isHtml: true,
       },
     ] : (showTax && hasTax ? [{ label: 'الإجمالي قبل الضريبة', value: formatReceiptMoney(Number(options.subtotal || 0), options.settings) }] : [])) : (showTax && hasTax ? [{ label: 'الإجمالي قبل الضريبة', value: formatReceiptMoney(Number(options.subtotal || 0), options.settings) }] : [])),
+    /* INV-POS-LINE-DISCOUNT: the per-line discounts as their own row,
+     * between the offers and the header discount — the item totals
+     * are already net of them, so this row is what reconciles the
+     * "before discounts" gross to the net subtotal. */
+    ...(hasLineDiscount && showDiscountBreakdown ? [
+      {
+        label: 'خصم الأصناف',
+        value: `<span style="display:inline-flex; align-items:center; direction:ltr;"><span>${formatReceiptMoney(totalLineDiscount, options.settings)}</span><span style="margin-left:2px;">-</span></span>`,
+        isHtml: true,
+      },
+    ] : []),
     ...(hasDiscount && showDiscountBreakdown ? [
       {
         label: discountLabel,

@@ -7,6 +7,9 @@ export interface SaleItem {
   originalPrice?: number;
   offerDiscount?: number;
   offerName?: string;
+  /* INV-POS-LINE-DISCOUNT: the per-line TOTAL discount stored in
+   * sale_items.line_discount (0 on rows that carry none). */
+  lineDiscount?: number;
   total: number;
   unitName: string;
   unitMultiplier: number;

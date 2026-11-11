@@ -1,6 +1,6 @@
 import { printPostedSaleReceipt, printKitchenTicket, printGuestCheck } from '@/lib/pos-printing';
 import { computeDraftTotal } from '@/features/pos/lib/pos-workspace.helpers';
-import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
+import { calcCartLineNetTotal } from '@/features/pos/lib/pos-modifier-totals';
 import type { PosWorkspaceActionParams } from '@/features/pos/hooks/usePosWorkspaceActionGroups';
 
 function getSaleKey(params: PosWorkspaceActionParams) {
@@ -99,8 +99,12 @@ export function createPosWorkspaceReceiptActions(params: PosWorkspaceActionParam
       return;
     }
     const cashierName = (params.ownOpenShift as any)?.openedByName || params.authUserName || '—';
+    /* INV-POS-LINE-DISCOUNT: the guest-check subtotal is the NET
+     * subtotal (gross minus per-line discounts), matching the receipt
+     * template — the gross sum would leave the check's rows summing
+     * above its total. */
     const subtotal = params.cart.reduce((sum, item) => {
-      return sum + calcCartLineTotal(item);
+      return sum + calcCartLineNetTotal(item);
     }, 0);
     printGuestCheck({
       tableNumber: params.tableNumber || '1',

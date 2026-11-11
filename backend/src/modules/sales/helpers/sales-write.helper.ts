@@ -87,8 +87,8 @@ export function buildPreparedSaleItem(
   // reduces this line's gross total before the header discount is
   // allocated over the lines. A discount larger than the gross line
   // total fails closed (0.001 of float hair is tolerated and clamps
-  // the net to zero); POS payloads never send lineDiscount, so their
-  // line totals are unchanged.
+  // the net to zero); a POS payload without lineDiscount leaves the
+  // line total unchanged.
   const lineDiscount = Number(item.lineDiscount || 0);
   if (!Number.isFinite(lineDiscount) || lineDiscount < 0) {
     throw new AppError('Line discount must be a non-negative amount', 'INVALID_DISCOUNT', 400);

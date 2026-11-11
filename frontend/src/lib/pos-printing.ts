@@ -87,7 +87,12 @@ export function printPosDraftPreview(options: {
       originalPrice: item.originalPrice ? Number(item.originalPrice) : undefined,
       offerDiscount: item.offerDiscount ? Number(item.offerDiscount) : undefined,
       offerName: item.offerName,
-      total: Number(item.qty || 0) * (Number(item.price || 0) + (item.modifiers || []).reduce((sum: number, mod: any) => sum + Number(mod.price || 0) * Number(mod.qty || 1), 0)),
+      /* INV-POS-LINE-DISCOUNT: the draft total is the NET line total
+       * (gross minus the line's own discount), matching the posted
+       * sale — the gross figure would leave the item rows summing
+       * above the shown total. */
+      lineDiscount: item.lineDiscount ? Number(item.lineDiscount) : undefined,
+      total: Number(item.qty || 0) * (Number(item.price || 0) + (item.modifiers || []).reduce((sum: number, mod: any) => sum + Number(mod.price || 0) * Number(mod.qty || 1), 0)) - Number(item.lineDiscount || 0),
       modifiers: item.modifiers,
     })),
     subtotal: Number(options.subtotal || 0),
@@ -155,7 +160,13 @@ function buildPostedSaleDocument(sale: Sale, options: PrintReceiptOptions) {
       originalPrice: item.originalPrice ? Number(item.originalPrice) : (item.original_price ? Number(item.original_price) : undefined),
       offerDiscount: item.offerDiscount ? Number(item.offerDiscount) : (item.offer_discount ? Number(item.offer_discount) : undefined),
       offerName: item.offerName || item.offer_name || undefined,
-      total: Number(item.total || (Number(item.qty || 0) * (Number(item.price || 0) + (item.modifiers || []).reduce((sum: number, mod: any) => sum + Number(mod.price || 0) * Number(mod.qty || 1), 0)))),
+      /* INV-POS-LINE-DISCOUNT: the stored per-line discount (the read
+       * path returns it as lineDiscount; the snake-case fallback
+       * covers raw sale rows). item.total is already the NET line
+       * total from the backend; the fallback subtracts the discount
+       * from the gross so a raw row reconciles too. */
+      lineDiscount: item.lineDiscount != null ? Number(item.lineDiscount) : (item.line_discount != null ? Number(item.line_discount) : undefined),
+      total: Number(item.total || (Number(item.qty || 0) * (Number(item.price || 0) + (item.modifiers || []).reduce((sum: number, mod: any) => sum + Number(mod.price || 0) * Number(mod.qty || 1), 0)) - Number(item.lineDiscount ?? item.line_discount ?? 0))),
       modifiers: item.modifiers,
     })),
     subtotal: Number(sale.subTotal || (sale as any).expectedTotal || 0),
@@ -259,7 +270,11 @@ export function printGuestCheck(options: {
       unitName: item.unitName,
       qty: Number(item.qty || 0),
       price: Number(item.price || 0),
-      total: Number(item.qty || 0) * (Number(item.price || 0) + (item.modifiers || []).reduce((sum: number, mod: any) => sum + Number(mod.price || 0) * Number(mod.qty || 1), 0)),
+      /* INV-POS-LINE-DISCOUNT: the guest-check total is the NET line
+       * total, matching the posted sale and the template's net
+       * subtotal. */
+      lineDiscount: item.lineDiscount ? Number(item.lineDiscount) : undefined,
+      total: Number(item.qty || 0) * (Number(item.price || 0) + (item.modifiers || []).reduce((sum: number, mod: any) => sum + Number(mod.price || 0) * Number(mod.qty || 1), 0)) - Number(item.lineDiscount || 0),
       modifiers: item.modifiers,
     })),
     subtotal: Number(options.subtotal || 0),

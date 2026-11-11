@@ -3,7 +3,7 @@ import { formatCurrency } from '@/lib/format';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { paymentLabel } from '@/features/pos/lib/pos-workspace.helpers';
-import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
+import { computePosCartTotals } from '@/features/pos/lib/pos-cart-totals';
 import { computeCashChange } from '@/features/pos/lib/pos-paid-amount';
 import { getProductPrice, isNegativeStockSalesAllowed } from '@/features/pos/lib/pos.domain';
 import type { PaymentChannel, PaymentType, PosProductFilter } from '@/features/pos/hooks/usePosWorkspace';
@@ -159,71 +159,20 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
     });
   }, [panelSourceProducts, params.productFilter, recentProductIdSet]);
 
-  const totals = useMemo(() => {
-    const subTotal = params.cart.reduce((sum, item) => {
-      return sum + calcCartLineTotal(item);
-    }, 0);
-    const manualDiscount = Math.max(0, Number(params.discount || 0));
-    const pointRedeemValue = Number(params.settings?.loyaltyPointRedeemValue ?? 0.1);
-    /* R5-A (INV-REST-TOTALS-TRUTH-2, R-I53/R-I10): the loyalty discount
-     * used to be uncapped here while the backend caps it at
-     * subtotal * maxDiscountPercentage/100 (default 100) and the
-     * redeem-all button capped at 50 by default — three different
-     * totals for one sale. The backend default (100) is the authority:
-     * it is the only one that already posts. */
-    const maxDiscountPercentage = Number(params.settings?.loyaltyMaxDiscountPercentage ?? 100);
-    const loyaltyDiscountCap = roundMoneyValue((subTotal * maxDiscountPercentage) / 100, bookDigits);
-    const loyaltyDiscount = Math.min(
-      Math.max(0, roundMoneyValue(Number(params.loyaltyPointsRedeemed || 0) * pointRedeemValue, bookDigits)),
-      loyaltyDiscountCap,
-    );
-    const discountValue = manualDiscount + loyaltyDiscount;
-    const deliveryFee = Math.max(0, Number(params.deliveryFee || 0));
-    const tipAmount = Math.max(0, Number(params.tipAmount || 0));
-
-    // Restaurant Dine-in Service Charge
-    const isServiceChargeActive = Boolean(
-      params.settings?.restaurantServiceChargeEnabled && params.orderType === 'dine_in'
-    );
-    const serviceChargePercent = isServiceChargeActive
-      ? Math.max(0, Number(params.settings?.restaurantServiceChargePercent ?? 0))
-      : 0;
-    const discounted = Math.max(0, subTotal - discountValue);
-    const serviceCharge = serviceChargePercent > 0
-      ? roundMoneyValue((discounted * serviceChargePercent) / 100, bookDigits)
-      : 0;
-
-    const baseBeforeTax = roundMoneyValue(discounted + serviceCharge, bookDigits);
-    const taxRate = Number(params.settings?.taxRate || 0);
-    const pricesIncludeTax = String(params.settings?.taxMode || 'exclusive') === 'inclusive';
-    let taxAmount = 0;
-    let total = 0;
-    if (taxRate > 0) {
-      if (pricesIncludeTax) {
-        total = roundMoneyValue(baseBeforeTax + deliveryFee + tipAmount, bookDigits);
-        taxAmount = roundMoneyValue(baseBeforeTax - (baseBeforeTax / (1 + taxRate / 100)), bookDigits);
-      } else {
-        taxAmount = roundMoneyValue(baseBeforeTax * (taxRate / 100), bookDigits);
-        total = roundMoneyValue(baseBeforeTax + taxAmount + deliveryFee + tipAmount, bookDigits);
-      }
-    } else {
-      total = roundMoneyValue(baseBeforeTax + deliveryFee + tipAmount, bookDigits);
-    }
-    return {
-      subTotal: roundMoneyValue(subTotal, bookDigits),
-      discountValue: roundMoneyValue(discountValue, bookDigits),
-      manualDiscount: roundMoneyValue(manualDiscount, bookDigits),
-      loyaltyDiscount: roundMoneyValue(loyaltyDiscount, bookDigits),
-      serviceCharge,
-      serviceChargePercent,
-      deliveryFee: roundMoneyValue(deliveryFee, bookDigits),
-      tipAmount,
-      taxRate,
-      pricesIncludeTax,
-      taxAmount,
-      total,
-    };
-  }, [params.cart, params.discount, params.loyaltyPointsRedeemed, params.deliveryFee, params.tipAmount, params.settings, params.orderType, bookDigits]);
+  /* INV-POS-LINE-DISCOUNT: the totals math lives in the pure
+   * computePosCartTotals helper (pos-cart-totals.ts) so the spec can
+   * pin it without rendering the hook; this memo only wires the
+   * workspace inputs into it. */
+  const totals = useMemo(() => computePosCartTotals({
+    cart: params.cart,
+    discount: params.discount,
+    loyaltyPointsRedeemed: params.loyaltyPointsRedeemed,
+    deliveryFee: params.deliveryFee,
+    tipAmount: params.tipAmount,
+    settings: params.settings,
+    orderType: params.orderType,
+    bookDigits,
+  }), [params.cart, params.discount, params.loyaltyPointsRedeemed, params.deliveryFee, params.tipAmount, params.settings, params.orderType, bookDigits]);
 
   const changeAmount = useMemo(() => computeCashChange(
     { cashAmount: params.cashAmount, cardAmount: params.cardAmount, transferAmount: params.transferAmount },
@@ -247,8 +196,15 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
     return matched || null;
   }, [openShiftByUserId, openShiftList, params.authUserId]);
 
-  const discountVal = Math.abs(Number(params.discount || 0));
-  const subtotalVal = Number(totals.subTotal || 0);
+  /* INV-POS-LINE-DISCOUNT (frontend mirror of the backend gate,
+   * assertDiscountChangeAllowed): the gated amount is the header
+   * discount (manual + loyalty, i.e. totals.discountValue) PLUS the
+   * per-line discounts, and the percentage divides by the NET
+   * subtotal (gross minus line discounts) — the backend's stored
+   * subtotal. A line discount alone can therefore need the manager
+   * approval, exactly as it does at submit time. */
+  const discountVal = Math.abs(Number(totals.discountValue || 0) + Number(totals.lineDiscountTotal || 0));
+  const subtotalVal = Number((totals.netSubTotal ?? totals.subTotal) || 0);
   const isThresholdEnabled = Boolean(params.settings?.posMaxDiscountThresholdEnabled);
   const thresholdType = params.settings?.posMaxDiscountThresholdType || 'percentage';
   const thresholdValue = Number(params.settings?.posMaxDiscountThresholdValue ?? 10);

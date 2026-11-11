@@ -70,6 +70,9 @@ function fullState(): HeldSnapshotState {
         originalPrice: 30,
         offerDiscount: 5,
         offerName: 'Deal',
+        /* INV-POS-LINE-DISCOUNT: the per-line discount rides the
+         * held snapshot with the cart line, like the offer fields. */
+        lineDiscount: 4,
         isWeighted: false,
         quantityChunks: [1, 1],
         seatNumber: 1,
@@ -134,6 +137,7 @@ describe('held snapshot round-trip', () => {
     expect(snapshot.cart[0].originalPrice).toBe(30);
     expect(snapshot.cart[0].offerDiscount).toBe(5);
     expect(snapshot.cart[0].offerName).toBe('Deal');
+    expect(snapshot.cart[0].lineDiscount).toBe(4);
     expect(snapshot.cart[0].quantityChunks).toEqual([1, 1]);
     expect(snapshot.cart[0].seatNumber).toBe(1);
     expect(snapshot.cart[0].course).toBe('main');
@@ -155,6 +159,7 @@ describe('held snapshot round-trip', () => {
     expect(cart[0].originalPrice).toBe(30);
     expect(cart[0].offerDiscount).toBe(5);
     expect(cart[0].offerName).toBe('Deal');
+    expect(cart[0].lineDiscount).toBe(4);
     expect(cart[0].quantityChunks).toEqual([1, 1]);
     expect(cart[0].seatNumber).toBe(1);
     expect(cart[0].course).toBe('main');

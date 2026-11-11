@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { PosCartItemsList } from './PosCartItemsList';
 import type { PosItem } from '@/features/pos/types/pos.types';
@@ -23,6 +23,7 @@ describe('PosCartItemsList', () => {
         cart={cart}
         lastAddedLineKey=""
         selectedLineKey=""
+        canApplyDiscount
         onQtyChange={vi.fn()}
         onRemoveItem={vi.fn()}
         onSelectLine={vi.fn()}
@@ -47,6 +48,7 @@ describe('PosCartItemsList', () => {
         cart={cart}
         lastAddedLineKey=""
         selectedLineKey=""
+        canApplyDiscount
         onQtyChange={vi.fn()}
         onRemoveItem={vi.fn()}
         onSelectLine={vi.fn()}
@@ -68,6 +70,7 @@ describe('PosCartItemsList', () => {
         cart={cart}
         lastAddedLineKey=""
         selectedLineKey=""
+        canApplyDiscount
         onQtyChange={vi.fn()}
         onRemoveItem={vi.fn()}
         onSelectLine={vi.fn()}
@@ -77,5 +80,51 @@ describe('PosCartItemsList', () => {
 
     const noteButtons = screen.getAllByTitle(/إضافة ملاحظة وتجهيز للمطبخ/);
     expect(noteButtons.length).toBe(cart.length);
+  });
+
+  /* INV-POS-LINE-DISCOUNT: the row shows the net total for a
+   * discounted line (100 - 30 = 70) and the per-line discount input
+   * reports the entered amount to the workspace action. Without the
+   * handler the input is not rendered at all. */
+  it('shows the net line total and reports the per-line discount input', () => {
+    const onLineDiscountChange = vi.fn();
+    const discountedCart: PosItem[] = [
+      { ...cart[0], lineDiscount: 30 },
+    ];
+    render(
+      <PosCartItemsList
+        cart={discountedCart}
+        lastAddedLineKey=""
+        selectedLineKey=""
+        canApplyDiscount
+        onQtyChange={vi.fn()}
+        onLineDiscountChange={onLineDiscountChange}
+        onRemoveItem={vi.fn()}
+        onSelectLine={vi.fn()}
+        onItemNoteChange={vi.fn()}
+      />,
+    );
+
+    const discountInput = screen.getByLabelText(/خصم الصنف/) as HTMLInputElement;
+    expect(discountInput.value).toBe('30');
+    fireEvent.change(discountInput, { target: { value: '40' } });
+    expect(onLineDiscountChange).toHaveBeenCalledWith('line-1', 40);
+  });
+
+  it('does not render the per-line discount input without the handler', () => {
+    render(
+      <PosCartItemsList
+        cart={cart}
+        lastAddedLineKey=""
+        selectedLineKey=""
+        canApplyDiscount
+        onQtyChange={vi.fn()}
+        onRemoveItem={vi.fn()}
+        onSelectLine={vi.fn()}
+        onItemNoteChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText(/خصم الصنف/)).not.toBeInTheDocument();
   });
 });

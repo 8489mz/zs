@@ -33,10 +33,11 @@ export function SharedSaleDetailCard({ sale, isLoading = false, onEdit, onCancel
         <table style={{ width: '100%', minWidth: '100%', tableLayout: 'auto' }}>
           <thead>
             <tr>
-              <th style={{ textAlign: 'right', width: '40%' }}>{t('shared.invoice_detail_cards.s13', "الصنف")}</th>
-              <th style={{ textAlign: 'center', width: '15%' }}>{t('shared.invoice_detail_cards.s14', "الوحدة")}</th>
-              <th style={{ textAlign: 'center', width: '15%' }}>{t('shared.invoice_detail_cards.s15', "الكمية")}</th>
-              <th style={{ textAlign: 'center', width: '15%' }}>{t('shared.invoice_detail_cards.s16', "السعر")}</th>
+              <th style={{ textAlign: 'right', width: '35%' }}>{t('shared.invoice_detail_cards.s13', "الصنف")}</th>
+              <th style={{ textAlign: 'center', width: '12%' }}>{t('shared.invoice_detail_cards.s14', "الوحدة")}</th>
+              <th style={{ textAlign: 'center', width: '12%' }}>{t('shared.invoice_detail_cards.s15', "الكمية")}</th>
+              <th style={{ textAlign: 'center', width: '13%' }}>{t('shared.invoice_detail_cards.s16', "السعر")}</th>
+              <th style={{ textAlign: 'center', width: '13%' }}>{t('shared.invoice_detail_cards.s17b', "الخصم")}</th>
               <th style={{ textAlign: 'left', width: '15%' }}>{t('shared.invoice_detail_cards.s17', "الإجمالي")}</th>
             </tr>
           </thead>
@@ -47,6 +48,11 @@ export function SharedSaleDetailCard({ sale, isLoading = false, onEdit, onCancel
                 <td style={{ textAlign: 'center', color: '#64748b' }}>{item.unitName || '—'}</td>
                 <td style={{ textAlign: 'center', fontWeight: 600 }}>{item.qty}</td>
                 <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(item.price)}</td>
+                {/* INV-POS-LINE-DISCOUNT: the per-line discount for this
+                  * row (0 when none) — the total column is already net
+                  * of it, so the discount is what reconciles qty x
+                  * price to the shown total. */}
+                <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums', color: '#065f46', fontWeight: 600 }}>{Number(item.lineDiscount || 0) > 0 ? `- ${formatCurrency(Number(item.lineDiscount))}` : '—'}</td>
                 <td style={{ textAlign: 'left', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(item.total)}</td>
               </tr>
             ))}

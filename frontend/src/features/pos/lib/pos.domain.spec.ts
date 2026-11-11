@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addPosItem, addSerialToPosLine, applyPosLineTransfer, buildPosLineKey, getRequiredSerialCount, getSerialEntryState, getSerialLookupError, getProductPrice, isOfferHappyHourActive, removeSerialFromPosLine, repriceCartLine, syncPosCartStock, updatePosItemModifiers, updatePosItemQtyWithOptions, updatePosItemSeat } from '@/features/pos/lib/pos.domain';
+import { addPosItem, addSerialToPosLine, applyPosLineTransfer, buildPosLineKey, getRequiredSerialCount, getSerialEntryState, getSerialLookupError, getProductPrice, isOfferHappyHourActive, removeSerialFromPosLine, repriceCartLine, syncPosCartStock, updatePosItemLineDiscount, updatePosItemModifiers, updatePosItemQtyWithOptions, updatePosItemSeat } from '@/features/pos/lib/pos.domain';
 import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 import type { Product } from '@/types/domain';
 
@@ -429,5 +429,62 @@ describe('POS line transfer matching (R-I34)', () => {
     );
     expect(nextSource[0].qty).toBe(2);
     expect(nextTarget[0].qty).toBe(1);
+  });
+});
+
+/* INV-POS-LINE-DISCOUNT: the per-line TOTAL discount (amount) is set
+ * on one cart line only, clamped to [0, line gross] and rounded at
+ * book digits — the cart can never hold a discount the backend
+ * would refuse (INVALID_DISCOUNT). */
+describe('POS per-line discount (INV-POS-LINE-DISCOUNT)', () => {
+  const shirt: Product = { ...product, id: 'p-shirt', name: 'قميص', retailPrice: 100, costPrice: 80, stock: 10 };
+  const trousers: Product = { ...product, id: 'p-trousers', name: 'بنطلون', retailPrice: 50, costPrice: 30, stock: 10 };
+
+  function twoLineCart() {
+    let cart = addPosItem([], shirt, { priceType: 'retail', quantity: 2, digits: 2 });
+    cart = addPosItem(cart, trousers, { priceType: 'retail', quantity: 1, digits: 2 });
+    return cart;
+  }
+
+  it('sets the discount on the named line only', () => {
+    const cart = twoLineCart();
+    const next = updatePosItemLineDiscount(cart, cart[0].lineKey, 30, 2);
+    expect(next[0].lineDiscount).toBe(30);
+    expect(next[1].lineDiscount).toBeUndefined();
+    expect(next[1]).toBe(cart[1]);
+  });
+
+  it('clamps a discount above the line gross to the gross', () => {
+    const cart = twoLineCart();
+    const next = updatePosItemLineDiscount(cart, cart[0].lineKey, 250, 2);
+    expect(next[0].lineDiscount).toBe(200);
+  });
+
+  it('counts modifiers toward the line gross cap', () => {
+    const cheese = { optionId: 'opt-cheese', name: 'جبنة إضافية', price: 20, qty: 1 };
+    const cart = addPosItem([], shirt, { priceType: 'retail', quantity: 1, digits: 2, modifiers: [cheese] });
+    const next = updatePosItemLineDiscount(cart, cart[0].lineKey, 150, 2);
+    expect(next[0].lineDiscount).toBe(120);
+  });
+
+  it('rounds the discount at book digits', () => {
+    const cart = twoLineCart();
+    const next = updatePosItemLineDiscount(cart, cart[0].lineKey, 33.333, 2);
+    expect(next[0].lineDiscount).toBe(33.33);
+  });
+
+  it('clears the discount with zero', () => {
+    const cart = twoLineCart();
+    const key = cart[0].lineKey;
+    const discounted = updatePosItemLineDiscount(cart, key, 30, 2);
+    expect(discounted[0].lineDiscount).toBe(30);
+    const next = updatePosItemLineDiscount(discounted, key, 0, 2);
+    expect(next[0].lineDiscount).toBeUndefined();
+  });
+
+  it('ignores a negative discount', () => {
+    const cart = twoLineCart();
+    const next = updatePosItemLineDiscount(cart, cart[0].lineKey, -5, 2);
+    expect(next[0].lineDiscount).toBeUndefined();
   });
 });

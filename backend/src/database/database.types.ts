@@ -1050,6 +1050,9 @@ export interface SaleItemTable {
   net_line_total?: number | null;
   allocated_discount?: number | null;
   allocated_tax?: number | null;
+  /* INV-POS-LINE-DISCOUNT: the per-line TOTAL discount stored by
+   * migration 2040000000313 (nullable; NULL reads as zero). */
+  line_discount?: number | null;
   price_type: 'retail' | 'wholesale';
   consumer_price?: number | null;
   pricing_tier_type?: 'cash' | 'credit' | 'offer' | string | null;

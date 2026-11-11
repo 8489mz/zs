@@ -9,7 +9,7 @@ import { ProductIcon } from '@/shared/components/icons/product-svg-catalog';
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
 import type { Product } from '@/types/domain';
 import type { PosCartPanelProps } from './posCartPanel.types';
-import { calcCartLineTotal, calcModifiersTotal } from '@/features/pos/lib/pos-modifier-totals';
+import { calcCartLineDiscount, calcCartLineNetTotal, calcCartLineTotal, calcModifiersTotal } from '@/features/pos/lib/pos-modifier-totals';
 
 const PosCartItemRow = memo(function PosCartItemRow({
   item,
@@ -29,6 +29,8 @@ const PosCartItemRow = memo(function PosCartItemRow({
   onItemSeatChange,
   onItemModifiersClick,
   onQtyChange,
+  onLineDiscountChange,
+  canApplyDiscount,
   onChangeLineQtyByDelta,
   onAddLineSerial,
   onRemoveLineSerial,
@@ -36,7 +38,11 @@ const PosCartItemRow = memo(function PosCartItemRow({
 }: any) {
   const { t: __t } = useTranslation();
   const { t } = useTranslation();
-  const lineTotal = calcCartLineTotal(item);
+  /* INV-POS-LINE-DISCOUNT: the row shows the NET line total (gross
+   * minus the line's own discount) — the gross figure would leave the
+   * visible rows summing above the shown total. */
+  const lineTotal = calcCartLineNetTotal(item);
+  const lineDiscount = calcCartLineDiscount(item);
   /* R5-A (INV-REST-TOTALS-TRUTH-2, M19): the line total already
    * includes modifiers (R-B8), but the price column and the per-unit
    * hint showed the bare base price — the unit price a modifier sale
@@ -334,6 +340,40 @@ const PosCartItemRow = memo(function PosCartItemRow({
         >
           {formatCurrencyWithCode(lineTotal)}
         </strong>
+        {/* INV-POS-LINE-DISCOUNT: per-line TOTAL discount (amount) for
+          * this line only — the clothes-shop case: one clearance piece
+          * in a 4-piece sale. Shown only where the panel passes the
+          * handler (the POS cart); disabled without the discount
+          * permission, same lock as the header discount. The action
+          * clamps the amount to the line gross at book digits. */}
+        {typeof onLineDiscountChange === 'function' && (
+          <span
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginTop: '2px', fontSize: '10.5px', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            {t('pos.line_discount_short', 'خصم')}
+            <input
+              type="number"
+              aria-label={t('pos.line_discount', 'خصم الصنف')}
+              value={Number(item.lineDiscount || 0) > 0 ? String(item.lineDiscount) : ''}
+              placeholder="0"
+              min={0}
+              max={calcCartLineTotal(item)}
+              step="0.01"
+              disabled={!canApplyDiscount}
+              onChange={(event) => {
+                const parsed = Number(event.target.value);
+                onLineDiscountChange(item.lineKey, Number.isFinite(parsed) && parsed > 0 ? parsed : 0);
+              }}
+              style={{ width: '64px', height: '22px', fontSize: '11px', padding: '1px 4px', border: '1px solid #cbd5e1', borderRadius: '5px', textAlign: 'center', direction: 'ltr' }}
+            />
+          </span>
+        )}
+        {lineDiscount > 0 && (
+          <span style={{ fontSize: '10.5px', color: '#065f46', fontWeight: 700, marginTop: '1px', whiteSpace: 'nowrap' }}>
+            - {formatCurrencyWithCode(lineDiscount)}
+          </span>
+        )}
         {item.qty > 1 && (
           <span
             className="pos-cart-unit-price-mobile-hint"
@@ -375,7 +415,7 @@ const PosCartItemRow = memo(function PosCartItemRow({
   );
 });
 
-export function PosCartItemsList({ cart, products, onNavigateToProducts, lastAddedLineKey, selectedLineKey, onQtyChange, onItemNoteChange, onItemModifiersClick, onItemSeatChange, onEditProduct, onRemoveItem, onSelectLine, onChangeLineQtyByDelta, onAddLineSerial, onRemoveLineSerial }: Pick<PosCartPanelProps, 'cart' | 'products' | 'onNavigateToProducts' | 'lastAddedLineKey' | 'selectedLineKey' | 'onQtyChange' | 'onItemNoteChange' | 'onItemModifiersClick' | 'onItemSeatChange' | 'onEditProduct' | 'onRemoveItem' | 'onSelectLine' | 'onChangeLineQtyByDelta' | 'onAddLineSerial' | 'onRemoveLineSerial'>) {
+export function PosCartItemsList({ cart, products, onNavigateToProducts, lastAddedLineKey, selectedLineKey, canApplyDiscount, onQtyChange, onLineDiscountChange, onItemNoteChange, onItemModifiersClick, onItemSeatChange, onEditProduct, onRemoveItem, onSelectLine, onChangeLineQtyByDelta, onAddLineSerial, onRemoveLineSerial }: Pick<PosCartPanelProps, 'cart' | 'products' | 'onNavigateToProducts' | 'lastAddedLineKey' | 'selectedLineKey' | 'canApplyDiscount' | 'onQtyChange' | 'onLineDiscountChange' | 'onItemNoteChange' | 'onItemModifiersClick' | 'onItemSeatChange' | 'onEditProduct' | 'onRemoveItem' | 'onSelectLine' | 'onChangeLineQtyByDelta' | 'onAddLineSerial' | 'onRemoveLineSerial'>) {
   const { t: __t } = useTranslation();
   const { t } = useTranslation();
   const settingsQuery = useSettingsQuery();
@@ -560,6 +600,8 @@ export function PosCartItemsList({ cart, products, onNavigateToProducts, lastAdd
               onItemModifiersClick={handleItemModifiersClick}
               onItemSeatChange={handleItemSeatChange}
               onQtyChange={handleQtyChange}
+              onLineDiscountChange={onLineDiscountChange}
+              canApplyDiscount={canApplyDiscount}
               onChangeLineQtyByDelta={handleChangeLineQtyByDelta}
               onAddLineSerial={handleAddLineSerial}
               onRemoveLineSerial={handleRemoveLineSerial}

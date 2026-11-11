@@ -20,6 +20,10 @@ export interface CustomerDisplayItem {
    * sum to the shown total. */
   modifiers?: CustomerDisplayModifier[];
   notes?: string;
+  /* INV-POS-LINE-DISCOUNT: the line's own discount (0 when none),
+   * rendered under the item so the customer sees why the line total
+   * is below qty x price. */
+  lineDiscount?: number;
 }
 
 export interface CustomerDisplayCustomerInfo {
@@ -61,6 +65,10 @@ export interface CustomerDisplayPayload {
   items: CustomerDisplayItem[];
   subtotal: number;
   discount: number;
+  /* INV-POS-LINE-DISCOUNT: the sum of the per-line discounts, shown
+   * as its own breakdown row on the customer display (the discount
+   * field stays the header discount only, like the receipt). */
+  lineDiscountTotal?: number;
   tax: number;
   /* R5-A (INV-REST-TOTALS-TRUTH-2, R-I14): the breakdown rows the
    * display was missing — without them the visible rows never summed

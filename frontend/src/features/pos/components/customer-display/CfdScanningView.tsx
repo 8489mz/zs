@@ -73,6 +73,14 @@ export const CfdScanningView: React.FC<CfdScanningViewProps> = ({
                     {item.notes && (
                       <span className="cfd-item-barcode">{item.notes}</span>
                     )}
+                    {/* INV-POS-LINE-DISCOUNT: the line's own discount,
+                     * so the customer sees why the line total is below
+                     * qty x price. */}
+                    {Number(item.lineDiscount || 0) > 0 && (
+                      <span className="cfd-item-barcode" style={{ color: '#065f46' }}>
+                        {t('pos.line_discount', 'خصم الصنف')}: - {formatCurrency(Number(item.lineDiscount))}
+                      </span>
+                    )}
                   </div>
 
                   <div className="cfd-item-unit-price">
@@ -108,6 +116,7 @@ export const CfdScanningView: React.FC<CfdScanningViewProps> = ({
             totals={{
               subTotal: payload.subtotal,
               discountValue: payload.discount,
+              lineDiscountTotal: payload.lineDiscountTotal,
               serviceCharge: payload.serviceCharge,
               deliveryFee: payload.deliveryFee,
               taxAmount: payload.tax,

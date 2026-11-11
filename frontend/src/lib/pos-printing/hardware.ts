@@ -112,17 +112,30 @@ export function formatSaleForHardwarePrinter(sale: Sale, options?: HardwarePrint
   out += `${divider}\n`;
 
   const items: any[] = (sale as any).cart || sale.items || [];
+  /* INV-POS-LINE-DISCOUNT: the per-line discounts, summed for the
+   * totals section — sale.subTotal is already net of them. */
+  const totalLineDiscount = items.reduce((sum, entry) => sum + Number(entry.lineDiscount ?? entry.line_discount ?? 0), 0);
   for (const item of items) {
     const itemName = String(item.name || 'صنف');
     const qty = Number(item.qty || 1);
     const price = Number(item.price || 0);
-    const total = Number(item.total || qty * price);
+    const lineDiscount = Number(item.lineDiscount ?? item.line_discount ?? 0);
+    /* item.total is the backend's NET line total; the fallback nets
+     * the gross (price + modifiers) by the line discount, so a
+     * fully-discounted line (total 0) does not print at full price. */
+    const modifiersTotal = Array.isArray(item.modifiers)
+      ? item.modifiers.reduce((sum: number, mod: any) => sum + Number(mod.price || 0) * Number(mod.qty || 1), 0)
+      : 0;
+    const total = Number(item.total || (qty * (price + modifiersTotal) - lineDiscount));
 
     out += `${itemName}\n`;
     const qtyPrice = `${qty} x ${price.toFixed(2)}`;
     const totalStr = total.toFixed(2);
     out += padLine(`  ${qtyPrice}`, totalStr, width);
 
+    if (lineDiscount > 0) {
+      out += padLine('  خصم الصنف:', `-${lineDiscount.toFixed(2)}`, width);
+    }
     if (Array.isArray(item.modifiers) && item.modifiers.length > 0) {
       for (const mod of item.modifiers) {
         const modName = `+ ${mod.name || mod.modifierName}`;
@@ -141,8 +154,15 @@ export function formatSaleForHardwarePrinter(sale: Sale, options?: HardwarePrint
   const paid = Number(sale.paidAmount || 0);
   const change = Number((sale as any).changeAmount || 0);
 
-  if (discount > 0 || tax > 0 || deliveryFee > 0) {
-    out += padLine('المجموع الفرعي:', subtotal.toFixed(2), width);
+  if (discount > 0 || tax > 0 || deliveryFee > 0 || totalLineDiscount > 0) {
+    /* INV-POS-LINE-DISCOUNT: sale.subTotal is net of the line
+     * discounts, so the subtotal row shows the gross (net + line
+     * discounts) — the "خصم الأصناف" row below reconciles it back
+     * to the net, exactly like the receipt template. */
+    out += padLine('المجموع الفرعي:', (subtotal + totalLineDiscount).toFixed(2), width);
+  }
+  if (totalLineDiscount > 0) {
+    out += padLine('خصم الأصناف:', `-${totalLineDiscount.toFixed(2)}`, width);
   }
   if (discount > 0) {
     out += padLine('الخصم:', `-${discount.toFixed(2)}`, width);

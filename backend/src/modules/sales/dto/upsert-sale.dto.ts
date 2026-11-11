@@ -52,8 +52,10 @@ class SaleItemDto {
   /**
    * Per-line TOTAL discount (INV-CONVERSION-LINE-DISCOUNTS-PRESERVED):
    * the amount subtracted from this line's gross total (qty x price),
-   * not a per-unit amount. Only order/quotation conversion sends it;
-   * POS payloads never do, so direct sales are unchanged. Deliberately
+   * not a per-unit amount. Order/quotation conversion sends it, and
+   * the POS sends it too since INV-POS-LINE-DISCOUNT (per-line
+   * discount on the cart line); a direct sale without a line discount
+   * is unchanged. Deliberately
    * NOT named `discount`: conversion payloads historically sent a
    * per-item `discount` that normalizeSalePayload drops, and reusing
    * that name would silently change storefront/van conversions that

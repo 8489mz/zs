@@ -12,6 +12,10 @@ import { formatCurrency } from '@/lib/format';
 export interface PosTotalsBreakdownTotals {
   subTotal: number;
   discountValue?: number;
+  /* INV-POS-LINE-DISCOUNT: the sum of the per-line discounts, shown
+   * as its own row ("خصم الأصناف") between the gross subtotal and the
+   * header discount, so the visible rows still sum to the total. */
+  lineDiscountTotal?: number;
   manualDiscount?: number;
   loyaltyDiscount?: number;
   serviceCharge?: number;
@@ -34,6 +38,7 @@ interface PosTotalsBreakdownProps {
 export function PosTotalsBreakdown({ totals, showTotal = true, rowClassName }: PosTotalsBreakdownProps) {
   const { t } = useTranslation();
   const discount = Number(totals.discountValue ?? (Number(totals.manualDiscount || 0) + Number(totals.loyaltyDiscount || 0)));
+  const lineDiscountTotal = Number(totals.lineDiscountTotal || 0);
   const serviceCharge = Number(totals.serviceCharge || 0);
   const deliveryFee = Number(totals.deliveryFee || 0);
   const tax = Number(totals.taxAmount || 0);
@@ -48,6 +53,13 @@ export function PosTotalsBreakdown({ totals, showTotal = true, rowClassName }: P
         <span>{t('pos.subtotal', 'المجموع الفرعي')}</span>
         <span>{formatCurrency(totals.subTotal)}</span>
       </div>
+
+      {lineDiscountTotal > 0 && (
+        <div className={rowClassName} style={rowStyle}>
+          <span>{t('pos.line_discount', 'خصم الأصناف')}</span>
+          <span>- {formatCurrency(lineDiscountTotal)}</span>
+        </div>
+      )}
 
       {discount > 0 && (
         <div className={rowClassName} style={rowStyle}>

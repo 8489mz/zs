@@ -464,6 +464,70 @@ describe('POS paid gates (R4-D)', () => {
     expect((buildPosSalePayload(baseInput({ terminalCode: 'T4A2' })) as any).terminalCode).toBe('T4A2');
   });
 
+  /* INV-POS-LINE-DISCOUNT: the clothes-shop case — a 2-piece line at
+   * 100 with 30 off that piece only, plus a 1-piece line at 50 with
+   * its whole 50 discounted. Gross 250, net 170. Both payload
+   * builders (online + legacy fallback) must carry the per-line
+   * discount, and the validation must bound it per line ([0, line
+   * gross]) and bound the header discount by the NET subtotal. */
+  it('carries the per-line discount on both payload builders', () => {
+    const discountedCart: PosItem[] = [
+      { ...cart[0], productId: '1', qty: 2, price: 100, lineDiscount: 30, lineKey: '1::قطعة::retail' },
+      { ...cart[0], productId: '2', name: 'صنف ثان', qty: 1, price: 50, lineDiscount: 50, lineKey: '2::قطعة::retail' },
+    ];
+    const input = baseInput({
+      cart: discountedCart,
+      paidAmount: 170,
+      tenderedAmount: 170,
+      payments: [{ paymentChannel: 'cash' as const, amount: 170 }],
+      expectedTotal: 170,
+    });
+    for (const build of [buildPosSalePayload, buildLegacyPosSalePayload]) {
+      const built = build(input) as any;
+      expect(built.items[0].lineDiscount).toBe(30);
+      expect(built.items[1].lineDiscount).toBe(50);
+      expect(built.expectedTotal).toBe(170);
+    }
+  });
+
+  it('rejects a per-line discount above the line gross', () => {
+    expect(() => validatePosSaleInput(baseInput({
+      cart: [{ ...cart[0], qty: 2, price: 100, lineDiscount: 200.01 }],
+    }))).toThrow('خصم الصنف أكبر من إجمالي الصنف');
+  });
+
+  it('rejects a negative per-line discount', () => {
+    expect(() => validatePosSaleInput(baseInput({
+      cart: [{ ...cart[0], lineDiscount: -5 }],
+    }))).toThrow('خصم الصنف لا يمكن أن يكون سالبًا');
+  });
+
+  it('bounds the header discount by the net subtotal, not the gross', () => {
+    const discountedCart: PosItem[] = [
+      { ...cart[0], qty: 2, price: 100, lineDiscount: 30, lineKey: '1::قطعة::retail' },
+      { ...cart[0], productId: '2', name: 'صنف ثان', qty: 1, price: 50, lineKey: '2::قطعة::retail' },
+    ];
+    // Net subtotal is 220 (250 gross - 30 line discount): a header
+    // discount of 221 exceeds it even though it is below the gross.
+    expect(() => validatePosSaleInput(baseInput({
+      cart: discountedCart,
+      discount: 221,
+      paidAmount: 220,
+      tenderedAmount: 220,
+      payments: [{ paymentChannel: 'cash' as const, amount: 220 }],
+      expectedTotal: 1,
+    }))).toThrow('الخصم أكبر من إجمالي الأصناف');
+    // A header discount of 200 fits the net subtotal and passes.
+    expect(() => validatePosSaleInput(baseInput({
+      cart: discountedCart,
+      discount: 200,
+      paidAmount: 20,
+      tenderedAmount: 20,
+      payments: [{ paymentChannel: 'cash' as const, amount: 20 }],
+      expectedTotal: 20,
+    }))).not.toThrow();
+  });
+
   it('carries the displayed total as expectedTotal on both payload builders (R5-A, R-I53)', () => {
     const input = {
       cart,

@@ -83,7 +83,11 @@ export function printCurrentPosDraft(pos: PosWorkspaceState, customerName: strin
     branchName: SINGLE_STORE_MODE ? 'المتجر الرئيسي' : (pos.currentBranch?.name || 'الرئيسي'),
     locationName: pos.currentLocation?.name || 'المخزن الأساسي',
     items: pos.cart,
-    subtotal: pos.totals.subTotal,
+    /* INV-POS-LINE-DISCOUNT: the receipt template takes the NET
+     * subtotal (gross minus per-line discounts) — the backend's
+     * stored subtotal for posted sales — and rebuilds the gross by
+     * adding the line discounts back. */
+    subtotal: pos.totals.netSubTotal ?? pos.totals.subTotal,
     discount: pos.totals.discountValue,
     deliveryFee: pos.totals.deliveryFee,
     taxAmount: pos.totals.taxAmount,

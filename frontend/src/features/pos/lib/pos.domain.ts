@@ -1,5 +1,6 @@
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import { roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
+import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 import type { Product, ProductOffer, ProductUnit } from '@/types/domain';
 import type { PosItem, PosPriceType } from '@/features/pos/types/pos.types';
 
@@ -518,6 +519,22 @@ export function updatePosItemNotes(cart: PosItem[], lineKey: string, notes: stri
   return cart.map((item) => {
     if (item.lineKey !== lineKey) return item;
     return { ...item, notes };
+  });
+}
+
+/* INV-POS-LINE-DISCOUNT: set (or clear, with 0) the per-line TOTAL
+ * discount on one cart line. The amount is rounded at book digits and
+ * clamped to the line gross, so the cart can never hold a discount
+ * the backend would refuse (INVALID_DISCOUNT): a discount above the
+ * gross is cut to the gross, never kept. A zero discount clears the
+ * field (undefined) so the payload carries no line discount at all. */
+export function updatePosItemLineDiscount(cart: PosItem[], lineKey: string, discount: number, digits: MoneyDigits) {
+  return cart.map((item) => {
+    if (item.lineKey !== lineKey) return item;
+    const gross = calcCartLineTotal(item);
+    const rounded = roundMoneyValue(Math.max(0, Number(discount || 0)), digits);
+    const clamped = Math.min(rounded, Math.max(0, gross));
+    return { ...item, lineDiscount: clamped > 0 ? clamped : undefined };
   });
 }
 

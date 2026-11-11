@@ -1793,8 +1793,9 @@ export class SalesWriteService {
 
       // INV-CONVERSION-LINE-DISCOUNTS-PRESERVED: per-line discounts are
       // discounts granted at conversion too, so they count toward the
-      // gated amount alongside the header discount (POS payloads never
-      // send lineDiscount, so direct sales are unchanged).
+      // gated amount alongside the header discount (the POS sends
+      // lineDiscount too since INV-POS-LINE-DISCOUNT, so a direct
+      // sale's gated amount includes its line discounts).
       const lineDiscountTotal = roundSaleResidual(normalized.items.reduce((sum, item) => sum + Number((item as { lineDiscount?: number }).lineDiscount || 0), 0), moneyDigits);
       const unapprovedDiscount = Math.max(0, roundSaleResidual(roundSaleResidual(normalized.discount - Number(approvedTerms?.approvedDiscount || 0), moneyDigits) + lineDiscountTotal, moneyDigits));
       await this.assertDiscountChangeAllowed(trx, auth, unapprovedDiscount, normalized.managerPin, subtotal);
@@ -2283,6 +2284,7 @@ export class SalesWriteService {
             qty: item.qty,
             unit_price: item.unitPrice,
             line_total: item.lineTotal,
+            line_discount: Number(item.lineDiscount || 0),
             net_unit_price: allocationByItem.get(item)!.netUnitPrice,
             net_line_total: allocationByItem.get(item)!.netLineTotal,
             allocated_discount: allocationByItem.get(item)!.allocatedDiscount,
@@ -3778,6 +3780,7 @@ export class SalesWriteService {
           qty: item.qty,
           unit_price: item.unitPrice,
           line_total: item.lineTotal,
+          line_discount: Number(item.lineDiscount || 0),
           net_unit_price: allocationByItem.get(item)!.netUnitPrice,
           net_line_total: allocationByItem.get(item)!.netLineTotal,
           allocated_discount: allocationByItem.get(item)!.allocatedDiscount,
@@ -4667,6 +4670,11 @@ export class SalesWriteService {
           serials: Array.isArray(item.serials) ? item.serials.map((entry) => String(entry)) : undefined,
           originalPrice: item.originalPrice != null ? Number(item.originalPrice) : undefined,
           offerDiscount: item.offerDiscount != null ? Number(item.offerDiscount) : undefined,
+          /* INV-POS-LINE-DISCOUNT: the per-line discount rides the same
+           * R5-B envelope as offerDiscount — a held line keeps its own
+           * discount, so recall + submit posts the price the cashier
+           * agreed instead of silently re-adding it. */
+          lineDiscount: item.lineDiscount != null ? Number(item.lineDiscount) : undefined,
           offerName: item.offerName ? String(item.offerName) : undefined,
           isWeighted: item.isWeighted != null ? Boolean(item.isWeighted) : undefined,
           quantityChunks: Array.isArray(item.quantityChunks) ? item.quantityChunks.map((entry) => Number(entry)) : undefined,
@@ -4674,7 +4682,11 @@ export class SalesWriteService {
         .filter((entry) => entry.productId > 0 && entry.qty > 0);
 
       if (!items.length) throw new AppError('Held draft must include at least one item', 'HELD_DRAFT_ITEMS_REQUIRED', 400);
-      await this.assertDiscountChangeAllowed(trx, auth, Number(payload.discount || 0), payload.managerPin);
+      /* INV-POS-LINE-DISCOUNT: the hold gate counts line discounts
+       * exactly like createSale does — holding a discounted draft is
+       * granting the discount, not deferring it. */
+      const heldLineDiscountTotal = roundMoney(items.reduce((sum, item) => sum + Number((item as { lineDiscount?: number }).lineDiscount || 0), 0), moneyDigits);
+      await this.assertDiscountChangeAllowed(trx, auth, roundMoney(Number(payload.discount || 0) + heldLineDiscountTotal, moneyDigits), payload.managerPin);
 
       for (const item of items) {
         let finalProductName = item.productName;
@@ -4818,6 +4830,7 @@ export class SalesWriteService {
           ...(Array.isArray(item.serials) && item.serials.length ? { serials: item.serials } : {}),
           ...(item.originalPrice != null ? { originalPrice: item.originalPrice } : {}),
           ...(item.offerDiscount != null ? { offerDiscount: item.offerDiscount } : {}),
+          ...(item.lineDiscount != null ? { lineDiscount: item.lineDiscount } : {}),
           ...(item.offerName ? { offerName: item.offerName } : {}),
           ...(item.isWeighted != null ? { isWeighted: item.isWeighted } : {}),
           ...(Array.isArray(item.quantityChunks) && item.quantityChunks.length ? { quantityChunks: item.quantityChunks } : {}),
