@@ -90,6 +90,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE journal_entry_lines (id bigserial PRIMARY KEY, tenant_id text, journal_entry_id bigint, account_id bigint, cost_center_id bigint, description text, debit numeric, credit numeric, partner_type text, partner_id bigint, branch_id bigint, location_id bigint, is_reconciled boolean DEFAULT false);
     CREATE TABLE accounting_posting_failures (id bigserial PRIMARY KEY, tenant_id text, source_type text, source_id bigint, resolved_at timestamptz, last_attempt_at timestamptz);
     CREATE TABLE products (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, name_en text, barcode text, style_code text, stock_qty numeric DEFAULT 0, reserved_qty numeric DEFAULT 0, cost_price numeric DEFAULT 0, retail_price numeric DEFAULT 0, wholesale_price numeric DEFAULT 0, credit_price numeric DEFAULT 0, consumer_price numeric DEFAULT 0, min_selling_price numeric DEFAULT 0, is_active boolean DEFAULT true, track_serials boolean DEFAULT false, default_location_id bigint, item_type text, updated_at timestamptz);
+    CREATE TABLE restaurant_86_items (id bigserial PRIMARY KEY, tenant_id text, branch_id bigint, product_id bigint, product_name text, component_product_id bigint, is_86ed boolean DEFAULT false, reason text, auto_restore_at timestamptz, created_by bigint, created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW());
     CREATE TABLE product_location_stock (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, branch_id bigint, location_id bigint, qty numeric DEFAULT 0, reserved_qty numeric DEFAULT 0, updated_at timestamptz);
     CREATE TABLE stock_movements (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, movement_type text, qty numeric, before_qty numeric, after_qty numeric, reason text, note text, reference_type text, reference_id bigint, created_by bigint, branch_id bigint, location_id bigint, unit_cost numeric, total_cost numeric, created_at timestamptz DEFAULT NOW());
     CREATE TABLE pharmacy_drugs (id bigint PRIMARY KEY, tenant_id text, account_id text, product_id bigint, name text);
@@ -98,8 +99,8 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE customers (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, phone text, address text, balance numeric DEFAULT 0, credit_limit numeric DEFAULT 0, is_credit_blocked boolean DEFAULT false, credit_block_reason text, customer_type text, location_url text, metadata text, store_credit_balance numeric DEFAULT 0, loyalty_points numeric DEFAULT 0, is_active boolean DEFAULT true, updated_at timestamptz);
     CREATE TABLE customer_ledger (id bigserial PRIMARY KEY, customer_id bigint, supplier_id bigint, entry_type text, amount numeric, balance_after numeric, note text, reference_type text, reference_id bigint, van_trip_id bigint, tenant_id text, account_id text);
     CREATE TABLE customer_loyalty_logs (id bigserial PRIMARY KEY, tenant_id text, account_id text, customer_id bigint, points_change numeric, balance_after numeric, action_type text, sale_id bigint, notes text, created_at timestamptz DEFAULT NOW());
-    CREATE TABLE sales (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, customer_id bigint, customer_name text, customer_phone text, customer_address text, payment_type text, payment_channel text, subtotal numeric DEFAULT 0, discount numeric DEFAULT 0, delivery_fee numeric DEFAULT 0, delivery_fee_mode text, service_charge numeric DEFAULT 0, tip_amount numeric DEFAULT 0, tax_rate numeric DEFAULT 0, tax_amount numeric DEFAULT 0, prices_include_tax boolean DEFAULT false, total numeric DEFAULT 0, paid_amount numeric DEFAULT 0, applied_amount numeric DEFAULT 0, tendered_amount numeric DEFAULT 0, change_amount numeric DEFAULT 0, store_credit_used numeric DEFAULT 0, note text, status text, collection_status text, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT NOW(), updated_at timestamptz, sale_origin text, exchange_return_id bigint, van_trip_id bigint, delivery_rep_id bigint, table_number text, order_type text, guest_count int, zatca_status text, cancel_reason text, delivery_status text, dining_course text, pager_number text, transfer_reference text, transfer_receipt_url text, recipient_name text, recipient_phone text, recipient_role text, recipient_signature text, delivery_gps_lat numeric, delivery_gps_lng numeric, delivery_proof_photo text, packaging_breakdown text, is_credit_overridden boolean DEFAULT false, credit_override_by_user_id bigint, credit_override_reason text, terminal_id text, terminal_auth_code text, terminal_rrn text, card_scheme text, card_last_four text);
-    CREATE TABLE sale_items (id bigserial PRIMARY KEY, tenant_id text, account_id text, sale_id bigint, product_id bigint, product_name text, product_name_en text, qty numeric, unit_price numeric, line_total numeric, net_unit_price numeric, net_line_total numeric, allocated_discount numeric, allocated_tax numeric, unit_name text, unit_multiplier numeric, cost_price numeric, consumer_price numeric, pricing_tier_type text, unit_offer_savings numeric, is_bonus boolean DEFAULT false, bonus_reason text, price_type text, notes text, modifiers jsonb, serials jsonb);
+    CREATE TABLE sales (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, customer_id bigint, customer_name text, customer_phone text, customer_address text, payment_type text, payment_channel text, subtotal numeric DEFAULT 0, discount numeric DEFAULT 0, delivery_fee numeric DEFAULT 0, delivery_fee_mode text, service_charge numeric DEFAULT 0, tip_amount numeric DEFAULT 0, tax_rate numeric DEFAULT 0, tax_amount numeric DEFAULT 0, prices_include_tax boolean DEFAULT false, total numeric DEFAULT 0, paid_amount numeric DEFAULT 0, applied_amount numeric DEFAULT 0, tendered_amount numeric DEFAULT 0, change_amount numeric DEFAULT 0, store_credit_used numeric DEFAULT 0, note text, status text, collection_status text, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT NOW(), updated_at timestamptz, sale_origin text, exchange_return_id bigint, van_trip_id bigint, delivery_rep_id bigint, table_number text, order_type text, guest_count int, zatca_status text, cancel_reason text, delivery_status text, dining_course text, pager_number text, transfer_reference text, transfer_receipt_url text, recipient_name text, recipient_phone text, recipient_role text, recipient_signature text, delivery_gps_lat numeric, delivery_gps_lng numeric, delivery_proof_photo text, packaging_breakdown text, is_credit_overridden boolean DEFAULT false, credit_override_by_user_id bigint, credit_override_reason text, terminal_id text, terminal_auth_code text, terminal_rrn text, card_scheme text, card_last_four text, pos_terminal_code text);
+    CREATE TABLE sale_items (id bigserial PRIMARY KEY, tenant_id text, account_id text, sale_id bigint, product_id bigint, product_name text, product_name_en text, qty numeric, unit_price numeric, line_total numeric, line_discount numeric DEFAULT 0, net_unit_price numeric, net_line_total numeric, allocated_discount numeric, allocated_tax numeric, unit_name text, unit_multiplier numeric, cost_price numeric, consumer_price numeric, pricing_tier_type text, unit_offer_savings numeric, is_bonus boolean DEFAULT false, bonus_reason text, price_type text, notes text, modifiers jsonb, serials jsonb);
     CREATE TABLE sale_payments (id bigserial PRIMARY KEY, tenant_id text, account_id text, sale_id bigint, payment_channel text, amount numeric, applied_amount numeric, tendered_amount numeric, change_amount numeric, card_rrn text, card_auth_code text, terminal_id text, terminal_auth_code text, terminal_rrn text, card_scheme text, card_last_four text);
     CREATE TABLE sale_line_stock_allocations (id bigserial PRIMARY KEY, tenant_id text, account_id text, sale_id bigint, sale_line_id bigint, product_id bigint, location_id bigint, branch_id bigint, qty numeric, quantity numeric, allocation_order int, created_at timestamptz DEFAULT NOW());
     CREATE TABLE product_offers (id bigserial PRIMARY KEY, product_id bigint, offer_type text, value numeric, min_qty numeric, start_date text, end_date text, bogo_buy_qty numeric, bogo_get_qty numeric, bogo_discount_percent numeric, happy_hour_start text, happy_hour_end text, days_of_week text, tenant_id text, is_active boolean DEFAULT true);
@@ -276,10 +277,10 @@ async function main(): Promise<void> {
     console.log('  pure helper table passed');
   }
 
-  // 1. Admin edit below the floor with no PIN is rejected and the
-  // sale is unchanged: the gap this package closes. The gate passes
-  // (canEditPrice, threshold disabled), so the rejection can only
-  // come from the floor check.
+  // 1. INV-POS-ADMIN-DISCOUNT-AUTHORITY: an admin edit below the floor
+  // with no PIN is NOT blocked (the admin is the store owner/approver);
+  // the floor is still computed on the frozen cost and the below-floor
+  // line is recorded in the sale note without an approver name.
   {
     const { pg, db } = await makeDb();
     try {
@@ -289,17 +290,17 @@ async function main(): Promise<void> {
       const saleId = await createAndGetId(service, salePayload(100), adminAuth);
       const qtyAfterCreate = await locationQty(db);
       assert.equal(qtyAfterCreate, 99, 'creation deducts one unit');
-      await expectAppError(service.updateSale(saleId, editPayload(85), adminAuth), 'MANAGER_AUTH_REQUIRED');
+      await service.updateSale(saleId, editPayload(85), adminAuth);
       const sale = await readSale(db, saleId);
-      assert.equal(Number(sale.total), 100);
-      assert.equal(Number(sale.paid_amount), 100);
-      assert.equal(await locationQty(db), qtyAfterCreate, 'the rejected edit leaves stock untouched');
+      assert.equal(Number(sale.total), 85);
+      assert.ok(String(sale.note || '').includes('[بيع تحت الحد: أصناف 101]'), 'admin floor tag records the line');
+      assert.ok(!String(sale.note || '').includes('اعتماد بيع تحت الحد'), 'admin floor tag carries no approver');
       const item = await readSaleItem(db, saleId);
       assert.equal(Number(item.cost_price), 90);
     } finally {
       await db.destroy();
     }
-    console.log('  admin below-floor edit rejected passed');
+    console.log('  admin below-floor edit recorded (not blocked) passed');
   }
 
   // 2. The same admin edit at/above the floor posts without any PIN
@@ -386,7 +387,12 @@ async function main(): Promise<void> {
       const saleId = await createAndGetId(service, salePayload(100), adminAuth);
       await (db as any).updateTable('products').set({ cost_price: 70 })
         .where('id', '=', 101).where('tenant_id', '=', TENANT).execute();
-      await expectAppError(service.updateSale(saleId, editPayload(85), adminAuth), 'MANAGER_AUTH_REQUIRED');
+      // INV-POS-ADMIN-DISCOUNT-AUTHORITY: the admin edit posts, but the
+      // floor is still evaluated on the FROZEN 90 (not the new WAC 70),
+      // so the line is tagged as below the floor.
+      await service.updateSale(saleId, editPayload(85), adminAuth);
+      const sale = await readSale(db, saleId);
+      assert.ok(String(sale.note || '').includes('[بيع تحت الحد: أصناف 101]'), 'frozen-cost floor still detected');
       const item = await readSaleItem(db, saleId);
       assert.equal(Number(item.cost_price), 90);
     } finally {
@@ -411,24 +417,32 @@ async function main(): Promise<void> {
     console.log('  frozen-cost basis passed');
   }
 
-  // 6. Creation is unchanged through the shared helper: a
-  // below-floor creation without a PIN is rejected, and with the PIN
-  // it posts with the floor-approval note.
+  // 6. Creation through the shared helper: a cashier below-floor
+  // creation without a PIN is rejected, and with the PIN it posts with
+  // the floor-approval note; an admin below-floor creation posts with no
+  // PIN and records the line without an approver
+  // (INV-POS-ADMIN-DISCOUNT-AUTHORITY).
   {
     const { pg, db } = await makeDb();
     try {
       await seedFoundation(db);
       await seedProduct(db, { retail: 100, cost: 90, minSelling: 80 });
+      await (db as any).insertInto('cashier_shifts').values({
+        tenant_id: TENANT, account_id: ACCOUNT, opened_by: 2, status: 'open', branch_id: 1,
+      }).execute();
       const service = buildService(db);
-      await expectAppError(service.createSale(salePayload(85), adminAuth), 'MANAGER_AUTH_REQUIRED');
-      const saleId = await createAndGetId(service, salePayload(85, { managerPin: MANAGER_PIN }), adminAuth);
+      await expectAppError(service.createSale(salePayload(85), cashierAuth), 'MANAGER_AUTH_REQUIRED');
+      const saleId = await createAndGetId(service, salePayload(85, { managerPin: MANAGER_PIN }), cashierAuth);
       const sale = await readSale(db, saleId);
       assert.equal(Number(sale.total), 85);
-      assert.ok(String(sale.note || '').includes('اعتماد بيع تحت الحد'), 'creation floor tag present');
+      assert.ok(String(sale.note || '').includes('اعتماد بيع تحت الحد'), 'cashier creation floor tag present');
+      const adminSaleId = await createAndGetId(service, salePayload(85), adminAuth);
+      const adminSale = await readSale(db, adminSaleId);
+      assert.ok(String(adminSale.note || '').includes('[بيع تحت الحد: أصناف 101]'), 'admin creation floor tag present');
     } finally {
       await db.destroy();
     }
-    console.log('  creation unchanged passed');
+    console.log('  creation floor (cashier PIN / admin recorded) passed');
   }
 
   // 7. Source + invariant pins.

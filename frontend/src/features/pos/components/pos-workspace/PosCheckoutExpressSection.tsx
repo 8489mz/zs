@@ -1065,6 +1065,22 @@ export function PosCheckoutExpressSection({
                   : t('pos.confirm_sale_f2', 'تأكيد البيع والطباعة (F2)')}
               </span>
             </Button>
+            {pos.adminDiscountWarning && (
+              <div
+                style={{
+                  fontSize: '11.5px',
+                  color: '#92400e',
+                  background: '#fef3c7',
+                  border: '1px solid #fde68a',
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  textAlign: 'center',
+                  fontWeight: 700,
+                }}
+              >
+                {pos.adminDiscountWarning}
+              </div>
+            )}
             {!pos.canSubmitSale && pos.canSubmitHint && (
               <div
                 style={{

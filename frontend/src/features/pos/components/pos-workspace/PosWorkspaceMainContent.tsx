@@ -245,6 +245,7 @@ export function PosWorkspaceMainContent({
                 amountDue={pos.amountDue}
                 hasOpenShift={Boolean(pos.ownOpenShift)}
                 canApplyDiscount={pos.canApplyDiscount}
+                adminDiscountWarning={pos.adminDiscountWarning}
                 discountApprovalGranted={pos.discountApprovalGranted}
                 isDiscountAuthorizationPending={pos.discountAuthorizationMutation.isPending}
                 hasDiscountPermissionViolation={pos.hasDiscountPermissionViolation}

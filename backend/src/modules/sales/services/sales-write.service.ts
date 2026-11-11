@@ -530,8 +530,12 @@ export class SalesWriteService {
 
     if (discountVal <= flatAllowance + 0.0001) return;
 
-    const isSuperAdmin = this.authz.hasPermission(auth, '*');
-    if (isSuperAdmin) return;
+    // INV-POS-ADMIN-DISCOUNT-AUTHORITY: the tenant admin IS the store
+    // owner/manager (the highest role inside a customer tenant), so it
+    // is treated exactly like super_admin at the discount gate, with the
+    // same role pattern as updateSale. The tiers apply to cashiers only.
+    const isAdmin = auth.role === 'admin' || auth.role === 'super_admin';
+    if (isAdmin || this.authz.hasPermission(auth, '*')) return;
 
     if (!this.authz.hasPermission(auth, 'canDiscount') || exceedsThreshold) {
       await this.authz.authorizeDiscountOverride(String(managerPin || '').trim(), auth, trx);
@@ -551,7 +555,10 @@ export class SalesWriteService {
         ? allowedPrice > 0 && reduction / allowedPrice * 100 > threshold
         : reduction > threshold);
     let authorizedBy: string | null = null;
-    if (!this.authz.hasPermission(auth, 'canEditPrice') || exceedsThreshold) {
+    // INV-POS-ADMIN-DISCOUNT-AUTHORITY: the tenant admin (store owner)
+    // edits prices without a manager approval; the audit row is kept.
+    const isAdmin = auth.role === 'admin' || auth.role === 'super_admin';
+    if (!isAdmin && (!this.authz.hasPermission(auth, 'canEditPrice') || exceedsThreshold)) {
       const approval = await this.authz.authorizeDiscountOverride(String(managerPin || '').trim(), auth, trx);
       authorizedBy = approval.authorizedByName;
     }
@@ -1876,7 +1883,12 @@ export class SalesWriteService {
           netLineTotal: allocationByItem.get(item)!.netLineTotal,
         };
       }));
-      const floorApproval = belowFloorItems.length
+      // INV-POS-ADMIN-DISCOUNT-AUTHORITY: an admin selling below the
+      // floor is not blocked (the admin is the approver); the lines are
+      // still recorded in the sale note below. A cashier still needs the
+      // manager approval.
+      const isAdminSeller = auth.role === 'admin' || auth.role === 'super_admin';
+      const floorApproval = belowFloorItems.length && !isAdminSeller
         ? await this.authz.authorizeDiscountOverride(normalized.managerPin, auth, trx)
         : null;
 
@@ -2142,6 +2154,8 @@ export class SalesWriteService {
       }
       if (floorApproval) {
         saleNote = `${saleNote ? `${saleNote} | ` : ''}[اعتماد بيع تحت الحد: ${floorApproval.authorizedByName}; أصناف ${belowFloorItems.join(',')}]`;
+      } else if (belowFloorItems.length) {
+        saleNote = `${saleNote ? `${saleNote} | ` : ''}[بيع تحت الحد: أصناف ${belowFloorItems.join(',')}]`;
       }
       if (normalized.terminalAuthCode) {
         const terminalTag = `[تفويض شبكة: ${normalized.cardScheme || 'بطاقة'} | ${normalized.terminalAuthCode}${normalized.terminalRrn ? ` | مرجع: ${normalized.terminalRrn}` : ''}]`;
@@ -3755,11 +3769,16 @@ export class SalesWriteService {
         effectiveAllowedUnitPrice: item.effectiveAllowedUnitPrice,
         netLineTotal: allocationByItem.get(item)!.netLineTotal,
       })));
-      const editFloorApproval = belowFloorProductIds.length
+      // INV-POS-ADMIN-DISCOUNT-AUTHORITY: an admin edit below the floor
+      // is not blocked; the lines are recorded in the note (no approver).
+      const isAdminEditor = auth.role === 'admin' || auth.role === 'super_admin';
+      const editFloorApproval = belowFloorProductIds.length && !isAdminEditor
         ? await this.authz.authorizeDiscountOverride(normalized.managerPin, auth, trx)
         : null;
-      if (editFloorApproval) {
-        const floorTag = `[اعتماد بيع تحت الحد: ${editFloorApproval.authorizedByName}; أصناف ${belowFloorProductIds.join(',')}]`;
+      if (belowFloorProductIds.length) {
+        const floorTag = editFloorApproval
+          ? `[اعتماد بيع تحت الحد: ${editFloorApproval.authorizedByName}; أصناف ${belowFloorProductIds.join(',')}]`
+          : `[بيع تحت الحد: أصناف ${belowFloorProductIds.join(',')}]`;
         const editNote = normalized.note ? `${normalized.note} | ${floorTag}` : floorTag;
         await trx.updateTable('sales').set({ note: editNote } as any)
           .where('id', '=', saleId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();

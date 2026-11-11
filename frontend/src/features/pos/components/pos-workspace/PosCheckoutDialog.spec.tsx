@@ -153,4 +153,18 @@ describe('PosCheckoutDialog — failure reason inside the dialog (T11-A)', () =>
 
     expect(screen.queryByRole('alert')).toBeNull();
   }, 30000);
+
+  it('shows manager approval button when cashier has discount locked, and locks confirm sale', () => {
+    renderDialog(makePos({
+      canApplyDiscount: false,
+      hasDiscountPermissionViolation: true,
+      canSubmitSale: false,
+      canSubmitHint: 'الخصم يتطلب اعتماد المدير (PIN).',
+    }));
+
+    expect(screen.getByText('اعتماد المدير')).toBeInTheDocument();
+    expect(screen.getByText('الخصم يتطلب اعتماد المدير (PIN).')).toBeInTheDocument();
+    const confirmButton = screen.getByRole('button', { name: /تأكيد البيع/ });
+    expect(confirmButton).toBeDisabled();
+  });
 });

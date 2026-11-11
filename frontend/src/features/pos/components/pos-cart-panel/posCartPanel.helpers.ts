@@ -15,6 +15,7 @@ export function getAlertMessages(props: PosCartPanelProps) {
     props.paymentType === 'credit' && !props.customerId ? 'البيع الآجل يحتاج اختيار عميل حتى يتم حفظ المديونية بشكل صحيح.' : '',
     hasZeroPriceLine ? 'يوجد صنف بسعر صفر داخل السلة. راجع التسعير قبل إتمام البيع.' : '',
     props.hasDiscountPermissionViolation ? 'يوجد خصم غير مسموح به لهذا المستخدم.' : '',
+    props.adminDiscountWarning || '',
     props.hasPricePermissionViolation ? 'يوجد تعديل سعر غير مسموح به لهذا المستخدم.' : '',
     belowCostLines.length ? `تحذير: يوجد أصناف يتم بيعها بأقل من سعر التكلفة (${belowCostLines.map((item) => item.name).join('، ')})` : '',
     lowStockLines.length ? `هذه الفاتورة ستجعل بعض الأصناف عند الحد الأدنى أو أقل: ${lowStockLines.map((item) => item.name).join('، ')}` : '',

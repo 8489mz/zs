@@ -132,4 +132,37 @@ describe('usePosWorkspaceDerived paid gates (R4-D)', () => {
     expect(result.current.canSubmitSale).toBe(false);
     expect(result.current.canSubmitHint).toContain('صفر');
   });
+
+  describe('INV-POS-ADMIN-DISCOUNT-AUTHORITY', () => {
+    it('admin has no discount violation even when discount exceeds threshold', () => {
+      const { result } = setup({
+        authRole: 'admin',
+        authPermissions: ['sales'],
+        settings: { posMaxDiscountThresholdEnabled: true, posMaxDiscountThresholdValue: 10, posMaxDiscountThresholdType: 'percentage' },
+        discount: 50,
+        openShiftRows: openShift,
+        cashAmount: 50,
+      });
+      expect(result.current.canApplyDiscount).toBe(true);
+      expect(result.current.hasDiscountPermissionViolation).toBe(false);
+      expect(result.current.canSubmitSale).toBe(true);
+      expect(result.current.adminDiscountWarning).toContain('تنبيه: الخصم يتجاوز');
+      expect(result.current.adminDiscountWarning).toContain('50.00');
+    });
+
+    it('cashier without discount permission has discount violation when above flat allowance', () => {
+      const { result } = setup({
+        authRole: 'cashier',
+        authPermissions: ['sales'],
+        settings: { posMaxDiscountThresholdEnabled: true, posMaxDiscountThresholdValue: 10, posSmallDiscountFlatAllowance: 2 },
+        discount: 20,
+        openShiftRows: openShift,
+        cashAmount: 80,
+      });
+      expect(result.current.canApplyDiscount).toBe(false);
+      expect(result.current.hasDiscountPermissionViolation).toBe(true);
+      expect(result.current.canSubmitSale).toBe(false);
+      expect(result.current.canSubmitHint).toContain('الخصم يتطلب اعتماد المدير (PIN)');
+    });
+  });
 });

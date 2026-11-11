@@ -20,6 +20,7 @@ interface PosWorkspaceDerivedParams {
   locations: Array<{ id: string | number; name: string }>;
   openShiftRows: Array<{ id: string | number; docNo?: string; openedById?: string | number; openedByName?: string }>;
   authUserId?: string | number | null;
+  authRole?: string | null;
   authPermissions?: string[];
   settings?: { currency?: string; taxRate?: number | string; taxMode?: string; allowNegativeStockSales?: unknown; allowSellingBelowStock?: unknown; posMaxDiscountThresholdEnabled?: boolean; posMaxDiscountThresholdType?: string; posMaxDiscountThresholdValue?: number; posSmallDiscountFlatAllowance?: number; loyaltyPointRedeemValue?: number; loyaltyPointsPer100Egp?: number; loyaltyMinRedeemPoints?: number; loyaltyMaxDiscountPercentage?: number; loyaltyEnabled?: boolean; restaurantServiceChargeEnabled?: boolean; restaurantServiceChargePercent?: number } | null;
   heldDrafts: Array<unknown>;
@@ -224,7 +225,9 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
   }
 
   const isApprovedByManager = Boolean(params.discountApprovalGranted);
-  const isSuperAdmin = authPermissionSet.has('*');
+  // INV-POS-ADMIN-DISCOUNT-AUTHORITY: the tenant admin is the store owner/manager
+  // (highest role in tenant), so admin is treated as super_admin for discounts/prices.
+  const isSuperAdmin = authPermissionSet.has('*') || params.authRole === 'admin' || params.authRole === 'super_admin';
   const hasBaseDiscountPermission = authPermissionSet.has('canDiscount') || isSuperAdmin;
 
   const hasDiscountPermissionViolation = discountVal > 0.0001 && !withinFlatAllowance && (
@@ -233,7 +236,14 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
   );
 
   const canApplyDiscount = withinFlatAllowance || (hasBaseDiscountPermission && !exceedsDiscountThreshold) || isSuperAdmin || isApprovedByManager;
-  const canEditPrice = authPermissionSet.has('canEditPrice') || authPermissionSet.has('*');
+  const canEditPrice = authPermissionSet.has('canEditPrice') || isSuperAdmin;
+
+  // Non-blocking warning for admin when discount exceeds cashier threshold
+  const isAdminUser = params.authRole === 'admin' || params.authRole === 'super_admin' || authPermissionSet.has('*');
+  const isAdminDiscountThresholdExceeded = isAdminUser && exceedsDiscountThreshold && discountVal > 0.0001;
+  const adminDiscountWarning = isAdminDiscountThresholdExceeded
+    ? `تنبيه: الخصم يتجاوز الحد المعتاد (${thresholdValue}${thresholdType === 'percentage' ? '%' : ''}) — السعر النهائي المطلوب: ${formatCurrency(totals.total)}`
+    : '';
   const canSellWholesale = authPermissionSet.has('canSellWholesale') || authPermissionSet.has('*') || Boolean(params.wholesaleApprovalGranted);
   const hasOperationalSetup = Boolean(branchList.length > 0 && locationList.length > 0);
   const hasCatalogReady = Boolean(productList.length > 0);
@@ -406,6 +416,8 @@ export function usePosWorkspaceDerived(params: PosWorkspaceDerivedParams) {
     checkoutDisabledReason,
     canSubmitSale,
     canSubmitHint,
+    isAdminDiscountThresholdExceeded,
+    adminDiscountWarning,
     contextBadges,
     shortSummary,
     selectedCustomerName,

@@ -53,6 +53,16 @@
   3. **إغلاق نافذة نجاح البيع تلقائياً عند الطباعة (`PosWorkspace.tsx`):** ربط أزرار الطباعة (`F2`, `F4`, `F10`, طباعة المطبخ) بإغلاق `PosSaleSuccessDialog` واستدعاء `completePostSaleCycle` وإعادة التركيز لحقل الباركود فوراً.
 * **أدلة الاختبار:** `npm --prefix frontend run test -- --run src/lib/browser-print-bridge.spec.ts src/lib/pos-printing/hardware.spec.ts src/features/pos/components/pos-workspace/PosSaleSuccessDialog.spec.tsx src/features/pos/components/PosWorkspace.keyboard-safety.spec.tsx` (29/29 اختباراً ناجحاً).
 
+### 263. صلاحية الأدمن ومالك المتجر الكاملة في الخصومات وتعديل الأسعار وحظر طلب الـ PIN للمدير (Admin & Store Owner POS Discount & Price Authority - 11 November 2026)
+* **حالة القدرة:** 🟢 مكتملة ومحمية بسبيك شامل (11 نوفمبر 2026).
+* **المسارات المتأثرة:** بوابات الخصم والأسعار والحد الأدنى في الباك إند (`sales-write.service.ts`)، وهوك وواجهات الكاشير والدفع بالفرونت إند (`usePosWorkspace.ts`, `usePosWorkspaceDerived.ts`, `PosCheckoutDialog.tsx`, `PosCheckoutExpressSection.tsx`, `PosCartPanel.tsx`).
+* **القواعد والضوابط المنفذة (INV-POS-ADMIN-DISCOUNT-AUTHORITY):**
+  1. **معاملة الأدمن كمالك ومدير للمتجر:** رتبة `admin` في حسابات المستأجرين تمثل أعلى سلطة إدارية، لذا تم إعفاء `admin` و `super_admin` تماماً من طلب كلمة مرور أو رمز المدير عند الخصم في `assertDiscountChangeAllowed` وتعديل السعر في `assertUnitPriceChangeAllowed`.
+  2. **البيع تحت حد التكلفة للأدمن:** عند نزول صافي السعر تحت التكلفة أو الحد الأدنى (`belowFloorItems`) أثناء بيع أو تعديل الأدمن، لا يتم حظر العملية ولا يُطلب PIN مدير، بل يتم تسجيل الأصناف في ملاحظة الفاتورة (`[بيع تحت الحد: أصناف ...]`) دون اسم معتمد؛ بينما يبقى الكاشير خاضعاً للإلزام الصارم باعتماد المدير.
+  3. **مرآة الواجهة والتنبيه غير المانع:** تمرير `authRole` من `authUser` لـ `usePosWorkspaceDerived` ومطابقة سلطة الأدمن في الفرونت إند مع عرض تنبيه تحذيري غني يوضح السعر النهائي المطلوب بالعملة دون قفل زر البيع إطلاقاً.
+  4. **إظهار اعتماد المدير للكاشير:** إزالة شرط حجب زر الاعتماد عن الأدمن في `PosCheckoutDialog` بحيث يظهر زر وحقل إدخال رمز المدير لأي مستخدم مقفول عليه الخصم (الكاشير).
+* **أدلة الاختبار:** `npx ts-node test/critical/admin-discount-authority.spec.ts` (6/6 نجاح)، `npx ts-node test/critical/sale-edit-cost-floor.spec.ts` (نجاح)، `npx ts-node test/critical/discount-tiers.spec.ts` (نجاح)، واختبارات الفرونت إند `npm --prefix frontend test -- usePosWorkspaceDerived.spec.tsx PosCheckoutDialog.spec.tsx --run` (14/14 نجاح).
+
 ## فهرس الأقسام المنقولة
 
 - [قدرة: منظومة الدفع والـ QR الذكي متعدد القنوات (Z-Pay Multi-Channel Smart Payment Hub) لماكينات Sunmi ونقاط البيع — ✅ مفعّلة ومكتملة 100% (أكتوبر 2026)](#cap-004)

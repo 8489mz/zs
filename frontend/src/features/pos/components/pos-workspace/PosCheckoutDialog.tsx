@@ -54,7 +54,7 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
   
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-  const isDiscountLocked = !pos.canApplyDiscount && !isAdmin;
+  const isDiscountLocked = !pos.canApplyDiscount;
   const isRestaurant = pos.settingsQuery?.data?.restaurantModuleEnabled === true;
 
   const { customization } = usePosUiCustomization();
@@ -546,6 +546,23 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
             </div>
 
             <PosCreditLimitNotice customerId={pos.customerId} total={pos.totals.total} paidAmount={pos.paidAmount} />
+            {pos.adminDiscountWarning && (
+              <div
+                style={{
+                  fontSize: '11.5px',
+                  color: '#92400e',
+                  background: '#fef3c7',
+                  border: '1px solid #fde68a',
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  textAlign: 'center',
+                  fontWeight: 700,
+                  marginTop: '8px',
+                }}
+              >
+                {pos.adminDiscountWarning}
+              </div>
+            )}
             {!pos.canSubmitSale && pos.canSubmitHint && (
               <div
                 style={{

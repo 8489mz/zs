@@ -231,6 +231,7 @@ export function usePosWorkspace() {
     locations: locationsQuery.data || [],
     openShiftRows,
     authUserId: authUser?.id,
+    authRole: authUser?.role,
     authPermissions: authUser?.permissions || [],
     settings: settingsQuery.data || null,
     heldDrafts,
