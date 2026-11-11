@@ -573,6 +573,11 @@ async function testOnlinePaidOrderSaleConversion(): Promise<void> {
             }),
           }),
           executeTakeFirst: async () => ({ id: 1, default_stock_location_id: 1 }),
+          // SF-2 D-SF-11: convertToSale now reads the tenant settings map
+          // (resolveStorefrontOutOfStockAllowance -> getTenantSettingsMap),
+          // whose real Kysely chain ends in .execute(). This mock must
+          // provide it; no settings rows here, so the allowance is false.
+          execute: async () => [],
         }),
       }),
       selectAll: () => ({
