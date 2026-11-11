@@ -1955,6 +1955,16 @@ export class StorefrontService {
     });
 
     const totalAmount = Math.max(0, subtotal - discountAmount) + deliveryFee;
+    // D-SF-08: round the stored row totals at book digits — a sum of
+    // rounded lines and a raw settings fee can still carry float dust
+    // (0.1 + 0.2), and the stored total must equal the quote the
+    // customer saw and the invoice the conversion recomputes. The total
+    // is recomputed from the rounded components so the stored total
+    // equals the stored parts exactly.
+    subtotal = roundMoney(subtotal, moneyDigits);
+    const roundedDeliveryFee = roundMoney(deliveryFee, moneyDigits);
+    const roundedDiscountAmount = roundMoney(discountAmount, moneyDigits);
+    const roundedTotalAmount = roundMoney(Math.max(0, subtotal - roundedDiscountAmount) + roundedDeliveryFee, moneyDigits);
 
     // Get default primary branch
     const primaryBranch = await this.db
@@ -2141,12 +2151,12 @@ export class StorefrontService {
         customer_notes: (dto.customerNotes || '').trim(),
         items_json: JSON.stringify(validatedItems),
         subtotal,
-        delivery_fee: deliveryFee,
+        delivery_fee: roundedDeliveryFee,
         delivery_zone_id: deliveryZoneId,
         delivery_zone_name: deliveryZoneName,
-        discount_amount: discountAmount,
+        discount_amount: roundedDiscountAmount,
         coupon_code: appliedCouponCode,
-        total_amount: totalAmount,
+        total_amount: roundedTotalAmount,
         status: 'pending',
         payment_method: dto.paymentMethod || 'cod',
         payment_status: 'pending',
@@ -2191,12 +2201,12 @@ export class StorefrontService {
             payment_type: 'cash',
             payment_channel: 'cash',
             subtotal,
-            discount: discountAmount,
+            discount: roundedDiscountAmount,
             tax_rate: 0,
             tax_amount: 0,
             delivery_fee: 0,
             prices_include_tax: false,
-            total: totalAmount,
+            total: roundedTotalAmount,
             paid_amount: 0,
             tendered_amount: 0,
             change_amount: 0,
@@ -2359,10 +2369,10 @@ export class StorefrontService {
       trackingUrl,
       totalAmount: Number(insertedOrder.total_amount),
       subtotal,
-      deliveryFee,
+      deliveryFee: roundedDeliveryFee,
       deliveryZoneId,
       deliveryZoneName,
-      discountAmount,
+      discountAmount: roundedDiscountAmount,
       couponCode: appliedCouponCode,
       items: validatedItems,
       whatsappUrl,
@@ -2726,6 +2736,12 @@ export class StorefrontService {
     });
     const { deliveryFee, discountAmount } = charges;
     const totalAmount = Math.max(0, subtotal - discountAmount) + deliveryFee;
+    // D-SF-08: same rounding as createOnlineOrder — the stored row
+    // totals are rounded at book digits (see the note there).
+    subtotal = roundMoney(subtotal, moneyDigits);
+    const roundedDeliveryFee = roundMoney(deliveryFee, moneyDigits);
+    const roundedDiscountAmount = roundMoney(discountAmount, moneyDigits);
+    const roundedTotalAmount = roundMoney(Math.max(0, subtotal - roundedDiscountAmount) + roundedDeliveryFee, moneyDigits);
 
     await this.db.transaction().execute(async (trx) => {
       const lockedOrder = await trx
@@ -2805,12 +2821,12 @@ export class StorefrontService {
       .set({
         items_json: JSON.stringify(validatedItems),
         subtotal,
-        delivery_fee: deliveryFee,
+        delivery_fee: roundedDeliveryFee,
         delivery_zone_id: charges.deliveryZoneId,
         delivery_zone_name: charges.deliveryZoneName,
-        discount_amount: discountAmount,
+        discount_amount: roundedDiscountAmount,
         coupon_code: charges.appliedCouponCode,
-        total_amount: totalAmount,
+        total_amount: roundedTotalAmount,
         stock_reserved: nextStockReserved,
         stock_reserved_at: nextStockReserved ? new Date() : null,
         customer_name: (dto.customerName || order.customer_name).trim(),
@@ -2837,10 +2853,10 @@ export class StorefrontService {
     return {
       ok: true,
       orderNumber: order.order_number,
-      totalAmount,
+      totalAmount: roundedTotalAmount,
       subtotal,
-      deliveryFee,
-      discountAmount,
+      deliveryFee: roundedDeliveryFee,
+      discountAmount: roundedDiscountAmount,
       couponCode: charges.appliedCouponCode,
       items: validatedItems,
       message: 'تم تحديث طلبك بنجاح!',
