@@ -2461,16 +2461,34 @@ export class VanSalesService {
       let creditOverrideUserId: number | null = null;
       let creditOverrideReason: string | null = null;
 
-      if (isCard && totalSale > 0) {
+      // INV-VAN-FIELD-NONCASH-EVIDENCE-GATE: instapay / vodafone_cash
+      // settle straight to bank 1120 exactly like a card sale, so
+      // they run the same evidence gate — supervisor PIN + a
+      // reference of at least 3 chars — or the sale is refused.
+      // Before this gate, an instapay sale skipped the check
+      // entirely and a rep could mark a debt "instapay arrived"
+      // with zero evidence while no cash was ever expected of him.
+      if ((isCard || isInstapay) && totalSale > 0) {
+        // The card leg below is byte-identical to the pre-existing
+        // card contract (reference = reason || notes, approval note
+        // as the fallback reference). The instapay leg reads the
+        // transfer reference first and has NO invented fallback: an
+        // instapay / vodafone_cash sale needs a real reference of at
+        // least 3 chars on top of the supervisor PIN, or it is
+        // refused with CARD_PAYMENT_REFERENCE_REQUIRED.
         const cardCheck = evaluateFieldCardPayment({
           totalSaleAmount: totalSale,
-          referenceReason: payload.supervisorOverrideReason || payload.notes,
+          referenceReason: isCard
+            ? (payload.supervisorOverrideReason || payload.notes)
+            : (payload.transferReference || payload.supervisorOverrideReason || payload.notes),
           supervisorOverride: supervisorOverrideApproved
             ? {
                 approved: true,
                 supervisorId: overrideSupervisorId || undefined,
                 supervisorName: overrideSupervisorName,
-                reason: payload.supervisorOverrideReason || payload.notes || `إيصال شبكة معتمد من ${overrideSupervisorName}`,
+                reason: isCard
+                  ? (payload.supervisorOverrideReason || payload.notes || `إيصال شبكة معتمد من ${overrideSupervisorName}`)
+                  : (payload.transferReference || payload.supervisorOverrideReason || payload.notes || undefined),
               }
             : undefined,
         });
@@ -2484,8 +2502,8 @@ export class VanSalesService {
             customerName,
             eventCode: 'VAN_SUSPICION_FAKE_CARD_PAYMENT',
             severity: 'critical',
-            titleAr: 'محاولة تسجيل دفع وهمي بالشبكة بدون اعتماد مشرف أو رقم إيصال',
-            detailsAr: `حاول المندوب تسجيل فاتورة بقيمة ${totalSale} ج.م كدفع بالشبكة/الفيزا لتجنب مطالبته بتوريد الكاش بالتصفية، دون اعتماد مشرف أو رقم إيصال.`,
+            titleAr: 'محاولة تسجيل دفع إلكتروني وهمي بدون اعتماد مشرف أو رقم إيصال',
+            detailsAr: `حاول المندوب تسجيل فاتورة بقيمة ${totalSale} ج.م كدفع ${isCard ? 'بالشبكة/الفيزا' : 'إلكتروني (إنستاباي/فودافون كاش)'} لتجنب مطالبته بتوريد الكاش بالتصفية، دون اعتماد مشرف أو رقم إيصال.`,
             attemptedAmount: totalSale,
           });
           throw new AppError(
@@ -3011,6 +3029,7 @@ export class VanSalesService {
       paymentMethod?: 'cash' | 'instapay' | 'vodafone_cash' | 'bank_transfer';
       transferReference?: string;
       transferReceiptUrl?: string;
+      supervisorOverridePin?: string;
       notes?: string;
       gpsLat?: number;
       gpsLng?: number;
@@ -3150,6 +3169,7 @@ export class VanSalesService {
       paymentMethod?: 'cash' | 'instapay' | 'vodafone_cash' | 'bank_transfer';
       transferReference?: string;
       transferReceiptUrl?: string;
+      supervisorOverridePin?: string;
       notes?: string;
       gpsLat?: number;
       gpsLng?: number;
@@ -3210,6 +3230,76 @@ export class VanSalesService {
         : null;
       const lockedBranchId = lockedVanLocRow?.branch_id ? Number(lockedVanLocRow.branch_id) : null;
       branchId = lockedBranchId;
+
+      // INV-VAN-FIELD-NONCASH-EVIDENCE-GATE: a non-cash field
+      // collection (instapay / vodafone_cash / bank_transfer) is
+      // posted straight to bank 1120 by postVanFieldCollection, so
+      // it needs the same evidence as a card sale — supervisor PIN
+      // + a transfer reference of at least 3 chars — or it is
+      // refused here, inside the same transaction and after the
+      // locked-trip recheck above, before any balance moves. Cash
+      // collections are untouched: the cash stays in rep custody
+      // until settleTrip. The gate is evaluateFieldCardPayment
+      // itself, not a second copy of it; only the PIN is verified
+      // first (on this transaction handle, never the pool — a pool
+      // read inside the open transaction deadlocks on PGlite).
+      const isNonCashCollection =
+        payload.paymentMethod === 'instapay' ||
+        payload.paymentMethod === 'vodafone_cash' ||
+        payload.paymentMethod === 'bank_transfer';
+      if (isNonCashCollection && amount > 0) {
+        let collectionSupervisorApproved = false;
+        let collectionSupervisorId: number | null = null;
+        let collectionSupervisorName = '';
+        if (payload.supervisorOverridePin) {
+          const pinVerification = await this.verifySupervisorPin(
+            tenantId,
+            payload.supervisorOverridePin,
+            repId,
+            trxAny,
+          );
+          collectionSupervisorApproved = pinVerification.approved;
+          collectionSupervisorId = pinVerification.supervisorId ?? null;
+          collectionSupervisorName = pinVerification.supervisorName ?? '';
+        }
+        const evidenceCheck = evaluateFieldCardPayment({
+          totalSaleAmount: amount,
+          referenceReason: payload.transferReference || payload.notes,
+          supervisorOverride: collectionSupervisorApproved
+            ? {
+                approved: true,
+                supervisorId: collectionSupervisorId || undefined,
+                supervisorName: collectionSupervisorName,
+                // No invented fallback here: a collection settles a
+                // pre-existing customer debt straight to bank 1120,
+                // so the reference is the only audit trail tying the
+                // bank receipt to the customer — it must be a real
+                // transfer reference (or note) of at least 3 chars.
+                reason: payload.transferReference || payload.notes || undefined,
+              }
+            : undefined,
+        });
+        if (!evidenceCheck.allowed) {
+          await this.vanFraudRadarService.recordSuspicionEvent({
+            tenantId,
+            accountId,
+            repId,
+            tripId: payload.tripId,
+            customerId: payload.customerId,
+            customerName: cust.name,
+            eventCode: 'VAN_SUSPICION_FAKE_ELECTRONIC_COLLECTION',
+            severity: 'critical',
+            titleAr: 'محاولة تسجيل تحصيل إلكتروني وهمي بدون اعتماد مشرف أو رقم إيصال',
+            detailsAr: `حاول المندوب تسجيل تحصيل بقيمة ${amount} ج.م كدفع إلكتروني (${payload.paymentMethod}) لتجنب مطالبته بتوريد الكاش بالتصفية، دون اعتماد مشرف أو رقم مرجع تحويل.`,
+            attemptedAmount: amount,
+          });
+          throw new AppError(
+            evidenceCheck.errorMessageAr || 'التحصيل الإلكتروني في الميدان يتطلب اعتماد المشرف ورقم مرجع التحويل',
+            evidenceCheck.reasonCode || 'CARD_PAYMENT_REQUIRES_SUPERVISOR_PIN',
+            403,
+          );
+        }
+      }
 
       const lockedCust = await trxAny
         .selectFrom('customers')
@@ -3420,7 +3510,7 @@ export class VanSalesService {
       await this.accountingPosting.postVanFieldCollection(
         trx,
         Number(insertedPayment.id),
-        { amount, customerId: payload.customerId, branchId, locationId: vanLocId, paymentMethod: payload.paymentMethod || 'cash' },
+        { amount, customerId: payload.customerId, branchId, locationId: vanLocId, paymentMethod: payload.paymentMethod || 'cash', transferReference: payload.transferReference },
         systemAuth,
       );
     });

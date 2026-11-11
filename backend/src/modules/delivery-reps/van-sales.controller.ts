@@ -306,6 +306,7 @@ export class VanSalesController {
       paymentMethod?: 'cash' | 'instapay' | 'vodafone_cash' | 'bank_transfer';
       transferReference?: string;
       transferReceiptUrl?: string;
+      supervisorOverridePin?: string;
       notes?: string;
       gpsLat?: number;
       gpsLng?: number;

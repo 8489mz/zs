@@ -5913,7 +5913,7 @@ export class AccountingPostingService {
   async postVanFieldCollection(
     queryable: DbOrTx,
     collectionId: number,
-    params: { amount: number; customerId: number; branchId: number | null; locationId: number | null; paymentMethod?: string },
+    params: { amount: number; customerId: number; branchId: number | null; locationId: number | null; paymentMethod?: string; transferReference?: string },
     auth: AuthContext,
   ): Promise<{ posted: boolean; journalEntryId: number | null }> {
     const scope = requireTenantScope(auth);
@@ -5942,6 +5942,20 @@ export class AccountingPostingService {
     const branchId = params.branchId;
     const locationId = params.locationId;
     const electronic = params.paymentMethod != null && params.paymentMethod !== 'cash';
+    // INV-VAN-FIELD-NONCASH-EVIDENCE-GATE: an electronic collection
+    // debits bank 1120 below, so it must carry a transfer
+    // reference — the field service enforces supervisor PIN +
+    // reference before this point, and this is the last line of
+    // defence for any future caller that reaches the posting
+    // without evidence. Cash collections are untouched.
+    if (electronic) {
+      const reference = String(params.transferReference || '').trim();
+      if (reference.length < 3) {
+        throw new Error(
+          `Van field collection ${collectionId}: refusing to debit bank 1120 for an electronic collection without a transfer reference of at least 3 characters`,
+        );
+      }
+    }
     const debitAccountId = electronic ? await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.bank_account_id, '1120') : receivableAccountId;
     const lines: JournalLineDraft[] = [
       { accountId: debitAccountId, description: electronic ? 'تحصيل ميداني إلكتروني إلى البنك' : 'تحصيل ميداني بواسطة مندوب - عهدة نقدية', debit: amount, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId },

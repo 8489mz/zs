@@ -143,6 +143,14 @@ function buildService(db: Kysely<Database>): VanSalesService {
     userId: 1, sessionId: 'spec', username: 'spec', role: 'admin',
     permissions: ['accounting'], tenantId: TENANT, accountId: ACCOUNT,
   });
+  // INV-VAN-FIELD-NONCASH-EVIDENCE-GATE: the InstaPay case below now
+  // has to carry supervisor evidence, and this spec's users DDL has
+  // no pin columns for the real verifier — so the PIN check is
+  // stubbed approved here (tax is what this spec pins). The real
+  // PIN path is driven in van-field-noncash-evidence.spec.ts.
+  (service as any).verifySupervisorPin = async () => ({
+    approved: true, supervisorId: 2, supervisorName: 'Supervisor',
+  });
   return service;
 }
 
@@ -298,6 +306,7 @@ async function main(): Promise<void> {
       const service = buildService(db);
       const res = await service.executeFieldSale(1, TENANT, ACCOUNT, {
         tripId: 1, paymentMethod: 'instapay',
+        supervisorOverridePin: '4321', transferReference: 'IP-9988221',
         items: [{ productId: 106, qty: 2 }],
       });
       assert.equal(res.total, 230);
