@@ -1,19 +1,34 @@
 /*
 New file: backend/test/critical/storefront-reaper-service.spec.ts
 
-WHAT THIS PINS (INV-SF-REAPER-HEARTBEAT-LOGGING): the expired-reservation
-reaper actually reaps — the real StorefrontService.reapExpiredReservations
-on PGlite, not just the pure engine. The old spec (storefront-stock-
-reaper.spec.ts) tested only isReservationExpired boundaries; the service
-SQL, the transaction, the release and the scheduler timers were entirely
-unpinned, which is how D-SF-12 shipped: the selection rule was correct
-and both sweepers were wired, yet order ON-261110-0008 (instapay_wallet,
-131.60, placed 19:58 EET 2026-11-10) sat pending ~2h54m through ~48
-sweeps with zero trace — an empty per-order catch swallowed errors, a
-wedged `running` flag had no timeout, empty sweeps logged nothing, and
-the SQL pre-filter `stock_reserved_at < cutoff` with no COALESCE to
-created_at could never select a NULL-timestamp row even though the
-engine would expire it.
+WHAT THIS PINS (INV-SF-REAPER-HEARTBEAT-LOGGING + INV-SF-REAPER-UNRESERVED-EXPIRY):
+the expired-reservation reaper actually reaps — the real
+StorefrontService.reapExpiredReservations on PGlite, not just the pure
+engine. The old spec (storefront-stock-reaper.spec.ts) tested only
+isReservationExpired boundaries; the service SQL, the transaction, the
+release and the scheduler timers were entirely unpinned, which is how
+D-SF-12 shipped: the selection rule was correct and both sweepers were
+wired, yet order ON-261110-0008 (instapay_wallet, 131.60, placed 19:58
+EET 2026-11-10) sat pending ~2h54m through ~48 sweeps with zero trace —
+an empty per-order catch swallowed errors, a wedged `running` flag had
+no timeout, empty sweeps logged nothing, and the SQL pre-filter
+`stock_reserved_at < cutoff` with no COALESCE to created_at could never
+select a NULL-timestamp row even though the engine would expire it.
+
+D-SF-12, SECOND BLIND SPOT (INV-SF-REAPER-UNRESERVED-EXPIRY): the
+candidate select AND the per-row re-select both required
+stock_reserved = true, and the engine returned false for unreserved
+orders — but placement stores stock_reserved = false (stock_reserved_at
+NULL) whenever the storefront setting "allow ordering without stock" is
+ON, so on test10k EVERY order was invisible to the reaper and the
+heartbeat scanned 0 while four orders were past threshold (0008
+instapay ~15h, 0014 instapay ~13.5h, 0001 COD ~29h, 0002 COD ~27h).
+The reaper's job — cancel abandoned unpaid orders — is independent of
+whether stock was reserved; only the stock RELEASE is reservation-gated.
+Cases (g)-(j) below pin the unreserved path. The old claim "T3 proved
+reservations happen on test10k" is WRONG — T3 only proved stock_qty
+unchanged at placement (12 -> 12 -> 10), which is consistent with NO
+reservation; nothing here relies on it.
 
 THE CASES, WORKED ONCE (goods product 101, location 10, branch 1,
 tenant 't1', location stock qty 10 / reserved 2, product reserved 2):
@@ -32,6 +47,15 @@ COALESCE case: fails if the COALESCE is removed from the selector).
 a wedged `running` flag older than the stale timeout is reset + the
 sweep proceeds (wedgedReset true); a fresh `running` flag skips the
 sweep without calling the service (skippedWhileRunning true).
+(g) UNRESERVED online (instapay) order, 31 min old, stock_reserved_at
+NULL -> reaped: status cancelled, payment_status failed, stock_reserved
+stays false, and the seeded reservation (location + global reserved 2,
+belonging to no order in this fixture) is UNTOUCHED — the reaper must
+not release stock it never reserved; qty untouched (10).
+(h) Same unreserved order, 29 min old -> NOT reaped, row untouched.
+(i)+(j) UNRESERVED COD boundaries in one sweep: 23h59m NOT reaped,
+24h01m reaped; scanned counts both; the seeded reservation stays 2 —
+no release for either order.
 
 HOW THIS IS DRIVEN: the real StorefrontService over the real SalesService
 facade (real SalesQueryService + real SalesWriteService chain) on PGlite,
@@ -50,8 +74,13 @@ logging + heartbeat at the final live trial, not by this spec.
 RED PROOF: with the COALESCE removed from the storefront selector, case
 (e) fails — the NULL-timestamp row is never selected and stays pending.
 With the per-order release removed, case (a) fails — the order cancels
-but reserved_qty stays 2. Both proven by targeted reversal, file
-restored with cp afterwards (never git checkout on uncommitted work).
+but reserved_qty stays 2. With the stock_reserved = true filter restored
+in the storefront selector, cases (g) and (i) fail — the unreserved rows
+are never selected and stay pending. With the engine's unreserved expiry
+reverted (stock_reserved required again), cases (g) and (i) fail — the
+rows are selected but the engine vetoes them. All proven by targeted
+reversal, files restored with cp afterwards (never git checkout on
+uncommitted work).
 */
 
 import 'reflect-metadata';
@@ -370,6 +399,92 @@ async function main(): Promise<void> {
       await db.destroy();
     }
     console.log('  (e) NULL stock_reserved_at + old created_at reaped (COALESCE) passed');
+  }
+
+  // (g) UNRESERVED online order, 31 min old, stock_reserved_at NULL:
+  // reaped by created_at, and the seeded reservation (2) is untouched —
+  // the reaper must not release stock it never reserved.
+  {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedOrder(db, {
+        stock_reserved: false, reserved_branch_id: null, reserved_location_id: null,
+        stock_reserved_at: null, created_at: minutesAgo(31),
+      });
+      const { storefront } = buildServices(db);
+      const result = await storefront.reapExpiredReservations();
+      assert.equal(result.scannedCount, 1, 'the 31-min unreserved order must be a candidate');
+      assert.equal(result.reapedOrdersCount, 1, 'the 31-min unreserved order must be reaped');
+      assert.deepEqual(result.reapedOrderNumbers, ['ON-1'], 'the reaped order number is recorded');
+      const order = await readOrder(db, 77);
+      assert.equal(order.status, 'cancelled', 'the unreserved order must be cancelled');
+      assert.equal(order.payment_status, 'failed', 'the unreserved order must be marked failed');
+      assert.equal(order.stock_reserved, false, 'the unreserved order stays unreserved');
+      const loc = await locationReserved(db);
+      assert.equal(loc.reserved, 2, 'the seeded reservation must be untouched — nothing was reserved to release');
+      assert.equal(loc.qty, 10, 'on-hand qty must be untouched');
+      assert.equal(await productReserved(db), 2, 'the global reservation must be untouched');
+    } finally {
+      await db.destroy();
+    }
+    console.log('  (g) 31-min UNRESERVED online order reaped + reservation untouched passed');
+  }
+
+  // (h) UNRESERVED online order, 29 min old: inside the timeout — untouched.
+  {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedOrder(db, {
+        stock_reserved: false, reserved_branch_id: null, reserved_location_id: null,
+        stock_reserved_at: null, created_at: minutesAgo(29),
+      });
+      const { storefront } = buildServices(db);
+      const result = await storefront.reapExpiredReservations();
+      assert.equal(result.scannedCount, 0, 'the 29-min unreserved order must not be a candidate');
+      assert.equal(result.reapedOrdersCount, 0, 'the 29-min unreserved order must not be reaped');
+      const order = await readOrder(db, 77);
+      assert.equal(order.status, 'pending', 'the 29-min unreserved order must stay pending');
+      assert.equal(order.stock_reserved, false, 'the 29-min unreserved order stays unreserved');
+      assert.equal((await locationReserved(db)).reserved, 2, 'the seeded reservation must be untouched');
+    } finally {
+      await db.destroy();
+    }
+    console.log('  (h) 29-min UNRESERVED online order untouched passed');
+  }
+
+  // (i)+(j) UNRESERVED COD boundaries in one sweep: 23h59m kept, 24h01m reaped.
+  {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedOrder(db, {
+        id: 77, order_number: 'ON-COD-UNRES-YOUNG', payment_method: 'cod',
+        stock_reserved: false, reserved_branch_id: null, reserved_location_id: null,
+        stock_reserved_at: null, created_at: minutesAgo(23 * 60 + 59),
+      });
+      await seedOrder(db, {
+        id: 78, order_number: 'ON-COD-UNRES-OLD', payment_method: 'cod',
+        stock_reserved: false, reserved_branch_id: null, reserved_location_id: null,
+        stock_reserved_at: null, created_at: minutesAgo(24 * 60 + 1),
+      });
+      const { storefront } = buildServices(db);
+      const result = await storefront.reapExpiredReservations();
+      assert.equal(result.scannedCount, 2, 'both unreserved COD rows pass the 30-min SQL pre-filter');
+      assert.equal(result.reapedOrdersCount, 1, 'only the 24h01m unreserved COD order must be reaped');
+      assert.deepEqual(result.reapedOrderNumbers, ['ON-COD-UNRES-OLD'], 'the reaped order is the old unreserved COD one');
+      const young = await readOrder(db, 77);
+      assert.equal(young.status, 'pending', 'the 23h59m unreserved COD order must stay pending');
+      const old = await readOrder(db, 78);
+      assert.equal(old.status, 'cancelled', 'the 24h01m unreserved COD order must be cancelled');
+      assert.equal(old.payment_status, 'failed', 'the reaped unreserved COD order must be marked failed');
+      assert.equal((await locationReserved(db)).reserved, 2, 'no reservation may be released for unreserved orders');
+      assert.equal(await productReserved(db), 2, 'the global reservation must be untouched');
+    } finally {
+      await db.destroy();
+    }
+    console.log('  (i)+(j) UNRESERVED COD 23h59m kept + 24h01m reaped passed');
   }
 
   // (f1) Scheduler: a sweep invokes the service and records the heartbeat.

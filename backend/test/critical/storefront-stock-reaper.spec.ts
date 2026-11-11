@@ -11,35 +11,69 @@ import {
  * Critical tests for Storefront stock reservation reaper and failure compensation (Phase 6).
  *
  * Invariants:
- * 1. An online order with an active stock reservation (stock_reserved = true) that is abandoned
- *    or unpaid past its timeout window MUST be declared expired.
+ * 1. An online order abandoned or unpaid past its timeout window MUST be
+ *    declared expired — whether or not it reserved stock.
  * 2. Paid orders, converted sales, and orders already in preparation MUST NEVER be auto-reaped.
  * 3. Items extraction from JSON payloads must be resilient against corruption or missing fields.
+ *
+ * D-SF-12 / INV-SF-REAPER-UNRESERVED-EXPIRY: the old invariant 1 required
+ * stock_reserved = true. That was WRONG: placement stores stock_reserved =
+ * false (stock_reserved_at NULL) whenever the storefront setting "allow
+ * ordering without stock" is ON, so every such order was invisible to the
+ * reaper and abandoned unpaid orders sat pending forever (live: heartbeat
+ * scannedCount 0 while four orders were past threshold on test10k). The
+ * reaper's job — cancel abandoned unpaid orders — is independent of
+ * whether stock was reserved; only the stock RELEASE is reservation-gated.
+ * An unreserved order therefore expires by the same clock from created_at
+ * (stock_reserved_at is NULL for it, so the engine's fallback is created_at),
+ * same thresholds: online 30 min, COD 24 h. The old "never expire" pin
+ * below is REVERSED, not kept.
  */
 
-function testNonReservedOrdersNeverExpire(): void {
+function testUnreservedOrdersExpireByCreatedAt(): void {
   const now = new Date('2026-10-03T12:00:00Z');
   const oldDate = new Date('2026-10-01T12:00:00Z');
+  const recentDate = new Date('2026-10-03T11:50:00Z');
 
-  const notReserved: OrderReservationCandidate = {
+  // Unreserved + expired by created_at (2 days old, online method) -> expired.
+  // Placement stores stock_reserved_at NULL for unreserved orders, so the
+  // clock is created_at.
+  const notReservedExpired: OrderReservationCandidate = {
     id: 1,
     stock_reserved: false,
     status: 'pending',
     payment_method: 'card',
     payment_status: 'pending',
-    stock_reserved_at: oldDate,
+    stock_reserved_at: null,
+    created_at: oldDate,
   };
-  assert.equal(isReservationExpired(notReserved, now), false, 'Non-reserved order must never be flagged as expired');
+  assert.equal(isReservationExpired(notReservedExpired, now), true, 'Unreserved order past the 30-min window must expire by created_at');
 
-  const nullReserved: OrderReservationCandidate = {
+  // stock_reserved NULL behaves the same as false.
+  const nullReservedExpired: OrderReservationCandidate = {
     id: 2,
     stock_reserved: null,
     status: 'pending',
-    stock_reserved_at: oldDate,
+    payment_method: 'card',
+    payment_status: 'pending',
+    stock_reserved_at: null,
+    created_at: oldDate,
   };
-  assert.equal(isReservationExpired(nullReserved, now), false, 'Order with null stock_reserved must never expire');
+  assert.equal(isReservationExpired(nullReservedExpired, now), true, 'Order with null stock_reserved past the window must expire by created_at');
 
-  console.log('  -> Non-reserved orders are correctly ignored.');
+  // Unreserved + inside the window (10 min old) -> NOT expired.
+  const notReservedRecent: OrderReservationCandidate = {
+    id: 12,
+    stock_reserved: false,
+    status: 'pending',
+    payment_method: 'card',
+    payment_status: 'pending',
+    stock_reserved_at: null,
+    created_at: recentDate,
+  };
+  assert.equal(isReservationExpired(notReservedRecent, now), false, 'Unreserved order inside the 30-min window must not expire');
+
+  console.log('  -> Unreserved orders expire by created_at, same thresholds as reserved ones.');
 }
 
 function testPaidOrConvertedOrdersNeverExpire(): void {
@@ -188,8 +222,8 @@ function testReservationItemsExtraction(): void {
 async function main(): Promise<void> {
   console.log('=== [PHASE 6] STOREFRONT STOCK RESERVATION REAPER & HARDENING ===\n');
 
-  console.log('[Test 1] Non-reserved orders never expire');
-  testNonReservedOrdersNeverExpire();
+  console.log('[Test 1] Unreserved orders expire by created_at (reversed pin)');
+  testUnreservedOrdersExpireByCreatedAt();
 
   console.log('[Test 2] Paid or converted orders never expire');
   testPaidOrConvertedOrdersNeverExpire();

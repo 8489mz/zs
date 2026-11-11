@@ -52,12 +52,13 @@ storefront flag does not leak into walk-in POS sales.
 a pending order into the POS cart flips it to 'processing' (the cart
 holds it) and returns the cart items.
 
-HONEST LIMITS, STATED NOT HIDDEN: the reaper additionally requires a
-reservation (isReservationExpired rule 1: stock_reserved must be true),
-and an out-of-stock order never had one — so case (a) asserts the
+HONEST LIMITS, STATED NOT HIDDEN: case (a) asserts the
 status/payment/sale conditions the restore returns, not a full reaper
-run. Whether reservation-less orders should expire is the D-SF-12
-reaper question (SF-3), not this package. prepareOrderForPos has no
+run. (The old note here said the reaper required a reservation and
+asked whether reservation-less orders should expire — that question is
+now ANSWERED by INV-SF-REAPER-UNRESERVED-EXPIRY: unreserved expired
+orders are reaped by created_at; see storefront-reaper-service.spec.ts
+cases (g)-(j).) prepareOrderForPos has no
 deterministic post-lock failure to drive its restore branch (its
 post-lock steps are reads plus a caught customer upsert), so case (f)
 pins the lock behaviour and the restore is proven through the shared

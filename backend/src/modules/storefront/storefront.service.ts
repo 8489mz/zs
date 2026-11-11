@@ -2898,7 +2898,11 @@ export class StorefrontService {
         'sale_id',
         'created_at',
       ])
-      .where('stock_reserved', '=', true)
+      // INV-SF-REAPER-UNRESERVED-EXPIRY: no stock_reserved filter here.
+      // Placement stores stock_reserved = false whenever the storefront
+      // setting "allow ordering without stock" is ON, so requiring a
+      // reservation hid every such order from the reaper. Expiry is by
+      // the order clock; only the stock release below is reservation-gated.
       .where('status', '=', 'pending')
       .where('payment_status', '!=', 'paid')
       .where('sale_id', 'is', null)
@@ -2942,7 +2946,8 @@ export class StorefrontService {
             ])
             .where('id', '=', candidate.id)
             .where(sql<boolean>`tenant_id = ${candidate.tenant_id}`)
-            .where('stock_reserved', '=', true)
+            // INV-SF-REAPER-UNRESERVED-EXPIRY: no stock_reserved filter —
+            // see the candidate select above.
             .where('status', '=', 'pending')
             .where('payment_status', '!=', 'paid')
             .where('sale_id', 'is', null)
@@ -2951,9 +2956,12 @@ export class StorefrontService {
 
           if (!row || !isReservationExpired(row, new Date(), options)) return;
 
-          // 1. Release location stock
+          // 1. Release location stock — ONLY when the order actually
+          // reserved stock. An unreserved order holds nothing to release;
+          // releasing its items would wrongly decrement another order's
+          // reservation (INV-SF-REAPER-UNRESERVED-EXPIRY).
           const items = extractReservationItems(row.items_json);
-          if (items.length > 0) {
+          if (row.stock_reserved && items.length > 0) {
             await releaseLocationStock(trx, {
               tenantId: row.tenant_id,
               accountId: row.account_id,

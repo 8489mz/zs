@@ -132,6 +132,7 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
           'tenant_id',
           'order_number',
           'payment_method',
+          'stock_reserved',
           'stock_reserved_at',
           'created_at',
           'items_json',
@@ -141,7 +142,10 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
           'branch_id',
           'account_id',
         ])
-        .where('stock_reserved', '=', true)
+        // INV-SF-REAPER-UNRESERVED-EXPIRY: no stock_reserved filter — the
+        // same blind spot as the storefront reaper: placement stores
+        // stock_reserved = false when "allow ordering without stock" is ON,
+        // so requiring a reservation hid every such order from this sweeper.
         .where('status', '=', 'pending')
         .where('payment_status', '!=', 'paid')
         .where('sale_id', 'is', null)
@@ -177,7 +181,8 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
               })
               .where('id', '=', ord.id)
               .where(sql<boolean>`tenant_id = ${ord.tenant_id}`)
-              .where('stock_reserved', '=', true)
+              // INV-SF-REAPER-UNRESERVED-EXPIRY: no stock_reserved filter —
+              // see the candidate select above.
               .where('status', '=', 'pending')
               .where('payment_status', '!=', 'paid')
               .where('sale_id', 'is', null)
@@ -188,7 +193,10 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
 
             let items: any[] = [];
             try { items = typeof ord.items_json === 'string' ? JSON.parse(ord.items_json) : ord.items_json; } catch {}
-            if (Array.isArray(items) && items.length > 0) {
+            // INV-SF-REAPER-UNRESERVED-EXPIRY: release stock ONLY when the
+            // order actually reserved it — an unreserved order holds
+            // nothing to release.
+            if (ord.stock_reserved && Array.isArray(items) && items.length > 0) {
               const releaseItems = items.map((it) => ({
                 productId: Number(it.productId ?? it.id),
                 qty: Number(it.quantity ?? it.qty ?? 1),

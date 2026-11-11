@@ -28,34 +28,42 @@ export interface ReservationExpirationOptions {
 }
 
 /**
- * Checks whether an online order's stock reservation has exceeded its allowed window.
+ * Checks whether an online order has exceeded its allowed unpaid window.
+ *
+ * D-SF-12 / INV-SF-REAPER-UNRESERVED-EXPIRY: expiry is by the order clock,
+ * not by whether stock was reserved. Placement stores stock_reserved = false
+ * (with stock_reserved_at NULL) whenever the storefront setting "allow
+ * ordering without stock" is ON, so requiring a reservation made every
+ * such order invisible to the reaper and abandoned unpaid orders sat
+ * pending forever. An unreserved order therefore expires by the same
+ * thresholds (online 30 min, COD 24 h) from created_at — the engine's
+ * stock_reserved_at || created_at fallback is created_at for it, because
+ * placement stores NULL stock_reserved_at when nothing was reserved.
+ * Only the stock RELEASE is reservation-gated (callers must check
+ * stock_reserved before releasing); the expiry decision is not.
  */
 export function isReservationExpired(
   candidate: OrderReservationCandidate,
   now: Date = new Date(),
   options?: ReservationExpirationOptions,
 ): boolean {
-  // 1. Must currently hold an active reservation
-  if (!candidate.stock_reserved) {
-    return false;
-  }
-
-  // 2. Already invoiced/converted orders are final
+  // 1. Already invoiced/converted orders are final
   if (candidate.sale_id != null) {
     return false;
   }
 
-  // 3. Only orders still in 'pending' status can expire
+  // 2. Only orders still in 'pending' status can expire
   if (candidate.status !== 'pending') {
     return false;
   }
 
-  // 4. Paid orders are never auto-reaped
+  // 3. Paid orders are never auto-reaped
   if (candidate.payment_status === 'paid') {
     return false;
   }
 
-  // 5. Evaluate elapsed time since reservation
+  // 4. Evaluate elapsed time since reservation (reserved orders) or since
+  // placement (unreserved orders: stock_reserved_at is NULL, created_at applies)
   const rawDate = candidate.stock_reserved_at || candidate.created_at;
   const reservedAt = rawDate ? new Date(rawDate).getTime() : 0;
   if (!reservedAt || Number.isNaN(reservedAt)) {
