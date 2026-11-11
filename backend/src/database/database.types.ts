@@ -5775,7 +5775,8 @@ export interface VanDamagedSwapTable {
   tenant_id: ColumnType<string, string | undefined, string | undefined>;
   account_id: ColumnType<string, string | undefined, string | undefined>;
   trip_id: number;
-  customer_id: number;
+  rep_id: ColumnType<number | null, number | null | undefined, number | null>;
+  customer_id: ColumnType<number | null, number | null | undefined, number | null>;
   damaged_product_id: number;
   damaged_qty: number;
   damage_reason: string;
