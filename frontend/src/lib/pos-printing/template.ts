@@ -454,7 +454,7 @@ function renderTotals(options: {
     ] : []),
     ...(showPaymentMethod && options.paymentText ? [{
       label: `طريقة الرد: ${options.paymentText}`,
-      value: `<span style="font-size:0.88em; font-weight:700; margin-inline-end:3px;">المسترد:</span><strong style="font-weight:800; font-size:1.05em;">${formatReceiptMoney(Number(options.total || paidAmount || 0), options.settings)} <span style="font-size:0.82em; font-weight:700;">${escapeHtml(currencySymbol)}</span></strong>`,
+      value: `<span style="font-size:0.88em; font-weight:700; margin-left: 3px; margin-inline-end:3px;">المسترد:</span><strong style="font-weight:800; font-size:1.05em;">${formatReceiptMoney(Number(options.total || paidAmount || 0), options.settings)} <span style="font-size:0.82em; font-weight:700;">${escapeHtml(currencySymbol)}</span></strong>`,
       strong: true,
       isHtml: true,
       noColon: true,
@@ -503,7 +503,7 @@ function renderTotals(options: {
     ...(showTax && hasTax && (!hasOffersSavings || !showDiscountBreakdown) ? [{ label: 'الضريبة', value: `${formatReceiptMoney(Number(options.taxAmount || 0), options.settings)} ${currencySymbol}` }] : []),
     ...(showPaymentMethod && options.paymentText ? [{
       label: `طريقة الدفع: ${options.paymentText}`,
-      value: `<span style="font-size:0.88em; font-weight:700; margin-inline-end:3px;">الإجمالي:</span><strong style="font-weight:800; font-size:1.05em;">${formatReceiptMoney(Number(options.total || 0), options.settings)} <span style="font-size:0.82em; font-weight:700;">${escapeHtml(currencySymbol)}</span></strong>`,
+      value: `<span style="font-size:0.88em; font-weight:700; margin-left: 3px; margin-inline-end:3px;">الإجمالي:</span><strong style="font-weight:800; font-size:1.05em;">${formatReceiptMoney(Number(options.total || 0), options.settings)} <span style="font-size:0.82em; font-weight:700;">${escapeHtml(currencySymbol)}</span></strong>`,
       strong: true,
       isHtml: true,
       noColon: true,
@@ -599,6 +599,7 @@ export function getInvoiceStyles(compact = false) {
     .invoice-logo,
     .invoice-logo-fallback {
       position: absolute;
+      top: 0; right: 0; bottom: 0; left: 0;
       inset: 0;
       width: 100%;
       height: 100%;
@@ -608,15 +609,22 @@ export function getInvoiceStyles(compact = false) {
       object-fit: contain;
       object-position: center;
       background: transparent;
-      display: grid;
+      display: block; display: grid;
       place-items: center;
       font-weight: 800;
       color: #000;
       overflow: hidden;
     }
     img.invoice-logo {
+      /* IE11 has no object-fit: the shared .invoice-logo rule sizes the img
+         100%x100%, which stretches it. Auto sizing keeps the aspect ratio
+         (capped by the max sizes below); margin:auto centers it inside the
+         absolutely-positioned box (top/right/bottom/left: 0). */
+      width: auto;
+      height: auto;
       max-width: ${compact ? '68px' : '96px'} !important;
       max-height: ${compact ? '44px' : '56px'} !important;
+      margin: auto;
     }
     .invoice-brand-copy {
       min-width: 0;
@@ -751,6 +759,7 @@ export function getInvoiceStyles(compact = false) {
     .invoice-items-table td.name-cell {
       text-align: right;
       vertical-align: middle;
+      padding-right: ${compact ? '4px' : '6px'};
       padding-inline-start: ${compact ? '4px' : '6px'};
     }
     .invoice-items-table .index-cell,

@@ -118,6 +118,9 @@ export interface AppSettings {
   posKitchenPrinterMode?: 'detailed' | 'mini';
   posKitchenLanguage?: 'dual' | 'en' | 'ar' | string;
   printBilingualItemNames?: boolean;
+  posWindowsPrinterName?: string;
+  posNetworkThermalPrinterIp?: string;
+  posNetworkThermalPrinterPort?: number;
   weightedBarcodeEnabled?: boolean;
   weightedBarcodePrefix?: string;
   weightedBarcodeProductCodeLength?: number;

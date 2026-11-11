@@ -323,6 +323,15 @@ export function buildSettingsUpdatePayload(
     posElectronKitchenPrinter: values.posElectronKitchenPrinter !== undefined
       ? cleanText(values.posElectronKitchenPrinter)
       : cleanText(current?.posElectronKitchenPrinter),
+    posWindowsPrinterName: values.posWindowsPrinterName !== undefined
+      ? cleanText(values.posWindowsPrinterName)
+      : cleanText(current?.posWindowsPrinterName),
+    posNetworkThermalPrinterIp: values.posNetworkThermalPrinterIp !== undefined
+      ? cleanText(values.posNetworkThermalPrinterIp)
+      : cleanText(current?.posNetworkThermalPrinterIp),
+    posNetworkThermalPrinterPort: values.posNetworkThermalPrinterPort !== undefined
+      ? Math.min(65535, Math.max(1, Number(values.posNetworkThermalPrinterPort) || 9100))
+      : Math.min(65535, Math.max(1, Number(current?.posNetworkThermalPrinterPort) || 9100)),
     weightedBarcodeEnabled: values.weightedBarcodeEnabled !== undefined
       ? values.weightedBarcodeEnabled === true
       : current?.weightedBarcodeEnabled === true,

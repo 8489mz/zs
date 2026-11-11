@@ -289,6 +289,9 @@ export interface AppSettings {
   printBilingualItemNames?: boolean;
   posElectronCashierPrinter?: string;
   posElectronKitchenPrinter?: string;
+  posWindowsPrinterName?: string;
+  posNetworkThermalPrinterIp?: string;
+  posNetworkThermalPrinterPort?: number;
   weightedBarcodeEnabled?: boolean;
   weightedBarcodePrefix?: string;
   weightedBarcodeProductCodeLength?: number;

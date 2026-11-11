@@ -4,6 +4,7 @@ import {
   MOBILE_TERMINAL_PRESETS,
   type MobilePaymentRequest,
 } from './mobile-terminal-bridge';
+import { HardwareBridgeClient } from './hardware-bridge-client';
 
 describe('MobileTerminalBridge', () => {
 
@@ -166,5 +167,34 @@ describe('MobileTerminalBridge', () => {
     expect(success).toBe(true);
     expect(printTextSpy).toHaveBeenCalledWith('RECEIPT CONTENT');
     expect(cutPaperSpy).toHaveBeenCalled();
+  });
+
+  it('sends the Hardware Bridge print to the configured network printer IP, not localhost', async () => {
+    const isAvailableSpy = vi.spyOn(HardwareBridgeClient, 'isAvailable').mockResolvedValue(true);
+    const printSpy = vi.spyOn(HardwareBridgeClient, 'printReceipt').mockResolvedValue({ success: true } as any);
+
+    const success = await MobileTerminalBridge.printReceipt({
+      receiptText: 'RECEIPT CONTENT',
+      cutPaper: true,
+      networkPrinter: { ip: '192.168.1.50', port: 9100 },
+    });
+
+    expect(success).toBe(true);
+    expect(printSpy).toHaveBeenCalledWith(expect.objectContaining({ ip: '192.168.1.50', port: 9100 }));
+    expect(printSpy).not.toHaveBeenCalledWith(expect.objectContaining({ ip: '127.0.0.1' }));
+    isAvailableSpy.mockRestore();
+    printSpy.mockRestore();
+  });
+
+  it('skips the Hardware Bridge channel entirely when no network printer is configured', async () => {
+    const isAvailableSpy = vi.spyOn(HardwareBridgeClient, 'isAvailable').mockResolvedValue(true);
+    const printSpy = vi.spyOn(HardwareBridgeClient, 'printReceipt').mockResolvedValue({ success: true } as any);
+
+    const success = await MobileTerminalBridge.printReceipt({ receiptText: 'RECEIPT CONTENT' });
+
+    expect(success).toBe(false);
+    expect(printSpy).not.toHaveBeenCalled();
+    isAvailableSpy.mockRestore();
+    printSpy.mockRestore();
   });
 });

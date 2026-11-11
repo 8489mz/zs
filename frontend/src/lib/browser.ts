@@ -185,6 +185,7 @@ export function resolvePrintSettings() {
     address: String(cachedSettings.address || '').trim(),
     invoiceFooter: String(cachedSettings.invoiceFooter || '').trim(),
     logoData: String(cachedSettings.logoData || '').trim(),
+    windowsPrinterName: String(cachedSettings.posWindowsPrinterName || '').trim(),
   };
 }
 
@@ -300,17 +301,19 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
           --print-strong: #020617;
           --print-accent: #0284c7;
         }
+        /* IE11 fallbacks (the C# bridge renders in IE11 mode): every var(--...) is preceded by its literal value and every display:grid by display:block. IE11 drops the var()/grid line and keeps the fallback; modern browsers use the second line. Do not remove the first line of a pair. */
         * { box-sizing: border-box; }
-        html, body { margin: 0; padding: 0; background: #fff; color: var(--print-text); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        html, body { margin: 0; padding: 0; background: #fff; color: #0f172a; color: var(--print-text); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; font-size: 11.5px; line-height: 1.4; }
         .print-shell { padding: 10px; max-width: 100%; }
-        .print-header { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 10px; align-items: stretch; margin-bottom: 10px; }
+        .print-header { display: block; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 10px; align-items: stretch; margin-bottom: 10px; }
         .print-header.centered-layout { display: block; text-align: center; margin-bottom: 10px; }
         .print-header.centered-layout .doc-panel { min-width: auto; padding: 10px 16px; gap: 4px; }
         .print-header.centered-layout .doc-header-details { margin-top: 2px; padding: 4px 10px; }
         .print-header.centered-layout .doc-meta-chip { margin-top: 2px; }
-        .brand-name-centered { font-size: 18px; font-weight: 800; color: var(--print-strong); margin-bottom: 2px; }
+        .brand-name-centered { font-size: 18px; font-weight: 800; color: #020617; color: var(--print-strong); margin-bottom: 2px; }
         .brand-panel, .doc-panel, .meta-box, .summary-box, .totals, .print-footer {
+          border: 1px solid #94a3b8;
           border: 1px solid var(--print-border);
           border-radius: 8px;
           background: rgba(248, 250, 252, 0.85);
@@ -326,6 +329,7 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
         .brand-name {
           font-size: 15px;
           font-weight: 800;
+          color: #020617;
           color: var(--print-strong);
           line-height: 1.2;
           white-space: nowrap;
@@ -338,6 +342,7 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
           flex-wrap: wrap;
           align-items: center;
           gap: 4px 8px;
+          color: #475569;
           color: var(--print-muted);
           font-size: 11px;
         }
@@ -366,19 +371,19 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
           justify-content: center;
           gap: 2px;
         }
-        .doc-title { margin: 0; font-size: 16px; line-height: 1.2; font-weight: 800; color: var(--print-strong); }
-        .doc-subtitle { color: var(--print-muted); font-size: 11px; }
-        .doc-header-details { margin-top: 6px; font-size: 11.5px; color: var(--print-strong); background: #ffffff; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--print-border); display: inline-block; }
-        .doc-meta-chip { margin-top: 4px; color: var(--print-muted); font-size: 10.5px; }
+        .doc-title { margin: 0; font-size: 16px; line-height: 1.2; font-weight: 800; color: #020617; color: var(--print-strong); }
+        .doc-subtitle { color: #475569; color: var(--print-muted); font-size: 11px; }
+        .doc-header-details { margin-top: 6px; font-size: 11.5px; color: #020617; color: var(--print-strong); background: #ffffff; padding: 4px 8px; border-radius: 6px; border: 1px solid #94a3b8; border: 1px solid var(--print-border); display: inline-block; }
+        .doc-meta-chip { margin-top: 4px; color: #475569; color: var(--print-muted); font-size: 10.5px; }
         .print-content { display: flex; flex-direction: column; gap: 8px; }
-        .meta { margin: 0; color: var(--print-muted); font-size: 11px; }
+        .meta { margin: 0; color: #475569; color: var(--print-muted); font-size: 11px; }
         .section { margin: 0; break-inside: avoid; }
-        h1, h2, h3 { margin: 0 0 6px; color: var(--print-strong); }
+        h1, h2, h3 { margin: 0 0 6px; color: #020617; color: var(--print-strong); }
         h2 { font-size: 13.5px; }
         h3 { font-size: 12.5px; }
         p { margin: 0 0 6px; }
         .meta-grid, .summary-grid {
-          display: grid;
+          display: block; display: grid;
           grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
           gap: 8px;
         }
@@ -386,6 +391,7 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
         .meta-box strong, .summary-box strong {
           display: block;
           margin-bottom: 4px;
+          color: #475569;
           color: var(--print-muted);
           font-size: 11px;
           font-weight: 700;
@@ -398,6 +404,7 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
           margin-top: 2px;
         }
         th, td {
+          border: 1px solid #94a3b8;
           border: 1px solid var(--print-border);
           padding: 5px 7px;
           text-align: right;
@@ -406,6 +413,7 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
           line-height: 1.35;
         }
         th {
+          background: #f1f5f9;
           background: var(--print-surface);
           color: #0f172a;
           font-weight: 700;
@@ -421,8 +429,8 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
           gap: 12px;
           margin-bottom: 4px;
         }
-        .totals strong { color: var(--print-strong); }
-        .muted { color: var(--print-muted); }
+        .totals strong { color: #020617; color: var(--print-strong); }
+        .muted { color: #475569; color: var(--print-muted); }
         .text-left { text-align: left; }
         .print-footer {
           margin-top: 6px;
@@ -478,7 +486,7 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
           background: transparent;
         }
         body.receipt-mode .meta-grid, body.receipt-mode .summary-grid {
-          display: grid;
+          display: block; display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 3px;
           margin-bottom: 4px;
@@ -599,30 +607,93 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
     }
   }
 
-  const printWindow = window.open('', '_blank', 'width=1120,height=820');
-  if (!printWindow) {
-    console.warn('Print window was blocked or unsupported on this platform.');
+  // Silent Windows print via the local bridge (no browser print dialog).
+  // No window.open is used at all: browsers clamp off-screen popup
+  // coordinates on-screen, so a tiny window flashed on every sale.
+  // The bridge is attempted first (only when a Windows printer name is
+  // configured); on ANY bridge failure, or when no printer is configured,
+  // the same HTML prints through a hidden in-page iframe, whose
+  // contentWindow.print() shows the usual dialog without a popup.
+  // print() needs no user activation, so no window has to be opened
+  // synchronously before the async bridge attempt.
+  const windowsPrinterName = branding.windowsPrinterName;
+  const bridgeAttemptPlanned = Boolean(windowsPrinterName);
+
+  const printViaDialog = () => {
+    // Remove any print iframe left by an earlier print (autoClose:false
+    // keeps it until the next print); at most one stale iframe exists.
+    document.querySelectorAll('iframe[data-print-frame="true"]').forEach((el) => el.remove());
+    // A hidden iframe (never display:none: some browsers refuse to print
+    // one) carries the document; its window shows the print dialog.
+    const frame = document.createElement('iframe');
+    frame.setAttribute('data-print-frame', 'true');
+    frame.setAttribute('aria-hidden', 'true');
+    frame.tabIndex = -1;
+    frame.style.cssText =
+      'position:absolute;width:0;height:0;border:0;left:0;top:0;visibility:hidden;';
+    document.body.appendChild(frame);
+    const frameWindow = frame.contentWindow;
+    const frameDocument = frame.contentDocument;
+    if (!frameWindow || !frameDocument) {
+      document.body.removeChild(frame);
+      console.warn('Print iframe was unavailable on this platform.');
+      return;
+    }
+    frameDocument.open();
+    frameDocument.write(html);
+    frameDocument.close();
+
+    let printed = false;
+    const finalizePrint = () => {
+      if (printed) return;
+      printed = true;
+      window.setTimeout(() => {
+        frameWindow.focus();
+        frameWindow.print();
+        if (autoClose) {
+          // The 220ms delay protects browsers where print() returns before
+          // the dialog has captured the document.
+          window.setTimeout(() => {
+            try { document.body.removeChild(frame); } catch { /* already gone */ }
+          }, 220);
+        }
+      }, Math.max(220, Number(printDelayMs || 0)));
+    };
+
+    if (frameDocument.readyState === 'complete') {
+      finalizePrint();
+    } else {
+      frame.addEventListener('load', finalizePrint, { once: true });
+      window.setTimeout(finalizePrint, Math.max(400, Number(printDelayMs || 0) + 120));
+    }
+  };
+
+  if (!bridgeAttemptPlanned) {
+    printViaDialog();
     return;
   }
 
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
-
-  const finalizePrint = () => {
-    window.setTimeout(() => {
-      printWindow.focus();
-      printWindow.print();
-      if (autoClose) {
-        window.setTimeout(() => printWindow.close(), 220);
+  // Fire-and-forget: the function stays sync (its ~20 callers do not await
+  // it). On bridge success nothing is shown and no dialog appears; on ANY
+  // bridge failure the hidden iframe prints the dialog way, so a print is
+  // never lost.
+  void (async () => {
+    try {
+      const { HardwareBridgeClient } = await import('@/features/pos/lib/hardware-bridge-client');
+      if (await HardwareBridgeClient.isAvailable()) {
+        const result = await HardwareBridgeClient.printWindows({
+          html,
+          deviceName: windowsPrinterName,
+          pageSize,
+          receiptWidthMm,
+        });
+        if (result?.success) {
+          return;
+        }
       }
-    }, Math.max(220, Number(printDelayMs || 0)));
-  };
-
-  if (printWindow.document.readyState === 'complete') {
-    finalizePrint();
-  } else {
-    printWindow.addEventListener('load', finalizePrint, { once: true });
-    window.setTimeout(finalizePrint, Math.max(400, Number(printDelayMs || 0) + 120));
-  }
+    } catch {
+      // Fall through to the dialog below.
+    }
+    printViaDialog();
+  })();
 }

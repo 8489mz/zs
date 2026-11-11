@@ -8,6 +8,7 @@ const http = require('http');
 const url = require('url');
 const path = require('path');
 const fs = require('fs');
+const { execFile } = require('child_process');
 
 const { chargePax, cancelPax, testPaxConnection } = require('../drivers/ecr/pax-driver');
 const { chargeGeidea, cancelGeidea, testGeideaConnection } = require('../drivers/ecr/geidea-driver');
@@ -29,6 +30,88 @@ function broadcastEvent(type, data = {}) {
       sseClients.delete(res);
     }
   }
+}
+
+// --- Silent Windows HTML printing (Electron tray runtime only) ---
+// The headless Node daemon has no rendering engine, so print-windows answers
+// 501 there; the Electron tray app owns a hidden BrowserWindow for rendering.
+const isElectronRuntime = Boolean(process.versions && process.versions.electron);
+let windowsPrintWindow = null; // lazily created hidden BrowserWindow (Electron only)
+let windowsPrintQueue = Promise.resolve(); // serialize prints (one job at a time)
+
+async function getWindowsPrintWindow() {
+  // Lazy require: this file must keep loading in plain Node (headless daemon).
+  const { BrowserWindow } = require('electron');
+  if (!windowsPrintWindow || windowsPrintWindow.isDestroyed()) {
+    windowsPrintWindow = new BrowserWindow({
+      show: false,
+      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+    });
+  }
+  return windowsPrintWindow;
+}
+
+async function printHtmlOnWindowsPrinter({ html, deviceName, pageSize = 'A4', receiptWidthMm = 80 }) {
+  const win = await getWindowsPrintWindow();
+  const base64 = Buffer.from(html, 'utf8').toString('base64');
+  const printJob = (async () => {
+    await win.loadURL(`data:text/html;base64,${base64}`);
+    const printOptions = { silent: true, printBackground: true, margins: { marginType: 'none' } };
+    if (deviceName) printOptions.deviceName = deviceName;
+    if (pageSize === 'A4') printOptions.pageSize = 'A4';
+    else if (pageSize === 'receipt') {
+      printOptions.pageSize = { width: (receiptWidthMm === 58 ? 58 : 80) * 1000, height: 297000 };
+    }
+    // 'auto' leaves pageSize unset: the HTML @page rule decides.
+    // webContents.print returns a Promise on newer Electron and takes a
+    // callback on older Electron; settle on whichever fires first.
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const once = (fn) => (value) => { if (!settled) { settled = true; fn(value); } };
+      const onOk = once(resolve);
+      const onErr = once(reject);
+      let result;
+      try {
+        result = win.webContents.print(printOptions, (success, failureReason) => {
+          if (success) onOk();
+          else onErr(new Error(failureReason || 'فشلت الطباعة'));
+        });
+      } catch (err) {
+        onErr(err);
+        return;
+      }
+      if (result && typeof result.then === 'function') {
+        result.then(onOk, (err) => onErr(err instanceof Error ? err : new Error(String(err))));
+      }
+    });
+  })();
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('انتهت مهلة الطباعة (30 ثانية) ولم تكتمل الطباعة')), 30000));
+  await Promise.race([printJob, timeout]);
+}
+
+async function listWindowsPrinters() {
+  if (isElectronRuntime) {
+    const win = await getWindowsPrintWindow();
+    const list = await win.webContents.getPrintersAsync();
+    return list.map((p) => p.name).filter(Boolean);
+  }
+  // Headless Node on Windows: ask PowerShell for the installed printers.
+  // Any other platform has no Windows printer queue to list.
+  if (process.platform !== 'win32') {
+    throw new Error('قائمة الطابعات غير متاحة: الجسر يعمل بدون واجهة Electron على نظام غير ويندوز');
+  }
+  return new Promise((resolve, reject) => {
+    execFile('powershell', ['-NoProfile', '-Command', 'Get-Printer | Select-Object -ExpandProperty Name'],
+      { timeout: 8000, windowsHide: true },
+      (err, stdout) => {
+        if (err) {
+          reject(new Error('تعذر قراءة قائمة الطابعات من ويندوز: ' + err.message));
+          return;
+        }
+        resolve(String(stdout || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean));
+      });
+  });
 }
 
 // Strict browser-origin allowlist; native clients without Origin are handled separately.
@@ -225,6 +308,56 @@ const server = http.createServer(async (req, res) => {
       const result = await printTestReceipt(body);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, data: result }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: err.message }));
+    }
+    return;
+  }
+
+  // 4b. Windows Printer Endpoints (silent HTML print, no browser dialog).
+  //     These only render in the Electron tray runtime, which owns a hidden
+  //     BrowserWindow. The headless Node daemon has no rendering engine and
+  //     the bridge ships zero dependencies, so it answers 501 naming the
+  //     missing capability; the web app then falls back to the browser print
+  //     dialog and printing is never lost.
+  if (pathname === '/api/printer/list' && req.method === 'GET') {
+    try {
+      const printers = await listWindowsPrinters();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, printers }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: err.message }));
+    }
+    return;
+  }
+
+  if (pathname === '/api/printer/print-windows' && req.method === 'POST') {
+    const body = await parseJsonBody(req);
+    const html = String(body.html || '');
+    if (!html.trim()) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: 'يرجى إرسال محتوى HTML للطباعة' }));
+      return;
+    }
+    if (!isElectronRuntime) {
+      res.writeHead(501, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: 'الطباعة الصامتة من HTML غير متاحة في الجسر بدون واجهة Electron: شغّل تطبيق الجسر (Electron) على هذا الجهاز' }));
+      return;
+    }
+    try {
+      const deviceName = String(body.deviceName || '').trim() || undefined;
+      const pageSize = String(body.pageSize || 'A4');
+      const receiptWidthMm = Number(body.receiptWidthMm || 80);
+      // Serialize prints: one silent job at a time (shared hidden window).
+      // The queue promise is kept settled so one failed job never blocks the next.
+      const job = windowsPrintQueue.catch(() => {}).then(() =>
+        printHtmlOnWindowsPrinter({ html, deviceName, pageSize, receiptWidthMm }));
+      windowsPrintQueue = job.catch(() => {});
+      await job;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, printer: deviceName || 'default' }));
     } catch (err) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: false, error: err.message }));

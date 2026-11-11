@@ -6,6 +6,8 @@ using System.Text;
 using System.Threading;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Printing;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.Web.Script.Serialization;
 using Microsoft.Win32;
@@ -19,6 +21,9 @@ namespace ZSystems.HardwareBridge
         private static readonly DateTime StartTime = DateTime.UtcNow;
         private static readonly List<HttpListenerResponse> SseClients = new List<HttpListenerResponse>();
         private static readonly object SseLock = new object();
+        // Serializes Windows silent prints: switching the default printer is a
+        // process-wide side effect, so two prints must never interleave it.
+        private static readonly object WindowsPrintLock = new object();
         private static HttpListener _listener;
         private static NotifyIcon _trayIcon;
 
@@ -233,7 +238,9 @@ namespace ZSystems.HardwareBridge
                 {
                     string jobId = Convert.ToString(job["jobId"]);
                     string ip = Convert.ToString(job["ip"]);
-                    if (string.IsNullOrEmpty(ip)) ip = "192.168.1.3";
+                    // Never default to a guessed terminal IP: a cloud job
+                    // without an IP is skipped, not sent to a stranger's terminal.
+                    if (string.IsNullOrEmpty(ip)) return;
                     int port = Convert.ToInt32(job["port"]);
                     string provider = Convert.ToString(job["provider"]);
                     string refId = Convert.ToString(job["referenceId"]);
@@ -332,6 +339,12 @@ namespace ZSystems.HardwareBridge
                     }
                 }
                 catch (Exception regEx) { File.AppendAllText(logPath, "Reg error: " + regEx.Message + "\n"); }
+
+                // 2b. Render the hidden print browser in IE11 mode, not IE7:
+                // FEATURE_BROWSER_EMULATION is read when the WebBrowser
+                // control is created (lazily, per print), so writing the key
+                // at startup takes effect for every print in this run.
+                EnsureBrowserEmulation();
 
                 File.AppendAllText(logPath, "Step 3: Starting listener\n");
                 // 3. Start HTTP bridge server on background thread
@@ -564,7 +577,7 @@ namespace ZSystems.HardwareBridge
                     {
                         { "status", "ONLINE" },
                         { "name", "Z-Systems Hardware Bridge" },
-                        { "version", "1.1.0" },
+                        { "version", "1.2.0" },
                         { "runtime", "Windows Native Service" },
                         { "tenantId", TenantId },
                         { "cloudRelayConnected", IsCloudRelayConnected },
@@ -669,6 +682,20 @@ namespace ZSystems.HardwareBridge
                 if (path == "/api/printer/kick-drawer" && context.Request.HttpMethod == "POST")
                 {
                     HandleKickDrawer(context, jsonBody);
+                    return;
+                }
+
+                // 10. Windows Printer List (names of printers installed on this PC)
+                if (path == "/api/printer/list" && context.Request.HttpMethod == "GET")
+                {
+                    HandlePrinterList(context);
+                    return;
+                }
+
+                // 11. Silent HTML Print on a Windows printer (no browser print dialog)
+                if (path == "/api/printer/print-windows" && context.Request.HttpMethod == "POST")
+                {
+                    HandlePrinterPrintWindows(context, jsonBody);
                     return;
                 }
 
@@ -862,7 +889,15 @@ namespace ZSystems.HardwareBridge
         private static void HandleEcrCancel(HttpListenerContext context, Dictionary<string, object> body)
         {
             string ip = body.ContainsKey("ip") ? Convert.ToString(body["ip"]) : "";
-            if (string.IsNullOrEmpty(ip)) ip = "192.168.1.3";
+            if (string.IsNullOrEmpty(ip))
+            {
+                SendJson(context, 400, new Dictionary<string, object>
+                {
+                    { "success", false },
+                    { "error", "يجب تحديد عنوان IP الماكينة" }
+                });
+                return;
+            }
             int port = body.ContainsKey("port") ? Convert.ToInt32(body["port"]) : 8080;
             string refId = body.ContainsKey("referenceId") ? Convert.ToString(body["referenceId"]) : "";
             string prov = body.ContainsKey("provider") ? Convert.ToString(body["provider"]).ToLowerInvariant() : "";
@@ -1078,6 +1113,285 @@ namespace ZSystems.HardwareBridge
             {
                 SendJson(context, 500, new Dictionary<string, object> { { "success", false }, { "error", ex.Message } });
             }
+        }
+
+        // 10. List the printers installed on this PC (Windows printer queue names),
+        // so the web app can offer them in the printer picker.
+        private static void HandlePrinterList(HttpListenerContext context)
+        {
+            try
+            {
+                List<string> printers = new List<string>();
+                foreach (string name in PrinterSettings.InstalledPrinters)
+                {
+                    printers.Add(name);
+                }
+                SendJson(context, 200, new Dictionary<string, object>
+                {
+                    { "success", true },
+                    { "printers", printers }
+                });
+            }
+            catch (Exception ex)
+            {
+                SendJson(context, 500, new Dictionary<string, object> { { "success", false }, { "error", ex.Message } });
+            }
+        }
+
+        [DllImport("winspool.drv", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern bool SetDefaultPrinter(string name);
+
+        // 11. Silent HTML print on a Windows printer (no browser print dialog).
+        //    Renders the HTML in a hidden WebBrowser (the same engine family that
+        //    prints today's A4 receipt) and prints it with WebBrowser.Print().
+        //    When deviceName names a printer other than the current default, the
+        //    default is switched for the duration of the print and restored in
+        //    finally. Paper size follows the printer's own default: Trident ignores
+        //    the @page size, so for the A4-on-A4 receipt case the output matches
+        //    today's dialog print exactly. The receiptWidthMm value only sizes the
+        //    hidden browser viewport for receipt pages.
+        private static void HandlePrinterPrintWindows(HttpListenerContext context, Dictionary<string, object> body)
+        {
+            lock (WindowsPrintLock)
+            {
+                string html = body.ContainsKey("html") ? Convert.ToString(body["html"]) : "";
+                string deviceName = body.ContainsKey("deviceName") ? Convert.ToString(body["deviceName"]) : "";
+                string pageSize = body.ContainsKey("pageSize") ? Convert.ToString(body["pageSize"]) : "A4";
+                int receiptWidthMm = body.ContainsKey("receiptWidthMm") ? Convert.ToInt32(body["receiptWidthMm"]) : 80;
+
+                if (string.IsNullOrWhiteSpace(html))
+                {
+                    SendJson(context, 400, new Dictionary<string, object> { { "success", false }, { "error", "يرجى إرسال محتوى HTML للطباعة" } });
+                    return;
+                }
+
+                string printerName = string.IsNullOrWhiteSpace(deviceName)
+                    ? new PrinterSettings().PrinterName
+                    : deviceName.Trim();
+
+                bool printerExists = false;
+                foreach (string name in PrinterSettings.InstalledPrinters)
+                {
+                    if (string.Equals(name, printerName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        printerExists = true;
+                        break;
+                    }
+                }
+                if (!printerExists)
+                {
+                    SendJson(context, 400, new Dictionary<string, object> { { "success", false }, { "error", "الطابعة غير موجودة على هذا الجهاز: " + printerName } });
+                    return;
+                }
+
+                // A4 (794px at 96dpi) or receipt width (58mm ~ 220px, 80mm ~ 302px).
+                int viewportWidth = string.Equals(pageSize, "receipt", StringComparison.OrdinalIgnoreCase)
+                    ? (receiptWidthMm == 58 ? 220 : 302)
+                    : 794;
+
+                string error = PrintHtmlOnWindowsPrinter(html, printerName, viewportWidth);
+                if (error == null)
+                {
+                    SendJson(context, 200, new Dictionary<string, object> { { "success", true }, { "printer", printerName } });
+                }
+                else
+                {
+                    SendJson(context, 500, new Dictionary<string, object> { { "success", false }, { "error", error } });
+                }
+            }
+        }
+
+        // Prints HTML on a Windows printer from a dedicated STA thread: WebBrowser
+        // is an ActiveX control and must live on an STA thread with a message pump.
+        // Returns null on success, otherwise a human-readable error (Arabic).
+        // The caller holds WindowsPrintLock, so the temporary default-printer
+        // switch below can never interleave with another print.
+        // WebBrowser defaults to IE7 rendering unless FEATURE_BROWSER_EMULATION
+        // names this exe at IE11 (11001). IE7 understands no CSS Grid, no
+        // Flexbox and no var(); even IE11 needs the print stylesheet to carry
+        // explicit fallbacks, but IE11 at least renders the receipt instead
+        // of a stacked IE7 fallback. Never throws: a failed registry write
+        // must not stop the bridge.
+        private static void EnsureBrowserEmulation()
+        {
+            try
+            {
+                string exeName = Path.GetFileName(Application.ExecutablePath);
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BROWSER_EMULATION"))
+                {
+                    if (key == null) return;
+                    object current = key.GetValue(exeName);
+                    if (current == null || !current.Equals(11001))
+                    {
+                        key.SetValue(exeName, 11001, RegistryValueKind.DWord);
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // IE PageSetup lives under HKCU\...\PageSetup. The WebBrowser print
+        // template reads header/footer/margins/Print_Background from there, so
+        // a Windows print gets IE defaults (Page 1 of 1, about:blank, ~19mm
+        // margins, no backgrounds) unless we override them for this print and
+        // restore them afterwards. Margins are inches, as strings.
+        private static Dictionary<string, object> ApplyWindowsPrintPageSetup()
+        {
+            Dictionary<string, object> saved = new Dictionary<string, object>();
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Internet Explorer\PageSetup"))
+                {
+                    if (key == null) return saved;
+                    string[] names = new string[] { "header", "footer", "margin_top", "margin_bottom", "margin_left", "margin_right", "Print_Background" };
+                    foreach (string name in names)
+                    {
+                        saved[name] = key.GetValue(name); // null when absent
+                    }
+                    key.SetValue("header", "", RegistryValueKind.String);
+                    key.SetValue("footer", "", RegistryValueKind.String);
+                    key.SetValue("margin_top", "0", RegistryValueKind.String);
+                    key.SetValue("margin_bottom", "0", RegistryValueKind.String);
+                    key.SetValue("margin_left", "0", RegistryValueKind.String);
+                    key.SetValue("margin_right", "0", RegistryValueKind.String);
+                    key.SetValue("Print_Background", "yes", RegistryValueKind.String);
+                }
+            }
+            catch { }
+            return saved;
+        }
+
+        private static void RestoreWindowsPrintPageSetup(Dictionary<string, object> saved)
+        {
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Internet Explorer\PageSetup"))
+                {
+                    if (key == null) return;
+                    foreach (KeyValuePair<string, object> pair in saved)
+                    {
+                        if (pair.Value == null) { try { key.DeleteValue(pair.Key, false); } catch {} }
+                        else { key.SetValue(pair.Key, pair.Value); }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private static string PrintHtmlOnWindowsPrinter(string html, string printerName, int viewportWidth)
+        {
+            string error = null;
+            ManualResetEvent done = new ManualResetEvent(false);
+            Thread sta = new Thread(delegate()
+            {
+                string previousDefault = null;
+                WebBrowser browser = null;
+                Dictionary<string, object> savedPageSetup = null;
+                try
+                {
+                    PrinterSettings current = new PrinterSettings();
+                    previousDefault = current.PrinterName;
+                    if (!string.Equals(printerName, previousDefault, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!SetDefaultPrinter(printerName))
+                        {
+                            error = "تعذر تعيين الطابعة الافتراضية: " + printerName;
+                            done.Set();
+                            return;
+                        }
+                    }
+
+                    // Override IE PageSetup for this print only (restored in
+                    // finally): no header/footer lines, zero margins, and
+                    // backgrounds on, so the table header prints as designed.
+                    savedPageSetup = ApplyWindowsPrintPageSetup();
+
+                    browser = new WebBrowser();
+                    // Force the underlying ActiveX handle to exist before loading.
+                    IntPtr handle = browser.Handle;
+                    browser.Width = viewportWidth;
+                    browser.Height = 1100;
+                    browser.ScrollBarsEnabled = false;
+                    bool printRequested = false;
+                    DateTime printStartedAt = DateTime.MinValue;
+                    browser.DocumentCompleted += delegate(object sender, WebBrowserDocumentCompletedEventArgs e)
+                    {
+                        try
+                        {
+                            // Fire once for the top-level document, not for frames.
+                            if (e.Url == browser.Url && !printRequested)
+                            {
+                                printRequested = true;
+                                browser.Print();
+                                // Print() only queues the hidden ieframe print
+                                // template; the wait below pumps it.
+                                printStartedAt = DateTime.UtcNow;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            error = ex.Message;
+                            done.Set();
+                        }
+                    };
+                    browser.DocumentText = html;
+
+                    // Message pump: keep the STA thread alive until Print() runs
+                    // or the deadline hits. DoEvents lets the DocumentCompleted
+                    // event fire on this same thread.
+                    DateTime deadline = DateTime.UtcNow.AddSeconds(45);
+                    while (!done.WaitOne(0))
+                    {
+                        if (printRequested && DateTime.UtcNow >= printStartedAt.AddSeconds(3))
+                        {
+                            // Print() returns as soon as the hidden ieframe print
+                            // template is queued; the template reads the (still
+                            // switched) default printer and spools on this same
+                            // STA thread, so keep pumping 3s after Print() returns
+                            // before restoring the default printer / disposing.
+                            done.Set();
+                            break;
+                        }
+                        if (DateTime.UtcNow > deadline)
+                        {
+                            error = "انتهت مهلة الطباعة (45 ثانية) ولم تكتمل الطباعة";
+                            break;
+                        }
+                        Application.DoEvents();
+                        Thread.Sleep(50);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    error = ex.Message;
+                }
+                finally
+                {
+                    try { if (browser != null) browser.Dispose(); } catch {}
+                    try { if (savedPageSetup != null) RestoreWindowsPrintPageSetup(savedPageSetup); } catch {}
+                    try
+                    {
+                        if (previousDefault != null && !string.Equals(printerName, previousDefault, StringComparison.OrdinalIgnoreCase))
+                        {
+                            SetDefaultPrinter(previousDefault);
+                        }
+                    }
+                    catch {}
+                    done.Set();
+                }
+            });
+            sta.SetApartmentState(ApartmentState.STA);
+            sta.IsBackground = true;
+            sta.Start();
+            // Backstop: the STA thread signals done in every path (45s deadline
+            // plus Print time). If it still hangs, report a timeout and let the
+            // background thread restore the default printer when it unwinds.
+            bool finished = done.WaitOne(TimeSpan.FromSeconds(60));
+            if (!finished && error == null)
+            {
+                error = "انتهت مهلة الطباعة (60 ثانية) ولم تكتمل الطباعة";
+            }
+            return error;
         }
     }
 }

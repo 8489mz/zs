@@ -39,6 +39,25 @@ export interface BridgeChargeResponse {
   raw?: any;
 }
 
+export interface BridgeWindowsPrintRequest {
+  html: string;
+  deviceName?: string;
+  pageSize?: 'A4' | 'receipt' | 'auto';
+  receiptWidthMm?: number;
+}
+
+export interface BridgeWindowsPrintResponse {
+  success: boolean;
+  printer?: string;
+  error?: string;
+}
+
+export interface BridgePrinterListResponse {
+  success: boolean;
+  printers?: string[];
+  error?: string;
+}
+
 export class HardwareBridgeClient {
   private static cachedOnline: boolean | null = null;
   private static lastCheckTime = 0;
@@ -190,5 +209,53 @@ export class HardwareBridgeClient {
       body: JSON.stringify(request),
     });
     return res.json();
+  }
+
+  /**
+   * Silent HTML print on a Windows printer via the local bridge
+   * (POST /api/printer/print-windows). Never throws: any failure returns
+   * { success: false } so the caller can fall back to the browser dialog.
+   * The 65s timeout is longer than the bridge's own print timeout, so the
+   * bridge always answers first and a slow print never double-prints.
+   */
+  static async printWindows(request: BridgeWindowsPrintRequest): Promise<BridgeWindowsPrintResponse> {
+    try {
+      const res = await fetch(`${BRIDGE_BASE_URL}/api/printer/print-windows`, {
+        method: 'POST',
+        mode: 'cors',
+        credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        signal: AbortSignal.timeout(65000),
+      });
+      const data = await res.json().catch(() => ({}));
+      return { success: Boolean(res.ok && data?.success), printer: data?.printer, error: data?.error };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'تعذر الوصول إلى الجسر المحلي' };
+    }
+  }
+
+  /**
+   * List the Windows printers installed on the bridge PC
+   * (GET /api/printer/list). Never throws: any failure returns
+   * { success: false } so the caller can offer free-text input instead.
+   */
+  static async listPrinters(): Promise<BridgePrinterListResponse> {
+    try {
+      const res = await fetch(`${BRIDGE_BASE_URL}/api/printer/list`, {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
+        signal: AbortSignal.timeout(5000),
+      });
+      const data = await res.json().catch(() => ({}));
+      return {
+        success: Boolean(res.ok && data?.success),
+        printers: Array.isArray(data?.printers) ? data.printers : undefined,
+        error: data?.error,
+      };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'تعذر الوصول إلى الجسر المحلي' };
+    }
   }
 }

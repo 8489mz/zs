@@ -68,6 +68,9 @@ export interface MobilePrintRequest {
   rawEscPos?: Uint8Array | string;
   cutPaper?: boolean;
   openDrawer?: boolean;
+  // Network thermal printer the bridge dials (TCP ip:port). When absent,
+  // the Hardware Bridge channel is skipped entirely.
+  networkPrinter?: { ip: string; port?: number };
 }
 
 export interface MobileTerminalCapabilities {
@@ -543,20 +546,27 @@ export class MobileTerminalBridge {
       // ignore
     }
 
-    // 4. Hardware Bridge print
-    try {
-      const isBridge = await HardwareBridgeClient.isAvailable();
-      if (isBridge) {
-        const res = await HardwareBridgeClient.printReceipt({
-          ip: '127.0.0.1',
-          rawText: request.receiptText,
-          cut: request.cutPaper !== false,
-          kickDrawer: request.openDrawer === true,
-        });
-        return Boolean(res?.success);
+    // 4. Hardware Bridge print to the configured network thermal printer.
+    //    Skipped entirely when no network printer is configured: the bridge
+    //    dials a TCP printer at ip:port, and the old hardcoded 127.0.0.1
+    //    sent every receipt at a localhost port where no printer exists.
+    const networkPrinterIp = String(request.networkPrinter?.ip || '').trim();
+    if (networkPrinterIp) {
+      try {
+        const isBridge = await HardwareBridgeClient.isAvailable();
+        if (isBridge) {
+          const res = await HardwareBridgeClient.printReceipt({
+            ip: networkPrinterIp,
+            port: request.networkPrinter?.port,
+            rawText: request.receiptText,
+            cut: request.cutPaper !== false,
+            kickDrawer: request.openDrawer === true,
+          });
+          return Boolean(res?.success);
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
 
     return false;

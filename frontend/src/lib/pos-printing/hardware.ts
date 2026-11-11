@@ -215,7 +215,15 @@ export async function tryPrintViaHardware(
   try {
     const { MobileTerminalBridge } = await import('@/features/pos/lib/mobile-terminal-bridge');
     const printText = formatSaleForHardwarePrinter(sale, options);
-    const printedOnMobile = await MobileTerminalBridge.printReceipt({ receiptText: printText, cutPaper: true });
+    const networkIp = String(options?.settings?.posNetworkThermalPrinterIp || '').trim();
+    const networkPort = Number(options?.settings?.posNetworkThermalPrinterPort || 9100);
+    const printedOnMobile = await MobileTerminalBridge.printReceipt({
+      receiptText: printText,
+      cutPaper: true,
+      networkPrinter: networkIp
+        ? { ip: networkIp, port: Number.isFinite(networkPort) && networkPort > 0 ? networkPort : 9100 }
+        : undefined,
+    });
     if (printedOnMobile) return true;
   } catch {
     // ignore and continue to standard network printer
