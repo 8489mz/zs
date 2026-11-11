@@ -4248,6 +4248,7 @@ export class VanSalesService {
     tripExpenses?: number;
     variance: number;
     stockVarianceAmount: number;
+    stockOverageAmount?: number;
     unloadedItemsCount: number;
     distanceKm: number;
     status: 'settled';
@@ -4394,6 +4395,7 @@ export class VanSalesService {
     const countedCash = Number(payload.countedCash || 0);
     let unloadedItemsCount = 0;
     let totalStockVarianceCost = 0;
+    let totalStockOverageCost = 0;
     let totalUnloadedCost = 0;
     let stockAuditResult: ReturnType<typeof reconcileVanStockAudit> | null = null;
 
@@ -4479,6 +4481,28 @@ export class VanSalesService {
       const stockAuditDigits = currencyMoneyDigits(await tenantBaseCurrency(trxAny, tenantId));
       stockAuditResult = reconcileVanStockAudit(auditItems, stockAuditDigits);
       totalStockVarianceCost = stockAuditResult.totalStockShortageCost;
+      totalStockOverageCost = stockAuditResult.totalStockOverageCost;
+
+      // INV-VAN-SETTLE-COUNT-OVERAGE-VISIBLE: an item nobody counted
+      // is NOT certified balanced. Refuse the settle — inside the
+      // transaction, before any stock deduction, journal, or trip
+      // update — and name the uncounted products in the error so the
+      // caller knows exactly what to count. There is no supervisor
+      // bypass flag: the supervisor's explicit decision IS a physical
+      // count (submit the verified countedQty for that product); a
+      // flag certifying an unverified item as balanced would be the
+      // same false certification this fix removes. A van with no
+      // remaining stock has no uncounted items and settles normally.
+      if (stockAuditResult.hasUncountedItems) {
+        const names = stockAuditResult.uncountedItems
+          .map((u) => `${u.productName} (#${u.productId})`)
+          .join('، ');
+        throw new AppError(
+          `لا يمكن تصفية الرحلة قبل اكتمال الجرد: الأصناف التالية لم تُعدّ بعد — ${names}. أعدّ كل صنف في السيارة (أو أكّد كميته بعد الفحص الفعلي) ثم أعد التصفية.`,
+          'VAN_STOCK_AUDIT_INCOMPLETE',
+          422,
+        );
+      }
 
       // Deduct missing stock items if shortage was detected
       for (const itemVariance of stockAuditResult.itemVariances) {
@@ -4509,6 +4533,33 @@ export class VanSalesService {
             vanLocationId,
             false,
           );
+        }
+      }
+
+      // INV-VAN-SETTLE-COUNT-OVERAGE-VISIBLE: mirror of the shortage
+      // loop above. Overage units physically in the van are added to
+      // van stock (movement 'van_stock_overage') so the system qty
+      // matches the count; the added value is accounted by the
+      // settlement journal (Dr 1140 / Cr 7100 in
+      // postVanTripSettlement), never by a silent stock or income
+      // increase. No pharmacy-batch move: found units carry no batch
+      // identity to attach them to.
+      for (const itemVariance of stockAuditResult.itemVariances) {
+        if (itemVariance.status === 'overage' && itemVariance.varianceQty > 0) {
+          await this.moveVanStock(trx, {
+            productId: itemVariance.productId,
+            delta: itemVariance.varianceQty,
+            locationId: vanLocationId,
+            tenantId,
+            accountId,
+            userId: actorUserId || null,
+            movementType: 'van_stock_overage',
+            note: `زيادة جرد سيارة توزيع - رحلة #${payload.tripId}`,
+            referenceType: 'van_sales_trip',
+            referenceId: Number(payload.tripId),
+            skipGlobalUpdate: false,
+            unitCost: itemVariance.costPrice,
+          });
         }
       }
 
@@ -4697,6 +4748,33 @@ export class VanSalesService {
           .execute();
       }
 
+      // INV-VAN-SETTLE-COUNT-OVERAGE-VISIBLE: record stock overage in
+      // the rep financial ledger (mirror of the shortage row above).
+      // It is settled at once — an overage is a recorded gain, never
+      // a claim on the rep — so operators see it in the same ledger
+      // where shortages appear, instead of only in the journal. The
+      // 0.01 gate mirrors the shortage row's gate exactly.
+      if (totalStockOverageCost > 0.01) {
+        await trxAny
+          .insertInto('van_rep_financial_settlements')
+          .values({
+            tenant_id: tenantId,
+            account_id: accountId,
+            rep_id: repId,
+            trip_id: payload.tripId,
+            entry_type: 'stock_overage',
+            amount: totalStockOverageCost,
+            status: 'settled',
+            settled_at: sql`NOW()`,
+            settled_by: actorUserId || null,
+            settlement_method: 'stock_audit',
+            notes: `زيادة جرد بضاعة رحلة #${payload.tripId} (مسجلة كزيادة مخزنية، غير محملة على المندوب)`,
+            created_at: sql`NOW()`,
+            updated_at: sql`NOW()`,
+          })
+          .execute();
+      }
+
       // Auto-record / finish any ongoing active customer visit upon settlement
       if (payload.activeVisitCustomerId) {
         const custId = Number(payload.activeVisitCustomerId);
@@ -4759,6 +4837,7 @@ export class VanSalesService {
           branchId,
           locationId: vanLocationId,
           stockShortageAmount: totalStockVarianceCost,
+          stockOverageAmount: totalStockOverageCost,
           chargeStockVarianceToRep: effectiveChargeToRep,
         },
         systemAuth,
@@ -4854,6 +4933,7 @@ export class VanSalesService {
       tripExpenses: totalTripExpenses,
       variance: cashVariance,
       stockVarianceAmount: totalStockVarianceCost,
+      stockOverageAmount: totalStockOverageCost,
       unloadedItemsCount,
       distanceKm: odometerResult.distanceKm,
       status: 'settled',

@@ -419,6 +419,7 @@ async function main(): Promise<void> {
       await assert.rejects(
         () => controller.settleTrip('Bearer driver', {
           tripId: 11, countedCash: 0, unloadRemainingToWarehouse: false,
+          countedStock: [{ productId: 1, countedQty: 10 }],
           supervisorPin: '4321',
         }),
         /NIGHT_STOCK_UNAPPROVED/,
@@ -426,6 +427,7 @@ async function main(): Promise<void> {
       assert.equal((await tripRow(db, 11)).status, 'open', 'the refused settle leaves the trip open');
       const result = await controller.settleTrip('Bearer driver', {
         tripId: 12, countedCash: 0, unloadRemainingToWarehouse: false,
+        countedStock: [{ productId: 1, countedQty: 10 }],
         nightStockApproved: true,
         supervisorPin: '4321',
       });

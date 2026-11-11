@@ -281,6 +281,10 @@ async function main(): Promise<void> {
     const settlement = await vanSales.settleTrip(repId, TENANT, ACCOUNT, {
       tripId: loadResult.tripId,
       countedCash: 80,
+      countedStock: [
+        { productId: Number(productA.id), countedQty: 7 },
+        { productId: Number(productB.id), countedQty: 18 },
+      ],
       unloadRemainingToWarehouse: true,
     });
     assert.equal(settlement.expectedCash, 85);

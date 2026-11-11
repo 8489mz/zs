@@ -5857,6 +5857,11 @@ export class AccountingPostingService {
       branchId: number | null;
       locationId: number | null;
       stockShortageAmount?: number;
+      // INV-VAN-SETTLE-COUNT-OVERAGE-VISIBLE: mirror of
+      // stockShortageAmount. Overage units found in the van are
+      // journaled Dr 1140 / Cr 7100 so the added stock value is
+      // accounted, never silently added to stock or income.
+      stockOverageAmount?: number;
       chargeStockVarianceToRep?: boolean;
     },
     auth: AuthContext,
@@ -5880,8 +5885,9 @@ export class AccountingPostingService {
     const counted = toBookMoney(params.countedCash);
     const tripExpenses = params.tripExpenses ? toBookMoney(params.tripExpenses) : 0;
     const stockShortage = params.stockShortageAmount ? toBookMoney(params.stockShortageAmount) : 0;
+    const stockOverage = params.stockOverageAmount ? toBookMoney(params.stockOverageAmount) : 0;
 
-    if (expected <= 0 && counted <= 0 && tripExpenses <= 0 && stockShortage <= 0) return { posted: false, journalEntryId: null };
+    if (expected <= 0 && counted <= 0 && tripExpenses <= 0 && stockShortage <= 0 && stockOverage <= 0) return { posted: false, journalEntryId: null };
     const variance = toBookMoney(counted - expected);
 
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
@@ -5934,6 +5940,19 @@ export class AccountingPostingService {
 
       addBookLine({ accountId: debitAccountId, description: debitDesc, debit: stockShortage, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
       addBookLine({ accountId: inventoryAccountId, description: `تسوية عجز مخزني سيارة التوزيع - رحلة #${tripId}`, debit: 0, credit: stockShortage, partnerType: 'none', partnerId: null, branchId, locationId });
+    }
+
+    // INV-VAN-SETTLE-COUNT-OVERAGE-VISIBLE: overage mirror of the
+    // shortage block above. Found units raise the van's inventory
+    // asset (Dr 1140) against an overage gain (Cr 7100, the same
+    // account cash overage credits in this journal). Shortage legs
+    // above are byte-identical; this block only adds legs.
+    if (stockOverage > 0) {
+      let inventoryAccountId = Number(settings.inventory_account_id || 0);
+      if (!(inventoryAccountId > 0)) inventoryAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1140');
+      const overageAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '7100');
+      addBookLine({ accountId: inventoryAccountId, description: `تسوية زيادة مخزنية سيارة التوزيع - رحلة #${tripId}`, debit: stockOverage, credit: 0, partnerType: 'none', partnerId: null, branchId, locationId });
+      addBookLine({ accountId: overageAccountId, description: `إيراد زيادة جرد بضاعة سيارة التوزيع - رحلة #${tripId}`, debit: 0, credit: stockOverage, partnerType: 'none', partnerId: null, branchId, locationId });
     }
 
     if (lines.length === 0) return { posted: false, journalEntryId: null };

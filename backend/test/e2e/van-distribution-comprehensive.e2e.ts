@@ -417,6 +417,10 @@ async function runVanDistributionCompleteSuite(): Promise<void> {
     const settlement = await vanSales.settleTrip(repId, TENANT, ACCOUNT, {
       tripId: loadResult.tripId,
       countedCash: 600,
+      countedStock: [
+        { productId: Number(productJuice.id), countedQty: 35 },
+        { productId: Number(productRice.id), countedQty: 10 },
+      ],
       unloadRemainingToWarehouse: true,
       notes: 'تصفية اليوم وإرجاع المتبقي للمستودع',
     });

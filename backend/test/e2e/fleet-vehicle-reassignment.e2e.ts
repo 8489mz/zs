@@ -149,6 +149,7 @@ async function main(): Promise<void> {
     await vanSales.settleTrip(Number(repA.id), TENANT, ACCOUNT, {
       tripId: trip.tripId,
       countedCash: 0,
+      countedStock: [{ productId: Number(product.id), countedQty: 5 }],
       unloadRemainingToWarehouse: true,
     });
 

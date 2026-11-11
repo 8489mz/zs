@@ -71,12 +71,22 @@ export interface VanStockItemVariance {
   productName: string;
   systemQty: number;
   countedQty: number;
+  /** True only when a physical count was supplied for this item. */
+  counted: boolean;
   varianceQty: number;
   costPrice: number;
   retailPrice: number;
   shortageCost: number;
   overageCost: number;
   status: 'balanced' | 'shortage' | 'overage';
+}
+
+/** An item in the van that nobody counted during the audit. */
+export interface VanStockUncountedItem {
+  productId: number;
+  productName: string;
+  systemQty: number;
+  costPrice: number;
 }
 
 export interface VanStockAuditResult {
@@ -88,6 +98,19 @@ export interface VanStockAuditResult {
   totalStockOverageCost: number;
   netStockVarianceCost: number;
   itemVariances: VanStockItemVariance[];
+  /**
+   * INV-VAN-SETTLE-COUNT-OVERAGE-VISIBLE: an item nobody counted is
+   * NOT certified balanced — it is listed here and the settle must
+   * refuse to certify the audit while this list is non-empty. The
+   * numeric variance of such an item stays 0 (status 'balanced',
+   * countedQty shown as the system qty for display only); only
+   * `counted` / this list say whether it was actually verified.
+   * hasStockDiscrepancy stays a counted-variance signal only, so an
+   * uncounted-only audit is "incomplete", not "discrepant".
+   */
+  hasUncountedItems: boolean;
+  uncountedItemsCount: number;
+  uncountedItems: VanStockUncountedItem[];
 }
 
 export interface CreditLimitEvaluationParams {
@@ -283,10 +306,26 @@ export function reconcileVanStockAudit(items: VanStockAuditItem[], digits: Money
   let totalStockShortageCost = 0;
   let totalStockOverageCost = 0;
   const itemVariances: VanStockItemVariance[] = [];
+  const uncountedItems: VanStockUncountedItem[] = [];
 
   for (const item of items) {
     const systemQty = toQty(item.systemQty);
+    // INV-VAN-SETTLE-COUNT-OVERAGE-VISIBLE: an uncounted item's
+    // countedQty falls back to the system qty ONLY as a display
+    // value — `counted: false` below (and the uncountedItems list)
+    // is the authoritative signal, and the caller must refuse to
+    // certify the audit while any item is uncounted. Never read
+    // countedQty as a verified count without checking `counted`.
+    const counted = item.countedQty !== undefined;
     const countedQty = item.countedQty !== undefined ? toQty(item.countedQty) : systemQty;
+    if (!counted) {
+      uncountedItems.push({
+        productId: item.productId,
+        productName: item.productName,
+        systemQty,
+        costPrice: Number(item.costPrice || 0),
+      });
+    }
     const varianceQty = toQty(countedQty - systemQty);
     const costPrice = Number(item.costPrice || 0);
     const retailPrice = Number(item.retailPrice || 0);
@@ -310,6 +349,7 @@ export function reconcileVanStockAudit(items: VanStockAuditItem[], digits: Money
       productName: item.productName,
       systemQty,
       countedQty,
+      counted,
       varianceQty,
       costPrice,
       retailPrice,
@@ -333,6 +373,9 @@ export function reconcileVanStockAudit(items: VanStockAuditItem[], digits: Money
     totalStockOverageCost,
     netStockVarianceCost,
     itemVariances,
+    hasUncountedItems: uncountedItems.length > 0,
+    uncountedItemsCount: uncountedItems.length,
+    uncountedItems,
   };
 }
 
