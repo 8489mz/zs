@@ -28,6 +28,12 @@ WHAT THIS PINS, driving the real approveFieldReturn with a mock DB:
 - A return on a settled trip is rejected (INVALID_TRIP).
 - The trip row is locked (FOR UPDATE) on the transaction before
   the provenance reads.
+- INV-VAN-RETURN-METHOD-MATCH: the mock sale carries payment_type
+  'credit' / total 1000 and the mock answers the customer balance
+  (1000), because approveFieldReturn now also enforces the refund
+  method against the sale's payment legs and refuses a credit refund
+  the customer's balance cannot cover. Case 3 passes both checks
+  exactly (prior credit return 200, this return 800 of 1000).
 */
 
 import 'reflect-metadata';
@@ -80,6 +86,11 @@ function buildService(opts: {
       if (table === 'sale_items') {
         return chainable({ execute: async () => opts.saleLines.concat(opts.soldLines) });
       }
+      if (table === 'customers') {
+        // INV-VAN-RETURN-METHOD-MATCH: the approval-time balance
+        // floor locks the customer row; the mock world holds 1000.
+        return chainable({ executeTakeFirst: async () => ({ balance: 1000 }) });
+      }
       if (table === 'settings') {
         // D4: approveFieldReturn resolves book digits on the transaction
         // handle after the trip lock; the mock answers with EGP.
@@ -127,7 +138,7 @@ async function main() {
     const service = buildService({
       ret: retFixture(),
       trip: tripRow(),
-      sale: { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'cancelled' },
+      sale: { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'cancelled', payment_type: 'credit', total: 1000, paid_amount: 0 },
       saleLines: [{ id: 101, product_id: 1, qty: 10, line_total: 1000, product_name: 'Widget' }],
       existingReturns: [],
       repSales: [],
@@ -145,7 +156,7 @@ async function main() {
     const service = buildService({
       ret: retFixture(),
       trip: tripRow(),
-      sale: { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'posted' },
+      sale: { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'posted', payment_type: 'credit', total: 1000, paid_amount: 0 },
       saleLines: [{ id: 101, product_id: 1, qty: 5, line_total: 500, product_name: 'Widget' }],
       existingReturns: [],
       repSales: [],
@@ -163,10 +174,10 @@ async function main() {
     const service = buildService({
       ret: retFixture(),
       trip: tripRow(),
-      sale: { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'posted' },
+      sale: { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'posted', payment_type: 'credit', total: 1000, paid_amount: 0 },
       saleLines: [{ id: 101, product_id: 1, qty: 10, line_total: 1000, product_name: 'Widget' }],
       existingReturns: [
-        { id: 30, items_json: JSON.stringify([{ productId: 1, qty: 2, saleItemId: 101 }]), status: 'approved' },
+        { id: 30, items_json: JSON.stringify([{ productId: 1, qty: 2, saleItemId: 101 }]), status: 'approved', refund_method: 'credit', total_amount: 200 },
         { id: 31, items_json: JSON.stringify([{ productId: 1, qty: 8, saleItemId: 101 }]), status: 'pending_approval' },
       ],
       repSales: [],
@@ -187,10 +198,10 @@ async function main() {
     const service = buildService({
       ret: retFixture({ items_json: JSON.stringify([{ productId: 1, qty: 9, unitPrice: 100, saleItemId: 101 }]), total_amount: 900 }),
       trip: tripRow(),
-      sale: { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'posted' },
+      sale: { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'posted', payment_type: 'credit', total: 1000, paid_amount: 0 },
       saleLines: [{ id: 101, product_id: 1, qty: 10, line_total: 1000, product_name: 'Widget' }],
       existingReturns: [
-        { id: 30, items_json: JSON.stringify([{ productId: 1, qty: 2, saleItemId: 101 }]), status: 'approved' },
+        { id: 30, items_json: JSON.stringify([{ productId: 1, qty: 2, saleItemId: 101 }]), status: 'approved', refund_method: 'credit', total_amount: 200 },
       ],
       repSales: [],
       soldLines: [],
@@ -261,7 +272,7 @@ async function main() {
     const service = buildService({
       ret: retFixture(),
       trip: tripRow('settled'),
-      sale: { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'posted' },
+      sale: { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'posted', payment_type: 'credit', total: 1000, paid_amount: 0 },
       saleLines: [{ id: 101, product_id: 1, qty: 10, line_total: 1000, product_name: 'Widget' }],
       existingReturns: [],
       repSales: [],

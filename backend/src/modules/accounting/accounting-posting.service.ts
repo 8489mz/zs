@@ -6115,6 +6115,45 @@ export class AccountingPostingService {
       .executeTakeFirst();
     if (existing) return { posted: false, journalEntryId: Number(existing.id) };
 
+    // INV-VAN-RETURN-METHOD-MATCH: the posting must debit the leg
+    // that actually holds the money. The returns service already
+    // enforces the match; this re-derives the linked sale's payment
+    // type at the money boundary so a mismatched refund can never
+    // post even if a future caller passes refundMethod unchecked.
+    // A split sale allows either method — its leg bounds are
+    // enforced by the returns service, not here.
+    if (params.saleId != null) {
+      const linkedSale = await queryable
+        .selectFrom('sales')
+        .select(['payment_type'])
+        .where('id', '=', params.saleId)
+        .where('tenant_id', '=', scope.tenantId)
+        .executeTakeFirst();
+      const salePayment = String((linkedSale as any)?.payment_type || '').trim();
+      const wantsCash = params.refundMethod === 'cash';
+      if (!linkedSale || !['cash', 'credit', 'card', 'split', 'instapay', 'vodafone_cash'].includes(salePayment)) {
+        throw new AppError(
+          `تعذّرت مطابقة طريقة رد المرتجع #${returnId} مع الفاتورة الأصلية — طريقة دفع الفاتورة غير معروفة`,
+          'REFUND_METHOD_MISMATCH',
+          400,
+        );
+      }
+      if ((salePayment === 'credit' && wantsCash) || (salePayment === 'cash' && !wantsCash)) {
+        throw new AppError(
+          `طريقة رد المرتجع #${returnId} (${wantsCash ? 'نقدي' : 'كائتمان'}) لا تطابق طريقة دفع الفاتورة الأصلية (${salePayment})`,
+          'REFUND_METHOD_MISMATCH',
+          400,
+        );
+      }
+      if (salePayment === 'card' || salePayment === 'instapay' || salePayment === 'vodafone_cash') {
+        throw new AppError(
+          `لا يمكن رد مرتجع #${returnId} على فاتورة مسددة (${salePayment}) نقداً أو كائتمان من عهدة المندوب — المبلغ مستقر في البنك ويتطلب عكساً بنكياً`,
+          'REFUND_METHOD_MISMATCH',
+          400,
+        );
+      }
+    }
+
     const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
     if (!settings) throw new Error(`Accounting settings missing while posting van field return ${returnId}`);
 

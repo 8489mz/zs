@@ -131,7 +131,10 @@ async function main(): Promise<void> {
       doc_no: 'VRET-1',
     };
   }
-  const sale = { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'posted' };
+  // INV-VAN-RETURN-METHOD-MATCH: the mock sale is a cash sale of
+  // 1000 (the returns under test are cash refunds), so the
+  // method-match leg check sees the leg the refunds draw on.
+  const sale = { id: 7, doc_no: 'S-1', customer_id: 21, resolved_rep_id: 4, status: 'posted', payment_type: 'cash', total: 1000, paid_amount: 0 };
   const saleLines = [{ id: 101, product_id: 1, qty: 10, line_total: 1000, product_name: 'Widget' }];
 
   // 1. Lock precedes the cash read, and an insufficient refund is

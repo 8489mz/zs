@@ -163,7 +163,11 @@ async function seedWorld(
     tenant_id: 't1', account_id: 'a1', product_id: 100, branch_id: null, location_id: 900, qty: opts.postSaleStock, reserved_qty: 0,
   } as never).execute();
   await db.insertInto('customers' as never).values({
-    id: 5, tenant_id: 't1', account_id: 'a1', name: 'Shop', balance: 0,
+    // INV-VAN-RETURN-METHOD-MATCH: the fixture models the balance a
+    // posted credit sale of saleTotal leaves in production (the sale
+    // writer raises customers.balance by the credit leg), so the
+    // approval-time balance floor sees the real world, not a 0.
+    id: 5, tenant_id: 't1', account_id: 'a1', name: 'Shop', balance: opts.saleTotal,
   } as never).execute();
   await db.insertInto('van_sales_trips' as never).values({
     id: 1, tenant_id: 't1', account_id: 'a1', status: 'open', van_location_id: 900,
@@ -173,7 +177,15 @@ async function seedWorld(
   if (saleId != null) {
     await db.insertInto('sales' as never).values({
       id: saleId, tenant_id: 't1', doc_no: `S-${saleId}`, customer_id: 5, subtotal: opts.saleTotal,
-      discount: 0, tax_amount: 0, total: opts.saleTotal, paid_amount: opts.saleTotal, store_credit_used: 0,
+      // INV-VAN-RETURN-METHOD-MATCH: an unpaid credit sale carries
+      // paid_amount 0 and no sale_payments row — the sale writer sets
+      // paid_amount only for card/InstaPay, and postSale (like the
+      // refund-leg resolution) reads the receivable as
+      // total - paid_amount - store_credit_used. The old seed set
+      // paid_amount to the full total plus a cash settlement row,
+      // which described a fully-paid sale (receivable 0) and made
+      // every credit refund look like a refund of money nobody owes.
+      discount: 0, tax_amount: 0, total: opts.saleTotal, paid_amount: 0, store_credit_used: 0,
       exchange_return_id: null, branch_id: null, location_id: null, created_by: 1, created_at: new Date(),
       delivery_fee: 0, delivery_fee_mode: null, service_charge: 0, tip_amount: 0, prices_include_tax: false,
       sale_origin: 'van', payment_type: 'credit', collection_status: 'paid', status: 'posted',
@@ -186,9 +198,6 @@ async function seedWorld(
         unit_multiplier: line.unitMultiplier ?? 1, modifiers: JSON.stringify([]),
       } as never).execute();
     }
-    await db.insertInto('sale_payments' as never).values({
-      sale_id: saleId, tenant_id: 't1', payment_channel: 'cash', amount: opts.saleTotal,
-    } as never).execute();
   }
 }
 
