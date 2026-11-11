@@ -611,6 +611,31 @@ export const storefrontApi = {
       body: JSON.stringify({ adminPassword, status }),
     }),
 
+  /** D-SF-12: run the expired-reservation reaper now for this tenant (the
+   * scheduler runs it every 2 min; this is the manual button in the
+   * merchant orders page). Returns the scanned + reaped counts. */
+  reapExpiredOrders: () =>
+    http<{ reapedOrdersCount: number; reapedOrderNumbers: string[]; scannedCount: number }>('/api/storefront/admin/orders/reap-expired', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+
+  /** D-SF-12: the scheduler's last sweep (null until the first sweep runs). */
+  getReapStatus: () =>
+    http<{
+      lastSweep: {
+        completedAt: string;
+        scannedCount: number;
+        reapedOrdersCount: number;
+        reapedOrderNumbers: string[];
+        skippedWhileRunning: boolean;
+        wedgedReset: boolean;
+        error: string | null;
+      } | null;
+      onlineTimeoutMs: number;
+      codTimeoutMs: number;
+    }>('/api/storefront/admin/orders/reap-status'),
+
   getOrder: (id: number) => http<OnlineOrderRecord>(`/api/storefront/admin/orders/${id}`),
 
   updateOrderStatus: (id: number, status: string, saleId?: number) =>

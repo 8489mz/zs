@@ -133,6 +133,7 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
           'order_number',
           'payment_method',
           'stock_reserved_at',
+          'created_at',
           'items_json',
           'coupon_code',
           'reserved_branch_id',
@@ -144,7 +145,10 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
         .where('status', '=', 'pending')
         .where('payment_status', '!=', 'paid')
         .where('sale_id', 'is', null)
-        .where('stock_reserved_at', '<', onlineCutoff)
+        // D-SF-12: the engine falls back to created_at when stock_reserved_at is NULL —
+        // the selector must do the same, or NULL-timestamp rows can never be reaped.
+        .where(sql<boolean>`COALESCE(stock_reserved_at, created_at) < ${onlineCutoff}`)
+        .orderBy(sql`COALESCE(stock_reserved_at, created_at)`, 'asc')
         .limit(50)
         .execute();
 
@@ -153,7 +157,10 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
         // Enforce 24h window for Cash-on-Delivery, 30m for online/card payments
         const timeoutMs = ord.payment_method === 'cod' ? 24 * 60 * 60 * 1000 : 30 * 60 * 1000;
         const currentCutoff = new Date(nowMs - timeoutMs);
-        if (ord.stock_reserved_at && new Date(ord.stock_reserved_at).getTime() > currentCutoff.getTime()) {
+        // D-SF-12: fall back to created_at like the engine does, or a NULL
+        // stock_reserved_at row skips the check here but can never be selected above.
+        const reservedAt = ord.stock_reserved_at || ord.created_at;
+        if (reservedAt && new Date(reservedAt).getTime() > currentCutoff.getTime()) {
           continue; // Order was refreshed or is COD within 24h window
         }
 
@@ -174,7 +181,7 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
               .where('status', '=', 'pending')
               .where('payment_status', '!=', 'paid')
               .where('sale_id', 'is', null)
-              .where('stock_reserved_at', '<=', currentCutoff)
+              .where(sql<boolean>`COALESCE(stock_reserved_at, created_at) <= ${currentCutoff}`)
               .executeTakeFirst();
 
             if (Number(locked?.numUpdatedRows || 0) === 0) return;
@@ -209,7 +216,11 @@ export class DatabaseMaintenanceService implements OnApplicationBootstrap {
             }
             reapedCount++;
           });
-        } catch {}
+        } catch (err) {
+          // D-SF-12: a per-order failure must name the order + error — an
+          // empty catch here used to swallow it and retry forever in silence.
+          this.logger.warn(`Failed to reap expired online order ${ord.order_number}`, err);
+        }
       }
       results.expiredReservationsReaped = reapedCount;
       if (reapedCount > 0) this.logger.log(`Reaped ${reapedCount} expired online order reservations.`);

@@ -18,7 +18,7 @@ import { printPostedSaleReceipt } from '@/lib/pos-printing';
 import type { Sale } from '@/types/domain';
 import { PageHeader } from '@/shared/components/page-header';
 import { StandardDialog } from '@/shared/components/StandardDialog';
-import { toast } from '@/shared/components/system-alert';
+import { systemConfirm, toast } from '@/shared/components/system-alert';
 import { getGlobalCurrencySymbol, getGlobalSystemCurrency, isThreeDecimalCurrency } from '@/lib/currencies';
 import { TrendingUpIcon, MessageSquareIcon, Trash2Icon, CopyIcon, CheckIcon, AlertTriangleIcon, SlidersIcon } from '@/shared/components/icons/AppIcons';
 
@@ -122,6 +122,40 @@ export function MerchantOnlineOrdersPage() {
       toast.error(err.message || 'تعذر إلغاء الطلبات، تأكد من صحة كلمة مرور المسؤول (Admin)');
     },
   });
+
+  // D-SF-12: the reaper's last sweep (heartbeat) + the manual "reap now" run.
+  const reapStatusQuery = useQuery({
+    queryKey: ['storefront-admin-reap-status'],
+    queryFn: () => storefrontApi.getReapStatus(),
+  });
+
+  const reapExpiredMutation = useMutation({
+    mutationFn: () => storefrontApi.reapExpiredOrders(),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['storefront-admin-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['storefront-admin-orders-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['storefront-admin-reap-status'] });
+      toast.success(
+        res.reapedOrdersCount > 0
+          ? `تم إلغاء ${res.reapedOrdersCount} طلب منتهي وتحرير حجزه`
+          : 'لا توجد طلبات منتهية — تم فحص الطلبات ولم يُلغَ شيء',
+      );
+    },
+    onError: (err: any) => {
+      toast.error(err.message || 'تعذر تشغيل فحص الطلبات المنتهية');
+    },
+  });
+
+  const handleReapExpired = async () => {
+    const confirmed = await systemConfirm({
+      title: 'فحص الطلبات المنتهية الآن',
+      message: 'سيتم إلغاء الطلبات المعلقة التي انتهت مهلة الدفع/الحجز وتحرير مخزونها المحجوز. الطلبات غير المنتهية لن تتأثر.',
+      confirmText: 'شغّل الفحص',
+      cancelText: 'تراجع',
+      variant: 'primary',
+    });
+    if (confirmed) reapExpiredMutation.mutate();
+  };
 
   const confirmPaymentMutation = useMutation({
     mutationFn: ({ id, reference }: { id: number; reference?: string }) =>
@@ -302,9 +336,57 @@ export function MerchantOnlineOrdersPage() {
                 <span>{t('storefront.merchant_online_orders_page.s6', "معاينة المتجر كزبون")}</span>
                 <span style={{ fontSize: '13px' }}>↗</span>
               </a>
+              {/* D-SF-12: manual expired-reservation reap — the scheduler runs it every 2 min; this runs it now. */}
+              <button
+                type="button"
+                onClick={handleReapExpired}
+                disabled={reapExpiredMutation.isPending}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  height: '36px',
+                  padding: '0 14px',
+                  borderRadius: '8px',
+                  background: '#ffffff',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: reapExpiredMutation.isPending ? 'wait' : 'pointer',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                  boxSizing: 'border-box',
+                }}
+              >
+                <span>{reapExpiredMutation.isPending ? t('storefront.merchant_online_orders_page.s59', "جارٍ فحص الطلبات المنتهية...") : t('storefront.merchant_online_orders_page.s60', "فحص الطلبات المنتهية الآن")}</span>
+              </button>
             </div>
           }
         />
+
+        {/* D-SF-12: reaper heartbeat — the last automatic sweep, so a dead scheduler is visible. */}
+        {reapStatusQuery.data && (
+          <div style={{ fontSize: '12.5px', color: '#64748b', marginBottom: '12px' }}>
+            {reapStatusQuery.data.lastSweep ? (
+              <>
+                <span>{t('storefront.merchant_online_orders_page.s61', "آخر فحص تلقائي للطلبات المنتهية: ")}</span>
+                <span>{new Date(reapStatusQuery.data.lastSweep.completedAt).toLocaleString(t('common.locale', 'en-US') === 'en-US' ? 'en-US' : 'ar-EG', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                <span>{t('storefront.merchant_online_orders_page.s62', " — تم فحص ")}</span>
+                <span>{reapStatusQuery.data.lastSweep.scannedCount.toLocaleString()}</span>
+                <span>{t('storefront.merchant_online_orders_page.s63', " طلب، وأُلغي ")}</span>
+                <span>{reapStatusQuery.data.lastSweep.reapedOrdersCount.toLocaleString()}</span>
+                {reapStatusQuery.data.lastSweep.skippedWhileRunning && (
+                  <span>{t('storefront.merchant_online_orders_page.s64', " — تم تخطي الفحص لأن الفحص السابق كان لا يزال يعمل")}</span>
+                )}
+                {reapStatusQuery.data.lastSweep.error && (
+                  <span>{t('storefront.merchant_online_orders_page.s65', " — خطأ: ")}{reapStatusQuery.data.lastSweep.error}</span>
+                )}
+              </>
+            ) : (
+              <span>{t('storefront.merchant_online_orders_page.s66', "الفحص التلقائي للطلبات المنتهية لم يعمل بعد.")}</span>
+            )}
+          </div>
+        )}
 
 
         {/* KPI Summary Cards Grid */}

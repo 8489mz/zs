@@ -1,5 +1,7 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { StorefrontService } from './storefront.service';
+import { StorefrontReservationSchedulerService } from './services/storefront-reservation-scheduler.service';
+import { DEFAULT_COD_STALE_TIMEOUT_MS, DEFAULT_ONLINE_PAYMENT_TIMEOUT_MS } from './engines/storefront-reservation.engine';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { RequireAnyPermission } from '../../core/auth/decorators/permissions.decorator';
@@ -18,7 +20,10 @@ const CONFIG_PERMISSIONS = ['storefront', 'settings'] as const;
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequireAnyPermission('storefront', 'sales')
 export class StorefrontMerchantController {
-  constructor(private readonly service: StorefrontService) {}
+  constructor(
+    private readonly service: StorefrontService,
+    private readonly reaperScheduler: StorefrontReservationSchedulerService,
+  ) {}
 
   @Get('orders')
   listOrders(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth) {
@@ -28,6 +33,17 @@ export class StorefrontMerchantController {
   @Get('orders/counts')
   getOrderCounts(@Req() req: RequestWithAuth) {
     return this.service.getOrderCounts(req.authContext!);
+  }
+
+  // D-SF-12: the reaper's last sweep, so a dead scheduler is visible in the
+  // admin UI instead of silent — null until the first sweep runs.
+  @Get('orders/reap-status')
+  getReapStatus() {
+    return {
+      lastSweep: this.reaperScheduler.getLastResults(),
+      onlineTimeoutMs: DEFAULT_ONLINE_PAYMENT_TIMEOUT_MS,
+      codTimeoutMs: DEFAULT_COD_STALE_TIMEOUT_MS,
+    };
   }
 
   @Post('orders/bulk-cancel')

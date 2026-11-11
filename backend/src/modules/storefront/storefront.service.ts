@@ -2856,7 +2856,7 @@ export class StorefrontService {
     onlineTimeoutMs?: number;
     codTimeoutMs?: number;
     limit?: number;
-  }): Promise<{ reapedOrdersCount: number; reapedOrderNumbers: string[] }> {
+  }): Promise<{ reapedOrdersCount: number; reapedOrderNumbers: string[]; scannedCount: number }> {
     const now = new Date();
     const batchLimit = Math.max(1, Math.min(100, options?.limit ?? 50));
     const onlineTimeout = options?.onlineTimeoutMs ?? DEFAULT_ONLINE_PAYMENT_TIMEOUT_MS;
@@ -2887,11 +2887,15 @@ export class StorefrontService {
       .where('payment_status', '!=', 'paid')
       .where('sale_id', 'is', null)
       .$if(Boolean(options?.tenantId), (qb) => qb.where(sql<boolean>`tenant_id = ${options!.tenantId!}`))
-      .where('stock_reserved_at', '<', cutoffDate)
+      // D-SF-12: the engine falls back to created_at when stock_reserved_at is NULL —
+      // the selector must do the same, or NULL-timestamp rows can never be reaped.
+      .where(sql<boolean>`COALESCE(stock_reserved_at, created_at) < ${cutoffDate}`)
+      .orderBy(sql`COALESCE(stock_reserved_at, created_at)`, 'asc')
       .limit(batchLimit)
       .execute();
 
     const reapedOrderNumbers: string[] = [];
+    const scannedCount = candidates.length;
 
     for (const candidate of candidates) {
       if (!isReservationExpired(candidate, now, options)) {
@@ -2965,13 +2969,18 @@ export class StorefrontService {
           reapedOrderNumbers.push(row.order_number);
         });
       } catch (err) {
-        // Individual order failure shouldn't abort the whole batch
+        // Individual order failure shouldn't abort the whole batch — but it must never
+        // vanish silently (D-SF-12): the order number + error name the failing row.
+        this.logger.error(
+          `Reaper failed for order ${candidate.order_number}: ${(err as Error)?.message || String(err)}`,
+        );
       }
     }
 
     return {
       reapedOrdersCount: reapedOrderNumbers.length,
       reapedOrderNumbers,
+      scannedCount,
     };
   }
 
