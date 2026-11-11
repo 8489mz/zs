@@ -19,10 +19,11 @@
  *     only an explicit false disables it (unparseable values fail
  *     closed to true);
  * (2) a driver settle with no PIN is refused SETTLEMENT_REQUIRES_SUPERVISOR_PIN;
- * (3) a driver settle with the rep's own PIN is refused
+ * (3) a driver settle with the rep's own admin credential is refused
  *     MAKER_CHECKER_SELF_APPROVAL;
- * (4) a driver settle with a valid supervisor PIN settles, records the
- *     supervisor (not the rep) as the settler, and runs maker-checker;
+ * (4) a driver settle with a valid supervisor PIN settles and runs
+ *     maker-checker — PIN mode carries no attribution, so the trip
+ *     records NO settler id (honest null, not the first supervisor);
  * (5) maker == checker is refused at the service level too;
  * (6) a rep-supplied chargeStockVarianceToRep=false on the driver path
  *     is ignored: the stock shortage stays pending on the rep and the
@@ -31,17 +32,23 @@
  *     false waives the shortage, true charges it;
  * (8) night stock without explicit approval is refused
  *     NIGHT_STOCK_UNAPPROVED, and with explicit approval + PIN it
- *     settles with night_stock_approved recorded;
+ *     settles with night_stock_approved recorded (approved_by null:
+ *     PIN mode carries no attribution);
  * (9) a legacy direct service call without authContext still settles
  *     (documented boundary: the four live-Postgres e2e suites call
  *     settleTrip that way; enforcement lives at the HTTP boundary and
  *     a future service-level guard must update those callers first).
  *
- * NOT DRIVEN: the plaintext PIN comparison itself is F6's package
- * (V3) — this spec uses the existing verification path as-is (users.pin
- * / settings managerPin exactly as existing tests do). The frontend
- * removal of the rep-side checkbox is not driven here (no frontend
- * runner in this VM); it is verified by code inspection.
+ * VERIFICATION (INV-VAN-SUPERVISOR-PIN-AUTHORIZED, F6): the plaintext
+ * PIN comparison is gone — verifySupervisorPin now goes through the
+ * shared authorizeManagerSecret rule. The fixtures moved with it: the
+ * supervisor PIN is a bcrypt managerPin in settings, and the rep's
+ * own credential is his admin login password (bcrypt). A plaintext
+ * users.pin would never approve; PIN-mode approval attributes to no
+ * user, so settled_by / supervisor_id / night_stock_approved_by are
+ * null on PIN-approved settles. The frontend removal of the rep-side
+ * checkbox is not driven here (no frontend runner in this VM); it is
+ * verified by code inspection.
  */
 
 import 'reflect-metadata';
@@ -54,13 +61,16 @@ import { PGliteDialect } from 'kysely-pglite-dialect';
 import { Database } from '../../src/database/database.types';
 import { VanSalesService } from '../../src/modules/delivery-reps/van-sales.service';
 import { VanSalesController } from '../../src/modules/delivery-reps/van-sales.controller';
+import { hashManagerPin } from '../../src/common/utils/manager-approval';
+import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
 
 const TENANT = 't1';
 const ACCOUNT = 'a1';
 
-// Rep 4's phone links him to user 7 (his own login); user 2 is the
-// supervisor whose PIN authorizes settlements. User 1 is the admin
-// used by the service-level (admin path) cases.
+// Rep 4's phone links him to user 7 (his own login, an admin whose
+// own password is '1111'); the supervisor PIN is the shared bcrypt
+// managerPin in settings. User 1 is the admin used by the
+// service-level (admin path) cases.
 const adminAuth: any = {
   userId: 1, sessionId: 'spec', username: 'admin', role: 'admin',
   permissions: ['deliveryReps', 'accounting'], tenantId: TENANT, accountId: ACCOUNT,
@@ -82,7 +92,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE currency_exchange_rates (id bigserial PRIMARY KEY, tenant_id text, currency_code text, exchange_rate numeric, is_base boolean);
     CREATE TABLE branches (id bigint PRIMARY KEY, tenant_id text, name text, is_active boolean DEFAULT true);
     CREATE TABLE stock_locations (id bigint PRIMARY KEY, tenant_id text, account_id text, branch_id bigint, name text, code text, is_active boolean DEFAULT true, location_type text);
-    CREATE TABLE users (id bigint PRIMARY KEY, tenant_id text, username text, display_name text, phone text, role text, pin text, pin_hash text, permissions_json text, is_active boolean DEFAULT true);
+    CREATE TABLE users (id bigint PRIMARY KEY, tenant_id text, username text, display_name text, phone text, role text, pin text, pin_hash text, password_hash text, password_salt text, permissions_json text, is_active boolean DEFAULT true);
     CREATE TABLE delivery_representatives (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, phone text, pin_hash text, vehicle_plate text, van_location_id bigint, employee_id bigint, national_id text, is_van_rep boolean DEFAULT false, updated_at timestamptz DEFAULT NOW());
     CREATE TABLE fleet_vehicles (id bigint PRIMARY KEY, tenant_id text, assigned_rep_id bigint, van_location_id bigint, current_odometer numeric, plate_number text);
     CREATE TABLE van_sales_trips (id bigserial PRIMARY KEY, tenant_id text, account_id text, rep_id bigint, vehicle_id bigint, start_odometer numeric, end_odometer numeric, van_location_id bigint, source_warehouse_id bigint, status text, settlement_status text, loaded_amount numeric DEFAULT 0, sales_amount numeric DEFAULT 0, cash_collected numeric DEFAULT 0, credit_sales numeric DEFAULT 0, returns_amount numeric DEFAULT 0, cash_refunds numeric DEFAULT 0, total_instapay_sales numeric DEFAULT 0, total_instapay_collections numeric DEFAULT 0, variance numeric DEFAULT 0, stock_variance_amount numeric DEFAULT 0, stock_variance_details text, night_stock_approved boolean, night_stock_approved_by bigint, night_stock_notes text, distance_km numeric, notes text, opened_at timestamptz, submitted_at timestamptz, closed_at timestamptz, settled_by bigint, supervisor_id bigint, updated_at timestamptz);
@@ -104,10 +114,14 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('branches').values({ id: 1, tenant_id: TENANT, name: 'Main', is_active: true }).execute();
   await anyDb.insertInto('stock_locations').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Warehouse', code: 'WH', is_active: true, location_type: 'branch_stock' }).execute();
   await anyDb.insertInto('stock_locations').values({ id: 10, tenant_id: TENANT, account_id: ACCOUNT, branch_id: 1, name: 'Van', code: 'VAN_4', is_active: true, location_type: 'van_stock' }).execute();
-  // Supervisor (id 2, PIN 4321) and the rep's own login (id 7, phone
-  // = rep phone, PIN 1111). The rep must never authorize himself.
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'sup', display_name: 'Supervisor', phone: '5550002', role: 'supervisor', pin: '4321', pin_hash: null, permissions_json: null, is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 7, tenant_id: TENANT, username: '5550001', display_name: 'Rep 4', phone: '5550001', role: 'rep', pin: '1111', pin_hash: null, permissions_json: null, is_active: true }).execute();
+  // Supervisor approval is the bcrypt manager PIN in settings (the
+  // shared rule); the rep's own login (id 7, phone = rep phone) is an
+  // admin whose own login password is '1111'. The rep must never
+  // authorize himself — his own credential is what case (3) refuses.
+  await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: JSON.stringify(await hashManagerPin('4321')) }).execute();
+  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'sup', display_name: 'Supervisor', phone: '5550002', role: 'supervisor', pin: null, pin_hash: null, password_hash: '', password_salt: '', permissions_json: null, is_active: true }).execute();
+  const repPassword = await createPasswordRecord('1111');
+  await anyDb.insertInto('users').values({ id: 7, tenant_id: TENANT, username: '5550001', display_name: 'Rep 4', phone: '5550001', role: 'admin', pin: null, pin_hash: null, password_hash: repPassword.hash, password_salt: repPassword.salt, permissions_json: null, is_active: true }).execute();
 }
 
 async function seedRep(db: Kysely<Database>): Promise<void> {
@@ -222,8 +236,9 @@ async function main(): Promise<void> {
     console.log('  (2) driver settle without PIN refused passed');
   }
 
-  // (3) Driver settle with the rep's own PIN is refused (maker ==
-  // checker, even when the rep holds an admin role on his own login).
+  // (3) Driver settle with the rep's own admin credential is refused
+  // (maker == checker, even when the rep holds an admin role on his
+  // own login).
   {
     const { db } = await makeDb();
     try {
@@ -245,8 +260,10 @@ async function main(): Promise<void> {
     console.log('  (3) driver settle with the rep’s own PIN refused passed');
   }
 
-  // (4) Driver settle with a valid supervisor PIN settles, and the
-  // recorded settler is the supervisor (id 2), not the rep.
+  // (4) Driver settle with a valid supervisor PIN settles and runs
+  // maker-checker. PIN mode carries no attribution, so the trip
+  // records NO settler id (honest null — the old "first supervisor
+  // by id" attribution was false and is gone).
   {
     const { db } = await makeDb();
     try {
@@ -261,8 +278,8 @@ async function main(): Promise<void> {
       assert.equal(result.status, 'settled', 'the supervisor-PIN settle completes');
       const trip = await tripRow(db, 11);
       assert.equal(trip.status, 'settled', 'the trip is settled');
-      assert.equal(Number(trip.settled_by), 2, 'the supervisor is recorded as the settler');
-      assert.equal(Number(trip.supervisor_id), 2, 'the supervisor is recorded on the trip');
+      assert.equal(trip.settled_by, null, 'PIN mode attributes the approval to no user');
+      assert.equal(trip.supervisor_id, null, 'PIN mode records no supervisor id');
     } finally {
       await db.destroy();
     }
@@ -415,7 +432,7 @@ async function main(): Promise<void> {
       assert.equal(result.status, 'settled', 'the approved night-stock settle completes');
       const trip = await tripRow(db, 12);
       assert.equal(trip.night_stock_approved, true, 'night stock approval is recorded');
-      assert.equal(Number(trip.night_stock_approved_by), 2, 'the approving supervisor is recorded');
+      assert.equal(trip.night_stock_approved_by, null, 'PIN mode attributes the approval to no user');
     } finally {
       await db.destroy();
     }

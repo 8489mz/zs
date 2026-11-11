@@ -42,9 +42,11 @@
  * resolveSystemAuthContext shadowed and the fraud radar stubbed
  * no-op, because a pool read inside the open transaction deadlocks
  * on PGlite's single connection. The supervisor PIN is driven
- * through the REAL verifySupervisorPin: a supervisor user (id 2,
- * role 'supervisor', pin '4321') is seeded, so the approval in the
- * passing cases is a real PIN verification, not a stub. The
+ * through the REAL verifySupervisorPin: the shared manager PIN is
+ * seeded as a bcrypt hash in settings (INV-VAN-SUPERVISOR-PIN-AUTHORIZED),
+ * so the approval in the passing cases is a real verification through
+ * the shared authorizeManagerSecret rule, not a stub. A plaintext
+ * users.pin would never approve here.
  * collection gate runs inside the collection transaction, after the
  * INV-VAN-TRIP-LOCKED-STATE-RECHECK locked-trip re-read — a refused
  * collection therefore rolls the whole transaction back.
@@ -68,6 +70,7 @@ import { PGliteDialect } from 'kysely-pglite-dialect';
 import { Database } from '../../src/database/database.types';
 import { VanSalesService } from '../../src/modules/delivery-reps/van-sales.service';
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
+import { hashManagerPin } from '../../src/common/utils/manager-approval';
 
 const TENANT = 't-van-noncash-evidence';
 const ACCOUNT = 'a-van-noncash-evidence';
@@ -115,7 +118,10 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
   await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'sys', is_active: true }).execute();
-  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'supervisor', display_name: 'Supervisor', role: 'supervisor', pin: SUPERVISOR_PIN, is_active: true }).execute();
+  // The shared manager PIN (bcrypt) is what the real verifier checks;
+  // the supervisor user carries no plaintext PIN anymore.
+  await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'managerPin', value: JSON.stringify(await hashManagerPin(SUPERVISOR_PIN)) }).execute();
+  await anyDb.insertInto('users').values({ id: 2, tenant_id: TENANT, username: 'supervisor', display_name: 'Supervisor', role: 'supervisor', pin: null, is_active: true }).execute();
   const accounts: Array<[number, string, string]> = [
     [1110, '1110', 'asset'], [1120, '1120', 'asset'], [1130, '1130', 'asset'], [1140, '1140', 'asset'],
     [2120, '2120', 'liability'], [4100, '4100', 'revenue'], [4300, '4300', 'revenue'], [5100, '5100', 'expense'],

@@ -59,6 +59,7 @@ import { VanTargetsService } from './services/van-targets.service';
 import { VanTransfersService } from './services/van-transfers.service';
 import { VanRoutesService } from './services/van-routes.service';
 import { VanFraudRadarService, RecordVanSuspicionParams } from './services/van-fraud-radar.service';
+import { authorizeManagerSecret } from '../../common/utils/manager-approval';
 
 export interface VanStockItem {
   productId: number;
@@ -205,14 +206,30 @@ export class VanSalesService {
   }
 
   /**
-   * Verifies a Supervisor PIN against authorized active users (or tenant managerPin setting)
-   * while strictly enforcing Maker-Checker separation (the rep cannot authorize their own actions).
+   * Verifies a supervisor approval secret via the ONE shared
+   * manager-approval rule (INV-SPIRIT-MANAGER-APPROVAL-SHARED /
+   * INV-VAN-SUPERVISOR-PIN-AUTHORIZED): the shared manager PIN from
+   * settings (bcrypt via authorizeManagerSecret; a legacy plaintext
+   * stored value verifies once then hashes in place) or the login
+   * password of an ACTIVE admin / super_admin. Plaintext
+   * users.pin / pin_hash and delivery_representatives.pin_hash are
+   * NEVER compared here: a bcrypt hash can never match a plaintext
+   * comparison, so hashed PINs could never verify under the old code.
+   * Maker-checker still enforced where the secret is attributable:
+   * account mode carries the approver id, so the rep's own login
+   * password approving his own operation is refused; PIN mode
+   * carries no id — the shared PIN belongs to no single user, so no
+   * attribution is invented (same honest limit as cash-drawer).
+   * A shared-PIN approval therefore records no individual
+   * (settled_by / supervisor_id / journal created_by stay null);
+   * the old "first supervisor by id" attribution was false and is gone.
    */
   async verifySupervisorPin(
     tenantId: string,
     pinInput?: string | null,
     repId?: number | null,
     queryable?: any,
+    accountId?: string | null,
   ): Promise<{
     approved: boolean;
     supervisorId?: number;
@@ -225,48 +242,89 @@ export class VanSalesService {
     }
 
     const dbConn = queryable || this.anyDb;
+    // Maker-checker needs the rep's linked login id only. The rep's
+    // stored PIN values are never read for comparison here.
     let repUserId: number | null = null;
-    let repPinMatch = false;
     if (repId && Number(repId) > 0) {
       const repRow = await dbConn
         .selectFrom('delivery_representatives')
-        .select(['pin_hash', 'name', 'phone'])
+        .select(['phone'])
         .where('id', '=', Number(repId))
         .where('tenant_id', '=', tenantId)
         .executeTakeFirst();
       if (repRow?.phone) {
         const repUser = await dbConn
           .selectFrom('users')
-          .select(['id', 'pin', 'pin_hash'])
+          .select(['id'])
           .where('tenant_id', '=', tenantId)
           .where(sql<boolean>`(phone = ${String(repRow.phone)} or username = ${String(repRow.phone)})`)
           .executeTakeFirst();
         if (repUser) {
           repUserId = Number(repUser.id);
-          if (
-            (String(repUser.pin || '').trim() === cleanPin || String(repUser.pin_hash || '').trim() === cleanPin)
-          ) {
-            repPinMatch = true;
-          }
         }
-      }
-      if (repRow?.pin_hash && String(repRow.pin_hash).trim() === cleanPin) {
-        repPinMatch = true;
       }
     }
 
-    let supervisorUser = await dbConn
-      .selectFrom('users')
-      .select(['id', 'role', sql<string>`coalesce(display_name, username)`.as('name')])
-      .where('tenant_id', '=', tenantId)
-      .where('is_active', '=', true)
-      .where(
-        sql<boolean>`(role in ('admin', 'supervisor', 'super_admin') or permissions_json::text ilike '%deliveryReps%' or permissions_json::text ilike '%sales%')`,
-      )
-      .where(sql<boolean>`(pin = ${cleanPin} or pin_hash = ${cleanPin})`)
-      .executeTakeFirst();
+    // The shared rule needs tenant + account scope. Every production
+    // caller passes its accountId; a direct caller that does not gets
+    // the tenant's earliest user account as a best effort, and a
+    // tenant with no users at all fails closed in requireTenantScope.
+    let scopeAccountId = String(accountId || '').trim();
+    if (!scopeAccountId) {
+      try {
+        const scopeUser = await dbConn
+          .selectFrom('users')
+          .select(['account_id'])
+          .where('tenant_id', '=', tenantId)
+          .orderBy('id', 'asc')
+          .executeTakeFirst();
+        scopeAccountId = String((scopeUser as any)?.account_id || '').trim();
+      } catch {
+        scopeAccountId = '';
+      }
+    }
+    const approvalAuth: AuthContext = {
+      userId: 0,
+      sessionId: 'van-supervisor-pin',
+      username: 'supervisor-pin',
+      role: 'supervisor',
+      permissions: [],
+      tenantId,
+      accountId: scopeAccountId,
+    };
 
-    if (repPinMatch || (repUserId && supervisorUser && Number(supervisorUser.id) === repUserId)) {
+    let approval: { mode: 'pin' | 'account'; authorizedByName: string; authorizedById?: number };
+    try {
+      approval = await authorizeManagerSecret(dbConn, approvalAuth, cleanPin);
+    } catch (err) {
+      const code = (err as AppError)?.code;
+      if (code === 'MANAGER_AUTH_INVALID' || code === 'MANAGER_AUTH_REQUIRED') {
+        await this.vanFraudRadarService.recordSuspicionEvent({
+          tenantId,
+          repId: repId ? Number(repId) : null,
+          eventCode: 'VAN_SUSPICION_INVALID_PIN',
+          severity: 'high',
+          titleAr: 'إدخال رمز اعتماد مشرف (PIN) خاطئ أو غير مصرح',
+          detailsAr: 'حاول المندوب إدخال رمز اعتماد مشرف غير صحيح لتمرير عملية استثنائية في الميدان.',
+        });
+        throw new AppError(
+          'رمز اعتماد المشرف (PIN) غير صحيح أو غير مصرح له بالاعتماد الاستثنائي',
+          'INVALID_SUPERVISOR_PIN',
+          403,
+        );
+      }
+      throw err;
+    }
+
+    // Account mode carries attribution, so the rep approving his own
+    // operation with his own login password is refused here. PIN mode
+    // carries no id and is never attributed to any user.
+    if (
+      approval.mode === 'account' &&
+      approval.authorizedById &&
+      repUserId &&
+      Number(approval.authorizedById) === repUserId
+    ) {
       await this.vanFraudRadarService.recordSuspicionEvent({
         tenantId,
         repId: repId ? Number(repId) : null,
@@ -282,48 +340,32 @@ export class VanSalesService {
       );
     }
 
-    if (!supervisorUser) {
-      const settingRow = await dbConn
-        .selectFrom('settings')
-        .select(['value'])
-        .where('tenant_id', '=', tenantId)
-        .where('key', '=', 'managerPin')
-        .executeTakeFirst();
-      if (settingRow?.value && String(settingRow.value).trim() === cleanPin) {
-        let fallbackQuery = dbConn
+    if (approval.mode === 'account') {
+      if (approval.authorizedById) {
+        const supervisorUser = await dbConn
           .selectFrom('users')
-          .select(['id', 'role', sql<string>`coalesce(display_name, username)`.as('name')])
+          .select(['role', sql<string>`coalesce(display_name, username)`.as('name')])
+          .where('id', '=', Number(approval.authorizedById))
           .where('tenant_id', '=', tenantId)
-          .where('is_active', '=', true)
-          .where(sql<boolean>`role in ('admin', 'supervisor', 'super_admin')`);
-        if (repUserId) {
-          fallbackQuery = fallbackQuery.where('id', '!=', repUserId);
-        }
-        supervisorUser = await fallbackQuery.orderBy('id', 'asc').executeTakeFirst();
+          .executeTakeFirst();
+        return {
+          approved: true,
+          supervisorId: Number(approval.authorizedById),
+          supervisorName: String(supervisorUser?.name || approval.authorizedByName || 'مشرف معتمد'),
+          supervisorRole: String(supervisorUser?.role || 'admin'),
+        };
       }
-    }
-
-    if (!supervisorUser) {
-      await this.vanFraudRadarService.recordSuspicionEvent({
-        tenantId,
-        repId: repId ? Number(repId) : null,
-        eventCode: 'VAN_SUSPICION_INVALID_PIN',
-        severity: 'high',
-        titleAr: 'إدخال رمز اعتماد مشرف (PIN) خاطئ أو غير مصرح',
-        detailsAr: 'حاول المندوب إدخال رمز اعتماد مشرف غير صحيح لتمرير عملية استثنائية في الميدان.',
-      });
-      throw new AppError(
-        'رمز اعتماد المشرف (PIN) غير صحيح أو غير مصرح له بالاعتماد الاستثنائي',
-        'INVALID_SUPERVISOR_PIN',
-        403,
-      );
+      return {
+        approved: true,
+        supervisorName: String(approval.authorizedByName || 'مشرف معتمد'),
+        supervisorRole: 'admin',
+      };
     }
 
     return {
       approved: true,
-      supervisorId: Number(supervisorUser.id),
-      supervisorName: String(supervisorUser.name || 'مشرف معتمد'),
-      supervisorRole: String(supervisorUser.role || 'supervisor'),
+      supervisorName: String(approval.authorizedByName || 'اعتماد المدير'),
+      supervisorRole: 'supervisor',
     };
   }
 
@@ -2142,6 +2184,7 @@ export class VanSalesService {
           payload.supervisorOverridePin,
           repId,
           trxAny,
+          accountId,
         );
         supervisorOverrideApproved = pinVerification.approved;
         overrideSupervisorId = pinVerification.supervisorId ?? null;
@@ -3263,6 +3306,7 @@ export class VanSalesService {
             payload.supervisorOverridePin,
             repId,
             trxAny,
+            accountId,
           );
           collectionSupervisorApproved = pinVerification.approved;
           collectionSupervisorId = pinVerification.supervisorId ?? null;
@@ -5767,7 +5811,7 @@ export class VanSalesService {
     let approvedSupervisorName: string | undefined = undefined;
 
     if (payload.supervisorOverridePin) {
-      const pinCheck = await this.verifySupervisorPin(tenantId, payload.supervisorOverridePin, repId);
+      const pinCheck = await this.verifySupervisorPin(tenantId, payload.supervisorOverridePin, repId, undefined, accountId);
       supervisorApproved = pinCheck.approved;
       approvedSupervisorId = pinCheck.supervisorId;
       approvedSupervisorName = pinCheck.supervisorName;
