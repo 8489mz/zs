@@ -86,8 +86,24 @@ function runConversion(orderRow: Record<string, any>): Promise<{ payload: any; r
               return null;
             },
             orderBy: () => ({ executeTakeFirst: async () => ({ id: 2, name: 'Store Rep' }) }),
+            // INV-STOREFRONT-DELIVERY-FEE-MODE: convertToSale resolves the
+            // delivery rep with THREE chained .where() calls (tenant, active,
+            // rep_type not-van-or-null) before .orderBy().executeTakeFirst(),
+            // so the mock must stay chainable through the third .where().
+            where: () => ({
+              executeTakeFirst: async () => {
+                if (table === 'delivery_representatives') return { id: 2, name: 'Store Rep' };
+                return null;
+              },
+              orderBy: () => ({ executeTakeFirst: async () => ({ id: 2, name: 'Store Rep' }) }),
+            }),
           }),
           executeTakeFirst: async () => ({ id: 1, default_stock_location_id: 1 }),
+          // SF-2 D-SF-11: convertToSale now reads the tenant settings map
+          // (resolveStorefrontOutOfStockAllowance -> getTenantSettingsMap),
+          // whose real Kysely chain ends in .execute(). This mock must
+          // provide it; no settings rows here, so the allowance is false.
+          execute: async () => [],
         }),
       }),
       selectAll: () => ({
@@ -98,7 +114,11 @@ function runConversion(orderRow: Record<string, any>): Promise<{ payload: any; r
     }),
     updateTable: () => ({
       set: () => {
-        const builder: any = { where: () => builder, execute: async () => undefined };
+        // SF-2 D-SF-11: convertToSale takes a conversion lock on pending
+        // orders (updateTable -> set -> where x3 -> executeTakeFirst).
+        // The lock is not taken here (numUpdatedRows 0); the conversion
+        // still proceeds and the failure path restores nothing.
+        const builder: any = { where: () => builder, execute: async () => undefined, executeTakeFirst: async () => ({ numUpdatedRows: 0 }) };
         return builder;
       },
     }),

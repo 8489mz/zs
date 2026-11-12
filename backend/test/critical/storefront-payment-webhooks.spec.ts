@@ -571,6 +571,19 @@ async function testOnlinePaidOrderSaleConversion(): Promise<void> {
             orderBy: () => ({
               executeTakeFirst: async () => ({ id: 2, name: 'Store Rep' }),
             }),
+            // INV-STOREFRONT-DELIVERY-FEE-MODE: convertToSale resolves the
+            // delivery rep with THREE chained .where() calls (tenant, active,
+            // rep_type not-van-or-null) before .orderBy().executeTakeFirst(),
+            // so the mock must stay chainable through the third .where().
+            where: () => ({
+              executeTakeFirst: async () => {
+                if (table === 'delivery_representatives') return { id: 2, name: 'Store Rep' };
+                return null;
+              },
+              orderBy: () => ({
+                executeTakeFirst: async () => ({ id: 2, name: 'Store Rep' }),
+              }),
+            }),
           }),
           executeTakeFirst: async () => ({ id: 1, default_stock_location_id: 1 }),
           // SF-2 D-SF-11: convertToSale now reads the tenant settings map
