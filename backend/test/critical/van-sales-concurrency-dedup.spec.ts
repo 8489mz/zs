@@ -13,6 +13,8 @@ describe('Van Sales Concurrency, Deduplication & Idempotency Shield', () => {
       q.where = () => q;
       q.orderBy = () => q;
       q.executeTakeFirst = async () => null;
+      // tenantBaseCurrency reads currency_exchange_rates via .execute().
+      q.execute = async () => [];
       return q;
     };
     const mockDb: any = {
@@ -91,6 +93,8 @@ describe('Van Sales Concurrency, Deduplication & Idempotency Shield', () => {
       q.where = () => q;
       q.orderBy = () => q;
       q.executeTakeFirst = async () => null;
+      // tenantBaseCurrency reads currency_exchange_rates via .execute().
+      q.execute = async () => [];
       return q;
     };
     const mockDb: any = {
@@ -154,6 +158,8 @@ describe('Van Sales Concurrency, Deduplication & Idempotency Shield', () => {
       q.where = () => q;
       q.orderBy = () => q;
       q.executeTakeFirst = async () => null;
+      // tenantBaseCurrency reads currency_exchange_rates via .execute().
+      q.execute = async () => [];
       return q;
     };
     const mockDb: any = {
