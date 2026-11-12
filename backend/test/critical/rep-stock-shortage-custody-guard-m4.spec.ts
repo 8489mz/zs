@@ -323,7 +323,7 @@ async function main(): Promise<void> {
       assert.equal(tripJournal.get('1140')?.credit, 40, 'trip settlement credited inventory 1140 40');
       assert.equal(tripJournal.get('7200'), undefined, 'no expense leg on a charged shortage');
       await seedSettlementItem(db, 201, 'stock_shortage', 40);
-      const result: any = await controller.settleRepFinancialItem(controllerReq, 201, { method: 'waiver' });
+      const result: any = await controller.settleRepFinancialItem(controllerReq, 201, { method: 'waiver', notes: 'تسوية إدارية: عجز مقبول بقرار الإدارة' });
       assert.equal(result.status, 'waived');
       assert.equal(result.receiptVoucherNo, null);
       assert.ok(Number(result.journalEntryId) > 0, 'the waiver journal id is returned');
@@ -395,7 +395,7 @@ async function main(): Promise<void> {
       assert.equal(tripJournal.get('1160'), undefined, 'no custody leg stands for the uncharged shortage');
       await seedSettlementItem(db, 203, 'stock_shortage', 40);
       await assert.rejects(
-        () => controller.settleRepFinancialItem(controllerReq, 203, { method: 'waiver' }),
+        () => controller.settleRepFinancialItem(controllerReq, 203, { method: 'waiver', notes: 'تسوية إدارية: عجز مقبول بقرار الإدارة' }),
         (err: any) => err && err.code === 'REP_SHORTAGE_NO_CUSTODY_LEG',
         'the waiver must fail closed with the specific code',
       );
@@ -482,7 +482,7 @@ async function main(): Promise<void> {
       await seedTrip(db);
       const { controller } = buildServices(db);
       await seedSettlementItem(db, 206, 'cash_shortage', 25);
-      const result: any = await controller.settleRepFinancialItem(controllerReq, 206, { method: 'waiver' });
+      const result: any = await controller.settleRepFinancialItem(controllerReq, 206, { method: 'waiver', notes: 'تسوية إدارية: عجز مقبول بقرار الإدارة' });
       assert.equal(result.status, 'waived');
       assert.equal(result.receiptVoucherNo, null);
       assert.equal(result.journalEntryId, null, 'a cash-shortage waiver returns no journal id');
@@ -510,7 +510,7 @@ async function main(): Promise<void> {
       assert.equal(tripJournal.get('1160')?.debit, 25, 'only Dr 1160 25 stands');
       await seedSettlementItem(db, 207, 'stock_shortage', 40);
       await assert.rejects(
-        () => controller.settleRepFinancialItem(controllerReq, 207, { method: 'waiver' }),
+        () => controller.settleRepFinancialItem(controllerReq, 207, { method: 'waiver', notes: 'تسوية إدارية: عجز مقبول بقرار الإدارة' }),
         (err: any) => err && err.code === 'REP_SHORTAGE_NO_CUSTODY_LEG',
         'a partial leg must fail closed with the specific code',
       );

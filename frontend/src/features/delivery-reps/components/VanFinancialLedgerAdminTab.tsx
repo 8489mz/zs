@@ -45,6 +45,13 @@ export function VanFinancialLedgerAdminTab() {
   const [settleModalItem, setSettleModalItem] = useState<VanRepFinancialSettlementItem | null>(null);
   const [settleMethod, setSettleMethod] = useState<'cash' | 'waiver'>('cash');
   const [settleNotes, setSettleNotes] = useState('');
+  // M5 (INV-REP-WAIVER-APPROVAL-RULE): a waiver above this amount
+  // needs a supervisor PIN on the server (settings key
+  // repWaiverApprovalThreshold, default 500 in tenant base-currency
+  // units — the Q6 equivalent). The server is the authority; this
+  // default only decides when the UI shows the PIN field.
+  const REP_WAIVER_PIN_THRESHOLD_DEFAULT = 500;
+  const [settlePin, setSettlePin] = useState('');
 
   const [isAddBonusOpen, setIsAddBonusOpen] = useState(false);
   const [bonusRepId, setBonusRepId] = useState<string>('');
@@ -173,11 +180,15 @@ export function VanFinancialLedgerAdminTab() {
       id,
       method,
       notes,
+      reason,
+      supervisorPin,
     }: {
       id: number;
       method: 'cash' | 'waiver';
       notes?: string;
-    }) => vanSalesApi.settleRepFinancialItem(id, { method, notes }),
+      reason?: string;
+      supervisorPin?: string;
+    }) => vanSalesApi.settleRepFinancialItem(id, { method, notes, reason, supervisorPin }),
     onSuccess: (res) => {
       toast.success(
         res.status === 'settled'
@@ -186,6 +197,7 @@ export function VanFinancialLedgerAdminTab() {
       );
       setSettleModalItem(null);
       setSettleNotes('');
+      setSettlePin('');
       queryClient.invalidateQueries({ queryKey: ['van-rep-financial-ledger'] });
       queryClient.invalidateQueries({ queryKey: ['van-sales-trips'] });
     },
@@ -1183,6 +1195,7 @@ export function VanFinancialLedgerAdminTab() {
                                 setSettleModalItem(it);
                                 setSettleMethod('cash');
                                 setSettleNotes('');
+                                setSettlePin('');
                               }}
                               style={{
                                 height: '26px',
@@ -1208,6 +1221,7 @@ export function VanFinancialLedgerAdminTab() {
                                 setSettleModalItem(it);
                                 setSettleMethod('waiver');
                                 setSettleNotes('');
+                                setSettlePin('');
                               }}
                               style={{
                                 height: '26px',
@@ -1273,7 +1287,7 @@ export function VanFinancialLedgerAdminTab() {
       {settleModalItem && (
         <StandardDialog
           isOpen={Boolean(settleModalItem)}
-          onClose={() => setSettleModalItem(null)}
+          onClose={() => { setSettleModalItem(null); setSettlePin(''); }}
           title={settleMethod === 'cash' ? t('delivery_reps.van_financial_ledger_admin_tab.s69', "إثبات سداد نقدي وتوريد للخزينة") : t('delivery_reps.van_financial_ledger_admin_tab.s70', "تسوية وإعفاء إداري معتمد")}
           subtitle={`المندوب: ${settleModalItem.repName} | المبلغ: ${Number(settleModalItem.amount).toFixed(2)} ج.م`}
           width="480px"
@@ -1341,6 +1355,7 @@ export function VanFinancialLedgerAdminTab() {
             <div>
               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
                 {t('delivery_reps.van_financial_ledger_admin_tab.s77', "ملاحظات ومبررات التسوية:")}
+                {settleMethod === 'waiver' && <span style={{ color: '#dc2626' }}> *</span>}
               </label>
               <textarea
                 value={settleNotes}
@@ -1356,7 +1371,40 @@ export function VanFinancialLedgerAdminTab() {
                   boxSizing: 'border-box',
                 }}
               />
+              {settleMethod === 'waiver' && !settleNotes.trim() && (
+                <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px' }}>
+                  {t('delivery_reps.van_financial_ledger_admin_tab.s86', "سبب الإعفاء إلزامي — لا يمكن اعتماد الإعفاء بدون سبب مسجل.")}
+                </div>
+              )}
             </div>
+
+            {settleMethod === 'waiver' && Number(settleModalItem.amount) > REP_WAIVER_PIN_THRESHOLD_DEFAULT && (
+              <div>
+                <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
+                  {t('delivery_reps.van_financial_ledger_admin_tab.s87', "رمز اعتماد المشرف (PIN):")}
+                  <span style={{ color: '#dc2626' }}> *</span>
+                </label>
+                <input
+                  type="password"
+                  value={settlePin}
+                  onChange={(e) => setSettlePin(e.target.value)}
+                  placeholder={t('delivery_reps.van_financial_ledger_admin_tab.s88', "أدخل رمز المشرف أو كلمة مرور المدير")}
+                  autoComplete="off"
+                  style={{
+                    width: '100%',
+                    height: '35px',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    padding: '0 10px',
+                    fontSize: '12px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                  {t('delivery_reps.van_financial_ledger_admin_tab.s89', "المبلغ فوق حد الاعتماد (500) فيتطلب اعتماد مشرف؛ ولا يجوز لمن اعتمد تصفية الرحلة أن يعتمد إعفاءها.")}
+                </div>
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
               <Button
@@ -1366,9 +1414,19 @@ export function VanFinancialLedgerAdminTab() {
                     id: settleModalItem.id,
                     method: settleMethod,
                     notes: settleNotes.trim() || undefined,
+                    reason: settleMethod === 'waiver' ? settleNotes.trim() || undefined : undefined,
+                    supervisorPin:
+                      settleMethod === 'waiver' && Number(settleModalItem.amount) > REP_WAIVER_PIN_THRESHOLD_DEFAULT
+                        ? settlePin.trim() || undefined
+                        : undefined,
                   })
                 }
-                disabled={settleMutation.isPending}
+                disabled={
+                  settleMutation.isPending ||
+                  (settleMethod === 'waiver' &&
+                    (!settleNotes.trim() ||
+                      (Number(settleModalItem.amount) > REP_WAIVER_PIN_THRESHOLD_DEFAULT && !settlePin.trim())))
+                }
                 style={{
                   flex: 1,
                   height: '36px',

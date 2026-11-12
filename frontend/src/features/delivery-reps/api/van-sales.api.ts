@@ -2129,7 +2129,7 @@ export const vanSalesApi = {
 
   settleRepFinancialItem: async (
     id: number,
-    payload: { method: 'cash' | 'waiver'; notes?: string }
+    payload: { method: 'cash' | 'waiver'; notes?: string; reason?: string; supervisorPin?: string }
   ): Promise<{ ok: boolean; id: number; status: string; receiptVoucherNo?: string }> => {
     return http(`/api/van-sales/admin/financial-ledger/${id}/settle`, {
       method: 'POST',

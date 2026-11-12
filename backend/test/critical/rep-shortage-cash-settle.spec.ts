@@ -384,7 +384,7 @@ async function main(): Promise<void> {
       await seedTrip(db);
       await seedSettlementItem(db, 105, 'cash_shortage', 25);
       const { van, drawer } = buildServices(db);
-      const result = await van.settleRepFinancialItem(TENANT, ACCOUNT, 105, { method: 'waiver' }, adminAuth);
+      const result = await van.settleRepFinancialItem(TENANT, ACCOUNT, 105, { method: 'waiver', notes: 'تسوية إدارية: عجز مقبول بقرار الإدارة' }, adminAuth);
       assert.equal(result.status, 'waived');
       assert.equal(result.receiptVoucherNo, null);
       assert.equal(result.journalEntryId, null, 'a cash-shortage waiver returns no journal id');
@@ -481,7 +481,7 @@ async function main(): Promise<void> {
       await seedSettlementItem(db, 109, 'stock_shortage', 40);
       const { van, drawer, posting } = buildServices(db);
       await seedChargedTripJournal(db, posting);
-      const result = await van.settleRepFinancialItem(TENANT, ACCOUNT, 109, { method: 'waiver' }, adminAuth);
+      const result = await van.settleRepFinancialItem(TENANT, ACCOUNT, 109, { method: 'waiver', notes: 'تسوية إدارية: عجز مقبول بقرار الإدارة' }, adminAuth);
       assert.equal(result.status, 'waived');
       assert.equal(result.receiptVoucherNo, null);
       assert.ok(Number(result.journalEntryId) > 0, 'the waiver journal id is returned');
@@ -518,10 +518,10 @@ async function main(): Promise<void> {
       await seedSettlementItem(db, 110, 'stock_shortage', 40);
       const { van, posting } = buildServices(db);
       await seedChargedTripJournal(db, posting);
-      const first = await van.settleRepFinancialItem(TENANT, ACCOUNT, 110, { method: 'waiver' }, adminAuth);
+      const first = await van.settleRepFinancialItem(TENANT, ACCOUNT, 110, { method: 'waiver', notes: 'تسوية إدارية: عجز مقبول بقرار الإدارة' }, adminAuth);
       assert.equal(first.status, 'waived');
       await assert.rejects(
-        () => van.settleRepFinancialItem(TENANT, ACCOUNT, 110, { method: 'waiver' }, adminAuth),
+        () => van.settleRepFinancialItem(TENANT, ACCOUNT, 110, { method: 'waiver', notes: 'تسوية إدارية: عجز مقبول بقرار الإدارة' }, adminAuth),
         /ALREADY_SETTLED/,
       );
       assert.equal((await itemRow(db, 110)).status, 'waived');
@@ -543,7 +543,7 @@ async function main(): Promise<void> {
       await seedTrip(db);
       await seedSettlementItem(db, 111, 'stock_shortage', 0);
       const { van } = buildServices(db);
-      const result = await van.settleRepFinancialItem(TENANT, ACCOUNT, 111, { method: 'waiver' }, adminAuth);
+      const result = await van.settleRepFinancialItem(TENANT, ACCOUNT, 111, { method: 'waiver', notes: 'تسوية إدارية: عجز مقبول بقرار الإدارة' }, adminAuth);
       assert.equal(result.status, 'waived');
       assert.equal(result.receiptVoucherNo, null);
       assert.equal(result.journalEntryId, null, 'no journal for a zero amount');
