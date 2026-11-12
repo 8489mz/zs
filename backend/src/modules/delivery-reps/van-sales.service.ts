@@ -7416,12 +7416,50 @@ export class VanSalesService {
         // and records a failure instead of a second deduction.
         const lockedItem = await trxAny
           .selectFrom('van_rep_financial_settlements')
-          .select(['id', 'status', 'amount'])
+          .select(['id', 'status', 'amount', 'notes'])
           .where('id', '=', item.id)
           .where('tenant_id', '=', tenantId)
           .forUpdate()
           .executeTakeFirst();
-        if (!lockedItem || lockedItem.status !== 'pending') {
+        if (!lockedItem) {
+          results.push({
+            id: Number(item.id),
+            repName: item.repName,
+            amount: Number(item.amount),
+            success: false,
+            message: 'البند تمت تسويته مسبقاً',
+          });
+          continue;
+        }
+
+        // INV-PAYROLL-PUSH-FAIL-CLOSED: a row already flipped to
+        // pushed_to_payroll is retryable ONLY when no payroll
+        // adjustment was ever written for it. The pre-fix code flipped
+        // the row and then skipped the insert when no employee was
+        // linked, so the shortage vanished with no deduction and no
+        // retry. A flipped row WITH an adjustment is genuinely pushed
+        // and stays refused, so a re-push can never double-deduct.
+        let isRepush = false;
+        if (lockedItem.status === 'pushed_to_payroll') {
+          const existingAdjustment = await trxAny
+            .selectFrom('hr_employee_adjustments')
+            .select('id')
+            .where('tenant_id', '=', tenantId)
+            .where('source_type', '=', 'van_sales_settlement')
+            .where('source_id', '=', String(item.id))
+            .executeTakeFirst();
+          if (existingAdjustment) {
+            results.push({
+              id: Number(item.id),
+              repName: item.repName,
+              amount: Number(item.amount),
+              success: false,
+              message: 'البند تمت تسويته مسبقاً',
+            });
+            continue;
+          }
+          isRepush = true;
+        } else if (lockedItem.status !== 'pending') {
           results.push({
             id: Number(item.id),
             repName: item.repName,
@@ -7458,69 +7496,101 @@ export class VanSalesService {
           }
         }
 
-        const flipped = await trxAny
-          .updateTable('van_rep_financial_settlements')
-          .set({
-            status: 'pushed_to_payroll',
-            settlement_method: 'payroll',
-            settled_at: sql`NOW()`,
-            settled_by: actorUserId,
-            notes: `${item.notes ? item.notes + ' | ' : ''}تم ترحيل العجز لمسير رواتب شهر ${targetMonth}${resolvedEmployeeId ? ` (موظف #${resolvedEmployeeId})` : ' (قيد انتظار ربط الموظف)'}`,
-            updated_at: sql`NOW()`,
-          })
-          .where('id', '=', item.id)
-          .where('tenant_id', '=', tenantId)
-          .where('status', '=', 'pending')
-          .returning('id')
-          .execute();
-        if (flipped.length !== 1) {
+        // INV-PAYROLL-PUSH-FAIL-CLOSED: fail closed — a push with no
+        // linked employee is REFUSED and the row stays pending, so it
+        // can be pushed after the rep is linked. The old code flipped
+        // the row and reported success with no deduction written.
+        if (!resolvedEmployeeId) {
           results.push({
             id: Number(item.id),
             repName: item.repName,
             amount: Number(item.amount),
             success: false,
-            message: 'البند تمت تسويته مسبقاً',
+            message: `لم يتم الترحيل: المندوب ${item.repName} غير مرتبط بموظف في الموارد البشرية — اربط المندوب بموظف ثم أعد الترحيل`,
           });
           continue;
         }
 
-        // If resolvedEmployeeId is available, insert into hr_employee_adjustments for HR payroll integration
-        if (resolvedEmployeeId) {
-          const isShortage = ['cash_shortage', 'stock_shortage'].includes(item.entryType);
-          const adjType = isShortage ? 'deduction' : 'allowance';
-          const adjReason = isShortage
-            ? `استقطاع عجز سيارة فان (حركة #${item.id} - ${item.notes || 'عجز مبيعات'})`
-            : `صرف بونص/عمولة سيارة فان (حركة #${item.id} - ${item.notes || 'حافز مبيعات'})`;
-
-          await trxAny
-            .insertInto('hr_employee_adjustments')
-            .values({
-              tenant_id: tenantId,
-              employee_id: resolvedEmployeeId,
-              adjustment_type: adjType,
-              amount_type: 'fixed',
-              amount: Number(item.amount),
-              date: sql`CURRENT_DATE`,
-              reason: adjReason,
-              status: 'pending',
-              source_type: 'van_sales_settlement',
-              source_id: String(item.id),
-              created_by: actorUserId,
-              updated_by: actorUserId,
-              created_at: sql`NOW()`,
+        if (!isRepush) {
+          const flipped = await trxAny
+            .updateTable('van_rep_financial_settlements')
+            .set({
+              status: 'pushed_to_payroll',
+              settlement_method: 'payroll',
+              settled_at: sql`NOW()`,
+              settled_by: actorUserId,
+              notes: `${item.notes ? item.notes + ' | ' : ''}تم ترحيل العجز لمسير رواتب شهر ${targetMonth} (موظف #${resolvedEmployeeId})`,
               updated_at: sql`NOW()`,
             })
+            .where('id', '=', item.id)
+            .where('tenant_id', '=', tenantId)
+            .where('status', '=', 'pending')
+            .returning('id')
+            .execute();
+          if (flipped.length !== 1) {
+            results.push({
+              id: Number(item.id),
+              repName: item.repName,
+              amount: Number(item.amount),
+              success: false,
+              message: 'البند تمت تسويته مسبقاً',
+            });
+            continue;
+          }
+        } else {
+          // The row was already flipped by the failed pre-fix push;
+          // record the retry in the notes instead of flipping again.
+          await trxAny
+            .updateTable('van_rep_financial_settlements')
+            .set({
+              notes: `${lockedItem.notes ? lockedItem.notes + ' | ' : ''}أعيد ترحيل العجز لمسير رواتب شهر ${targetMonth} (موظف #${resolvedEmployeeId})`,
+              updated_at: sql`NOW()`,
+            })
+            .where('id', '=', item.id)
+            .where('tenant_id', '=', tenantId)
             .execute();
         }
+
+        // INV-PAYROLL-PUSH-FAIL-CLOSED: the adjustment is always
+        // written now — the no-employee case is refused above, so
+        // reaching here without a deduction is impossible. amount_type
+        // is 'money': 'fixed' is not a legal unit ('money' | 'days' |
+        // 'hours') and made the whole payroll run build fail with
+        // HR_PAYROLL_DATED_ADJUSTMENT_INVALID.
+        const isShortage = ['cash_shortage', 'stock_shortage'].includes(item.entryType);
+        const adjType = isShortage ? 'deduction' : 'allowance';
+        const adjReason = isShortage
+          ? `استقطاع عجز سيارة فان (حركة #${item.id} - ${item.notes || 'عجز مبيعات'})`
+          : `صرف بونص/عمولة سيارة فان (حركة #${item.id} - ${item.notes || 'حافز مبيعات'})`;
+
+        await trxAny
+          .insertInto('hr_employee_adjustments')
+          .values({
+            tenant_id: tenantId,
+            employee_id: Number(resolvedEmployeeId),
+            adjustment_type: adjType,
+            amount_type: 'money',
+            amount: Number(lockedItem.amount),
+            date: sql`CURRENT_DATE`,
+            reason: adjReason,
+            status: 'pending',
+            source_type: 'van_sales_settlement',
+            source_id: String(item.id),
+            created_by: actorUserId,
+            updated_by: actorUserId,
+            created_at: sql`NOW()`,
+            updated_at: sql`NOW()`,
+          })
+          .execute();
 
         results.push({
           id: Number(item.id),
           repName: item.repName,
           amount: Number(item.amount),
           success: true,
-          message: resolvedEmployeeId
-            ? `تم الترحيل بنجاح لملف الموظف في مسير شهر ${targetMonth}`
-            : `تم ترحيل البند كعجز معتمد لمسير رواتب شهر ${targetMonth}`,
+          message: isRepush
+            ? `أعيد الترحيل بنجاح لملف الموظف في مسير شهر ${targetMonth}`
+            : `تم الترحيل بنجاح لملف الموظف في مسير شهر ${targetMonth}`,
         });
       }
     });
