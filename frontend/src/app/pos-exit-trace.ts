@@ -136,9 +136,25 @@ export function installPosExitTrace(options: InstallPosExitTraceOptions): () => 
 
   // Originals, saved before wrapping so uninstall restores exactly them.
   const origSetTimeout = window.setTimeout;
+  // Loose alias for CALLING the original: this project's type environment
+  // resolves window.setTimeout to the Node flavour (Timeout return, generic
+  // tuple params), so a plain `.call`/`.apply` with a spread fails the
+  // checker. The alias keeps the DOM calling shape; the original above stays
+  // untouched so uninstall restores the exact function object.
+  const callOrigTimeout = origSetTimeout as unknown as (
+    handler: TimerHandler,
+    timeout?: number,
+    ...args: any[]
+  ) => ReturnType<typeof window.setTimeout>;
   const origPushState = window.history.pushState;
   const origReplaceState = window.history.replaceState;
   const origNotifySchedule = notifyManager.schedule;
+  // query-core declares `schedule` readonly, so the wrap/restore go through a
+  // mutable view. Runtime behaviour is unchanged: the same function object is
+  // wrapped and restored.
+  const notifyManagerMutable = notifyManager as unknown as {
+    schedule: (callback: () => void) => void;
+  };
 
   const dump = (): void => {
     if (dumped) return;
@@ -158,7 +174,7 @@ export function installPosExitTrace(options: InstallPosExitTraceOptions): () => 
 
   const scheduleDump = (): void => {
     if (dumped || dumpTimer !== undefined) return;
-    dumpTimer = origSetTimeout.call(window, dump, dumpDelayMs);
+    dumpTimer = callOrigTimeout.call(window, dump, dumpDelayMs);
   };
 
   // 1. Every queryCache write: event type + query key + time.
@@ -170,7 +186,7 @@ export function installPosExitTrace(options: InstallPosExitTraceOptions): () => 
   });
 
   // 2. Every notifyManager schedule + flush (the "Timer fired" signature).
-  notifyManager.schedule = (callback: () => void): void => {
+  notifyManagerMutable.schedule = (callback: () => void): void => {
     record('notify-scheduled', '');
     origNotifySchedule.call(notifyManager, () => {
       const start = safeNow();
@@ -214,12 +230,16 @@ export function installPosExitTrace(options: InstallPosExitTraceOptions): () => 
       `${link.getAttribute('data-key') || ''} -> ${link.getAttribute('href') || ''}`,
     );
     if (fallbackTimer === undefined) {
-      fallbackTimer = origSetTimeout.call(window, dump, FALLBACK_DUMP_MS);
+      fallbackTimer = callOrigTimeout.call(window, dump, FALLBACK_DUMP_MS);
     }
   };
   document.addEventListener('click', onDocumentClick, true);
 
-  window.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+  // The DOM setTimeout signature takes `...arguments: any[]`; matching it here
+  // keeps the spread into the original legal, and the double cast is what TS
+  // itself suggests for the NodeJS.Timeout vs number overlap (this project's
+  // type environment resolves the call to the Node flavour).
+  window.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: any[]) => {
     const delay = timeout ?? 0;
     if (
       typeof handler === 'function' &&
@@ -241,10 +261,10 @@ export function installPosExitTrace(options: InstallPosExitTraceOptions): () => 
           record('timer-0-done', `${(safeNow() - start).toFixed(1)}ms`);
         }
       };
-      return origSetTimeout.call(window, wrapped, 0, ...args);
+      return callOrigTimeout.apply(window, [wrapped, 0, ...args]);
     }
-    return origSetTimeout.call(window, handler as never, delay, ...args);
-  }) as typeof window.setTimeout;
+    return callOrigTimeout.apply(window, [handler, delay, ...args]);
+  }) as unknown as typeof window.setTimeout;
 
   // 6. Route changes.
   const recordRouteChange = (to: string): void => {
@@ -278,7 +298,7 @@ export function installPosExitTrace(options: InstallPosExitTraceOptions): () => 
     window.setTimeout = origSetTimeout;
     window.history.pushState = origPushState;
     window.history.replaceState = origReplaceState;
-    notifyManager.schedule = origNotifySchedule;
+    notifyManagerMutable.schedule = origNotifySchedule;
     if (dumpTimer !== undefined) clearTimeout(dumpTimer);
     if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
   };
