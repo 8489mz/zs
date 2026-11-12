@@ -61,6 +61,40 @@ export class ServicesService {
     };
   }
 
+  // INV-SERVICES-TREASURY-APPEND-ONLY: treasury legs for a service are
+  // append-only. The live cash balance of a service is the sum of its
+  // legs; superseding it posts a NEGATIVE cash_out leg (the established
+  // cash_out sign: sales-write posts cash_out legs as -Math.abs(amount),
+  // and computeShiftCashDrawerMovements counts amount < 0 as cash out).
+  // Nothing is ever DELETEed here, so the original leg keeps its id,
+  // amount and created_at forever.
+  private async postServiceTreasuryReversal(
+    db: Kysely<Database>,
+    serviceId: number,
+    serviceName: string,
+    auth: AuthContext,
+    scope: ServiceFinanceScope,
+  ): Promise<number> {
+    const tenantScope = requireTenantScope(auth);
+    const live = await sql<{ total?: number | string | null }>`
+      select coalesce(sum(amount), 0) as total
+      from treasury_transactions
+      where tenant_id = ${tenantScope.tenantId}
+        and reference_type = 'service'
+        and reference_id = ${serviceId}
+    `.execute(db);
+    const liveCash = Number(live.rows?.[0]?.total || 0);
+    if (!(liveCash > 0)) return 0;
+    await sql`
+      insert into treasury_transactions (
+        txn_type, amount, note, reference_type, reference_id, branch_id, location_id, created_by, created_at, tenant_id, account_id
+      ) values (
+        'cash_out', ${-liveCash}, ${`عكس خدمة نقدي: ${String(serviceName || '').trim()}`}, 'service', ${serviceId}, ${scope.branchId}, ${scope.locationId}, ${auth.userId}, ${new Date()}, ${tenantScope.tenantId}, ${tenantScope.accountId}
+      )
+    `.execute(db);
+    return liveCash;
+  }
+
   private async syncServiceTreasuryTransaction(
     db: Kysely<Database>,
     serviceId: number,
@@ -69,12 +103,12 @@ export class ServicesService {
     scope: ServiceFinanceScope,
   ): Promise<number | null> {
     const tenantScope = requireTenantScope(auth);
-    await sql`
-      delete from treasury_transactions
-      where tenant_id = ${tenantScope.tenantId}
-        and reference_type = 'service'
-        and reference_id = ${serviceId}
-    `.execute(db);
+    // Append-only: reverse the live cash balance with a cash_out leg,
+    // never DELETE the old legs. created_at is NOW (the creation
+    // moment), never the backdated service_date (F4): the old code
+    // dated the re-inserted leg at service_date while shift
+    // attribution windows on created_at.
+    await this.postServiceTreasuryReversal(db, serviceId, service.name || '', auth, scope);
 
     const amount = Number(service.amount || 0);
     const paymentChannel = this.normalizePaymentChannel(service.paymentChannel);
@@ -82,16 +116,79 @@ export class ServicesService {
       return null;
     }
 
-    const serviceDate = service.date ? new Date(service.date) : new Date();
     const inserted = await sql<{ id: number }>`
       insert into treasury_transactions (
         txn_type, amount, note, reference_type, reference_id, branch_id, location_id, created_by, created_at, tenant_id, account_id
       ) values (
-        'cash_in', ${amount}, ${`خدمة نقدي: ${String(service.name || '').trim()}`}, 'service', ${serviceId}, ${scope.branchId}, ${scope.locationId}, ${auth.userId}, ${serviceDate}, ${tenantScope.tenantId}, ${tenantScope.accountId}
+        'cash_in', ${amount}, ${`خدمة نقدي: ${String(service.name || '').trim()}`}, 'service', ${serviceId}, ${scope.branchId}, ${scope.locationId}, ${auth.userId}, ${new Date()}, ${tenantScope.tenantId}, ${tenantScope.accountId}
       )
       returning id
     `.execute(db);
     return Number(inserted.rows?.[0]?.id || 0) || null;
+  }
+
+  // INV-SERVICES-TREASURY-APPEND-ONLY (closed-shift guard): a service
+  // whose cash entered inside a CLOSED shift may not be updated or
+  // deleted. Two predicates, one window ([shift.created_at,
+  // shift.closed_at], branch/location null-tolerant, the same window
+  // computeShiftServiceBreakdown uses): (a) any cash_in treasury leg
+  // of the service dated inside the window — reversal legs are
+  // excluded, they record the update moment, not the cash entry;
+  // (b) the service row itself, because the shift service detail
+  // reads the services table (created_by + created_at window), so
+  // changing the amount rewrites the closed shift's reported cash
+  // even though services.created_at never moves. Card services have
+  // no treasury leg, so (b) is what protects them. Checked inside
+  // the transaction AFTER the FOR UPDATE lock, BEFORE any reversal,
+  // so a refused call changes nothing.
+  private async assertServiceNotInClosedShift(
+    db: Kysely<Database>,
+    serviceId: number,
+    serviceRow: { branch_id?: number | string | null; location_id?: number | string | null; created_by?: number | string | null; created_at?: Date | string | null },
+    operation: 'update' | 'delete',
+    auth: AuthContext,
+  ): Promise<void> {
+    const tenantScope = requireTenantScope(auth);
+    const branchId = this.toNullableNumber(serviceRow.branch_id);
+    const locationId = this.toNullableNumber(serviceRow.location_id);
+    const createdBy = Number(serviceRow.created_by || 0) || null;
+    const createdAt = serviceRow.created_at ? new Date(serviceRow.created_at) : null;
+    const found = await sql<{ id: number }>`
+      select cs.id
+      from cashier_shifts cs
+      where cs.tenant_id = ${tenantScope.tenantId}
+        and cs.status = 'closed'
+        and (
+          exists (
+            select 1 from treasury_transactions tt
+            where tt.tenant_id = ${tenantScope.tenantId}
+              and tt.reference_type = 'service'
+              and tt.reference_id = ${serviceId}
+              and tt.txn_type = 'cash_in'
+              and tt.created_at >= cs.created_at
+              and (cs.closed_at is null or tt.created_at <= cs.closed_at)
+              and (cs.branch_id is null or tt.branch_id is null or tt.branch_id = cs.branch_id)
+              and (cs.location_id is null or tt.location_id is null or tt.location_id = cs.location_id)
+          )
+          or (
+            ${createdBy}::bigint is not null and ${createdBy}::bigint = cs.opened_by
+            and ${createdAt}::timestamptz is not null and ${createdAt}::timestamptz >= cs.created_at
+            and (cs.closed_at is null or ${createdAt}::timestamptz <= cs.closed_at)
+            and (cs.branch_id is null or ${branchId}::int is null or ${branchId}::int = cs.branch_id)
+            and (cs.location_id is null or ${locationId}::int is null or ${locationId}::int = cs.location_id)
+          )
+        )
+      limit 1
+    `.execute(db);
+    if (found.rows?.length) {
+      throw new AppError(
+        operation === 'delete'
+          ? 'لا يمكن حذف خدمة تنتمي إلى وردية مغلقة'
+          : 'لا يمكن تعديل خدمة تنتمي إلى وردية مغلقة',
+        'SERVICE_SHIFT_CLOSED',
+        422,
+      );
+    }
   }
 
   async listServices(query: Record<string, unknown>, auth: AuthContext, db: Kysely<Database> = this.db): Promise<Record<string, unknown>> {
@@ -269,8 +366,8 @@ export class ServicesService {
     };
 
     const finalResponse = await this.tx.runInTransaction(this.db, async (trx) => {
-      const existing = await sql<{ id: number; branch_id?: number | string | null; location_id?: number | string | null; revision: number }>`
-        select id, branch_id, location_id, revision
+      const existing = await sql<{ id: number; branch_id?: number | string | null; location_id?: number | string | null; revision: number; created_by?: number | string | null; created_at?: Date | string | null; name?: string | null }>`
+        select id, branch_id, location_id, revision, created_by, created_at, name
         from services
         where tenant_id = ${tenantScope.tenantId} and id = ${id}
         for update
@@ -278,6 +375,8 @@ export class ServicesService {
 
       const existingRow = existing.rows?.[0] || null;
       if (!existingRow) throw new AppError('Service not found', 'SERVICE_NOT_FOUND', 404);
+
+      await this.assertServiceNotInClosedShift(trx, id, existingRow, 'update', auth);
 
       const financeScope = { branchId: this.toNullableNumber(existingRow.branch_id), locationId: this.toNullableNumber(existingRow.location_id) };
 
@@ -318,17 +417,25 @@ export class ServicesService {
     }
 
     const finalResponse = await this.tx.runInTransaction(this.db, async (trx) => {
-      const existing = await sql<{ id: number; revision: number }>`
-        select id, revision
+      const existing = await sql<{ id: number; revision: number; name?: string | null; branch_id?: number | string | null; location_id?: number | string | null; created_by?: number | string | null; created_at?: Date | string | null }>`
+        select id, revision, name, branch_id, location_id, created_by, created_at
         from services
         where tenant_id = ${tenantScope.tenantId} and id = ${id}
         for update
       `.execute(trx);
 
       if (!existing.rows.length) throw new AppError('Service not found', 'SERVICE_NOT_FOUND', 404);
+      const existingRow = existing.rows[0];
 
-      await this.accountingPosting.reverseService(trx, id, existing.rows[0].revision, auth);
-      await sql`delete from treasury_transactions where tenant_id = ${tenantScope.tenantId} and reference_type = 'service' and reference_id = ${id}`.execute(trx);
+      await this.assertServiceNotInClosedShift(trx, id, existingRow, 'delete', auth);
+
+      await this.accountingPosting.reverseService(trx, id, existingRow.revision, auth);
+      // Append-only: reverse the live cash with a cash_out leg, never
+      // DELETE the treasury rows; the service row itself is hard-deleted.
+      await this.postServiceTreasuryReversal(trx, id, existingRow.name || '', auth, {
+        branchId: this.toNullableNumber(existingRow.branch_id),
+        locationId: this.toNullableNumber(existingRow.location_id),
+      });
       await sql`delete from services where tenant_id = ${tenantScope.tenantId} and id = ${id}`.execute(trx);
 
       const responsePayload = { ok: true, ...(await this.listServices({}, auth, trx)) };
