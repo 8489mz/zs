@@ -666,7 +666,25 @@ export class DeliveryRepsService {
     };
   }
 
-  async settleAllOrders(repId: number, expectedAmount: number, actor: AuthContext): Promise<Record<string, unknown>> {
+  async settleAllOrders(repId: number, expectedAmount: number, actor: AuthContext, countedCashAmount?: number): Promise<Record<string, unknown>> {
+    // INV-SETTLE-ALL-CONFIRMATION-COUNTED-CASH (B5): the
+    // expectedAmount is the confirmation gate — the only proof the
+    // cash handed over matches the books — so it must be present
+    // and numeric BEFORE any write. At base the gate read
+    // `actualTotal - undefined` = NaN and `NaN > 0.01` is false,
+    // so omitting the field settled a short batch as if it had
+    // matched. A counted amount, when supplied, is validated the
+    // same way as the single-order path (D-SF-01).
+    const rawExpected = Number(expectedAmount);
+    if (expectedAmount === undefined || expectedAmount === null || !Number.isFinite(rawExpected) || rawExpected < 0) {
+      throw new AppError('Expected settlement amount must be a non-negative number', 'SETTLEMENT_AMOUNT_INVALID', 400);
+    }
+    if (countedCashAmount !== undefined && countedCashAmount !== null) {
+      const rawCounted = Number(countedCashAmount);
+      if (!Number.isFinite(rawCounted) || rawCounted < 0) {
+        throw new AppError('Counted cash amount must be a non-negative number', 'SETTLEMENT_AMOUNT_INVALID', 400);
+      }
+    }
     const result = await this.db.transaction().execute(async (trx) => {
       const openShift = await this.findOwnOpenShift(trx, actor);
       if (!openShift) throw new AppError('لا بد من فتح وردية أولاً لاستلام الفلوس من المندوب', 'NO_OPEN_SHIFT', 400);
@@ -725,8 +743,42 @@ export class DeliveryRepsService {
       };
       const actualTotal = roundMoney(unsettledOrders.reduce((sum, order) => sum + cashDue(order), 0), moneyDigits);
 
-      if (Math.abs(actualTotal - expectedAmount) > 0.01) {
-        throw new AppError(`مبلغ التسوية (${expectedAmount}) لا يتطابق مع إجمالي المطلوب من المندوب (${actualTotal}).`, 'AMOUNT_MISMATCH', 400);
+      // B5 secondary: the tolerance is the tenant's book tolerance
+      // (10^-moneyDigits — the same tolerance the posting service
+      // uses), not a hardcoded 0.01: on a 3-decimal tenant the old
+      // 0.01 let a 0.005 mismatch through.
+      const tolerance = 10 ** -moneyDigits;
+      if (Math.abs(actualTotal - rawExpected) > tolerance) {
+        throw new AppError(`مبلغ التسوية (${rawExpected}) لا يتطابق مع إجمالي المطلوب من المندوب (${actualTotal}).`, 'AMOUNT_MISMATCH', 400);
+      }
+
+      // INV-SETTLE-ALL-CONFIRMATION-COUNTED-CASH (C7): the cash
+      // the rep actually handed over, counted by the cashier.
+      // When no counted amount is supplied it defaults to the book
+      // total, preserving the old behaviour exactly. A counted
+      // amount is never silently replaced by the book amount: the
+      // difference is a shortage (Dr 7200) or an overage (Cr 7100)
+      // booked by postDeliveryRepSettlement, exactly like the
+      // single-order path. The batch total is allocated across the
+      // orders in id order (each order counted up to its own cash
+      // due; any overage beyond every due lands on the last order),
+      // so the per-order counted amounts always sum to the counted
+      // total and no order is ever counted negative.
+      const totalCounted = countedCashAmount !== undefined && countedCashAmount !== null
+        ? roundMoney(Number(countedCashAmount), moneyDigits)
+        : actualTotal;
+      const totalVariance = roundMoney(totalCounted - actualTotal, moneyDigits);
+      const countedByOrderId = new Map<number, number>();
+      let remainingCounted = totalCounted;
+      for (const order of unsettledOrders) {
+        const due = cashDue(order);
+        const take = roundMoney(Math.min(due, remainingCounted), moneyDigits);
+        countedByOrderId.set(Number(order.id), take);
+        remainingCounted = roundMoney(remainingCounted - take, moneyDigits);
+      }
+      if (remainingCounted > 0) {
+        const lastId = Number(unsettledOrders[unsettledOrders.length - 1].id);
+        countedByOrderId.set(lastId, roundMoney((countedByOrderId.get(lastId) ?? 0) + remainingCounted, moneyDigits));
       }
 
       const saleIds = unsettledOrders.map(o => o.id);
@@ -736,11 +788,18 @@ export class DeliveryRepsService {
 
       // R7-A F2: no cash row when the batch hands over nothing
       // (every order fully returned) — a zero treasury row is noise.
-      if (actualTotal > 0) {
+      // The drawer rises by the cash actually counted, not the book
+      // total: unreceived cash is never booked as received.
+      const varianceNote = totalVariance < 0
+        ? ` (عجز ${roundMoney(Math.abs(totalVariance), moneyDigits)} ج)`
+        : totalVariance > 0
+          ? ` (زيادة ${totalVariance} ج)`
+          : '';
+      if (totalCounted > 0) {
         await trx.insertInto('treasury_transactions').values({
           txn_type: 'cash_in',
-          amount: actualTotal,
-          note: `تسوية أوردرات دليفري (${saleIds.length} أوردر) من ${repLabel}`,
+          amount: totalCounted,
+          note: `تسوية أوردرات دليفري (${saleIds.length} أوردر) من ${repLabel}${varianceNote}`,
           reference_type: 'cashier_shift',
           reference_id: openShift.id,
           branch_id: openShift.branchId,
@@ -760,7 +819,7 @@ export class DeliveryRepsService {
           && !(await this.accountingPosting.hasDeliveryCustodyReclassification(trx, Number(order.id), actor))) {
           await this.salesFinance.createCustomerLedgerEntry(trx, order.customer_id, -basis.remainingReceivable, `تسديد من مندوب للأوردر #${order.id}`, order.id, actor);
         }
-        await this.accountingPosting.postDeliveryRepSettlement(trx, order.id, cashDue(order), openShift.branchId, openShift.locationId, actor);
+        await this.accountingPosting.postDeliveryRepSettlement(trx, order.id, cashDue(order), openShift.branchId, openShift.locationId, actor, { countedCash: countedByOrderId.get(Number(order.id)) ?? cashDue(order) });
       }
 
       await trx
@@ -786,11 +845,11 @@ export class DeliveryRepsService {
         .where('status', '!=', 'cancelled')
         .execute();
 
-      return { settledCount: saleIds.length, totalAmount: actualTotal };
+      return { settledCount: saleIds.length, totalAmount: actualTotal, countedCash: totalCounted, expectedCash: actualTotal, variance: totalVariance };
     });
 
     await this.audit.log('تسوية كل الطلبات', `تمت تسوية ${result.settledCount} طلب للمندوب #${repId} بواسطة ${actor.username}`, actor);
-    return { ok: true, settledCount: result.settledCount, totalAmount: result.totalAmount };
+    return { ok: true, settledCount: result.settledCount, totalAmount: result.totalAmount, countedCash: result.countedCash, expectedCash: result.expectedCash, variance: result.variance };
   }
 
   async driverLogin(payload: { phone: string; pinCode: string; companyCode?: string; tenantId?: string }): Promise<{ token: string; rep: Record<string, unknown>; mustChangePin: boolean }> {

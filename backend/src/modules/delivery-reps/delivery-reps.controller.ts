@@ -91,10 +91,10 @@ export class DeliveryRepsController {
   @RequirePermissions('deliveryReps')
   settleAllOrders(
     @Param('id', ParseIntPipe) id: number,
-    @Body('expectedAmount') expectedAmount: number,
+    @Body() body: { expectedAmount?: number; countedCashAmount?: number },
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
-    return this.service.settleAllOrders(id, expectedAmount, req.authContext!);
+    return this.service.settleAllOrders(id, body?.expectedAmount as number, req.authContext!, body?.countedCashAmount);
   }
 
   @Get(':id/summary')
