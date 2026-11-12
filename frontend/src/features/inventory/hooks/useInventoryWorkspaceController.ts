@@ -202,13 +202,14 @@ export function useInventoryWorkspaceController(currentSection: InventorySection
   async function confirmTransferAction(receiptItems?: Record<string, Array<{
     itemId: number; receivedQty: number; receivedSerials?: string[];
     batchReceipts?: Array<{ transitBatchId: number; receivedQty: number }>;
-  }>>, varianceReasons?: Record<string, string>) {
+  }>>, varianceReasons?: Record<string, string>, approvalSecrets?: Record<string, string>) {
     if (!state.transferActionConfirm) return;
     await mutations.transferActionMutation.mutateAsync({
       transferIds: state.transferActionConfirm.transfers.map((entry) => String(entry.id)),
       action: state.transferActionConfirm.action,
       receiptItems,
       varianceReasons,
+      approvalSecrets,
     });
     state.setTransferActionConfirm(null);
   }

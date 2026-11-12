@@ -1712,6 +1712,11 @@ async function main() {
     // A one-fil final warehouse issue or transit shrinkage MUST preserve the
     // immutable physical movement money, not round it to cents before GL.
     const moving = await fixture('kwd_stock_transfers');
+    // INV-TRANSFER-RECEIPT-SHORTAGE-APPROVAL: a shortfall receipt needs
+    // approval by a different admin user than the receiver (user 1).
+    await db.insertInto('users').values({tenant_id:moving.auth.tenantId,account_id:moving.auth.tenantId,username:`${moving.auth.tenantId}_approver`,phone:tag+'kwd_stock_transfers_approver',
+      password_hash:secret.hash,password_salt:secret.salt,role:'admin',is_active:true,must_change_password:false,permissions_json:JSON.stringify(SUPER_ADMIN_PERMISSIONS),
+    } as any).execute();
     await db.updateTable('settings').set({value:'"KWD"'})
       .where('tenant_id','=',moving.auth.tenantId!).where('key','=','currency').execute();
     await db.updateTable('currency_exchange_rates').set({currency_code:'KWD',exchange_rate:1})
@@ -1781,8 +1786,8 @@ async function main() {
     assert.equal(await postingAmount(moving,'1140',3),0.002,'transfer in transit does not change global GL asset');
     await assertTransferStock('after KWD transit dispatch',2);
     const received=await Promise.allSettled([
-      transfers.receiveStockTransfer(outboundId,moving.auth,{items:[{itemId:Number(outboundItem.id),receivedQty:0}],varianceReason:'entire shipment lost in transit'}),
-      transfers.receiveStockTransfer(outboundId,moving.auth,{items:[{itemId:Number(outboundItem.id),receivedQty:0}],varianceReason:'entire shipment lost in transit'}),
+      transfers.receiveStockTransfer(outboundId,moving.auth,{items:[{itemId:Number(outboundItem.id),receivedQty:0}],varianceReason:'entire shipment lost in transit',approvalSecret:'DisposableAcceptance!2026#Only'}),
+      transfers.receiveStockTransfer(outboundId,moving.auth,{items:[{itemId:Number(outboundItem.id),receivedQty:0}],varianceReason:'entire shipment lost in transit',approvalSecret:'DisposableAcceptance!2026#Only'}),
     ]);
     assert.equal(received.filter(r=>r.status==='fulfilled').length,1,'concurrent transfer receipt posts only once');
     assert.equal(received.filter(r=>r.status==='rejected').length,1);

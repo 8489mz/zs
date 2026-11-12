@@ -91,12 +91,16 @@ export function useInventoryWorkspaceMutations({
   });
 
   const transferActionMutation = useMutation({
-    mutationFn: async ({ transferIds, action, receiptItems, varianceReasons }: {
+    mutationFn: async ({ transferIds, action, receiptItems, varianceReasons, approvalSecrets }: {
       transferIds: string[]; action: 'receive' | 'cancel';
       receiptItems?: Record<string, Array<{ itemId: number; receivedQty: number; receivedSerials?: string[]; batchReceipts?: Array<{ transitBatchId: number; receivedQty: number }> }>>;
       /** Variance reason per transfer, keyed by transfer id; required by the
        *  backend for any short receipt (at least 8 characters). */
       varianceReasons?: Record<string, string>;
+      /** Approval password per transfer, keyed by transfer id: the
+       *  password of a different admin user than the receiver
+       *  (INV-TRANSFER-RECEIPT-SHORTAGE-APPROVAL). */
+      approvalSecrets?: Record<string, string>;
     }) => {
       const operationKeys = transferIds.map(id => inventoryTransferActionAttemptKey(action, id));
       const frozenKeys = [...transferActionAttempts.current.keys()];
@@ -110,7 +114,7 @@ export function useInventoryWorkspaceMutations({
         };
         const payload: Record<string, unknown> = {
           transferId, action,
-          ...(action === 'receive' ? { items: receiptItems?.[transferId], varianceReason: varianceReasons?.[transferId] } : {}),
+          ...(action === 'receive' ? { items: receiptItems?.[transferId], varianceReason: varianceReasons?.[transferId], approvalSecret: approvalSecrets?.[transferId] } : {}),
         };
         try {
           await executeStickyInventoryMutation(ref, payload,
@@ -122,6 +126,7 @@ export function useInventoryWorkspaceMutations({
                     batchReceipts?: Array<{ transitBatchId: number; receivedQty: number }>;
                   }> | undefined,
                   varianceReason: frozen.varianceReason as string | undefined,
+                  approvalSecret: frozen.approvalSecret as string | undefined,
                 })
               : inventoryApi.cancelStockTransfer(String(frozen.transferId), headers));
         } finally {

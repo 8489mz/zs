@@ -1,6 +1,7 @@
 /*
 New file: backend/test/critical/transfer-receipt-pinned.spec.ts
-Pins the transfer-receipt gate (INV-TRANSFER-RECEIPT-PINNED).
+Pins the transfer-receipt gate (INV-TRANSFER-RECEIPT-PINNED, as revised by
+INV-TRANSFER-RECEIPT-SHORTAGE-APPROVAL, 2026-11-12).
 
 THE GAP: receiving a transfer defaulted every omitted item to
 "fully received", and any shortfall the receiver typed in was
@@ -13,33 +14,39 @@ loss. The schema already had the columns to record all of this
 (variance_reason on the item, transit_variance_journal_entry_id
 on the header); nothing ever wrote them.
 
-THE RULE (as revised by the spirit-of-law decision Q4, INV-SPIRIT-TRANSFER-RECEIPT-PARTIAL):
+THE RULE (as revised 2026-11-12 by INV-TRANSFER-RECEIPT-SHORTAGE-APPROVAL,
+reversing the INV-SPIRIT-TRANSFER-RECEIPT-PARTIAL deliberate state of
+"no segregation of duties on receipt"):
 a receipt names the quantities that actually arrived; an item the
-receiver does not name defaults to 0 received and its full
-dispatched quantity is recorded as a shortage pending a reason
-(variance_reason null), so the receipt never waits for every item
-to be named or for a written variance reason. A supplied reason is
-stored as-is on each shortfall item, with the first shrinkage
-journal id stored on the header; shrinkage is valued at the cost
-FROZEN at dispatch (the transfer_send movement's unit_cost), never
-re-read at receipt. Only a receipt with no items at all is still
-rejected with TRANSFER_RECEIPT_INVALID: it carries no evidence
-that anything was checked.
+receiver does not name defaults to 0 received. Any shortfall now
+requires BOTH a written variance reason of at least 8 characters
+AND approval by a different admin user than the receiver (verified
+via authorizeManagerSecret; the shared manager PIN identifies no
+approver and is rejected); otherwise the whole receipt is rejected
+fail-closed with nothing half-moved. A supplied reason is stored
+as-is on each shortfall item, with the first shrinkage journal id
+stored on the header; shrinkage is valued at the cost FROZEN at
+dispatch (the transfer_send movement's unit_cost), never re-read
+at receipt. Only a receipt with no items at all is still rejected
+with TRANSFER_RECEIPT_INVALID: it carries no evidence that
+anything was checked.
 
 WHAT THIS PINS, driving the REAL createStockTransfer and
 receiveStockTransfer on PGlite:
 - receipt with no items, or an empty items array, is rejected
   with TRANSFER_RECEIPT_INVALID and the transfer stays 'sent'
   with transit stock intact.
-- receipt naming one item of two succeeds: the omitted item is
-  received 0, its 5 units are written off as a pending-reason
-  shortage, and the named item is immediately available at the
-  destination.
-- a shortfall with no reason succeeds and stores variance_reason
-  null (pending); a short one-word reason is stored as-is.
+- receipt naming one item of two with no reason or approval is
+  rejected with TRANSFER_SHORTAGE_REASON_REQUIRED: the omitted
+  item stays a 0-received shortfall, the transfer stays 'sent',
+  and transit stock stays intact — no automatic write-off.
+- a shortfall with no reason is rejected; a short reason (under
+  8 characters) is rejected even with a valid approver; a valid
+  reason plus a different approver succeeds and stores the reason.
 - cost_price changed between ship (10) and receive (25): the
   shrinkage movement and journal stay at the dispatch cost
-  (unit 10, total 20 for 2 units); the reason and the journal id
+  (unit 10, total 20 for 2 units) for a receipt carrying a valid
+  reason plus a different approver; the reason and the journal id
   are persisted; destination/global/transit quantities are exact.
 - an explicit full receipt needs no reason, posts no shrinkage
   movement or journal, and leaves the variance columns empty.
@@ -61,9 +68,11 @@ import { IdempotencyService } from '../../src/core/idempotency/idempotency.servi
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { InventoryTransferService } from '../../src/modules/inventory/services/inventory-transfer.service';
+import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
 
 const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
 const REASON = 'Two units lost in transit';
+const APPROVER_PASSWORD = 'approver-password';
 
 async function seedProduct(db: Kysely<Database>, id: number, qty: number, cost: number): Promise<void> {
   await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${qty}, 0, ${cost}, true, false)`.execute(db);
@@ -125,7 +134,6 @@ async function main(): Promise<void> {
       CREATE TABLE stock_locations (id bigserial PRIMARY KEY, tenant_id text, account_id text, branch_id bigint, name text, code text, is_active boolean DEFAULT true, location_type text);
       INSERT INTO stock_locations VALUES (1, 't1', 'a1', 1, 'Main Store', 'MAIN', true, 'branch_stock'), (2, 't1', 'a1', 2, 'Dest Store', 'DEST', true, 'branch_stock');
       CREATE TABLE users (id bigint PRIMARY KEY, tenant_id text, username text, default_branch_id bigint, role text, password_hash text, password_salt text, is_active boolean DEFAULT true);
-      INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', '', '', true);
       CREATE TABLE user_branches (tenant_id text, user_id bigint, branch_id bigint);
       CREATE TABLE products (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, name_en text, barcode text, style_code text, stock_qty numeric DEFAULT 0, reserved_qty numeric DEFAULT 0, cost_price numeric DEFAULT 0, is_active boolean DEFAULT true, track_serials boolean DEFAULT false, updated_at timestamptz);
       CREATE TABLE product_location_stock (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, branch_id bigint, location_id bigint, qty numeric DEFAULT 0, reserved_qty numeric DEFAULT 0, updated_at timestamptz);
@@ -141,6 +149,13 @@ async function main(): Promise<void> {
       SELECT setval(pg_get_serial_sequence('stock_transfers', 'id'), 100);
     `);
 
+    // Receiver (user 1, the AUTH user) and a different approver (user 2),
+    // both admins; the approver's bcrypt password is the approval secret
+    // for shortfall receipts (INV-TRANSFER-RECEIPT-SHORTAGE-APPROVAL).
+    const approverRecord = await createPasswordRecord(APPROVER_PASSWORD);
+    await sql`INSERT INTO users VALUES (1, 't1', 'admin', 1, 'admin', '', '', true)`.execute(db);
+    await sql`INSERT INTO users VALUES (2, 't1', 'approver', 1, 'admin', ${approverRecord.hash}, ${approverRecord.salt}, true)`.execute(db);
+
     // Case 1: no items / empty items -> rejected, transfer stays sent, transit intact.
     await seedProduct(db, 1, 100, 10);
     const t1 = await makeTransfer(service, [{ productId: 1, qty: 10 }]);
@@ -149,39 +164,56 @@ async function main(): Promise<void> {
     assert.equal(await transferStatus(db, t1), 'sent');
     assert.equal(await transitQty(db, 1), 10);
 
-    // Case 2: an omitted item defaults to 0 received -- the receipt
-    // succeeds, the omitted item is a pending-reason shortage, and the
-    // named item is immediately available at the destination.
+    // Case 2: an omitted item defaults to 0 received -- but with no
+    // reason or approval the whole receipt is now rejected (no
+    // automatic write-off): the transfer stays 'sent' and transit
+    // stock stays intact for both items.
     await seedProduct(db, 2, 100, 10);
     await seedProduct(db, 3, 100, 10);
     const t2 = await makeTransfer(service, [{ productId: 2, qty: 5 }, { productId: 3, qty: 5 }]);
     const t2item1 = await transferItemId(db, t2, 2);
-    await service.receiveStockTransfer(t2, AUTH, { items: [{ itemId: t2item1, receivedQty: 5 }] } as never);
+    await assert.rejects(
+      service.receiveStockTransfer(t2, AUTH, { items: [{ itemId: t2item1, receivedQty: 5 }] } as never),
+      /TRANSFER_SHORTAGE_REASON_REQUIRED/,
+    );
+    assert.equal(await transferStatus(db, t2), 'sent');
+    assert.equal(await transitQty(db, 2), 5);
+    assert.equal(await transitQty(db, 3), 5);
+    // Same receipt with a valid reason plus a different approver
+    // succeeds: the omitted item is received 0 with its 5 units
+    // written off with the reason, and the named item is immediately
+    // available at the destination.
+    await service.receiveStockTransfer(t2, AUTH, { items: [{ itemId: t2item1, receivedQty: 5 }], varianceReason: REASON, approvalSecret: APPROVER_PASSWORD } as never);
     assert.equal(await transferStatus(db, t2), 'received');
     const omitted2 = await sql<{ received_qty: string; variance_qty: string; variance_reason: string | null }>`SELECT received_qty, variance_qty, variance_reason FROM stock_transfer_items WHERE transfer_id = ${t2} AND product_id = 3`.execute(db);
     assert.equal(Number(omitted2.rows[0].received_qty), 0);
     assert.equal(Number(omitted2.rows[0].variance_qty), 5);
-    assert.equal(omitted2.rows[0].variance_reason, null);
+    assert.equal(omitted2.rows[0].variance_reason, REASON);
     const dest2 = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = 2 AND location_id = 2`.execute(db);
     assert.equal(Number(dest2.rows[0].qty), 5);
     assert.equal(await transitQty(db, 2), 0);
     assert.equal(await transitQty(db, 3), 0);
 
-    // Case 3: a shortfall with no reason succeeds and stays pending
-    // (variance_reason null); a short one-word reason is stored as-is.
+    // Case 3: a shortfall with no reason is rejected; a short reason
+    // (under 8 characters) is rejected even with a valid approver; a
+    // valid reason plus a different approver succeeds and stores it.
     await seedProduct(db, 4, 100, 10);
     const t3 = await makeTransfer(service, [{ productId: 4, qty: 10 }]);
     const t3item = await transferItemId(db, t3, 4);
-    await service.receiveStockTransfer(t3, AUTH, { items: [{ itemId: t3item, receivedQty: 8 }] } as never);
+    await assert.rejects(
+      service.receiveStockTransfer(t3, AUTH, { items: [{ itemId: t3item, receivedQty: 8 }] } as never),
+      /TRANSFER_SHORTAGE_REASON_REQUIRED/,
+    );
+    assert.equal(await transferStatus(db, t3), 'sent');
+    await assert.rejects(
+      service.receiveStockTransfer(t3, AUTH, { items: [{ itemId: t3item, receivedQty: 8 }], varianceReason: 'lost', approvalSecret: APPROVER_PASSWORD } as never),
+      /TRANSFER_SHORTAGE_REASON_REQUIRED/,
+    );
+    assert.equal(await transferStatus(db, t3), 'sent');
+    await service.receiveStockTransfer(t3, AUTH, { items: [{ itemId: t3item, receivedQty: 8 }], varianceReason: REASON, approvalSecret: APPROVER_PASSWORD } as never);
     assert.equal(await transferStatus(db, t3), 'received');
     const item3 = await sql<{ variance_reason: string | null }>`SELECT variance_reason FROM stock_transfer_items WHERE id = ${t3item}`.execute(db);
-    assert.equal(item3.rows[0].variance_reason, null);
-    await seedProduct(db, 8, 100, 10);
-    const t3b = await makeTransfer(service, [{ productId: 8, qty: 10 }]);
-    const t3bitem = await transferItemId(db, t3b, 8);
-    await service.receiveStockTransfer(t3b, AUTH, { items: [{ itemId: t3bitem, receivedQty: 8 }], varianceReason: 'lost' } as never);
-    const item3b = await sql<{ variance_reason: string | null }>`SELECT variance_reason FROM stock_transfer_items WHERE id = ${t3bitem}`.execute(db);
-    assert.equal(item3b.rows[0].variance_reason, 'lost');
+    assert.equal(item3.rows[0].variance_reason, REASON);
 
     // Case 4: cost moves between ship and receive -- shrinkage stays at dispatch cost.
     await seedProduct(db, 5, 100, 10);
@@ -191,7 +223,7 @@ async function main(): Promise<void> {
     assert.equal(Number(dispatchMov.rows[0].total_cost), 100);
     await sql`UPDATE products SET cost_price = 25 WHERE id = 5`.execute(db);
     const t4item = await transferItemId(db, t4, 5);
-    await service.receiveStockTransfer(t4, AUTH, { items: [{ itemId: t4item, receivedQty: 8 }], varianceReason: REASON } as never);
+    await service.receiveStockTransfer(t4, AUTH, { items: [{ itemId: t4item, receivedQty: 8 }], varianceReason: REASON, approvalSecret: APPROVER_PASSWORD } as never);
     const loss = await sql<{ id: number; unit_cost: string; total_cost: string }>`SELECT id, unit_cost, total_cost FROM stock_movements WHERE reference_id = ${t4} AND movement_type = 'transfer_transit_loss'`.execute(db);
     assert.equal(Number(loss.rows[0].unit_cost), 10);
     assert.equal(Number(loss.rows[0].total_cost), 20);

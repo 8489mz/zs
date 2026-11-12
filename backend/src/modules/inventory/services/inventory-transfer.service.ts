@@ -20,6 +20,7 @@ import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { assertUntrackedStockMutation } from '../helpers/inventory-tracked-stock.helper';
 import { syncImportLotsOnLocationTransfer, syncImportLotsOnStockDeduction } from '../../import-sales/helpers/import-lot-allocation.helper';
+import { authorizeManagerSecret } from '../../../common/utils/manager-approval';
 import { dispatchTrackedStock, receiveTrackedStock, cancelTrackedStock, type TransferReceiptTraceRequest } from '../helpers/stock-transfer-trace.helper';
 import { moveDirectTrackedStock } from '../helpers/direct-tracked-stock-move.helper';
 
@@ -236,7 +237,7 @@ export class InventoryTransferService {
     return transferId as Record<string, unknown>;
   }
 
-  async receiveStockTransfer(transferId: number, auth: AuthContext, receiptPayload?: { items?: TransferReceiptTraceRequest[]; varianceReason?: string }): Promise<Record<string, unknown>> {
+  async receiveStockTransfer(transferId: number, auth: AuthContext, receiptPayload?: { items?: TransferReceiptTraceRequest[]; varianceReason?: string; approvalSecret?: string }): Promise<Record<string, unknown>> {
     const scope = this.tenantScope(auth);
     const result = await this.tx.runInTransaction(this.db, async (trx) => {
       const transfer = await trx.selectFrom('stock_transfers').selectAll().where('id', '=', transferId).where(this.tenantPredicate(auth)).forUpdate().executeTakeFirst();
@@ -277,13 +278,15 @@ export class InventoryTransferService {
         receivedByItemId.set(itemId, receivedQty);
       }
 
-      // INV-SPIRIT-TRANSFER-RECEIPT-PARTIAL: a receipt names the
+      // INV-TRANSFER-RECEIPT-SHORTAGE-APPROVAL: a receipt names the
       // quantities that actually arrived; an item the receiver does not
       // name defaults to 0 received and its full dispatched quantity is
-      // recorded as a shortage pending a reason (variance_reason null),
-      // so the receipt never waits for every item to be named. Only a
-      // receipt with no items at all is still rejected: it carries no
-      // evidence that anything was checked.
+      // a planned shortage. That shortage is only written off when the
+      // receipt also carries a written variance reason (at least 8
+      // characters) approved by a different user (see the gate below);
+      // otherwise the whole receipt is rejected fail-closed. Only a
+      // receipt with no items at all is still rejected here: it carries
+      // no evidence that anything was checked.
       if (!receiptPayload?.items?.length) {
         throw new AppError('يجب تحديد كمية مستلمة واحدة على الأقل قبل الاستلام', 'TRANSFER_RECEIPT_INVALID', 400);
       }
@@ -294,10 +297,33 @@ export class InventoryTransferService {
         const received = receivedByItemId.get(Number(item.id)) ?? 0;
         return { item, dispatched, received, shortfall: Number((dispatched - received).toFixed(3)) };
       });
-      // A shortfall no longer waits for a written variance reason: the
-      // reason, when supplied, is stored as-is on each shortfall item,
-      // and a missing reason stays null (pending) on the item row.
+      // INV-TRANSFER-RECEIPT-SHORTAGE-APPROVAL: a shortfall is a real
+      // write-off, never an automatic one. Any receipt whose planned
+      // shortfall exceeds 0.0001 needs BOTH a written variance reason
+      // (at least 8 characters) AND approval by a different user than
+      // the receiver, verified here before any write through the one
+      // shared authorizeManagerSecret. The approval credential must
+      // resolve to an admin user id different from the receiver: a
+      // shared manager PIN identifies no approver, so it cannot
+      // satisfy segregation of duties. Full receipts are unchanged.
       const varianceReason = String(receiptPayload?.varianceReason || '').trim();
+      const hasShortfall = receiptPlan.some((row) => row.shortfall > 0.0001);
+      if (hasShortfall) {
+        if (varianceReason.length < 8) {
+          throw new AppError('A transfer shortfall needs a written variance reason of at least 8 characters', 'TRANSFER_SHORTAGE_REASON_REQUIRED', 400);
+        }
+        const approvalSecret = String(receiptPayload?.approvalSecret || '').trim();
+        if (!approvalSecret) {
+          throw new AppError('A transfer shortfall needs approval by a different user than the receiver', 'TRANSFER_SHORTAGE_APPROVAL_REQUIRED', 400);
+        }
+        const approval = await authorizeManagerSecret(trx, auth, approvalSecret);
+        if (approval.mode !== 'account' || !approval.authorizedById) {
+          throw new AppError('A transfer shortfall must be approved with the password of a different admin user; the shared manager PIN does not identify who approved', 'TRANSFER_SHORTAGE_APPROVAL_REQUIRED', 400);
+        }
+        if (Number(approval.authorizedById) === Number(auth.userId)) {
+          throw new AppError('The receiver cannot approve their own transfer shortfall', 'TRANSFER_SHORTAGE_SELF_APPROVAL', 403);
+        }
+      }
 
       let inTransitLocationId: number | null = null;
       const inTransitRow = await trx.selectFrom('stock_locations').select('id').where('location_type', '=', 'in_transit').where('tenant_id', '=', scope.tenantId).executeTakeFirst();

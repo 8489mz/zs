@@ -77,7 +77,7 @@ export class InventoryService {
     return this.transferService.internalTransferCategory(payload, auth);
   }
 
-  receiveStockTransfer(transferId: number, auth: AuthContext, receiptPayload?: { items?: Array<{ itemId: number; receivedQty: number }>; varianceReason?: string }): Promise<Record<string, unknown>> {
+  receiveStockTransfer(transferId: number, auth: AuthContext, receiptPayload?: { items?: Array<{ itemId: number; receivedQty: number }>; varianceReason?: string; approvalSecret?: string }): Promise<Record<string, unknown>> {
     return this.transferService.receiveStockTransfer(transferId, auth, receiptPayload);
   }
 

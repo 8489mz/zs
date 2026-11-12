@@ -135,14 +135,17 @@ export class InventoryController {
   receiveTransfer(
     @Param('id', ParseIntPipe) id: number,
     // Partial/short receipts must identify which serials and which batches arrived.
-    // INV-TRANSFER-RECEIPT-PINNED: a short receipt must also carry a
-    // written variance reason (at least 8 characters).
+    // INV-TRANSFER-RECEIPT-SHORTAGE-APPROVAL: a short receipt (any
+    // shortfall over 0.0001) needs a written variance reason of at least
+    // 8 characters AND approval by a different user than the receiver
+    // (approvalSecret: the approving admin's password). The shared
+    // manager PIN does not identify an approver and cannot satisfy it.
     @Body() body: { items?: Array<{
       itemId: number;
       receivedQty: number;
       receivedSerials?: string[];
       batchReceipts?: Array<{ transitBatchId: number; receivedQty: number }>;
-    }>; varianceReason?: string },
+    }>; varianceReason?: string; approvalSecret?: string },
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.inventoryService.receiveStockTransfer(id, req.authContext!, body);

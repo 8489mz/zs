@@ -1,11 +1,13 @@
 /*
- * Pins the middle of the short-transfer-receipt reason plumbing
- * (INV-SHORT-TRANSFER-RECEIPT-REASON): the workspace mutation must carry
- * the per-transfer varianceReason the dialog collected into the
- * receiveStockTransfer call, so the backend gate sees it. The dialog half
- * is pinned by InventoryTransferActionDialog.spec.tsx and the request
- * body half by the api serialisation case there; this file pins the
- * mutation in between, driving the REAL hook with a mocked api boundary.
+ * Pins the middle of the short-transfer-receipt reason + approval plumbing
+ * (INV-SHORT-TRANSFER-RECEIPT-REASON, as revised by
+ * INV-TRANSFER-RECEIPT-SHORTAGE-APPROVAL, 2026-11-12): the workspace
+ * mutation must carry the per-transfer varianceReason and the approver
+ * password the dialog collected into the receiveStockTransfer call, so
+ * the backend gate sees them. The dialog half is pinned by
+ * InventoryTransferActionDialog.spec.tsx and the request body half by
+ * the api serialisation case there; this file pins the mutation in
+ * between, driving the REAL hook with a mocked api boundary.
  */
 
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -83,5 +85,24 @@ describe('transfer action mutation variance reason', () => {
     expect(mocks.receiveStockTransfer).toHaveBeenCalledTimes(1);
     const payload = mocks.receiveStockTransfer.mock.calls[0][2] as { varianceReason?: string };
     expect(payload.varianceReason).toBeUndefined();
+  });
+
+  it('passes the approver password to the receive call', async () => {
+    const { result } = renderMutations();
+    await act(async () => {
+      await result.current.transferActionMutation.mutateAsync({
+        transferIds: ['7'],
+        action: 'receive',
+        receiptItems: { '7': [{ itemId: 71, receivedQty: 8 }] },
+        varianceReasons: { '7': 'نقصت وحدتان أثناء النقل' },
+        approvalSecrets: { '7': 'approver-password' },
+      });
+    });
+    expect(mocks.receiveStockTransfer).toHaveBeenCalledTimes(1);
+    expect(mocks.receiveStockTransfer).toHaveBeenCalledWith(
+      '7',
+      expect.objectContaining({ 'x-idempotency-key': expect.any(String) }),
+      { items: [{ itemId: 71, receivedQty: 8 }], varianceReason: 'نقصت وحدتان أثناء النقل', approvalSecret: 'approver-password' },
+    );
   });
 });

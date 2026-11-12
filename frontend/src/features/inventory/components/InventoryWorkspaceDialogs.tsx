@@ -13,10 +13,16 @@ type ReceiptLine = {
 type ReceiptRows = Record<string, ReceiptLine[]>;
 type ReceiptDraft = { receivedQty: string; serials: string; batches: string };
 /** Variance reason per transfer, keyed by String(transfer.id). The
- *  reason is optional: a shortfall receipt completes without one and
- *  the shortage is recorded pending a reason; a supplied reason is
- *  stored as-is on each shortfall item. A full receipt sends none. */
+ *  reason is REQUIRED (at least 8 characters) for any shortfall,
+ *  together with the approval password of a different admin user
+ *  (INV-TRANSFER-RECEIPT-SHORTAGE-APPROVAL): a shortfall receipt
+ *  without both is rejected, nothing is written off. A full receipt
+ *  sends none. */
 type TransferVarianceReasons = Record<string, string>;
+/** Approval password per transfer, keyed by String(transfer.id):
+ *  the password of a different admin user than the receiver. The
+ *  shared manager PIN identifies no approver and is rejected. */
+type TransferApprovalSecrets = Record<string, string>;
 
 function transferHasShortfall(transfer: StockTransfer, draft: Record<string, ReceiptDraft>): boolean {
   return transfer.items.some((item) => {
@@ -85,7 +91,7 @@ export function InventoryTransferActionDialog({
   action: { action: 'receive' | 'cancel'; transfers: StockTransfer[] } | null;
   isBusy: boolean;
   onCancel: () => void;
-  onConfirm: (receipts?: ReceiptRows, varianceReasons?: TransferVarianceReasons) => void | Promise<void>;
+  onConfirm: (receipts?: ReceiptRows, varianceReasons?: TransferVarianceReasons, approvalSecrets?: TransferApprovalSecrets) => void | Promise<void>;
 }) {
   const { t } = useTranslation();
   const [receiptDraft, setReceiptDraft] = useState<Record<string, ReceiptDraft>>({});
@@ -142,7 +148,7 @@ export function InventoryTransferActionDialog({
             })}
                 {transferHasShortfall(transfer, receiptDraft) ? (
                   <div style={{ padding: '8px 0', borderBottom: '1px solid #e2e8f0' }}>
-                    <label>سبب فرق الكمية للتحويل {transfer.docNo || transfer.id} (اختياري — الفاقد يُسجَّل بانتظار السبب)
+                    <label>سبب فرق الكمية للتحويل {transfer.docNo || transfer.id} (مطلوب — 8 أحرف على الأقل)
                       <textarea rows={2} value={varianceReasonDraft[String(transfer.id)] ?? ''}
                         onChange={e => setVarianceReasonDraft(current => ({ ...current, [String(transfer.id)]: e.target.value }))}
                         placeholder="مثال: نقصت وحدتان أثناء النقل" disabled={isBusy}/>
@@ -158,13 +164,39 @@ export function InventoryTransferActionDialog({
       confirmVariant={action?.action === 'receive' ? 'success' : 'danger'}
       isBusy={isBusy}
       onCancel={onCancel}
-      onConfirm={() => {
+      managerPinRequired={action?.action === 'receive' && (action?.transfers || []).some((transfer) => transferHasShortfall(transfer, receiptDraft))}
+      managerPinLabel="كلمة مرور المعتمد"
+      managerPinHint="الفاقد يحتاج اعتماد مدير آخر غير المستلم — أدخل كلمة مرور حساب مدير آخر (الرمز المشترك لا يكفي)."
+      managerPinPlaceholder="كلمة مرور المدير المعتمد"
+      managerPinInputType="password"
+      onConfirm={({ managerPin }) => {
         if (!action) return;
         if (action.action !== 'receive') return onConfirm();
         try {
           const rows = receiptRowsFromDraft(action.transfers, receiptDraft);
           const reasons = varianceReasonsFromDraft(action.transfers, receiptDraft, varianceReasonDraft);
-          return onConfirm(rows, reasons);
+          // INV-TRANSFER-RECEIPT-SHORTAGE-APPROVAL: a shortfall needs
+          // a reason of at least 8 characters AND a different
+          // approver's password; the backend rejects otherwise, so
+          // stop here with a specific message instead of failing
+          // after the request.
+          const shortTransfers = action.transfers.filter((transfer) => transferHasShortfall(transfer, receiptDraft));
+          for (const transfer of shortTransfers) {
+            const reason = (reasons[String(transfer.id)] || '').trim();
+            if (reason.length < 8) {
+              toast.error(`سبب الفرق للتحويل ${transfer.docNo || transfer.id} مطلوب (8 أحرف على الأقل)`);
+              return;
+            }
+          }
+          const approvalSecrets: TransferApprovalSecrets = {};
+          if (shortTransfers.length) {
+            if (!managerPin.trim()) {
+              toast.error('الفاقد يحتاج كلمة مرور معتمد آخر غير المستلم');
+              return;
+            }
+            for (const transfer of shortTransfers) approvalSecrets[String(transfer.id)] = managerPin.trim();
+          }
+          return onConfirm(rows, reasons, approvalSecrets);
         } catch (error) {
           toast.error(error instanceof Error ? error.message : 'تعذر قراءة كميات استلام التحويل');
         }
