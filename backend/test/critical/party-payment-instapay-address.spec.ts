@@ -81,7 +81,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE journal_entry_lines (id bigserial PRIMARY KEY, tenant_id text, journal_entry_id bigint, account_id bigint, cost_center_id bigint, description text, debit numeric, credit numeric, partner_type text, partner_id bigint, branch_id bigint, location_id bigint, is_reconciled boolean DEFAULT false);
     CREATE TABLE customers (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, phone text, address text, balance numeric DEFAULT 0, credit_limit numeric DEFAULT 0, is_credit_blocked boolean DEFAULT false, credit_block_reason text, customer_type text, location_url text, metadata text, store_credit_balance numeric DEFAULT 0, loyalty_points numeric DEFAULT 0, is_active boolean DEFAULT true, updated_at timestamptz);
     CREATE TABLE customer_ledger (id bigserial PRIMARY KEY, tenant_id text, account_id text, customer_id bigint, entry_type text, amount numeric, balance_after numeric, note text, reference_type text, reference_id bigint, return_document_id bigint, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT NOW());
-    CREATE TABLE customer_payments (id bigserial PRIMARY KEY, tenant_id text, account_id text, customer_id bigint, amount numeric, payment_channel text, instapay_address text, note text, branch_id bigint, location_id bigint, job_id bigint, created_by bigint, created_at timestamptz DEFAULT NOW());
+    CREATE TABLE customer_payments (id bigserial PRIMARY KEY, tenant_id text, account_id text, customer_id bigint, amount numeric, payment_channel text, instapay_address text, transfer_reference text, transfer_receipt_url text, note text, branch_id bigint, location_id bigint, job_id bigint, created_by bigint, created_at timestamptz DEFAULT NOW());
     CREATE TABLE maritime_jobs (id bigint PRIMARY KEY, tenant_id text, customer_id bigint, job_number text, client_invoiced_total numeric, client_paid_total numeric, payment_status text, status text);
     CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, phone text, address text, balance numeric DEFAULT 0, notes text, metadata jsonb, is_active boolean DEFAULT true, updated_at timestamptz);
     CREATE TABLE supplier_ledger (id bigserial PRIMARY KEY, tenant_id text, account_id text, supplier_id bigint, entry_type text, amount numeric, balance_after numeric, note text, reference_type text, reference_id bigint, return_document_id bigint, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT NOW());
@@ -212,14 +212,17 @@ async function main(): Promise<void> {
         loyalty_points: 0, is_active: true,
       }).execute();
       const { write } = buildServices(db);
+      // INV-REP-NONCASH-EVIDENCE-GATE (PD1): a non-cash receipt needs
+      // a transfer reference, so this IPA case now carries one too.
       const result = await write.createCustomerPayment(
-        { customerId: 1, amount: 150, paymentChannel: 'instapay', instapayAddress: 'sara@instapay' } as any,
+        { customerId: 1, amount: 150, paymentChannel: 'instapay', instapayAddress: 'sara@instapay', transferReference: 'TRX-987654' } as any,
         ADMIN,
       );
       assert.equal((result as any).ok, true);
-      const row = await anyDb.selectFrom('customer_payments').select(['instapay_address', 'payment_channel', 'amount']).executeTakeFirstOrThrow();
+      const row = await anyDb.selectFrom('customer_payments').select(['instapay_address', 'payment_channel', 'transfer_reference', 'amount']).executeTakeFirstOrThrow();
       assert.equal(row.instapay_address, 'sara@instapay');
       assert.equal(row.payment_channel, 'instapay');
+      assert.equal(row.transfer_reference, 'TRX-987654');
       assert.equal(Number(row.amount), 150);
       const customer = await anyDb.selectFrom('customers').select('balance').where('id', '=', 1).executeTakeFirstOrThrow();
       assert.equal(Number(customer.balance), 350);

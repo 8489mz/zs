@@ -3711,6 +3711,7 @@ export class AccountingPostingService {
         'cp.customer_id',
         'cp.amount',
         'cp.payment_channel',
+        'cp.transfer_reference',
         'cp.note',
         'cp.branch_id',
         'cp.location_id',
@@ -3734,6 +3735,22 @@ export class AccountingPostingService {
     if (!(amount > 0)) {
       this.logger.warn(`Customer payment ${paymentId} has non-positive amount; skipping accounting post`);
       return { posted: false, journalEntryId: null };
+    }
+
+    // INV-REP-NONCASH-EVIDENCE-GATE (PD1): last line of defence for
+    // any caller that reaches this posting without evidence — a
+    // non-cash receipt debits bank 1120 below, so it must carry a
+    // transfer reference of at least 3 characters (same bar as the
+    // van field-collection gate). The service gate refuses first, so
+    // this normally never fires; rows with no channel are cash.
+    // A free-text note alone is not evidence.
+    if ((payment.payment_channel || 'cash') !== 'cash') {
+      const reference = String(payment.transfer_reference || '').trim();
+      if (reference.length < 3) {
+        throw new Error(
+          `Customer payment ${paymentId}: refusing to debit bank 1120 for a non-cash receipt without a transfer reference of at least 3 characters`,
+        );
+      }
     }
 
     const branchId = payment.branch_id ? Number(payment.branch_id) : null;

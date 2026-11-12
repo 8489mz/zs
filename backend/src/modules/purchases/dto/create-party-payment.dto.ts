@@ -70,6 +70,16 @@ export class CreateCustomerPaymentDto {
   @MaxLength(100)
   instapayAddress?: string;
 
+  /* INV-REP-NONCASH-EVIDENCE-GATE (PD1): the real transfer reference
+   * (bank / card / wallet / InstaPay transaction reference) of this
+   * receipt. Mandatory for any non-cash channel — the service gate
+   * refuses the receipt without one. Stored in
+   * customer_payments.transfer_reference; cash receipts store NULL. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  transferReference?: string;
+
   @Type(() => Number)
   @IsOptional()
   @IsNumber()

@@ -20,7 +20,7 @@ import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { CreateCustomerPaymentDto, CreateSupplierPaymentDto } from '../dto/create-party-payment.dto';
 import { UpsertPurchaseDto } from '../dto/upsert-purchase.dto';
-import { allocatePurchaseInvoiceDiscount, buildHistoricCostMap, buildNormalizedPurchaseItem, buildPurchaseReferenceNote, calculatePurchaseStockDecrease, calculatePurchaseStockIncrease, calculatePurchaseSubtotal, normalizeInstapayAddress, normalizeOptionalNote, normalizePurchaseScope, type DiscountAllocatedPurchaseItem } from '../helpers/purchases-write.helper';
+import { allocatePurchaseInvoiceDiscount, buildHistoricCostMap, buildNormalizedPurchaseItem, buildPurchaseReferenceNote, calculatePurchaseStockDecrease, calculatePurchaseStockIncrease, calculatePurchaseSubtotal, assertNonCashTransferReference, normalizeInstapayAddress, normalizeOptionalNote, normalizePurchaseScope, normalizeTransferReference, type DiscountAllocatedPurchaseItem } from '../helpers/purchases-write.helper';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { PurchasesFinanceService } from './purchases-finance.service';
 import { PurchasesQueryService } from './purchases-query.service';
@@ -1464,6 +1464,11 @@ export class PurchasesWriteService {
     if (!Number.isFinite(amount) || amount <= 0 || Math.abs(amount * scale - Math.round(amount * scale)) > 0.000001) {
       throw new AppError('Customer payment must be positive and have at most tenant currency minor-unit precision', 'INVALID_PAYMENT_AMOUNT', 400);
     }
+    // INV-REP-NONCASH-EVIDENCE-GATE (PD1): refuse a non-cash general
+    // receipt with no real transfer reference BEFORE any idempotency
+    // reservation, ledger write or Dr 1120 posting. A free-text note
+    // alone is not evidence. Cash receipts are untouched.
+    assertNonCashTransferReference(payload.paymentChannel, payload.transferReference);
     const operationType = 'customer_payment_create';
     if (idempotencyKey) {
       const existing = await this.idempotency.reserveOperation({
@@ -1540,6 +1545,7 @@ export class PurchasesWriteService {
           amount,
           payment_channel: payload.paymentChannel || 'cash',
           instapay_address: normalizeInstapayAddress(payload.paymentChannel, payload.instapayAddress),
+          transfer_reference: normalizeTransferReference(payload.paymentChannel, payload.transferReference),
           note: normalizeOptionalNote(payload.note),
           branch_id: branchId,
           location_id: locationId,

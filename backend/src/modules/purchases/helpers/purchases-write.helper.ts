@@ -279,6 +279,53 @@ export function normalizeInstapayAddress(
   return address;
 }
 
+/*
+ * INV-REP-NONCASH-EVIDENCE-GATE (PD1): the transfer reference of a
+ * general customer receipt. The reference belongs to the receipt only
+ * when the receipt actually travels off cash: a trimmed value is kept
+ * exactly when the channel is non-cash, and cash stores NULL so a
+ * stray reference can never be read as evidence for a cash receipt.
+ * Blank input is NULL, never an empty string; over-long input is
+ * rejected with the named error rather than silently truncated.
+ * A free-text note alone is NOT a reference — the gate below reads
+ * only this field.
+ */
+export function normalizeTransferReference(
+  paymentChannel: unknown,
+  rawReference: unknown,
+): string | null {
+  if (!paymentChannel || paymentChannel === 'cash') return null;
+  const reference = String(rawReference || '').trim();
+  if (!reference) return null;
+  if (reference.length > 100) {
+    throw new AppError('Transfer reference must be at most 100 characters', 'INVALID_TRANSFER_REFERENCE', 400);
+  }
+  return reference;
+}
+
+/*
+ * INV-REP-NONCASH-EVIDENCE-GATE (PD1): a non-cash general receipt
+ * debits bank 1120, so it must carry a real transfer reference of at
+ * least 3 characters — the same bar as the van card gate (F2). Cash
+ * receipts (including an omitted channel, which defaults to cash)
+ * are untouched. The note is deliberately NOT consulted: a free-text
+ * note alone is not evidence.
+ */
+export function assertNonCashTransferReference(
+  paymentChannel: unknown,
+  reference: unknown,
+): void {
+  if (!paymentChannel || paymentChannel === 'cash') return;
+  const trimmed = String(reference || '').trim();
+  if (trimmed.length < 3) {
+    throw new AppError(
+      `Non-cash customer receipt requires a transfer reference of at least 3 characters; a note alone is not evidence (channel: ${String(paymentChannel)})`,
+      'NONCASH_RECEIPT_REFERENCE_REQUIRED',
+      400,
+    );
+  }
+}
+
 export function normalizePositiveAmount(amount: unknown, errorCode = 'INVALID_AMOUNT', message = 'Amount must be greater than zero'): number {
   const normalized = roundCurrency(Number(amount || 0));
   if (!(normalized > 0)) {
