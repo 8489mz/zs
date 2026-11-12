@@ -3552,6 +3552,27 @@ export class StorefrontService {
     return isOutOfStockOrderingAllowed(settings, tenant.slug, tenant.activity_type);
   }
 
+  /**
+   * INV-STOREFRONT-DELIVERY-FEE-MODE (H6, C3): the tenant's own
+   * deliveryFeeMode setting governs a converted delivery sale —
+   * never a hardcoded 'store_fleet'. Read exactly the way
+   * createSale reads it (sales-write.service.ts:2129-2136): a
+   * value naming 'store_fleet' keeps the fee as store revenue
+   * (Cr 4200); a courier value makes the fee a rep payable
+   * (Cr 2115). When the tenant never set a mode, null is returned
+   * and createSale resolves it itself — its rep-type inference (a
+   * store_fleet rep) plus its own settings fallback
+   * (freelance_courier when nothing names store_fleet).
+   */
+  private async resolveTenantDeliveryFeeMode(tenantId: string): Promise<'store_fleet' | 'freelance_courier' | null> {
+    const settings = await this.getTenantSettingsMap(tenantId);
+    const raw = String(settings.get('deliveryFeeMode') || '').trim();
+    if (!raw) return null;
+    if (raw.includes('store_fleet')) return 'store_fleet';
+    if (raw.includes('freelance_courier') || raw.includes('freelance')) return 'freelance_courier';
+    return null;
+  }
+
   async convertToSale(id: number, actor: AuthContext, explicitRepId?: number) {
     const { tenantId, accountId } = requireTenantScope(actor);
     const order = await this.getOrder(id, actor);
@@ -3679,11 +3700,17 @@ export class StorefrontService {
     if (effectiveOrderType === 'delivery') {
       repId = explicitRepId ? Number(explicitRepId) : 0;
       if (!repId || Number.isNaN(repId) || repId <= 0) {
+        // INV-STOREFRONT-DELIVERY-FEE-MODE (H6, C3): a storefront
+        // delivery picks a delivery-type rep, never a van rep
+        // (rep_type 'van' runs van-sales trips, not storefront
+        // deliveries). Legacy rows predate rep_type, so a NULL
+        // rep_type still counts as a delivery rep.
         let activeRep = await this.db
           .selectFrom('delivery_representatives')
           .select(['id', 'name'])
           .where(sql<boolean>`tenant_id = ${tenantId}`)
           .where('is_active', '=', true)
+          .where((eb) => eb.or([eb('rep_type', '!=', 'van'), eb('rep_type', 'is', null)]))
           .orderBy('id', 'asc')
           .executeTakeFirst();
 
@@ -3696,6 +3723,13 @@ export class StorefrontService {
               phone: null,
               is_active: true,
               rep_type: 'store_fleet',
+              // INV-STOREFRONT-DELIVERY-FEE-MODE (H6, C3): the auto
+              // store rep is marked in metadata so it is
+              // distinguishable from a merchant-created rep. It
+              // carries no phone and no PIN, so it can never log
+              // into the driver portal — driverLogin skips reps
+              // without phone + pin_hash.
+              metadata: { auto_created_store_rep: true },
               tenant_id: tenantId,
               account_id: String(accountId || 1),
             } as any)
@@ -3720,6 +3754,14 @@ export class StorefrontService {
     // setting alone.
     const storefrontAllowOutOfStock = await this.resolveStorefrontOutOfStockAllowance(tenantId);
 
+    // INV-STOREFRONT-DELIVERY-FEE-MODE (H6, C3): the tenant's own
+    // deliveryFeeMode setting governs the converted sale — never a
+    // hardcoded 'store_fleet'. A null here (tenant never set a
+    // mode) lets createSale resolve it itself.
+    const tenantDeliveryFeeMode = effectiveOrderType === 'delivery'
+      ? await this.resolveTenantDeliveryFeeMode(tenantId)
+      : null;
+
     // 3. Call SalesService to create formal sale delivery invoice.
     // SF-3: the invoice is born "collected" only when a real gateway webhook or a merchant user
     // confirmed the money. Choosing InstaPay at checkout, or paying in the sandbox simulator, is
@@ -3741,7 +3783,7 @@ export class StorefrontService {
       deliveryRepId: repId,
       deliveryStatus: effectiveOrderType === 'delivery' ? 'pending' : null,
       collectionStatus: isPaidOnline ? 'prepaid_online' : (effectiveOrderType === 'delivery' ? 'cod' : null),
-      deliveryFeeMode: effectiveOrderType === 'delivery' ? 'store_fleet' : null,
+      deliveryFeeMode: tenantDeliveryFeeMode,
       branchId,
       locationId,
       deliveryFee: effectiveOrderType === 'delivery' ? Number(order.deliveryFee || 0) : 0,
