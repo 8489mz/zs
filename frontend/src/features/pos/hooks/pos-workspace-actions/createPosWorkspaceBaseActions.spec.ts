@@ -541,7 +541,12 @@ describe('trash-delete end to end with production setCart semantics (T15-A)', ()
     expect(setLoyaltyPointsRedeemed).toHaveBeenCalledWith(0);
     expect(setDeliveryFee).toHaveBeenCalledWith(0);
     expect(setSubmitMessage).toHaveBeenCalledWith('');
-    expect(reset).toHaveBeenCalledTimes(1);
+    // INV-POS-EMPTY-CART-MUTATION-RESET-GATE: the stub is an idle
+    // mutation (a plain trash-delete, no finished sale), so the gated
+    // empty-cart effect must NOT reset it. The extras-zeroing above
+    // is this test's real point; the terminal-state reset is pinned
+    // in usePosWorkspaceEffects.reset-loop.spec.tsx.
+    expect(reset).toHaveBeenCalledTimes(0);
   });
 });
 
