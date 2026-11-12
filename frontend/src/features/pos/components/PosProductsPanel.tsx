@@ -26,6 +26,7 @@ import { CameraBarcodeScannerModal } from '@/shared/components/CameraBarcodeScan
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { usePosUiCustomization } from '@/features/pos/hooks/usePosUiCustomization';
+import { useCachedT } from '@/features/pos/lib/cached-t';
 import { PosCustomizationDialog } from '@/features/pos/components/pos-workspace/PosCustomizationDialog';
 import { isNegativeStockSalesAllowed } from '@/features/pos/lib/pos.domain';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
@@ -561,6 +562,701 @@ function InlineGroupPicker({
     : pickerContent;
 }
 
+interface PosProductGroupCardProps {
+  groupKey: string;
+  index: number;
+  title: string;
+  hasVariants: boolean;
+  variantCount: number;
+  minPrice: number;
+  maxPrice: number;
+  totalStock: number;
+  itemKind?: Product['itemKind'];
+  imageUrl?: string | null;
+  iconName?: string | null;
+  metaLabel: string;
+  isSelected: boolean;
+  isFavorite: boolean;
+  isOutOfStock: boolean;
+  cardDensity: PosCardDensity;
+  isMobile: boolean;
+  mobileGridColumns: '2' | '3' | 'auto';
+  showCardIcon: boolean;
+  cardRefs: RefObject<Array<HTMLElement | null>>;
+  onActivate: (groupKey: string) => void;
+  onToggleFavorite: (groupKey: string) => void;
+}
+
+// Memoized product-grid card. Every prop is a primitive, a stable ref object,
+// or a stable callback, so a card skips re-rendering when the panel
+// re-renders for any reason that leaves this card's data unchanged (new
+// `products` array identity, search keystrokes, selection moves, another
+// card's favorite toggle). The JSX below is the panel's former inline card
+// body, moved verbatim; only the closed-over values became props.
+function PosProductGroupCardComponent({
+  groupKey,
+  index,
+  title,
+  hasVariants,
+  variantCount,
+  minPrice,
+  maxPrice,
+  totalStock,
+  itemKind,
+  imageUrl,
+  iconName,
+  metaLabel,
+  isSelected,
+  isFavorite,
+  isOutOfStock,
+  cardDensity,
+  isMobile,
+  mobileGridColumns,
+  showCardIcon,
+  cardRefs,
+  onActivate,
+  onToggleFavorite,
+}: PosProductGroupCardProps) {
+  const t = useCachedT();
+  const priceLabel = minPrice === maxPrice
+    ? formatCurrencyWithCode(minPrice)
+    : `${formatCurrencyWithCode(minPrice)} - ${formatCurrencyWithCode(maxPrice)}`;
+
+  if (cardDensity === 'gallery') {
+    // Ultra-Clean Seamless Visual Card (Balanced Mobile & Touch Ergonomics)
+    return (
+      <article
+        className={`pos-group-card pos-group-card-gallery ${isSelected ? 'is-selected' : ''} ${isOutOfStock ? 'is-out-of-stock' : ''}`}
+        style={{
+          background: isOutOfStock ? '#f8fafc' : '#ffffff',
+          border: isSelected
+            ? '1px solid #170e5e'
+            : isOutOfStock
+            ? '1px dashed #cbd5e1'
+            : '1px solid #e2e8f0',
+          borderRadius: '12px',
+          overflow: 'hidden',
+          boxShadow: isSelected ? '0 0 0 1px #170e5e' : '0 1px 4px rgba(0,0,0,0.03)',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+          boxSizing: 'border-box',
+          padding: 0,
+          height: '100%',
+          maxWidth: isMobile ? '100%' : '190px',
+          width: '100%',
+          opacity: isOutOfStock ? 0.55 : 1,
+          filter: isOutOfStock ? 'grayscale(0.65)' : undefined,
+          transition: 'opacity 0.2s ease, border-color 0.2s ease',
+        }}
+      >
+        {/* Top Right Floating Pill: Variants Count OR Available Stock Badge */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '6px',
+            right: '6px',
+            zIndex: 2,
+            pointerEvents: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px',
+          }}
+        >
+          {hasVariants ? (
+            <span
+              style={{
+                fontSize: '9.5px',
+                fontWeight: 800,
+                padding: '2px 6px',
+                borderRadius: '5px',
+                background: 'rgba(239, 246, 255, 0.95)',
+                color: '#1d4ed8',
+                border: '1px solid #bfdbfe',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+              }}
+            >
+              {variantCount} {t('pos.options', 'خيارات')}
+            </span>
+          ) : (itemKind as string) !== 'service' && typeof totalStock === 'number' ? (
+            totalStock <= 0 ? (
+              <span
+                style={{
+                  fontSize: '9px',
+                  fontWeight: 800,
+                  padding: '2px 5px',
+                  borderRadius: '5px',
+                  background: 'rgba(254, 242, 242, 0.95)',
+                  color: '#b91c1c',
+                  border: '1px solid #fecaca',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                }}
+              >
+                {t('pos.out_of_stock', 'نفد')}
+              </span>
+            ) : totalStock <= 5 ? (
+              <span
+                style={{
+                  fontSize: '9px',
+                  fontWeight: 800,
+                  padding: '2px 5px',
+                  borderRadius: '5px',
+                  background: 'rgba(255, 251, 235, 0.95)',
+                  color: '#b45309',
+                  border: '1px solid #fde68a',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                }}
+              >
+                {totalStock} {t('pos.left', 'متبقي')}
+              </span>
+            ) : (
+              <span
+                style={{
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  padding: '1px 5px',
+                  borderRadius: '5px',
+                  background: 'rgba(248, 250, 252, 0.92)',
+                  color: '#64748b',
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                }}
+              >
+                {totalStock}
+              </span>
+            )
+          ) : null}
+        </div>
+
+        {/* Favorite Star Button (Ergonomic Touch Separation) */}
+        <button
+          type="button"
+          className={`pos-favorite-star ${isFavorite ? 'is-active' : ''}`}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleFavorite(groupKey);
+          }}
+          aria-label={isFavorite ? t('pos.pos_products_panel.s25', 'إزالة من المفضلة') : t('pos.pos_products_panel.s26', 'إضافة إلى المفضلة')}
+          style={{
+            position: 'absolute',
+            top: '6px',
+            left: '6px',
+            zIndex: 3,
+            background: isFavorite ? '#ffffff' : 'rgba(255, 255, 255, 0.92)',
+            border: isFavorite ? '1px solid #fde68a' : '1px solid #e2e8f0',
+            borderRadius: '50%',
+            width: '26px',
+            height: '26px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            padding: 0,
+            boxShadow: isFavorite ? '0 2px 6px rgba(245, 158, 11, 0.22)' : '0 1px 3px rgba(0, 0, 0, 0.08)',
+            transition: 'transform 0.1s ease, background 0.15s ease',
+          }}
+        >
+          <StarIcon size={12.5} filled={isFavorite} color={isFavorite ? '#f59e0b' : '#94a3b8'} />
+        </button>
+
+        {/* Card Action Button */}
+        <button
+          ref={(node) => { cardRefs.current[index] = node; }}
+          type="button"
+          className="pos-group-card-action"
+          onClick={() => onActivate(groupKey)}
+          style={{
+            border: 'none',
+            background: 'transparent',
+            textAlign: 'center',
+            padding: 0,
+            width: '100%',
+            cursor: isOutOfStock ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            flex: 1,
+            outline: 'none',
+            WebkitTapHighlightColor: 'transparent',
+            userSelect: 'none',
+          }}
+        >
+          {/* Dominant Hero Image (Natural Square Proportion) */}
+          <div
+            style={{
+              width: '100%',
+              aspectRatio: '1 / 1',
+              background: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+              overflow: 'hidden',
+              padding: isMobile && mobileGridColumns === '3' ? '4px' : isMobile ? '5px' : '8px',
+              boxSizing: 'border-box',
+            }}
+          >
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={title}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                }}
+                loading="lazy"
+              />
+            ) : (
+              <div
+                style={{
+                  width: isMobile ? '36px' : '48px',
+                  height: isMobile ? '36px' : '48px',
+                  borderRadius: '10px',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#94a3b8',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                }}
+              >
+                <ProductIcon name={iconName || 'box-package'} size={isMobile ? 18 : 24} />
+              </div>
+            )}
+          </div>
+
+          {/* Clean Bottom Text Bar: Title + Price Directly Underneath */}
+          <div
+            style={{
+              width: '100%',
+              padding: isMobile && mobileGridColumns === '3' ? '4px 3px 5px' : isMobile ? '5px 5px 6px' : '8px 6px 8px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '2px',
+              boxSizing: 'border-box',
+              borderTop: '1px solid #f1f5f9',
+              background: '#ffffff',
+              minHeight: isMobile && mobileGridColumns === '3' ? '48px' : isMobile ? '52px' : '66px',
+            }}
+          >
+            <strong
+              style={{
+                fontSize: isMobile && mobileGridColumns === '3' ? '10.5px' : isMobile ? '11.5px' : '12px',
+                fontWeight: 700,
+                color: '#0f172a',
+                lineHeight: '1.25',
+                textAlign: 'center',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                wordBreak: 'break-word',
+                width: '100%',
+                minHeight: isMobile ? '24px' : '28px',
+                boxSizing: 'border-box',
+                padding: '0 2px',
+              }}
+              title={title}
+            >
+              {title}
+            </strong>
+
+            {/* Price Pill Capsule */}
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: isMobile && mobileGridColumns === '3' ? '1.5px 5px' : isMobile ? '2px 6px' : '2px 8px',
+                borderRadius: '5px',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                maxWidth: '100%',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: isMobile && mobileGridColumns === '3' ? '10.5px' : '11px',
+                  fontWeight: 800,
+                  color: '#170e5e',
+                  letterSpacing: '0.2px',
+                  direction: 'ltr',
+                  display: 'inline-block',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {priceLabel}
+              </span>
+            </div>
+          </div>
+        </button>
+      </article>
+    );
+  }
+
+  if (cardDensity === 'comfortable') {
+    // Classic Comfortable Card (Default)
+    return (
+      <article
+        className={`pos-group-card ${isSelected ? 'is-selected' : ''} ${isOutOfStock ? 'is-out-of-stock' : ''}`}
+        style={isOutOfStock ? {
+          opacity: 0.55,
+          filter: 'grayscale(0.65)',
+          border: '1px dashed #cbd5e1',
+          background: '#f8fafc',
+        } : undefined}
+      >
+        <div className="pos-group-card-top">
+          <span
+            className={`pos-group-kind ${hasVariants ? 'has-choices' : 'is-direct'}`}
+            style={isOutOfStock ? { background: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca' } : undefined}
+          >
+            {isOutOfStock
+              ? t('pos.out_of_stock', 'نفد')
+              : hasVariants
+              ? `${variantCount} فرع`
+              : t('pos.pos_products_panel.s24', "مباشر")}
+          </span>
+          <button
+            type="button"
+            className={`pos-favorite-star ${isFavorite ? 'is-active' : ''}`}
+            onClick={() => onToggleFavorite(groupKey)}
+            aria-label={isFavorite ? t('pos.pos_products_panel.s25', "إزالة من المفضلة") : t('pos.pos_products_panel.s26', "إضافة إلى المفضلة")}
+          >
+            <StarIcon size={14} filled={isFavorite} color={isFavorite ? '#f59e0b' : '#94a3b8'} />
+          </button>
+        </div>
+
+        <button
+          ref={(node) => { cardRefs.current[index] = node; }}
+          type="button"
+          dir="rtl"
+          className="pos-group-card-action"
+          onClick={() => onActivate(groupKey)}
+          style={{ direction: 'rtl', textAlign: 'right', cursor: isOutOfStock ? 'not-allowed' : 'pointer', outline: 'none', WebkitTapHighlightColor: 'transparent', userSelect: 'none' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '4px', width: '100%', direction: 'rtl', minHeight: '36px' }}>
+            {imageUrl ? (
+              <div className="pos-card-product-img" style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '8px',
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                overflow: 'hidden',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+              }}>
+                <img
+                  src={imageUrl}
+                  alt={title}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  loading="lazy"
+                />
+              </div>
+            ) : showCardIcon ? (
+              <div className="pos-card-product-icon" style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '6px',
+                background: '#f8fafc',
+                color: 'var(--product-icon-color, #2563eb)',
+                border: '1px solid #e2e8f0',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <ProductIcon name={iconName || 'box-package'} size={16} />
+              </div>
+            ) : null}
+            <strong
+              style={{
+                flex: 1,
+                textAlign: 'right',
+                minWidth: 0,
+                fontSize: '13px',
+                lineHeight: '1.38',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                minHeight: '36px',
+              }}
+            >
+              {title}
+            </strong>
+          </div>
+          <div
+            className="muted small pos-group-card-meta"
+            style={{
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: '100%',
+              direction: 'rtl',
+              textAlign: 'right',
+              fontSize: '11px',
+              color: '#64748b',
+              height: '18px',
+              minHeight: '18px',
+              maxHeight: '18px',
+              lineHeight: '18px',
+              margin: '2px 0 6px',
+            }}
+            title={metaLabel}
+          >
+            {metaLabel}
+          </div>
+          <div className="pick-meta-row pos-pick-meta-row" style={{ direction: 'rtl', width: '100%' }}>
+            <span>{priceLabel}</span>
+            <span className="small muted">
+              {isOutOfStock
+                ? t('pos.out_of_stock', 'نفد')
+                : hasVariants
+                ? t('pos.pos_products_panel.s27', "افتح الاختيارات")
+                : t('pos.pos_products_panel.s28', "أضف الآن")}
+            </span>
+          </div>
+        </button>
+      </article>
+    );
+  }
+
+  // Refined Soothing Compact Card
+  return (
+    <article
+      className={`pos-group-card ${isSelected ? 'is-selected' : ''} ${isOutOfStock ? 'is-out-of-stock' : ''}`}
+      style={{
+        background: isOutOfStock ? '#f8fafc' : 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+        border: isSelected
+          ? '1px solid #0f172a'
+          : isOutOfStock
+          ? '1px dashed #cbd5e1'
+          : '1px solid rgba(148, 163, 184, 0.28)',
+        borderRadius: '8px',
+        padding: isMobile ? (mobileGridColumns === '3' ? '5px 5px' : '6px 8px') : '8px 10px',
+        boxShadow: isSelected ? '0 0 0 1px #0f172a' : '0 1px 3px rgba(15, 23, 42, 0.03)',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        height: isMobile ? (mobileGridColumns === '3' ? '106px' : '112px') : '114px',
+        minHeight: isMobile ? (mobileGridColumns === '3' ? '106px' : '112px') : '114px',
+        maxHeight: isMobile ? (mobileGridColumns === '3' ? '106px' : '112px') : '114px',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        position: 'relative',
+        opacity: isOutOfStock ? 0.55 : 1,
+        filter: isOutOfStock ? 'grayscale(0.65)' : undefined,
+        outline: 'none',
+        WebkitTapHighlightColor: 'transparent',
+      }}
+    >
+      <div
+        ref={(node) => { cardRefs.current[index] = node; }}
+        role="button"
+        tabIndex={0}
+        dir="rtl"
+        className="pos-group-card-action"
+        onClick={() => onActivate(groupKey)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onActivate(groupKey);
+          }
+        }}
+        style={{
+          border: 'none',
+          background: 'transparent',
+          textAlign: 'right',
+          direction: 'rtl',
+          padding: 0,
+          width: '100%',
+          cursor: isOutOfStock ? 'not-allowed' : 'pointer',
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          height: '100%',
+          justifyContent: 'space-between',
+          outline: 'none',
+          WebkitTapHighlightColor: 'transparent',
+          userSelect: 'none',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '6px', width: '100%', marginBottom: '6px', direction: 'rtl' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0, direction: 'rtl' }}>
+            {imageUrl ? (
+              <div className="pos-card-product-img" style={{
+                width: '30px',
+                height: '30px',
+                borderRadius: '6px',
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                overflow: 'hidden',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+              }}>
+                <img
+                  src={imageUrl}
+                  alt={title}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  loading="lazy"
+                />
+              </div>
+            ) : showCardIcon ? (
+              <div className="pos-card-product-icon" style={{
+                width: '26px',
+                height: '26px',
+                borderRadius: '5px',
+                background: '#f8fafc',
+                color: 'var(--product-icon-color, #2563eb)',
+                border: '1px solid #e2e8f0',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <ProductIcon name={iconName || 'box-package'} size={15} />
+              </div>
+            ) : null}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <strong
+                style={{
+                  fontSize: '0.88rem',
+                  fontWeight: 800,
+                  color: '#0f172a',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  lineHeight: 1.3,
+                }}
+              >
+                {title}
+              </strong>
+              {hasVariants ? (
+                <div style={{ marginTop: '3px' }}>
+                  <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #dbeafe' }}>
+                    {variantCount} {t('pos.options', 'خيارات')}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className={`pos-favorite-star ${isFavorite ? 'is-active' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite(groupKey);
+            }}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+            }}
+            aria-label={isFavorite ? t('pos.pos_products_panel.s30', "إزالة من المفضلة") : t('pos.pos_products_panel.s31', "إضافة إلى المفضلة")}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              color: isFavorite ? '#f59e0b' : '#cbd5e1',
+              fontSize: '1rem',
+              cursor: 'pointer',
+              padding: 0,
+              lineHeight: 1,
+              flexShrink: 0,
+            }}
+          >
+            <StarIcon size={14} filled={isFavorite} color={isFavorite ? '#f59e0b' : '#cbd5e1'} />
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '4px',
+            borderTop: '1px solid rgba(148, 163, 184, 0.16)',
+            paddingTop: '4px',
+            marginTop: 'auto',
+            width: '100%',
+            minWidth: 0,
+          }}
+        >
+          <span
+            style={{
+              fontSize: isMobile ? '0.82rem' : '0.92rem',
+              fontWeight: 800,
+              color: '#0f172a',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              minWidth: 0,
+              flexShrink: 1,
+            }}
+            title={priceLabel}
+          >
+            {priceLabel}
+          </span>
+
+          <span
+            className="pos-card-add-pill"
+            style={{
+              fontSize: isMobile ? '0.66rem' : '0.7rem',
+              fontWeight: 700,
+              padding: isMobile ? '2px 5px' : '2px 7px',
+              borderRadius: '5px',
+              background: isOutOfStock ? '#fee2e2' : hasVariants ? '#eff6ff' : '#ecfdf5',
+              color: isOutOfStock ? '#b91c1c' : hasVariants ? '#1d4ed8' : '#047857',
+              border: isOutOfStock ? '1px solid #fecaca' : hasVariants ? '1px solid #dbeafe' : '1px solid #a7f3d0',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '3px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              lineHeight: 1,
+            }}
+          >
+            {isOutOfStock ? (
+              t('pos.out_of_stock', 'نفد')
+            ) : hasVariants ? (
+              <>
+                <span>{t('pos.options_short', 'خيارات')}</span>
+                <ChevronDownIcon size={10} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+              </>
+            ) : (
+              <>
+                <PlusIcon size={10} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                <span>{t('pos.add_short', 'أضف')}</span>
+              </>
+            )}
+          </span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+const PosProductGroupCard = memo(PosProductGroupCardComponent);
+
 function PosProductsPanelComponent({
   search,
   onSearchChange,
@@ -789,6 +1485,15 @@ function PosProductsPanelComponent({
     return () => observer.disconnect();
   }, [hasMoreTouchGroups]);
   const groupedProductsMap = useMemo(() => new Map(groupedProducts.map((g) => [g.key, g])), [groupedProducts]);
+  // Latest-value refs for the stable group-action callbacks below. The grid
+  // cards are memoized and receive these callbacks as props, so the callbacks
+  // must keep a stable identity across panel re-renders; they read the current
+  // search / onAddProduct / group map at click time instead of closing over
+  // values that change every render.
+  const latestGroupActionRefs = useRef({ search, onAddProduct, groupedProductsMap });
+  useEffect(() => {
+    latestGroupActionRefs.current = { search, onAddProduct, groupedProductsMap };
+  });
   const visibleRecentGroups = useMemo(
     () => recentGroupKeys
       .map((key) => groupedProductsMap.get(key))
@@ -853,15 +1558,15 @@ function PosProductsPanelComponent({
     setSelectedIndex(safeIndex);
   }
 
-  function toggleFavorite(groupKey: string) {
+  const toggleFavorite = useCallback((groupKey: string) => {
     setFavoriteKeys((current) => (
       current.includes(groupKey)
         ? current.filter((entry) => entry !== groupKey)
         : [groupKey, ...current].slice(0, 20)
     ));
-  }
+  }, []);
 
-  function activateGroup(group: PosProductGroup | null) {
+  const activateGroup = useCallback((group: PosProductGroup | null) => {
     if (!group) return false;
     if (isOutOfStockGroup(group)) {
       toast.warning(t('pos.item_out_of_stock_warning', 'الصنف نافذ من المخزون ولا يمكن بيعه حالياً'));
@@ -871,12 +1576,16 @@ function PosProductsPanelComponent({
       setOpenGroupKey(group.key);
       return true;
     }
-    onAddProduct(group.products[0]);
-    if (search.trim().length > 0) {
+    latestGroupActionRefs.current.onAddProduct(group.products[0]);
+    if (latestGroupActionRefs.current.search.trim().length > 0) {
       focusSearchInput(searchInputRef);
     }
     return true;
-  }
+  }, [isOutOfStockGroup, t]);
+
+  const activateGroupByKey = useCallback((groupKey: string) => {
+    return activateGroup(latestGroupActionRefs.current.groupedProductsMap.get(groupKey) || null);
+  }, [activateGroup]);
 
   function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     const currentQuery = event.currentTarget.value || search;
@@ -1621,652 +2330,33 @@ function PosProductsPanelComponent({
                 gap: '6px',
               } : undefined)}
             >
-              {displayedGroups.map((group, index) => {
-                const isSelected = isKeyboardNavigatingRef.current && index === selectedIndex;
-                const isFavorite = favoriteKeySet.has(group.key);
-                const isOutOfStock = isOutOfStockGroup(group);
-                const priceLabel = group.minPrice === group.maxPrice
-                  ? formatCurrencyWithCode(group.minPrice)
-                  : `${formatCurrencyWithCode(group.minPrice)} - ${formatCurrencyWithCode(group.maxPrice)}`;
-
-                const rawIcon = group.products[0]?.icon;
-                const showCardIcon = iconSettings.showIcons;
-
-                if (cardDensity === 'gallery') {
-                  // Ultra-Clean Seamless Visual Card (Balanced Mobile & Touch Ergonomics)
-                  return (
-                    <article
-                      key={group.key}
-                      className={`pos-group-card pos-group-card-gallery ${isSelected ? 'is-selected' : ''} ${isOutOfStock ? 'is-out-of-stock' : ''}`}
-                      style={{
-                        background: isOutOfStock ? '#f8fafc' : '#ffffff',
-                        border: isSelected
-                          ? '1px solid #170e5e'
-                          : isOutOfStock
-                          ? '1px dashed #cbd5e1'
-                          : '1px solid #e2e8f0',
-                        borderRadius: '12px',
-                        overflow: 'hidden',
-                        boxShadow: isSelected ? '0 0 0 1px #170e5e' : '0 1px 4px rgba(0,0,0,0.03)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        position: 'relative',
-                        boxSizing: 'border-box',
-                        padding: 0,
-                        height: '100%',
-                        maxWidth: isMobile ? '100%' : '190px',
-                        width: '100%',
-                        opacity: isOutOfStock ? 0.55 : 1,
-                        filter: isOutOfStock ? 'grayscale(0.65)' : undefined,
-                        transition: 'opacity 0.2s ease, border-color 0.2s ease',
-                      }}
-                    >
-                      {/* Top Right Floating Pill: Variants Count OR Available Stock Badge */}
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: '6px',
-                          right: '6px',
-                          zIndex: 2,
-                          pointerEvents: 'none',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '3px',
-                        }}
-                      >
-                        {group.hasVariants ? (
-                          <span
-                            style={{
-                              fontSize: '9.5px',
-                              fontWeight: 800,
-                              padding: '2px 6px',
-                              borderRadius: '5px',
-                              background: 'rgba(239, 246, 255, 0.95)',
-                              color: '#1d4ed8',
-                              border: '1px solid #bfdbfe',
-                              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                            }}
-                          >
-                            {group.products.length} {t('pos.options', 'خيارات')}
-                          </span>
-                        ) : (group.itemKind as string) !== 'service' && typeof group.totalStock === 'number' ? (
-                          group.totalStock <= 0 ? (
-                            <span
-                              style={{
-                                fontSize: '9px',
-                                fontWeight: 800,
-                                padding: '2px 5px',
-                                borderRadius: '5px',
-                                background: 'rgba(254, 242, 242, 0.95)',
-                                color: '#b91c1c',
-                                border: '1px solid #fecaca',
-                                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                              }}
-                            >
-                              {t('pos.out_of_stock', 'نفد')}
-                            </span>
-                          ) : group.totalStock <= 5 ? (
-                            <span
-                              style={{
-                                fontSize: '9px',
-                                fontWeight: 800,
-                                padding: '2px 5px',
-                                borderRadius: '5px',
-                                background: 'rgba(255, 251, 235, 0.95)',
-                                color: '#b45309',
-                                border: '1px solid #fde68a',
-                                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                              }}
-                            >
-                              {group.totalStock} {t('pos.left', 'متبقي')}
-                            </span>
-                          ) : (
-                            <span
-                              style={{
-                                fontSize: '9px',
-                                fontWeight: 700,
-                                padding: '1px 5px',
-                                borderRadius: '5px',
-                                background: 'rgba(248, 250, 252, 0.92)',
-                                color: '#64748b',
-                                border: '1px solid #e2e8f0',
-                                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-                              }}
-                            >
-                              {group.totalStock}
-                            </span>
-                          )
-                        ) : null}
-                      </div>
-
-                      {/* Favorite Star Button (Ergonomic Touch Separation) */}
-                      <button
-                        type="button"
-                        className={`pos-favorite-star ${isFavorite ? 'is-active' : ''}`}
-                        onPointerDown={(e) => {
-                          e.stopPropagation();
-                        }}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          toggleFavorite(group.key);
-                        }}
-                        aria-label={isFavorite ? t('pos.pos_products_panel.s25', 'إزالة من المفضلة') : t('pos.pos_products_panel.s26', 'إضافة إلى المفضلة')}
-                        style={{
-                          position: 'absolute',
-                          top: '6px',
-                          left: '6px',
-                          zIndex: 3,
-                          background: isFavorite ? '#ffffff' : 'rgba(255, 255, 255, 0.92)',
-                          border: isFavorite ? '1px solid #fde68a' : '1px solid #e2e8f0',
-                          borderRadius: '50%',
-                          width: '26px',
-                          height: '26px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          padding: 0,
-                          boxShadow: isFavorite ? '0 2px 6px rgba(245, 158, 11, 0.22)' : '0 1px 3px rgba(0, 0, 0, 0.08)',
-                          transition: 'transform 0.1s ease, background 0.15s ease',
-                        }}
-                      >
-                        <StarIcon size={12.5} filled={isFavorite} color={isFavorite ? '#f59e0b' : '#94a3b8'} />
-                      </button>
-
-                      {/* Card Action Button */}
-                      <button
-                        ref={(node) => { groupRefs.current[index] = node; }}
-                        type="button"
-                        className="pos-group-card-action"
-                        onClick={() => activateGroup(group)}
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          textAlign: 'center',
-                          padding: 0,
-                          width: '100%',
-                          cursor: isOutOfStock ? 'not-allowed' : 'pointer',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          flex: 1,
-                          outline: 'none',
-                          WebkitTapHighlightColor: 'transparent',
-                          userSelect: 'none',
-                        }}
-                      >
-                        {/* Dominant Hero Image (Natural Square Proportion) */}
-                        <div
-                          style={{
-                            width: '100%',
-                            aspectRatio: '1 / 1',
-                            background: '#ffffff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            position: 'relative',
-                            overflow: 'hidden',
-                            padding: isMobile && customization.mobileGridColumns === '3' ? '4px' : isMobile ? '5px' : '8px',
-                            boxSizing: 'border-box',
-                          }}
-                        >
-                          {group.imageUrl ? (
-                            <img
-                              src={group.imageUrl}
-                              alt={group.title}
-                              style={{
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'contain',
-                              }}
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div
-                              style={{
-                                width: isMobile ? '36px' : '48px',
-                                height: isMobile ? '36px' : '48px',
-                                borderRadius: '10px',
-                                background: '#f8fafc',
-                                border: '1px solid #e2e8f0',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: '#94a3b8',
-                                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-                              }}
-                            >
-                              <ProductIcon name={rawIcon || 'box-package'} size={isMobile ? 18 : 24} />
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Clean Bottom Text Bar: Title + Price Directly Underneath */}
-                        <div
-                          style={{
-                            width: '100%',
-                            padding: isMobile && customization.mobileGridColumns === '3' ? '4px 3px 5px' : isMobile ? '5px 5px 6px' : '8px 6px 8px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '2px',
-                            boxSizing: 'border-box',
-                            borderTop: '1px solid #f1f5f9',
-                            background: '#ffffff',
-                            minHeight: isMobile && customization.mobileGridColumns === '3' ? '48px' : isMobile ? '52px' : '66px',
-                          }}
-                        >
-                          <strong
-                            style={{
-                              fontSize: isMobile && customization.mobileGridColumns === '3' ? '10.5px' : isMobile ? '11.5px' : '12px',
-                              fontWeight: 700,
-                              color: '#0f172a',
-                              lineHeight: '1.25',
-                              textAlign: 'center',
-                              display: '-webkit-box',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              wordBreak: 'break-word',
-                              width: '100%',
-                              minHeight: isMobile ? '24px' : '28px',
-                              boxSizing: 'border-box',
-                              padding: '0 2px',
-                            }}
-                            title={group.title}
-                          >
-                            {group.title}
-                          </strong>
-
-                          {/* Price Pill Capsule */}
-                          <div
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              padding: isMobile && customization.mobileGridColumns === '3' ? '1.5px 5px' : isMobile ? '2px 6px' : '2px 8px',
-                              borderRadius: '5px',
-                              background: '#f8fafc',
-                              border: '1px solid #e2e8f0',
-                              maxWidth: '100%',
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: isMobile && customization.mobileGridColumns === '3' ? '10.5px' : '11px',
-                                fontWeight: 800,
-                                color: '#170e5e',
-                                letterSpacing: '0.2px',
-                                direction: 'ltr',
-                                display: 'inline-block',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                              }}
-                            >
-                              {priceLabel}
-                            </span>
-                          </div>
-                        </div>
-                      </button>
-                    </article>
-                  );
-                }
-
-                if (cardDensity === 'comfortable') {
-                  // Classic Comfortable Card (Default)
-                  return (
-                    <article
-                      key={group.key}
-                      className={`pos-group-card ${isSelected ? 'is-selected' : ''} ${isOutOfStock ? 'is-out-of-stock' : ''}`}
-                      style={isOutOfStock ? {
-                        opacity: 0.55,
-                        filter: 'grayscale(0.65)',
-                        border: '1px dashed #cbd5e1',
-                        background: '#f8fafc',
-                      } : undefined}
-                    >
-                      <div className="pos-group-card-top">
-                        <span
-                          className={`pos-group-kind ${group.hasVariants ? 'has-choices' : 'is-direct'}`}
-                          style={isOutOfStock ? { background: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca' } : undefined}
-                        >
-                          {isOutOfStock
-                            ? t('pos.out_of_stock', 'نفد')
-                            : group.hasVariants
-                            ? `${group.products.length} فرع`
-                            : t('pos.pos_products_panel.s24', "مباشر")}
-                        </span>
-                        <button
-                          type="button"
-                          className={`pos-favorite-star ${isFavorite ? 'is-active' : ''}`}
-                          onClick={() => toggleFavorite(group.key)}
-                          aria-label={isFavorite ? t('pos.pos_products_panel.s25', "إزالة من المفضلة") : t('pos.pos_products_panel.s26', "إضافة إلى المفضلة")}
-                        >
-                          <StarIcon size={14} filled={isFavorite} color={isFavorite ? '#f59e0b' : '#94a3b8'} />
-                        </button>
-                      </div>
-
-                      <button
-                        ref={(node) => { groupRefs.current[index] = node; }}
-                        type="button"
-                        dir="rtl"
-                        className="pos-group-card-action"
-                        onClick={() => activateGroup(group)}
-                        style={{ direction: 'rtl', textAlign: 'right', cursor: isOutOfStock ? 'not-allowed' : 'pointer', outline: 'none', WebkitTapHighlightColor: 'transparent', userSelect: 'none' }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '4px', width: '100%', direction: 'rtl', minHeight: '36px' }}>
-                          {group.imageUrl ? (
-                            <div className="pos-card-product-img" style={{
-                              width: '36px',
-                              height: '36px',
-                              borderRadius: '8px',
-                              background: '#ffffff',
-                              border: '1px solid #e2e8f0',
-                              overflow: 'hidden',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0,
-                              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                            }}>
-                              <img
-                                src={group.imageUrl}
-                                alt={group.title}
-                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                loading="lazy"
-                              />
-                            </div>
-                          ) : showCardIcon ? (
-                            <div className="pos-card-product-icon" style={{
-                              width: '28px',
-                              height: '28px',
-                              borderRadius: '6px',
-                              background: '#f8fafc',
-                              color: 'var(--product-icon-color, #2563eb)',
-                              border: '1px solid #e2e8f0',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0
-                            }}>
-                              <ProductIcon name={rawIcon || 'box-package'} size={16} />
-                            </div>
-                          ) : null}
-                          <strong
-                            style={{
-                              flex: 1,
-                              textAlign: 'right',
-                              minWidth: 0,
-                              fontSize: '13px',
-                              lineHeight: '1.38',
-                              display: '-webkit-box',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden',
-                              minHeight: '36px',
-                            }}
-                          >
-                            {group.title}
-                          </strong>
-                        </div>
-                        <div
-                          className="muted small pos-group-card-meta"
-                          style={{
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            maxWidth: '100%',
-                            direction: 'rtl',
-                            textAlign: 'right',
-                            fontSize: '11px',
-                            color: '#64748b',
-                            height: '18px',
-                            minHeight: '18px',
-                            maxHeight: '18px',
-                            lineHeight: '18px',
-                            margin: '2px 0 6px',
-                          }}
-                          title={groupMetaLabel(group)}
-                        >
-                          {groupMetaLabel(group)}
-                        </div>
-                        <div className="pick-meta-row pos-pick-meta-row" style={{ direction: 'rtl', width: '100%' }}>
-                          <span>{priceLabel}</span>
-                          <span className="small muted">
-                            {isOutOfStock
-                              ? t('pos.out_of_stock', 'نفد')
-                              : group.hasVariants
-                              ? t('pos.pos_products_panel.s27', "افتح الاختيارات")
-                              : t('pos.pos_products_panel.s28', "أضف الآن")}
-                          </span>
-                        </div>
-                      </button>
-                    </article>
-                  );
-                }
-
-                // Refined Soothing Compact Card
-                return (
-                  <article
-                    key={group.key}
-                    className={`pos-group-card ${isSelected ? 'is-selected' : ''} ${isOutOfStock ? 'is-out-of-stock' : ''}`}
-                    style={{
-                      background: isOutOfStock ? '#f8fafc' : 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
-                      border: isSelected
-                        ? '1px solid #0f172a'
-                        : isOutOfStock
-                        ? '1px dashed #cbd5e1'
-                        : '1px solid rgba(148, 163, 184, 0.28)',
-                      borderRadius: '8px',
-                      padding: isMobile ? (customization.mobileGridColumns === '3' ? '5px 5px' : '6px 8px') : '8px 10px',
-                      boxShadow: isSelected ? '0 0 0 1px #0f172a' : '0 1px 3px rgba(15, 23, 42, 0.03)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      height: isMobile ? (customization.mobileGridColumns === '3' ? '106px' : '112px') : '114px',
-                      minHeight: isMobile ? (customization.mobileGridColumns === '3' ? '106px' : '112px') : '114px',
-                      maxHeight: isMobile ? (customization.mobileGridColumns === '3' ? '106px' : '112px') : '114px',
-                      boxSizing: 'border-box',
-                      overflow: 'hidden',
-                      position: 'relative',
-                      opacity: isOutOfStock ? 0.55 : 1,
-                      filter: isOutOfStock ? 'grayscale(0.65)' : undefined,
-                      outline: 'none',
-                      WebkitTapHighlightColor: 'transparent',
-                    }}
-                  >
-                    <div
-                      ref={(node) => { groupRefs.current[index] = node; }}
-                      role="button"
-                      tabIndex={0}
-                      dir="rtl"
-                      className="pos-group-card-action"
-                      onClick={() => activateGroup(group)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          activateGroup(group);
-                        }
-                      }}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        textAlign: 'right',
-                        direction: 'rtl',
-                        padding: 0,
-                        width: '100%',
-                        cursor: isOutOfStock ? 'not-allowed' : 'pointer',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        flex: 1,
-                        height: '100%',
-                        justifyContent: 'space-between',
-                        outline: 'none',
-                        WebkitTapHighlightColor: 'transparent',
-                        userSelect: 'none',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '6px', width: '100%', marginBottom: '6px', direction: 'rtl' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0, direction: 'rtl' }}>
-                          {group.imageUrl ? (
-                            <div className="pos-card-product-img" style={{
-                              width: '30px',
-                              height: '30px',
-                              borderRadius: '6px',
-                              background: '#ffffff',
-                              border: '1px solid #e2e8f0',
-                              overflow: 'hidden',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0,
-                              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                            }}>
-                              <img
-                                src={group.imageUrl}
-                                alt={group.title}
-                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                loading="lazy"
-                              />
-                            </div>
-                          ) : showCardIcon ? (
-                            <div className="pos-card-product-icon" style={{
-                              width: '26px',
-                              height: '26px',
-                              borderRadius: '5px',
-                              background: '#f8fafc',
-                              color: 'var(--product-icon-color, #2563eb)',
-                              border: '1px solid #e2e8f0',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0
-                            }}>
-                              <ProductIcon name={rawIcon || 'box-package'} size={15} />
-                            </div>
-                          ) : null}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <strong
-                              style={{
-                                fontSize: '0.88rem',
-                                fontWeight: 800,
-                                color: '#0f172a',
-                                display: '-webkit-box',
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden',
-                                lineHeight: 1.3,
-                              }}
-                            >
-                              {group.title}
-                            </strong>
-                            {group.hasVariants ? (
-                              <div style={{ marginTop: '3px' }}>
-                                <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #dbeafe' }}>
-                                  {group.products.length} {t('pos.options', 'خيارات')}
-                                </span>
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          className={`pos-favorite-star ${isFavorite ? 'is-active' : ''}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFavorite(group.key);
-                          }}
-                          onKeyDown={(e) => {
-                            e.stopPropagation();
-                          }}
-                          aria-label={isFavorite ? t('pos.pos_products_panel.s30', "إزالة من المفضلة") : t('pos.pos_products_panel.s31', "إضافة إلى المفضلة")}
-                          style={{
-                            border: 'none',
-                            background: 'transparent',
-                            color: isFavorite ? '#f59e0b' : '#cbd5e1',
-                            fontSize: '1rem',
-                            cursor: 'pointer',
-                            padding: 0,
-                            lineHeight: 1,
-                            flexShrink: 0,
-                          }}
-                        >
-                          <StarIcon size={14} filled={isFavorite} color={isFavorite ? '#f59e0b' : '#cbd5e1'} />
-                        </button>
-                      </div>
-
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          gap: '4px',
-                          borderTop: '1px solid rgba(148, 163, 184, 0.16)',
-                          paddingTop: '4px',
-                          marginTop: 'auto',
-                          width: '100%',
-                          minWidth: 0,
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: isMobile ? '0.82rem' : '0.92rem',
-                            fontWeight: 800,
-                            color: '#0f172a',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            minWidth: 0,
-                            flexShrink: 1,
-                          }}
-                          title={priceLabel}
-                        >
-                          {priceLabel}
-                        </span>
-
-                        <span
-                          className="pos-card-add-pill"
-                          style={{
-                            fontSize: isMobile ? '0.66rem' : '0.7rem',
-                            fontWeight: 700,
-                            padding: isMobile ? '2px 5px' : '2px 7px',
-                            borderRadius: '5px',
-                            background: isOutOfStock ? '#fee2e2' : group.hasVariants ? '#eff6ff' : '#ecfdf5',
-                            color: isOutOfStock ? '#b91c1c' : group.hasVariants ? '#1d4ed8' : '#047857',
-                            border: isOutOfStock ? '1px solid #fecaca' : group.hasVariants ? '1px solid #dbeafe' : '1px solid #a7f3d0',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '3px',
-                            whiteSpace: 'nowrap',
-                            flexShrink: 0,
-                            lineHeight: 1,
-                          }}
-                        >
-                          {isOutOfStock ? (
-                            t('pos.out_of_stock', 'نفد')
-                          ) : group.hasVariants ? (
-                            <>
-                              <span>{t('pos.options_short', 'خيارات')}</span>
-                              <ChevronDownIcon size={10} strokeWidth={2.5} style={{ flexShrink: 0 }} />
-                            </>
-                          ) : (
-                            <>
-                              <PlusIcon size={10} strokeWidth={2.5} style={{ flexShrink: 0 }} />
-                              <span>{t('pos.add_short', 'أضف')}</span>
-                            </>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+              {displayedGroups.map((group, index) => (
+                <PosProductGroupCard
+                  key={group.key}
+                  groupKey={group.key}
+                  index={index}
+                  title={group.title}
+                  hasVariants={group.hasVariants}
+                  variantCount={group.products.length}
+                  minPrice={group.minPrice}
+                  maxPrice={group.maxPrice}
+                  totalStock={group.totalStock}
+                  itemKind={group.itemKind}
+                  imageUrl={group.imageUrl}
+                  iconName={group.products[0]?.icon}
+                  metaLabel={groupMetaLabel(group)}
+                  isSelected={isKeyboardNavigatingRef.current && index === selectedIndex}
+                  isFavorite={favoriteKeySet.has(group.key)}
+                  isOutOfStock={isOutOfStockGroup(group)}
+                  cardDensity={cardDensity}
+                  isMobile={isMobile}
+                  mobileGridColumns={customization.mobileGridColumns}
+                  showCardIcon={iconSettings.showIcons}
+                  cardRefs={groupRefs}
+                  onActivate={activateGroupByKey}
+                  onToggleFavorite={toggleFavorite}
+                />
+              ))}
             </div>
 
             {hasMoreTouchGroups ? (

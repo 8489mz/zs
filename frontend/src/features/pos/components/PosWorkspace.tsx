@@ -166,7 +166,29 @@ export function PosWorkspace() {
 
   const printCurrentDraft = useCallback(() => {
     printCurrentPosDraft(pos, selectedCustomerName, selectedCustomer?.phone, selectedCustomer?.address);
-  }, [pos, selectedCustomerName, selectedCustomer]);
+  }, [
+    /* POS render cost: field deps, NOT [pos]. The workspace object is a
+     * fresh literal every render, so [pos] re-created this callback on
+     * every pass and defeated the header's areEqual (onPrintDraft). These
+     * are exactly the pos fields printCurrentPosDraft reads (cart, payment,
+     * branch/location, totals, note, table, order type, settings); every
+     * one is itself stable (state values, derived useMemos, query data)
+     * unless its value really changes. Keep this list in sync with
+     * printCurrentPosDraft's reads. */
+    pos.cart,
+    pos.paymentType,
+    pos.paymentChannel,
+    pos.currentBranch,
+    pos.currentLocation,
+    pos.totals,
+    pos.note,
+    pos.tableNumber,
+    pos.orderType,
+    pos.settingsQuery.data,
+    selectedCustomerName,
+    selectedCustomer?.phone,
+    selectedCustomer?.address,
+  ]);
 
   const focusBarcodeEntry = useCallback(() => {
     if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) {
@@ -606,18 +628,34 @@ export function PosWorkspace() {
     }
   }, [isRestaurantActive]);
 
+  /* POS render cost: stable header callbacks. The header is memo + custom
+   * areEqual comparing onOpenNewProduct / onOpenQuickService /
+   * onOpenHeldDrafts / onPrintDraft (and more) by identity, so the inline
+   * arrows previously passed here re-rendered it on every workspace pass.
+   * handleOpenNewProduct / handleOpenPhoneOrder are already stable
+   * useCallbacks and are passed directly below; these wrappers only
+   * pre-bind an argument or a constant setter call, and each dep is
+   * itself stable (isRestaurantActive is a boolean derived from settings;
+   * the setState setters are stable by React's guarantee). */
+  const handleOpenTables = useCallback(() => handleOpenHeldOrTables('floor'), [handleOpenHeldOrTables]);
+  const handleOpenHeldDrafts = useCallback(() => handleOpenHeldOrTables('list'), [handleOpenHeldOrTables]);
+  const handleOpenQuickService = useCallback(() => setQuickServiceOpen(true), []);
+  const handleRequestOpenShift = useCallback(() => setOpenShiftModalOpen(true), []);
+  const handleOpenSerialLookup = useCallback(() => setSerialLookupOpen(true), []);
+  const handleOpenReprintModal = useCallback(() => setReprintModalOpen(true), []);
+
   usePosWorkspaceKeyboardShortcuts({
     pos,
     focusBarcodeEntry,
-    onOpenNewProduct: () => handleOpenNewProduct(),
-    onOpenQuickService: isServicesActive ? () => setQuickServiceOpen(true) : undefined,
+    onOpenNewProduct: handleOpenNewProduct,
+    onOpenQuickService: isServicesActive ? handleOpenQuickService : undefined,
     printCurrentDraft,
     onRequestClearCart: requestClearCart,
     onRequestLineDelete: requestLineDelete,
     onRequestCheckout: requestCheckoutDialog,
-    onOpenHeldDrafts: () => handleOpenHeldOrTables('floor'),
+    onOpenHeldDrafts: handleOpenTables,
     onRecallHeldDraftByIndex: requestRecallHeldDraftByIndex,
-    onOpenReprintModal: () => setReprintModalOpen(true),
+    onOpenReprintModal: handleOpenReprintModal,
     onOpenPhoneOrder: isPhoneOrdersActive ? () => handleOpenPhoneOrder() : undefined,
   });
 
@@ -628,15 +666,15 @@ export function PosWorkspace() {
         posMode={posMode}
         onModeChange={setPosMode}
         onFocusSearch={focusBarcodeEntry}
-        onOpenNewProduct={() => handleOpenNewProduct()}
-        onOpenQuickService={isServicesActive ? () => setQuickServiceOpen(true) : undefined}
-        onOpenTables={() => handleOpenHeldOrTables('floor')}
-        onOpenHeldDrafts={() => handleOpenHeldOrTables('list')}
-        onOpenPhoneOrder={isPhoneOrdersActive ? () => handleOpenPhoneOrder() : undefined}
+        onOpenNewProduct={handleOpenNewProduct}
+        onOpenQuickService={isServicesActive ? handleOpenQuickService : undefined}
+        onOpenTables={handleOpenTables}
+        onOpenHeldDrafts={handleOpenHeldDrafts}
+        onOpenPhoneOrder={isPhoneOrdersActive ? handleOpenPhoneOrder : undefined}
         onPrintDraft={printCurrentDraft}
-        onRequestOpenShift={() => setOpenShiftModalOpen(true)}
-        onOpenSerialLookup={() => setSerialLookupOpen(true)}
-        onOpenReprintModal={() => setReprintModalOpen(true)}
+        onRequestOpenShift={handleRequestOpenShift}
+        onOpenSerialLookup={handleOpenSerialLookup}
+        onOpenReprintModal={handleOpenReprintModal}
         onPrintCupLabels={handlePrintCupLabels}
       />
 
@@ -653,17 +691,17 @@ export function PosWorkspace() {
         onRequestDiscountAuthorization={requestDiscountAuthorization}
         onRequestLineDelete={requestLineDelete}
         onItemModifiersClick={requestItemModifiers}
-        onEditProduct={(id) => setEditProductId(id)}
+        onEditProduct={setEditProductId}
         onRequestSelectedLineDelete={requestSelectedLineDelete}
         onRequestHeldDelete={requestHeldDelete}
         onRequestClearHeldDrafts={requestClearHeldDrafts}
         onRequestClearCart={requestClearCart}
         onRequestCheckout={requestCheckoutDialog}
         heldDraftsCount={pos.heldDraftSummaries.length}
-        onOpenHeldDrafts={() => handleOpenHeldOrTables('floor')}
+        onOpenHeldDrafts={handleOpenTables}
         onPrintCurrentDraft={printCurrentDraft}
         onFocusBarcodeEntry={focusBarcodeEntry}
-        onRequestOpenShift={() => setOpenShiftModalOpen(true)}
+        onRequestOpenShift={handleRequestOpenShift}
         onOpenNewProduct={handleOpenNewProduct}
         onPriceTypeChange={handlePriceTypeChange}
       />

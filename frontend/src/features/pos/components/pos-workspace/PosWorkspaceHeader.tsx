@@ -930,10 +930,12 @@ function PosWorkspaceHeaderComponent({
         </div>
       )}
     />
-    <PosOnlineOrdersModal
-      isOpen={isOnlineOrdersOpen}
-      onClose={() => setIsOnlineOrdersOpen(false)}
-    />
+    {isOnlineOrdersOpen && (
+      <PosOnlineOrdersModal
+        isOpen={isOnlineOrdersOpen}
+        onClose={() => setIsOnlineOrdersOpen(false)}
+      />
+    )}
     {!onOpenTables && isTablesOpen && (
       <PosTablesFloorPlanDialog
         open={isTablesOpen}
@@ -1009,193 +1011,229 @@ function PosWorkspaceHeaderComponent({
         onDismiss={() => setShowFloatingAlert(false)}
       />
     )}
-    <PosOfflineQueueModal
-      open={isOfflineQueueModalOpen}
-      onClose={() => setIsOfflineQueueModalOpen(false)}
-      offlineQueue={offlineQueue}
-      isSyncing={isSyncing}
-      onRetrySync={syncOfflineSales}
-    />
-    <DialogShell open={isNoSaleOpen} onClose={() => { if (!isNoSalePending) setIsNoSaleOpen(false); }} width="min(480px, 100%)">
-      <div dir="rtl" style={{ padding: 24, background: '#fff' }}>
-        <h2 style={{ marginTop: 0 }}>{t('pos.pos_workspace.pos_workspace_header.s53', "فتح الدرج بدون بيع")}</h2>
-        <p>{t('pos.pos_workspace.pos_workspace_header.s54', "سيُحفظ اسم المستخدم والوردية والسبب في سجل التدقيق قبل إرسال أمر فتح الدرج.")}</p>
-        <label htmlFor="pos-no-sale-reason">{t('pos.pos_workspace.pos_workspace_header.s55', "سبب فتح الدرج")}</label>
-        <textarea id="pos-no-sale-reason" value={noSaleReason} onChange={(event) => setNoSaleReason(event.target.value)} maxLength={500} rows={3} style={{ width: '100%', marginBottom: 12 }} disabled={isNoSalePending} />
-        <Button type="button" variant="primary" onClick={() => { void handleNoSaleDrawerKick(); }} disabled={isNoSalePending || !noSaleReason.trim()}>
-          {isNoSalePending ? t('pos.pos_workspace.pos_workspace_header.s57', "جاري فتح الدرج...") : t('pos.pos_workspace.pos_workspace_header.s58', "فتح الدرج")}
-        </Button>
-      </div>
-    </DialogShell>
-    <PosInstantExchangeDialog open={isExchangeOpen} onClose={() => setIsExchangeOpen(false)} pos={pos} />
-    <PosDeliveryAggregatorsModal
-      open={isAggregatorsOpen}
-      onClose={() => setIsAggregatorsOpen(false)}
-      onBack={() => { setIsAggregatorsOpen(false); setIsOpsModalOpen(true); }}
-    />
-    <RestaurantDeliveryDispatcherModal
-      open={isDriverDispatchOpen}
-      onClose={() => setIsDriverDispatchOpen(false)}
-      onBack={() => { setIsDriverDispatchOpen(false); setIsOpsModalOpen(true); }}
-    />
-    <PosFoodWasteModal
-      open={isFoodWasteOpen}
-      onClose={() => setIsFoodWasteOpen(false)}
-      branchId={Number(pos.branchId) || 1}
-      onBack={() => { setIsFoodWasteOpen(false); setIsOpsModalOpen(true); }}
-    />
-    <Pos86ItemsModal
-      open={is86ModalOpen}
-      onClose={() => setIs86ModalOpen(false)}
-      products={(pos as any).productsQuery?.data || []}
-      branchId={Number(pos.branchId) || undefined}
-      onBack={() => { setIs86ModalOpen(false); setIsOpsModalOpen(true); }}
-    />
-    <PosTipPoolModal
-      open={isTipPoolOpen}
-      onClose={() => setIsTipPoolOpen(false)}
-      branchId={Number(pos.branchId) || undefined}
-      currency={(pos as any).currency || t('pos.pos_workspace.pos_workspace_header.s59', "ج.م")}
-      onBack={() => { setIsTipPoolOpen(false); setIsOpsModalOpen(true); }}
-    />
-    <KitchenDailyPrepSheetModal
-      open={isPrepSheetOpen}
-      onClose={() => setIsPrepSheetOpen(false)}
-      branchId={Number(pos.branchId) || undefined}
-      onBack={() => { setIsPrepSheetOpen(false); setIsOpsModalOpen(true); }}
-    />
-    <PosPlateCostRadarModal
-      open={isPlateRadarOpen}
-      onClose={() => setIsPlateRadarOpen(false)}
-      currency={(pos as any).currency || t('pos.pos_workspace.pos_workspace_header.s60', "ج.م")}
-      onBack={() => { setIsPlateRadarOpen(false); setIsOpsModalOpen(true); }}
-    />
-    <PosCustomerPunchCardModal
-      open={isStampCardOpen}
-      onClose={() => setIsStampCardOpen(false)}
-      customerId={Number(pos.customerId) || 1}
-      customerName={(pos as any).customerName || t('pos.pos_workspace.pos_workspace_header.s61', "العميل الحالي")}
-      onBack={() => { setIsStampCardOpen(false); setIsOpsModalOpen(true); }}
-    />
-    <PosDriveThruModal
-      open={isDriveThruOpen}
-      onClose={() => setIsDriveThruOpen(false)}
-      branchId={Number(pos.branchId) || undefined}
-      onBack={() => { setIsDriveThruOpen(false); setIsOpsModalOpen(true); }}
-    />
-    <PosSmartUpsellModal
-      open={isUpsellModalOpen}
-      onClose={() => setIsUpsellModalOpen(false)}
-      recommendations={upsellRules}
-      onBack={() => { setIsUpsellModalOpen(false); setIsOpsModalOpen(true); }}
-      onAcceptUpsell={(product: any) => {
-        if ((pos as any).addProduct) {
-          (pos as any).addProduct(product);
-        }
-      }}
-    />
-    <PosRestaurantOperationsModal
-      open={isOpsModalOpen}
-      onClose={() => setIsOpsModalOpen(false)}
-      isManager={isManager}
-      count86={count86}
-      cartLength={pos.cart.length}
-      isPhoneOrdersActive={Boolean(isPhoneOrdersActive)}
-      isRestaurantActive={Boolean(isRestaurantActive)}
-      isStorefrontActive={Boolean(isStorefrontActive)}
-      onOpenCombo={onOpenComboModal || (() => setIsComboMealModalOpen(true))}
-      onOpenCupLabels={onPrintCupLabels}
-      onOpenStampCard={() => setIsStampCardOpen(true)}
-      onOpenDriveThru={() => setIsDriveThruOpen(true)}
-      onOpenUpsell={async () => {
-        try {
-          const firstProductId = Number(pos.cart[0]?.productId) || undefined;
-          const rules = await restaurantAdvancedFnbApi.getUpsellRecommendations(firstProductId);
-          setUpsellRules(rules || []);
-          setIsUpsellModalOpen(true);
-        } catch {
-          setIsUpsellModalOpen(true);
-        }
-      }}
-      onOpen86={() => setIs86ModalOpen(true)}
-      onOpenManagerComp={onOpenManagerComp || (() => setIsManagerCompOpen(true))}
-      onOpenPlateRadar={() => setIsPlateRadarOpen(true)}
-      onOpenPrepSheet={() => setIsPrepSheetOpen(true)}
-      onOpenFoodWaste={() => setIsFoodWasteOpen(true)}
-      onOpenTipPool={() => setIsTipPoolOpen(true)}
-      onOpenAggregators={() => setIsAggregatorsOpen(true)}
-      onOpenDriverDispatch={() => setIsDriverDispatchOpen(true)}
-    />
-    <PosDisplaysModal
-      open={isDisplaysModalOpen}
-      onClose={() => setIsDisplaysModalOpen(false)}
-      isRestaurantActive={Boolean(isRestaurantActive)}
-    />
-    <PosManagerCompModal
-      open={isManagerCompOpen}
-      onClose={() => setIsManagerCompOpen(false)}
-      onBack={() => {
-        setIsManagerCompOpen(false);
-        setIsOpsModalOpen(true);
-      }}
-      currentCartTotal={Number(pos.totals?.total || 0)}
-      currentTableNumber={pos.tableNumber || undefined}
-      cartSummary={pos.cart.map((i) => `${i.qty}× ${i.name}`).join(t('pos.pos_workspace.pos_workspace_header.s62', "، "))}
-      onApplyComp={async (comp) => {
-        pos.setDiscount(comp.amount);
-        pos.setNote(`ضيافة إدارة [${comp.compType}] - معتمد: ${comp.managerName}${comp.notes ? ` - ${comp.notes}` : ''}`);
-        setIsManagerCompOpen(false);
-      }}
-    />
-    <PosComboMealModal
-      open={isComboMealModalOpen}
-      onClose={() => setIsComboMealModalOpen(false)}
-      onBack={() => {
-        setIsComboMealModalOpen(false);
-        setIsOpsModalOpen(true);
-      }}
-      products={(pos as any).productsQuery?.data || []}
-      onAddComboToCart={(combo) => {
-        const product = ((pos as any).productsQuery?.data || []).find((p: any) => p.id === combo.productId);
-        // R8-C path 1: the main vanished from the catalog between modal
-        // open and confirm. Was a silent no-op; now a named toast + false
-        // so the modal stays open instead of closing on a lost combo.
-        if (!product) {
-          toast.error('تعذّر إضافة الوجبة: الصنف الرئيسي غير موجود في الكتالوج.');
-          return false;
-        }
-        const comboLineId = `combo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-        const comboOptions = {
-          priceType: pos.priceType,
-          digits: currencyMoneyDigits(settings?.currency || getGlobalSystemCurrency()),
-          allowNegativeStockSales: isNegativeStockSalesAllowed(settings) || Boolean((product as any).hasBom),
-          comboLineId,
-        };
-        // R8-C: ONE apply, on the current cart — its result IS the cart
-        // setCart installs, so the returned boolean is exact. The old
-        // double-apply (pre-flight + setCart updater with a silent
-        // `catch { return prevCart; }`) could swallow a failure that only
-        // appears with the freshest cart AFTER the modal had closed
-        // (path 3). The handler is synchronous, so no other cart write
-        // can interleave between the apply and setCart.
-        let nextCart: { cart: any[]; lineKey: string };
-        try {
-          nextCart = applyComboToCart(pos.cart, product, combo, comboOptions);
-        } catch (error) {
-          toast.error(error instanceof Error ? error.message : 'تعذّر إضافة الوجبة إلى السلة.');
-          return false;
-        }
-        pos.setCart(nextCart.cart);
-        pos.setSelectedLineKey(nextCart.lineKey);
-        pos.setLastAddedLineKey(nextCart.lineKey);
-        toast.success(`تمت إضافة ${combo.productName} إلى السلة بنجاح`);
-        return true;
-      }}
-    />
-    <PosCustomizationDialog
-      isOpen={isCustomizationOpen}
-      onClose={() => setIsCustomizationOpen(false)}
-    />
+    {isOfflineQueueModalOpen && (
+      <PosOfflineQueueModal
+        open={isOfflineQueueModalOpen}
+        onClose={() => setIsOfflineQueueModalOpen(false)}
+        offlineQueue={offlineQueue}
+        isSyncing={isSyncing}
+        onRetrySync={syncOfflineSales}
+      />
+    )}
+    {isNoSaleOpen && (
+      <DialogShell open={isNoSaleOpen} onClose={() => { if (!isNoSalePending) setIsNoSaleOpen(false); }} width="min(480px, 100%)">
+        <div dir="rtl" style={{ padding: 24, background: '#fff' }}>
+          <h2 style={{ marginTop: 0 }}>{t('pos.pos_workspace.pos_workspace_header.s53', "فتح الدرج بدون بيع")}</h2>
+          <p>{t('pos.pos_workspace.pos_workspace_header.s54', "سيُحفظ اسم المستخدم والوردية والسبب في سجل التدقيق قبل إرسال أمر فتح الدرج.")}</p>
+          <label htmlFor="pos-no-sale-reason">{t('pos.pos_workspace.pos_workspace_header.s55', "سبب فتح الدرج")}</label>
+          <textarea id="pos-no-sale-reason" value={noSaleReason} onChange={(event) => setNoSaleReason(event.target.value)} maxLength={500} rows={3} style={{ width: '100%', marginBottom: 12 }} disabled={isNoSalePending} />
+          <Button type="button" variant="primary" onClick={() => { void handleNoSaleDrawerKick(); }} disabled={isNoSalePending || !noSaleReason.trim()}>
+            {isNoSalePending ? t('pos.pos_workspace.pos_workspace_header.s57', "جاري فتح الدرج...") : t('pos.pos_workspace.pos_workspace_header.s58', "فتح الدرج")}
+          </Button>
+        </div>
+      </DialogShell>
+    )}
+    {isExchangeOpen && (
+      <PosInstantExchangeDialog open={isExchangeOpen} onClose={() => setIsExchangeOpen(false)} pos={pos} />
+    )}
+    {isAggregatorsOpen && (
+      <PosDeliveryAggregatorsModal
+        open={isAggregatorsOpen}
+        onClose={() => setIsAggregatorsOpen(false)}
+        onBack={() => { setIsAggregatorsOpen(false); setIsOpsModalOpen(true); }}
+      />
+    )}
+    {isDriverDispatchOpen && (
+      <RestaurantDeliveryDispatcherModal
+        open={isDriverDispatchOpen}
+        onClose={() => setIsDriverDispatchOpen(false)}
+        onBack={() => { setIsDriverDispatchOpen(false); setIsOpsModalOpen(true); }}
+      />
+    )}
+    {isFoodWasteOpen && (
+      <PosFoodWasteModal
+        open={isFoodWasteOpen}
+        onClose={() => setIsFoodWasteOpen(false)}
+        branchId={Number(pos.branchId) || 1}
+        onBack={() => { setIsFoodWasteOpen(false); setIsOpsModalOpen(true); }}
+      />
+    )}
+    {is86ModalOpen && (
+      <Pos86ItemsModal
+        open={is86ModalOpen}
+        onClose={() => setIs86ModalOpen(false)}
+        products={(pos as any).productsQuery?.data || []}
+        branchId={Number(pos.branchId) || undefined}
+        onBack={() => { setIs86ModalOpen(false); setIsOpsModalOpen(true); }}
+      />
+    )}
+    {isTipPoolOpen && (
+      <PosTipPoolModal
+        open={isTipPoolOpen}
+        onClose={() => setIsTipPoolOpen(false)}
+        branchId={Number(pos.branchId) || undefined}
+        currency={(pos as any).currency || t('pos.pos_workspace.pos_workspace_header.s59', "ج.م")}
+        onBack={() => { setIsTipPoolOpen(false); setIsOpsModalOpen(true); }}
+      />
+    )}
+    {isPrepSheetOpen && (
+      <KitchenDailyPrepSheetModal
+        open={isPrepSheetOpen}
+        onClose={() => setIsPrepSheetOpen(false)}
+        branchId={Number(pos.branchId) || undefined}
+        onBack={() => { setIsPrepSheetOpen(false); setIsOpsModalOpen(true); }}
+      />
+    )}
+    {isPlateRadarOpen && (
+      <PosPlateCostRadarModal
+        open={isPlateRadarOpen}
+        onClose={() => setIsPlateRadarOpen(false)}
+        currency={(pos as any).currency || t('pos.pos_workspace.pos_workspace_header.s60', "ج.م")}
+        onBack={() => { setIsPlateRadarOpen(false); setIsOpsModalOpen(true); }}
+      />
+    )}
+    {isStampCardOpen && (
+      <PosCustomerPunchCardModal
+        open={isStampCardOpen}
+        onClose={() => setIsStampCardOpen(false)}
+        customerId={Number(pos.customerId) || 1}
+        customerName={(pos as any).customerName || t('pos.pos_workspace.pos_workspace_header.s61', "العميل الحالي")}
+        onBack={() => { setIsStampCardOpen(false); setIsOpsModalOpen(true); }}
+      />
+    )}
+    {isDriveThruOpen && (
+      <PosDriveThruModal
+        open={isDriveThruOpen}
+        onClose={() => setIsDriveThruOpen(false)}
+        branchId={Number(pos.branchId) || undefined}
+        onBack={() => { setIsDriveThruOpen(false); setIsOpsModalOpen(true); }}
+      />
+    )}
+    {isUpsellModalOpen && (
+      <PosSmartUpsellModal
+        open={isUpsellModalOpen}
+        onClose={() => setIsUpsellModalOpen(false)}
+        recommendations={upsellRules}
+        onBack={() => { setIsUpsellModalOpen(false); setIsOpsModalOpen(true); }}
+        onAcceptUpsell={(product: any) => {
+          if ((pos as any).addProduct) {
+            (pos as any).addProduct(product);
+          }
+        }}
+      />
+    )}
+    {isOpsModalOpen && (
+      <PosRestaurantOperationsModal
+        open={isOpsModalOpen}
+        onClose={() => setIsOpsModalOpen(false)}
+        isManager={isManager}
+        count86={count86}
+        cartLength={pos.cart.length}
+        isPhoneOrdersActive={Boolean(isPhoneOrdersActive)}
+        isRestaurantActive={Boolean(isRestaurantActive)}
+        isStorefrontActive={Boolean(isStorefrontActive)}
+        onOpenCombo={onOpenComboModal || (() => setIsComboMealModalOpen(true))}
+        onOpenCupLabels={onPrintCupLabels}
+        onOpenStampCard={() => setIsStampCardOpen(true)}
+        onOpenDriveThru={() => setIsDriveThruOpen(true)}
+        onOpenUpsell={async () => {
+          try {
+            const firstProductId = Number(pos.cart[0]?.productId) || undefined;
+            const rules = await restaurantAdvancedFnbApi.getUpsellRecommendations(firstProductId);
+            setUpsellRules(rules || []);
+            setIsUpsellModalOpen(true);
+          } catch {
+            setIsUpsellModalOpen(true);
+          }
+        }}
+        onOpen86={() => setIs86ModalOpen(true)}
+        onOpenManagerComp={onOpenManagerComp || (() => setIsManagerCompOpen(true))}
+        onOpenPlateRadar={() => setIsPlateRadarOpen(true)}
+        onOpenPrepSheet={() => setIsPrepSheetOpen(true)}
+        onOpenFoodWaste={() => setIsFoodWasteOpen(true)}
+        onOpenTipPool={() => setIsTipPoolOpen(true)}
+        onOpenAggregators={() => setIsAggregatorsOpen(true)}
+        onOpenDriverDispatch={() => setIsDriverDispatchOpen(true)}
+      />
+    )}
+    {isDisplaysModalOpen && (
+      <PosDisplaysModal
+        open={isDisplaysModalOpen}
+        onClose={() => setIsDisplaysModalOpen(false)}
+        isRestaurantActive={Boolean(isRestaurantActive)}
+      />
+    )}
+    {isManagerCompOpen && (
+      <PosManagerCompModal
+        open={isManagerCompOpen}
+        onClose={() => setIsManagerCompOpen(false)}
+        onBack={() => {
+          setIsManagerCompOpen(false);
+          setIsOpsModalOpen(true);
+        }}
+        currentCartTotal={Number(pos.totals?.total || 0)}
+        currentTableNumber={pos.tableNumber || undefined}
+        cartSummary={pos.cart.map((i) => `${i.qty}× ${i.name}`).join(t('pos.pos_workspace.pos_workspace_header.s62', "، "))}
+        onApplyComp={async (comp) => {
+          pos.setDiscount(comp.amount);
+          pos.setNote(`ضيافة إدارة [${comp.compType}] - معتمد: ${comp.managerName}${comp.notes ? ` - ${comp.notes}` : ''}`);
+          setIsManagerCompOpen(false);
+        }}
+      />
+    )}
+    {isComboMealModalOpen && (
+      <PosComboMealModal
+        open={isComboMealModalOpen}
+        onClose={() => setIsComboMealModalOpen(false)}
+        onBack={() => {
+          setIsComboMealModalOpen(false);
+          setIsOpsModalOpen(true);
+        }}
+        products={(pos as any).productsQuery?.data || []}
+        onAddComboToCart={(combo) => {
+          const product = ((pos as any).productsQuery?.data || []).find((p: any) => p.id === combo.productId);
+          // R8-C path 1: the main vanished from the catalog between modal
+          // open and confirm. Was a silent no-op; now a named toast + false
+          // so the modal stays open instead of closing on a lost combo.
+          if (!product) {
+            toast.error('تعذّر إضافة الوجبة: الصنف الرئيسي غير موجود في الكتالوج.');
+            return false;
+          }
+          const comboLineId = `combo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+          const comboOptions = {
+            priceType: pos.priceType,
+            digits: currencyMoneyDigits(settings?.currency || getGlobalSystemCurrency()),
+            allowNegativeStockSales: isNegativeStockSalesAllowed(settings) || Boolean((product as any).hasBom),
+            comboLineId,
+          };
+          // R8-C: ONE apply, on the current cart — its result IS the cart
+          // setCart installs, so the returned boolean is exact. The old
+          // double-apply (pre-flight + setCart updater with a silent
+          // `catch { return prevCart; }`) could swallow a failure that only
+          // appears with the freshest cart AFTER the modal had closed
+          // (path 3). The handler is synchronous, so no other cart write
+          // can interleave between the apply and setCart.
+          let nextCart: { cart: any[]; lineKey: string };
+          try {
+            nextCart = applyComboToCart(pos.cart, product, combo, comboOptions);
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'تعذّر إضافة الوجبة إلى السلة.');
+            return false;
+          }
+          pos.setCart(nextCart.cart);
+          pos.setSelectedLineKey(nextCart.lineKey);
+          pos.setLastAddedLineKey(nextCart.lineKey);
+          toast.success(`تمت إضافة ${combo.productName} إلى السلة بنجاح`);
+          return true;
+        }}
+      />
+    )}
+    {isCustomizationOpen && (
+      <PosCustomizationDialog
+        isOpen={isCustomizationOpen}
+        onClose={() => setIsCustomizationOpen(false)}
+      />
+    )}
     </>
   );
 }

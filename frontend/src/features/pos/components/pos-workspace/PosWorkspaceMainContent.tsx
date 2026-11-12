@@ -1,6 +1,6 @@
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { XIcon } from '@/shared/components/icons/AppIcons';
-import { useState, useEffect } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { usePosUiCustomization } from '@/features/pos/hooks/usePosUiCustomization';
 import { createPortal } from 'react-dom';
 import { QueryFeedback } from '@/shared/components/query-feedback';
@@ -48,7 +48,7 @@ interface PosWorkspaceMainContentProps {
   onPriceTypeChange?: (value: PosPriceType) => void;
 }
 
-export function PosWorkspaceMainContent({
+export function PosWorkspaceMainContentComponent({
   pos,
   posMode,
   catalogsLoading,
@@ -511,3 +511,14 @@ export function PosWorkspaceMainContent({
     </QueryFeedback>
   );
 }
+
+/* POS render cost: memo with the default shallow compare. It only skips
+ * when every prop is referentially identical — proven by
+ * PosWorkspace.memo.spec.tsx with identical props. In production the
+ * `pos` prop is still a fresh object on every workspace pass (the whole
+ * object is deliberately NOT memoized: its action closures must keep
+ * reading current values, and freezing them would serve stale values to
+ * money logic), so this takes full effect only once pos identity is
+ * stabilized; until then it still skips the (rarer) identical-props
+ * re-renders and costs nothing — memo never changes what is rendered. */
+export const PosWorkspaceMainContent = memo(PosWorkspaceMainContentComponent);

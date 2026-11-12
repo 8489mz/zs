@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/app/query-keys';
 import { posApi } from '@/features/pos/api/pos.api';
@@ -149,13 +149,22 @@ export function usePosWorkspace() {
   // with a named message; the server still rejects the line at
   // submit, so a stale list can never sell an 86'd item.
   const isRestaurantActive = (settingsQuery.data as any)?.restaurantModuleEnabled === true;
-  const { data: items86 = [] } = useQuery({
+  const { data: items86Data } = useQuery({
     queryKey: ['pos-86-items-header', operationalContext.branchId],
     queryFn: () => restaurantAdvancedFnbApi.get86Items(operationalContext.branchId ? Number(operationalContext.branchId) : undefined),
     enabled: isRestaurantActive,
     staleTime: 60_000,
     refetchInterval: 15_000,
   });
+  /* POS render cost: the query's `data` is undefined (not a stable [])
+   * while disabled/loading, so a bare `?? []` / `= []` fallback hands
+   * every consumer a fresh array each pass. Stabilize it so the memos
+   * below actually hold. */
+  const items86 = useMemo(() => items86Data ?? [], [items86Data]);
+  const eightySixedProductIds = useMemo(
+    () => items86.map((item) => item.product_id),
+    [items86],
+  );
 
   /* M32 (R5-B): branch/location are derived from settings and have no
    * setter, so a recalled draft's branch/location rides as an override
@@ -220,7 +229,13 @@ export function usePosWorkspace() {
   const authUser = useAuthStore((entry) => entry.user);
   const mutations = usePosWorkspaceMutations({ queryClient, storedHeld: state.persistedState.heldDrafts });
 
-  const heldDrafts = mutations.heldDraftsQuery.data || [];
+  /* POS render cost: same stabilization as items86 above — the query's
+   * `data` is undefined while loading, and `|| []` would hand the
+   * derived/actions factories a fresh array every pass. */
+  const heldDrafts = useMemo(
+    () => mutations.heldDraftsQuery.data ?? [],
+    [mutations.heldDraftsQuery.data],
+  );
   const openShiftRows = mutations.openShiftsQuery.data?.rows || [];
 
   const derived = usePosWorkspaceDerived({
@@ -517,6 +532,18 @@ export function usePosWorkspace() {
     discountAuthorizationMutation: mutations.discountAuthorizationMutation,
   });
 
+  /* POS render cost: createPosWorkspaceActions rebuilds
+   * heldDraftSummaries with a fresh .map() on every call, and the
+   * header's areEqual compares it by identity — so the header re-rendered
+   * on every workspace pass even when nothing changed. The summaries are
+   * a pure function of heldDrafts (receipt-actions map + computeDraftTotal
+   * + a locale date label, no other inputs), so caching the factory's
+   * array keyed on heldDrafts identity is exact. This deliberately does
+   * NOT memoize the whole actions object: its closures must keep reading
+   * the current cart/discount/etc., and freezing them would serve stale
+   * values to money logic. */
+  const heldDraftSummaries = useMemo(() => actions.heldDraftSummaries, [heldDrafts]);
+
   async function refetchCatalogs() {
     await Promise.all([
       productsQuery.refetch(),
@@ -602,7 +629,7 @@ export function usePosWorkspace() {
     priceType: state.priceType,
     branchId: effectiveBranchId,
     locationId: effectiveLocationId,
-    eightySixedProductIds: items86.map((item) => item.product_id),
+    eightySixedProductIds,
     productFilter: state.productFilter,
     setProductFilter: state.setProductFilter,
     selectedCategoryId,
@@ -655,5 +682,8 @@ export function usePosWorkspace() {
     refetchCatalogs,
     ...derived,
     ...actions,
+    // POS render cost: the memoized summaries above (see comment at its
+    // definition) override the fresh array the actions factory builds.
+    heldDraftSummaries,
   };
 }

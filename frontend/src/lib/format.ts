@@ -1,13 +1,42 @@
 import { getCurrencyDecimals, getCurrencySymbol, getGlobalSystemCurrency } from './currencies';
 
+/*
+ * Module-level Intl formatter caches. Constructing an Intl formatter
+ * is expensive and the POS path formats every price on every render,
+ * so one formatter per decimals value (locale is fixed 'en-US') is
+ * built once and reused. `getCurrencyDecimals` only ever returns 2
+ * or 3, but the cache is keyed on the decimals value itself, so any
+ * future value gets its own formatter with no behaviour change.
+ * Output is byte-identical to a freshly constructed formatter.
+ */
+const currencyFormatters = new Map<number, Intl.NumberFormat>();
+
+function getCurrencyFormatter(decimals: number): Intl.NumberFormat {
+  let formatter = currencyFormatters.get(decimals);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+    currencyFormatters.set(decimals, formatter);
+  }
+  return formatter;
+}
+
+const dateTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: true,
+});
+
 export function formatCurrency(value: number | string | undefined | null, currencyCode?: string | null): string {
   const code = currencyCode || getGlobalSystemCurrency();
   const decimals = getCurrencyDecimals(code);
   const num = Number(value || 0);
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals
-  }).format(num);
+  return getCurrencyFormatter(decimals).format(num);
 }
 
 export function formatCurrencyWithSymbol(value: number | string | undefined | null, currencyCode?: string | null): string {
@@ -40,14 +69,7 @@ export function formatDate(value?: string | Date | number | null) {
   if (!value) return '—';
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
-  }).format(date);
+  return dateTimeFormatter.format(date);
 }
 
 export function toArabicDigits(str: string): string {

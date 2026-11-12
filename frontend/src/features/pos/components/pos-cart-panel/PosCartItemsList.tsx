@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback, useMemo, memo } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useCachedT } from '@/features/pos/lib/cached-t';
 import { formatCurrency, formatCurrencyWithCode } from '@/lib/format';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { FileTextIcon, TagIcon, SmartphoneIcon } from '@/shared/components/icons/AppIcons';
@@ -36,8 +36,8 @@ const PosCartItemRow = memo(function PosCartItemRow({
   onRemoveLineSerial,
   onRemoveItem
 }: any) {
-  const { t: __t } = useTranslation();
-  const { t } = useTranslation();
+  const __t = useCachedT();
+  const t = useCachedT();
   /* INV-POS-LINE-DISCOUNT: the row shows the NET line total (gross
    * minus the line's own discount) — the gross figure would leave the
    * visible rows summing above the shown total. */
@@ -558,8 +558,8 @@ const PosCartItemRow = memo(function PosCartItemRow({
 });
 
 export function PosCartItemsList({ cart, products, onNavigateToProducts, lastAddedLineKey, selectedLineKey, canApplyDiscount, onQtyChange, onLineDiscountChange, onItemNoteChange, onItemModifiersClick, onItemSeatChange, onEditProduct, onRemoveItem, onSelectLine, onChangeLineQtyByDelta, onAddLineSerial, onRemoveLineSerial }: Pick<PosCartPanelProps, 'cart' | 'products' | 'onNavigateToProducts' | 'lastAddedLineKey' | 'selectedLineKey' | 'canApplyDiscount' | 'onQtyChange' | 'onLineDiscountChange' | 'onItemNoteChange' | 'onItemModifiersClick' | 'onItemSeatChange' | 'onEditProduct' | 'onRemoveItem' | 'onSelectLine' | 'onChangeLineQtyByDelta' | 'onAddLineSerial' | 'onRemoveLineSerial'>) {
-  const { t: __t } = useTranslation();
-  const { t } = useTranslation();
+  const __t = useCachedT();
+  const t = useCachedT();
   const settingsQuery = useSettingsQuery();
   const isMobile = useIsMobile(900);
   const productMap = useMemo(() => {
