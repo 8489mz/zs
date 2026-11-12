@@ -2083,10 +2083,25 @@ export class SalesWriteService {
         // a courier delivery with no stated status lands here unpaid
         // — it is COD, never prepaid_online, even when the tender
         // arrived fully paid in cash. An online-channel tender keeps
-        // prepaid_online (see the inference above); non-courier
-        // deliveries keep the existing fallback.
+        // prepaid_online (see the inference above).
+        // INV-REP-COD-CASH-CHANNEL (M11, C6, PD4): the same rule
+        // extends to a delivery with NO rep — a fully-paid tender
+        // carrying a declared cash leg and no online-channel leg
+        // is cash in hand, not an online payment, so it is COD,
+        // never prepaid_online: no order without a gateway receipt
+        // is treated as an online payment. A card-only tender keeps
+        // the old fallback (bank money with a terminal trail,
+        // outside the decided cash scope), and an online-channel
+        // leg still proves prepaid_online. The rep-required gate
+        // above is untouched: this shape is fully paid, so it never
+        // trips it, and the sale posts with collection_status 'cod'
+        // and its cash leg intact (postSale still debits 1110 from
+        // the legs; the drawer treats COD cash as out for delivery,
+        // exactly as for an explicit COD with a declared cash leg).
+        // It also stops the phantom courier-fee cash_out below: with
+        // no rep there is no courier to pay from the drawer.
         collectionStatus = rawCollectionStatus
-          || (inferCodFromCourier ? 'cod' : (hasUnpaidAmount ? 'cod' : 'prepaid_online'));
+          || (inferCodFromCourier ? 'cod' : (hasUnpaidAmount ? 'cod' : ((hasDeclaredCashLeg && !hasOnlineChannelTender) ? 'cod' : 'prepaid_online')));
       }
 
       const isCodDelivery = isDelivery && (collectionStatus === 'cod' || collectionStatus === 'pending' || paidAmount + 0.0001 < collectibleTotal);
