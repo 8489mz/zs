@@ -34,6 +34,8 @@ import {
   getCustomerRepBalancesMap,
   fieldCollectionPaymentScope,
   resolveFieldCollectionChannel,
+  resolveRepLinkedUserId,
+  resolveVanMoneyAuditActor,
 } from './services/van-common.util';
 import {
   calculateRepTargetMetrics,
@@ -151,9 +153,9 @@ export class VanSalesService {
     this.vanFraudRadarService = vanFraudRadarService ?? new VanFraudRadarService(db);
     this.vanFleetService = vanFleetService ?? new VanFleetService(db);
     this.vanRequisitionsService = vanRequisitionsService ?? new VanRequisitionsService(db);
-    this.vanReturnsService = vanReturnsService ?? new VanReturnsService(db, accountingPosting, this.vanFraudRadarService);
+    this.vanReturnsService = vanReturnsService ?? new VanReturnsService(db, accountingPosting, this.vanFraudRadarService, this.audit);
     this.vanTargetsService = vanTargetsService ?? new VanTargetsService(db);
-    this.vanTransfersService = vanTransfersService ?? new VanTransfersService(db);
+    this.vanTransfersService = vanTransfersService ?? new VanTransfersService(db, this.audit);
     this.vanRoutesService = vanRoutesService ?? new VanRoutesService(db, this.vanFleetService, this.vanFraudRadarService);
   }
 
@@ -187,7 +189,33 @@ export class VanSalesService {
    * than a bare id — journal_entries.created_by/posted_by are FK'd to users(id), and an id that
    * doesn't exist there fails the insert.
    */
-  private async resolveSystemAuthContext(tenantId: string, accountId: string): Promise<AuthContext> {
+  /**
+   * M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the posting identity
+   * for a driver-originated journal. When the caller names the acting
+   * rep, his linked login is the poster — the tenant's first active
+   * user never sold or collected anything, so naming him as
+   * created_by on the sale/collection/settlement journal was false
+   * attribution. When the rep has no linked login (or no rep is
+   * named) the old first-active-user fallback stays: making that
+   * honestly null needs a posting-layer decision (AuthContext.userId
+   * is number-typed and sale.created_by feeds postSale's fallback),
+   * recorded as a follow-up, not bundled here.
+   */
+  private async resolveSystemAuthContext(tenantId: string, accountId: string, repId?: number | null): Promise<AuthContext> {
+    if (repId && Number(repId) > 0) {
+      const linkedUserId = await resolveRepLinkedUserId(this.anyDb, tenantId, Number(repId));
+      if (linkedUserId) {
+        return {
+          userId: linkedUserId,
+          sessionId: 'van-sales-system',
+          username: 'van-sales-system',
+          role: 'admin',
+          permissions: ['accounting'],
+          tenantId,
+          accountId,
+        };
+      }
+    }
     const user = await this.anyDb
       .selectFrom('users')
       .select(['id'])
@@ -237,6 +265,12 @@ export class VanSalesService {
     supervisorId?: number;
     supervisorName?: string;
     supervisorRole?: string;
+    // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): HOW the approval
+    // was given. 'pin' carries no user id (the shared PIN belongs to
+    // no single user) — callers must record supervisor_id NULL plus
+    // this mode, never fabricate an id; 'account' carries the
+    // approving login's id in supervisorId.
+    approvalMode?: 'pin' | 'account';
   }> {
     const cleanPin = String(pinInput || '').trim();
     if (!cleanPin) {
@@ -308,6 +342,8 @@ export class VanSalesService {
           severity: 'high',
           titleAr: 'إدخال رمز اعتماد مشرف (PIN) خاطئ أو غير مصرح',
           detailsAr: 'حاول المندوب إدخال رمز اعتماد مشرف غير صحيح لتمرير عملية استثنائية في الميدان.',
+          // M18: the actor is the rep entering the PIN.
+          actorUserId: repUserId,
         });
         throw new AppError(
           'رمز اعتماد المشرف (PIN) غير صحيح أو غير مصرح له بالاعتماد الاستثنائي',
@@ -334,6 +370,8 @@ export class VanSalesService {
         severity: 'critical',
         titleAr: 'محاولة اعتماد ذاتي من المندوب لنفسه (خرق فصل المهام Maker-Checker)',
         detailsAr: 'حاول المندوب إدخال رمزه السري الشخصي لاعتماد عملية استثنائية لنفسه في الميدان بدلاً من المشرف.',
+        // M18: the actor is the rep attempting the self-approval.
+        actorUserId: repUserId,
       });
       throw new AppError(
         'لا يجوز لمندوب المبيعات استخدام رمزه الشخصي لاعتماد عملياته الميدانية طبقاً لمبدأ فصل المهام الرقابي (Maker-Checker)',
@@ -355,12 +393,14 @@ export class VanSalesService {
           supervisorId: Number(approval.authorizedById),
           supervisorName: String(supervisorUser?.name || approval.authorizedByName || 'مشرف معتمد'),
           supervisorRole: String(supervisorUser?.role || 'admin'),
+          approvalMode: 'account',
         };
       }
       return {
         approved: true,
         supervisorName: String(approval.authorizedByName || 'مشرف معتمد'),
         supervisorRole: 'admin',
+        approvalMode: 'account',
       };
     }
 
@@ -368,6 +408,7 @@ export class VanSalesService {
       approved: true,
       supervisorName: String(approval.authorizedByName || 'اعتماد المدير'),
       supervisorRole: 'supervisor',
+      approvalMode: 'pin',
     };
   }
 
@@ -2137,6 +2178,18 @@ export class VanSalesService {
     // before this hoist.
     const repFlags = await loadRepPermissions(this.anyDb, tenantId, repId);
 
+    // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the posting
+    // identity and the audit actor are resolved here, on the pool
+    // handle BEFORE the transaction starts (P2 pattern — a pool read
+    // inside the open transaction deadlocks on PGlite's single
+    // connection, and on Postgres it would read outside the trip
+    // lock). The posting identity prefers the acting rep's linked
+    // login over the tenant's first active user, and the audit actor
+    // is that same linked login (or null, naming the rep in the
+    // details, when the rep has no linked login).
+    const systemAuth = await this.resolveSystemAuthContext(tenantId, accountId, repId);
+    const auditActor = await resolveVanMoneyAuditActor(this.anyDb, tenantId, repId);
+
     await this.db.transaction().execute(async (trx) => {
       const trxAny = trx as any;
       // INV-VAN-TRIP-LOCKED-STATE-RECHECK: the trip read above runs on
@@ -2498,7 +2551,6 @@ export class VanSalesService {
       if (subtotalSale < totalSale) subtotalSale = totalSale;
       discountSale = toBookMoney(Math.max(0, subtotalSale - totalSale));
 
-      const systemAuth = await this.resolveSystemAuthContext(tenantId, accountId);
       const createdByUserId = systemAuth.userId > 0 ? systemAuth.userId : null;
 
       const isCash = payload.paymentMethod === 'cash';
@@ -3162,6 +3214,24 @@ export class VanSalesService {
       // Field stock, rep custody, customer debt and GL either all commit or all roll back.
       await this.accountingPosting.postSale(trx, createdSaleId, systemAuth);
       await this.accountingPosting.clearPostingFailure(trx, { tenantId, accountId }, 'sale', createdSaleId);
+
+      // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): one audit row per
+      // field sale, in this same transaction — a rolled-back sale
+      // leaves no audit trace, and a committed sale always has one.
+      // The actor is the selling rep's linked login (resolved before
+      // the transaction above); a rep with no linked login records
+      // created_by null and is named in the details. The
+      // function-check guards harnesses that pass a `{}` audit stub;
+      // in production Nest always injects the real AuditService.
+      if (this.audit && typeof this.audit.logWithExecutor === 'function') {
+        await this.audit.logWithExecutor(
+          trx,
+          'بيع ميداني',
+          `باع المندوب ${auditActor.repName} (#${Number(repId)}) الفاتورة ${docNo} للعميل ${customerName} بقيمة ${toBookMoney(totalSale)} (${payload.paymentMethod}) — نقداً ${toBookMoney(cashPaid)}، آجل ${toBookMoney(creditOwed)}`,
+          { userId: auditActor.userId, tenantId, accountId },
+          { eventCode: AUDIT_EVENT_CODES.VAN_FIELD_SALE },
+        );
+      }
     });
 
     return {
@@ -3452,6 +3522,14 @@ export class VanSalesService {
     let finalBalance = 0;
     let repPreviousBalance = 0;
     let repNewBalance = 0;
+
+    // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the posting identity
+    // and the audit actor are resolved here, on the pool handle
+    // BEFORE the transaction starts (P2 pattern — same hoist as the
+    // field sale above). The posting identity prefers the acting
+    // rep's linked login over the tenant's first active user.
+    const systemAuth = await this.resolveSystemAuthContext(tenantId, accountId, repId);
+    const auditActor = await resolveVanMoneyAuditActor(this.anyDb, tenantId, repId);
 
     await this.db.transaction().execute(async (trx) => {
       const trxAny = trx as any;
@@ -3777,13 +3855,31 @@ export class VanSalesService {
       // The cash just collected is with the rep, not the till, until settleTrip — this only moves
       // the debt off the customer's receivable and into the same pooled bucket postVanTripSettlement
       // later clears against real cash.
-      const systemAuth = await this.resolveSystemAuthContext(tenantId, accountId);
       await this.accountingPosting.postVanFieldCollection(
         trx,
         Number(insertedPayment.id),
         { amount, customerId: payload.customerId, branchId, locationId: vanLocId, paymentMethod: payload.paymentMethod || 'cash', transferReference: payload.transferReference },
         systemAuth,
       );
+
+      // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): one audit row per
+      // field collection, in this same transaction — a rolled-back
+      // collection leaves no audit trace, and a committed one always
+      // has one. Replays return before this internal method runs, so
+      // a retried collection writes no second row. The actor is the
+      // collecting rep's linked login (resolved before the
+      // transaction above); a rep with no linked login records
+      // created_by null and is named in the details. The
+      // function-check guards harnesses that pass a `{}` audit stub.
+      if (this.audit && typeof this.audit.logWithExecutor === 'function') {
+        await this.audit.logWithExecutor(
+          trx,
+          'تحصيل ميداني',
+          `حصّل المندوب ${auditActor.repName} (#${Number(repId)}) مبلغ ${amount} (${resolveFieldCollectionChannel(payload.paymentMethod)}) من العميل ${cust.name} (#${Number(payload.customerId)}) على الرحلة #${Number(payload.tripId)} — إيصال ${receiptNo}، الرصيد ${repPreviousBalance} ← ${repNewBalance}`,
+          { userId: auditActor.userId, tenantId, accountId },
+          { eventCode: AUDIT_EVENT_CODES.VAN_FIELD_COLLECTION },
+        );
+      }
     });
 
     return {
@@ -4368,6 +4464,11 @@ export class VanSalesService {
         severity: 'high',
         titleAr: 'تلاعب في قراءة عداد الكيلومترات عند تقديم إقرار التصفية',
         detailsAr: odometerResult.errorMessageAr || `قراءة العداد النهائية (${payload.endOdometer}) غير متسقة مع قراءة البداية (${trip.start_odometer}).`,
+        // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the actor is the
+        // rep submitting the statement — his linked login, resolved
+        // here; the radar falls back to the same resolution when it
+        // is absent, so this is explicit threading, not a new path.
+        actorUserId: await this.resolveRepLinkedUserId(this.anyDb, tenantId, repId),
         metadata: {
           startOdometer: trip.start_odometer,
           endOdometer: payload.endOdometer,
@@ -4397,6 +4498,23 @@ export class VanSalesService {
       .where('id', '=', payload.tripId)
       .where('tenant_id', '=', tenantId)
       .execute();
+
+    // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the submitted
+    // statement is itself a money action (the rep declares the cash
+    // he holds); it gets its own audit row naming the submitting
+    // rep. Best-effort is wrong here — this method has no
+    // transaction, so the row is written right after the update it
+    // describes. The function-check guards harnesses that pass a
+    // `{}` audit stub.
+    if (this.audit && typeof this.audit.log === 'function') {
+      const auditActor = await resolveVanMoneyAuditActor(this.anyDb, tenantId, repId);
+      await this.audit.log(
+        'تقديم إقرار تصفية رحلة',
+        `قدّم المندوب ${auditActor.repName} (#${Number(repId)}) إقرار تصفية الرحلة #${Number(payload.tripId)} — متوقع ${expectedCash}، معدود ${countedCash}، فرق ${variance} — بانتظار اعتماد المشرف`,
+        { userId: auditActor.userId, tenantId, accountId },
+        { eventCode: AUDIT_EVENT_CODES.VAN_TRIP_SETTLEMENT_SUBMITTED },
+      );
+    }
 
     // Auto-record / end active visit if rep had an open visit upon submission
     if (payload.activeVisitCustomerId) {
@@ -4478,6 +4596,18 @@ export class VanSalesService {
       chargeStockVarianceDecidedBySupervisor?: boolean;
       activeVisitCustomerId?: number;
       notes?: string;
+      // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): HOW the
+      // settlement was approved, and by WHOM when the approver is
+      // identified. The driver controller passes both: 'account' +
+      // the supervisor's user id when approval came from a login
+      // password, 'shared_manager_pin' + null when it came from the
+      // shared manager PIN (which belongs to no single user — the
+      // trip then records supervisor_id NULL plus this method, never
+      // a fabricated id). The admin console passes 'account' + its
+      // own user id. Legacy direct callers pass neither: the method
+      // is then 'unrecorded' and settled_by stays null.
+      supervisorApprovalMethod?: 'shared_manager_pin' | 'account' | 'unrecorded';
+      supervisorId?: number | null;
     },
     authContext?: AuthContext,
   ): Promise<{
@@ -4529,7 +4659,32 @@ export class VanSalesService {
       .where('tenant_id', '=', tenantId)
       .executeTakeFirst();
 
-    const actorUserId = authContext?.userId ? Number(authContext.userId) : 0;
+    // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the approver id.
+    // An explicitly passed supervisorId wins — including an explicit
+    // null, which means "shared-PIN approval, no identified
+    // supervisor" and must NOT fall back to authContext.userId (the
+    // driver controller builds that context with userId 0 in PIN
+    // mode, because AuthContext.userId is number-typed; 0 is "no
+    // user", never a user id, and every writer below guards it with
+    // `> 0` / `|| null`). Without an explicit supervisorId, a real
+    // session user id is the approver (admin console); with neither,
+    // the approver is unknown (legacy direct call) and stays null.
+    const hasExplicitSupervisor = payload.supervisorId !== undefined;
+    const actorUserId = hasExplicitSupervisor
+      ? (payload.supervisorId != null && Number(payload.supervisorId) > 0 ? Number(payload.supervisorId) : 0)
+      : (authContext?.userId ? Number(authContext.userId) : 0);
+    // The approval method, for the trip notes and the settlement
+    // audit row: explicit when the caller recorded it, 'account'
+    // when a named session settled it, 'unrecorded' otherwise.
+    const supervisorApprovalMethod: 'shared_manager_pin' | 'account' | 'unrecorded' =
+      payload.supervisorApprovalMethod ??
+      (authContext?.userId && Number(authContext.userId) > 0 ? 'account' : 'unrecorded');
+    const supervisorApprovalLabel =
+      supervisorApprovalMethod === 'shared_manager_pin'
+        ? 'اعتماد برمز المدير المشترك (لا مشرف محدَّد الهوية)'
+        : supervisorApprovalMethod === 'account'
+          ? 'اعتماد حساب مشرف محدَّد'
+          : 'تصفية بلا سجل اعتماد مسجَّل';
     let repUserId: number | null = null;
     if (rep?.phone) {
       const linkedUser = await this.anyDb
@@ -4540,6 +4695,14 @@ export class VanSalesService {
         .executeTakeFirst();
       if (linkedUser?.id) repUserId = Number(linkedUser.id);
     }
+
+    // M18: the posting identity for the settlement journal when no
+    // session authContext exists (legacy direct call). Resolved here
+    // on the pool handle, before the transaction below opens (P2
+    // pattern — a pool read inside it deadlocks on PGlite); the
+    // transaction uses the hoisted value. It prefers the acting
+    // rep's linked login over the tenant's first active user.
+    const fallbackSystemAuth = authContext ? null : await this.resolveSystemAuthContext(tenantId, accountId, repId);
 
     if (authContext) {
       const isSupervisor =
@@ -4567,6 +4730,10 @@ export class VanSalesService {
           severity: 'critical',
           titleAr: 'محاولة تصفية رحلة ذاتياً بدون صلاحية مشرف (خرق Maker-Checker)',
           detailsAr: makerChecker.errorMessageAr || 'حاول المندوب اعتماد وتصفية رحلته بنفسه دون مراجعة المشرف.',
+          // M18: the actor attempting the self-settle is the rep —
+          // his linked login, not the 0 the fabricated PIN-mode
+          // context would have carried.
+          actorUserId: repUserId ?? (actorUserId > 0 ? actorUserId : null),
           metadata: {
             reasonCode: makerChecker.reasonCode,
             actorUserId,
@@ -4610,6 +4777,8 @@ export class VanSalesService {
         severity: 'high',
         titleAr: 'تلاعب في قراءة عداد الكيلومترات عند التصفية النهائية',
         detailsAr: odometerResult.errorMessageAr || `قراءة العداد النهائية (${effectiveEndOdometer}) أقل من قراءة البداية (${trip.start_odometer}).`,
+        // M18: the actor is the rep settling the trip.
+        actorUserId: repUserId ?? (actorUserId > 0 ? actorUserId : null),
         metadata: {
           startOdometer: trip.start_odometer,
           endOdometer: effectiveEndOdometer,
@@ -4917,7 +5086,9 @@ export class VanSalesService {
           end_odometer: effectiveEndOdometer ?? null,
           distance_km: odometerResult.distanceKm,
           variance: cashVariance,
-          notes: payload.notes || `تم إغلاق وتصفية رحلة التوزيع بنجاح. عجز/زيادة الكاش: ${cashVariance}، عجز المخزون: ${totalStockVarianceCost}`,
+          notes: payload.notes
+            ? `${payload.notes} — ${supervisorApprovalLabel}`
+            : `تم إغلاق وتصفية رحلة التوزيع بنجاح. عجز/زيادة الكاش: ${cashVariance}، عجز المخزون: ${totalStockVarianceCost} — ${supervisorApprovalLabel}`,
           updated_at: sql`NOW()`,
         })
         .where('id', '=', payload.tripId)
@@ -5064,7 +5235,9 @@ export class VanSalesService {
         .where('tenant_id', '=', tenantId)
         .executeTakeFirst();
       const branchId = vanLocRow?.branch_id ? Number(vanLocRow.branch_id) : null;
-      const systemAuth = authContext || (await this.resolveSystemAuthContext(tenantId, accountId));
+      // M18: the fallback identity was resolved before the transaction
+      // above (P2 pattern); the in-transaction pool read is gone.
+      const systemAuth = authContext || fallbackSystemAuth!;
 
       // Post van trip settlement (cash collected + shortage/overage + stock shortage allocation)
       await this.accountingPosting.postVanTripSettlement(
@@ -5128,6 +5301,24 @@ export class VanSalesService {
           systemAuth,
         );
       }
+
+      // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): one audit row per
+      // trip settlement, in this same transaction — a rolled-back
+      // settlement leaves no audit trace, and a committed one always
+      // has one. The actor is the identified approver (account-mode
+      // supervisor or admin session); a shared-PIN approval records
+      // created_by null and says so in the details, naming the rep
+      // whose trip was settled — never a fabricated supervisor 0.
+      // The function-check guards harnesses that pass a `{}` audit stub.
+      if (this.audit && typeof this.audit.logWithExecutor === 'function') {
+        await this.audit.logWithExecutor(
+          trx,
+          'تسوية رحلة توزيع',
+          `تمت تسوية رحلة التوزيع #${Number(payload.tripId)} للمندوب ${rep?.name ? String(rep.name) : `مندوب #${Number(repId)}`} (#${Number(repId)}) — متوقع ${expectedCash}، معدود ${countedCash}، فرق ${cashVariance}، عجز مخزون ${totalStockVarianceCost} — ${supervisorApprovalLabel}`,
+          { userId: actorUserId > 0 ? actorUserId : null, tenantId, accountId },
+          { eventCode: AUDIT_EVENT_CODES.VAN_TRIP_SETTLEMENT },
+        );
+      }
     });
 
     if (cashVariance < -0.5 || totalStockVarianceCost > 0.5) {
@@ -5144,6 +5335,8 @@ export class VanSalesService {
         titleAr: 'رصد عجز نقدي أو مخزني عند تصفية رحلة التوزيع',
         detailsAr: `تم تصفية الرحلة #${payload.tripId} بعجز نقدي قدره (${cashShortageAmount.toFixed(2)}) وعجز بضاعة مفقودة بتكلفة (${totalStockVarianceCost.toFixed(2)}). إجمالي العجز المسجل على المندوب: (${totalShortage.toFixed(2)}).`,
         amountInvolved: totalShortage,
+        // M18: the actor is the rep whose trip settled short.
+        actorUserId: repUserId ?? (actorUserId > 0 ? actorUserId : null),
         metadata: {
           expectedCash,
           countedCash,
@@ -6332,6 +6525,13 @@ export class VanSalesService {
           governance.errorMessageAr ||
           `حاول المندوب تسجيل مصروف (${payload.expenseType}) بمبلغ (${payload.amount}) يتجاوز السقف المعتمد بدون كود مشرف.`,
         amountInvolved: Number(payload.amount),
+        // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the actor is the
+        // rep recording the expense — his linked login, or the named
+        // session caller when one exists.
+        actorUserId:
+          authContext?.userId && Number(authContext.userId) > 0
+            ? Number(authContext.userId)
+            : await this.resolveRepLinkedUserId(this.anyDb, tenantId, repId),
         metadata: {
           expenseType: payload.expenseType,
           amount: Number(payload.amount),
@@ -6372,6 +6572,27 @@ export class VanSalesService {
       .where('trip_id', '=', payload.tripId)
       .where('tenant_id', '=', tenantId)
       .executeTakeFirst();
+
+    // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): one audit row per
+    // trip expense, naming the rep who recorded it (his linked login;
+    // a named session caller wins when one exists). A supervisor-PIN
+    // approval is recorded in the details, not as the actor — the
+    // approver did not record the expense. The function-check guards
+    // harnesses that pass a `{}` audit stub.
+    if (this.audit && typeof this.audit.log === 'function') {
+      const auditActor = await resolveVanMoneyAuditActor(
+        this.anyDb,
+        tenantId,
+        repId,
+        authContext?.userId && Number(authContext.userId) > 0 ? Number(authContext.userId) : null,
+      );
+      await this.audit.log(
+        'مصروف رحلة توزيع',
+        `سجّل المندوب ${auditActor.repName} (#${Number(repId)}) مصروف ${payload.expenseType} بقيمة ${Number(payload.amount)} على الرحلة #${Number(payload.tripId)} (إجمالي مصروفات الرحلة ${Number(sumRow?.totalExpenses || 0)})${approvedSupervisorName ? ` — باعتماد المشرف ${approvedSupervisorName}` : ''}`,
+        { userId: auditActor.userId, tenantId, accountId },
+        { eventCode: AUDIT_EVENT_CODES.VAN_TRIP_EXPENSE },
+      );
+    }
 
     return {
       ok: true,
@@ -7662,24 +7883,11 @@ export class VanSalesService {
    * (delivery_representatives.phone matched against users.phone or
    * users.username). Null when the rep has no linked login — the rep
    * can then never be the actor or the approver, so there is nothing
-   * to refuse on this leg.
+   * to refuse on this leg. Canonical implementation lives in
+   * van-common.util (shared with the M18 audit attribution).
    */
   private async resolveRepLinkedUserId(dbConn: any, tenantId: string, repId: number | null): Promise<number | null> {
-    if (!repId || Number(repId) <= 0) return null;
-    const repRow = await dbConn
-      .selectFrom('delivery_representatives')
-      .select(['phone'])
-      .where('id', '=', Number(repId))
-      .where('tenant_id', '=', tenantId)
-      .executeTakeFirst();
-    if (!repRow?.phone) return null;
-    const repUser = await dbConn
-      .selectFrom('users')
-      .select(['id'])
-      .where('tenant_id', '=', tenantId)
-      .where(sql<boolean>`(phone = ${String(repRow.phone)} or username = ${String(repRow.phone)})`)
-      .executeTakeFirst();
-    return repUser ? Number(repUser.id) : null;
+    return resolveRepLinkedUserId(dbConn, tenantId, repId);
   }
 
   /**

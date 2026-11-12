@@ -1,13 +1,21 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Kysely, sql } from '../../../database/kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
-import { moveVanStock, sortItemsByProductId, generateDailySequenceNumber, getOrCreateVanLocation } from './van-common.util';
+import { moveVanStock, sortItemsByProductId, generateDailySequenceNumber, getOrCreateVanLocation, resolveRepLinkedUserId } from './van-common.util';
+import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 
 @Injectable()
 export class VanTransfersService {
-  constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
+  constructor(
+    @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
+    // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): optional so direct
+    // `new` callers keep working; VanSalesService passes its
+    // AuditService, and Nest resolves it from the imported
+    // AuditModule.
+    @Optional() private readonly audit?: AuditService,
+  ) {}
 
   private get anyDb(): any {
     return this.db as any;
@@ -113,6 +121,32 @@ export class VanTransfersService {
         .where('id', '=', transferId)
         .where('tenant_id', '=', tenantId)
         .execute();
+
+      // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the creation is
+      // the money action (stock leaves the sender's van custody);
+      // the acceptance writes its own custody movement when it
+      // happens. In this same transaction, so a rolled-back creation
+      // leaves no audit trace and a committed one always has it.
+      // The actor is the sending rep's linked login, or null with
+      // the rep named in the details when he has no linked login.
+      // The function-check guards harnesses that pass a `{}` audit stub.
+      if (this.audit && typeof this.audit.logWithExecutor === 'function') {
+        const actorUserId = await resolveRepLinkedUserId(trxAny, tenantId, fromRepId);
+        const fromRepRow = await trxAny
+          .selectFrom('delivery_representatives')
+          .select(['name'])
+          .where('id', '=', Number(fromRepId))
+          .where('tenant_id', '=', tenantId)
+          .executeTakeFirst();
+        const fromRepName = fromRepRow?.name ? String(fromRepRow.name).trim() : `مندوب #${Number(fromRepId)}`;
+        await this.audit.logWithExecutor(
+          trx,
+          'تحويل بضاعة بين سيارتي توزيع',
+          `حوّل المندوب ${fromRepName} (#${Number(fromRepId)}) بضاعة ${transferNo} إلى المندوب #${Number(payload.toRepId)} (${payload.items.length} أصناف، ${totalQty} وحدات) بانتظار قبول المستلم`,
+          { userId: actorUserId, tenantId, accountId },
+          { eventCode: AUDIT_EVENT_CODES.VAN_INTER_VAN_TRANSFER },
+        );
+      }
 
       return { transferId, transferNo };
     });

@@ -530,3 +530,80 @@ export function fieldCollectionPaymentScope(input: {
 }
 
 
+/**
+ * M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the rep's linked login
+ * user id, resolved exactly as verifySupervisorPin / the M5 waiver
+ * gate resolve it (delivery_representatives.phone matched against
+ * users.phone or users.username). Null when the rep has no linked
+ * login — the rep can then never be the audit actor, so the audit
+ * row records created_by null and names the rep in its details
+ * instead of borrowing another user's id. Call with the pool handle
+ * BEFORE a transaction opens, or with the transaction handle from
+ * inside it — never the pool handle from inside an open transaction
+ * (PGlite single connection deadlocks; the P2 pattern).
+ */
+export async function resolveRepLinkedUserId(
+  dbConn: any,
+  tenantId: string,
+  repId: number | null,
+): Promise<number | null> {
+  if (!repId || Number(repId) <= 0) return null;
+  const repRow = await dbConn
+    .selectFrom('delivery_representatives')
+    .select(['phone'])
+    .where('id', '=', Number(repId))
+    .where('tenant_id', '=', tenantId)
+    .executeTakeFirst();
+  if (!repRow?.phone) return null;
+  const repUser = await dbConn
+    .selectFrom('users')
+    .select(['id'])
+    .where('tenant_id', '=', tenantId)
+    .where(sql<boolean>`(phone = ${String(repRow.phone)} or username = ${String(repRow.phone)})`)
+    .executeTakeFirst();
+  return repUser ? Number(repUser.id) : null;
+}
+
+export interface VanMoneyAuditActor {
+  /** The identified human behind the action, or null when there is none — never 0. */
+  userId: number | null;
+  /** Display name of the rep, for the audit details text. */
+  repName: string;
+}
+
+/**
+ * M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): who a van money
+ * action's audit row names. Precedence: an explicit human caller
+ * (admin session / account-mode supervisor approval) wins; else the
+ * acting rep's linked login; else null — the row still names the rep
+ * in its details text. The tenant's first active user is NEVER the
+ * fallback here: he did not take the action.
+ */
+export async function resolveVanMoneyAuditActor(
+  dbConn: any,
+  tenantId: string,
+  repId: number,
+  explicitUserId?: number | null,
+): Promise<VanMoneyAuditActor> {
+  const repRow = await dbConn
+    .selectFrom('delivery_representatives')
+    .select(['name', 'phone'])
+    .where('id', '=', Number(repId))
+    .where('tenant_id', '=', tenantId)
+    .executeTakeFirst();
+  const repName = repRow?.name ? String(repRow.name).trim() : `مندوب #${Number(repId)}`;
+  if (explicitUserId && Number(explicitUserId) > 0) {
+    return { userId: Number(explicitUserId), repName };
+  }
+  let linkedUserId: number | null = null;
+  if (repRow?.phone) {
+    const repUser = await dbConn
+      .selectFrom('users')
+      .select(['id'])
+      .where('tenant_id', '=', tenantId)
+      .where(sql<boolean>`(phone = ${String(repRow.phone)} or username = ${String(repRow.phone)})`)
+      .executeTakeFirst();
+    linkedUserId = repUser ? Number(repUser.id) : null;
+  }
+  return { userId: linkedUserId, repName };
+}

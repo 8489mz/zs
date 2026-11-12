@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Kysely, sql } from '../../../database/kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
@@ -7,8 +7,9 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
-import { moveVanStock, sortItemsByProductId, generateDailySequenceNumber } from './van-common.util';
+import { moveVanStock, sortItemsByProductId, generateDailySequenceNumber, resolveRepLinkedUserId } from './van-common.util';
 import { VanFraudRadarService } from './van-fraud-radar.service';
+import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 
 @Injectable()
 export class VanReturnsService {
@@ -16,6 +17,11 @@ export class VanReturnsService {
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly accountingPosting: AccountingPostingService,
     private readonly fraudRadar?: VanFraudRadarService,
+    // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): optional so direct
+    // `new` callers (specs, VanSalesService's default construction)
+    // keep working; VanSalesService passes its AuditService, and Nest
+    // resolves it from the imported AuditModule.
+    @Optional() private readonly audit?: AuditService,
   ) {}
 
   private get anyDb(): any {
@@ -703,6 +709,32 @@ export class VanReturnsService {
         .where('id', '=', returnId)
         .where('tenant_id', '=', tenantId)
         .execute();
+
+      // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the submission
+      // itself is the money action (it reserves the refund); the
+      // approval writes its own row when it happens. In this same
+      // transaction, so a rolled-back submission leaves no audit
+      // trace and a committed one always has it. The actor is the
+      // submitting rep's linked login, or null with the rep named in
+      // the details when the rep has no linked login. The
+      // function-check guards harnesses that pass a `{}` audit stub.
+      if (this.audit && typeof this.audit.logWithExecutor === 'function') {
+        const actorUserId = await resolveRepLinkedUserId(trxAny, tenantId, repId);
+        const repRow = await trxAny
+          .selectFrom('delivery_representatives')
+          .select(['name'])
+          .where('id', '=', Number(repId))
+          .where('tenant_id', '=', tenantId)
+          .executeTakeFirst();
+        const repName = repRow?.name ? String(repRow.name).trim() : `مندوب #${Number(repId)}`;
+        await this.audit.logWithExecutor(
+          trx,
+          'تقديم مرتجع ميداني',
+          `قدّم المندوب ${repName} (#${Number(repId)}) مرتجعاً ميدانياً ${docNo} للعميل #${Number(payload.customerId)} من الرحلة #${Number(payload.tripId)} بقيمة ${totalAmount} (${payload.refundMethod || 'credit'}) بانتظار الاعتماد`,
+          { userId: actorUserId, tenantId, accountId },
+          { eventCode: AUDIT_EVENT_CODES.VAN_FIELD_RETURN_SUBMITTED },
+        );
+      }
 
       return { returnId, docNo };
     });

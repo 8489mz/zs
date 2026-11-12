@@ -202,8 +202,27 @@ export class VanSalesController {
       driver.accountId,
     );
 
+    // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the shared manager
+    // PIN carries no user id — verifySupervisorPin returns no
+    // supervisorId in PIN mode, and the old `Number(... || 0)`
+    // silently turned that absence into userId 0. The approval is
+    // now passed explicitly: the identified supervisor's id when
+    // approval came from a login password, null plus the
+    // 'shared_manager_pin' method when it came from the shared PIN,
+    // so the settlement records supervisor_id NULL plus the method
+    // instead of a fabricated id. The AuthContext below still needs
+    // a number userId (its type); 0 there means "no identified
+    // supervisor" and the service treats it that way (every id
+    // writer guards `> 0` / `|| null`, and the settlement audit row
+    // records created_by null in PIN mode).
+    const supervisorId =
+      pinVerification.supervisorId && Number(pinVerification.supervisorId) > 0
+        ? Number(pinVerification.supervisorId)
+        : null;
+    const supervisorApprovalMethod: 'shared_manager_pin' | 'account' =
+      pinVerification.approvalMode === 'account' ? 'account' : 'shared_manager_pin';
     const supervisorAuthContext = {
-      userId: Number(pinVerification.supervisorId || 0),
+      userId: supervisorId ?? 0,
       sessionId: 'supervisor-pin-settlement',
       username: String(pinVerification.supervisorName || 'supervisor'),
       role: (pinVerification.supervisorRole || 'supervisor') as any,
@@ -228,6 +247,10 @@ export class VanSalesController {
         unloadRemainingToWarehouse: body.unloadRemainingToWarehouse,
         countedStock: body.countedStock,
         chargeStockVarianceDecidedBySupervisor: false,
+        // M18: the approval is passed explicitly (see above) — never
+        // a fabricated supervisor 0.
+        supervisorApprovalMethod,
+        supervisorId,
         nightStockApproved,
         nightStockNotes: nightStockApproved
           ? `تم الإبقاء على البضاعة في سيارة التوزيع لليوم التالي باعتماد المشرف (${pinVerification.supervisorName})`
@@ -966,6 +989,10 @@ export class VanSalesAdminController {
         // charge/waive decision at settle time and is honored as-is.
         chargeStockVarianceToRep: body.chargeStockVarianceToRep,
         chargeStockVarianceDecidedBySupervisor: true,
+        // M18: the admin console settles under a named session, so
+        // the approval is account-mode with this user as supervisor.
+        supervisorApprovalMethod: 'account',
+        supervisorId: req.authContext!.userId,
         notes: body.notes,
       },
       req.authContext,

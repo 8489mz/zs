@@ -5,7 +5,13 @@ import { KYSELY_DB } from '../../database/database.constants';
 import type { AuthContext } from '../auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../auth/utils/tenant-boundary';
 
-type AuditActor = Pick<AuthContext, 'userId' | 'tenantId' | 'accountId'> & Pick<Partial<AuthContext>, 'impersonatedBy'>;
+// M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): userId is nullable —
+// a driver-originated action whose rep has no linked login, and a
+// shared-manager-PIN approval, carry NO identified user, and the row
+// must record null, never a fabricated 0 or the tenant's first user.
+// The insert already wrote `actor.userId ?? null`; the type now says
+// what the database column always allowed.
+type AuditActor = Omit<Pick<AuthContext, 'userId' | 'tenantId' | 'accountId'>, 'userId'> & { userId: number | null } & Pick<Partial<AuthContext>, 'impersonatedBy'>;
 
 /** Stable event codes consumed by detection logic (fraud radar, alerting). */
 export const AUDIT_EVENT_CODES = {
@@ -42,6 +48,16 @@ export const AUDIT_EVENT_CODES = {
   VAN_SUSPICION_UNAUTHORIZED_LOAD_OR_SETTLE: 'VAN_SUSPICION_UNAUTHORIZED_LOAD_OR_SETTLE',
   VAN_SUSPICION_GEOFENCE_VIOLATION: 'VAN_SUSPICION_GEOFENCE_VIOLATION',
   VAN_SUSPICION_SETTLEMENT_SHORTAGE: 'VAN_SUSPICION_SETTLEMENT_SHORTAGE',
+  // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): one audit row per van
+  // money action, naming the real actor — the van money actions
+  // previously wrote no audit.log row at all.
+  VAN_FIELD_SALE: 'VAN_FIELD_SALE',
+  VAN_FIELD_COLLECTION: 'VAN_FIELD_COLLECTION',
+  VAN_TRIP_SETTLEMENT: 'VAN_TRIP_SETTLEMENT',
+  VAN_TRIP_SETTLEMENT_SUBMITTED: 'VAN_TRIP_SETTLEMENT_SUBMITTED',
+  VAN_TRIP_EXPENSE: 'VAN_TRIP_EXPENSE',
+  VAN_INTER_VAN_TRANSFER: 'VAN_INTER_VAN_TRANSFER',
+  VAN_FIELD_RETURN_SUBMITTED: 'VAN_FIELD_RETURN_SUBMITTED',
   MANUFACTURING_UNBUILD_VARIANCE_REVIEW_REQUIRED: 'MANUFACTURING_UNBUILD_VARIANCE_REVIEW_REQUIRED',
 } as const;
 

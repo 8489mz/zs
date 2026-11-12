@@ -6,6 +6,7 @@ import { AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { resolveRepLinkedUserId } from './van-common.util';
 
 export type VanSuspicionSeverity = 'medium' | 'high' | 'critical';
 
@@ -183,6 +184,22 @@ export class VanFraudRadarService {
         resolvedRepName = `مندوب #${repIdNum}`;
       }
 
+      // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): a suspicion event
+      // names its actor. Callers pass actorUserId when a named human
+      // is at hand; every other call site passes only the rep, so the
+      // writer itself resolves the rep's linked login here — the one
+      // canonical place — instead of leaving created_by null on every
+      // row. A rep with no linked login stays honestly null (the rep
+      // id/name are already inside the JSON details); a fabricated id
+      // (0 or the tenant's first user) is never substituted. No
+      // scheduled-sweep suspicion path exists: every caller carries a
+      // repId, so there is no actorless system event to mark.
+      let actorUserId: number | null =
+        params.actorUserId && Number(params.actorUserId) > 0 ? Number(params.actorUserId) : null;
+      if (actorUserId === null && repIdNum > 0) {
+        actorUserId = await resolveRepLinkedUserId(this.anyDb, params.tenantId, repIdNum);
+      }
+
       let resolvedCustomerName = params.customerName ? String(params.customerName).trim() : '';
       if (!resolvedCustomerName && params.customerId && Number(params.customerId) > 0) {
         const custRow = await this.anyDb
@@ -208,6 +225,7 @@ export class VanFraudRadarService {
       const payloadJson = {
         repId: repIdNum,
         repName: resolvedRepName,
+        actorUserId,
         tripId: params.tripId != null ? Number(params.tripId) : null,
         customerId: params.customerId != null ? Number(params.customerId) : null,
         customerName: resolvedCustomerName || null,
@@ -225,7 +243,7 @@ export class VanFraudRadarService {
           action: titleAr,
           details: JSON.stringify(payloadJson),
           event_code: String(params.eventCode),
-          created_by: params.actorUserId ?? null,
+          created_by: actorUserId,
           tenant_id: params.tenantId,
           account_id: params.accountId || 'default',
         })
