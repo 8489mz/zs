@@ -58,6 +58,17 @@ export function useScannerBuffer(opts: {
   // Sync external → DOM when the external value changes
   // (e.g., search cleared after adding a product, or set programmatically).
   useEffect(() => {
+    // Skip the overwrite when the user typed ahead of the last flushed value:
+    // the only sources of a non-empty externalValue change are onFlush/flushNow
+    // (value = the last flushed value), so a non-empty external that differs
+    // from the local buffer can only mean the user edited after the last flush
+    // (e.g. typed "200" while "20" was still in flight) — overwriting would
+    // clobber that keystroke back to the stale flushed value. The local buffer
+    // keeps the typed-ahead value, so the next flush still sends the full text.
+    // Programmatic clears ('') always apply.
+    if (externalValue !== '' && localValueRef.current !== externalValue) {
+      return;
+    }
     localValueRef.current = externalValue;
     const input = inputRef.current;
     if (input && input.value !== externalValue) {
