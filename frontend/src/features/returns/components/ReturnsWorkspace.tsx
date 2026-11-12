@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { invalidateReturnsDomain } from '@/app/query-invalidation';
-import { ActionConfirmDialog } from '@/shared/components/action-confirm-dialog';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { StatsGrid } from '@/shared/components/stats-grid';
 import { Button } from '@/shared/ui/button';
@@ -48,7 +47,8 @@ export function ReturnsWorkspace() {
   const [employeeFilter, setEmployeeFilter] = useState('');
   const [selectedReturnId, setSelectedReturnId] = useState('');
   const [copyFeedback, setCopyFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
-  const [confirmReturn, setConfirmReturn] = useState(false);
+  const [returnReason, setReturnReason] = useState('');
+  const [managerPin, setManagerPin] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [form, setForm] = useState<ReturnFormState>(() => createEmptyReturnForm(isPurchaseMode ? 'purchase' : 'sale'));
   const [selectedItems, setSelectedItems] = useState<Record<string, string>>({});
@@ -351,7 +351,8 @@ export function ReturnsWorkspace() {
       setGoodwillRefundAmount('');
       setGoodwillReason('');
       setDiscountMode('original');
-      setConfirmReturn(false);
+      setReturnReason('');
+      setManagerPin('');
       setIsCreateOpen(false);
     },
   });
@@ -375,6 +376,8 @@ export function ReturnsWorkspace() {
     setGoodwillRefundAmount('');
     setGoodwillReason('');
     setDiscountMode('original');
+    setReturnReason('');
+    setManagerPin('');
   };
 
   const updateForm = (updater: (current: ReturnFormState) => ReturnFormState) => {
@@ -599,14 +602,20 @@ export function ReturnsWorkspace() {
           onToggleItem={toggleItem}
           onSetItemQty={setItemQty}
           onSetSerials={(itemId, value) => { if (!returnAttempt.current) setSelectedSerials((current) => ({ ...current, [itemId]: value })); }}
-          onOpenConfirm={() => {
-            // T11-C: never open the confirm dialog on an unverified
-            // refund — the preview must have loaded successfully
-            // (or the retry must have succeeded) first.
+          returnReason={returnReason}
+          onReturnReasonChange={setReturnReason}
+          managerPin={managerPin}
+          onManagerPinChange={setManagerPin}
+          needsManagerApproval={needsManagerApprovalForReturn}
+          managerPinHint={needsManagerApprovalForGoodwill ? t('returns.manager_pin_hint_goodwill', 'الزيادة عن المبلغ المحسوب تتطلب رمز المدير لإتمام المرتجع.') : needsManagerApprovalForReturn ? t('returns.manager_pin_hint', 'المرتجع النقدي الكبير يتطلب اعتماد المشرف أو إدخال رمز المدير لإتمام المرتجع.') : undefined}
+          onSubmitReturn={({ reason, managerPin: pin }) => {
+            // T11-C: never confirm on an unverified refund — the preview must have loaded successfully
             if (isReliefPreviewError || isReliefPreviewLoading) return;
-            if ((returnHistoryReady && returnQuantitiesValid) || returnOutcomeUncertain) {
-              setConfirmReturn(true);
+            if (!returnAttempt.current && !returnQuantitiesValid && !returnOutcomeUncertain) {
+              toast.warning('راجع كميات المرتجع بعد تحديث بيانات الفاتورة قبل الاعتماد');
+              return;
             }
+            void createMutation.mutate({ reason, managerPin: pin });
           }}
           returnedQtyByLine={returnedQtyByLine}
           blockedProductIds={blockedProductIds}
@@ -632,32 +641,6 @@ export function ReturnsWorkspace() {
           </div>
         </DialogShell>
       </main>
-
-      <ActionConfirmDialog
-        open={confirmReturn}
-        title={form.type === 'sale' ? t('returns.confirm_sale_title', 'تأكيد مرتجع البيع') : t('returns.confirm_purchase_title', 'تأكيد مرتجع الشراء')}
-        description={selectedInvoice ? t('returns.confirm_desc', 'سيتم إنشاء مرتجع على الفاتورة {{docNo}} بعدد {{count}} بند بقيمة متوقعة {{amount}}.', { docNo: selectedInvoice.docNo || selectedInvoice.id, count: selectedItemsCount, amount: formatCurrency(expectedReturnValue) }) : t('returns.confirm_desc_empty', 'راجع البيانات قبل حفظ المرتجع.')}
-        confirmLabel={form.type === 'sale' ? t('returns.confirm_sale_action', 'تسجيل مرتجع البيع') : t('returns.confirm_purchase_action', 'تسجيل مرتجع الشراء')}
-        confirmVariant="danger"
-        reasonRequired
-        reasonLabel={t('returns.reason_label', 'سبب المرتجع')}
-        reasonPlaceholder={t('returns.reason_placeholder', 'اكتب سبب المرتجع')}
-        reasonHint={t('returns.reason_hint', 'هذا السبب سيظهر في السجل ويُستخدم للمراجعة لاحقًا.')}
-        minReasonLength={1}
-        managerPinRequired={needsManagerApprovalForReturn}
-        managerPinLabel={t('returns.manager_pin_label', 'رمز اعتماد المشرف / كلمة المرور')}
-        managerPinHint={needsManagerApprovalForGoodwill ? t('returns.manager_pin_hint_goodwill', 'الزيادة عن المبلغ المحسوب تتطلب رمز المدير لإتمام المرتجع.') : needsManagerApprovalForReturn ? t('returns.manager_pin_hint', 'المرتجع النقدي الكبير يتطلب اعتماد المشرف أو إدخال رمز المدير لإتمام المرتجع.') : undefined}
-        isBusy={createMutation.isPending}
-        onCancel={() => setConfirmReturn(false)}
-        onConfirm={({ reason, managerPin }) => {
-          if (!returnAttempt.current && !returnQuantitiesValid) {
-            toast.warning('راجع كميات المرتجع بعد تحديث بيانات الفاتورة قبل الاعتماد');
-            setConfirmReturn(false);
-            return;
-          }
-          void createMutation.mutate({ reason, managerPin });
-        }}
-      />
     </div>
   );
 }
