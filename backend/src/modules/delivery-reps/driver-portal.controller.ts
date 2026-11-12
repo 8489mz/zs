@@ -40,7 +40,7 @@ export class DriverPortalController {
   ) {
     const driver = await this.service.verifyDriverToken(authHeader);
     await this.service.assertDriverPinChanged(driver);
-    return this.service.driverListOrders(driver.repId, driver.tenantId, { status, dateFrom, dateTo, page: Number(page), pageSize: Number(pageSize) });
+    return this.service.driverListOrders(driver.repId, driver.tenantId, driver.accountId, { status, dateFrom, dateTo, page: Number(page), pageSize: Number(pageSize) });
   }
 
   @Post('orders/:saleId/settle')

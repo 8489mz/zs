@@ -192,7 +192,7 @@ export function DriverPortalPage() {
   });
 
   const pendingCount = orders.filter((o) => !o.settledAt && o.deliveryStatus !== 'settled').length;
-  const pendingAmount = orders.filter((o) => !o.settledAt && o.deliveryStatus !== 'settled').reduce((sum, o) => sum + Number(o.total || 0), 0);
+  const pendingAmount = orders.filter((o) => !o.settledAt && o.deliveryStatus !== 'settled').reduce((sum, o) => sum + Number(o.remainingAmount ?? 0), 0);
   const settledCount = orders.filter((o) => Boolean(o.settledAt) || o.deliveryStatus === 'settled').length;
 
   if (!driverUser) {

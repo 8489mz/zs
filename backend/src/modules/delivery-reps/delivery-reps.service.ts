@@ -1150,7 +1150,7 @@ export class DeliveryRepsService {
     return this.verifyDriverTokenCore(token, true);
   }
 
-  async driverListOrders(repId: number, tenantId: string, filters?: { dateFrom?: string; dateTo?: string; status?: string; page?: number; pageSize?: number }): Promise<Record<string, unknown>> {
+  async driverListOrders(repId: number, tenantId: string, accountId: string, filters?: { dateFrom?: string; dateTo?: string; status?: string; page?: number; pageSize?: number }): Promise<Record<string, unknown>> {
     const { page, pageSize, offset } = boundedPage(filters?.page, filters?.pageSize);
     let query = this.db
       .selectFrom('sales')
@@ -1160,6 +1160,7 @@ export class DeliveryRepsService {
         'sales.doc_no as docNo',
         'sales.total',
         'sales.delivery_fee as deliveryFee',
+        'sales.delivery_fee_mode as deliveryFeeMode',
         'customers.name as customerName',
         'customers.phone as customerPhone',
         'customers.address as customerAddress',
@@ -1190,7 +1191,34 @@ export class DeliveryRepsService {
     }
 
     const orders = await query.orderBy('sales.created_at', 'desc').orderBy('sales.id', 'desc').limit(pageSize + 1).offset(offset).execute();
-    return { ok: true, orders: orders.slice(0, pageSize), pagination: { page, pageSize, hasMore: orders.length > pageSize } };
+    // INV-DRIVER-PORTAL-REMAINING-AMOUNT (M15): the driver portal
+    // showed the raw invoice total per row (and summed it into the
+    // pending badge) although the rep owes only the remaining cash
+    // due — a prior return already reversed part of the receivable.
+    // Mirror the listOrders pattern: each page row carries its
+    // remaining cash due from deliverySettlementBasis (store-fleet:
+    // remaining receivable; freelance: remaining receivable minus
+    // remaining fee, floored at zero) as `remainingAmount`, while
+    // `total` stays the invoice total. The driver token carries no
+    // full session, so the basis runs on a minimal { tenantId,
+    // accountId } scope — the only fields requireTenantScope reads.
+    // Only the page rows are priced (pageSize <= 200), never the
+    // lookahead row.
+    const pageRows = orders.slice(0, pageSize);
+    const driverActor = { tenantId, accountId } as AuthContext;
+    const defaultMode = await this.getDeliveryFeeMode(this.db, driverActor);
+    const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+    const ordersWithRemaining = [];
+    for (const row of pageRows) {
+      const remainingAmount = await this.repOrderCashDue(
+        { id: Number(row.id), delivery_fee_mode: (row as any).deliveryFeeMode ?? null },
+        defaultMode,
+        moneyDigits,
+        driverActor,
+      );
+      ordersWithRemaining.push({ ...row, remainingAmount });
+    }
+    return { ok: true, orders: ordersWithRemaining, pagination: { page, pageSize, hasMore: orders.length > pageSize } };
   }
 
   async driverSettleOrder(

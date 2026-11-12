@@ -66,6 +66,11 @@ export interface DeliveryOrder {
   id: number;
   docNo: string;
   total: number;
+  /** Remaining cash due for this order (deliverySettlementBasis net of
+   * prior returns), attached by listOrders / driverListOrders.
+   * Optional: other endpoints sharing this type do not attach it.
+   * The pending badge sums this field, never the raw invoice total. */
+  remainingAmount?: number;
   deliveryFee?: number;
   deliveryFeeMode?: string | null;
   customerName: string;
