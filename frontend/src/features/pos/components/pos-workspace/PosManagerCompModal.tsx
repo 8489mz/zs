@@ -42,10 +42,26 @@ export function PosManagerCompModal({
 }: PosManagerCompModalProps) {
   const { t: __t } = useTranslation();
   const currentUser = useAuthStore((s: any) => s.user);
+  // INV-REST-MANAGER-COMP-PIN-GATE: the approving-manager name is
+  // pre-filled ONLY when the current user is a manager (admin role or
+  // pos_manager / manage_restaurant permission — the POS isManager
+  // definition). A cashier opening the dialog used to be presented as
+  // the approving manager (their own name, or the 'مدير الصالة'
+  // fallback — AuthUser has no `name` field, so the old
+  // `currentUser?.name` was always undefined); the server records the
+  // VERIFIED approver, never this free text, so the field stays empty
+  // for a non-manager instead of presenting them as the approver.
+  const isManagerUser =
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'super_admin' ||
+    (currentUser?.permissions ?? []).includes('pos_manager') ||
+    (currentUser?.permissions ?? []).includes('manage_restaurant');
+  const [managerName, setManagerName] = useState<string>(
+    isManagerUser ? (currentUser?.displayName || currentUser?.username || 'مدير الصالة') : '',
+  );
   const [compType, setCompType] = useState<'vip_guest' | 'customer_complaint' | 'staff_meal' | 'promotional_tasting'>('vip_guest');
   const [isFullComp, setIsFullComp] = useState(true);
   const [customAmount, setCustomAmount] = useState<string>(String(currentCartTotal));
-  const [managerName, setManagerName] = useState<string>(currentUser?.name || 'مدير الصالة');
   const [managerPin, setManagerPin] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -150,7 +166,12 @@ export function PosManagerCompModal({
             type="button"
             variant="primary"
             onClick={handleConfirm}
-            disabled={isSubmitting || finalCompAmount <= 0}
+            // INV-REST-MANAGER-COMP-PIN-GATE: the approve button cannot
+            // act without a manager PIN — it stays disabled until one
+            // is typed. The confirm-time PIN check below stays as
+            // defence in depth, and the server verifies the PIN and
+            // the caller role before anything is recorded.
+            disabled={isSubmitting || finalCompAmount <= 0 || !managerPin.trim()}
             style={{
               minHeight: '34px',
               height: '34px',
@@ -234,6 +255,7 @@ export function PosManagerCompModal({
                   type="text"
                   value={managerName}
                   onChange={(e) => setManagerName(e.target.value)}
+                  placeholder="اسم المدير المعتمد"
                   style={{
                     width: '100%',
                     height: '34px',
