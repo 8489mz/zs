@@ -23,6 +23,15 @@
  * RED PROOF: on the unfixed tree the cashier save succeeds (no 403),
  * renameHeldDraftTable does not exist (TypeError), and the 01:00 Cairo
  * reservation is missing from the 2026-11-09 list.
+ *
+ * INV-REST-FLOOR-SAVE-MANAGER-FORWARD (2026-11-12): the R5-D gate above
+ * was wired wrong at the controller — saveTableLayouts passed the bare
+ * requireTenantScope() result ({ tenantId, accountId } only) to the
+ * service, so assertManagerCaller saw role undefined / permissions [] and
+ * refused EVERY save with 403, manager included. The service-level checks
+ * (1)/(2) pass on both trees because they hand the service a full scope;
+ * only the controller-level checks (7)/(8) below catch the wiring, by
+ * calling the controller with a real req.authContext the way the POS does.
  */
 import 'reflect-metadata';
 import { strict as assert } from 'node:assert';
@@ -35,6 +44,7 @@ import {
   type TenantScope,
 } from '../../src/modules/sales/services/restaurant-advanced-fnb.service';
 import { TableReservationsService } from '../../src/modules/sales/services/table-reservations.service';
+import { RestaurantAdvancedFnbController } from '../../src/modules/sales/controllers/restaurant-advanced-fnb.controller';
 
 const TENANT = 't1';
 const ACCOUNT = 't1:main';
@@ -228,6 +238,49 @@ async function main(): Promise<void> {
       const prevDay: any[] = await reservations.listReservations(TENANT, undefined, '2026-11-08');
       assert.equal(prevDay.length, 0, 'the reservation must not leak into 2026-11-08');
       console.log('  (6) tenant-local reservation day window passed');
+    }
+
+    // (7) Through the CONTROLLER, a manager save lands: the controller
+    // must forward role/permissions from req.authContext to the service
+    // gate (requireTenantScope alone carries neither).
+    {
+      await resetDb(pg);
+      const controller = new RestaurantAdvancedFnbController(service);
+      const managerReq: any = {
+        authContext: {
+          userId: 1, sessionId: 's1', username: 'admin',
+          role: 'admin', permissions: [], tenantId: TENANT, accountId: ACCOUNT,
+        },
+      };
+      const saved: any = await controller.saveTableLayouts(managerReq, {
+        layouts: [{ table_number: '1', shape: 'square', x_pos: 10, y_pos: 10, width: 100, height: 78 }],
+      });
+      assert.equal(saved.length, 1);
+      assert.equal(String(saved[0].table_number), '1');
+      console.log('  (7) controller manager saveTableLayouts lands passed');
+    }
+
+    // (8) Through the CONTROLLER, a cashier save is still refused 403
+    // and writes nothing.
+    {
+      await resetDb(pg);
+      const controller = new RestaurantAdvancedFnbController(service);
+      const cashierReq: any = {
+        authContext: {
+          userId: 2, sessionId: 's2', username: 'cashier',
+          role: 'cashier', permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+        },
+      };
+      await expectAppError(
+        controller.saveTableLayouts(cashierReq, {
+          layouts: [{ table_number: '1', shape: 'square', x_pos: 10, y_pos: 10 }],
+        }),
+        'MANAGER_PERMISSION_REQUIRED',
+        403,
+      );
+      const rows: any = await pg.query(`SELECT COUNT(*)::int AS n FROM restaurant_table_layouts`);
+      assert.equal(Number(rows.rows[0].n), 0, 'the refused controller save must write nothing');
+      console.log('  (8) controller cashier saveTableLayouts refused with 403 passed');
     }
 
     console.log('restaurant-floor-state.spec: all checks passed');

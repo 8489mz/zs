@@ -328,7 +328,16 @@ export class RestaurantAdvancedFnbController {
     },
   ) {
     const scope = requireTenantScope(req.authContext!);
-    return this.service.saveTableLayouts(scope, dto.layouts, dto.branchId);
+    // INV-REST-FLOOR-SAVE-MANAGER-FORWARD: the save gate lives in the
+    // service (assertManagerCaller) and reads scope.role / scope.permissions,
+    // but requireTenantScope returns only { tenantId, accountId } — passing
+    // the bare scope made EVERY save 403, manager included. Forward the
+    // caller's identity like the comp/tip endpoints do.
+    return this.service.saveTableLayouts(
+      { ...scope, role: req.authContext?.role, permissions: req.authContext?.permissions ?? [] },
+      dto.layouts,
+      dto.branchId,
+    );
   }
 
   @Post('table-layouts/:id/delete')
