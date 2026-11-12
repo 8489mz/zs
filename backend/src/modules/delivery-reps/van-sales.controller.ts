@@ -9,7 +9,8 @@ import { SubmitLoadRequisitionDto } from './dto/submit-load-requisition.dto';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
-import { RequireAnyPermission } from '../../core/auth/decorators/permissions.decorator';
+import { RequireAnyPermission, RequirePermissions } from '../../core/auth/decorators/permissions.decorator';
+import { RequireFeature } from '../../core/auth/decorators/feature.decorator';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../common/errors/app-error';
 import { AUDIT_EVENT_CODES } from '../../core/audit/audit.service';
@@ -776,6 +777,7 @@ export class VanSalesController {
 
 @Controller('api/van-sales/admin')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
+@RequireFeature('deliveryReps')
 export class VanSalesAdminController {
   constructor(
     private readonly vanSalesService: VanSalesService,
@@ -908,7 +910,7 @@ export class VanSalesAdminController {
   }
 
   @Post('trips/:id/settle')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory', 'accounting')
+  @RequirePermissions('deliveryReps')
   async settleTripAdmin(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -1038,7 +1040,7 @@ export class VanSalesAdminController {
   }
 
   @Post('returns/:id/approve')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryReps')
   async approveReturn(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -1050,7 +1052,7 @@ export class VanSalesAdminController {
   }
 
   @Post('returns/:id/reject')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryReps')
   async rejectReturn(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -1118,7 +1120,7 @@ export class VanSalesAdminController {
   }
 
   @Put('requisitions/:id/review')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryReps')
   async reviewRequisition(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -1130,7 +1132,7 @@ export class VanSalesAdminController {
   }
 
   @Post('requisitions/:id/dispatch')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryReps')
   async dispatchRequisition(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -1142,7 +1144,7 @@ export class VanSalesAdminController {
   }
 
   @Post('requisitions/:id/reject')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryReps')
   async rejectRequisition(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -1155,7 +1157,7 @@ export class VanSalesAdminController {
   }
 
   @Delete('requisitions/:id')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryReps')
   async deleteRequisition(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -1181,7 +1183,7 @@ export class VanSalesAdminController {
   }
 
   @Post('targets')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryReps')
   async setRepTarget(
     @Req() req: RequestWithAuth,
     @Body()
@@ -1223,7 +1225,7 @@ export class VanSalesAdminController {
   }
 
   @Post('targets/commission-config')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryReps')
   async saveCommissionConfig(
     @Req() req: RequestWithAuth,
     @Body()
@@ -1240,7 +1242,7 @@ export class VanSalesAdminController {
   }
 
   @Post('targets/settle-commission')
-  @RequireAnyPermission('deliveryReps', 'sales', 'accounting')
+  @RequirePermissions('deliveryReps')
   async settleRepCommission(
     @Req() req: RequestWithAuth,
     @Body()
@@ -1290,7 +1292,7 @@ export class VanSalesAdminController {
   }
 
   @Post('customers/:id/route-schedule')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryReps')
   async setCustomerRouteSchedule(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -1332,7 +1334,7 @@ export class VanSalesAdminController {
   }
 
   @Post('supervisor/customer-routes/bulk-assign')
-  @RequireAnyPermission('deliveryReps', 'sales', 'inventory')
+  @RequirePermissions('deliveryReps')
   async bulkAssignCustomerRoutes(
     @Req() req: RequestWithAuth,
     @Body()
@@ -1716,7 +1718,7 @@ export class VanSalesAdminController {
   }
 
   @Post('financial-ledger/:id/settle')
-  @RequireAnyPermission('deliveryReps', 'sales', 'accounting')
+  @RequirePermissions('deliveryReps')
   async settleRepFinancialItem(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
@@ -1737,7 +1739,7 @@ export class VanSalesAdminController {
   }
 
   @Post('financial-ledger/bonus')
-  @RequireAnyPermission('deliveryReps', 'sales', 'accounting')
+  @RequirePermissions('deliveryReps')
   async addRepBonusOrCommission(
     @Req() req: RequestWithAuth,
     @Body() body: { repId: number; entryType: 'bonus' | 'commission'; amount: number; notes: string },
