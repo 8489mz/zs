@@ -338,9 +338,16 @@ export class CashDrawerService {
    * branch/location (a sale posted by another login at the same
    * terminal), OR — INV-REST-SHIFT-CLOSE-CONTROL (I24) — when the
    * sale carries this shift's POS station code (pos_terminal_code)
-   * and its creator has no covering shift. The fallback never claims rep-custody cash: a sale
-   * whose collection_status is prepaid_by_rep (van field cash and
-   * rep-prepaid deliveries) stays with its creator's shift only.
+   * and its creator has no covering shift. Rep-custody cash never
+   * belongs to a shift's sale cash: a sale whose collection_status
+   * is prepaid_by_rep (van field cash and rep-prepaid deliveries)
+   * is excluded from the main branch exactly like the fallback
+   * branches — the cash sits with the rep, not in any drawer, until
+   * settlement credits the receiving shift with a treasury row
+   * (INV-REP-PREPAID-SHIFT-TREASURY). The creation shift therefore
+   * never expects it, and the cancelled-sale receipt restore and
+   * the attributed sale-cash list inherit the same rule because
+   * they share this key.
    * Call sites always alias the sales table `s`. Only columns that
    * every drawer fixture carries are referenced (no sale_origin /
    * van_trip_id: minimal harnesses do not seed them).
@@ -393,7 +400,7 @@ export class CashDrawerService {
         ) ${terminalBranch}`
       : sql<boolean>`or false`;
     return sql<boolean>`(
-        s.created_by = ${openerId}
+        (s.created_by = ${openerId} and coalesce(s.collection_status, '') <> 'prepaid_by_rep')
         ${fallback}
       )
       and s.created_at >= ${shift.created_at}

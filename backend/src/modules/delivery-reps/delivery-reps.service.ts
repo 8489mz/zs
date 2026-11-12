@@ -457,6 +457,15 @@ export class DeliveryRepsService {
         throw new AppError('Only active delivery orders may be settled', 'DELIVERY_SETTLEMENT_INVALID_ORDER', 409);
       }
       const isCourierCash = sale.collection_status === 'cod';
+      // INV-REP-PREPAID-SHIFT-TREASURY (M6/A7): a rep-prepaid
+      // delivery is cash the rep holds, not cash in the till — the
+      // sale posted as paid at creation ("المبلغ مع المندوب"), so
+      // the rep hands the money over at settlement exactly like a
+      // COD courier. It settles through the same treasury-row path
+      // below, but posts NO settlement journal and NO customer
+      // ledger leg: the sale already booked Dr 1110 at creation
+      // and the customer receivable is already zero.
+      const isPrepaidByRep = sale.collection_status === 'prepaid_by_rep';
       if (isCourierCash && Number(sale.paid_amount || 0) > 0.009) {
         // The current GL posting contract expects the entire invoice as an
         // outstanding receivable. Refuse partially paid orders until reconciled.
@@ -465,16 +474,19 @@ export class DeliveryRepsService {
       // INV-SF-SINGLE-SETTLE-COUNTED-CASH (D-SF-01): a counted
       // cash amount is validated up front, before any write. It
       // must be a non-negative number; a positive counted amount
-      // on a non-COD order has no cash to settle and fails closed
-      // instead of being silently ignored (a zero amount on a
-      // non-COD order is a no-op and is ignored).
+      // on an order with no cash to settle (prepaid_online and
+      // other non-cash statuses) fails closed instead of being
+      // silently ignored (a zero amount on such an order is a
+      // no-op and is ignored). A rep-prepaid order DOES have cash
+      // to settle — the rep holds it — so counted cash applies to
+      // it exactly like COD.
       if (payload?.countedCashAmount !== undefined && payload?.countedCashAmount !== null) {
         const rawCounted = Number(payload.countedCashAmount);
         if (!Number.isFinite(rawCounted) || rawCounted < 0) {
           throw new AppError('Counted cash amount must be a non-negative number', 'SETTLEMENT_AMOUNT_INVALID', 400);
         }
-        if (!isCourierCash && rawCounted > 0) {
-          throw new AppError('Counted cash applies only to cash-on-delivery orders', 'DELIVERY_SETTLEMENT_COUNTED_CASH_NOT_APPLICABLE', 400);
+        if (!isCourierCash && !isPrepaidByRep && rawCounted > 0) {
+          throw new AppError('Counted cash applies only to cash-on-delivery and rep-prepaid orders', 'DELIVERY_SETTLEMENT_COUNTED_CASH_NOT_APPLICABLE', 400);
         }
       }
 
@@ -482,7 +494,24 @@ export class DeliveryRepsService {
       let branchId: number | null = null;
       let locationId: number | null = null;
 
-      if (isCourierCash) {
+      // INV-REP-PREPAID-SHIFT-TREASURY (M6/A7): a COD courier and a
+      // rep-prepaid rep both hand cash over at settlement, so both
+      // take this branch: the receiving shift is found, the cash
+      // due is computed, and a cash_in treasury row credits the
+      // receiving shift. The two differ only in WHAT the rep owes
+      // and in the GL: a COD rep owes the remaining receivable,
+      // and the settlement journal clears it (Dr 1110 / Cr 1130);
+      // a rep-prepaid rep owes the PAID amount he holds (the
+      // customer receivable is already zero — the sale posted as
+      // paid at creation), and the settlement posts NO journal and
+      // NO customer ledger leg: posting one would fail the
+      // fee-reconciliation gate (fee = 0 - 0, never the remaining
+      // fee) and double-book the cash Dr 1110 already holds.
+      // A counted amount that differs from the book cash due is
+      // reported as variance; for a rep-prepaid order the variance
+      // is a drawer variance at close (no 7200/7100 leg exists for
+      // it — the GL booked the full cash at creation).
+      if (isCourierCash || isPrepaidByRep) {
         const openShift = await this.findOwnOpenShift(trx, actor);
         if (!openShift) throw new AppError('لا بد من فتح وردية أولاً لاستلام الفلوس من المندوب', 'NO_OPEN_SHIFT', 400);
         shiftId = openShift.id;
@@ -501,16 +530,22 @@ export class DeliveryRepsService {
         const remainingFee = deliveryFeeMode === 'store_fleet' ? 0 : basis.remainingFee;
         const { tenantId: settleTenantId } = requireTenantScope(actor);
         const settleDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, settleTenantId));
-        const cashDue = roundMoney(Math.max(0, basis.remainingReceivable - remainingFee), settleDigits);
+        const cashDue = isPrepaidByRep
+          ? roundMoney(Math.max(0, Number(sale.paid_amount || 0) - remainingFee), settleDigits)
+          : roundMoney(Math.max(0, basis.remainingReceivable - remainingFee), settleDigits);
         // INV-SF-SINGLE-SETTLE-COUNTED-CASH (D-SF-01): the cash
         // the rep actually handed over, counted by the cashier.
         // When no counted amount is supplied (older clients, the
         // driver mobile page) it defaults to the book cash due,
         // preserving the old behaviour exactly. A counted amount
-        // is never silently replaced by the book amount: a
-        // shortage is booked to 7200 and an overage to 7100 by
-        // postDeliveryRepSettlement, and the receivable is cleared
-        // by cash received + variance, never by unreceived cash.
+        // is never silently replaced by the book amount: for a COD
+        // order a shortage is booked to 7200 and an overage to
+        // 7100 by postDeliveryRepSettlement, and the receivable is
+        // cleared by cash received + variance, never by unreceived
+        // cash. For a rep-prepaid order the variance is reported
+        // and surfaces as drawer variance at close — no 7200/7100
+        // leg is booked, because the GL booked the full cash at
+        // creation (see the branch comment above).
         const countedCash = payload?.countedCashAmount !== undefined && payload?.countedCashAmount !== null
           ? roundMoney(Number(payload.countedCashAmount), settleDigits)
           : null;
@@ -543,13 +578,17 @@ export class DeliveryRepsService {
         // customer's books at dispatch (custody transfer), so the
         // settle must not credit the customer ledger again — it
         // would drive the balance negative. A sale settled without
-        // dispatch keeps the old credit.
-        if (sale.customer_id && basis.remainingReceivable > 0
-          && !(await this.accountingPosting.hasDeliveryCustodyReclassification(trx, saleId, actor))) {
-          await this.salesFinance.createCustomerLedgerEntry(trx, sale.customer_id, -basis.remainingReceivable, `تسديد من مندوب للأوردر #${saleId}`, saleId, actor);
-        }
+        // dispatch keeps the old credit. COD ONLY: a rep-prepaid
+        // sale has no receivable left to clear and no custody leg
+        // to credit — its GL was fully posted at creation.
+        if (isCourierCash) {
+          if (sale.customer_id && basis.remainingReceivable > 0
+            && !(await this.accountingPosting.hasDeliveryCustodyReclassification(trx, saleId, actor))) {
+            await this.salesFinance.createCustomerLedgerEntry(trx, sale.customer_id, -basis.remainingReceivable, `تسديد من مندوب للأوردر #${saleId}`, saleId, actor);
+          }
 
-        await this.accountingPosting.postDeliveryRepSettlement(trx, saleId, cashDue, branchId, locationId, actor, { countedCash: settledCashAmount });
+          await this.accountingPosting.postDeliveryRepSettlement(trx, saleId, cashDue, branchId, locationId, actor, { countedCash: settledCashAmount });
+        }
       }
 
       const updateData: Record<string, any> = {
@@ -600,14 +639,27 @@ export class DeliveryRepsService {
    * 131.60). The formula is settleAllOrders' cashDue exactly:
    * store-fleet owes the remaining receivable; a freelance
    * courier owes it minus the remaining fee, floored at zero.
+   *
+   * INV-REP-PREPAID-SHIFT-TREASURY (M6/A7): a rep-prepaid order
+   * owes the PAID amount, not the remaining receivable — the sale
+   * posted as paid at creation, so the remaining receivable is
+   * already zero while the rep still holds the cash. The rep hands
+   * over the paid amount minus the remaining courier fee (zero for
+   * a store-fleet sale: the basis already reports a zero remaining
+   * fee for it), floored at zero. The fee still comes from the
+   * basis, so a prior return that relieved part of the fee is
+   * honoured exactly like the COD formula.
    */
   private async repOrderCashDue(
-    order: { id: number; delivery_fee_mode: string | null },
+    order: { id: number; delivery_fee_mode: string | null; collection_status?: string | null; paid_amount?: number | string | null },
     defaultMode: 'freelance_courier' | 'store_fleet',
     moneyDigits: MoneyDigits,
     actor: AuthContext,
   ): Promise<number> {
     const basis = await this.accountingPosting.deliverySettlementBasis(this.db, Number(order.id), actor);
+    if (String(order.collection_status || '') === 'prepaid_by_rep') {
+      return Math.max(0, roundMoney(Number(order.paid_amount || 0) - basis.remainingFee, moneyDigits));
+    }
     return (order.delivery_fee_mode || defaultMode) === 'store_fleet'
       ? basis.remainingReceivable
       : Math.max(0, roundMoney(basis.remainingReceivable - basis.remainingFee, moneyDigits));
@@ -638,7 +690,7 @@ export class DeliveryRepsService {
     // second computation this fix exists to delete.
     const orders = await this.db
       .selectFrom('sales')
-      .select(['id', 'delivery_fee_mode', 'delivery_status', 'collection_status'])
+      .select(['id', 'delivery_fee_mode', 'delivery_status', 'collection_status', 'paid_amount'])
       .where('delivery_rep_id', '=', repId)
       .where(this.tenantPredicate(actor))
       .execute();
@@ -646,12 +698,17 @@ export class DeliveryRepsService {
     let pendingAmount = 0;
     for (const order of orders) {
       const cashDue = await this.repOrderCashDue(
-        { id: Number(order.id), delivery_fee_mode: order.delivery_fee_mode ?? null },
+        { id: Number(order.id), delivery_fee_mode: order.delivery_fee_mode ?? null, collection_status: order.collection_status ?? null, paid_amount: order.paid_amount ?? null },
         defaultMode, moneyDigits, actor,
       );
       if (order.delivery_status === 'settled') {
         collectedAmount += cashDue;
-      } else if (order.collection_status === 'cod') {
+      } else if (order.collection_status === 'cod' || order.collection_status === 'prepaid_by_rep') {
+        // INV-REP-PREPAID-SHIFT-TREASURY (M6/A7): an unsettled
+        // rep-prepaid order is cash the rep still holds, exactly
+        // like an unsettled COD order — it belongs in pending, or
+        // the badge says the rep owes nothing while holding the
+        // full amount.
         pendingAmount += cashDue;
       }
     }
@@ -691,9 +748,16 @@ export class DeliveryRepsService {
 
       const unsettledOrders = await trx
         .selectFrom('sales')
-        .select(['id', 'total', 'customer_id', 'delivery_fee', 'delivery_fee_mode', 'paid_amount'])
+        .select(['id', 'total', 'customer_id', 'delivery_fee', 'delivery_fee_mode', 'paid_amount', 'collection_status'])
         .where('delivery_rep_id', '=', repId)
-        .where('collection_status', '=', 'cod')
+        // INV-REP-PREPAID-SHIFT-TREASURY (M6/A7): the batch settles
+        // rep-prepaid orders too — a rep-prepaid rep hands cash
+        // over exactly like a COD courier, and leaving the orders
+        // out of the batch left them unsettleable in bulk (the
+        // single-order path was the only way, and it wrote no
+        // treasury row either). prepaid_online stays out: the
+        // gateway already holds that money, no rep handover exists.
+        .where('collection_status', 'in', ['cod', 'prepaid_by_rep'])
         .where('order_type', '=', 'delivery')
         .where('status', '!=', 'cancelled')
         .where((eb) => eb.or([
@@ -714,7 +778,12 @@ export class DeliveryRepsService {
         throw new AppError('No unsettled orders found for this representative', 'NO_ORDERS', 400);
       }
 
-      if (unsettledOrders.some((order) => Number(order.paid_amount || 0) > 0.009)) {
+      // COD ONLY: a partially-paid COD order cannot settle through
+      // this path (the GL contract expects the entire invoice as an
+      // outstanding receivable). A rep-prepaid order is paid by
+      // definition — a positive paid_amount is its normal shape,
+      // not a partial payment — so the gate must not fire on it.
+      if (unsettledOrders.some((order) => order.collection_status === 'cod' && Number(order.paid_amount || 0) > 0.009)) {
         throw new AppError('بعض طلبات المندوب مدفوعة جزئياً وتتطلب تسوية منفصلة', 'DELIVERY_PARTIAL_PAYMENT_RECONCILIATION_REQUIRED', 409);
       }
       const defaultMode = await this.getDeliveryFeeMode(trx, actor);
@@ -737,6 +806,13 @@ export class DeliveryRepsService {
       }
       const cashDue = (order: typeof unsettledOrders[number]) => {
         const basis = basisByOrderId.get(Number(order.id))!;
+        if (String(order.collection_status || '') === 'prepaid_by_rep') {
+          // INV-REP-PREPAID-SHIFT-TREASURY (M6/A7): the rep holds
+          // the PAID amount (the remaining receivable is already
+          // zero), minus the remaining courier fee he keeps — the
+          // same paid-minus-fee shape as the single-order path.
+          return Math.max(0, roundMoney(Number(order.paid_amount || 0) - basis.remainingFee, moneyDigits));
+        }
         return (order.delivery_fee_mode || defaultMode) === 'store_fleet'
           ? basis.remainingReceivable
           : Math.max(0, roundMoney(basis.remainingReceivable - basis.remainingFee, moneyDigits));
@@ -758,8 +834,11 @@ export class DeliveryRepsService {
       // total, preserving the old behaviour exactly. A counted
       // amount is never silently replaced by the book amount: the
       // difference is a shortage (Dr 7200) or an overage (Cr 7100)
-      // booked by postDeliveryRepSettlement, exactly like the
-      // single-order path. The batch total is allocated across the
+      // booked by postDeliveryRepSettlement for the COD orders in
+      // the batch, exactly like the single-order path. (A
+      // rep-prepaid order's share of the variance surfaces as
+      // drawer variance at close — its GL booked the full cash at
+      // creation.) The batch total is allocated across the
       // orders in id order (each order counted up to its own cash
       // due; any overage beyond every due lands on the last order),
       // so the per-order counted amounts always sum to the counted
@@ -810,6 +889,14 @@ export class DeliveryRepsService {
       }
 
       for (const order of unsettledOrders) {
+        // INV-REP-PREPAID-SHIFT-TREASURY (M6/A7): the GL legs below
+        // are COD ONLY, exactly like the single-order path — a
+        // rep-prepaid order's GL was fully posted at creation, and
+        // its cash reaches the drawer through the single batch
+        // treasury row above. Posting a settlement journal for it
+        // would fail the fee-reconciliation gate and double-book
+        // the cash. The counted allocation for it is simply unused.
+        if (String(order.collection_status || '') !== 'cod') continue;
         const basis = basisByOrderId.get(Number(order.id))!;
         // D-SF-02 (INV-SF-COD-CUSTODY-GL): same as settleOrder —
         // the receivable already left the customer's books at
