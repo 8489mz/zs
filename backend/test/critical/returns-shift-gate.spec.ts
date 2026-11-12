@@ -50,6 +50,20 @@ the posting itself is already pinned by sale-money-truth.spec.ts
 Part F. Live-Postgres acceptance remains deferred by written
 decision (no live Postgres on this VM). The van-sales gates stay
 deferred and are untouched.
+
+INV-RETURNS-MANAGER-PIN-BCRYPT (B1, 2026-11-12): returns kept its own
+plaintext duplicate of the manager check — verifyManagerAuthorization
+compared the typed PIN with `===` against the stored value, but
+Settings stores the shared manager PIN as a bcrypt hash, so a correct
+shared PIN ALWAYS failed 403 MANAGER_AUTH_INVALID for non-admins
+(only an admin's login password worked). The fix routes the check
+through the shared authorizeManagerSecret (bcrypt + legacy plaintext
++ admin-password fallback) and keeps the returns error contract
+(403 + the same messages) and approval names. The service-level
+checks (1)/(2) of the old floor-state spec could not catch this class
+of bug; checks 11-14 below call the real ReturnsService method, so
+they fail on the unfixed tree (11 fails with MANAGER_AUTH_INVALID)
+and pass on the fixed tree.
 */
 
 import 'reflect-metadata';
@@ -64,6 +78,8 @@ import { IdempotencyService } from '../../src/core/idempotency/idempotency.servi
 import { ReturnsService } from '../../src/modules/returns/returns.service';
 import { resolveRequireCashierShiftForSales } from '../../src/modules/sales/services/sales-authorization.service';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
+import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
+import { hashManagerPin, isBcryptHash } from '../../src/common/utils/manager-approval';
 
 const TENANT = 't1';
 const ACCOUNT = 'a1';
@@ -178,6 +194,40 @@ async function seedPurchase(db: Kysely<Database>): Promise<void> {
     product_name: 'Widget 101', qty: 1, unit_price: 100, unit_cost: 10,
     unit_multiplier: 1, line_total: 100, allocated_tax: 0, location_id: 10, branch_id: 1,
   }).execute();
+}
+
+const MANAGER_PIN = '2468';
+const ADMIN_PASSWORD = 'admin-pass-1';
+
+async function seedAdminPassword(db: Kysely<Database>): Promise<void> {
+  const record = await createPasswordRecord(ADMIN_PASSWORD);
+  await (db as any).updateTable('users')
+    .set({ password_hash: record.hash, password_salt: record.salt })
+    .where('id', '=', 1)
+    .execute();
+}
+
+async function seedManagerPin(db: Kysely<Database>, value: string): Promise<void> {
+  await (db as any).insertInto('settings')
+    .values({ tenant_id: TENANT, key: 'managerPin', value })
+    .execute();
+}
+
+async function storedManagerPin(db: Kysely<Database>): Promise<string> {
+  const row: any = await (db as any).selectFrom('settings').select('value')
+    .where('tenant_id', '=', TENANT).where('key', '=', 'managerPin').executeTakeFirst();
+  return String(row?.value || '');
+}
+
+async function expectManagerAuthError(promise: Promise<unknown>, code: string, statusCode: number): Promise<void> {
+  try {
+    await promise;
+  } catch (error: any) {
+    assert.equal(error?.code, code, `expected AppError ${code}, got ${error?.code}: ${error?.message}`);
+    assert.equal(error?.statusCode, statusCode, `expected status ${statusCode}, got ${error?.statusCode}`);
+    return;
+  }
+  assert.fail(`expected AppError ${code} but the call succeeded`);
 }
 
 async function seedShift(db: Kysely<Database>, id: number, openedBy: number): Promise<void> {
@@ -469,6 +519,78 @@ async function main(): Promise<void> {
     assert.ok(authzSource.includes('INV-REST-RETURN-SHIFT-GATE'), 'the authorization note names the returns extension');
     assert.ok(!authzSource.includes('return-refund and\n   * van-remittance gates stay strict'), 'the stale stay-strict note for returns is gone');
     console.log('  10. source pins passed');
+  }
+
+  // 11. B1: a bcrypt-stored shared manager PIN approves a cashier.
+  {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedAdminPassword(db);
+      await seedManagerPin(db, JSON.stringify(await hashManagerPin(MANAGER_PIN)));
+      const service = buildReturnsService(db);
+      const approved: string = await (service as any).verifyManagerAuthorization(db, MANAGER_PIN, cashierAuth);
+      assert.equal(approved, 'رمز المشرف', 'the shared PIN approves with the returns approval name');
+    } finally {
+      await db.destroy();
+    }
+    console.log('  11. bcrypt-stored shared manager PIN approves passed');
+  }
+
+  // 12. B1: a wrong PIN still fails closed with 403 MANAGER_AUTH_INVALID.
+  {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedAdminPassword(db);
+      await seedManagerPin(db, JSON.stringify(await hashManagerPin(MANAGER_PIN)));
+      const service = buildReturnsService(db);
+      await expectManagerAuthError(
+        (service as any).verifyManagerAuthorization(db, '0000', cashierAuth),
+        'MANAGER_AUTH_INVALID',
+        403,
+      );
+    } finally {
+      await db.destroy();
+    }
+    console.log('  12. wrong manager PIN is refused with 403 passed');
+  }
+
+  // 13. B1: a legacy plaintext stored PIN still approves once, and is
+  // hashed in place by that first success (then still approves).
+  {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedAdminPassword(db);
+      await seedManagerPin(db, JSON.stringify(MANAGER_PIN));
+      const service = buildReturnsService(db);
+      const approved: string = await (service as any).verifyManagerAuthorization(db, MANAGER_PIN, cashierAuth);
+      assert.equal(approved, 'رمز المشرف');
+      const stored = JSON.parse(await storedManagerPin(db)) as string;
+      assert.ok(isBcryptHash(stored), 'the legacy plaintext PIN must be hashed in place after first use');
+      const again: string = await (service as any).verifyManagerAuthorization(db, MANAGER_PIN, cashierAuth);
+      assert.equal(again, 'رمز المشرف');
+    } finally {
+      await db.destroy();
+    }
+    console.log('  13. legacy plaintext PIN approves and migrates to a hash passed');
+  }
+
+  // 14. B1: an active admin's login password still approves, under the
+  // admin's own username.
+  {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedAdminPassword(db);
+      const service = buildReturnsService(db);
+      const approved: string = await (service as any).verifyManagerAuthorization(db, ADMIN_PASSWORD, cashierAuth);
+      assert.equal(approved, 'admin', 'the approval is recorded under the admin username');
+    } finally {
+      await db.destroy();
+    }
+    console.log('  14. admin login password approves passed');
   }
 
   console.log('Returns shift gate tests passed');

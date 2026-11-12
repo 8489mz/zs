@@ -22,7 +22,7 @@ import { CreateReturnDto } from './dto/create-return.dto';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { IdempotencyService } from '../../core/idempotency/idempotency.service';
 import { idempotencyStorage } from '../../core/idempotency/idempotency.context';
-import { verifyPassword } from '../../core/auth/utils/password-hasher';
+import { authorizeManagerSecret } from '../../common/utils/manager-approval';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
 import { allocateRefundTenders, type RefundTender } from './engines/refund-tender.engine';
 import { allocateProRata, computeConditionalDiscountForfeit, type ConditionalDiscountForfeitBreakdown, type ConditionalDiscountForfeitResult } from './engines/conditional-header-discount-return.engine';
@@ -641,26 +641,6 @@ export class ReturnsService {
     return { goodsTotal, originalGoodsTotal, tipRelief: returnRelief.tipRelief, courierRelief: returnRelief.courierRelief, totalRelief: returnRelief.totalRelief, refundTotal, forfeit: forfeitBreakdown };
   }
 
-  private async getManagerPin(trx: Kysely<Database>, auth: AuthContext): Promise<string> {
-    const { tenantId } = requireTenantScope(auth);
-    const result = await sql<{ key?: string; value?: string }>`
-      select key, value from settings
-      where key in ('managerPin', 'managerApprovalPin', 'manager_pin')
-        and tenant_id = ${tenantId}
-    `.execute(trx);
-
-    const value = result.rows?.find((row) => String(row.key || '').length > 0)?.value;
-    if (typeof value === 'string' && value.trim()) {
-      try {
-        const parsed = JSON.parse(value);
-        if (typeof parsed === 'string' && parsed.trim()) return parsed.trim();
-      } catch {
-        return value.trim();
-      }
-    }
-    return '';
-  }
-
   // INV-SPIRIT-LARGE-CASH-REFUND: the manager-approval threshold
   // for cash refunds, in tenant currency units. Coordinator-chosen
   // default 500, owner-set via the posLargeCashRefundThreshold
@@ -680,38 +660,32 @@ export class ReturnsService {
     return 500;
   }
 
+  // INV-RETURNS-MANAGER-PIN-BCRYPT (B1): the manager check is the one
+  // shared authorizeManagerSecret — never a local duplicate. The old
+  // body compared the typed PIN with `===` against the stored value,
+  // but Settings stores the shared manager PIN as a bcrypt hash, so a
+  // correct PIN could never match and every non-admin approval failed
+  // 403 MANAGER_AUTH_INVALID. The shared helper verifies a bcrypt
+  // hash, a legacy plaintext PIN (hashing it in place on first
+  // success), or an active admin's login password. The returns error
+  // contract is preserved: the helper's 400s are re-thrown as the
+  // 403s this path has always returned, with the same codes and
+  // messages, and the approval names are unchanged ('رمز المشرف' for
+  // a PIN, the admin username for a password). Who needs approval and
+  // the admin bypass are untouched — only the comparison moved.
   private async verifyManagerAuthorization(trx: Kysely<Database>, secret: string, auth: AuthContext): Promise<string> {
-    const { tenantId } = requireTenantScope(auth);
-    const normalizedSecret = String(secret || '').trim();
-    if (!normalizedSecret) {
-      throw new AppError('أدخل رمز المشرف أو كلمة المرور لاعتماد المرتجع', 'MANAGER_AUTH_REQUIRED', 403);
-    }
-
-    const managerPin = await this.getManagerPin(trx, auth);
-    if (managerPin && normalizedSecret === managerPin) {
-      return 'رمز المشرف';
-    }
-
-    const managerUsers = await trx
-      .selectFrom('users')
-      .select(['id', 'username', 'role', 'password_hash', 'password_salt'])
-      .where('is_active', '=', true)
-      .where(sql<boolean>`tenant_id = ${tenantId}`)
-      .where((eb) => eb.or([eb('role', '=', 'admin'), eb('role', '=', 'super_admin')]))
-      .execute();
-
-    for (const managerUser of managerUsers) {
-      const passwordCheck = await verifyPassword(
-        normalizedSecret,
-        String(managerUser.password_hash || ''),
-        String(managerUser.password_salt || ''),
-      );
-      if (passwordCheck.valid) {
-        return String(managerUser.username || 'المدير');
+    try {
+      const result = await authorizeManagerSecret(trx, auth, secret);
+      return result.mode === 'pin' ? 'رمز المشرف' : result.authorizedByName;
+    } catch (error) {
+      if (error instanceof AppError && error.code === 'MANAGER_AUTH_REQUIRED') {
+        throw new AppError('أدخل رمز المشرف أو كلمة المرور لاعتماد المرتجع', 'MANAGER_AUTH_REQUIRED', 403);
       }
+      if (error instanceof AppError && error.code === 'MANAGER_AUTH_INVALID') {
+        throw new AppError('رمز المشرف أو كلمة المرور غير صحيحة', 'MANAGER_AUTH_INVALID', 403);
+      }
+      throw error;
     }
-
-    throw new AppError('رمز المشرف أو كلمة المرور غير صحيحة', 'MANAGER_AUTH_INVALID', 403);
   }
 
   async createReturn(payload: CreateReturnDto, auth: AuthContext): Promise<Record<string, unknown>> {
