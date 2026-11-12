@@ -337,6 +337,7 @@ async function reconcileRenamedMigrations(db: Kysely<Database>): Promise<void> {
       ['2040000000248_stock_count_tracked_provenance', '2040000000250_stock_count_tracked_provenance'],
       ['2040000000249_payment_channels_cash_drawer_separation', '2040000000251_payment_channels_cash_drawer_separation'],
       ['2040000000252_hr_asset_recovery_money_type', '2040000000254_hr_asset_recovery_money_type'],
+      ['2040000000319_import_sale_allocations_allocation_type', '2040000000320_import_sale_allocations_allocation_type'],
     ];
 
     for (const [oldName, newName] of shiftedImportMigrations) {
