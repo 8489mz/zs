@@ -110,7 +110,16 @@ export class RestaurantAdvancedFnbController {
     @Body() dto: SaveTableZoneDto,
   ) {
     const scope = requireTenantScope(req.authContext!);
-    return this.service.saveZone(scope, dto);
+    // INV-REST-FLOOR-DESIGN-GATES (B2): the zone gate lives in the
+    // service (assertManagerCaller) and reads scope.role /
+    // scope.permissions, but requireTenantScope returns only
+    // { tenantId, accountId } — passing the bare scope would make EVERY
+    // save 403, manager included (the 221c0c43 bug class). Forward the
+    // caller's identity like the comp/tip/layout-save endpoints do.
+    return this.service.saveZone(
+      { ...scope, role: req.authContext?.role, permissions: req.authContext?.permissions ?? [] },
+      dto,
+    );
   }
 
   // 4. Central Prep Kitchen & Daily Prep Sheets
@@ -346,7 +355,13 @@ export class RestaurantAdvancedFnbController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     const scope = requireTenantScope(req.authContext!);
-    return this.service.deleteTableLayout(scope, id);
+    // INV-REST-FLOOR-DESIGN-GATES (B2): same forwarding as saveZone
+    // above — the delete gate reads scope.role / scope.permissions, so
+    // the bare requireTenantScope() result would 403 every caller.
+    return this.service.deleteTableLayout(
+      { ...scope, role: req.authContext?.role, permissions: req.authContext?.permissions ?? [] },
+      id,
+    );
   }
 
   // INV-REST-FLOOR-STATE-TRUTH (R5-D, R-I35): whole-table transfer for a

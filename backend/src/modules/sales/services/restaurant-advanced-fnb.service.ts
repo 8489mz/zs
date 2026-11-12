@@ -594,6 +594,11 @@ export class RestaurantAdvancedFnbService {
   }
 
   async saveZone(scope: TenantScope, dto: SaveTableZoneDto) {
+    // INV-REST-FLOOR-DESIGN-GATES (B2): a zone is a design artifact like
+    // the layout — design mode is manager-only (R5-D), so the same
+    // assertManagerCaller gate applies. Read (getZones) stays
+    // authenticated-any.
+    this.assertManagerCaller(scope);
     if (!dto.name || !dto.zoneCode) {
       throw new AppError('اسم وكود المنطقة مطلوبان', 'INVALID_ZONE_DATA', 400);
     }
@@ -1211,6 +1216,13 @@ export class RestaurantAdvancedFnbService {
   }
 
   async resolveRescueAlert(scope: TenantScope, ratingId: number, managerName: string) {
+    // INV-REST-FLOOR-DESIGN-GATES (B2, decision): deliberately NOT
+    // manager-gated. This only flips is_rescued on a guest rating with a
+    // free-text managerName attribution — a service-recovery note, not a
+    // floor-state or money write. The name is a label, not a verified
+    // identity, and the staff member who actually soothed the guest is
+    // the one who records it. Pinned by restaurant-floor-state.spec.ts
+    // check (14).
     await this.db
       .updateTable('restaurant_table_ratings')
       .set({
@@ -1518,6 +1530,10 @@ export class RestaurantAdvancedFnbService {
   }
 
   async deleteTableLayout(scope: TenantScope, id: number) {
+    // INV-REST-FLOOR-DESIGN-GATES (B2): deleting a layout is a design
+    // write like saving one — manager-only (R5-D). At base any
+    // authenticated caller could delete the shared floor through the API.
+    this.assertManagerCaller(scope);
     await this.db
       .deleteFrom('restaurant_table_layouts')
       .where('tenant_id', '=', scope.tenantId)
@@ -1536,6 +1552,14 @@ export class RestaurantAdvancedFnbService {
    * same one-draft-per-table rule saveHeldSale enforces (R4-D I42).
    */
   async renameHeldDraftTable(scope: TenantScope, draftId: number, toTableNumber: string) {
+    // INV-REST-FLOOR-DESIGN-GATES (B2, decision): deliberately NOT
+    // manager-gated. This is the whole-table TRANSFER engine
+    // (transferTableOrder + the held-drafts dialog rename, both open to
+    // any POS role in the UI) — it changes ONLY held_sales.table_number,
+    // no amounts or cart contents, is fully reversible, and the 409
+    // occupied-table guard prevents collisions. Gating it would block
+    // every waiter/cashier table move; a table move is neither loss nor
+    // fraud. Pinned by restaurant-floor-state.spec.ts check (13).
     const to = String(toTableNumber || '').trim();
     if (!to) {
       throw new AppError('رقم الطاولة الجديدة إلزامي.', 'HELD_DRAFT_TABLE_REQUIRED', 400);

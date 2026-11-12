@@ -32,6 +32,30 @@
  * (1)/(2) pass on both trees because they hand the service a full scope;
  * only the controller-level checks (7)/(8) below catch the wiring, by
  * calling the controller with a real req.authContext the way the POS does.
+ *
+ * INV-REST-FLOOR-DESIGN-GATES (B2, 2026-11-12): the R5-D gate covered only
+ * the layout save — the sibling design writes were fail-open: any
+ * authenticated caller could save a zone or delete a layout through the
+ * API while the UI hides design mode from non-managers. saveZone and
+ * deleteTableLayout now carry the same assertManagerCaller gate, with the
+ * controller forwarding role/permissions (the 221c0c43 wiring, not the
+ * bare scope). Checks (9)-(12) below are controller-level for the same
+ * reason as (7)/(8).
+ *
+ * Deliberately NOT gated (recorded decisions, pinned by checks (13)/(14)
+ * so a future "fix" cannot silently break the daily flow):
+ * - renameHeldDraftTable is the whole-table TRANSFER engine
+ *   (transferTableOrder + the held-drafts dialog rename, both open to any
+ *   POS role in the UI with no manager check). It changes ONLY
+ *   held_sales.table_number — no amounts, discounts or cart contents —
+ *   is fully reversible, and the 409 occupied-table guard prevents
+ *   collisions. Gating it would block every waiter/cashier table move;
+ *   a table move is neither loss nor fraud (spirit-of-the-law).
+ * - resolveRescueAlert only flips is_rescued on a guest rating with a
+ *   free-text managerName attribution — a service-recovery note, not a
+ *   floor-state or money write. The name is a label, not a verified
+ *   identity, and the staff member who actually soothed the guest is the
+ *   one who records it.
  */
 import 'reflect-metadata';
 import { strict as assert } from 'node:assert';
@@ -68,6 +92,17 @@ const DDL = `
     guest_count int, reservation_time timestamptz, status text,
     special_requests text, reservation_type text, created_by bigint,
     created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW());
+  CREATE TABLE restaurant_table_zones (id serial PRIMARY KEY, tenant_id text NOT NULL,
+    branch_id bigint, zone_code text NOT NULL, name text NOT NULL,
+    sort_order int NOT NULL DEFAULT 0, capacity_seats int NOT NULL DEFAULT 4,
+    table_numbers jsonb NOT NULL DEFAULT '[]'::jsonb, minimum_spend numeric(12, 2) DEFAULT 0,
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT NOW(), updated_at timestamptz NOT NULL DEFAULT NOW());
+  CREATE TABLE restaurant_table_ratings (id serial PRIMARY KEY, tenant_id text NOT NULL,
+    branch_id bigint, table_number text NOT NULL, sale_id bigint, rating int NOT NULL,
+    feedback_category text DEFAULT 'food_quality', notes text,
+    is_rescued boolean NOT NULL DEFAULT false, rescued_by text,
+    created_at timestamptz NOT NULL DEFAULT NOW());
 `;
 
 async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
@@ -79,7 +114,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 
 async function resetDb(pg: PGlite): Promise<void> {
   await pg.exec(
-    `TRUNCATE settings, restaurant_table_layouts, held_sales, restaurant_table_reservations RESTART IDENTITY`,
+    `TRUNCATE settings, restaurant_table_layouts, held_sales, restaurant_table_reservations, restaurant_table_zones, restaurant_table_ratings RESTART IDENTITY`,
   );
 }
 
@@ -281,6 +316,168 @@ async function main(): Promise<void> {
       const rows: any = await pg.query(`SELECT COUNT(*)::int AS n FROM restaurant_table_layouts`);
       assert.equal(Number(rows.rows[0].n), 0, 'the refused controller save must write nothing');
       console.log('  (8) controller cashier saveTableLayouts refused with 403 passed');
+    }
+
+    // (9) B2: through the CONTROLLER, a cashier zone save is refused 403
+    // and writes nothing (design writes are manager-only like the layout save).
+    {
+      await resetDb(pg);
+      const controller = new RestaurantAdvancedFnbController(service);
+      const cashierReq: any = {
+        authContext: {
+          userId: 2, sessionId: 's2', username: 'cashier',
+          role: 'cashier', permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+        },
+      };
+      await expectAppError(
+        controller.saveZone(cashierReq, { zoneCode: 'vip', name: 'VIP', tableNumbers: ['1', '2'] }),
+        'MANAGER_PERMISSION_REQUIRED',
+        403,
+      );
+      const rows: any = await pg.query(`SELECT COUNT(*)::int AS n FROM restaurant_table_zones`);
+      assert.equal(Number(rows.rows[0].n), 0, 'the refused zone save must write nothing');
+      console.log('  (9) controller cashier saveZone refused with 403 passed');
+    }
+
+    // (10) B2: through the CONTROLLER, a manager zone save lands.
+    {
+      await resetDb(pg);
+      const controller = new RestaurantAdvancedFnbController(service);
+      const managerReq: any = {
+        authContext: {
+          userId: 1, sessionId: 's1', username: 'admin',
+          role: 'admin', permissions: [], tenantId: TENANT, accountId: ACCOUNT,
+        },
+      };
+      const saved: any = await controller.saveZone(managerReq, {
+        zoneCode: 'vip', name: 'VIP', tableNumbers: ['1', '2'],
+      });
+      assert.equal(saved.success, true);
+      const rows: any = await pg.query(
+        `SELECT zone_code, name FROM restaurant_table_zones WHERE tenant_id = $1`,
+        [TENANT],
+      );
+      assert.equal(rows.rows.length, 1);
+      assert.equal(rows.rows[0].zone_code, 'vip');
+      assert.equal(rows.rows[0].name, 'VIP');
+      console.log('  (10) controller manager saveZone lands passed');
+    }
+
+    // (11) B2: through the CONTROLLER, a cashier layout delete is refused
+    // 403 and the layout survives.
+    {
+      await resetDb(pg);
+      const [layout] = await (db as any)
+        .insertInto('restaurant_table_layouts')
+        .values({
+          tenant_id: TENANT, branch_id: null, table_number: '1', zone_code: 'main',
+          shape: 'square', x_pos: 10, y_pos: 10, width: 80, height: 80,
+          seats: 4, rotation: 0, is_active: true,
+        })
+        .returning('id')
+        .execute();
+      const layoutId = Number(layout.id);
+      const controller = new RestaurantAdvancedFnbController(service);
+      const cashierReq: any = {
+        authContext: {
+          userId: 2, sessionId: 's2', username: 'cashier',
+          role: 'cashier', permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+        },
+      };
+      await expectAppError(
+        controller.deleteTableLayout(cashierReq, layoutId),
+        'MANAGER_PERMISSION_REQUIRED',
+        403,
+      );
+      const rows: any = await pg.query(`SELECT COUNT(*)::int AS n FROM restaurant_table_layouts`);
+      assert.equal(Number(rows.rows[0].n), 1, 'the refused delete must leave the layout in place');
+      console.log('  (11) controller cashier deleteTableLayout refused with 403 passed');
+    }
+
+    // (12) B2: through the CONTROLLER, a manager layout delete lands.
+    {
+      await resetDb(pg);
+      const [layout] = await (db as any)
+        .insertInto('restaurant_table_layouts')
+        .values({
+          tenant_id: TENANT, branch_id: null, table_number: '1', zone_code: 'main',
+          shape: 'square', x_pos: 10, y_pos: 10, width: 80, height: 80,
+          seats: 4, rotation: 0, is_active: true,
+        })
+        .returning('id')
+        .execute();
+      const layoutId = Number(layout.id);
+      const controller = new RestaurantAdvancedFnbController(service);
+      const managerReq: any = {
+        authContext: {
+          userId: 1, sessionId: 's1', username: 'admin',
+          role: 'admin', permissions: [], tenantId: TENANT, accountId: ACCOUNT,
+        },
+      };
+      const deleted: any = await controller.deleteTableLayout(managerReq, layoutId);
+      assert.equal(deleted.success, true);
+      const rows: any = await pg.query(`SELECT COUNT(*)::int AS n FROM restaurant_table_layouts`);
+      assert.equal(Number(rows.rows[0].n), 0, 'the manager delete must remove the layout');
+      console.log('  (12) controller manager deleteTableLayout lands passed');
+    }
+
+    // (13) B2 decision pin: a cashier CAN still rename a held draft's
+    // table through the controller — the rename is the whole-table
+    // TRANSFER engine for waiters/cashiers, not a design write. It
+    // changes only table_number (see check (3)).
+    {
+      await resetDb(pg);
+      const id = await seedHeldDraft(db);
+      const controller = new RestaurantAdvancedFnbController(service);
+      const cashierReq: any = {
+        authContext: {
+          userId: 2, sessionId: 's2', username: 'cashier',
+          role: 'cashier', permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+        },
+      };
+      const renamed: any = await controller.renameHeldDraftTable(cashierReq, id, { tableNumber: '9' });
+      assert.equal(String(renamed.table_number), '9');
+      const rows: any = await pg.query(
+        `SELECT paid_amount, discount, note FROM held_sales WHERE id = $1`,
+        [id],
+      );
+      assert.equal(Number(rows.rows[0].paid_amount), 100);
+      assert.equal(Number(rows.rows[0].discount), 5);
+      assert.equal(rows.rows[0].note, 'keep-me');
+      console.log('  (13) controller cashier renameHeldDraftTable still transfers passed');
+    }
+
+    // (14) B2 decision pin: a cashier CAN still resolve a rescue alert —
+    // it records that the guest issue was handled, with a free-text
+    // attribution, and is not a floor-state or money write.
+    {
+      await resetDb(pg);
+      const [rating] = await (db as any)
+        .insertInto('restaurant_table_ratings')
+        .values({
+          tenant_id: TENANT, branch_id: null, table_number: '5', sale_id: null,
+          rating: 2, feedback_category: 'service_speed', notes: 'slow',
+          is_rescued: false, rescued_by: null,
+        })
+        .returning('id')
+        .execute();
+      const ratingId = Number(rating.id);
+      const controller = new RestaurantAdvancedFnbController(service);
+      const cashierReq: any = {
+        authContext: {
+          userId: 2, sessionId: 's2', username: 'cashier',
+          role: 'cashier', permissions: ['sales'], tenantId: TENANT, accountId: ACCOUNT,
+        },
+      };
+      const resolved: any = await controller.resolveRescueAlert(cashierReq, ratingId, 'أحمد');
+      assert.equal(resolved.success, true);
+      const rows: any = await pg.query(
+        `SELECT is_rescued, rescued_by FROM restaurant_table_ratings WHERE id = $1`,
+        [ratingId],
+      );
+      assert.equal(rows.rows[0].is_rescued, true);
+      assert.equal(rows.rows[0].rescued_by, 'أحمد');
+      console.log('  (14) controller cashier resolveRescueAlert still records passed');
     }
 
     console.log('restaurant-floor-state.spec: all checks passed');
