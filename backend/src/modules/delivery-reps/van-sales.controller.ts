@@ -1727,7 +1727,7 @@ export class VanSalesAdminController {
   async settleRepFinancialItem(
     @Req() req: RequestWithAuth,
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { method: 'cash' | 'waiver'; notes?: string },
+    @Body() body: { method: 'cash' | 'waiver'; notes?: string; reason?: string; supervisorPin?: string },
   ) {
     const { tenantId, accountId } = requireTenantScope(req.authContext!);
     return this.vanSalesService.settleRepFinancialItem(tenantId, accountId, id, body, req.authContext!);
