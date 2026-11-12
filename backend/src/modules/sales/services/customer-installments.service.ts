@@ -18,6 +18,71 @@ import {
   ListInstallmentsQueryDto,
 } from '../dto/customer-installment.dto';
 
+/*
+ * INV-INSTALLMENT-PAYMENT-CHANNEL: the channel a customer_payments
+ * row (and its treasury row) carries for an installment payment.
+ * The DTO speaks 'bank_transfer'; the CHECK constraint on
+ * customer_payments / treasury_transactions (migration 0251) allows
+ * only 'cash' | 'bank' | 'card' | 'wallet' | 'instapay', so a bank
+ * transfer is stored as 'bank' — writing 'bank_transfer' would
+ * violate the constraint. postCustomerPayment debits 1120 for every
+ * non-'cash' channel, so this mapping is what moves a bank/card/
+ * InstaPay installment off the cash account 1110.
+ */
+const INSTALLMENT_PAYMENT_CHANNELS: Record<string, 'cash' | 'bank' | 'card' | 'instapay'> = {
+  cash: 'cash',
+  card: 'card',
+  bank_transfer: 'bank',
+  instapay: 'instapay',
+};
+
+/*
+ * INV-REP-NONCASH-EVIDENCE-GATE (PD1), same rule as
+ * normalizeTransferReference for general receipts: the reference
+ * belongs to the payment only when it actually travels off cash.
+ * Cash stores NULL so a stray reference can never be read as
+ * evidence for a cash receipt. Blank input is NULL, never an empty
+ * string; over-long input is rejected with the named error rather
+ * than silently truncated. A free-text note alone is NOT a
+ * reference — the gate below reads only this field.
+ */
+function normalizeInstallmentTransferReference(
+  paymentChannel: string,
+  rawReference: unknown,
+): string | null {
+  if (!paymentChannel || paymentChannel === 'cash') return null;
+  const reference = String(rawReference || '').trim();
+  if (!reference) return null;
+  if (reference.length > 100) {
+    throw new AppError('Transfer reference must be at most 100 characters', 'INVALID_TRANSFER_REFERENCE', 400);
+  }
+  return reference;
+}
+
+/*
+ * INV-REP-NONCASH-EVIDENCE-GATE (PD1), same bar as the van card
+ * gate (F2) and the general-receipt gate: a non-cash installment
+ * receipt debits bank 1120, so it must carry a real transfer
+ * reference of at least 3 characters. Cash is untouched.
+ * postCustomerPayment re-checks the stored reference itself, so
+ * any future caller reaching the posting without evidence is
+ * refused before any Dr 1120 is posted.
+ */
+function assertInstallmentTransferReference(
+  paymentChannel: string,
+  reference: unknown,
+): void {
+  if (!paymentChannel || paymentChannel === 'cash') return;
+  const trimmed = String(reference || '').trim();
+  if (trimmed.length < 3) {
+    throw new AppError(
+      `Non-cash installment payment requires a transfer reference of at least 3 characters; a note alone is not evidence (channel: ${paymentChannel})`,
+      'NONCASH_RECEIPT_REFERENCE_REQUIRED',
+      400,
+    );
+  }
+}
+
 @Injectable()
 export class CustomerInstallmentsService {
   constructor(
@@ -512,6 +577,37 @@ export class CustomerInstallmentsService {
   async payInstallment(installmentId: number, dto: PayInstallmentDto, auth: AuthContext) {
     const scope = this.tenantScope(auth);
 
+    // INV-INSTALLMENT-PAYMENT-CHANNEL: the installment's payment
+    // method is the channel of the money itself — it must reach the
+    // customer_payments row and the treasury row, or
+    // postCustomerPayment reads 'cash' and debits 1110 for a
+    // bank/card/InstaPay receipt (drawer overstated, bank
+    // understated, phantom cash at settlement). A missing or unknown
+    // method fails closed with a named error instead of silently
+    // defaulting to cash — that silent default IS the defect.
+    // The only in-repo caller (InstallmentsPage) always sends a
+    // method (its state defaults to 'cash'), so a missing method can
+    // only come from a direct API caller. Validated before the
+    // transaction opens, so a refusal writes nothing.
+    const paymentMethod = dto.paymentMethod;
+    if (!paymentMethod) {
+      throw new AppError(
+        'Installment payment requires a payment method (cash, card, bank_transfer or instapay)',
+        'INSTALLMENT_PAYMENT_METHOD_REQUIRED',
+        400,
+      );
+    }
+    const paymentChannel = INSTALLMENT_PAYMENT_CHANNELS[paymentMethod];
+    if (!paymentChannel) {
+      throw new AppError(
+        `Unknown installment payment method "${String(paymentMethod)}"; expected cash, card, bank_transfer or instapay`,
+        'INSTALLMENT_PAYMENT_METHOD_INVALID',
+        400,
+      );
+    }
+    const transferReference = normalizeInstallmentTransferReference(paymentChannel, dto.transferReference);
+    assertInstallmentTransferReference(paymentChannel, transferReference);
+
     return await this.tx.runInTransaction(this.db, async (trx: Kysely<Database>) => {
       const bookDigits = await this.bookDigits(trx, auth);
       const payAmount = this.roundBook(dto.amount, bookDigits);
@@ -563,9 +659,11 @@ export class CustomerInstallmentsService {
 
       const newPaidAmount = this.roundBook(currentPaid + payAmount, bookDigits);
       const newStatus = newPaidAmount >= totalRequired ? 'paid' : 'partially_paid';
-      const paymentMethod = dto.paymentMethod || 'cash';
 
       // 3. Insert customer payment first to get identity for document numbering (Invariant #10 & #13)
+      // INV-INSTALLMENT-PAYMENT-CHANNEL: the payment_channel (and the
+      // transfer reference for non-cash) travels on this row, so
+      // postCustomerPayment debits the right account below.
       const insertedPayment = await trx
         .insertInto('customer_payments')
         .values({
@@ -573,6 +671,8 @@ export class CustomerInstallmentsService {
           account_id: scope.accountId,
           customer_id: Number(installment.customer_id),
           amount: payAmount,
+          payment_channel: paymentChannel,
+          transfer_reference: transferReference,
           note: `سداد قسط رقم ${installment.installment_number} لخطة ${plan?.plan_number || ''}`,
           branch_id: plan?.branch_id ? Number(plan.branch_id) : null,
           created_by: auth.userId || null,
@@ -617,6 +717,9 @@ export class CustomerInstallmentsService {
       );
 
       // 6. Treasury Transaction
+      // INV-INSTALLMENT-PAYMENT-CHANNEL: the treasury row carries
+      // the same channel, so the drawer never counts a bank/card/
+      // InstaPay receipt as cash.
       await this.salesFinance.addTreasuryPaymentTransaction(
         trx,
         'customer_payment',
@@ -627,6 +730,7 @@ export class CustomerInstallmentsService {
         auth,
         branchId,
         null,
+        paymentChannel,
       );
 
       // 7. General Ledger Double-Entry Posting

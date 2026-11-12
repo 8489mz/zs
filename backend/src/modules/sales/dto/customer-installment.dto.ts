@@ -17,6 +17,13 @@ export interface CreateInstallmentPlanDto {
 export interface PayInstallmentDto {
   amount: number;
   paymentMethod?: 'cash' | 'card' | 'bank_transfer' | 'instapay';
+  /* INV-INSTALLMENT-PAYMENT-CHANNEL: the real transfer reference
+   * (bank / card / InstaPay transaction reference) of this payment.
+   * Mandatory for any non-cash method — the service gate refuses
+   * the payment without one (same bar as the general-receipt gate,
+   * INV-REP-NONCASH-EVIDENCE-GATE). Stored in
+   * customer_payments.transfer_reference; cash stores NULL. */
+  transferReference?: string;
   notes?: string;
   receiptNo?: string;
 }

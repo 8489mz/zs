@@ -224,6 +224,12 @@ export class SalesFinanceService {
     auth: AuthContext,
     branchId?: number | null,
     locationId?: number | null,
+    // INV-INSTALLMENT-PAYMENT-CHANNEL: the channel of the money
+    // itself. Callers that omit it keep the old behaviour (the
+    // column defaults to 'cash'); callers that pass it record the
+    // real channel so the drawer never counts a bank/card/InstaPay
+    // receipt as cash.
+    paymentChannel?: 'cash' | 'bank' | 'card' | 'wallet' | 'instapay' | null,
   ): Promise<void> {
     await queryable
       .insertInto('treasury_transactions')
@@ -231,6 +237,7 @@ export class SalesFinanceService {
         txn_type: txnType,
         amount,
         note,
+        payment_channel: paymentChannel || 'cash',
         reference_type: referenceType,
         reference_id: referenceId,
         created_by: auth.userId,
