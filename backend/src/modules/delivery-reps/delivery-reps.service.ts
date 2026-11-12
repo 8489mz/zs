@@ -1220,6 +1220,14 @@ export class DeliveryRepsService {
       // still post the courier's COD custody/treasury/GL atomically via settleOrder.
       if (sale.delivery_status === 'delivered') return;
 
+      // C5 (INV-DISPATCH-STATE-GUARDS-AUDIT): proof of delivery is only
+      // meaningful after dispatch — a pending order was never handed to
+      // any rep, so marking it delivered would skip dispatch/custody
+      // entirely (pending -> delivered directly).
+      if (sale.delivery_status !== 'out_for_delivery') {
+        throw new AppError('لا يمكن إثبات توصيل طلب لم يُصرف بعد؛ اصرف الطلب إلى المندوب أولاً', 'DELIVERY_NOT_DISPATCHED', 409);
+      }
+
       const updateData: Record<string, any> = {
         delivery_status: 'delivered',
         updated_at: sql`NOW()`,
@@ -1289,6 +1297,12 @@ export class DeliveryRepsService {
       // whose receivable moves to courier custody below.
       const dispatchedSaleIds: number[] = [...saleIds];
 
+      // C12 (INV-DISPATCH-STATE-GUARDS-AUDIT): one audit row per
+      // dispatched item (sale or online order), written in this same
+      // transaction so a rolled-back dispatch leaves no audit trace.
+      // A re-assignment (oldRepId set) records old rep -> new rep.
+      const auditEntries: Array<{ orderLabel: string; oldRepId: number | null }> = [];
+
       if (saleIds.length) {
         const sales = await trx.selectFrom('sales')
           .select(['id','doc_no','customer_phone','order_type','status','delivery_status','delivery_rep_id'])
@@ -1300,6 +1314,16 @@ export class DeliveryRepsService {
               (s.delivery_rep_id && Number(s.delivery_rep_id) !== Number(rep.id) &&
                 !['pending', null].includes(s.delivery_status)))) {
           throw new AppError('لا يمكن إسناد طلب ملغي أو مسلّم بالفعل أو في عهدة مندوب آخر', 'DELIVERY_DISPATCH_FORBIDDEN', 409);
+        }
+        // C4: a pending order re-assigned to another rep is allowed,
+        // but the old -> new rep move must be recorded, not silent.
+        for (const s of sales) {
+          auditEntries.push({
+            orderLabel: `#${s.id}`,
+            oldRepId: s.delivery_rep_id && Number(s.delivery_rep_id) !== Number(rep.id)
+              ? Number(s.delivery_rep_id)
+              : null,
+          });
         }
         await trx.updateTable('sales').set({
           order_type: 'delivery',
@@ -1334,6 +1358,35 @@ export class DeliveryRepsService {
         const linkedSaleIds = orders.map(o => o.sale_id).filter((id): id is number => Boolean(id) && Number(id) > 0);
         dispatchedSaleIds.push(...linkedSaleIds);
         if (linkedSaleIds.length > 0) {
+          // C2 (INV-DISPATCH-STATE-GUARDS-AUDIT): mirror the saleIds
+          // guard on the linked sale — a settled sale, or one already
+          // out for delivery in another rep's custody, must be
+          // refused here too, not silently overwritten.
+          const linkedSales = await trx.selectFrom('sales')
+            .select(['id', 'status', 'delivery_status', 'delivery_rep_id'])
+            .where('id', 'in', [...new Set(linkedSaleIds)]).where(this.tenantPredicate(actor))
+            .orderBy('id', 'asc').forUpdate().execute();
+          if (linkedSales.length !== new Set(linkedSaleIds).size ||
+              linkedSales.some(s => s.status === 'cancelled' ||
+                ['delivered', 'settled'].includes(String(s.delivery_status)) ||
+                (s.delivery_rep_id && Number(s.delivery_rep_id) !== Number(rep.id) &&
+                  !['pending', null].includes(s.delivery_status)))) {
+            throw new AppError('لا يمكن إسناد طلب أونلاين مسلّم بالفعل أو مُسوَّى أو في عهدة مندوب آخر', 'DELIVERY_DISPATCH_FORBIDDEN', 409);
+          }
+          const linkedById = new Map(linkedSales.map(s => [Number(s.id), s]));
+          for (const order of orders) {
+            if (!order.sale_id) {
+              auditEntries.push({ orderLabel: `أونلاين #${order.order_number || order.id}`, oldRepId: null });
+              continue;
+            }
+            const linked = linkedById.get(Number(order.sale_id));
+            auditEntries.push({
+              orderLabel: `#${order.sale_id}`,
+              oldRepId: linked && linked.delivery_rep_id && Number(linked.delivery_rep_id) !== Number(rep.id)
+                ? Number(linked.delivery_rep_id)
+                : null,
+            });
+          }
           await trx.updateTable('sales').set({
             order_type: 'delivery',
             delivery_rep_id: rep.id,
@@ -1341,6 +1394,11 @@ export class DeliveryRepsService {
             dispatched_at: now,
             ...(payload.notes ? { note: sql`COALESCE(note, '') || ${' [' + payload.notes + ']'}` as any } : {}),
           }).where('id', 'in', linkedSaleIds).where(this.tenantPredicate(actor)).execute();
+        } else {
+          // Online orders with no linked sale still get an audit row.
+          for (const order of orders) {
+            auditEntries.push({ orderLabel: `أونلاين #${order.order_number || order.id}`, oldRepId: null });
+          }
         }
 
         for (const order of orders) if (order.customer_phone) {
@@ -1364,6 +1422,18 @@ export class DeliveryRepsService {
         if (reclass.posted && reclass.amount > 0 && reclass.customerId) {
           await this.salesFinance.addCustomerLedgerLeg(trx, reclass.customerId, -reclass.amount, 'delivery_custody_transfer', `نقل عهدة فاتورة #${reclass.docNo} إلى مندوب التوصيل ${rep.name}`, 'sale', dispatchedSaleId, actor);
         }
+      }
+      // C12: one audit row per dispatched item, in this same
+      // transaction. A re-assignment row names the old rep too.
+      for (const entry of auditEntries) {
+        const reassigned = entry.oldRepId !== null;
+        await this.audit.logWithExecutor(trx,
+          reassigned ? 'إعادة إسناد طلب توصيل' : 'إسناد طلب توصيل',
+          reassigned
+            ? `تمت إعادة إسناد الطلب ${entry.orderLabel} من المندوب #${entry.oldRepId} إلى المندوب ${rep.name} (#${rep.id}) بواسطة ${actor.username}`
+            : `تم إسناد الطلب ${entry.orderLabel} إلى المندوب ${rep.name} (#${rep.id}) بواسطة ${actor.username}`,
+          actor,
+          { eventCode: 'DELIVERY_ORDER_DISPATCHED' });
       }
       return { rep, notifications };
     });

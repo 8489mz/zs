@@ -725,6 +725,9 @@ async function main(): Promise<void> {
     } as any,rest.auth);
     const codId=Number((codSale.sale as {id:string}).id);
     const cashBefore=await posted(rest,'1110');
+    await couriers.dispatchOrders(rest.auth,{
+      repId:Number(courier.id),saleIds:[codId],
+    });
     await couriers.driverSettleOrder(codId,Number(courier.id),rest.auth.tenantId!);
     assert.equal((await db.selectFrom('sales').select('delivery_status')
       .where('tenant_id','=',rest.auth.tenantId!).where('id','=',codId)
