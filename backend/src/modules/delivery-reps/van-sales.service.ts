@@ -3476,6 +3476,22 @@ export class VanSalesService {
         .executeTakeFirst();
       finalBalance = Number(updatedCust?.balance || 0);
 
+      // INV-REP-COLLECTION-TOTAL-BALANCE-CAP (defence in depth): the
+      // engine gate above refuses any collection above the customer's
+      // total debt, so this must never fire — but the write itself must
+      // never commit a negative customer balance even if a future
+      // caller reaches it without the gate. Throwing here rolls the
+      // whole collection transaction back. The comparison is at book
+      // digits so a sub-minor-unit residue in a legacy balance cannot
+      // refuse a collection the gate allowed.
+      if (roundMoney(finalBalance, moneyDigits) < 0) {
+        throw new AppError(
+          `لا يمكن تحصيل مبلغ (${amount} ج.م) من العميل "${lockedCust.name}" أكبر من مديونية العميل — الرصيد بعد التحصيل سالب (${finalBalance} ج.م)`,
+          'REP_COLLECTION_EXCEEDS_TOTAL_BALANCE',
+          422,
+        );
+      }
+
       const isInstapayCollection = payload.paymentMethod === 'instapay' || payload.paymentMethod === 'vodafone_cash' || payload.paymentMethod === 'bank_transfer';
       const defaultColNote = isInstapayCollection
         ? `سند تحصيل إلكتروني (${payload.paymentMethod === 'vodafone_cash' ? 'فودافون كاش' : 'إنستاباي/تحويل'}) بواسطة المندوب`

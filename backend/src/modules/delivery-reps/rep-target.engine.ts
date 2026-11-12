@@ -749,6 +749,30 @@ export function validateIsolatedRepCollection(params: {
     };
   }
 
+  // INV-REP-COLLECTION-TOTAL-BALANCE-CAP: a field collection must never
+  // exceed the customer's TOTAL debt (this rep's share + other reps'
+  // balances + any unassigned balance). Before this cap the only guard
+  // above fired when another rep held balance on the same customer, so
+  // a sole-rep customer could be collected past zero and
+  // customers.balance (and 1130) went negative with no recorded advance
+  // intent. There is no advance concept on the field-collection path
+  // (no advance flag on the payload, no advance column on
+  // customer_payments), so anything above the total debt is refused
+  // hard with a specific error naming both amounts. The cross-rep guard
+  // above still runs first: collecting another rep's share stays
+  // refused under its own code even when the total would allow it.
+  if (amount > companyPreviousBalance) {
+    return {
+      allowed: false,
+      errorCode: 'REP_COLLECTION_EXCEEDS_TOTAL_BALANCE',
+      errorMessage: `لا يمكن تحصيل مبلغ (${amount} ج.م) أكبر من إجمالي مديونية العميل (${companyPreviousBalance} ج.م). لا توجد سلفة مسجلة على هذا العميل تسمح بالتحصيل الزائد.`,
+      repPreviousBalance,
+      repNewBalance: repPreviousBalance,
+      companyPreviousBalance,
+      companyNewBalance: companyPreviousBalance,
+    };
+  }
+
   return {
     allowed: true,
     repPreviousBalance,
