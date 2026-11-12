@@ -24,6 +24,10 @@ import {
   validateUnpackAction,
   type PackageHierarchyNode,
 } from '../engines/package-barcode.engine';
+import {
+  releaseLocationStock,
+  reserveLocationStock,
+} from '../../../common/utils/location-stock-ledger';
 
 @Injectable()
 export class WarehousePackagesService {
@@ -40,6 +44,32 @@ export class WarehousePackagesService {
       return;
     }
     throw new ForbiddenException('Missing required inventory permissions');
+  }
+
+  private round3(value: number | string | null | undefined): number {
+    return Number((Number(value || 0) + Number.EPSILON).toFixed(3));
+  }
+
+  private validatePackageQty(value: unknown, label: string): number {
+    const qty = Number(value);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw new BadRequestException(`${label} must be greater than zero (received ${String(value)})`);
+    }
+    if (Math.abs(qty * 1000 - Math.round(qty * 1000)) > 0.000001) {
+      throw new BadRequestException(`${label} must have at most three decimal places (received ${String(value)})`);
+    }
+    return this.round3(qty);
+  }
+
+  private async resolveBranchId(trx: any, tenantId: string, locationId: number | null): Promise<number | null> {
+    if (locationId == null) return null;
+    const loc = await trx
+      .selectFrom('stock_locations')
+      .select(['branch_id'])
+      .where('id', '=', locationId)
+      .where('tenant_id', '=', tenantId)
+      .executeTakeFirst();
+    return loc?.branch_id == null ? null : Number(loc.branch_id);
   }
 
   /**
@@ -85,9 +115,47 @@ export class WarehousePackagesService {
     }
 
     const packageId = `pkg_${randomUUID()}`;
+    const locationId = dto.locationId || parentPkg?.location_id || null;
+    // Validate every item quantity up front (finite, > 0, at most 3dp) and
+    // aggregate duplicate product lines so the availability check sees
+    // the true total per product, not one line at a time.
+    const validatedItems = (dto.items || []).map((item) => ({
+      productId: Number(item.productId),
+      quantity: this.validatePackageQty(item.quantity, 'Package item quantity'),
+      unitName: item.unitName || 'قطعة',
+      batchNumber: item.batchNumber || null,
+      serialNumbers: item.serialNumbers ? JSON.stringify(item.serialNumbers) : null,
+    }));
+    const reserveByProduct = new Map<number, number>();
+    for (const item of validatedItems) {
+      reserveByProduct.set(item.productId, this.round3((reserveByProduct.get(item.productId) || 0) + item.quantity));
+    }
+    const reserveItems = Array.from(reserveByProduct.entries()).map(([productId, qty]) => ({ productId, qty }));
 
     // Execute in transaction
     await (this.db as any).transaction().execute(async (trx: any) => {
+      // INV-WAREHOUSE-PACKAGE-STOCK-MOVEMENT: sealing stock is a
+      // reservation through the canonical ledger, not a second stock.
+      // The on-hand quantities do not move (no journal: this is a
+      // reservation, not a physical count), but the reserved quantity
+      // rises so the sealed units are no longer sellable — a second
+      // pack of the same stock is refused by the ledger's
+      // availability check. The reserve runs first, inside the same
+      // transaction, so a refused pack leaves no package row behind.
+      // A child package reserves its OWN items only; stock already
+      // sealed in the parent is never re-reserved here, so a nested
+      // pack cannot double-count the same units.
+      if (reserveItems.length > 0) {
+        const branchId = await this.resolveBranchId(trx, tenantId, locationId);
+        await reserveLocationStock(trx, {
+          tenantId,
+          accountId: scope.accountId,
+          branchId,
+          locationId,
+          items: reserveItems,
+        });
+      }
+
       await trx
         .insertInto('warehouse_packages')
         .values({
@@ -97,7 +165,7 @@ export class WarehousePackagesService {
           package_type: dto.packageType,
           parent_package_id: dto.parentPackageId || null,
           warehouse_id: dto.warehouseId || parentPkg?.warehouse_id || null,
-          location_id: dto.locationId || parentPkg?.location_id || null,
+          location_id: locationId,
           status: 'sealed',
           gross_weight_kg: dto.grossWeightKg || null,
           net_weight_kg: dto.netWeightKg || null,
@@ -108,8 +176,8 @@ export class WarehousePackagesService {
         })
         .execute();
 
-      if (dto.items && dto.items.length > 0) {
-        for (const item of dto.items) {
+      if (validatedItems.length > 0) {
+        for (const item of validatedItems) {
           await trx
             .insertInto('warehouse_package_items')
             .values({
@@ -118,9 +186,9 @@ export class WarehousePackagesService {
               package_id: packageId,
               product_id: item.productId,
               quantity: item.quantity,
-              unit_name: item.unitName || 'قطعة',
-              batch_number: item.batchNumber || null,
-              serial_numbers: item.serialNumbers ? JSON.stringify(item.serialNumbers) : null,
+              unit_name: item.unitName,
+              batch_number: item.batchNumber,
+              serial_numbers: item.serialNumbers,
               created_at: new Date(),
             })
             .execute();
@@ -321,7 +389,44 @@ export class WarehousePackagesService {
     }
 
     await (this.db as any).transaction().execute(async (trx: any) => {
+      // INV-WAREHOUSE-PACKAGE-STOCK-MOVEMENT: every release below runs
+      // at the package's own location — the same location the pack
+      // reserved at — in the same transaction as the item-row write,
+      // so a release can never land without its row disappearing (or
+      // shrinking) and can never run twice for the same row: a second
+      // unpack finds no row left to release. Child packages are only
+      // detached, never unpacked, so their own reservations survive.
+      const branchId = await this.resolveBranchId(trx, tenantId, pkg.location_id == null ? null : Number(pkg.location_id));
+      const locationId = pkg.location_id == null ? null : Number(pkg.location_id);
+
       if (dto.action === 'unpack_all') {
+        // Release only this package's DIRECT items. Nested child
+        // packages stay sealed with their own reservations intact —
+        // releasing them here would return stock that is still sealed
+        // inside a child, and the child would release it again when
+        // it is unpacked.
+        const directItems = await trx
+          .selectFrom('warehouse_package_items')
+          .select(['product_id', 'quantity'])
+          .where('package_id', '=', id)
+          .where('tenant_id', '=', tenantId)
+          .execute();
+        const releaseByProduct = new Map<number, number>();
+        for (const row of directItems as any[]) {
+          const productId = Number(row.product_id);
+          releaseByProduct.set(productId, this.round3((releaseByProduct.get(productId) || 0) + Number(row.quantity || 0)));
+        }
+        const releaseItems = Array.from(releaseByProduct.entries()).map(([productId, qty]) => ({ productId, qty }));
+        if (releaseItems.length > 0) {
+          await releaseLocationStock(trx, {
+            tenantId,
+            accountId: scope.accountId,
+            branchId,
+            locationId,
+            items: releaseItems,
+          });
+        }
+
         // Detach all nested child packages
         await trx
           .updateTable('warehouse_packages')
@@ -345,6 +450,9 @@ export class WarehousePackagesService {
           .where('tenant_id', '=', tenantId)
           .execute();
       } else if (dto.action === 'remove_child_package' && dto.targetChildPackageId) {
+        // Detach only: the child stays sealed, so its reservation
+        // stays with it. Releasing here would make sealed stock
+        // sellable while it is still inside the child package.
         await trx
           .updateTable('warehouse_packages')
           .set({ parent_package_id: null, updated_at: new Date() })
@@ -353,12 +461,53 @@ export class WarehousePackagesService {
           .where('tenant_id', '=', tenantId)
           .execute();
       } else if (dto.action === 'remove_item' && dto.targetPackageItemId) {
-        await trx
-          .deleteFrom('warehouse_package_items')
+        const itemRow = await trx
+          .selectFrom('warehouse_package_items')
+          .select(['id', 'product_id', 'quantity'])
           .where('id', '=', dto.targetPackageItemId)
           .where('package_id', '=', id)
           .where('tenant_id', '=', tenantId)
-          .execute();
+          .executeTakeFirst();
+        if (!itemRow) {
+          throw new NotFoundException('Package item not found');
+        }
+        const itemQty = this.round3((itemRow as any).quantity);
+        // Partial unpack: release only the unpacked quantity and
+        // shrink the row; a full unpack releases it all and deletes
+        // the row. Either way the released quantity is exactly the
+        // quantity taken out of the package, once.
+        let releaseQty = itemQty;
+        if (dto.quantity != null) {
+          releaseQty = this.validatePackageQty(dto.quantity, 'Unpack quantity');
+          if (releaseQty > itemQty) {
+            throw new BadRequestException(
+              `Unpack quantity ${releaseQty} exceeds the packaged quantity ${itemQty} for this item`,
+            );
+          }
+        }
+        await releaseLocationStock(trx, {
+          tenantId,
+          accountId: scope.accountId,
+          branchId,
+          locationId,
+          items: [{ productId: Number((itemRow as any).product_id), qty: releaseQty }],
+        });
+        if (releaseQty < itemQty) {
+          await trx
+            .updateTable('warehouse_package_items')
+            .set({ quantity: this.round3(itemQty - releaseQty) })
+            .where('id', '=', dto.targetPackageItemId)
+            .where('package_id', '=', id)
+            .where('tenant_id', '=', tenantId)
+            .execute();
+        } else {
+          await trx
+            .deleteFrom('warehouse_package_items')
+            .where('id', '=', dto.targetPackageItemId)
+            .where('package_id', '=', id)
+            .where('tenant_id', '=', tenantId)
+            .execute();
+        }
       }
     });
 

@@ -82,6 +82,18 @@ export class UnpackPackageDto {
   @IsOptional()
   @IsString()
   targetChildPackageId?: string;
+
+  /**
+   * INV-WAREHOUSE-PACKAGE-STOCK-MOVEMENT: partial unpack of one item
+   * (remove_item only). Releases exactly this quantity and shrinks the
+   * item row; omitted (or equal to the item quantity) unpacks the
+   * whole item. Must be > 0, at most 3dp, and no more than the item
+   * holds — the service enforces the cap.
+   */
+  @IsOptional()
+  @IsNumber()
+  @Min(0.0001)
+  quantity?: number;
 }
 
 export class UpdatePackageStatusDto {
