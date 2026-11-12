@@ -7730,17 +7730,43 @@ export class VanSalesService {
         // Try to resolve HR employee if not already linked
         let resolvedEmployeeId = item.employeeId ? Number(item.employeeId) : null;
         if (!resolvedEmployeeId) {
-          const candidateEmp = await trxAny
-            .selectFrom('hr_employees')
-            .select(['id', 'display_name'])
-            .where('tenant_id', '=', tenantId)
-            .where((eb: any) =>
-              eb.or([
-                item.repNationalId ? eb('national_id', '=', item.repNationalId) : eb('id', '=', -1),
-                eb('display_name', 'ilike', `%${item.repName}%`),
-              ])
-            )
-            .executeTakeFirst();
+          // INV-REP-EMPLOYEE-MATCH-DETERMINISTIC (M3, A4): the old
+          // match was one unordered OR query — `display_name ILIKE
+          // %repName%` OR `national_id = …` with executeTakeFirst()
+          // and no ORDER BY — so with several matching employees the
+          // linked employee was whichever row the planner returned
+          // first, and a % or _ in the rep name matched spuriously
+          // as a LIKE wildcard. The match is now deterministic in
+          // two ordered steps: (1) an exact national_id match wins
+          // over any name match; (2) the name match escapes LIKE
+          // wildcards (% _ and backslash) and orders by id, so the
+          // same input always links the same employee. The link is
+          // still permanent (written to delivery_representatives
+          // below), so determinism here is what keeps a rep's
+          // shortage off the wrong employee's pay.
+          let candidateEmp: { id: number; display_name: string } | undefined;
+          if (item.repNationalId) {
+            candidateEmp = await trxAny
+              .selectFrom('hr_employees')
+              .select(['id', 'display_name'])
+              .where('tenant_id', '=', tenantId)
+              .where('national_id', '=', item.repNationalId)
+              .orderBy('id', 'asc')
+              .executeTakeFirst();
+          }
+          if (!candidateEmp) {
+            const escapedName = String(item.repName || '')
+              .replace(/\\/g, '\\\\')
+              .replace(/%/g, '\\%')
+              .replace(/_/g, '\\_');
+            candidateEmp = await trxAny
+              .selectFrom('hr_employees')
+              .select(['id', 'display_name'])
+              .where('tenant_id', '=', tenantId)
+              .where(sql<boolean>`display_name ILIKE ${`%${escapedName}%`} ESCAPE '\\'`)
+              .orderBy('id', 'asc')
+              .executeTakeFirst();
+          }
 
           if (candidateEmp?.id) {
             resolvedEmployeeId = Number(candidateEmp.id);
