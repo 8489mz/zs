@@ -762,9 +762,19 @@ export class CatalogProductService {
     const { q, barcode, limit, requestedLocationId, requestedBranchId, view, isFullCatalog, categoryId } = this.parsePosProductLookupQuery(query);
     const offerCapabilities = await this.getProductOfferColumnCapabilities();
     const scopedLocation = requestedLocationId > 0 ? await this.inventoryScope.assertLocationScope(requestedLocationId, actor).catch(() => null) : null;
-    const productRows = barcode
-      ? await this.findPosProductsByBarcode(barcode, limit, actor)
-      : await this.searchPosProducts(q, limit, view === 'offers' ? 'offers' : 'all', actor, categoryId);
+    let productRows: PosProductLookupRow[];
+    if (barcode) {
+      productRows = await this.findPosProductsByBarcode(barcode, limit, actor);
+      // POS-PARTIAL-CODE-FALLBACK: an exact barcode/SKU/serial/unit match
+      // keeps priority; only when it returns nothing do we fall back to
+      // substring search (LIKE %term% on barcode/sku/name), so a partial
+      // code like "200" finds barcodes containing it instead of [].
+      if (!productRows.length) {
+        productRows = await this.searchPosProducts(barcode, limit, view === 'offers' ? 'offers' : 'all', actor, categoryId);
+      }
+    } else {
+      productRows = await this.searchPosProducts(q, limit, view === 'offers' ? 'offers' : 'all', actor, categoryId);
+    }
 
     const uniqueRows = this.uniquePosProductRows(productRows).slice(0, limit);
     const productIds = uniqueRows.map((product) => Number(product.id));
