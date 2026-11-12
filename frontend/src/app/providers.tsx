@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { applyAccentColorToDocument } from '@/lib/theme';
 import { setGlobalSystemCurrency } from '@/lib/currencies';
+import { usePosExitTrace } from './pos-exit-trace';
 
 function ThemeProvider({ children }: PropsWithChildren) {
   const theme = useAuthStore((state) => state.theme);
@@ -75,6 +76,9 @@ export const queryClient = new QueryClient({
 });
 
 export function AppProviders({ children }: PropsWithChildren) {
+  // INV-POS-EXIT-TRACE: flag-gated (localStorage `zs:pos-exit-trace=1`) runtime
+  // trace of one POS exit; inert when the flag is off.
+  usePosExitTrace(queryClient);
   useEffect(() => {
     const runtime = (window as unknown as { electronRuntime?: { onBackendReady?: (cb: () => void) => () => void } }).electronRuntime;
     if (runtime && typeof runtime.onBackendReady === 'function') {
