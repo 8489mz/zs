@@ -82,7 +82,10 @@ export function cachedTranslate(
   const cacheKey = `${i18n.language}\0${ns}\0${key}\0${defaultValue ?? ''}`;
   const hit = cache.get(cacheKey);
   if (hit !== undefined) return hit;
-  const result = i18n.t(key, options as TOptions | string) as unknown;
+  const result =
+    typeof options === 'string'
+      ? (i18n.t(key, options) as unknown)
+      : (i18n.t(key, options as TOptions) as unknown);
   if (typeof result === 'string') cache.set(cacheKey, result);
   return result as string;
 }

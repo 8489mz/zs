@@ -230,7 +230,6 @@ function createPosMock() {
     resetPosDraft: vi.fn(),
     fillPaidAmount: vi.fn(),
     setPaymentPreset: vi.fn(),
-    setPaymentType: vi.fn(),
     handleQuickCustomerSubmit: vi.fn(),
     handleSubmit: vi.fn(),
     printReceiptNow: vi.fn(),
