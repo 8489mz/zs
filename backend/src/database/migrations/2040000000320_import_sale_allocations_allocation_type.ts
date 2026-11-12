@@ -2,7 +2,7 @@ import type { Migration } from 'kysely';
 import { sql } from 'kysely';
 
 /*
- * 0319 — ensure allocation_type on import_sale_allocations
+ * 0320 — ensure allocation_type on import_sale_allocations
  * (INV-RETURN-IMPORT-ALLOCATION-TYPE-COLUMN).
  *
  * GROUNDING: restoreImportLotsFromSalesReturn in

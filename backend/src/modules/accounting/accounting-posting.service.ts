@@ -31,7 +31,7 @@ type JournalLineDraft = {
   description: string;
   debit: number;
   credit: number;
-  partnerType: 'none' | 'customer' | 'supplier' | 'employee';
+  partnerType: 'none' | 'customer' | 'supplier' | 'employee' | 'rep';
   partnerId: number | null;
   branchId: number | null;
   locationId: number | null;
@@ -836,6 +836,8 @@ export class AccountingPostingService {
       ['suppliers', 'partnerId', lines.filter(line => line.partnerType === 'supplier')],
       // Cashier custody uses users.id; HR settlements use hr_employees.id.
       [params.sourceType === 'cashier_shift_variance' ? 'users' : 'hr_employees', 'partnerId', lines.filter(line => line.partnerType === 'employee')],
+      // M12 (INV-REP-CUSTODY-LEDGER): a rep custody leg names a delivery_representatives.id.
+      ['delivery_representatives', 'partnerId', lines.filter(line => line.partnerType === 'rep')],
       ['branches', 'branchId', lines], ['stock_locations', 'locationId', lines], ['cost_centers', 'costCenterId', lines],
     ] as const) {
       const ids = Array.from(new Set(values.map((line: any) => line[field]).filter((id: any) => id != null).map(Number)));
@@ -2340,27 +2342,27 @@ export class AccountingPostingService {
   }
 
   /**
-   * D-SF-02 (INV-SF-COD-CUSTODY-GL): the receivable a courier is
-   * carrying moves off the customer the moment the order is
-   * dispatched — Dr 1130 partnerType 'none' (courier custody, the
-   * van pattern: postSale already books van field cash as 1130
-   * 'none' "عهدة نقدية لدى مندوب التوزيع") / Cr 1130 partnerType
-   * 'customer'. The caller (dispatchOrders) moves the customer
-   * ledger in the same transaction via its own ledger leg; this
-   * method posts only the GL half.
+   * D-SF-02 (INV-SF-COD-CUSTODY-GL) + M12 (INV-REP-CUSTODY-LEDGER): the
+   * receivable a courier is carrying moves off the customer the moment
+   * the order is dispatched — Dr 1130 partnerType 'rep' + partnerId =
+   * the delivery_representatives.id (per-rep custody, so the GL itself
+   * carries a balance per rep to reconcile against) / Cr 1130
+   * partnerType 'customer'. The caller (dispatchOrders) moves the
+   * customer ledger in the same transaction via its own ledger leg;
+   * this method posts only the GL half.
    *
    * Decisions (recorded):
-   * - partnerType 'none', NOT 'delivery_rep': the DB check
-   *   constraint on journal_entry_lines (migration
-   *   2040000000110) allows only
-   *   ('none','customer','supplier','employee'), and
-   *   syncPostedPartnerLedger throws for any control-account line
-   *   whose partner is not customer/supplier. A new partner type
-   *   would need a migration plus a sync exemption for every
-   *   control-account reader. The van precedent already books
-   *   courier custody as 1130 'none'; the rep is identified by
-   *   the description + sales.delivery_rep_id, never by a new
-   *   partner value.
+   * - partnerType 'rep' (M12, supersedes the old 'none' shape): the
+   *   old 'none' debit mixed every rep's custody into one aggregate
+   *   1130 balance with no per-rep balance to reconcile against.
+   *   Migration 0319 extends the journal_entry_lines CHECK (0110
+   *   precedent: DROP + ADD) to include 'rep'; the partner id is a
+   *   delivery_representatives.id, validated tenant-scoped in
+   *   insertPostedJournal. No sync exemption is needed:
+   *   syncPostedPartnerLedger runs only for its 12 listed source
+   *   types, and the custody / settle / return source types are not
+   *   among them. The van precedent (1130 'none' field cash) is a
+   *   different flow and keeps its shape.
    * - The amount is the REMAINING receivable
    *   (deliverySettlementBasis), not the original total: a return
    *   before dispatch already reversed part of it on the customer
@@ -2425,8 +2427,8 @@ export class AccountingPostingService {
       description: `عهدة نقدية لدى مندوب التوصيل من فاتورة #${docNo}`,
       debit: amount,
       credit: 0,
-      partnerType: 'none',
-      partnerId: null,
+      partnerType: 'rep',
+      partnerId: repId,
       branchId,
       locationId,
     });
@@ -2476,6 +2478,73 @@ export class AccountingPostingService {
       .where('status', '=', 'posted')
       .executeTakeFirst();
     return Boolean(existing);
+  }
+
+  /**
+   * M12 (INV-REP-CUSTODY-LEDGER): the partner identity of the custody
+   * debit a dispatch posted for this sale — the leg the settle /
+   * return credit must mirror so the per-rep balance clears. Post-M12
+   * that is ('rep', repId); an order dispatched before M12 carries
+   * the old ('none', null) leg, and mirroring it keeps the
+   * transitional order clearing exactly where its debit sits instead
+   * of driving the rep balance negative. Falls back to ('none',
+   * null) when no reclassification exists or its debit leg cannot be
+   * read — the pre-M12 shape.
+   */
+  private async deliveryCustodyPartner(
+    queryable: DbOrTx,
+    saleId: number,
+  ): Promise<{ partnerType: 'rep' | 'none'; partnerId: number | null }> {
+    const entry = await queryable.selectFrom('journal_entries').select('id')
+      .where('source_type', '=', 'delivery_custody_reclassification')
+      .where('source_id', '=', saleId)
+      .where('status', '=', 'posted')
+      .executeTakeFirst();
+    if (!entry) return { partnerType: 'none', partnerId: null };
+    const leg = await queryable.selectFrom('journal_entry_lines')
+      .select(['partner_type', 'partner_id'])
+      .where('journal_entry_id', '=', Number(entry.id))
+      .where('debit', '>', 0)
+      .executeTakeFirst();
+    if (!leg) return { partnerType: 'none', partnerId: null };
+    const partnerType = String((leg as any).partner_type || 'none');
+    return {
+      partnerType: partnerType === 'rep' ? 'rep' : 'none',
+      partnerId: partnerType === 'rep' && (leg as any).partner_id != null ? Number((leg as any).partner_id) : null,
+    };
+  }
+
+  /**
+   * M12 (INV-REP-CUSTODY-LEDGER): the rep's 1130 custody balance
+   * straight from the GL — net Dr − Cr over posted lines on the 1130
+   * account with partner_type 'rep' and partner_id = repId. This is
+   * the per-rep balance getRepSummary / listOrders can reconcile
+   * against instead of re-deriving it from sales rows; it is
+   * prospective from M12 onward — pre-M12 custody sits on 'none'
+   * legs and is not attributed to any rep here (the aggregate 1130
+   * balance still reconciles in total). A rep with no custody reads 0.
+   */
+  async getRepCustodyBalance(
+    queryable: DbOrTx,
+    repId: number,
+    auth: AuthContext,
+  ): Promise<number> {
+    const scope = requireTenantScope(auth);
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
+    const customerAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, null, '1130');
+    const row = await queryable
+      .selectFrom('journal_entry_lines as l')
+      .innerJoin('journal_entries as j', (join) => join
+        .onRef('j.id', '=', 'l.journal_entry_id')
+        .onRef('j.tenant_id', '=', 'l.tenant_id'))
+      .select(sql<number>`coalesce(sum(l.debit - l.credit), 0)`.as('balance'))
+      .where('l.tenant_id', '=', scope.tenantId)
+      .where('l.account_id', '=', customerAccountId)
+      .where(sql<boolean>`l.partner_type = 'rep'`)
+      .where('l.partner_id', '=', repId)
+      .where('j.status', '=', 'posted')
+      .executeTakeFirst();
+    return this.toMoney(Number((row as any)?.balance || 0), bookDigits);
   }
 
   /**
@@ -2706,6 +2775,12 @@ export class AccountingPostingService {
     const saleInCourierCustody = sale?.id
       ? await this.hasDeliveryCustodyReclassification(queryable, Number(sale.id), auth)
       : false;
+    // M12 (INV-REP-CUSTODY-LEDGER): a receivable-tender return of a
+    // dispatched sale credits the SAME custody partner the dispatch
+    // posted (deliveryCustodyPartner), so the per-rep balance nets.
+    const custodyPartner = saleInCourierCustody && sale?.id
+      ? await this.deliveryCustodyPartner(queryable, Number(sale.id))
+      : null;
     const lines: JournalLineDraft[] = [];
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
     const branchId = returnDocument.branch_id ? Number(returnDocument.branch_id) : null;
@@ -2831,8 +2906,8 @@ export class AccountingPostingService {
           description: `تسوية مرتجع فاتورة رقم ${invoiceNo} - ${allocation.tender}`,
           debit: 0,
           credit: lineAmount,
-          partnerType: custodyReceivable ? 'none' : (partner && customerPartnerId ? 'customer' : 'none'),
-          partnerId: custodyReceivable ? null : (partner ? customerPartnerId : null),
+          partnerType: custodyReceivable && custodyPartner ? custodyPartner.partnerType : (partner && customerPartnerId ? 'customer' : 'none'),
+          partnerId: custodyReceivable && custodyPartner ? custodyPartner.partnerId : (partner ? customerPartnerId : null),
           branchId,
           locationId,
         });
@@ -5744,13 +5819,17 @@ export class AccountingPostingService {
       branchId,
       locationId,
     });
-    // D-SF-02 (INV-SF-COD-CUSTODY-GL): the receivable was moved to
-    // courier custody at dispatch, so the settlement credits the
-    // custody leg (partnerType 'none'), never the customer leg —
+    // D-SF-02 (INV-SF-COD-CUSTODY-GL) + M12 (INV-REP-CUSTODY-LEDGER):
+    // the receivable was moved to courier custody at dispatch, so the
+    // settlement credits the custody leg — the SAME partner the
+    // dispatch posted (deliveryCustodyPartner: 'rep' + repId post-M12,
+    // the old 'none' for a pre-M12 dispatch) — never the customer leg:
     // crediting the customer would drive it negative while the
-    // custody debit stands. A sale settled without dispatch keeps
+    // custody debit stands, and crediting a different partner would
+    // strand the rep balance. A sale settled without dispatch keeps
     // the old customer-leg credit.
     const inCourierCustody = await this.hasDeliveryCustodyReclassification(queryable, saleId, auth);
+    const custodyPartner = inCourierCustody ? await this.deliveryCustodyPartner(queryable, saleId) : null;
     addBookLine({
       accountId: customerAccountId,
       description: `تسديد مديونية فاتورة #${sale.doc_no || saleId}`,
@@ -5760,8 +5839,8 @@ export class AccountingPostingService {
       // receivable leg, so crediting the full total would
       // over-credit 1130 by the returned share.
       credit: remainingReceivable,
-      partnerType: inCourierCustody ? 'none' : (sale.customer_id ? 'customer' : 'none'),
-      partnerId: inCourierCustody ? null : (sale.customer_id ? Number(sale.customer_id) : null),
+      partnerType: custodyPartner ? custodyPartner.partnerType : (sale.customer_id ? 'customer' : 'none'),
+      partnerId: custodyPartner ? custodyPartner.partnerId : (sale.customer_id ? Number(sale.customer_id) : null),
       branchId,
       locationId,
     });

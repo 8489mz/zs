@@ -1,7 +1,7 @@
 /*
  * backend/test/critical/import-sale-allocations-allocation-type.spec.ts
  * Pins INV-RETURN-IMPORT-ALLOCATION-TYPE-COLUMN:
- * Migration 0319 ensures import_sale_allocations.allocation_type exists
+ * Migration 0320 ensures import_sale_allocations.allocation_type exists
  * with default 'sale' so restoreImportLotsFromSalesReturn does not crash
  * on databases where the table was created without this column.
  */
@@ -12,7 +12,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { Kysely, sql } from 'kysely';
 import { PGliteDialect } from 'kysely-pglite-dialect';
 import { Database } from '../../src/database/database.types';
-import { migration } from '../../src/database/migrations/2040000000319_import_sale_allocations_allocation_type';
+import { migration } from '../../src/database/migrations/2040000000320_import_sale_allocations_allocation_type';
 
 async function main() {
   const pg = new PGlite();

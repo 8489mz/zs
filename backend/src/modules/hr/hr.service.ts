@@ -2907,7 +2907,7 @@ export class HrService {
       const loanDeduction = await this.calculateLoanDeduction(db, employeeId, range.to, tenantId, bookDigits);
 
       const empAdjustmentsResult = await sql<Record<string, unknown>>`
-        SELECT id, adjustment_type, amount_type, amount, accounting_category,
+        SELECT id, adjustment_type, amount_type, amount, accounting_category, source_type, source_id,
           to_char(date, 'YYYY-MM-DD') AS adjustment_date
         FROM hr_employee_adjustments
         WHERE employee_id = ${employeeId} AND tenant_id = ${tenantId} AND status = 'pending' AND date <= ${range.to}
@@ -2917,6 +2917,7 @@ export class HrService {
       let empAdjDeduction = 0;
       let empAdjAssetRecoveryDeduction = 0;
       const appliedAdjIds: number[] = [];
+      const vanSettlementIds: number[] = [];
 
       for (const adj of empAdjustmentsResult.rows) {
         let val: number;
@@ -2950,6 +2951,9 @@ export class HrService {
         }
 
         appliedAdjIds.push(Number(adj.id));
+        if (clean(adj.source_type) === 'van_sales_settlement' && /^\d+$/.test(clean(adj.source_id))) {
+          vanSettlementIds.push(Number(adj.source_id));
+        }
       }
 
       if (appliedAdjIds.length > 0) {
@@ -2959,6 +2963,31 @@ export class HrService {
           WHERE id IN (${sql.join(appliedAdjIds)})
             AND tenant_id = ${tenantId} AND employee_id = ${employeeId}
         `.execute(db);
+        if (vanSettlementIds.length > 0) {
+          // INV-REP-PAYROLL-TARGET-MONTH (M2, A10): the run that
+          // actually applied a van-settlement deduction is written
+          // back onto the settlement row, so a paid item traces to
+          // its run. The push writes the targeted run; the rebuild
+          // writes the run that applied it (they differ when the
+          // targeted run never rebuilt the item and a later run
+          // picked it up). Migration 0225 declares the column;
+          // harnesses modelling the table without it skip the
+          // write instead of failing the rebuild.
+          const linkColumn = await sql<{ exists: boolean }>`
+            SELECT EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_name = 'van_rep_financial_settlements'
+                AND column_name = 'payroll_run_id'
+            ) AS exists
+          `.execute(db);
+          if (linkColumn.rows[0]?.exists === true) {
+            await sql`
+              UPDATE van_rep_financial_settlements
+              SET payroll_run_id = ${runId}, updated_at = NOW()
+              WHERE id IN (${sql.join(vanSettlementIds)}) AND tenant_id = ${tenantId}
+            `.execute(db);
+          }
+        }
       }
 
       const review = autoReviews.get(employeeId);

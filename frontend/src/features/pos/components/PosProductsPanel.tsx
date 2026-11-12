@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/shared/ui/button';
 import { Card } from '@/shared/ui/card';
 import { StarIcon, SlidersIcon, PlusIcon, ChevronDownIcon, XIcon, KeyboardIcon } from '@/shared/components/icons/AppIcons';
-import { formatCurrency, formatCurrencyWithCode } from '@/lib/format';
+import { formatCurrencyWithCode } from '@/lib/format';
 import { sharedProductsApi } from '@/shared/api/products';
 import {
   buildPosProductGroups,

@@ -249,6 +249,49 @@ async function run(): Promise<void> {
   }
 
   {
+    // POS-PARTIAL-CODE-FALLBACK: an exact full barcode still wins outright.
+    const db = new FakeDb();
+    db.products = [
+      product(1, 'Item A', '200261055320', 10),
+      product(2, 'Item B', '120045678901', 12),
+      product(3, 'Item C', '555123456789', 5),
+    ];
+    const { service } = createService(db);
+    const result = await service.listPosProducts({ barcode: '200261055320' }, cashier);
+    assert.deepEqual(productIds(result), ['1']);
+  }
+
+  {
+    // POS-PARTIAL-CODE-FALLBACK: a partial code falls back to substring
+    // search when no exact barcode/SKU/serial/unit matches.
+    const db = new FakeDb();
+    db.products = [
+      product(1, 'Item A', '200261055320', 10),
+      product(2, 'Item B', '120045678901', 12),
+      product(3, 'Item C', '555123456789', 5),
+    ];
+    db.searchNeedle = '200';
+    const { service } = createService(db);
+    const result = await service.listPosProducts({ barcode: '200' }, cashier);
+    assert.deepEqual(productIds(result), ['1', '2']);
+  }
+
+  {
+    // POS-PARTIAL-CODE-FALLBACK: an unknown code still returns [] — the
+    // fallback must not turn a miss into a browse of the whole catalog.
+    const db = new FakeDb();
+    db.products = [
+      product(1, 'Item A', '200261055320', 10),
+      product(2, 'Item B', '120045678901', 12),
+      product(3, 'Item C', '555123456789', 5),
+    ];
+    db.searchNeedle = '999999';
+    const { service } = createService(db);
+    const result = await service.listPosProducts({ barcode: '999999' }, cashier);
+    assert.deepEqual(productIds(result), []);
+  }
+
+  {
     const db = new FakeDb();
     db.products = [
       product(1, 'Fresh Milk', 'MILK-1', 9),

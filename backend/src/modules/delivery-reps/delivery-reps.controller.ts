@@ -87,6 +87,16 @@ export class DeliveryRepsController {
     return this.service.settleOrder(saleId, req.authContext!, body);
   }
 
+  @Post('settle-partial/:saleId')
+  @RequirePermissions('deliveryReps')
+  settlePartialOrder(
+    @Param('saleId', ParseIntPipe) saleId: number,
+    @Body() body: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string; countedCashAmount?: number },
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
+    return this.service.settlePartialOrder(saleId, req.authContext!, body);
+  }
+
   @Post(':id/settle-all')
   @RequirePermissions('deliveryReps')
   settleAllOrders(

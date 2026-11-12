@@ -37,6 +37,6 @@
 ### INV-RETURN-IMPORT-ALLOCATION-TYPE-COLUMN 2026-11-12 — ضمان وجود عمود allocation_type لجدول تخصيصات مبيعات الاستيراد
 
 - دالة `restoreImportLotsFromSalesReturn` في `import-lot-allocation.helper.ts` تقوم بالفلترة على `import_sale_allocations.allocation_type = 'sale'`. في قواعد البيانات التي تم إنشاؤها بدون هذا العمود (أو بحالة تسبق الترحيل 0239)، كان أي مرتجع مبيعات غير مركب يفشل بالخطأ 500 في `ReturnsService.createSaleReturn`.
-- ترحيل إضافي `2040000000319_import_sale_allocations_allocation_type.ts` يضمن إضافة العمود `allocation_type VARCHAR(50) DEFAULT 'sale'` باستخدام `ADD COLUMN IF NOT EXISTS` مع التراجع الآمن `DROP COLUMN IF EXISTS`، لحماية أي قاعدة بيانات قديمة أو منشأة يدوياً.
-- المصدر: `backend/src/database/migrations/2040000000319_import_sale_allocations_allocation_type.ts`، `backend/src/modules/import-sales/helpers/import-lot-allocation.helper.ts`.
+- ترحيل إضافي `2040000000320_import_sale_allocations_allocation_type.ts` يضمن إضافة العمود `allocation_type VARCHAR(50) DEFAULT 'sale'` باستخدام `ADD COLUMN IF NOT EXISTS` مع التراجع الآمن `DROP COLUMN IF EXISTS`، لحماية أي قاعدة بيانات قديمة أو منشأة يدوياً.
+- المصدر: `backend/src/database/migrations/2040000000320_import_sale_allocations_allocation_type.ts`، `backend/src/modules/import-sales/helpers/import-lot-allocation.helper.ts`.
 - الاختبار: `backend/test/critical/import-sale-allocations-allocation-type.spec.ts` (تطبيق الترحيل على جدول بدون العمود، التحقق من قراءة الصفوف السابقة بقيمة 'sale'، إدخال صفوف جديدة بنوع 'return'، التحقق من قابلية الإعادة idempotency والتراجع down) — أخضر محلياً؛ `backend/test/critical/returns-conditional-discount-forfeit.spec.ts` — أخضر.
