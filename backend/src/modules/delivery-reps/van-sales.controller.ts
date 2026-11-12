@@ -5,6 +5,7 @@ import { VanPreSalesService } from './services/van-pre-sales.service';
 import { VanPromotionsService } from './services/van-promotions.service';
 import { VanRoutesService } from './services/van-routes.service';
 import { VanFieldExecutionService } from './services/van-field-execution.service';
+import { SubmitLoadRequisitionDto } from './dto/submit-load-requisition.dto';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
@@ -388,14 +389,21 @@ export class VanSalesController {
   @Post('requisitions')
   async submitLoadRequisition(
     @Headers('authorization') authHeader: string,
-    @Body() body: {
-      sourceWarehouseId?: number;
-      items: { productId: number; qty: number; sourceWarehouseId?: number; sourceWarehouseName?: string }[];
-      notes?: string;
-    },
+    @Body() body: SubmitLoadRequisitionDto,
   ) {
     const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
-    return this.vanSalesService.submitLoadRequisition(driver.repId, driver.tenantId, driver.accountId, body);
+    // INV-DRIVER-REQUISITION-DTO-WHITELIST: the driver route never
+    // forwards allowMultiplePending. The DTO rejects it at the
+    // boundary and the controller forces false here, so a driver can
+    // never bypass the single-pending-requisition rule. The admin
+    // funnel (createLoadRequisitionByAdmin) is the only path that
+    // sets the flag, from dispatchImmediately.
+    return this.vanSalesService.submitLoadRequisition(driver.repId, driver.tenantId, driver.accountId, {
+      sourceWarehouseId: body.sourceWarehouseId,
+      items: body.items,
+      notes: body.notes,
+      allowMultiplePending: false,
+    });
   }
 
   @Get('requisitions')
