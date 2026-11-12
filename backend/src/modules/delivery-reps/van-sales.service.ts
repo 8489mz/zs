@@ -3235,6 +3235,32 @@ export class VanSalesService {
 
     // Register collection promise IMMEDIATELY (synchronously) before any await
     const colPromise = (async () => {
+      // INV-REP-FIELD-COLLECTION-MONEY-PRECISION (M10/B6): REJECT — never
+      // silently round — a collection amount that does not fit the
+      // tenant's money digits, mirroring the general customer-payment
+      // path (createCustomerPayment, INVALID_PAYMENT_AMOUNT). Rounding
+      // would silently alter the cash the driver actually holds and
+      // the amount the customer actually paid, while only the journal
+      // rounds (postVanFieldCollection via toBookMoney) — so the
+      // payment row, customer balance, trip totals and ledger would
+      // disagree with the journal by fractions of a minor unit on
+      // every collection. This runs FIRST inside the closure — before
+      // the dedup reads and before recordFieldCollectionInternal — so
+      // a refused amount writes nothing: no payment row, no balance
+      // change, no JE, no trip total. It stays inside the closure
+      // (rather than above the promise registration) so concurrent
+      // identical requests still register synchronously and dedup.
+      const baseCurrency = await tenantBaseCurrency(this.anyDb, tenantId);
+      const moneyDigits = currencyMoneyDigits(baseCurrency);
+      const scale = 10 ** moneyDigits;
+      if (Math.abs(amount * scale - Math.round(amount * scale)) > 0.000001) {
+        throw new AppError(
+          `Field collection amount must have at most ${moneyDigits} decimal places for the tenant currency (${baseCurrency})`,
+          'INVALID_PAYMENT_AMOUNT',
+          400,
+        );
+      }
+
       // 3. Database Idempotency Check via client_tx_id, falling back to
       // the legacy [tx:clientTxId] note tag for rows written before
       // migration 2040000000268 (whose backfill could not parse a tag).
