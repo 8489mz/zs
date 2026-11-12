@@ -252,6 +252,9 @@ interface EmptyCartProps {
   loyaltyPointsRedeemed: number;
   deliveryFee: number;
   submitMessage: string;
+  /* INV-POS-EMPTY-CART-MUTATION-RESET-GATE: the terminal state of the
+   * sale mutation. Absent = idle (no finished sale to clear). */
+  createSaleState?: { isSuccess?: boolean; isError?: boolean };
 }
 
 function setupEmptyCart() {
@@ -272,7 +275,7 @@ function setupEmptyCart() {
   };
   const render = (initialProps: EmptyCartProps) =>
     renderHook(
-      ({ cart, tipAmount, loyaltyPointsRedeemed, deliveryFee, submitMessage }: EmptyCartProps) =>
+      ({ cart, tipAmount, loyaltyPointsRedeemed, deliveryFee, submitMessage, createSaleState }: EmptyCartProps) =>
         usePosWorkspaceEffects({
           cart,
           customerId: '7',
@@ -311,7 +314,7 @@ function setupEmptyCart() {
           setSelectedLineKey: setters.setSelectedLineKey,
           discountApprovalSecret: '',
           setDiscountApprovalSecret: setters.setDiscountApprovalSecret,
-          createSale: { reset: setters.createSaleReset },
+          createSale: { reset: setters.createSaleReset, ...(createSaleState ?? {}) },
         }),
       { initialProps },
     );
@@ -367,7 +370,7 @@ describe('empty cart resets order extras (T15-A)', () => {
     vi.clearAllMocks();
   });
 
-  it('trash-deletes the only item with tip 10 + 200 redeemed points + fee 15: zeroes all three extras, clears the banner and resets createSale', () => {
+  it('trash-deletes the only item with tip 10 + 200 redeemed points + fee 15: zeroes all three extras, clears the banner, and does NOT reset an idle createSale', () => {
     const { setters, render } = setupEmptyCart();
     const { rerender } = render({ cart: [trialLine], tipAmount: 10, loyaltyPointsRedeemed: 200, deliveryFee: 15, submitMessage: 'mismatch banner' });
 
@@ -379,11 +382,36 @@ describe('empty cart resets order extras (T15-A)', () => {
     expect(setters.setLoyaltyPointsRedeemed).toHaveBeenCalledWith(0);
     expect(setters.setDeliveryFee).toHaveBeenCalledWith(0);
     expect(setters.setSubmitMessage).toHaveBeenCalledWith('');
-    expect(setters.createSaleReset).toHaveBeenCalledTimes(1);
+    /* INV-POS-EMPTY-CART-MUTATION-RESET-GATE: no sale finished, so the
+     * idle mutation has no stale status to clear — resetting it here is
+     * what self-sustained the exit render loop. */
+    expect(setters.createSaleReset).not.toHaveBeenCalled();
     expect(setters.setSelectedLineKey).toHaveBeenCalledWith('');
   });
 
-  it('mounting with an already-empty cart is harmless: nothing to zero, only the createSale reset fires', () => {
+  it('a finished sale is cleared exactly once when the cart empties (isSuccess)', () => {
+    const { setters, render } = setupEmptyCart();
+    const { rerender } = render({ cart: [trialLine], tipAmount: 0, loyaltyPointsRedeemed: 0, deliveryFee: 0, submitMessage: '', createSaleState: { isSuccess: true } });
+
+    act(() => {
+      rerender({ cart: [], tipAmount: 0, loyaltyPointsRedeemed: 0, deliveryFee: 0, submitMessage: '', createSaleState: { isSuccess: true } });
+    });
+
+    expect(setters.createSaleReset).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed sale is cleared exactly once when the cart empties (isError)', () => {
+    const { setters, render } = setupEmptyCart();
+    const { rerender } = render({ cart: [trialLine], tipAmount: 0, loyaltyPointsRedeemed: 0, deliveryFee: 0, submitMessage: '', createSaleState: { isError: true } });
+
+    act(() => {
+      rerender({ cart: [], tipAmount: 0, loyaltyPointsRedeemed: 0, deliveryFee: 0, submitMessage: '', createSaleState: { isError: true } });
+    });
+
+    expect(setters.createSaleReset).toHaveBeenCalledTimes(1);
+  });
+
+  it('mounting with an already-empty cart is harmless: nothing to zero, and an idle createSale is NOT reset', () => {
     const { setters, render } = setupEmptyCart();
     render({ cart: [], tipAmount: 0, loyaltyPointsRedeemed: 0, deliveryFee: 0, submitMessage: '' });
 
@@ -391,7 +419,7 @@ describe('empty cart resets order extras (T15-A)', () => {
     expect(setters.setLoyaltyPointsRedeemed).not.toHaveBeenCalled();
     expect(setters.setDeliveryFee).not.toHaveBeenCalled();
     expect(setters.setSubmitMessage).not.toHaveBeenCalled();
-    expect(setters.createSaleReset).toHaveBeenCalledTimes(1);
+    expect(setters.createSaleReset).not.toHaveBeenCalled();
   });
 
   it('removing a line that leaves items in the cart does NOT zero the extras or clear the banner', () => {

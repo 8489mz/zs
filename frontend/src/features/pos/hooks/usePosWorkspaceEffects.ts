@@ -99,7 +99,7 @@ export function usePosWorkspaceEffects({
   setTipAmount?: (value: number) => void;
   loyaltyPointsRedeemed?: number;
   setLoyaltyPointsRedeemed?: (value: number) => void;
-  createSale?: { reset?: () => void } | null;
+  createSale?: { reset?: () => void; isSuccess?: boolean; isError?: boolean } | null;
   pagerNumber?: string;
   diningCourse?: string;
   deliveryFeeMode?: 'freelance_courier' | 'store_fleet' | string;
@@ -270,7 +270,17 @@ export function usePosWorkspaceEffects({
       if (loyaltyPointsRedeemed) setLoyaltyPointsRedeemed?.(0);
       if (deliveryFee) setDeliveryFee?.(0);
       if (submitMessage) setSubmitMessage('');
-      createSale?.reset?.();
+      /* INV-POS-EMPTY-CART-MUTATION-RESET-GATE: reset ONLY when the
+       * mutation is in a terminal state. An unconditional reset here
+       * self-sustained a render loop: useMutation returns a fresh object
+       * every render (so the createSale dep "changed" after every render),
+       * and reset() notifies listeners unconditionally, which re-rendered
+       * the workspace and re-ran this effect — hundreds of renders until
+       * the POS route unmounted (~5.4 s live). An idle mutation has no
+       * stale status to clear, so skipping the reset loses nothing; a
+       * finished sale is cleared exactly once, and the flip to idle closes
+       * the gate on the next effect run. */
+      if (createSale?.isSuccess || createSale?.isError) createSale.reset?.();
       return;
     }
     if (selectedLineKey && cart.some((item) => item.lineKey === selectedLineKey)) return;
