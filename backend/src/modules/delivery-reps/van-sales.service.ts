@@ -3206,7 +3206,13 @@ export class VanSalesService {
     if (amount <= 0) throw new AppError('المبلغ المحصل يجب أن يكون أكبر من صفر', 'INVALID_AMOUNT', 400);
 
     const txKey = payload.clientTxId ? `${tenantId}:${payload.tripId}:${payload.clientTxId}` : null;
-    const fingerprintKey = `${tenantId}:${payload.tripId}:${repId}:${payload.customerId}:${amount}`;
+    // INV-REP-FIELD-COLLECTION-DEDUP-KEYS (B3): the fingerprint must
+    // include the payment channel — a cash collection then an
+    // instapay collection of the same amount within 5s are two
+    // different collections, not a retry. The channel resolves by the
+    // same rule the posting uses (omitted method counts as cash), so
+    // a true retry (same channel, same everything) still dedups.
+    const fingerprintKey = `${tenantId}:${payload.tripId}:${repId}:${payload.customerId}:${amount}:${resolveFieldCollectionChannel(payload.paymentMethod)}`;
 
     // 1. In-flight Promise Deduplication: Await concurrent request and return its result
     if (txKey && VanSalesService.inFlightCollectionPromises.has(txKey)) {
@@ -3233,11 +3239,18 @@ export class VanSalesService {
       // the legacy [tx:clientTxId] note tag for rows written before
       // migration 2040000000268 (whose backfill could not parse a tag).
       if (payload.clientTxId) {
+        // INV-REP-FIELD-COLLECTION-DEDUP-KEYS (B8): the client_tx_id
+        // lookup is scoped by van_trip_id as well — a customer key
+        // reused on a different trip is a NEW collection for that
+        // trip, not a replay of the first trip's payment. The legacy
+        // note-tag fallback is scoped the same way: an unscoped tag
+        // match would leave the same hole open through the fallback.
         const existingByColumn = await this.anyDb
           .selectFrom('customer_payments')
           .select(['id', 'amount', 'note'])
           .where('tenant_id', '=', tenantId)
           .where('customer_id', '=', payload.customerId)
+          .where('van_trip_id', '=', payload.tripId)
           .where('client_tx_id', '=', payload.clientTxId)
           .executeTakeFirst();
         const existingPayment = existingByColumn ?? await this.anyDb
@@ -3245,18 +3258,30 @@ export class VanSalesService {
           .select(['id', 'amount', 'note'])
           .where('tenant_id', '=', tenantId)
           .where('customer_id', '=', payload.customerId)
+          .where('van_trip_id', '=', payload.tripId)
           .where('note', 'like', `%[tx:${payload.clientTxId}]%`)
           .executeTakeFirst();
 
         if (existingPayment) {
-          const cust = await this.anyDb.selectFrom('customers').select(['name']).where('id', '=', payload.customerId).where('tenant_id', '=', tenantId).executeTakeFirst();
+          // INV-REP-FIELD-COLLECTION-DEDUP-KEYS (B7): a dedup replay
+          // returns the REAL balances, not 0/0. newBalance is the
+          // customer's current balance (re-read here, after the
+          // original collection posted); previousBalance is that
+          // balance plus the stored payment amount — the balance just
+          // before this collection, the same figure the receipt
+          // screen derives as newBalance + amount. Exact when no
+          // later collection intervened; always a real current
+          // balance, never 0/0.
+          const cust = await this.anyDb.selectFrom('customers').select(['name', 'balance']).where('id', '=', payload.customerId).where('tenant_id', '=', tenantId).executeTakeFirst();
+          const currentBalance = Number(cust?.balance || 0);
+          const paidAmount = Number(existingPayment.amount);
           return {
             ok: true,
             receiptNo: existingPayment.note?.match(/#([A-Z0-9-]+)/)?.[1] || 'COL-SYNCED',
-            amount: Number(existingPayment.amount),
+            amount: paidAmount,
             customerName: cust?.name || 'العميل',
-            previousBalance: 0,
-            newBalance: 0,
+            previousBalance: currentBalance + paidAmount,
+            newBalance: currentBalance,
           };
         }
       }
@@ -3287,14 +3312,19 @@ export class VanSalesService {
         .executeTakeFirst();
 
       if (recentDbPayment) {
-        const cust = await this.anyDb.selectFrom('customers').select(['name']).where('id', '=', payload.customerId).where('tenant_id', '=', tenantId).executeTakeFirst();
+        // INV-REP-FIELD-COLLECTION-DEDUP-KEYS (B7): same real-balance
+        // replay as the clientTxId branch above — the stored twin's
+        // amount plus the customer's current balance.
+        const cust = await this.anyDb.selectFrom('customers').select(['name', 'balance']).where('id', '=', payload.customerId).where('tenant_id', '=', tenantId).executeTakeFirst();
+        const currentBalance = Number(cust?.balance || 0);
+        const paidAmount = Number(recentDbPayment.amount);
         return {
           ok: true,
           receiptNo: recentDbPayment.note?.match(/#([A-Z0-9-]+)/)?.[1] || 'COL-SYNCED',
-          amount: Number(recentDbPayment.amount),
+          amount: paidAmount,
           customerName: cust?.name || 'العميل',
-          previousBalance: 0,
-          newBalance: 0,
+          previousBalance: currentBalance + paidAmount,
+          newBalance: currentBalance,
         };
       }
 
