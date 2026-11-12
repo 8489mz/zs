@@ -13,6 +13,9 @@ describe('adjustment prefill basis', () => {
   it('falls back to the selected location raw qty while the live read is pending', () => {
     expect(resolveAdjustmentPrefill({ availableQty: null, locationQty: 10, globalStock: 12 })).toBe(10);
   });
+  it('falls back to the global stock when both live and location reads are unresolved', () => {
+    expect(resolveAdjustmentPrefill({ availableQty: null, locationQty: null, globalStock: 12 })).toBe(12);
+  });
   it('falls back to the global stock only when no location qty is known', () => {
     expect(resolveAdjustmentPrefill({ availableQty: undefined, locationQty: undefined, globalStock: 12 })).toBe(12);
   });
