@@ -206,16 +206,13 @@ function InlineGroupPicker({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose, searchInputRef, isMobile]);
 
-  const deferredColor = useDeferredValue(selectedColor);
-  const deferredSize = useDeferredValue(selectedSize);
-
   const filteredProducts = useMemo(() => {
     return group.products.filter((product) => {
-      if (deferredColor && String(product.color || '') !== deferredColor) return false;
-      if (deferredSize && String(product.size || '') !== deferredSize) return false;
+      if (selectedColor && String(product.color || '') !== selectedColor) return false;
+      if (selectedSize && String(product.size || '') !== selectedSize) return false;
       return true;
     });
-  }, [deferredColor, deferredSize, group.products]);
+  }, [selectedColor, selectedSize, group.products]);
 
   // Only show filter chips when there are multi-dimensional options (colors AND sizes)
   // or a very long list of single options (>6). If items only have 3 colors, the rows themselves are the colors!
@@ -223,7 +220,7 @@ function InlineGroupPicker({
   const showSizeFilter = (group.sizes.length > 1 && group.colors.length > 0) || group.sizes.length > 6;
 
   const pickerContent = (
-    <div className="pos-workspace pos-inline-picker-overlay" role="presentation">
+    <div className={`pos-inline-picker-overlay ${isMobile ? 'is-mobile' : 'is-desktop'}`} role="presentation">
       <button
         type="button"
         className="pos-inline-picker-backdrop"
@@ -253,6 +250,38 @@ function InlineGroupPicker({
         <div className="pos-inline-picker-head">
           <div className="pos-inline-picker-head-info">
             <span style={{ width: '3.5px', height: '16px', backgroundColor: '#170e5e', borderRadius: '2px', display: 'inline-block', flexShrink: 0 }} />
+            {group.imageUrl ? (
+              <img
+                src={group.imageUrl}
+                alt={group.title}
+                style={{
+                  width: '26px',
+                  height: '26px',
+                  borderRadius: '6px',
+                  objectFit: 'contain',
+                  border: '1px solid #e2e8f0',
+                  flexShrink: 0,
+                  background: '#ffffff',
+                }}
+              />
+            ) : group.products[0]?.icon ? (
+              <div
+                style={{
+                  width: '26px',
+                  height: '26px',
+                  borderRadius: '6px',
+                  background: '#eff6ff',
+                  color: '#1d4ed8',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  border: '1px solid #dbeafe',
+                }}
+              >
+                <ProductIcon name={group.products[0].icon} size={15} />
+              </div>
+            ) : null}
             <h4 title={group.title}>{group.title}</h4>
             <span
               style={{
@@ -487,7 +516,7 @@ function InlineGroupPicker({
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        {formatCurrency(Number(price || 0))}
+                        {formatCurrencyWithCode(Number(price || 0))}
                       </span>
 
                       <span
@@ -1466,7 +1495,7 @@ function PosProductsPanelComponent({
           style={{
             flex: '1 1 0%',
             minHeight: 0,
-            overflowY: openGroup ? 'hidden' : 'auto',
+            overflowY: 'auto',
             overflowX: 'hidden',
             scrollbarWidth: 'none',
             paddingBottom: isMobile ? 'calc(140px + env(safe-area-inset-bottom, 0px))' : '24px',
