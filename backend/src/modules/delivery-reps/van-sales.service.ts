@@ -7583,9 +7583,85 @@ export class VanSalesService {
     const actorUserId = authContext.userId ? Number(authContext.userId) : null;
     const targetMonth = payload.targetMonth || new Date().toISOString().slice(0, 7);
     const results: Array<{ id: number; repName: string; amount: number; success: boolean; message: string }> = [];
+    // INV-REP-PAYROLL-TARGET-MONTH (M2, PD2): resolved inside the
+    // transaction below — the run the deduction is targeted at.
+    let effectiveMonth = targetMonth;
+    let effectiveRunId: number | null = null;
+    let rolledForward = false;
 
     await this.db.transaction().execute(async (trx) => {
       const trxAny = trx as any;
+
+      // INV-REP-PAYROLL-TARGET-MONTH (M2, PD2): targetMonth is the
+      // FIRST payroll run whose period is the target month. The old
+      // code dated the adjustment CURRENT_DATE, so payroll ignored
+      // the month entirely and the deduction landed in whatever run
+      // was built next — the wrong month's wage, or never for a rep
+      // who left before the target month. The adjustment is now
+      // dated inside the effective run's period, so only that run's
+      // rebuild picks it up (pickup is `date <= range.to`). When the
+      // target run's period already passed, the deduction rolls
+      // forward to the nearest following run and the roll-forward is
+      // recorded on the settlement row.
+      const targetRunRow = await trxAny
+        .selectFrom('hr_payroll_runs')
+        .select([
+          'id',
+          sql<string>`to_char(start_date, 'YYYY-MM-DD')`.as('startDate'),
+          sql<boolean>`end_date < CURRENT_DATE`.as('periodPassed'),
+        ])
+        .where('tenant_id', '=', tenantId)
+        .where('period_month', '=', targetMonth)
+        .orderBy('start_date', 'asc')
+        .executeTakeFirst();
+      let effectiveDate = `${targetMonth}-01`;
+      if (targetRunRow) {
+        const periodPassed = (targetRunRow as any).periodPassed === true;
+        if (!periodPassed) {
+          effectiveRunId = Number((targetRunRow as any).id);
+          effectiveDate = String((targetRunRow as any).startDate || `${targetMonth}-01`);
+        } else {
+          const followingRunRow = await trxAny
+            .selectFrom('hr_payroll_runs')
+            .select([
+              'id',
+              'period_month',
+              sql<string>`to_char(start_date, 'YYYY-MM-DD')`.as('startDate'),
+            ])
+            .where('tenant_id', '=', tenantId)
+            .where('period_month', '>', targetMonth)
+            .orderBy('period_month', 'asc')
+            .orderBy('start_date', 'asc')
+            .executeTakeFirst();
+          if (followingRunRow) {
+            effectiveRunId = Number((followingRunRow as any).id);
+            effectiveMonth = String((followingRunRow as any).period_month || (followingRunRow as any).periodMonth || targetMonth);
+            effectiveDate = String((followingRunRow as any).startDate || `${effectiveMonth}-01`);
+            rolledForward = true;
+          } else {
+            // No following run exists yet: keep the target run, so
+            // the deduction stays dated inside the target month and
+            // the next run built picks it up (date <= range.to).
+            effectiveRunId = Number((targetRunRow as any).id);
+            effectiveDate = String((targetRunRow as any).startDate || `${targetMonth}-01`);
+          }
+        }
+      }
+      const rollForwardNote = rolledForward
+        ? ` — تم الترحيل لشهر ${effectiveMonth} بدلاً من ${targetMonth} لأن فترة مسير ${targetMonth} انتهت`
+        : '';
+      // Migration 0225 declares payroll_run_id on the settlement
+      // rows; older harnesses model the table without it. The link
+      // is traceability only — a missing column must never fail the
+      // push itself, so the write is skipped when the column is absent.
+      const linkColumn = await sql<{ exists: boolean }>`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'van_rep_financial_settlements'
+            AND column_name = 'payroll_run_id'
+        ) AS exists
+      `.execute(trx);
+      const canWriteRunLink = linkColumn.rows[0]?.exists === true;
 
       for (const item of items) {
         // INV-VAN-TRIP-LOCKED-STATE-RECHECK: the status above comes
@@ -7700,7 +7776,8 @@ export class VanSalesService {
               settlement_method: 'payroll',
               settled_at: sql`NOW()`,
               settled_by: actorUserId,
-              notes: `${item.notes ? item.notes + ' | ' : ''}تم ترحيل العجز لمسير رواتب شهر ${targetMonth} (موظف #${resolvedEmployeeId})`,
+              ...(canWriteRunLink && effectiveRunId !== null ? { payroll_run_id: effectiveRunId } : {}),
+              notes: `${item.notes ? item.notes + ' | ' : ''}تم ترحيل العجز لمسير رواتب شهر ${effectiveMonth} (موظف #${resolvedEmployeeId})${rollForwardNote}`,
               updated_at: sql`NOW()`,
             })
             .where('id', '=', item.id)
@@ -7724,7 +7801,8 @@ export class VanSalesService {
           await trxAny
             .updateTable('van_rep_financial_settlements')
             .set({
-              notes: `${lockedItem.notes ? lockedItem.notes + ' | ' : ''}أعيد ترحيل العجز لمسير رواتب شهر ${targetMonth} (موظف #${resolvedEmployeeId})`,
+              ...(canWriteRunLink && effectiveRunId !== null ? { payroll_run_id: effectiveRunId } : {}),
+              notes: `${lockedItem.notes ? lockedItem.notes + ' | ' : ''}أعيد ترحيل العجز لمسير رواتب شهر ${effectiveMonth} (موظف #${resolvedEmployeeId})${rollForwardNote}`,
               updated_at: sql`NOW()`,
             })
             .where('id', '=', item.id)
@@ -7752,7 +7830,12 @@ export class VanSalesService {
             adjustment_type: adjType,
             amount_type: 'money',
             amount: Number(lockedItem.amount),
-            date: sql`CURRENT_DATE`,
+            // INV-REP-PAYROLL-TARGET-MONTH: dated inside the
+            // effective run's period, never CURRENT_DATE — the run
+            // rebuild picks up adjustments by `date <= range.to`,
+            // so this date is what puts the deduction in the
+            // targeted month's run.
+            date: effectiveDate,
             reason: adjReason,
             status: 'pending',
             source_type: 'van_sales_settlement',
@@ -7770,8 +7853,8 @@ export class VanSalesService {
           amount: Number(item.amount),
           success: true,
           message: isRepush
-            ? `أعيد الترحيل بنجاح لملف الموظف في مسير شهر ${targetMonth}`
-            : `تم الترحيل بنجاح لملف الموظف في مسير شهر ${targetMonth}`,
+            ? `أعيد الترحيل بنجاح لملف الموظف في مسير شهر ${effectiveMonth}`
+            : `تم الترحيل بنجاح لملف الموظف في مسير شهر ${effectiveMonth}`,
         });
       }
     });
@@ -7779,6 +7862,9 @@ export class VanSalesService {
     return {
       ok: true,
       targetMonth,
+      effectiveMonth,
+      effectiveRunId,
+      rolledForward,
       processedCount: results.filter((r) => r.success).length,
       results,
     };
