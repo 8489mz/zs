@@ -53,6 +53,18 @@ export function ReturnsWorkspace() {
   const [form, setForm] = useState<ReturnFormState>(() => createEmptyReturnForm(isPurchaseMode ? 'purchase' : 'sale'));
   const [selectedItems, setSelectedItems] = useState<Record<string, string>>({});
   const [selectedSerials, setSelectedSerials] = useState<Record<string, string>>({});
+  // INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: the merchant's requested
+  // final goods refund (computed + goodwill) and its reason. The
+  // backend validates both against the cap; the dialog never
+  // computes the refund itself.
+  const [goodwillRefundAmount, setGoodwillRefundAmount] = useState('');
+  const [goodwillReason, setGoodwillReason] = useState('');
+  // INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: the merchant's chosen
+  // refund mode for this return — 'original' (the recorded net line,
+  // the default) or 'forfeit' (header discount forfeited). The
+  // system cannot know which the discount was, so the choice is
+  // the merchant's on every return; the dialog shows both amounts.
+  const [discountMode, setDiscountMode] = useState<'original' | 'forfeit'>('original');
   const [returnOutcomeUncertain, setReturnOutcomeUncertain] = useState(false);
   // The exact payload and key survive HTTP failures within this mounted workspace.
   // Never generate a new key when a refund may already have committed.
@@ -129,8 +141,28 @@ export function ReturnsWorkspace() {
     .filter((entry) => entry.qty > 0), [invoiceItems, selectedItems]);
 
   const reliefPreviewItemsKey = selectedReturnItems.map(({ item, qty }) => `${item.id || item.productId}:${qty}`).join(',');
+  // INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: the header discount is
+  // conditional on the deal quantity. A partial sale return forfeits
+  // it entirely and the kept pieces reprice at original price; the
+  // backend computes the refund and the dialog only asks for it.
+  // Eligibility is derived here; the backend re-derives it from its
+  // own data, so a wrong local guess can never pay the wrong refund.
+  const totalRemainingQty = invoiceItems.reduce((sum, item) => sum + remainingInvoiceLineQuantity(
+    Number(item.qty || 0),
+    Number(returnedQtyByLine[String(item.id || item.productId || '')] || 0),
+    returnHistoryReady,
+    blockedProductIds.includes(String(item.productId || '')),
+  ), 0);
+  const selectedQtyForForfeit = selectedReturnItems.reduce((sum, entry) => sum + Number(entry.qty || 0), 0);
+  const forfeitEligible = form.type === 'sale'
+    && Boolean(selectedInvoice && 'discount' in selectedInvoice && Number(selectedInvoice.discount || 0) > 0)
+    && selectedReturnItems.length > 0
+    && totalRemainingQty > 0
+    && selectedQtyForForfeit < totalRemainingQty;
+  const goodwillRequestedAmount = Number(goodwillRefundAmount || 0);
+  const goodwillActive = forfeitEligible && Number.isFinite(goodwillRequestedAmount) && goodwillRequestedAmount > 0;
   const reliefPreviewQuery = useQuery({
-    queryKey: ['returns-relief-preview', form.type, selectedInvoice?.id, reliefPreviewItemsKey],
+    queryKey: ['returns-relief-preview', form.type, selectedInvoice?.id, reliefPreviewItemsKey, forfeitEligible, discountMode, goodwillRefundAmount],
     queryFn: () => returnsApi.preview({
       type: form.type,
       invoiceId: Number(selectedInvoice!.id),
@@ -141,6 +173,8 @@ export function ReturnsWorkspace() {
         saleItemId: form.type === 'sale' ? Number(item.id || 0) : undefined,
         purchaseItemId: form.type === 'purchase' ? Number(item.id || 0) : undefined,
       })),
+      forfeitHeaderDiscount: discountMode === 'forfeit' && forfeitEligible ? true : undefined,
+      goodwillRefundAmount: goodwillActive ? goodwillRequestedAmount : undefined,
     }),
     enabled: isCreateOpen && form.type === 'sale' && Boolean(selectedInvoice?.id) && selectedReturnItems.length > 0,
     staleTime: 0,
@@ -168,10 +202,25 @@ export function ReturnsWorkspace() {
   // will actually pay (goods + relief); without one (purchase
   // returns, or before the preview lands) it stays the lines total.
   const expectedReturnValue = reliefPreview ? Number(reliefPreview.refundTotal || 0) : linesReturnValue;
+  // INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: a goodwill extra above
+  // the computed refund always needs a manager's credential for
+  // non-admins — the backend enforces it authoritatively; the dialog
+  // only surfaces the PIN field. Admins see the warning, never a block.
+  const isAdminRole = user?.role === 'admin' || user?.role === 'super_admin';
+  // INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: the goodwill rules
+  // apply to the CHOSEN mode's computed amount — the forfeit amount
+  // in forfeit mode, the recorded pro-rata amount in original mode.
+  const selectedComputedGoods = discountMode === 'forfeit' && reliefPreview?.forfeit?.applies
+    ? Number(reliefPreview.forfeit.computedGoodsRefund || 0)
+    : Number(reliefPreview?.originalGoodsTotal ?? reliefPreview?.goodsTotal ?? 0);
+  const goodwillExceedsComputed = Boolean(
+    goodwillActive && goodwillRequestedAmount > selectedComputedGoods,
+  );
+  const needsManagerApprovalForGoodwill = goodwillExceedsComputed && !isAdminRole;
   // Manager approval is required only for a large cash refund; the
   // backend enforces the same threshold authoritatively.
   const largeCashRefundThreshold = Number((settingsQuery.data as any)?.posLargeCashRefundThreshold ?? 500);
-  const needsManagerApprovalForReturn = !canDirectReturn && form.settlementMode === 'refund' && form.refundMethod === 'cash' && expectedReturnValue >= largeCashRefundThreshold;
+  const needsManagerApprovalForReturn = (!canDirectReturn && form.settlementMode === 'refund' && form.refundMethod === 'cash' && expectedReturnValue >= largeCashRefundThreshold) || needsManagerApprovalForGoodwill;
 
   const summary = query.data?.summary;
   const salesReturns = Number(summary?.salesReturns || 0);
@@ -258,6 +307,9 @@ export function ReturnsWorkspace() {
           refundMethod: form.refundMethod,
           note: [reason.trim(), String(form.note || '').trim()].filter(Boolean).join(' — '),
           managerPin,
+          forfeitHeaderDiscount: discountMode === 'forfeit' && forfeitEligible ? true : undefined,
+          goodwillRefundAmount: goodwillActive ? goodwillRequestedAmount : undefined,
+          goodwillRefundReason: goodwillActive ? goodwillReason.trim() || undefined : undefined,
         };
         returnAttempt.current = { key: crypto.randomUUID(), payload };
       }
@@ -296,6 +348,9 @@ export function ReturnsWorkspace() {
       setForm(createEmptyReturnForm(isPurchaseMode ? 'purchase' : 'sale'));
       setSelectedItems({});
       setSelectedSerials({});
+      setGoodwillRefundAmount('');
+      setGoodwillReason('');
+      setDiscountMode('original');
       setConfirmReturn(false);
       setIsCreateOpen(false);
     },
@@ -317,6 +372,9 @@ export function ReturnsWorkspace() {
     setForm(createEmptyReturnForm(isPurchaseMode ? 'purchase' : 'sale'));
     setSelectedItems({});
     setSelectedSerials({});
+    setGoodwillRefundAmount('');
+    setGoodwillReason('');
+    setDiscountMode('original');
   };
 
   const updateForm = (updater: (current: ReturnFormState) => ReturnFormState) => {
@@ -326,6 +384,9 @@ export function ReturnsWorkspace() {
       if (next.type !== current.type || next.invoiceId !== current.invoiceId) {
         setSelectedItems({});
         setSelectedSerials({});
+        setGoodwillRefundAmount('');
+        setGoodwillReason('');
+        setDiscountMode('original');
       }
       return next;
     });
@@ -515,6 +576,14 @@ export function ReturnsWorkspace() {
           selectedQtyTotal={selectedQtyTotal}
           expectedReturnValue={expectedReturnValue}
           reliefPreview={reliefPreview}
+          discountMode={discountMode}
+          onDiscountModeChange={(mode) => { if (!returnAttempt.current) setDiscountMode(mode); }}
+          originalGoodsTotal={reliefPreview?.originalGoodsTotal}
+          goodwillRefundAmount={goodwillRefundAmount}
+          goodwillReason={goodwillReason}
+          onGoodwillRefundAmountChange={(value) => { if (!returnAttempt.current) setGoodwillRefundAmount(value); }}
+          onGoodwillReasonChange={(value) => { if (!returnAttempt.current) setGoodwillReason(value); }}
+          isAdminRole={isAdminRole}
           isReliefPreviewLoading={isReliefPreviewLoading}
           isReliefPreviewError={isReliefPreviewError}
           reliefPreviewError={reliefPreviewError}
@@ -577,7 +646,7 @@ export function ReturnsWorkspace() {
         minReasonLength={1}
         managerPinRequired={needsManagerApprovalForReturn}
         managerPinLabel={t('returns.manager_pin_label', 'رمز اعتماد المشرف / كلمة المرور')}
-        managerPinHint={needsManagerApprovalForReturn ? t('returns.manager_pin_hint', 'المرتجع النقدي الكبير يتطلب اعتماد المشرف أو إدخال رمز المدير لإتمام المرتجع.') : undefined}
+        managerPinHint={needsManagerApprovalForGoodwill ? t('returns.manager_pin_hint_goodwill', 'الزيادة عن المبلغ المحسوب تتطلب رمز المدير لإتمام المرتجع.') : needsManagerApprovalForReturn ? t('returns.manager_pin_hint', 'المرتجع النقدي الكبير يتطلب اعتماد المشرف أو إدخال رمز المدير لإتمام المرتجع.') : undefined}
         isBusy={createMutation.isPending}
         onCancel={() => setConfirmReturn(false)}
         onConfirm={({ reason, managerPin }) => {

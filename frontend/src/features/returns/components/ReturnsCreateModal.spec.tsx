@@ -173,3 +173,124 @@ describe('ReturnsCreateModal relief preview failure (T11-C)', () => {
     expect(screen.getByRole('button', { name: 'تسجيل وتأكيد مرتجع البيع' })).not.toBeDisabled();
   });
 });
+
+/* INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: when the backend preview
+ * says the header discount can forfeit, the modal shows TWO refund
+ * mode buttons side by side — "إرجاع بالسعر الأصلي" (the recorded
+ * pro-rata amount) and "إرجاع بإلغاء الخصم" (the forfeit amount) —
+ * each with its own computed amount before the merchant presses it,
+ * plus the breakdown and the optional goodwill input — all numbers
+ * read from the preview, never computed locally. */
+describe('ReturnsCreateModal conditional header-discount forfeit', () => {
+  const forfeitPreview = {
+    goodsTotal: 500, originalGoodsTotal: 533.33, tipRelief: 0, courierRelief: 0, totalRelief: 0, refundTotal: 500,
+    forfeit: {
+      applies: true, invoiceTotal: 800, priorGoodsRefunded: 0, remainingNetAtOriginal: 300,
+      computedGoodsRefund: 500, forfeitedHeaderDiscount: 100, repricedReturnedTotal: 500,
+      goodwillCap: 600, goodwillAmount: 0,
+    },
+  };
+
+  it('shows both refund mode buttons with their amounts and the forfeit breakdown', () => {
+    renderModal({ expectedReturnValue: 500, reliefPreview: forfeitPreview });
+
+    expect(screen.getByRole('button', { name: /إرجاع بالسعر الأصلي/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /إرجاع بإلغاء الخصم/ })).toBeInTheDocument();
+    expect(screen.getByText(/القطعة ترجع بسعرها اللي في الفاتورة/)).toBeInTheDocument();
+    expect(screen.getByText(/خصم الفاتورة يتلغي والقطع اللي فضلت/)).toBeInTheDocument();
+    expect(screen.getAllByText('533.33').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('500.00').length).toBeGreaterThan(0);
+    expect(screen.getByText(/الباقي مع العميل بالسعر الأصلي/)).toBeInTheDocument();
+    expect(screen.getByText(/خصم الفاتورة الملغي/)).toBeInTheDocument();
+    expect(screen.getByText(/المبلغ المسترد المحسوب/)).toBeInTheDocument();
+    expect(screen.getByText(/أعلى مبلغ يمكن منحه/)).toBeInTheDocument();
+    expect(screen.getAllByText('300.00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('100.00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('600.00').length).toBeGreaterThan(0);
+    expect(screen.getByPlaceholderText('533.33')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'تسجيل وتأكيد مرتجع البيع' })).not.toBeDisabled();
+  });
+
+  it('calls back with the forfeit mode when the merchant presses its button', () => {
+    const onDiscountModeChange = vi.fn();
+    renderModal({ expectedReturnValue: 500, reliefPreview: forfeitPreview, onDiscountModeChange });
+
+    screen.getByRole('button', { name: /إرجاع بإلغاء الخصم/ }).click();
+    expect(onDiscountModeChange).toHaveBeenCalledTimes(1);
+    expect(onDiscountModeChange).toHaveBeenCalledWith('forfeit');
+  });
+
+  it('shows the manager-PIN note for a cashier raising the refund above the computed amount in forfeit mode', () => {
+    renderModal({
+      expectedReturnValue: 550,
+      reliefPreview: { ...forfeitPreview, refundTotal: 550, goodsTotal: 550, forfeit: { ...forfeitPreview.forfeit, goodwillAmount: 50 } },
+      discountMode: 'forfeit',
+      goodwillRefundAmount: '550',
+      goodwillReason: 'عميلة قديمة',
+      onGoodwillRefundAmountChange: vi.fn(),
+      onGoodwillReasonChange: vi.fn(),
+    });
+
+    expect(screen.getByText(/تتطلب رمز المدير عند التأكيد/)).toBeInTheDocument();
+    expect(screen.queryByText(/تنبيه: المبلغ أعلى من المحسوب/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'تسجيل وتأكيد مرتجع البيع' })).not.toBeDisabled();
+  });
+
+  it('shows the warning-only note for an admin raising the refund above the computed amount in forfeit mode', () => {
+    renderModal({
+      expectedReturnValue: 550,
+      reliefPreview: { ...forfeitPreview, refundTotal: 550, goodsTotal: 550, forfeit: { ...forfeitPreview.forfeit, goodwillAmount: 50 } },
+      discountMode: 'forfeit',
+      goodwillRefundAmount: '550',
+      goodwillReason: 'عميلة قديمة',
+      onGoodwillRefundAmountChange: vi.fn(),
+      onGoodwillReasonChange: vi.fn(),
+      isAdminRole: true,
+    });
+
+    expect(screen.getByText(/تنبيه: المبلغ أعلى من المحسوب/)).toBeInTheDocument();
+    expect(screen.queryByText(/تتطلب رمز المدير عند التأكيد/)).not.toBeInTheDocument();
+  });
+
+  it('blocks confirm while a goodwill extra has no reason', () => {
+    renderModal({
+      expectedReturnValue: 550,
+      reliefPreview: { ...forfeitPreview, refundTotal: 550, goodsTotal: 550, forfeit: { ...forfeitPreview.forfeit, goodwillAmount: 50 } },
+      discountMode: 'forfeit',
+      goodwillRefundAmount: '550',
+      goodwillReason: '',
+      onGoodwillRefundAmountChange: vi.fn(),
+      onGoodwillReasonChange: vi.fn(),
+    });
+
+    expect(screen.getByText(/اكتب سبب التسوية الودية قبل التأكيد/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'تسجيل وتأكيد مرتجع البيع' })).toBeDisabled();
+  });
+
+  it('measures the goodwill extra against the original mode amount when that mode is chosen', () => {
+    renderModal({
+      expectedReturnValue: 550,
+      reliefPreview: { ...forfeitPreview, refundTotal: 550, goodsTotal: 550, forfeit: { ...forfeitPreview.forfeit, goodwillAmount: 16.67 } },
+      discountMode: 'original',
+      goodwillRefundAmount: '550',
+      goodwillReason: 'عميلة قديمة',
+      onGoodwillRefundAmountChange: vi.fn(),
+      onGoodwillReasonChange: vi.fn(),
+    });
+
+    expect(screen.getByText(/تتطلب رمز المدير عند التأكيد/)).toBeInTheDocument();
+    expect(screen.getByText(/16.67/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'تسجيل وتأكيد مرتجع البيع' })).not.toBeDisabled();
+  });
+
+  it('shows no forfeit panel when the preview carries no forfeit', () => {
+    renderModal({
+      reliefPreview: { goodsTotal: 75, tipRelief: 10, courierRelief: 0, totalRelief: 10, refundTotal: 85 },
+    });
+
+    expect(screen.queryByText(/خصم الفاتورة مشروط بكمية الصفقة/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/إرجاع بالسعر الأصلي/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/إرجاع بإلغاء الخصم/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/المبلغ المسترد المطلوب/)).not.toBeInTheDocument();
+  });
+});

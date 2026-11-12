@@ -1171,6 +1171,10 @@ export interface ReturnDocumentTable {
   exchange_courier_relief: number | null;
   tip_relief: number | null;
   courier_relief: number | null;
+  forfeited_header_discount: number | null;
+  goodwill_amount: number | null;
+  goodwill_reason: string | null;
+  header_discount_mode: string | null;
   total: number;
   note: string;
   branch_id: number | null;

@@ -230,11 +230,13 @@ async function main(): Promise<void> {
           discount numeric DEFAULT 0, tax_amount numeric DEFAULT 0, subtotal numeric DEFAULT 0,
           prices_include_tax boolean DEFAULT false, payment_type text, payment_channel text,
           branch_id bigint, location_id bigint, created_by bigint DEFAULT 1, created_at timestamptz DEFAULT '2026-10-01',
-          exchange_return_id bigint);
+          exchange_return_id bigint, tip_amount numeric DEFAULT 0, delivery_fee numeric DEFAULT 0,
+          delivery_fee_mode text, service_charge numeric DEFAULT 0);
         CREATE TABLE sale_items (id bigint PRIMARY KEY, tenant_id text, account_id text, sale_id bigint, product_id bigint,
           product_name text, qty numeric, unit_price numeric, line_total numeric, net_unit_price numeric,
           net_line_total numeric, allocated_discount numeric DEFAULT 0, allocated_tax numeric DEFAULT 0,
-          cost_price numeric DEFAULT 0, unit_multiplier numeric DEFAULT 1, serials text, modifiers text);
+          cost_price numeric DEFAULT 0, unit_multiplier numeric DEFAULT 1, serials text, modifiers text,
+          line_discount numeric(15, 3));
         CREATE TABLE sale_payments (id bigserial PRIMARY KEY, tenant_id text, account_id text, sale_id bigint,
           payment_channel text, amount numeric, created_at timestamptz DEFAULT NOW());
         CREATE TABLE sale_line_stock_allocations (id bigserial PRIMARY KEY, tenant_id text, account_id text,
@@ -250,7 +252,8 @@ async function main(): Promise<void> {
           invoice_id bigint, settlement_mode text, refund_method text, refund_allocations jsonb, total numeric, note text,
           branch_id bigint, location_id bigint, created_by bigint DEFAULT 1, created_at timestamptz DEFAULT '2026-10-02',
           exchange_return_id bigint,
-      tip_relief numeric(15, 3), courier_relief numeric(15, 3));
+      tip_relief numeric(15, 3), courier_relief numeric(15, 3),
+      forfeited_header_discount numeric(15, 3), goodwill_amount numeric(15, 3), goodwill_reason text, header_discount_mode text);
         CREATE TABLE return_items (id bigserial PRIMARY KEY, tenant_id text, account_id text, return_document_id bigint,
           product_id bigint, product_name text, qty numeric, unit_total numeric, line_total numeric,
           allocated_tax numeric, cost_price numeric, sale_item_id bigint, purchase_item_id bigint);

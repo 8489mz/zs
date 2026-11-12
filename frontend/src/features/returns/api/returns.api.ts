@@ -32,10 +32,28 @@ export interface ReturnsListResponse {
 
 export interface ReturnReliefPreview {
   goodsTotal: number;
+  /** INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: the pro-rata goods
+   *  total (mode 1, "refund at the recorded price"). The dialog
+   *  shows it next to the forfeit amount so the merchant can choose. */
+  originalGoodsTotal?: number;
   tipRelief: number;
   courierRelief: number;
   totalRelief: number;
   refundTotal: number;
+  /** INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: the forfeit breakdown
+   *  the backend computed for this return (present only when the
+   *  dialog asked for the forfeit and it applies). */
+  forfeit?: {
+    applies: boolean;
+    invoiceTotal: number;
+    priorGoodsRefunded: number;
+    remainingNetAtOriginal: number;
+    computedGoodsRefund: number;
+    forfeitedHeaderDiscount: number;
+    repricedReturnedTotal: number;
+    goodwillCap: number;
+    goodwillAmount: number;
+  };
 }
 
 export interface ReturnReliefPreviewItem {
@@ -50,6 +68,14 @@ export interface ReturnReliefPreviewPayload {
   type: 'sale' | 'purchase';
   invoiceId: string | number;
   items: ReturnReliefPreviewItem[];
+  /** INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: ask the backend to
+   *  forfeit the header discount and reprice the kept pieces at
+   *  original price; the preview then shows the computed refund. */
+  forfeitHeaderDiscount?: boolean;
+  /** Requested final goods refund (computed + goodwill). Only valid
+   *  with the forfeit; the backend enforces the cap. */
+  goodwillRefundAmount?: number;
+  goodwillRefundReason?: string;
 }
 
 export const returnsApi = {

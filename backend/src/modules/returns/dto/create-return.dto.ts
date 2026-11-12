@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
 
 class ReturnItemDto {
   @Type(() => Number)
@@ -79,4 +79,27 @@ export class CreateReturnDto {
   @IsString()
   @MaxLength(500)
   refundOverrideReason?: string;
+
+  /* INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: reprice the kept pieces
+   * at original price and forfeit the header discount entirely on a
+   * partial sale return (never pro-rata). The backend computes the
+   * refund; the dialog only displays it. */
+  @IsOptional()
+  @IsBoolean()
+  forfeitHeaderDiscount?: boolean;
+
+  /* Final goods refund the merchant asks for (computed refund +
+   * goodwill). Must sit inside [computed, goodwillCap]; the extra
+   * above the computed refund is the goodwill amount and needs
+   * goodwillRefundReason plus manager approval for non-admins. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  goodwillRefundAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  goodwillRefundReason?: string;
 }

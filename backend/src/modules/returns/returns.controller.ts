@@ -6,6 +6,7 @@ import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.in
 import { IdempotencyInterceptor } from '../../core/idempotency/idempotency.interceptor';
 import { CreateReturnDto } from './dto/create-return.dto';
 import { ReturnsService } from './returns.service';
+import type { ConditionalDiscountForfeitBreakdown } from './engines/conditional-header-discount-return.engine';
 
 @Controller('api')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -45,7 +46,7 @@ export class ReturnsController {
    * create route; it takes the same body shape as a create. */
   @Post('returns/preview')
   @RequirePermissions('returns')
-  previewReturnRelief(@Body() payload: CreateReturnDto, @Req() req: RequestWithAuth): Promise<{ goodsTotal: number; tipRelief: number; courierRelief: number; totalRelief: number; refundTotal: number }> {
+  previewReturnRelief(@Body() payload: CreateReturnDto, @Req() req: RequestWithAuth): Promise<{ goodsTotal: number; originalGoodsTotal: number; tipRelief: number; courierRelief: number; totalRelief: number; refundTotal: number; forfeit?: ConditionalDiscountForfeitBreakdown }> {
     return this.returnsService.previewReturnRelief(payload, req.authContext!);
   }
 

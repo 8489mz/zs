@@ -25,6 +25,7 @@ import { idempotencyStorage } from '../../core/idempotency/idempotency.context';
 import { verifyPassword } from '../../core/auth/utils/password-hasher';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
 import { allocateRefundTenders, type RefundTender } from './engines/refund-tender.engine';
+import { allocateProRata, computeConditionalDiscountForfeit, type ConditionalDiscountForfeitBreakdown, type ConditionalDiscountForfeitResult } from './engines/conditional-header-discount-return.engine';
 import { allocateInvoiceDiscount } from '../sales/engines/invoice-discount.engine';
 import { settlePosExchange } from '../sales/engines/pos-exchange.engine';
 import { selectPurchaseReturnSerials, selectPurchaseReturnBatch } from './helpers/purchase-return-traceability.helper';
@@ -42,7 +43,7 @@ export interface ExchangeReturnContext {
 }
 
 type ReturnInputItem = { productId: number; productName: string; qty: number; saleItemId?: number; purchaseItemId?: number; batchId?: number; serials?: string[] };
-type ReturnDocumentInput = { returnType: 'sale' | 'purchase'; invoiceId: number; settlementMode: string; refundMethod: string; total: number; note: string; branchId: number | null; locationId: number | null; refundAllocations?: Array<{ tender: RefundTender | 'payable'; amount: number }>; tipRelief?: number; courierRelief?: number };
+type ReturnDocumentInput = { returnType: 'sale' | 'purchase'; invoiceId: number; settlementMode: string; refundMethod: string; total: number; note: string; branchId: number | null; locationId: number | null; refundAllocations?: Array<{ tender: RefundTender | 'payable'; amount: number }>; tipRelief?: number; courierRelief?: number; forfeitedHeaderDiscount?: number | null; goodwillAmount?: number | null; goodwillReason?: string | null; headerDiscountMode?: string | null };
 
 @Injectable()
 export class ReturnsService {
@@ -211,6 +212,10 @@ export class ReturnsService {
       refund_allocations: row.refundAllocations ? JSON.stringify(row.refundAllocations) : null,
       tip_relief: row.tipRelief ?? null,
       courier_relief: row.courierRelief ?? null,
+      forfeited_header_discount: row.forfeitedHeaderDiscount ?? null,
+      goodwill_amount: row.goodwillAmount ?? null,
+      goodwill_reason: row.goodwillReason ?? null,
+      header_discount_mode: row.headerDiscountMode ?? null,
       total: row.total,
       note: row.note,
       branch_id: row.branchId,
@@ -320,6 +325,10 @@ export class ReturnsService {
         'rd.total',
         'rd.tip_relief',
         'rd.courier_relief',
+        'rd.forfeited_header_discount',
+        'rd.goodwill_amount',
+        'rd.goodwill_reason',
+        'rd.header_discount_mode',
         'rd.note',
         'rd.created_at',
         'rd.created_by',
@@ -366,6 +375,10 @@ export class ReturnsService {
         tipRelief: Number(row.tip_relief || 0),
         courierRelief: Number(row.courier_relief || 0),
         refundTotal: Number(row.total || 0) + Number(row.tip_relief || 0) + Number(row.courier_relief || 0),
+        forfeitedHeaderDiscount: Number(row.forfeited_header_discount || 0),
+        goodwillAmount: Number(row.goodwill_amount || 0),
+        goodwillReason: row.goodwill_reason || '',
+        headerDiscountMode: row.header_discount_mode === 'forfeit' ? 'forfeit' : 'original',
         note: row.note || '',
         settlementMode: row.settlement_mode || '',
         refundMethod: row.refund_method || '',
@@ -424,7 +437,102 @@ export class ReturnsService {
    * journal, no treasury row. Relief exists only on sales; a
    * purchase preview fails closed instead of inventing a figure
    * through the relief path. */
-  async previewReturnRelief(payload: CreateReturnDto, auth: AuthContext): Promise<{ goodsTotal: number; tipRelief: number; courierRelief: number; totalRelief: number; refundTotal: number }> {
+  /* INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: shared by the preview
+   * and the create path so the dialog shows exactly what the create
+   * will pay (T10-D). Loads nothing itself — it runs the pure engine
+   * over rows the caller already holds. Legacy lines whose net /
+   * allocated values were never stored get the same in-memory
+   * allocation createSaleReturn backfills on disk, so the preview
+   * and the create agree even on pre-allocation sales. */
+  private computeForfeitForReturn(args: {
+    sale: { discount: number | string | null; total: number | string | null; tax_amount: number | string | null; prices_include_tax: boolean | null };
+    saleItems: Array<{ id: number | string; qty: number | string | null; unit_price: number | string | null; line_total: number | string | null; line_discount?: number | string | null; net_line_total?: number | string | null; allocated_discount?: number | string | null; allocated_tax?: number | string | null }>;
+    returnedQtyByLine: Map<number, number>;
+    returnedAmountByLine: Map<number, number>;
+    items: ReturnInputItem[];
+    moneyDigits: 2 | 3;
+    requestedGoodsRefund?: number;
+  }): ConditionalDiscountForfeitResult {
+    const { sale, saleItems, moneyDigits } = args;
+    const lines = saleItems.map((line) => ({
+      saleItemId: Number(line.id),
+      soldQty: Number(line.qty || 0),
+      unitPrice: Number(line.unit_price || 0),
+      lineTotal: Number(line.line_total || 0),
+      lineDiscount: Number(line.line_discount || 0),
+      allocatedDiscount: Number(line.allocated_discount || 0),
+      allocatedTax: Number(line.allocated_tax || 0),
+    }));
+    if (lines.some((line, index) => saleItems[index].net_line_total == null)) {
+      const allocations = allocateInvoiceDiscount({
+        lines: lines.map((line) => ({ lineTotal: line.lineTotal, qty: line.soldQty })),
+        invoiceDiscount: Number(sale.discount || 0),
+        invoiceTax: Number(sale.tax_amount || 0),
+        pricesIncludeTax: Boolean(sale.prices_include_tax),
+        digits: moneyDigits,
+      });
+      for (let index = 0; index < lines.length; index += 1) {
+        lines[index].allocatedDiscount = allocations[index].allocatedDiscount;
+        lines[index].allocatedTax = allocations[index].allocatedTax;
+      }
+    }
+    let priorGoodsRefunded = 0;
+    for (const amount of args.returnedAmountByLine.values()) priorGoodsRefunded += Number(amount || 0);
+    return computeConditionalDiscountForfeit({
+      lines,
+      returns: args.items.map((item) => ({
+        saleItemId: Number(item.saleItemId || 0),
+        qty: Number(item.qty || 0),
+      })),
+      priorReturnedQtyByLine: args.returnedQtyByLine,
+      headerDiscount: Number(sale.discount || 0),
+      invoiceTotal: Number(sale.total || 0),
+      priorGoodsRefunded,
+      pricesIncludeTax: Boolean(sale.prices_include_tax),
+      requestedGoodsRefund: args.requestedGoodsRefund,
+      digits: moneyDigits,
+    });
+  }
+
+  /* INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: original-mode goodwill.
+   *  Raises the pro-rata goods total to the merchant's requested
+   *  refund, splitting the extra across the returned lines pro-rata
+   *  (same rounding as the forfeit engine) and scaling the tax share
+   *  with the total. The requested refund must sit inside [computed,
+   *  gross cap] or the call fails closed with the same codes the
+   *  engine uses, so both modes validate identically. Returns the
+   *  goodwill extra (0 when the request equals the computed total). */
+  private applyRaisedGoodsTotal(
+    lines: Array<{ qty: number; unitTotal: number; lineTotal: number; allocatedTax: number }>,
+    proRataTotal: number,
+    requested: number,
+    cap: number,
+    moneyDigits: 2 | 3,
+  ): number {
+    if (!Number.isFinite(requested) || requested < 0) {
+      throw new AppError('المبلغ المسترد المطلوب غير صالح', 'CONDITIONAL_DISCOUNT_FORFEIT_INVALID_INPUT', 400);
+    }
+    if (requested < proRataTotal - 0.000001) {
+      throw new AppError('المبلغ المسترد المطلوب أقل من المبلغ المحسوب', 'GOODWILL_REFUND_BELOW_COMPUTED', 400);
+    }
+    if (requested > cap + 0.000001) {
+      throw new AppError('المبلغ المسترد المطلوب يتجاوز سقف سعر القطع المرتجعة', 'GOODWILL_REFUND_ABOVE_CAP', 400);
+    }
+    const goodwill = roundBookMoney(requested - proRataTotal, moneyDigits);
+    if (goodwill <= 0) return 0;
+    const finalTotals = allocateProRata(lines.map((line) => line.lineTotal), requested, moneyDigits);
+    const existingTax = lines.reduce((sum, line) => sum + Number(line.allocatedTax || 0), 0);
+    const totalTax = proRataTotal > 0 ? roundBookMoney(requested * (existingTax / proRataTotal), moneyDigits) : 0;
+    const finalTaxes = allocateProRata(finalTotals, totalTax, moneyDigits);
+    lines.forEach((line, index) => {
+      line.lineTotal = finalTotals[index];
+      line.allocatedTax = finalTaxes[index];
+      line.unitTotal = line.qty > 0 ? roundBookMoney(finalTotals[index] / line.qty, moneyDigits) : 0;
+    });
+    return goodwill;
+  }
+
+  async previewReturnRelief(payload: CreateReturnDto, auth: AuthContext): Promise<{ goodsTotal: number; originalGoodsTotal: number; tipRelief: number; courierRelief: number; totalRelief: number; refundTotal: number; forfeit?: ConditionalDiscountForfeitBreakdown }> {
     if (payload.type !== 'sale') throw new AppError('معاينة الاسترداد متاحة لمرتجعات البيع فقط', 'RETURN_TYPE_INVALID', 400);
     const scope = this.scope(auth);
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
@@ -457,7 +565,7 @@ export class ReturnsService {
       returnedAmountByLine.set(Number(r.sale_item_id), Number(r.total_amount || 0));
       returnedTaxByLine.set(Number(r.sale_item_id), Number(r.total_tax || 0));
     }
-    const normalizedLines: Array<{ productId: number; productName: string; qty: number; unitTotal: number; lineTotal: number; allocatedTax: number }> = [];
+    const normalizedLines: Array<{ productId: number; productName: string; qty: number; unitTotal: number; lineTotal: number; allocatedTax: number; saleItemId?: number }> = [];
     for (const requestItem of [...items].sort((a, b) => a.productId - b.productId)) {
       const matchingLines = saleItems.filter((entry) => Number(entry.product_id) === requestItem.productId);
       if (!requestItem.saleItemId && matchingLines.length > 1) {
@@ -470,20 +578,67 @@ export class ReturnsService {
       const saleLineId = Number(saleItem.id);
       const product = await this.db.selectFrom('products').select(['id', 'stock_qty']).where('id', '=', requestItem.productId).where(this.tenantPredicate(auth)).executeTakeFirst();
       if (!product) throw new AppError('Product not found', 'PRODUCT_NOT_FOUND', 404);
-      normalizedLines.push(buildSaleReturnLine(saleItem, product, requestItem, {
-        qty: returnedQtyByLine.get(saleLineId) || 0,
-        amount: returnedAmountByLine.get(saleLineId) || 0,
-        tax: returnedTaxByLine.get(saleLineId) || 0,
-      }, moneyDigits));
+      normalizedLines.push({
+        ...buildSaleReturnLine(saleItem, product, requestItem, {
+          qty: returnedQtyByLine.get(saleLineId) || 0,
+          amount: returnedAmountByLine.get(saleLineId) || 0,
+          tax: returnedTaxByLine.get(saleLineId) || 0,
+        }, moneyDigits),
+        saleItemId: saleLineId,
+      });
     }
-    const goodsTotal = calculateReturnDocumentTotal(normalizedLines, moneyDigits);
+    const originalGoodsTotal = calculateReturnDocumentTotal(normalizedLines, moneyDigits);
+    let goodsTotal = originalGoodsTotal;
+    // INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: the dialog shows BOTH
+    // refund modes side by side, so the forfeit is always computed
+    // for display when the sale carries a header discount — the
+    // merchant chooses per return whether the discount was a bundle
+    // deal (forfeit) or a general discount (original). The flag only
+    // selects which mode prices this preview (and validates any
+    // goodwill against it).
+    let forfeit: ConditionalDiscountForfeitResult | null = null;
+    if (Number(sale.discount || 0) > 0) {
+      forfeit = this.computeForfeitForReturn({
+        sale, saleItems, returnedQtyByLine, returnedAmountByLine, items, moneyDigits,
+        requestedGoodsRefund: payload.forfeitHeaderDiscount ? payload.goodwillRefundAmount : undefined,
+      });
+    }
+    if (payload.forfeitHeaderDiscount && forfeit?.applies) {
+      const pricedByLine = new Map(forfeit.lines.map((entry) => [entry.saleItemId, entry]));
+      for (const line of normalizedLines) {
+        const priced = line.saleItemId == null ? undefined : pricedByLine.get(line.saleItemId);
+        if (!priced) throw new AppError('تعذر تسعير بند المرتجع بعد إلغاء خصم الفاتورة', 'CONDITIONAL_DISCOUNT_FORFEIT_LINE_MISSING', 500);
+        line.lineTotal = priced.lineTotal;
+        line.allocatedTax = priced.allocatedTax;
+        line.unitTotal = priced.unitTotal;
+      }
+      goodsTotal = calculateReturnDocumentTotal(normalizedLines, moneyDigits);
+    } else if (payload.goodwillRefundAmount != null) {
+      // Original mode: the goodwill extra rides on the pro-rata
+      // lines, capped at the returned pieces' gross price — the
+      // same cap as the forfeit mode.
+      const cap = forfeit?.applies ? forfeit.goodwillCap : originalGoodsTotal;
+      this.applyRaisedGoodsTotal(normalizedLines, originalGoodsTotal, Number(payload.goodwillRefundAmount), cap, moneyDigits);
+      goodsTotal = calculateReturnDocumentTotal(normalizedLines, moneyDigits);
+    }
     const returnTaxAmount = normalizedLines.reduce((sum, line) => sum + Number(line.allocatedTax || 0), 0);
     const netReturnAmount = Math.max(0, goodsTotal - returnTaxAmount);
     const returnRelief = await this.accountingPosting.computeSalesReturnRelief(
       this.db, scope.tenantId, sale, goodsTotal, netReturnAmount, null,
     );
     const refundTotal = roundBookMoney(goodsTotal + returnRelief.totalRelief, moneyDigits);
-    return { goodsTotal, tipRelief: returnRelief.tipRelief, courierRelief: returnRelief.courierRelief, totalRelief: returnRelief.totalRelief, refundTotal };
+    const forfeitBreakdown: ConditionalDiscountForfeitBreakdown | undefined = forfeit?.applies ? {
+      applies: forfeit.applies,
+      invoiceTotal: forfeit.invoiceTotal,
+      priorGoodsRefunded: forfeit.priorGoodsRefunded,
+      remainingNetAtOriginal: forfeit.remainingNetAtOriginal,
+      computedGoodsRefund: forfeit.computedGoodsRefund,
+      forfeitedHeaderDiscount: forfeit.forfeitedHeaderDiscount,
+      repricedReturnedTotal: forfeit.repricedReturnedTotal,
+      goodwillCap: forfeit.goodwillCap,
+      goodwillAmount: forfeit.goodwillAmount,
+    } : undefined;
+    return { goodsTotal, originalGoodsTotal, tipRelief: returnRelief.tipRelief, courierRelief: returnRelief.courierRelief, totalRelief: returnRelief.totalRelief, refundTotal, forfeit: forfeitBreakdown };
   }
 
   private async getManagerPin(trx: Kysely<Database>, auth: AuthContext): Promise<string> {
@@ -704,6 +859,12 @@ export class ReturnsService {
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
     const sale = await trx.selectFrom('sales').selectAll().where('id', '=', Number(payload.invoiceId)).where('status', '=', 'posted').where(this.tenantPredicate(auth)).forUpdate().executeTakeFirst();
     if (!sale) throw new AppError('Invoice not found', 'INVOICE_NOT_FOUND', 404);
+    // INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: the forfeit reprices a
+    // refund; an exchange grants store credit for the return total
+    // instead, so the two must never mix in one document.
+    if (exchangePrepared && (payload.forfeitHeaderDiscount || payload.goodwillRefundAmount != null)) {
+      throw new AppError('إلغاء خصم الفاتورة أو التسوية الودية غير متاح مع الاستبدال', 'FORFEIT_EXCHANGE_NOT_SUPPORTED', 400);
+    }
     if (exchangePrepared && (!sale.customer_id || hasUnpaidExchangeBalance(Number(sale.total), Number(sale.paid_amount), Number(sale.store_credit_used || 0), moneyDigits))) {
       throw new AppError('الاستبدال يتطلب فاتورة مسددة وعميلها مسجلاً؛ سوِّ المديونية أولاً', 'EXCHANGE_UNPAID_SOURCE', 422);
     }
@@ -979,7 +1140,70 @@ export class ReturnsService {
       normalizedLines.push({ productId: preparedLine.productId, productName: preparedLine.productName, qty: preparedLine.qty, unitTotal: preparedLine.unitTotal, lineTotal: preparedLine.lineTotal, allocatedTax: preparedLine.allocatedTax, costPrice: isPreparedComposite ? 0 : Number(saleItem.cost_price || 0), saleItemId: saleLineId });
     }
 
-    const total = calculateReturnDocumentTotal(normalizedLines, moneyDigits);
+    const originalGoodsTotal = calculateReturnDocumentTotal(normalizedLines, moneyDigits);
+    let total = originalGoodsTotal;
+    // INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: TWO merchant-chosen
+    // modes — the system cannot know whether the header discount was
+    // a bundle deal or a general discount, so the dialog shows both
+    // amounts and the merchant picks per return:
+    // - 'original' (default): the recorded net line after discount
+    //   allocation (267 per piece); goodwill above it rides on the
+    //   pro-rata lines, capped at the returned pieces' gross price.
+    // - 'forfeit': the kept pieces reprice at original price and the
+    //   whole header discount forfeits (200 per piece); the engine's
+    //   lines replace the pro-rata pricing above.
+    // Stock restock above is qty-based and already done at frozen
+    // cost, so it is untouched by either mode. The relief, tender
+    // allocation, journal and treasury below all read this total,
+    // so they follow the priced refund automatically. The chosen
+    // mode is stored on the document (header_discount_mode).
+    let forfeit: ConditionalDiscountForfeitResult | null = null;
+    let goodwillAmount = 0;
+    let goodwillReason: string | undefined;
+    if (payload.forfeitHeaderDiscount || payload.goodwillRefundAmount != null) {
+      forfeit = this.computeForfeitForReturn({
+        sale, saleItems, returnedQtyByLine, returnedAmountByLine, items, moneyDigits,
+        requestedGoodsRefund: payload.forfeitHeaderDiscount ? payload.goodwillRefundAmount : undefined,
+      });
+    }
+    if (payload.forfeitHeaderDiscount && forfeit?.applies) {
+      const pricedByLine = new Map(forfeit.lines.map((entry) => [entry.saleItemId, entry]));
+      for (const line of normalizedLines) {
+        const priced = line.saleItemId == null ? undefined : pricedByLine.get(line.saleItemId);
+        if (!priced) throw new AppError('تعذر تسعير بند المرتجع بعد إلغاء خصم الفاتورة', 'CONDITIONAL_DISCOUNT_FORFEIT_LINE_MISSING', 500);
+        line.lineTotal = priced.lineTotal;
+        line.allocatedTax = priced.allocatedTax;
+        line.unitTotal = priced.unitTotal;
+      }
+      total = calculateReturnDocumentTotal(normalizedLines, moneyDigits);
+      if (Math.abs(total - (forfeit.computedGoodsRefund + forfeit.goodwillAmount)) > 0.001) {
+        throw new AppError('إجمالي المرتجع بعد إلغاء الخصم لا يطابق الحسبة', 'CONDITIONAL_DISCOUNT_FORFEIT_TOTAL_MISMATCH', 500);
+      }
+      goodwillAmount = forfeit.goodwillAmount;
+    } else if (payload.goodwillRefundAmount != null) {
+      // Original mode: the goodwill extra rides on the pro-rata
+      // lines, capped at the returned pieces' gross price — the
+      // same cap as the forfeit mode.
+      const cap = forfeit?.applies ? forfeit.goodwillCap : originalGoodsTotal;
+      goodwillAmount = this.applyRaisedGoodsTotal(normalizedLines, originalGoodsTotal, Number(payload.goodwillRefundAmount), cap, moneyDigits);
+      total = calculateReturnDocumentTotal(normalizedLines, moneyDigits);
+      if (Math.abs(total - Number(payload.goodwillRefundAmount)) > 0.001) {
+        throw new AppError('إجمالي المرتجع بعد التسوية الودية لا يطابق المبلغ المطلوب', 'CONDITIONAL_DISCOUNT_FORFEIT_TOTAL_MISMATCH', 500);
+      }
+    }
+    if (goodwillAmount > 0) {
+      goodwillReason = String(payload.goodwillRefundReason || '').trim();
+      if (!goodwillReason) {
+        throw new AppError('التسوية الودية تحتاج سبباً واضحاً', 'GOODWILL_REASON_REQUIRED', 400);
+      }
+      // A goodwill extra above the computed refund always needs a
+      // manager's credential for non-admins — same gate as the
+      // refund-method override above. Admins see the warning in the
+      // dialog; the backend does not block them.
+      if (!['admin', 'super_admin'].includes(auth.role) && approvedByName === undefined) {
+        approvedByName = await this.verifyManagerAuthorization(trx, payload.managerPin || '', auth);
+      }
+    }
     // R7-A (INV-REST-RETURN-PAYOUT-TRUTH) F1, Option A: compute the
     // tip / courier-fee relief BEFORE allocating, and allocate the
     // refund total + relief — the same numbers postSalesReturn
@@ -1026,15 +1250,30 @@ export class ReturnsService {
         approvedByName = await this.verifyManagerAuthorization(trx, approvalRequest.secret, auth);
       }
     }
-    const returnNote = overrideRequested
+    // The forfeit counts as APPLIED only when the merchant chose it
+    // and it applies: computing it for display (or for the cap)
+    // must never record a forfeited discount on an original-mode
+    // document.
+    const forfeitApplied = Boolean(payload.forfeitHeaderDiscount && forfeit?.applies);
+    const forfeitNote = forfeitApplied && forfeit
+      ? `إلغاء خصم فاتورة مشروط ${forfeit.forfeitedHeaderDiscount} (المبلغ المحسوب ${forfeit.computedGoodsRefund})${goodwillAmount > 0 ? `؛ تسوية ودية ${goodwillAmount} بسبب: ${goodwillReason}${approvedByName ? ` (اعتماد: ${approvedByName})` : ''}` : ''}`
+      : goodwillAmount > 0
+        ? `تسوية ودية ${goodwillAmount} بسبب: ${goodwillReason}${approvedByName ? ` (اعتماد: ${approvedByName})` : ''}`
+        : '';
+    const returnNote = [overrideRequested
       ? `${String(payload.note || '').trim()} | اعتماد تجاوز وسيلة الاسترداد: ${String(payload.refundOverrideReason).trim()}`.trim()
-      : `${String(payload.note || '').trim()}${exchangePrepared && approvedByName ? ` | اعتماد المشرف: ${approvedByName}` : ''}`.trim();
+      : `${String(payload.note || '').trim()}${exchangePrepared && approvedByName ? ` | اعتماد المشرف: ${approvedByName}` : ''}`.trim(),
+    forfeitNote].filter(Boolean).join(' | ');
     // The posting service reverses the returned lines using their original sale-line costs.
     const { id: returnDocumentId, docNo: returnDocNo } = await this.insertReturnDocument(trx, {
       returnType: 'sale', invoiceId: Number(payload.invoiceId), settlementMode,
       refundMethod: refundAllocations.length === 1 ? refundAllocations[0].tender : 'mixed',
       refundAllocations, total, note: returnNote, branchId: sale.branch_id, locationId: sale.location_id,
       tipRelief: returnRelief.tipRelief, courierRelief: returnRelief.courierRelief,
+      forfeitedHeaderDiscount: forfeitApplied ? (forfeit?.forfeitedHeaderDiscount ?? null) : null,
+      goodwillAmount: goodwillAmount > 0 ? goodwillAmount : null,
+      goodwillReason: goodwillReason ?? null,
+      headerDiscountMode: forfeitApplied ? 'forfeit' : 'original',
     }, auth);
     for (const line of normalizedLines) await this.insertReturnItem(trx, { returnDocumentId, productId: line.productId, productName: line.productName, qty: line.qty, unitTotal: line.unitTotal, lineTotal: line.lineTotal, allocatedTax: line.allocatedTax, costPrice: line.costPrice, saleItemId: line.saleItemId }, auth);
     const customerId = sale.customer_id ? Number(sale.customer_id) : null;

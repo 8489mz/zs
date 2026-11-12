@@ -23,6 +23,23 @@ type Props = {
   selectedQtyTotal: number;
   expectedReturnValue: number;
   reliefPreview?: ReturnReliefPreview | null;
+  /** INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: the merchant's chosen
+   *  refund mode ('original' = recorded net line, 'forfeit' =
+   *  header discount forfeited) and the pro-rata goods total the
+   *  first mode button shows. Owned by the workspace; the modal
+   *  only renders the two mode buttons with their amounts. */
+  discountMode?: 'original' | 'forfeit';
+  onDiscountModeChange?: (mode: 'original' | 'forfeit') => void;
+  originalGoodsTotal?: number;
+  /** INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: the merchant's
+   *  requested final goods refund (computed + goodwill) and its
+   *  reason, owned by the workspace; the modal only renders the
+   *  forfeit breakdown the backend preview returned. */
+  goodwillRefundAmount?: string;
+  goodwillReason?: string;
+  onGoodwillRefundAmountChange?: (value: string) => void;
+  onGoodwillReasonChange?: (value: string) => void;
+  isAdminRole?: boolean;
   isReliefPreviewLoading?: boolean;
   // T11-C: a failed relief preview must fail LOUD — the error is
   // shown, the displayed amount is flagged as unverified, and
@@ -65,6 +82,14 @@ export function ReturnsCreateModal(props: Props) {
     selectedQtyTotal,
     expectedReturnValue,
     reliefPreview = null,
+    discountMode = 'original',
+    onDiscountModeChange,
+    originalGoodsTotal,
+    goodwillRefundAmount = '',
+    goodwillReason = '',
+    onGoodwillRefundAmountChange,
+    onGoodwillReasonChange,
+    isAdminRole = false,
     isReliefPreviewLoading = false,
     isReliefPreviewError = false,
     reliefPreviewError = null,
@@ -89,6 +114,25 @@ export function ReturnsCreateModal(props: Props) {
   } = props;
 
   if (!isOpen) return null;
+
+  // INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: the forfeit breakdown
+  // comes from the backend preview only. The merchant picks one of
+  // two refund modes per return — the goodwill rules apply to the
+  // CHOSEN mode's computed amount, and a goodwill extra above it
+  // needs a clear reason before confirm, and the workspace requires
+  // the manager PIN for non-admins.
+  const forfeit = reliefPreview?.forfeit?.applies ? reliefPreview.forfeit : null;
+  const originalAmount = Number(originalGoodsTotal ?? reliefPreview?.goodsTotal ?? 0);
+  const selectedComputed = discountMode === 'forfeit' && forfeit
+    ? Number(forfeit.computedGoodsRefund || 0) : originalAmount;
+  const goodwillAmountValue = Number(goodwillRefundAmount || 0);
+  const goodwillExceedsComputed = Boolean(
+    forfeit && Number.isFinite(goodwillAmountValue) && goodwillAmountValue > 0
+    && goodwillAmountValue > selectedComputed,
+  );
+  const goodwillExtra = goodwillExceedsComputed
+    ? Number((goodwillAmountValue - selectedComputed).toFixed(2)) : 0;
+  const goodwillReasonMissing = goodwillExceedsComputed && !goodwillReason.trim();
 
   return (
     <DialogShell
@@ -364,6 +408,117 @@ export function ReturnsCreateModal(props: Props) {
                   </>
                 ) : null}
 
+                {/* INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: the
+                    header discount is conditional on the deal
+                    quantity, so a partial return forfeits it
+                    entirely and the kept pieces reprice at original
+                    price. Every number here comes from the backend
+                    preview — the dialog never computes money. */}
+                {forfeit ? (
+                  <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#92400e' }}>
+                      {t('returns.forfeit_title', 'خصم الفاتورة مشروط بكمية الصفقة — اختر طريقة الرد حسب الاتفاق')}
+                    </div>
+                    {/* INV-RETURN-CONDITIONAL-DISCOUNT-FORFEIT: the
+                        two merchant-chosen refund modes. Each button
+                        shows its own computed amount before the
+                        merchant presses it; the chosen mode is stored
+                        on the return document. */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <button
+                        type="button"
+                        aria-pressed={discountMode === 'original'}
+                        onClick={() => onDiscountModeChange?.('original')}
+                        style={{
+                          width: '100%', textAlign: 'start', cursor: 'pointer',
+                          background: discountMode === 'original' ? '#eff6ff' : '#fff',
+                          border: discountMode === 'original' ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                          borderRadius: '10px', padding: '10px 12px',
+                          display: 'flex', flexDirection: 'column', gap: '2px',
+                        }}
+                      >
+                        <span style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                          <span>{t('returns.mode_original', 'إرجاع بالسعر الأصلي')}</span>
+                          <span style={{ fontFamily: 'monospace' }}>{formatCurrency(originalAmount)}</span>
+                        </span>
+                        <span style={{ fontSize: '12px', color: '#64748b' }}>
+                          {t('returns.mode_original_hint', 'القطعة ترجع بسعرها اللي في الفاتورة، والخصم يفضل ساري على الباقي')}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={discountMode === 'forfeit'}
+                        onClick={() => onDiscountModeChange?.('forfeit')}
+                        style={{
+                          width: '100%', textAlign: 'start', cursor: 'pointer',
+                          background: discountMode === 'forfeit' ? '#eff6ff' : '#fff',
+                          border: discountMode === 'forfeit' ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                          borderRadius: '10px', padding: '10px 12px',
+                          display: 'flex', flexDirection: 'column', gap: '2px',
+                        }}
+                      >
+                        <span style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                          <span>{t('returns.mode_forfeit', 'إرجاع بإلغاء الخصم')}</span>
+                          <span style={{ fontFamily: 'monospace' }}>{formatCurrency(Number(forfeit.computedGoodsRefund || 0))}</span>
+                        </span>
+                        <span style={{ fontSize: '12px', color: '#64748b' }}>
+                          {t('returns.mode_forfeit_hint', 'خصم الفاتورة يتلغي والقطع اللي فضلت تتحسب بسعرها الأصلي قبل الخصم')}
+                        </span>
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                      <span>{t('returns.forfeit_remaining', 'الباقي مع العميل بالسعر الأصلي')}:</span>
+                      <strong style={{ color: '#0f172a' }}>{formatCurrency(Number(forfeit.remainingNetAtOriginal || 0))}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                      <span>{t('returns.forfeit_discount', 'خصم الفاتورة الملغي')}:</span>
+                      <strong style={{ color: '#0f172a' }}>{formatCurrency(Number(forfeit.forfeitedHeaderDiscount || 0))}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                      <span>{t('returns.forfeit_computed', 'المبلغ المسترد المحسوب')}:</span>
+                      <strong style={{ color: '#0f172a' }}>{formatCurrency(Number(forfeit.computedGoodsRefund || 0))}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                      <span>{t('returns.forfeit_cap', 'أعلى مبلغ يمكن منحه (سعر القطع المرتجعة)')}:</span>
+                      <strong style={{ color: '#0f172a' }}>{formatCurrency(Number(forfeit.goodwillCap || 0))}</strong>
+                    </div>
+                    <Field label={t('returns.goodwill_amount_label', 'المبلغ المسترد المطلوب (اختياري — أعلى من المحسوب تسوية ودية)')}>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={goodwillRefundAmount}
+                        onChange={(e) => onGoodwillRefundAmountChange?.(e.target.value)}
+                        placeholder={formatCurrency(selectedComputed)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                      />
+                    </Field>
+                    {goodwillExceedsComputed ? (
+                      <>
+                        <div role="alert" style={{ fontSize: '12.5px', color: isAdminRole ? '#92400e' : '#991b1b' }}>
+                          {isAdminRole
+                            ? t('returns.goodwill_admin_warning', 'تنبيه: المبلغ أعلى من المحسوب بمقدار {{amount}} — تسوية ودية تُسجَّل بسبب واضح.', { amount: formatCurrency(goodwillExtra) })
+                            : t('returns.goodwill_cashier_note', 'الزيادة عن المحسوب ({{amount}}) تتطلب رمز المدير عند التأكيد.', { amount: formatCurrency(goodwillExtra) })}
+                        </div>
+                        <Field label={t('returns.goodwill_reason_label', 'سبب التسوية الودية (إلزامي)')}>
+                          <input
+                            type="text"
+                            value={goodwillReason}
+                            onChange={(e) => onGoodwillReasonChange?.(e.target.value)}
+                            placeholder={t('returns.goodwill_reason_placeholder', 'اكتب سبب الزيادة عن المبلغ المحسوب')}
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                          />
+                        </Field>
+                        {goodwillReasonMissing ? (
+                          <div role="alert" style={{ fontSize: '12.5px', color: '#991b1b' }}>
+                            {t('returns.goodwill_reason_required', 'اكتب سبب التسوية الودية قبل التأكيد.')}
+                          </div>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {/* T11-C: a failed preview fails LOUD — the error is
                     shown with a retry, the amount below is flagged
                     as unverified, and confirm stays blocked. */}
@@ -417,7 +572,7 @@ export function ReturnsCreateModal(props: Props) {
                 type="button"
                 variant="primary"
                 onClick={onOpenConfirm}
-                disabled={!selectedInvoice || selectedItemsCount === 0 || isBusy || isReliefPreviewLoading || isReliefPreviewError || (!returnQuantitiesValid && !canRetryUnresolved)}
+                disabled={!selectedInvoice || selectedItemsCount === 0 || isBusy || isReliefPreviewLoading || isReliefPreviewError || (!returnQuantitiesValid && !canRetryUnresolved) || goodwillReasonMissing}
                 style={{
                   width: '100%',
                   padding: '10px',
