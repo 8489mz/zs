@@ -1114,7 +1114,7 @@ export class VanRoutesService {
     if (Array.isArray(payload.customerIds) && payload.customerIds.length > 0) {
       customerRows = await this.anyDb
         .selectFrom('customers')
-        .select(['id', 'name', 'phone', 'address', 'metadata'])
+        .select(['id', 'name', 'phone', 'address', 'metadata', 'balance'])
         .where('id', 'in', payload.customerIds)
         .where('tenant_id', '=', tenantId)
         .where('is_active', '=', true)
@@ -1122,7 +1122,7 @@ export class VanRoutesService {
     } else if (payload.route && payload.route.trim()) {
       const allActive = await this.anyDb
         .selectFrom('customers')
-        .select(['id', 'name', 'phone', 'address', 'metadata'])
+        .select(['id', 'name', 'phone', 'address', 'metadata', 'balance'])
         .where('tenant_id', '=', tenantId)
         .where('is_active', '=', true)
         .execute();
@@ -1139,6 +1139,58 @@ export class VanRoutesService {
       });
     } else {
       throw new AppError('يرجى تحديد العملاء أو اسم خط السير للتحسين', 'INVALID_OPTIMIZE_PAYLOAD', 400);
+    }
+
+    // INV-REP-SCOPED-DRIVER-READS (M19/D8): when repId is present the
+    // caller is a driver (or a supervisor optimizing for one rep) and
+    // the route may only cover that rep's own customers — assigned in
+    // customer metadata, served (field visit / pre-sale order /
+    // delivered sale), or ledger-active under his rep id; the same
+    // three legs H7 established for getActiveTrip /
+    // getDriverTodayItinerary. An explicitly requested customer
+    // outside that scope is refused with a specific 403 naming the
+    // problem (existing 403 style); a shared route name is silently
+    // restricted to his own customers, since route names are shared
+    // across reps and no specific customer was requested. With no
+    // repId (admin path) the breadth is unchanged. Because the rows
+    // below are the only ones ever persisted, persistSequence can
+    // never rewrite another rep's route_sequence.
+    if (payload.repId != null) {
+      const repId = Number(payload.repId);
+      const servedIds = await this.listRepServedCustomerIds(tenantId, repId);
+      const candidateIds = customerRows.map((c: any) => Number(c.id));
+      const totals: Record<number, number> = {};
+      for (const c of customerRows) totals[Number(c.id)] = Number((c as any).balance || 0);
+      const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
+      const repBalancesMap = await getCustomerRepBalancesMap(this.anyDb, tenantId, {
+        customerIds: candidateIds,
+        customerTotalBalances: totals,
+        moneyDigits,
+      });
+      const inScope = (c: any): boolean => {
+        const cid = Number(c.id);
+        let meta: any = {};
+        if (typeof c.metadata === 'string') {
+          try { meta = JSON.parse(c.metadata); } catch { meta = {}; }
+        } else if (c.metadata && typeof c.metadata === 'object') {
+          meta = c.metadata;
+        }
+        if (extractAssignedRepIds(meta).includes(repId)) return true;
+        if (servedIds.has(cid)) return true;
+        return Boolean(repBalancesMap.get(cid)?.byRepId[repId]);
+      };
+      if (Array.isArray(payload.customerIds) && payload.customerIds.length > 0) {
+        const outside = customerRows.find((c: any) => !inScope(c));
+        if (outside) {
+          throw new AppError(
+            'هذا العميل غير مسند إليك ولم تخدمه من قبل، لا يمكنك إدراجه في خط سيرك',
+            'REP_CUSTOMER_NOT_IN_SCOPE',
+            403,
+          );
+        }
+      } else {
+        customerRows = customerRows.filter(inScope);
+      }
     }
 
     if (customerRows.length === 0) {

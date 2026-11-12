@@ -3,7 +3,7 @@ import { Kysely, sql } from '../../../database/kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
-import { generateDailySequenceNumber } from './van-common.util';
+import { generateDailySequenceNumber, listRepUsableWarehouseScope, assertWarehouseInRepScope } from './van-common.util';
 import { evaluateBatchExpiryStatus } from '../rep-target.engine';
 
 @Injectable()
@@ -515,8 +515,35 @@ export class VanRequisitionsService {
     };
   }
 
-  async getDriverWarehouses(tenantId: string) {
-    const rows = await this.anyDb
+  async getDriverWarehouses(tenantId: string, repId?: number) {
+    // INV-REP-SCOPED-DRIVER-READS (M19/D10): a driver call carries
+    // repId and sees only the operational warehouses he has loaded
+    // from (his trips' / requisitions' source warehouses). A rep with
+    // no load history yet falls back to the full list — see
+    // listRepUsableWarehouseScope — because no assignment source
+    // exists to restrict him to. Staff calls (no repId) are unchanged.
+    let rows: any[];
+    if (repId != null) {
+      const scope = await listRepUsableWarehouseScope(this.anyDb, tenantId, repId);
+      if (scope.hasLoadHistory) {
+        rows = await this.anyDb
+          .selectFrom('stock_locations')
+          .select(['id', 'name', 'code', 'location_type'])
+          .where('tenant_id', '=', tenantId)
+          .where('is_active', '=', true)
+          .where('location_type', '!=', 'van_stock')
+          .where('id', 'in', [...scope.sourceWarehouseIds])
+          .orderBy('id', 'asc')
+          .execute();
+        return rows.map((r: any) => ({
+          id: Number(r.id),
+          name: r.name,
+          code: r.code || '',
+          locationType: r.location_type,
+        }));
+      }
+    }
+    rows = await this.anyDb
       .selectFrom('stock_locations')
       .select(['id', 'name', 'code', 'location_type'])
       .where('tenant_id', '=', tenantId)
@@ -533,7 +560,23 @@ export class VanRequisitionsService {
     }));
   }
 
-  async getDriverAvailableProducts(tenantId: string, warehouseId?: number) {
+  async getDriverAvailableProducts(tenantId: string, warehouseId?: number, repId?: number) {
+    // INV-REP-SCOPED-DRIVER-READS (M19/D10): a driver call carries
+    // repId and sees stock only in his own usable warehouses (same
+    // evidence scope as getDriverWarehouses); an explicitly requested
+    // warehouse outside that scope is refused with a specific 403.
+    // The per-warehouse breakdown (warehouseStocks) is restricted the
+    // same way — previously it listed every warehouse even when a
+    // single warehouse was requested. Staff calls (no repId) keep the
+    // full-tenant behaviour.
+    let repScope: Awaited<ReturnType<typeof listRepUsableWarehouseScope>> | null = null;
+    if (repId != null) {
+      repScope = await listRepUsableWarehouseScope(this.anyDb, tenantId, repId);
+      if (warehouseId && Number(warehouseId) > 0) {
+        assertWarehouseInRepScope(repScope, Number(warehouseId));
+      }
+    }
+
     const products = await this.anyDb
       .selectFrom('products as p')
       .leftJoin('suppliers as s', 's.id', 'p.supplier_id')
@@ -555,7 +598,7 @@ export class VanRequisitionsService {
       .orderBy('p.name', 'asc')
       .execute();
 
-    const stockQuery = this.anyDb
+    let stockQuery = this.anyDb
       .selectFrom('product_location_stock as pls')
       .innerJoin('stock_locations as sl', 'sl.id', 'pls.location_id')
       .select([
@@ -567,6 +610,13 @@ export class VanRequisitionsService {
       .where('pls.tenant_id', '=', tenantId)
       .where('sl.is_active', '=', true)
       .where('sl.location_type', '!=', 'van_stock');
+
+    // INV-REP-SCOPED-DRIVER-READS (M19/D10): stock rows only from the
+    // rep's own usable warehouses (bootstrap: no history yet means no
+    // restriction — see listRepUsableWarehouseScope).
+    if (repScope?.hasLoadHistory) {
+      stockQuery = stockQuery.where('sl.id', 'in', [...repScope.sourceWarehouseIds]);
+    }
 
     const stockRows = await stockQuery.execute();
 
@@ -617,6 +667,7 @@ export class VanRequisitionsService {
         const pid = Number(b.product_id);
         if (!pid || !b.expiry_date) continue;
         if (warehouseId && b.location_id && Number(b.location_id) !== Number(warehouseId)) continue;
+        if (repScope?.hasLoadHistory && b.location_id && !repScope.sourceWarehouseIds.has(Number(b.location_id))) continue;
         if (!fefoBatchMap.has(pid)) {
           fefoBatchMap.set(pid, {
             batchNumber: b.batch_number ? String(b.batch_number) : null,
@@ -663,9 +714,16 @@ export class VanRequisitionsService {
 
     return products.map((p: any) => {
       const pId = Number(p.id);
-      const whStocks = stockMap.get(pId) || [];
+      // INV-REP-SCOPED-DRIVER-READS (M19/D10): the breakdown lists only
+      // the requested warehouse when one was requested — previously it
+      // listed every warehouse's stock even for a single-warehouse
+      // request. (The rep scope above already filtered stockMap.)
+      const allWhStocks = stockMap.get(pId) || [];
+      const whStocks = targetWhId
+        ? allWhStocks.filter((w) => w.warehouseId === targetWhId)
+        : allWhStocks;
       const totalStock = targetWhId
-        ? (whStocks.find((w) => w.warehouseId === targetWhId)?.qty || 0)
+        ? (whStocks[0]?.qty || 0)
         : whStocks.reduce((sum, w) => sum + w.qty, 0);
       const unitInfo = unitsMap.get(pId);
       const baseUnit = unitInfo?.baseUnitName || 'قطعة';

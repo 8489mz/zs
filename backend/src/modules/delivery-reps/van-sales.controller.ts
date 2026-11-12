@@ -38,6 +38,7 @@ export class VanSalesController {
       driver.tenantId,
       warehouseLocationId ? Number(warehouseLocationId) : undefined,
       { search, categoryId: categoryId ? Number(categoryId) : undefined },
+      driver.repId,
     );
   }
 
@@ -435,7 +436,7 @@ export class VanSalesController {
   @Get('warehouses')
   async getDriverWarehouses(@Headers('authorization') authHeader: string) {
     const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
-    const warehouses = await this.vanSalesService.getDriverWarehouses(driver.tenantId);
+    const warehouses = await this.vanSalesService.getDriverWarehouses(driver.tenantId, driver.repId);
     return { ok: true, warehouses };
   }
 
@@ -446,7 +447,7 @@ export class VanSalesController {
   ) {
     const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
     const parsedWhId = warehouseId && warehouseId !== 'all' ? Number(warehouseId) : undefined;
-    const products = await this.vanSalesService.getDriverAvailableProducts(driver.tenantId, parsedWhId);
+    const products = await this.vanSalesService.getDriverAvailableProducts(driver.tenantId, parsedWhId, driver.repId);
     return { ok: true, products };
   }
 
@@ -543,7 +544,7 @@ export class VanSalesController {
   @Get('maintenance-alerts')
   async getMyMaintenanceAlerts(@Headers('authorization') authHeader: string) {
     const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
-    return this.vanSalesService.getFleetMaintenanceAlerts(driver.tenantId);
+    return this.vanSalesService.getFleetMaintenanceAlerts(driver.tenantId, undefined, driver.repId);
   }
 
   @Post('transfers')

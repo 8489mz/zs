@@ -411,9 +411,15 @@ export class VanTransfersService {
   }
 
   async getPeerReps(tenantId: string, currentRepId: number) {
+    // INV-REP-SCOPED-DRIVER-READS (M19/D10): the peer list hides phone
+    // numbers — a driver picking a transfer recipient needs the peer's
+    // name and plate (the transfer modal labels options with exactly
+    // those), never another rep's personal contact details. The phone
+    // key is kept as an empty string so the existing response shape
+    // (and the transfer modal) does not break.
     const rows = await this.anyDb
       .selectFrom('delivery_representatives')
-      .select(['id', 'name', 'phone', 'vehicle_plate'])
+      .select(['id', 'name', 'vehicle_plate'])
       .where('tenant_id', '=', tenantId)
       .where('is_active', '=', true)
       .where('id', '!=', currentRepId)
@@ -423,7 +429,7 @@ export class VanTransfersService {
     return rows.map((r: any) => ({
       id: Number(r.id),
       name: r.name,
-      phone: r.phone || '',
+      phone: '',
       vehiclePlate: r.vehicle_plate || '',
     }));
   }

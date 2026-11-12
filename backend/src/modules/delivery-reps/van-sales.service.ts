@@ -5777,8 +5777,8 @@ export class VanSalesService {
     return this.vanFleetService.listOilChanges(tenantId, vehicleId);
   }
 
-  async getFleetMaintenanceAlerts(tenantId: string, vehicleId?: number) {
-    return this.vanFleetService.getFleetMaintenanceAlerts(tenantId, vehicleId);
+  async getFleetMaintenanceAlerts(tenantId: string, vehicleId?: number, repId?: number) {
+    return this.vanFleetService.getFleetMaintenanceAlerts(tenantId, vehicleId, repId);
   }
 
   async listVehicleDrivers(tenantId: string, vehicleId: number) {
@@ -5947,12 +5947,12 @@ export class VanSalesService {
     return this.vanRequisitionsService.cancelLoadRequisitionByDriver(tenantId, repId, requisitionId);
   }
 
-  async getDriverWarehouses(tenantId: string) {
-    return this.vanRequisitionsService.getDriverWarehouses(tenantId);
+  async getDriverWarehouses(tenantId: string, repId?: number) {
+    return this.vanRequisitionsService.getDriverWarehouses(tenantId, repId);
   }
 
-  async getDriverAvailableProducts(tenantId: string, warehouseId?: number) {
-    return this.vanRequisitionsService.getDriverAvailableProducts(tenantId, warehouseId);
+  async getDriverAvailableProducts(tenantId: string, warehouseId?: number, repId?: number) {
+    return this.vanRequisitionsService.getDriverAvailableProducts(tenantId, warehouseId, repId);
   }
 
   // =========================================================================

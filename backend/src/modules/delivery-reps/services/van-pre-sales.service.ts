@@ -5,7 +5,7 @@ import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 import { reserveLocationStock, releaseLocationStock } from '../../../common/utils/location-stock-ledger';
-import { sortItemsByProductId, generateDailySequenceNumber } from './van-common.util';
+import { sortItemsByProductId, generateDailySequenceNumber, listRepUsableWarehouseScope, assertWarehouseInRepScope } from './van-common.util';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { normalizeDateOnly, todayLocalIsoDate } from '../../sales/helpers/sales-write.helper';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
@@ -22,11 +22,15 @@ export interface PreSalesCatalogItem {
   warehouseReserved?: number;
   availableQty: number;
   warehouseAvailable?: number;
-  costPrice: number;
+  // INV-REP-SCOPED-DRIVER-READS (M19/D9): the four non-retail prices
+  // are present only on staff reads. A driver call (repId present)
+  // omits them entirely — the driver sees the retail price only, like
+  // getDriverAvailableProducts.
+  costPrice?: number;
   retailPrice: number;
-  creditPrice: number;
-  consumerPrice: number;
-  wholesalePrice: number;
+  creditPrice?: number;
+  consumerPrice?: number;
+  wholesalePrice?: number;
   supplierId?: number | null;
   supplierName?: string | null;
   categoryId?: number | null;
@@ -175,7 +179,26 @@ export class VanPreSalesService {
     tenantId: string,
     warehouseLocationId?: number,
     query?: { search?: string; categoryId?: number; limit?: number; offset?: number },
+    repId?: number,
   ): Promise<{ ok?: boolean; items: PreSalesCatalogItem[]; products?: PreSalesCatalogItem[]; total: number; targetWarehouseId?: number | null }> {
+    // INV-REP-SCOPED-DRIVER-READS (M19/D9): a driver call carries
+    // repId (driver controller). His catalog shows the retail price
+    // only — cost/wholesale/credit/consumer prices are never selected
+    // for him — and its stock resolves to a warehouse he loads from.
+    // No rep<->category assignment exists anywhere in the schema, so
+    // hiding "categories not assigned to the rep" is NOT possible
+    // without inventing an assignment source; the price hiding above
+    // plus the warehouse scoping below are the scopable parts.
+    let effectiveWarehouseLocationId = warehouseLocationId;
+    if (repId != null) {
+      const scope = await listRepUsableWarehouseScope(this.anyDb, tenantId, repId);
+      if (effectiveWarehouseLocationId) {
+        assertWarehouseInRepScope(scope, Number(effectiveWarehouseLocationId));
+      } else if (scope.hasLoadHistory && scope.mostRecentSourceWarehouseId) {
+        effectiveWarehouseLocationId = scope.mostRecentSourceWarehouseId;
+      }
+    }
+
     let qb = this.anyDb
       .selectFrom('products as p')
       .leftJoin('suppliers as s', 's.id', 'p.supplier_id')
@@ -186,11 +209,10 @@ export class VanPreSalesService {
         'p.barcode',
         'p.stock_qty',
         'p.reserved_qty',
-        'p.cost_price',
+        ...(repId != null
+          ? []
+          : ['p.cost_price', 'p.wholesale_price', 'p.credit_price', 'p.consumer_price']),
         'p.retail_price',
-        'p.wholesale_price',
-        'p.credit_price',
-        'p.consumer_price',
         'p.category_id',
         'p.supplier_id',
         's.name as supplier_name',
@@ -273,7 +295,7 @@ export class VanPreSalesService {
     }
 
     // Resolve target warehouse location consistently
-    const targetWhId = await this.resolveDefaultWarehouseLocationId(tenantId, warehouseLocationId, productIds);
+    const targetWhId = await this.resolveDefaultWarehouseLocationId(tenantId, effectiveWarehouseLocationId, productIds);
 
     // Query location-specific stock AND unassigned stock for accurate availability matching reserveLocationStock
     const locationStockMap = new Map<number, number>();
@@ -371,11 +393,17 @@ export class VanPreSalesService {
         warehouseReserved: reserved,
         availableQty: available,
         warehouseAvailable: available,
-        costPrice: Number(p.cost_price || 0),
+        // INV-REP-SCOPED-DRIVER-READS (M19/D9): driver reads carry no
+        // cost/wholesale/credit/consumer price at all — retail only.
+        ...(repId != null
+          ? {}
+          : {
+              costPrice: Number(p.cost_price || 0),
+              creditPrice: credit,
+              consumerPrice: consumer,
+              wholesalePrice: Number(p.wholesale_price || retail),
+            }),
         retailPrice: retail,
-        creditPrice: credit,
-        consumerPrice: consumer,
-        wholesalePrice: Number(p.wholesale_price || retail),
         supplierId: p.supplier_id ? Number(p.supplier_id) : null,
         supplierName: (p.supplier_name || '').trim() || 'الشركة العامة',
         categoryId: p.category_id ? Number(p.category_id) : null,

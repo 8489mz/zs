@@ -596,7 +596,45 @@ export class VanFleetService {
     return rows;
   }
 
-  async getFleetMaintenanceAlerts(tenantId: string, vehicleId?: number) {
+  async getFleetMaintenanceAlerts(tenantId: string, vehicleId?: number, repId?: number) {
+    // INV-REP-SCOPED-DRIVER-READS (M19/D10): a driver call carries
+    // repId and sees alerts only for vehicles assigned to him — either
+    // as the vehicle's assigned rep (fleet_vehicles.assigned_rep_id)
+    // or as an active driver on it (fleet_vehicle_drivers). An
+    // explicitly requested vehicle outside that set is refused with a
+    // specific 403. A rep with no vehicle simply gets no alerts.
+    // Staff calls (no repId) keep the full-tenant behaviour.
+    let repVehicleIds: Set<number> | null = null;
+    if (repId != null) {
+      const [assigned, driven] = await Promise.all([
+        this.anyDb
+          .selectFrom('fleet_vehicles')
+          .select('id')
+          .where('tenant_id', '=', tenantId)
+          .where('assigned_rep_id', '=', repId)
+          .execute(),
+        this.anyDb
+          .selectFrom('fleet_vehicle_drivers')
+          .select('vehicle_id')
+          .where('tenant_id', '=', tenantId)
+          .where('rep_id', '=', repId)
+          .where('is_active', '=', true)
+          .execute(),
+      ]);
+      repVehicleIds = new Set<number>();
+      for (const row of [...(assigned || []), ...(driven || [])]) {
+        const id = Number((row as any).id ?? (row as any).vehicle_id);
+        if (Number.isInteger(id) && id > 0) repVehicleIds.add(id);
+      }
+      if (vehicleId && !repVehicleIds.has(Number(vehicleId))) {
+        throw new AppError(
+          'هذه المركبة ليست مسندة إليك، لا يمكنك الاطلاع على تنبيهات صيانتها',
+          'REP_VEHICLE_NOT_ASSIGNED',
+          403,
+        );
+      }
+    }
+
     let vehicleQuery = this.anyDb
       .selectFrom('fleet_vehicles as fv')
       .leftJoin('delivery_representatives as dr', 'dr.id', 'fv.assigned_rep_id')
@@ -614,6 +652,9 @@ export class VanFleetService {
 
     if (vehicleId) {
       vehicleQuery = vehicleQuery.where('fv.id', '=', vehicleId);
+    }
+    if (repVehicleIds) {
+      vehicleQuery = vehicleQuery.where('fv.id', 'in', [...repVehicleIds]);
     }
 
     const vehicles = await vehicleQuery.execute();

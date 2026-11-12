@@ -153,6 +153,95 @@ export async function getOrCreateVanLocation(
   return { id: Number(inserted.id), name: inserted.name || locationName };
 }
 
+export interface RepWarehouseScope {
+  /** Operational warehouses the rep has actually loaded from (trip sources + requisition sources). */
+  sourceWarehouseIds: Set<number>;
+  /** The rep's most recent load source, for defaulting a driver read to his own scope. */
+  mostRecentSourceWarehouseId: number | null;
+  /** The rep's own van_stock location (his van stock, never a load source). */
+  vanLocationId: number | null;
+  /** True once any load history exists; false for a brand-new rep with no trips/requisitions yet. */
+  hasLoadHistory: boolean;
+}
+
+/**
+ * INV-REP-SCOPED-DRIVER-READS (M19/D10): the warehouses a driver may
+ * read stock from. There is NO rep<->warehouse assignment anywhere in
+ * the schema — submitLoadRequisition accepts any operational warehouse
+ * as a load source — so the scope is EVIDENCE, not assignment: the
+ * source warehouses of the rep's own trips and load requisitions, plus
+ * his own van_stock location. A rep with no load history yet has no
+ * evidence to restrict him to, so callers fall back to the full
+ * operational list for him (bootstrap); without that fallback his very
+ * first load requisition could name no source warehouse at all. Once
+ * his first trip/requisition exists the scope closes to his own
+ * sources automatically.
+ */
+export async function listRepUsableWarehouseScope(
+  anyDb: any,
+  tenantId: string,
+  repId: number,
+): Promise<RepWarehouseScope> {
+  const rep = await anyDb
+    .selectFrom('delivery_representatives')
+    .select(['van_location_id'])
+    .where('id', '=', repId)
+    .where('tenant_id', '=', tenantId)
+    .executeTakeFirst();
+  const vanLocationId = rep?.van_location_id ? Number(rep.van_location_id) : null;
+
+  const [tripSources, reqSources] = await Promise.all([
+    anyDb
+      .selectFrom('van_sales_trips')
+      .select('source_warehouse_id')
+      .where('tenant_id', '=', tenantId)
+      .where('rep_id', '=', repId)
+      .where('source_warehouse_id', 'is not', null)
+      .orderBy('id', 'desc')
+      .execute(),
+    anyDb
+      .selectFrom('van_load_requisitions')
+      .select('source_warehouse_id')
+      .where('tenant_id', '=', tenantId)
+      .where('rep_id', '=', repId)
+      .where('source_warehouse_id', 'is not', null)
+      .orderBy('id', 'desc')
+      .execute(),
+  ]);
+  const sourceWarehouseIds = new Set<number>();
+  for (const row of [...(tripSources || []), ...(reqSources || [])]) {
+    const id = Number((row as any).source_warehouse_id);
+    if (Number.isInteger(id) && id > 0) sourceWarehouseIds.add(id);
+  }
+  const mostRecentRow = (tripSources || [])[0] || (reqSources || [])[0];
+  const mostRecentSourceWarehouseId = mostRecentRow?.source_warehouse_id
+    ? Number(mostRecentRow.source_warehouse_id)
+    : null;
+  return {
+    sourceWarehouseIds,
+    mostRecentSourceWarehouseId,
+    vanLocationId,
+    hasLoadHistory: sourceWarehouseIds.size > 0,
+  };
+}
+
+/**
+ * INV-REP-SCOPED-DRIVER-READS (M19/D10): refuses an explicitly
+ * requested warehouse outside the rep's own scope with a specific
+ * error naming the problem (existing 403 style). A rep with no load
+ * history yet is not refused — see listRepUsableWarehouseScope.
+ */
+export function assertWarehouseInRepScope(scope: RepWarehouseScope, warehouseId: number): void {
+  if (!scope.hasLoadHistory) return;
+  if (scope.sourceWarehouseIds.has(warehouseId)) return;
+  if (scope.vanLocationId !== null && scope.vanLocationId === warehouseId) return;
+  throw new AppError(
+    'هذا المستودع ليس من المستودعات التي تحمل منها، لا يمكنك الاطلاع على مخزونه',
+    'REP_WAREHOUSE_NOT_USABLE',
+    403,
+  );
+}
+
 /**
  * Generates a collision-proof, tenant-scoped daily sequence number (0001, 0002, ...)
  * strictly adhering to the Universal Document Numbering Standard (PREFIX-YYMMDD-XXXX).
