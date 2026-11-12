@@ -118,3 +118,22 @@ export function verifyPortalToken<T extends Record<string, unknown>>(
 
 /** عمر رمز البوابة الموحّد (30 يوماً) — كان مكرراً في ثلاث خدمات. */
 export const PORTAL_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * M14 (INV-DRIVER-TOKEN-PIN-INVALIDATION): اسم حقل نسخة رمز الدخول (PIN)
+ * داخل حمولة رمز البوابة. رمز المندوب بلا حالة، فبدون نسخة يبقى رمز
+ * صادر قبل تغيير الـPIN صالحاً حتى انتهاء عمره (30 يوماً). كل تغيير
+ * PIN يرفع النسخة المخزنة لدى المندوب، والرمز يحمل النسخة التي صدر
+ * تحتها؛ والتحقق يرفض أي رمز نسخته أقدم من المخزنة.
+ */
+export const PORTAL_TOKEN_PIN_VERSION_CLAIM = 'pinVer';
+
+/**
+ * يقرأ نسخة الـPIN من حمولة رمز بوابة مفكوكة. الرموز الصادرة قبل M14
+ * لا تحمل الحقل إطلاقاً فتُقرأ نسخة 0 — أي أن أول تغيير PIN بعد هذا
+ * الإصلاح يُبطلها أيضاً (انظر قرار الرموز القديمة في تقرير M14).
+ */
+export function portalTokenPinVersion(payload: Record<string, unknown>): number {
+  const raw = Number((payload as Record<string, unknown>)?.[PORTAL_TOKEN_PIN_VERSION_CLAIM] ?? 0);
+  return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 0;
+}

@@ -75,7 +75,7 @@ async function main(): Promise<void> {
     await pg.exec(`
       CREATE TABLE tenants (id text PRIMARY KEY, slug text, custom_domain text, business_name text, status text, trial_ends_at timestamptz);
       CREATE TABLE tenant_subscriptions (id bigserial PRIMARY KEY, tenant_id text, status text, created_at timestamptz DEFAULT NOW(), ends_at timestamptz, grace_ends_at timestamptz, updated_at timestamptz DEFAULT NOW());
-      CREATE TABLE delivery_representatives (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, phone text, is_active boolean DEFAULT true, pin_hash text, pin_salt text);
+      CREATE TABLE delivery_representatives (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, phone text, is_active boolean DEFAULT true, pin_hash text, pin_salt text, metadata jsonb NOT NULL DEFAULT '{}');
       CREATE TABLE branches (id bigint PRIMARY KEY, tenant_id text, name text, latitude numeric, longitude numeric, geofence_radius_meters numeric);
       CREATE TABLE hr_departments (id bigint PRIMARY KEY, tenant_id text, name text);
       CREATE TABLE hr_positions (id bigint PRIMARY KEY, tenant_id text, name text);

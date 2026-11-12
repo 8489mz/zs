@@ -7,7 +7,9 @@ import { AuthCacheService } from '../../core/auth/services/auth-cache.service';
 import { checkPortalTenantStatus } from '../../core/auth/utils/portal-tenant-status';
 import { boundedPage } from '../../common/utils/bounded-page';
 import {
+  PORTAL_TOKEN_PIN_VERSION_CLAIM,
   PORTAL_TOKEN_TTL_MS,
+  portalTokenPinVersion,
   signPortalToken,
   verifyPortalToken,
   type PortalTokenErrorSpec,
@@ -16,7 +18,7 @@ import { AppError } from '../../common/errors/app-error';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { UpsertDeliveryRepDto } from './dto/upsert-delivery-rep.dto';
-import { LoginAttemptLimiter } from '../../common/utils/login-attempt-limiter';
+import { LoginAttemptLimiter, normalizePhoneForRateLimit } from '../../common/utils/login-attempt-limiter';
 import { assertPortalTenantAllowed } from '../../core/auth/utils/portal-tenant-status';
 import { createPasswordRecord, verifyPassword } from '../../core/auth/utils/password-hasher';
 import { assertSecurePasscode } from '../../core/auth/utils/password-policy';
@@ -32,6 +34,45 @@ const DRIVER_TOKEN_ERRORS: PortalTokenErrorSpec = {
   signature: { message: 'رمز الدخول غير صالح أو مزور', code: 'INVALID_DRIVER_TOKEN' },
   expired: { message: 'انتهت صلاحية جلسة المندوب، يرجى إعادة تسجيل الدخول', code: 'DRIVER_SESSION_EXPIRED' },
 };
+
+/**
+ * M14 (INV-DRIVER-TOKEN-PIN-INVALIDATION): نسخة الـPIN مخزنة في
+ * `delivery_representatives.metadata.pin_version` (JSONB، موجود منذ
+ * الهجرة 0224 — لا حاجة لعمود جديد). كل تغيير PIN يرفعها بمقدار 1،
+ * والرمز يحمل النسخة التي صدر تحتها؛ أي رمز نسخته أقدم من المخزنة
+ * يُرفض عند التحقق. المندوب الذي لم يغيّر رمزه أبداً نسخته 0، وهي
+ * نفس قيمة الرموز القديمة بلا حقل نسخة، فتستمر صالحة حتى أول تغيير.
+ */
+function repPinVersion(metadata: unknown): number {
+  let parsed: any = metadata;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return 0;
+    }
+  }
+  const raw = Number(parsed?.pin_version ?? 0);
+  return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 0;
+}
+
+/** يعيد نسخة من بيانات metadata مع ضبط pin_version — دون مسح باقي المفاتيح. */
+function withPinVersion(metadata: unknown, version: number): Record<string, any> {
+  return { ...parseMetadata(metadata), pin_version: version };
+}
+
+/** يحوّل قيمة metadata (كائن JSONB أو نص JSON أو null) إلى كائن عادي. */
+function parseMetadata(metadata: unknown): Record<string, any> {
+  if (typeof metadata === 'string') {
+    try {
+      return JSON.parse(metadata) || {};
+    } catch {
+      return {};
+    }
+  }
+  if (metadata && typeof metadata === 'object') return { ...(metadata as Record<string, any>) };
+  return {};
+}
 
 @Injectable()
 export class DeliveryRepsService {
@@ -179,7 +220,8 @@ export class DeliveryRepsService {
         is_van_rep: isVanRep,
         is_active: payload.isActive !== false,
         permissions: permissions as any,
-        metadata: (payload.metadata || {}) as any,
+        // M14: مندوب جديد يبدأ بنسخة PIN رقم 0 — لا رموز صادرة قبله أصلاً.
+        metadata: { ...((payload.metadata || {}) as Record<string, any>), pin_version: 0 } as any,
         ...this.tenantFields(actor),
       } as any)
       .returning(['id'])
@@ -195,7 +237,7 @@ export class DeliveryRepsService {
 
     const existing = await this.db
       .selectFrom('delivery_representatives')
-      .select(['id', 'permissions', 'phone'])
+      .select(['id', 'permissions', 'phone', 'metadata'])
       .where('id', '=', id)
       .where(this.tenantPredicate(actor))
       .executeTakeFirst();
@@ -205,6 +247,21 @@ export class DeliveryRepsService {
       assertSecurePasscode(String(payload.pinCode), { phone: payload.phone || existing.phone || undefined });
     }
     const updatePinRecord = payload.pinCode ? await createPasswordRecord(String(payload.pinCode)) : null;
+
+    // M14: تغيير PIN من مسار الإدارة يرفع نسخة الـPIN أيضاً — وإلا بقيت
+    // الرموز الصادرة تحت الـPIN القديم صالحة 30 يوماً. دمج metadata
+    // يحفظ النسخة حتى لو أرسل المتصل metadata كاملة بدونها.
+    const currentPinVersion = repPinVersion((existing as any).metadata);
+    const nextPinVersion = updatePinRecord ? currentPinVersion + 1 : currentPinVersion;
+    const mergedMetadata =
+      updatePinRecord || payload.metadata !== undefined
+        ? withPinVersion(
+            payload.metadata !== undefined
+              ? { ...parseMetadata((existing as any).metadata), ...(payload.metadata as Record<string, any>) }
+              : (existing as any).metadata,
+            nextPinVersion,
+          )
+        : undefined;
 
     const isVanRep = payload.isVanRep !== undefined
       ? Boolean(payload.isVanRep)
@@ -236,7 +293,7 @@ export class DeliveryRepsService {
         is_van_rep: isVanRep !== undefined ? isVanRep : undefined,
         is_active: payload.isActive !== undefined ? payload.isActive : undefined,
         ...(mergedPermissions !== undefined ? { permissions: mergedPermissions as any } : {}),
-        ...(payload.metadata !== undefined ? { metadata: payload.metadata as any } : {}),
+        ...(mergedMetadata !== undefined ? { metadata: mergedMetadata as any } : {}),
         updated_at: sql`NOW()`,
       } as any)
       .where('id', '=', id)
@@ -948,7 +1005,9 @@ export class DeliveryRepsService {
       throw new AppError('رقم الهاتف ورمز الدخول السريع (PIN) مطلوبان', 'INVALID_CREDENTIALS', 400);
     }
 
-    const rateLimitKey = `driver-portal:${rawPhone.toLowerCase()}:${String(companyScope || '').toLowerCase()}`;
+    // M14: مفتاح المحدِّد يستخدم رقم الهاتف بعد التطبيع (نفس تطبيع
+    // المطابقة أدناه) — فالصيغ +20 / 0 / خام تشترك في دلو واحد.
+    const rateLimitKey = `driver-portal:${normalizePhoneForRateLimit(rawPhone)}:${String(companyScope || '').toLowerCase()}`;
     this.driverLoginLimiter.assertNotLocked(rateLimitKey);
 
     try {
@@ -969,7 +1028,9 @@ export class DeliveryRepsService {
     rateLimitKey: string,
   ): Promise<{ token: string; rep: Record<string, unknown>; mustChangePin: boolean }> {
     const cleanDigits = rawPhone.replace(/\D/g, '');
-    const cleanNoCountry = cleanDigits.startsWith('20') ? cleanDigits.slice(2) : (cleanDigits.startsWith('0') ? cleanDigits.slice(1) : cleanDigits);
+    // M14: نفس دالة التطبيع التي يبني بها driverLogin مفتاح المحدِّد —
+    // رقم واحد بأي صيغة يطابق صفاً واحداً ودلواً واحداً.
+    const cleanNoCountry = normalizePhoneForRateLimit(rawPhone);
 
     let resolvedTenantId = companyScope ? String(companyScope).trim() : undefined;
     if (resolvedTenantId) {
@@ -1004,7 +1065,7 @@ export class DeliveryRepsService {
     const phoneMatches = reps.filter((r) => {
       if (!r.phone || !r.pin_hash) return false;
       const rDigits = String(r.phone).replace(/\D/g, '');
-      const rNoCountry = rDigits.startsWith('20') ? rDigits.slice(2) : (rDigits.startsWith('0') ? rDigits.slice(1) : rDigits);
+      const rNoCountry = normalizePhoneForRateLimit(String(r.phone));
       return rNoCountry === cleanNoCountry || rDigits === cleanDigits;
     });
 
@@ -1090,6 +1151,9 @@ export class DeliveryRepsService {
         accountId: matchedRep.account_id,
         name: matchedRep.name,
         phone: matchedRep.phone,
+        // M14: الرمز يحمل نسخة الـPIN الحالية؛ أي تغيير PIN لاحق
+        // يُبطل هذا الرمز عند التحقق (verifyDriverTokenCore).
+        [PORTAL_TOKEN_PIN_VERSION_CLAIM]: repPinVersion((matchedRep as any).metadata),
       },
       PORTAL_TOKEN_TTL_MS,
     );
@@ -1119,8 +1183,8 @@ export class DeliveryRepsService {
    * shared `assertSecurePasscode` policy (never a trivial value such as
    * 1234/0000) and differ from the current one. Returns a fresh token:
    * once the PIN is no longer the default the session is unflagged.
-   * The driver token is stateless HMAC with no version, so a PIN change
-   * cannot invalidate tokens already issued — that is M14's package.
+   * M14: the change bumps the stored PIN version, so every token issued
+   * under the old PIN is rejected at verify (verifyDriverTokenCore).
    */
   async driverChangePin(
     driver: { repId: number; tenantId: string; accountId: string; name: string; phone: string },
@@ -1134,7 +1198,7 @@ export class DeliveryRepsService {
 
     const rep = await this.db
       .selectFrom('delivery_representatives')
-      .select(['id', 'name', 'full_name', 'phone', 'vehicle_plate', 'is_active', 'tenant_id', 'account_id', 'pin_hash', 'pin_salt', 'is_van_rep', 'van_location_id', 'permissions'])
+      .select(['id', 'name', 'full_name', 'phone', 'vehicle_plate', 'is_active', 'tenant_id', 'account_id', 'pin_hash', 'pin_salt', 'is_van_rep', 'van_location_id', 'permissions', 'metadata'])
       .where('id', '=', driver.repId)
       .where('tenant_id', '=', driver.tenantId)
       .executeTakeFirst();
@@ -1156,9 +1220,12 @@ export class DeliveryRepsService {
     }
 
     const record = await createPasswordRecord(newPin);
+    // M14: رفع نسخة الـPIN مع تغييره، في نفس الكتابة — الرمز الجديد
+    // يحمل النسخة الجديدة، والرموز القديمة تُرفض عند التحقق.
+    const nextPinVersion = repPinVersion((rep as any).metadata) + 1;
     await this.db
       .updateTable('delivery_representatives')
-      .set({ pin_hash: record.hash, pin_salt: record.salt })
+      .set({ pin_hash: record.hash, pin_salt: record.salt, metadata: withPinVersion((rep as any).metadata, nextPinVersion) as any })
       .where('id', '=', driver.repId)
       .where('tenant_id', '=', driver.tenantId)
       .execute();
@@ -1184,6 +1251,8 @@ export class DeliveryRepsService {
         accountId: rep.account_id,
         name: rep.name,
         phone: rep.phone,
+        // M14: الرمز الجديد يحمل النسخة الجديدة بعد رفعها.
+        [PORTAL_TOKEN_PIN_VERSION_CLAIM]: nextPinVersion,
       },
       PORTAL_TOKEN_TTL_MS,
     );
@@ -1236,6 +1305,8 @@ export class DeliveryRepsService {
    * الرمز بلا حالة وعمره 30 يوماً، فبعد التحقق من التوقيع يُعاد التأكد من قاعدة
    * البيانات أن المندوب ما زال نشطاً داخل نفس المستأجر — وإلا ظل مندوب موقوف قادراً
    * على البيع والتحصيل باسم المنشأة لمدة شهر بعد إيقافه.
+   * M14: يُعاد التأكد أيضاً أن نسخة الـPIN في الرمز تساوي المخزنة —
+   * أي تغيير PIN (ذاتي أو من الإدارة) يُبطل فوراً كل رمز صدر قبله.
    */
   /**
    * INV-PORTAL-TENANT-STATUS-ENFORCED: the driver token is stateless,
@@ -1262,13 +1333,20 @@ export class DeliveryRepsService {
 
     const rep = await this.db
       .selectFrom('delivery_representatives')
-      .select(['id', 'name', 'phone', 'is_active', 'tenant_id', 'account_id'])
+      .select(['id', 'name', 'phone', 'is_active', 'tenant_id', 'account_id', 'metadata'])
       .where('id', '=', repId)
       .where('tenant_id', '=', tenantId)
       .executeTakeFirst();
 
     if (!rep || rep.is_active === false) {
       throw new AppError('تم إيقاف حساب المندوب. يرجى مراجعة الإدارة', 'DRIVER_INACTIVE', 401);
+    }
+
+    // M14: نسخة الـPIN في الرمز أقدم من المخزنة تعني أن الـPIN تغيّر
+    // بعد إصدار الرمز — الرمز مرفوض حتى لو كان توقيعه وعمره سليمين.
+    // الرموز القديمة بلا حقل نسخة تُقرأ نسخة 0 (portalTokenPinVersion).
+    if (portalTokenPinVersion(payload) !== repPinVersion((rep as any).metadata)) {
+      throw new AppError('رمز الدخول غير صالح', 'INVALID_DRIVER_TOKEN', 401);
     }
 
     const decision = await checkPortalTenantStatus(this.db as any, this.authCache, tenantId);
