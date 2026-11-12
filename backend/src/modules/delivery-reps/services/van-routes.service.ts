@@ -39,6 +39,96 @@ export class VanRoutesService {
     return this.db as any;
   }
 
+  /**
+   * INV-REP-SCOPED-CUSTOMER-READS (H7/D1+D14): the customer ids this rep
+   * has served — a field visit on one of his trips, a pre-sale order
+   * assigned to him, or a delivered sale carrying his delivery_rep_id.
+   * Same served definition as VanSalesService.assertRepServedCustomer
+   * (that service owns the read gate; this service cannot import it
+   * without a cycle, so the three evidence queries are mirrored here
+   * verbatim and must stay in step with it).
+   */
+  private async listRepServedCustomerIds(tenantId: string, repId: number): Promise<Set<number>> {
+    const ids = new Set<number>();
+    const collect = (rows: any[]): void => {
+      for (const row of rows || []) {
+        const id = Number((row as any).customer_id ?? (row as any).customerId);
+        if (Number.isInteger(id) && id > 0) ids.add(id);
+      }
+    };
+    const [visits, orders, sales] = await Promise.all([
+      this.anyDb
+        .selectFrom('van_field_visits')
+        .select('customer_id')
+        .where('tenant_id', '=', tenantId)
+        .where('rep_id', '=', repId)
+        .execute(),
+      this.anyDb
+        .selectFrom('sales_orders')
+        .select('customer_id')
+        .where('tenant_id', '=', tenantId)
+        .where('rep_id', '=', repId)
+        .execute(),
+      this.anyDb
+        .selectFrom('sales')
+        .select('customer_id')
+        .where('tenant_id', '=', tenantId)
+        .where('delivery_rep_id', '=', repId)
+        .execute(),
+    ]);
+    collect(visits);
+    collect(orders);
+    collect(sales);
+    return ids;
+  }
+
+  /**
+   * INV-REP-SCOPED-CUSTOMER-READS (H7/D5): a rep may record a visit /
+   * check-in only for a customer assigned to him, or on a trip he owns.
+   * Served history alone does NOT authorize a new visit — a visit row
+   * is itself the evidence that opens the customer reads, so letting
+   * one visit bootstrap the next would rebuild the self-built scope
+   * gate this fix closes. A missing trip fails closed (404); a trip
+   * belonging to another rep fails with a specific 403 naming the trip.
+   */
+  private async assertRepVisitScope(
+    tenantId: string,
+    repId: number,
+    customerId: number,
+    tripId?: number | null,
+  ): Promise<void> {
+    const customer = await this.anyDb
+      .selectFrom('customers')
+      .select(['id', 'metadata'])
+      .where('id', '=', customerId)
+      .where('tenant_id', '=', tenantId)
+      .executeTakeFirst();
+    if (!customer) {
+      throw new AppError('العميل غير مسجل في النظام', 'CUSTOMER_NOT_FOUND', 404);
+    }
+    if (tripId != null) {
+      const trip = await this.anyDb
+        .selectFrom('van_sales_trips')
+        .select(['id', 'rep_id'])
+        .where('id', '=', tripId)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      if (!trip) {
+        throw new AppError('الرحلة غير موجودة', 'TRIP_NOT_FOUND', 404);
+      }
+      if (Number((trip as any).rep_id) !== Number(repId)) {
+        throw new AppError('هذه الرحلة تخص مندوباً آخر، لا يمكنك تسجيل زيارة عليها', 'REP_TRIP_NOT_OWNED', 403);
+      }
+      return;
+    }
+    if (extractAssignedRepIds((customer as any).metadata).includes(Number(repId))) return;
+    throw new AppError(
+      'العميل غير مسند إليك ولا توجد رحلة مملوكة لك تبرر تسجيل الزيارة',
+      'REP_CUSTOMER_NOT_ASSIGNED',
+      403,
+    );
+  }
+
   async getDriverTodayItinerary(tenantId: string, repId: number, tripId?: number) {
     void tripId;
     const customers = await this.anyDb
@@ -84,19 +174,24 @@ export class VanRoutesService {
     };
 
     const numRepId = Number(repId);
-    const repHasExplicitAssignments = customers.some((c: any) => {
-      const assignedIds = extractAssignedRepIds(c.metadata);
-      return assignedIds.includes(numRepId);
-    });
-
+    // INV-REP-SCOPED-CUSTOMER-READS (H7/D14): the open-region fallback is
+    // CLOSED, not documented as open. A rep sees only assigned customers,
+    // customers he served (same served definition as
+    // assertRepServedCustomer), and customers with ledger activity under
+    // his own rep id (a field collection writes a customer_ledger row but
+    // no visit row, so without this leg a collected-from customer would
+    // vanish from the itinerary). The ledger leg is rep-scoped
+    // (byRepId[this rep]) — it is not a leak. A rep with no assignments
+    // sees only the customers he served or transacted with, never the
+    // unassigned pool. The old fallback handed every rep the full
+    // unassigned book with balances, credit limits and GPS links
+    // whenever he had no explicit assignment.
+    const servedCustomerIds = await this.listRepServedCustomerIds(tenantId, numRepId);
     const repCustomers = customers.filter((c: any) => {
       const cid = Number(c.id);
       const assignedIds = extractAssignedRepIds(c.metadata);
       const hasRepLedgerActivity = Boolean(repBalancesMap.get(cid)?.byRepId[numRepId]);
-      if (repHasExplicitAssignments) {
-        return assignedIds.includes(numRepId) || hasRepLedgerActivity;
-      }
-      return assignedIds.length === 0 || assignedIds.includes(numRepId) || hasRepLedgerActivity;
+      return assignedIds.includes(numRepId) || servedCustomerIds.has(cid) || hasRepLedgerActivity;
     });
 
     const todayVisits = await this.anyDb
@@ -254,6 +349,34 @@ export class VanRoutesService {
     }
     if (payload.visitType === 'negative' && !payload.negativeReason) {
       throw new AppError('يرجى تحديد سبب الزيارة السلبية', 'MISSING_NEGATIVE_REASON', 400);
+    }
+
+    // INV-REP-SCOPED-CUSTOMER-READS (H7/D5): no visit on another rep's
+    // trip and no visit to a customer the rep is not assigned to
+    // without an owned trip — otherwise any rep could manufacture the
+    // very visit row that opens another rep's customer reads.
+    await this.assertRepVisitScope(tenantId, repId, payload.customerId, payload.tripId);
+
+    // A linked sale, when given, must be the rep's own sale to this
+    // customer: another rep's sale must not be attachable to my visit.
+    // No live caller passes saleId today (the only driver caller sends
+    // negative visits without one), so this narrows nothing in use.
+    if (payload.saleId != null) {
+      const sale = await this.anyDb
+        .selectFrom('sales')
+        .select(['id', 'customer_id', 'delivery_rep_id'])
+        .where('id', '=', payload.saleId)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      if (!sale) {
+        throw new AppError('الفاتورة غير موجودة', 'SALE_NOT_FOUND', 404);
+      }
+      if (Number((sale as any).customer_id) !== Number(payload.customerId)) {
+        throw new AppError('الفاتورة لا تخص هذا العميل', 'VISIT_SALE_CUSTOMER_MISMATCH', 400);
+      }
+      if ((sale as any).delivery_rep_id != null && Number((sale as any).delivery_rep_id) !== Number(repId)) {
+        throw new AppError('الفاتورة تخص مندوباً آخر، لا يمكنك ربطها بزيارتك', 'REP_SALE_NOT_OWNED', 403);
+      }
     }
 
     const inserted = await this.anyDb

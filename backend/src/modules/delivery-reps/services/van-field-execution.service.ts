@@ -5,6 +5,7 @@ import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
 import { VanFraudRadarService } from './van-fraud-radar.service';
 import { FmcgVisitExecutionEngine, GeofenceEvaluationResult } from '../fmcg-visit-execution.engine';
+import { extractAssignedRepIds } from '../rep-target.engine';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
@@ -103,6 +104,39 @@ export class VanFieldExecutionService {
     const meta = typeof customer.metadata === 'string'
       ? JSON.parse(customer.metadata || '{}')
       : (customer.metadata || {});
+
+    // INV-REP-SCOPED-CUSTOMER-READS (H7/D5): a check-in is not a free
+    // pass to a customer. The rep must be assigned to this customer, or
+    // the trip he names must be his own — otherwise one check-in
+    // manufactures the visit row that opens another rep's customer
+    // reads (field statement, last sold prices). Served history alone
+    // does NOT authorize a new check-in, for the same reason. A missing
+    // trip fails closed (404); another rep's trip fails with a specific
+    // 403 naming the trip. Same codes/messages as the recordFieldVisit
+    // gate in VanRoutesService.
+    let tripOwned = false;
+    if (payload.tripId != null) {
+      const trip = await this.db
+        .selectFrom('van_sales_trips')
+        .select(['id', 'rep_id'])
+        .where('id', '=', payload.tripId)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      if (!trip) {
+        throw new AppError('الرحلة غير موجودة', 'TRIP_NOT_FOUND', 404);
+      }
+      if (Number((trip as any).rep_id) !== Number(repId)) {
+        throw new AppError('هذه الرحلة تخص مندوباً آخر، لا يمكنك تسجيل زيارة عليها', 'REP_TRIP_NOT_OWNED', 403);
+      }
+      tripOwned = true;
+    }
+    if (!tripOwned && !extractAssignedRepIds(meta).includes(Number(repId))) {
+      throw new AppError(
+        'العميل غير مسند إليك ولا توجد رحلة مملوكة لك تبرر تسجيل الزيارة',
+        'REP_CUSTOMER_NOT_ASSIGNED',
+        403,
+      );
+    }
 
     const customerLat = meta.latitude ?? meta.gps_lat ?? meta.lat ?? null;
     const customerLng = meta.longitude ?? meta.gps_lng ?? meta.lng ?? null;

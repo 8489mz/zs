@@ -1035,7 +1035,15 @@ export class VanSalesService {
       };
     });
 
-    // Fetch route customers with per-rep isolated debt balances
+    // Fetch route customers with per-rep isolated debt balances.
+    // INV-REP-SCOPED-CUSTOMER-READS (H7/D1): the trip row is rep-scoped
+    // but this list was not — it returned every active tenant customer.
+    // A rep now sees only his own customers: explicitly assigned
+    // (assigned_rep_ids in the customer metadata) plus served (a field
+    // visit, a pre-sale order, or a delivered sale — the same served
+    // definition as assertRepServedCustomer). Another rep's customers
+    // and unassigned customers are excluded, with the same per-customer
+    // field shape as before.
     const customerRows = await this.anyDb
       .selectFrom('customers as c')
       .select([
@@ -1053,9 +1061,15 @@ export class VanSalesService {
       .limit(2500)
       .execute();
 
+    const servedCustomerIds = await this.listRepServedCustomerIds(tenantId, Number(repId));
+    const scopedCustomerRows = customerRows.filter((c: any) => {
+      const cid = Number(c.id);
+      return extractAssignedRepIds(c.metadata).includes(Number(repId)) || servedCustomerIds.has(cid);
+    });
+
     const customerIds: number[] = [];
     const customerTotalBalances: Record<number, number> = {};
-    for (const c of customerRows) {
+    for (const c of scopedCustomerRows) {
       const cid = Number(c.id);
       customerIds.push(cid);
       customerTotalBalances[cid] = Number(c.balance || 0);
@@ -1067,7 +1081,7 @@ export class VanSalesService {
       moneyDigits,
     });
 
-    const customers = customerRows.map((c: any) => {
+    const customers = scopedCustomerRows.map((c: any) => {
       const cid = Number(c.id);
       let meta: any = {};
       if (typeof c.metadata === 'string') {
@@ -4012,6 +4026,50 @@ export class VanSalesService {
   }
 
   /**
+   * INV-REP-SCOPED-CUSTOMER-READS (H7/D1+D14): the customer ids this rep
+   * has served. One canonical definition, shared by the read scope
+   * (getActiveTrip / getDriverTodayItinerary) and the read gate below:
+   * a field visit on one of his trips, a pre-sale order assigned to
+   * him, or a delivered sale carrying his delivery_rep_id. There is no
+   * static customer-to-rep assignment in the schema, so history is the
+   * association — plus the explicit metadata assignment, which the
+   * callers check separately via extractAssignedRepIds.
+   */
+  private async listRepServedCustomerIds(tenantId: string, repId: number): Promise<Set<number>> {
+    const ids = new Set<number>();
+    const collect = (rows: any[]): void => {
+      for (const row of rows || []) {
+        const id = Number((row as any).customer_id ?? (row as any).customerId);
+        if (Number.isInteger(id) && id > 0) ids.add(id);
+      }
+    };
+    const [visits, orders, sales] = await Promise.all([
+      this.anyDb
+        .selectFrom('van_field_visits')
+        .select('customer_id')
+        .where('tenant_id', '=', tenantId)
+        .where('rep_id', '=', repId)
+        .execute(),
+      this.anyDb
+        .selectFrom('sales_orders')
+        .select('customer_id')
+        .where('tenant_id', '=', tenantId)
+        .where('rep_id', '=', repId)
+        .execute(),
+      this.anyDb
+        .selectFrom('sales')
+        .select('customer_id')
+        .where('tenant_id', '=', tenantId)
+        .where('delivery_rep_id', '=', repId)
+        .execute(),
+    ]);
+    collect(visits);
+    collect(orders);
+    collect(sales);
+    return ids;
+  }
+
+  /**
    * INV-DRIVER-PORTAL-REP-SCOPED-READS: a rep may read a customer's
    * field statement and last sold prices only when the codebase already
    * records him serving that customer: a field visit on one of his
@@ -4021,33 +4079,8 @@ export class VanSalesService {
    * callers pass no repId and skip the check.
    */
   private async assertRepServedCustomer(tenantId: string, repId: number, customerId: number): Promise<void> {
-    const visit = await this.anyDb
-      .selectFrom('van_field_visits')
-      .select('id')
-      .where('tenant_id', '=', tenantId)
-      .where('rep_id', '=', repId)
-      .where('customer_id', '=', customerId)
-      .limit(1)
-      .executeTakeFirst();
-    if (visit) return;
-    const order = await this.anyDb
-      .selectFrom('sales_orders')
-      .select('id')
-      .where('tenant_id', '=', tenantId)
-      .where('rep_id', '=', repId)
-      .where('customer_id', '=', customerId)
-      .limit(1)
-      .executeTakeFirst();
-    if (order) return;
-    const sale = await this.anyDb
-      .selectFrom('sales')
-      .select('id')
-      .where('tenant_id', '=', tenantId)
-      .where('delivery_rep_id', '=', repId)
-      .where('customer_id', '=', customerId)
-      .limit(1)
-      .executeTakeFirst();
-    if (sale) return;
+    const served = await this.listRepServedCustomerIds(tenantId, repId);
+    if (served.has(Number(customerId))) return;
     throw new AppError('غير مصرح لك بالاطلاع على بيانات عميل لا يتبع لك', 'FORBIDDEN', 403);
   }
 
