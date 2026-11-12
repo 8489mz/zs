@@ -10,6 +10,14 @@
  * Cases: a fully-returned 131.60 invoice next to an open 131.60
  * invoice reads 131.60 (not 263.20); a partial return of 65.80
  * reads 65.80; an order with no remainingAmount contributes 0.
+ *
+ * INV-DRIVER-PORTAL-PENDING-AMOUNT-2DP: the badge formats money at
+ * exactly 2 fraction digits (ar-EG) — bare toLocaleString('ar-EG')
+ * drops the trailing zero, so 65.80 read ٦٥٫٨ and 131.60 read ١٣١٫٦.
+ * The spec also waits for the order rows before reading the badge:
+ * the badge label is static and renders before the orders query
+ * resolves, so reading it immediately snapshots the initial 0 and
+ * the first two cases passed vacuously-or-not-at-all by timing.
  */
 import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
@@ -88,11 +96,20 @@ function renderPortal() {
 }
 
 async function pendingBadgeText(): Promise<string> {
+  // Wait for the order rows first: the badge label is static and renders
+  // before the orders query resolves, so reading the badge immediately
+  // snapshots the initial 0. The rows only render after getOrders resolves.
+  await screen.findAllByText('Customer Seven');
   const label = await screen.findByText('المطلوب تحصيله');
   const card = label.parentElement;
   expect(card).not.toBeNull();
   return card!.textContent ?? '';
 }
+
+// Same explicit 2dp ar-EG format as the page badge (see the INV note
+// above): the expectation must not drift by environment.
+const fmtBadge = (n: number) =>
+  n.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 describe('DriverPortalPage pending amount', () => {
   it('sums remainingAmount, not the raw total: a fully-returned 131.60 invoice next to an open one reads 131.60, not 263.20', async () => {
@@ -102,8 +119,8 @@ describe('DriverPortalPage pending amount', () => {
     ]);
     renderPortal();
     const badge = await pendingBadgeText();
-    expect(badge).toContain((131.6).toLocaleString('ar-EG'));
-    expect(badge).not.toContain((263.2).toLocaleString('ar-EG'));
+    expect(badge).toContain(fmtBadge(131.6));
+    expect(badge).not.toContain(fmtBadge(263.2));
   });
 
   it('a partial return of 65.80 reads 65.80', async () => {
@@ -112,8 +129,8 @@ describe('DriverPortalPage pending amount', () => {
     ]);
     renderPortal();
     const badge = await pendingBadgeText();
-    expect(badge).toContain((65.8).toLocaleString('ar-EG'));
-    expect(badge).not.toContain((131.6).toLocaleString('ar-EG'));
+    expect(badge).toContain(fmtBadge(65.8));
+    expect(badge).not.toContain(fmtBadge(131.6));
   });
 
   it('an order with no remainingAmount contributes 0 and never falls back to its raw total', async () => {
@@ -122,7 +139,7 @@ describe('DriverPortalPage pending amount', () => {
     ]);
     renderPortal();
     const badge = await pendingBadgeText();
-    expect(badge).toContain((0).toLocaleString('ar-EG'));
-    expect(badge).not.toContain((100).toLocaleString('ar-EG'));
+    expect(badge).toContain(fmtBadge(0));
+    expect(badge).not.toContain(fmtBadge(100));
   });
 });

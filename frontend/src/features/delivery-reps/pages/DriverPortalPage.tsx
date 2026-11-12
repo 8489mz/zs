@@ -192,6 +192,10 @@ export function DriverPortalPage() {
   });
 
   const pendingCount = orders.filter((o) => !o.settledAt && o.deliveryStatus !== 'settled').length;
+  // INV-DRIVER-PORTAL-PENDING-AMOUNT-2DP: money on this badge is strict
+  // 2dp. Bare toLocaleString('ar-EG') drops the trailing zero (65.80
+  // reads ٦٥٫٨), so the badge pins exactly 2 fraction digits; the spec
+  // asserts the same explicit format.
   const pendingAmount = orders.filter((o) => !o.settledAt && o.deliveryStatus !== 'settled').reduce((sum, o) => sum + Number(o.remainingAmount ?? 0), 0);
   const settledCount = orders.filter((o) => Boolean(o.settledAt) || o.deliveryStatus === 'settled').length;
 
@@ -254,7 +258,7 @@ export function DriverPortalPage() {
         </div>
         <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px', textAlign: 'center' }}>
           <div style={{ fontSize: '11px', color: '#64748b' }}>{t('delivery_reps.driver_portal_page.s1', "المطلوب تحصيله")}</div>
-          <div style={{ fontSize: '15px', fontWeight: 900, color: '#170e5e', marginTop: '2px' }}>{pendingAmount.toLocaleString('ar-EG')} <CurrencySymbol /></div>
+          <div style={{ fontSize: '15px', fontWeight: 900, color: '#170e5e', marginTop: '2px' }}>{pendingAmount.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <CurrencySymbol /></div>
         </div>
         <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px', textAlign: 'center' }}>
           <div style={{ fontSize: '11px', color: '#64748b' }}>{t('delivery_reps.driver_portal_page.s2', "تم تسليمها")}</div>
