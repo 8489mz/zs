@@ -10,9 +10,22 @@ export class DriverPortalController {
     return this.service.driverLogin(body);
   }
 
+  // INV-DRIVER-PIN-FIRST-LOGIN-CHANGE: the only driver-portal call a
+  // rep still on the default PIN must be able to reach; it verifies the
+  // current PIN and returns a fresh, unflagged token.
+  @Post('change-pin')
+  async changePin(
+    @Headers('authorization') authHeader: string,
+    @Body() body: { currentPin?: string; newPin?: string },
+  ) {
+    const driver = await this.service.verifyDriverToken(authHeader);
+    return this.service.driverChangePin(driver, body);
+  }
+
   @Get('profile')
   async getProfile(@Headers('authorization') authHeader: string) {
     const driver = await this.service.verifyDriverToken(authHeader);
+    await this.service.assertDriverPinChanged(driver);
     return { ok: true, driver };
   }
 
@@ -26,6 +39,7 @@ export class DriverPortalController {
     @Query('pageSize') pageSize?: string,
   ) {
     const driver = await this.service.verifyDriverToken(authHeader);
+    await this.service.assertDriverPinChanged(driver);
     return this.service.driverListOrders(driver.repId, driver.tenantId, { status, dateFrom, dateTo, page: Number(page), pageSize: Number(pageSize) });
   }
 
@@ -36,6 +50,7 @@ export class DriverPortalController {
     @Body() body: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string },
   ) {
     const driver = await this.service.verifyDriverToken(authHeader);
+    await this.service.assertDriverPinChanged(driver);
     return this.service.driverSettleOrder(saleId, driver.repId, driver.tenantId, body);
   }
 }

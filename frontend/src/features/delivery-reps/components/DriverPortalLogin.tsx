@@ -28,7 +28,7 @@ function ChevronLeftIcon() {
 }
 
 interface DriverPortalLoginProps {
-  onLoginSuccess: (user: DriverPortalUser) => void;
+  onLoginSuccess: (user: DriverPortalUser, mustChangePin: boolean) => void;
 }
 
 export const DriverPortalLogin: React.FC<DriverPortalLoginProps> = ({ onLoginSuccess }) => {
@@ -58,7 +58,7 @@ export const DriverPortalLogin: React.FC<DriverPortalLoginProps> = ({ onLoginSuc
       if (companyCode) {
         localStorage.setItem('zs_driver_last_company_code', companyCode);
       }
-      onLoginSuccess(res.rep);
+      onLoginSuccess(res.rep, res.mustChangePin === true);
     } catch (err: any) {
       const details = err?.details || err?.error?.details || err?.response?.data?.details || err?.response?.data || err;
       const tenants = details?.tenants || details?.error?.tenants || err?.tenants;
@@ -83,7 +83,7 @@ export const DriverPortalLogin: React.FC<DriverPortalLoginProps> = ({ onLoginSuc
       const res = await driverPortalApi.login(cleanPhone, cleanPin, tenantId);
       localStorage.setItem('zs_driver_last_company_code', tenantId);
       setDisambiguationTenants(null);
-      onLoginSuccess(res.rep);
+      onLoginSuccess(res.rep, res.mustChangePin === true);
     } catch (err: any) {
       setLoginError(err.message || 'تعذر تسجيل الدخول للمنشأة المحددة');
     } finally {

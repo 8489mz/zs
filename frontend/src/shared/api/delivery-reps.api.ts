@@ -182,7 +182,19 @@ export interface DriverPortalUser {
 }
 
 export const driverPortalApi = {
-  login: async (phone: string, pinCode: string, companyCode?: string): Promise<{ token: string; rep: DriverPortalUser; isOffline?: boolean }> => {
+  // INV-DRIVER-PIN-FIRST-LOGIN-CHANGE: whether the stored session is still
+  // on the default PIN. Persisted beside the token so a rep who closes the
+  // tab on the forced-change screen is forced again on return, instead of
+  // walking straight into the portal from the stored session.
+  getStoredMustChangePin: (): boolean => {
+    try {
+      return localStorage.getItem('zs_driver_portal_must_change_pin') === '1';
+    } catch {
+      return false;
+    }
+  },
+
+  login: async (phone: string, pinCode: string, companyCode?: string): Promise<{ token: string; rep: DriverPortalUser; mustChangePin?: boolean; isOffline?: boolean }> => {
     const cleanPhone = phone.trim();
     const cleanPin = pinCode.trim();
 
@@ -192,19 +204,27 @@ export const driverPortalApi = {
       if (cached && cached.phone === cleanPhone && cached.pinCode === cleanPin) {
         localStorage.setItem('zs_driver_portal_token', cached.token);
         localStorage.setItem('zs_driver_portal_rep', JSON.stringify(cached.rep));
-        return { token: cached.token, rep: cached.rep, isOffline: true };
+        // The offline cache holds the plaintext PIN, so a still-default
+        // PIN is detectable here too — the forced change must not be
+        // bypassable by going offline.
+        const mustChangePin = cached.pinCode === '1234';
+        if (mustChangePin) localStorage.setItem('zs_driver_portal_must_change_pin', '1');
+        else localStorage.removeItem('zs_driver_portal_must_change_pin');
+        return { token: cached.token, rep: cached.rep, mustChangePin, isOffline: true };
       }
       throw new Error('أنت غير متصل بالإنترنت حالياً، وبيانات الدخول لا تطابق الحساب المسجل سابقاً على هذا الجهاز.');
     }
 
     try {
-      const res = await http<{ token: string; rep: DriverPortalUser }>('/api/driver-portal/login', {
+      const res = await http<{ token: string; rep: DriverPortalUser; mustChangePin?: boolean }>('/api/driver-portal/login', {
         method: 'POST',
         body: JSON.stringify({ phone: cleanPhone, pinCode: cleanPin, ...(companyCode ? { companyCode } : {}) }),
       });
       if (res?.token) {
         localStorage.setItem('zs_driver_portal_token', res.token);
         localStorage.setItem('zs_driver_portal_rep', JSON.stringify(res.rep));
+        if (res.mustChangePin === true) localStorage.setItem('zs_driver_portal_must_change_pin', '1');
+        else localStorage.removeItem('zs_driver_portal_must_change_pin');
         localStorage.setItem(
           'zs_driver_portal_auth_cache',
           JSON.stringify({
@@ -229,11 +249,40 @@ export const driverPortalApi = {
         if (cached && cached.phone === cleanPhone && cached.pinCode === cleanPin) {
           localStorage.setItem('zs_driver_portal_token', cached.token);
           localStorage.setItem('zs_driver_portal_rep', JSON.stringify(cached.rep));
-          return { token: cached.token, rep: cached.rep, isOffline: true };
+          const mustChangePin = cached.pinCode === '1234';
+          if (mustChangePin) localStorage.setItem('zs_driver_portal_must_change_pin', '1');
+          else localStorage.removeItem('zs_driver_portal_must_change_pin');
+          return { token: cached.token, rep: cached.rep, mustChangePin, isOffline: true };
         }
       }
       throw err;
     }
+  },
+
+  // INV-DRIVER-PIN-FIRST-LOGIN-CHANGE: the only portal call allowed while
+  // the rep still uses the default PIN. Returns a fresh token; the caller
+  // stores it exactly like a login. The offline auth cache is re-keyed to
+  // the new PIN so the old PIN cannot be reused offline after the change.
+  changePin: async (payload: { currentPin: string; newPin: string }): Promise<{ token: string; rep: DriverPortalUser; mustChangePin: boolean }> => {
+    const token = localStorage.getItem('zs_driver_portal_token');
+    const res = await http<{ token: string; rep: DriverPortalUser; mustChangePin: boolean }>('/api/driver-portal/change-pin', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (res?.token) {
+      localStorage.setItem('zs_driver_portal_token', res.token);
+      localStorage.setItem('zs_driver_portal_rep', JSON.stringify(res.rep));
+      localStorage.removeItem('zs_driver_portal_must_change_pin');
+      const cached = driverPortalApi.getOfflineAuthCache();
+      if (cached) {
+        localStorage.setItem(
+          'zs_driver_portal_auth_cache',
+          JSON.stringify({ ...cached, pinCode: payload.newPin, token: res.token, rep: res.rep }),
+        );
+      }
+    }
+    return res;
   },
 
   getOfflineAuthCache: (): { phone: string; pinCode: string; token: string; rep: DriverPortalUser } | null => {
@@ -259,6 +308,7 @@ export const driverPortalApi = {
   logout: () => {
     localStorage.removeItem('zs_driver_portal_token');
     localStorage.removeItem('zs_driver_portal_rep');
+    localStorage.removeItem('zs_driver_portal_must_change_pin');
   },
 
   getOrders: async (status?: string): Promise<DeliveryOrder[]> => {

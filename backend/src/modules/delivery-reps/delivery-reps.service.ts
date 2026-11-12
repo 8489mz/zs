@@ -793,7 +793,7 @@ export class DeliveryRepsService {
     return { ok: true, settledCount: result.settledCount, totalAmount: result.totalAmount };
   }
 
-  async driverLogin(payload: { phone: string; pinCode: string; companyCode?: string; tenantId?: string }): Promise<{ token: string; rep: Record<string, unknown> }> {
+  async driverLogin(payload: { phone: string; pinCode: string; companyCode?: string; tenantId?: string }): Promise<{ token: string; rep: Record<string, unknown>; mustChangePin: boolean }> {
     const rawPhone = String(payload?.phone || '').trim();
     const pinCode = String(payload?.pinCode || '').trim();
     const companyScope = payload?.companyCode || payload?.tenantId;
@@ -821,7 +821,7 @@ export class DeliveryRepsService {
     pinCode: string,
     companyScope: string | undefined,
     rateLimitKey: string,
-  ): Promise<{ token: string; rep: Record<string, unknown> }> {
+  ): Promise<{ token: string; rep: Record<string, unknown>; mustChangePin: boolean }> {
     const cleanDigits = rawPhone.replace(/\D/g, '');
     const cleanNoCountry = cleanDigits.startsWith('20') ? cleanDigits.slice(2) : (cleanDigits.startsWith('0') ? cleanDigits.slice(1) : cleanDigits);
 
@@ -929,6 +929,14 @@ export class DeliveryRepsService {
     // suspended / expired / trial-expired tenant, even with a valid PIN.
     await assertPortalTenantAllowed(this.db as any, this.authCache, String(matchedRep.tenant_id));
 
+    // INV-DRIVER-PIN-FIRST-LOGIN-CHANGE: a PIN that is still the public
+    // default must be changed at first login. Detection is a real password
+    // check against the stored hash — never a comparison with a stored
+    // value — and the default itself is never returned or displayed.
+    const mustChangePin = matchedRep.pin_hash
+      ? (await verifyPassword('1234', String(matchedRep.pin_hash), String(matchedRep.pin_salt || ''))).valid
+      : false;
+
     const token = signPortalToken(
       {
         repId: Number(matchedRep.id),
@@ -943,6 +951,7 @@ export class DeliveryRepsService {
 
     return {
       token,
+      mustChangePin,
       rep: {
         id: matchedRep.id,
         name: matchedRep.name,
@@ -956,6 +965,123 @@ export class DeliveryRepsService {
         permissions: (matchedRep as any).permissions || {},
       },
     };
+  }
+
+  /**
+   * INV-DRIVER-PIN-FIRST-LOGIN-CHANGE: driver self-service PIN change.
+   * The current PIN must verify first; the new credential must pass the
+   * shared `assertSecurePasscode` policy (never a trivial value such as
+   * 1234/0000) and differ from the current one. Returns a fresh token:
+   * once the PIN is no longer the default the session is unflagged.
+   * The driver token is stateless HMAC with no version, so a PIN change
+   * cannot invalidate tokens already issued — that is M14's package.
+   */
+  async driverChangePin(
+    driver: { repId: number; tenantId: string; accountId: string; name: string; phone: string },
+    body: { currentPin?: string; newPin?: string },
+  ): Promise<{ token: string; rep: Record<string, unknown>; mustChangePin: false }> {
+    const currentPin = String(body?.currentPin || '').trim();
+    const newPin = String(body?.newPin || '').trim();
+    if (!currentPin || !newPin) {
+      throw new AppError('يرجى إدخال الرمز الحالي والرمز الجديد', 'INVALID_PIN', 400);
+    }
+
+    const rep = await this.db
+      .selectFrom('delivery_representatives')
+      .select(['id', 'name', 'full_name', 'phone', 'vehicle_plate', 'is_active', 'tenant_id', 'account_id', 'pin_hash', 'pin_salt', 'is_van_rep', 'van_location_id', 'permissions'])
+      .where('id', '=', driver.repId)
+      .where('tenant_id', '=', driver.tenantId)
+      .executeTakeFirst();
+
+    if (!rep || rep.is_active === false) {
+      throw new AppError('تم إيقاف حساب المندوب. يرجى مراجعة الإدارة', 'DRIVER_INACTIVE', 401);
+    }
+    if (
+      !rep.pin_hash ||
+      !(await verifyPassword(currentPin, String(rep.pin_hash), String(rep.pin_salt || ''))).valid
+    ) {
+      throw new AppError('رمز الدخول الحالي غير صحيح', 'INVALID_PIN', 401);
+    }
+
+    assertSecurePasscode(newPin, { phone: String(rep.phone || '') });
+
+    if ((await verifyPassword(newPin, String(rep.pin_hash), String(rep.pin_salt || ''))).valid) {
+      throw new AppError('الرمز الجديد يجب أن يختلف عن الرمز الحالي', 'WEAK_PIN', 400);
+    }
+
+    const record = await createPasswordRecord(newPin);
+    await this.db
+      .updateTable('delivery_representatives')
+      .set({ pin_hash: record.hash, pin_salt: record.salt })
+      .where('id', '=', driver.repId)
+      .where('tenant_id', '=', driver.tenantId)
+      .execute();
+
+    let tenantName = String(rep.tenant_id);
+    try {
+      const tenantRow = await this.db
+        .selectFrom('tenants')
+        .select(['business_name', 'slug'])
+        .where('id', '=', rep.tenant_id)
+        .executeTakeFirst();
+      if (tenantRow?.business_name || tenantRow?.slug) {
+        tenantName = tenantRow.business_name || tenantRow.slug;
+      }
+    } catch {
+      // fallback to tenant_id
+    }
+
+    const token = signPortalToken(
+      {
+        repId: Number(rep.id),
+        tenantId: rep.tenant_id,
+        accountId: rep.account_id,
+        name: rep.name,
+        phone: rep.phone,
+      },
+      PORTAL_TOKEN_TTL_MS,
+    );
+
+    return {
+      token,
+      mustChangePin: false,
+      rep: {
+        id: rep.id,
+        name: rep.name,
+        fullName: rep.full_name,
+        phone: rep.phone,
+        vehiclePlate: rep.vehicle_plate,
+        tenantId: rep.tenant_id,
+        tenantName,
+        isVanRep: Boolean((rep as any).is_van_rep),
+        vanLocationId: (rep as any).van_location_id || null,
+        permissions: (rep as any).permissions || {},
+      },
+    };
+  }
+
+  /**
+   * INV-DRIVER-PIN-FIRST-LOGIN-CHANGE: no driver-portal data is served
+   * while the rep still uses the default PIN. The flag is re-derived
+   * from the live stored hash on every call, never trusted from the
+   * token — so a rep who changes the PIN unflags immediately, even on
+   * an old token. The change-PIN endpoint is the only escape hatch and
+   * does not call this guard. Mirrors the staff portal's
+   * assertPinChanged (INV-PORTAL-DEFAULT-PIN-FORCED-CHANGE).
+   */
+  async assertDriverPinChanged(driver: { repId: number; tenantId: string }): Promise<void> {
+    const rep = await this.db
+      .selectFrom('delivery_representatives')
+      .select(['pin_hash', 'pin_salt'])
+      .where('id', '=', driver.repId)
+      .where('tenant_id', '=', driver.tenantId)
+      .executeTakeFirst();
+    if (
+      rep?.pin_hash &&
+      (await verifyPassword('1234', String(rep.pin_hash), String(rep.pin_salt || ''))).valid
+    ) {
+      throw new AppError('يجب تغيير رمز الدخول الافتراضي قبل المتابعة', 'PIN_CHANGE_REQUIRED', 403);
+    }
   }
 
   /**

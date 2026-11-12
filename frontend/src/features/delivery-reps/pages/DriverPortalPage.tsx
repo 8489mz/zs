@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { driverPortalApi, DeliveryOrder, SettleOrderPayload, DriverPortalUser } from '../api/delivery-reps.api';
 import { DeliverySettlementModal } from '../components/DeliverySettlementModal';
 import { DriverPortalLogin } from '../components/DriverPortalLogin';
+import { DriverPinChangeScreen } from '../components/DriverPinChangeScreen';
 import { DriverTopBar } from '../components/DriverTopBar';
 import { DriverOrderCard } from '../components/DriverOrderCard';
 import { PackageIcon } from '@/shared/components/icons/AppIcons';
@@ -26,6 +27,11 @@ export function DriverPortalPage() {
     const session = driverPortalApi.getStoredSession();
     return session ? session.rep : null;
   });
+
+  // INV-DRIVER-PIN-FIRST-LOGIN-CHANGE: set from the login response (or
+  // from the stored flag when the tab was closed on the change screen).
+  // While true the orders list never renders and no orders call is made.
+  const [mustChangePin, setMustChangePin] = useState<boolean>(() => driverPortalApi.getStoredMustChangePin());
 
   const [statusFilter, setStatusFilter] = useState<'pending' | 'settled' | 'all'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
@@ -63,7 +69,7 @@ export function DriverPortalPage() {
   const { data: orders = [], isLoading, isFetching, refetch } = useQuery({
     queryKey: ['driver-portal-orders', driverUser?.id, statusFilter],
     queryFn: () => driverPortalApi.getOrders(statusFilter === 'all' ? undefined : statusFilter),
-    enabled: Boolean(driverUser?.id),
+    enabled: Boolean(driverUser?.id) && !mustChangePin,
     refetchInterval: 25000,
   });
 
@@ -71,6 +77,7 @@ export function DriverPortalPage() {
     if (window.confirm('هل تود الانتقال والتبديل إلى منشأة أخرى؟')) {
       driverPortalApi.logout();
       setDriverUser(null);
+      setMustChangePin(false);
     }
   };
 
@@ -78,6 +85,7 @@ export function DriverPortalPage() {
     if (window.confirm('هل تود تسجيل الخروج من حساب المندوب؟')) {
       driverPortalApi.logout();
       setDriverUser(null);
+      setMustChangePin(false);
     }
   };
 
@@ -188,7 +196,27 @@ export function DriverPortalPage() {
   const settledCount = orders.filter((o) => Boolean(o.settledAt) || o.deliveryStatus === 'settled').length;
 
   if (!driverUser) {
-    return <DriverPortalLogin onLoginSuccess={(user) => setDriverUser(user)} />;
+    return (
+      <DriverPortalLogin
+        onLoginSuccess={(user, mustChange) => {
+          setDriverUser(user);
+          setMustChangePin(mustChange === true);
+        }}
+      />
+    );
+  }
+
+  if (mustChangePin) {
+    return (
+      <DriverPinChangeScreen
+        user={driverUser}
+        onChanged={(_token, user) => {
+          setDriverUser(user);
+          setMustChangePin(false);
+        }}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   return (
