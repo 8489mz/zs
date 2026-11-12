@@ -198,6 +198,9 @@ export function ReturnsCreateModal(props: Props) {
       open={isOpen}
       onClose={onClose}
       width="min(1100px, calc(100vw - 32px))"
+      height="88vh"
+      maxHeight="860px"
+      minHeight="min(860px, 88vh)"
       showCloseButton={true}
       ariaLabel={t('returns.create_modal_title', 'تسجيل مرتجع جديد')}
     >
@@ -205,7 +208,7 @@ export function ReturnsCreateModal(props: Props) {
         style={{
           display: 'flex',
           flexDirection: 'column',
-          maxHeight: '90vh',
+          height: '100%',
           boxSizing: 'border-box',
           background: '#ffffff',
           borderRadius: '12px',
@@ -254,10 +257,12 @@ export function ReturnsCreateModal(props: Props) {
 
         {/* Scrollable Body - 2 Symmetrical Columns */}
         <div
+          data-testid="returns-create-modal-body"
           style={{
             padding: '16px 22px',
             overflowY: 'auto',
             flex: 1,
+            minHeight: 0,
             display: 'grid',
             gridTemplateColumns: 'minmax(0, 1.4fr) minmax(360px, 1fr)',
             gap: '16px',

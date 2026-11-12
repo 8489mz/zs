@@ -294,3 +294,107 @@ describe('ReturnsCreateModal conditional header-discount forfeit', () => {
     expect(screen.queryByText(/المبلغ المسترد المطلوب/)).not.toBeInTheDocument();
   });
 });
+
+/* INV-RETURN-CREATE-MODAL-STABLE-HEIGHT: the create-return dialog
+ * must open and REMAIN at one fixed height — switching refund mode
+ * or selecting an item must never resize the popup. jsdom has no
+ * real layout, so this pins the STYLE CONTRACT: the dialog shell
+ * carries a fixed height + minHeight, the outer wrapper fills it
+ * (height 100%), the body scrolls internally (overflowY auto,
+ * minHeight 0 so flex:1 can shrink it and the footer stays
+ * visible), and both mode buttons are border-box so the 1px/2px
+ * border swap cannot change their outer size. On the base the shell
+ * has no height at all, so the height assertions fail there. */
+describe('ReturnsCreateModal stable dialog height (INV-RETURN-CREATE-MODAL-STABLE-HEIGHT)', () => {
+  const forfeitPreview = {
+    goodsTotal: 500, originalGoodsTotal: 533.33, tipRelief: 0, courierRelief: 0, totalRelief: 0, refundTotal: 500,
+    forfeit: {
+      applies: true, invoiceTotal: 800, priorGoodsRefunded: 0, remainingNetAtOriginal: 300,
+      computedGoodsRefund: 500, forfeitedHeaderDiscount: 100, repricedReturnedTotal: 500,
+      goodwillCap: 600, goodwillAmount: 0,
+    },
+  };
+
+  const dialogHeightOf = () => {
+    const dialog = screen.getByRole('dialog');
+    // NOTE: height is 88vh + maxHeight 860px (used height identical
+    // to min(860px, 88vh)); jsdom drops min() on `height` while
+    // accepting it on minHeight, so the min() form is unassertable
+    // here even though real browsers accept it.
+    expect(dialog).toHaveStyle({ height: '88vh', maxHeight: '860px', minHeight: 'min(860px, 88vh)' });
+    return dialog.style.height;
+  };
+
+  it('keeps the same fixed dialog height when toggling the refund mode, even as the goodwill alert mounts', () => {
+    // Goodwill 520 sits between the two computed amounts: below the
+    // original-mode 533.33 (no alert) and above the forfeit-mode
+    // 500.00 (alert + reason field mount).
+    const { unmount } = renderModal({
+      expectedReturnValue: 500,
+      reliefPreview: forfeitPreview,
+      discountMode: 'original',
+      goodwillRefundAmount: '520',
+      goodwillReason: '',
+      onGoodwillRefundAmountChange: vi.fn(),
+      onGoodwillReasonChange: vi.fn(),
+    });
+    expect(screen.queryByText(/تتطلب رمز المدير عند التأكيد/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/اكتب سبب التسوية الودية قبل التأكيد/)).not.toBeInTheDocument();
+    const heightOriginal = dialogHeightOf();
+    expect(screen.getAllByText('533.33').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('500.00').length).toBeGreaterThan(0);
+    unmount();
+
+    renderModal({
+      expectedReturnValue: 500,
+      reliefPreview: forfeitPreview,
+      discountMode: 'forfeit',
+      goodwillRefundAmount: '520',
+      goodwillReason: '',
+      onGoodwillRefundAmountChange: vi.fn(),
+      onGoodwillReasonChange: vi.fn(),
+    });
+    expect(screen.getByText(/تتطلب رمز المدير عند التأكيد/)).toBeInTheDocument();
+    expect(screen.getByText(/اكتب سبب التسوية الودية قبل التأكيد/)).toBeInTheDocument();
+    const heightForfeit = dialogHeightOf();
+    expect(heightForfeit).toBe(heightOriginal);
+    // Mode amounts and hero total are byte-identical across the toggle.
+    expect(screen.getAllByText('533.33').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('500.00').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the same fixed dialog height before and after selecting an item', () => {
+    const { unmount } = renderModal({
+      selectedItems: {},
+      selectedSerials: {},
+      selectedItemsCount: 0,
+      selectedQtyTotal: 0,
+      expectedReturnValue: 0,
+    });
+    const heightEmpty = dialogHeightOf();
+    unmount();
+
+    renderModal();
+    const heightSelected = dialogHeightOf();
+    expect(heightSelected).toBe(heightEmpty);
+  });
+
+  it('fills the fixed shell and scrolls content internally instead of resizing the shell', () => {
+    renderModal({ expectedReturnValue: 500, reliefPreview: forfeitPreview });
+
+    const dialog = screen.getByRole('dialog');
+    const wrapper = dialog.firstElementChild as HTMLElement;
+    expect(wrapper).toHaveStyle({ height: '100%' });
+
+    const body = screen.getByTestId('returns-create-modal-body');
+    expect(body).toHaveStyle({ overflowY: 'auto' });
+    expect(Number.parseFloat(body.style.minHeight)).toBe(0);
+  });
+
+  it('keeps both refund-mode buttons border-box so the 1px/2px border swap cannot resize them', () => {
+    renderModal({ expectedReturnValue: 500, reliefPreview: forfeitPreview });
+
+    expect(screen.getByRole('button', { name: /إرجاع بالسعر الأصلي/ })).toHaveStyle({ boxSizing: 'border-box' });
+    expect(screen.getByRole('button', { name: /إرجاع بإلغاء الخصم/ })).toHaveStyle({ boxSizing: 'border-box' });
+  });
+});
