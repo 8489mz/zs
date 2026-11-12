@@ -1496,6 +1496,11 @@ async function main() {
     // variance write AND the journal linked to it; a rejected posting must
     // atomically roll back both the stock source and its cost.
     const stockFil = await fixture('kwd_stock_variances');
+    // INV-STOCK-COUNT-DUAL-APPROVAL: the variance post below needs
+    // approval by a different admin user than the counter/poster (user 1).
+    await db.insertInto('users').values({tenant_id:stockFil.auth.tenantId,account_id:stockFil.auth.tenantId,username:`${stockFil.auth.tenantId}_approver`,phone:tag+'kwd_stock_variances_approver',
+      password_hash:secret.hash,password_salt:secret.salt,role:'admin',is_active:true,must_change_password:false,permissions_json:JSON.stringify(SUPER_ADMIN_PERMISSIONS),
+    } as any).execute();
     await db.updateTable('settings').set({ value: '"KWD"' })
       .where('tenant_id', '=', stockFil.auth.tenantId!).where('key', '=', 'currency').execute();
     await db.updateTable('currency_exchange_rates').set({ currency_code:'KWD', exchange_rate:1 })
@@ -1543,7 +1548,7 @@ async function main() {
       items:[{productId:stockFil.productId,countedQty:1,reason:'KWD one-fil shortage'}],
     },stockFil.auth);
     const countedId=Number(counted.sessionId);
-    await counting.postStockCountSession(countedId,stockFil.auth);
+    await counting.postStockCountSession(countedId,stockFil.auth,'DisposableAcceptance!2026#Only');
     const countMovement=await db.selectFrom('stock_movements').select(['total_cost'])
       .where('tenant_id','=',stockFil.auth.tenantId!)
       .where('reference_type','=','stock_count_session').where('reference_id','=',countedId)

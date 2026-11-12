@@ -69,8 +69,10 @@ import { IdempotencyService } from '../../src/core/idempotency/idempotency.servi
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { InventoryCountService } from '../../src/modules/inventory/services/inventory-count.service';
+import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
 
 const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
+const APPROVER_PASSWORD = 'approver-pass';
 
 async function seedProduct(db: Kysely<Database>, id: number, globalQty: number, reserved: number, cost: number): Promise<void> {
   await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${globalQty}, ${reserved}, ${cost}, true, false)`.execute(db);
@@ -167,6 +169,12 @@ async function main(): Promise<void> {
       CREATE TABLE import_inventory_lots (id bigserial PRIMARY KEY, tenant_id text, product_id bigint, status text, remaining_quantity numeric, location_id bigint, receipt_date date, created_at timestamptz DEFAULT NOW());
     `);
 
+    // INV-STOCK-COUNT-DUAL-APPROVAL: variance posts need approval by a
+    // different admin than the counter (user 1) and the poster (AUTH,
+    // user 1) — a second admin user with its own password.
+    const approverRecord = await createPasswordRecord(APPROVER_PASSWORD);
+    await sql`INSERT INTO users VALUES (2, 't1', 'approver', 1, 'admin', ${approverRecord.hash}, ${approverRecord.salt}, true)`.execute(db);
+
     // Case 1: the reported bug -- 12 on hand, 1 reserved, counted 12.
     // Old code froze book 11, variance +1, phantom effect +58.82, and
     // posted nothing while the UI claimed success.
@@ -175,7 +183,7 @@ async function main(): Promise<void> {
     const row1 = await itemRow(db, session1);
     assert.equal(Number(row1.expected_qty), 12);
     assert.equal(Number(row1.variance_qty), 0);
-    await service.postStockCountSession(session1, AUTH);
+    await service.postStockCountSession(session1, AUTH, APPROVER_PASSWORD);
     assert.equal(await journalCount(db), 0);
     assert.equal(await locationQty(db, 1), 12);
     const mov1 = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM stock_movements WHERE reference_id = ${session1}`.execute(db);
@@ -188,7 +196,7 @@ async function main(): Promise<void> {
     const row2 = await itemRow(db, session2);
     assert.equal(Number(row2.expected_qty), 12);
     assert.equal(Number(row2.variance_qty), 1);
-    await service.postStockCountSession(session2, AUTH);
+    await service.postStockCountSession(session2, AUTH, APPROVER_PASSWORD);
     const mov2 = await sql<{ qty: string; before_qty: string; after_qty: string }>`SELECT qty, before_qty, after_qty FROM stock_movements WHERE reference_id = ${session2}`.execute(db);
     assert.equal(Number(mov2.rows[0].qty), 1);
     assert.equal(Number(mov2.rows[0].before_qty), 12);
@@ -206,7 +214,7 @@ async function main(): Promise<void> {
     const row3 = await itemRow(db, session3);
     assert.equal(Number(row3.expected_qty), 12);
     assert.equal(Number(row3.variance_qty), -1);
-    await service.postStockCountSession(session3, AUTH);
+    await service.postStockCountSession(session3, AUTH, APPROVER_PASSWORD);
     const mov3 = await sql<{ qty: string; before_qty: string; after_qty: string }>`SELECT qty, before_qty, after_qty FROM stock_movements WHERE reference_id = ${session3}`.execute(db);
     assert.equal(Number(mov3.rows[0].qty), -1);
     assert.equal(Number(mov3.rows[0].before_qty), 12);
@@ -224,7 +232,7 @@ async function main(): Promise<void> {
     assert.equal(Number(row4.expected_qty), 12);
     await sql`UPDATE product_location_stock SET qty = 13 WHERE product_id = 4 AND location_id = 1`.execute(db);
     await sql`UPDATE products SET stock_qty = 13 WHERE id = 4`.execute(db);
-    const deferred = await service.postStockCountSession(session4, AUTH) as Record<string, unknown>;
+    const deferred = await service.postStockCountSession(session4, AUTH, APPROVER_PASSWORD) as Record<string, unknown>;
     assert.deepEqual(deferred.skippedStockCountItemIds, [row4.id]);
     assert.equal((await itemRow(db, session4)).posted_at, null);
     assert.equal(await sessionStatus(db, session4), 'draft');
@@ -232,7 +240,7 @@ async function main(): Promise<void> {
     const row4b = await itemRow(db, session4);
     assert.equal(Number(row4b.expected_qty), 13);
     assert.equal(Number(row4b.variance_qty), 0);
-    await service.postStockCountSession(session4, AUTH);
+    await service.postStockCountSession(session4, AUTH, APPROVER_PASSWORD);
     assert.notEqual((await itemRow(db, session4)).posted_at, null);
     assert.equal(await sessionStatus(db, session4), 'posted');
 
@@ -246,7 +254,7 @@ async function main(): Promise<void> {
     assert.equal(Number(row5.variance_qty), 0);
     await sql`UPDATE product_location_stock SET reserved_qty = 2 WHERE product_id = 5 AND location_id = 1`.execute(db);
     await sql`UPDATE products SET reserved_qty = 2 WHERE id = 5`.execute(db);
-    const posted5 = await service.postStockCountSession(session5, AUTH) as Record<string, unknown>;
+    const posted5 = await service.postStockCountSession(session5, AUTH, APPROVER_PASSWORD) as Record<string, unknown>;
     assert.deepEqual(posted5.skippedStockCountItemIds, []);
     assert.notEqual((await itemRow(db, session5)).posted_at, null);
     assert.equal(await sessionStatus(db, session5), 'posted');
@@ -259,7 +267,7 @@ async function main(): Promise<void> {
     assert.equal(Number(row6.expected_qty), 10);
     assert.equal(Number(row6.variance_qty), 0);
     const journalsBefore = await journalCount(db);
-    await service.postStockCountSession(session6, AUTH);
+    await service.postStockCountSession(session6, AUTH, APPROVER_PASSWORD);
     assert.equal(await journalCount(db), journalsBefore);
     assert.equal(await locationQty(db, 6), 10);
 
@@ -270,7 +278,7 @@ async function main(): Promise<void> {
     // actual delta (0), so no journal is booked.
     await seedProduct(db, 7, 12, 1, 58.82);
     const item7 = await seedSession(db, 107, 7, 11, 12);
-    await service.postStockCountSession(107, AUTH);
+    await service.postStockCountSession(107, AUTH, APPROVER_PASSWORD);
     const row7 = await itemRow(db, 107);
     assert.equal(Number(row7.expected_qty), 11);
     assert.equal(Number(row7.variance_qty), 1);

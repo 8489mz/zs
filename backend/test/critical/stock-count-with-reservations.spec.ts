@@ -57,8 +57,10 @@ import { IdempotencyService } from '../../src/core/idempotency/idempotency.servi
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { InventoryCountService } from '../../src/modules/inventory/services/inventory-count.service';
+import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
 
 const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
+const APPROVER_PASSWORD = 'approver-pass';
 
 async function seedProduct(db: Kysely<Database>, id: number, globalQty: number, reserved: number, cost: number, trackSerials = false): Promise<void> {
   await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${globalQty}, ${reserved}, ${cost}, true, ${trackSerials})`.execute(db);
@@ -152,12 +154,18 @@ async function main(): Promise<void> {
       CREATE TABLE import_inventory_lots (id bigserial PRIMARY KEY, tenant_id text, product_id bigint, status text, remaining_quantity numeric, location_id bigint, receipt_date date, created_at timestamptz DEFAULT NOW());
     `);
 
+    // INV-STOCK-COUNT-DUAL-APPROVAL: variance posts need approval by a
+    // different admin than the counter (user 1) and the poster (AUTH,
+    // user 1) — a second admin user with its own password.
+    const approverRecord = await createPasswordRecord(APPROVER_PASSWORD);
+    await sql`INSERT INTO users VALUES (2, 't1', 'approver', 1, 'admin', ${approverRecord.hash}, ${approverRecord.salt}, true)`.execute(db);
+
     // Case 1: serial-tracked + reserved -- the defect. Old code threw
     // COUNT_SERIAL_LEDGER_MISMATCH (5 serials vs available 3).
     await seedProduct(db, 1, 5, 2, 10, true);
     await seedSerials(db, 1, ['SN1', 'SN2', 'SN3', 'SN4', 'SN5']);
     const item1 = await seedSession(db, 101, 1, 3, 4, 'count', ['SN1', 'SN2', 'SN3', 'SN4'], null);
-    await service.postStockCountSession(101, AUTH);
+    await service.postStockCountSession(101, AUTH, APPROVER_PASSWORD);
     const loc1 = await sql<{ qty: string; reserved_qty: string }>`SELECT qty, reserved_qty FROM product_location_stock WHERE product_id = 1 AND location_id = 1`.execute(db);
     assert.equal(Number(loc1.rows[0].qty), 4);
     assert.equal(Number(loc1.rows[0].reserved_qty), 2);
@@ -183,7 +191,7 @@ async function main(): Promise<void> {
       { batchId: lotA, countedQty: 3 },
       { batchId: lotB, countedQty: 1 },
     ]);
-    await service.postStockCountSession(102, AUTH);
+    await service.postStockCountSession(102, AUTH, APPROVER_PASSWORD);
     const lots2 = await sql<{ batch_number: string; quantity: string; status: string }>`SELECT batch_number, quantity, status FROM pharmacy_batches WHERE product_id = 2 ORDER BY batch_number`.execute(db);
     assert.deepEqual(lots2.rows.map((r) => ({ n: r.batch_number, q: Number(r.quantity), s: r.status })), [
       { n: 'LOT-A', q: 3, s: 'active' },
@@ -201,7 +209,7 @@ async function main(): Promise<void> {
     await seedProduct(db, 3, 4, 0, 10, true);
     await seedSerials(db, 3, ['SN1', 'SN2', 'SN3', 'SN4', 'SN5']);
     await seedSession(db, 103, 3, 4, 4, 'count', ['SN1', 'SN2', 'SN3', 'SN4'], null);
-    await expectCode(service.postStockCountSession(103, AUTH), 'COUNT_SERIAL_LEDGER_MISMATCH');
+    await expectCode(service.postStockCountSession(103, AUTH, APPROVER_PASSWORD), 'COUNT_SERIAL_LEDGER_MISMATCH');
     const loc3 = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = 3 AND location_id = 1`.execute(db);
     assert.equal(Number(loc3.rows[0].qty), 4);
     const mov3 = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM stock_movements WHERE reference_id = 103`.execute(db);
@@ -214,7 +222,7 @@ async function main(): Promise<void> {
     await seedSession(db, 104, 4, 4, 4, 'count', null, [
       { batchId: lotB4, countedQty: 4 },
     ]);
-    await expectCode(service.postStockCountSession(104, AUTH), 'COUNT_BATCH_LEDGER_MISMATCH');
+    await expectCode(service.postStockCountSession(104, AUTH, APPROVER_PASSWORD), 'COUNT_BATCH_LEDGER_MISMATCH');
     const lots4 = await sql<{ quantity: string }>`SELECT quantity FROM pharmacy_batches WHERE product_id = 4 ORDER BY batch_number`.execute(db);
     assert.deepEqual(lots4.rows.map((r) => Number(r.quantity)), [3, 2]);
 
@@ -223,7 +231,7 @@ async function main(): Promise<void> {
     await seedProduct(db, 5, 5, 2, 10, true);
     await seedSerials(db, 5, ['SN1', 'SN2', 'SN3', 'SN4', 'SN5']);
     await seedSession(db, 105, 5, 3, 1, 'count', ['SN1'], null);
-    await expectCode(service.postStockCountSession(105, AUTH), 'INSUFFICIENT_STOCK');
+    await expectCode(service.postStockCountSession(105, AUTH, APPROVER_PASSWORD), 'INSUFFICIENT_STOCK');
     const loc5 = await sql<{ qty: string; reserved_qty: string }>`SELECT qty, reserved_qty FROM product_location_stock WHERE product_id = 5 AND location_id = 1`.execute(db);
     assert.equal(Number(loc5.rows[0].qty), 5);
     assert.equal(Number(loc5.rows[0].reserved_qty), 2);
@@ -236,7 +244,7 @@ async function main(): Promise<void> {
     await seedProduct(db, 6, 3, 0, 10, true);
     await seedSerials(db, 6, ['SN1', 'SN2', 'SN3']);
     const item6 = await seedSession(db, 106, 6, 3, 2, 'count', ['SN1', 'SN2'], null);
-    await service.postStockCountSession(106, AUTH);
+    await service.postStockCountSession(106, AUTH, APPROVER_PASSWORD);
     const scrapped6 = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM product_serials WHERE product_id = 6 AND status = 'scrapped'`.execute(db);
     assert.equal(Number(scrapped6.rows[0].n), 1);
     assert.deepEqual(await journalLines(db, item6), [

@@ -56,8 +56,10 @@ import { IdempotencyService } from '../../src/core/idempotency/idempotency.servi
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { InventoryCountService } from '../../src/modules/inventory/services/inventory-count.service';
+import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
 
 const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: ['canAdjustInventory'] } as unknown as AuthContext;
+const APPROVER_PASSWORD = 'approver-pass';
 
 async function seedProduct(db: Kysely<Database>, id: number, globalQty: number, reserved: number, cost: number, trackSerials = false): Promise<void> {
   await sql`INSERT INTO products (id, tenant_id, account_id, name, stock_qty, reserved_qty, cost_price, is_active, track_serials) VALUES (${id}, 't1', 'a1', ${`Product ${id}`}, ${globalQty}, ${reserved}, ${cost}, true, ${trackSerials})`.execute(db);
@@ -126,10 +128,16 @@ async function main(): Promise<void> {
       CREATE TABLE import_inventory_lots (id bigserial PRIMARY KEY, tenant_id text, product_id bigint, status text, remaining_quantity numeric, location_id bigint, receipt_date date, created_at timestamptz DEFAULT NOW());
     `);
 
+    // INV-STOCK-COUNT-DUAL-APPROVAL: variance posts need approval by a
+    // different admin than the counter (user 1) and the poster (AUTH,
+    // user 1) — a second admin user with its own password.
+    const approverRecord = await createPasswordRecord(APPROVER_PASSWORD);
+    await sql`INSERT INTO users VALUES (2, 't1', 'approver', 1, 'admin', ${approverRecord.hash}, ${approverRecord.salt}, true)`.execute(db);
+
     // Case 1: reserved fixture -- the bug. Old code booked a 7100 gain of 50.
     await seedProduct(db, 1, 100, 10, 10);
     const item1 = await seedSession(db, 101, 1, 90, 95, 'count', null);
-    await service.postStockCountSession(101, AUTH);
+    await service.postStockCountSession(101, AUTH, APPROVER_PASSWORD);
     const loc1 = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = 1 AND location_id = 1`.execute(db);
     assert.equal(Number(loc1.rows[0].qty), 95);
     const mov1 = await sql<{ qty: string; before_qty: string; after_qty: string }>`SELECT qty, before_qty, after_qty FROM stock_movements WHERE reference_id = 101`.execute(db);
@@ -144,7 +152,7 @@ async function main(): Promise<void> {
     // Case 2: no-reservation regression -- identical to the old behaviour.
     await seedProduct(db, 2, 100, 0, 10);
     const item2 = await seedSession(db, 102, 2, 100, 90, 'count', null);
-    await service.postStockCountSession(102, AUTH);
+    await service.postStockCountSession(102, AUTH, APPROVER_PASSWORD);
     const mov2 = await sql<{ qty: string }>`SELECT qty FROM stock_movements WHERE reference_id = 102`.execute(db);
     assert.equal(Number(mov2.rows[0].qty), -10);
     assert.deepEqual(await journalLines(db, item2), [
@@ -155,7 +163,7 @@ async function main(): Promise<void> {
     // Case 3: stale global counter -- journal follows the actual delta, not the variance.
     await seedProduct(db, 3, 80, 0, 10);
     const item3 = await seedSession(db, 103, 3, 80, 90, 'count', null);
-    await service.postStockCountSession(103, AUTH);
+    await service.postStockCountSession(103, AUTH, APPROVER_PASSWORD);
     const prod3 = await sql<{ stock_qty: string }>`SELECT stock_qty FROM products WHERE id = 3`.execute(db);
     assert.equal(Number(prod3.rows[0].stock_qty), 90);
     assert.deepEqual(await journalLines(db, item3), [
@@ -166,7 +174,7 @@ async function main(): Promise<void> {
     // Case 4: counted == raw qty with reservations -- zero net, no journal, stock unchanged.
     await seedProduct(db, 4, 100, 10, 10);
     const item4 = await seedSession(db, 104, 4, 90, 100, 'count', null);
-    await service.postStockCountSession(104, AUTH);
+    await service.postStockCountSession(104, AUTH, APPROVER_PASSWORD);
     const mov4 = await sql<{ qty: string }>`SELECT qty FROM stock_movements WHERE reference_id = 104`.execute(db);
     assert.equal(Number(mov4.rows[0].qty), 0);
     assert.deepEqual(await journalLines(db, item4), []);
@@ -177,7 +185,7 @@ async function main(): Promise<void> {
     await seedProduct(db, 5, 3, 0, 10, true);
     await sql`INSERT INTO product_serials (tenant_id, account_id, product_id, serial_number, status, branch_id, location_id, cost_price) VALUES ('t1','a1',5,'SN1','in_stock',1,1,10), ('t1','a1',5,'SN2','in_stock',1,1,10), ('t1','a1',5,'SN3','in_stock',1,1,10)`.execute(db);
     const item5 = await seedSession(db, 105, 5, 3, 2, 'count', ['SN1', 'SN2']);
-    await service.postStockCountSession(105, AUTH);
+    await service.postStockCountSession(105, AUTH, APPROVER_PASSWORD);
     const scrapped = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM product_serials WHERE product_id = 5 AND status = 'scrapped'`.execute(db);
     assert.equal(Number(scrapped.rows[0].n), 1);
     assert.deepEqual(await journalLines(db, item5), [
@@ -188,7 +196,7 @@ async function main(): Promise<void> {
     // Case 6: damage reason, positive frozen variance, negative actual delta.
     await seedProduct(db, 6, 100, 10, 10);
     const item6 = await seedSession(db, 106, 6, 90, 92, 'damage', null);
-    await service.postStockCountSession(106, AUTH);
+    await service.postStockCountSession(106, AUTH, APPROVER_PASSWORD);
     assert.deepEqual(await journalLines(db, item6), [
       { code: '1140', debit: 0, credit: 80 },
       { code: '5300', debit: 80, credit: 0 },

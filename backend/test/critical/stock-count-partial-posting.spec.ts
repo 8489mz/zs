@@ -12,10 +12,13 @@ THE RULE: an item whose scoped stock moved since the count started
 is skipped, never blocking the session: it stays unposted for a
 standalone recount (which refreshes its expected quantity), while
 every unchanged item posts and the session stays draft until the
-skipped items are recounted and posted. Manager approval -- the
-shared manager PIN or a manager password -- is required only when
-the session posts a variance or a serial/batch trace; a
-zero-variance session posts with no credential at all.
+skipped items are recounted and posted. Manager approval — the
+password of a different admin user than the counter and the poster
+(INV-STOCK-COUNT-DUAL-APPROVAL, 2026-11-12) — is required only
+when the session posts a variance or a serial/batch trace; the
+shared manager PIN identifies no approver and is rejected, and so
+is the counter's own password; a zero-variance session posts with
+no credential at all.
 
 WHAT THIS PINS, driving the REAL postStockCountSession on PGlite:
 - a session with one unchanged item and one moved item posts the
@@ -24,9 +27,10 @@ WHAT THIS PINS, driving the REAL postStockCountSession on PGlite:
   the skipped item; after a recount the item posts and the session
   becomes posted.
 - a variance session posted by a non-manager without a credential
-  is rejected with ADMIN_PASSWORD_REQUIRED; the same session posts
-  with the manager PIN, and an equivalent session posts with the
-  admin password.
+  is rejected with ADMIN_PASSWORD_REQUIRED; the shared manager PIN
+  is rejected with STOCK_COUNT_APPROVER_NOT_IDENTIFIED, and the
+  counter's own admin password with STOCK_COUNT_APPROVER_SAME_AS_COUNTER;
+  the same session posts with a different admin's password.
 - a zero-variance session posts as a non-manager with no credential.
 */
 
@@ -117,10 +121,15 @@ async function main(): Promise<void> {
     `);
 
 
-    // Approval fixtures: admin password + shared manager PIN + cashier user.
+    // Approval fixtures: admin password + shared manager PIN + cashier user
+    // + a second admin (user 3) whose password approves variances
+    // (INV-STOCK-COUNT-DUAL-APPROVAL: approver differs from the counter,
+    // user 1, and from the poster, the cashier user 2).
     const adminRecord = await createPasswordRecord('admin-pass');
     await sql`UPDATE users SET password_hash = ${adminRecord.hash}, password_salt = ${adminRecord.salt} WHERE id = 1`.execute(db);
     await sql`INSERT INTO users VALUES (2, 't1', 'cashier', 1, 'cashier', '', '', true)`.execute(db);
+    const approverRecord = await createPasswordRecord('approver-pass');
+    await sql`INSERT INTO users VALUES (3, 't1', 'approver', 1, 'admin', ${approverRecord.hash}, ${approverRecord.salt}, true)`.execute(db);
     await sql`INSERT INTO settings VALUES ('t1', 'managerPin', '"2468"')`.execute(db);
 
     async function sessionStatus(db: Kysely<Database>, id: number): Promise<string> {
@@ -157,19 +166,25 @@ async function main(): Promise<void> {
     assert.equal(await itemPosted(db, movedItem), true);
     assert.equal(await sessionStatus(db, 201), 'posted');
 
-    // Case 2: a variance session needs manager approval from a
-    // non-manager; the manager PIN works, and so does the admin password.
+    // Case 2: a variance session needs approval by a DIFFERENT admin
+    // than the counter and the poster; the shared manager PIN cannot
+    // identify an approver and is rejected, and so is the counter's
+    // own admin password.
     await seedProduct(db, 3, 100, 0, 10);
     await sql`UPDATE product_location_stock SET qty = 90 WHERE product_id = 3 AND location_id = 1`.execute(db);
     await seedSession(db, 202, 3, 90, 85, 'shortage found', null);
     await assert.rejects(service.postStockCountSession(202, CASHIER), (error: any) => error.code === 'ADMIN_PASSWORD_REQUIRED');
     assert.equal(await sessionStatus(db, 202), 'draft');
-    await service.postStockCountSession(202, CASHIER, '2468');
+    await assert.rejects(service.postStockCountSession(202, CASHIER, '2468'), (error: any) => error.code === 'STOCK_COUNT_APPROVER_NOT_IDENTIFIED');
+    assert.equal(await sessionStatus(db, 202), 'draft');
+    await assert.rejects(service.postStockCountSession(202, CASHIER, 'admin-pass'), (error: any) => error.code === 'STOCK_COUNT_APPROVER_SAME_AS_COUNTER');
+    assert.equal(await sessionStatus(db, 202), 'draft');
+    await service.postStockCountSession(202, CASHIER, 'approver-pass');
     assert.equal(await sessionStatus(db, 202), 'posted');
     await seedProduct(db, 4, 100, 0, 10);
     await sql`UPDATE product_location_stock SET qty = 90 WHERE product_id = 4 AND location_id = 1`.execute(db);
     await seedSession(db, 203, 4, 90, 85, 'shortage found', null);
-    await service.postStockCountSession(203, CASHIER, 'admin-pass');
+    await service.postStockCountSession(203, CASHIER, 'approver-pass');
     assert.equal(await sessionStatus(db, 203), 'posted');
     const loc3 = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = 3 AND location_id = 1`.execute(db);
     assert.equal(Number(loc3.rows[0].qty), 85);
