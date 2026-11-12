@@ -6444,6 +6444,18 @@ export class VanSalesService {
       notes?: string;
     },
   ): Promise<{ ok: boolean; movementId: number }> {
+    // INV-REP-DRIVER-WRITES-OWNERSHIP (M16/D7): the trip must be the
+    // caller's own — the repId parameter this method already carried
+    // was never used, while the read side (getTripPackagingMovements)
+    // already gated on it. No rep_id column is added: trip_id already
+    // determines ownership deterministically (van_sales_trips.rep_id),
+    // and the read side gates on the same trip — a redundant column
+    // would duplicate that fact and need a backfill. The customerId
+    // rides inside the owned trip; the customer-balance read stays
+    // gated by assertRepServedCustomer, so a stray customerId cannot
+    // leak another rep's customer data.
+    await this.assertTripOwnedByRep(tenantId, payload.tripId, repId);
+
     const delivered = Math.max(0, Number(payload.deliveredQty || 0));
     const returned = Math.max(0, Number(payload.returnedQty || 0));
 

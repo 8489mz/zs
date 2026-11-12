@@ -26,6 +26,20 @@ export class VanSalesController {
     private readonly vanFieldExecutionService: VanFieldExecutionService,
   ) {}
 
+  /**
+   * INV-DRIVER-PIN-FIRST-LOGIN-CHANGE (H4 ride-along, M16): every
+   * van-sales driver endpoint re-derives the default-PIN flag from
+   * the live hash — a default-PIN rep is refused here exactly as on
+   * the driver portal's own data routes (DriverPortalController).
+   * The change-PIN endpoint lives in DriverPortalController and is
+   * the only escape hatch; it must NOT call this helper.
+   */
+  private async verifyDriver(authHeader: string) {
+    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    await this.deliveryRepsService.assertDriverPinChanged(driver);
+    return driver;
+  }
+
   @Get('pre-sales/catalog')
   async listPreSalesCatalog(
     @Headers('authorization') authHeader: string,
@@ -33,7 +47,7 @@ export class VanSalesController {
     @Query('search') search?: string,
     @Query('categoryId') categoryId?: string,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanPreSalesService.listWarehouseCatalog(
       driver.tenantId,
       warehouseLocationId ? Number(warehouseLocationId) : undefined,
@@ -47,7 +61,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Body() body: any,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanPreSalesService.createPreSalesOrder(driver.repId, driver.tenantId, driver.accountId, body);
   }
 
@@ -59,7 +73,7 @@ export class VanSalesController {
     @Query('dateTo') dateTo?: string,
     @Query('search') search?: string,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanPreSalesService.listPreSalesOrders(driver.tenantId, {
       repId: driver.repId,
       status,
@@ -74,13 +88,13 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanPreSalesService.getPreSalesOrderDetails(id, driver.tenantId, driver.repId);
   }
 
   @Get('active-trip')
   async getActiveTrip(@Headers('authorization') authHeader: string) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getActiveTrip(driver.repId, driver.tenantId, driver.accountId);
   }
 
@@ -89,7 +103,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Body() body: { sourceWarehouseId?: number; items?: { productId: number; qty: number }[]; notes?: string; startOdometer?: number; vehicleId?: number },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     if (body?.items && Array.isArray(body.items) && body.items.length > 0) {
       await this.vanSalesService.recordSuspicionEvent({
         tenantId: driver.tenantId,
@@ -147,6 +161,7 @@ export class VanSalesController {
     // settle service enforces open-trip + rep ownership. New trips and
     // sales stay blocked by the strict verifier elsewhere.
     const driver = await this.deliveryRepsService.verifyDriverTokenForSettlement(authHeader);
+    await this.deliveryRepsService.assertDriverPinChanged(driver);
     const pinToVerify = String(body?.supervisorPin || body?.supervisorOverridePin || '').trim();
 
     // INV-VAN-SELF-SETTLE-PIN-REQUIRED: self-settlement from the
@@ -240,6 +255,7 @@ export class VanSalesController {
     // INV-PORTAL-TENANT-STATUS-ENFORCED: finish-and-settle only (see
     // settleTrip above).
     const driver = await this.deliveryRepsService.verifyDriverTokenForSettlement(authHeader);
+    await this.deliveryRepsService.assertDriverPinChanged(driver);
     return this.vanSalesService.submitTripSettlement(driver.repId, driver.tenantId, driver.accountId, body);
   }
 
@@ -281,7 +297,7 @@ export class VanSalesController {
       recipientSignature?: string;
     },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.executeFieldSale(driver.repId, driver.tenantId, driver.accountId, body);
   }
 
@@ -294,7 +310,7 @@ export class VanSalesController {
     @Query('search') search?: string,
     @Query('tripId') tripId?: string,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     const sales = await this.vanSalesService.listDriverSales(driver.tenantId, driver.repId, {
       dateScope: dateScope || 'all',
       customerId: customerId ? Number(customerId) : undefined,
@@ -323,7 +339,7 @@ export class VanSalesController {
       clientTxId?: string;
     },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.recordFieldCollection(driver.repId, driver.tenantId, driver.accountId, body);
   }
 
@@ -343,7 +359,7 @@ export class VanSalesController {
       clientTxId?: string;
     },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.executeDamagedSwap(driver.repId, driver.tenantId, driver.accountId, {
       tripId,
       ...body,
@@ -355,7 +371,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Param('tripId', ParseIntPipe) tripId: number,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     const swaps = await this.vanSalesService.listTripDamagedSwaps(driver.tenantId, tripId, driver.repId);
     return { ok: true, swaps };
   }
@@ -365,7 +381,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Param('customerId', ParseIntPipe) customerId: number,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     const sales = await this.vanSalesService.getCustomerEligibleSales(driver.tenantId, customerId, driver.repId);
     return { ok: true, sales };
   }
@@ -384,7 +400,7 @@ export class VanSalesController {
       notes?: string;
     },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.submitFieldReturn(driver.repId, driver.tenantId, driver.accountId, body);
   }
 
@@ -393,7 +409,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Body() body: SubmitLoadRequisitionDto,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     // INV-DRIVER-REQUISITION-DTO-WHITELIST: the driver route never
     // forwards allowMultiplePending. The DTO rejects it at the
     // boundary and the controller forces false here, so a driver can
@@ -410,7 +426,7 @@ export class VanSalesController {
 
   @Get('requisitions')
   async listMyRequisitions(@Headers('authorization') authHeader: string) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     const requisitions = await this.vanSalesService.listLoadRequisitions(driver.tenantId, { repId: driver.repId });
     return { ok: true, requisitions };
   }
@@ -420,7 +436,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.cancelLoadRequisitionByDriver(driver.tenantId, driver.repId, id);
   }
 
@@ -429,13 +445,13 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.cancelLoadRequisitionByDriver(driver.tenantId, driver.repId, id);
   }
 
   @Get('warehouses')
   async getDriverWarehouses(@Headers('authorization') authHeader: string) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     const warehouses = await this.vanSalesService.getDriverWarehouses(driver.tenantId, driver.repId);
     return { ok: true, warehouses };
   }
@@ -445,7 +461,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Query('warehouseId') warehouseId?: string,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     const parsedWhId = warehouseId && warehouseId !== 'all' ? Number(warehouseId) : undefined;
     const products = await this.vanSalesService.getDriverAvailableProducts(driver.tenantId, parsedWhId, driver.repId);
     return { ok: true, products };
@@ -456,13 +472,13 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Query('month') month?: string,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getRepTarget(driver.tenantId, driver.repId, month);
   }
 
   @Get('itinerary')
   async getMyItinerary(@Headers('authorization') authHeader: string) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     const itinerary = await this.vanSalesService.getDriverTodayItinerary(driver.tenantId, driver.repId);
     return { ok: true, itinerary };
   }
@@ -472,7 +488,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Body() body: any,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.createDriverCustomer(driver.repId, driver.tenantId, driver.accountId, body);
   }
 
@@ -492,7 +508,7 @@ export class VanSalesController {
       notes?: string;
     },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.recordFieldVisit(driver.tenantId, driver.accountId, driver.repId, body);
   }
 
@@ -510,13 +526,13 @@ export class VanSalesController {
       notes?: string;
     },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.recordFuelLog(driver.tenantId, driver.accountId, driver.repId, body);
   }
 
   @Get('fuel-logs')
   async listMyFuelLogs(@Headers('authorization') authHeader: string) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     const logs = await this.vanSalesService.listFuelLogs(driver.tenantId, { repId: driver.repId });
     return { ok: true, logs };
   }
@@ -537,13 +553,13 @@ export class VanSalesController {
       notes?: string;
     },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.recordOilChange(driver.tenantId, driver.accountId, driver.repId, body);
   }
 
   @Get('maintenance-alerts')
   async getMyMaintenanceAlerts(@Headers('authorization') authHeader: string) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getFleetMaintenanceAlerts(driver.tenantId, undefined, driver.repId);
   }
 
@@ -559,13 +575,13 @@ export class VanSalesController {
       notes?: string;
     },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.createInterVanTransfer(driver.tenantId, driver.accountId, driver.repId, body);
   }
 
   @Get('transfers')
   async listMyTransfers(@Headers('authorization') authHeader: string) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     const transfers = await this.vanSalesService.listInterVanTransfers(driver.tenantId, { repId: driver.repId });
     return { ok: true, transfers };
   }
@@ -575,7 +591,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.acceptInterVanTransfer(driver.tenantId, driver.accountId, driver.repId, id);
   }
 
@@ -585,13 +601,13 @@ export class VanSalesController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { reason?: string },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.rejectInterVanTransfer(driver.tenantId, driver.repId, id, body?.reason);
   }
 
   @Get('peer-reps')
   async getPeerReps(@Headers('authorization') authHeader: string) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     const reps = await this.vanSalesService.getPeerReps(driver.tenantId, driver.repId);
     return { ok: true, reps };
   }
@@ -606,7 +622,7 @@ export class VanSalesController {
     @Param('tripId', ParseIntPipe) tripId: number,
     @Body() body: { expenseType: string; amount: number; notes?: string; receiptPhotoUrl?: string; supervisorOverridePin?: string },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.recordTripExpense(driver.repId, driver.tenantId, driver.accountId, {
       ...body,
       tripId,
@@ -618,7 +634,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Param('tripId', ParseIntPipe) tripId: number,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getTripExpenses(tripId, driver.tenantId, driver.repId);
   }
 
@@ -632,7 +648,7 @@ export class VanSalesController {
     @Param('tripId', ParseIntPipe) tripId: number,
     @Body() body: { customerId?: number; packageType: string; deliveredQty: number; returnedQty: number; notes?: string },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.recordPackagingMovement(driver.repId, driver.tenantId, driver.accountId, {
       ...body,
       tripId,
@@ -644,7 +660,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Param('tripId', ParseIntPipe) tripId: number,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getTripPackagingMovements(tripId, driver.tenantId, driver.repId);
   }
 
@@ -653,7 +669,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Param('customerId', ParseIntPipe) customerId: number,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getCustomerPackagingBalance(customerId, driver.tenantId, driver.repId);
   }
 
@@ -662,7 +678,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Param('customerId', ParseIntPipe) customerId: number,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getCustomerSuggestedOrder(driver.tenantId, driver.accountId, driver.repId, customerId);
   }
 
@@ -671,7 +687,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Param('customerId', ParseIntPipe) customerId: number,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getCustomerLastSoldPrices(driver.tenantId, customerId, driver.repId);
   }
 
@@ -680,13 +696,13 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Param('customerId', ParseIntPipe) customerId: number,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanSalesService.getCustomerFieldStatement(driver.tenantId, customerId, driver.repId);
   }
 
   @Get('promotions')
   async listActivePromotions(@Headers('authorization') authHeader: string) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     const promotions = await this.vanPromotionsService.listPromotions(driver.tenantId, { isActive: true });
     return { ok: true, promotions };
   }
@@ -696,7 +712,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Body() body: { cartItems: any[]; invoiceSubtotal?: number; customerType?: string },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     const result = await this.vanPromotionsService.evaluateCart(driver.tenantId, body);
     return { ok: true, ...result };
   }
@@ -706,7 +722,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Body() body: { customerIds?: number[]; startLat?: number; startLng?: number; persistSequence?: boolean; route?: string },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     const result = await this.vanRoutesService.optimizeCustomerRoute(driver.tenantId, {
       ...body,
       repId: driver.repId,
@@ -727,7 +743,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Body() body: { tripId?: number; customerId: number; customerName?: string; latitude?: number; longitude?: number },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanFieldExecutionService.checkInVisit(driver.tenantId, Number(driver.accountId || 0), driver.repId, body);
   }
 
@@ -737,8 +753,8 @@ export class VanSalesController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { items: any[] },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
-    return this.vanFieldExecutionService.recordVisitInventory(driver.tenantId, id, body);
+    const driver = await this.verifyDriver(authHeader);
+    return this.vanFieldExecutionService.recordVisitInventory(driver.tenantId, id, body, driver.repId);
   }
 
   @Post('visits/:id/no-sale')
@@ -747,8 +763,8 @@ export class VanSalesController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { noSaleReason: string; noSaleNotes?: string },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
-    return this.vanFieldExecutionService.recordVisitNoSale(driver.tenantId, id, body);
+    const driver = await this.verifyDriver(authHeader);
+    return this.vanFieldExecutionService.recordVisitNoSale(driver.tenantId, id, body, driver.repId);
   }
 
   @Post('visits/:id/check-out')
@@ -757,8 +773,8 @@ export class VanSalesController {
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { hasSale?: boolean; saleId?: number; saleAmount?: number; hasCollection?: boolean; collectionAmount?: number },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
-    return this.vanFieldExecutionService.checkOutVisit(driver.tenantId, id, body);
+    const driver = await this.verifyDriver(authHeader);
+    return this.vanFieldExecutionService.checkOutVisit(driver.tenantId, id, body, driver.repId);
   }
 
   @Post('trade-surveys')
@@ -766,7 +782,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Body() body: any,
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanFieldExecutionService.recordTradeSurvey(driver.tenantId, Number(driver.accountId || 0), driver.repId, body);
   }
 
@@ -775,7 +791,7 @@ export class VanSalesController {
     @Headers('authorization') authHeader: string,
     @Body() body: { tripId: number; latitude: number; longitude: number; speedKmh?: number; batteryLevel?: number },
   ) {
-    const driver = await this.deliveryRepsService.verifyDriverToken(authHeader);
+    const driver = await this.verifyDriver(authHeader);
     return this.vanFieldExecutionService.recordLiveBreadcrumb(driver.tenantId, Number(driver.accountId || 0), driver.repId, body);
   }
 }

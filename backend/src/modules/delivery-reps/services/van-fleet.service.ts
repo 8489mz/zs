@@ -16,6 +16,94 @@ export class VanFleetService {
   }
 
   /**
+   * INV-REP-DRIVER-WRITES-OWNERSHIP (M16/D7): a driver fuel/oil write
+   * is allowed only on a vehicle he may use — the vehicle's assigned
+   * rep, an active multi-driver shift row (fleet_vehicle_drivers),
+   * a supplied trip he owns whose vehicle this is, or one of his open
+   * trips that names this vehicle. Same vehicle set M19's
+   * getFleetMaintenanceAlerts already uses for reads, extended with
+   * the trip anchors a fuel log carries. A missing vehicle is a 404;
+   * a vehicle the rep may not use is REP_VEHICLE_NOT_ASSIGNED 403.
+   * Staff callers pass repId null and skip the check. The gate runs
+   * before the insert AND before the odometer bump, so a refused
+   * write moves no cost and no odometer.
+   */
+  private async assertVehicleUsableByRep(
+    tenantId: string,
+    vehicleId: number,
+    repId: number,
+    tripId?: number | null,
+  ): Promise<void> {
+    const vehicle = await this.anyDb
+      .selectFrom('fleet_vehicles')
+      .select(['id', 'assigned_rep_id'])
+      .where('id', '=', vehicleId)
+      .where('tenant_id', '=', tenantId)
+      .executeTakeFirst();
+    if (!vehicle) {
+      throw new AppError('المركبة غير موجودة', 'VEHICLE_NOT_FOUND', 404);
+    }
+
+    // A named trip is checked FIRST: the fuel row carries the trip as
+    // well as the vehicle, so owning the vehicle alone must not let a
+    // rep attribute his fuel to another rep's trip.
+    if (tripId != null) {
+      const trip = await this.anyDb
+        .selectFrom('van_sales_trips')
+        .select(['id', 'rep_id', 'vehicle_id'])
+        .where('id', '=', tripId)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      if (!trip) {
+        throw new AppError('الرحلة غير موجودة', 'TRIP_NOT_FOUND', 404);
+      }
+      if (Number((trip as any).rep_id) !== Number(repId)) {
+        throw new AppError(
+          'هذه الرحلة تخص مندوباً آخر، لا يمكنك تسجيل وقود عليها',
+          'REP_TRIP_NOT_OWNED',
+          403,
+        );
+      }
+      if ((trip as any).vehicle_id != null && Number((trip as any).vehicle_id) !== Number(vehicleId)) {
+        throw new AppError(
+          'هذه المركبة ليست مركبة الرحلة المذكورة',
+          'REP_VEHICLE_NOT_ASSIGNED',
+          403,
+        );
+      }
+      return;
+    }
+
+    if (vehicle.assigned_rep_id != null && Number(vehicle.assigned_rep_id) === Number(repId)) return;
+
+    const driven = await this.anyDb
+      .selectFrom('fleet_vehicle_drivers')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('vehicle_id', '=', vehicleId)
+      .where('rep_id', '=', repId)
+      .where('is_active', '=', true)
+      .executeTakeFirst();
+    if (driven) return;
+
+    const ownTrip = await this.anyDb
+      .selectFrom('van_sales_trips')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('rep_id', '=', repId)
+      .where('vehicle_id', '=', vehicleId)
+      .where('status', '=', 'open')
+      .executeTakeFirst();
+    if (ownTrip) return;
+
+    throw new AppError(
+      'هذه المركبة ليست مسندة إليك، لا يمكنك تسجيل وقود/زيت عليها',
+      'REP_VEHICLE_NOT_ASSIGNED',
+      403,
+    );
+  }
+
+  /**
    * Fleet Management: List all vehicles registered under the company fleet.
    */
   async listFleetVehicles(tenantId: string) {
@@ -377,6 +465,15 @@ export class VanFleetService {
       throw new AppError('يرجى إدخال سعر لتر الوقود', 'INVALID_PRICE_PER_LITER', 400);
     }
 
+    // INV-REP-DRIVER-WRITES-OWNERSHIP (M16/D7): the vehicle (and the
+    // trip, when one is named) must be the caller's own — before the
+    // insert and before the odometer bump. Staff callers pass repId
+    // null and skip the check. The oil-change insert is fully traced
+    // and gated the same way below.
+    if (repId != null) {
+      await this.assertVehicleUsableByRep(tenantId, payload.vehicleId, repId, payload.tripId ?? null);
+    }
+
     // Fuel cost is money: round at the tenant's book digits (a 3-decimal
     // tenant keeps its third decimal; the old 2-decimal cut dropped it).
     // consumptionRate below stays 2dp: it is km per litre, not money.
@@ -509,6 +606,18 @@ export class VanFleetService {
     }
     if (!payload.oilType?.trim()) {
       throw new AppError('يرجى كتابة نوع الزيت المستخدم', 'INVALID_OIL_TYPE', 400);
+    }
+
+    // INV-REP-DRIVER-WRITES-OWNERSHIP (M16/D7): the vehicle must be
+    // the caller's own — before completing the previous active
+    // oil-change row, before the insert, and before the odometer
+    // bump. A refused write completes nothing and moves no odometer.
+    // Traced fully: insert into fleet_oil_changes + complete prior
+    // active rows for this vehicle + GREATEST odometer bump. There is
+    // no trip anchor on this endpoint, so vehicle assignment is the
+    // only ownership proof. Staff callers pass repId null.
+    if (repId != null) {
+      await this.assertVehicleUsableByRep(tenantId, payload.vehicleId, repId);
     }
 
     const nextDue = odo + rated;

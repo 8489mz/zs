@@ -77,6 +77,133 @@ export class VanFieldExecutionService {
   ) {}
 
   /**
+   * INV-REP-DRIVER-WRITES-OWNERSHIP (M16/D6+D7): every driver write
+   * below verifies the visit / trip / vehicle / customer belongs to
+   * the calling rep and refuses with a specific 403 otherwise, before
+   * any write. Staff callers pass repId null and skip the ownership
+   * check (the supervisor view); the amount-anchoring in
+   * checkOutVisit still applies to them. A missing row is a 404; a
+   * row owned by another rep is a 403 — never a silent no-op.
+   */
+  private async assertVisitOwnedByRep(
+    tenantId: string,
+    visitId: number,
+    repId: number,
+  ) {
+    const visit = await this.db
+      .selectFrom('van_store_visits')
+      .selectAll()
+      .where('id', '=', visitId)
+      .where('tenant_id', '=', tenantId)
+      .executeTakeFirst();
+
+    if (!visit) {
+      throw new AppError('سجل الزيارة غير موجود', 'VISIT_NOT_FOUND', 404);
+    }
+    if (Number((visit as any).rep_id) !== Number(repId)) {
+      throw new AppError(
+        'هذه الزيارة تخص مندوباً آخر، لا يمكنك التعديل عليها',
+        'REP_VISIT_NOT_OWNED',
+        403,
+      );
+    }
+    return visit;
+  }
+
+  private async assertTripOwnedByRep(
+    tenantId: string,
+    tripId: number,
+    repId: number,
+  ) {
+    const trip = await this.db
+      .selectFrom('van_sales_trips')
+      .select(['id', 'rep_id'])
+      .where('id', '=', tripId)
+      .where('tenant_id', '=', tenantId)
+      .executeTakeFirst();
+    if (!trip) {
+      throw new AppError('الرحلة غير موجودة', 'TRIP_NOT_FOUND', 404);
+    }
+    if (Number((trip as any).rep_id) !== Number(repId)) {
+      throw new AppError(
+        'هذه الرحلة تخص مندوباً آخر، لا يمكنك تسجيل زيارة عليها',
+        'REP_TRIP_NOT_OWNED',
+        403,
+      );
+    }
+  }
+
+  /**
+   * INV-REP-DRIVER-WRITES-OWNERSHIP (M16/D7): a survey customer is
+   * authorized when the rep is assigned to the customer, has served
+   * him before (field visit, pre-sale order, or delivered sale), or
+   * has an open store visit (check-in) for him — the check-in itself
+   * was already gated by H7, so it cannot manufacture access to
+   * another rep's customer.
+   */
+  private async assertSurveyCustomer(
+    tenantId: string,
+    repId: number,
+    customerId: number,
+  ): Promise<void> {
+    const customer = await this.db
+      .selectFrom('customers')
+      .select(['id', 'metadata'])
+      .where('id', '=', customerId)
+      .where('tenant_id', '=', tenantId)
+      .executeTakeFirst();
+
+    if (!customer) {
+      throw new AppError('العميل غير مسجل في النظام', 'CUSTOMER_NOT_FOUND', 404);
+    }
+
+    const meta = typeof customer.metadata === 'string'
+      ? JSON.parse(customer.metadata || '{}')
+      : (customer.metadata || {});
+    if (extractAssignedRepIds(meta).includes(Number(repId))) return;
+
+    const [fieldVisit, order, sale, storeVisit] = await Promise.all([
+      // van_field_visits is not a typed key in Database (same as in
+      // VanRoutesService, which reads it through anyDb).
+      (this.db as any)
+        .selectFrom('van_field_visits')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('rep_id', '=', repId)
+        .where('customer_id', '=', customerId)
+        .executeTakeFirst(),
+      this.db
+        .selectFrom('sales_orders')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('rep_id', '=', repId)
+        .where('customer_id', '=', customerId)
+        .executeTakeFirst(),
+      this.db
+        .selectFrom('sales')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('delivery_rep_id', '=', repId)
+        .where('customer_id', '=', customerId)
+        .executeTakeFirst(),
+      this.db
+        .selectFrom('van_store_visits')
+        .select('id')
+        .where('tenant_id', '=', tenantId)
+        .where('rep_id', '=', repId)
+        .where('customer_id', '=', customerId)
+        .executeTakeFirst(),
+    ]);
+    if (fieldVisit || order || sale || storeVisit) return;
+
+    throw new AppError(
+      'العميل غير مسند إليك ولا توجد زيارة مملوكة لك تبرر تسجيل الاستبيان',
+      'REP_CUSTOMER_NOT_ASSIGNED',
+      403,
+    );
+  }
+
+  /**
    * 1. Check-In: Initiates a structured store visit with GPS geofencing verification
    */
   async checkInVisit(
@@ -227,16 +354,23 @@ export class VanFieldExecutionService {
     tenantId: string,
     visitId: number,
     payload: RecordStoreInventoryPayload,
+    repId?: number | null,
   ) {
-    const visit = await this.db
-      .selectFrom('van_store_visits')
-      .select(['id'])
-      .where('id', '=', visitId)
-      .where('tenant_id', '=', tenantId)
-      .executeTakeFirst();
+    // INV-REP-DRIVER-WRITES-OWNERSHIP (M16/D6): a driver writes shelf
+    // stock only on his own visit. Staff callers pass no repId.
+    if (repId != null) {
+      await this.assertVisitOwnedByRep(tenantId, visitId, repId);
+    } else {
+      const visit = await this.db
+        .selectFrom('van_store_visits')
+        .select(['id'])
+        .where('id', '=', visitId)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
 
-    if (!visit) {
-      throw new AppError('سجل الزيارة غير موجود', 'VISIT_NOT_FOUND', 404);
+      if (!visit) {
+        throw new AppError('سجل الزيارة غير موجود', 'VISIT_NOT_FOUND', 404);
+      }
     }
 
     await this.db
@@ -259,9 +393,18 @@ export class VanFieldExecutionService {
     tenantId: string,
     visitId: number,
     payload: RecordNoSalePayload,
+    repId?: number | null,
   ) {
     if (!payload.noSaleReason) {
       throw new AppError('سبب عدم البيع إلزامي', 'NO_SALE_REASON_REQUIRED', 400);
+    }
+
+    // INV-REP-DRIVER-WRITES-OWNERSHIP (M16/D6): a driver records a
+    // no-sale only on his own visit. The check also closes the old
+    // silent no-op: a missing visit on the driver path is a 404, not
+    // an update that touches zero rows. Staff callers pass no repId.
+    if (repId != null) {
+      await this.assertVisitOwnedByRep(tenantId, visitId, repId);
     }
 
     await this.db
@@ -285,16 +428,153 @@ export class VanFieldExecutionService {
     tenantId: string,
     visitId: number,
     payload?: CheckOutVisitPayload,
+    repId?: number | null,
   ) {
-    const visit = await this.db
-      .selectFrom('van_store_visits')
-      .selectAll()
-      .where('id', '=', visitId)
-      .where('tenant_id', '=', tenantId)
-      .executeTakeFirst();
+    // INV-REP-DRIVER-WRITES-OWNERSHIP (M16/D6): a driver checks out
+    // only his own visit. Staff callers pass no repId.
+    const visit = repId != null
+      ? await this.assertVisitOwnedByRep(tenantId, visitId, repId)
+      : await (async () => {
+          const row = await this.db
+            .selectFrom('van_store_visits')
+            .selectAll()
+            .where('id', '=', visitId)
+            .where('tenant_id', '=', tenantId)
+            .executeTakeFirst();
+          if (!row) {
+            throw new AppError('سجل الزيارة غير موجود', 'VISIT_NOT_FOUND', 404);
+          }
+          return row;
+        })();
 
-    if (!visit) {
-      throw new AppError('سجل الزيارة غير موجود', 'VISIT_NOT_FOUND', 404);
+    // INV-REP-DRIVER-WRITES-OWNERSHIP (M16/D6): caller-supplied
+    // sale/collection amounts are NEVER trusted as typed. An amount
+    // may only be attached when it is anchored in a real record the
+    // caller owns — REJECT, never ignore-and-derive silently, so no
+    // invented amount can reach the visit KPIs. No shipped UI sends
+    // these amounts without a sale (no frontend caller passes
+    // saleAmount/collectionAmount to check-out today), so rejecting
+    // unanchored amounts narrows nothing in use.
+    //  - saleId, when given, must resolve to a sale of this visit's
+    //    customer, on this visit's trip when both name one, belonging
+    //    to the caller when the sale names a rep (same rule as
+    //    recordFieldVisit, H7). A supplied saleAmount must equal that
+    //    sale's total within 0.01, and is derived from the sale when
+    //    omitted. A saleAmount with no saleId is invented by
+    //    definition; a sale claim (hasSale) with no verified sale is
+    //    the same.
+    //  - collectionAmount, when positive, must equal either the cash
+    //    paid on the linked verified sale or the sum of this rep's
+    //    field collections for this visit's trip + customer; a
+    //    collection claim (hasCollection) with no verifiable amount
+    //    is refused the same way.
+    let verifiedSale: any = null;
+    if (payload?.saleId != null) {
+      verifiedSale = await this.db
+        .selectFrom('sales')
+        .select(['id', 'total', 'paid_amount', 'payment_type', 'customer_id', 'delivery_rep_id', 'van_trip_id'])
+        .where('id', '=', payload.saleId)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      if (!verifiedSale) {
+        throw new AppError('الفاتورة غير موجودة', 'SALE_NOT_FOUND', 404);
+      }
+      if (Number((verifiedSale as any).customer_id) !== Number((visit as any).customer_id)) {
+        throw new AppError('الفاتورة لا تخص هذا العميل', 'VISIT_SALE_CUSTOMER_MISMATCH', 400);
+      }
+      if (
+        (verifiedSale as any).delivery_rep_id != null &&
+        repId != null &&
+        Number((verifiedSale as any).delivery_rep_id) !== Number(repId)
+      ) {
+        throw new AppError('الفاتورة تخص مندوباً آخر، لا يمكنك ربطها بزيارتك', 'REP_SALE_NOT_OWNED', 403);
+      }
+      if (
+        (visit as any).trip_id != null &&
+        (verifiedSale as any).van_trip_id != null &&
+        Number((verifiedSale as any).van_trip_id) !== Number((visit as any).trip_id)
+      ) {
+        throw new AppError('الفاتورة ليست على رحلة هذه الزيارة', 'REP_SALE_NOT_OWNED', 403);
+      }
+    }
+
+    const suppliedSaleAmount = payload?.saleAmount;
+    if (suppliedSaleAmount != null && verifiedSale == null) {
+      throw new AppError(
+        'لا يمكن إرفاق مبلغ بيع بلا فاتورة موثقة تخص هذه الزيارة',
+        'REP_VISIT_SALE_UNVERIFIED',
+        403,
+      );
+    }
+    if (
+      suppliedSaleAmount != null &&
+      verifiedSale != null &&
+      Math.abs(Number(suppliedSaleAmount) - Number((verifiedSale as any).total)) > 0.01
+    ) {
+      throw new AppError(
+        'مبلغ البيع المرسل لا يطابق إجمالي الفاتورة المرتبطة',
+        'REP_VISIT_SALE_AMOUNT_MISMATCH',
+        403,
+      );
+    }
+    const hasSale = verifiedSale != null
+      ? true
+      : (payload?.hasSale ?? (suppliedSaleAmount != null && Number(suppliedSaleAmount) > 0));
+    if (hasSale && verifiedSale == null) {
+      throw new AppError(
+        'لا يمكن تسجيل بيع على الزيارة بلا فاتورة موثقة تخص هذه الزيارة',
+        'REP_VISIT_SALE_UNVERIFIED',
+        403,
+      );
+    }
+
+    const suppliedCollectionAmount = payload?.collectionAmount;
+    const saleCashPaid =
+      verifiedSale != null && (verifiedSale as any).payment_type === 'cash'
+        ? Number((verifiedSale as any).paid_amount || 0)
+        : 0;
+    let fieldCollectionsSum: number | null = null;
+    const readFieldCollectionsSum = async (): Promise<number> => {
+      if (fieldCollectionsSum != null) return fieldCollectionsSum;
+      if (repId == null || (visit as any).trip_id == null) {
+        fieldCollectionsSum = 0;
+        return 0;
+      }
+      const row = await (this.db as any)
+        .selectFrom('customer_payments')
+        .select(sql<number>`coalesce(sum(amount), 0)`.as('total'))
+        .where('tenant_id', '=', tenantId)
+        .where('van_trip_id', '=', (visit as any).trip_id)
+        .where('rep_id', '=', repId)
+        .where('customer_id', '=', (visit as any).customer_id)
+        .executeTakeFirst();
+      fieldCollectionsSum = Number((row as any)?.total || 0);
+      return fieldCollectionsSum;
+    };
+    if (suppliedCollectionAmount != null && Number(suppliedCollectionAmount) > 0) {
+      const paymentsSum = await readFieldCollectionsSum();
+      if (
+        Math.abs(Number(suppliedCollectionAmount) - saleCashPaid) > 0.01 &&
+        Math.abs(Number(suppliedCollectionAmount) - paymentsSum) > 0.01
+      ) {
+        throw new AppError(
+          'مبلغ التحصيل المرسل لا يطابق أي تحصيل موثق لهذه الزيارة (فاتورة نقدية أو تحصيل ميداني)',
+          'REP_VISIT_COLLECTION_UNVERIFIED',
+          403,
+        );
+      }
+    }
+    const hasCollection = payload?.hasCollection ??
+      (suppliedCollectionAmount != null && Number(suppliedCollectionAmount) > 0);
+    if (hasCollection) {
+      const paymentsSum = await readFieldCollectionsSum();
+      if (saleCashPaid <= 0 && paymentsSum <= 0) {
+        throw new AppError(
+          'لا يمكن تسجيل تحصيل على الزيارة بلا مبلغ تحصيل موثق لهذه الزيارة',
+          'REP_VISIT_COLLECTION_UNVERIFIED',
+          403,
+        );
+      }
     }
 
     const checkOutAt = new Date();
@@ -303,17 +583,16 @@ export class VanFieldExecutionService {
       checkOutAt,
     );
 
-    const hasSale = payload?.hasSale ?? (payload?.saleAmount != null && payload.saleAmount > 0);
-    const hasCollection = payload?.hasCollection ?? (payload?.collectionAmount != null && payload.collectionAmount > 0);
-
     const [updated] = await this.db
       .updateTable('van_store_visits')
       .set({
         check_out_at: checkOutAt.toISOString(),
         dwell_time_seconds: dwellSeconds,
         has_sale: hasSale,
-        sale_id: payload?.saleId ?? visit.sale_id,
-        sale_amount: payload?.saleAmount != null ? payload.saleAmount : visit.sale_amount,
+        sale_id: verifiedSale != null ? Number((verifiedSale as any).id) : visit.sale_id,
+        sale_amount: verifiedSale != null
+          ? Number((verifiedSale as any).total)
+          : (payload?.saleAmount != null ? payload.saleAmount : visit.sale_amount),
         has_collection: hasCollection,
         collection_amount: payload?.collectionAmount != null ? payload.collectionAmount : visit.collection_amount,
         updated_at: new Date().toISOString(),
@@ -342,6 +621,33 @@ export class VanFieldExecutionService {
     repId: number,
     payload: TradeSurveyPayload,
   ) {
+    // INV-REP-DRIVER-WRITES-OWNERSHIP (M16/D7): every anchor the
+    // caller names must be his own — the visit, the trip, and the
+    // customer (assigned, served before, or checked in by him) — or
+    // the survey is refused before any row is written.
+    if (payload.visitId != null) {
+      const visit = await this.db
+        .selectFrom('van_store_visits')
+        .select(['id', 'rep_id'])
+        .where('id', '=', payload.visitId)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      if (!visit) {
+        throw new AppError('سجل الزيارة غير موجود', 'VISIT_NOT_FOUND', 404);
+      }
+      if (Number((visit as any).rep_id) !== Number(repId)) {
+        throw new AppError(
+          'هذه الزيارة تخص مندوباً آخر، لا يمكنك تسجيل استبيان عليها',
+          'REP_VISIT_NOT_OWNED',
+          403,
+        );
+      }
+    }
+    if (payload.tripId != null) {
+      await this.assertTripOwnedByRep(tenantId, payload.tripId, repId);
+    }
+    await this.assertSurveyCustomer(tenantId, repId, payload.customerId);
+
     const [survey] = await this.db
       .insertInto('van_trade_marketing_surveys')
       .values({
@@ -385,6 +691,11 @@ export class VanFieldExecutionService {
     if (!payload.tripId || payload.latitude == null || payload.longitude == null) {
       throw new AppError('بيانات التتبع ناقصة', 'INVALID_BREADCRUMB_DATA', 400);
     }
+
+    // INV-REP-DRIVER-WRITES-OWNERSHIP (M16/D7): GPS points land only
+    // on the caller's own trip — another rep's trail cannot be
+    // injected or polluted.
+    await this.assertTripOwnedByRep(tenantId, payload.tripId, repId);
 
     const [breadcrumb] = await this.db
       .insertInto('van_rep_live_breadcrumbs')
