@@ -7224,6 +7224,17 @@ export class VanSalesService {
    * debit (INV-VAN-REP-SHORTAGE-WAIVER-REVERSAL: Dr 7200 / Cr 1160)
    * in the same transaction, before the status flip, so a posting
    * failure leaves the row pending instead of stranding Dr 1160.
+   * M4 (INV-REP-SHORTAGE-CUSTODY-GUARD): both branches first verify
+   * that a Dr 1160 custody leg actually stands for this item's trip
+   * (see assertRepStockShortageCustodyLeg). Migration 0225 backfilled
+   * pending stock_shortage rows without recording whether the rep was
+   * charged, so a backfilled row may have no Dr 1160 at all — its
+   * trip journal booked Dr 7200 / Cr 1140 instead. Waiving or
+   * cash-settling such a row would post a Cr 1160 reversal against
+   * nothing, so the guard fails closed with
+   * REP_SHORTAGE_NO_CUSTODY_LEG, posts no journal, flips no status,
+   * and the blocked attempt is written to audit_logs after the
+   * transaction rolls back. The row stays pending for manual review.
    */
   async settleRepFinancialItem(
     tenantId: string,
@@ -7276,6 +7287,12 @@ export class VanSalesService {
           const waiverBookDigits = currencyMoneyDigits(await tenantBaseCurrency(trxAny, tenantId));
           const waiverAmount = roundMoney(Number(item.amount || 0), waiverBookDigits);
           if (waiverAmount > 0) {
+            // M4 (INV-REP-SHORTAGE-CUSTODY-GUARD): only a shortage
+            // trip settlement actually charged to the rep (Dr 1160)
+            // may be waived into Dr 7200 / Cr 1160. A backfilled
+            // row with no Dr 1160 leg fails closed here, before any
+            // journal is posted or status flipped.
+            await this.assertRepStockShortageCustodyLeg(trxAny, tenantId, item, waiverAmount, waiverBookDigits);
             // Branch/location mirror settleTrip: the trip's van
             // location, branch from that location's row; null when
             // the trip or the location row is missing.
@@ -7350,6 +7367,17 @@ export class VanSalesService {
         throw new AppError('مبلغ بند التسوية يجب أن يكون أكبر من صفر', 'SETTLEMENT_AMOUNT_INVALID', 400);
       }
 
+      // M4 (INV-REP-SHORTAGE-CUSTODY-GUARD): a stock shortage may
+      // only be collected in cash against a Dr 1160 custody leg trip
+      // settlement actually charged to the rep. A backfilled row with
+      // no such leg fails closed here, before the shift is resolved
+      // or any journal is posted, so the operator sees the root cause
+      // instead of an incidental missing-shift error. Cash shortages
+      // need no custody leg — Dr 7200 already stands for them.
+      if (entryType === 'stock_shortage') {
+        await this.assertRepStockShortageCustodyLeg(trxAny, tenantId, item, amount, bookDigits);
+      }
+
       const shift = await this.resolveRepShortageReceivingShift(trxAny, {
         tenantId,
         actorUserId,
@@ -7419,7 +7447,112 @@ export class VanSalesService {
         receiptVoucherNo,
         journalEntryId,
       };
+    }).catch(async (error: any) => {
+      if (error?.code === 'REP_SHORTAGE_NO_CUSTODY_LEG') {
+        // M4: the failing transaction already rolled back, so an
+        // audit row written inside it would have vanished with it.
+        // Record the blocked attempt AFTER the rollback, on a
+        // separate committed write, so an admin can find it in the
+        // audit log (event_code REP_SHORTAGE_NO_CUSTODY_LEG) while
+        // the row stays pending in the ledger for manual review.
+        // Best-effort only: a logging failure (a stub audit service
+        // in a harness, a missing table) must never mask the
+        // fail-closed error.
+        try {
+          await this.audit.log(
+            'محاولة تسوية عجز مخزني بلا قيد عهدة',
+            `تم إيقاف تسوية بند عجز مخزني #${id} بطريقة ${payload.method}: لا يوجد قيد مدين 1160 قائم لهذا البند — البند باقٍ معلق للمراجعة اليدوية`,
+            authContext,
+            { eventCode: 'REP_SHORTAGE_NO_CUSTODY_LEG' },
+          );
+        } catch {
+          // The audit trail is best-effort; the fail-closed error stands.
+        }
+      }
+      throw error;
     });
+  }
+
+  /**
+   * M4 (INV-REP-SHORTAGE-CUSTODY-GUARD): verify that a Dr 1160
+   * custody leg actually stands for a pending stock_shortage item
+   * before its waiver or cash settlement posts a Cr 1160 reversal.
+   *
+   * What "stands" means, grounded in postVanTripSettlement: a
+   * CHARGED stock shortage books Dr 1160 / Cr 1140 on the trip's
+   * van_trip_settlement journal (source_type van_trip_settlement,
+   * source_id = trip id, status posted); an UNCHARGED one books
+   * Dr 7200 / Cr 1140 instead, so no 1160 leg exists. Migration
+   * 0225 backfilled every settled trip with stock variance > 0.01
+   * into a PENDING stock_shortage row without recording which leg
+   * was booked, so only the trip journal can tell them apart — the
+   * linkage that survives is the item's trip_id.
+   *
+   * The check sums the Dr 1160 legs of the trip's posted settlement
+   * journal(s) and subtracts the Cr 1160 legs of any prior waiver /
+   * cash-collection reversals for stock_shortage items of the same
+   * trip, then requires the net standing custody to cover the item
+   * amount within one book-digit unit (10^-bookDigits, the same
+   * tolerance the posting service allows between journal sides).
+   * A missing trip, a missing journal, an uncharged (Dr 7200) leg,
+   * or a leg smaller than the item all fail closed with
+   * REP_SHORTAGE_NO_CUSTODY_LEG (422): no journal is posted and no
+   * status flips — the row stays pending for manual review. A
+   * legitimately charged shortage proceeds exactly as before.
+   * Runs inside the caller's transaction, under the item's FOR
+   * UPDATE lock, so the journal read sees the same snapshot as the
+   * status flip that follows it.
+   */
+  private async assertRepStockShortageCustodyLeg(
+    trx: any,
+    tenantId: string,
+    item: { trip_id?: number | null },
+    amount: number,
+    bookDigits: MoneyDigits,
+  ): Promise<void> {
+    const tolerance = 10 ** -bookDigits;
+    let standingCustody = 0;
+    const tripId = item.trip_id ? Number(item.trip_id) : null;
+    if (tripId) {
+      const custodyAccountId = await this.accountingPosting.resolveSystemAccountByCode(trx, tenantId, '1160');
+      const chargedRows = await trx
+        .selectFrom('journal_entry_lines as l')
+        .innerJoin('journal_entries as je', 'je.id', 'l.journal_entry_id')
+        .select('l.debit as debit')
+        .where('je.tenant_id', '=', tenantId)
+        .where('je.source_type', '=', 'van_trip_settlement')
+        .where('je.source_id', '=', tripId)
+        .where('je.status', '=', 'posted')
+        .where('l.account_id', '=', custodyAccountId)
+        .execute();
+      const charged = chargedRows.reduce((sum: number, row: any) => sum + Number(row?.debit || 0), 0);
+      // Prior reversals for stock_shortage items of the same trip
+      // (each reversal journal's source_id is its settlement item,
+      // so the join back to the item recovers the trip): a second
+      // pending row for the same trip must not reverse custody that
+      // an earlier settle already cleared.
+      const reversedRows = await trx
+        .selectFrom('journal_entry_lines as l')
+        .innerJoin('journal_entries as je', 'je.id', 'l.journal_entry_id')
+        .innerJoin('van_rep_financial_settlements as s', 's.id', 'je.source_id')
+        .select('l.credit as credit')
+        .where('je.tenant_id', '=', tenantId)
+        .where('je.source_type', 'in', ['rep_shortage_waiver', 'rep_shortage_cash_collection'])
+        .where('je.status', '=', 'posted')
+        .where('s.trip_id', '=', tripId)
+        .where('s.entry_type', '=', 'stock_shortage')
+        .where('l.account_id', '=', custodyAccountId)
+        .execute();
+      const reversed = reversedRows.reduce((sum: number, row: any) => sum + Number(row?.credit || 0), 0);
+      standingCustody = charged - reversed;
+    }
+    if (standingCustody + tolerance < amount) {
+      throw new AppError(
+        'العجز المخزني غير محمّل على عهدة المندوب — لا يوجد قيد مدين 1160 قائم لهذا البند، راجع تصفية الرحلة قبل التسوية',
+        'REP_SHORTAGE_NO_CUSTODY_LEG',
+        422,
+      );
+    }
   }
 
   /**

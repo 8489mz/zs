@@ -21,6 +21,14 @@ journal. Cash on a bonus/commission item fails closed: those leave
 through payroll, never through this cash receipt. The receipt voucher is
 deterministic (REC-<date>-<itemId>), never a random number.
 
+M4 NOTE (INV-REP-SHORTAGE-CUSTODY-GUARD): the stock_shortage
+fixtures here (cases 2, 9, 10) are charged shortages, so each now
+seeds the charged trip journal (Dr 1160 / Cr 1140 via the real
+postVanTripSettlement) that the guard requires to stand; without it
+the settle would fail closed with REP_SHORTAGE_NO_CUSTODY_LEG. The
+blocked-backfill behavior itself is pinned by
+rep-stock-shortage-custody-guard-m4.spec.ts.
+
 WHAT IS DRIVEN: the real settleRepFinancialItem (real tenant-currency
 resolution at book digits, real postRepShortageCashCollection journal,
 real postRepShortageWaiver journal, real shift resolution, real treasury
@@ -188,6 +196,28 @@ async function seedSettlementItem(db: Kysely<Database>, id: number, entryType: s
   }).execute();
 }
 
+/** M4: the stock_shortage fixtures are charged shortages — book the
+ * real charged trip journal (Dr 1160 / Cr 1140) the custody guard
+ * requires to stand, via the same postVanTripSettlement settleTrip
+ * calls. */
+async function seedChargedTripJournal(db: Kysely<Database>, posting: AccountingPostingService): Promise<void> {
+  await posting.postVanTripSettlement(
+    db as any,
+    11,
+    {
+      expectedCash: 0,
+      countedCash: 0,
+      tripExpenses: 0,
+      branchId: 1,
+      locationId: 10,
+      stockShortageAmount: 40,
+      stockOverageAmount: 0,
+      chargeStockVarianceToRep: true,
+    },
+    adminAuth,
+  );
+}
+
 function buildServices(db: Kysely<Database>): { van: VanSalesService; drawer: CashDrawerService; posting: AccountingPostingService } {
   const foundation = {
     ensureForAuth: async () => {},
@@ -279,7 +309,8 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 1);
       await seedTrip(db);
       await seedSettlementItem(db, 102, 'stock_shortage', 40);
-      const { van, drawer } = buildServices(db);
+      const { van, drawer, posting } = buildServices(db);
+      await seedChargedTripJournal(db, posting);
       const result = await van.settleRepFinancialItem(TENANT, ACCOUNT, 102, { method: 'cash' }, adminAuth);
       assert.equal(result.status, 'settled');
       assert.equal((await treasuryRows(db)).length, 1);
@@ -448,7 +479,8 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 1);
       await seedTrip(db);
       await seedSettlementItem(db, 109, 'stock_shortage', 40);
-      const { van, drawer } = buildServices(db);
+      const { van, drawer, posting } = buildServices(db);
+      await seedChargedTripJournal(db, posting);
       const result = await van.settleRepFinancialItem(TENANT, ACCOUNT, 109, { method: 'waiver' }, adminAuth);
       assert.equal(result.status, 'waived');
       assert.equal(result.receiptVoucherNo, null);
@@ -484,7 +516,8 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 1);
       await seedTrip(db);
       await seedSettlementItem(db, 110, 'stock_shortage', 40);
-      const { van } = buildServices(db);
+      const { van, posting } = buildServices(db);
+      await seedChargedTripJournal(db, posting);
       const first = await van.settleRepFinancialItem(TENANT, ACCOUNT, 110, { method: 'waiver' }, adminAuth);
       assert.equal(first.status, 'waived');
       await assert.rejects(
