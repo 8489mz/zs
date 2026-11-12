@@ -7129,11 +7129,57 @@ export class VanSalesService {
       updatedAt: r.updatedAt || r.updated_at || r.updatedat,
     }));
 
+    // INV-REP-LEDGER-SUMMARY-BALANCE (M7, A8): the summary is a
+    // statement of what was charged vs earned over the FILTERED items
+    // (the rep/status/date filters above already scope the query), so
+    // the net balance counts every NON-WAIVED item on both sides:
+    //   netBalance = commissionsDue - shortagesOwed, where
+    //   commissionsDue = commission/bonus with status != 'waived',
+    //   shortagesOwed = cash/stock shortage with status != 'waived'
+    //     (pending + settled + pushed_to_payroll).
+    // Grounded status meanings (read from the writers, not assumed):
+    // - 'waived' is the ONLY extinguishing status. A waived stock
+    //   shortage reverses its trip custody debit (Dr 7200 / Cr 1160,
+    //   postRepShortageWaiver) and a waived bonus/commission posts
+    //   nothing — a waived item never was / no longer is money
+    //   between company and rep, so it leaves both totals.
+    // - 'settled' shortage = cash actually collected from the rep
+    //   (settleRepFinancialItem cash branch: Dr 1110 / Cr 7200 or
+    //   Cr 1160 + treasury + drawer row, one transaction). The old
+    //   formula dropped it from the subtraction, so the headline net
+    //   understated what was charged in the window; the settled
+    //   bucket is displayed alongside, so what is already collected
+    //   stays visible and is never collected twice off this number
+    //   (push-to-payroll takes explicit ids, the per-rep card shows
+    //   pending only).
+    // - 'pushed_to_payroll' = an hr_employee_adjustments deduction /
+    //   allowance was WRITTEN (status 'pending') but the money leaves
+    //   the rep's pay only when the targeted payroll run is built
+    //   (pickup is `date <= range.to`, M2) — not actually deducted
+    //   yet, so it stays in the balance. LIMIT (honest, display-only):
+    //   no status ever records "the payroll run applied it" (nothing
+    //   flips pushed_to_payroll afterwards and this summary never
+    //   reads hr_employee_adjustments), so a pushed shortage remains
+    //   in the net even after the run deducts it; the pushed bucket
+    //   is the admin's view of that amount. Same for a cash-settled
+    //   shortage, which remains in the gross position with the
+    //   settled bucket showing it as collected.
+    // - 'settled' bonus/commission cannot occur today (the cash branch
+    //   rejects non-shortages with SETTLEMENT_CASH_UNSUPPORTED; push
+    //   flips to pushed_to_payroll), but the != 'waived' rule covers
+    //   it as earned if a future path ever settles one by payment.
+    // - Overages (cash_overage / stock_overage, born 'settled' at
+    //   settleTrip, INV-VAN-SETTLE-COUNT-OVERAGE-VISIBLE) are company
+    //   gains (Cr 7100), never a claim on the rep, so they are shown
+    //   as totalOverages / per-rep overages and NEVER folded into the
+    //   net balance. Display-only: no journal, no status flip, no
+    //   migration.
     let totalPendingShortages = 0;
     let totalSettledShortages = 0;
     let totalWaivedShortages = 0;
     let totalPushedToPayroll = 0;
     let totalCommissions = 0;
+    let totalOverages = 0;
 
     const repMap = new Map<number, {
       repId: number;
@@ -7146,6 +7192,7 @@ export class VanSalesService {
       waivedShortages: number;
       pushedToPayroll: number;
       commissions: number;
+      overages: number;
       netBalance: number;
       itemsCount: number;
     }>();
@@ -7154,6 +7201,8 @@ export class VanSalesService {
       const amt = Number(it.amount || 0);
       const isShortage = ['cash_shortage', 'stock_shortage'].includes(it.entryType);
       const isBonus = ['commission', 'bonus'].includes(it.entryType);
+      const isOverage = ['cash_overage', 'stock_overage'].includes(it.entryType);
+      const isWaived = it.status === 'waived';
 
       if (isShortage) {
         if (it.status === 'pending') totalPendingShortages += amt;
@@ -7161,7 +7210,13 @@ export class VanSalesService {
         else if (it.status === 'waived') totalWaivedShortages += amt;
         else if (it.status === 'pushed_to_payroll') totalPushedToPayroll += amt;
       } else if (isBonus) {
-        totalCommissions += amt;
+        // INV-REP-LEDGER-SUMMARY-BALANCE: a waived bonus/commission
+        // was forgiven, never earned — it leaves the commission total.
+        if (!isWaived) totalCommissions += amt;
+      } else if (isOverage) {
+        // INV-REP-LEDGER-SUMMARY-BALANCE: overages are shown, never
+        // netted (company gain, Cr 7100 — not rep money).
+        if (!isWaived) totalOverages += amt;
       }
 
       if (!repMap.has(it.repId)) {
@@ -7176,6 +7231,7 @@ export class VanSalesService {
           waivedShortages: 0,
           pushedToPayroll: 0,
           commissions: 0,
+          overages: 0,
           netBalance: 0,
           itemsCount: 0,
         });
@@ -7189,9 +7245,17 @@ export class VanSalesService {
         else if (it.status === 'waived') repEntry.waivedShortages += amt;
         else if (it.status === 'pushed_to_payroll') repEntry.pushedToPayroll += amt;
       } else if (isBonus) {
-        repEntry.commissions += amt;
+        if (!isWaived) repEntry.commissions += amt;
+      } else if (isOverage) {
+        if (!isWaived) repEntry.overages += amt;
       }
-      repEntry.netBalance = roundMoney(repEntry.commissions - repEntry.pendingShortages, moneyDigits);
+      // INV-REP-LEDGER-SUMMARY-BALANCE: commissions due (non-waived)
+      // minus shortages owed (pending + settled + pushed_to_payroll);
+      // waived leaves both sides, overages never enter the net.
+      repEntry.netBalance = roundMoney(
+        repEntry.commissions - (repEntry.pendingShortages + repEntry.settledShortages + repEntry.pushedToPayroll),
+        moneyDigits,
+      );
     }
 
     return {
@@ -7202,7 +7266,11 @@ export class VanSalesService {
         totalWaivedShortages: roundMoney(totalWaivedShortages, moneyDigits),
         totalPushedToPayroll: roundMoney(totalPushedToPayroll, moneyDigits),
         totalCommissions: roundMoney(totalCommissions, moneyDigits),
-        netRepBalance: roundMoney(totalCommissions - totalPendingShortages, moneyDigits),
+        totalOverages: roundMoney(totalOverages, moneyDigits),
+        netRepBalance: roundMoney(
+          totalCommissions - (totalPendingShortages + totalSettledShortages + totalPushedToPayroll),
+          moneyDigits,
+        ),
         repsBreakdown: Array.from(repMap.values()),
       },
     };
