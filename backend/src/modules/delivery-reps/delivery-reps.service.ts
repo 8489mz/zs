@@ -684,6 +684,155 @@ export class DeliveryRepsService {
   }
 
   /**
+   * INV-REP-PARTIAL-COD-SETTLEMENT (M13/C9): the escape path for a
+   * partially-paid COD order. settleOrder refuses such an order
+   * (DELIVERY_PARTIAL_PAYMENT_RECONCILIATION_REQUIRED) because its
+   * GL contract expects the whole invoice as an outstanding
+   * receivable — but deliverySettlementBasis already nets the paid
+   * amount out of the remaining receivable, so the remainder is
+   * exactly what the rep still owes. This endpoint settles that
+   * remainder through the SAME legs as the single-order COD path:
+   * the delivered (counted) cash enters the drawer, the difference
+   * against the book remainder is a shortage (Dr 7200) or an
+   * overage (Cr 7100) via postDeliveryRepSettlement, and the
+   * receivable is cleared by cash received + variance. The 409 in
+   * settleOrder / settleAllOrders stays for every case this
+   * endpoint does not cover: a batch containing a partial order
+   * still refuses — settle each partial order here first.
+   */
+  async settlePartialOrder(
+    saleId: number,
+    actor: AuthContext,
+    payload?: { signatureDataUrl?: string; proofPhotoUrl?: string; gpsLat?: number; gpsLng?: number; notes?: string; countedCashAmount?: number }
+  ): Promise<Record<string, unknown>> {
+    let settlementSummary: { countedCash: number; expectedCash: number; variance: number } | null = null;
+    await this.db.transaction().execute(async (trx) => {
+      const sale = await trx
+        .selectFrom('sales')
+        .select(['id', 'total', 'delivery_fee', 'delivery_fee_mode', 'delivery_status', 'delivery_rep_id', 'collection_status', 'customer_id', 'paid_amount', 'status', 'order_type'])
+        .where('id', '=', saleId)
+        .where(this.tenantPredicate(actor))
+        .forUpdate()
+        .executeTakeFirst();
+
+      if (!sale) throw new AppError('Order not found', 'ORDER_NOT_FOUND', 404);
+      if (!sale.delivery_rep_id) throw new AppError('Order is not assigned to a delivery rep', 'NOT_ASSIGNED', 400);
+      if (sale.delivery_status === 'settled') throw new AppError('Order is already settled', 'ALREADY_SETTLED', 400);
+      if (sale.status === 'cancelled' || sale.order_type !== 'delivery') {
+        throw new AppError('Only active delivery orders may be settled', 'DELIVERY_SETTLEMENT_INVALID_ORDER', 409);
+      }
+      // This endpoint exists ONLY for the partial-payment case: a
+      // COD order with a positive paid amount. Anything else is
+      // settled through the standard path (or is not a COD order
+      // at all) — failing closed here keeps the two endpoints'
+      // contracts disjoint instead of letting this one silently
+      // become a second settleOrder.
+      if (sale.collection_status !== 'cod') {
+        throw new AppError('Only partially-paid cash-on-delivery orders may be settled through the partial settlement', 'DELIVERY_PARTIAL_SETTLEMENT_NOT_APPLICABLE', 409);
+      }
+      if (Number(sale.paid_amount || 0) <= 0.009) {
+        throw new AppError('Order has no partial payment; use the standard settlement', 'DELIVERY_PARTIAL_SETTLEMENT_NOT_APPLICABLE', 409);
+      }
+      // Same counted-cash validation as the single-order path
+      // (D-SF-01): a non-negative number, and it applies here
+      // because the order IS a COD order with cash to settle.
+      if (payload?.countedCashAmount !== undefined && payload?.countedCashAmount !== null) {
+        const rawCounted = Number(payload.countedCashAmount);
+        if (!Number.isFinite(rawCounted) || rawCounted < 0) {
+          throw new AppError('Counted cash amount must be a non-negative number', 'SETTLEMENT_AMOUNT_INVALID', 400);
+        }
+      }
+
+      const openShift = await this.findOwnOpenShift(trx, actor);
+      if (!openShift) throw new AppError('لا بد من فتح وردية أولاً لاستلام الفلوس من المندوب', 'NO_OPEN_SHIFT', 400);
+      const shiftId = openShift.id;
+      const branchId = openShift.branchId;
+      const locationId = openShift.locationId;
+
+      // The remainder comes from deliverySettlementBasis — the
+      // single source of truth — never from gross total: the basis
+      // already subtracts the partial payment (and any prior
+      // return relief) from the remaining receivable.
+      const basis = await this.accountingPosting.deliverySettlementBasis(trx, saleId, actor);
+      const deliveryFeeMode = (sale as any).delivery_fee_mode || await this.getDeliveryFeeMode(trx, actor);
+      const remainingFee = deliveryFeeMode === 'store_fleet' ? 0 : basis.remainingFee;
+      const { tenantId: settleTenantId } = requireTenantScope(actor);
+      const settleDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, settleTenantId));
+      const cashDue = roundMoney(Math.max(0, basis.remainingReceivable - remainingFee), settleDigits);
+      const countedCash = payload?.countedCashAmount !== undefined && payload?.countedCashAmount !== null
+        ? roundMoney(Number(payload.countedCashAmount), settleDigits)
+        : null;
+      const settledCashAmount = countedCash ?? cashDue;
+      const settlementVariance = roundMoney(settledCashAmount - cashDue, settleDigits);
+      settlementSummary = { countedCash: settledCashAmount, expectedCash: cashDue, variance: settlementVariance };
+
+      if (settledCashAmount > 0) {
+        const repRow = sale.delivery_rep_id ? await trx.selectFrom('delivery_representatives').select(['name']).where('id', '=', Number(sale.delivery_rep_id)).where(this.tenantPredicate(actor)).executeTakeFirst() : null;
+        const repLabel = repRow?.name ? `${repRow.name} (#${sale.delivery_rep_id})` : `مندوب #${sale.delivery_rep_id}`;
+        const varianceNote = settlementVariance < 0
+          ? ` (عجز ${roundMoney(Math.abs(settlementVariance), settleDigits)} ج)`
+          : settlementVariance > 0
+            ? ` (زيادة ${settlementVariance} ج)`
+            : '';
+        await trx.insertInto('treasury_transactions').values({
+          txn_type: 'cash_in',
+          amount: settledCashAmount,
+          note: `تسوية جزئية لأوردر دليفري رقم #${saleId} من ${repLabel}${remainingFee > 0 && deliveryFeeMode === 'freelance_courier' ? ` (مخصوماً منها ${remainingFee} ج رسوم المندوب)` : ''}${varianceNote}`,
+          reference_type: 'cashier_shift',
+          reference_id: shiftId,
+          branch_id: branchId,
+          location_id: locationId,
+          created_by: actor.userId,
+          ...this.tenantFields(actor)
+        }).execute();
+      }
+
+      // D-SF-02 (INV-SF-COD-CUSTODY-GL): same as settleOrder —
+      // the receivable left the customer's books at dispatch, so
+      // the settle must not credit the customer ledger again.
+      if (sale.customer_id && basis.remainingReceivable > 0
+        && !(await this.accountingPosting.hasDeliveryCustodyReclassification(trx, saleId, actor))) {
+        await this.salesFinance.createCustomerLedgerEntry(trx, sale.customer_id, -basis.remainingReceivable, `تسديد من مندوب للأوردر #${saleId}`, saleId, actor);
+      }
+
+      await this.accountingPosting.postDeliveryRepSettlement(trx, saleId, cashDue, branchId, locationId, actor, { countedCash: settledCashAmount });
+
+      const updateData: Record<string, any> = {
+        delivery_status: 'settled',
+        settled_at: sql`NOW()`,
+        settled_by: actor.userId,
+        updated_at: sql`NOW()`,
+      };
+      if (payload?.signatureDataUrl) updateData.delivery_signature = payload.signatureDataUrl;
+      if (payload?.proofPhotoUrl) updateData.delivery_photo_url = payload.proofPhotoUrl;
+      if (payload?.gpsLat !== undefined && payload?.gpsLat !== null) updateData.delivery_gps_lat = payload.gpsLat;
+      if (payload?.gpsLng !== undefined && payload?.gpsLng !== null) updateData.delivery_gps_lng = payload.gpsLng;
+      if (payload?.notes) updateData.delivery_notes = payload.notes;
+
+      await trx
+        .updateTable('sales')
+        .set(updateData)
+        .where('id', '=', saleId)
+        .where(this.tenantPredicate(actor))
+        .execute();
+
+      await trx
+        .updateTable('online_orders')
+        .set({
+          status: 'delivered',
+          updated_at: sql`NOW()`,
+        })
+        .where('sale_id', '=', saleId)
+        .where(this.tenantPredicate(actor))
+        .where('status', '!=', 'cancelled')
+        .execute();
+    });
+
+    await this.audit.log('تسوية جزئية لطلب توصيل', `تمت التسوية الجزئية للطلب #${saleId} بواسطة ${actor.username}`, actor);
+    return { ok: true, ...(settlementSummary ? settlementSummary : {}) };
+  }
+
+  /**
    * INV-SF-REP-CUSTODY-NET-RETURNS (D-SF-10): the cash a rep still
    * owes (pending) or has handed over (collected) for ONE order,
    * derived from deliverySettlementBasis — the single source of
