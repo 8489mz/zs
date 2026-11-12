@@ -5,7 +5,7 @@ import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
 import { VanFraudRadarService } from './van-fraud-radar.service';
 import { FmcgVisitExecutionEngine, GeofenceEvaluationResult } from '../fmcg-visit-execution.engine';
-import { extractAssignedRepIds } from '../rep-target.engine';
+import { extractAssignedRepIds, hasGpsCoordinates, loadRepPermissions } from '../rep-target.engine';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
@@ -87,6 +87,22 @@ export class VanFieldExecutionService {
   ) {
     if (!payload.customerId) {
       throw new AppError('معرف العميل مطلوب لتسجيل الزيارة', 'CUSTOMER_ID_REQUIRED', 400);
+    }
+
+    // H9 (D4): when the acting rep's require_gps_on_visit flag is on,
+    // a check-in without usable GPS coordinates is refused — the same
+    // gate as recordFieldVisit, at the other check-in entry point.
+    // Runs before the customer and scope reads, so a GPS-less attempt
+    // is refused without learning anything about the customer.
+    if (!hasGpsCoordinates(payload.latitude, payload.longitude)) {
+      const repFlags = await loadRepPermissions(this.db as any, tenantId, repId);
+      if (repFlags.require_gps_on_visit) {
+        throw new AppError(
+          'إحداثيات GPS مطلوبة لتسجيل الزيارة الميدانية (require_gps_on_visit مفعّل لهذا المندوب) ولم يتم إرسالها',
+          'REP_VISIT_GPS_REQUIRED',
+          403,
+        );
+      }
     }
 
     // Fetch customer GPS and details

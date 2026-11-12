@@ -11,6 +11,8 @@ import {
   extractCoordinatesFromCustomerLocation,
   evaluateGeofenceCompliance,
   extractAssignedRepIds,
+  hasGpsCoordinates,
+  loadRepPermissions,
   resolveIsolatedRepCustomerBalance,
 } from '../rep-target.engine';
 import { VanFraudRadarService } from './van-fraud-radar.service';
@@ -349,6 +351,25 @@ export class VanRoutesService {
     }
     if (payload.visitType === 'negative' && !payload.negativeReason) {
       throw new AppError('يرجى تحديد سبب الزيارة السلبية', 'MISSING_NEGATIVE_REASON', 400);
+    }
+
+    // H9 (D4): when the acting rep's require_gps_on_visit flag is on,
+    // a field visit without usable GPS coordinates is refused — a
+    // visit with no location is exactly the unverifiable visit the
+    // flag exists to prevent. The gate runs before the scope checks,
+    // so a GPS-less attempt is refused without learning anything
+    // about the trip or customer. Reps whose stored flags do not set
+    // the flag (legacy rows) keep the pre-flag behaviour; see
+    // parseRepPermissions.
+    if (!hasGpsCoordinates(payload.gpsLat, payload.gpsLng)) {
+      const repFlags = await loadRepPermissions(this.anyDb, tenantId, repId);
+      if (repFlags.require_gps_on_visit) {
+        throw new AppError(
+          'إحداثيات GPS مطلوبة لتسجيل الزيارة الميدانية (require_gps_on_visit مفعّل لهذا المندوب) ولم يتم إرسالها',
+          'REP_VISIT_GPS_REQUIRED',
+          403,
+        );
+      }
     }
 
     // INV-REP-SCOPED-CUSTOMER-READS (H7/D5): no visit on another rep's
@@ -1082,6 +1103,10 @@ export class VanRoutesService {
       startLat?: number | null;
       startLng?: number | null;
       persistSequence?: boolean;
+      // H9 (D4): the rep acting on his own behalf. Only the driver
+      // endpoint passes this; the supervisor endpoint does not, so a
+      // supervisor editing routes is never gated by a rep's flag.
+      actingRepId?: number;
     },
   ): Promise<RouteOptimizationResult & { persistedCount?: number }> {
     let customerRows: any[] = [];
@@ -1154,6 +1179,23 @@ export class VanRoutesService {
 
     let persistedCount = 0;
     if (payload.persistSequence) {
+      // H9 (D4): persisting a new route sequence IS the route edit —
+      // a read-only optimization (no persistSequence) writes nothing
+      // and is never gated. When the caller is the rep himself
+      // (actingRepId), his can_edit_routes flag must allow it; a
+      // supervisor call carries no actingRepId and is ungated.
+      // The gate runs before the first write, so a refusal leaves
+      // every customer's route_sequence untouched.
+      if (payload.actingRepId != null) {
+        const repFlags = await loadRepPermissions(this.anyDb, tenantId, Number(payload.actingRepId));
+        if (!repFlags.can_edit_routes) {
+          throw new AppError(
+            'صلاحية تعديل خطوط السير (can_edit_routes) مغلقة لهذا المندوب، فلا يمكنه حفظ ترتيب مسار جديد',
+            'REP_CANNOT_EDIT_ROUTES',
+            403,
+          );
+        }
+      }
       for (const stop of result.orderedStops) {
         const cRow = customerRows.find((c) => Number(c.id) === stop.id);
         if (!cRow) continue;

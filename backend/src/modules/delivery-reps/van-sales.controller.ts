@@ -709,6 +709,10 @@ export class VanSalesController {
     const result = await this.vanRoutesService.optimizeCustomerRoute(driver.tenantId, {
       ...body,
       repId: driver.repId,
+      // H9 (D4): the driver acts for himself here, so a persist is
+      // gated on his own can_edit_routes flag (the supervisor
+      // endpoint passes no actingRepId and is never gated by it).
+      actingRepId: driver.repId,
     });
     return { ok: true, ...result };
   }

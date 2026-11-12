@@ -33,6 +33,7 @@ import {
   formatCustomerCode,
   getCustomerRepBalancesMap,
   fieldCollectionPaymentScope,
+  resolveFieldCollectionChannel,
 } from './services/van-common.util';
 import {
   calculateRepTargetMetrics,
@@ -41,6 +42,7 @@ import {
   isValidCoordinatePair,
   evaluateBatchExpiryStatus,
   extractAssignedRepIds,
+  loadRepPermissions,
   resolveIsolatedRepCustomerBalance,
   validateIsolatedRepCollection,
   type RepTargetCalculationResult,
@@ -2123,6 +2125,18 @@ export class VanSalesService {
     // helper; assigned inside the callback, on the transaction handle.
     let toBookMoney: (value: unknown) => number = (value) => Number(value ?? 0);
 
+    // H9 (D4): load the acting rep's permission flags ONCE, here on
+    // the pool handle BEFORE the transaction starts. The flags are
+    // read-only config, and the discount + credit-limit gates below
+    // reuse these loaded flags. A flags read must never run inside
+    // the open transaction: in Postgres ANY error aborts the
+    // transaction, and the catch in loadRepPermissions (a schema
+    // without a permissions column) could not un-abort it — the sale
+    // would then fail with 25P02 at the next statement, which is
+    // exactly what the book-digits spec's 3dp cash-discount case hit
+    // before this hoist.
+    const repFlags = await loadRepPermissions(this.anyDb, tenantId, repId);
+
     await this.db.transaction().execute(async (trx) => {
       const trxAny = trx as any;
       // INV-VAN-TRIP-LOCKED-STATE-RECHECK: the trip read above runs on
@@ -2501,6 +2515,62 @@ export class VanSalesService {
         // touches the totals (the old code took it raw and re-rounded
         // the result at 2dp, so a 3dp discount never survived intact).
         const cashDiscount = Math.max(0, toBookMoney(payload.cashDiscountAmount || 0));
+        if (cashDiscount > 0) {
+          // H9 (D3 + D4): the cash discount was a second, ungated
+          // discount channel for the same sale — the item-price guard
+          // above it needs a verified supervisor PIN, but this channel
+          // needed nothing. It is now gated on the acting rep's
+          // permission flags (loaded before the transaction, above):
+          // can_give_discount false refuses ANY cash discount (a
+          // supervisor PIN does not override a closed flag — the flag
+          // is the control, the PIN alone is not enough); a discount
+          // above max_discount_percent of the pre-discount sale total
+          // needs the already-verified supervisor PIN. The gate runs
+          // even when the discount is >= the total (which the apply
+          // below still leaves unapplied, as before) — the attempt
+          // itself is refused, not silently swallowed.
+          if (!repFlags.can_give_discount) {
+            await this.vanFraudRadarService.recordSuspicionEvent({
+              tenantId,
+              accountId,
+              repId,
+              tripId: payload.tripId,
+              customerId: resolvedCustomerId,
+              customerName,
+              eventCode: 'VAN_SUSPICION_UNAUTHORIZED_CASH_DISCOUNT',
+              severity: 'high',
+              titleAr: 'محاولة منح خصم نقدي بدون صلاحية خصم (can_give_discount مغلقة)',
+              detailsAr: `حاول المندوب منح خصم نقدي بقيمة ${cashDiscount} ج.م على بيع ميداني رغم أن صلاحية منح الخصم (can_give_discount) مغلقة له.`,
+              attemptedAmount: cashDiscount,
+            });
+            throw new AppError(
+              'صلاحية منح الخصم (can_give_discount) مغلقة لهذا المندوب، فلا يمكنه منح خصم نقدي على البيع الميداني',
+              'REP_DISCOUNT_NOT_ALLOWED',
+              403,
+            );
+          }
+          const discountPercent = totalSale > 0 ? (cashDiscount / totalSale) * 100 : 0;
+          if (discountPercent > repFlags.max_discount_percent && !supervisorOverrideApproved) {
+            await this.vanFraudRadarService.recordSuspicionEvent({
+              tenantId,
+              accountId,
+              repId,
+              tripId: payload.tripId,
+              customerId: resolvedCustomerId,
+              customerName,
+              eventCode: 'VAN_SUSPICION_DISCOUNT_ABOVE_LIMIT',
+              severity: 'high',
+              titleAr: 'محاولة خصم نقدي فوق الحد المسموح بدون اعتماد مشرف',
+              detailsAr: `حاول المندوب منح خصم نقدي بقيمة ${cashDiscount} ج.م (${discountPercent.toFixed(2)}%) متجاوزاً الحد المسموح له (${repFlags.max_discount_percent}%) بدون رمز اعتماد المشرف.`,
+              attemptedAmount: cashDiscount,
+            });
+            throw new AppError(
+              `الخصم النقدي (${discountPercent.toFixed(2)}%) يتجاوز الحد الأقصى المسموح لهذا المندوب (max_discount_percent = ${repFlags.max_discount_percent}%) ويتطلب اعتماد المشرف برمز PIN`,
+              'CASH_DISCOUNT_ABOVE_LIMIT_REQUIRES_SUPERVISOR_PIN',
+              403,
+            );
+          }
+        }
         if (cashDiscount > 0 && cashDiscount < totalSale) {
           totalSale = toBookMoney(totalSale - cashDiscount);
           discountSale = toBookMoney(discountSale + cashDiscount);
@@ -2747,6 +2817,39 @@ export class VanSalesService {
               creditCheck.reasonCode || 'CREDIT_LIMIT_REJECTED',
               422,
             );
+          }
+
+          // H9 (D4): can_sell_over_credit_limit is the control on
+          // selling over the customer's credit limit — a supervisor
+          // PIN alone is NOT enough. The engine returns isOverridden
+          // whenever a PIN approves an overrun, and exceededAmount > 0
+          // exactly for a limit overrun (projected balance above the
+          // limit, including a cash-only customer whose limit is 0);
+          // a blocked-customer or overdue-invoice override carries
+          // exceededAmount 0 and is NOT a limit overrun, so it keeps
+          // the existing PIN flow untouched. The flags are the ones
+          // loaded before the transaction, above.
+          if (creditCheck.isOverridden && Number(creditCheck.exceededAmount || 0) > 0) {
+            if (!repFlags.can_sell_over_credit_limit) {
+              await this.vanFraudRadarService.recordSuspicionEvent({
+                tenantId,
+                accountId,
+                repId,
+                tripId: payload.tripId,
+                customerId: resolvedCustomerId,
+                customerName: custRecord.name || customerName,
+                eventCode: 'VAN_SUSPICION_CREDIT_LIMIT_FLAG',
+                severity: 'high',
+                titleAr: 'محاولة بيع فوق سقف الائتمان بدون صلاحية تجاوز السقف رغم اعتماد المشرف',
+                detailsAr: `حاول المندوب بيع آجل بقيمة ${creditOwed} ج.م للعميل "${custRecord.name || customerName}" متجاوزاً سقف الائتمان بمقدار ${Number(creditCheck.exceededAmount || 0)} ج.م رغم أن صلاحية البيع فوق السقف (can_sell_over_credit_limit) مغلقة له، حتى مع اعتماد المشرف برمز PIN.`,
+                attemptedAmount: creditOwed,
+              });
+              throw new AppError(
+                'صلاحية البيع فوق سقف الائتمان (can_sell_over_credit_limit) مغلقة لهذا المندوب، فلا يمكنه البيع فوق سقف ائتمان العميل حتى باعتماد المشرف برمز PIN',
+                'REP_CANNOT_SELL_OVER_CREDIT_LIMIT',
+                403,
+              );
+            }
           }
 
           if (creditCheck.isOverridden) {
@@ -3240,6 +3343,38 @@ export class VanSalesService {
     },
   ) {
     const amount = Number(payload.amount || 0);
+
+    // H9 (D4 + B10): a cash collection is gated on the acting rep's
+    // can_collect_cash flag, read on the pool handle before any
+    // write. Non-cash channels (instapay / vodafone_cash /
+    // bank_transfer — resolved by the same channel rule the posting
+    // uses, so an omitted paymentMethod counts as cash) are
+    // unaffected: they keep the existing supervisor-PIN + reference
+    // evidence gate below. The refusal happens before the trip and
+    // customer reads, so a forbidden rep learns nothing about the
+    // trip or customer from the attempt.
+    if (resolveFieldCollectionChannel(payload.paymentMethod) === 'cash') {
+      const repFlags = await loadRepPermissions(this.anyDb, tenantId, repId);
+      if (!repFlags.can_collect_cash) {
+        await this.recordSuspicionEvent({
+          tenantId,
+          accountId,
+          repId,
+          tripId: payload.tripId,
+          customerId: payload.customerId,
+          eventCode: 'VAN_SUSPICION_CASH_COLLECTION_FLAG',
+          severity: 'high',
+          titleAr: 'محاولة تحصيل نقدي بدون صلاحية تحصيل نقدي (can_collect_cash مغلقة)',
+          detailsAr: `حاول المندوب تحصيل مبلغ نقدي بقيمة ${amount} ج.م رغم أن صلاحية التحصيل النقدي (can_collect_cash) مغلقة له.`,
+          attemptedAmount: amount,
+        });
+        throw new AppError(
+          'صلاحية التحصيل النقدي (can_collect_cash) مغلقة لهذا المندوب، فلا يمكنه تحصيل نقدية ميدانياً',
+          'REP_CANNOT_COLLECT_CASH',
+          403,
+        );
+      }
+    }
 
     const trip = await this.anyDb
       .selectFrom('van_sales_trips as vt')
@@ -6371,6 +6506,19 @@ export class VanSalesService {
     const name = String(body.name || '').trim();
     if (!name) {
       throw new AppError('اسم المحل أو العميل مطلوب', 'CUSTOMER_NAME_REQUIRED', 400);
+    }
+
+    // H9 (D4): field customer creation is gated on the acting rep's
+    // can_add_customers flag. The gate runs before any read or write
+    // on the customer, so a forbidden rep cannot even link himself to
+    // an existing customer through this path.
+    const repFlags = await loadRepPermissions(this.anyDb, tenantId, repId);
+    if (!repFlags.can_add_customers) {
+      throw new AppError(
+        'صلاحية إنشاء العملاء (can_add_customers) مغلقة لهذا المندوب، فلا يمكنه إنشاء عميل جديد ميدانياً',
+        'REP_CANNOT_ADD_CUSTOMERS',
+        403,
+      );
     }
 
     const district = (body.district || body.metadata?.district || '').trim();

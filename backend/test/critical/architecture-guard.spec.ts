@@ -222,7 +222,7 @@ async function main(): Promise<void> {
     { file: 'backend/src/modules/delivery-reps/services/van-fraud-radar.service.ts', reason: 'message text (amount formatted into a fraud alert), display only', toFixed2: 1, inlineRound: 0 },
     { file: 'backend/src/modules/delivery-reps/services/van-routes.service.ts', reason: 'fuel efficiency km/litre, not money', toFixed2: 1, inlineRound: 0 },
     { file: 'backend/src/modules/delivery-reps/services/van-transfers.service.ts', reason: 'van transfer retail value adjusting the sender trip loaded_amount (operational; transfers post no journal — stock movement only)', toFixed2: 1, inlineRound: 0 },
-    { file: 'backend/src/modules/delivery-reps/van-sales.service.ts', reason: 'message text (invoice notes / settlement details), display only', toFixed2: 7, inlineRound: 0 },
+    { file: 'backend/src/modules/delivery-reps/van-sales.service.ts', reason: 'message text (invoice notes / settlement details / discount percentage in refusal messages), display only', toFixed2: 9, inlineRound: 0 },
     { file: 'backend/src/modules/delivery-reps/van-trip-reconciliation.engine.ts', reason: 'message text (credit-block / expense / daily-summary messages) + trip distance, display only', toFixed2: 22, inlineRound: 0 },
     { file: 'backend/src/modules/hr/engines/leave-balance.engine.ts', reason: 'leave-day balance, not money', toFixed2: 1, inlineRound: 0 },
     { file: 'backend/src/modules/hr/hr.service.ts', reason: 'leave-day counts + HR loan ledger listing (amounts read as stored; loan postings are payroll-engine values)', toFixed2: 11, inlineRound: 0 },
@@ -511,7 +511,7 @@ async function main(): Promise<void> {
     .map((line) => line.split(' ')[1]);
   assert.ok(invariantIds.length > 0, 'the invariants file must list INV- entries');
   assert.equal(new Set(invariantIds).size, invariantIds.length, 'invariant ids must be unique: no duplicated entry');
-  assert.equal(invariantIds[invariantIds.length - 1], 'INV-RETURNS-MANAGER-PIN-BCRYPT', 'the newest invariant entry must be the last INV- line');
+  assert.equal(invariantIds[invariantIds.length - 1], 'INV-REP-PERMISSION-FLAGS-ENFORCED', 'the newest invariant entry must be the last INV- line');
 
   console.log('architecture guard checks passed');
 }
