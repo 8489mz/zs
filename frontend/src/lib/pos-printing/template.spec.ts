@@ -104,4 +104,25 @@ describe('Receipt Printing Payment QR Section', () => {
     expect(doc.html).toContain('Chicken Burger');
     expect(doc.html).toContain('item-name-en');
   });
+  it('should render item modifiers as inline badges without repeating [إضافة]', () => {
+    const doc = buildReceiptDocument({
+      ...baseOptions,
+      items: [
+        {
+          name: 'حواوشي سجق',
+          qty: 1,
+          price: 40,
+          total: 50,
+          modifiers: [
+            { name: 'جبنه', price: 10, qty: 1 },
+            { name: 'بطه', price: 0, qty: 3 },
+          ],
+        },
+      ],
+    });
+    expect(doc.html).not.toContain('[إضافة]');
+    expect(doc.html).toContain('+ جبنه');
+    expect(doc.html).toContain('+ بطه (×3)');
+    expect(doc.html).toContain('item-modifiers');
+  });
 });

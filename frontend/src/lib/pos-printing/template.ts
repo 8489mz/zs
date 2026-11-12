@@ -110,17 +110,15 @@ function renderMetaPanel(rows: Array<{ label: string; value?: string | number | 
 function renderItemsTable(items: Array<{ name?: string; unitName?: string; qty?: number; price?: number; originalPrice?: number; offerDiscount?: number; offerName?: string; lineDiscount?: number; total?: number; modifiers?: any[]; serials?: string[] }>, compact = false, settings?: Partial<AppSettings> | null) {
   const body = (items || []).map((item, index) => {
     const modifiersHtml = item.modifiers?.length 
-      ? `<div class="item-modifiers" style="font-size: 0.85em; color: #000; margin-top: 2px;">
+      ? `<div class="item-modifiers" style="font-size: 0.8em; color: #111; margin-top: 2px; line-height: 1.35; max-width: 100%; word-break: break-word;">
           ${item.modifiers.map((mod: any) => {
             const modPrice = Number(mod.price || 0);
             const modQty = Number(mod.qty || 1);
             const modTotal = modPrice * modQty;
-            return `<div style="padding: 2px 0; color: #000; font-size: 0.9em; margin-right: 8px;">
-              <strong style="color: #000;">[إضافة]</strong> ${escapeHtml(mod.name)}
-              ${modQty > 1 ? ` <span style="color:#000; font-size: 0.9em;">(×${modQty})</span>` : ''}
-              ${modTotal > 0 ? ` <span style="font-weight:600; color:#000;">(+${formatReceiptMoney(modTotal, settings)})</span>` : ''}
-            </div>`;
-          }).join('')}
+            const qtyText = modQty > 1 ? ` (×${modQty})` : '';
+            const priceText = modTotal > 0 ? ` (+${formatReceiptMoney(modTotal, settings)})` : '';
+            return `<span style="white-space: nowrap; display: inline-block;">+ ${escapeHtml(mod.name)}${qtyText}${priceText}</span>`;
+          }).join(' <span style="color: #666; font-size: 0.9em;">·</span> ')}
          </div>`
       : '';
     const serialsHtml = item.serials?.length

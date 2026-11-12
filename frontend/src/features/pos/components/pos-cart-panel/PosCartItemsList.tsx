@@ -124,7 +124,7 @@ const PosCartItemRow = memo(function PosCartItemRow({
         style={{ cursor: 'pointer' }}
         title={itemCode ? `${item.name} - #${itemCode} (${t('pos.double_click_edit', 'انقر مرتين للتعديل')})` : `${item.name} (${t('pos.double_click_edit', 'انقر مرتين للتعديل')})`}
       >
-        <div className="pos-cart-product-inline" style={{ minWidth: 0, overflow: 'hidden' }}>
+        <div className="pos-cart-product-inline" style={{ minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           <strong
             className="pos-cart-product-name"
             style={{
@@ -139,22 +139,75 @@ const PosCartItemRow = memo(function PosCartItemRow({
             {item.name}
           </strong>
           {itemCode ? <span className="pos-cart-product-code">#{itemCode}</span> : null}
+          {allowItemModifiers && onItemModifiersClick && (
+            <button
+              type="button"
+              className="pos-cart-modifiers-btn"
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                color: '#1e40af',
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: '6px',
+                padding: '1px 6px',
+                cursor: 'pointer',
+                lineHeight: 1.25,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '2px',
+                flexShrink: 0,
+                opacity: isSelected ? 1 : 0.88,
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onItemModifiersClick(item.lineKey);
+              }}
+            >
+              + {t('pos.modifiers', 'إضافات')}
+            </button>
+          )}
+          {allowItemModifiers && item.seatNumber ? (
+            <button
+              type="button"
+              style={{
+                fontSize: '10.5px',
+                fontWeight: 700,
+                color: '#1e40af',
+                background: '#dbeafe',
+                border: '1px solid #93c5fd',
+                borderRadius: '6px',
+                padding: '1px 6px',
+                cursor: 'pointer',
+                lineHeight: 1.25,
+                flexShrink: 0,
+              }}
+              title={__t('pos.pos_cart_panel.pos_cart_items_list.s0', 'انقر لتغيير مقعد الضيف على الطاولة')}
+              onClick={(e) => {
+                e.stopPropagation();
+                const nextSeat = ((item.seatNumber || 1) % 6) + 1;
+                onItemSeatChange?.(item.lineKey, nextSeat);
+              }}
+            >
+              {t('pos.seat', 'مقعد')} {item.seatNumber}
+            </button>
+          ) : null}
           {allowItemNotes && (
             <button
               type="button"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', display: 'flex', alignItems: 'center', color: item.notes ? (isRestaurant ? '#dc2626' : '#170e5e') : '#6b7280' }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', display: 'inline-flex', alignItems: 'center', color: item.notes ? (isRestaurant ? '#dc2626' : '#170e5e') : '#94a3b8', flexShrink: 0 }}
               title={item.notes ? (isRestaurant ? t('pos.edit_kitchen_note', 'تعديل ملاحظة المطبخ') : t('pos.edit_item_note', 'تعديل ملاحظة الصنف')) : (isRestaurant ? t('pos.add_kitchen_note', 'إضافة ملاحظة وتجهيز للمطبخ') : t('pos.add_item_note', 'إضافة ملاحظة على الصنف'))}
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenItemNotes?.(item);
               }}
             >
-              <FileTextIcon size={14} color={item.notes ? (isRestaurant ? '#dc2626' : '#170e5e') : '#6b7280'} />
+              <FileTextIcon size={14} color={item.notes ? (isRestaurant ? '#dc2626' : '#170e5e') : '#94a3b8'} />
             </button>
           )}
         </div>
         {item.nameEn && item.nameEn !== item.name && (
-          <div dir="ltr" style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textAlign: 'right', marginTop: '1px', fontFamily: 'system-ui, sans-serif' }}>
+          <div dir="ltr" style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textAlign: 'right', marginTop: '1px', lineHeight: 1.2, fontFamily: 'system-ui, sans-serif', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {item.nameEn}
           </div>
         )}
@@ -184,9 +237,36 @@ const PosCartItemRow = memo(function PosCartItemRow({
           </div>
         )}
         {item.modifiers && item.modifiers.length > 0 && (
-          <div style={{ fontSize: '0.75rem', color: '#3b82f6', marginTop: '2px' }}>
+          <div
+            className="pos-cart-modifiers-pills"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '4px',
+              marginTop: '3px',
+            }}
+          >
             {item.modifiers.map((mod: any, i: number) => (
-              <div key={i}>+ {mod.name} {mod.qty > 1 ? `(x${mod.qty})` : ''}</div>
+              <span
+                key={i}
+                className="pos-cart-modifier-pill"
+                style={{
+                  fontSize: '10.5px',
+                  fontWeight: 700,
+                  color: '#1d4ed8',
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: '5px',
+                  padding: '1px 6px',
+                  lineHeight: 1.25,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                + {mod.name}{mod.qty > 1 ? ` (x${mod.qty})` : ''}
+              </span>
             ))}
           </div>
         )}
@@ -209,45 +289,6 @@ const PosCartItemRow = memo(function PosCartItemRow({
             <strong>{item.serials.join(', ')}</strong> :IMEI <SmartphoneIcon size={12} color="#7e22ce" />
           </div>
         ) : null}
-        {allowItemModifiers && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
-            {onItemModifiersClick && (
-              <button
-                type="button"
-                style={{ fontSize: '0.72rem', color: '#170c5c', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '1px 6px', cursor: 'pointer', opacity: isSelected ? 1 : 0.8 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onItemModifiersClick(item.lineKey);
-                }}
-              >
-                + {t('pos.modifiers', 'إضافات')}
-              </button>
-            )}
-            {item.seatNumber ? (
-              <button
-                type="button"
-                style={{
-                  fontSize: '0.7rem',
-                  fontWeight: 700,
-                  color: '#1e40af',
-                  background: '#dbeafe',
-                  border: '1px solid #93c5fd',
-                  borderRadius: '4px',
-                  padding: '1px 6px',
-                  cursor: 'pointer',
-                }}
-                title={__t('pos.pos_cart_panel.pos_cart_items_list.s0', __t('pos.pos_cart_panel.pos_cart_items_list.s0', "انقر لتغيير مقعد الضيف على الطاولة"))}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const nextSeat = ((item.seatNumber || 1) % 6) + 1;
-                  onItemSeatChange?.(item.lineKey, nextSeat);
-                }}
-              >
-                {t('pos.seat', 'مقعد')} {item.seatNumber}
-              </button>
-            ) : null}
-          </div>
-        )}
       </div>
 
       <div className="pos-cart-col pos-cart-col-qty" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>

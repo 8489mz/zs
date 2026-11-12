@@ -2400,6 +2400,16 @@ input.pos-cart-discount-input {
   color: #b91c1c !important;
 }
 
+.pos-workspace .pos-cart-modifiers-btn {
+  transition: all 0.15s ease;
+}
+
+.pos-workspace .pos-cart-modifiers-btn:hover {
+  background: #dbeafe !important;
+  border-color: #93c5fd !important;
+  color: #170e5e !important;
+}
+
 .pos-workspace .pos-cart-qty-btn {
   min-height: 26px;
   height: 26px;
