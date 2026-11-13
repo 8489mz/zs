@@ -26,11 +26,15 @@ class PostgresManager {
     this.postgresLogsDir = path.join(this.runtimeDir, 'logs');
     
     this.pgProcess = null;
-    this.authPath = path.join(this.runtimeDir, '.postgres-auth.json');
+    this.authPath = path.join(this.postgresDataDir, '.postgres-auth.json');
+    this.legacyAuthPath = path.join(this.runtimeDir, '.postgres-auth.json');
     this.pendingDbPass = null;
-    if (fs.existsSync(this.authPath)) {
+    const activeAuthPath = fs.existsSync(this.authPath)
+      ? this.authPath
+      : (fs.existsSync(this.legacyAuthPath) ? this.legacyAuthPath : null);
+    if (activeAuthPath) {
       try {
-        const auth = JSON.parse(fs.readFileSync(this.authPath, 'utf8'));
+        const auth = JSON.parse(fs.readFileSync(activeAuthPath, 'utf8'));
         if (!/^[a-f0-9]{48}$/.test(auth.password) && auth.password !== 'postgres') throw new Error('Invalid PostgreSQL credential file');
         this.dbPass = auth.password;
         if (auth.pendingPassword && /^[a-f0-9]{48}$/.test(auth.pendingPassword)) {
@@ -43,7 +47,7 @@ class PostgresManager {
   }
 
   saveDatabaseCredentials(data) {
-    fs.mkdirSync(this.runtimeDir, { recursive: true });
+    fs.mkdirSync(path.dirname(this.authPath), { recursive: true });
     const temporary = this.authPath + '.tmp';
     fs.writeFileSync(temporary, JSON.stringify(data), { mode: 0o600, flag: 'w' });
     fs.renameSync(temporary, this.authPath);
@@ -91,9 +95,10 @@ class PostgresManager {
     return new Promise((resolve, reject) => {
       console.log('Initializing PostgreSQL data directory (first run).');
       // New customer installations must never use the shared default 'postgres' password.
+      // Keep data/ empty until initdb succeeds, then persist data/.postgres-auth.json inside data/.
       if (!fs.existsSync(this.authPath)) {
         this.dbPass = crypto.randomBytes(24).toString('hex');
-        this.saveDatabaseCredentials({ password: this.dbPass });
+        this.pendingDbPass = null;
       }
       const passwordFile = path.join(this.runtimeDir, 'postgres.pw');
       fs.writeFileSync(passwordFile, this.dbPass, { encoding: 'utf8', mode: 0o600 });
@@ -113,12 +118,36 @@ class PostgresManager {
       initProcess.stdout.on('data', data => console.log(`initdb: ${data}`));
       initProcess.stderr.on('data', data => console.error(`initdb err: ${data}`));
 
-      initProcess.on('close', (code) => {
+      let settled = false;
+      const cleanupPasswordFile = () => {
         if (fs.existsSync(passwordFile)) {
           fs.unlinkSync(passwordFile);
         }
+      };
+
+      initProcess.on('error', (err) => {
+        if (settled) return;
+        settled = true;
+        cleanupPasswordFile();
+        reject(err);
+      });
+
+      initProcess.on('close', (code) => {
+        if (settled) return;
+        settled = true;
+        cleanupPasswordFile();
         if (code === 0) {
-          resolve();
+          try {
+            if (!fs.existsSync(this.authPath)) {
+              this.saveDatabaseCredentials({ password: this.dbPass });
+            }
+            if (fs.existsSync(this.legacyAuthPath)) {
+              try { fs.unlinkSync(this.legacyAuthPath); } catch {}
+            }
+            resolve();
+          } catch (err) {
+            reject(err);
+          }
         } else {
           reject(new Error(`initdb failed with exit code ${code}`));
         }
@@ -248,7 +277,18 @@ class PostgresManager {
     await this.startServer();
     await this.waitForReady();
     await this.ensureDatabaseExists();
-    if (!fs.existsSync(this.authPath) || this.pendingDbPass) {
+    if (!fs.existsSync(this.authPath)) {
+      if (fs.existsSync(this.legacyAuthPath)) {
+        // Migrate legacy runtime/.postgres-auth.json into data/ so manual data/ folder swaps carry auth.
+        const payload = { password: this.dbPass };
+        if (this.pendingDbPass) payload.pendingPassword = this.pendingDbPass;
+        this.saveDatabaseCredentials(payload);
+        try { fs.unlinkSync(this.legacyAuthPath); } catch {}
+      } else {
+        this.rotateLegacyPassword();
+      }
+    }
+    if (this.pendingDbPass) {
       this.rotateLegacyPassword();
     }
   }

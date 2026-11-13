@@ -55,6 +55,7 @@ async function run() {
   const data = path.join(runtime, 'data');
   assert.ok(!fs.existsSync(data), 'Release must never ship database data');
   assert.ok(!fs.existsSync(path.join(runtime, '.postgres-auth.json')), 'Release must not ship database credentials');
+  assert.ok(!fs.existsSync(path.join(data, '.postgres-auth.json')), 'Release must not ship database credentials inside data');
   const node = path.join(runtime, 'node/node.exe');
   assert.match(exec(node, ['--version']), /^v22\./);
   const manager = new PostgresManager('', false, runtime);
@@ -67,6 +68,8 @@ async function run() {
   try {
     await manager.setupAndStart();
     assert.match(manager.dbPass, /^[a-f0-9]{48}$/, 'Per-installation password required');
+    assert.ok(fs.existsSync(path.join(data, '.postgres-auth.json')), 'Database credentials must be persisted inside data/');
+    assert.ok(!fs.existsSync(path.join(runtime, '.postgres-auth.json')), 'Database credentials must not remain outside data/');
     assert.equal(query('SELECT 1'), '1', 'PostgreSQL did not start');
     query('CREATE TABLE IF NOT EXISTS offline_ci_probe (id integer PRIMARY KEY, value text NOT NULL)');
     query("INSERT INTO offline_ci_probe VALUES (1, 'durable') ON CONFLICT (id) DO NOTHING");

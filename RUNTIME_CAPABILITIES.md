@@ -672,4 +672,19 @@
 ---
 
 
+---
+
+<a id="runtime-electron-data-auth-and-local-manifest"></a>
+### تخزين اعتماد قاعدة بيانات إلكترون داخل `data/` وتوليد بصمة بيئة التشغيل المحلية (PostgreSQL 16.13)
+- السلوك الحالي والحدود:
+  - يحفظ `PostgresManager` ملف `.postgres-auth.json` داخل `runtime/data/.postgres-auth.json` (بعد نجاح `initdb.exe` حتى يظل مجلد `data/` فارغاً أثناء التهيئة) ليتم نقل مجلد `data/` يدوياً بين إصدارات إلكترون في خطوة واحدة مع `secrets.json`؛ مع قراءة وترحيل تلقائي لملفات `runtime/.postgres-auth.json` القديمة بعد تحقق `waitForReady()`. في أول ترقية لعميل قديم يمتلك `runtime/.postgres-auth.json` خارج `data/` يلزم نقل ذلك الملف لمرة واحدة مع `data/` ثم يندمج داخل `data/` تلقائياً.
+  - سكربت `ApplyAndRestart.ps1` يأخذ نسخة احتياطية ويسترجع عند التراجع كلا المسارين (`data/.postgres-auth.json` والمسار القديم `runtime/.postgres-auth.json`).
+  - أداة `scripts/generate-local-runtime-manifest.cjs` تولّد `portable/runtime/runtime-manifest.sha256` من `node/` و`postgres/` المحليين (مثل PostgreSQL 16.13 وNode 22) مع استبعاد `data/` و`logs/` لتمرير بوابة تغليف إلكترون محلياً دون إجبار العملاء على الانتقال إلى PostgreSQL 17.
+- حالة التنفيذ: موجود.
+- مصدر التنفيذ: `frontend/electron/postgres-manager.cjs`، `portable/tools/launcher/scripts/ApplyAndRestart.ps1`، `scripts/release/test-windows-offline-runtime.cjs`، `scripts/generate-local-runtime-manifest.cjs`.
+- المجالات المتأثرة: التشغيل المكتبي المستقل والتحديثات (`SETTINGS_CAPABILITIES.md`).
+- التحقق: نجح `node --test scripts/test-electron-postgres-auth.cjs` (4/4)، و`npm run qa:electron`، وفحص نحو PowerShell لـ `ApplyAndRestart.ps1` بتاريخ 2026-11-13 (تشغيل EXE الكامل و`test-windows-offline-runtime.cjs` لم يُنفّذا في هذه الجولة لأن المستخدم سيبني نسخة إلكترون مباشرة).
+- آخر تحقق: 2026-11-13 (محلي على `HEAD` `b0e970cb2` + التعديل المحلي غير المثبّت بعد).
+- النواقص أو التعارضات: لم يُختبر إقلاع حزمة EXE المبنية بالكامل في هذه الجولة؛ يعتمد التحقق المخبري على اختبارات النظام النصية والمؤقتة.
+
 <!-- migrated:cap-248:end -->

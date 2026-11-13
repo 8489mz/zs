@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Applies a pending ZS update and restarts the backend process automatically.
 
@@ -222,12 +222,14 @@ try {
     if ($LASTEXITCODE -ge 8 -or -not (Test-Path (Join-Path $clusterBackup 'PG_VERSION'))) {
       throw "Database snapshot could not be verified (robocopy $LASTEXITCODE)"
     }
-    # PostgreSQL auth is stored next to the cluster, not inside data/.
-    # Keep it in the same rollback snapshot, otherwise a password change during
-    # a failed upgrade can permanently lock the old database.
-    $pgAuthFile = Join-Path $pathMap.RuntimeDir '.postgres-auth.json'
-    if (Test-Path $pgAuthFile) {
-      Copy-Item -Path $pgAuthFile -Destination (Join-Path $backupDir 'postgres-auth.json') -Force
+    # PostgreSQL auth is stored inside data/ (.postgres-auth.json), with fallback
+    # to legacy runtime/.postgres-auth.json so both layouts snapshot and roll back cleanly.
+    $dataPgAuthFile = Join-Path $dataDir '.postgres-auth.json'
+    $legacyPgAuthFile = Join-Path $pathMap.RuntimeDir '.postgres-auth.json'
+    if (Test-Path $dataPgAuthFile) {
+      Copy-Item -Path $dataPgAuthFile -Destination (Join-Path $backupDir 'postgres-auth.json') -Force
+    } elseif (Test-Path $legacyPgAuthFile) {
+      Copy-Item -Path $legacyPgAuthFile -Destination (Join-Path $backupDir 'postgres-auth.json') -Force
     } else {
       Set-Content -Path (Join-Path $backupDir 'postgres-auth.absent') -Value 'not-present-before-update'
     }
@@ -543,11 +545,19 @@ if (-not $applySuccess) {
       robocopy $clusterBackup $dbData /MIR /R:2 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
       if ($LASTEXITCODE -ge 8) { throw "PostgreSQL rollback failed ($LASTEXITCODE)" }
       $originalPgAuth = Join-Path $backupDir 'postgres-auth.json'
-      $pgAuthDest = Join-Path $pathMap.RuntimeDir '.postgres-auth.json'
+      $dataPgAuthDest = Join-Path $dbData '.postgres-auth.json'
+      $legacyPgAuthDest = Join-Path $pathMap.RuntimeDir '.postgres-auth.json'
       if (Test-Path $originalPgAuth) {
-        Copy-Item -Path $originalPgAuth -Destination $pgAuthDest -Force
+        if (Test-Path (Join-Path $clusterBackup '.postgres-auth.json')) {
+          Copy-Item -Path $originalPgAuth -Destination $dataPgAuthDest -Force
+          Remove-Item -Path $legacyPgAuthDest -Force -ErrorAction SilentlyContinue
+        } else {
+          Copy-Item -Path $originalPgAuth -Destination $legacyPgAuthDest -Force
+          Remove-Item -Path $dataPgAuthDest -Force -ErrorAction SilentlyContinue
+        }
       } elseif (Test-Path (Join-Path $backupDir 'postgres-auth.absent')) {
-        Remove-Item -Path $pgAuthDest -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $dataPgAuthDest -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $legacyPgAuthDest -Force -ErrorAction SilentlyContinue
       } else {
         throw 'PostgreSQL authentication snapshot marker missing; refusing incomplete rollback'
       }
