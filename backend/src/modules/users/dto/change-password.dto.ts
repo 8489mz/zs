@@ -6,6 +6,8 @@ export class ChangePasswordDto {
   oldPassword!: string;
 
   @IsString()
-  @MinLength(MIN_PASSWORD_LENGTH)
+  @MinLength(MIN_PASSWORD_LENGTH, {
+    message: 'كلمة المرور الجديدة قصيرة جداً؛ يجب ألا تقل عن الحد الأدنى المطلوب لدورك.',
+  })
   newPassword!: string;
 }

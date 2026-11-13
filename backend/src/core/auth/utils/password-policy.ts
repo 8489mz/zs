@@ -81,7 +81,8 @@ export function assertStrongPassword(
 
   if (trimmed.length < minLength) {
     throw new AppError(
-      options?.message || `Password must be at least ${minLength} characters long`,
+      options?.message ||
+        `كلمة المرور الجديدة قصيرة جداً: يجب ألا تقل عن ${minLength} أحرف.`,
       options?.code || 'PASSWORD_TOO_WEAK',
       400,
       { minLength },

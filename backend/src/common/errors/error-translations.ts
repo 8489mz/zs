@@ -63,7 +63,7 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   BACKUP_FOLDER_NOT_WRITABLE: 'تعذر الوصول أو الكتابة في مجلد النسخ الاحتياطي المحدد. تأكد من صحة المسار وصلاحيات الكتابة.',
   USERNAME_REQUIRED: 'اسم المستخدم مطلوب.',
   PASSWORD_REQUIRED: 'كلمة المرور مطلوبة.',
-  PASSWORD_TOO_WEAK: 'كلمة المرور مطلوبة.',
+  PASSWORD_TOO_WEAK: 'كلمة المرور الجديدة قصيرة جداً؛ يجب ألا تقل عن الحد الأدنى المطلوب لدورك.',
   CURRENT_PASSWORD_INVALID: 'كلمة المرور الحالية غير صحيحة.',
   SETTINGS_INVALID: 'بيانات الإعدادات غير صحيحة.',
   APP_BOOTSTRAP_REQUIRED: 'يجب إكمال تهيئة النظام أولًا.',

@@ -5,6 +5,7 @@ import { http } from '@/lib/http';
 import { Button } from '@/shared/ui/button';
 import { systemAlert } from '@/shared/components/system-alert';
 import { TwoFactorCard } from '@/features/auth/components/TwoFactorCard';
+import { passwordMinLengthForRole, passwordMinLengthHint } from '@/config/security';
 
 function UserIcon() {
   return (
@@ -126,6 +127,14 @@ export function ProfilePage() {
 
     if (newPassword === oldPassword) {
       setPasswordErrorMsg('كلمة المرور الجديدة يجب أن تختلف عن الحالية.');
+      return;
+    }
+
+    // Role-aware minimum (12 for admin/super_admin, 8 otherwise): reject
+    // here with the number that actually applies, instead of letting the
+    // server answer with a different one.
+    if (newPassword.trim().length < passwordMinLengthForRole(user?.role)) {
+      setPasswordErrorMsg(passwordMinLengthHint(user?.role));
       return;
     }
 
@@ -397,6 +406,9 @@ export function ProfilePage() {
                 spellCheck={false}
                 placeholder="••••••••"
               />
+              <span style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '3px', display: 'block' }}>
+                {passwordMinLengthHint(user?.role)}
+              </span>
             </div>
 
             <div>
