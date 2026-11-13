@@ -1091,7 +1091,7 @@ export const VanSaleTab: React.FC<VanSaleTabProps> = ({
                           </span>
                         )}
                         <span style={{ fontSize: '11px', color: '#64748b' }}>
-                          {t('delivery_reps.van_sale_tab.s66', "المتاح:")} {item.qty} {item.unitName || t('delivery_reps.van_sale_tab.s67', "قطعة")}
+                          {t('delivery_reps.van_sale_tab.s66', "المتاح:")} {item.qty} {item.stockUnitName || item.unitName || t('delivery_reps.van_sale_tab.s67', "قطعة")}
                         </span>
                         {item.expiryStatus === 'expired' && (
                           <span style={{ fontSize: '9.5px', backgroundColor: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>
