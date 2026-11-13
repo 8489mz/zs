@@ -964,6 +964,48 @@ export default function VanSalesMobilePage() {
     },
   });
 
+  // INV-VAN-COLLECTION-GUARD-CONTINUATION: the collection submit body,
+  // extracted so the visit guard can pass it as handleStartVisit's
+  // onSuccess continuation instead of discarding the submit. It
+  // deliberately performs NO visit check of its own: the flag-OFF
+  // branch calls onSuccess synchronously, before React re-renders, so
+  // a re-check here would still see activeVisit === null and refuse
+  // again. The caller (onSubmitCollection) owns the busy/validation/
+  // visit gates; this runs only after they pass or via the visit
+  // continuation.
+  const submitCollection = async () => {
+    if (!data?.trip) return;
+    isCollectionProcessingRef.current = true;
+    setIsCollectionProcessing(true);
+
+    const clientTxId = `van_col_${data.trip.id}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+    let gpsLat: number | undefined;
+    let gpsLng: number | undefined;
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      try {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3500, enableHighAccuracy: true });
+        });
+        gpsLat = pos.coords.latitude;
+        gpsLng = pos.coords.longitude;
+      } catch {}
+    }
+    try {
+      recordCollectionMutation.mutate({
+        tripId: data.trip.id,
+        clientTxId,
+        customerId: Number(colCustomerId),
+        amount: Number(colAmount),
+        gpsLat: gpsLat || activeVisit?.latitude,
+        gpsLng: gpsLng || activeVisit?.longitude,
+      });
+    } catch (err) {
+      isCollectionProcessingRef.current = false;
+      setIsCollectionProcessing(false);
+    }
+  };
+
   const settleTripMutation = useMutation({
     mutationFn: vanSalesApi.settleTrip,
     onSuccess: (res) => {
@@ -3207,9 +3249,16 @@ export default function VanSalesMobilePage() {
                     }
                     if (selectedCustomerId && (!activeVisit || activeVisit.customerId !== Number(selectedCustomerId))) {
                       const cust = allAvailableCustomers.find((c) => c.id === Number(selectedCustomerId));
-                      showAlert('warning', `يلزم تفعيل الـ GPS وبدء زيارة العميل "${cust?.name || ''}" أولاً لإصدار الفاتورة.`);
+                      // INV-VAN-COLLECTION-GUARD-CONTINUATION: the visit is
+                      // started with the checkout as its continuation —
+                      // discarding it here made the first submit a no-op.
+                      // The GPS warning shows only when GPS is actually
+                      // mandatory for this rep (flag !== false).
+                      if (session?.rep?.permissions?.require_gps_on_visit !== false) {
+                        showAlert('warning', `يلزم تفعيل الـ GPS وبدء زيارة العميل "${cust?.name || ''}" أولاً لإصدار الفاتورة.`);
+                      }
                       if (cust) {
-                        handleStartVisit(Number(selectedCustomerId), cust.name);
+                        handleStartVisit(Number(selectedCustomerId), cust.name, () => setCheckoutModalOpen(true));
                       }
                       return;
                     }
@@ -3297,42 +3346,25 @@ export default function VanSalesMobilePage() {
                     }
                     if (colCustomerId && (!activeVisit || activeVisit.customerId !== Number(colCustomerId))) {
                       const cust = allAvailableCustomers.find((c) => c.id === Number(colCustomerId));
-                      showAlert('warning', `يلزم تفعيل الـ GPS وبدء زيارة العميل "${cust?.name || ''}" أولاً لتسجيل سند التحصيل.`);
+                      // INV-VAN-COLLECTION-GUARD-CONTINUATION: the submit
+                      // is passed as handleStartVisit's onSuccess — the
+                      // old code started the visit and discarded the
+                      // submit, so the first attempt after every sale
+                      // (which auto-ends the visit) never recorded.
+                      // The GPS warning shows only when GPS is actually
+                      // mandatory for this rep (flag !== false).
+                      if (session?.rep?.permissions?.require_gps_on_visit !== false) {
+                        showAlert('warning', `يلزم تفعيل الـ GPS وبدء زيارة العميل "${cust?.name || ''}" أولاً لتسجيل سند التحصيل.`);
+                      }
                       if (cust) {
-                        handleStartVisit(Number(colCustomerId), cust.name);
+                        handleStartVisit(Number(colCustomerId), cust.name, () => {
+                          void submitCollection();
+                        });
                       }
                       return;
                     }
 
-                    isCollectionProcessingRef.current = true;
-                    setIsCollectionProcessing(true);
-
-                    const clientTxId = `van_col_${data.trip!.id}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
-                    let gpsLat: number | undefined;
-                    let gpsLng: number | undefined;
-                    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-                      try {
-                        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-                          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3500, enableHighAccuracy: true });
-                        });
-                        gpsLat = pos.coords.latitude;
-                        gpsLng = pos.coords.longitude;
-                      } catch {}
-                    }
-                    try {
-                      recordCollectionMutation.mutate({
-                        tripId: data.trip!.id,
-                        clientTxId,
-                        customerId: Number(colCustomerId),
-                        amount: Number(colAmount),
-                        gpsLat: gpsLat || activeVisit?.latitude,
-                        gpsLng: gpsLng || activeVisit?.longitude,
-                      });
-                    } catch (err) {
-                      isCollectionProcessingRef.current = false;
-                      setIsCollectionProcessing(false);
-                    }
+                    await submitCollection();
                   }}
                   isSubmitting={isCollectionProcessing || recordCollectionMutation.isPending}
                   onReturnSuccess={(docNo, amount) => {
