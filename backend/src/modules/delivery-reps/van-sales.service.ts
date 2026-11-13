@@ -1463,6 +1463,12 @@ export class VanSalesService {
     let createdTripId = 0;
     const hasItemsToLoad = Boolean(payload.items && payload.items.length > 0);
 
+    // INV-VAN-TRIP-STARTED-AUDIT: resolve the actor before the
+    // transaction (same pattern as the field-sale row) so the audit
+    // row below names the acting rep's linked login — or null with
+    // the rep named in the details when the rep has no linked login.
+    const auditActor = await resolveVanMoneyAuditActor(this.anyDb, tenantId, repId);
+
     await this.db.transaction().execute(async (trx) => {
       const trxAny = trx as any;
 
@@ -1616,6 +1622,23 @@ export class VanSalesService {
         .executeTakeFirstOrThrow();
 
       createdTripId = Number(insertedTrip.id);
+
+      // INV-VAN-TRIP-STARTED-AUDIT: one audit row per trip start, in
+      // this same transaction — a rolled-back open leaves no audit
+      // trace, and a committed open always has one. Before this the
+      // trip start wrote nothing, so the trip was invisible in the
+      // admin audit log while its settlement is audited. The
+      // function-check guards harnesses that pass a `{}` audit stub;
+      // in production Nest always injects the real AuditService.
+      if (this.audit && typeof this.audit.logWithExecutor === 'function') {
+        await this.audit.logWithExecutor(
+          trx,
+          'بدء رحلة توزيع',
+          `بدأ المندوب ${auditActor.repName} (#${Number(repId)}) رحلة التوزيع #${createdTripId} — بضاعة محملة بقيمة ${roundMoney(totalLoadedValue, moneyDigits)} (${Number(payload.items?.length || 0)} صنف)`,
+          { userId: auditActor.userId, tenantId, accountId },
+          { eventCode: AUDIT_EVENT_CODES.VAN_TRIP_STARTED },
+        );
+      }
 
       // Post van loading stock transfer journal
       if (hasItemsToLoad && totalLoadedCost > 0) {
