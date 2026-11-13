@@ -245,6 +245,11 @@ export class VanReturnsService {
         's.created_at as createdAt',
         sql<number>`cast(coalesce(s.total, 0) as numeric)`.as('total'),
         sql<number>`cast(coalesce(s.discount, 0) as numeric)`.as('discount'),
+        // INV-VAN-RETURN-REFUND-METHOD-DEFAULT: the return form
+        // defaults the settlement from the source invoice's payment
+        // type — without this the form hardcoded 'credit' and a
+        // return against a cash invoice was refused by the server.
+        's.payment_type as paymentType',
       ])
       .where('s.customer_id', '=', customerId)
       .where('s.tenant_id', '=', tenantId)
@@ -317,6 +322,9 @@ export class VanReturnsService {
       createdAt: String(s.createdAt),
       total: Number(s.total || 0),
       discount: Number(s.discount || 0),
+      // INV-VAN-RETURN-REFUND-METHOD-DEFAULT: '' for a legacy NULL
+      // payment_type — the form treats any non-'credit' as cash.
+      paymentType: String(s.paymentType || ''),
       items: itemsBySale.get(Number(s.id)) || [],
     }));
   }

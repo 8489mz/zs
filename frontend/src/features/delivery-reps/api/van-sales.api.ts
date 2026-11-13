@@ -377,6 +377,10 @@ export interface CustomerEligibleSale {
   createdAt: string;
   total: number;
   discount: number;
+  // INV-VAN-RETURN-REFUND-METHOD-DEFAULT: the source invoice's
+  // payment type — the return form defaults the settlement from it
+  // ('credit' for a credit sale, 'cash' for any other method).
+  paymentType?: string;
   items: CustomerEligibleSaleItem[];
 }
 

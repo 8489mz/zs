@@ -117,6 +117,9 @@ const cashSale: any = {
   createdAt: '2026-11-13T10:00:00.000Z',
   total: 288,
   discount: 0,
+  // INV-VAN-RETURN-REFUND-METHOD-DEFAULT (P8): the source invoice's
+  // payment type — the form defaults the settlement from it.
+  paymentType: 'cash',
   items: [
     {
       saleItemId: 1001,
@@ -132,6 +135,36 @@ const cashSale: any = {
     },
   ],
 };
+
+const creditSale: any = {
+  id: 101,
+  docNo: 'VAN-261113-0003',
+  createdAt: '2026-11-13T10:00:00.000Z',
+  total: 288,
+  discount: 0,
+  paymentType: 'credit',
+  items: [
+    {
+      saleItemId: 1002,
+      productId: 2,
+      productName: 'صنف اختبار جملة ب',
+      soldQty: 1,
+      alreadyReturnedQty: 0,
+      remainingReturnableQty: 1,
+      unitPrice: 288,
+      netUnitPrice: 288,
+      unitMultiplier: 1,
+      unitName: 'قطعة',
+    },
+  ],
+};
+
+async function pickSale(docNo: string) {
+  const picker = await screen.findByPlaceholderText('اختر الفاتورة الأصلية');
+  fireEvent.click(picker);
+  const option = await screen.findByText((_, el) => el?.tagName === 'SPAN' && (el.textContent || '').startsWith(`فاتورة #${docNo}`));
+  fireEvent.click(option);
+}
 
 function renderTab(props: { customer?: any; customers?: any[]; sales?: any[] } = {}) {
   const customer = props.customer ?? retailCustomer;
@@ -223,5 +256,42 @@ describe('VanCollectionTab unlinked return picker (P6)', () => {
     expect(await screen.findByText(/بنود الفاتورة الأصلية #/)).toBeTruthy();
     expect(screen.getByText('صنف اختبار جملة أ')).toBeTruthy();
     expect(screen.queryByText('أو إرجاع بدون فاتورة — من بضاعة السيارة:')).toBeNull();
+  });
+
+  it('case 6 (P8): picking a cash invoice defaults the settlement to cash refund', async () => {
+    renderTab({ sales: [cashSale] });
+    await pickSale('VAN-261113-0002');
+    expect(await screen.findByText(/بنود الفاتورة الأصلية #/)).toBeTruthy();
+    fireEvent.click(screen.getAllByText('+ إضافة')[0]);
+    fireEvent.click(screen.getByRole('button', { name: /إرسال إذن المرتجع للإدارة/ }));
+    await waitFor(() => expect(mockSubmitReturn).toHaveBeenCalledTimes(1));
+    const payload = mockSubmitReturn.mock.calls[0][0];
+    expect(payload.saleId).toBe(100);
+    expect(payload.refundMethod).toBe('cash');
+  });
+
+  it('case 7 (P8): picking a credit invoice defaults the settlement to credit', async () => {
+    renderTab({ sales: [creditSale] });
+    await pickSale('VAN-261113-0003');
+    expect(await screen.findByText(/بنود الفاتورة الأصلية #/)).toBeTruthy();
+    fireEvent.click(screen.getAllByText('+ إضافة')[0]);
+    fireEvent.click(screen.getByRole('button', { name: /إرسال إذن المرتجع للإدارة/ }));
+    await waitFor(() => expect(mockSubmitReturn).toHaveBeenCalledTimes(1));
+    const payload = mockSubmitReturn.mock.calls[0][0];
+    expect(payload.saleId).toBe(101);
+    expect(payload.refundMethod).toBe('credit');
+  });
+
+  it('case 8 (P8): the manual override still works after the auto-default', async () => {
+    renderTab({ sales: [cashSale] });
+    await pickSale('VAN-261113-0002');
+    expect(await screen.findByText(/بنود الفاتورة الأصلية #/)).toBeTruthy();
+    // Auto-default is cash; the rep switches to credit manually.
+    fireEvent.click(screen.getByText('خصم من الحساب (آجل)'));
+    fireEvent.click(screen.getAllByText('+ إضافة')[0]);
+    fireEvent.click(screen.getByRole('button', { name: /إرسال إذن المرتجع للإدارة/ }));
+    await waitFor(() => expect(mockSubmitReturn).toHaveBeenCalledTimes(1));
+    const payload = mockSubmitReturn.mock.calls[0][0];
+    expect(payload.refundMethod).toBe('credit');
   });
 });

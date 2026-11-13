@@ -1131,6 +1131,22 @@ export const VanCollectionTab: React.FC<VanCollectionTabProps> = ({
                       onChange={(val) => {
                         setSelectedSaleId(val ? Number(val) : '');
                         setReturnCart([]);
+                        // INV-VAN-RETURN-REFUND-METHOD-DEFAULT: default
+                        // the settlement from the picked invoice's
+                        // payment type — 'credit' for a credit sale,
+                        // 'cash' for any other method (cash, card,
+                        // split, instapay, vodafone_cash, unknown).
+                        // Clearing the sale restores the unlinked
+                        // default 'credit'. The rep can still override
+                        // manually afterwards (this fires only at pick
+                        // time). The server still validates the chosen
+                        // method against the sale's legs at submit.
+                        if (!val) {
+                          setRefundMethod('credit');
+                          return;
+                        }
+                        const picked = eligibleSales.find((s) => String(s.id) === String(val));
+                        setRefundMethod(picked?.paymentType === 'credit' ? 'credit' : 'cash');
                       }}
                       options={[
                         { value: '', label: t('delivery_reps.van_collection_tab.s55', "-- اختر فاتورة سابقة (موصى به) --") },
