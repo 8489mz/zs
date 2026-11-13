@@ -18,7 +18,9 @@
  * the backend login already returns the rep's full permissions object,
  * so no backend change is needed for the flag to reach the page.
  * (P11 WhatsApp-share cases live in the same file, added by the P11
- * package — see the second describe block.)
+ * package — see the second describe block: INV-VAN-WHATSAPP-SHARE-OPT-IN.
+ * The checkbox defaults OFF; ticking it opts in for that one sale only,
+ * and re-opening the modal resets it.)
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -32,9 +34,11 @@ vi.mock('react-i18next', () => ({
 }));
 
 const DISCOUNT_TOGGLE = '+ إضافة خصم تسوية نقدي (اختياري)';
+const WHATSAPP_LABEL = 'مشاركة الفاتورة مع العميل عبر واتساب فور الإصدار';
 const CONFIRM_LABEL = 'تأكيد وإصدار الفاتورة';
 
 const customerNoPhone = { id: 3060, name: 'محل اختبار جملة 1', balance: 0 };
+const customerWithPhone = { ...customerNoPhone, phone: '01122220001' };
 
 function renderModal(props: Record<string, unknown>) {
   const onConfirmCheckout = vi.fn();
@@ -76,5 +80,41 @@ describe('VanSaleCheckoutModal discount permission (P7)', () => {
   it('case 3: prop omitted hides the discount control (fail closed)', () => {
     renderModal({ customer: customerNoPhone });
     expect(screen.queryByText(DISCOUNT_TOGGLE)).toBeNull();
+  });
+});
+
+describe('VanSaleCheckoutModal WhatsApp share default (P11)', () => {
+  it('case 4: customer with a phone gets an unchecked checkbox by default', () => {
+    const { onConfirmCheckout } = renderModal({ customer: customerWithPhone });
+    expect(screen.getByText(WHATSAPP_LABEL)).toBeTruthy();
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    fireEvent.click(screen.getByText(CONFIRM_LABEL));
+    expect(onConfirmCheckout).toHaveBeenCalledTimes(1);
+    expect(onConfirmCheckout.mock.calls[0][0].autoShareWhatsApp).toBe(false);
+  });
+
+  it('case 5: ticking the checkbox shares on confirm (manual opt-in)', () => {
+    const { onConfirmCheckout } = renderModal({ customer: customerWithPhone });
+    // Click the label text, not the input itself: fireEvent.click on a
+    // checkbox nested in a <label> double-toggles in jsdom (the click
+    // bubbles to the label, which fires a second activation click).
+    fireEvent.click(screen.getByText(WHATSAPP_LABEL));
+    expect(screen.getByRole('checkbox')).toBeChecked();
+    fireEvent.click(screen.getByText(CONFIRM_LABEL));
+    expect(onConfirmCheckout).toHaveBeenCalledTimes(1);
+    expect(onConfirmCheckout.mock.calls[0][0].autoShareWhatsApp).toBe(true);
+  });
+
+  it('case 6: re-opening the modal resets the checkbox to unchecked', () => {
+    const { rerender } = renderModal({ customer: customerWithPhone });
+    fireEvent.click(screen.getByText(WHATSAPP_LABEL));
+    expect(screen.getByRole('checkbox')).toBeChecked();
+    rerender(
+      <VanSaleCheckoutModal {...baseProps} onConfirmCheckout={vi.fn()} customer={customerWithPhone} open={false} />,
+    );
+    rerender(
+      <VanSaleCheckoutModal {...baseProps} onConfirmCheckout={vi.fn()} customer={customerWithPhone} open />,
+    );
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
   });
 });
