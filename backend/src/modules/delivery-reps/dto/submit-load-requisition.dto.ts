@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsInt,
   IsNumber,
   IsOptional,
@@ -24,7 +25,21 @@ import {
  *
  * Shape mirrors the driver frontend payload exactly
  * (frontend/src/features/delivery-reps/api/van-sales.api.ts
- * `submitLoadRequisition`): sourceWarehouseId / items / notes only.
+ * `submitLoadRequisition`, built in
+ * DriverNewLoadRequisitionView.tsx `handleSubmit`): sourceWarehouseId /
+ * items / notes at the top level, and per item the display fields the
+ * frontend ALWAYS sends — unitName / isWeight / packingText, plus the
+ * carton breakdown (cartons / pieces / cartonMultiplier /
+ * packagingUnitName) when defined. INV-DRIVER-REQUISITION-ITEM-FIELDS:
+ * those per-item fields are whitelisted here (all @IsOptional()) so
+ * the real frontend payload passes the pipe; they are display-only
+ * (packingText is what the supervisor sees when reviewing) and the
+ * service already spreads items into requested_items /
+ * approved_items, so the info is stored, not dropped. Before this
+ * invariant the DTO whitelisted only productId / qty /
+ * sourceWarehouseId / sourceWarehouseName per item, so EVERY driver
+ * submit was rejected with VALIDATION_ERROR at the boundary and the
+ * load-request button appeared to do nothing.
  */
 export class LoadRequisitionItemDto {
   @IsInt()
@@ -41,6 +56,37 @@ export class LoadRequisitionItemDto {
   @IsString()
   @MaxLength(200)
   sourceWarehouseName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  unitName?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isWeight?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  packingText?: string;
+
+  @IsOptional()
+  @IsNumber()
+  cartons?: number;
+
+  @IsOptional()
+  @IsNumber()
+  pieces?: number;
+
+  @IsOptional()
+  @IsNumber()
+  cartonMultiplier?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  packagingUnitName?: string;
 }
 
 export class SubmitLoadRequisitionDto {

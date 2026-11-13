@@ -35,14 +35,17 @@
  * (d) the admin route with dispatchImmediately still allows multiple
  *     pending (the supplementary-load flow is preserved);
  * (e) the DTO rejects other unknown fields (dispatchImmediately) and
- *     a clean driver payload passes the pipe with no allowMultiplePending
- *     key on it.
+ *     the REAL driver frontend payload passes the pipe — per item the
+ *     frontend always sends unitName / isWeight / packingText plus the
+ *     carton breakdown (cartons / pieces / cartonMultiplier /
+ *     packagingUnitName) when defined, so the DTO must whitelist
+ *     those display fields while still rejecting allowMultiplePending.
  *
  * NOT DRIVEN: a live HTTP request through Nest (needs a booted app —
  * the pipe instance driven here IS the global one registered in
  * main.ts); a live Postgres run (PGlite only); the frontend screens
- * (untouched — the driver frontend already sends only
- * sourceWarehouseId / items / notes).
+ * (untouched — the driver frontend sends the per-item display fields
+ * listed under (e), which is exactly what this spec drives).
  */
 
 import 'reflect-metadata';
@@ -173,6 +176,10 @@ async function main(): Promise<void> {
     const controller = Object.create(VanSalesController.prototype);
     controller.deliveryRepsService = {
       verifyDriverToken: async () => ({ repId: REP_ID, tenantId: TENANT, accountId: ACCOUNT }),
+      // verifyDriver (INV-DRIVER-PIN-FIRST-LOGIN-CHANGE) re-derives the
+      // default-PIN flag from the live hash on every driver endpoint —
+      // the stub must answer it or the controller call never runs.
+      assertDriverPinChanged: async () => undefined,
     };
     controller.vanSalesService = {
       submitLoadRequisition: async (_repId: number, _tenantId: string, _accountId: string, payload: any) => {
@@ -287,7 +294,53 @@ async function main(): Promise<void> {
       false,
       'no allowMultiplePending key reaches the service from a clean driver payload',
     );
+    // (e2) The REAL driver frontend payload — DriverNewLoadRequisitionView
+    // handleSubmit sends per item, ALWAYS: unitName, isWeight,
+    // packingText, plus the carton breakdown (cartons / pieces /
+    // cartonMultiplier / packagingUnitName) when defined. The pipe
+    // must ACCEPT it (this is the exact payload the live trial sent
+    // and got rejected with VALIDATION_ERROR on every submit).
+    const realFrontend = (await requestValidationPipe.transform(
+      {
+        sourceWarehouseId: 1,
+        items: [
+          { productId: 5, qty: 1, unitName: 'قطعة', isWeight: false, packingText: '1 قطعة' },
+          {
+            productId: 7, qty: 24, cartons: 2, pieces: 0, cartonMultiplier: 12,
+            packagingUnitName: 'كرتونة', unitName: 'قطعة', isWeight: false,
+            packingText: '2 كرتونة',
+          },
+          { productId: 8, qty: 2.5, unitName: 'كجم', isWeight: true, packingText: '2.5 كجم' },
+        ],
+        notes: 'morning load',
+      },
+      { type: 'body', metatype: SubmitLoadRequisitionDto },
+    )) as SubmitLoadRequisitionDto;
+    // The new display fields are read through a Record cast on
+    // purpose: before the DTO fix they do not exist on the type at
+    // all, so a direct access would fail compilation instead of
+    // proving the runtime rejection (VALIDATION_ERROR) at the pipe.
+    const rf0 = realFrontend.items[0] as unknown as Record<string, unknown>;
+    const rf1 = realFrontend.items[1] as unknown as Record<string, unknown>;
+    const rf2 = realFrontend.items[2] as unknown as Record<string, unknown>;
+    assert.equal(realFrontend.items.length, 3, 'all three real frontend items survive the pipe');
+    assert.equal(rf0.unitName, 'قطعة', 'the piece item unit survives the pipe');
+    assert.equal(rf0.isWeight, false, 'the piece item weight flag survives the pipe');
+    assert.equal(rf0.packingText, '1 قطعة', 'the piece item packing text survives the pipe');
+    assert.equal(rf1.cartons, 2, 'the carton count survives the pipe');
+    assert.equal(rf1.pieces, 0, 'the piece remainder survives the pipe');
+    assert.equal(rf1.cartonMultiplier, 12, 'the carton multiplier survives the pipe');
+    assert.equal(rf1.packagingUnitName, 'كرتونة', 'the packaging unit name survives the pipe');
+    assert.equal(rf1.packingText, '2 كرتونة', 'the carton packing text survives the pipe');
+    assert.equal(rf2.isWeight, true, 'the weight item flag survives the pipe');
+    assert.equal(rf2.packingText, '2.5 كجم', 'the weight item packing text survives the pipe');
+    assert.equal(
+      'allowMultiplePending' in (realFrontend as unknown as Record<string, unknown>),
+      false,
+      'no allowMultiplePending key reaches the service from the real frontend payload either',
+    );
     console.log('  (e) DTO rejects unknown fields, clean payload passes without the flag passed');
+    console.log('  (e2) real driver frontend payload passes the pipe passed');
   }
 
   // Source pins: the controller forces the flag false and takes the
