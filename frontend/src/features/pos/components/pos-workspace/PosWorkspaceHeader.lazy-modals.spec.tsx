@@ -34,7 +34,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createTestQueryClient } from '@/test/test-query-client';
 import { useAuthStore } from '@/stores/auth-store';
-import { storefrontApi } from '@/features/storefront/api/storefront.api';
+import { storefrontApi } from '@/features/storefront';
 import { PosWorkspaceHeader } from './PosWorkspaceHeader';
 
 const mockSettingsState = vi.hoisted(() => ({

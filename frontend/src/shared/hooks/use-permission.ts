@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
-import { isPlatformAdmin, tenantHasFeature } from '@/app/router/access';
+import { tenantHasFeature } from '@/app/router/access';
 
 function normalizePermissions(input: Array<string | null | undefined>) {
   return input.map((value) => String(value || '').trim()).filter(Boolean);
