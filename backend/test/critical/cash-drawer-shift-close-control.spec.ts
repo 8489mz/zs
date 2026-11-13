@@ -10,6 +10,19 @@
  *   (held_sales rows) or draft sales in the shift window; only a
  *   DIFFERENT manager's secret + a >=10-char reason overrides it,
  *   and the override is stamped into close_note.
+ *   INV-SHIFT-CLOSE-HANDOVER-NOTE-REASON: the closing note IS the
+ *   handover justification — the reason is read from
+ *   openTablesOverrideReason OR the closing note (ملاحظة الإغلاق),
+ *   so a reason typed in the visible note field counts. An
+ *   admin/super_admin closer closes with a >=10-char reason alone
+ *   (admin-as-super_admin: their own password-confirmed close +
+ *   recorded reason is the control); a cashier still needs a
+ *   different manager's account secret. Held tables and drafts
+ *   survive the close — they belong to the shop, not the shift.
+ * INV-SHIFT-CLOSE-ADMIN-CLOSE-ANY: an admin closes ANY cashier's
+ *   shift (recorded as the closer, blind close goes to review);
+ *   a cashier closes only their own — another cashier's shift
+ *   throws SHIFT_FORBIDDEN.
  * I21 — a variance over the shortage-tolerance cap needs a second
  *   approver (a manager/admin other than the closer, by account
  *   password — the shared PIN has no identity and cannot prove a
@@ -50,6 +63,7 @@ import { AccountingPostingService } from '../../src/modules/accounting/accountin
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 import { createPasswordRecord } from '../../src/core/auth/utils/password-hasher';
+import { hashManagerPin } from '../../src/common/utils/manager-approval';
 import { CashDrawerService } from '../../src/modules/cash-drawer/cash-drawer.service';
 import { TransactionHelper } from '../../src/database/helpers/transaction.helper';
 import {
@@ -120,6 +134,7 @@ async function main() {
   const admin1 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin1', permissions: [] } as unknown as AuthContext;
   const manager2 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 2, username: 'manager2', permissions: [] } as unknown as AuthContext;
   const cashier3 = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 3, username: 'cashier3', permissions: [] } as unknown as AuthContext;
+  const cashier5 = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 5, username: 'cashier5', permissions: [] } as unknown as AuthContext;
   const admin4 = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 4, username: 'admin4', permissions: [] } as unknown as AuthContext;
   const superAdmin = { tenantId: 't1', accountId: 'a1', role: 'super_admin', userId: 9, username: 'owner', permissions: [] } as unknown as AuthContext;
 
@@ -202,15 +217,15 @@ async function main() {
     for (const [code, type] of [[1110, 'asset'], [7110, 'revenue'], [7210, 'expense'], [1135, 'asset']] as const) {
       await pg.query('INSERT INTO accounting_accounts(id,tenant_id,code,account_type) VALUES ($1,$2,$3,$4)', [code, 't1', String(code), type]);
     }
-    const passwords: Record<number, string> = { 1: 'pw-admin-1', 2: 'pw-manager-2', 3: 'pw-cashier-3', 4: 'pw-admin-4', 9: 'pw-owner-9' };
-    for (const [id, role, branch] of [[1, 'admin', null], [2, 'admin', null], [3, 'cashier', 1], [4, 'admin', null], [9, 'super_admin', null]] as const) {
+    const passwords: Record<number, string> = { 1: 'pw-admin-1', 2: 'pw-manager-2', 3: 'pw-cashier-3', 4: 'pw-admin-4', 5: 'pw-cashier-5', 9: 'pw-owner-9' };
+    for (const [id, role, branch] of [[1, 'admin', null], [2, 'admin', null], [3, 'cashier', 1], [4, 'admin', null], [5, 'cashier', 1], [9, 'super_admin', null]] as const) {
       const rec = await createPasswordRecord(passwords[id as number]);
       await pg.query(
         'INSERT INTO users(id,tenant_id,username,role,is_active,password_hash,password_salt,default_branch_id) VALUES ($1,$2,$3,$4,true,$5,$6,$7)',
         [id, 't1', `user${id}`, role, rec.hash, rec.salt, branch],
       );
     }
-    await pg.query(`INSERT INTO user_branches VALUES ('t1',3,1)`);
+    await pg.query(`INSERT INTO user_branches VALUES ('t1',3,1),('t1',5,1)`);
 
     // ---------- I20: open tables / draft sales block the close. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
@@ -244,16 +259,110 @@ async function main() {
       (err: unknown) => codeOf(err) === 'SHIFT_CLOSE_OVERRIDE_REASON_REQUIRED',
       'an override reason under 10 chars must not open the gate',
     );
-    await assert.rejects(
-      drawer.closeCashierShift(shiftB, { countedCash: 100, managerPin: 'pw-admin-1', openTablesOverrideSecret: 'pw-admin-1', openTablesOverrideReason: 'الطاولة ستنتقل إلى وردية المساء' }, admin1),
-      (err: unknown) => codeOf(err) === 'SHIFT_CLOSE_OVERRIDE_IDENTITY_REQUIRED',
-      'the closer cannot override their own close with their own secret',
-    );
     await drawer.closeCashierShift(shiftB, { countedCash: 100, managerPin: 'pw-admin-1', openTablesOverrideSecret: 'pw-manager-2', openTablesOverrideReason: 'الطاولة ستنتقل إلى وردية المساء' }, admin1);
     const rowB = await shiftRow(shiftB);
     assert.equal(rowB.status, 'closed');
     assert.ok(String(rowB.close_note || '').includes('T5'), 'the override stamp must name the open table');
     assert.ok(String(rowB.close_note || '').includes('وردية المساء'), 'the override stamp must carry the reason');
+
+    // The identity rule still binds a non-admin closer: the shared
+    // manager PIN carries no identity, so it cannot approve an override.
+    await pg.query(`INSERT INTO settings VALUES ('t1','managerPin',$1)`, [JSON.stringify(await hashManagerPin('1234'))]);
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
+    const shiftB2 = await shiftIdOf(3);
+    await pg.query(`INSERT INTO held_sales(id,tenant_id,account_id,table_number,order_type,branch_id,created_by,created_at)
+      VALUES (3,'t1','a1','T5','dine_in',1,3,now())`);
+    await assert.rejects(
+      drawer.closeCashierShift(shiftB2, { countedCash: 100, managerPin: 'pw-cashier-3', openTablesOverrideSecret: '1234', openTablesOverrideReason: 'الطاولة ستنتقل إلى وردية المساء' }, cashier3),
+      (err: unknown) => codeOf(err) === 'SHIFT_CLOSE_OVERRIDE_IDENTITY_REQUIRED',
+      'a cashier cannot override with the shared manager PIN — it proves no second person',
+    );
+    await pg.query(`DELETE FROM settings WHERE tenant_id='t1' AND key='managerPin'`);
+    await pg.query(`DELETE FROM held_sales WHERE id=3`);
+    await drawer.closeCashierShift(shiftB2, { countedCash: 100, managerPin: 'pw-cashier-3' }, cashier3);
+
+    // INV-SHIFT-CLOSE-HANDOVER-NOTE-REASON: an admin closer with a
+    // >=10-char reason in the closing note alone closes with open
+    // tables — no second manager's secret — and the held table and
+    // draft survive for the next cashier.
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
+    const shiftH1 = await shiftIdOf(1);
+    await pg.query(`INSERT INTO held_sales(id,tenant_id,account_id,table_number,order_type,branch_id,created_by,created_at)
+      VALUES (20,'t1','a1','T5','dine_in',1,1,now())`);
+    await pg.query(`INSERT INTO sales(id,tenant_id,account_id,table_number,order_type,status,branch_id,created_by,created_at)
+      VALUES (21,'t1','a1','T7','dine_in','draft',1,1,now())`);
+    await drawer.closeCashierShift(shiftH1, { countedCash: 100, note: 'الطاولات ستنتقل إلى وردية المساء', managerPin: 'pw-admin-1' }, admin1);
+    const rowH1 = await shiftRow(shiftH1);
+    assert.equal(rowH1.status, 'closed', 'an admin handover close with a >=10-char reason in the closing note must succeed');
+    assert.ok(String(rowH1.close_note || '').includes('وردية المساء'), 'the handover stamp must carry the closing-note reason');
+    assert.ok(String(rowH1.close_note || '').includes('T5'), 'the handover stamp must name the open table');
+    const heldAfter = await pg.query<{ count: string }>(`SELECT count(*) AS count FROM held_sales WHERE id=20`);
+    assert.equal(Number(heldAfter.rows[0].count), 1, 'the held table must survive the close for the next cashier');
+    const draftAfter = await pg.query<{ count: string }>(`SELECT count(*) AS count FROM sales WHERE id=21 AND status='draft'`);
+    assert.equal(Number(draftAfter.rows[0].count), 1, 'the draft sale must survive the close');
+    assert.equal(await drawer.computeShiftExpectedCash(shiftH1, admin1), 100, 'held tables and drafts must not inflate the closed shift expected cash');
+    await pg.query(`DELETE FROM held_sales WHERE id=20`);
+    await pg.query(`DELETE FROM sales WHERE id=21`);
+
+    // An admin handover close with a reason under 10 chars still demands one.
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);
+    const shiftH2 = await shiftIdOf(1);
+    await pg.query(`INSERT INTO held_sales(id,tenant_id,account_id,table_number,order_type,branch_id,created_by,created_at)
+      VALUES (22,'t1','a1','T5','dine_in',1,1,now())`);
+    await assert.rejects(
+      drawer.closeCashierShift(shiftH2, { countedCash: 100, note: 'قصير', managerPin: 'pw-admin-1' }, admin1),
+      (err: unknown) => codeOf(err) === 'SHIFT_CLOSE_OVERRIDE_REASON_REQUIRED',
+      'an admin handover close with a reason under 10 chars must still demand a reason',
+    );
+    await pg.query(`DELETE FROM held_sales WHERE id=22`);
+    await drawer.closeCashierShift(shiftH2, { countedCash: 100, managerPin: 'pw-admin-1' }, admin1);
+
+    // A cashier still needs a second manager's secret even with a long
+    // closing note — the note fallback waives no secret for cashiers.
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
+    const shiftH3 = await shiftIdOf(3);
+    await pg.query(`INSERT INTO held_sales(id,tenant_id,account_id,table_number,order_type,branch_id,created_by,created_at)
+      VALUES (23,'t1','a1','T5','dine_in',1,3,now())`);
+    await assert.rejects(
+      drawer.closeCashierShift(shiftH3, { countedCash: 100, note: 'الطاولات ستنتقل إلى وردية المساء', managerPin: 'pw-cashier-3' }, cashier3),
+      (err: unknown) => codeOf(err) === 'SHIFT_CLOSE_OPEN_TABLES',
+      'a cashier still needs a second manager secret even with a long closing note',
+    );
+    // ...but the reason may live in the closing note instead of the
+    // override-reason box: secret + note reason closes (to review).
+    await drawer.closeCashierShift(shiftH3, { countedCash: 100, note: 'الطاولات ستنتقل إلى وردية المساء', managerPin: 'pw-cashier-3', openTablesOverrideSecret: 'pw-manager-2' }, cashier3);
+    const rowH3 = await shiftRow(shiftH3);
+    assert.equal(rowH3.status, 'pending_review', 'a cashier-opener shift closed with a manager override goes to review');
+    assert.ok(String(rowH3.close_note || '').includes('وردية المساء'), 'the override stamp must carry the closing-note reason for the cashier path too');
+    await pg.query(`DELETE FROM held_sales WHERE id=23`);
+
+    // ---------- INV-SHIFT-CLOSE-ADMIN-CLOSE-ANY: admin closes any
+    // cashier's shift; a cashier closes only their own. The old
+    // owner-only gate (super_admin excepted) blocked the shop owner
+    // from closing a cashier who forgot or left — live on test10k
+    // 2026-11-13, admin closing cashier_test SHIFT-261112-0026 got
+    // "غير مسموح لك بإغلاق هذه الوردية". Admin is super_admin in
+    // all in-tenant permissions (standing rule, decided 2026-11-11
+    // for discounts, generalized 2026-11-13); super_admin exists
+    // only for package/subscription changes. ----------
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier5);
+    const shiftP1 = await shiftIdOf(5);
+    await assert.rejects(
+      drawer.closeCashierShift(shiftP1, { countedCash: 100, managerPin: 'pw-cashier-3' }, cashier3),
+      (err: unknown) => codeOf(err) === 'SHIFT_FORBIDDEN',
+      'a cashier must never close another cashier shift',
+    );
+    await drawer.closeCashierShift(shiftP1, { countedCash: 100, managerPin: 'pw-admin-1' }, admin1);
+    const rowP1 = await shiftRow(shiftP1);
+    assert.equal(rowP1.status, 'pending_review', 'an admin closing a cashier-opener shift goes to review, like super_admin');
+    assert.equal(Number(rowP1.closed_by), 1, 'the admin closer must be recorded as the closer');
+    await drawer.reviewCashierShiftClose(shiftP1, { decision: 'approve', note: 'مطابق' }, manager2);
+    assert.equal((await shiftRow(shiftP1)).status, 'closed');
+    // A cashier closing their own shift still works.
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier5);
+    const shiftP2 = await shiftIdOf(5);
+    await drawer.closeCashierShift(shiftP2, { countedCash: 100, managerPin: 'pw-cashier-5' }, cashier5);
+    assert.equal((await shiftRow(shiftP2)).status, 'pending_review', 'a cashier closing their own shift still works');
 
     // ---------- I21: over-cap variance needs a second approver. ----------
     await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, admin1);

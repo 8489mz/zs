@@ -824,7 +824,7 @@ export default function VanSalesMobilePage() {
         customerTotalBalance: matchedCustomer?.balance != null ? Number(matchedCustomer.balance) : undefined,
         packagingBreakdown: {
           cartonsCount: Number(cartonsCount) || 0,
-          piecesCount: cart.reduce((s, it) => s + it.qty, 0),
+          piecesCount: cart.reduce((s, it) => s + it.qty * (it.unitMultiplier || 1), 0),
           itemsCount: cart.length,
         },
         deliveryProofPhoto: deliveryProofPhoto || undefined,
@@ -3330,6 +3330,7 @@ export default function VanSalesMobilePage() {
                 <VanCollectionTab
                   tripId={data.trip!.id}
                   customers={allAvailableCustomers}
+                  inventory={data?.inventory || []}
                   colCustomerId={colCustomerId}
                   onColCustomerChange={setColCustomerId}
                   colAmount={colAmount}
@@ -3513,6 +3514,7 @@ export default function VanSalesMobilePage() {
           notes={saleNotes}
           onNotesChange={setSaleNotes}
           isSubmitting={isCheckoutProcessing || executeSaleMutation.isPending}
+          canGiveDiscount={session?.rep?.permissions?.can_give_discount === true}
           onConfirmCheckout={async (checkoutData) => {
             if (isCheckoutProcessingRef.current || executeSaleMutation.isPending) {
               return;
@@ -3561,7 +3563,7 @@ export default function VanSalesMobilePage() {
                 packagingBreakdown: checkoutData.cartonsCount
                   ? {
                       cartonsCount: Number(checkoutData.cartonsCount) || 0,
-                      piecesCount: cart.reduce((s, it) => s + it.qty, 0),
+                      piecesCount: cart.reduce((s, it) => s + it.qty * (it.unitMultiplier || 1), 0),
                       itemsCount: cart.length,
                     }
                   : undefined,

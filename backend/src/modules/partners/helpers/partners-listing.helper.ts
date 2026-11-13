@@ -25,6 +25,11 @@ export function parsePartnersListQuery(query: Record<string, unknown>): Partners
 export function mapCustomerRow(
   row: CustomerRow,
   repBalances?: Array<{ repId: number; repName: string; balance: number; totalDebit: number; totalCredit: number }>,
+  // INV-CUSTOMER-REP-BALANCES-UNASSIGNED: the legacy opening balance
+  // no rep owns (explicit total minus rep balances). The register
+  // card's "مباشر/إدارة:" chip reads this field — without it the
+  // breakdown visibly fails to reconcile.
+  unassignedBalance?: number,
 ): Record<string, unknown> {
   let meta: any = {};
   if (typeof row.metadata === 'string') {
@@ -44,6 +49,7 @@ export function mapCustomerRow(
     customerCode: custCode,
     balance: Number(row.balance || 0),
     repBalances: repBalances || [],
+    unassignedBalance: Number(unassignedBalance ?? 0),
     type: row.customer_type || 'cash',
     creditLimit: Number(row.credit_limit || 0),
     storeCreditBalance: Number(row.store_credit_balance || 0),
@@ -69,7 +75,7 @@ export function mapSupplierRow(row: SupplierRow): Record<string, unknown> {
 export function buildCustomerSearchPredicate(q: string) {
   if (!q) return null;
   const term = `%${normalizeArabicSearch(q)}%`;
-  const codeDigitsMatch = q.trim().match(/^(?:c-|#)?0*(\d+)$/i);
+  const codeDigitsMatch = q.trim().match(/^(?:c[-\s]?|#)?0*(\d+)$/i);
   const numericId = codeDigitsMatch ? Number(codeDigitsMatch[1]) : null;
   if (numericId && Number.isInteger(numericId) && numericId > 0) {
     return sql<boolean>`(

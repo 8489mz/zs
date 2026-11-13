@@ -38,6 +38,7 @@
   "features/hr/pages/reports/HrReportsFiltersToolbar.tsx imports another page module (./hr-reports.helpers)",
   "features/hr/pages/reports/HrReportsKpiBar.tsx imports another page module (./hr-reports.helpers)",
   "features/hr/pages/reports/HrReportsOverviewGrid.tsx imports another page module (./hr-reports.helpers)",
+  "features/inventory/pages/WarehousesGridPage.spec.tsx imports another page module (./WarehousesGridPage)",
   "features/maritime-freight/pages/MaritimeLayout.tsx imports another page module (./MaritimeContainersPage)",
   "features/maritime-freight/pages/MaritimeLayout.tsx imports another page module (./MaritimeInquiriesPage)",
   "features/maritime-freight/pages/MaritimeLayout.tsx imports another page module (./MaritimeJobsPage)",

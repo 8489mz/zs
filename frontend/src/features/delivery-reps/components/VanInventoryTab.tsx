@@ -311,7 +311,7 @@ export const VanInventoryTab: React.FC<VanInventoryTabProps> = ({
                   }}
                   title={t('delivery_reps.van_inventory_tab.s9', "الكمية المحملة داخل سيارة التوزيع")}
                 >
-                  {t('delivery_reps.van_inventory_tab.s10', "السيارة:")} {item.qty} {item.unitName || t('delivery_reps.van_inventory_tab.s11', "قطعة")}
+                  {t('delivery_reps.van_inventory_tab.s10', "السيارة:")} {item.qty} {item.stockUnitName || item.unitName || t('delivery_reps.van_inventory_tab.s11', "قطعة")}
                 </span>
               </div>
 

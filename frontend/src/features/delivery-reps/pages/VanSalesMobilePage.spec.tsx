@@ -22,7 +22,6 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import VanSalesMobilePage from './VanSalesMobilePage';
-import { vanSalesApi } from '../api/van-sales.api';
 import { systemConfirm } from '@/shared/components/system-alert';
 import { createTestQueryClient } from '@/test/test-query-client';
 
@@ -34,10 +33,12 @@ const GPS_DIALOG_TITLE = 'تفعيل خدمة تحديد المواقع (GPS) إ
 const CUSTOMER_NAME = 'محل اختبار تجريبي';
 const CUSTOMER_PICKER_PLACEHOLDER = 'اختر المحل / العميل من القائمة';
 
-const { currentRep, mockCheckInVisit, mockGetActiveTrip } = vi.hoisted(() => ({
+const { currentRep, mockCheckInVisit, mockGetActiveTrip, mockRecordCollection, mockExecuteSale } = vi.hoisted(() => ({
   currentRep: { value: null as any },
   mockCheckInVisit: vi.fn(),
   mockGetActiveTrip: vi.fn(),
+  mockRecordCollection: vi.fn(),
+  mockExecuteSale: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -77,8 +78,8 @@ vi.mock('../api/van-sales.api', () => ({
     checkInVisit: mockCheckInVisit,
     openTrip: vi.fn(),
     settleTrip: vi.fn(),
-    recordCollection: vi.fn(),
-    executeSale: vi.fn(),
+    recordCollection: mockRecordCollection,
+    executeSale: mockExecuteSale,
     cancelMyRequisition: vi.fn(),
   },
 }));
@@ -241,8 +242,6 @@ const COLLECTION_AMOUNT = 240;
 const STUB_LAT = 30.0444;
 const STUB_LNG = 31.2357;
 
-const mockRecordCollection = vi.mocked(vanSalesApi.recordCollection);
-const mockExecuteSale = vi.mocked(vanSalesApi.executeSale);
 const mockSystemConfirm = vi.mocked(systemConfirm);
 
 describe('VanSalesMobilePage collection/invoice submit guards', () => {

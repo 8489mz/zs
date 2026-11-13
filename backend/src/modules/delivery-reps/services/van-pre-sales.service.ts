@@ -439,6 +439,31 @@ export class VanPreSalesService {
       throw new AppError('الطلبيات الآجلة تتطلب تحديد اسم العميل', 'CREDIT_REQUIRES_CUSTOMER', 400);
     }
 
+    // INV-VAN-PRE-SALES-CUSTOMER-ATTRIBUTION: when the rep picked an
+    // existing customer, resolve the name (and phone/address) from the
+    // tenant-scoped customer row — otherwise the order is stored
+    // under the generic default 'عميل تجزئة ميداني' and no read path
+    // can attribute it (every read selects the denormalized
+    // so.customer_name). The row is authoritative for an existing
+    // customer; the default survives only when no row is found.
+    // Phone/address come from the row only when the payload omits
+    // them.
+    let customerPhone = payload.customerPhone || null;
+    let customerAddress = payload.customerAddress || null;
+    if (customerId) {
+      const byId = await this.anyDb
+        .selectFrom('customers')
+        .select(['id', 'name', 'phone', 'address'])
+        .where('id', '=', customerId)
+        .where('tenant_id', '=', tenantId)
+        .executeTakeFirst();
+      if (byId) {
+        customerName = byId.name;
+        if (!customerPhone) customerPhone = byId.phone || null;
+        if (!customerAddress) customerAddress = byId.address || null;
+      }
+    }
+
     if (!customerId && payload.customerName?.trim()) {
       const existing = await this.anyDb
         .selectFrom('customers')
@@ -658,8 +683,8 @@ export class VanPreSalesService {
           order_number: tempOrderNo,
           customer_id: customerId,
           customer_name: customerName,
-          customer_phone: payload.customerPhone || null,
-          customer_address: payload.customerAddress || null,
+          customer_phone: customerPhone,
+          customer_address: customerAddress,
           branch_id: null,
           warehouse_location_id: warehouseLocId > 0 ? warehouseLocId : null,
           rep_id: repId,

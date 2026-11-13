@@ -61,11 +61,15 @@ export function VanFieldReturnsAdminTab() {
 
   // Approve Mutation
   const approveMutation = useMutation({
-    mutationFn: (id: number) => vanSalesApi.approveReturn(id),
-    onSuccess: () => {
+    mutationFn: ({ id }: { id: number; tripId: number }) => vanSalesApi.approveReturn(id),
+    onSuccess: (_data, variables) => {
       toast.success('تم قبول واعتماد إذن المرتجع، وقيد التسوية المخزنية والمالية بنجاح!');
       queryClient.invalidateQueries({ queryKey: ['van-admin-field-returns'] });
       queryClient.invalidateQueries({ queryKey: ['van-sales-admin-trips'] });
+      // INV-VAN-ADMIN-INVALIDATIONS (P10): the open trip-details dialog
+      // reads ['van-trip-admin-details', tripId] — without this it keeps
+      // its pre-approval snapshot until a full reload.
+      queryClient.invalidateQueries({ queryKey: ['van-trip-admin-details', variables.tripId] });
       setSelectedReturn(null);
     },
     onError: (err: any) => {
@@ -75,10 +79,13 @@ export function VanFieldReturnsAdminTab() {
 
   // Reject Mutation
   const rejectMutation = useMutation({
-    mutationFn: ({ id, reason }: { id: number; reason: string }) => vanSalesApi.rejectReturn(id, reason),
-    onSuccess: () => {
+    mutationFn: ({ id, reason }: { id: number; reason: string; tripId: number }) => vanSalesApi.rejectReturn(id, reason),
+    onSuccess: (_data, variables) => {
       toast.info('تم رفض إذن المرتجع');
       queryClient.invalidateQueries({ queryKey: ['van-admin-field-returns'] });
+      // INV-VAN-ADMIN-INVALIDATIONS (P10): a rejected return also changes
+      // what the open trip-details dialog shows (returns list + KPIs).
+      queryClient.invalidateQueries({ queryKey: ['van-trip-admin-details', variables.tripId] });
       setSelectedReturn(null);
       setRejectModalReturn(null);
       setRejectReasonInput('');
@@ -97,7 +104,7 @@ export function VanFieldReturnsAdminTab() {
       variant: 'primary',
     });
     if (ok) {
-      approveMutation.mutate(ret.id);
+      approveMutation.mutate({ id: ret.id, tripId: ret.tripId });
     }
   };
 
@@ -111,6 +118,7 @@ export function VanFieldReturnsAdminTab() {
     rejectMutation.mutate({
       id: rejectModalReturn.id,
       reason: rejectReasonInput.trim() || 'تم الرفض بواسطة الإدارة',
+      tripId: rejectModalReturn.tripId,
     });
   };
 

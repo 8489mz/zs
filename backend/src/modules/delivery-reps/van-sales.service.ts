@@ -1074,6 +1074,12 @@ export class VanSalesService {
         hasActiveOffer: Boolean(offer && discountPerUnit > 0),
         offerBadge,
         unitName: r.unitName || 'قطعة',
+        // INV-VAN-PIECE-COUNT-BASIS: qty is in BASE units
+        // (product_location_stock.qty is pieces), so the stock balance
+        // is labeled with the base unit name — not the packaging name.
+        // unitName stays the packaging name for the cart/picker, which
+        // legitimately sells in cartons.
+        stockUnitName: availUnits.find((u) => u.isBase)?.name || 'قطعة',
         packagingUnit: packUnitObj ? { name: packUnitObj.name, multiplier: packUnitObj.multiplier } : undefined,
         availableUnits: availUnits.length > 0 ? availUnits : undefined,
         earliestExpiryDate: expiryInfo.earliestExpiryDate,
@@ -5914,6 +5920,10 @@ export class VanSalesService {
         sql<number>`cast(si.qty as numeric)`.as('qty'),
         sql<number>`cast(si.unit_price as numeric)`.as('unitPrice'),
         sql<number>`cast(si.line_total as numeric)`.as('lineTotal'),
+        // INV-VAN-PIECE-COUNT-BASIS: the history fallback counts
+        // pieces as qty x unitMultiplier, so the multiplier must be
+        // carried with the item (sale_items.qty is in sale units).
+        sql<number>`cast(coalesce(si.unit_multiplier, 1) as numeric)`.as('unitMultiplier'),
         sql<number>`cast(si.consumer_price as numeric)`.as('consumerPrice'),
         'si.pricing_tier_type as pricingTierType',
         sql<number>`cast(si.unit_offer_savings as numeric)`.as('unitOfferSavings'),

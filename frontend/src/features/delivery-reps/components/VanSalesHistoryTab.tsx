@@ -99,7 +99,7 @@ export const VanSalesHistoryTab: React.FC<VanSalesHistoryTabProps> = ({
         totalPieces += Number(s.packagingBreakdown.piecesCount || 0);
         totalCartons += Number(s.packagingBreakdown.cartonsCount || 0);
       } else if (s.items) {
-        totalPieces += s.items.reduce((sum, it) => sum + Number(it.qty || 0), 0);
+        totalPieces += s.items.reduce((sum, it) => sum + Number(it.qty || 0) * (Number(it.unitMultiplier || 1)), 0);
       }
     });
 
@@ -735,7 +735,7 @@ export const VanSalesHistoryTab: React.FC<VanSalesHistoryTabProps> = ({
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ color: '#475569', fontWeight: 700 }}>
                       {t('delivery_reps.van_sales_history_tab.s36', "محتوى الشحنة:")} {sale.packagingBreakdown?.cartonsCount ? `${sale.packagingBreakdown.cartonsCount} كرتونة | ` : ''}
-                      {sale.packagingBreakdown?.piecesCount || sale.items?.reduce((s, it) => s + it.qty, 0) || 0} {t('delivery_reps.van_sales_history_tab.s37', "قطعة (")}{sale.itemsCount} {t('delivery_reps.van_sales_history_tab.s38', "صنف)")}
+                      {sale.packagingBreakdown?.piecesCount || sale.items?.reduce((s, it) => s + it.qty * (it.unitMultiplier || 1), 0) || 0} {t('delivery_reps.van_sales_history_tab.s37', "قطعة (")}{sale.itemsCount} {t('delivery_reps.van_sales_history_tab.s38', "صنف)")}
                     </span>
                     {sale.repName && (
                       <span style={{ color: '#64748b', fontSize: '10.5px' }}>

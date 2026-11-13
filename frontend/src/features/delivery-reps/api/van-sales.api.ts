@@ -15,6 +15,9 @@ export interface VanStockItem {
   creditPrice?: number | null;
   consumerPrice?: number | null;
   unitName?: string;
+  // INV-VAN-PIECE-COUNT-BASIS: base unit name for the stock balance
+  // (qty is in pieces); unitName stays the packaging name.
+  stockUnitName?: string;
   originalPrice?: number;
   discountPerUnit?: number;
   hasActiveOffer?: boolean;
@@ -345,6 +348,9 @@ export interface DriverSaleHistoryItem {
     productId: number;
     name: string;
     qty: number;
+    // INV-VAN-PIECE-COUNT-BASIS: sale-unit multiplier so the
+    // no-breakdown fallback can count pieces (qty x multiplier).
+    unitMultiplier?: number;
     unitPrice: number;
     lineTotal: number;
   }>;
@@ -359,6 +365,10 @@ export interface CustomerEligibleSaleItem {
   remainingReturnableQty: number;
   unitPrice: number;
   netUnitPrice: number;
+  // INV-VAN-FIELD-RETURN-CARTON-QTY: the sale unit the qty is in —
+  // without it a carton return posts its raw qty as pieces.
+  unitMultiplier?: number;
+  unitName?: string;
 }
 
 export interface CustomerEligibleSale {
@@ -367,6 +377,10 @@ export interface CustomerEligibleSale {
   createdAt: string;
   total: number;
   discount: number;
+  // INV-VAN-RETURN-REFUND-METHOD-DEFAULT: the source invoice's
+  // payment type — the return form defaults the settlement from it
+  // ('credit' for a credit sale, 'cash' for any other method).
+  paymentType?: string;
   items: CustomerEligibleSaleItem[];
 }
 

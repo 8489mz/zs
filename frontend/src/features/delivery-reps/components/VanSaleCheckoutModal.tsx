@@ -54,6 +54,10 @@ export interface VanSaleCheckoutModalProps {
   notes?: string;
   onNotesChange?: (notes: string) => void;
   isSubmitting: boolean;
+  // INV-VAN-CHECKOUT-DISCOUNT-PERMISSION: the discount section renders
+  // only when the rep's can_give_discount flag is on; absent/false hides
+  // it (fail closed, matching the server gate).
+  canGiveDiscount?: boolean;
   onConfirmCheckout: (data: {
     paymentMethod: VanPaymentMethod;
     paidAmount?: number;
@@ -130,6 +134,7 @@ export const VanSaleCheckoutModal: React.FC<VanSaleCheckoutModalProps> = ({
   notes: propNotes = '',
   onNotesChange,
   isSubmitting,
+  canGiveDiscount,
   onConfirmCheckout,
 }) => {
   const { t } = useTranslation();
@@ -152,9 +157,11 @@ export const VanSaleCheckoutModal: React.FC<VanSaleCheckoutModalProps> = ({
   const [walletType, setWalletType] = useState<'instapay' | 'vodafone_cash'>('instapay');
   const [recipientSignatureData, setRecipientSignatureData] = useState<RecipientSignatureData | null>(null);
   const [showSignatureModal, setShowSignatureModal] = useState<boolean>(false);
-  const [autoShareWhatsApp, setAutoShareWhatsApp] = useState<boolean>(
-    Boolean(customer?.phone || (customer as any)?.metadata?.phone || (customer as any)?.metadata?.whatsapp)
-  );
+  // INV-VAN-WHATSAPP-SHARE-OPT-IN: opt-in only — the receipt is shared
+  // only when the rep ticks the box for this sale. It used to default ON
+  // whenever the customer had a phone, opening an unprompted WhatsApp
+  // tab per issued invoice.
+  const [autoShareWhatsApp, setAutoShareWhatsApp] = useState<boolean>(false);
 
   useEffect(() => {
     if (open) {
@@ -176,6 +183,10 @@ export const VanSaleCheckoutModal: React.FC<VanSaleCheckoutModalProps> = ({
       setWalletType('instapay');
       setRecipientSignatureData(null);
       setShowSignatureModal(false);
+      // INV-VAN-WHATSAPP-SHARE-OPT-IN: the modal stays mounted across
+      // opens, so the opt-in must be reset per sale — otherwise a rep
+      // who ticks it once keeps auto-sharing for every later sale.
+      setAutoShareWhatsApp(false);
 
       const custCoords = parseCustomerCoords(customer);
       if (custCoords && typeof navigator !== 'undefined' && navigator.geolocation) {
@@ -991,6 +1002,8 @@ export const VanSaleCheckoutModal: React.FC<VanSaleCheckoutModalProps> = ({
               )}
 
               {/* Optional Cash Discount Toggle */}
+              {/* INV-VAN-CHECKOUT-DISCOUNT-PERMISSION: hidden unless the rep may give discounts */}
+              {canGiveDiscount === true && (
               <div>
                 {!showCashDiscount && cashDiscountAmount === 0 ? (
                   <button
@@ -1092,6 +1105,7 @@ export const VanSaleCheckoutModal: React.FC<VanSaleCheckoutModalProps> = ({
                   </div>
                 )}
               </div>
+              )}
             </div>
           )}
 

@@ -7,7 +7,7 @@ import { VanFraudRadarService } from './van-fraud-radar.service';
 import { FmcgVisitExecutionEngine, GeofenceEvaluationResult } from '../fmcg-visit-execution.engine';
 import { extractAssignedRepIds, hasGpsCoordinates, loadRepPermissions } from '../rep-target.engine';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
 export interface CheckInVisitPayload {
   tripId?: number | null;
@@ -889,8 +889,10 @@ export class VanFieldExecutionService {
         has_sale: true,
         sale_id: Number(s.id),
         sale_amount: Number(s.sale_amount || 0),
-        has_collection: s.payment_type === 'cash',
-        collection_amount: s.payment_type === 'cash' ? Number(s.sale_amount || 0) : 0,
+        // INV-VAN-VISITS-TRACKING-COLLECTIONS: a cash sale is cash in
+        // hand, not a collection — it must not inflate "تحصيلات".
+        has_collection: false,
+        collection_amount: 0,
         no_sale_reason: null,
         no_sale_notes: s.doc_no ? `فاتورة بيع مباشر #${s.doc_no}` : 'فاتورة بيع ميداني',
         store_inventory: '[]',
@@ -907,7 +909,32 @@ export class VanFieldExecutionService {
     // the engine would default to 2 and cut a 3-decimal tenant's fils
     // off the visit sales/collections totals.
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
-    const metrics = FmcgVisitExecutionEngine.calculateStrikeRateMetrics(allVisits, moneyDigits);
+    // INV-VAN-VISITS-TRACKING-COLLECTIONS: the engine can only sum
+    // what the visit rows carry, and a field collection is recorded
+    // from the collection tab with no visit row (the visit auto-ends
+    // after a sale), so real collections never reached the total.
+    // Source "تحصيلات" from the same customer_payments vouchers the
+    // trip cash_collected counter accumulates — the same table
+    // checkOutVisit verifies a collection amount against — scoped
+    // exactly like the visits above. Only rows with a van_trip_id
+    // count: a plain customer payment has none and is not a field
+    // collection.
+    let collectionsQuery = (this.db as any)
+      .selectFrom('customer_payments')
+      .select(sql<number>`coalesce(sum(amount), 0)`.as('total'))
+      .where('tenant_id', '=', tenantId)
+      .where('van_trip_id', 'is not', null);
+    if (filters?.tripId) collectionsQuery = collectionsQuery.where('van_trip_id', '=', filters.tripId);
+    if (filters?.repId) collectionsQuery = collectionsQuery.where('rep_id', '=', filters.repId);
+    if (filters?.customerId) collectionsQuery = collectionsQuery.where('customer_id', '=', filters.customerId);
+    if (filters?.date) {
+      collectionsQuery = collectionsQuery.where(sql`DATE(created_at)`, '=', filters.date);
+    }
+    const collectionsRow = await collectionsQuery.executeTakeFirst();
+    const metrics = {
+      ...FmcgVisitExecutionEngine.calculateStrikeRateMetrics(allVisits, moneyDigits),
+      totalCollectionsAmount: roundMoney(Number((collectionsRow as any)?.total || 0), moneyDigits),
+    };
 
     return {
       ok: true,

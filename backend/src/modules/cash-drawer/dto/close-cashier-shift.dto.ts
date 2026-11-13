@@ -39,6 +39,10 @@ export class CloseCashierShiftDto {
    * blocked by open tables / draft sales. Same identity rule as
    * approverSecret, plus a reason of at least 10 characters,
    * stamped into close_note.
+   * INV-SHIFT-CLOSE-HANDOVER-NOTE-REASON: the reason may also
+   * live in the closing note (note) — the server falls back to
+   * it — and an admin/super_admin closer needs no second
+   * manager's secret at all.
    */
   @IsOptional() @IsString() @MaxLength(100) openTablesOverrideSecret?: string;
   @IsOptional() @IsString() @MaxLength(500) openTablesOverrideReason?: string;
