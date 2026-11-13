@@ -159,14 +159,24 @@ export function usePosCatalog(search: string, branchId: string, locationId: stri
     }
   }, [activeTenantId, productsQuery.data, lookupMode]);
 
-  const saleProducts = useMemo(
-    () => getAvailableSaleProducts(productsQuery.data || [], '', productFilter),
-    [productsQuery.data, productFilter],
-  );
   const scopedCache = useMemo(() => cacheState.tenantId === activeTenantId
     ? cacheState.products : [], [activeTenantId, cacheState]);
   const catalogProducts = useMemo(() => mergeLookupProducts(productsQuery.data || [], scopedCache),
     [productsQuery.data, scopedCache]);
+  /* INV-POS-COLD-ENTRY-CACHED-CATALOG-PAINT: while the first (browse)
+   * network lookup is still pending, paint the grid from the warm IndexedDB
+   * copy already merged into catalogProducts — the grid must not wait on
+   * the slowest of five network queries. Browse-only: cached rows are
+   * unscoped browse rows, so once the network resolves (or a search term
+   * is in flight) the grid is network-only again, exactly as before. */
+  const saleProducts = useMemo(
+    () => getAvailableSaleProducts(
+      productsQuery.isLoading && lookupMode === 'browse' ? catalogProducts : (productsQuery.data || []),
+      '',
+      productFilter,
+    ),
+    [productsQuery.isLoading, lookupMode, catalogProducts, productsQuery.data, productFilter],
+  );
   const barcodeMap = useMemo(() => createProductBarcodeMap(catalogProducts), [catalogProducts]);
 
   return {

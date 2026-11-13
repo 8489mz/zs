@@ -134,7 +134,13 @@ export function PosWorkspace() {
   }, []);
   const allowNegativeStockSales = isNegativeStockSalesAllowed(pos.settingsQuery.data);
 
-  const catalogsLoading = pos.productsQuery.isLoading || pos.customersQuery.isLoading || pos.branchesQuery.isLoading || pos.locationsQuery.isLoading || pos.settingsQuery.isLoading;
+  /* INV-POS-COLD-ENTRY-CACHED-CATALOG-PAINT: productsQuery.isLoading is
+   * deliberately NOT in this gate — the products panel mounts while the
+   * catalog is still in flight and paints cached rows from IndexedDB
+   * (usePosCatalog saleProducts) instead of hiding the whole workspace
+   * behind "جارٍ تحميل بيانات الكاشير..." until the slowest of five
+   * network queries resolves. */
+  const catalogsLoading = pos.customersQuery.isLoading || pos.branchesQuery.isLoading || pos.locationsQuery.isLoading || pos.settingsQuery.isLoading;
   const catalogsError = pos.productsQuery.error || pos.customersQuery.error || pos.branchesQuery.error || pos.locationsQuery.error || pos.settingsQuery.error;
 
   const selectedCustomer = useMemo(() => {
