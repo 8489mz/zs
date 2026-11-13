@@ -182,7 +182,7 @@ export class PartnersService {
         moneyDigits,
       });
       return {
-        customers: rows.map((row) => mapCustomerRow(row, repBalancesMap.get(Number(row.id))?.repBalances)),
+        customers: rows.map((row) => mapCustomerRow(row, repBalancesMap.get(Number(row.id))?.repBalances, repBalancesMap.get(Number(row.id))?.unassignedBalance)),
       };
     }
 
@@ -205,7 +205,7 @@ export class PartnersService {
     const totalItems = Number(countRow.count || 0);
 
     return {
-      customers: rows.map((row) => mapCustomerRow(row, repBalancesMap.get(Number(row.id))?.repBalances)),
+      customers: rows.map((row) => mapCustomerRow(row, repBalancesMap.get(Number(row.id))?.repBalances, repBalancesMap.get(Number(row.id))?.unassignedBalance)),
       pagination: calculatePagination(page, pageSize, totalItems),
       summary: {
         totalCustomers: Number(summaryRow.total_customers || 0),

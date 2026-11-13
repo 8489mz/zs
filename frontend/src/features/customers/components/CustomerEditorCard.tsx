@@ -379,7 +379,7 @@ export function CustomerEditorCard({
         </div>
 
         {/* Rep Isolated Balances Breakdown */}
-        {customer.repBalances && customer.repBalances.length > 0 && (
+        {(customer.repBalances && customer.repBalances.length > 0) || (customer.unassignedBalance ?? 0) > 0 ? (
           <div
             style={{
               marginTop: '10px',
@@ -401,7 +401,7 @@ export function CustomerEditorCard({
               </span>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {customer.repBalances.map((rb) => (
+              {(customer.repBalances || []).map((rb) => (
                 <div
                   key={rb.repId}
                   style={{
@@ -421,9 +421,31 @@ export function CustomerEditorCard({
                   </span>
                 </div>
               ))}
+              {/* INV-CUSTOMER-REP-BALANCES-UNASSIGNED: the legacy opening
+                  balance no rep owns — without this chip the breakdown
+                  shows 570 attributed of a 645 total with 75 invisible. */}
+              {(customer.unassignedBalance ?? 0) > 0 && (
+                <div
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '6px',
+                    padding: '3px 8px',
+                    fontSize: '11px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                  }}
+                >
+                  <span style={{ fontWeight: 700, color: '#475569' }}>{__t('customers.customer_editor_card.s46', "مباشر/إدارة:")}</span>
+                  <span style={{ fontWeight: 800, color: '#475569' }}>
+                    {(customer.unassignedBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} {getGlobalCurrencySymbol()}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* SECTION 3: التوزيع الميداني وجدول خط السير والمناديب */}
