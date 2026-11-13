@@ -402,7 +402,11 @@ export function WarehousesGridPage() {
                         <TruckIcon size={12} />
                         <span>{t('inventory.warehouses_grid_page.transfer_btn', "صرف وتحويل")}</span>
                       </button>
-                      <div className="warehouse-details-link" style={{ marginInlineStart: '4px' }}>
+                      <div
+                        className="warehouse-details-link"
+                        style={{ marginInlineStart: '4px' }}
+                        onClick={() => navigate(`/inventory/warehouses/${loc.id}`)}
+                      >
                         <span>{t('inventory.warehouses_grid_page.s13', "عرض الأصناف")}</span>
                         <ArrowLeftIcon size={14} />
                       </div>
