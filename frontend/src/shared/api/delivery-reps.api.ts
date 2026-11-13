@@ -184,6 +184,14 @@ export interface DriverPortalUser {
   tenantName?: string;
   isVanRep?: boolean;
   vanLocationId?: number | null;
+  // INV-VAN-GPS-FLAG-OFF-VISIT: the backend login response already sends
+  // the rep's permissions object; the portal type dropped it, so the
+  // customer-pick GPS gate never saw the admin's require_gps_on_visit
+  // toggle. Only this one flag is surfaced here (the portal needs no
+  // other rep permission).
+  permissions?: {
+    require_gps_on_visit?: boolean;
+  };
 }
 
 export const driverPortalApi = {

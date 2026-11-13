@@ -445,6 +445,43 @@ export default function VanSalesMobilePage() {
       return;
     }
 
+    // INV-VAN-GPS-FLAG-OFF-VISIT: when the admin has explicitly switched
+    // GPS off for this rep (require_gps_on_visit === false), the visit
+    // starts without coordinates — no GPS capture, no mandatory dialog.
+    // A missing flag stays mandatory (today's behaviour); only an
+    // explicit OFF opts out, and the admin toggle remains the only
+    // control (no supervisor-PIN override). The visit object carries no
+    // coordinates, so the submit re-gates see a valid activeVisit and the
+    // backend check-in (which honours the flag) proceeds without them.
+    if (session?.rep?.permissions?.require_gps_on_visit === false) {
+      const now = Date.now();
+      const nowStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+      const visitData = {
+        customerId,
+        customerName,
+        startedAt: now,
+        startedTimeStr: nowStr,
+      };
+      setActiveVisit(visitData);
+      try {
+        localStorage.setItem('zs_van_active_visit', JSON.stringify(visitData));
+      } catch {}
+
+      vanSalesApi.checkInVisit({
+        tripId: data?.trip?.id,
+        customerId,
+        customerName,
+      }).catch(() => {
+        // Silently handled in background
+      });
+
+      toast.success(`تم بدء الزيارة: "${customerName}" (${nowStr})`);
+      setGpsBlockedModalOpen(false);
+      setGpsBlockedInfo(null);
+      onSuccess?.();
+      return;
+    }
+
     setIsCheckingGps(true);
     try {
       const coords = await requestGpsPosition();

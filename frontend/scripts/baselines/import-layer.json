@@ -21,6 +21,7 @@
   "features/contracting/pages/ContractingWorkspacePage.tsx imports another page module (./ContractingRfiPage)",
   "features/contracting/pages/ContractingWorkspacePage.tsx imports another page module (./ContractingSubcontractsPage)",
   "features/delivery-reps/pages/DriverPortalPage.spec.tsx imports another page module (./DriverPortalPage)",
+  "features/delivery-reps/pages/VanSalesMobilePage.spec.tsx imports another page module (./VanSalesMobilePage)",
   "features/hr/pages/EmployeeEditPage.tsx imports another page module (./employee-edit/EmployeeAttendancePolicySection)",
   "features/hr/pages/EmployeeEditPage.tsx imports another page module (./employee-edit/EmployeeBankDetailsSection)",
   "features/hr/pages/EmployeeEditPage.tsx imports another page module (./employee-edit/EmployeeCompensationSection)",
