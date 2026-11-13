@@ -1392,25 +1392,45 @@ export class CashDrawerService {
 
       // INV-REST-SHIFT-CLOSE-CONTROL (I20): closing mid-service
       // strands real tables, so open tables / draft sales block
-      // the close. Only a DIFFERENT manager's secret (account
-      // password — the shared PIN has no identity) plus a reason
-      // of at least 10 characters overrides, and the override is
-      // stamped into the close note.
+      // the close. A >=10-char reason overrides — the reason is
+      // read from the override-reason box OR the closing note
+      // (ملاحظة الإغلاق), because the note is the handover
+      // justification the closer actually types
+      // (INV-SHIFT-CLOSE-HANDOVER-NOTE-REASON: a reason typed in
+      // the visible note field used to die in the validator, which
+      // read only the separate override-reason field — live
+      // SHIFT-261105-0025, expected 6,853.40 counted 6,853.4,
+      // blocked although a note was typed). For a cashier closer
+      // the override still needs a DIFFERENT manager's secret
+      // (account password — the shared PIN has no identity). An
+      // admin/super_admin closer needs no second manager: the
+      // admin is the shop owner (admin-as-super_admin in all
+      // in-tenant permissions), their own password-confirmed
+      // close plus the recorded reason is the control, and the
+      // override is stamped into the close note either way.
       const openTables = await this.findOpenTablesBlockingClose(trx, scope.tenantId, lockedShift as ShiftRow);
       if (openTables.totalCount > 0) {
         const overrideSecret = String(payload.openTablesOverrideSecret || '').trim();
-        const overrideReason = String(payload.openTablesOverrideReason || '').trim();
-        if (!overrideSecret) {
-          const tables = openTables.heldTables.length > 0 ? ` (طاولات: ${openTables.heldTables.join('، ')})` : '';
-          throw new AppError(`لا يمكن إغلاق الوردية: توجد ${openTables.heldCount} طاولة مفتوحة${tables} و${openTables.draftCount} فاتورة مسودة`, 'SHIFT_CLOSE_OPEN_TABLES', 400);
-        }
-        if (overrideReason.length < 10) throw new AppError('اكتب سبب تجاوز الطاولات المفتوحة (10 أحرف على الأقل)', 'SHIFT_CLOSE_OVERRIDE_REASON_REQUIRED', 400);
-        const override = await authorizeManagerSecret(trx, auth, overrideSecret);
-        if (override.mode !== 'account' || !override.authorizedById || override.authorizedById === Number(auth.userId)) {
-          throw new AppError('تجاوز الطاولات المفتوحة يتطلب اعتماد مدير آخر غير من يغلق الوردية', 'SHIFT_CLOSE_OVERRIDE_IDENTITY_REQUIRED', 400);
-        }
+        const overrideReason = String(payload.openTablesOverrideReason || '').trim() || note;
         const tables = openTables.heldTables.length > 0 ? ` (طاولات: ${openTables.heldTables.join('، ')})` : '';
-        noteStamps.push(`تجاوز طاولات مفتوحة: ${openTables.heldCount} طاولة${tables} + ${openTables.draftCount} فاتورة مسودة — السبب: ${overrideReason} — بواسطة ${override.authorizedByName}`);
+        const isPrivilegedCloser = ['admin', 'super_admin'].includes(String(auth.role || '').trim());
+        if (isPrivilegedCloser) {
+          if (!overrideReason && !overrideSecret) {
+            throw new AppError(`لا يمكن إغلاق الوردية: توجد ${openTables.heldCount} طاولة مفتوحة${tables} و${openTables.draftCount} فاتورة مسودة`, 'SHIFT_CLOSE_OPEN_TABLES', 400);
+          }
+          if (overrideReason.length < 10) throw new AppError('اكتب سبب تجاوز الطاولات المفتوحة (10 أحرف على الأقل)', 'SHIFT_CLOSE_OVERRIDE_REASON_REQUIRED', 400);
+          noteStamps.push(`تجاوز طاولات مفتوحة: ${openTables.heldCount} طاولة${tables} + ${openTables.draftCount} فاتورة مسودة — السبب: ${overrideReason} — بواسطة ${String(auth.username || '')} (إغلاق إداري)`);
+        } else {
+          if (!overrideSecret) {
+            throw new AppError(`لا يمكن إغلاق الوردية: توجد ${openTables.heldCount} طاولة مفتوحة${tables} و${openTables.draftCount} فاتورة مسودة`, 'SHIFT_CLOSE_OPEN_TABLES', 400);
+          }
+          if (overrideReason.length < 10) throw new AppError('اكتب سبب تجاوز الطاولات المفتوحة (10 أحرف على الأقل)', 'SHIFT_CLOSE_OVERRIDE_REASON_REQUIRED', 400);
+          const override = await authorizeManagerSecret(trx, auth, overrideSecret);
+          if (override.mode !== 'account' || !override.authorizedById || override.authorizedById === Number(auth.userId)) {
+            throw new AppError('تجاوز الطاولات المفتوحة يتطلب اعتماد مدير آخر غير من يغلق الوردية', 'SHIFT_CLOSE_OVERRIDE_IDENTITY_REQUIRED', 400);
+          }
+          noteStamps.push(`تجاوز طاولات مفتوحة: ${openTables.heldCount} طاولة${tables} + ${openTables.draftCount} فاتورة مسودة — السبب: ${overrideReason} — بواسطة ${override.authorizedByName}`);
+        }
       }
 
       const expectedCash = await this.computeShiftExpectedCashFromShift(lockedShift as ShiftRow, auth, undefined, undefined, trx);
