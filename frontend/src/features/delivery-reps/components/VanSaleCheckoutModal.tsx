@@ -54,6 +54,10 @@ export interface VanSaleCheckoutModalProps {
   notes?: string;
   onNotesChange?: (notes: string) => void;
   isSubmitting: boolean;
+  // INV-VAN-CHECKOUT-DISCOUNT-PERMISSION: the discount section renders
+  // only when the rep's can_give_discount flag is on; absent/false hides
+  // it (fail closed, matching the server gate).
+  canGiveDiscount?: boolean;
   onConfirmCheckout: (data: {
     paymentMethod: VanPaymentMethod;
     paidAmount?: number;
@@ -130,6 +134,7 @@ export const VanSaleCheckoutModal: React.FC<VanSaleCheckoutModalProps> = ({
   notes: propNotes = '',
   onNotesChange,
   isSubmitting,
+  canGiveDiscount,
   onConfirmCheckout,
 }) => {
   const { t } = useTranslation();
@@ -991,6 +996,8 @@ export const VanSaleCheckoutModal: React.FC<VanSaleCheckoutModalProps> = ({
               )}
 
               {/* Optional Cash Discount Toggle */}
+              {/* INV-VAN-CHECKOUT-DISCOUNT-PERMISSION: hidden unless the rep may give discounts */}
+              {canGiveDiscount === true && (
               <div>
                 {!showCashDiscount && cashDiscountAmount === 0 ? (
                   <button
@@ -1092,6 +1099,7 @@ export const VanSaleCheckoutModal: React.FC<VanSaleCheckoutModalProps> = ({
                   </div>
                 )}
               </div>
+              )}
             </div>
           )}
 

@@ -187,10 +187,12 @@ export interface DriverPortalUser {
   // INV-VAN-GPS-FLAG-OFF-VISIT: the backend login response already sends
   // the rep's permissions object; the portal type dropped it, so the
   // customer-pick GPS gate never saw the admin's require_gps_on_visit
-  // toggle. Only this one flag is surfaced here (the portal needs no
-  // other rep permission).
+  // toggle. INV-VAN-CHECKOUT-DISCOUNT-PERMISSION: can_give_discount is
+  // surfaced the same way — the checkout modal must hide its discount
+  // section when the flag is off (the server refuses the submit anyway).
   permissions?: {
     require_gps_on_visit?: boolean;
+    can_give_discount?: boolean;
   };
 }
 

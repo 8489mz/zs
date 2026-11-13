@@ -3514,6 +3514,7 @@ export default function VanSalesMobilePage() {
           notes={saleNotes}
           onNotesChange={setSaleNotes}
           isSubmitting={isCheckoutProcessing || executeSaleMutation.isPending}
+          canGiveDiscount={session?.rep?.permissions?.can_give_discount === true}
           onConfirmCheckout={async (checkoutData) => {
             if (isCheckoutProcessingRef.current || executeSaleMutation.isPending) {
               return;
