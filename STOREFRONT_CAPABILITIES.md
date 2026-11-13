@@ -14,6 +14,14 @@
 
 عند تعديل قدرة، حدّث وصفها في مكانها أو أضف سجلاً بمعرّف ثابت: السلوك والحدود، مصادر الكود، الاختبارات ونتائجها الفعلية، تاريخ التحقق والـcommit. اربط المجالات المتأثرة دون نسخ تفاصيلها.
 
+<a id="storefront-sidebar-pos-entitlement-20261113"></a>
+### ضبط ظهور «طلبات المتجر الإلكتروني» وصلاحية المتجر في POS — 13 نوفمبر 2026
+- **السلوك والحدود:**
+  - القائمة الجانبية (`frontend/src/shared/layout/app-shell.tsx`): يظهر رابط `online-orders` فقط إذا كان للمنشأة صلاحية `storefront` في الباقة **أو** وُجدت طلبات إلكترونية مسجلة فعلياً (`counts.all > 0` عبر `/api/storefront/admin/orders/counts`)، بينما يظل المسار `/online-orders` متاحاً بالوصول المباشر لمن يملك صلاحية `sales` وفق `INV-STOREFRONT-ORDERS`. كما توقف السحب الدوري كل 20 ثانية وبانر التنبيهات الحي `<LiveOrderNotificationBanner />` عن الباقات التي لا تضم `storefront` ولا تملك طلبات معلقة.
+  - شريط نقطة البيع (`frontend/src/features/pos/components/pos-workspace/PosWorkspaceHeader.tsx`): أصبح `isStorefrontActive` مشروطاً بـ `Boolean(settings && useHasFeature('storefront') && settings.storefrontModuleEnabled !== false)` فلا يُفعّل المتجر في POS عندما تكون القيمة `undefined` على باقات `plan_basic` أو `plan_pro`.
+- **الحدود:** يعتمد إخفاء `online-orders` عند غياب الطلبات على استجابة `/api/storefront/admin/orders/counts` للمستخدمين الذين يملكون صلاحية `storefront` أو `sales`؛ وبحث الكومند باليت العام (`GlobalSearchModal.tsx`) لم يُقيّد ليظل الوصول المباشر متاحاً عند البحث المقصود.
+- **الأدلة والاختبارات (13 نوفمبر 2026):** تشغيل `vitest run` على الرأس المحلي غير المودع (`16b051d81` + التعديلات الحالية): `app-shell.spec.tsx` (8/8)، `PosWorkspaceHeader.lazy-modals.spec.tsx` (5/5)، `vertical-scope.spec.ts` (14/14)، و`access.spec.ts` (16/16) — الإجمالي 43/43 نجاح. راجع أيضاً توحيد بوابات الباقات في [UI_CAPABILITIES.md](UI_CAPABILITIES.md) و[ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md).
+
 ## فهرس الأقسام المنقولة
 
 - [1. المتجر الإلكتروني وقنوات البيع الموحدة (Storefront & Omnichannel)](#cap-028)

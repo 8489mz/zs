@@ -14,6 +14,12 @@
 
 عند تعديل قدرة، حدّث وصفها في مكانها أو أضف سجلاً بمعرّف ثابت: السلوك والحدود، مصادر الكود، الاختبارات ونتائجها الفعلية، تاريخ التحقق والـcommit. اربط المجالات المتأثرة دون نسخ تفاصيلها.
 
+<a id="ui-tier-feature-gating-unification-20261113"></a>
+### توحيد فحص ميزات الباقة بين المسارات والـ Hooks (`tenantHasFeature`) — 13 نوفمبر 2026
+- **المشكلة والسلوك:** كان فحص الميزات للأنشطة التجارية في `hasRequiredFeature` (`frontend/src/app/router/access.ts`) و`useHasFeature` (`frontend/src/shared/hooks/use-permission.ts`) يمرّر ميزات مؤمَّنة بالباقة مثل `hr` و`accounting` و`installments` و`inventory` و`purchases` و`reports` كـ `true` دائماً، كما كان يحوّل `catalog` تلقائياً إلى `inventory`؛ ما أدى لفتح روابط الموارد البشرية والحسابات وإلغاء قفل خيار الموارد البشرية في `ModulesSettingsTab` على باقات `plan_basic` و`plan_pro`. تم توحيد المنطق في الدالة المشتركة `tenantHasFeature` بحيث تلتزم الموديولات المؤمَّنة بـ `tenant.features` عندما تكون الباقة محددة صراحةً مع إبقاء الأساسيات التشغيلية للتجارة (`pos`, `catalog`, `products`, `sales`, `crm`, `pricing`, `customers`, `treasury`, `expenses`) والمسارات التراثية بدون مصفوفة ميزات.
+- **التكامل مع قائمة المتجر:** تفاصيل حصر رابط `online-orders` وبانر الطلبات و`PosWorkspaceHeader` موثقة مع نتائج الاختبارات في [STOREFRONT_CAPABILITIES.md](STOREFRONT_CAPABILITIES.md#storefront-sidebar-pos-entitlement-20261113) و[ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md).
+- **الاختبار:** تغطية `access.spec.ts` (16/16، يثبت حجب `/hr` و`/accounting` و`/installments` و`/storefront` عن `plan_pro` وحجب `/inventory` و`/purchases` عن `plan_basic` مع بقاء `/online-orders` متاحاً بالوصول المباشر).
+
 ## فهرس الأقسام المنقولة
 
 - [قدرة: دستور منع التكرار الصارم في القوائم الجانبية ومساحات العمل (Zero Sidebar Duplication Invariant) — ✅ مفعّلة ومكتملة 100% (أكتوبر 2026)](#cap-008)

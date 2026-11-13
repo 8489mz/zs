@@ -17,6 +17,7 @@ const {
   customersListMock,
   suppliersListMock,
   dashboardOverviewMock,
+  httpMock,
 } = vi.hoisted(() => ({
   logoutMock: vi.fn(),
   settingsMock: vi.fn(),
@@ -27,7 +28,16 @@ const {
   customersListMock: vi.fn(),
   suppliersListMock: vi.fn(),
   dashboardOverviewMock: vi.fn(),
+  httpMock: vi.fn(),
 }));
+
+vi.mock('@/lib/http', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/http')>();
+  return {
+    ...actual,
+    http: httpMock,
+  };
+});
 
 vi.mock('@/shared/api/auth', () => ({
   authApi: {
@@ -116,7 +126,7 @@ function buildUser() {
   };
 }
 
-function renderShell(initialEntry = '/products') {
+function renderShell(initialEntry = '/products', ordersCounts: Record<string, number> = { all: 0, pending: 0 }) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -129,6 +139,12 @@ function renderShell(initialEntry = '/products') {
   customersListMock.mockResolvedValue([]);
   suppliersListMock.mockResolvedValue([]);
   dashboardOverviewMock.mockResolvedValue({});
+  httpMock.mockImplementation(async (url: string) => {
+    if (url === '/api/storefront/admin/orders/counts') {
+      return { counts: ordersCounts };
+    }
+    return {};
+  });
 
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -263,7 +279,44 @@ describe('AppShell', () => {
     expect(l2Keys).toContain('inventory');
     expect(l2Keys).not.toContain('accounting-journal-entries');
     expect(l2Keys).not.toContain('hr');
+    expect(l2Keys).not.toContain('online-orders');
     unmountL2();
+  });
+
+  it('hides online-orders in sidebar for non-storefront tier when 0 orders exist, and reveals it when recorded orders exist', async () => {
+    const proTenant = {
+      id: 't-pro-orders',
+      accountId: 'a-1',
+      slug: 'pro-shop',
+      businessName: 'Pro Shop',
+      activityType: 'retail_general',
+      status: 'active' as const,
+      isTrial: false,
+      trialEndsAt: null,
+      trialDaysRemaining: null,
+      features: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer', 'reports', 'purchases', 'inventory'],
+    };
+
+    useAuthStore.setState({
+      user: { ...buildUser(), role: 'admin', permissions: ['*'] },
+      tenant: proTenant,
+      storeName: 'Pro Shop',
+      theme: 'light',
+      initialized: true,
+    });
+
+    const firstRender = renderShell('/dashboard', { all: 0, pending: 0 });
+    await waitFor(() => {
+      expect(httpMock).toHaveBeenCalledWith('/api/storefront/admin/orders/counts');
+    });
+    expect(firstRender.container.querySelector('.sidebar-nav a[data-key="online-orders"]')).not.toBeInTheDocument();
+    firstRender.unmount();
+
+    const secondRender = renderShell('/dashboard', { all: 3, pending: 1 });
+    await waitFor(() => {
+      expect(secondRender.container.querySelector('.sidebar-nav a[data-key="online-orders"]')).toBeInTheDocument();
+    });
+    secondRender.unmount();
   });
 
   it('strictly isolates warehousing mode: hides POS and cash drawer even if slug is almhnds', () => {

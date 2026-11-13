@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NavigationItemDefinition } from '@/app/router/types';
-import { canAccessNavigationItem, canAccessPath, findFirstAccessibleRoute, getFirstAccessibleRoute, getRoutePermissionRequirement, hasAnyPermission, matchesNavigationSearch } from '@/app/router/access';
+import { canAccessNavigationItem, canAccessPath, findFirstAccessibleRoute, getFirstAccessibleRoute, getRoutePermissionRequirement, hasAnyPermission, hasRequiredFeature, matchesNavigationSearch, tenantHasFeature } from '@/app/router/access';
 import { normalizeArabicSearchKey } from '@/lib/arabic-normalization';
 import { useAuthStore } from '@/stores/auth-store';
 import type { AuthUser } from '@/types/auth';
@@ -120,6 +120,66 @@ describe('router access guards', () => {
       expect(canAccessPath(salesUser, '/pos')).toBe(true);
     } finally {
       useAuthStore.setState({ tenant: null });
+    }
+  });
+
+  it('enforces tier-gated modules (hr, accounting, installments, inventory, purchases, storefront) on commerce plans', () => {
+    const fullAdminUser: AuthUser = { ...adminUser, permissions: ['*'] };
+    const proTenant = {
+      id: 't-pro',
+      name: 'Pro Commerce',
+      activityType: 'retail_general',
+      plan_id: 'plan_pro',
+      features: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports', 'suppliers'],
+    } as any;
+    const basicTenant = {
+      id: 't-basic',
+      name: 'Basic Commerce',
+      activityType: 'retail_general',
+      plan_id: 'plan_basic',
+      features: ['sales', 'catalog', 'sessions', 'cashDrawer'],
+    } as any;
+
+    try {
+      useAuthStore.setState({ user: fullAdminUser, tenant: proTenant });
+      expect(tenantHasFeature('hr', proTenant, fullAdminUser)).toBe(false);
+      expect(tenantHasFeature('accounting', proTenant, fullAdminUser)).toBe(false);
+      expect(tenantHasFeature('installments', proTenant, fullAdminUser)).toBe(false);
+      expect(tenantHasFeature('storefront', proTenant, fullAdminUser)).toBe(false);
+      expect(hasRequiredFeature('/hr', fullAdminUser)).toBe(false);
+      expect(canAccessPath(fullAdminUser, '/hr')).toBe(false);
+      expect(canAccessPath(fullAdminUser, '/accounting')).toBe(false);
+      expect(canAccessPath(fullAdminUser, '/installments')).toBe(false);
+      expect(canAccessPath(fullAdminUser, '/storefront')).toBe(false);
+      // Purchases & Inventory are included in Pro, while /online-orders stays reachable by URL (INV-STOREFRONT-ORDERS).
+      expect(canAccessPath(fullAdminUser, '/purchases')).toBe(true);
+      expect(canAccessPath(fullAdminUser, '/inventory')).toBe(true);
+      expect(canAccessPath(fullAdminUser, '/online-orders')).toBe(true);
+
+      // Basic omits purchases, inventory, reports, hr, accounting — even with 'catalog' present.
+      useAuthStore.setState({ user: fullAdminUser, tenant: basicTenant });
+      expect(tenantHasFeature('sales', basicTenant, fullAdminUser)).toBe(true);
+      expect(tenantHasFeature('catalog', basicTenant, fullAdminUser)).toBe(true);
+      expect(tenantHasFeature('purchases', basicTenant, fullAdminUser)).toBe(false);
+      expect(tenantHasFeature('inventory', basicTenant, fullAdminUser)).toBe(false);
+      expect(canAccessPath(fullAdminUser, '/purchases')).toBe(false);
+      expect(canAccessPath(fullAdminUser, '/inventory')).toBe(false);
+      expect(canAccessPath(fullAdminUser, '/hr')).toBe(false);
+      expect(canAccessPath(fullAdminUser, '/pos')).toBe(true);
+
+      // Dedicated enterprise/ultimate tenants retain explicitly granted features.
+      const ultimateTenant = {
+        ...proTenant,
+        id: 't-ult',
+        plan_id: 'plan_ultimate',
+        features: [...proTenant.features, 'hr', 'accounting', 'installments'],
+      };
+      useAuthStore.setState({ user: fullAdminUser, tenant: ultimateTenant });
+      expect(canAccessPath(fullAdminUser, '/hr')).toBe(true);
+      expect(canAccessPath(fullAdminUser, '/accounting')).toBe(true);
+      expect(canAccessPath(fullAdminUser, '/installments')).toBe(true);
+    } finally {
+      useAuthStore.setState({ user: null, tenant: null });
     }
   });
 });

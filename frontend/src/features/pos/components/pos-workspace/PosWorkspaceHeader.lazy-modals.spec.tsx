@@ -28,12 +28,22 @@
  * open, and closing any other modal here is a dismiss that starts a
  * fresh task on reopen.
  */
-import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createTestQueryClient } from '@/test/test-query-client';
+import { useAuthStore } from '@/stores/auth-store';
+import { storefrontApi } from '@/features/storefront/api/storefront.api';
 import { PosWorkspaceHeader } from './PosWorkspaceHeader';
+
+const mockSettingsState = vi.hoisted(() => ({
+  restaurantModuleEnabled: false,
+  storefrontModuleEnabled: false as boolean | undefined,
+  phoneOrdersModuleEnabled: false,
+  servicesModuleEnabled: false,
+  enableMobileStoreFeatures: false,
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -50,13 +60,7 @@ vi.mock('@/shared/hooks/use-catalog-queries', async (importOriginal) => {
   return {
     ...actual,
     useSettingsQuery: () => ({
-      data: {
-        restaurantModuleEnabled: false,
-        storefrontModuleEnabled: false,
-        phoneOrdersModuleEnabled: false,
-        servicesModuleEnabled: false,
-        enableMobileStoreFeatures: false,
-      },
+      data: mockSettingsState,
     }),
   };
 });
@@ -252,5 +256,49 @@ describe('PosWorkspaceHeader — lazy modals (closed modals are not mounted)', (
     for (const testId of MODAL_TEST_IDS) {
       expect(screen.queryByTestId(testId)).not.toBeInTheDocument();
     }
+  });
+});
+
+describe('PosWorkspaceHeader — storefront plan entitlement', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    useAuthStore.setState({ user: null, tenant: null });
+    mockSettingsState.storefrontModuleEnabled = false;
+  });
+
+  it('does not query or display online orders on plan_pro without storefront feature even if storefrontModuleEnabled is undefined', async () => {
+    mockSettingsState.storefrontModuleEnabled = undefined;
+    const getOrderCountsSpy = vi.spyOn(storefrontApi, 'getOrderCounts').mockResolvedValue({
+      counts: { pending: 4, all: 4, active: 4, confirmed: 0, processing: 0, shipped: 0, delivered: 0, cancelled: 0 },
+    } as never);
+
+    useAuthStore.setState({
+      user: { id: 'u1', username: 'admin', role: 'admin', permissions: ['*'] } as never,
+      tenant: { id: 't-pro', activityType: 'retail_general', plan_id: 'plan_pro', features: ['sales', 'catalog', 'purchases', 'inventory'] } as never,
+    });
+
+    renderHeader();
+
+    expect(getOrderCountsSpy).not.toHaveBeenCalled();
+    expect(screen.queryByText('طلبات أونلاين')).not.toBeInTheDocument();
+  });
+
+  it('queries and shows pending online orders button when storefront feature is entitled', async () => {
+    mockSettingsState.storefrontModuleEnabled = undefined;
+    const getOrderCountsSpy = vi.spyOn(storefrontApi, 'getOrderCounts').mockResolvedValue({
+      counts: { pending: 2, all: 2, active: 2, confirmed: 0, processing: 0, shipped: 0, delivered: 0, cancelled: 0 },
+    } as never);
+
+    useAuthStore.setState({
+      user: { id: 'u1', username: 'admin', role: 'admin', permissions: ['*'] } as never,
+      tenant: { id: 't-omni', activityType: 'retail_general', plan_id: 'plan_omnichannel', features: ['sales', 'catalog', 'storefront'] } as never,
+    });
+
+    renderHeader();
+
+    await waitFor(() => {
+      expect(getOrderCountsSpy).toHaveBeenCalled();
+      expect(screen.getByText('طلبات أونلاين')).toBeInTheDocument();
+    });
   });
 });

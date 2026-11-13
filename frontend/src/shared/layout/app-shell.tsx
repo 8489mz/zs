@@ -10,6 +10,7 @@ import { resetAuthenticatedClient } from '@/lib/query-client-session';
 import { DEFAULT_STORE_NAME, useAuthStore } from '@/stores/auth-store';
 import { navigationItems } from '@/app/router/registry';
 import { canAccessNavigationItem, matchesNavigationSearch, isDesktopOfflineApp, isPlatformAdmin } from '@/app/router/access';
+import { userHasAnyPermission } from '@/shared/hooks/use-permission';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { PasswordRotationGate } from '@/shared/system/password-rotation-gate';
 import { SystemStatusBanner } from '@/shared/system/system-status-banner';
@@ -122,20 +123,28 @@ export function AppShell({ children }: PropsWithChildren) {
   const deploymentMode = useAuthStore((state) => state.activationStatus?.deploymentMode);
   const { data: updateInfo } = useOfflineUpdateCheck(deploymentMode);
 
+  const canQueryOnlineOrders = Boolean(user) && userHasAnyPermission(user, ['storefront', 'sales']);
+  const isStorefrontEntitled = isPlatformAdmin(user) || Boolean(tenant?.features?.includes('storefront'));
+
   const pendingOrdersCountQuery = useQuery({
     queryKey: ['storefront-admin-orders-count'],
     queryFn: async () => {
       try {
         const res = await http<{ counts: Record<string, number> }>('/api/storefront/admin/orders/counts');
-        return res.counts?.pending || 0;
+        return {
+          pending: Number(res.counts?.pending || 0),
+          total: Number(res.counts?.all ?? res.counts?.active ?? res.counts?.pending ?? 0),
+        };
       } catch {
-        return 0;
+        return { pending: 0, total: 0 };
       }
     },
-    refetchInterval: 20 * 1000,
-    staleTime: 15 * 1000,
+    enabled: canQueryOnlineOrders,
+    refetchInterval: isStorefrontEntitled ? 20 * 1000 : false,
+    staleTime: isStorefrontEntitled ? 15 * 1000 : 60 * 1000,
   });
-  const pendingOrdersCount = pendingOrdersCountQuery.data || 0;
+  const pendingOrdersCount = pendingOrdersCountQuery.data?.pending || 0;
+  const totalOnlineOrdersCount = pendingOrdersCountQuery.data?.total || 0;
 
   const displayName = user?.displayName || user?.username || 'المستخدم';
   const workspaceName = storeName || DEFAULT_STORE_NAME;
@@ -1064,11 +1073,10 @@ export function AppShell({ children }: PropsWithChildren) {
         if (item.key?.startsWith('pharmacy-') && (settings?.enablePharmacyModule !== true || !hasFeature('pharmacy'))) return false;
         if (item.key?.startsWith('manufacturing-') && (settings?.manufacturingModuleEnabled !== true || !hasFeature('manufacturing'))) return false;
         if (item.key === 'services' && (settings?.servicesModuleEnabled !== true || (!hasFeature('purchases') && !hasFeature('services')))) return false;
-        // INV-STOREFRONT-ORDERS: no feature/settings gate on the recorded-orders list —
-        // it is the tenant's own order record, not a storefront feature. 'online-orders'
-        // is removed from every per-vertical disallowed list above for the same reason,
-        // so an admin can always reach orders recorded while the storefront was on.
-        // The 'sales' permission still gates the item via canAccessNavigationItem.
+        // INV-STOREFRONT-ORDERS: /online-orders route stays reachable directly (vertical + 'sales' permission)
+        // without requiring the Storefront feature on the route itself, while the sidebar menu entry is shown
+        // only if the tenant is entitled to 'storefront' OR already has recorded online orders in the database.
+        if (item.key === 'online-orders' && !hasFeature('storefront') && totalOnlineOrdersCount <= 0) return false;
         if (item.key === 'installments' && (!hasFeature('installments') || settings?.installmentsModuleEnabled === false)) return false;
         if (item.key === 'vat-declaration' && !isContractingVertical && !isMaritimeVertical && !isManufacturingVertical && !isImportVertical && (!hasFeature('vat_declaration') || settings?.taxDeclarationModuleEnabled === false)) return false;
         // Delivery Reps (Retail / Stores / Last-Mile Courier):
@@ -1135,7 +1143,7 @@ export function AppShell({ children }: PropsWithChildren) {
         const bIndex = preferredOrder.indexOf(b.key);
         return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
       });
-  }, [user, tenant?.features, tenant?.activityType, tenant?.pillar, t, isEtaActive, settings?.activityType, settings?.businessIndustry, settings?.posModuleEnabled, settings?.importModuleEnabled, settings?.enableMobileStoreFeatures, settings?.maintenanceProfile, settings?.enablePharmacyModule, settings?.manufacturingModuleEnabled, settings?.servicesModuleEnabled, settings?.storefrontModuleEnabled, settings?.installmentsModuleEnabled, settings?.fixedAssetsModuleEnabled, settings?.taxDeclarationModuleEnabled, settings?.deliveryFleetModuleEnabled, settings?.deliveryRepsModuleEnabled, settings?.vanSalesModuleEnabled, settings?.purchasesModuleEnabled, settings?.inventoryModuleEnabled, settings?.hrModuleEnabled, settings?.enableEnterpriseFeatures, settings?.restaurantModuleEnabled, settings?.maritimeFreightModuleEnabled, settings?.contractingModuleEnabled]);
+  }, [user, tenant?.features, tenant?.activityType, tenant?.pillar, t, isEtaActive, totalOnlineOrdersCount, settings?.activityType, settings?.businessIndustry, settings?.posModuleEnabled, settings?.importModuleEnabled, settings?.enableMobileStoreFeatures, settings?.maintenanceProfile, settings?.enablePharmacyModule, settings?.manufacturingModuleEnabled, settings?.servicesModuleEnabled, settings?.storefrontModuleEnabled, settings?.installmentsModuleEnabled, settings?.fixedAssetsModuleEnabled, settings?.taxDeclarationModuleEnabled, settings?.deliveryFleetModuleEnabled, settings?.deliveryRepsModuleEnabled, settings?.vanSalesModuleEnabled, settings?.purchasesModuleEnabled, settings?.inventoryModuleEnabled, settings?.hrModuleEnabled, settings?.enableEnterpriseFeatures, settings?.restaurantModuleEnabled, settings?.maritimeFreightModuleEnabled, settings?.contractingModuleEnabled]);
 
   const navigationMap = useMemo(() => new Map(visibleNavigationItems.map((item) => [item.key, item])), [visibleNavigationItems]);
   const primaryNavigationKeys = useMemo(() => {
@@ -2369,7 +2377,7 @@ export function AppShell({ children }: PropsWithChildren) {
       <PwaInstallBanner />
       <QuickAttendanceShortcut open={quickAttendanceOpen} onClose={() => setQuickAttendanceOpen(false)} />
       <Suspense fallback={null}>
-        <LiveOrderNotificationBanner />
+        {canQueryOnlineOrders && (isStorefrontEntitled || pendingOrdersCount > 0) ? <LiveOrderNotificationBanner /> : null}
         <GlobalSearchModal />
         <DeveloperActivationPanel />
       </Suspense>

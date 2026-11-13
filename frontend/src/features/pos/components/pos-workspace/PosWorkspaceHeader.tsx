@@ -32,6 +32,7 @@ import { PosCustomizationDialog } from './PosCustomizationDialog';
 import { restaurantAdvancedFnbApi } from '@/features/pos/api/restaurant-advanced-fnb.api';
 import { playNotificationChime } from '@/lib/audio-chime';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
+import { useHasFeature } from '@/shared/hooks/use-permission';
 import { toast } from '@/shared/components/system-alert';
 import { printXReport } from '@/features/cash-drawer';
 import { cashDrawerApi } from '@/lib/api/cash-drawer';
@@ -95,9 +96,10 @@ function PosWorkspaceHeaderComponent({
   const { t, i18n } = useTranslation();
   const isEn = Boolean(i18n.language && i18n.language.startsWith('en'));
   const { data: settings } = useSettingsQuery();
+  const hasStorefrontFeature = useHasFeature('storefront');
   const isRestaurantActive = settings?.restaurantModuleEnabled === true;
   const isPhoneOrdersActive = settings?.phoneOrdersModuleEnabled === true || (settings?.phoneOrdersModuleEnabled === undefined && (isRestaurantActive || ['restaurant', 'pharmacy', 'supermarket', 'grocery', 'food_beverage'].includes(settings?.businessIndustry || '')));
-  const isStorefrontActive = settings?.storefrontModuleEnabled !== false;
+  const isStorefrontActive = Boolean(settings && hasStorefrontFeature && settings.storefrontModuleEnabled !== false);
   const isServicesActive = settings?.servicesModuleEnabled === true || Boolean(settings?.enableMobileStoreFeatures);
 
   const { offlineQueue, queueError, isSyncing, hasFailedSales, syncOfflineSales } = usePosOfflineSync();

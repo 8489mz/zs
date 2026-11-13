@@ -643,6 +643,72 @@ export function getRouteFeatureRequirement(target: string) {
   return null;
 }
 
+const VERTICAL_SUITE_FEATURES: Partial<Record<ReturnType<typeof resolveCurrentVertical>, readonly string[]>> = {
+  import_export: ['import', 'inventory', 'catalog', 'products', 'purchases', 'suppliers', 'sales', 'pos', 'cashDrawer', 'customers', 'accounting', 'treasury', 'hr', 'crm', 'pricing', 'reports', 'approvals', 'fixed_assets', 'vat_declaration', 'expenses'],
+  warehousing: ['inventory', 'catalog', 'products', 'purchases', 'suppliers', 'sales', 'customers', 'accounting', 'hr', 'crm', 'pricing', 'reports', 'treasury', 'expenses'],
+  wholesale_van: ['deliveryReps', 'catalog', 'products', 'sales', 'pos', 'purchases', 'inventory', 'accounting', 'hr', 'crm', 'pricing', 'suppliers', 'customers', 'treasury', 'expenses', 'reports', 'installments'],
+  contracting: ['contracting', 'purchases', 'inventory', 'catalog', 'products', 'suppliers', 'customers', 'crm', 'accounting', 'hr', 'fixed_assets', 'vat_declaration', 'reports', 'approvals', 'treasury'],
+  maritime: ['maritime_freight', 'purchases', 'suppliers', 'customers', 'crm', 'sales', 'accounting', 'hr', 'vat_declaration', 'reports', 'approvals', 'treasury'],
+  manufacturing: ['manufacturing', 'purchases', 'inventory', 'catalog', 'products', 'suppliers', 'customers', 'crm', 'sales', 'pricing', 'accounting', 'hr', 'fixed_assets', 'vat_declaration', 'reports', 'approvals', 'treasury'],
+};
+
+const COMMERCE_CORE_FEATURES = new Set([
+  'pos',
+  'catalog',
+  'products',
+  'sales',
+  'crm',
+  'pricing',
+  'customers',
+  'treasury',
+  'expenses',
+]);
+
+const LEGACY_COMMERCE_FALLBACK_FEATURES = new Set([
+  ...COMMERCE_CORE_FEATURES,
+  'purchases',
+  'suppliers',
+  'inventory',
+  'reports',
+  'installments',
+]);
+
+/**
+ * Shared plan & vertical feature resolver used by both router guards (`hasRequiredFeature`)
+ * and React hooks (`useHasFeature`) so plan tiers enforce modules identically everywhere.
+ */
+export function tenantHasFeature(
+  feature: string,
+  tenant: ReturnType<typeof useAuthStore.getState>['tenant'],
+  user?: AuthUser | null,
+): boolean {
+  if (isPlatformAdmin(user)) return true;
+  if (!tenant) return true;
+
+  const vertical = resolveCurrentVertical(tenant);
+  const verticalFeatures = VERTICAL_SUITE_FEATURES[vertical];
+  if (verticalFeatures) {
+    if (verticalFeatures.includes(feature)) return true;
+  } else {
+    // Retail/commerce tiers retain core selling primitives while keeping tier-gated modules
+    // (hr, accounting, purchases, inventory, reports, installments, storefront) strictly bound to tenant.features.
+    if (COMMERCE_CORE_FEATURES.has(feature)) return true;
+    const hasExplicitFeatures = Array.isArray(tenant.features) && tenant.features.length > 0;
+    if (!hasExplicitFeatures && LEGACY_COMMERCE_FALLBACK_FEATURES.has(feature)) {
+      return true;
+    }
+  }
+
+  if (!Array.isArray(tenant.features) || tenant.features.length === 0) return false;
+  if (feature === 'catalog' && (tenant.features.includes('inventory') || tenant.features.includes('products'))) {
+    return true;
+  }
+  if (feature === 'products' && (tenant.features.includes('catalog') || tenant.features.includes('inventory'))) {
+    return true;
+  }
+  return tenant.features.includes(feature);
+}
+
 export function hasRequiredFeature(target: string, user?: AuthUser | null): boolean {
   if (isPlatformAdmin(user)) return true;
 
@@ -654,49 +720,8 @@ export function hasRequiredFeature(target: string, user?: AuthUser | null): bool
 
   const requiredFeature = getRouteFeatureRequirement(target);
   if (!requiredFeature) return true;
-  
-  if (!tenant) return true;
 
-  const isContracting = vertical === 'contracting';
-  const isMaritime = vertical === 'maritime';
-  const isManufacturing = vertical === 'manufacturing';
-  const isWholesaleVan = vertical === 'wholesale_van';
-  const isWarehousing = vertical === 'warehousing';
-  const isImport = vertical === 'import_export';
-  const isCommerce = !isContracting && !isMaritime && !isManufacturing && !isWholesaleVan && !isWarehousing && !isImport;
-
-  if (isImport && ['import', 'inventory', 'catalog', 'products', 'purchases', 'suppliers', 'sales', 'pos', 'cashDrawer', 'customers', 'accounting', 'treasury', 'hr', 'crm', 'pricing', 'reports', 'approvals'].includes(requiredFeature)) {
-    return true;
-  }
-  if (isWarehousing && ['inventory', 'catalog', 'products', 'purchases', 'suppliers', 'sales', 'customers', 'accounting', 'hr', 'crm', 'pricing', 'reports'].includes(requiredFeature)) {
-    return true;
-  }
-  if (isWholesaleVan && ['deliveryReps', 'catalog', 'products', 'sales', 'pos', 'purchases', 'inventory', 'accounting', 'hr', 'crm', 'pricing', 'suppliers', 'customers'].includes(requiredFeature)) {
-    return true;
-  }
-  if (isContracting && ['contracting', 'purchases', 'inventory', 'catalog', 'products', 'suppliers', 'customers', 'crm', 'accounting', 'hr'].includes(requiredFeature)) {
-    return true;
-  }
-  if (isMaritime && ['maritime_freight', 'purchases', 'suppliers', 'customers', 'crm', 'sales', 'accounting', 'hr'].includes(requiredFeature)) {
-    return true;
-  }
-  if (isManufacturing && ['manufacturing', 'purchases', 'inventory', 'catalog', 'products', 'suppliers', 'customers', 'crm', 'sales', 'pricing', 'accounting', 'hr'].includes(requiredFeature)) {
-    return true;
-  }
-  if (isCommerce && ['pos', 'catalog', 'products', 'sales', 'purchases', 'inventory', 'accounting', 'hr', 'crm', 'pricing', 'suppliers', 'customers'].includes(requiredFeature)) {
-    return true;
-  }
-
-  if (!tenant.features || !Array.isArray(tenant.features)) return false;
-  
-  if (requiredFeature === 'catalog' && (tenant.features.includes('inventory') || tenant.features.includes('products'))) {
-    return true;
-  }
-  if (requiredFeature === 'inventory' && tenant.features.includes('catalog')) {
-    return true;
-  }
-
-  return tenant.features.includes(requiredFeature);
+  return tenantHasFeature(requiredFeature, tenant, user);
 }
 
 export function canAccessPath(user: AuthUser | null | undefined, target: string) {
