@@ -5,7 +5,7 @@ import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import { Button } from '@/shared/ui/button';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { useQuery } from '@tanstack/react-query';
-import { vanSalesApi, CustomerEligibleSale, CustomerEligibleSaleItem } from '../api/van-sales.api';
+import { vanSalesApi, CustomerEligibleSale, CustomerEligibleSaleItem, VanStockItem } from '../api/van-sales.api';
 import {
   CheckCircleIcon,
   SearchIcon,
@@ -27,11 +27,20 @@ interface CustomerOption {
   route?: string;
   district?: string;
   locationUrl?: string;
+  // INV-VAN-UNLINKED-RETURN-PICKER: the sale cart prices wholesale
+  // customers at the wholesale price; the unlinked return picker
+  // applies the same rule, so it needs the type the page already
+  // carries on these objects (customer_type, snake_case from the API).
+  customer_type?: string;
 }
 
 interface VanCollectionTabProps {
   tripId: number;
   customers: CustomerOption[];
+  // INV-VAN-UNLINKED-RETURN-PICKER: the trip's van-stock items, for
+  // the unlinked return picker (no invoice selected). The page already
+  // holds this list (data.inventory); the tab never had it.
+  inventory?: VanStockItem[];
   colCustomerId: number | '';
   onColCustomerChange: (val: number | '') => void;
   colAmount: string;
@@ -55,6 +64,7 @@ const RETURN_REASONS = [
 export const VanCollectionTab: React.FC<VanCollectionTabProps> = ({
   tripId,
   customers,
+  inventory = [],
   colCustomerId,
   onColCustomerChange,
   colAmount,
@@ -179,6 +189,44 @@ export const VanCollectionTab: React.FC<VanCollectionTabProps> = ({
           saleItemId: item.saleItemId,
           unitMultiplier: item.unitMultiplier ?? 1,
           unitName: item.unitName ?? 'قطعة',
+        },
+      ]);
+    }
+  };
+
+  // INV-VAN-UNLINKED-RETURN-PICKER: the unlinked return prices exactly
+  // like the sale cart (VanSalesMobilePage addToCart) — wholesale price
+  // for a wholesale-typed customer when it exists and is > 0, else the
+  // retail price. Van-stock qty is in PIECES (P9), so the line carries
+  // multiplier 1 and the base unit name.
+  const resolveUnlinkedUnitPrice = (item: VanStockItem) => {
+    const returnCustomer = customers.find((c) => c.id === Number(returnCustomerId));
+    return returnCustomer?.customer_type === 'wholesale' && item.wholesalePrice != null && Number(item.wholesalePrice) > 0
+      ? Number(item.wholesalePrice)
+      : item.retailPrice;
+  };
+
+  const handleAddStockItemToReturn = (item: VanStockItem) => {
+    if (item.qty <= 0) return;
+    const existingIndex = returnCart.findIndex((c) => c.saleItemId === undefined && c.productId === item.productId);
+    if (existingIndex >= 0) {
+      if (returnCart[existingIndex].qty < item.qty) {
+        const updated = [...returnCart];
+        updated[existingIndex].qty += 1;
+        setReturnCart(updated);
+      }
+    } else {
+      setReturnCart([
+        ...returnCart,
+        {
+          productId: item.productId,
+          productName: item.productName,
+          qty: 1,
+          unitPrice: resolveUnlinkedUnitPrice(item),
+          maxQty: item.qty,
+          saleItemId: undefined,
+          unitMultiplier: 1,
+          unitName: item.stockUnitName || 'قطعة',
         },
       ]);
     }
@@ -1153,6 +1201,67 @@ export const VanCollectionTab: React.FC<VanCollectionTabProps> = ({
                 </div>
               )}
 
+              {/* 3a. Unlinked return — van-stock picker (no invoice selected) */}
+              {returnCustomerId && !selectedSale && (
+                <div style={{ backgroundColor: '#f8fafc', borderRadius: '10px', padding: '12px', border: '1px solid #e2e8f0' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#1e293b', display: 'block', marginBottom: '8px' }}>
+                    {t('delivery_reps.van_collection_tab.s79', "أو إرجاع بدون فاتورة — من بضاعة السيارة:")}
+                  </span>
+                  {inventory.length === 0 ? (
+                    <div style={{ fontSize: '12px', color: '#64748b', backgroundColor: '#ffffff', padding: '8px 12px', borderRadius: '8px' }}>
+                      {t('delivery_reps.van_collection_tab.s80', "لا توجد بضاعة محملة في السيارة حالياً.")}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {inventory.map((item) => (
+                        <div
+                          key={item.productId}
+                          style={{
+                            backgroundColor: '#ffffff',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            border: '1px solid #cbd5e1',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '10px',
+                          }}
+                        >
+                          <div>
+                            <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#0f172a', display: 'block' }}>{item.productName}</span>
+                            <span style={{ fontSize: '11px', color: '#64748b' }}>
+                              {t('delivery_reps.van_collection_tab.s81', "المتاح في السيارة:")} {item.qty} {item.stockUnitName || 'قطعة'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 800, color: '#059669' }}>
+                              {resolveUnlinkedUnitPrice(item).toFixed(2)} <CurrencySymbol /> {t('delivery_reps.van_collection_tab.s62', "/ ق")}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={item.qty <= 0}
+                              onClick={() => handleAddStockItemToReturn(item)}
+                              style={{
+                                backgroundColor: item.qty > 0 ? '#170e5e' : '#cbd5e1',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: '6px',
+                                padding: '4px 8px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                cursor: item.qty > 0 ? 'pointer' : 'not-allowed',
+                              }}
+                            >
+                              {t('delivery_reps.van_collection_tab.s63', "+ إضافة")}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* 4. Return Cart */}
               {returnCart.length > 0 && (
                 <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
@@ -1176,7 +1285,7 @@ export const VanCollectionTab: React.FC<VanCollectionTabProps> = ({
                         <div>
                           <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#991b1b', display: 'block' }}>{item.productName}</span>
                           <span style={{ fontSize: '11px', color: '#b91c1c' }}>
-                            {t('delivery_reps.van_collection_tab.s65', "سعر الإرجاع:")} {item.unitPrice.toFixed(2)} {getGlobalCurrencySymbol()} {t('delivery_reps.van_collection_tab.s66', "(صافي الفاتورة)")}
+                            {t('delivery_reps.van_collection_tab.s65', "سعر الإرجاع:")} {item.unitPrice.toFixed(2)} {getGlobalCurrencySymbol()} {item.saleItemId !== undefined ? t('delivery_reps.van_collection_tab.s66', "(صافي الفاتورة)") : t('delivery_reps.van_collection_tab.s82', "(سعر البيع)")}
                           </span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

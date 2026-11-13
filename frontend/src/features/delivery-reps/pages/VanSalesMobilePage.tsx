@@ -3330,6 +3330,7 @@ export default function VanSalesMobilePage() {
                 <VanCollectionTab
                   tripId={data.trip!.id}
                   customers={allAvailableCustomers}
+                  inventory={data?.inventory || []}
                   colCustomerId={colCustomerId}
                   onColCustomerChange={setColCustomerId}
                   colAmount={colAmount}
