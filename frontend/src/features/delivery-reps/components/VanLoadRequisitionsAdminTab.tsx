@@ -349,6 +349,10 @@ export function VanLoadRequisitionsAdminTab() {
       );
       queryClient.invalidateQueries({ queryKey: ['van-admin-load-requisitions'] });
       queryClient.invalidateQueries({ queryKey: ['van-sales-admin-trips'] });
+      // INV-VAN-ADMIN-INVALIDATIONS (P10): dispatch changes the pending
+      // count — without this the pending-loads badge stays stale until a
+      // manual refresh.
+      queryClient.invalidateQueries({ queryKey: ['van-admin-pending-requisitions-badge'] });
       setSelectedReq(null);
     },
     onError: (err: any) => {
@@ -362,6 +366,9 @@ export function VanLoadRequisitionsAdminTab() {
     onSuccess: () => {
       toast.info('تم رفض طلب التحميل');
       queryClient.invalidateQueries({ queryKey: ['van-admin-load-requisitions'] });
+      // INV-VAN-ADMIN-INVALIDATIONS (P10): a rejection also changes the
+      // pending count behind the badge.
+      queryClient.invalidateQueries({ queryKey: ['van-admin-pending-requisitions-badge'] });
       setSelectedReq(null);
       setRejectModalReq(null);
       setRejectReasonInput('');
@@ -377,6 +384,9 @@ export function VanLoadRequisitionsAdminTab() {
     onSuccess: (data) => {
       toast.success(`تم حذف إذن التحميل #${data.docNo} بنجاح`);
       queryClient.invalidateQueries({ queryKey: ['van-admin-load-requisitions'] });
+      // INV-VAN-ADMIN-INVALIDATIONS (P10): deleting a pending requisition
+      // also changes the pending count behind the badge.
+      queryClient.invalidateQueries({ queryKey: ['van-admin-pending-requisitions-badge'] });
       setSelectedReq(null);
     },
     onError: (err: any) => {
