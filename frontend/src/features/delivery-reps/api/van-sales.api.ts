@@ -365,6 +365,10 @@ export interface CustomerEligibleSaleItem {
   remainingReturnableQty: number;
   unitPrice: number;
   netUnitPrice: number;
+  // INV-VAN-FIELD-RETURN-CARTON-QTY: the sale unit the qty is in —
+  // without it a carton return posts its raw qty as pieces.
+  unitMultiplier?: number;
+  unitName?: string;
 }
 
 export interface CustomerEligibleSale {

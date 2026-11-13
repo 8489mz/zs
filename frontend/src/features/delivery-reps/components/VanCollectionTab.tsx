@@ -93,6 +93,9 @@ export const VanCollectionTab: React.FC<VanCollectionTabProps> = ({
     unitPrice: number;
     maxQty: number;
     saleItemId?: number;
+    // INV-VAN-FIELD-RETURN-CARTON-QTY: the sale unit the qty is in.
+    unitMultiplier?: number;
+    unitName?: string;
   }>>([]);
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
   const [returnResult, setReturnResult] = useState<{ docNo: string; total: number } | null>(null);
@@ -174,6 +177,8 @@ export const VanCollectionTab: React.FC<VanCollectionTabProps> = ({
           unitPrice: item.netUnitPrice, // Net price after discount
           maxQty: item.remainingReturnableQty,
           saleItemId: item.saleItemId,
+          unitMultiplier: item.unitMultiplier ?? 1,
+          unitName: item.unitName ?? 'قطعة',
         },
       ]);
     }
@@ -213,6 +218,8 @@ export const VanCollectionTab: React.FC<VanCollectionTabProps> = ({
         qty: c.qty,
         unitPrice: c.unitPrice,
         saleItemId: c.saleItemId,
+        unitMultiplier: c.unitMultiplier,
+        unitName: c.unitName,
       })),
       notes: returnNotes || undefined,
     };

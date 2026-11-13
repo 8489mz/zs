@@ -273,6 +273,11 @@ export class VanReturnsService {
         sql<number>`cast(coalesce(si.qty, 0) as numeric)`.as('soldQty'),
         sql<number>`cast(coalesce(si.unit_price, 0) as numeric)`.as('unitPrice'),
         sql<number>`cast(coalesce(si.line_total, 0) as numeric)`.as('lineTotal'),
+        // INV-VAN-FIELD-RETURN-CARTON-QTY: the return form and the
+        // approval need the sale unit — without it a carton return
+        // posts its raw qty as pieces.
+        sql<number>`cast(coalesce(si.unit_multiplier, 1) as numeric)`.as('unitMultiplier'),
+        sql<string>`coalesce(si.unit_name, 'قطعة')`.as('unitName'),
       ])
       .where('si.sale_id', 'in', saleIds)
       .where('si.tenant_id', '=', tenantId)
@@ -298,6 +303,8 @@ export class VanReturnsService {
         remainingReturnableQty,
         unitPrice: Number(it.unitPrice || 0),
         netUnitPrice,
+        unitMultiplier: Number(it.unitMultiplier || 1),
+        unitName: String(it.unitName || 'قطعة'),
       };
 
       if (!itemsBySale.has(sid)) itemsBySale.set(sid, []);
@@ -333,6 +340,11 @@ export class VanReturnsService {
         qty: number;
         unitPrice: number;
         saleItemId?: number;
+        // INV-VAN-FIELD-RETURN-CARTON-QTY: carried for the form's own
+        // unit display; the approval never trusts it — it reads the
+        // multiplier from the DB sale line.
+        unitMultiplier?: number;
+        unitName?: string;
       }[];
       notes?: string;
     },
@@ -887,6 +899,11 @@ export class VanReturnsService {
       // fraud-radar event is recorded here: a changed basis is often
       // a legitimate edit, not an attempted fraud.
       const returnItems = (items || []).map((i: any) => ({ ...i, productId: Number(i.productId) }));
+      // INV-VAN-FIELD-RETURN-CARTON-QTY: the matched sale lines are
+      // needed again at stock posting (each line's own multiplier);
+      // hoisted out of the provenance block so the restock loop can
+      // read them without a second query.
+      let linkedSaleLines: any[] = [];
       if (ret.sale_id) {
         const sale = await trxAny
           .selectFrom('sales as s')
@@ -920,7 +937,7 @@ export class VanReturnsService {
             403,
           );
         }
-        const saleLines = await trxAny
+        linkedSaleLines = await trxAny
           .selectFrom('sale_items')
           .selectAll()
           .where('sale_id', '=', ret.sale_id)
@@ -948,8 +965,8 @@ export class VanReturnsService {
         }
         for (const item of returnItems) {
           const line = item.saleItemId
-            ? saleLines.find((sl: any) => Number(sl.id) === Number(item.saleItemId))
-            : saleLines.find((sl: any) => Number(sl.product_id) === Number(item.productId));
+            ? linkedSaleLines.find((sl: any) => Number(sl.id) === Number(item.saleItemId))
+            : linkedSaleLines.find((sl: any) => Number(sl.product_id) === Number(item.productId));
           if (!line) {
             throw new AppError(`الصنف #${item.productId} لم يتم العثور عليه في الفاتورة الأصلية`, 'ITEM_NOT_IN_SALE', 400);
           }
@@ -1106,6 +1123,21 @@ export class VanReturnsService {
         const price = Number(item.unitPrice || 0);
         if (qty <= 0) continue;
 
+        // INV-VAN-FIELD-RETURN-CARTON-QTY: qty is in SALE units
+        // (cartons); van stock is in PIECES. Convert with the matched
+        // DB sale line's own multiplier — never the client value
+        // (the provenance re-check above already matched this line).
+        // Unlinked returns have no sale line, so their qty is already
+        // pieces (multiplier 1). unitCost becomes the per-piece price,
+        // so the movement value is unchanged (12 x 12 = 1 x 144).
+        const linkedLine = item.saleItemId != null
+          ? linkedSaleLines.find((sl: any) => Number(sl.id) === Number(item.saleItemId))
+          : linkedSaleLines.find((sl: any) => Number(sl.product_id) === Number(pid));
+        const rawMultiplier = linkedLine ? Number(linkedLine.unit_multiplier ?? 1) : 1;
+        const unitMultiplier = Number.isFinite(rawMultiplier) && rawMultiplier > 0 ? rawMultiplier : 1;
+        const pieceQty = qty * unitMultiplier;
+        const pieceUnitCost = price / unitMultiplier;
+
         // CANONICAL LOCK ORDER: Lock products first!
         const prod = await trxAny
           .selectFrom('products')
@@ -1117,7 +1149,7 @@ export class VanReturnsService {
 
         await moveVanStock(trx, {
           productId: pid,
-          delta: qty,
+          delta: pieceQty,
           locationId: targetLocationId,
           tenantId,
           accountId,
@@ -1127,9 +1159,13 @@ export class VanReturnsService {
           referenceType: 'van_field_return',
           referenceId: returnId,
           skipGlobalUpdate: false,
-          unitCost: price,
+          unitCost: pieceUnitCost,
         });
 
+        // itemsWithCost keeps SALE-unit qty on purpose:
+        // postVanFieldReturn's COGS mirror expects sold units and
+        // converts to base units itself via each line's multiplier —
+        // passing pieces there would 12x the COGS reversal.
         itemsWithCost.push({ productId: pid, qty, costPrice: Number(prod?.cost_price || 0), saleItemId: item.saleItemId != null ? Number(item.saleItemId) : null });
       }
 
