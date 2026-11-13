@@ -1341,7 +1341,15 @@ export class CashDrawerService {
     const shift = await this.getShift(shiftId, auth);
     if (!shift) throw new AppError('الوردية غير موجودة', 'SHIFT_NOT_FOUND', 404);
     if (String(shift.status || 'open') !== 'open') throw new AppError('الوردية مغلقة بالفعل', 'SHIFT_ALREADY_CLOSED', 400);
-    if (Number(shift.opened_by || 0) !== Number(auth.userId || 0) && auth.role !== 'super_admin') throw new AppError('غير مسموح لك بإغلاق هذه الوردية', 'SHIFT_FORBIDDEN', 403);
+    // INV-SHIFT-CLOSE-ADMIN-CLOSE-ANY: an admin closes ANY cashier's
+    // shift (admin-as-super_admin in all in-tenant permissions;
+    // super_admin exists only for package/subscription changes).
+    // A cashier closes only their own shift, never another
+    // cashier's. The old owner-only gate (super_admin excepted)
+    // blocked the shop owner from closing a cashier who forgot
+    // or left — live on test10k 2026-11-13, admin closing
+    // cashier_test SHIFT-261112-0026.
+    if (Number(shift.opened_by || 0) !== Number(auth.userId || 0) && !['admin', 'super_admin'].includes(String(auth.role || '').trim())) throw new AppError('غير مسموح لك بإغلاق هذه الوردية', 'SHIFT_FORBIDDEN', 403);
     const countedCash = Number(payload.countedCash || 0);
     const note = String(payload.note || '').trim();
     assertCashDrawerCountedCash(countedCash);
