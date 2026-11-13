@@ -8,6 +8,10 @@ export interface VanStockItem {
   mainWarehouseQty?: number;
   costPrice: number;
   retailPrice: number;
+  // INV-VAN-FIELD-SALE-WHOLESALE-PRICE: raw wholesale price (same
+  // exposure as the already-exposed costPrice); the rep cart uses it
+  // for wholesale-typed customers, the writer stays authoritative.
+  wholesalePrice?: number;
   creditPrice?: number | null;
   consumerPrice?: number | null;
   unitName?: string;
@@ -250,6 +254,9 @@ export interface VanActiveTripResponse {
     customerCode?: string;
     route?: string;
     locationUrl?: string;
+    // INV-VAN-FIELD-SALE-WHOLESALE-PRICE: the rep cart prices by
+    // customer type ('wholesale' charges wholesale_price).
+    customer_type?: string;
   }[];
   recentSales: {
     id: number;

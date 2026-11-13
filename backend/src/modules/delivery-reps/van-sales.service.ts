@@ -887,6 +887,7 @@ export class VanSalesService {
         sql<number>`cast(coalesce(pls.qty, 0) as numeric)`.as('qty'),
         sql<number>`cast(coalesce(p.cost_price, 0) as numeric)`.as('costPrice'),
         sql<number>`cast(coalesce(p.retail_price, 0) as numeric)`.as('retailPrice'),
+        sql<number>`cast(coalesce(p.wholesale_price, 0) as numeric)`.as('wholesalePrice'),
         'pu.name as unitName',
       ])
       .where('pls.location_id', '=', vanLoc.id)
@@ -1064,6 +1065,10 @@ export class VanSalesService {
         mainWarehouseQty: mainStockMap.get(pid) || 0,
         costPrice: Number(r.costPrice || 0),
         retailPrice: effectiveRetail,
+        // INV-VAN-FIELD-SALE-WHOLESALE-PRICE: raw wholesale price for
+        // the rep cart (same exposure as the already-exposed costPrice);
+        // the writer re-derives the authoritative price server-side.
+        wholesalePrice: Number(r.wholesalePrice || 0),
         originalPrice: offer && discountPerUnit > 0 ? baseRetail : undefined,
         discountPerUnit: discountPerUnit > 0 ? discountPerUnit : undefined,
         hasActiveOffer: Boolean(offer && discountPerUnit > 0),
@@ -1095,6 +1100,7 @@ export class VanSalesService {
         'c.phone',
         'c.address',
         'c.metadata',
+        'c.customer_type',
         sql<number>`cast(coalesce(c.credit_limit, 0) as numeric)`.as('creditLimit'),
         sql<number>`coalesce(c.balance, 0)`.as('balance'),
       ])
@@ -1151,6 +1157,9 @@ export class VanSalesService {
         creditLimit: Number(c.creditLimit || 0),
         customerCode: normalizeCustomerCode(meta.customer_code || meta.code, cid),
         route: meta.route || '',
+        // INV-VAN-FIELD-SALE-WHOLESALE-PRICE: the rep cart prices by
+        // customer type, so the type rides the trip customers payload.
+        customer_type: (c as any).customer_type || 'cash',
         assignedRepIds,
         locationUrl: meta.location_url || (meta.gps_lat && meta.gps_lng ? `https://maps.google.com/?q=${meta.gps_lat},${meta.gps_lng}` : ''),
       };
@@ -2123,6 +2132,10 @@ export class VanSalesService {
 
     let resolvedCustomerId: number | null = payload.customerId ? Number(payload.customerId) : null;
     let customerName = payload.customerName || 'عميل نقدي ميداني';
+    // INV-VAN-FIELD-SALE-WHOLESALE-PRICE: the customer's type drives
+    // the price branch below, so it is loaded BEFORE the item loop
+    // (the in-transaction customer read is after the loop — too late).
+    let customerType: string | null = null;
 
     const isCreditOrSplit = payload.paymentMethod === 'credit' || payload.paymentMethod === 'split';
     if (isCreditOrSplit && !resolvedCustomerId && !payload.customerName) {
@@ -2133,7 +2146,7 @@ export class VanSalesService {
     if (!resolvedCustomerId && payload.customerName && payload.customerName.trim() && payload.customerName !== 'عميل نقدي ميداني') {
       const existing = await this.anyDb
         .selectFrom('customers')
-        .select(['id', 'name', 'metadata'])
+        .select(['id', 'name', 'metadata', 'customer_type'])
         .where('name', '=', payload.customerName.trim())
         .where('tenant_id', '=', tenantId)
         .executeTakeFirst();
@@ -2141,6 +2154,7 @@ export class VanSalesService {
       if (existing) {
         resolvedCustomerId = Number(existing.id);
         customerName = existing.name;
+        customerType = (existing as any).customer_type || null;
       } else {
         isNewCustomer = true;
         customerName = payload.customerName.trim();
@@ -2148,12 +2162,13 @@ export class VanSalesService {
     } else if (resolvedCustomerId) {
       const cust = await this.anyDb
         .selectFrom('customers')
-        .select(['name', 'metadata'])
+        .select(['name', 'metadata', 'customer_type'])
         .where('id', '=', resolvedCustomerId)
         .where('tenant_id', '=', tenantId)
         .executeTakeFirst();
       if (!cust) throw new AppError('العميل غير موجود', 'CUSTOMER_NOT_FOUND', 404);
       customerName = cust.name;
+      customerType = (cust as any).customer_type || null;
 
       // Ensure shared customer retains multi-rep link in assigned_rep_ids without overwriting primary rep
       let metaObj: any = {};
@@ -2366,9 +2381,15 @@ export class VanSalesService {
         const activeOffers = offersByProduct.get(pid) || [];
 
         const isCreditSale = payload.paymentMethod === 'credit' || payload.paymentMethod === 'split';
-        const defaultBasePrice = isCreditSale && prod.credit_price != null && Number(prod.credit_price) > 0
-          ? Number(prod.credit_price)
-          : Number(prod.retail_price || 0);
+        // INV-VAN-FIELD-SALE-WHOLESALE-PRICE: a wholesale-typed
+        // customer is charged products.wholesale_price on both cash and
+        // credit sales; wholesale beats credit_price for such a customer
+        // (the type defines the price; credit terms affect payment).
+        const defaultBasePrice = customerType === 'wholesale' && prod.wholesale_price != null && Number(prod.wholesale_price) > 0
+          ? Number(prod.wholesale_price)
+          : (isCreditSale && prod.credit_price != null && Number(prod.credit_price) > 0
+            ? Number(prod.credit_price)
+            : Number(prod.retail_price || 0));
 
         // Security Invariant: Gated Bonus Items
         // Free bonus items cannot be arbitrarily flipped by the driver unless an active promotion allows it or supervisor PIN is provided
@@ -2446,7 +2467,7 @@ export class VanSalesService {
         // for offer savings and for the original-price fallback below.
         const baseUnitPrice = toBookMoney(defaultBasePrice * multiplier);
         let systemAuthorizedPrice = baseUnitPrice;
-        let pricingTierType: 'cash' | 'credit' | 'offer' | 'bonus' = isBonus ? 'bonus' : (isCreditSale ? 'credit' : 'cash');
+        let pricingTierType: 'cash' | 'credit' | 'offer' | 'bonus' | 'wholesale' = isBonus ? 'bonus' : (customerType === 'wholesale' ? 'wholesale' : (isCreditSale ? 'credit' : 'cash'));
         let unitOfferSavings = 0;
 
         if (isBonus) {
@@ -2540,6 +2561,12 @@ export class VanSalesService {
               );
             }
             unitPrice = clientPrice;
+          } else if (pricingTierType === 'wholesale') {
+            // INV-VAN-FIELD-SALE-WHOLESALE-PRICE: the server price is
+            // authoritative for the wholesale tier — a higher client
+            // price (the old frontend still sends retail) must not
+            // override the authorized wholesale price.
+            unitPrice = systemAuthorizedPrice;
           } else {
             // Higher price accepted
             unitPrice = clientPrice;

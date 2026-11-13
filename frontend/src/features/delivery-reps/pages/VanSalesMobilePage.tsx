@@ -592,13 +592,19 @@ export default function VanSalesMobilePage() {
         return prev.map((c) => (c.productId === item.productId ? { ...c, qty: c.qty + 1 } : c));
       }
       const initialUnit = item.availableUnits?.[0];
+      // INV-VAN-FIELD-SALE-WHOLESALE-PRICE: wholesale-typed customer
+      // starts the cart line at the wholesale price (per piece, like
+      // retailPrice); unit changes re-derive it in changeCartItemUnit.
+      const startUnitPrice = selectedCustomer?.customer_type === 'wholesale' && item.wholesalePrice != null && Number(item.wholesalePrice) > 0
+        ? Number(item.wholesalePrice)
+        : item.retailPrice;
       return [
         ...prev,
         {
           productId: item.productId,
           name: item.productName,
           qty: 1,
-          unitPrice: item.retailPrice,
+          unitPrice: startUnitPrice,
           originalPrice: item.originalPrice,
           offerBadge: item.offerBadge,
           maxQty: item.qty,
@@ -636,7 +642,12 @@ export default function VanSalesMobilePage() {
       prev.map((c) => {
         if (c.productId === productId) {
           const stockItem = data?.inventory?.find((it) => it.productId === productId);
-          const basePrice = stockItem?.retailPrice || c.originalPrice || c.unitPrice;
+          // INV-VAN-FIELD-SALE-WHOLESALE-PRICE: wholesale-typed
+          // customer re-derives the unit price from wholesalePrice,
+          // falling back to the retail chain when it is absent/zero.
+          const basePrice = selectedCustomer?.customer_type === 'wholesale' && stockItem?.wholesalePrice != null && Number(stockItem.wholesalePrice) > 0
+            ? Number(stockItem.wholesalePrice)
+            : (stockItem?.retailPrice || c.originalPrice || c.unitPrice);
           const newUnitPrice = c.isBonus ? 0 : basePrice * (multiplier || 1);
           return {
             ...c,
@@ -695,6 +706,14 @@ export default function VanSalesMobilePage() {
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
   }, [data?.customers, itinerary]);
+
+  // INV-VAN-FIELD-SALE-WHOLESALE-PRICE: the cart prices by the
+  // selected customer's type — a wholesale-typed customer is charged
+  // the wholesale price, everyone else retail/credit as before.
+  const selectedCustomer = useMemo(
+    () => (selectedCustomerId === '' ? null : allAvailableCustomers.find((c) => String(c.id) === String(selectedCustomerId)) || null),
+    [allAvailableCustomers, selectedCustomerId],
+  );
 
   const cartTotal = useMemo(() => cart.reduce((sum, c) => sum + (c.isBonus ? 0 : c.qty * c.unitPrice), 0), [cart]);
 
