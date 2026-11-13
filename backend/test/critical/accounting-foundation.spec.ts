@@ -175,7 +175,7 @@ function testForbiddenPatternsAreGone(): void {
   assert.ok(!/reverseSaleJournal\(trx,/.test(updateSaleBody),
     'updateSale must not reverse explicitly before postSaleEdit, or postSaleEdit throws SALE_ALREADY_REVERSED');
 
-  const posting = read('modules/accounting/accounting-posting.service.ts');
+  const posting = read('modules/accounting/services/journal-posting-core.service.ts');
   assert.ok(
     /INSERT INTO accounting_posting_failures/.test(posting) && /ON CONFLICT \(tenant_id, source_type, source_id\) DO UPDATE/.test(posting),
     'the failure record must be upserted per source, counting attempts rather than piling up rows',

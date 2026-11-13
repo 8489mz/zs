@@ -370,7 +370,7 @@ async function main(): Promise<void> {
     assert.ok(!body.includes("insertInto('journal_entries')"), 'manual-journal slice must not insert headers directly');
     assert.ok(!body.includes("insertInto('journal_entry_lines')"), 'manual-journal slice must not insert lines directly');
     assert.ok(!body.includes('JE-TMP-'), 'manual-journal slice must not mint temp entry numbers');
-    const boundary = readFileSync(resolve(__dirname, '../../src/modules/accounting/accounting-posting.service.ts'), 'utf8');
+    const boundary = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/journal-posting-core.service.ts'), 'utf8');
     assert.ok(boundary.includes('cashFlowCategory'), 'boundary must carry the cash-flow category');
     assert.ok(boundary.includes('cash_flow_category'), 'boundary must store the cash-flow category');
   }
