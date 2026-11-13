@@ -39,6 +39,12 @@ export const VanFleetTab: React.FC<VanFleetTabProps> = ({
   const numPpl = parseFloat(pricePerLiter) || 0;
   const calculatedTotal = (numLiters * numPpl).toFixed(2);
 
+  // INV-VAN-FUEL-VEHICLE-GATE (P14): fuel is tracked per vehicle
+  // (consumption needs the vehicle's last odometer). With no vehicle
+  // linked the form must never look submittable — the old form rendered
+  // fully editable and only failed at save.
+  const hasVehicle = Boolean(vehicle?.id);
+
   const handleRecordFuel = async (e: React.FormEvent) => {
     e.preventDefault();
     const odo = parseFloat(odometer);
@@ -189,6 +195,35 @@ export const VanFleetTab: React.FC<VanFleetTabProps> = ({
           {t('delivery_reps.van_fleet_tab.s4', "تسجيل تفويل وقود وحساب معدل الاستهلاك")}
         </h4>
 
+        {!hasVehicle && (
+          <div
+            style={{
+              backgroundColor: '#fffbeb',
+              border: '1px solid #fde68a',
+              borderRadius: '8px',
+              padding: '10px 12px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '8px',
+              fontSize: '12px',
+              color: '#92400e',
+              fontWeight: 700,
+              lineHeight: 1.5,
+              marginBottom: '10px',
+            }}
+          >
+            <div style={{ marginTop: '2px', color: '#d97706', flexShrink: 0 }}>
+              <AlertTriangleIcon size={16} />
+            </div>
+            <span>
+              {t(
+                'delivery_reps.van_fleet_tab.s25',
+                "لا توجد مركبة مربوطة بهذه الرحلة — اطلب من المشرف تسجيل مركبة وربطها بالمندوب قبل تسجيل التفويل",
+              )}
+            </span>
+          </div>
+        )}
+
         <form onSubmit={handleRecordFuel} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
             <div>
@@ -202,6 +237,7 @@ export const VanFleetTab: React.FC<VanFleetTabProps> = ({
                 onChange={(e) => setOdometer(e.target.value)}
                 placeholder={t('delivery_reps.van_fleet_tab.s6', "مثال: 45200")}
                 required
+                disabled={!hasVehicle}
                 style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', boxSizing: 'border-box' }}
               />
             </div>
@@ -217,6 +253,7 @@ export const VanFleetTab: React.FC<VanFleetTabProps> = ({
                 onChange={(e) => setLiters(e.target.value)}
                 placeholder={t('delivery_reps.van_fleet_tab.s8', "مثال: 40")}
                 required
+                disabled={!hasVehicle}
                 style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', boxSizing: 'border-box' }}
               />
             </div>
@@ -232,6 +269,7 @@ export const VanFleetTab: React.FC<VanFleetTabProps> = ({
                 onChange={(e) => setPricePerLiter(e.target.value)}
                 placeholder={t('delivery_reps.van_fleet_tab.s10', "مثال: 15.50")}
                 required
+                disabled={!hasVehicle}
                 style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', boxSizing: 'border-box' }}
               />
             </div>
@@ -245,6 +283,7 @@ export const VanFleetTab: React.FC<VanFleetTabProps> = ({
                 value={stationName}
                 onChange={(e) => setStationName(e.target.value)}
                 placeholder={t('delivery_reps.van_fleet_tab.s12', "محطة مصر للبترول / التعاون")}
+                disabled={!hasVehicle}
                 style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', boxSizing: 'border-box' }}
               />
             </div>
@@ -270,7 +309,7 @@ export const VanFleetTab: React.FC<VanFleetTabProps> = ({
           <Button
             type="submit"
             variant="primary"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !hasVehicle}
             style={{ backgroundColor: '#170e5e', color: '#ffffff', fontSize: '12.5px', fontWeight: 800, height: '36px' }}
           >
             {isSubmitting ? t('delivery_reps.van_fleet_tab.s14', "جاري الحفظ...") : t('delivery_reps.van_fleet_tab.s15', "حفظ عملية التفويل وحساب الاستهلاك")}
@@ -279,7 +318,7 @@ export const VanFleetTab: React.FC<VanFleetTabProps> = ({
       </div>
 
       {/* Recent Fuel Logs Table */}
-      {fuelLogs.length > 0 && (
+      {fuelLogs.length > 0 ? (
         <div
           style={{
             backgroundColor: '#ffffff',
@@ -341,6 +380,22 @@ export const VanFleetTab: React.FC<VanFleetTabProps> = ({
               </div>
             ))}
           </div>
+        </div>
+      ) : (
+        <div
+          style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '12px',
+            padding: '14px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+            textAlign: 'center',
+            fontSize: '12px',
+            color: '#94a3b8',
+            fontWeight: 700,
+          }}
+        >
+          {t('delivery_reps.van_fleet_tab.s26', "لا توجد تفويلات مسجلة بعد")}
         </div>
       )}
     </div>
