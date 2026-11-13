@@ -69,7 +69,7 @@ export function mapSupplierRow(row: SupplierRow): Record<string, unknown> {
 export function buildCustomerSearchPredicate(q: string) {
   if (!q) return null;
   const term = `%${normalizeArabicSearch(q)}%`;
-  const codeDigitsMatch = q.trim().match(/^(?:c-|#)?0*(\d+)$/i);
+  const codeDigitsMatch = q.trim().match(/^(?:c[-\s]?|#)?0*(\d+)$/i);
   const numericId = codeDigitsMatch ? Number(codeDigitsMatch[1]) : null;
   if (numericId && Number.isInteger(numericId) && numericId > 0) {
     return sql<boolean>`(
