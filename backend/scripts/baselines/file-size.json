@@ -16,7 +16,7 @@
     "src/modules/cash-drawer/cash-drawer.service.ts": 1654,
     "src/modules/catalog/services/catalog-product.service.ts": 3285,
     "src/modules/contracting/contracting.controller.ts": 1363,
-    "src/modules/contracting/contracting.service.ts": 8565,
+    "src/modules/contracting/contracting.service.ts": 8569,
     "src/modules/contracting/dto/contracting.dto.ts": 2615,
     "src/modules/delivery-reps/delivery-reps.service.ts": 1851,
     "src/modules/delivery-reps/services/van-collections-and-swaps.service.ts": 1013,

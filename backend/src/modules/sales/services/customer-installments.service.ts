@@ -7,7 +7,7 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
-import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
+import { formatLocalCalendarDay, getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { SalesFinanceService } from './sales-finance.service';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
@@ -464,10 +464,15 @@ export class CustomerInstallmentsService {
       .orderBy('installment_number', 'asc')
       .execute();
 
-    // Mark virtual overdue
-    const todayStr = new Date().toISOString().split('T')[0];
+    // Mark virtual overdue — both sides are tenant-day keys: "today"
+    // is the tenant's business day (not the UTC day), and the stored
+    // due_date is a PG DATE column, so its key comes from local
+    // calendar parts (formatLocalCalendarDay), never a UTC slice —
+    // a UTC slice renders the previous day on any host east of UTC.
+    const tenantTz = await getTenantTimezone(this.db, this.tenantScope(auth).tenantId);
+    const todayStr = todayTenantDate(tenantTz);
     const installmentsWithStatus = installments.map((inst) => {
-      const dueDateStr = new Date(inst.due_date).toISOString().split('T')[0];
+      const dueDateStr = formatLocalCalendarDay(new Date(inst.due_date));
       let displayStatus = inst.status;
       if (inst.status === 'pending' && dueDateStr < todayStr) {
         displayStatus = 'overdue';
@@ -547,12 +552,17 @@ export class CustomerInstallmentsService {
       );
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    // "Today" is the tenant's business day, and the due_date filter
+    // compares DATE to DATE (a plain date string, never a UTC-midnight
+    // instant) so the result cannot depend on the database session's
+    // timezone setting.
+    const tenantTz = await getTenantTimezone(this.db, this.tenantScope(auth).tenantId);
+    const todayStr = todayTenantDate(tenantTz);
 
     if (query.status === 'overdue') {
-      q = q.where('i.status', '=', 'pending').where('i.due_date', '<', new Date(todayStr));
+      q = q.where('i.status', '=', 'pending').where(sql<boolean>`i.due_date < ${todayStr}::date`);
     } else if (query.status === 'due_now') {
-      q = q.where('i.status', '=', 'pending').where('i.due_date', '<=', new Date(todayStr));
+      q = q.where('i.status', '=', 'pending').where(sql<boolean>`i.due_date <= ${todayStr}::date`);
     } else if (query.status && query.status !== 'all') {
       q = q.where('i.status', '=', query.status);
     }
@@ -560,7 +570,7 @@ export class CustomerInstallmentsService {
     const rows = await q.orderBy('i.due_date', 'asc').limit(Number(query.pageSize) || 100).execute();
 
     const installments = rows.map((r) => {
-      const dueDateStr = new Date(r.due_date).toISOString().split('T')[0];
+      const dueDateStr = formatLocalCalendarDay(new Date(r.due_date));
       let displayStatus = r.status;
       if (r.status === 'pending' && dueDateStr < todayStr) {
         displayStatus = 'overdue';
@@ -783,7 +793,11 @@ export class CustomerInstallmentsService {
 
   async getSummaryMetrics(auth: AuthContext) {
     const bookDigits = await this.bookDigits(this.db, auth);
-    const todayStr = new Date().toISOString().split('T')[0];
+    // Overdue means due before the tenant's business day; the filter
+    // compares DATE to DATE (plain date string, never a UTC-midnight
+    // instant) so it cannot depend on the database session's timezone.
+    const tenantTz = await getTenantTimezone(this.db, this.tenantScope(auth).tenantId);
+    const todayStr = todayTenantDate(tenantTz);
 
     const [plansSummary, installmentsSummary, overdueSummary] = await Promise.all([
       this.db
@@ -814,7 +828,7 @@ export class CustomerInstallmentsService {
         ])
         .where(this.tenantPredicate(auth))
         .where('status', '!=', 'paid')
-        .where('due_date', '<', new Date(todayStr))
+        .where(sql<boolean>`due_date < ${todayStr}::date`)
         .executeTakeFirst(),
     ]);
 

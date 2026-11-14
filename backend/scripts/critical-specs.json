@@ -180,6 +180,7 @@
     "test/critical/trip-reconciliation-digits.spec.ts",
     "test/critical/van-field-return-cogs-residual-mirror.spec.ts",
     "test/critical/van-fmcg-promotions-and-route-opt.spec.ts",
-    "test/critical/withholding-tax-book-digits.spec.ts"
+    "test/critical/withholding-tax-book-digits.spec.ts",
+    "test/critical/clock-p4-utc-day-keys.spec.ts"
   ]
 }

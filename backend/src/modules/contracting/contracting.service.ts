@@ -12,7 +12,7 @@ import {
   getDailyDocumentPrefix,
   formatDailyDocumentNumber,
 } from '../../common/utils/document-number.util';
-import { getTenantTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
+import { formatLocalCalendarDay, getTenantTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
 import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
@@ -1394,7 +1394,7 @@ export class ContractingService {
             subcontractId: String(invoice.subcontract_id),
             projectId: String(invoice.project_id),
             unrecoveredAdvanceBalance: unrecBalance,
-            invoiceDate: invoice.period_end ? (typeof invoice.period_end === 'string' ? invoice.period_end : new Date(invoice.period_end).toISOString().split('T')[0]) : (await resolveBusinessDateKey(this.db, tenantId, new Date())),
+            invoiceDate: invoice.period_end ? (typeof invoice.period_end === 'string' ? invoice.period_end : formatLocalCalendarDay(new Date(invoice.period_end))) : (await resolveBusinessDateKey(this.db, tenantId, new Date())),
             activeGuarantees,
           });
           if (interlocking.isBlocked) {
@@ -2285,8 +2285,12 @@ export class ContractingService {
         assigned_team: null,
       };
     }
-    const startDate = r.start_date instanceof Date ? r.start_date.toISOString().slice(0, 10) : (r.start_date ? String(r.start_date).slice(0, 10) : '');
-    const endDate = r.end_date instanceof Date ? r.end_date.toISOString().slice(0, 10) : (r.end_date ? String(r.end_date).slice(0, 10) : '');
+    // start_date / end_date are PG DATE columns: node-postgres returns
+    // them as local-midnight Dates, so their day key comes from local
+    // calendar parts, never a UTC slice (a UTC slice renders the
+    // previous day on any host east of UTC).
+    const startDate = r.start_date instanceof Date ? formatLocalCalendarDay(r.start_date) : (r.start_date ? String(r.start_date).slice(0, 10) : '');
+    const endDate = r.end_date instanceof Date ? formatLocalCalendarDay(r.end_date) : (r.end_date ? String(r.end_date).slice(0, 10) : '');
     return {
       id: String(r.id),
       projectId: String(r.project_id),
@@ -7364,10 +7368,10 @@ export class ContractingService {
       issuing_bank: r.issuing_bank,
       amount: Number(r.amount),
       currency: r.currency || 'EGP',
-      issue_date: typeof r.issue_date === 'string' ? r.issue_date : new Date(r.issue_date).toISOString().split('T')[0],
-      expiry_date: typeof r.expiry_date === 'string' ? r.expiry_date : new Date(r.expiry_date).toISOString().split('T')[0],
+      issue_date: typeof r.issue_date === 'string' ? r.issue_date : formatLocalCalendarDay(new Date(r.issue_date)),
+      expiry_date: typeof r.expiry_date === 'string' ? r.expiry_date : formatLocalCalendarDay(new Date(r.expiry_date)),
       claim_expiry_date: r.claim_expiry_date
-        ? (typeof r.claim_expiry_date === 'string' ? r.claim_expiry_date : new Date(r.claim_expiry_date).toISOString().split('T')[0])
+        ? (typeof r.claim_expiry_date === 'string' ? r.claim_expiry_date : formatLocalCalendarDay(new Date(r.claim_expiry_date)))
         : null,
       reduction_schedule: r.reduction_schedule,
       status: r.status,
@@ -7465,10 +7469,10 @@ export class ContractingService {
         issuingBank: r.issuing_bank,
         amount: Number(r.amount),
         currency: r.currency || 'EGP',
-        issueDate: typeof r.issue_date === 'string' ? r.issue_date : new Date(r.issue_date).toISOString().split('T')[0],
-        expiryDate: typeof r.expiry_date === 'string' ? r.expiry_date : new Date(r.expiry_date).toISOString().split('T')[0],
+        issueDate: typeof r.issue_date === 'string' ? r.issue_date : formatLocalCalendarDay(new Date(r.issue_date)),
+        expiryDate: typeof r.expiry_date === 'string' ? r.expiry_date : formatLocalCalendarDay(new Date(r.expiry_date)),
         claimExpiryDate: r.claim_expiry_date
-          ? (typeof r.claim_expiry_date === 'string' ? r.claim_expiry_date : new Date(r.claim_expiry_date).toISOString().split('T')[0])
+          ? (typeof r.claim_expiry_date === 'string' ? r.claim_expiry_date : formatLocalCalendarDay(new Date(r.claim_expiry_date)))
           : null,
         reductionSchedule: r.reduction_schedule,
         status: r.status,

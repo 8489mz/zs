@@ -5,6 +5,7 @@ import { Kysely, sql } from 'kysely';
 import { Database } from '../../../../database/database.types';
 import { TaxSettingsService } from '../tax-settings/tax-settings.service';
 import { buildDocumentTax } from '../../engines/document-tax.engine';
+import { getTenantTimezone, todayTenantDate } from '../../../../common/utils/tenant-timezone.util';
 import { resolveZatcaSellerIdentity } from '../../engines/zatca-seller-identity.engine';
 import { selectConfiguredTaxRow } from '../../engines/configured-tax-id.engine';
 
@@ -268,7 +269,10 @@ export class ZatcaPhase2Service {
       const invoiceUuid = crypto.randomUUID();
 
       const saleDate = new Date(sale.created_at || Date.now());
-      const issueDate = saleDate.toISOString().split('T')[0];
+      // The e-invoice issue date is the tenant's business day of the
+      // sale instant — never the UTC day (a 00:30 Cairo sale is issued
+      // on the Cairo day, not the previous UTC day).
+      const issueDate = todayTenantDate(await getTenantTimezone(trx, tenantId), saleDate);
       const issueTime = saleDate.toTimeString().split(' ')[0];
 
       const isB2B = Boolean(customer?.tax_number);

@@ -1,4 +1,5 @@
 import { nextAccountingDay, resolveBusinessDateKey } from '../engines/accounting-date.engine';
+import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { tenantBaseCurrency } from '../accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
@@ -90,6 +91,12 @@ export class AgedDebtsService {
     kind: 'receivables' | 'payables',
   ): Promise<AgedDebtsSummary> {
     const asOfDay = params.asOfDate ? params.asOfDate.slice(0, 10) : await resolveBusinessDateKey(this.db, auth.tenantId ?? '', new Date());
+    // Invoice ages are counted in the TENANT's calendar days: the
+    // ledger instant is converted to a date in the tenant zone, never
+    // UTC — a 00:30 Cairo invoice is 0 days old on the Cairo as-of
+    // day, not 1. The zone is a bound parameter, so the SQL carries
+    // no hardcoded city.
+    const tenantTz = await getTenantTimezone(this.db, auth.tenantId ?? '');
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, auth.tenantId ?? ''));
     // Dust threshold: a balance that rounds to zero at book digits is
     // dust. At 2dp this is exactly the old 0.01; at 3dp it is 0.001, so
@@ -139,7 +146,7 @@ export class AgedDebtsService {
       ), allocated as (
         select i.partner_id, i.invoice_date,
                greatest(0, least(i.unpaid, p.balance - i.prior_unpaid)) as amount,
-               (${asOfDay}::date - (i.invoice_date at time zone 'UTC')::date) as days_old
+               (${asOfDay}::date - (i.invoice_date at time zone ${tenantTz})::date) as days_old
         from invoices i join partners p on p.id = i.partner_id
       ), buckets as (
         select partner_id,
@@ -161,7 +168,7 @@ export class AgedDebtsService {
                round(coalesce(b.days_91_plus, 0) + greatest(0, p.balance - coalesce(b.allocated_amount, 0)), ${digits}) as days_91_plus,
                b.oldest_invoice_date,
                case when b.oldest_invoice_date is null then 0
-                    else (${asOfDay}::date - (b.oldest_invoice_date at time zone 'UTC')::date) end as oldest_invoice_days,
+                    else (${asOfDay}::date - (b.oldest_invoice_date at time zone ${tenantTz})::date) end as oldest_invoice_days,
                case when coalesce(b.days_91_plus, 0) + greatest(0, p.balance - coalesce(b.allocated_amount, 0)) > 0 then 4
                     when coalesce(b.days_61_to_90, 0) > 0 then 3
                     when coalesce(b.days_31_to_60, 0) > 0 then 2
@@ -206,7 +213,7 @@ export class AgedDebtsService {
         creditLimit: p.credit_limit == null ? undefined : this.money(p.credit_limit, digits),
         totalBalance: balance, currentAmount: this.money(p.current_amount, digits),
         days1To30, days31To60, days61To90, days91Plus,
-        oldestInvoiceDate: p.oldest_invoice_date ? new Date(p.oldest_invoice_date).toISOString().slice(0, 10) : undefined,
+        oldestInvoiceDate: p.oldest_invoice_date ? todayTenantDate(tenantTz, new Date(p.oldest_invoice_date)) : undefined,
         oldestInvoiceDays: Number(p.oldest_invoice_days || 0),
         riskLevel,
         whatsAppUrl: kind === 'receivables' && cleanPhone.length >= 8
