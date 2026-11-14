@@ -3052,6 +3052,6 @@ INV-IMPORT-PRODUCTS-BILINGUAL-NAMES-PAYLOAD: the products import sends only norm
   then Africa/Cairo). No business timestamp is ever taken from a client/mobile/device clock, and no
   business day is ever derived from host-local parts, UTC slices, or a hardcoded city. Offline actions
   queue WITHOUT a client timestamp and are stamped by the server on sync receipt; the single deliberate
-  exception is POS offline `offlineCreatedAt`, gated to [2000-01-01, now+5min] and re-checked against closed
-  periods at journal-write time (see P2 for the past bound). Document numbers, report days, offer windows,
+  exception is POS offline `offlineCreatedAt`, gated to [now-7d, now+5min] and re-checked against closed
+  periods at journal-write time. Document numbers, report days, offer windows,
   due/issue dates and attendance days all derive from the tenant day. Prospective only.
