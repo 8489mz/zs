@@ -986,6 +986,7 @@ export interface SalesTable {
   settled_by: number | null;
   created_at: ColumnType<Date, string | undefined, never>;
   updated_at: ColumnType<Date, string | Date | undefined, string | Date | undefined>;
+  received_at: ColumnType<Date, string | Date | undefined, string | Date | undefined>;
   eta_uuid: string | null;
   eta_status: Generated<string>;
   eta_submission_id: string | null;

@@ -48,7 +48,7 @@ import { assertPosSubmitGates } from '../engines/pos-submit-gates.engine';
 import { assertProductsNot86ed } from './restaurant-advanced-fnb.service';
 import { ensureUniqueFlowItems } from '../../../common/utils/financial-integrity';
 import { allocateSaleFromImportLots } from '../../import-sales/helpers/import-lot-allocation.helper';
-import { validateOfflineCreatedAt } from '../../cash-drawer/helpers/cash-drawer.helper';
+import { offlineSaleTimestamps, validateOfflineCreatedAt } from '../../cash-drawer/helpers/cash-drawer.helper';
 import { buildPreparedSaleItem, calculateAllowedSaleUnitPrice, calculateCollectibleTotal, calculateStoreCreditBalance, computeSaleAllocationLegs, findBelowFloorSaleItems, resolvePostedSalePaymentChannel, roundSaleInvoiceTotals, roundSaleResidual } from '../helpers/sales-write.helper';
 import { normalizeSalePayload } from '../helpers/sales-payload.helper';
 import { type NormalizedSalePayload, type SalesOrderConversionRelease, type UpsertSaleDto } from '../dto/upsert-sale.dto';
@@ -1279,12 +1279,12 @@ export class CreateSaleService {
           card_scheme: normalized.cardScheme || null,
           card_last_four: normalized.cardLastFour || null,
           pager_number: normalized.pagerNumber || null,
-          // INV-REST-SHIFT-CLOSE-CONTROL (I24/I26): the station
-          // code for shift attribution, and the offline sale's
-          // original timestamp (only when the client sent a valid
-          // one — otherwise the column default NOW() applies).
+          // INV-REST-SHIFT-CLOSE-CONTROL (I24/I26) + clock P2: station
+          // code for shift attribution, and the offline sale's original
+          // timestamp (only when the client sent a valid one — otherwise
+          // the column default NOW() applies) + received_at for audit.
           pos_terminal_code: posTerminalCode,
-          ...(offlineCreatedAt ? { created_at: offlineCreatedAt.toISOString() } : {}),
+          ...offlineSaleTimestamps(offlineCreatedAt),
           tenant_id: scope.tenantId,
           account_id: scope.accountId,
         } as any)

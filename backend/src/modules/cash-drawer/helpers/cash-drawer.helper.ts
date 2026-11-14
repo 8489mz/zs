@@ -476,16 +476,20 @@ export function sumExpectedCashRows(rows: ExpectedCashBreakdownRow[]): number {
 }
 
 /**
- * INV-REST-SHIFT-CLOSE-CONTROL (I26): validate an offline sale's
- * client timestamp. Returns the parsed Date, or null when the
- * client sent nothing (an online sale). A supplied value that is
- * unparseable, before 2000-01-01 (garbage/epoch), or more than
- * five minutes in the future (clock skew allowance — the value is
- * still stored exactly as sent, never clamped) rejects with
- * OFFLINE_TIMESTAMP_INVALID. The server never silently rewrites
- * the timestamp: a wrong device clock must surface, not move the
- * sale into another shift's window unnoticed.
+ * INV-REST-SHIFT-CLOSE-CONTROL (I26) + single-server-clock rule (P2):
+ * validate an offline sale's client timestamp. Returns the parsed Date,
+ * or null when the client sent nothing (an online sale). A supplied value
+ * that is unparseable, before 2000-01-01 (garbage/epoch), more than five
+ * minutes in the future (clock skew allowance), or older than
+ * OFFLINE_CREATED_AT_MAX_AGE_MS — 7 days, the past bound: offline POS
+ * covers short outages, and anything older is a tampered device clock or
+ * a stale queue — rejects with OFFLINE_TIMESTAMP_INVALID. The value is
+ * still stored exactly as sent, never clamped: a wrong device clock must
+ * surface, not move the sale into another shift's window unnoticed. The
+ * closed-period journal re-check remains the backstop for the rest.
  */
+export const OFFLINE_CREATED_AT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
 export function validateOfflineCreatedAt(value: unknown, now: Date = new Date()): Date | null {
   const raw = String(value || '').trim();
   if (!raw) return null;
@@ -493,8 +497,32 @@ export function validateOfflineCreatedAt(value: unknown, now: Date = new Date())
   if (!Number.isFinite(parsed.getTime())) {
     throw new AppError('تاريخ الفاتورة الأوفلاين غير صالح', 'OFFLINE_TIMESTAMP_INVALID', 400);
   }
-  if (parsed.getTime() < Date.UTC(2000, 0, 1) || parsed.getTime() > now.getTime() + 5 * 60 * 1000) {
+  if (
+    parsed.getTime() < Date.UTC(2000, 0, 1) ||
+    parsed.getTime() < now.getTime() - OFFLINE_CREATED_AT_MAX_AGE_MS ||
+    parsed.getTime() > now.getTime() + 5 * 60 * 1000
+  ) {
     throw new AppError('تاريخ الفاتورة الأوفلاين خارج النطاق المسموح', 'OFFLINE_TIMESTAMP_INVALID', 400);
   }
   return parsed;
+}
+
+/**
+ * INV-REST-SHIFT-CLOSE-CONTROL (I26) + single-server-clock rule (P2):
+ * the two stamps an offline sale carries — the client's claimed business
+ * day (created_at, kept verbatim so the sale lands in the shift whose
+ * window held it) and the server's receipt instant (received_at, stamped
+ * from the server clock at insert time, never from the client). An online
+ * sale (no offline timestamp) carries neither stamp and falls back to the
+ * column defaults.
+ */
+export function offlineSaleTimestamps(
+  offlineCreatedAt: Date | null,
+  receivedAt: Date = new Date(),
+): { created_at?: string; received_at?: string } {
+  if (!offlineCreatedAt) return {};
+  return {
+    created_at: offlineCreatedAt.toISOString(),
+    received_at: receivedAt.toISOString(),
+  };
 }

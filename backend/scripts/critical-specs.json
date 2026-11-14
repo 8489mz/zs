@@ -126,6 +126,7 @@
     "test/critical/category-1a-money-dates.spec.ts",
     "test/critical/business-date-display.spec.ts",
     "test/critical/fmcg-promotion-date-mapping.spec.ts",
-    "test/critical/reports-tenant-day.spec.ts"
+    "test/critical/reports-tenant-day.spec.ts",
+    "test/critical/offline-sale-backdate-bound.spec.ts"
   ]
 }

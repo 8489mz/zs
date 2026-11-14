@@ -48,7 +48,8 @@
  *   sum to its total, including customer collections and cancelled-
  *   sale cash; the hydrated shift row exposes both totals.
  * I26 — an offline timestamp is validated, never silently clamped
- *   (garbage / future / pre-2000 reject); a backdated sale inside a
+ *   (garbage / future / pre-2000 reject; clock P2 bounds the past to 7
+ *   days — an older backdate rejects); a backdated sale inside a
  *   closed shift's window corrects that shift's stored figures
  *   through refreshClosedShiftSummary with a stamped correction.
  */
@@ -104,7 +105,9 @@ assert.ok(breakdown.rows.some((row: { key: string; amount: number }) => row.key 
 assert.ok(breakdown.rows.some((row: { key: string; amount: number }) => row.key === 'saleReturnsCash' && row.amount === -15));
 
 // --- Pure layer: offline timestamp validation (never silently clamped). ---
-assert.ok(validateOfflineCreatedAt('2026-11-08T10:00:00.000Z') instanceof Date);
+// The "valid" case is relative to now: a fixed calendar date would age out
+// of the 7-day past bound (clock P2) within a week of being written.
+assert.ok(validateOfflineCreatedAt(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) instanceof Date);
 assert.equal(validateOfflineCreatedAt(undefined), null);
 assert.equal(validateOfflineCreatedAt(''), null);
 assert.throws(() => validateOfflineCreatedAt('not-a-date'), /OFFLINE_TIMESTAMP_INVALID/);
