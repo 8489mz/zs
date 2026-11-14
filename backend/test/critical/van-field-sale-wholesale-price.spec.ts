@@ -235,9 +235,9 @@ async function main(): Promise<void> {
   // 4. Source pin: the wholesale branch, tier and guard skip live in
   // executeFieldSaleInternal.
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
-    const start = source.indexOf('private async executeFieldSaleInternal(');
-    const end = source.indexOf('async recordFieldCollection(');
+    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-sales.service.ts'), 'utf8');
+    const start = source.indexOf('async executeFieldSaleInternal(');
+    const end = source.indexOf('async listDriverSales(');
     assert.ok(start > 0 && end > start);
     const body = source.slice(start, end);
     assert.ok(body.includes("customerType === 'wholesale'"), 'customer_type drives the price branch');

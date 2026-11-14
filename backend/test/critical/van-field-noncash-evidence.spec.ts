@@ -480,8 +480,11 @@ async function main(): Promise<void> {
     {
       const here = __dirname;
       const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+      // Split 2 of 5 moved the sale gate to the field-sales service; the
+      // collection gate still lives in the facade until split 3.
+      const fieldSalesSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-field-sales.service.ts'), 'utf8');
       assert.ok(vanSource.includes('INV-VAN-FIELD-NONCASH-EVIDENCE-GATE'), 'van-sales names the invariant');
-      assert.ok(vanSource.includes('(isCard || isInstapay) && totalSale > 0'), 'the sale gate covers instapay');
+      assert.ok(fieldSalesSource.includes('(isCard || isInstapay) && totalSale > 0'), 'the sale gate covers instapay');
       assert.ok(vanSource.includes('isNonCashCollection'), 'the collection gate exists');
       assert.ok(vanSource.includes('transferReference: payload.transferReference'), 'the posting call hands the reference over');
       const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');

@@ -549,12 +549,14 @@ async function main(): Promise<void> {
       // Split 1 of 5 moved verifySupervisorPin + settleTrip to the lifecycle service;
       // the field sale still lives in the facade until split 2.
       const lifecycleSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle.service.ts'), 'utf8');
+      // Split 2 of 5 moved the field sale to the field-sales service.
+      const fieldSalesSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-field-sales.service.ts'), 'utf8');
       assert.ok(
         lifecycleSource.includes('approvalMode'),
         'verifySupervisorPin reports its approval mode',
       );
       assert.ok(
-        serviceSource.includes("eventCode: AUDIT_EVENT_CODES.VAN_FIELD_SALE"),
+        fieldSalesSource.includes("eventCode: AUDIT_EVENT_CODES.VAN_FIELD_SALE"),
         'the field sale writes its audit row',
       );
       assert.ok(
