@@ -367,6 +367,14 @@ export function normalizeCashDrawerMovementType(type?: string): CashDrawerMoveme
 }
 export function isCashDrawerTransferType(type: CashDrawerMovementType): boolean { return type === 'safe_drop' || type === 'safe_replenishment'; }
 export function toSignedCashDrawerAmount(type: CashDrawerMovementType, amount: number): number { return type === 'cash_out' || type === 'safe_drop' ? -Math.abs(amount) : Math.abs(amount); }
+// INV-DRAWER-MONEY-IN-NO-PASSWORD: only money-OUT movements need a
+// password — cash leaves the drawer, so the approval secret (the
+// cashier's own password, manager PIN fallback) proves who moved it
+// out. Money-IN (cash_in, safe_replenishment) enters the drawer, so
+// there is no loss to guard and no secret is required. The caller
+// (recordCashMovement) gates on this; the close confirmation and the
+// shift-open confirmation are separate gates and stay unchanged.
+export function isCashDrawerOutboundType(type: CashDrawerMovementType): boolean { return type === 'cash_out' || type === 'safe_drop'; }
 /**
  * Shift variance at the tenant's minor unit. digits is required: the old
  * toFixed(2) turned a KWD 0.005 variance into 0.01 (overstating the GL

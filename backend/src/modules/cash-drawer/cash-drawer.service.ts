@@ -1,7 +1,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Kysely, sql } from '../../database/kysely';
 import { AppError } from '../../common/errors/app-error';
-import { assertCashDrawerAmount, assertCashDrawerCountedCash, assertCashDrawerNote, buildCashDrawerShiftDocNo, buildExpectedCashBreakdown, computeCashDrawerVariance, filterCashDrawerRows, mapCashDrawerShiftRow, normalizeCashDrawerMovementType, normalizeShiftOpenPayload, paginateCashDrawerRows, requiresSecondApproval, summarizeCashDrawerRows, toSignedCashDrawerAmount, buildShiftCashReturnItem, isDrawerCashTender, isCashDrawerTransferType } from './helpers/cash-drawer.helper';
+import { assertCashDrawerAmount, assertCashDrawerCountedCash, assertCashDrawerNote, buildCashDrawerShiftDocNo, buildExpectedCashBreakdown, computeCashDrawerVariance, filterCashDrawerRows, isCashDrawerOutboundType, mapCashDrawerShiftRow, normalizeCashDrawerMovementType, normalizeShiftOpenPayload, paginateCashDrawerRows, requiresSecondApproval, summarizeCashDrawerRows, toSignedCashDrawerAmount, buildShiftCashReturnItem, isDrawerCashTender, isCashDrawerTransferType } from './helpers/cash-drawer.helper';
 import type { BlindCloseChannelReconciliation, BlindCloseReconciliation, CashDrawerMovementType } from './helpers/cash-drawer.helper';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
@@ -1288,7 +1288,7 @@ export class CashDrawerService {
         throw new AppError('لا يمكن تحويل النقدية إلى حساب الدرج نفسه؛ اختر حساب الخزنة الآمنة (1111) أو البنك', 'DRAWER_COUNTERPART_SAME_AS_CASH', 400);
       }
     }
-    await this.assertCashDrawerApproval(movementType, String(payload.managerPin || '').trim(), auth);
+    if (isCashDrawerOutboundType(movementType)) await this.assertCashDrawerApproval(movementType, String(payload.managerPin || '').trim(), auth);
     const signedAmount = toSignedCashDrawerAmount(movementType, amount);
 
     // The drawer movement and the expected_cash recomputation must be atomic and serialized on the

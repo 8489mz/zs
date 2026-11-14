@@ -120,7 +120,7 @@ export function CashDrawerPage() {
   const confirmDialogDescription = isMovement
     ? (isOutboundMovement
       ? 'سيتم تسجيل حركة صرف نقدي على وردية نقطة البيع الحالية بعد الاعتماد.'
-      : 'سيتم تسجيل حركة إيداع نقدي على وردية نقطة البيع الحالية بعد تأكيد المستخدم الحالي.')
+      : 'سيتم تسجيل حركة إيداع نقدي على وردية نقطة البيع الحالية.')
     : (controller.isBlindCloseUser
       ? 'سيتم تسجيل إقرار الإغلاق وإرسال وردية نقطة البيع في انتظار مراجعة المدير.'
       : 'سيتم إغلاق وردية نقطة البيع الحالية وتسجيل المبلغ المعدود والفرق النهائي بعد تأكيد المستخدم الحالي.');
@@ -129,12 +129,12 @@ export function CashDrawerPage() {
   const managerPinLabel = 'كلمة مرور المستخدم الحالي';
   const managerPinHint = 'أدخل كلمة مرور المستخدم الحالي لتأكيد العملية.';
 
-  // The backend requires an approval secret for every movement
-  // (the current user's own password for every type, manager PIN
-  // accepted as a fallback) and for close, so the PIN is always
-  // required here. The old expression let cash_in (and admin
-  // cash_out) confirm with an empty PIN and fail server-side.
-  const isPinRequired = true;
+  // INV-DRAWER-MONEY-IN-NO-PASSWORD: the backend requires an approval
+  // secret only for money-OUT movements (cash_out, safe_drop) and for
+  // close, so the PIN is required for those only. Money-IN movements
+  // (cash_in, safe_replenishment) post with no secret — the dialog
+  // hides the PIN field and sends ''.
+  const isPinRequired = !isMovement || isOutboundMovement;
 
   return (
     <div className="page-stack page-shell cash-drawer-page" dir="rtl">
