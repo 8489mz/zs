@@ -8,6 +8,7 @@ import { Database } from '../../database/database.types';
 import { TransactionHelper } from '../../database/helpers/transaction.helper';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
+import { CancelExpenseDto } from './dto/cancel-expense.dto';
 import { CreateTreasuryTransferDto } from './dto/create-treasury-transfer.dto';
 import { AppError } from '../../common/errors/app-error';
 import { paginateRows } from '../../common/utils/pagination';
@@ -45,11 +46,14 @@ export class TreasuryService {
           WITH filtered_expenses AS (
             SELECT
               e.id, e.title, e.amount, e.expense_date, e.note, e.branch_id, e.location_id,
-              b.name AS branch_name, l.name AS location_name, u.username AS created_by_name
+              e.cancelled_at, e.cancelled_by, e.cancel_reason,
+              b.name AS branch_name, l.name AS location_name, u.username AS created_by_name,
+              uc.username AS cancelled_by_name
             FROM expenses e
             LEFT JOIN branches b ON b.id = e.branch_id AND b.tenant_id = ${scope.tenantId}
             LEFT JOIN stock_locations l ON l.id = e.location_id AND l.tenant_id = ${scope.tenantId}
             LEFT JOIN users u ON u.id = e.created_by AND u.tenant_id = ${scope.tenantId}
+            LEFT JOIN users uc ON uc.id = e.cancelled_by AND uc.tenant_id = ${scope.tenantId}
             WHERE e.tenant_id = ${scope.tenantId}
             ${lastSeenId > 0 ? sql`AND e.id < ${lastSeenId}` : sql``}
             AND (
@@ -69,11 +73,14 @@ export class TreasuryService {
           WITH filtered_expenses AS (
             SELECT
               e.id, e.title, e.amount, e.expense_date, e.note, e.branch_id, e.location_id,
-              b.name AS branch_name, l.name AS location_name, u.username AS created_by_name
+              e.cancelled_at, e.cancelled_by, e.cancel_reason,
+              b.name AS branch_name, l.name AS location_name, u.username AS created_by_name,
+              uc.username AS cancelled_by_name
             FROM expenses e
             LEFT JOIN branches b ON b.id = e.branch_id AND b.tenant_id = ${scope.tenantId}
             LEFT JOIN stock_locations l ON l.id = e.location_id AND l.tenant_id = ${scope.tenantId}
             LEFT JOIN users u ON u.id = e.created_by AND u.tenant_id = ${scope.tenantId}
+            LEFT JOIN users uc ON uc.id = e.cancelled_by AND uc.tenant_id = ${scope.tenantId}
             WHERE e.tenant_id = ${scope.tenantId}
             ${lastSeenId > 0 ? sql`AND e.id < ${lastSeenId}` : sql``}
           )
@@ -92,6 +99,9 @@ export class TreasuryService {
       date: row.expense_date,
       note: row.note || '',
       createdBy: row.created_by_name || '',
+      cancelledAt: row.cancelled_at || null,
+      cancelledBy: row.cancelled_by_name || '',
+      cancelReason: row.cancel_reason || '',
       branchId: row.branch_id ? String(row.branch_id) : '',
       branchName: row.branch_name || '',
       locationId: row.location_id ? String(row.location_id) : '',
@@ -270,6 +280,115 @@ export class TreasuryService {
       }
     }
     return { ok: true, ...(await this.listExpenses({}, auth)) };
+  }
+
+  /**
+   * INV-EXPENSE-CANCEL-REVERSAL: cancel a posted expense without ever
+   * deleting or rewriting its journal. One transaction posts a
+   * REVERSING journal (Dr cash / Cr the expense account, linked to the
+   * original entry), writes a compensating +amount treasury row so the
+   * drawer cash is restored, and stamps the expense row cancelled.
+   * The close-screen disbursed total drops by the amount because
+   * computeShiftExpensesTotal excludes cancelled expenses -- a
+   * treasury row alone could not move it (the shift-movement query
+   * only reads reference_type 'cashier_shift' rows).
+   *
+   * Idempotency: the expense row is locked FOR UPDATE and the
+   * cancelled marker is the guard. A second cancel returns ok with
+   * alreadyCancelled and the original reversal entry id instead of
+   * posting twice; the posting layer's reversalOfEntryId check is the
+   * concurrent backstop.
+   */
+  async cancelExpense(expenseId: number, payload: CancelExpenseDto, auth: AuthContext): Promise<Record<string, unknown>> {
+    const scope = requireTenantScope(auth);
+    if (!Number.isInteger(expenseId) || expenseId <= 0) {
+      throw new AppError('Expense was not found', 'EXPENSE_NOT_FOUND', 404);
+    }
+    const reason = String(payload?.reason || '').trim().slice(0, 500);
+
+    const findReversalEntryId = async (trx: Kysely<Database>): Promise<number | null> => {
+      const row = await sql<{ id: number }>`
+        SELECT id FROM journal_entries
+        WHERE tenant_id = ${scope.tenantId} AND source_type = 'expense_reversal' AND source_id = ${expenseId}
+        AND status = 'posted' ORDER BY id DESC LIMIT 1
+      `.execute(trx);
+      return row.rows[0] ? Number(row.rows[0].id) : null;
+    };
+
+    const result = await this.tx.runInTransaction(this.db, async (trx) => {
+      await lockAccountingPeriod(trx, scope.tenantId);
+      // The row lock serializes concurrent cancels of the same expense:
+      // the second caller blocks here, then sees cancelled_at set.
+      const existing = await sql<{
+        id: number; title: string; amount: number; branch_id: number | null; location_id: number | null;
+        cancelled_at: Date | string | null;
+      }>`
+        SELECT id, title, amount, branch_id, location_id, cancelled_at
+        FROM expenses
+        WHERE tenant_id = ${scope.tenantId} AND id = ${expenseId}
+        FOR UPDATE
+      `.execute(trx);
+      const expense = existing.rows[0];
+      if (!expense) {
+        throw new AppError('Expense was not found', 'EXPENSE_NOT_FOUND', 404);
+      }
+      if (expense.cancelled_at) {
+        return { expenseId, journalEntryId: await findReversalEntryId(trx), alreadyCancelled: true };
+      }
+      const amount = Number(expense.amount || 0);
+      if (!(amount > 0)) {
+        throw new AppError('Expense amount must be positive', 'INVALID_EXPENSE_AMOUNT', 400);
+      }
+      const title = String(expense.title || '').trim();
+
+      const reversal = await this.accountingPosting.postExpenseReversal(trx, expenseId, reason, auth);
+      if (!reversal.journalEntryId) {
+        throw new AppError('Expense journal was not found, so it cannot be reversed', 'EXPENSE_JOURNAL_NOT_FOUND', 409);
+      }
+
+      // Compensating drawer movement: the cash physically returns to
+      // the drawer. Mirrors the original -amount 'expense' row, with
+      // its own reference type so no shift query double-counts it --
+      // the shift math attributes expenses through the expenses table,
+      // which now excludes this cancelled row.
+      await trx.insertInto('treasury_transactions').values({
+        txn_type: 'expense_reversal',
+        amount,
+        note: 'إلغاء مصروف: ' + title,
+        reference_type: 'expense_reversal',
+        reference_id: expenseId,
+        branch_id: expense.branch_id,
+        location_id: expense.location_id,
+        created_by: auth.userId,
+        tenant_id: scope.tenantId,
+        account_id: scope.accountId,
+      }).execute();
+
+      await sql`
+        UPDATE expenses
+        SET cancelled_at = NOW(), cancelled_by = ${auth.userId}, cancel_reason = ${reason || null}
+        WHERE id = ${expenseId} AND tenant_id = ${scope.tenantId}
+      `.execute(trx);
+
+      return { expenseId, journalEntryId: reversal.journalEntryId, alreadyCancelled: false };
+    });
+
+    if (!result.alreadyCancelled) {
+      // The expense, its reversal journal and the compensating row are
+      // already committed. An audit-log failure must NOT turn this
+      // into an error response: the client would retry, and the retry
+      // is exactly the double posting this guard exists to prevent.
+      try {
+        await this.audit.log(
+          'إلغاء مصروف',
+          `تم إلغاء مصروف #${result.expenseId} — قيد عكسي #${result.journalEntryId} بواسطة ${auth.username}`,
+          auth,
+        );
+      } catch (auditError) {
+        this.logger.error(`Expense ${result.expenseId} cancelled but audit log failed: ${(auditError as Error)?.message || auditError}`);
+      }
+    }
+    return { ok: true, ...result, ...(await this.listExpenses({}, auth)) };
   }
 
   async createTransfer(payload: CreateTreasuryTransferDto, auth: AuthContext): Promise<Record<string, unknown>> {

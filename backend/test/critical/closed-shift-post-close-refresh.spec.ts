@@ -113,7 +113,7 @@ const PRECISION_DDL = `
   CREATE TABLE supplier_payments (id bigint PRIMARY KEY, tenant_id text, created_by bigint, payment_date timestamptz, created_at timestamptz,
     branch_id bigint, location_id bigint, payment_channel text, amount numeric);
   CREATE TABLE expenses (id bigint PRIMARY KEY, tenant_id text, created_by bigint, expense_date timestamptz,
-    created_at timestamptz, branch_id bigint, location_id bigint, amount numeric);
+    created_at timestamptz, branch_id bigint, location_id bigint, amount numeric, cancelled_at timestamptz, cancelled_by bigint, cancel_reason text);
   CREATE TABLE customer_payments (id bigint PRIMARY KEY, tenant_id text, created_by bigint, created_at timestamptz,
     branch_id bigint, location_id bigint, payment_channel text, amount numeric);
 `;
@@ -322,7 +322,7 @@ async function makeFullDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE services (id bigserial PRIMARY KEY, tenant_id text, created_by bigint, service_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, payment_channel text, amount numeric);
     CREATE TABLE supplier_payments (id bigserial PRIMARY KEY, tenant_id text, created_by bigint, payment_date timestamptz, created_at timestamptz, branch_id bigint, location_id bigint, payment_channel text, amount numeric);
     CREATE TABLE customer_payments (id bigserial PRIMARY KEY, tenant_id text, created_by bigint, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, payment_channel text, amount numeric, note text);
-    CREATE TABLE expenses (id bigserial PRIMARY KEY, tenant_id text, created_by bigint, expense_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, amount numeric, title text, note text);
+    CREATE TABLE expenses (id bigserial PRIMARY KEY, tenant_id text, created_by bigint, expense_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, amount numeric, title text, note text, cancelled_at timestamptz, cancelled_by bigint, cancel_reason text);
   `);
   return { pg, db };
 }

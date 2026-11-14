@@ -24,7 +24,7 @@ async function main() {
   const pg = new PGlite();
   const db = new Kysely<any>({ dialect: new PGliteDialect(pg) });
   try {
-    await sql`CREATE TABLE expenses (id SERIAL PRIMARY KEY, tenant_id TEXT NOT NULL, title TEXT, amount NUMERIC(14,2) NOT NULL DEFAULT 0, expense_date DATE, note TEXT, branch_id INTEGER, location_id INTEGER, created_by INTEGER)`.execute(db);
+    await sql`CREATE TABLE expenses (id SERIAL PRIMARY KEY, tenant_id TEXT NOT NULL, title TEXT, amount NUMERIC(14,2) NOT NULL DEFAULT 0, expense_date DATE, note TEXT, branch_id INTEGER, location_id INTEGER, created_by INTEGER, cancelled_at TIMESTAMPTZ NULL, cancelled_by BIGINT NULL, cancel_reason TEXT NULL)`.execute(db);
     await sql`CREATE TABLE branches (id SERIAL PRIMARY KEY, tenant_id TEXT NOT NULL, name TEXT)`.execute(db);
     await sql`CREATE TABLE stock_locations (id SERIAL PRIMARY KEY, tenant_id TEXT NOT NULL, name TEXT)`.execute(db);
     await sql`CREATE TABLE users (id SERIAL PRIMARY KEY, tenant_id TEXT NOT NULL, username TEXT)`.execute(db);

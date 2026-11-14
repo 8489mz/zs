@@ -6,6 +6,10 @@ import { DialogShell } from '@/shared/components/dialog-shell';
 import { useTreasuryPage } from '@/features/treasury/hooks/useTreasuryPage';
 import { useTreasuryPageActions } from '@/features/treasury/hooks/useTreasuryPageActions';
 import { useCreateExpenseMutation } from '@/features/treasury/hooks/useCreateExpenseMutation';
+import { useCancelExpenseMutation } from '@/features/treasury/hooks/useCancelExpenseMutation';
+import { systemConfirm } from '@/shared/components/system-alert';
+import { toast } from '@/shared/components/system-alert';
+import type { ExpenseRecord } from '@/types/domain';
 import {
   exportExpenseCsv,
   initialExpenseForm,
@@ -38,6 +42,24 @@ export function ExpensesPage() {
     setExpensePage(1);
     setIsCreateOpen(false);
   });
+
+  const cancelExpenseMutation = useCancelExpenseMutation();
+
+  const handleCancelExpense = async (row: ExpenseRecord) => {
+    const ok = await systemConfirm({
+      title: t('expenses.cancel_confirm_title', "تأكيد إلغاء المصروف"),
+      message: t('expenses.cancel_confirm_message', "سيتم إلغاء المصروف {{title}} بمبلغ {{amount}} وإعادة النقدية إلى الدرج بقيد عكسي. لا يمكن التراجع عن الإلغاء.", { title: row.title, amount: row.amount }),
+      confirmText: t('expenses.cancel_confirm_button', "إلغاء المصروف"),
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await cancelExpenseMutation.mutateAsync(row);
+      toast.success(t('expenses.cancel_success', "تم إلغاء المصروف وإعادة النقدية إلى الدرج"));
+    } catch {
+      toast.error(t('expenses.cancel_failed', "تعذر إلغاء المصروف"));
+    }
+  };
 
   useEffect(() => setExpensePage(1), [expenseSearch]);
 
@@ -90,6 +112,8 @@ export function ExpensesPage() {
           setExpensePage={setExpensePage}
           setExpensePageSize={setExpensePageSize}
           onOpenCreate={() => setIsCreateOpen(true)}
+          onCancelExpense={handleCancelExpense}
+          cancellingExpenseId={cancelExpenseMutation.isPending ? cancelExpenseMutation.variables?.id : null}
         />
 
         {/* Modal for Recording Expense */}

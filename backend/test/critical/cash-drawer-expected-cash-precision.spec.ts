@@ -71,7 +71,7 @@ async function main() {
       CREATE TABLE supplier_payments (id bigint PRIMARY KEY, tenant_id text, created_by bigint, payment_date timestamptz, created_at timestamptz,
         branch_id bigint, location_id bigint, payment_channel text, amount numeric);
       CREATE TABLE expenses (id bigint PRIMARY KEY, tenant_id text, created_by bigint, expense_date timestamptz,
-        created_at timestamptz, branch_id bigint, location_id bigint, amount numeric);
+        created_at timestamptz, branch_id bigint, location_id bigint, amount numeric, cancelled_at timestamptz, cancelled_by bigint, cancel_reason text);
       CREATE TABLE customer_payments (id bigint PRIMARY KEY, tenant_id text, created_by bigint, created_at timestamptz,
         branch_id bigint, location_id bigint, payment_channel text, amount numeric);
       INSERT INTO cashier_shifts (id, tenant_id, branch_id, location_id, opened_by, opening_cash, status, created_at, closed_at, doc_no)

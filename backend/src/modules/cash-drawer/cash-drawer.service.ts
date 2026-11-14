@@ -299,6 +299,7 @@ export class CashDrawerService {
       select coalesce(sum(e.amount), 0) as total
       from expenses e
       where e.tenant_id = ${scope.tenantId} and e.created_by = ${openerId}
+        and e.cancelled_at is null
         and e.created_at >= ${shift.created_at}
         and (${shift.closed_at || null}::timestamptz is null or e.created_at <= ${shift.closed_at || null})
         and (${shift.branch_id || null}::int is null or e.branch_id is null or e.branch_id = ${Number(shift.branch_id || 0) || null})
@@ -738,6 +739,7 @@ export class CashDrawerService {
         select e.id, e.amount, e.title, e.note, e.expense_date, e.created_at
         from expenses e
         where e.tenant_id = ${scope.tenantId} and e.created_by = ${openerId}
+          and e.cancelled_at is null
           and e.created_at >= ${shift.created_at}
           and (${shift.closed_at || null}::timestamptz is null or e.created_at <= ${shift.closed_at || null})
           and (${shift.branch_id || null}::int is null or e.branch_id is null or e.branch_id = ${Number(shift.branch_id || 0) || null})

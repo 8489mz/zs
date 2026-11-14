@@ -87,4 +87,6 @@ export const treasuryApi = {
     return { rows: allRows, summary: firstPage.summary, pagination: firstPage.pagination };
   },
   createExpense: (payload: unknown) => http('/api/expenses', { method: 'POST', body: JSON.stringify(payload) }),
+  cancelExpense: (id: string | number, payload: { reason?: string } = {}) =>
+    http(`/api/expenses/${id}/cancel`, { method: 'POST', body: JSON.stringify(payload) }),
 };

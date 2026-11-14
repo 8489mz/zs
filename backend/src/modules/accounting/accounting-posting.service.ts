@@ -470,6 +470,9 @@ export class AccountingPostingService {
   async postExpense(queryable: DbOrTx, expenseId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.purchasesTreasuryPosting.postExpense(queryable, expenseId, auth);
   }
+  async postExpenseReversal(queryable: DbOrTx, expenseId: number, reason: string, auth: AuthContext): Promise<{ reversed: boolean; journalEntryId: number | null }> {
+    return this.purchasesTreasuryPosting.postExpenseReversal(queryable, expenseId, reason, auth);
+  }
 
   async resolveSystemAccountByCode(queryable: DbOrTx, tenantId: string, code: string): Promise<number> {
     return this.postingCore.resolveSystemAccountByCode(queryable, tenantId, code);

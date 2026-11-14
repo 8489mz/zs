@@ -342,4 +342,7 @@ export interface ExpenseRecord {
   branchName?: string;
   locationId?: string;
   locationName?: string;
+  cancelledAt?: string | null;
+  cancelledBy?: string;
+  cancelReason?: string;
 }

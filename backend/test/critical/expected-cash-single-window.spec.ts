@@ -80,7 +80,7 @@ async function main() {
         payment_channel text, amount numeric, note text);
       CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, name text);
       CREATE TABLE expenses (id bigint PRIMARY KEY, tenant_id text, created_by bigint, expense_date timestamptz,
-        created_at timestamptz, branch_id bigint, location_id bigint, amount numeric, title text, note text);
+        created_at timestamptz, branch_id bigint, location_id bigint, amount numeric, title text, note text, cancelled_at timestamptz, cancelled_by bigint, cancel_reason text);
       CREATE TABLE customer_payments (id bigint PRIMARY KEY, tenant_id text, created_by bigint, created_at timestamptz,
         branch_id bigint, location_id bigint, payment_channel text, amount numeric, note text);
 

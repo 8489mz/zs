@@ -9,7 +9,7 @@ import { SINGLE_STORE_MODE } from '@/config/product-scope';
 import type { ExpenseRecord } from '@/types/domain';
 import { formatScopeLabel } from '@/features/treasury/lib/treasury-page.helpers';
 
-export function TreasuryExpensesRegisterCard({ expenseSearch, onExpenseSearchChange, onReset, expensesQuery, expenses, expenseSummary, expensePagination, expensePageSize, setExpensePage, setExpensePageSize, onOpenCreate }: {
+export function TreasuryExpensesRegisterCard({ expenseSearch, onExpenseSearchChange, onReset, expensesQuery, expenses, expenseSummary, expensePagination, expensePageSize, setExpensePage, setExpensePageSize, onOpenCreate, onCancelExpense, cancellingExpenseId }: {
   expenseSearch: string;
   onExpenseSearchChange: (value: string) => void;
   onReset: () => void;
@@ -21,6 +21,8 @@ export function TreasuryExpensesRegisterCard({ expenseSearch, onExpenseSearchCha
   setExpensePage: (page: number) => void;
   setExpensePageSize: (pageSize: number) => void;
   onOpenCreate?: () => void;
+  onCancelExpense?: (row: ExpenseRecord) => void;
+  cancellingExpenseId?: string | null;
 }) {
   const { t } = useTranslation();
   return (
@@ -119,6 +121,39 @@ export function TreasuryExpensesRegisterCard({ expenseSearch, onExpenseSearchCha
                     {formatDate(row.date)}
                   </span>
                 ) 
+              },
+              {
+                key: 'status',
+                header: t('treasury.treasury_expenses_register_card.s20', "الحالة"),
+                cell: (row: ExpenseRecord) => (
+                  row.cancelledAt ? (
+                    <span style={{ fontSize: '0.78rem', color: '#991b1b', fontWeight: 700, background: '#fee2e2', padding: '2px 7px', borderRadius: '4px', display: 'inline-block', whiteSpace: 'nowrap' }} title={row.cancelReason || ''}>
+                      {t('treasury.treasury_expenses_register_card.s21', "ملغي")}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '0.78rem', color: '#166534', fontWeight: 700, background: '#dcfce7', padding: '2px 7px', borderRadius: '4px', display: 'inline-block', whiteSpace: 'nowrap' }}>
+                      {t('treasury.treasury_expenses_register_card.s22', "مسجل")}
+                    </span>
+                  )
+                )
+              },
+              {
+                key: 'actions',
+                header: t('treasury.treasury_expenses_register_card.s23', "إجراءات"),
+                cell: (row: ExpenseRecord) => (
+                  row.cancelledAt || !onCancelExpense ? (
+                    <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>—</span>
+                  ) : (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={cancellingExpenseId === row.id}
+                      onClick={() => onCancelExpense(row)}
+                    >
+                      {t('treasury.treasury_expenses_register_card.s24', "إلغاء")}
+                    </Button>
+                  )
+                )
               }
             ]} 
           />
