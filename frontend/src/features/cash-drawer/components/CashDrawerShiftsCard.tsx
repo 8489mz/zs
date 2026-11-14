@@ -368,9 +368,19 @@ function ShiftDetailsGrid({
         const cashSales = Number(row.cashSalesTotal || 0) + Number(row.serviceCashTotal || 0);
         const deliveryIn = Number(row.cashDrawerDeliveryCashInTotal || 0);
         const manualIn = Number(row.cashDrawerManualCashInTotal || 0);
+        const customerCollectionsIn = Number(row.customerCollectionsTotal || 0);
+        const cancelledSaleCashIn = Number(row.cancelledSaleCashTotal || 0);
         const totalOut = Number(row.cashDrawerCashOutTotal || 0) + Number(row.expensesTotal || 0) + Number(row.supplierPaymentsTotal || 0) + Number(row.saleReturnCashRefundTotal || 0);
-        const dynamicExpectedCash = openingCash + cashSales + manualIn + deliveryIn - totalOut;
-        const dynamicVariance = row.countedCash != null ? Number(row.countedCash) - dynamicExpectedCash : (row.variance != null ? Number(row.variance) : 0);
+        /* INV-EXPECTED-CASH-SINGLE-SOURCE: the expected cash is the
+         * backend's row.expectedCash (the same figure the close screen
+         * and the Z-report render). It must NOT be recomputed here:
+         * the old local recompute omitted customer collections and
+         * cancelled-sale cash, so closed shift SHIFT-261113-0027
+         * showed 3,733.90 here against the true 4,283.90 — a phantom
+         * +550.00 variance. Variance derives from the backend figure.
+         */
+        const expectedCash = Number(row.expectedCash || 0);
+        const variance = row.countedCash != null ? Number(row.countedCash) - expectedCash : (row.variance != null ? Number(row.variance) : 0);
 
         return (
           <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
@@ -398,6 +408,18 @@ function ShiftDetailsGrid({
                   <strong style={{ color: '#0f172a' }}>+{formatCurrency(deliveryIn)}</strong>
                 </div>
               )}
+              {customerCollectionsIn > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#64748b' }}>{t('cash_drawer.cash_drawer_shifts_card.s84', "(+) تحصيلات عملاء نقدي:")}</span>
+                  <strong style={{ color: '#0f172a' }}>+{formatCurrency(customerCollectionsIn)}</strong>
+                </div>
+              )}
+              {cancelledSaleCashIn > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#64748b' }}>{t('cash_drawer.cash_drawer_shifts_card.s85', "(+) نقدية فواتير ملغاة:")}</span>
+                  <strong style={{ color: '#0f172a' }}>+{formatCurrency(cancelledSaleCashIn)}</strong>
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#64748b' }}>{t('cash_drawer.cash_drawer_shifts_card.s29', "(-) إجمالي المنصرف من الدرج:")}</span>
                 <strong style={{ color: '#dc2626' }}>
@@ -406,7 +428,7 @@ function ShiftDetailsGrid({
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #cbd5e1', paddingTop: '6px', marginTop: '2px' }}>
                 <span style={{ fontWeight: 800, color: '#0f172a' }}>{t('cash_drawer.cash_drawer_shifts_card.s30', "صافي النقدية المتوقعة:")}</span>
-                <strong style={{ fontWeight: 800, color: '#0284c7' }}>{formatCurrency(dynamicExpectedCash)}</strong>
+                <strong style={{ fontWeight: 800, color: '#0284c7' }}>{formatCurrency(expectedCash)}</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#64748b' }}>{t('cash_drawer.cash_drawer_shifts_card.s31', "النقدية الفعلية (المعدودة):")}</span>
@@ -425,7 +447,7 @@ function ShiftDetailsGrid({
                     <>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span style={{ color: '#64748b' }}>{t('cash_drawer.cash_drawer_shifts_card.s32', "فارق نقدية الدرج:")}</span>
-                        <strong>{renderVarianceBadge(dynamicVariance)}</strong>
+                        <strong>{renderVarianceBadge(variance)}</strong>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span style={{ color: '#64748b' }}>{t('cash_drawer.cash_drawer_shifts_card.s33', "فارق الإلكتروني:")}</span>
@@ -433,7 +455,7 @@ function ShiftDetailsGrid({
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #cbd5e1', paddingTop: '4px', marginTop: '2px' }}>
                         <span style={{ fontWeight: 800, color: '#0f172a' }}>{t('cash_drawer.cash_drawer_shifts_card.s34', "إجمالي فارق الوردية:")}</span>
-                        <strong>{renderVarianceBadge(dynamicVariance + electronicDiff)}</strong>
+                        <strong>{renderVarianceBadge(variance + electronicDiff)}</strong>
                       </div>
                     </>
                   );
@@ -442,7 +464,7 @@ function ShiftDetailsGrid({
                 return (
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: '#64748b' }}>{t('cash_drawer.cash_drawer_shifts_card.s35', "الفارق النهائي (عجز / زيادة):")}</span>
-                    <strong>{renderVarianceBadge(dynamicVariance)}</strong>
+                    <strong>{renderVarianceBadge(variance)}</strong>
                   </div>
                 );
               })()}
@@ -661,13 +683,15 @@ export function CashDrawerShiftsCard(props: CashDrawerShiftsCardProps) {
                       {canViewSensitiveTotals && (
                         <td style={{ padding: '14px 16px', verticalAlign: 'middle', textAlign: 'center' }}>
                           {(() => {
-                            const openingCash = Number(row.openingCash || 0);
-                            const cashSales = Number(row.cashSalesTotal || 0) + Number(row.serviceCashTotal || 0);
-                            const deliveryIn = Number(row.cashDrawerDeliveryCashInTotal || 0);
-                            const manualIn = Number(row.cashDrawerManualCashInTotal || 0);
-                            const totalOut = Number(row.cashDrawerCashOutTotal || 0) + Number(row.expensesTotal || 0) + Number(row.supplierPaymentsTotal || 0) + Number(row.saleReturnCashRefundTotal || 0);
-                            const dynamicExpectedCash = openingCash + cashSales + manualIn + deliveryIn - totalOut;
-                            const drawerVariance = row.countedCash != null ? Number(row.countedCash) - dynamicExpectedCash : Number(row.variance || 0);
+                            /* INV-EXPECTED-CASH-SINGLE-SOURCE: same as the
+                             * detail card — the list variance column
+                             * derives from the backend row.expectedCash,
+                             * never from a local recompute (which omitted
+                             * customer collections + cancelled-sale cash
+                             * and showed a phantom +550.00 variance).
+                             */
+                            const expectedCash = Number(row.expectedCash || 0);
+                            const drawerVariance = row.countedCash != null ? Number(row.countedCash) - expectedCash : Number(row.variance || 0);
 
                             const expectedCard = Number(row.cardSalesTotal || 0) + Number(row.serviceCardTotal || 0) - Number(row.saleReturnCardRefundTotal || 0);
                             const cardDiff = Number(row.declaredCardTotal || 0) - expectedCard;
