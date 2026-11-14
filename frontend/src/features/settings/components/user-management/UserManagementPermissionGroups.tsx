@@ -90,10 +90,25 @@ export function UserManagementPermissionGroups({
   const { t } = useTranslation();
   const tenant = useAuthStore((s) => s.tenant);
   const vertical = resolveCurrentVertical(tenant);
+  // INV-USER-GRANT-NAMES-PERMISSION: the actor's own permissions.
+  // A permission the actor does not hold cannot be granted
+  // (INV-USER-GRANT-SUBSET), so its box stays untickable while it is
+  // unchecked; a checked one stays enabled so it can always be
+  // REMOVED (removing never needs the grant). Unknown actor (no
+  // session permissions — first-run setup) disables nothing.
+  const actorPermissions = useAuthStore((s) => s.user?.permissions);
+  const canGrant = (permission: string): boolean =>
+    !actorPermissions || actorPermissions.includes('*') || actorPermissions.includes(permission);
 
   const visibleGroups = useMemo(() => {
     return getFilteredPermissionGroups(tenant?.features, vertical);
   }, [tenant?.features, vertical]);
+
+  const ungrantableVisible = useMemo(
+    () => visibleGroups.flatMap((group) => group.items).filter((permission) => !permissions.includes(permission) && !canGrant(permission)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visibleGroups, permissions, actorPermissions],
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -105,6 +120,18 @@ export function UserManagementPermissionGroups({
           </span>
         ) : null}
       </div>
+
+      {/* INV-USER-GRANT-NAMES-PERMISSION: name the boxes the actor
+        cannot grant in the same plain Arabic words the form shows,
+        so the merchant sees why they are greyed out instead of
+        guessing — and knows to ask the platform owner for them. */}
+      {ungrantableVisible.length > 0 ? (
+        <div style={{ padding: '8px 10px', border: '1px solid #fde68a', borderRadius: '8px', background: '#fffbeb', fontSize: '0.76rem', color: '#92400e', lineHeight: 1.7 }}>
+          <strong>صلاحيات لا يملكها حسابك فلا يمكنك منحها: </strong>
+          {ungrantableVisible.map((permission) => getPermissionLabel(permission, vertical)).join('، ')}
+          <span> — لو احتاجها المستخدم الجديد، اطلبها من مالك المنصة.</span>
+        </div>
+      ) : null}
 
       {/* Balanced 3-Column Layout: Primary operations group spans 2 cols, filling row 1 & row 2 with zero gaps */}
       <div style={{
@@ -152,12 +179,13 @@ export function UserManagementPermissionGroups({
               }}>
                 {group.items.map((permission) => {
                   const isChecked = permissions.includes(permission);
+                  const isDisabled = !isChecked && !canGrant(permission);
                   return (
                     <label
                       key={permission}
-                      title={`${getPermissionLabel(permission, vertical)} (${permission})`}
+                      title={`${getPermissionLabel(permission, vertical)} (${permission})${isDisabled ? ' — لا يملكها حسابك فلا يمكنك منحها' : ''}`}
                       style={{
-                        cursor: 'pointer',
+                        cursor: isDisabled ? 'not-allowed' : 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px',
@@ -165,20 +193,22 @@ export function UserManagementPermissionGroups({
                         minHeight: '32px',
                         borderRadius: '6px',
                         border: isChecked ? '1px solid #86efac' : '1px solid #e2e8f0',
-                        background: isChecked ? '#f0fdf4' : '#ffffff',
+                        background: isDisabled ? '#f8fafc' : isChecked ? '#f0fdf4' : '#ffffff',
                         boxSizing: 'border-box',
                         userSelect: 'none',
                         transition: 'all 0.12s ease',
+                        opacity: isDisabled ? 0.6 : 1,
                       }}
                     >
                       <input
                         type="checkbox"
+                        disabled={isDisabled}
                         style={{
                           width: 15,
                           height: 15,
                           margin: 0,
                           accentColor: '#166534',
-                          cursor: 'pointer',
+                          cursor: isDisabled ? 'not-allowed' : 'pointer',
                           flexShrink: 0
                         }}
                         checked={isChecked}

@@ -17,6 +17,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { generatePhoneSearchVariants, validateAndNormalizePhone } from '../../core/utils/phone-utils';
 import { resolveUserLimit, isUserLimitReached } from './engines/user-plan-limit.engine';
 import { AuthCacheService } from '../../core/auth/services/auth-cache.service';
+import { getPermissionArabicLabel } from './permission-labels';
 
 function parseStoredPermissions(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.map(String);
@@ -409,8 +410,19 @@ export class UsersService {
     }
     if (!actorPermissions.includes('*')) {
       const held = new Set(actorPermissions);
-      if (writtenPermissions.some((permission) => !held.has(permission))) {
-        throw new AppError('You cannot grant a permission you do not hold', 'GRANT_EXCEEDS_ACTOR_PERMISSIONS', 403);
+      // INV-USER-GRANT-NAMES-PERMISSION: the refusal names the FIRST
+      // offending permission in the payload's order, in the same plain
+      // Arabic words the merchant sees on the form checkbox, with the
+      // key in parentheses — and tells them what to do (untick it and
+      // save again). The rule itself is unchanged: the grant is still
+      // refused, only the message became specific.
+      const offending = writtenPermissions.find((permission) => !held.has(permission));
+      if (offending) {
+        throw new AppError(
+          `لا يمكنك منح صلاحية «${getPermissionArabicLabel(offending)}» (${offending}) لأن حسابك لا يملكها. أزل علامة الصح عن هذه الصلاحية ثم أعد الحفظ.`,
+          'GRANT_EXCEEDS_ACTOR_PERMISSIONS',
+          403,
+        );
       }
     }
     if (typeof payload.role === 'string' && payload.role) {

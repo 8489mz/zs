@@ -6,6 +6,32 @@ export const DEFAULT_ADMIN_PERMS = [
   'maritimeJobs','maritimeContainers','maritimeInquiries','maritimeQuotations','maritimeRfqs','maritimePolicies',
   'contractingProjects','contractingInvoices','contractingBoq','contractingDailyLogs','contractingChangeOrders','contractingSubcontractors'
 ];
+export const MARITIME_PERMISSIONS = [
+  'maritimeJobs', 'maritimeContainers', 'maritimeInquiries', 'maritimeQuotations', 'maritimeRfqs', 'maritimePolicies',
+];
+export const CONTRACTING_PERMISSIONS = [
+  'contractingProjects', 'contractingInvoices', 'contractingBoq', 'contractingDailyLogs', 'contractingChangeOrders', 'contractingSubcontractors',
+];
+/* INV-USER-GRANT-NAMES-PERMISSION: DEFAULT_ADMIN_PERMS is 57 keys =
+ * the 45 retail keys the activation owner actually holds
+ * (backend/src/core/auth/constants/super-admin-permissions.ts) PLUS
+ * the 12 maritime/contracting keys above. A retail/clothes tenant
+ * has no maritime or contracting in it at all, so its owner template
+ * must never carry those 12: the form never shows them
+ * (getFilteredPermissionGroups shows only the tenant's vertical),
+ * the user can never untick them, and the grant guard
+ * (INV-USER-GRANT-SUBSET) refuses the whole save because the actor
+ * does not hold them. The retail template is therefore the admin
+ * list minus the two verticals; a vertical tenant adds back only
+ * its own 6 keys. */
+export const DEFAULT_RETAIL_ADMIN_PERMS = DEFAULT_ADMIN_PERMS.filter(
+  (permission) => !MARITIME_PERMISSIONS.includes(permission) && !CONTRACTING_PERMISSIONS.includes(permission),
+);
+export function getAdminTemplatePermissions(vertical?: string): string[] {
+  if (vertical === 'maritime') return [...DEFAULT_RETAIL_ADMIN_PERMS, ...MARITIME_PERMISSIONS];
+  if (vertical === 'contracting') return [...DEFAULT_RETAIL_ADMIN_PERMS, ...CONTRACTING_PERMISSIONS];
+  return [...DEFAULT_RETAIL_ADMIN_PERMS];
+}
 export const DEFAULT_OPERATOR_PERMS = [
   'dashboard','products','sales','kitchen','purchases','inventory','suppliers','customers','crm','accounts','accounting','returns','reports','treasury','services','hr','hrEmployees','hrAttendance','hrContracts','hrLoans','hrPayrollView','hrPayrollManage','settings','pricingCenterView','pricingCenterManage','cashDrawer','deliveryReps','canPrint','canDiscount','canEditPrice','canSellWholesale','canViewProfit','canEditInvoices','canDirectReturn','canAdjustInventory','canManageBranchStock','canManageSettings'
 ];
@@ -317,7 +343,7 @@ export function getFilteredPermissionGroups(tenantFeatures?: string[] | null, ve
 
 export const USER_ROLE_TEMPLATES = {
   cashier: { label: 'كاشير (مستخدم عادي)', role: 'cashier', permissions: [...DEFAULT_CASHIER_PERMS] },
-  owner: { label: 'مدير / مالك المنشأة', role: 'admin', permissions: [...DEFAULT_ADMIN_PERMS] },
+  owner: { label: 'مدير / مالك المنشأة', role: 'admin', permissions: [...DEFAULT_RETAIL_ADMIN_PERMS] },
   inventory: { label: 'مسؤول مخزون', role: 'admin', permissions: ['dashboard','products','inventory','purchases','suppliers','reports','pricingCenterView','pricingCenterManage','canPrint','canAdjustInventory','canManageBranchStock'] },
   accountant: { label: 'محاسب', role: 'admin', permissions: ['dashboard','accounts','accounting','reports','customers','suppliers','treasury','canPrint','canViewProfit'] }
 } as const;
@@ -326,7 +352,7 @@ export function getUserRoleTemplates(vertical?: string) {
   if (vertical === 'maritime') {
     return {
       cashier: { label: 'مسؤول عمليات وتتبع ملاحي', role: 'cashier' as const, permissions: [...DEFAULT_MARITIME_OPS_PERMS] },
-      owner: { label: 'مدير / مالك المكتب الملاحي', role: 'admin' as const, permissions: [...DEFAULT_ADMIN_PERMS] },
+      owner: { label: 'مدير / مالك المكتب الملاحي', role: 'admin' as const, permissions: getAdminTemplatePermissions('maritime') },
       inventory: { label: 'مسؤول حاويات ومستودعات', role: 'admin' as const, permissions: ['dashboard', 'maritimeContainers', 'maritimeJobs', 'suppliers', 'reports', 'canPrint'] },
       accountant: { label: 'محاسب نولون وتخليص', role: 'admin' as const, permissions: ['dashboard', 'maritimeJobs', 'maritimeQuotations', 'accounts', 'accounting', 'reports', 'customers', 'suppliers', 'treasury', 'canPrint', 'canViewProfit'] }
     };
@@ -334,7 +360,7 @@ export function getUserRoleTemplates(vertical?: string) {
   if (vertical === 'contracting') {
     return {
       cashier: { label: 'مهندس موقع / مسؤول مشاريع ومستخلصات', role: 'cashier' as const, permissions: [...DEFAULT_CONTRACTING_OPS_PERMS] },
-      owner: { label: 'مدير عام / مالك شركة المقاولات', role: 'admin' as const, permissions: [...DEFAULT_ADMIN_PERMS] },
+      owner: { label: 'مدير عام / مالك شركة المقاولات', role: 'admin' as const, permissions: getAdminTemplatePermissions('contracting') },
       inventory: { label: 'مسؤول تشوين ومهمات', role: 'admin' as const, permissions: ['dashboard', 'contractingProjects', 'contractingBoq', 'suppliers', 'reports', 'canPrint'] },
       accountant: { label: 'محاسب مشاريع ومستخلصات', role: 'admin' as const, permissions: ['dashboard', 'contractingProjects', 'contractingInvoices', 'contractingSubcontractors', 'accounts', 'accounting', 'reports', 'customers', 'suppliers', 'treasury', 'canPrint', 'canViewProfit'] }
     };
@@ -342,10 +368,45 @@ export function getUserRoleTemplates(vertical?: string) {
   return USER_ROLE_TEMPLATES;
 }
 
+/* INV-USER-GRANT-NAMES-PERMISSION: a template (owner/admin/...) must
+ * never pre-tick a permission the current actor does not hold — the
+ * server guard (INV-USER-GRANT-SUBSET) refuses the whole save when
+ * it does, and the merchant only learns it after the failed save.
+ * Split a requested list into what the actor may grant and what they
+ * may not, so the form pre-ticks only the grantable part. An actor
+ * holding '*' may grant everything; an unknown actor (no session
+ * permissions — first-run setup) is not filtered, so setup keeps
+ * working. Order of the requested list is preserved in both parts. */
+export function splitPermissionsByActorGrant(
+  requested: string[],
+  actorPermissions?: string[] | null,
+): { granted: string[]; withheld: string[] } {
+  if (!actorPermissions || actorPermissions.includes('*')) {
+    return { granted: [...requested], withheld: [] };
+  }
+  const held = new Set(actorPermissions);
+  const granted: string[] = [];
+  const withheld: string[] = [];
+  for (const permission of requested) {
+    if (held.has(permission)) granted.push(permission);
+    else withheld.push(permission);
+  }
+  return { granted, withheld };
+}
+
 export function blankUserDraft(role: 'super_admin' | 'admin' | 'cashier' = 'cashier', vertical?: string): ManagedUserRecord {
   let perms: string[];
-  if (role === 'super_admin' || role === 'admin') {
+  if (role === 'super_admin') {
+    // Platform-only role: the platform actor holds '*', so the full
+    // list passes the grant guard; the platform tenant has no shop
+    // vertical to scope by.
     perms = [...DEFAULT_ADMIN_PERMS];
+  } else if (role === 'admin') {
+    // INV-USER-GRANT-NAMES-PERMISSION: vertical-scoped (retail 45,
+    // maritime/contracting 51) — never the full 57, so no hidden
+    // vertical key is ever sent from a tenant that has no such
+    // vertical in it.
+    perms = getAdminTemplatePermissions(vertical);
   } else if (vertical === 'maritime') {
     perms = [...DEFAULT_MARITIME_OPS_PERMS];
   } else if (vertical === 'contracting') {

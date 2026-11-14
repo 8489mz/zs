@@ -202,6 +202,15 @@ const ARABIC_CODE_MESSAGES: Record<string, string> = {
   SUPPLIER_ADVANCE_OVERAPPLY: 'المبلغ أكبر من المتبقي من الدفعة المقدمة.',
   SUPPLIER_ADVANCE_EXCEEDS_PAYABLE: 'المبلغ أكبر من الرصيد المستحق للمورد.',
   SUPPLIER_ADVANCE_PURCHASE_MISMATCH: 'الدفعة المقدمة تُطبق فقط على فاتورة شراء مفتوحة لنفس المورد.',
+  /* INV-USER-GRANT-NAMES-PERMISSION: the grant-guard codes. The
+   * star/role codes carry no dynamic detail, so they map statically.
+   * GRANT_EXCEEDS_ACTOR_PERMISSIONS is mapped statically too, but
+   * ONLY as the fallback: the carve-out below prefers the server
+   * message whenever it names the blocking permission in Arabic, so
+   * the specific reason is never replaced by this static text. */
+  GRANT_EXCEEDS_ACTOR_PERMISSIONS: 'لا يمكنك منح صلاحية لا يملكها حسابك — أزل علامة الصح عن الصلاحية التي لا تملكها ثم أعد الحفظ.',
+  GRANT_STAR_FORBIDDEN: 'لا يمكن منح صلاحية "الكل" إلا من حساب منصة المنشأة الرئيسية.',
+  GRANT_ROLE_ABOVE_ACTOR: 'لا يمكنك منح دور أعلى من دور حسابك الحالي.',
   CATEGORY_EXISTS: 'يوجد قسم مسجل بالفعل بنفس هذا الاسم.',
   PRODUCT_HAS_STOCK: 'لا يمكن حذف الصنف لوجود رصيد مخزني حالي له.',
   PRODUCT_HAS_HISTORY: 'لا يمكن حذف الصنف لارتباطه بحركات وفواتير سابقة.',
@@ -301,6 +310,14 @@ const ENGLISH_CODE_MESSAGES: Record<string, string> = {
   SUPPLIER_ADVANCE_OVERAPPLY: 'The amount exceeds the remaining advance.',
   SUPPLIER_ADVANCE_EXCEEDS_PAYABLE: 'The amount exceeds the supplier payable balance.',
   SUPPLIER_ADVANCE_PURCHASE_MISMATCH: 'An advance can only be applied to an open purchase bill of the same supplier.',
+  /* INV-USER-GRANT-NAMES-PERMISSION: the star/role codes carry no
+   * dynamic detail, so they map statically. GRANT_EXCEEDS is
+   * deliberately NOT mapped here: its server message names the
+   * blocking permission in Arabic (with the English key), and the
+   * carve-out below returns that specific message in both languages
+   * instead of a static sentence. */
+  GRANT_STAR_FORBIDDEN: 'The all-permissions grant can only be given from the platform tenant account.',
+  GRANT_ROLE_ABOVE_ACTOR: 'You cannot grant a role above your own account role.',
   CATEGORY_EXISTS: 'A category with this name already exists.',
   PRODUCT_EXISTS: 'A product with this name or barcode already exists.',
   PRODUCT_HAS_STOCK: 'Cannot delete product because it has active stock.',
@@ -378,6 +395,23 @@ export function getFriendlyApiErrorMessage(error: unknown, fallback?: string): s
   if (code && code.trim().toUpperCase() === 'VALIDATION_ERROR') {
     const trimmed = (message || '').trim().replace(/[.،]+$/, '');
     if (trimmed && trimmed !== 'البيانات المدخلة غير صحيحة' && trimmed !== 'البيانات المرسلة غير صحيحة') {
+      return message;
+    }
+  }
+
+  // INV-USER-GRANT-NAMES-PERMISSION: the server message for this code
+  // names the blocking permission in plain Arabic ("لا يمكنك منح
+  // صلاحية «النسخ الاحتياطي والاسترداد» (canManageBackups) ...").
+  // The static code map below would replace it with a sentence that
+  // does not say WHICH permission blocks the save — exactly the
+  // generic-message failure this package fixes. Prefer the specific
+  // server message whenever it is Arabic and differs from the static
+  // mapping; the static mapping stays as the fallback for servers
+  // that send no specific message.
+  if (code && code.trim().toUpperCase() === 'GRANT_EXCEEDS_ACTOR_PERMISSIONS') {
+    const trimmed = (message || '').trim();
+    const staticText = ARABIC_CODE_MESSAGES.GRANT_EXCEEDS_ACTOR_PERMISSIONS;
+    if (trimmed && /[\u0600-\u06FF]/.test(trimmed) && trimmed !== staticText) {
       return message;
     }
   }

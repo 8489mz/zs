@@ -7,6 +7,18 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   DAMAGE_NOTE_REQUIRED: 'لازم تكتب سبب في خانة الملاحظات.',
   LOCATION_BRANCH_MISMATCH: 'الموقع المختار لا يتبع الفرع المحدد.',
   FORBIDDEN: 'غير مسموح بتنفيذ هذه العملية.',
+  /* INV-USER-GRANT-NAMES-PERMISSION: the three grant-guard codes had
+   * no mapping, so every one of them surfaced as the generic 403
+   * sentence (and GRANT_STAR_FORBIDDEN even matched the
+   * '_FORBIDDEN' pattern fallback). Each now resolves to a specific
+   * Arabic sentence. GRANT_EXCEEDS_ACTOR_PERMISSIONS keeps its
+   * specific wording from the guard itself: translateErrorMessage-
+   * FromCode prefers an Arabic fallback that differs from this
+   * static text, so the message naming the blocking permission
+   * survives the translator and reaches the screen. */
+  GRANT_EXCEEDS_ACTOR_PERMISSIONS: 'لا يمكنك منح صلاحية لا يملكها حسابك — أزل علامة الصح عن الصلاحية التي لا تملكها ثم أعد الحفظ.',
+  GRANT_STAR_FORBIDDEN: 'لا يمكن منح صلاحية "الكل" إلا من حساب منصة المنشأة الرئيسية.',
+  GRANT_ROLE_ABOVE_ACTOR: 'لا يمكنك منح دور أعلى من دور حسابك الحالي.',
   UNAUTHORIZED: 'غير مصرح لك بالوصول.',
   CUSTOMER_EXISTS: 'يوجد عميل بنفس الاسم بالفعل.',
   CUSTOMER_NOT_FOUND: 'العميل غير موجود.',

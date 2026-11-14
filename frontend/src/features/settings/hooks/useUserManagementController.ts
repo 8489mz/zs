@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { settingsApi, type ManagedUserRecord, type PlanLimitInfo } from '@/features/settings/api/settings.api';
-import { blankUserDraft, normalizeUserRecord } from '@/features/settings/components/user-management.shared';
+import { blankUserDraft, getPermissionLabel, normalizeUserRecord, splitPermissionsByActorGrant } from '@/features/settings/components/user-management.shared';
 import {
   applyRolePermissions,
   buildTemplateDraft,
@@ -34,6 +34,13 @@ export function useUserManagementController({
 }) {
   const currentUserId = useAuthStore((state) => state.user?.id || '');
   const currentUserRole = useAuthStore((state) => state.user?.role || 'cashier');
+  // INV-USER-GRANT-NAMES-PERMISSION: the actor's own permissions are
+  // the second layer (after vertical scoping) that keeps a save from
+  // ever carrying a permission the actor does not hold — a visible
+  // permission the actor lacks is never pre-ticked, so creating an
+  // owner/admin with the standard template cannot fail the grant
+  // guard for a permission the merchant could see but not grant.
+  const actorPermissions = useAuthStore((state) => state.user?.permissions);
   const tenant = useAuthStore((state) => state.tenant);
   const vertical = resolveCurrentVertical(tenant);
   const [selectedUserKey, setSelectedUserKey] = useState('');
@@ -153,6 +160,8 @@ export function useUserManagementController({
   const startNewUser = useCallback((role: 'super_admin' | 'admin' | 'cashier' = 'cashier') => {
     setSelectedUserKey('__new__');
     const newDraft = blankUserDraft(role, vertical);
+    const split = splitPermissionsByActorGrant(newDraft.permissions, actorPermissions);
+    newDraft.permissions = split.granted;
     if (!SINGLE_STORE_MODE && branches && branches.length === 1) {
       newDraft.branchIds = [branches[0].id];
       newDraft.defaultBranchId = branches[0].id;
@@ -163,7 +172,7 @@ export function useUserManagementController({
     setDraft(newDraft);
     setActiveTemplate(null);
     setStatusMessage('');
-  }, [vertical, branches]);
+  }, [vertical, branches, actorPermissions]);
 
   useEffect(() => {
     if (selectedUserKey === '__new__' && !SINGLE_STORE_MODE && branches && branches.length === 1) {
@@ -182,9 +191,15 @@ export function useUserManagementController({
 
   function applyTemplate(templateKey: 'cashier' | 'owner' | 'inventory' | 'accountant') {
     const template = buildTemplateDraft(draft, templateKey, vertical);
-    setDraft(template.nextDraft);
+    const split = splitPermissionsByActorGrant(template.nextDraft.permissions, actorPermissions);
+    setDraft({ ...template.nextDraft, permissions: split.granted });
     setActiveTemplate(templateKey);
-    setStatusMessage(`تم تطبيق ${template.label}.`);
+    // Name what was left unticked in the same plain Arabic words the
+    // form shows, so the merchant knows exactly why those boxes are
+    // empty instead of wondering.
+    setStatusMessage(split.withheld.length
+      ? `تم تطبيق ${template.label}. لم تُعلَّم هذه الصلاحيات لأن حسابك لا يملكها: ${split.withheld.map((permission) => getPermissionLabel(permission, vertical)).join('، ')}.`
+      : `تم تطبيق ${template.label}.`);
   }
 
   useUserManagementEffects({
@@ -235,7 +250,10 @@ export function useUserManagementController({
   const canDirectlyDisableSelected = !selectedDraftDisableProtection;
 
   function applyDefaultPermissions(role: 'super_admin' | 'admin' | 'cashier') {
-    setDraft((current) => ({ ...current, role, permissions: applyRolePermissions(role, vertical) }));
+    setDraft((current) => {
+      const split = splitPermissionsByActorGrant(applyRolePermissions(role, vertical), actorPermissions);
+      return { ...current, role, permissions: split.granted };
+    });
   }
 
   function togglePermission(permission: string) {

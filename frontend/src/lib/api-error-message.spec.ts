@@ -76,3 +76,53 @@ describe('getFriendlyApiErrorMessage — modifiers 23502 names the field (T14-B)
     expect(message).toBe('Modifiers are required.');
   });
 });
+
+/*
+ * INV-USER-GRANT-NAMES-PERMISSION: when the grant guard refuses a
+ * save, the server message names the blocking permission in plain
+ * Arabic. The static code map must never replace that specific
+ * message with a sentence that does not say WHICH permission blocks
+ * the save; the star/role codes carry no dynamic detail, so they map
+ * statically instead of falling back to the generic 403 sentence.
+ */
+describe('getFriendlyApiErrorMessage — grant refusals name the permission', () => {
+  const NAMED_MESSAGE =
+    'لا يمكنك منح صلاحية «النسخ الاحتياطي والاسترداد» (canManageBackups) لأن حسابك لا يملكها. أزل علامة الصح عن هذه الصلاحية ثم أعد الحفظ.';
+
+  it('prefers the server message naming the blocking permission over the static mapping', () => {
+    const message = getFriendlyApiErrorMessage({
+      response: {
+        data: {
+          code: 'GRANT_EXCEEDS_ACTOR_PERMISSIONS',
+          message: NAMED_MESSAGE,
+        },
+      },
+    });
+    expect(message).toBe(NAMED_MESSAGE);
+  });
+
+  it('falls back to the specific static Arabic sentence when the server sends no detail', () => {
+    const message = getFriendlyApiErrorMessage({
+      response: {
+        data: {
+          code: 'GRANT_EXCEEDS_ACTOR_PERMISSIONS',
+          message: 'You cannot grant a permission you do not hold',
+        },
+      },
+    });
+    expect(message).toBe('لا يمكنك منح صلاحية لا يملكها حسابك — أزل علامة الصح عن الصلاحية التي لا تملكها ثم أعد الحفظ.');
+  });
+
+  it('maps the star and role grant codes to specific Arabic sentences, never the generic 403', () => {
+    expect(
+      getFriendlyApiErrorMessage({
+        response: { data: { code: 'GRANT_STAR_FORBIDDEN', message: 'Only the platform tenant may grant the all-permissions grant' } },
+      }),
+    ).toBe('لا يمكن منح صلاحية "الكل" إلا من حساب منصة المنشأة الرئيسية.');
+    expect(
+      getFriendlyApiErrorMessage({
+        response: { data: { code: 'GRANT_ROLE_ABOVE_ACTOR', message: 'You cannot grant a role above your own' } },
+      }),
+    ).toBe('لا يمكنك منح دور أعلى من دور حسابك الحالي.');
+  });
+});
