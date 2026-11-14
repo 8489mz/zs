@@ -1,4 +1,5 @@
 import { tenantBaseCurrency } from './accounting-currency';
+import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { resolveFxRate } from './fx-rate-resolution';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from './engines/money-minor-units.engine';
 
@@ -611,6 +612,9 @@ export class AccountingService {
 
   async listJournalEntries(filters: JournalEntriesQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
     this.assertAccountingAccess(auth);
+    // P8 (RC-7): the JE page's date default comes from the server clock —
+    // the list response carries it, the HR attendance list precedent.
+    const tenantTimezone = await getTenantTimezone(this.db, auth.tenantId);
     const page = Math.max(1, Number(filters.page || 1));
     const pageSize = Math.min(200, Math.max(1, Number(filters.pageSize || 20)));
     const offset = (page - 1) * pageSize;
@@ -714,6 +718,9 @@ export class AccountingService {
         totalPages: Math.max(1, Math.ceil(totalItems / pageSize)),
         nextCursor,
       },
+      // P8 (RC-7): the JE page's date default comes from the server clock.
+      serverTime: new Date().toISOString(),
+      serverTimezone: tenantTimezone,
     };
   }
 

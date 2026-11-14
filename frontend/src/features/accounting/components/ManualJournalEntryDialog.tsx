@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useServerClock } from '@/shared/hooks/use-server-clock';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { Button } from '@/shared/ui/button';
 import { Field } from '@/shared/ui/field';
@@ -25,6 +26,10 @@ interface ManualJournalEntryDialogProps {
   open: boolean;
   onClose: () => void;
   onSuccess: (entry: { id: number; entryNo: string }) => void;
+  /** Server instant (ISO) from the page's JE list response. */
+  serverTime?: string;
+  /** Tenant zone from the page's JE list response. */
+  serverTimezone?: string;
 }
 
 function normalizeNumerals(value: string): string {
@@ -56,8 +61,9 @@ function createEmptyRow(): JournalLineRow {
   };
 }
 
-export function ManualJournalEntryDialog({ open, onClose, onSuccess }: ManualJournalEntryDialogProps) {
+export function ManualJournalEntryDialog({ open, onClose, onSuccess, serverTime, serverTimezone }: ManualJournalEntryDialogProps) {
   const { t } = useTranslation();
+  const serverClock = useServerClock(serverTime, serverTimezone);
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState('');
   const [reference, setReference] = useState('');
@@ -159,8 +165,19 @@ export function ManualJournalEntryDialog({ open, onClose, onSuccess }: ManualJou
     },
   });
 
+  // P8 (RC-7): default the entry date from the server day in the tenant
+  // zone when the dialog opens — the old default was a UTC slice, so it
+  // was yesterday for the first two hours after midnight (UTC+2). The
+  // input stays user-editable; only the default comes from the server.
+  useEffect(() => {
+    if (open) {
+      const key = serverClock.todayKey();
+      if (key) setEntryDate(key);
+    }
+  }, [open]);
+
   function handleReset() {
-    setEntryDate(new Date().toISOString().slice(0, 10));
+    setEntryDate(serverClock.todayKey() || new Date().toISOString().slice(0, 10));
     setDescription('');
     setReference('');
     setCashFlowCategory('');

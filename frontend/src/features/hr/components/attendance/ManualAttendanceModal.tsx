@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { ClockIcon, UserIcon, CalendarIcon } from '@/shared/components/icons/AppIcons';
+import { useServerClock } from '@/shared/hooks/use-server-clock';
 import { TimeAmPmInput } from './TimeAmPmInput';
 import type { ManualAttendancePrompt } from './attendance-types';
 
@@ -14,6 +15,10 @@ interface ManualAttendanceModalProps {
   isPending: boolean;
   onClose: () => void;
   onSubmit: (e?: React.FormEvent) => void;
+  /** Server instant (ISO) from the page's attendance list response. */
+  serverTime?: string;
+  /** Tenant zone from the page's attendance list response. */
+  serverTimezone?: string;
 }
 
 export const ManualAttendanceModal: React.FC<ManualAttendanceModalProps> = ({
@@ -25,8 +30,11 @@ export const ManualAttendanceModal: React.FC<ManualAttendanceModalProps> = ({
   isPending,
   onClose,
   onSubmit,
+  serverTime,
+  serverTimezone,
 }) => {
   const { t } = useTranslation();
+  const serverClock = useServerClock(serverTime, serverTimezone);
   if (!prompt) return null;
 
   const isCheckIn = prompt.type === 'check_in';
@@ -41,10 +49,9 @@ export const ManualAttendanceModal: React.FC<ManualAttendanceModalProps> = ({
   );
 
   const handleSetCurrentTime = () => {
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    setTimeInput(`${hh}:${mm}`);
+    // P8 (RC-7): the "current time" comes from the server clock in the
+    // tenant zone, never the client clock.
+    setTimeInput(serverClock.timeHHmm());
   };
 
   const handleSetScheduledTime = () => {

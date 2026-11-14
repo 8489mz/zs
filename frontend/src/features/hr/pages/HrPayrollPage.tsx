@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { FormEvent, useMemo, useState, useEffect } from 'react';
+import { FormEvent, useMemo, useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { hrApi } from '@/features/hr/api/hr.api';
@@ -13,6 +13,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { useHrMutations, useHrPayrollRun, useHrWorkspace } from '@/features/hr/hooks/useHr';
 import { HrPayrollTopSections } from '@/features/hr/pages/payroll/HrPayrollTopSections';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
+import { serverDayKey } from '@/shared/hooks/use-server-clock';
 import { isEgypt } from '@/lib/currencies';
 import {
   employeeMatches,
@@ -123,6 +124,23 @@ export function HrPayrollPage() {
 
   const workspace = useHrWorkspace({ page, pageSize, month: monthFilter });
   const payrollRunDetails = useHrPayrollRun(selectedRunId || undefined);
+
+  // P8 (RC-7): the payroll page opens on the SERVER's tenant month, not
+  // the client clock's month. Adopt it once, when the payroll-runs list
+  // first resolves, and only while the filter still equals the client
+  // month at mount — a user-picked month is never overridden.
+  const serverMonth = useMemo(() => {
+    const key = serverDayKey(workspace.payrollRuns.data?.serverTime, workspace.payrollRuns.data?.serverTimezone);
+    return key ? key.slice(0, 7) : '';
+  }, [workspace.payrollRuns.data?.serverTime, workspace.payrollRuns.data?.serverTimezone]);
+  const adoptedServerMonthRef = useRef(false);
+  useEffect(() => {
+    if (!serverMonth || adoptedServerMonthRef.current) return;
+    adoptedServerMonthRef.current = true;
+    if (monthFilter === initialMonth && serverMonth !== initialMonth) {
+      setMonthFilter(serverMonth);
+    }
+  }, [serverMonth, monthFilter, initialMonth]);
 
   // Active employees for employee dropdown/combobox (matching attendance page)
   const canViewEmployees = useHasAnyPermission(['hrEmployees', 'hrAttendance', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove']);
@@ -1091,6 +1109,8 @@ export function HrPayrollPage() {
         formError={formError}
         employees={employees}
         isEgypt={isEg}
+        serverTime={workspace.payrollRuns.data?.serverTime}
+        serverTimezone={workspace.payrollRuns.data?.serverTimezone}
       />
 
       <PayPayrollRunModal

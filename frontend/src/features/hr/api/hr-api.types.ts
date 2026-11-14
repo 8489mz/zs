@@ -46,6 +46,8 @@ export interface WithdrawalsResponse {
 export interface PayrollRunsResponse {
   runs?: HrPayrollRun[];
   summary?: { totalItems?: number };
+  serverTime?: string;
+  serverTimezone?: string;
 }
 
 export interface PayrollRunResponse {

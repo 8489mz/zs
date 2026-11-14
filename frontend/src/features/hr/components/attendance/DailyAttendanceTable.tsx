@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useMemo } from 'react';
 import { DataTable } from '@/shared/ui/data-table';
 import { CustomSelect } from '@/shared/ui/custom-select';
+import { useServerClock } from '@/shared/hooks/use-server-clock';
 import type { HrAttendanceRecord } from '@/types/domain';
 import { DraftRow, calculateAttendancePayableMinutes } from './attendance-types';
 import { TimeAmPmInput } from './TimeAmPmInput';
@@ -14,6 +15,10 @@ interface DailyAttendanceTableProps {
   modifiedEmployeeIds?: Set<string>;
   onUpdateDraft: (employeeId: string, patch: Partial<DraftRow>) => void;
   onSaveRow: (employeeId: string) => void;
+  /** Server instant (ISO) from the page's attendance list response. */
+  serverTime?: string;
+  /** Tenant zone from the page's attendance list response. */
+  serverTimezone?: string;
 }
 
 export const DailyAttendanceTable: React.FC<DailyAttendanceTableProps> = ({
@@ -22,8 +27,11 @@ export const DailyAttendanceTable: React.FC<DailyAttendanceTableProps> = ({
   modifiedEmployeeIds,
   onUpdateDraft,
   onSaveRow,
+  serverTime,
+  serverTimezone,
 }) => {
   const { t } = useTranslation();
+  const serverClock = useServerClock(serverTime, serverTimezone);
 
   // INV-ATTENDANCE-EQUAL-TIMES-ZERO: equal check-in/check-out times mean zero
   // worked minutes. The midnight wrap applies only when end < start (a real
@@ -61,12 +69,11 @@ export const DailyAttendanceTable: React.FC<DailyAttendanceTableProps> = ({
   };
 
   const setNowTime = (employeeId: string, field: 'checkInAt' | 'checkOutAt') => {
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
+    // P8 (RC-7): the "now" time comes from the server clock in the tenant
+    // zone, never the client clock.
     const current = draftByEmployeeId[employeeId];
     onUpdateDraft(employeeId, {
-      [field]: `${hh}:${mm}`,
+      [field]: serverClock.timeHHmm(),
       status: current?.status || 'present',
     });
   };

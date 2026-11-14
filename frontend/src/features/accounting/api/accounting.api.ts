@@ -268,7 +268,7 @@ export const accountingApi = {
       search.set(key, String(value));
     }
     const suffix = search.toString();
-    return http<{ entries: JournalEntryListItem[]; pagination: Record<string, unknown> }>(`/api/accounting/journal-entries${suffix ? `?${suffix}` : ''}`);
+    return http<{ entries: JournalEntryListItem[]; pagination: Record<string, unknown>; serverTime?: string; serverTimezone?: string }>(`/api/accounting/journal-entries${suffix ? `?${suffix}` : ''}`);
   },
   journalEntry: (id: string) => http<{ entry: JournalEntryDetail }>(`/api/accounting/journal-entries/${encodeURIComponent(id)}`),
   reverseJournalEntry: (id: string, reason: string) =>
@@ -818,7 +818,7 @@ export const pdcChequesApi = {
     if (params?.page) sp.set('page', String(params.page));
     if (params?.limit) sp.set('limit', String(params.limit));
     const qs = sp.toString() ? `?${sp.toString()}` : '';
-    return http<{ data: PdcCheque[]; total: number; page: number; limit: number }>(`/api/accounting/cheques${qs}`);
+    return http<{ data: PdcCheque[]; total: number; page: number; limit: number; serverTime?: string; serverTimezone?: string }>(`/api/accounting/cheques${qs}`);
   },
 
   stats: () => http<PdcChequesStats>('/api/accounting/cheques/stats'),

@@ -375,6 +375,8 @@ export function AccountingJournalEntriesPage() {
           query.refetch();
           handleSelectEntry(String(entry.id));
         }}
+        serverTime={query.data?.serverTime}
+        serverTimezone={query.data?.serverTimezone}
       />
 
       <StandardDialog

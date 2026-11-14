@@ -1,4 +1,5 @@
 import { tenantBaseCurrency } from '../accounting-currency';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { resolveBusinessDateKey } from '../engines/accounting-date.engine';
 import { assertPdcTransition, pdcBookAmount } from '../engines/pdc-transition.engine';
 import { pdcCurrencySnapshot } from '../pdc-currency';
@@ -146,8 +147,11 @@ export class PdcChequesService {
   async listCheques(
     authContext: AuthContext,
     filters: PdcChequesFilter = {},
-  ): Promise<{ data: PdcChequeRecord[]; total: number; page: number; limit: number }> {
+  ): Promise<{ data: PdcChequeRecord[]; total: number; page: number; limit: number; serverTime: string; serverTimezone: string }> {
     const tenantId = String(authContext.tenantId || '');
+    // P8 (RC-7): the PDC page's action-date default comes from the server
+    // clock — the list response carries it, the HR attendance list precedent.
+    const tenantTimezone = await getTenantTimezone(this.db, tenantId);
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
     const page = Math.max(1, Number(filters.page || 1));
     const limit = Math.min(100, Math.max(1, Number(filters.limit || 25)));
@@ -242,7 +246,12 @@ export class PdcChequesService {
       updated_at: r.updated_at ? new Date(r.updated_at).toISOString() : '',
     }));
 
-    return { data, total, page, limit };
+    return {
+      data, total, page, limit,
+      // P8 (RC-7): the PDC page's action-date default comes from the server clock.
+      serverTime: new Date().toISOString(),
+      serverTimezone: tenantTimezone,
+    };
   }
 
   /**

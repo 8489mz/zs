@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useServerClock } from '@/shared/hooks/use-server-clock';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { Button } from '@/shared/ui/button';
 import { CustomSelect } from '@/shared/ui/custom-select';
@@ -16,6 +17,10 @@ export interface PdcChequeActionModalProps {
   cheque: PdcCheque | null;
   onClose: () => void;
   onSuccess?: () => void;
+  /** Server instant (ISO) from the page's cheques list response. */
+  serverTime?: string;
+  /** Tenant zone from the page's cheques list response. */
+  serverTimezone?: string;
 }
 
 const BOUNCE_REASON_OPTIONS = [
@@ -33,9 +38,12 @@ export function PdcChequeActionModal({
   cheque,
   onClose,
   onSuccess,
+  serverTime,
+  serverTimezone,
 }: PdcChequeActionModalProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const serverClock = useServerClock(serverTime, serverTimezone);
   const [actionDate, setActionDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [bouncedReason, setBouncedReason] = useState('عدم كفاية الرصيد');
   const [bouncedFee, setBouncedFee] = useState('0');
@@ -45,7 +53,10 @@ export function PdcChequeActionModal({
 
   useEffect(() => {
     if (open) {
-      setActionDate(new Date().toISOString().slice(0, 10));
+      // P8 (RC-7): default the action date from the server day in the
+      // tenant zone — the old default was a UTC slice, yesterday for the
+      // first two hours after midnight (UTC+2). The input stays editable.
+      setActionDate(serverClock.todayKey() || new Date().toISOString().slice(0, 10));
       setBouncedReason('عدم كفاية الرصيد');
       setBouncedFee('0');
       setEndorsedSupplier('');

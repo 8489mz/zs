@@ -306,6 +306,8 @@ export function PdcChequesPage() {
         open={Boolean(activeActionModal && activeActionModal !== 'voucher' && selectedCheque)}
         action={activeActionModal as PdcActionType}
         cheque={selectedCheque}
+        serverTime={chequesQuery.data?.serverTime}
+        serverTimezone={chequesQuery.data?.serverTimezone}
         onClose={() => {
           setActiveActionModal(null);
           setSelectedCheque(null);

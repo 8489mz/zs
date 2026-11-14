@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/shared/components/page-header';
@@ -28,6 +28,7 @@ import {
   filterExceptions,
 } from '../components/attendance/attendance-types';
 import { AttendanceKpiSummary } from '../components/attendance/AttendanceKpiSummary';
+import { serverDayKey } from '@/shared/hooks/use-server-clock';
 import { AttendanceExceptionsTable } from '../components/attendance/AttendanceExceptionsTable';
 import { DailyAttendanceTable } from '../components/attendance/DailyAttendanceTable';
 import { AttendanceRangeTable } from '../components/attendance/AttendanceRangeTable';
@@ -43,10 +44,10 @@ function getLocalDateString(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function calculatePeriodRange(mode: PeriodMode, refDateStr: string): { from: string; to: string } {
-  const now = new Date();
-  const todayStr = getLocalDateString(now);
-
+// P8 (RC-7): the "today" bound is the server day in the tenant zone,
+// passed in by the page once the attendance list resolves. The client
+// clock is only the pre-data fallback (todayDate()).
+function calculatePeriodRange(mode: PeriodMode, refDateStr: string, todayStr: string = todayDate()): { from: string; to: string } {
   if (mode === 'day') {
     return { from: refDateStr || todayStr, to: refDateStr || todayStr };
   }
@@ -79,18 +80,17 @@ function calculatePeriodRange(mode: PeriodMode, refDateStr: string): { from: str
 
   if (mode === 'month') {
     // Current month to date: 1st of month to today
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    return { from: `${y}-${m}-01`, to: todayStr };
+    return { from: `${todayStr.slice(0, 7)}-01`, to: todayStr };
   }
 
   if (mode === 'last_month') {
     // Last month: 1st to last day of last month
-    const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-    const y = lastDayLastMonth.getFullYear();
-    const m = String(lastDayLastMonth.getMonth() + 1).padStart(2, '0');
+    const [y, m] = todayStr.split('-').map(Number);
+    const lastDayLastMonth = new Date(y, m - 1, 0);
+    const ly = lastDayLastMonth.getFullYear();
+    const lm = String(lastDayLastMonth.getMonth() + 1).padStart(2, '0');
     const d = String(lastDayLastMonth.getDate()).padStart(2, '0');
-    return { from: `${y}-${m}-01`, to: `${y}-${m}-${d}` };
+    return { from: `${ly}-${lm}-01`, to: `${ly}-${lm}-${d}` };
   }
 
   return { from: refDateStr || todayStr, to: todayStr };
@@ -184,7 +184,7 @@ export function HrAttendancePage() {
   const selectPeriod = (mode: PeriodMode) => {
     setViewMode(mode);
     setRangePage(1);
-    const { from, to } = calculatePeriodRange(mode, date);
+    const { from, to } = calculatePeriodRange(mode, date, serverToday);
     setRangeFrom(from);
     setRangeTo(to);
     if (mode === 'day') {
@@ -236,6 +236,30 @@ export function HrAttendancePage() {
     pageSize: 200,
   });
   const rows = useMemo(() => (attendance.data?.rows || []) as HrAttendanceRecord[], [attendance.data?.rows]);
+
+  // P8 (RC-7): the page opens on the SERVER's tenant day, not the client
+  // clock's day. Adopt it once, when the attendance list first resolves,
+  // and only while the page still shows the client-today value — a
+  // user-picked date (or a ?period= URL month) is never overridden.
+  const serverToday = useMemo(() => {
+    return serverDayKey(attendance.data?.serverTime, attendance.data?.serverTimezone) || todayDate();
+  }, [attendance.data?.serverTime, attendance.data?.serverTimezone]);
+  const adoptedServerDayRef = useRef(false);
+  useEffect(() => {
+    if (!attendance.data?.serverTime || adoptedServerDayRef.current) return;
+    adoptedServerDayRef.current = true;
+    const clientToday = todayDate();
+    if (date === clientToday && serverToday !== clientToday) {
+      setDate(serverToday);
+      if (viewMode === 'day') {
+        setRangeFrom(serverToday);
+        setRangeTo(serverToday);
+      }
+    }
+    if (exceptionMonth === clientToday.slice(0, 7) && serverToday.slice(0, 7) !== clientToday.slice(0, 7)) {
+      setExceptionMonth(serverToday.slice(0, 7));
+    }
+  }, [attendance.data?.serverTime, date, viewMode, exceptionMonth, serverToday]);
   const allExceptionRows = useMemo(() => (exceptions.data?.rows || []) as HrAttendanceException[], [exceptions.data?.rows]);
   
   const scopedExceptionRows = useMemo(() => {
@@ -1051,6 +1075,8 @@ export function HrAttendancePage() {
                     modifiedEmployeeIds={modifiedEmployeeIds}
                     onUpdateDraft={updateDraft}
                     onSaveRow={saveRow}
+                    serverTime={attendance.data?.serverTime}
+                    serverTimezone={attendance.data?.serverTimezone}
                   />
                 )}
               </QueryFeedback>
@@ -1091,6 +1117,8 @@ export function HrAttendancePage() {
             onSubmit={(e) => {
               void submitManualTime(e);
             }}
+            serverTime={attendance.data?.serverTime}
+            serverTimezone={attendance.data?.serverTimezone}
           />
         </div>
       </main>

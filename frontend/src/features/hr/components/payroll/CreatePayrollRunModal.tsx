@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useMemo } from 'react';
 import { DialogShell } from '@/shared/components/dialog-shell';
+import { useServerClock } from '@/shared/hooks/use-server-clock';
 import { Button } from '@/shared/ui/button';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { XIcon, CheckCircleIcon, AlertCircleIcon, CalendarIcon, InfoIcon } from '@/shared/components/icons/AppIcons';
@@ -25,6 +26,10 @@ interface CreatePayrollRunModalProps {
   formError: string;
   employees?: Array<{ payFrequency?: string; status?: string; displayName?: string }>;
   isEgypt?: boolean;
+  /** Server instant (ISO) from the page's payroll-runs list response. */
+  serverTime?: string;
+  /** Tenant zone from the page's payroll-runs list response. */
+  serverTimezone?: string;
 }
 
 function getMonthDetails(monthStr: string) {
@@ -53,8 +58,11 @@ export function CreatePayrollRunModal({
   formError,
   employees = [],
   isEgypt = false,
+  serverTime,
+  serverTimezone,
 }: CreatePayrollRunModalProps) {
   const { t } = useTranslation();
+  const serverClock = useServerClock(serverTime, serverTimezone);
 
   // Terminology based on regional settings (Egypt vs Gulf/Other)
   const payrollTerm = isEgypt ? 'كشف المرتبات' : 'مسير الرواتب';
@@ -140,7 +148,10 @@ export function CreatePayrollRunModal({
         newStart = `${m}-01`;
         newEnd = `${m}-07`;
       } else if (newFreq === 'daily') {
-        const todayStr = new Date().toISOString().slice(0, 10);
+        // P8 (RC-7): the daily-run "today" comes from the server day in
+        // the tenant zone — the old default was a UTC slice, yesterday
+        // for the first two hours after midnight (UTC+2).
+        const todayStr = serverClock.todayKey() || new Date().toISOString().slice(0, 10);
         const isCurrentMonth = todayStr.startsWith(m);
         const dayStr = isCurrentMonth ? todayStr.slice(8, 10) : '01';
         newStart = `${m}-${dayStr}`;
@@ -354,7 +365,8 @@ export function CreatePayrollRunModal({
                         <button
                           type="button"
                           onClick={() => {
-                            const todayStr = new Date().toISOString().slice(0, 10);
+                            // P8 (RC-7): "today only" is the server day in the tenant zone.
+                            const todayStr = serverClock.todayKey() || new Date().toISOString().slice(0, 10);
                             const isCurrentMonth = todayStr.startsWith(draft.periodMonth);
                             const dayNum = isCurrentMonth ? parseInt(todayStr.slice(8, 10), 10) : 1;
                             setPresetDates(dayNum, dayNum);

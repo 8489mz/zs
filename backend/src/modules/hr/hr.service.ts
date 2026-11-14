@@ -3497,6 +3497,9 @@ export class HrService {
 
   async listPayrollRuns(query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
     requireTenantScope(auth);
+    // P8 (RC-7): the payroll page's month default comes from the server
+    // clock — the list response carries it, the HR attendance list precedent.
+    const tenantTimezone = await getTenantTimezone(this.db, auth.tenantId);
     const month = normalizePayrollMonth(query.month);
     const result = await sql<Record<string, unknown>>`
       SELECT
@@ -3528,7 +3531,8 @@ export class HrService {
     `.execute(this.db);
     const runs = result.rows.map((row) => this.mapPayrollRun(row));
     const paged = paginateRows(runs, query, { defaultSize: 25 });
-    return { runs: paged.rows, pagination: paged.pagination, summary: { totalItems: runs.length } };
+    // P8 (RC-7): the payroll page's month default comes from the server clock.
+    return { runs: paged.rows, pagination: paged.pagination, summary: { totalItems: runs.length }, serverTime: new Date().toISOString(), serverTimezone: tenantTimezone };
   }
 
   async getPayrollRun(id: number, auth: AuthContext): Promise<Record<string, unknown>> {
