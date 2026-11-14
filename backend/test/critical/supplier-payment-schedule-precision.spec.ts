@@ -127,7 +127,7 @@ async function main() {
         supplier_id bigint, installment_no integer, due_date date, amount numeric, paid_amount numeric DEFAULT 0,
         status text DEFAULT 'pending', note text DEFAULT '', paid_at timestamptz, created_by bigint, updated_by bigint, updated_at timestamptz);
       CREATE TABLE supplier_payment_schedule_logs (id bigserial PRIMARY KEY, tenant_id text, account_id text, schedule_id bigint,
-        supplier_id bigint, amount numeric, payment_channel text, note text DEFAULT '', created_by bigint, created_by_name text, created_at timestamptz DEFAULT now());
+        supplier_id bigint, amount numeric, payment_channel text, instapay_address text, note text DEFAULT '', created_by bigint, created_by_name text, created_at timestamptz DEFAULT now());
     `);
 
     // 1. Create schedule for purchase (100.123 KWD, 3 installments)

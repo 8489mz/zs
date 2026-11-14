@@ -247,6 +247,8 @@ export class PurchasesQueryService {
         'sp.doc_no',
         'sp.supplier_id',
         'sp.amount',
+        'sp.is_advance',
+        'sp.applied_amount',
         'sp.note',
         'sp.payment_date',
         'sp.payment_channel',
@@ -270,6 +272,12 @@ export class PurchasesQueryService {
         docNo: row.doc_no || `ZPV-${row.id}`,
         supplierId: String(row.supplier_id),
         amount: Number(row.amount || 0),
+        /* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT: the list must show an
+         * advance separately from a settlement — same row shape, so
+         * the supplier statement can split them. */
+        isAdvance: (row as any).is_advance === true,
+        appliedAmount: Number((row as any).applied_amount || 0),
+        remainingAdvance: Number(Number(row.amount || 0) - Number((row as any).applied_amount || 0)),
         note: row.note || '',
         date: row.payment_date,
         paymentChannel: row.payment_channel || 'cash',
@@ -312,6 +320,8 @@ export class PurchasesQueryService {
         'sp.supplier_id',
         's.name as supplier_name',
         'sp.amount',
+        'sp.is_advance',
+        'sp.applied_amount',
         'sp.note',
         'sp.payment_date',
         'sp.payment_channel',
@@ -345,6 +355,11 @@ export class PurchasesQueryService {
         supplierId: String(row.supplier_id),
         supplierName: row.supplier_name || '',
         amount: Number(row.amount || 0),
+        /* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT: see listSupplierPayments
+         * above — the detail read carries the same advance split. */
+        isAdvance: (row as any).is_advance === true,
+        appliedAmount: Number((row as any).applied_amount || 0),
+        remainingAdvance: Number(Number(row.amount || 0) - Number((row as any).applied_amount || 0)),
         note: row.note || '',
         date: row.payment_date,
         paymentChannel: row.payment_channel || 'cash',

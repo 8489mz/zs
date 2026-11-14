@@ -906,6 +906,7 @@ export class PurchasesAndTreasuryPostingService {
         'sp.doc_no',
         'sp.supplier_id',
         'sp.amount',
+        'sp.is_advance',
         'sp.payment_channel',
         'sp.note',
         'sp.payment_date',
@@ -941,11 +942,21 @@ export class PurchasesAndTreasuryPostingService {
     const cashAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.cash_account_id, '1110');
     const paymentAccountId = (payment.payment_channel || 'cash') === 'cash' ? cashAccountId :
       await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.bank_account_id, '1120');
+    /* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT (trial D08): an advance is
+     * NOT a settlement — it debits the dedicated advance asset 1185
+     * and never touches the 2110 payable. resolveSystemAccountByCode
+     * fails closed (a tenant-created 1185 of another type throws)
+     * and auto-creates the account from the fallback map when the
+     * chart lacks it. An ordinary payment keeps Dr 2110. */
+    const isAdvance = (payment as any).is_advance === true;
+    const debitAccountId = isAdvance
+      ? await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1185')
+      : supplierPayableAccountId;
     const lines: JournalLineDraft[] = [];
     const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
     addBookLine({
-      accountId: supplierPayableAccountId,
-      description: 'سداد مستحقات مورد',
+      accountId: debitAccountId,
+      description: isAdvance ? 'دفعة مقدمة لمورد' : 'سداد مستحقات مورد',
       debit: amount,
       credit: 0,
       partnerType: payment.supplier_id ? 'supplier' : 'none',
@@ -955,7 +966,9 @@ export class PurchasesAndTreasuryPostingService {
     });
     addBookLine({
       accountId: paymentAccountId,
-      description: (payment.payment_channel || 'cash') === 'cash' ? 'خروج نقدية لسداد مورد' : 'سداد مورد عبر البنك أو المدفوعات الإلكترونية',
+      description: (payment.payment_channel || 'cash') === 'cash'
+        ? (isAdvance ? 'خروج نقدية كدفعة مقدمة لمورد' : 'خروج نقدية لسداد مورد')
+        : (isAdvance ? 'دفعة مقدمة لمورد عبر البنك أو المدفوعات الإلكترونية' : 'سداد مورد عبر البنك أو المدفوعات الإلكترونية'),
       debit: 0,
       credit: amount,
       partnerType: 'none',
@@ -984,7 +997,9 @@ export class PurchasesAndTreasuryPostingService {
       tenantId: scope.tenantId,
       accountId: scope.accountId,
       entryDate: payment.payment_date ? new Date(payment.payment_date) : (payment.created_at ? new Date(payment.created_at) : new Date()),
-      description: `قيد سداد مورد رقم ${docNo}${supplierName ? ` - ${supplierName}` : ''}`,
+      description: isAdvance
+        ? `قيد دفعة مقدمة لمورد رقم ${docNo}${supplierName ? ` - ${supplierName}` : ''}`
+        : `قيد سداد مورد رقم ${docNo}${supplierName ? ` - ${supplierName}` : ''}`,
       branchId,
       locationId,
       createdBy: payment.created_by ? Number(payment.created_by) : auth.userId,
@@ -993,6 +1008,152 @@ export class PurchasesAndTreasuryPostingService {
     });
 
     return { posted: true, journalEntryId: entryId };
+  }
+
+  /* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT: apply part or all of a
+   * supplier advance against a later bill — Dr 2110 Accounts Payable
+   * / Cr 1185 Supplier Advances. The payable balance itself moves in
+   * the caller (PurchasesWriteService.applySupplierAdvance, via a
+   * supplier-ledger entry) so the statement shows the relief; this
+   * method owns the journal and the applied_amount counter, in the
+   * same transaction, so the two can never drift apart.
+   *
+   * Guards (all fail-closed, in tenant minor units):
+   * - the payment must exist and be an advance (is_advance);
+   * - amount must be positive and within minor-unit precision;
+   * - amount is capped at the outstanding advance (amount -
+   *   applied_amount) — over-applying is SUPPLIER_ADVANCE_OVERAPPLY;
+   * - amount is capped at the supplier payable balance — applying
+   *   more than is owed is SUPPLIER_ADVANCE_EXCEEDS_PAYABLE.
+   * Partial applies are legitimate, so there is no once-per-source
+   * dedup here: the applied_amount cap is the idempotency guard
+   * (insertPostedJournal also skips dedup for this source type).
+   * The partner-subledger sync never runs for this source type, so
+   * the balance moves exactly once, in the caller's ledger entry. */
+  async postSupplierAdvanceApplication(
+    queryable: DbOrTx,
+    advancePaymentId: number,
+    applyAmount: number,
+    purchaseId: number | null,
+    auth: AuthContext,
+  ): Promise<{ posted: boolean; journalEntryId: number | null; appliedAmount: number; remainingAdvance: number }> {
+    const scope = requireTenantScope(auth);
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(queryable, scope.tenantId));
+    const toBookMoney = (value: unknown) => this.toMoney(value, bookDigits);
+    await this.ensureTenantFoundation(queryable, auth);
+
+    const payment = await queryable
+      .selectFrom('supplier_payments as sp')
+      .leftJoin('suppliers as s', 's.id', 'sp.supplier_id')
+      .select([
+        'sp.id',
+        'sp.doc_no',
+        'sp.supplier_id',
+        'sp.amount',
+        'sp.is_advance',
+        'sp.applied_amount',
+        'sp.branch_id',
+        'sp.location_id',
+        'sp.created_by',
+        'sp.created_at',
+        's.name as supplier_name',
+        's.balance as supplier_balance',
+      ])
+      .where('sp.id', '=', advancePaymentId)
+      .where(sql<boolean>`sp.tenant_id = ${scope.tenantId}`)
+      .executeTakeFirst();
+    if (!payment) throw new AppError('Supplier advance payment not found', 'SUPPLIER_ADVANCE_NOT_FOUND', 404);
+    if ((payment as any).is_advance !== true) throw new AppError('Payment is not a supplier advance', 'SUPPLIER_ADVANCE_NOT_ADVANCE', 400);
+
+    const amount = toBookMoney(applyAmount);
+    if (!(amount > 0)) throw new AppError('Advance application must be positive', 'INVALID_AMOUNT', 400);
+    const outstanding = toBookMoney(Number((payment as any).amount || 0) - Number((payment as any).applied_amount || 0));
+    if (amount > outstanding + this.maxAllowedDifference(bookDigits)) {
+      throw new AppError(
+        `Advance application ${amount} exceeds the outstanding advance ${outstanding}`,
+        'SUPPLIER_ADVANCE_OVERAPPLY',
+        400,
+      );
+    }
+    const payableBalance = toBookMoney((payment as any).supplier_balance || 0);
+    if (amount > payableBalance + this.maxAllowedDifference(bookDigits)) {
+      throw new AppError(
+        `Advance application ${amount} exceeds the supplier payable balance ${payableBalance}`,
+        'SUPPLIER_ADVANCE_EXCEEDS_PAYABLE',
+        400,
+      );
+    }
+
+    const settings = await this.getTenantAccountingSettings(queryable, scope.tenantId);
+    if (!settings) throw new Error(`Accounting settings missing while applying supplier advance ${advancePaymentId}`);
+
+    const branchId = payment.branch_id ? Number(payment.branch_id) : null;
+    const locationId = payment.location_id ? Number(payment.location_id) : null;
+    const supplierName = String(payment.supplier_name || '').trim();
+    const docNo = String(payment.doc_no || `ZPV-${advancePaymentId}`).trim();
+
+    const supplierPayableAccountId = await this.resolveAccountWithFallback(queryable, scope.tenantId, settings.supplier_payable_account_id, '2110');
+    const advanceAccountId = await this.resolveSystemAccountByCode(queryable, scope.tenantId, '1185');
+    const lines: JournalLineDraft[] = [];
+    const addBookLine = (line: JournalLineDraft) => this.addLine(lines, line, bookDigits);
+    addBookLine({
+      accountId: supplierPayableAccountId,
+      description: 'تطبيق دفعة مقدمة على مستحقات مورد',
+      debit: amount,
+      credit: 0,
+      partnerType: payment.supplier_id ? 'supplier' : 'none',
+      partnerId: payment.supplier_id ? Number(payment.supplier_id) : null,
+      branchId,
+      locationId,
+    });
+    addBookLine({
+      accountId: advanceAccountId,
+      description: 'تخفيض دفعة مقدمة لمورد',
+      debit: 0,
+      credit: amount,
+      partnerType: payment.supplier_id ? 'supplier' : 'none',
+      partnerId: payment.supplier_id ? Number(payment.supplier_id) : null,
+      branchId,
+      locationId,
+    });
+
+    const accountMap = await this.getActiveAccountMap(queryable, scope.tenantId, lines.map((line) => line.accountId));
+    for (const line of lines) {
+      if (!(line.accountId > 0)) throw new Error(`Invalid accounting setting account id while applying supplier advance ${advancePaymentId}`);
+      if (!accountMap.has(line.accountId)) throw new Error(`Configured account ${line.accountId} was not found while applying supplier advance ${advancePaymentId}`);
+      if (!accountMap.get(line.accountId)) throw new Error(`Configured account ${line.accountId} is inactive while applying supplier advance ${advancePaymentId}`);
+    }
+
+    const normalizedLines = lines.map((line) => ({ ...line, debit: toBookMoney(line.debit), credit: toBookMoney(line.credit) })).filter((line) => line.debit > 0 || line.credit > 0);
+    const totalDebit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.debit, 0));
+    const totalCredit = toBookMoney(normalizedLines.reduce((sum, line) => sum + line.credit, 0));
+    if (Math.abs(totalDebit - totalCredit) > this.maxAllowedDifference(bookDigits)) {
+      throw new Error(`Unbalanced supplier advance application journal for payment ${advancePaymentId}: debit=${totalDebit} credit=${totalCredit}`);
+    }
+
+    const entryId = await this.insertPostedJournal(queryable, {
+      sourceType: 'supplier_advance_application',
+      sourceId: advancePaymentId,
+      tenantId: scope.tenantId,
+      accountId: scope.accountId,
+      entryDate: payment.created_at ? new Date(payment.created_at) : new Date(),
+      description: `قيد تطبيق دفعة مقدمة لمورد رقم ${docNo}${supplierName ? ` - ${supplierName}` : ''}${purchaseId ? ` على فاتورة شراء #${purchaseId}` : ''}`,
+      branchId,
+      locationId,
+      createdBy: payment.created_by ? Number(payment.created_by) : auth.userId,
+      postedBy: auth.userId,
+      lines: normalizedLines,
+    });
+
+    const appliedAmount = toBookMoney(Number((payment as any).applied_amount || 0) + amount);
+    await queryable
+      .updateTable('supplier_payments')
+      .set({ applied_amount: appliedAmount } as any)
+      .where('id', '=', advancePaymentId)
+      .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+      .execute();
+
+    return { posted: true, journalEntryId: entryId, appliedAmount: amount, remainingAdvance: toBookMoney(outstanding - amount) };
   }
 
 

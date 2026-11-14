@@ -1746,6 +1746,16 @@ export interface SupplierPaymentTable {
   idempotency_key?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
   /** Original currency amount; amount is always base currency EGP. */
   amount_foreign?: ColumnType<number | null, number | null | undefined, number | null | undefined>;
+  /** INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT: true when this payment is a
+   * supplier advance (Dr 1185 Supplier Advances / Cr cash-or-bank)
+   * rather than a settlement of a payable (Dr 2110 / Cr cash-or-bank).
+   * An advance never touches the supplier payable balance. */
+  is_advance?: ColumnType<boolean, boolean | undefined, boolean | undefined>;
+  /** INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT: cumulative amount of this
+   * advance already applied against later bills (Dr 2110 / Cr 1185).
+   * Outstanding advance = amount - applied_amount; every apply is
+   * capped at it. 0 on ordinary payments and on unapplied advances. */
+  applied_amount?: ColumnType<number, number | undefined, number | undefined>;
   /** Closed payment method (import-payment-method.engine) + its evidence. NULL on legacy rows: method unrecorded, never backfilled. */
   payment_method?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
   payment_reference?: ColumnType<string | null, string | null | undefined, string | null | undefined>;

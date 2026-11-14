@@ -9,7 +9,7 @@ import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { IdempotencyInterceptor } from '../../core/idempotency/idempotency.interceptor';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
-import { CreateCustomerPaymentDto, CreateSupplierPaymentDto } from './dto/create-party-payment.dto';
+import { ApplySupplierAdvanceDto, CreateCustomerPaymentDto, CreateSupplierPaymentDto } from './dto/create-party-payment.dto';
 import { CreateSupplierPaymentScheduleDto, PaySupplierScheduleInstallmentDto } from './dto/supplier-payment-schedule.dto';
 import { UpsertPurchaseDto } from './dto/upsert-purchase.dto';
 import { PurchasesService } from './purchases.service';
@@ -179,6 +179,18 @@ export class PurchasesController {
   @RequirePermissions('accounts')
   createSupplierPayment(@Body() payload: CreateSupplierPaymentDto, @Req() req: RequestWithAuth, @Headers('x-idempotency-key') idempotencyKey?: string): Promise<Record<string, unknown>> {
     return this.purchasesService.createSupplierPayment(payload, req.authContext!, idempotencyKey);
+  }
+
+  /* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT: apply a supplier advance
+   * (created with isAdvance) against a later bill — Dr 2110 /
+   * Cr 1185, payable and outstanding advance both reduced. No cash
+   * moves at apply time. No UI calls this yet (open item); the
+   * endpoint is the posting-side apply the supplier payment form
+   * will call once it gains an advance toggle + apply action. */
+  @Post('supplier-payments/:id/apply-advance')
+  @RequirePermissions('accounts')
+  applySupplierAdvance(@Param('id', ParseIntPipe) id: number, @Body() payload: ApplySupplierAdvanceDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+    return this.purchasesService.applySupplierAdvance(id, payload, req.authContext!);
   }
 
   @Post('customer-payments')

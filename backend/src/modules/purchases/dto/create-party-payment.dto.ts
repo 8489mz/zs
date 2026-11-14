@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class CreateSupplierPaymentDto {
   @Type(() => Number)
@@ -19,6 +19,18 @@ export class CreateSupplierPaymentDto {
   @IsOptional()
   @IsIn(['cash', 'bank', 'card', 'wallet', 'instapay'])
   paymentChannel?: 'cash' | 'bank' | 'card' | 'wallet' | 'instapay';
+
+  /* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT: true marks this payment as a
+   * supplier ADVANCE, not a settlement of a payable. An advance posts
+   * Dr 1185 Supplier Advances / Cr cash-or-bank, leaves the supplier
+   * payable balance untouched, and is skipped by the no-balance /
+   * overpayment / reserved-schedule guards (a true advance needs no
+   * outstanding balance). False/absent keeps the old behaviour:
+   * Dr 2110 / Cr cash-or-bank against the payable. */
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  isAdvance?: boolean;
 
   /* INV-INSTAPAY-FIELD-MISSING: the counterparty InstaPay account number
    * (IPA) this payment was sent to. Stored only when the channel is
@@ -97,4 +109,23 @@ export class CreateCustomerPaymentDto {
   @IsNumber()
   @Min(1)
   jobId?: number;
+}
+
+/* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT: apply part or all of a supplier
+ * advance (created with isAdvance) against a later bill. Posts
+ * Dr 2110 / Cr 1185 and reduces both the payable and the outstanding
+ * advance. `amount` is capped at the outstanding advance AND at the
+ * supplier payable balance; `purchaseId` is optional — when given,
+ * the bill must belong to the same supplier and not be cancelled. */
+export class ApplySupplierAdvanceDto {
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  amount!: number;
+
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  purchaseId?: number;
 }

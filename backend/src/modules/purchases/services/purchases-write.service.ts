@@ -18,7 +18,7 @@ import { applyStockDelta, lockStockProducts, previewConsumableStockQty } from '.
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
-import { CreateCustomerPaymentDto, CreateSupplierPaymentDto } from '../dto/create-party-payment.dto';
+import { ApplySupplierAdvanceDto, CreateCustomerPaymentDto, CreateSupplierPaymentDto } from '../dto/create-party-payment.dto';
 import { UpsertPurchaseDto } from '../dto/upsert-purchase.dto';
 import { allocatePurchaseInvoiceDiscount, buildHistoricCostMap, buildNormalizedPurchaseItem, buildPurchaseReferenceNote, calculatePurchaseStockDecrease, calculatePurchaseStockIncrease, calculatePurchaseSubtotal, assertNonCashTransferReference, normalizeInstapayAddress, normalizeOptionalNote, normalizePurchaseScope, normalizeTransferReference, type DiscountAllocatedPurchaseItem } from '../helpers/purchases-write.helper';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
@@ -1381,21 +1381,34 @@ export class PurchasesWriteService {
         throw new AppError('Supplier payment must be positive and have at most tenant currency minor-unit precision', 'INVALID_AMOUNT', 400);
       }
       const currentBalance = Number(supplier.balance || 0);
-      if (!(currentBalance > 0)) throw new AppError('Supplier has no outstanding balance', 'SUPPLIER_NO_BALANCE', 400);
-      if (amount > currentBalance + 0.0001) throw new AppError('Supplier payment cannot exceed outstanding balance', 'SUPPLIER_OVERPAYMENT', 400);
+      /* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT (trial D08): an advance is
+       * money out BEFORE any bill exists, so the payable guards do
+       * not apply to it — a true advance needs no outstanding
+       * balance, cannot "overpay" a payable it does not settle, and
+       * is not spendable against installment-reserved debt either
+       * (it settles nothing). Ordinary payments keep all three. */
+      const isAdvance = payload.isAdvance === true;
+      if (!isAdvance) {
+        if (!(currentBalance > 0)) throw new AppError('Supplier has no outstanding balance', 'SUPPLIER_NO_BALANCE', 400);
+        if (amount > currentBalance + 0.0001) throw new AppError('Supplier payment cannot exceed outstanding balance', 'SUPPLIER_OVERPAYMENT', 400);
+      }
       // Amounts reserved by active installment schedules are not free supplier
       // debt. Otherwise an ordinary payment can settle the same payable while
       // its installment remains outstanding, leaving duplicate obligations.
-      const reservedSchedules = await trx.selectFrom('supplier_payment_schedules')
-        .select(sql<number>`coalesce(sum(greatest(amount - paid_amount, 0)), 0)`.as('reserved'))
-        .where('tenant_id', '=', scope.tenantId)
-        .where('account_id', '=', scope.accountId)
-        .where('supplier_id', '=', supplier.id)
-        .where('status', '!=', 'cancelled').executeTakeFirst();
-      const unrestrictedBalance = Math.max(0, Math.round((currentBalance - Number(reservedSchedules?.reserved || 0)) * scale) / scale);
-      if (amount > unrestrictedBalance + 0.0001) {
-        throw new AppError('جزء من رصيد المورد محجوز في أقساط؛ سددها من جدول الأقساط أو استخدم الرصيد غير المجدول',
-          'SUPPLIER_PAYMENT_SCHEDULE_RESERVED', 409);
+      // An advance settles nothing, so the reserved-debt guard does not
+      // apply to it either (INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT).
+      if (!isAdvance) {
+        const reservedSchedules = await trx.selectFrom('supplier_payment_schedules')
+          .select(sql<number>`coalesce(sum(greatest(amount - paid_amount, 0)), 0)`.as('reserved'))
+          .where('tenant_id', '=', scope.tenantId)
+          .where('account_id', '=', scope.accountId)
+          .where('supplier_id', '=', supplier.id)
+          .where('status', '!=', 'cancelled').executeTakeFirst();
+        const unrestrictedBalance = Math.max(0, Math.round((currentBalance - Number(reservedSchedules?.reserved || 0)) * scale) / scale);
+        if (amount > unrestrictedBalance + 0.0001) {
+          throw new AppError('جزء من رصيد المورد محجوز في أقساط؛ سددها من جدول الأقساط أو استخدم الرصيد غير المجدول',
+            'SUPPLIER_PAYMENT_SCHEDULE_RESERVED', 409);
+        }
       }
 
       // Gateway: three-way match must not be blocking.
@@ -1410,6 +1423,8 @@ export class PurchasesWriteService {
         .values({
           supplier_id: supplier.id,
           amount,
+          is_advance: isAdvance,
+          applied_amount: 0,
           payment_channel: payload.paymentChannel || 'cash',
           instapay_address: normalizeInstapayAddress(payload.paymentChannel, payload.instapayAddress),
           note: normalizeOptionalNote(payload.note),
@@ -1426,11 +1441,19 @@ export class PurchasesWriteService {
       const docNo = await this.generateSupplierPaymentDocNo(trx, id, scope.tenantId);
       await trx.updateTable('supplier_payments').set({ doc_no: docNo }).where('id', '=', id).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
       const paymentNote = normalizeOptionalNote(payload.note);
-      await this.financeService.addSupplierLedgerEntry(trx, supplier.id, -amount, 'supplier_payment', `دفع إلى ${supplier.name}${paymentNote ? ` - ${paymentNote}` : ''}`, 'supplier_payment', id, auth, branchId, locationId);
-      await this.financeService.addTreasuryTransaction(trx, 'supplier_payment', -amount, `دفع إلى ${supplier.name}${paymentNote ? ` - ${paymentNote}` : ''}`, 'supplier_payment', id, auth, branchId, locationId, payload.paymentChannel || 'cash');
+      /* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT: an advance is an asset,
+       * not a settlement — it must NOT write a -amount supplier
+       * ledger entry (that is what netted the D08 payable 300 ->
+       * 100). The payable balance stays exactly as it was; only the
+       * cash leaves (treasury -amount, counted in the drawer) and
+       * the journal posts Dr 1185 / Cr cash. */
+      if (!isAdvance) {
+        await this.financeService.addSupplierLedgerEntry(trx, supplier.id, -amount, 'supplier_payment', `دفع إلى ${supplier.name}${paymentNote ? ` - ${paymentNote}` : ''}`, 'supplier_payment', id, auth, branchId, locationId);
+      }
+      await this.financeService.addTreasuryTransaction(trx, 'supplier_payment', -amount, `${isAdvance ? 'دفعة مقدمة إلى' : 'دفع إلى'} ${supplier.name}${paymentNote ? ` - ${paymentNote}` : ''}`, 'supplier_payment', id, auth, branchId, locationId, payload.paymentChannel || 'cash');
       const posting = await this.accountingPosting.postSupplierPayment(trx, id, auth);
       if (!posting.journalEntryId) throw new AppError(`Supplier payment ${id} has no journal entry`, 'LEDGER_POSTING_MISSING', 500);
-      await this.audit.logWithExecutor(trx, 'دفع لمورد', `تم تسجيل دفع لمورد ${docNo} بواسطة ${auth.username}`, auth);
+      await this.audit.logWithExecutor(trx, isAdvance ? 'دفعة مقدمة لمورد' : 'دفع لمورد', `تم تسجيل ${isAdvance ? 'دفعة مقدمة لمورد' : 'دفع لمورد'} ${docNo} بواسطة ${auth.username}`, auth);
       if (idempotencyKey) {
         await this.idempotency.commitOperation(trx, {
           tenantId: scope.tenantId, accountId: scope.accountId, idempotencyKey, operationType,
@@ -1454,6 +1477,84 @@ export class PurchasesWriteService {
       }
       throw error;
     }
+  }
+
+  /* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT: apply part or all of a
+   * supplier advance against a later bill. One transaction:
+   * (1) the posting posts Dr 2110 / Cr 1185 and advances the
+   * applied_amount counter (capped at the outstanding advance and
+   * at the payable balance, both re-checked inside the posting);
+   * (2) a supplier-ledger entry of -amount relieves the payable
+   * balance and leaves the audit trail in the supplier statement.
+   * The journal sync never runs for source type
+   * 'supplier_advance_application', so the balance moves exactly
+   * once, here — never twice. No cash moves: the cash left when the
+   * advance was paid, so there is no treasury row and no drawer
+   * effect at apply time. */
+  async applySupplierAdvance(advancePaymentId: number, payload: ApplySupplierAdvanceDto, auth: AuthContext): Promise<Record<string, unknown>> {
+    const scope = requireTenantScope(auth);
+    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
+    const scale = 10 ** digits;
+    const amount = Number(payload.amount || 0);
+    if (!Number.isFinite(amount) || amount <= 0 || Math.abs(amount * scale - Math.round(amount * scale)) > 0.000001) {
+      throw new AppError('Advance application must be positive and have at most tenant currency minor-unit precision', 'INVALID_AMOUNT', 400);
+    }
+    const result = await this.tx.runInTransaction(this.db, async (trx) => {
+      const payment = await trx.selectFrom('supplier_payments')
+        .select(['id', 'doc_no', 'supplier_id', 'amount', 'is_advance', 'applied_amount', 'branch_id', 'location_id'])
+        .where('id', '=', advancePaymentId)
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .forUpdate().executeTakeFirst();
+      if (!payment) throw new AppError('Supplier advance payment not found', 'SUPPLIER_ADVANCE_NOT_FOUND', 404);
+      if ((payment as any).is_advance !== true) throw new AppError('Payment is not a supplier advance', 'SUPPLIER_ADVANCE_NOT_ADVANCE', 400);
+      const supplier = await trx.selectFrom('suppliers').select(['id', 'name', 'balance'])
+        .where('id', '=', Number((payment as any).supplier_id))
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .forUpdate().executeTakeFirst();
+      if (!supplier) throw new AppError('Supplier not found', 'SUPPLIER_NOT_FOUND', 404);
+      const outstanding = Math.round((Number((payment as any).amount || 0) - Number((payment as any).applied_amount || 0)) * scale) / scale;
+      if (amount > outstanding + 0.0001) {
+        throw new AppError(
+          `Advance application ${amount} exceeds the outstanding advance ${outstanding}`,
+          'SUPPLIER_ADVANCE_OVERAPPLY',
+          400,
+        );
+      }
+      if (amount > Number(supplier.balance || 0) + 0.0001) {
+        throw new AppError(
+          `Advance application ${amount} exceeds the supplier payable balance ${Number(supplier.balance || 0)}`,
+          'SUPPLIER_ADVANCE_EXCEEDS_PAYABLE',
+          400,
+        );
+      }
+      let purchaseId: number | null = null;
+      if (payload.purchaseId != null) {
+        const purchase = await trx.selectFrom('purchases').select(['id', 'supplier_id', 'status'])
+          .where('id', '=', Number(payload.purchaseId))
+          .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+          .executeTakeFirst();
+        if (!purchase || Number(purchase.supplier_id) !== Number((payment as any).supplier_id) || purchase.status === 'cancelled') {
+          throw new AppError('Advance can only be applied to an open bill of the same supplier', 'SUPPLIER_ADVANCE_PURCHASE_MISMATCH', 400);
+        }
+        purchaseId = Number(purchase.id);
+      }
+      const posting = await this.accountingPosting.postSupplierAdvanceApplication(trx, advancePaymentId, amount, purchaseId, auth);
+      if (!posting.journalEntryId) throw new AppError(`Supplier advance application ${advancePaymentId} has no journal entry`, 'LEDGER_POSTING_MISSING', 500);
+      const branchId = (payment as any).branch_id ? Number((payment as any).branch_id) : null;
+      const locationId = (payment as any).location_id ? Number((payment as any).location_id) : null;
+      await this.financeService.addSupplierLedgerEntry(
+        trx, Number(supplier.id), -amount, 'supplier_advance_application',
+        `تطبيق دفعة مقدمة ${String((payment as any).doc_no || `ZPV-${advancePaymentId}`)} على مستحقات ${supplier.name}${purchaseId ? ` — فاتورة شراء #${purchaseId}` : ''}`,
+        'supplier_payment', advancePaymentId, auth, branchId, locationId,
+      );
+      await this.audit.logWithExecutor(trx, 'تطبيق دفعة مقدمة لمورد', `تم تطبيق ${amount} من الدفعة المقدمة ${String((payment as any).doc_no || `ZPV-${advancePaymentId}`)} على مستحقات ${supplier.name} بواسطة ${auth.username}`, auth);
+      return {
+        appliedAmount: posting.appliedAmount,
+        remainingAdvance: posting.remainingAdvance,
+        journalEntryId: posting.journalEntryId,
+      };
+    });
+    return { ok: true, ...result };
   }
 
   async createCustomerPayment(payload: CreateCustomerPaymentDto, auth: AuthContext, idempotencyKey?: string): Promise<Record<string, unknown>> {

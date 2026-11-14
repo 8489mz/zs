@@ -554,7 +554,7 @@ export class JournalPostingCoreService {
       .executeTakeFirst();
 
     const dedicatedTypes: Record<string, string> = {
-      '1165': 'asset', '2160': 'liability', '2155': 'liability', '7170': 'revenue', '7270': 'expense',
+      '1165': 'asset', '1185': 'asset', '2160': 'liability', '2155': 'liability', '7170': 'revenue', '7270': 'expense',
       '5190': 'expense', '5300': 'expense', '6900': 'expense', '6950': 'expense', '3200': 'equity',
       '1150': 'asset', '2150': 'liability', '4300': 'contra_revenue', '4400': 'contra_revenue',
       '7110': 'revenue', '7210': 'expense', '7290': 'expense',
@@ -567,6 +567,12 @@ export class JournalPostingCoreService {
     if (!account) {
       const knownAccounts: Record<string, { name_ar: string; name_en: string; type: string; group: string; balance: string }> = {
         '1165': { name_ar: 'دفعات مقدمة لمقاولي الباطن', name_en: 'Subcontractor Advances', type: 'asset', group: 'current_assets', balance: 'debit' },
+        /* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT: dedicated supplier-
+         * advance asset (migration 0323). resolveSystemAccountByCode
+         * auto-creates it on first advance post for any tenant the
+         * migration missed; a tenant-created 1185 of another type
+         * fails closed via dedicatedTypes above. */
+        '1185': { name_ar: 'دفعات مقدمة للموردين', name_en: 'Supplier Advances', type: 'asset', group: 'current_assets', balance: 'debit' },
         '2160': { name_ar: 'تأمينات محتجزة لمقاولي الباطن', name_en: 'Subcontractor Retentions Payable', type: 'liability', group: 'current_liabilities', balance: 'credit' },
         '2155': { name_ar: 'فوائد تمويل غير مكتسبة', name_en: 'Unearned Financing Income', type: 'liability', group: 'current_liabilities', balance: 'credit' },
         '7170': { name_ar: 'أرباح فروق عملة محققة', name_en: 'Realized FX Gains', type: 'revenue', group: 'income', balance: 'credit' },

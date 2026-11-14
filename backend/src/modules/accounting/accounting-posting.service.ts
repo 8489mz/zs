@@ -461,6 +461,12 @@ export class AccountingPostingService {
   async postSupplierPayment(queryable: DbOrTx, paymentId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.purchasesTreasuryPosting.postSupplierPayment(queryable, paymentId, auth);
   }
+  /* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT: apply an advance against a
+   * later bill — Dr 2110 / Cr 1185 (see
+   * PurchasesAndTreasuryPostingService.postSupplierAdvanceApplication). */
+  async postSupplierAdvanceApplication(queryable: DbOrTx, advancePaymentId: number, applyAmount: number, purchaseId: number | null, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null; appliedAmount: number; remainingAdvance: number }> {
+    return this.purchasesTreasuryPosting.postSupplierAdvanceApplication(queryable, advancePaymentId, applyAmount, purchaseId, auth);
+  }
   async postSupplierPaymentScheduleSettlement(queryable: DbOrTx, settlementId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.purchasesTreasuryPosting.postSupplierPaymentScheduleSettlement(queryable, settlementId, auth);
   }

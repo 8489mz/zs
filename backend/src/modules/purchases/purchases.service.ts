@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
-import { CreateCustomerPaymentDto, CreateSupplierPaymentDto } from './dto/create-party-payment.dto';
+import { ApplySupplierAdvanceDto, CreateCustomerPaymentDto, CreateSupplierPaymentDto } from './dto/create-party-payment.dto';
 import { UpsertPurchaseDto } from './dto/upsert-purchase.dto';
 import { PurchasesQueryService } from './services/purchases-query.service';
 import { PurchasesWriteService } from './services/purchases-write.service';
@@ -52,6 +52,12 @@ export class PurchasesService {
 
   createSupplierPayment(payload: CreateSupplierPaymentDto, auth: AuthContext, idempotencyKey?: string): Promise<Record<string, unknown>> {
     return this.writeService.createSupplierPayment(payload, auth, idempotencyKey);
+  }
+
+  /* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT: apply a supplier advance
+   * against a later bill (Dr 2110 / Cr 1185). */
+  applySupplierAdvance(id: number, payload: ApplySupplierAdvanceDto, auth: AuthContext): Promise<Record<string, unknown>> {
+    return this.writeService.applySupplierAdvance(id, payload, auth);
   }
 
   createCustomerPayment(payload: CreateCustomerPaymentDto, auth: AuthContext, idempotencyKey?: string): Promise<Record<string, unknown>> {
