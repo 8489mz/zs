@@ -35,8 +35,21 @@ export function getAdminTemplatePermissions(vertical?: string): string[] {
 export const DEFAULT_OPERATOR_PERMS = [
   'dashboard','products','sales','kitchen','purchases','inventory','suppliers','customers','crm','accounts','accounting','returns','reports','treasury','services','hr','hrEmployees','hrAttendance','hrContracts','hrLoans','hrPayrollView','hrPayrollManage','settings','pricingCenterView','pricingCenterManage','cashDrawer','deliveryReps','canPrint','canDiscount','canEditPrice','canSellWholesale','canViewProfit','canEditInvoices','canDirectReturn','canAdjustInventory','canManageBranchStock','canManageSettings'
 ];
+/* INV-CASHIER-DEFAULT-MAXIMAL: the cashier default is maximal for
+ * work speed — a new cashier gets every permission that removes a
+ * supervisor gate or speeds the daily job (discount, direct return
+ * without a supervisor password, price fix, wholesale price, plus
+ * the read-only screens), so he never blocks waiting for a
+ * supervisor; the shop owner can trim the list per user if he
+ * wants less. Deliberately OFF: accounting (full financial books),
+ * canEditInvoices (posted invoices are never rewritten),
+ * canDelete (destructive), and the system-admin keys (settings,
+ * canManageSettings, canEditUsers, canManageUsers,
+ * canManageBackups). Reps and attendance were already in the
+ * default and stay pinned by the spec. */
 export const DEFAULT_CASHIER_PERMS = [
-  'sales', 'kitchen', 'cashDrawer', 'customers', 'suppliers', 'accounts', 'purchases', 'products', 'returns', 'deliveryReps', 'hr', 'hrAttendance', 'canPrint', 'services', 'treasury'
+  'sales', 'kitchen', 'cashDrawer', 'customers', 'suppliers', 'accounts', 'purchases', 'products', 'returns', 'deliveryReps', 'hr', 'hrAttendance', 'canPrint', 'services', 'treasury',
+  'dashboard', 'inventory', 'reports', 'pricingCenterView', 'canDiscount', 'canDirectReturn', 'canEditPrice', 'canSellWholesale',
 ];
 
 export const DEFAULT_MARITIME_OPS_PERMS = [

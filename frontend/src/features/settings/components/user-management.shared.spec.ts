@@ -18,6 +18,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   blankUserDraft,
+  DEFAULT_CASHIER_PERMS,
   getAdminTemplatePermissions,
   getUserRoleTemplates,
   splitPermissionsByActorGrant,
@@ -91,5 +92,52 @@ describe('splitPermissionsByActorGrant', () => {
   it('an unknown actor (no session permissions — first-run setup) is not filtered', () => {
     expect(splitPermissionsByActorGrant(['a', 'b'], undefined)).toEqual({ granted: ['a', 'b'], withheld: [] });
     expect(splitPermissionsByActorGrant(['a', 'b'], null)).toEqual({ granted: ['a', 'b'], withheld: [] });
+  });
+});
+
+describe('cashier template is maximal for the daily job (INV-CASHIER-DEFAULT-MAXIMAL)', () => {
+  /* The cashier default must give a new cashier everything that
+   * removes a supervisor gate or speeds the daily job — discount,
+   * direct return, price fix, wholesale price, and the read-only
+   * screens — and nothing that opens the books, rewrites posted
+   * invoices, deletes, or administers the system. Reps and
+   * attendance were already in the default (deliveryReps gates
+   * every rep endpoint; hrAttendance gates the attendance
+   * endpoints and the employees list) and stay pinned here. */
+  const EXPECTED_CASHIER_PERMISSIONS = [
+    'accounts', 'canDirectReturn', 'canDiscount', 'canEditPrice', 'canPrint', 'canSellWholesale',
+    'cashDrawer', 'customers', 'dashboard', 'deliveryReps', 'hr', 'hrAttendance', 'inventory',
+    'kitchen', 'pricingCenterView', 'products', 'purchases', 'reports', 'returns', 'sales',
+    'services', 'suppliers', 'treasury',
+  ];
+  const FORBIDDEN_CASHIER_PERMISSIONS = [
+    'accounting', 'canEditInvoices', 'canDelete', 'settings',
+    'canManageSettings', 'canManageBackups', 'canEditUsers', 'canManageUsers',
+  ];
+
+  it('cashier template is exactly the 23-key maximal set', () => {
+    const cashier = USER_ROLE_TEMPLATES.cashier;
+    expect(cashier.role).toBe('cashier');
+    expect([...cashier.permissions].sort()).toEqual([...EXPECTED_CASHIER_PERMISSIONS].sort());
+    expect(cashier.permissions).toHaveLength(23);
+  });
+
+  it('blankUserDraft(cashier) carries the same set', () => {
+    expect([...blankUserDraft('cashier').permissions].sort()).toEqual([...EXPECTED_CASHIER_PERMISSIONS].sort());
+  });
+
+  it('DEFAULT_CASHIER_PERMS is the same set (single source of truth)', () => {
+    expect([...DEFAULT_CASHIER_PERMS].sort()).toEqual([...EXPECTED_CASHIER_PERMISSIONS].sort());
+  });
+
+  it('includes the two supervisor gates the owner ticked by hand (discount + direct return)', () => {
+    expect(USER_ROLE_TEMPLATES.cashier.permissions).toContain('canDiscount');
+    expect(USER_ROLE_TEMPLATES.cashier.permissions).toContain('canDirectReturn');
+  });
+
+  it('keeps the books, posted invoices, delete and system admin out of the default', () => {
+    for (const key of FORBIDDEN_CASHIER_PERMISSIONS) {
+      expect(USER_ROLE_TEMPLATES.cashier.permissions).not.toContain(key);
+    }
   });
 });
