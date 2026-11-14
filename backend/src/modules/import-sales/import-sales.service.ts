@@ -7534,6 +7534,11 @@ export class ImportSalesService {
           shipment_id: dto.shipmentId ?? advanceForValidation.shipment_id ?? null,
           receipt_no: dto.receiptNo,
           expense_date: dto.expenseDate || await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date()),
+          // P9 (RC-9): payment_date had NO writer — the DB CURRENT_DATE
+          // default filled the database server's day. The default is
+          // dropped by migration 0328, so the app supplies the tenant
+          // day here (same value as before, correct clock).
+          payment_date: await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date()),
           category: dto.category,
           amount_egp: dto.amountEgp,
           is_capitalized: dto.isCapitalized ?? true,

@@ -19,6 +19,8 @@ import { SettingsService } from '../settings/settings.service';
 import { PLAN_MANAGED_MODULES_SETTING_KEY } from '../../common/constants/platform-settings-keys';
 import { normalizeIndustryProfileKey, getIndustryProfile } from '../../core/tenant/industry-profiles';
 import { isPlatformTenantId, requireTenantScope } from '../../core/auth/utils/tenant-boundary';
+import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
+import { checkClientBusinessDay, CLIENT_BUSINESS_DATE_PAST_DAYS } from '../../common/utils/client-date-bounds.util';
 
 /** Settings key holding the bcrypt hash of the developer master password. */
 export const DEVELOPER_MASTER_PASSWORD_HASH_KEY = 'developerMasterPasswordHash';
@@ -546,6 +548,22 @@ export class SaasAdminService {
     if (!activeSub) throw new BadRequestException('لا يوجد اشتراك نشط لتسجيل الدفعة عليه.');
 
     const now = new Date();
+    // P9 (RC-11): paid_at was stamped verbatim from the caller-supplied
+    // `date` string — an unvalidated, unparse-checked client date (a
+    // payment dated 2020 or 2030 posted as-is). A payment date is
+    // past-by-nature, so it lives in the P6 window [today-7d, today]
+    // in the TENANT day, like the expense channel. Without a supplied
+    // date the server instant stands.
+    let paidAt = now;
+    if (body.date) {
+      const tenantTz = await getTenantTimezone(this.db, tenant.id);
+      const checked = checkClientBusinessDay(body.date, tenantTz, {
+        minDayOffset: -CLIENT_BUSINESS_DATE_PAST_DAYS,
+        maxDayOffset: 0,
+      });
+      if (!checked.ok) throw new BadRequestException('تاريخ الدفعة غير صالح أو خارج النطاق المسموح (آخر 7 أيام حتى اليوم).');
+      paidAt = checked.date;
+    }
     await this.db.insertInto('tenant_subscription_payments').values({
       tenant_id: tenant.id,
       subscription_id: activeSub.id,
@@ -553,7 +571,7 @@ export class SaasAdminService {
       currency: body.currency,
       method: body.method || 'manual',
       reference: body.reference || null,
-      paid_at: body.date ? new Date(body.date) : now,
+      paid_at: paidAt,
       created_at: now,
     } as any).execute();
 

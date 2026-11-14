@@ -1401,6 +1401,15 @@ export class CashDrawerService {
     const walletDetails = this.normalizeOperationDetails(payload.walletDetails, walletOperationCount, closeDigits);
     const instapayDetails = this.normalizeOperationDetails(payload.instapayDetails, instapayOperationCount, closeDigits);
 
+    // P9 (RC-9) — one stamp source for the row: closed_at was DB
+    // now() while the review stamps in the same row's JSON close note
+    // are app new Date(). Capture ONE server instant for this close
+    // and stamp the closed_at column with it, so the row never mixes
+    // two clocks. Same host clock as DB now() in practice; the value
+    // is identical to within milliseconds, and the variance journal
+    // reads closed_at as its entry date (day unchanged).
+    const closeNow = new Date();
+
     await this.tx.runInTransaction(this.db, async (trx) => {
       const lockedShift = await trx
         .selectFrom('cashier_shifts')
@@ -1505,7 +1514,7 @@ export class CashDrawerService {
       const stampedNote = [...(note ? [note] : []), ...noteStamps].join('\n\n');
       const closeNoteValue = blindCloseMeta ? this.serializeBlindCloseNote({ ...blindCloseMeta, note: stampedNote }) : stampedNote;
 
-      await sql`update cashier_shifts set status = ${closeStatus}, expected_cash = ${expectedCash}, counted_cash = ${countedCash}, variance = ${variance}, close_note = ${closeNoteValue}, closed_by = ${auth.userId}, closed_at = now() where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
+      await sql`update cashier_shifts set status = ${closeStatus}, expected_cash = ${expectedCash}, counted_cash = ${countedCash}, variance = ${variance}, close_note = ${closeNoteValue}, closed_by = ${auth.userId}, closed_at = ${closeNow} where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
       if (closeStatus === 'closed') {
         await this.accountingPosting.postCashierShiftVariance(trx, shiftId, postingAuth);
       }
@@ -1585,6 +1594,12 @@ export class CashDrawerService {
     const shift = await this.getShift(shiftId, auth);
     if (!shift) throw new AppError('الوردية غير موجودة', 'SHIFT_NOT_FOUND', 404);
     if (String(shift.status || '') !== 'pending_review') throw new AppError('الوردية ليست في انتظار مراجعة المدير', 'SHIFT_NOT_PENDING_REVIEW', 400);
+    // P9 (RC-9) — one stamp source for the row: the JSON note stamps
+    // (rejectedAt / reviewedAt) were app new Date() while the same
+    // row's updated_at / closed_at were DB now(). Capture ONE server
+    // instant for this review and use it for both, so the row never
+    // mixes two clocks.
+    const reviewNow = new Date();
     const managerNote = String(payload.note || '').trim();
     if (decision === 'reject' && managerNote.length < 10) {
       throw new AppError('اكتب سبب الرفض (10 أحرف على الأقل) قبل إعادة فتح الوردية', 'SHIFT_REVIEW_NOTE_REQUIRED', 400);
@@ -1600,13 +1615,13 @@ export class CashDrawerService {
 
       if (decision === 'reject') {
         if (parsedBlindClose) {
-          parsedBlindClose.rejection = { note: managerNote, rejectedById: Number(auth.userId || 0), rejectedByName: String(auth.username || ''), rejectedAt: new Date().toISOString() };
+          parsedBlindClose.rejection = { note: managerNote, rejectedById: Number(auth.userId || 0), rejectedByName: String(auth.username || ''), rejectedAt: reviewNow.toISOString() };
           closeNoteValue = this.serializeBlindCloseNote(parsedBlindClose);
         } else {
           const line = `رفض مراجعة المدير: ${managerNote} — بواسطة ${String(auth.username || '')}`;
           closeNoteValue = rawCloseNote ? `${rawCloseNote}\n\n${line}` : line;
         }
-        await sql`update cashier_shifts set status = 'open', counted_cash = null, variance = null, close_note = ${closeNoteValue}, closed_by = null, closed_at = null, updated_at = now() where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
+        await sql`update cashier_shifts set status = 'open', counted_cash = null, variance = null, close_note = ${closeNoteValue}, closed_by = null, closed_at = null, updated_at = ${reviewNow} where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
         return;
       }
 
@@ -1638,14 +1653,14 @@ export class CashDrawerService {
         if (hasMismatch && managerNote.length < 10) {
           throw new AppError('يوجد فرق في إقرار الإغلاق؛ اكتب ملاحظة مراجعة (10 أحرف على الأقل) قبل الاعتماد', 'SHIFT_REVIEW_NOTE_REQUIRED', 400);
         }
-        parsedBlindClose.managerReview = { note: managerNote, reviewedById: Number(auth.userId || 0), reviewedByName: String(auth.username || ''), reviewedAt: new Date().toISOString() };
+        parsedBlindClose.managerReview = { note: managerNote, reviewedById: Number(auth.userId || 0), reviewedByName: String(auth.username || ''), reviewedAt: reviewNow.toISOString() };
         parsedBlindClose.reconciliation = reconciliation;
         closeNoteValue = this.serializeBlindCloseNote(parsedBlindClose);
       } else if (managerNote) {
         closeNoteValue = rawCloseNote ? `${rawCloseNote}\n\nملاحظة مراجعة المدير: ${managerNote}` : `ملاحظة مراجعة المدير: ${managerNote}`;
       }
 
-      await sql`update cashier_shifts set status = 'closed', close_note = ${closeNoteValue}, closed_by = coalesce(closed_by, ${auth.userId}), closed_at = coalesce(closed_at, now()), updated_at = now() where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
+      await sql`update cashier_shifts set status = 'closed', close_note = ${closeNoteValue}, closed_by = coalesce(closed_by, ${auth.userId}), closed_at = coalesce(closed_at, ${reviewNow}), updated_at = ${reviewNow} where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
       await this.accountingPosting.postCashierShiftVariance(trx, shiftId, auth);
     });
     const listing = await this.listCashierShifts({}, auth);
