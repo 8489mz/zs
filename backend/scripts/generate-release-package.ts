@@ -10,9 +10,19 @@ interface CommitCategory {
   other: string[];
 }
 
+/*
+ * Per-release random activation passcode (INV-OFFLINE-UPDATE-PASSCODE-RANDOM):
+ * the old scheme derived the code deterministically as SHA-256 of a fixed
+ * literal + version, so anyone holding the public repo could recompute the
+ * code for ANY version. The value is now fresh randomness per call, minted
+ * only here at release time and printed once for the seller — it is never
+ * written into the published manifest (which is public) and never derived
+ * anywhere else. Keep this copy in sync with the service copy in
+ * offline-releases.service.ts (same name, same format).
+ */
 function generateReleasePasscode(version: string): string {
   const clean = version.replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
-  const h = crypto.createHash('sha256').update(`ZS_SECRET_KEY_${version}_2026_MASTER`).digest('hex').toUpperCase();
+  const h = crypto.randomBytes(4).toString('hex').toUpperCase();
   return `ZS-UPD-${clean || '100'}-${h.substring(0, 4)}-${h.substring(4, 8)}`;
 }
 
@@ -96,7 +106,10 @@ async function main() {
   const manifest = {
     version: targetVersion,
     generatedAt: new Date().toISOString(),
-    passcode: passcode,
+    // No passcode here: the manifest is published to the public releases
+    // repo, so a code inside it would be public. The seller provisions the
+    // printed code into the release row (setReleasePasscode) and gives it to
+    // the client out-of-band.
     requiresPasscode: true,
     changelog: changelogMarkdown,
     // Update channel: the public releases-only repo (source of truth:
@@ -119,9 +132,20 @@ async function main() {
   const rootLatestManifestPath = path.join(rootReleasesDir, `manifest-latest.json`);
   fs.writeFileSync(rootLatestManifestPath, JSON.stringify(manifest, null, 2), 'utf8');
 
+  // Seller-only record of the code, kept out of the tracked releases dir:
+  // backend/runtime/ is gitignored and never published.
+  const passcodeRecordPath = path.join(outputDir, `passcode-${targetVersion}.txt`);
+  fs.writeFileSync(
+    passcodeRecordPath,
+    `Activation passcode for v${targetVersion}: ${passcode}\n` +
+      `Provision it into the release row (admin: set release passcode) and give it to the client out-of-band. Never publish this file.\n`,
+    'utf8',
+  );
+
   console.log(`✅ Release manifest saved to: ${manifestPath}`);
   console.log(`✅ Root Release manifest saved to: ${rootManifestPath}`);
   console.log(`✅ Root Latest manifest saved to: ${rootLatestManifestPath}`);
+  console.log(`✅ Seller-only passcode record saved to: ${passcodeRecordPath}`);
 }
 
 main().catch(console.error);

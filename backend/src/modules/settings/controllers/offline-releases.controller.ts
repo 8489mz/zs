@@ -132,6 +132,21 @@ export class OfflineReleasesAdminController {
   }
 
   /**
+   * POST /api/admin/offline-releases/:id/passcode
+   * Provision (or rotate) the activation passcode for a release. The code
+   * comes from the release script output — it is never derived server-side.
+   * Body: { passcode }
+   */
+  @Post(':id/passcode')
+  setReleasePasscode(
+    @Req() req: RequestWithAuth,
+    @Param('id') id: string,
+    @Body() body: { passcode: string },
+  ) {
+    return this.releasesService.setReleasePasscode(req.authContext!, Number(id), body?.passcode);
+  }
+
+  /**
    * POST /api/admin/offline-releases
    * Create a new release entry (draft — not active yet).
    * Body: { version, changelog, patchUrl, passcode, requiresPasscode }

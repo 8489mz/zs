@@ -11,10 +11,38 @@ import { spawn } from 'child_process';
 import AdmZip from 'adm-zip';
 import { isDesktopRuntimeMode } from '../../../config/app-mode';
 
+/**
+ * Per-release random activation passcode (INV-OFFLINE-UPDATE-PASSCODE-RANDOM).
+ *
+ * The old scheme derived the code deterministically as SHA-256 of a fixed
+ * literal + version, so anyone holding the public repo could recompute the
+ * code for ANY version — and the release script also published the code in
+ * plaintext inside the tracked release manifests (17 of 19 manifests carry
+ * one). A passcode that must travel through a public channel cannot be a
+ * secret. The value is now fresh randomness per call: the release script is
+ * the only place a code is minted (printed once for the seller), the service
+ * never derives or invents one, and verification only ever compares against
+ * a stored/provisioned value. Rows that already hold a stored code keep
+ * verifying against it — old releases keep their old codes (prospective
+ * only, nothing is revoked).
+ */
 export function generateReleasePasscode(version: string): string {
   const clean = version.replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
-  const h = crypto.createHash('sha256').update(`ZS_SECRET_KEY_${version}_2026_MASTER`).digest('hex').toUpperCase();
+  const h = crypto.randomBytes(4).toString('hex').toUpperCase();
   return `ZS-UPD-${clean || '100'}-${h.substring(0, 4)}-${h.substring(4, 8)}`;
+}
+
+/**
+ * Fail-closed resolution of the expected passcode: a gate with no stored or
+ * manifest-supplied code has nothing to compare against, so the update is
+ * refused instead of deriving a code the caller could also compute.
+ */
+function expectedPasscodeOrFail(candidate: string | null | undefined, _version: string): string {
+  const expected = (candidate || '').trim();
+  if (!expected) {
+    throw new BadRequestException('لم يتم تخصيص كود تفعيل لهذا الإصدار بعد.');
+  }
+  return expected;
 }
 
 /** Operator-approved package SHA256: update packages must be pinned out-of-band, never trusted because
@@ -154,7 +182,10 @@ export class OfflineReleasesService implements OnModuleInit {
         .executeTakeFirst();
 
       const isLatest = m.version === latestVersion;
-      const passcode = m.passcode || generateReleasePasscode(m.version);
+      // A manifest may carry a passcode (old manifests do); one that does not
+      // must never be invented here — a missing code stays null until an
+      // admin provisions it, and a stored code is never overwritten with null.
+      const passcode = m.passcode ?? null;
       const patchUrl = m.patchUrl || `/downloads/updates/Z-ERP-Patch-v${m.version}.zip`;
 
       if (!existing) {
@@ -187,9 +218,11 @@ export class OfflineReleasesService implements OnModuleInit {
             .where('is_active', '=', true)
             .execute();
 
+          const activationValues: { is_active: boolean; passcode?: string | null } = { is_active: true };
+          if (m.passcode) activationValues.passcode = m.passcode;
           await this.db
             .updateTable('offline_releases')
-            .set({ is_active: true, passcode: passcode })
+            .set(activationValues)
             .where('id', '=', existing.id)
             .execute();
         }
@@ -284,7 +317,9 @@ export class OfflineReleasesService implements OnModuleInit {
           .where('version', '=', ghRelease.version)
           .executeTakeFirst();
 
-        const passcode = ghRelease.passcode || generateReleasePasscode(ghRelease.version);
+        // A release published without a passcode keeps a null code until an
+        // admin provisions one; a stored code is never overwritten with null.
+        const passcode = ghRelease.passcode ?? null;
 
         if (!existing) {
           await this.db
@@ -314,14 +349,20 @@ export class OfflineReleasesService implements OnModuleInit {
             .where('is_active', '=', true)
             .execute();
 
+          const activationValues: {
+            is_active: boolean;
+            patch_url: string;
+            changelog: string;
+            passcode?: string | null;
+          } = {
+            is_active: true,
+            patch_url: ghRelease.patchUrl,
+            changelog: ghRelease.changelog,
+          };
+          if (ghRelease.passcode) activationValues.passcode = ghRelease.passcode;
           await this.db
             .updateTable('offline_releases')
-            .set({
-              is_active: true,
-              patch_url: ghRelease.patchUrl,
-              changelog: ghRelease.changelog,
-              passcode: passcode,
-            })
+            .set(activationValues)
             .where('id', '=', existing.id)
             .execute();
         }
@@ -411,7 +452,7 @@ export class OfflineReleasesService implements OnModuleInit {
       patchUrl: r.patch_url,
       promotedAt: r.promoted_at || r.created_at,
       requiresPasscode: r.requires_passcode ?? true,
-      passcode: isDev ? (r.passcode || generateReleasePasscode(r.version)) : undefined,
+      passcode: isDev ? (r.passcode ?? undefined) : undefined,
     }));
 
     return mapped.sort((a, b) => compareSemver(b.version, a.version));
@@ -432,16 +473,18 @@ export class OfflineReleasesService implements OnModuleInit {
       .where('version', '=', targetVer)
       .executeTakeFirst();
 
-    const expectedPasscode = targetRelease?.passcode || generateReleasePasscode(targetVer);
-
+    // Fail closed: with no stored code there is nothing to compare against,
+    // and no code may be derived — the published code for this version must
+    // not verify. The wrong-code error never echoes the expected code.
     if (targetRelease?.requires_passcode !== false) {
+      const expectedPasscode = expectedPasscodeOrFail(targetRelease?.passcode, targetVer);
       if (!body.passcode || !body.passcode.trim()) {
         throw new BadRequestException(`كود تفعيل التحديث مطلوب لهذا الإصدار.`);
       }
       const normalizedProvided = (body.passcode || '').replace(/[\s-]+/g, '').toUpperCase();
       const normalizedExpected = expectedPasscode.replace(/[\s-]+/g, '').toUpperCase();
       if (normalizedProvided !== normalizedExpected) {
-        throw new BadRequestException(`كود تفعيل التحديث غير صحيح. الكود المطلوب لهذا الإصدار هو: ${expectedPasscode}`);
+        throw new BadRequestException(`كود تفعيل التحديث غير صحيح.`);
       }
     }
 
@@ -463,11 +506,10 @@ export class OfflineReleasesService implements OnModuleInit {
       fromVersion: fromVer,
       targetVersion: targetVer,
       passcodeVerified: true,
-      generatedPasscode: expectedPasscode,
       cumulativeReleasesCount: intermediate.length,
       cumulativeChangelog: cumulativeChangelog || `تحديث شامل للإصدار ${targetVer}`,
       steps: [
-        { step: 1, title: 'التحقق من كود التفعيل والترخيص', status: 'completed', message: `تم التحقق بنجاح من كود التفعيل (${expectedPasscode}) وتوقيعه الرقمي.` },
+        { step: 1, title: 'التحقق من كود التفعيل والترخيص', status: 'completed', message: `تم التحقق بنجاح من كود التفعيل.` },
         { step: 2, title: 'إنشاء نقطة استعادة فورية (Auto Backup)', status: 'completed', message: `تم تأمين قاعدة البيانات والملفات في runtime/backups/pre-update-v${targetVer}.` },
         { step: 3, title: 'فحص الحزمة وتطابق الـ SHA256 Checksums', status: 'completed', message: 'جميع الملفات والـ Hash سليمة 100% ولا توجد أي ملفات تالفة أو محقونة.' },
         { step: 4, title: 'تطبيق ملفات الباك إند والفرونت إند', status: 'completed', message: `تم استبدال مجلدات dist بالكامل للإصدار ${targetVer} بنجاح.` },
@@ -486,19 +528,6 @@ export class OfflineReleasesService implements OnModuleInit {
       .selectAll()
       .orderBy('created_at', 'desc')
       .execute();
-
-    // Auto-populate passcode for releases if missing
-    for (const r of rows) {
-      if (!r.passcode) {
-        const gen = generateReleasePasscode(r.version);
-        await this.db
-          .updateTable('offline_releases')
-          .set({ passcode: gen })
-          .where('id', '=', r.id)
-          .execute();
-        r.passcode = gen;
-      }
-    }
 
     return rows.map((r) => ({
       id: r.id,
@@ -523,21 +552,43 @@ export class OfflineReleasesService implements OnModuleInit {
 
     if (!release) throw new NotFoundException('الإصدار غير موجود');
 
-    let passcode = release.passcode;
-    if (!passcode) {
-      passcode = generateReleasePasscode(release.version);
-      await this.db
-        .updateTable('offline_releases')
-        .set({ passcode })
-        .where('id', '=', id)
-        .execute();
-    }
+    return {
+      ok: true,
+      version: release.version,
+      passcode: release.passcode ?? null,
+      requiresPasscode: release.requires_passcode ?? true,
+    };
+  }
+
+  /**
+   * Provision (or rotate) the activation passcode for a release. This is the
+   * only way a code reaches a release row after the derivation was removed:
+   * the seller generates the code with the release script and sets it here,
+   * then gives it to the client out-of-band. Codes already stored for old
+   * releases are untouched by this method unless an admin rotates them.
+   */
+  async setReleasePasscode(_auth: AuthContext, id: number, passcode: string) {
+    if (!passcode?.trim()) throw new BadRequestException('passcode مطلوب');
+
+    const release = await this.db
+      .selectFrom('offline_releases')
+      .select(['id', 'version'])
+      .where('id', '=', id)
+      .executeTakeFirst();
+
+    if (!release) throw new NotFoundException('الإصدار غير موجود');
+
+    const normalized = passcode.trim();
+    await this.db
+      .updateTable('offline_releases')
+      .set({ passcode: normalized })
+      .where('id', '=', id)
+      .execute();
 
     return {
       ok: true,
       version: release.version,
-      passcode,
-      requiresPasscode: release.requires_passcode ?? true,
+      passcode: normalized,
     };
   }
 
@@ -551,28 +602,19 @@ export class OfflineReleasesService implements OnModuleInit {
       .executeTakeFirst();
 
     if (release) {
-      let passcode = release.passcode;
-      if (!passcode) {
-        passcode = generateReleasePasscode(release.version);
-        await this.db
-          .updateTable('offline_releases')
-          .set({ passcode })
-          .where('id', '=', release.id)
-          .execute();
-      }
       return {
         ok: true,
         version: release.version,
-        passcode,
+        passcode: release.passcode ?? null,
         requiresPasscode: release.requires_passcode ?? true,
       };
     }
 
-    const passcode = generateReleasePasscode(version.trim());
+    // No row, no code: an unprovisioned version is handed nothing.
     return {
       ok: true,
       version: version.trim(),
-      passcode,
+      passcode: null,
       requiresPasscode: true,
     };
   }
@@ -597,7 +639,9 @@ export class OfflineReleasesService implements OnModuleInit {
       throw new ConflictException(`الإصدار ${version} موجود بالفعل`);
     }
 
-    const assignedPasscode = passcode?.trim() || generateReleasePasscode(version.trim());
+    // No derivation fallback: an admin must provision the code explicitly
+    // (release script output, set via setReleasePasscode).
+    const assignedPasscode = passcode?.trim() || null;
 
     const inserted = await this.db
       .insertInto('offline_releases')
@@ -752,8 +796,9 @@ export class OfflineReleasesService implements OnModuleInit {
       .where('version', '=', body.version)
       .executeTakeFirst();
 
+    // Fail closed when no code was ever provisioned for this release.
     if (release?.requires_passcode !== false) {
-      const expected = release?.passcode || generateReleasePasscode(body.version);
+      const expected = expectedPasscodeOrFail(release?.passcode, body.version);
       const normalizedProvided = (body.passcode || '').replace(/[\s-]+/g, '').toUpperCase();
       const normalizedExpected = expected.replace(/[\s-]+/g, '').toUpperCase();
       if (normalizedProvided !== normalizedExpected) {
@@ -904,9 +949,11 @@ export class OfflineReleasesService implements OnModuleInit {
         
         version = manifest.version;
 
-        // Passcode validation for ZIP package (if required by manifest)
+        // Passcode validation for ZIP package (if required by manifest).
+        // The expected value is only the code carried inside this pinned
+        // package — with no code in the manifest, the gate fails closed.
         if (manifest.requiresPasscode === true || manifest.passcode) {
-          const expected = manifest.passcode || generateReleasePasscode(manifest.version);
+          const expected = expectedPasscodeOrFail(manifest.passcode ?? null, manifest.version);
           const normalizedProvided = (passcode || '').replace(/[\s-]+/g, '').toUpperCase();
           const normalizedExpected = expected.replace(/[\s-]+/g, '').toUpperCase();
           if (normalizedProvided !== normalizedExpected) {
