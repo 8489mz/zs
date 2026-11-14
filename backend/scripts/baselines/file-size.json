@@ -42,7 +42,7 @@
     "src/modules/sales/services/pos-terminal.service.ts": 1412,
     "src/modules/sales/services/restaurant-advanced-fnb.service.ts": 1645,
     "src/modules/sales/services/sales-orders.service.ts": 1174,
-    "src/modules/sales/services/sales-write.service.ts": 2442,
+    "src/modules/sales/services/sales-write.service.ts": 2223,
     "src/modules/settings/services/offline-releases.service.ts": 1086,
     "src/modules/settings/services/settings-demo-data.service.ts": 1489,
     "src/modules/settings/services/settings-import.service.ts": 1222,
