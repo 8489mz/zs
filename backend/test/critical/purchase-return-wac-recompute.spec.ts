@@ -303,7 +303,7 @@ async function main(): Promise<void> {
     assert.ok(createBody.includes('revalueStockReturn(trx, scope.tenantId, requestItem.productId, stockChange.globalAfter, preparedLine.stockDelta'),
       'creation must re-blend WAC from the corrected globalAfter in the same transaction');
     assert.ok(createBody.includes('originalPurchaseReturnUnitCost('), 'creation must keep the original-cost derivation');
-    const postingSource = readFileSync(resolve(__dirname, '../../src/modules/accounting/accounting-posting.service.ts'), 'utf8');
+    const postingSource = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/purchases-treasury-posting.service.ts'), 'utf8');
     const postStart = postingSource.indexOf('async postPurchaseReturn(');
     assert.ok(postStart > 0, 'postPurchaseReturn exists');
     const postBody = postingSource.slice(postStart, postingSource.indexOf('\n  async ', postStart + 1));
