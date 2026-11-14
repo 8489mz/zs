@@ -4,6 +4,7 @@
  */
 
 import { type MoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
+import { todayTenantDate } from '../../common/utils/tenant-timezone.util';
 
 export type FmcgPromoType = 'mix_and_match' | 'tiered_qty' | 'invoice_threshold';
 export type FmcgApplyType = 'free_bonus' | 'discount_percent' | 'discount_amount';
@@ -134,9 +135,15 @@ export function evaluateFmcgCartPromotions(params: {
     ? Number(params.invoiceSubtotal)
     : nonBonusItems.reduce((acc, it) => acc + (it.qty * it.unitPrice), 0);
 
+  // The reference day is a business day (INV-BUSINESS-DATE-TENANT-LOCAL):
+  // the UTC day is the wrong day around local midnight (a promo starting
+  // today is skipped and one that ended yesterday still applies). A Date
+  // reference is rendered in the business timezone; the live caller
+  // (VanPromotionsService.evaluateCart) passes the exact tenant-local
+  // day string, and this env fallback covers pure-engine callers.
   const refDateStr = params.referenceDate
-    ? (typeof params.referenceDate === 'string' ? params.referenceDate.slice(0, 10) : params.referenceDate.toISOString().slice(0, 10))
-    : new Date().toISOString().slice(0, 10);
+    ? (typeof params.referenceDate === 'string' ? params.referenceDate.slice(0, 10) : todayTenantDate(process.env.BUSINESS_TIMEZONE || 'Africa/Cairo', params.referenceDate))
+    : todayTenantDate(process.env.BUSINESS_TIMEZONE || 'Africa/Cairo');
 
   const appliedPromotions: AppliedPromotionReward[] = [];
   const bonusItemsToAdd: CartPromotionEvaluationResult['bonusItemsToAdd'] = [];

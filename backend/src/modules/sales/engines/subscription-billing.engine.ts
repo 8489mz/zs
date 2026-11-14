@@ -10,6 +10,7 @@
  */
 
 import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { formatLocalCalendarDay } from '../../../common/utils/tenant-timezone.util';
 
 export type BillingPeriod = 'monthly' | 'quarterly' | 'semi_annual' | 'annual';
 
@@ -40,7 +41,10 @@ export function calculateNextBillingDate(
   baseDate: Date | string,
   period: BillingPeriod,
 ): string {
-  const str = typeof baseDate === 'string' ? baseDate.slice(0, 10) : baseDate.toISOString().slice(0, 10);
+  // A Date here is a stored DATE column value: pg returns DATE columns
+  // as local-midnight Dates, so the UTC slice renders the previous day
+  // on hosts east of UTC. Local parts recover the stored calendar day.
+  const str = typeof baseDate === 'string' ? baseDate.slice(0, 10) : formatLocalCalendarDay(baseDate);
   const [yStr, mStr, dStr] = str.split('-');
   let y = parseInt(yStr, 10);
   let m = parseInt(mStr, 10);

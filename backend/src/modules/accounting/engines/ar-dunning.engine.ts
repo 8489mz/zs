@@ -160,7 +160,10 @@ export function allocateCustomerOverdueFifo(
         // no tenant context, so it cannot resolve a per-tenant zone; the UTC
         // day was wrong for every tenant, including the default one.
         createdAt: todayTenantDate(process.env.BUSINESS_TIMEZONE || 'Africa/Cairo', new Date(inv.createdAt)),
-        dueDate: effectiveDueDate.toISOString().slice(0, 10),
+        // Same business-timezone day for the due date (was a UTC slice:
+        // an invoice due on a Cairo day whose instant falls before 02:00
+        // Cairo rendered as the previous day).
+        dueDate: todayTenantDate(process.env.BUSINESS_TIMEZONE || 'Africa/Cairo', effectiveDueDate),
         total: roundMoney(inv.total, moneyDigits),
         paidAmount: roundMoney(inv.paidAmount, moneyDigits),
         unpaidAmount: invoiceUnpaid,

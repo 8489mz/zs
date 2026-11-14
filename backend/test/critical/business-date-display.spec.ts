@@ -50,15 +50,15 @@
  *   the start+durationDays math (:2387-2389), pharmacyExpiryText and
  *   the create-expiry Date branch, storefront-offers normalizeDateOnly,
  *   catalog-product.service.ts :214, van-common.util.ts holiday iteration.
- * - reports.controller.ts:183 daily-rollup default: the controller has
- *   no db handle and no timezone in AuthContext, and the rollup service
- *   itself builds UTC day bounds -- that service owns the fix
- *   (follow-up package, not this one).
- * - fmcg-promotions.engine.ts: pure engine, no tenant context; the
- *   caller (VanPromotionsService.evaluateCart) must pass the
- *   tenant-local day as referenceDate (follow-up). The string-reference
- *   behaviour is pinned below; the no-argument default is a documented
- *   limitation, not asserted.
+ * - reports.controller.ts:183 daily-rollup default (FIXED by
+ *   INV-CAT1A-MONEY-DATES-TENANT-LOCAL): the controller now passes an
+ *   empty date and the rollup service defaults to the tenant-local day
+ *   with tenant-local day bounds.
+ * - fmcg-promotions.engine.ts (FIXED by INV-CAT1A-MONEY-DATES-TENANT-LOCAL):
+ *   a Date reference and the no-argument default are now rendered with
+ *   todayTenantDate in the business timezone, and the caller
+ *   (VanPromotionsService.evaluateCart) now passes the tenant-local day
+ *   as referenceDate. The string-reference behaviour is pinned below.
  *
  * The fix routes every instant through the canonical gateway
  * resolveBusinessDateKey (tenant timezone from settings, default
@@ -312,9 +312,8 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     assert.ok(!contractingText.includes('weekStart.setHours(0, 0, 0, 0)'), 'histogram no longer snaps with local setHours');
 
     // 10. Wiring pin: no live-instant UTC date slice remains in the
-    // owned files except the four documented exceptions (a rollup
-    // default the rollup service owns, an fmcg default the caller
-    // owns, and two legacy-default branches kept for existing callers).
+    // owned files except the two documented exceptions (two legacy-default
+    // branches kept for existing callers).
     const countDefect = (text: string): number => (text.match(/new Date\(\)\.toISOString\(\)\.(slice\(0, 10\)|split\('T'\)\[0\])/g) || []).length;
     const pinZero = [
       'modules/returns/helpers/returns-listing.helper.ts',
@@ -331,14 +330,14 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
       'modules/delivery-reps/services/van-common.util.ts',
       'modules/contracting/contracting.service.ts',
       'modules/hr/hr.service.ts',
+      'modules/reports/reports.controller.ts',
+      'modules/delivery-reps/fmcg-promotions.engine.ts',
     ];
     for (const rel of pinZero) {
       const text = fs.readFileSync(path.join(SRC, rel), 'utf8');
       assert.equal(countDefect(text), 0, `${rel} keeps no live-instant UTC date slice`);
     }
     const pinOne: Array<{ file: string; marker: string }> = [
-      { file: 'modules/reports/reports.controller.ts', marker: 'targetDate' },
-      { file: 'modules/delivery-reps/fmcg-promotions.engine.ts', marker: 'referenceDate' },
       { file: 'modules/sales/helpers/sales-query.helper.ts', marker: 'todayKey ??' },
       { file: 'modules/cash-drawer/helpers/cash-drawer.helper.ts', marker: 'todayKey ??' },
     ];

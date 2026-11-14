@@ -89,6 +89,21 @@ export function todayTenantDate(timezone: string, date: Date = new Date()): stri
 }
 
 /**
+ * Formats a Date that represents a CALENDAR DAY at local midnight into
+ * its YYYY-MM-DD key, from the host-local calendar parts. node-postgres
+ * returns DATE columns as local-midnight Dates, so toISOString() (UTC)
+ * renders the previous day on any host east of UTC -- this recovers the
+ * stored day on every host. NEVER use for instants: format those with
+ * todayTenantDate in the tenant's zone.
+ */
+export function formatLocalCalendarDay(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
  * Formats a Date or UTC ISO string into localized time in the specified timezone
  */
 export function formatTimeInTimezone(

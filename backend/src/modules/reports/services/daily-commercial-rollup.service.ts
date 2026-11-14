@@ -3,6 +3,9 @@ import { Kysely, sql } from 'kysely';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
+import { getBusinessDayBounds } from '../helpers/reports-range.helper';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
 export interface DailyRollupSummary {
@@ -58,8 +61,19 @@ export class DailyCommercialRollupService {
     branchId?: number,
   ): Promise<DailyRollupSummary> {
     const branchKey = branchId ?? -1;
-    const startOfDay = new Date(`${dateStr}T00:00:00.000Z`);
-    const endOfDay = new Date(`${dateStr}T23:59:59.999Z`);
+    // The rollup day is a business day (INV-BUSINESS-DATE-TENANT-LOCAL):
+    // an empty date defaults to the tenant-local today, and the window
+    // is the tenant-local day, not the UTC day. The old UTC window
+    // counted the wrong sales around local midnight -- and, with a
+    // tenant-local key, would have stored a rollup whose label and
+    // contents disagreed (the UTC window of the Cairo day is mostly in
+    // the future at 01:00 Cairo).
+    const effectiveDate = dateStr?.trim()
+      ? dateStr.trim()
+      : await resolveBusinessDateKey(this.db, tenantId, new Date());
+    const bounds = getBusinessDayBounds(effectiveDate, await getTenantTimezone(this.db, tenantId));
+    const startOfDay = bounds.start;
+    const endOfDay = bounds.end;
 
     // 1. Sales & Cash/Credit Aggregates
     let salesQuery = (this.db as any)
@@ -148,7 +162,7 @@ export class DailyCommercialRollupService {
       .insertInto('daily_commercial_rollups')
       .values({
         tenant_id: tenantId,
-        rollup_date: dateStr,
+        rollup_date: effectiveDate,
         branch_id: branchId ?? null,
         branch_key: branchKey,
         sales_count: salesCount,
@@ -181,7 +195,7 @@ export class DailyCommercialRollupService {
       .execute();
 
     return {
-      rollupDate: dateStr,
+      rollupDate: effectiveDate,
       branchId: branchId ?? null,
       salesCount,
       salesTotal,

@@ -180,7 +180,11 @@ export class ReportsController {
     @Body('branchId') branchId: number,
     @Req() req: RequestWithAuth,
   ) {
-    const targetDate = (date || new Date().toISOString().slice(0, 10)).trim();
+    // No date supplied: the rollup service owns the default (it holds
+    // the tenant's db handle and resolves the tenant-local day). Passing
+    // an empty string lets it default instead of stamping the UTC day,
+    // which is the wrong business day around local midnight.
+    const targetDate = (date || '').trim();
     return this.rollupService.computeAndStoreDailyRollup(req.authContext!.tenantId!, targetDate, branchId);
   }
 }

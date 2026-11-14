@@ -10,6 +10,7 @@ import { CreateSupplierPaymentScheduleDto, PaySupplierScheduleInstallmentDto } f
 import { normalizeInstapayAddress, normalizeOptionalNote, normalizePurchaseScope } from '../helpers/purchases-write.helper';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
+import { formatLocalCalendarDay } from '../../../common/utils/tenant-timezone.util';
 import { currencyMoneyDigits, roundMoney, toMinorUnits, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { PurchasesFinanceService } from './purchases-finance.service';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
@@ -96,8 +97,12 @@ export class SupplierPaymentSchedulesService {
   }
 
   private addDays(date: Date, days: number): string {
+    // Calendar arithmetic in UTC: the input is a UTC-midnight date from
+    // parseDate, and host-local setDate/getDate shifts the day across a
+    // DST transition (proven: +2d from 2026-03-28 on a Berlin host
+    // returned 2026-03-29 instead of 2026-03-30).
     const next = new Date(date);
-    next.setDate(next.getDate() + days);
+    next.setUTCDate(next.getUTCDate() + days);
     return next.toISOString().slice(0, 10);
   }
 
@@ -194,14 +199,17 @@ export class SupplierPaymentSchedulesService {
   private formatIsoDate(dateValue: string | Date | null | undefined): string {
     if (!dateValue) return '';
     if (dateValue instanceof Date) {
-      return !Number.isNaN(dateValue.getTime()) ? dateValue.toISOString().slice(0, 10) : '';
+      // due_date is a DATE column: pg returns it as a local-midnight
+      // Date, so the UTC slice renders the previous day on hosts east
+      // of UTC. Local parts recover the stored calendar day.
+      return !Number.isNaN(dateValue.getTime()) ? formatLocalCalendarDay(dateValue) : '';
     }
     const str = String(dateValue).trim();
     if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
       return str.slice(0, 10);
     }
     const parsed = new Date(str);
-    return !Number.isNaN(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : str.slice(0, 10);
+    return !Number.isNaN(parsed.getTime()) ? formatLocalCalendarDay(parsed) : str.slice(0, 10);
   }
 
   private map(row: ScheduleRow, paymentLogs: SchedulePaymentLogRow[] = [], digits: MoneyDigits = 2, todayKey: string): Record<string, unknown> {

@@ -24,6 +24,7 @@ import { AccountingPostingService } from '../../accounting/accounting-posting.se
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { resolveRepLinkedUserId } from './van-common.util';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
 export type VanRepFinancialLedgerDeps = {
@@ -967,7 +968,11 @@ export class VanRepFinancialLedgerService {
     }
 
     const actorUserId = authContext.userId ? Number(authContext.userId) : null;
-    const targetMonth = payload.targetMonth || new Date().toISOString().slice(0, 7);
+    // The default target month is a business-month decision
+    // (INV-BUSINESS-DATE-TENANT-LOCAL): on the 1st of a month around
+    // local midnight the UTC month is still the previous month, so the
+    // shortage would be pushed to the wrong payroll run.
+    const targetMonth = payload.targetMonth || (await resolveBusinessDateKey(this.db, tenantId, new Date())).slice(0, 7);
     const results: Array<{ id: number; repName: string; amount: number; success: boolean; message: string }> = [];
     // INV-REP-PAYROLL-TARGET-MONTH (M2, PD2): resolved inside the
     // transaction below — the run the deduction is targeted at.

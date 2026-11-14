@@ -10,6 +10,7 @@ import {
   CartPromotionEvaluationResult,
 } from '../fmcg-promotions.engine';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
 export interface UpsertFmcgPromotionDto {
@@ -175,11 +176,18 @@ export class VanPromotionsService {
     // Pass the tenant's book digits into the pure engine: without this
     // the engine would default to 2 and cut a 3-decimal tenant's fils.
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
+    // The promotion window is a business-day decision
+    // (INV-BUSINESS-DATE-TENANT-LOCAL): pass the tenant-local day as
+    // referenceDate. Without this the engine defaults to the UTC day,
+    // so around local midnight a promo starting today is skipped and
+    // one that ended yesterday still applies.
+    const referenceDate = await resolveBusinessDateKey(this.anyDb, tenantId, new Date());
     return evaluateFmcgCartPromotions({
       cartItems: payload.cartItems || [],
       invoiceSubtotal: payload.invoiceSubtotal,
       customerType: payload.customerType,
       activePromotions,
+      referenceDate,
       moneyDigits,
     });
   }
