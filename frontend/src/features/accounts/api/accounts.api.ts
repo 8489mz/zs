@@ -66,6 +66,21 @@ function normalizeSupplierLedger(payload: SupplierLedger | LedgerPayloadLike): S
   };
 }
 
+export interface SupplierAdvanceRow {
+  id: string;
+  docNo: string;
+  supplierId: string;
+  amount: number;
+  isAdvance: boolean;
+  appliedAmount: number;
+  remainingAdvance: number;
+  note: string;
+  date: string;
+  paymentChannel: string;
+  instapayAddress: string;
+  createdBy: string;
+}
+
 export const accountsApi = {
   customers: async () => unwrapArray<Customer>(await http<Customer[] | { customers: Customer[] }>('/api/customers'), 'customers'),
   suppliers: async () => unwrapArray<Supplier>(await http<Supplier[] | { suppliers: Supplier[] }>('/api/suppliers'), 'suppliers'),
@@ -111,6 +126,21 @@ export const accountsApi = {
   },
   customerPaymentCreate: (payload: unknown) => postIdempotentAccountPayment('/api/customer-payments', payload),
   supplierPaymentCreate: (payload: unknown) => postIdempotentAccountPayment('/api/supplier-payments', payload),
+  /* INV-SUPPLIER-ADVANCE-UI-WIRING: the advances card's read + apply.
+   * The list is filtered server-side by supplier (the list is
+   * paginated); apply posts to the #7 endpoint, which needs no
+   * idempotency key — it is a one-shot application, not a payment. */
+  listSupplierPayments: async (params?: { supplierId?: string; page?: number; pageSize?: number }) => {
+    const payload = await http<{ supplierPayments?: SupplierAdvanceRow[]; total?: number }>(
+      `/api/supplier-payments${buildQueryString({ supplierId: params?.supplierId, page: params?.page, pageSize: params?.pageSize })}`,
+    );
+    return { supplierPayments: Array.isArray(payload.supplierPayments) ? payload.supplierPayments : [], total: Number(payload.total || 0) };
+  },
+  applySupplierAdvance: (id: string, payload: { amount: number; purchaseId?: number }) =>
+    http<{ ok: boolean; appliedAmount?: number; remainingAdvance?: number }>(
+      `/api/supplier-payments/${id}/apply-advance`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
   listCustomersWithDebt: async (): Promise<Customer[]> => {
     const pageSize = 200;
     let page = 1;

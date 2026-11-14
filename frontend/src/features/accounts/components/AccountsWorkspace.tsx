@@ -9,6 +9,7 @@ import { AccountsPartyCard } from '@/features/accounts/components/AccountsPartyC
 import { AccountsLedgerCard } from '@/features/accounts/components/AccountsLedgerCard';
 import { AccountsLedgerActions } from '@/features/accounts/components/AccountsLedgerActions';
 import { SupplierBalanceScheduleCard } from '@/features/accounts/components/SupplierBalanceScheduleCard';
+import { SupplierAdvancesCard } from '@/features/accounts/components/SupplierAdvancesCard';
 import { useAccountsWorkspaceController } from '@/features/accounts/hooks/useAccountsWorkspaceController';
 import { useHasAnyPermission } from '@/shared/hooks/use-permission';
 import { useCustomerProfile } from '@/features/customers/constants/customer-profiles';
@@ -213,6 +214,13 @@ export function AccountsWorkspace() {
           </div>
 
           <SupplierBalanceScheduleCard supplier={controller.selectedSupplier as Supplier | null} disabled={!canManageAccounts} />
+
+          <SupplierAdvancesCard
+            supplierId={controller.selectedSupplierId}
+            supplierName={(controller.selectedSupplier as Supplier | null)?.name || ''}
+            supplierBalance={Number((controller.selectedSupplier as Supplier | null)?.balance || 0)}
+            disabled={!canManageAccounts}
+          />
         </div>
       )}
       </main>

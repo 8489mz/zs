@@ -237,7 +237,11 @@ export class PurchasesQueryService {
     const page = Math.max(1, Number(query?.page || 1));
     const pageSize = Math.min(100, Math.max(1, Number(query?.pageSize || query?.limit || 50)));
     const offset = (page - 1) * pageSize;
-    const rows = await this.db
+    /* INV-SUPPLIER-ADVANCE-UI-WIRING: the advances card lists one
+     * supplier's open advances — filter server-side (the list is
+     * paginated, so a client-side filter would miss later pages). */
+    const supplierFilter = Number(query?.supplierId || 0);
+    let listQuery = this.db
       .selectFrom('supplier_payments as sp')
       .leftJoin('branches as b', 'b.id', 'sp.branch_id')
       .leftJoin('stock_locations as l', 'l.id', 'sp.location_id')
@@ -260,7 +264,11 @@ export class PurchasesQueryService {
         'u.username as created_by_name',
         sql<number>`count(*) over()`.as('total_count'),
       ])
-      .where(this.tenantPredicate(auth, 'sp'))
+      .where(this.tenantPredicate(auth, 'sp'));
+    if (supplierFilter > 0) {
+      listQuery = listQuery.where('sp.supplier_id', '=', supplierFilter);
+    }
+    const rows = await listQuery
       .orderBy('sp.id', 'desc')
       .limit(pageSize)
       .offset(offset)

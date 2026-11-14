@@ -355,7 +355,7 @@ export function SupplierPaymentForm({ suppliers, activeSupplierId, disabled = fa
   const { t } = useTranslation();
   const form = useForm<SupplierPaymentInput, undefined, SupplierPaymentOutput>({
     resolver: zodResolver(supplierPaymentSchema),
-    defaultValues: { supplierId: activeSupplierId || '', amount: 0, note: '', paymentChannel: 'cash', instapayAddress: '' }
+    defaultValues: { supplierId: activeSupplierId || '', amount: 0, note: '', paymentChannel: 'cash', instapayAddress: '', isAdvance: false }
   });
   // Mirror CustomerPaymentForm: a deep link (?supplierId=) must preselect
   // the supplier even when the id arrives after mount. Without this the
@@ -367,6 +367,7 @@ export function SupplierPaymentForm({ suppliers, activeSupplierId, disabled = fa
   }, [activeSupplierId, form]);
   const watchedSupplierId = useWatch({ control: form.control, name: 'supplierId' });
   const watchedChannel = useWatch({ control: form.control, name: 'paymentChannel' });
+  const watchedIsAdvance = useWatch({ control: form.control, name: 'isAdvance' });
   const selectedSupplier = suppliers.find((s) => String(s.id) === String(watchedSupplierId));
   const savedSupplierIpa = readSupplierInstapayAddress(selectedSupplier);
   /* INV-INSTAPAY-FIELD-MISSING: when InstaPay is picked, prefill the
@@ -377,7 +378,17 @@ export function SupplierPaymentForm({ suppliers, activeSupplierId, disabled = fa
       form.setValue('instapayAddress', savedSupplierIpa);
     }
   }, [watchedChannel, savedSupplierIpa, form]);
-  const mutation = useSupplierPaymentMutation(activeSupplierId, () => form.reset({ supplierId: '', amount: 0, note: '', paymentChannel: 'cash', instapayAddress: '' }));
+  /* INV-SUPPLIER-ADVANCE-UI-WIRING: a payment against a zero-balance
+   * supplier settles nothing, so it is an advance by definition — the
+   * toggle defaults ON for such a supplier. The merchant can still
+   * switch it off by hand (the backend derives the same from the
+   * balance, so the payment stays an advance either way). */
+  useEffect(() => {
+    if (watchedSupplierId) {
+      form.setValue('isAdvance', Number(selectedSupplier?.balance || 0) <= 0);
+    }
+  }, [watchedSupplierId, form]);
+  const mutation = useSupplierPaymentMutation(activeSupplierId, () => form.reset({ supplierId: '', amount: 0, note: '', paymentChannel: 'cash', instapayAddress: '', isAdvance: false }));
 
   const supplierOptions = suppliers.map((s) => ({
     value: String(s.id),
@@ -433,11 +444,24 @@ export function SupplierPaymentForm({ suppliers, activeSupplierId, disabled = fa
           <input type="text" {...form.register('instapayAddress')} disabled={mutation.isPending || disabled} placeholder={t('accounts.payment_forms.s30', "مثال: name@instapay")} />
         </Field>
       )}
+      <Field label={t('accounts.payment_forms.s32', "نوع الدفع")} className="field-full-span">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <input type="checkbox" id="supplier-advance-toggle" {...form.register('isAdvance')} disabled={mutation.isPending || disabled} />
+          <label htmlFor="supplier-advance-toggle" style={{ fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+            {t('accounts.payment_forms.s33', "دفعة مقدمة / عربون (لا تسدد مديونية — تُقيد في حساب الدفعات المقدمة 1185)")}
+          </label>
+        </div>
+        {watchedIsAdvance ? (
+          <div className="muted small" style={{ marginTop: '6px' }}>
+            {t('accounts.payment_forms.s34', "سيُقيد المبلغ كدفعة مقدمة للمورد في حساب 1185، والرصيد المستحق لا يتغير — تُطبق لاحقًا على فاتورة من بطاقة الدفعات المقدمة.")}
+          </div>
+        ) : null}
+      </Field>
       <Field label={t('accounts.payment_forms.s16', "البيان / ملاحظات السداد")}><input type="text" {...form.register('note')} disabled={mutation.isPending || disabled} placeholder={t('accounts.payment_forms.s17', "تفاصيل الدفع أو رقم الحوالة...")} /></Field>
       {disabled ? <div className="muted small" style={{ gridColumn: '1 / -1' }}>{t('accounts.payment_forms.s18', "هذا الحساب يملك متابعة كشوف الحساب فقط بدون تسجيل سندات صرف جديدة.")}</div> : null}
       <MutationFeedback isError={mutation.isError} isSuccess={mutation.isSuccess} error={mutation.error} errorFallback={t('accounts.payment_forms.s19', "تعذر حفظ الدفع")} successText={t('accounts.payment_forms.s20', "تم حفظ الدفع بنجاح.")} />
       <div style={{ gridColumn: '1 / -1' }}>
-        <SubmitButton type="submit" variant="primary" isPending={mutation.isPending} disabled={disabled} idleText={t('accounts.payment_forms.s21', "حفظ سند الصرف للمورد")} pendingText={t('accounts.payment_forms.s22', "جارٍ الحفظ...")} />
+        <SubmitButton type="submit" variant="primary" isPending={mutation.isPending} disabled={disabled} idleText={watchedIsAdvance ? t('accounts.payment_forms.s35', "حفظ سند الدفعة المقدمة") : t('accounts.payment_forms.s21', "حفظ سند الصرف للمورد")} pendingText={t('accounts.payment_forms.s22', "جارٍ الحفظ...")} />
       </div>
     </form>
   );

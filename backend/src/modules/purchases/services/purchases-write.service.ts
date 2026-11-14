@@ -1381,13 +1381,13 @@ export class PurchasesWriteService {
         throw new AppError('Supplier payment must be positive and have at most tenant currency minor-unit precision', 'INVALID_AMOUNT', 400);
       }
       const currentBalance = Number(supplier.balance || 0);
-      /* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT (trial D08): an advance is
-       * money out BEFORE any bill exists, so the payable guards do
-       * not apply to it — a true advance needs no outstanding
-       * balance, cannot "overpay" a payable it does not settle, and
-       * is not spendable against installment-reserved debt either
-       * (it settles nothing). Ordinary payments keep all three. */
-      const isAdvance = payload.isAdvance === true;
+      /* INV-SUPPLIER-ADVANCE-UI-WIRING: an advance is money out BEFORE
+       * any bill exists, so the payable guards do not apply to it — a
+       * true advance needs no outstanding balance, cannot "overpay" a
+       * payable it does not settle, and settles nothing. The flag says
+       * so, but a payment against a zero balance IS an advance by
+       * definition — derived from the data, like the customer flow. */
+      const isAdvance = payload.isAdvance === true || currentBalance <= 0;
       if (!isAdvance) {
         if (!(currentBalance > 0)) throw new AppError('Supplier has no outstanding balance', 'SUPPLIER_NO_BALANCE', 400);
         if (amount > currentBalance + 0.0001) throw new AppError('Supplier payment cannot exceed outstanding balance', 'SUPPLIER_OVERPAYMENT', 400);

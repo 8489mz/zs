@@ -39,6 +39,14 @@ export const supplierPaymentSchema = z.object({
    * (IPA) this payment was sent to; the form shows the field only
    * when the channel is InstaPay. */
   instapayAddress: z.string().trim().max(100).optional(),
+  /* INV-SUPPLIER-ADVANCE-UI-WIRING: true marks this payment as a
+   * supplier ADVANCE (Dr 1185, payable untouched) instead of a
+   * settlement of a payable. The form shows it as a "دفعة مقدمة"
+   * toggle, defaulting ON for a zero-balance supplier — before this
+   * field existed the UI could never send an advance at all, so a
+   * 200 advance for a zero-balance supplier failed SUPPLIER_NO_BALANCE
+   * with a generic error (live trial 2026-11-14). */
+  isAdvance: z.boolean().optional(),
 });
 
 export type CustomerPaymentInput = z.input<typeof customerPaymentSchema>;

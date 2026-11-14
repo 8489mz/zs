@@ -191,6 +191,17 @@ const ARABIC_CODE_MESSAGES: Record<string, string> = {
   DAMAGE_NOTE_REQUIRED: 'يجب كتابة سبب الإتلاف في خانة الملاحظات.',
   CUSTOMER_EXISTS: 'يوجد عميل مسجل بالفعل بنفس هذا الاسم.',
   SUPPLIER_EXISTS: 'يوجد مورد مسجل بالفعل بنفس هذا الاسم.',
+  /* INV-SUPPLIER-ADVANCE-UI-WIRING: same 7 codes as the backend
+   * error-translations map — the code is what the frontend resolves
+   * from, so an advance failure shows a real message even when the
+   * response message itself is the generic fallback. */
+  SUPPLIER_NO_BALANCE: 'لا يوجد رصيد مستحق لهذا المورد — سجّل المبلغ كدفعة مقدمة بدلًا من سداد.',
+  SUPPLIER_OVERPAYMENT: 'المبلغ أكبر من الرصيد المستحق للمورد — سدد المستحق فقط أو سجّل الزيادة كدفعة مقدمة.',
+  SUPPLIER_ADVANCE_NOT_FOUND: 'الدفعة المقدمة غير موجودة.',
+  SUPPLIER_ADVANCE_NOT_ADVANCE: 'هذا السند ليس دفعة مقدمة — لا يمكن تطبيقه على مستحقات.',
+  SUPPLIER_ADVANCE_OVERAPPLY: 'المبلغ أكبر من المتبقي من الدفعة المقدمة.',
+  SUPPLIER_ADVANCE_EXCEEDS_PAYABLE: 'المبلغ أكبر من الرصيد المستحق للمورد.',
+  SUPPLIER_ADVANCE_PURCHASE_MISMATCH: 'الدفعة المقدمة تُطبق فقط على فاتورة شراء مفتوحة لنفس المورد.',
   CATEGORY_EXISTS: 'يوجد قسم مسجل بالفعل بنفس هذا الاسم.',
   PRODUCT_HAS_STOCK: 'لا يمكن حذف الصنف لوجود رصيد مخزني حالي له.',
   PRODUCT_HAS_HISTORY: 'لا يمكن حذف الصنف لارتباطه بحركات وفواتير سابقة.',
@@ -283,6 +294,13 @@ const ENGLISH_CODE_MESSAGES: Record<string, string> = {
   LOCATION_BRANCH_MISMATCH: 'Selected location does not belong to the specified branch.',
   CUSTOMER_EXISTS: 'A customer with this name already exists.',
   SUPPLIER_EXISTS: 'A supplier with this name already exists.',
+  SUPPLIER_NO_BALANCE: 'This supplier has no outstanding balance — record the amount as an advance instead of a settlement.',
+  SUPPLIER_OVERPAYMENT: 'The amount exceeds the supplier outstanding balance — settle only what is due, or record the excess as an advance.',
+  SUPPLIER_ADVANCE_NOT_FOUND: 'Supplier advance not found.',
+  SUPPLIER_ADVANCE_NOT_ADVANCE: 'This payment is not a supplier advance and cannot be applied to a payable.',
+  SUPPLIER_ADVANCE_OVERAPPLY: 'The amount exceeds the remaining advance.',
+  SUPPLIER_ADVANCE_EXCEEDS_PAYABLE: 'The amount exceeds the supplier payable balance.',
+  SUPPLIER_ADVANCE_PURCHASE_MISMATCH: 'An advance can only be applied to an open purchase bill of the same supplier.',
   CATEGORY_EXISTS: 'A category with this name already exists.',
   PRODUCT_EXISTS: 'A product with this name or barcode already exists.',
   PRODUCT_HAS_STOCK: 'Cannot delete product because it has active stock.',

@@ -267,3 +267,64 @@ describe('payment form schemas enforce the transfer reference', () => {
     expect(parsed.transferReference).toBeUndefined();
   });
 });
+
+/* INV-SUPPLIER-ADVANCE-UI-WIRING: the supplier payment form could never
+ * send an advance — the schema had no isAdvance field and the payload
+ * builder dropped it — so a 200 advance for a zero-balance supplier
+ * failed SUPPLIER_NO_BALANCE with a generic error (live trial
+ * 2026-11-14). These specs pin the wiring the toggle goes through:
+ * the flag travels only when true, and an ordinary payment keeps its
+ * exact old payload (no isAdvance key). */
+describe('supplier payment payloads carry the advance flag', () => {
+  it('an advance payment carries isAdvance: true', () => {
+    const payload = buildSupplierPaymentPayload({
+      supplierId: '6',
+      amount: 200,
+      paymentChannel: 'cash',
+      isAdvance: true,
+    });
+    expect(payload.isAdvance).toBe(true);
+    expect(payload.amount).toBe(200);
+    expect(payload.supplierId).toBe('6');
+  });
+
+  it('an ordinary payment sends no isAdvance key', () => {
+    const payload = buildSupplierPaymentPayload({
+      supplierId: '6',
+      amount: 200,
+      paymentChannel: 'cash',
+    });
+    expect(payload.isAdvance).toBeUndefined();
+    expect('isAdvance' in payload).toBe(false);
+  });
+
+  it('an explicitly false flag sends no isAdvance key', () => {
+    const payload = buildSupplierPaymentPayload({
+      supplierId: '6',
+      amount: 200,
+      paymentChannel: 'cash',
+      isAdvance: false,
+    });
+    expect(payload.isAdvance).toBeUndefined();
+    expect('isAdvance' in payload).toBe(false);
+  });
+
+  it('the supplier payment schema accepts the advance flag', () => {
+    const parsed = supplierPaymentSchema.parse({
+      supplierId: '6',
+      amount: 200,
+      paymentChannel: 'cash',
+      isAdvance: true,
+    });
+    expect(parsed.isAdvance).toBe(true);
+  });
+
+  it('the supplier payment schema keeps the flag optional', () => {
+    const parsed = supplierPaymentSchema.parse({
+      supplierId: '6',
+      amount: 200,
+      paymentChannel: 'cash',
+    });
+    expect(parsed.isAdvance).toBeUndefined();
+  });
+});

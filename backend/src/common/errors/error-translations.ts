@@ -20,6 +20,18 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   SUPPLIER_HAS_BALANCE: 'لا يمكن حذف المورد لأن عليه رصيدًا قائمًا.',
   SUPPLIER_HAS_HISTORY: 'لا يمكن حذف المورد لأن لديه سجل حركات أو تاريخًا ماليًا.',
   SUPPLIER_IN_USE: 'لا يمكن حذف المورد لأنه مرتبط بأصناف موجودة.',
+  /* INV-SUPPLIER-ADVANCE-UI-WIRING: the advance flow's codes had no
+   * Arabic mapping, so every one of them surfaced as the generic
+   * 'تعذر تنفيذ العملية المطلوبة.' (live: a 200 advance for a
+   * zero-balance supplier failed SUPPLIER_NO_BALANCE with no usable
+   * message). */
+  SUPPLIER_NO_BALANCE: 'لا يوجد رصيد مستحق لهذا المورد — سجّل المبلغ كدفعة مقدمة بدلًا من سداد.',
+  SUPPLIER_OVERPAYMENT: 'المبلغ أكبر من الرصيد المستحق للمورد — سدد المستحق فقط أو سجّل الزيادة كدفعة مقدمة.',
+  SUPPLIER_ADVANCE_NOT_FOUND: 'الدفعة المقدمة غير موجودة.',
+  SUPPLIER_ADVANCE_NOT_ADVANCE: 'هذا السند ليس دفعة مقدمة — لا يمكن تطبيقه على مستحقات.',
+  SUPPLIER_ADVANCE_OVERAPPLY: 'المبلغ أكبر من المتبقي من الدفعة المقدمة.',
+  SUPPLIER_ADVANCE_EXCEEDS_PAYABLE: 'المبلغ أكبر من الرصيد المستحق للمورد.',
+  SUPPLIER_ADVANCE_PURCHASE_MISMATCH: 'الدفعة المقدمة تُطبق فقط على فاتورة شراء مفتوحة لنفس المورد.',
   CATEGORY_EXISTS: 'يوجد قسم بنفس الاسم بالفعل.',
   CATEGORY_NOT_FOUND: 'القسم غير موجود.',
   CATEGORY_NAME_REQUIRED: 'اسم القسم مطلوب.',

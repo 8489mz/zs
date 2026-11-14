@@ -29,6 +29,10 @@ export interface SupplierPaymentPayloadInput {
    * (IPA) this payment was sent to. Carried only when the channel is
    * 'instapay'. */
   instapayAddress?: string;
+  /* INV-SUPPLIER-ADVANCE-UI-WIRING: true marks this payment as a
+   * supplier advance (Dr 1185) instead of a settlement. Carried only
+   * when true, so ordinary payments keep their exact old payload. */
+  isAdvance?: boolean;
 }
 
 // INV-FE3-FRONTEND-BOOK-DIGITS: customer/supplier payment amounts post
@@ -100,5 +104,8 @@ export function buildSupplierPaymentPayload(input: SupplierPaymentPayloadInput) 
     note: String(input.note || '').trim(),
     paymentChannel: input.paymentChannel || 'cash',
     instapayAddress: normalizePaymentInstapayAddress(input.paymentChannel, input.instapayAddress),
+    /* INV-SUPPLIER-ADVANCE-UI-WIRING: the key exists only when true —
+     * an ordinary payment keeps its exact old payload shape. */
+    ...(input.isAdvance === true ? { isAdvance: true as const } : {}),
   };
 }
