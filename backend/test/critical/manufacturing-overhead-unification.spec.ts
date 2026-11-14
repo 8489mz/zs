@@ -155,7 +155,7 @@ async function main(): Promise<void> {
     const completion = readSrc('../../src/modules/manufacturing/services/manufacturing.service.ts');
     assert.ok(completion.includes('scaledBomOverhead('), 'completion must call scaledBomOverhead');
     assert.ok(!completion.includes('overheadCost * (qtyToProduce / bomQuantity)'), 'inline formula must be gone from completion');
-    const posterSource = readSrc('../../src/modules/accounting/accounting-posting.service.ts');
+    const posterSource = readSrc('../../src/modules/accounting/services/inventory-manufacturing-cash-posting.service.ts');
     const posterStart = posterSource.indexOf('async postManufacturingWorkOrder(');
     const posterEnd = posterSource.indexOf('async postManufacturingUnbuildOrder(');
     assert.ok(posterStart > -1 && posterEnd > posterStart);

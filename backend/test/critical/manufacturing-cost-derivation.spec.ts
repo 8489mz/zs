@@ -208,7 +208,7 @@ async function main(): Promise<void> {
 
     // Case 9: source pin -- no residual derivation, both new reads present.
     const source = fs.readFileSync(
-      path.resolve(__dirname, '../../src/modules/accounting/accounting-posting.service.ts'),
+      path.resolve(__dirname, '../../src/modules/accounting/services/inventory-manufacturing-cash-posting.service.ts'),
       'utf8',
     );
     const start = source.indexOf('async postManufacturingWorkOrder(');

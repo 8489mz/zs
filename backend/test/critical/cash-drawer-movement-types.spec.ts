@@ -443,7 +443,7 @@ async function main(): Promise<void> {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const here = __dirname;
-    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/accounting-posting.service.ts'), 'utf8');
+    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/inventory-manufacturing-cash-posting.service.ts'), 'utf8');
     assert.ok(postingSource.includes('`cash_drawer_${movementType}`'), 'the writer builds the source type from the movement type');
     assert.ok(postingSource.includes("movementType === 'safe_drop'"), 'the writer branches on the safe-drop type');
     assert.ok(postingSource.includes("movementType === 'safe_replenishment'"), 'the writer branches on the replenishment type');
