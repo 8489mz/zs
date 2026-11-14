@@ -44,7 +44,7 @@
     "typecheck": "node ./node_modules/typescript/lib/tsc.js -b",
     "lint": "node ./node_modules/eslint/bin/eslint.js .",
     "lint:fix": "node ./node_modules/eslint/bin/eslint.js . --fix",
-    "qa:architecture": "node scripts/feature-structure-check.mjs && node scripts/feature-boundary-check.mjs && node scripts/import-layer-check.mjs && node scripts/dev-proxy-check.mjs && node scripts/password-policy-sync-check.mjs && node scripts/literal-interpolation-check.mjs && node scripts/auth-setup-hardening-check.mjs && node scripts/auth-ui-test-coverage-check.mjs && node scripts/desktop-mobile-isolation-check.mjs",
+    "qa:architecture": "node scripts/feature-structure-check.mjs && node scripts/feature-boundary-check.mjs && node scripts/import-layer-check.mjs && node scripts/dev-proxy-check.mjs && node scripts/password-policy-sync-check.mjs && node scripts/literal-interpolation-check.mjs && node scripts/auth-setup-hardening-check.mjs && node scripts/auth-ui-test-coverage-check.mjs && node scripts/desktop-mobile-isolation-check.mjs && node scripts/file-size-check.mjs",
     "qa:uat": "npm run qa:guards && npm run qa:critical && npm run qa:release",
     "test": "npm run test:run",
     "test:run": "node ./node_modules/vitest/vitest.mjs run",

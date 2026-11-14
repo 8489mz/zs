@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const fs = require('fs');
 const path = require('path');
+const { countLines, enforceFileSizeCap, FILE_SIZE_CAP } = require('./file-size-guard.cjs');
 
 const root = path.resolve(__dirname, '..');
 
@@ -108,7 +109,7 @@ assert(reportsServiceSource.includes('buildDashboardScope'), 'ReportsService mus
 assert(reportsServiceSource.includes('buildDashboardComputedState'), 'ReportsService must delegate dashboard in-memory aggregate shaping to the dashboard helper');
 assert(reportsCombinedSource.includes('buildTreasuryPayload'), 'Reports services must delegate treasury payload shaping to the ops helper');
 assert(reportsCombinedSource.includes('buildAuditPayload'), 'Reports services must delegate audit payload shaping to the ops helper');
-const reportsServiceLines = reportsServiceSource.split(/\r?\n/).length;
+const reportsServiceLines = countLines(reportsServiceSource);
 assert(reportsServiceLines <= 1000, `ReportsService is still too large (${reportsServiceLines} lines)`);
 assert(reportsServiceSource.includes("leftJoin('stock_locations as l'"), 'Inventory reporting must join stock_locations explicitly');
 
@@ -161,4 +162,38 @@ for (const relPath of tsFiles) {
 }
 assert(!offenders.length, `Direct products.stock_qty mutations found outside the ledger utility: ${offenders.join(', ')}`);
 
+// File-size cap (INV-FILE-SIZE-CAP-RATCHET, proposed at merge): no production
+// source file under src may exceed 1000 lines, except files recorded in the
+// ratchet baseline (scripts/baselines/file-size.json) at their recorded line
+// count. Baseline files may shrink but never grow; unlisted oversized files
+// fail. Generated / master-data / hands-off files are allowlisted below and
+// never counted; migrations are immutable and skipped entirely. Specs are
+// not under the code cap. Regenerate the baseline only after a reviewed
+// change: node scripts/check-architecture-guardrails.cjs --update-baseline
+const FILE_SIZE_ALLOWLIST = new Set([
+  'src/database/database.types.ts', // GENERATED — kysely-codegen
+  'src/modules/tenant-subscription/pricing/pricing-catalog.generated.ts', // GENERATED
+  'src/modules/pharmacy/data/egyptian-master-drugs.data.ts', // MASTER DATA
+  'src/modules/maritime-freight/maritime-defaults.data.ts', // MASTER DATA
+  // Migration 2040000000087 is also covered by the migrations skip below;
+  // listed here so the allowlist is the single explicit record.
+  'src/database/migrations/2040000000087_maritime_comprehensive_defaults.ts',
+]);
+const fileSizeResult = enforceFileSizeCap({
+  srcRoot: path.join(root, 'src'),
+  baselineFile: path.join(__dirname, 'baselines', 'file-size.json'),
+  allowlist: FILE_SIZE_ALLOWLIST,
+  skipPrefixes: ['src/database/migrations/'],
+  cap: FILE_SIZE_CAP,
+  updateBaseline: process.argv.includes('--update-baseline') || process.env.UPDATE_ARCH_BASELINE === '1',
+});
+if (fileSizeResult.shrunk.length) {
+  console.log(
+    `[check:architecture] file-size cap: ${fileSizeResult.shrunk.length} baseline file(s) shrank below their recorded count — remove them from the baseline when they reach <= ${FILE_SIZE_CAP} lines.`,
+  );
+}
+
 console.log('[check:architecture] stock ledger guardrails and mutation flow coverage passed.');
+console.log(
+  `[check:architecture] file-size cap passed (${fileSizeResult.checked} files checked, ${fileSizeResult.overCap} over ${FILE_SIZE_CAP} lines, ${fileSizeResult.baselineEntries} baseline entries).`,
+);
