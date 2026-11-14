@@ -429,7 +429,7 @@ async function main(): Promise<void> {
     hrService.includes('calculateProgressiveDelayDeduction('),
     'payroll review must route delay deduction through the canonical engine',
   );
-  const postingService = stripComments(readFile('backend/src/modules/accounting/accounting-posting.service.ts'));
+  const postingService = stripComments(readFile('backend/src/modules/accounting/services/hr-payroll-posting.service.ts'));
   assert.ok(
     postingService.includes('calculateSettlementAbsorption('),
     'EOS settlement must route absorption through the canonical engine',
