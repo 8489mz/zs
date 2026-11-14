@@ -13,6 +13,7 @@ import { Database } from '../../database/database.types';
 import { TransactionHelper } from '../../database/helpers/transaction.helper';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
+import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
 
@@ -1063,7 +1064,8 @@ export class CashDrawerService {
     const filter = String(query.filter || query.status || 'all').trim().toLowerCase();
     const filterStatus = filter === 'open' || filter === 'closed' || filter === 'pending_review' ? filter : undefined;
     const mapped = await this.rawList(auth, filterStatus);
-    const filtered = filterCashDrawerRows(mapped, { ...query, filter });
+    // "today" filter keys shifts on the tenant day, not the UTC day (INV-SINGLE-SERVER-CLOCK-TENANT-TZ).
+    const filtered = filterCashDrawerRows(mapped, { ...query, filter }, undefined, await getTenantTimezone(this.db, this.scope(auth).tenantId));
     const paged = paginateCashDrawerRows(filtered, query);
     const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, this.scope(auth).tenantId));
     return { cashierShifts: paged.rows, pagination: paged.pagination, summary: summarizeCashDrawerRows(filtered, digits), viewerRole: auth.role };

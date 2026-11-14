@@ -8,6 +8,7 @@ import { requireTenantScope, TenantScope } from '../../../core/auth/utils/tenant
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { currencyMoneyDigits, fromMinorUnits, roundMoney, toMinorUnits } from '../../accounting/engines/money-minor-units.engine';
 
 @Injectable()
@@ -222,7 +223,9 @@ export class SettingsAdminService {
       generatedAt: new Date().toISOString(),
       appHost: process.env.APP_HOST || 'unset',
       appPort: process.env.APP_PORT || 'unset',
-      businessTimezone: process.env.BUSINESS_TIMEZONE || 'UTC',
+      // The tenant's business timezone, not the env value: the snapshot
+      // must agree with the tenant setting the reports path now honours.
+      businessTimezone: await getTenantTimezone(this.db, this.scope(actor).tenantId),
       activeUsers: Number((diagnostics.counts as Record<string, unknown>).activeUsers || 0),
       products: Number((diagnostics.counts as Record<string, unknown>).products || 0),
       sales: Number((diagnostics.counts as Record<string, unknown>).sales || 0),

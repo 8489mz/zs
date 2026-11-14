@@ -68,6 +68,13 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 
 async function seed(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
+  // The fixture's day boundaries are UTC business days (see header): pin
+  // the tenant to UTC so the series buckets hold under the tenant-day
+  // rule (INV-SINGLE-SERVER-CLOCK-TENANT-TZ). Tenant-day bucketing
+  // itself is pinned by reports-tenant-day.spec.ts.
+  await anyDb.insertInto('settings').values([
+    { tenant_id: TENANT, key: 'timezone', value: '"UTC"' },
+  ]).execute();
   await anyDb.insertInto('sales').values([
     { id: 1, tenant_id: TENANT, account_id: ACCOUNT, total: 1000, tax_amount: 100, discount: 0, delivery_fee: 0, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-01T10:00:00.000Z', status: 'posted' },
     { id: 2, tenant_id: TENANT, account_id: ACCOUNT, total: 500, tax_amount: 50, discount: 20, delivery_fee: 0, branch_id: 1, location_id: 1, created_by: 1, created_at: '2026-04-02T10:00:00.000Z', status: 'posted' },

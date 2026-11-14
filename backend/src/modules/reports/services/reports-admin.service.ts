@@ -10,6 +10,7 @@ import { AuditLogRow, buildAuditPayload, buildTreasuryPayload, TreasurySummaryRo
 import { applyAuditSearch, applySignedAmountFilter, applyTreasurySearch } from '../helpers/reports-query-pipeline.helper';
 import { buildReportListState } from '../helpers/reports-query.helper';
 import { buildPagination, getBusinessDayBounds } from '../helpers/reports-range.helper';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 
 @Injectable()
 export class ReportsAdminService {
@@ -28,7 +29,8 @@ export class ReportsAdminService {
 
   async treasuryTransactions(query: ReportRangeQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
-    const { fromDate, toDate, searchPattern, filter, page, pageSize, offset } = buildReportListState(query, 25);
+    const timezone = await getTenantTimezone(this.db, scope.tenantId);
+    const { fromDate, toDate, searchPattern, filter, page, pageSize, offset } = buildReportListState(query, 25, { timezone });
 
     let countQuery = this.db
       .selectFrom('treasury_transactions as t')
@@ -108,10 +110,11 @@ export class ReportsAdminService {
     if (!auth.permissions.includes('audit') && auth.role !== 'super_admin') {
       throw new AppError('Missing required permissions', 'FORBIDDEN', 403);
     }
+    const timezone = await getTenantTimezone(this.db, scope.tenantId);
 
-    const { fromDate, toDate, searchPattern, page, pageSize, offset } = buildReportListState(query, 50, { defaultFilter: '' });
+    const { fromDate, toDate, searchPattern, page, pageSize, offset } = buildReportListState(query, 50, { defaultFilter: '', timezone });
     const selectedUserId = Number(query.userId || 0);
-    const todayBounds = getBusinessDayBounds(new Date());
+    const todayBounds = getBusinessDayBounds(new Date(), timezone);
 
     let countQuery = this.db.selectFrom('audit_logs as a').leftJoin('users as u', 'u.id', 'a.created_by').where('a.created_at', '>=', fromDate!).where('a.created_at', '<=', toDate!).where(this.tenantPredicate(auth, 'a'));
     let rowsQuery = this.db.selectFrom('audit_logs as a').leftJoin('users as u', 'u.id', 'a.created_by').select(['a.id', 'a.action', 'a.details', 'a.created_at', 'u.username']).where('a.created_at', '>=', fromDate!).where('a.created_at', '<=', toDate!).where(this.tenantPredicate(auth, 'a'));
@@ -154,8 +157,9 @@ export class ReportsAdminService {
     if (!auth.permissions.includes('reports') && auth.role !== 'super_admin') {
       throw new AppError('Missing required permissions', 'FORBIDDEN', 403);
     }
+    const timezone = await getTenantTimezone(this.db, tenantId);
 
-    const { fromDate, toDate, searchPattern, page, pageSize, offset } = buildReportListState(query, 20, { defaultFilter: '' });
+    const { fromDate, toDate, searchPattern, page, pageSize, offset } = buildReportListState(query, 20, { defaultFilter: '', timezone });
     const selectedUserId = Number(query.userId || 0);
     const roleFilter = String(query.role || '').trim().toLowerCase();
     const activityType = String(query.activityType || 'all').trim().toLowerCase();
@@ -213,7 +217,7 @@ export class ReportsAdminService {
     const employee = Array.isArray(summaryPayload.rows) ? summaryPayload.rows[0] : null;
     if (!employee) throw new AppError('User not found', 'USER_NOT_FOUND', 404);
 
-    const { fromDate, toDate } = buildReportListState(query, 20, { defaultFilter: '' });
+    const { fromDate, toDate } = buildReportListState(query, 20, { defaultFilter: '', timezone: await getTenantTimezone(this.db, tenantId) });
     const limit = Math.min(100, Math.max(1, Number(query.limit || 25)));
     const activityType = String(query.activityType || 'all').trim().toLowerCase();
     const activityClause = activityType && activityType !== 'all' ? sql` and activity_type = ${activityType}` : sql``;

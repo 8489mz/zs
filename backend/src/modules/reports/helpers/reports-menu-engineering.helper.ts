@@ -85,9 +85,13 @@ export async function buildMenuEngineeringReport(
   db: Kysely<Database>,
   query: ReportRangeQueryDto,
   auth: AuthContext,
+  // Tenant business timezone for the default range. Callers with a
+  // tenant pass the resolved zone; without it parseRange falls back
+  // to the canonical env-or-Cairo default, never UTC.
+  timezone?: string,
 ): Promise<{ summary: MenuEngineeringSummary; items: MenuEngineeringItem[] }> {
   const scope = requireTenantScope(auth);
-  const range = parseRange(query);
+  const range = parseRange(query, timezone);
   const fromDate = new Date(range.from);
   const toDate = new Date(range.to);
 

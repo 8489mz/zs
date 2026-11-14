@@ -9,7 +9,8 @@ import { currencyMoneyDigits } from '../accounting/engines/money-minor-units.eng
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { ReportRangeQueryDto } from './dto/report-query.dto';
-import { buildPagination, filterScope, getBusinessTimezone, parseRange, setBusinessTimezoneResolver } from './helpers/reports-range.helper';
+import { buildPagination, filterScope, parseRange } from './helpers/reports-range.helper';
+import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { buildCustomerRfmPayload, buildReportSummaryAggregates, buildReportSummaryPayload } from './helpers/reports-summary.helper';
 import {
   buildSalesPurchasesSeries,
@@ -53,7 +54,19 @@ export class ReportsService {
   ) {
     this.reportsAdminService = reportsAdminService ?? new ReportsAdminService(this.db as never);
     this.reportsSummaryService = reportsSummaryService ?? new ReportsSummaryService(this.db);
-    setBusinessTimezoneResolver(() => this.configService?.get<string>('BUSINESS_TIMEZONE') ?? 'UTC');
+    // No module-global timezone resolver anymore (INV-SINGLE-SERVER-CLOCK-TENANT-TZ):
+    // every method resolves the tenant's settings.timezone per request
+    // (see tenantTimezone below) and threads it explicitly. configService
+    // stays as an optional constructor parameter for positional
+    // compatibility with existing callers; it no longer feeds any clock.
+  }
+
+  // The tenant's business timezone for this request (settings.timezone,
+  // fallback env BUSINESS_TIMEZONE, then Africa/Cairo; 5-min cached).
+  // Resolved once per method and threaded into every day derivation, so
+  // two tenants never share one global "today".
+  private tenantTimezone(auth: AuthContext): Promise<string> {
+    return getTenantTimezone(this.db, this.scope(auth).tenantId);
   }
 
   private scope(auth: AuthContext) {
@@ -73,7 +86,8 @@ export class ReportsService {
   }
 
   async reportSummary(query: ReportRangeQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
-    const range = parseRange(query);
+    const timezone = await this.tenantTimezone(auth);
+    const range = parseRange(query, timezone);
     const fromDate = new Date(range.from);
     const toDate = new Date(range.to);
 
@@ -155,14 +169,14 @@ export class ReportsService {
       const rowSeries = buildSalesPurchasesSeries({
         fromDate: fromDate!,
         toDate: toDate!,
-        timezone: getBusinessTimezone(),
+        timezone,
         dayComponents: buildSeriesDayComponentsFromRows({
           salesRows: salesRows as any,
           servicesRows: rawServicesRows as any,
           purchasesRows: purchasesRows as any,
           returnsRows: returnsRows as any,
           returnedSaleItemsRows: returnedSaleItemsRows as any,
-          timezone: getBusinessTimezone(),
+          timezone,
         }),
         netSalesTotal: rowPayload.sales.netSales,
         netPurchasesTotal: rowPayload.purchases.netPurchases,
@@ -191,8 +205,8 @@ export class ReportsService {
     // INV-REPORTS-REAL-SALES-PURCHASES-SERIES: the trend series is
     // built from the same rows, statuses and scope filters as the
     // totals above, with the same netting, so its points sum to the
-    // card totals.
-    const timezone = getBusinessTimezone();
+    // card totals. (timezone is the tenant zone resolved at the top
+    // of this method.)
     const dayComponents = await buildSalesPurchasesSeriesComponents({
       db: this.db,
       query,
@@ -229,14 +243,14 @@ export class ReportsService {
   async dashboardOverview(query: ReportRangeQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
     const { tenantId } = this.scope(auth);
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
-    const range = parseRange(query);
-    const cacheKey = `${tenantId}:${moneyDigits}:${range.from}:${range.to}:${query.branchId || ''}:${query.locationId || ''}`;
+    const businessTimezone = await this.tenantTimezone(auth);
+    const range = parseRange(query, businessTimezone);
+    const cacheKey = `${tenantId}:${businessTimezone}:${moneyDigits}:${range.from}:${range.to}:${query.branchId || ''}:${query.locationId || ''}`;
     const nowMs = Date.now();
     const cached = this.overviewCache.get(cacheKey);
     if (cached && nowMs < cached.expiresAt) {
       return cached.data;
     }
-    const businessTimezone = getBusinessTimezone();
     const scope = buildDashboardScope(new Date(), businessTimezone);
     const today = scope.today;
     const todayStart = today.start;
@@ -783,11 +797,11 @@ export class ReportsService {
   }
 
   async foodCostVarianceReport(query: ReportRangeQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
-    return this.withScope(await buildFoodCostVarianceReport(this.db, query, auth), auth);
+    return this.withScope(await buildFoodCostVarianceReport(this.db, query, auth, await this.tenantTimezone(auth)), auth);
   }
 
   async menuEngineeringReport(query: ReportRangeQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
-    return this.withScope(await buildMenuEngineeringReport(this.db, query, auth) as unknown as Record<string, unknown>, auth);
+    return this.withScope(await buildMenuEngineeringReport(this.db, query, auth, await this.tenantTimezone(auth)) as unknown as Record<string, unknown>, auth);
   }
 }
 

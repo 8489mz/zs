@@ -59,6 +59,10 @@ export function buildReportListState(
   options?: {
     includeRange?: boolean;
     defaultFilter?: string;
+    // Tenant business timezone for the default range. Callers with a
+    // tenant pass the resolved tenant zone; without it parseRange falls
+    // back to the canonical env-or-Cairo default, never UTC.
+    timezone?: string;
   },
 ): ReportListState {
   const includeRange = options?.includeRange !== false;
@@ -77,7 +81,7 @@ export function buildReportListState(
   }
 
   if (includeRange) {
-    const range = parseRange(query);
+    const range = parseRange(query, options?.timezone);
     state.range = range;
     state.fromDate = new Date(range.from);
     state.toDate = new Date(range.to);

@@ -11,10 +11,14 @@ export async function buildFoodCostVarianceReport(
   db: Kysely<Database>,
   query: ReportRangeQueryDto,
   auth: AuthContext,
+  // Tenant business timezone for the default range. Callers with a
+  // tenant pass the resolved zone; without it parseRange falls back
+  // to the canonical env-or-Cairo default, never UTC.
+  timezone?: string,
 ): Promise<Record<string, unknown>> {
   const scope = requireTenantScope(auth);
   const digits = currencyMoneyDigits(await tenantBaseCurrency(db, scope.tenantId));
-  const range = parseRange(query);
+  const range = parseRange(query, timezone);
   const fromDate = new Date(range.from);
   const toDate = new Date(range.to);
 

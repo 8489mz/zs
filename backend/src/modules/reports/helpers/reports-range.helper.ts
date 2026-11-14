@@ -21,7 +21,17 @@ type ZonedDateParts = {
   second: number;
 };
 
-let businessTimezoneResolver: () => string = () => 'UTC';
+/**
+ * Canonical no-tenant fallback for the reports path (INV-SINGLE-SERVER-CLOCK-TENANT-TZ):
+ * env BUSINESS_TIMEZONE, else Africa/Cairo — the same chain getTenantTimezone
+ * uses. NEVER UTC: a UTC default made every report day the UTC day whenever
+ * the server env was unset. Callers with a tenant MUST pass the tenant's
+ * resolved timezone explicitly; this default only covers callers that have
+ * no tenant context at all.
+ */
+export function getDefaultBusinessTimezone(): string {
+  return normalizeTimezone(process.env.BUSINESS_TIMEZONE || 'Africa/Cairo');
+}
 
 function pad2(value: number): string {
   return String(value).padStart(2, '0');
@@ -29,21 +39,16 @@ function pad2(value: number): string {
 
 function normalizeTimezone(value: string | null | undefined): string {
   const candidate = String(value || '').trim();
-  if (!candidate) return 'UTC';
+  if (!candidate) return 'Africa/Cairo';
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: candidate }).format(new Date());
     return candidate;
   } catch {
-    return 'UTC';
+    // Invalid zone: last resort of the canonical chain. A literal here
+    // (never a call back into getDefaultBusinessTimezone) so an invalid
+    // BUSINESS_TIMEZONE env value cannot recurse.
+    return 'Africa/Cairo';
   }
-}
-
-export function getBusinessTimezone(): string {
-  return normalizeTimezone(businessTimezoneResolver());
-}
-
-export function setBusinessTimezoneResolver(resolver: () => string): void {
-  businessTimezoneResolver = resolver;
 }
 
 function getFormatter(timezone: string): Intl.DateTimeFormat {
@@ -60,7 +65,11 @@ function getFormatter(timezone: string): Intl.DateTimeFormat {
 }
 
 function getZonedParts(value: Date, timezone: string): ZonedDateParts {
-  const parts = getFormatter(timezone).formatToParts(value);
+  // Normalize here — the single choke point for every zoned derivation
+  // (dateKey, getBusinessDayBounds, buildLastNDays): an invalid explicit
+  // zone falls back to the canonical env-or-Cairo default instead of
+  // throwing RangeError, the same chain getTenantTimezone uses.
+  const parts = getFormatter(normalizeTimezone(timezone)).formatToParts(value);
   const map = new Map(parts.map((part) => [part.type, part.value]));
   return {
     year: Number(map.get('year') || 0),
@@ -98,7 +107,7 @@ function zonedDateTimeToUtc(
   return new Date(corrected);
 }
 
-export function getBusinessDayBounds(value: Date | string = new Date(), timezone = getBusinessTimezone()): { start: Date; end: Date; key: string } {
+export function getBusinessDayBounds(value: Date | string = new Date(), timezone = getDefaultBusinessTimezone()): { start: Date; end: Date; key: string } {
   const source = value instanceof Date ? value : new Date(value);
   const zoned = getZonedParts(source, timezone);
   const start = zonedDateTimeToUtc(timezone, zoned.year, zoned.month, zoned.day, 0, 0, 0, 0);
@@ -110,8 +119,7 @@ export function getBusinessDayBounds(value: Date | string = new Date(), timezone
   };
 }
 
-export function parseRange(query: ReportRangeQueryDto): Range {
-  const timezone = getBusinessTimezone();
+export function parseRange(query: ReportRangeQueryDto, timezone = getDefaultBusinessTimezone()): Range {
   const today = getBusinessDayBounds(new Date(), timezone);
   const thirtyDaysAgo = new Date(today.start);
   thirtyDaysAgo.setUTCDate(thirtyDaysAgo.getUTCDate() - 30);
@@ -124,7 +132,7 @@ export function parseRange(query: ReportRangeQueryDto): Range {
   };
 }
 
-export function dateKey(value: Date | string | null | undefined, timezone = getBusinessTimezone()): string {
+export function dateKey(value: Date | string | null | undefined, timezone = getDefaultBusinessTimezone()): string {
   if (!value) return '';
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return '';
@@ -189,7 +197,7 @@ export function filterScope<T extends { branch_id?: number | null; location_id?:
   });
 }
 
-export function buildLastNDays(days: number, timezone = getBusinessTimezone(), anchor = new Date()): string[] {
+export function buildLastNDays(days: number, timezone = getDefaultBusinessTimezone(), anchor = new Date()): string[] {
   const today = getBusinessDayBounds(anchor, timezone).start;
   return Array.from({ length: days }).map((_, index) => {
     const date = new Date(today);

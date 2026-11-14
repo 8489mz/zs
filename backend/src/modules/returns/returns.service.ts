@@ -1,5 +1,6 @@
 import { revalueStockReturn, valueStockReceipt } from '../accounting/inventory-valuation';
 import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
+import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { exchangeStoreCreditAmount, hasUnpaidExchangeBalance } from './engines/exchange-store-credit.engine';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney as roundBookMoney } from '../accounting/engines/money-minor-units.engine';
@@ -285,10 +286,15 @@ export class ReturnsService {
       .orderBy('ri.id', 'asc')
       .execute();
     const today = await resolveBusinessDateKey(this.db, this.scope(auth).tenantId, new Date());
-    const mapped = filterReturnRows(mapReturnRows(rows as Array<Record<string, unknown>>), query, today);
+    // The "today" filter compares the tenant day against row days keyed
+    // in the same zone (INV-SINGLE-SERVER-CLOCK-TENANT-TZ): without the
+    // zone the helper falls back to a UTC slice and the filter drops
+    // in-window returns 00:00-02:59 Cairo.
+    const tenantTimezone = await getTenantTimezone(this.db, this.scope(auth).tenantId);
+    const mapped = filterReturnRows(mapReturnRows(rows as Array<Record<string, unknown>>), query, today, tenantTimezone);
     const paged = paginateRows(mapped, query, { defaultSize: 20 });
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, this.scope(auth).tenantId));
-    return { returns: paged.rows, pagination: paged.pagination, summary: summarizeReturnRows(mapped, today, moneyDigits), scope: this.scope(auth) };
+    return { returns: paged.rows, pagination: paged.pagination, summary: summarizeReturnRows(mapped, today, moneyDigits, tenantTimezone), scope: this.scope(auth) };
   }
 
   /* INV-STATEMENT-RETURN-ROW-DETAILS: single return-document read for the

@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { ReportsService } from '../../src/modules/reports/reports.service';
-import { dateKey, getBusinessTimezone } from '../../src/modules/reports/helpers/reports-range.helper';
+import { dateKey } from '../../src/modules/reports/helpers/reports-range.helper';
 
 // PO-2 (PERFORMANCE_CONSTITUTION.md §5): dashboardOverview used to fetch every active
 // product/customer/supplier for the tenant as a plain row list and reduce over them in JS — one
@@ -56,7 +56,11 @@ class FakeDb {
 }
 
 (async () => {
-  const businessTimezone = getBusinessTimezone();
+  // The service resolves the tenant timezone from settings; this FakeDb
+  // has no settings row, so it resolves the canonical fallback
+  // (env BUSINESS_TIMEZONE, else Africa/Cairo) — the expected keys below
+  // must use that same zone.
+  const businessTimezone = process.env.BUSINESS_TIMEZONE || 'Africa/Cairo';
 
   const today = new Date();
   today.setUTCHours(10, 0, 0, 0);

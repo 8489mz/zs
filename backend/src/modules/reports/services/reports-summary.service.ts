@@ -12,6 +12,7 @@ import { ReportRangeQueryDto } from '../dto/report-query.dto';
 import { buildPagination } from '../helpers/reports-range.helper';
 import { buildCustomerRfmPayload } from '../helpers/reports-summary.helper';
 import { buildReportListState } from '../helpers/reports-query.helper';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { applyPartnerLedgerSearch, applySignedAmountFilter } from '../helpers/reports-query-pipeline.helper';
 import {
   buildCustomerBalancesPayload,
@@ -557,7 +558,7 @@ export class ReportsSummaryService {
       .executeTakeFirst();
     if (!partner) throw new AppError(isCust ? 'Customer not found' : 'Supplier not found', isCust ? 'CUSTOMER_NOT_FOUND' : 'SUPPLIER_NOT_FOUND', 404);
 
-    const { fromDate, toDate, searchPattern, filter, page, pageSize, offset } = buildReportListState(query, 25);
+    const { fromDate, toDate, searchPattern, filter, page, pageSize, offset } = buildReportListState(query, 25, { timezone: await getTenantTimezone(this.db, this.tenantId(auth)) });
 
     let countQuery = (this.db as any)
       .selectFrom(ledgerTable)
