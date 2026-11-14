@@ -49,6 +49,11 @@ export type PartnerLedgerEntryRow = {
   reference_type?: string | null;
   reference_id?: number | string | null;
   created_at?: string | Date | null;
+  /* INV-SUPPLIER-ADVANCE-OVERDRAFT-LIMIT: the cash amount of a supplier
+   * advance, joined from supplier_payments. Marker rows carry amount 0
+   * (so ledger sums still equal the balance); this is the number the
+   * statement actually shows for the withdrawal. */
+  advance_amount?: number | string | null;
 };
 
 export type LedgerSummaryRow = {
@@ -119,6 +124,9 @@ export function mapLedgerEntries(rows: PartnerLedgerEntryRow[], direction: Ledge
       referenceType: row.reference_type || '',
       referenceId: row.reference_id ? String(row.reference_id) : '',
       createdAt: row.created_at || '',
+      /* INV-SUPPLIER-ADVANCE-OVERDRAFT-LIMIT: the advance amount of a
+       * 'supplier_advance' marker row; null on every other entry type. */
+      advanceAmount: row.advance_amount != null ? Number(row.advance_amount) : null,
     };
   });
 }

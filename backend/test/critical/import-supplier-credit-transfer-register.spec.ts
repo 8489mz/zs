@@ -57,7 +57,7 @@ async function makeDb(): Promise<Kysely<Database>> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
   await pg.exec(`
-    CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, name text, balance numeric DEFAULT 0);
+    CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, name text, balance numeric DEFAULT 0, supplier_type text, overdraft_limit numeric);
     CREATE TABLE supplier_payments (id bigserial PRIMARY KEY, tenant_id text, account_id text, supplier_id bigint, amount numeric, amount_foreign numeric, note text, created_by bigint, payment_date timestamptz, currency text, exchange_rate numeric, forex_variance_egp numeric, proforma_invoice_id text, idempotency_key text, doc_no text, created_at timestamptz DEFAULT NOW());
     INSERT INTO suppliers VALUES (1, 't1', 'Factory A', 353326), (2, 't1', 'Factory B', 0), (3, 't2', 'Other Tenant Factory', 0);
   `);

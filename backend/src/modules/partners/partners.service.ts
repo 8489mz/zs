@@ -902,10 +902,42 @@ export class PartnersService {
     };
   }
 
+  /* INV-SUPPLIER-ADVANCE-OVERDRAFT-LIMIT: validate the supplier type and
+   * overdraft limit in the service, not only in the DTO — the service is
+   * the real path, and a caller flag must never be trusted on its own.
+   * Returns the values to persist; undefined means "leave unchanged".
+   * A null limit clears the cap back to uncapped. The limit must fit
+   * tenant book precision, like every money amount. */
+  private async validateSupplierTypeAndLimit(payload: UpsertSupplierDto, actor: AuthContext): Promise<{ supplierType?: 'supplier' | 'freelancer'; overdraftLimit?: number | null }> {
+    let supplierType: 'supplier' | 'freelancer' | undefined;
+    if (payload.supplierType !== undefined) {
+      if (payload.supplierType !== 'supplier' && payload.supplierType !== 'freelancer') {
+        throw new AppError('Supplier type must be supplier or freelancer', 'SUPPLIER_TYPE_INVALID', 400);
+      }
+      supplierType = payload.supplierType;
+    }
+    let overdraftLimit: number | null | undefined;
+    if (payload.overdraftLimit !== undefined) {
+      if (payload.overdraftLimit === null) {
+        overdraftLimit = null;
+      } else {
+        const limit = Number(payload.overdraftLimit);
+        const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, this.tenantId(actor)));
+        const scale = 10 ** digits;
+        if (!Number.isFinite(limit) || limit < 0 || Math.abs(limit * scale - Math.round(limit * scale)) > 0.000001) {
+          throw new AppError('Overdraft limit must be zero or more with at most tenant currency minor-unit precision', 'SUPPLIER_OVERDRAFT_LIMIT_INVALID', 400);
+        }
+        overdraftLimit = limit;
+      }
+    }
+    return { supplierType, overdraftLimit };
+  }
+
   async createSupplier(payload: UpsertSupplierDto, actor: AuthContext): Promise<Record<string, unknown>> {
     const name = String(payload.name || '').trim();
     if (!name) throw new AppError('Supplier name is required', 'SUPPLIER_NAME_REQUIRED', 400);
     if (await this.supplierNameExists(name, actor)) throw new AppError('Supplier already exists', 'SUPPLIER_EXISTS', 400);
+    const { supplierType, overdraftLimit } = await this.validateSupplierTypeAndLimit(payload, actor);
 
     const inserted = await this.db.transaction().execute(async (trx) => {
       const inserted = await trx
@@ -917,6 +949,8 @@ export class PartnersService {
           balance: 0,
           notes: String(payload.notes || '').trim(),
           metadata: payload.metadata ? JSON.stringify(payload.metadata) : null,
+          supplier_type: supplierType ?? 'supplier',
+          overdraft_limit: overdraftLimit ?? null,
           is_active: true,
           ...this.tenantFields(actor),
         } as any)
@@ -951,6 +985,7 @@ export class PartnersService {
     if (Math.abs(Number(existing.balance || 0) - requestedBalance) > 0.0001) {
       throw new AppError('Balance cannot be edited from supplier form; use opening balance/import/reconcile flow', 'SUPPLIER_BALANCE_EDIT_FORBIDDEN', 400);
     }
+    const { supplierType, overdraftLimit } = await this.validateSupplierTypeAndLimit(payload, actor);
 
     await this.db
       .updateTable('suppliers')
@@ -960,6 +995,8 @@ export class PartnersService {
         address: String(payload.address || '').trim(),
         notes: String(payload.notes || '').trim(),
         metadata: payload.metadata ? JSON.stringify(payload.metadata) : null,
+        ...(supplierType !== undefined ? { supplier_type: supplierType } : {}),
+        ...(overdraftLimit !== undefined ? { overdraft_limit: overdraftLimit } : {}),
         updated_at: sql`NOW()`,
       })
       .where('id', '=', id)

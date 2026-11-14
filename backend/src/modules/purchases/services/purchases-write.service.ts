@@ -1374,7 +1374,7 @@ export class PurchasesWriteService {
     }
     try {
     const paymentResult = await this.tx.runInTransaction(this.db, async (trx) => {
-      const supplier = await trx.selectFrom('suppliers').select(['id', 'name', 'balance']).where('id', '=', payload.supplierId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).where('is_active', '=', true).forUpdate().executeTakeFirst();
+      const supplier = await trx.selectFrom('suppliers').select(['id', 'name', 'balance', 'overdraft_limit']).where('id', '=', payload.supplierId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).where('is_active', '=', true).forUpdate().executeTakeFirst();
       if (!supplier) throw new AppError('Supplier not found', 'SUPPLIER_NOT_FOUND', 404);
       const amount = Number(payload.amount || 0);
       if (!Number.isFinite(amount) || amount <= 0 || Math.abs(amount * scale - Math.round(amount * scale)) > 0.000001) {
@@ -1388,6 +1388,29 @@ export class PurchasesWriteService {
        * so, but a payment against a zero balance IS an advance by
        * definition — derived from the data, like the customer flow. */
       const isAdvance = payload.isAdvance === true || currentBalance <= 0;
+      /* INV-SUPPLIER-ADVANCE-OVERDRAFT-LIMIT: an advance is capped by the
+       * owner-set overdraft limit — cumulative, not per withdrawal. The
+       * cap sums outstanding advances (amount - applied_amount) under the
+       * same supplier lock, so concurrent withdrawals cannot overshoot
+       * it. NULL means uncapped: the legacy behaviour for every ordinary
+       * supplier (a default of 0 would have blocked the already-live
+       * advance flow for all of them). */
+      if (isAdvance) {
+        const limit = (supplier as any).overdraft_limit == null ? null : Number((supplier as any).overdraft_limit);
+        if (limit != null) {
+          const outstandingRow = await trx.selectFrom('supplier_payments')
+            .select(sql<number>`coalesce(sum(amount - applied_amount), 0)`.as('outstanding'))
+            .where('tenant_id', '=', scope.tenantId)
+            .where('account_id', '=', scope.accountId)
+            .where('supplier_id', '=', supplier.id)
+            .where('is_advance', '=', true)
+            .executeTakeFirst();
+          const afterThis = Math.round((Number(outstandingRow?.outstanding || 0) + amount) * scale) / scale;
+          if (afterThis > limit + 0.0001) {
+            throw new AppError('Supplier advance exceeds the overdraft limit', 'SUPPLIER_ADVANCE_OVER_LIMIT', 400);
+          }
+        }
+      }
       if (!isAdvance) {
         if (!(currentBalance > 0)) throw new AppError('Supplier has no outstanding balance', 'SUPPLIER_NO_BALANCE', 400);
         if (amount > currentBalance + 0.0001) throw new AppError('Supplier payment cannot exceed outstanding balance', 'SUPPLIER_OVERPAYMENT', 400);
@@ -1449,6 +1472,15 @@ export class PurchasesWriteService {
        * the journal posts Dr 1185 / Cr cash. */
       if (!isAdvance) {
         await this.financeService.addSupplierLedgerEntry(trx, supplier.id, -amount, 'supplier_payment', `دفع إلى ${supplier.name}${paymentNote ? ` - ${paymentNote}` : ''}`, 'supplier_payment', id, auth, branchId, locationId);
+      } else {
+        /* INV-SUPPLIER-ADVANCE-OVERDRAFT-LIMIT: the advance is invisible
+         * in the supplier statement unless it leaves a trace — a
+         * zero-amount marker row (entry_type 'supplier_advance') whose
+         * balance_after is the untouched payable. Amount 0 keeps
+         * sum(amount) over the ledger equal to suppliers.balance and
+         * contributes nothing to the statement totals; the statement
+         * joins the payment to expose the advance amount. */
+        await this.financeService.addSupplierLedgerEntry(trx, supplier.id, 0, 'supplier_advance', `دفعة مقدمة إلى ${supplier.name}${paymentNote ? ` - ${paymentNote}` : ''}`, 'supplier_payment', id, auth, branchId, locationId);
       }
       await this.financeService.addTreasuryTransaction(trx, 'supplier_payment', -amount, `${isAdvance ? 'دفعة مقدمة إلى' : 'دفع إلى'} ${supplier.name}${paymentNote ? ` - ${paymentNote}` : ''}`, 'supplier_payment', id, auth, branchId, locationId, payload.paymentChannel || 'cash');
       const posting = await this.accountingPosting.postSupplierPayment(trx, id, auth);

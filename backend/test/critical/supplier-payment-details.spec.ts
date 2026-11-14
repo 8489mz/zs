@@ -99,7 +99,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE customer_ledger (id bigserial PRIMARY KEY, tenant_id text, account_id text, customer_id bigint, entry_type text, amount numeric, balance_after numeric, note text, reference_type text, reference_id bigint, return_document_id bigint, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT NOW());
     CREATE TABLE customer_payments (id bigserial PRIMARY KEY, tenant_id text, account_id text, customer_id bigint, amount numeric, payment_channel text, instapay_address text, transfer_reference text, transfer_receipt_url text, note text, branch_id bigint, location_id bigint, job_id bigint, created_by bigint, created_at timestamptz DEFAULT NOW());
     CREATE TABLE maritime_jobs (id bigint PRIMARY KEY, tenant_id text, customer_id bigint, job_number text, client_invoiced_total numeric, client_paid_total numeric, payment_status text, status text);
-    CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, phone text, address text, balance numeric DEFAULT 0, notes text, metadata jsonb, is_active boolean DEFAULT true, updated_at timestamptz);
+    CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, phone text, address text, balance numeric DEFAULT 0, notes text, metadata jsonb, is_active boolean DEFAULT true, updated_at timestamptz, supplier_type text, overdraft_limit numeric);
     CREATE TABLE supplier_ledger (id bigserial PRIMARY KEY, tenant_id text, account_id text, supplier_id bigint, entry_type text, amount numeric, balance_after numeric, note text, reference_type text, reference_id bigint, return_document_id bigint, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT NOW());
     CREATE TABLE supplier_payments (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, supplier_id bigint, amount numeric, is_advance boolean DEFAULT false, applied_amount numeric DEFAULT 0, payment_channel text, instapay_address text, note text, branch_id bigint, location_id bigint, payment_date timestamptz, created_by bigint, created_at timestamptz DEFAULT NOW());
     CREATE TABLE supplier_payment_schedules (id bigint PRIMARY KEY, tenant_id text, account_id text, supplier_id bigint, purchase_id bigint, installment_no int, due_date text, amount numeric, paid_amount numeric DEFAULT 0, status text, note text, paid_at timestamptz, created_by bigint, updated_by bigint, created_at timestamptz DEFAULT NOW(), updated_at timestamptz);
@@ -291,8 +291,15 @@ async function main(): Promise<void> {
       assert.equal((payment as any).is_advance, true);
       assert.equal(Number((payment as any).applied_amount), 0);
       assert.equal(Number((payment as any).amount), 200);
-      const ledger = await anyDb.selectFrom('supplier_ledger').select(['entry_type', 'amount']).execute();
-      assert.equal(ledger.length, 0, 'an advance writes no supplier-ledger entry (D08 netted the payable through one)');
+      const ledger = await anyDb.selectFrom('supplier_ledger').select(['entry_type', 'amount', 'balance_after']).execute();
+      /* INV-SUPPLIER-ADVANCE-OVERDRAFT-LIMIT: an advance now writes exactly
+       * one zero-amount marker row — the payable is still never netted (the
+       * D08 bug was a -amount entry); the marker only makes the withdrawal
+       * visible in the supplier statement. */
+      assert.equal(ledger.length, 1, 'an advance writes exactly one zero-amount marker row');
+      assert.equal(ledger[0].entry_type, 'supplier_advance');
+      assert.equal(Number(ledger[0].amount), 0);
+      assert.equal(Number(ledger[0].balance_after), 300);
       const treasury = await anyDb.selectFrom('treasury_transactions').select(['txn_type', 'amount']).execute();
       assert.equal(treasury.length, 1);
       assert.equal(Number(treasury[0].amount), -200);

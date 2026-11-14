@@ -370,6 +370,17 @@ export interface SupplierTable {
   notes: ColumnType<string, string | undefined, string | undefined>;
   is_active: boolean;
   metadata: any | null;
+  /* INV-SUPPLIER-ADVANCE-OVERDRAFT-LIMIT: 'freelancer' marks a supplier
+   * who is a contractor (ads/marketing), not an HR employee. The type is
+   * informational — the advance cap below is enforced for any supplier
+   * with a limit set, freelancer or not. Optional on insert: the
+   * migration default is 'supplier'. */
+  supplier_type: ColumnType<'supplier' | 'freelancer', 'supplier' | 'freelancer' | undefined, 'supplier' | 'freelancer' | undefined>;
+  /* INV-SUPPLIER-ADVANCE-OVERDRAFT-LIMIT: owner-set ceiling on the
+   * supplier's outstanding advances (sum of amount - applied_amount).
+   * NULL means uncapped (legacy behaviour); a set limit is cumulative,
+   * not per withdrawal. */
+  overdraft_limit: ColumnType<number | null, number | null | undefined, number | null | undefined>;
   created_at: ColumnType<Date, string | undefined, never>;
   updated_at: ColumnType<Date, string | Date | undefined, string | Date | undefined>;
 }

@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsNumber, IsOptional, IsString, MaxLength, IsObject } from 'class-validator';
+import { IsIn, IsNumber, IsOptional, IsString, MaxLength, Min, IsObject } from 'class-validator';
 
 export class UpsertSupplierDto {
   @IsString()
@@ -20,6 +20,20 @@ export class UpsertSupplierDto {
   @Type(() => Number)
   @IsNumber()
   balance?: number;
+
+  /* INV-SUPPLIER-ADVANCE-OVERDRAFT-LIMIT: 'freelancer' marks a contractor
+   * (ads/marketing) registered on the supplier page instead of as an HR
+   * employee. The overdraft limit caps cumulative outstanding advances;
+   * null clears it back to uncapped. */
+  @IsOptional()
+  @IsIn(['supplier', 'freelancer'])
+  supplierType?: 'supplier' | 'freelancer';
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  overdraftLimit?: number | null;
 
   @IsOptional()
   @IsString()

@@ -37,7 +37,7 @@ async function main(): Promise<void> {
       CREATE TABLE currency_exchange_rates (tenant_id text, currency_code text, exchange_rate numeric, is_base boolean);
       CREATE TABLE customers (id bigint PRIMARY KEY, balance numeric DEFAULT 0, updated_at timestamptz, tenant_id text, account_id text, is_active boolean);
       CREATE TABLE customer_ledger (customer_id bigint, entry_type text, amount numeric, balance_after numeric, note text, reference_type text, reference_id bigint, created_by bigint, branch_id bigint, location_id bigint, tenant_id text, account_id text);
-      CREATE TABLE suppliers (id bigint PRIMARY KEY, balance numeric DEFAULT 0, updated_at timestamptz, tenant_id text, account_id text, is_active boolean);
+      CREATE TABLE suppliers (id bigint PRIMARY KEY, balance numeric DEFAULT 0, updated_at timestamptz, tenant_id text, account_id text, is_active boolean, supplier_type text, overdraft_limit numeric);
       CREATE TABLE supplier_ledger (supplier_id bigint, entry_type text, amount numeric, balance_after numeric, note text, reference_type text, reference_id bigint, created_by bigint, branch_id bigint, location_id bigint, tenant_id text, account_id text);
     `);
     await pg.exec(`

@@ -582,6 +582,34 @@ export class ReportsSummaryService {
     const totalItems = Number((totalRow as { count?: number | string | null } | undefined)?.count || 0);
     const rows = await entriesQuery.orderBy('created_at', 'asc').orderBy('id', 'asc').limit(pageSize).offset(offset).execute();
 
+    /* INV-SUPPLIER-ADVANCE-OVERDRAFT-LIMIT: an advance leaves a
+     * zero-amount marker row in supplier_ledger (so the ledger sums
+     * still equal the balance); the cash amount lives on the payment.
+     * Attach it here with a second query instead of a join:
+     * supplier_payments shares note/amount/created_at/id with the
+     * ledger, and a join would make those columns ambiguous in the
+     * shared search/filter/order/totals pipeline below. Only
+     * 'supplier_advance' marker rows ever expose an advance amount. */
+    if (!isCust) {
+      const markerIds = (rows as PartnerLedgerEntryRow[])
+        .filter((row) => row.entry_type === 'supplier_advance' && row.reference_id != null)
+        .map((row) => Number(row.reference_id));
+      if (markerIds.length > 0) {
+        const payments = await (this.db as any)
+          .selectFrom('supplier_payments')
+          .select(['id', 'amount'])
+          .where('id', 'in', markerIds)
+          .where(this.tenantPredicate(auth))
+          .execute();
+        const amounts = new Map<number, number>(payments.map((payment: any) => [Number(payment.id), Number(payment.amount || 0)]));
+        for (const row of rows as PartnerLedgerEntryRow[]) {
+          if (row.entry_type === 'supplier_advance' && row.reference_id != null) {
+            row.advance_amount = amounts.get(Number(row.reference_id)) ?? null;
+          }
+        }
+      }
+    }
+
     const [totalsRow, openingRow] = await Promise.all([
       entriesQuery
         .clearSelect()

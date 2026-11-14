@@ -140,15 +140,57 @@ export class SupplierBillsService {
         );
         const posting = await this.accountingPosting.postSupplierBill(trx, billId, auth);
         if (!posting.journalEntryId) throw new AppError(`Supplier bill ${billId} has no journal entry`, 'LEDGER_POSTING_MISSING', 500);
+        /* INV-SUPPLIER-ADVANCE-OVERDRAFT-LIMIT: a new bill settles the
+         * supplier's outstanding advances automatically, oldest first,
+         * up to the bill total — the payable must not stay overstated
+         * between the bill and a manual apply. postSupplierAdvanceApplication
+         * re-checks the outstanding-advance and payable caps and advances
+         * the applied_amount counter; the ledger entry mirrors
+         * applySupplierAdvance so the statement shows the application.
+         * Auto-apply runs ONLY for supplier bills, never purchase
+         * invoices. It runs inside this same transaction (calling the
+         * public applySupplierAdvance here would open a second
+         * transaction on the same single PGlite connection and hang). */
+        const appliedAdvances: Array<{ paymentId: number; amount: number }> = [];
+        let remainingBill = total;
+        if (remainingBill > 0) {
+          const scale = 10 ** digits;
+          const advances = await trx.selectFrom('supplier_payments')
+            .select(['id', 'doc_no', 'amount', 'applied_amount', 'branch_id', 'location_id'])
+            .where('tenant_id', '=', scope.tenantId)
+            .where('account_id', '=', scope.accountId)
+            .where('supplier_id', '=', supplier.id)
+            .where('is_advance', '=', true)
+            .orderBy('created_at', 'asc')
+            .orderBy('id', 'asc')
+            .execute();
+          for (const advanceRow of advances) {
+            if (remainingBill <= 0) break;
+            const outstanding = Math.round((Number((advanceRow as any).amount || 0) - Number((advanceRow as any).applied_amount || 0)) * scale) / scale;
+            if (!(outstanding > 0)) continue;
+            const applyAmount = Math.min(outstanding, remainingBill);
+            const application = await this.accountingPosting.postSupplierAdvanceApplication(trx, Number((advanceRow as any).id), applyAmount, null, auth);
+            if (!application.journalEntryId) throw new AppError(`Supplier advance application ${Number((advanceRow as any).id)} has no journal entry`, 'LEDGER_POSTING_MISSING', 500);
+            await this.financeService.addSupplierLedgerEntry(
+              trx, supplier.id, -applyAmount, 'supplier_advance_application',
+              `تطبيق دفعة مقدمة ${String((advanceRow as any).doc_no || `ZPV-${advanceRow.id}`)} على مستحقات ${supplier.name}`,
+              'supplier_payment', Number((advanceRow as any).id), auth,
+              (advanceRow as any).branch_id ? Number((advanceRow as any).branch_id) : null,
+              (advanceRow as any).location_id ? Number((advanceRow as any).location_id) : null,
+            );
+            appliedAdvances.push({ paymentId: Number((advanceRow as any).id), amount: applyAmount });
+            remainingBill = Math.round((remainingBill - applyAmount) * scale) / scale;
+          }
+        }
         await this.audit.logWithExecutor(trx, 'فاتورة مورد بدون مخزون', `تم تسجيل فاتورة مورد بدون مخزون ${docNo} للمورد ${supplier.name} بواسطة ${auth.username}`, auth);
         if (idempotencyKey) {
           await this.idempotency.commitOperation(trx, {
             tenantId: scope.tenantId, accountId: scope.accountId, idempotencyKey, operationType,
           }, { id: billId, docNo, total }, String(billId));
         }
-        return { id: billId, docNo, total };
+        return { id: billId, docNo, total, appliedAdvances };
       });
-      return { ok: true, bill: await this.readBill(Number((result as { id: number }).id), auth) };
+      return { ok: true, bill: await this.readBill(Number((result as { id: number }).id), auth), appliedAdvances: (result as { appliedAdvances?: Array<{ paymentId: number; amount: number }> }).appliedAdvances || [] };
     } catch (error) {
       if (idempotencyKey) {
         if (error instanceof AppError && error.statusCode < 500) {

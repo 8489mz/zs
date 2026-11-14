@@ -261,7 +261,7 @@ async function main(): Promise<void> {
         CREATE TABLE branches (id bigint PRIMARY KEY, tenant_id text, is_active boolean);
         CREATE TABLE stock_locations (id bigint PRIMARY KEY, tenant_id text, is_active boolean);
         CREATE TABLE customers (id bigint PRIMARY KEY, tenant_id text, is_active boolean, balance numeric);
-        CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, is_active boolean, balance numeric);
+        CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, is_active boolean, balance numeric, supplier_type text, overdraft_limit numeric);
         CREATE TABLE products (id bigint PRIMARY KEY, tenant_id text, is_active boolean);
         CREATE TABLE sales (id bigint PRIMARY KEY, tenant_id text);
         CREATE TABLE purchases (id bigint PRIMARY KEY, tenant_id text);
@@ -448,7 +448,7 @@ async function main(): Promise<void> {
         CREATE TABLE sales (id bigint PRIMARY KEY, doc_no text, order_type text, customer_id bigint, tenant_id text);
         CREATE TABLE customers (id bigint PRIMARY KEY, name text, tenant_id text);
         CREATE TABLE purchases (id bigint PRIMARY KEY, doc_no text, supplier_id bigint, tenant_id text);
-        CREATE TABLE suppliers (id bigint PRIMARY KEY, name text, tenant_id text);
+        CREATE TABLE suppliers (id bigint PRIMARY KEY, name text, tenant_id text, supplier_type text, overdraft_limit numeric);
         INSERT INTO sales VALUES (20, 'Z-20', 'pos', NULL, 't1'), (21, 'Z-21', 'pos', NULL, 't3');
         INSERT INTO return_documents VALUES (10, 'RET-10', 'sale', 20, '', 'refund', 'cash', NOW(), NULL, 't1'), (11, 'RET-11', 'sale', 21, '', 'refund', 'cash', NOW(), NULL, 't3');
         INSERT INTO return_items VALUES (1, 10, 2, 'Tea', 1, 100.125, 't1'), (2, 11, 2, 'Tea', 1, 100.125, 't3');
@@ -547,7 +547,7 @@ async function main(): Promise<void> {
       tip_relief numeric(15, 3), courier_relief numeric(15, 3));
         CREATE TABLE services (id bigserial PRIMARY KEY, tenant_id text, created_by bigint, service_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, payment_channel text, amount numeric);
         CREATE TABLE supplier_payments (id bigint PRIMARY KEY, tenant_id text, supplier_id bigint, created_by bigint, payment_date timestamptz, created_at timestamptz, branch_id bigint, location_id bigint, payment_channel text, amount numeric, note text);
-        CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, name text);
+        CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, name text, supplier_type text, overdraft_limit numeric);
         CREATE TABLE customer_payments (id bigint PRIMARY KEY, tenant_id text, created_by bigint, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, payment_channel text, amount numeric, note text);
         CREATE TABLE expenses (id bigint PRIMARY KEY, tenant_id text, created_by bigint, expense_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, amount numeric, title text, note text);
         CREATE TABLE treasury_transactions (id bigserial PRIMARY KEY, tenant_id text, account_id text, txn_type text, amount numeric, note text, reference_type text, reference_id bigint, created_by bigint, branch_id bigint, location_id bigint, payment_channel text, return_document_id bigint, request_key text, created_at timestamptz DEFAULT NOW());
@@ -593,7 +593,7 @@ async function main(): Promise<void> {
         CREATE TABLE product_categories (id bigint PRIMARY KEY, tenant_id text, name text);
         CREATE TABLE sale_items (id bigint PRIMARY KEY, sale_id bigint, product_id bigint, qty numeric);
         CREATE TABLE sales (id bigint PRIMARY KEY, tenant_id text, status text, created_at timestamptz);
-        CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, name text, phone text, metadata jsonb, is_active boolean);
+        CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, name text, phone text, metadata jsonb, is_active boolean, supplier_type text, overdraft_limit numeric);
         INSERT INTO products VALUES (1, 't1', 'Widget', 'W-1', 0, 3, 33.375, 50, 5, NULL, NULL, true), (2, 't3', 'Widget', 'W-1', 0, 3, 33.375, 50, 6, NULL, NULL, true);
         INSERT INTO suppliers VALUES (5, 't1', 'Supplier A', '0100', NULL, true), (6, 't3', 'Supplier A', '0100', NULL, true);
       `);
