@@ -28,7 +28,7 @@ import {
 import { formatCurrency, formatDate } from '@/lib/format';
 import type { Purchase, PurchaseItem, Sale, SaleItem } from '@/types/domain';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
-import { remainingInvoiceLineQuantity, isSelectedReturnQuantityValid } from '@/features/returns/lib/return-remaining-quantity';
+import { remainingInvoiceLineQuantity, isSelectedReturnQuantityValid, toggleReturnLineSelection } from '@/features/returns/lib/return-remaining-quantity';
 import { findReturnInRegisterOrRadar } from '@/features/returns/lib/return-radar-selection';
 import { buildReturnRegisterExportQuery } from '@/features/returns/lib/return-register-export-query';
 import { mayReleaseReturnIdempotencyKey, wasReturnCommitted } from '@/features/returns/lib/return-submission-recovery';
@@ -397,15 +397,19 @@ export function ReturnsWorkspace() {
 
   const toggleItem = (itemId: string, checked: boolean) => {
     if (returnAttempt.current) return;
-    setSelectedItems((current) => {
-      const next = { ...current };
-      if (!checked) {
-        delete next[itemId];
-        return next;
-      }
-      next[itemId] = next[itemId] || '1';
-      return next;
-    });
+    // SPICE-PKG3 (a): checking a line stamps its REMAINING quantity
+    // (via toggleReturnLineSelection), never a hardcoded '1' — 1 is
+    // an invalid selection for every weighed line with remaining < 1.
+    const invoiceItem = invoiceItems.find((item) => String(item.id || item.productId || '') === String(itemId));
+    const remainingQty = invoiceItem
+      ? remainingInvoiceLineQuantity(
+        Number(invoiceItem.qty || 0),
+        Number(returnedQtyByLine[itemId] || 0),
+        returnHistoryReady,
+        blockedProductIds.includes(String(invoiceItem.productId || '')),
+      )
+      : 0;
+    setSelectedItems((current) => toggleReturnLineSelection(current, itemId, checked, remainingQty));
   };
 
   const setItemQty = (itemId: string, value: string) => {

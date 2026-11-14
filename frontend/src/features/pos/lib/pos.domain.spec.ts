@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addPosItem, addSerialToPosLine, applyPosLineTransfer, buildPosLineKey, getRequiredSerialCount, getSerialEntryState, getSerialLookupError, getProductPrice, isOfferHappyHourActive, removeSerialFromPosLine, repriceCartLine, syncPosCartStock, updatePosItemLineDiscount, updatePosItemModifiers, updatePosItemQtyWithOptions, updatePosItemSeat } from '@/features/pos/lib/pos.domain';
+import { addPosItem, addSerialToPosLine, applyPosLineTransfer, buildPosLineKey, getRequiredSerialCount, getSerialEntryState, getSerialLookupError, getProductPrice, isOfferHappyHourActive, isWeightedSaleUnit, normalizeUnitName, removeSerialFromPosLine, repriceCartLine, syncPosCartStock, updatePosItemLineDiscount, updatePosItemModifiers, updatePosItemQtyWithOptions, updatePosItemSeat } from '@/features/pos/lib/pos.domain';
 import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 import type { Product } from '@/types/domain';
 
@@ -486,5 +486,109 @@ describe('POS per-line discount (INV-POS-LINE-DISCOUNT)', () => {
     const cart = twoLineCart();
     const next = updatePosItemLineDiscount(cart, cart[0].lineKey, -5, 2);
     expect(next[0].lineDiscount).toBeUndefined();
+  });
+});
+
+/* SPICE-PKG3 (b) — weighed lines added WITHOUT the scale/barcode
+ * path: isWeighted is derived from the selected SALE UNIT, not from
+ * how the line entered the cart. A tile tap, text search or quick
+ * add of a kg/g product must keep fractional quantities at every
+ * layer (add, qty edit, submit) instead of rounding 0.500 -> 1.
+ * On the base isWeighted is set only by the weighted-barcode path,
+ * so every case below fails there and passes after the fix. */
+describe('weighed sale units derived from the sale unit (SPICE-PKG3)', () => {
+  const kgProduct: Product = {
+    ...product,
+    stock: 10,
+    retailPrice: 400.40,
+    units: [{ ...product.units[0], id: 'ukg', name: 'كجم', multiplier: 1 }],
+  };
+  const kiloGramSpelledProduct: Product = {
+    ...product,
+    stock: 10,
+    retailPrice: 400.40,
+    units: [{ ...product.units[0], id: 'ukg', name: 'كيلو جرام', multiplier: 1 }],
+  };
+  const gramProduct: Product = {
+    ...product,
+    stock: 500,
+    retailPrice: 2,
+    units: [{ ...product.units[0], id: 'ug', name: 'جرام', multiplier: 1 }],
+  };
+
+  it('normalizes every weighed-unit spelling the catalog actually uses to kg/g', () => {
+    expect(normalizeUnitName('كجم')).toBe('kg');
+    expect(normalizeUnitName('كيلو')).toBe('kg');
+    expect(normalizeUnitName('كيلو جرام')).toBe('kg');
+    expect(normalizeUnitName('كيلوجرام')).toBe('kg');
+    expect(normalizeUnitName('كيلوغرام')).toBe('kg');
+    expect(normalizeUnitName('kg')).toBe('kg');
+    expect(normalizeUnitName('kilo')).toBe('kg');
+    expect(normalizeUnitName('kilogram')).toBe('kg');
+    expect(normalizeUnitName('جرام')).toBe('g');
+    expect(normalizeUnitName('جم')).toBe('g');
+    expect(normalizeUnitName('g')).toBe('g');
+  });
+
+  it('does not mistake a half-kilo pack (sold by the piece) for a weighed line', () => {
+    expect(normalizeUnitName('نصف كيلو')).toBe('نصف كيلو');
+    expect(isWeightedSaleUnit('نصف كيلو')).toBe(false);
+    expect(isWeightedSaleUnit('قطعة')).toBe(false);
+    expect(isWeightedSaleUnit('كرتونة')).toBe(false);
+    expect(isWeightedSaleUnit('')).toBe(false);
+    expect(isWeightedSaleUnit(undefined)).toBe(false);
+  });
+
+  it('flags kg/g sale units as weighed in every spelling', () => {
+    for (const name of ['كجم', 'كيلو', 'كيلو جرام', 'كيلوجرام', 'kg', 'kilo', 'جرام', 'جم', 'g']) {
+      expect(isWeightedSaleUnit(name)).toBe(true);
+    }
+  });
+
+  it('keeps 0.500 kg on a tile add of a كجم product (W08) — no barcode flag', () => {
+    const cart = addPosItem([], kgProduct, { priceType: 'retail', quantity: 0.5, digits: 2 });
+    expect(cart[0].qty).toBe(0.5);
+    expect(cart[0].isWeighted).toBe(true);
+    expect(calcCartLineTotal(cart[0])).toBeCloseTo(200.20, 2);
+  });
+
+  it('keeps 0.125 kg on a tile add of a كيلو جرام product (E08: 0.125 x 400.40)', () => {
+    const cart = addPosItem([], kiloGramSpelledProduct, { priceType: 'retail', quantity: 0.125, digits: 2 });
+    expect(cart[0].qty).toBe(0.125);
+    expect(cart[0].isWeighted).toBe(true);
+    expect(calcCartLineTotal(cart[0])).toBeCloseTo(50.05, 2);
+  });
+
+  it('still rounds a piece line 0.500 -> 1 — the derivation changes weighed lines only', () => {
+    const cart = addPosItem([], { ...product, stock: 10 }, { priceType: 'retail', quantity: 0.5, digits: 2 });
+    expect(cart[0].qty).toBe(1);
+    expect(cart[0].isWeighted).toBeUndefined();
+  });
+
+  it('lets a 0.750 kg stock cover a 0.500 kg tile add instead of flooring the stock to 0', () => {
+    const cart = addPosItem([], { ...kgProduct, stock: 0.75 }, { priceType: 'retail', quantity: 0.5, digits: 2 });
+    expect(cart[0].qty).toBe(0.5);
+    expect(cart[0].stockLimit).toBe(0.75);
+  });
+
+  it('keeps a fractional qty edit on a tile-added kg line (W07-style partial: 0.750 -> 0.250)', () => {
+    const cart = addPosItem([], kgProduct, { priceType: 'retail', quantity: 0.75, digits: 2 });
+    const updated = updatePosItemQtyWithOptions(cart, cart[0].lineKey, 0.25, [kgProduct], { digits: 2 });
+    expect(updated[0].qty).toBe(0.25);
+  });
+
+  it('keeps a fractional gram edit (125.5 g) on a tile-added جرام line', () => {
+    const cart = addPosItem([], gramProduct, { priceType: 'retail', quantity: 250, digits: 2 });
+    expect(cart[0].isWeighted).toBe(true);
+    const updated = updatePosItemQtyWithOptions(cart, cart[0].lineKey, 125.5, [gramProduct], { digits: 2 });
+    expect(updated[0].qty).toBe(125.5);
+  });
+
+  it('holds a mixed invoice (W08: 1 piece + 0.500 kg) with both quantities intact', () => {
+    let cart = addPosItem([], { ...product, stock: 10 }, { priceType: 'retail', quantity: 1, digits: 2 });
+    cart = addPosItem(cart, kgProduct, { priceType: 'retail', quantity: 0.5, digits: 2 });
+    expect(cart.map((item) => item.qty)).toEqual([1, 0.5]);
+    expect(cart[0].isWeighted).toBeUndefined();
+    expect(cart[1].isWeighted).toBe(true);
   });
 });

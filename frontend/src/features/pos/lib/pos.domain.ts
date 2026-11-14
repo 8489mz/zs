@@ -422,7 +422,12 @@ export function addPosItem(cart: PosItem[], product: Product, options: AddPosIte
     throw new Error(`الصنف ${product.name} غير متاح حالياً (86) — تم استبعاده من البيع.`);
   }
   const unit = safeUnits(product).find((entry) => entry.id === options.unitId) || getSaleUnit(product);
-  const isWeighted = options.isWeighted === true;
+  // SPICE-PKG3 (b): derive weighed from the SELECTED SALE UNIT, not
+  // from the entry path — tile taps, text search and quick-add never
+  // pass isWeighted, so a kg line was treated as a piece line and
+  // 0.500 rounded to 1 at every layer. An explicit caller flag
+  // (weighted barcode) still wins; the unit derivation covers the rest.
+  const isWeighted = options.isWeighted === true || isWeightedSaleUnit(unit.name);
   const minQty = getMinimumSaleQuantity(isWeighted);
   const requestedQty = normalizeSaleQuantity(options.quantity ?? 1, isWeighted);
   const isService = product.itemType === 'service' || (product as any).item_type === 'service';
@@ -1008,11 +1013,16 @@ export function normalizeUnitName(rawUnit?: string): string {
   const trimmed = String(rawUnit || '').trim();
   if (!trimmed) return 'قطعة';
 
-  const lower = trimmed.toLowerCase();
+  const lower = trimmed.toLowerCase().replace(/\s+/g, ' ');
 
-  // Keep kg and g in English as short abbreviations
-  if (lower === 'kg' || lower === 'كجم' || lower === 'كيلو' || lower === 'كيلوجرام') return 'kg';
-  if (lower === 'g' || lower === 'gm' || lower === 'gram' || lower === 'جرام') return 'g';
+  // Keep kg and g in English as short abbreviations.
+  // SPICE-PKG3 (b): cover every weighed spelling the catalog
+  // actually uses — 'كيلو جرام' (spaced) and 'كيلوغرام' /
+  // 'kilo' / 'kilogram' (manufacturing unit aliases) and 'جم'
+  // (van-services weight regex) were all returned raw before,
+  // so a tile/search add of those products never counted as weighed.
+  if (lower === 'kg' || lower === 'كجم' || lower === 'كيلو' || lower === 'كيلوجرام' || lower === 'كيلوغرام' || lower === 'كيلو جرام' || lower === 'kilo' || lower === 'kilogram' || lower === 'kilograms') return 'kg';
+  if (lower === 'g' || lower === 'gm' || lower === 'gram' || lower === 'grams' || lower === 'جرام' || lower === 'جم') return 'g';
 
   // English words to Arabic & normalizations
   if (['piece', 'pieces', 'pcs', 'pc', 'item', 'items', 'unit', 'units', 'قطعه', 'حبة', 'حبه'].includes(lower)) return 'قطعة';
@@ -1025,6 +1035,17 @@ export function normalizeUnitName(rawUnit?: string): string {
   if (['service', 'services', 'خدمه'].includes(lower)) return 'خدمة';
 
   return trimmed;
+}
+
+/* SPICE-PKG3 (b): a sale unit sold by weight (kg / g, in any
+ * spelling the catalog uses) is a weighed line — fractional
+ * quantities survive the add, the stepper and the submit
+ * normalizer, which all already branch on item.isWeighted. Exact
+ * match on the normalized unit name only: 'نصف كيلو' (a
+ * 0.5-multiplier pack sold by the piece) must NOT match. */
+export function isWeightedSaleUnit(unitName?: string): boolean {
+  const normalized = normalizeUnitName(unitName);
+  return normalized === 'kg' || normalized === 'g';
 }
 
 export function summarizeCartQuantities(cart: Array<{ unitName?: string; qty: number }>): string[] {

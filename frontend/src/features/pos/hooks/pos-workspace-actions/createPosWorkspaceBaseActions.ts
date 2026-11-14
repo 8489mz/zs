@@ -2,6 +2,7 @@ import {
   addPosItem,
   addSerialToPosLine,
   isNegativeStockSalesAllowed,
+  isWeightedSaleUnit,
   removePosItem,
   removeSerialFromPosLine,
   repriceCartLine,
@@ -66,7 +67,12 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
     const lineKey = unitId ? resolveUnitLineKey(product, unitId) : buildSaleLineKey(product, params.priceType);
     const allowNegativeStockSales = isNegativeStockSalesAllowed(params.settings) || !!product.hasBom;
     const unit = resolveSaleUnit(product, unitId);
-    const isWeighted = options.isWeighted === true;
+    // SPICE-PKG3 (b): derive weighed from the SELECTED SALE UNIT —
+    // tile taps, text search and quick-add never pass isWeighted, so
+    // a kg line was treated as a piece line (0.500 -> 1) and a
+    // 0.750 kg stock floored to 0 available. An explicit caller flag
+    // (weighted barcode) still wins.
+    const isWeighted = options.isWeighted === true || isWeightedSaleUnit(unit?.name);
     const availableQty = allowNegativeStockSales
       ? Number.MAX_SAFE_INTEGER
       : resolveAvailableQty(product, Number(unit?.multiplier || 1), isWeighted);
@@ -112,7 +118,7 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
             unitId,
             allowNegativeStockSales,
             quantity: options.quantity,
-            isWeighted: options.isWeighted,
+            isWeighted,
             sourceBarcode: options.sourceBarcode,
             serialNumber: options.serialNumber,
             eightySixedProductIds: params.eightySixedProductIds,

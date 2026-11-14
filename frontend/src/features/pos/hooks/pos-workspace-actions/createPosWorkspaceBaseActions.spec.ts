@@ -837,3 +837,102 @@ describe('removeItem never zeroes extras or clears the banner itself (T15-A)', (
     });
   });
 });
+
+/* SPICE-PKG3 (b) — a kg product added by TILE TAP, by quick-add
+ * barcode, or by quantity-prefix carries no isWeighted flag from
+ * the caller: handleAddProduct must derive it from the selected
+ * sale unit ('كجم'), so the 0.500 kg survives the add, the stock
+ * check (0.750 kg of stock must not floor to 0) and the stepper
+ * (0.001 step, not +1). On the base the flag stays unset, the add
+ * rounds 0.500 -> 1 and the 0.750-stock add is refused outright. */
+describe('tile/search add of a kg-unit product derives isWeighted (SPICE-PKG3)', () => {
+  const kgProduct: Product = {
+    ...product,
+    stock: 10,
+    retailPrice: 100,
+    units: [{ id: 'u1', name: 'كجم', multiplier: 1, barcode: '', isBaseUnit: true, isSaleUnit: true, isPurchaseUnit: true }],
+  };
+
+  function liveCartActions(liveCart: PosItem[], overrides: Partial<PosWorkspaceActionParams> = {}) {
+    const setCart = vi.fn((updater: PosItem[] | ((cart: PosItem[]) => PosItem[])) => (
+      typeof updater === 'function' ? updater(liveCart) : updater
+    ));
+    const actions = createPosWorkspaceBaseActions(makeParams({ cart: liveCart, setCart, products: [kgProduct], ...overrides }));
+    return { actions, setCart };
+  }
+
+  it('tile tap with quantity 0.5 installs a weighed 0.500 kg line', () => {
+    const { actions, setCart } = liveCartActions([]);
+
+    const result = actions.handleAddProduct(kgProduct, undefined, { quantity: 0.5 });
+
+    expect(result).toBe(true);
+    const installed = setCart.mock.results[0]?.value as PosItem[];
+    expect(installed).toHaveLength(1);
+    expect(installed[0].qty).toBe(0.5);
+    expect(installed[0].isWeighted).toBe(true);
+  });
+
+  it('tile tap with 0.750 kg of stock and a 0.500 kg add is not refused as out of stock', () => {
+    const { actions, setCart } = liveCartActions([], {});
+
+    const result = actions.handleAddProduct({ ...kgProduct, stock: 0.75 }, undefined, { quantity: 0.5 });
+
+    expect(result).toBe(true);
+    const installed = setCart.mock.results[0]?.value as PosItem[];
+    expect(installed[0].qty).toBe(0.5);
+    expect(installed[0].stockLimit).toBe(0.75);
+  });
+
+  it('quick-add barcode of the kg product installs a weighed line (search path, no flag)', () => {
+    const setCart = vi.fn((updater: PosItem[] | ((cart: PosItem[]) => PosItem[])) => (
+      typeof updater === 'function' ? updater([]) : updater
+    ));
+    const actions = createPosWorkspaceBaseActions(makeParams({
+      cart: [],
+      setCart,
+      products: [kgProduct],
+      quickAddCode: '123',
+    }));
+
+    const result = actions.handleQuickAddCodeSubmit();
+
+    expect(result).toBe(true);
+    const installed = setCart.mock.results[0]?.value as PosItem[];
+    expect(installed[0].qty).toBe(1);
+    expect(installed[0].isWeighted).toBe(true);
+  });
+
+  it('quantity-prefix quick add 0.5*barcode installs 0.500 kg, not 1 piece', () => {
+    const setCart = vi.fn((updater: PosItem[] | ((cart: PosItem[]) => PosItem[])) => (
+      typeof updater === 'function' ? updater([]) : updater
+    ));
+    const actions = createPosWorkspaceBaseActions(makeParams({
+      cart: [],
+      setCart,
+      products: [kgProduct],
+      quickAddCode: '0.5*123',
+    }));
+
+    const result = actions.handleQuickAddCodeSubmit();
+
+    expect(result).toBe(true);
+    const installed = setCart.mock.results[0]?.value as PosItem[];
+    expect(installed[0].qty).toBe(0.5);
+    expect(installed[0].isWeighted).toBe(true);
+  });
+
+  it('the stepper moves a tile-added kg line by 0.001, not by 1', () => {
+    const { actions, setCart } = liveCartActions([]);
+    actions.handleAddProduct(kgProduct, undefined, { quantity: 0.5 });
+    const installed = setCart.mock.results[0]?.value as PosItem[];
+    const lineKey = installed[0].lineKey;
+
+    const setCart2 = vi.fn();
+    const actions2 = createPosWorkspaceBaseActions(makeParams({ cart: installed, setCart: setCart2, products: [kgProduct] }));
+    actions2.changeLineQtyByDelta(lineKey, 1);
+
+    const updated = setCart2.mock.calls[0][0] as PosItem[];
+    expect(updated[0].qty).toBe(0.501);
+  });
+});

@@ -4,10 +4,12 @@
  * never a second local copy of the relief ratio. On the base the
  * modal has no reliefPreview prop and renders no relief line, so
  * these cases fail there and pass after the fix. */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { ReturnsCreateModal } from './ReturnsCreateModal';
 import { createEmptyReturnForm } from '@/features/returns/lib/returns-workspace.helpers';
+import { isSelectedReturnQuantityValid, toggleReturnLineSelection } from '@/features/returns/lib/return-remaining-quantity';
 import type { Sale, SaleItem } from '@/types/domain';
 
 const noop = () => undefined;
@@ -396,5 +398,132 @@ describe('ReturnsCreateModal stable dialog height (INV-RETURN-CREATE-MODAL-STABL
 
     expect(screen.getByRole('button', { name: /إرجاع بالسعر الأصلي/ })).toHaveStyle({ boxSizing: 'border-box' });
     expect(screen.getByRole('button', { name: /إرجاع بإلغاء الخصم/ })).toHaveStyle({ boxSizing: 'border-box' });
+  });
+});
+
+/* SPICE-PKG3 (a) — weighed returns through the real modal: the
+ * harness wires the modal's callbacks exactly the way
+ * ReturnsWorkspace does (toggle through toggleReturnLineSelection
+ * with the line's remaining qty; setQty stores the typed value),
+ * so the decision under test — the stamped qty and the
+ * key-presence selection — is the production code, not a copy.
+ * W07: a 0.750 kg sale line, return 0.250 kg. On the base the
+ * checkbox stamps '1' (invalid: 1 > 0.750) and clearing the qty
+ * un-checks the line and disables the input, so all three cases
+ * fail there. */
+describe('ReturnsCreateModal weighed returns (SPICE-PKG3)', () => {
+  const REMAINING = 0.75;
+
+  function weighedItem(): SaleItem {
+    return {
+      id: '10',
+      productId: '10',
+      name: 'جبنة بيضاء',
+      qty: 0.75,
+      price: 400.40,
+      total: 300.30,
+      unitName: 'كجم',
+      unitMultiplier: 1,
+      cost: 0,
+      priceType: 'retail',
+    };
+  }
+
+  function weighedSale(): Sale {
+    return {
+      id: '1',
+      docNo: 'S-1',
+      total: 300.30,
+      customerName: 'Cash customer',
+      items: [weighedItem()],
+    } as unknown as Sale;
+  }
+
+  function renderWeighedModal() {
+    function Harness() {
+      const [selectedItems, setSelectedItems] = useState<Record<string, string>>({});
+      const form = { ...createEmptyReturnForm('sale'), invoiceId: '1' };
+      const entries = Object.entries(selectedItems)
+        .map(([id, value]) => ({ id, qty: Number(value || 0) }))
+        .filter((entry) => entry.qty > 0);
+      const valid = entries.length > 0 && entries.every((entry) =>
+        isSelectedReturnQuantityValid('10', '10', REMAINING, entry.qty, {}, [], true));
+      return (
+        <ReturnsCreateModal
+          isOpen
+          onClose={noop}
+          form={form}
+          invoiceRows={[weighedSale()]}
+          selectedInvoice={weighedSale()}
+          invoiceItems={[weighedItem()]}
+          selectedItems={selectedItems}
+          selectedSerials={{}}
+          selectedItemsCount={entries.length}
+          selectedQtyTotal={entries.reduce((sum, entry) => sum + entry.qty, 0)}
+          expectedReturnValue={entries.reduce((sum, entry) => sum + entry.qty * 400.40, 0)}
+          canUseCreditSettlement={false}
+          settlementNeedsRefundMethod
+          isBusy={false}
+          isError={false}
+          isSuccess={false}
+          error={null}
+          onFormChange={noop}
+          onResetForm={noop}
+          onToggleItem={(itemId, checked) =>
+            setSelectedItems((current) => toggleReturnLineSelection(current, itemId, checked, REMAINING))}
+          onSetItemQty={(itemId, value) =>
+            setSelectedItems((current) => ({ ...current, [itemId]: value }))}
+          onSetSerials={noop}
+          onOpenConfirm={vi.fn()}
+          returnedQtyByLine={{}}
+          blockedProductIds={[]}
+          returnHistoryReady
+          returnQuantitiesValid={valid}
+        />
+      );
+    }
+    const utils = render(<Harness />);
+    // DialogShell portals its content to document.body, outside the
+    // render container — query the qty input from the document.
+    const qtyInput = () => document.querySelector('input[type="number"]') as HTMLInputElement;
+    return { ...utils, qtyInput };
+  }
+
+  it('checks a weighed line at its remaining 0.750 kg — never the hardcoded 1', () => {
+    const { qtyInput } = renderWeighedModal();
+
+    fireEvent.click(screen.getByRole('checkbox'));
+
+    expect(screen.getByRole('checkbox')).toBeChecked();
+    expect(qtyInput().value).toBe('0.75');
+    expect(qtyInput()).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'تسجيل وتأكيد مرتجع البيع' })).not.toBeDisabled();
+  });
+
+  it('keeps the line selected and the input enabled while the qty is cleared mid-correction', () => {
+    const { qtyInput } = renderWeighedModal();
+
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(qtyInput().value).toBe('0.75');
+    fireEvent.change(qtyInput(), { target: { value: '' } });
+
+    expect(screen.getByRole('checkbox')).toBeChecked();
+    expect(qtyInput()).not.toBeDisabled();
+    expect(qtyInput().value).toBe('');
+  });
+
+  it('accepts the partial weighed return 0.250 kg of the 0.750 kg line (W07)', () => {
+    const { qtyInput } = renderWeighedModal();
+
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.change(qtyInput(), { target: { value: '0.25' } });
+
+    expect(screen.getByRole('checkbox')).toBeChecked();
+    expect(qtyInput()).not.toBeDisabled();
+    expect(qtyInput().value).toBe('0.25');
+    // 0.25 kg x 400.40 = 100.10 — shown in the line total, the hero
+    // refund total and the footer pill alike.
+    expect(screen.getAllByText('100.10').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'تسجيل وتأكيد مرتجع البيع' })).not.toBeDisabled();
   });
 });

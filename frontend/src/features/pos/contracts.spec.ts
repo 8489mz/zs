@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { buildLegacyPosSalePayload, buildPosSalePayload, stripSaleItemNameFields, validatePosSaleInput } from './contracts';
+import { addPosItem } from '@/features/pos/lib/pos.domain';
 import type { PosItem } from '@/features/pos/types/pos.types';
+import type { Product } from '@/types/domain';
 
 const cart: PosItem[] = [
   {
@@ -546,5 +548,75 @@ describe('POS paid gates (R4-D)', () => {
     };
     expect((buildPosSalePayload(input) as any).expectedTotal).toBe(25);
     expect((buildLegacyPosSalePayload(input) as any).expectedTotal).toBe(25);
+  });
+});
+
+/* SPICE-PKG3 (b) — the submit normalizer (normalizeCartQty) already
+ * branches on item.isWeighted, so a tile-added kg line must reach
+ * it flagged: W08 posts 1 piece + 0.500 kg and E08 posts 0.125 kg.
+ * On the base the lines arrive unflagged (the barcode path is the
+ * only one that sets the flag), so the payload re-rounds 0.500 -> 1
+ * and 0.125 -> 1 and both cases fail there. */
+describe('weighed lines keep fractional quantities in the sale payload (SPICE-PKG3)', () => {
+  const pieceProduct: Product = {
+    id: 'p1',
+    name: 'Tea',
+    categoryId: '',
+    supplierId: '',
+    costPrice: 5,
+    retailPrice: 10,
+    wholesalePrice: 8,
+    stock: 10,
+    minStock: 0,
+    notes: '',
+    barcode: '123',
+    units: [{ id: 'u1', name: 'قطعة', multiplier: 1, barcode: '', isBaseUnit: true, isSaleUnit: true, isPurchaseUnit: true }],
+  };
+  const kgProduct: Product = {
+    ...pieceProduct,
+    id: 'p2',
+    name: 'جبنة بيضاء',
+    retailPrice: 400.40,
+    barcode: '456',
+    units: [{ id: 'ukg', name: 'كجم', multiplier: 1, barcode: '', isBaseUnit: true, isSaleUnit: true, isPurchaseUnit: true }],
+  };
+
+  function cashInput(cart: PosItem[], expectedTotal: number) {
+    return {
+      cart,
+      customerId: '',
+      paymentType: 'cash' as const,
+      paymentChannel: 'cash' as const,
+      discount: 0,
+      deliveryFee: 0,
+      note: '',
+      paidAmount: expectedTotal,
+      tenderedAmount: expectedTotal,
+      payments: [{ paymentChannel: 'cash' as const, amount: expectedTotal }],
+      taxRate: 0,
+      pricesIncludeTax: false,
+      expectedTotal,
+    };
+  }
+
+  it('posts 1 piece + 0.500 kg for a mixed invoice added by tile (W08)', () => {
+    let cart = addPosItem([], pieceProduct, { priceType: 'retail', quantity: 1, digits: 2 });
+    cart = addPosItem(cart, kgProduct, { priceType: 'retail', quantity: 0.5, digits: 2 });
+    const input = cashInput(cart, 210.20);
+
+    for (const build of [buildPosSalePayload, buildLegacyPosSalePayload]) {
+      const items = (build(input) as any).items;
+      expect(items.map((item: any) => item.qty)).toEqual([1, 0.5]);
+    }
+  });
+
+  it('posts 0.125 kg for a tile-added weighed line (E08: 0.125 x 400.40)', () => {
+    const cart = addPosItem([], kgProduct, { priceType: 'retail', quantity: 0.125, digits: 2 });
+    const input = cashInput(cart, 50.05);
+
+    for (const build of [buildPosSalePayload, buildLegacyPosSalePayload]) {
+      const items = (build(input) as any).items;
+      expect(items.map((item: any) => item.qty)).toEqual([0.125]);
+    }
   });
 });

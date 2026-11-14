@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { formatCurrency } from '@/lib/format';
-import { remainingInvoiceLineQuantity } from '@/features/returns/lib/return-remaining-quantity';
+import { remainingInvoiceLineQuantity, isReturnLineSelected } from '@/features/returns/lib/return-remaining-quantity';
 import type { PurchaseItem, SaleItem } from '@/types/domain';
 
 export function ReturnsInvoiceItemsTable({
@@ -57,7 +57,10 @@ export function ReturnsInvoiceItemsTable({
           <tbody>
             {invoiceItems.map((item) => {
               const itemId = String(item.id || item.productId || '');
-              const isSelected = Number(selectedItems[itemId] || 0) > 0;
+              // SPICE-PKG3 (a): selection is key presence — a weighed
+              // line corrected through '' / 0 stays selected and its
+              // input stays enabled; qty > 0 would un-check it mid-edit.
+              const isSelected = isReturnLineSelected(selectedItems, itemId);
               const qty = Number(selectedItems[itemId] || 0);
               const baseQty = Number(item.qty || 0);
               const alreadyReturnedQty = Number(returnedQtyByLine[itemId] || 0);
