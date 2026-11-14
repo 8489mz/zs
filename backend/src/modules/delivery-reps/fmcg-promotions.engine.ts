@@ -113,6 +113,12 @@ export function evaluateFmcgCartPromotions(params: {
   // caller (VanPromotionsService.evaluateCart) passes the tenant's
   // book digits so a 3-decimal tenant keeps its third decimal.
   moneyDigits?: MoneyDigits;
+  // Tenant business timezone for the reference day
+  // (INV-SINGLE-SERVER-CLOCK-TENANT-TZ). The live caller
+  // (VanPromotionsService.evaluateCart) resolves it via
+  // getTenantTimezone and passes it in; the env fallback covers
+  // pure-engine callers with no tenant context.
+  businessTimezone?: string;
 }): CartPromotionEvaluationResult {
   const { cartItems, activePromotions } = params;
   const moneyDigits: MoneyDigits = params.moneyDigits ?? 2;
@@ -138,12 +144,13 @@ export function evaluateFmcgCartPromotions(params: {
   // The reference day is a business day (INV-BUSINESS-DATE-TENANT-LOCAL):
   // the UTC day is the wrong day around local midnight (a promo starting
   // today is skipped and one that ended yesterday still applies). A Date
-  // reference is rendered in the business timezone; the live caller
+  // reference is rendered in the tenant business timezone; the live caller
   // (VanPromotionsService.evaluateCart) passes the exact tenant-local
-  // day string, and this env fallback covers pure-engine callers.
+  // day string, and the env fallback covers pure-engine callers.
+  const businessTz = params.businessTimezone ?? (process.env.BUSINESS_TIMEZONE || 'Africa/Cairo');
   const refDateStr = params.referenceDate
-    ? (typeof params.referenceDate === 'string' ? params.referenceDate.slice(0, 10) : todayTenantDate(process.env.BUSINESS_TIMEZONE || 'Africa/Cairo', params.referenceDate))
-    : todayTenantDate(process.env.BUSINESS_TIMEZONE || 'Africa/Cairo');
+    ? (typeof params.referenceDate === 'string' ? params.referenceDate.slice(0, 10) : todayTenantDate(businessTz, params.referenceDate))
+    : todayTenantDate(businessTz);
 
   const appliedPromotions: AppliedPromotionReward[] = [];
   const bonusItemsToAdd: CartPromotionEvaluationResult['bonusItemsToAdd'] = [];

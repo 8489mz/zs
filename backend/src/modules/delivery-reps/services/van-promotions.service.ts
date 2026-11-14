@@ -12,7 +12,7 @@ import {
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
-import { formatLocalCalendarDay } from '../../../common/utils/tenant-timezone.util';
+import { formatLocalCalendarDay, getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 
 /**
  * Converts a pg DATE column value to its YYYY-MM-DD calendar-day key.
@@ -201,6 +201,12 @@ export class VanPromotionsService {
     // so around local midnight a promo starting today is skipped and
     // one that ended yesterday still applies.
     const referenceDate = await resolveBusinessDateKey(this.anyDb, tenantId, new Date());
+    // Tenant business timezone for the engine's reference day
+    // (INV-SINGLE-SERVER-CLOCK-TENANT-TZ): the referenceDate string
+    // above already carries the tenant day, so the engine's string
+    // branch never consults this — the zone covers the Date branch
+    // and pure-engine callers.
+    const businessTimezone = await getTenantTimezone(this.anyDb, tenantId);
     return evaluateFmcgCartPromotions({
       cartItems: payload.cartItems || [],
       invoiceSubtotal: payload.invoiceSubtotal,
@@ -208,6 +214,7 @@ export class VanPromotionsService {
       activePromotions,
       referenceDate,
       moneyDigits,
+      businessTimezone,
     });
   }
 

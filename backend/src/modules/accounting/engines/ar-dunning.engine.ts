@@ -121,6 +121,12 @@ export function allocateCustomerOverdueFifo(
   asOfDate: Date,
   creditTermsDays = 0,
   moneyDigits: MoneyDigits = 2,
+  // Tenant business timezone for the createdAt/dueDate display days
+  // (INV-SINGLE-SERVER-CLOCK-TENANT-TZ). The live caller
+  // (ArCollectionsService.syncCollections) resolves it via
+  // getTenantTimezone and passes it in; the env fallback covers
+  // pure-engine callers with no tenant context.
+  businessTimezone?: string,
 ): { overdueInvoices: OverdueInvoice[]; totalOverdue: number; oldestOverdueDays: number } {
   if (balance <= 0.01 || !invoices.length) {
     return { overdueInvoices: [], totalOverdue: 0, oldestOverdueDays: 0 };
@@ -135,6 +141,9 @@ export function allocateCustomerOverdueFifo(
   const overdueInvoices: OverdueInvoice[] = [];
   let totalOverdue = 0;
   let maxOverdueDays = 0;
+  // Tenant business timezone for the createdAt/dueDate display days;
+  // the env fallback covers pure-engine callers with no tenant context.
+  const businessTz = businessTimezone ?? (process.env.BUSINESS_TIMEZONE || 'Africa/Cairo');
 
   for (const inv of sorted) {
     if (remainingBalance <= 0) break;
@@ -151,19 +160,18 @@ export function allocateCustomerOverdueFifo(
         maxOverdueDays = daysOverdue;
       }
 
+      // Display day of the creation instant in the tenant business
+      // timezone (the caller passes the resolved tenant zone; the env
+      // fallback covers pure-engine callers with no tenant context).
+      // The UTC day was wrong for every tenant, including the default one.
       overdueInvoices.push({
         id: inv.id,
         invoiceNumber: inv.invoiceNumber,
-        // Display day of the creation instant in the system business timezone
-        // (env BUSINESS_TIMEZONE, else Africa/Cairo -- the same fallback the
-        // tenant gateway uses when no tenant is known). This pure engine has
-        // no tenant context, so it cannot resolve a per-tenant zone; the UTC
-        // day was wrong for every tenant, including the default one.
-        createdAt: todayTenantDate(process.env.BUSINESS_TIMEZONE || 'Africa/Cairo', new Date(inv.createdAt)),
+        createdAt: todayTenantDate(businessTz, new Date(inv.createdAt)),
         // Same business-timezone day for the due date (was a UTC slice:
         // an invoice due on a Cairo day whose instant falls before 02:00
         // Cairo rendered as the previous day).
-        dueDate: todayTenantDate(process.env.BUSINESS_TIMEZONE || 'Africa/Cairo', effectiveDueDate),
+        dueDate: todayTenantDate(businessTz, effectiveDueDate),
         total: roundMoney(inv.total, moneyDigits),
         paidAmount: roundMoney(inv.paidAmount, moneyDigits),
         unpaidAmount: invoiceUnpaid,
@@ -262,6 +270,11 @@ export function evaluateCustomerDunning(
   levels: DunningLevel[],
   companyName?: string,
   moneyDigits: MoneyDigits = 2,
+  // Tenant business timezone for the overdue-invoice display days; the
+  // live caller (ArCollectionsService.syncCollections) resolves it via
+  // getTenantTimezone. The env fallback inside
+  // allocateCustomerOverdueFifo covers pure-engine callers.
+  businessTimezone?: string,
 ): EvaluatedDunningResult {
   const asOfDate = input.asOfDate ? new Date(input.asOfDate) : new Date();
   const totalBalance = roundMoney(input.balance || 0, moneyDigits);
@@ -286,7 +299,7 @@ export function evaluateCustomerDunning(
   // 1. Allocate overdue amounts via FIFO
   const { overdueInvoices, totalOverdue, oldestOverdueDays } = input.overdueSummary
     ? { overdueInvoices: [], ...input.overdueSummary }
-    : allocateCustomerOverdueFifo(totalBalance, input.invoices, asOfDate, input.creditTermsDays ?? 0, moneyDigits);
+    : allocateCustomerOverdueFifo(totalBalance, input.invoices, asOfDate, input.creditTermsDays ?? 0, moneyDigits, businessTimezone);
 
   // 2. Identify active dunning level
   const activeLevel = determineDunningLevel(oldestOverdueDays, levels);

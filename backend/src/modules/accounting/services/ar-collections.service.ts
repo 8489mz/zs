@@ -13,6 +13,7 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { tenantBaseCurrency } from '../accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { boundedPage } from '../../../common/utils/bounded-page';
 import {
   ArCollectionsQueryDto,
@@ -347,6 +348,10 @@ export class ArCollectionsService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
     const digits = await this.bookDigits(tenantId);
+    // Tenant business timezone for the dunning display days
+    // (INV-SINGLE-SERVER-CLOCK-TENANT-TZ): the engine renders the
+    // overdue-invoice createdAt/dueDate days in this zone.
+    const businessTimezone = await getTenantTimezone(this.db, tenantId);
 
     // 1. Fetch or ensure dunning levels
     let levels = await (this.db as any)
@@ -498,7 +503,7 @@ export class ArCollectionsService {
             : null,
         };
 
-        const evalResult = evaluateCustomerDunning(evalInput, levels as DunningLevel[], undefined, digits);
+        const evalResult = evaluateCustomerDunning(evalInput, levels as DunningLevel[], undefined, digits, businessTimezone);
 
         if (evalResult.totalOverdue > 0) {
           activeCasesCount++;
