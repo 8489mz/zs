@@ -382,7 +382,7 @@ async function main(): Promise<void> {
       const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
       assert.ok(postingSource.includes('postVanDamagedSwap'), 'the swap journal is posted by postVanDamagedSwap');
       assert.ok(postingSource.includes("'van_damaged_swap'"), 'the journal source is van_damaged_swap');
-      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-collections-and-swaps.service.ts'), 'utf8');
       assert.ok(vanSource.includes('postVanDamagedSwap'), 'executeDamagedSwap posts through postVanDamagedSwap');
       assert.ok(vanSource.includes("'swap_price_adjustment'"), 'the ledger row uses swap_price_adjustment');
       assert.ok(vanSource.includes("location_type', '=', 'damaged'"), 'the damaged qty is routed to the damaged location');

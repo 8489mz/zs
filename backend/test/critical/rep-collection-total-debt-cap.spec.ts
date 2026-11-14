@@ -317,7 +317,7 @@ async function main(): Promise<void> {
     // invariant id is present at both enforcement points.
     {
       const here = __dirname;
-      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-collections-and-swaps.service.ts'), 'utf8');
       assert.ok(vanSource.includes('INV-REP-COLLECTION-TOTAL-BALANCE-CAP'), 'van-sales names the invariant');
       assert.ok(vanSource.includes('roundMoney(finalBalance, moneyDigits) < 0'), 'the balance write carries the negative-balance floor guard');
       assert.ok(vanSource.includes('REP_COLLECTION_EXCEEDS_TOTAL_BALANCE'), 'van-sales uses the total-cap error code');

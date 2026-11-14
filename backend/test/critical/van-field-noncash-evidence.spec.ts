@@ -479,14 +479,15 @@ async function main(): Promise<void> {
     // PIN, and the posting call hands the reference over.
     {
       const here = __dirname;
-      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
-      // Split 2 of 5 moved the sale gate to the field-sales service; the
-      // collection gate still lives in the facade until split 3.
+      // Split 2 of 5 moved the sale gate to the field-sales service; split 3
+      // of 5 moved the collection gate to the collections service. The facade
+      // no longer names the invariant.
       const fieldSalesSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-field-sales.service.ts'), 'utf8');
-      assert.ok(vanSource.includes('INV-VAN-FIELD-NONCASH-EVIDENCE-GATE'), 'van-sales names the invariant');
+      const collectionsSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-collections-and-swaps.service.ts'), 'utf8');
+      assert.ok(collectionsSource.includes('INV-VAN-FIELD-NONCASH-EVIDENCE-GATE'), 'van-sales names the invariant');
       assert.ok(fieldSalesSource.includes('(isCard || isInstapay) && totalSale > 0'), 'the sale gate covers instapay');
-      assert.ok(vanSource.includes('isNonCashCollection'), 'the collection gate exists');
-      assert.ok(vanSource.includes('transferReference: payload.transferReference'), 'the posting call hands the reference over');
+      assert.ok(collectionsSource.includes('isNonCashCollection'), 'the collection gate exists');
+      assert.ok(collectionsSource.includes('transferReference: payload.transferReference'), 'the posting call hands the reference over');
       const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
       assert.ok(postingSource.includes('INV-VAN-FIELD-NONCASH-EVIDENCE-GATE'), 'the posting service names the invariant');
       assert.ok(postingSource.includes('transferReference?: string'), 'the posting takes a transfer reference');
