@@ -6,7 +6,8 @@
  * such banner, so the first two cases fail there; the third pins that
  * no banner appears when there is no message. */
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { formatCurrency } from '@/lib/format';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { PosCheckoutDialog } from './PosCheckoutDialog';
@@ -167,4 +168,99 @@ describe('PosCheckoutDialog — failure reason inside the dialog (T11-A)', () =>
     const confirmButton = screen.getByRole('button', { name: /تأكيد البيع/ });
     expect(confirmButton).toBeDisabled();
   });
+});
+
+/* SPICE-PKG8 (INV-THREE-WAY-PAYMENT-SPLIT): the trial E-block sale
+ * (cash + Visa + wallet, 200/200/200 on a 600 total) could not be
+ * recorded — the payment section rendered ONE shared second input
+ * whose value and setter flipped between the card leg and the
+ * transfer leg with paymentChannel, so the third leg had nowhere to
+ * be typed. The dialog must render three SEPARATE inputs (cash,
+ * card, transfer) holding all three legs at once, each typing into
+ * its own leg only, and the paid/remaining chips must reconcile
+ * exactly — a one-piastre shortfall still shows as remaining, never
+ * silently absorbed. */
+describe('PosCheckoutDialog — three-way payment split (SPICE-PKG8)', () => {
+  function makeSplitPos(overrides: Record<string, unknown> = {}) {
+    return makePos({
+      cart: [{
+        lineKey: 'p1::u1::retail',
+        productId: 'p1',
+        name: 'Burger',
+        unitName: 'قطعة',
+        unitMultiplier: 1,
+        price: 600,
+        qty: 1,
+      }],
+      totals: {
+        total: 600,
+        subTotal: 600,
+        discountValue: 0,
+        deliveryFee: 0,
+        taxRate: 0,
+        pricesIncludeTax: false,
+        serviceCharge: 0,
+        taxAmount: 0,
+        tipAmount: 0,
+      },
+      paidAmount: 600,
+      amountDue: 0,
+      changeAmount: 0,
+      cashAmount: 200,
+      cardAmount: 200,
+      transferAmount: 200,
+      paymentType: 'cash',
+      paymentChannel: 'wallet',
+      ...overrides,
+    });
+  }
+
+  it('renders separate cash, card and transfer inputs holding all three legs at once', () => {
+    renderDialog(makeSplitPos());
+
+    const cashInput = screen.getByLabelText('نقدي') as HTMLInputElement;
+    const cardInput = screen.getByLabelText('فيزا / كارت') as HTMLInputElement;
+    const transferInput = screen.getByLabelText('محافظ إلكترونية') as HTMLInputElement;
+    expect(cashInput.value).toBe('200');
+    expect(cardInput.value).toBe('200');
+    expect(transferInput.value).toBe('200');
+    expect(screen.getAllByDisplayValue('200')).toHaveLength(3);
+  }, 30000);
+
+  it('typing the transfer leg calls only setTransferAmount, never setCardAmount', () => {
+    const setCardAmount = vi.fn();
+    const setTransferAmount = vi.fn();
+    renderDialog(makeSplitPos({ setCardAmount, setTransferAmount }));
+
+    const transferInput = screen.getByLabelText('محافظ إلكترونية');
+    fireEvent.change(transferInput, { target: { value: '150' } });
+
+    expect(setTransferAmount).toHaveBeenCalledWith(150);
+    expect(setCardAmount).not.toHaveBeenCalled();
+  }, 30000);
+
+  it('typing the card leg calls only setCardAmount, never setTransferAmount', () => {
+    const setCardAmount = vi.fn();
+    const setTransferAmount = vi.fn();
+    renderDialog(makeSplitPos({ setCardAmount, setTransferAmount }));
+
+    const cardInput = screen.getByLabelText('فيزا / كارت');
+    fireEvent.change(cardInput, { target: { value: '250' } });
+
+    expect(setCardAmount).toHaveBeenCalledWith(250);
+    expect(setTransferAmount).not.toHaveBeenCalled();
+  }, 30000);
+
+  it('the paid and remaining chips reconcile exactly for a three-way split', () => {
+    renderDialog(makeSplitPos());
+
+    expect(screen.getByText('المدفوع').parentElement?.textContent).toContain(formatCurrency(600));
+    expect(screen.getByText('المتبقي').parentElement?.textContent).toContain(formatCurrency(0));
+  }, 30000);
+
+  it('a one-piastre shortfall still shows as remaining, never absorbed', () => {
+    renderDialog(makeSplitPos({ paidAmount: 599.99, amountDue: 0.01 }));
+
+    expect(screen.getByText('المتبقي').parentElement?.textContent).toContain(formatCurrency(0.01));
+  }, 30000);
 });

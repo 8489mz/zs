@@ -781,13 +781,18 @@ export function PosCheckoutPaymentSection({
       border: '1px solid #e2e8f0',
       boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
     }}>
-      {/* Single Unified Row: Cash, Card/Transfer, Discount (Amount), Discount (%) */}
+      {/* Single Unified Row: Cash, Card, Transfer, Discount (Amount), Discount (%)
+       * SPICE-PKG8 (INV-THREE-WAY-PAYMENT-SPLIT): card and transfer used
+       * to share ONE input whose value and setter flipped with
+       * paymentChannel, so a cash + card + transfer split had nowhere
+       * to type its third leg. Each leg now has its own input bound
+       * to its own state scalar; typing one leg never touches another. */}
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: isMobile
             ? 'repeat(2, minmax(0, 1fr))'
-            : (isDiscountLocked ? 'repeat(auto-fit, minmax(130px, 1fr))' : 'repeat(4, minmax(0, 1fr))'),
+            : (isDiscountLocked ? 'repeat(auto-fit, minmax(130px, 1fr))' : 'repeat(5, minmax(0, 1fr))'),
           gap: '8px',
           alignItems: 'end',
           width: '100%',
@@ -808,25 +813,33 @@ export function PosCheckoutPaymentSection({
         </label>
         <label className="field" style={{ margin: 0 }}>
           <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', marginBottom: '2px', display: 'block', textAlign: 'center' }}>
-            {transferSelected
-              ? (pos.paymentChannel === 'instapay'
-                  ? (isKwdStore ? 'رابط دفع' : 'InstaPay')
-                  : (isKwdStore ? 'محفظة رقمية' : 'محافظ إلكترونية'))
-              : (isKwdStore && pos.terminalPaymentDetails?.cardScheme === 'knet'
-                  ? 'كي نت K-NET'
-                  : isKsaStore && pos.terminalPaymentDetails?.cardScheme === 'mada'
-                  ? 'مدى mada'
-                  : 'فيزا / كارت')}
+            {(isKwdStore && pos.terminalPaymentDetails?.cardScheme === 'knet'
+              ? 'كي نت K-NET'
+              : isKsaStore && pos.terminalPaymentDetails?.cardScheme === 'mada'
+              ? 'مدى mada'
+              : 'فيزا / كارت')}
           </span>
           <input
             type="number"
             step="0.01"
-            value={transferSelected ? pos.transferAmount : pos.cardAmount}
-            onChange={(event) => {
-              const val = Number(event.target.value || 0);
-              if (transferSelected) pos.setTransferAmount(val);
-              else pos.setCardAmount(val);
-            }}
+            value={pos.cardAmount}
+            onChange={(event) => pos.setCardAmount(Number(event.target.value || 0))}
+            style={{ boxSizing: 'border-box', width: '100%', height: '38px', borderRadius: '6px', fontSize: '14px', fontWeight: 700, border: '1px solid #cbd5e1', textAlign: 'center' }}
+          />
+        </label>
+        <label className="field" style={{ margin: 0 }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', marginBottom: '2px', display: 'block', textAlign: 'center' }}>
+            {pos.paymentChannel === 'instapay'
+              ? (isKwdStore ? 'رابط دفع' : 'InstaPay')
+              : pos.paymentChannel === 'wallet'
+              ? (isKwdStore ? 'محفظة رقمية' : 'محافظ إلكترونية')
+              : (isKwdStore ? 'محفظة رقمية' : 'محافظ / InstaPay')}
+          </span>
+          <input
+            type="number"
+            step="0.01"
+            value={pos.transferAmount}
+            onChange={(event) => pos.setTransferAmount(Number(event.target.value || 0))}
             style={{ boxSizing: 'border-box', width: '100%', height: '38px', borderRadius: '6px', fontSize: '14px', fontWeight: 700, border: '1px solid #cbd5e1', textAlign: 'center' }}
           />
         </label>

@@ -218,6 +218,44 @@ describe('createPosWorkspaceAsyncActions — handleSubmit reports its outcome (T
   });
 });
 
+/* SPICE-PKG8 (INV-THREE-WAY-PAYMENT-SPLIT) — PIN (passes at base):
+ * the submit payload already carries every entered leg, so a
+ * 200/200/200 cash + card + wallet split on a 600 total posts as
+ * three legs summing exactly to the total under a 'mixed' channel.
+ * This pins the payload contract the dialog fix feeds: the dialog
+ * used to make the third leg un-enterable, never the payload
+ * dropping it. */
+describe('createPosWorkspaceAsyncActions — handleSubmit posts a three-way payment split (SPICE-PKG8)', () => {
+  it('posts cash + card + wallet legs summing exactly to the total', async () => {
+    const { actions, mutateAsync } = makeActions({
+      cashAmount: 200,
+      cardAmount: 200,
+      transferAmount: 200,
+      paymentType: 'cash',
+      paymentChannel: 'wallet',
+      totals: { discountValue: 0, deliveryFee: 0, taxRate: 0, pricesIncludeTax: false, total: 600, serviceCharge: 0 },
+      paidAmount: 600,
+    });
+
+    const result = await actions.handleSubmit({});
+
+    expect(result).toBe(true);
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    const payload = mutateAsync.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.paymentChannel).toBe('mixed');
+    expect(payload.paidAmount).toBe(600);
+    expect(payload.payments).toEqual([
+      { paymentChannel: 'cash', amount: 200 },
+      { paymentChannel: 'card', amount: 200 },
+      { paymentChannel: 'wallet', amount: 200 },
+    ]);
+    const legsSum = (payload.payments as Array<{ amount: number }>)
+      .reduce((sum, leg) => sum + leg.amount, 0);
+    expect(legsSum).toBe(600);
+    expect(legsSum).toBe(payload.expectedTotal);
+  });
+});
+
 /* T11-D (INV-REST-COD-COLLECTION-TRUTH): the submit payload always
  * carries an explicit collectionStatus for a delivery. An unstated
  * status is 'cod' (the courier collects); prepaid is an explicit

@@ -404,6 +404,143 @@ describe('createPosWorkspaceBaseActions', () => {
       expect(setPaymentChannel).toHaveBeenCalledWith('wallet');
       expect(setTransferAmount).toHaveBeenCalledWith(80);
     });
+
+    /* SPICE-PKG8 (INV-THREE-WAY-PAYMENT-SPLIT): picking a payment
+     * method used to ZERO the other legs — card wiped cash +
+     * transfer, cash wiped card + transfer, wallet wiped card — so a
+     * cash + card + transfer split could never be built: every tap
+     * destroyed a leg the cashier had already typed. When a split is
+     * already in progress the preset keeps the entered legs and fills
+     * only the unpaid remainder into the newly picked leg. A fresh
+     * single-channel pick keeps the old full-fill behaviour. */
+    it('card preset keeps a cash + transfer split and fills only the remainder into card', () => {
+      const setPaymentChannel = vi.fn();
+      const setCashAmount = vi.fn();
+      const setCardAmount = vi.fn();
+      const setTransferAmount = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        totals: { discountValue: 0, deliveryFee: 0, taxRate: 0, pricesIncludeTax: false, total: 600 },
+        paymentChannel: 'cash',
+        cashAmount: 200,
+        cardAmount: 0,
+        transferAmount: 200,
+        setPaymentChannel,
+        setCashAmount,
+        setCardAmount,
+        setTransferAmount,
+      }));
+
+      actions.setPaymentPreset('card');
+
+      expect(setPaymentChannel).toHaveBeenCalledWith('card');
+      expect(setCardAmount).toHaveBeenCalledWith(200);
+      expect(setCashAmount).not.toHaveBeenCalled();
+      expect(setTransferAmount).not.toHaveBeenCalled();
+    });
+
+    it('wallet preset keeps a cash + card split and fills only the remainder into transfer', () => {
+      const setPaymentChannel = vi.fn();
+      const setCashAmount = vi.fn();
+      const setCardAmount = vi.fn();
+      const setTransferAmount = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        totals: { discountValue: 0, deliveryFee: 0, taxRate: 0, pricesIncludeTax: false, total: 600 },
+        paymentChannel: 'cash',
+        cashAmount: 200,
+        cardAmount: 200,
+        transferAmount: 0,
+        setPaymentChannel,
+        setCashAmount,
+        setCardAmount,
+        setTransferAmount,
+      }));
+
+      actions.setPaymentPreset('wallet');
+
+      expect(setPaymentChannel).toHaveBeenCalledWith('wallet');
+      expect(setTransferAmount).toHaveBeenCalledWith(200);
+      expect(setCashAmount).not.toHaveBeenCalled();
+      expect(setCardAmount).not.toHaveBeenCalled();
+    });
+
+    it('cash preset keeps a card + transfer split and fills only the remainder into cash', () => {
+      const setPaymentChannel = vi.fn();
+      const setCashAmount = vi.fn();
+      const setCardAmount = vi.fn();
+      const setTransferAmount = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        totals: { discountValue: 0, deliveryFee: 0, taxRate: 0, pricesIncludeTax: false, total: 600 },
+        paymentChannel: 'card',
+        cashAmount: 0,
+        cardAmount: 200,
+        transferAmount: 200,
+        setPaymentChannel,
+        setCashAmount,
+        setCardAmount,
+        setTransferAmount,
+      }));
+
+      actions.setPaymentPreset('cash');
+
+      expect(setPaymentChannel).toHaveBeenCalledWith('cash');
+      expect(setCashAmount).toHaveBeenCalledWith(200);
+      expect(setCardAmount).not.toHaveBeenCalled();
+      expect(setTransferAmount).not.toHaveBeenCalled();
+    });
+
+    it('card preset still fills the full total for a fresh single-channel payment', () => {
+      const setPaymentChannel = vi.fn();
+      const setCashAmount = vi.fn();
+      const setCardAmount = vi.fn();
+      const setTransferAmount = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        totals: { discountValue: 0, deliveryFee: 0, taxRate: 0, pricesIncludeTax: false, total: 600 },
+        paymentChannel: 'cash',
+        cashAmount: 0,
+        cardAmount: 0,
+        transferAmount: 0,
+        setPaymentChannel,
+        setCashAmount,
+        setCardAmount,
+        setTransferAmount,
+      }));
+
+      actions.setPaymentPreset('card');
+
+      expect(setPaymentChannel).toHaveBeenCalledWith('card');
+      expect(setCashAmount).toHaveBeenCalledWith(0);
+      expect(setCardAmount).toHaveBeenCalledWith(600);
+      expect(setTransferAmount).toHaveBeenCalledWith(0);
+    });
+  });
+
+  /* SPICE-PKG8 (INV-THREE-WAY-PAYMENT-SPLIT): the 'mixed' fill wiped
+   * the transfer leg (setTransferAmount(0)) while topping cash up to
+   * the total — a cash + card + transfer split lost its third leg the
+   * moment the cashier tapped "fill". The fill now keeps every leg
+   * already entered and tops cash up with only the unpaid remainder. */
+  describe('fillPaidAmount', () => {
+    it('mixed channel keeps the transfer leg and fills cash with the remainder', () => {
+      const setCashAmount = vi.fn();
+      const setCardAmount = vi.fn();
+      const setTransferAmount = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        totals: { discountValue: 0, deliveryFee: 0, taxRate: 0, pricesIncludeTax: false, total: 600 },
+        paymentChannel: 'mixed',
+        cashAmount: 0,
+        cardAmount: 200,
+        transferAmount: 200,
+        setCashAmount,
+        setCardAmount,
+        setTransferAmount,
+      }));
+
+      actions.fillPaidAmount();
+
+      expect(setCardAmount).toHaveBeenCalledWith(200);
+      expect(setTransferAmount).toHaveBeenCalledWith(200);
+      expect(setCashAmount).toHaveBeenCalledWith(200);
+    });
   });
 
   /* T15-A (INV-REST-TRASH-DELETE-EXTRAS-TRUTH, K1): the T11-A /
