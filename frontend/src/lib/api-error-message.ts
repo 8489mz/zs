@@ -182,6 +182,8 @@ const ARABIC_CODE_MESSAGES: Record<string, string> = {
   UNAUTHORIZED: 'غير مصرح لك بالوصول. يرجى تسجيل الدخول مجدداً.',
   SESSION_NOT_FOUND: 'انتهت الجلسة. يرجى إعادة تسجيل الدخول.',
   MANAGER_PIN_INVALID: 'رمز المدير (PIN) غير صحيح.',
+  DRAWER_COUNTERPART_SAME_AS_CASH: 'لا يمكن تحويل النقدية إلى حساب الدرج نفسه؛ اختر حساب الخزنة الآمنة (1111) أو البنك.',
+  DRAWER_COUNTERPART_REQUIRED: 'اختر الحساب المقابل للتحويل (الخزينة الآمنة أو البنك).',
   MANAGER_PASSWORD_INVALID: 'كلمة مرور المدير غير صحيحة.',
   SHIFT_ALREADY_OPEN: 'توجد وردية مفتوحة بالفعل لهذا المستخدم.',
   SHIFT_ALREADY_CLOSED: 'تم إغلاق هذه الوردية بالفعل.',

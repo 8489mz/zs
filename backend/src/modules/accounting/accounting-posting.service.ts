@@ -3164,12 +3164,13 @@ export class AccountingPostingService {
 
     // INV-CASH-DRAWER-MOVEMENT-TYPES: safe transfers are
     // asset-to-asset journals, never profit legs. The counterpart
-    // is caller-named (no safe account exists in the chart) and is
-    // validated here — the journal writer fails closed — exactly
-    // like a treasury transfer, under lock, before any line is
-    // built. An unknown movement type throws instead of returning
-    // unposted: a silent skip would leave the treasury row posted
-    // with no journal and no trace.
+    // is caller-named — the dedicated safe/cash-box account is
+    // 1111 (INV-DRAWER-DISBURSE-CASHIER-PASSWORD, migration 0324)
+    // — and is validated here — the journal writer fails closed —
+    // exactly like a treasury transfer, under lock, before any
+    // line is built. An unknown movement type throws instead of
+    // returning unposted: a silent skip would leave the treasury
+    // row posted with no journal and no trace.
     const isTransferType = movementType === 'safe_drop' || movementType === 'safe_replenishment';
     let counterpartId = 0;
     if (isTransferType) {

@@ -181,7 +181,6 @@ export class CashDrawerService {
       throw err;
     }
   }
-  private shouldRequireManagerApprovalForCashOut(auth: AuthContext): boolean { return !['admin', 'super_admin', 'manager'].includes(String(auth.role || '').trim()); }
   private canReviewPendingShift(auth: AuthContext): boolean { return ['admin', 'super_admin', 'manager'].includes(String(auth.role || '').trim()); }
 
   private async assertCurrentUserPassword(password: string, auth: AuthContext): Promise<void> {
@@ -216,8 +215,15 @@ export class CashDrawerService {
     }
   }
 
+  // INV-DRAWER-DISBURSE-CASHIER-PASSWORD: drawer disbursements
+  // (cash_out + safe_drop) accept the CASHIER'S OWN password —
+  // the same current-user confirmation as deposits — instead of a
+  // manager PIN. The cashier is recorded in the audit trail
+  // (treasury row created_by = auth.userId). The manager PIN is
+  // still accepted as a fallback inside assertCurrentUserPassword
+  // (the deposits pattern). Posted-invoice edit and stock-count
+  // approval stay manager-gated: they do not call this method.
   private async assertCashDrawerApproval(movementType: CashDrawerMovementType, approvalSecret: string, auth: AuthContext): Promise<void> {
-    if ((movementType === 'cash_out' || movementType === 'safe_drop') && this.shouldRequireManagerApprovalForCashOut(auth)) { await this.assertManagerPin(approvalSecret, auth); return; }
     await this.assertCurrentUserPassword(approvalSecret, auth);
   }
 
@@ -1230,14 +1236,15 @@ export class CashDrawerService {
       throw new AppError('A stable drawer movement request key is required', 'DRAWER_REQUEST_KEY_REQUIRED', 400);
     }
     // INV-CASH-DRAWER-MOVEMENT-TYPES: a safe transfer names its
-    // counterpart cash/bank account. There is no safe/cash-box
-    // account in the chart, so the caller names an existing one
-    // and it is validated exactly like a treasury transfer
-    // (active cash/bank asset, debit normal balance). This
-    // fail-fast check runs before the approval check so a bad
-    // counterpart never consumes a password/PIN attempt; the
-    // journal writer re-validates under lock inside the
-    // transaction before anything is written.
+    // counterpart cash/bank account. The dedicated safe/cash-box
+    // account is 1111 (INV-DRAWER-DISBURSE-CASHIER-PASSWORD,
+    // migration 0324), so a safe drop lands in the safe; the caller
+    // may still name any other active cash/bank account, and it is
+    // validated exactly like a treasury transfer (active cash/bank
+    // asset, debit normal balance). This fail-fast check runs before
+    // the approval check so a bad counterpart never consumes a
+    // password/PIN attempt; the journal writer re-validates under
+    // lock inside the transaction before anything is written.
     if (isCashDrawerTransferType(movementType)) {
       const counterpartId = Number(payload.counterpartAccountId || 0);
       if (!(counterpartId > 0)) throw new AppError('A counterpart cash or bank account is required for a safe transfer', 'DRAWER_COUNTERPART_REQUIRED', 400);
@@ -1252,6 +1259,34 @@ export class CashDrawerService {
         .where('is_active', '=', true)
         .executeTakeFirst();
       if (!counterpart) throw new AppError('The counterpart must be an active cash or bank account in this tenant', 'TREASURY_ACCOUNT_NOT_FOUND', 400);
+      // INV-DRAWER-DISBURSE-CASHIER-PASSWORD (trial T31): the drawer
+      // cash account itself can never be the counterpart — a transfer
+      // from the drawer to itself is not a transfer, and the journal
+      // writer throws DRAWER_COUNTERPART_SAME_AS_CASH for it after
+      // the treasury row is already inserted (whole transaction rolls
+      // back, surfacing as a generic failure). Fail here, before the
+      // approval check and before any write, with the clear code.
+      // The drawer cash account is the tenant's cash_account_id
+      // (seeded 1110); the 1110-row lookup is the same fallback the
+      // journal writer uses.
+      const settingsRow = await this.db
+        .selectFrom('accounting_settings')
+        .select('cash_account_id')
+        .where('tenant_id', '=', scope.tenantId)
+        .executeTakeFirst();
+      let drawerCashAccountId = Number((settingsRow as { cash_account_id?: number | null } | undefined)?.cash_account_id || 0);
+      if (!(drawerCashAccountId > 0)) {
+        const cashByCode = await this.db
+          .selectFrom('accounting_accounts')
+          .select('id')
+          .where('tenant_id', '=', scope.tenantId)
+          .where('code', '=', '1110')
+          .executeTakeFirst();
+        drawerCashAccountId = Number((cashByCode as { id?: number | null } | undefined)?.id || 0);
+      }
+      if (drawerCashAccountId > 0 && counterpartId === drawerCashAccountId) {
+        throw new AppError('لا يمكن تحويل النقدية إلى حساب الدرج نفسه؛ اختر حساب الخزنة الآمنة (1111) أو البنك', 'DRAWER_COUNTERPART_SAME_AS_CASH', 400);
+      }
     }
     await this.assertCashDrawerApproval(movementType, String(payload.managerPin || '').trim(), auth);
     const signedAmount = toSignedCashDrawerAmount(movementType, amount);

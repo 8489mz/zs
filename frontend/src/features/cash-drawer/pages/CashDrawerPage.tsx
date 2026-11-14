@@ -106,10 +106,11 @@ export function CashDrawerPage() {
 
   const movementType = controller.confirmAction?.kind === 'movement' ? controller.confirmAction.values.type : '';
   const isCashOut = movementType === 'cash_out';
-  // INV-REST-SAFE-TRANSFER-TYPES: a safe drop moves cash out of the
-  // drawer exactly like a cash_out (the backend requires a manager
-  // PIN for it from non-managers), so it gets the same approval
-  // wording; a replenishment is money into the drawer like cash_in.
+  // INV-DRAWER-DISBURSE-CASHIER-PASSWORD: drawer disbursements
+  // (cash_out + safe_drop) accept the cashier's OWN password, the
+  // same current-user confirmation as deposits — so the outbound
+  // movement gets the same current-user wording as an inbound one;
+  // a replenishment is money into the drawer like cash_in.
   const isOutboundMovement = isCashOut || movementType === 'safe_drop';
   const isMovement = controller.confirmAction?.kind === 'movement';
   const confirmDialogTitle = isMovement
@@ -125,14 +126,12 @@ export function CashDrawerPage() {
       : 'سيتم إغلاق وردية نقطة البيع الحالية وتسجيل المبلغ المعدود والفرق النهائي بعد تأكيد المستخدم الحالي.');
 
   const confirmBusy = controller.movementMutation.isPending || controller.closeMutation.isPending;
-  const managerPinLabel = isOutboundMovement ? 'رمز اعتماد المدير أو كلمة مرور المدير' : 'كلمة مرور المستخدم الحالي';
-  const managerPinHint = isOutboundMovement
-    ? 'صرف النقدية يحتاج اعتماد المدير إذا كان المستخدم الحالي ليس مديرًا أو أدمن.'
-    : 'أدخل كلمة مرور المستخدم الحالي لتأكيد العملية.';
+  const managerPinLabel = 'كلمة مرور المستخدم الحالي';
+  const managerPinHint = 'أدخل كلمة مرور المستخدم الحالي لتأكيد العملية.';
 
   // The backend requires an approval secret for every movement
-  // (manager PIN for cash_out / safe_drop by non-managers, own
-  // password otherwise) and for close, so the PIN is always
+  // (the current user's own password for every type, manager PIN
+  // accepted as a fallback) and for close, so the PIN is always
   // required here. The old expression let cash_in (and admin
   // cash_out) confirm with an empty PIN and fail server-side.
   const isPinRequired = true;

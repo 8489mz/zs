@@ -44,6 +44,8 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   SHIFT_FORBIDDEN: 'غير مسموح لك بتنفيذ هذه العملية على هذه الوردية.',
   SHIFT_OPEN_FAILED: 'تعذر فتح الوردية.',
   MANAGER_PIN_INVALID: 'رمز اعتماد المدير غير صحيح.',
+  DRAWER_COUNTERPART_SAME_AS_CASH: 'لا يمكن تحويل النقدية إلى حساب الدرج نفسه؛ اختر حساب الخزنة الآمنة (1111) أو البنك.',
+  DRAWER_COUNTERPART_REQUIRED: 'اختر الحساب المقابل للتحويل (الخزينة الآمنة أو البنك).',
   MANAGER_PASSWORD_INVALID: 'كلمة مرور المدير غير صحيحة.',
   MANAGER_PASSWORD_REQUIRED: 'كلمة مرور المدير مطلوبة.',
   MANAGER_AUTH_REQUIRED: 'رمز اعتماد المدير مطلوب لتنفيذ هذه العملية.',

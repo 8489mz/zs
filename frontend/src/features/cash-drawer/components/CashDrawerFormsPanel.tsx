@@ -572,6 +572,15 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
   // would be rejected server-side, so it is never offered — the
   // same filter rule as the import treasury dropdowns
   // (INV-IMPORT-ISCASHBANK-SWEEP).
+  // INV-DRAWER-DISBURSE-CASHIER-PASSWORD (trial T31): the drawer
+  // cash account itself (seeded code 1110) is NEVER offered — a
+  // transfer from the drawer to itself is not a transfer, and the
+  // backend rejects it with DRAWER_COUNTERPART_SAME_AS_CASH. The
+  // picker excludes by code because the frontend has no settings
+  // read for cash_account_id; the backend pre-check (which reads
+  // the tenant's real cash_account_id) stays authoritative. The
+  // dedicated safe account 1111 is offered, so a safe drop lands
+  // in the safe instead of the bank.
   const { data: accountsData } = useQuery({
     queryKey: ['accounts-list'],
     queryFn: () => http<{ accounts: CashBankAccountRow[] }>('/api/accounting/accounts').catch(() => ({ accounts: [] })),
@@ -580,7 +589,7 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
     () =>
       (accountsData?.accounts || []).filter(
         (a) =>
-          isCashBankAccount(a) && a?.isActive !== false && a?.accountType === 'asset' && a?.normalBalance === 'debit',
+          isCashBankAccount(a) && a?.isActive !== false && a?.accountType === 'asset' && a?.normalBalance === 'debit' && String(a?.code || '').trim() !== '1110',
       ),
     [accountsData],
   );

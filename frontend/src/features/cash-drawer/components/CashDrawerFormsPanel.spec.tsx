@@ -33,6 +33,14 @@ const mockAccounts = [
     sortOrder: 0,
   },
   {
+    id: '1111', code: '1111', nameAr: 'الخزينة الآمنة', nameEn: '', accountType: 'asset',
+    accountGroup: 'current_assets', parentId: '', depth: 1, normalBalance: 'debit',
+    balance: 0, isActive: true, isSystem: true, allowManualEntries: true,
+    isControlAccount: false, isMonetary: true, revaluationCurrency: null,
+    flags: { isCashBank: true, isReceivable: false, isPayable: false, isInventory: false, isTax: false },
+    sortOrder: 0,
+  },
+  {
     id: '1120', code: '1120', nameAr: 'بنك', nameEn: '', accountType: 'asset',
     accountGroup: 'current_assets', parentId: '', depth: 1, normalBalance: 'debit',
     balance: 0, isActive: true, isSystem: false, allowManualEntries: true,
@@ -215,7 +223,12 @@ describe('CashDrawerFormsPanel movement types', () => {
     expect(boxes.length).toBe(2);
     fireEvent.click(boxes[1]);
     expect(await screen.findByText('1120 — بنك')).toBeTruthy();
-    expect(await screen.findByText('1110 — صندوق الدرج')).toBeTruthy();
+    // INV-DRAWER-DISBURSE-CASHIER-PASSWORD (trial T31): the drawer
+    // cash account itself (1110) is never offered as a counterpart
+    // — a transfer from the drawer to itself is rejected
+    // server-side — while the seeded safe account 1111 is offered.
+    expect(await screen.findByText('1111 — الخزينة الآمنة')).toBeTruthy();
+    expect(screen.queryByText('1110 — صندوق الدرج')).toBeNull();
     expect(screen.queryByText('6950 — مصروفات')).toBeNull();
     fireEvent.click(screen.getByText('1120 — بنك'));
     expect(screen.getByRole('button', { name: 'حفظ الحركة' })).not.toBeDisabled();

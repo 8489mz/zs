@@ -15,15 +15,20 @@ safe/cash-box account in the chart of accounts, so the transfer
 counterpart is caller-named (counterpartAccountId) and validated
 exactly like a treasury transfer: an active is_cash_bank asset
 with a debit normal balance, different from the drawer cash
-account. No treasury_transfers row is written.
+account. The dedicated safe/cash-box account is 1111
+(INV-DRAWER-DISBURSE-CASHIER-PASSWORD), seeded per tenant by
+migration 2040000000324, so a safe drop lands in the safe instead
+of the bank. No treasury_transfers row is written.
 
 WHAT IS DRIVEN: the real recordCashMovement (with the real
 journal writer postCashDrawerMovement, the real expected-cash
 recomputation, and the real listing) on PGlite, with the
 operator's password seeded via createPasswordRecord. The
-counterpart used here is the seeded bank account 1120 — the
-chart has no safe account to name, which is the point: any
-active cash/bank account in the tenant can be the safe.
+counterpart used here is the seeded bank account 1120 — and,
+since INV-DRAWER-DISBURSE-CASHIER-PASSWORD, the seeded safe
+account 1111, which is the transfer's real destination: any
+active cash/bank account in the tenant can still be the
+counterpart, but a safe drop lands in 1111, not in the bank.
 
 NOT DRIVEN: the frontend movement form (still offers only
 cash_in/cash_out — the new types are API-available first); the
@@ -106,7 +111,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE fleet_vehicles (id bigint PRIMARY KEY, tenant_id text, assigned_rep_id bigint, van_location_id bigint, current_odometer numeric);
     CREATE TABLE pos_audit_events (id bigserial PRIMARY KEY, tenant_id text, account_id text, event_type text, user_id bigint, sale_id bigint, product_id bigint, amount numeric, reason text, metadata jsonb, created_at timestamptz DEFAULT NOW());
     CREATE TABLE payment_allocations (id bigserial PRIMARY KEY, tenant_id text, invoice_type text, invoice_id bigint);
-    CREATE TABLE cashier_shifts (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, opened_by bigint, status text, branch_id bigint, location_id bigint, opening_cash numeric, opening_note text, expected_cash numeric, counted_cash numeric, variance numeric, close_note text, closed_by bigint, created_at timestamptz DEFAULT NOW(), closed_at timestamptz);
+    CREATE TABLE cashier_shifts (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, opened_by bigint, status text, branch_id bigint, location_id bigint, opening_cash numeric, opening_note text, expected_cash numeric, counted_cash numeric, variance numeric, close_note text, closed_by bigint, created_at timestamptz DEFAULT NOW(), closed_at timestamptz, terminal_code text);
     CREATE TABLE treasury_transactions (id bigserial PRIMARY KEY, tenant_id text, account_id text, txn_type text, amount numeric, note text, reference_type text, reference_id bigint, created_by bigint, branch_id bigint, location_id bigint, payment_channel text, return_document_id bigint, request_key text, created_at timestamptz DEFAULT NOW());
     CREATE TABLE audit_logs (id bigserial PRIMARY KEY, action text, details text, event_code text, target_tenant_id text, created_by bigint, impersonated_by bigint, tenant_id text, account_id text, created_at timestamptz DEFAULT NOW());
     CREATE TABLE operation_executions (id bigserial PRIMARY KEY, tenant_id text, account_id text, idempotency_key text, operation_type text, status text, document_id text, response_payload text, created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW());
@@ -134,7 +139,7 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
   await anyDb.insertInto('users').values({ id: 4, tenant_id: TENANT, username: 'other-login', role: 'cashier', is_active: true }).execute();
   const accounts: Array<[number, string, string, string, boolean]> = [
-    [1110, '1110', 'asset', 'debit', true], [1120, '1120', 'asset', 'debit', true],
+    [1110, '1110', 'asset', 'debit', true], [1111, '1111', 'asset', 'debit', true], [1120, '1120', 'asset', 'debit', true],
     [1130, '1130', 'asset', 'debit', false], [1140, '1140', 'asset', 'debit', false],
     [2120, '2120', 'liability', 'credit', false], [4100, '4100', 'income', 'credit', false],
     [4300, '4300', 'income', 'credit', false], [5100, '5100', 'expense', 'debit', false],
@@ -255,9 +260,38 @@ async function main(): Promise<void> {
       assert.equal(Number(totals.byAccount['7100']?.credit || 0), 0, 'no income leg');
       assert.equal(await drawer.computeShiftExpectedCash(1, adminAuth), -50, 'expected cash reflects the drop');
     } finally {
-      await db.destroy();
+      await db.destroy(); (globalThis as any).gc?.();
     }
     console.log('  safe drop posts a transfer journal passed');
+  }
+
+  // 1b. Safe drop to the seeded safe account 1111
+  // (INV-DRAWER-DISBURSE-CASHIER-PASSWORD): the transfer lands
+  // in the safe — Dr 1111 / Cr 1110 — instead of the bank. On
+  // pristine this fails: 1111 does not exist in the fixture chart
+  // (TREASURY_ACCOUNT_NOT_FOUND), so no transfer to the safe can
+  // succeed anywhere.
+  {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await seedOperatorPassword(db);
+      await seedShift(db, 1, 1);
+      const { drawer } = buildServices(db);
+      await drawer.recordCashMovement(1, { type: 'safe_drop', amount: 300, note: 'إيداع الخزينة', managerPin: PASSWORD, requestKey: 'safe-drop-safe-key-001', counterpartAccountId: 1111 } as never, adminAuth);
+      const rows = await treasuryRows(db, 1);
+      assert.equal(rows.length, 1, 'one treasury row');
+      assert.equal(rows[0].txn_type, 'safe_drop', 'the row carries the new type');
+      assert.equal(Number(rows[0].amount), -300, 'a safe drop leaves the drawer');
+      const lines = await journalLines(db, 'cash_drawer_safe_drop', Number(rows[0].id));
+      assert.equal(lines.length, 2, 'one transfer journal with two legs');
+      assert.deepEqual([Number(lines[0].account_id), Number(lines[0].debit), Number(lines[0].credit)], [1111, 300, 0], 'Dr safe account 1111');
+      assert.deepEqual([Number(lines[1].account_id), Number(lines[1].debit), Number(lines[1].credit)], [1110, 0, 300], 'Cr drawer cash');
+      assert.equal(await drawer.computeShiftExpectedCash(1, adminAuth), -300, 'expected cash reflects the drop');
+    } finally {
+      await db.destroy(); (globalThis as any).gc?.();
+    }
+    console.log('  safe drop to the seeded safe account 1111 passed');
   }
 
   // 2. Safe replenishment: treasury row signed positive,
@@ -280,7 +314,7 @@ async function main(): Promise<void> {
       assert.deepEqual([Number(lines[1].account_id), Number(lines[1].debit), Number(lines[1].credit)], [1120, 0, 30], 'Cr bank counterpart');
       assert.equal(await drawer.computeShiftExpectedCash(1, adminAuth), 30, 'expected cash reflects the replenishment');
     } finally {
-      await db.destroy();
+      await db.destroy(); (globalThis as any).gc?.();
     }
     console.log('  safe replenishment posts a transfer journal passed');
   }
@@ -301,7 +335,7 @@ async function main(): Promise<void> {
       assert.equal((await treasuryRows(db, 1)).length, 0, 'no treasury row is written');
       assert.equal((await journalTotals(db)).count, 0, 'no journal is written');
     } finally {
-      await db.destroy();
+      await db.destroy(); (globalThis as any).gc?.();
     }
     console.log('  missing counterpart fails closed before any write passed');
   }
@@ -326,7 +360,7 @@ async function main(): Promise<void> {
       assert.equal((await treasuryRows(db, 1)).length, 0, 'no treasury row is written');
       assert.equal((await journalTotals(db)).count, 0, 'no journal is written');
     } finally {
-      await db.destroy();
+      await db.destroy(); (globalThis as any).gc?.();
     }
     console.log('  invalid counterparts fail closed before any write passed');
   }
@@ -347,7 +381,7 @@ async function main(): Promise<void> {
       assert.equal((await treasuryRows(db, 1)).length, 0, 'no treasury row is written');
       assert.equal((await journalTotals(db)).count, 0, 'no journal is written');
     } finally {
-      await db.destroy();
+      await db.destroy(); (globalThis as any).gc?.();
     }
     console.log('  unknown movement type fails closed before any write passed');
   }
@@ -374,7 +408,7 @@ async function main(): Promise<void> {
       assert.deepEqual([Number(outLines[1].account_id), Number(outLines[1].credit)], [1110, 10], 'cash_out Cr cash');
       assert.equal(await drawer.computeShiftExpectedCash(1, adminAuth), 10, 'expected cash nets the two movements');
     } finally {
-      await db.destroy();
+      await db.destroy(); (globalThis as any).gc?.();
     }
     console.log('  existing cash_in and cash_out journals unchanged passed');
   }
@@ -397,7 +431,7 @@ async function main(): Promise<void> {
       assert.equal(drop.kind, 'cash_out', 'the kind union is unchanged');
       assert.equal(drop.amount, 50, 'the item amount is the absolute drop');
     } finally {
-      await db.destroy();
+      await db.destroy(); (globalThis as any).gc?.();
     }
     console.log('  movement items carry distinct safe labels passed');
   }
