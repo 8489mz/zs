@@ -449,7 +449,7 @@ async function main(): Promise<void> {
   // by the coordinator and is not pinned here.)
   {
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+    const serviceSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle.service.ts'), 'utf8');
     assert.ok(serviceSource.includes('INV-VAN-SELF-SETTLE-PIN-REQUIRED'), 'service names the invariant');
     assert.ok(serviceSource.includes('chargeStockVarianceDecidedBySupervisor'), 'service carries the supervisor-decision flag');
     const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.controller.ts'), 'utf8');

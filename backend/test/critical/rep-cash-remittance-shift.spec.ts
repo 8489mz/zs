@@ -350,7 +350,7 @@ async function main(): Promise<void> {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+    const serviceSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle.service.ts'), 'utf8');
     assert.ok(serviceSource.includes('INV-REP-CASH-REMITTANCE-SHIFT'), 'settleTrip names the invariant');
     assert.ok(serviceSource.includes('rep_cash_remittance'), 'the remittance treasury row exists in settleTrip');
     assert.ok(serviceSource.includes('insertRepCashRemittanceRow'), 'the remittance write is a named step in settleTrip');

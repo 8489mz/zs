@@ -262,7 +262,7 @@ async function main(): Promise<void> {
   // Source pin: settleTrip uses the shared helper and no inline
   // toFixed(2) variance/expected form; the 0.5 suspicion gate stays.
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-trip-lifecycle.service.ts'), 'utf8');
     const settleStart = source.indexOf('async settleTrip(');
     const afterSettle = source.indexOf('async listTripsForAdmin(');
     const settleBody = source.slice(settleStart, afterSettle);

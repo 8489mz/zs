@@ -543,7 +543,7 @@ async function main(): Promise<void> {
   // coordinator and is not pinned here.)
   {
     const here = __dirname;
-    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle.service.ts'), 'utf8');
     assert.ok(vanSource.includes('INV-VAN-TRIP-LOCKED-STATE-RECHECK'), 'van-sales names the invariant');
     assert.ok(vanSource.includes('uq_van_trips_one_open_per_rep'), 'the open guard names the unique index');
     const reqSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-requisitions.service.ts'), 'utf8');

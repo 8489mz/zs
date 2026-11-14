@@ -191,7 +191,7 @@ async function main(): Promise<void> {
       auditSource.includes("VAN_TRIP_STARTED: 'VAN_TRIP_STARTED'"),
       'AUDIT_EVENT_CODES declares VAN_TRIP_STARTED',
     );
-    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle.service.ts'), 'utf8');
     assert.ok(
       vanSource.includes('eventCode: AUDIT_EVENT_CODES.VAN_TRIP_STARTED'),
       'openTripAndLoad writes the trip-started audit row',

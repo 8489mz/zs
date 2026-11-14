@@ -216,8 +216,8 @@ async function main(): Promise<void> {
   // settleTrip does the same since Slice 7 P6 converged it (the
   // inline form is gone from both paths).
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
-    assert.ok(source.includes("import { computeCashDrawerVariance } from '../cash-drawer/helpers/cash-drawer.helper';"));
+    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-trip-lifecycle.service.ts'), 'utf8');
+    assert.ok(source.includes("import { computeCashDrawerVariance } from '../../cash-drawer/helpers/cash-drawer.helper';"));
     const submitStart = source.indexOf('async submitTripSettlement(');
     const settleStart = source.indexOf('async settleTrip(');
     const afterSettle = source.indexOf('async listTripsForAdmin(');

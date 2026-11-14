@@ -438,7 +438,7 @@ async function main(): Promise<void> {
       const engineSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-trip-reconciliation.engine.ts'), 'utf8');
       assert.ok(engineSource.includes('hasUncountedItems'), 'the engine surfaces uncounted items');
       assert.ok(engineSource.includes('uncountedItems'), 'the engine lists the uncounted items');
-      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle.service.ts'), 'utf8');
       assert.ok(vanSource.includes('VAN_STOCK_AUDIT_INCOMPLETE'), 'settleTrip refuses an incomplete audit');
       assert.ok(vanSource.includes('van_stock_overage'), 'settleTrip adds overage units through a named movement');
       assert.ok(vanSource.includes("entry_type: 'stock_overage'"), 'settleTrip records the overage in the rep ledger');

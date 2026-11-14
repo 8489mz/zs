@@ -302,7 +302,7 @@ async function main(): Promise<void> {
     const here = __dirname;
     const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/accounting-posting.service.ts'), 'utf8');
     assert.ok(postingSource.includes('postVanTripSettlement'), 'the settlement journal is posted by postVanTripSettlement');
-    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-trip-lifecycle.service.ts'), 'utf8');
     assert.ok(vanSource.includes('postVanTripSettlement'), 'settleTrip posts through postVanTripSettlement');
     assert.ok(vanSource.includes('INV-VAN-SETTLE-BOOK-DIGITS-VARIANCE'), 'settleTrip names the digits invariant');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
