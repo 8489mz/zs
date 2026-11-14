@@ -456,7 +456,9 @@ export class ImportSalesController {
     );
   }
 
-  @RequireAnyPermission('canViewProfit', 'reports', 'accounting')
+  // Profit is sensitive money data: 'reports' alone must not open it — only
+  // 'canViewProfit' or 'accounting'. (The cashier default holds 'reports'.)
+  @RequireAnyPermission('canViewProfit', 'accounting')
   @Get('profit-report')
   async generateProfitReport(
     @Req() req: RequestWithAuth,
@@ -473,7 +475,9 @@ export class ImportSalesController {
     return this.importSalesService.generatePeriodProfitReport(req.authContext!.tenantId!, startDate, endDate, projectId);
   }
 
-  @RequireAnyPermission('canViewProfit', 'reports', 'accounting')
+  // Profit is sensitive money data: 'reports' alone must not open it — only
+  // 'canViewProfit' or 'accounting'. (The cashier default holds 'reports'.)
+  @RequireAnyPermission('canViewProfit', 'accounting')
   @Get('profit-attribution')
   async listProjectProfitAttribution(
     @Req() req: RequestWithAuth,
