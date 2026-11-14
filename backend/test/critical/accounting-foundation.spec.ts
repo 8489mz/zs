@@ -166,7 +166,7 @@ function testForbiddenPatternsAreGone(): void {
       'a successful posting must still resolve a historical failure');
   }
 
-  const salesWriteSrc = read('modules/sales/services/sales-write.service.ts');
+  const salesWriteSrc = read('modules/sales/services/sales-edit-and-cancel.service.ts');
   const updateSaleBody = salesWriteSrc.slice(
     salesWriteSrc.indexOf('async updateSale('),
     salesWriteSrc.indexOf('async cancelSale('));
