@@ -524,6 +524,34 @@ export const PrintingSettingsTab = memo(function PrintingSettingsTab({
         </FormSection>
       )}
 
+      {/* ===== 2d. طابعة الكاشير المباشرة في نسخة الإلكترون (كل الأنشطة) ===== */}
+      {showPosSettings && typeof window !== 'undefined' && (window as any).electronPrinter && (
+        <FormSection
+          title={t('settings.forms.tabs.printing_settings_tab.s187', "طابعة الكاشير المباشرة (الإلكترون)")}
+          description={t('settings.forms.tabs.printing_settings_tab.s188', "اختر طابعة ويندوز المتصلة بالجهاز لطباعة الإيصال مباشرة بدون نافذة الطباعة، في نسخة الإلكترون.")}
+        >
+          <div className="document-prototype-grid compact-grid-2">
+            <div className="field">
+              <label>{t('settings.forms.tabs.printing_settings_tab.s67', "طابعة الكاشير المباشرة (الريسيت)")}</label>
+              <CustomSelect
+                value={form.watch('posElectronCashierPrinter') || ''}
+                onChange={(val) => form.setValue('posElectronCashierPrinter', val, { shouldDirty: true, shouldValidate: true })}
+                options={[
+                  { value: '', label: t('settings.forms.tabs.printing_settings_tab.s68', "- الطباعة العادية (نافذة المتصفح) -") },
+                  ...(savedCashierPrinter && !systemPrinters.some((p: any) => p.name === savedCashierPrinter) ? [{ value: savedCashierPrinter, label: savedCashierPrinter }] : []),
+                  ...systemPrinters.map((p: any) => ({ value: p.name, label: p.displayName || p.name })),
+                ]}
+                disabled={disabled}
+              />
+            </div>
+
+            <div className="muted small" style={{ gridColumn: '1 / -1' }}>
+              <strong>{t('settings.forms.tabs.printing_settings_tab.s71', "معلومة:")}</strong> {t('settings.forms.tabs.printing_settings_tab.s189', "إذا اخترت طابعة هنا، سيتم إرسال الإيصال مباشرة وبدون أي شاشة تأكيد.")}
+            </div>
+          </div>
+        </FormSection>
+      )}
+
       {/* ===== 3. طابعة وشيت المطبخ ومناداة العميل (KOT) ===== */}
       {(isRestaurantVertical || posKitchenPrinterEnabled) && (
         <FormSection
@@ -576,24 +604,10 @@ export const PrintingSettingsTab = memo(function PrintingSettingsTab({
 
             {typeof window !== 'undefined' && (window as any).electronPrinter && (
               <div
-                key={`printers-${String(settings?.posElectronCashierPrinter || '')}-${String(settings?.posElectronKitchenPrinter || '')}-${systemPrinters.length}`}
+                key={`kitchen-printers-${String(settings?.posElectronKitchenPrinter || '')}-${systemPrinters.length}`}
                 className="document-prototype-grid compact-grid-2"
                 style={{ gridColumn: '1 / -1', marginTop: 8, padding: '12px', border: '1px solid var(--border)', borderRadius: 8, background: '#f8fafc' }}
               >
-                <div className="field">
-                  <label>{t('settings.forms.tabs.printing_settings_tab.s67', "طابعة الكاشير المباشرة (الريسيت)")}</label>
-                  <CustomSelect
-                    value={form.watch('posElectronCashierPrinter') || ''}
-                    onChange={(val) => form.setValue('posElectronCashierPrinter', val, { shouldDirty: true, shouldValidate: true })}
-                    options={[
-                      { value: '', label: t('settings.forms.tabs.printing_settings_tab.s68', "- الطباعة العادية (نافذة المتصفح) -") },
-                      ...(savedCashierPrinter && !systemPrinters.some((p: any) => p.name === savedCashierPrinter) ? [{ value: savedCashierPrinter, label: savedCashierPrinter }] : []),
-                      ...systemPrinters.map((p: any) => ({ value: p.name, label: p.displayName || p.name })),
-                    ]}
-                    disabled={disabled}
-                  />
-                </div>
-
                 <div className="field">
                   <label>{t('settings.forms.tabs.printing_settings_tab.s69', "طابعة المطبخ المباشرة (KOT)")}</label>
                   <CustomSelect
@@ -609,7 +623,7 @@ export const PrintingSettingsTab = memo(function PrintingSettingsTab({
                 </div>
 
                 <div className="muted small" style={{ gridColumn: '1 / -1' }}>
-                  <strong>{t('settings.forms.tabs.printing_settings_tab.s71', "معلومة:")}</strong> {t('settings.forms.tabs.printing_settings_tab.s72', "إذا اخترت طابعة هنا، سيتم إرسال الطباعة")} <b>{t('settings.forms.tabs.printing_settings_tab.s73', "مباشرة وبدون أي شاشة تأكيد")}</b>{t('settings.forms.tabs.printing_settings_tab.s74', ".\n                  ولو اخترت")} <b>{t('settings.forms.tabs.printing_settings_tab.s75', "نفس الطابعة")}</b> {t('settings.forms.tabs.printing_settings_tab.s76', "للكاشير والمطبخ، سيتم طباعة الإيصالين ورا بعد تلقائياً.")}
+                  <strong>{t('settings.forms.tabs.printing_settings_tab.s71', "معلومة:")}</strong> {t('settings.forms.tabs.printing_settings_tab.s190', "إذا اخترت طابعة هنا، سيتم إرسال شيت المطبخ مباشرة وبدون أي شاشة تأكيد.")}
                 </div>
               </div>
             )}
