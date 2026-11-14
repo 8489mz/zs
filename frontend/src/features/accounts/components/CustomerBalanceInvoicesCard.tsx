@@ -202,6 +202,11 @@ export function CustomerBalanceInvoicesCard({ customer, disabled = false }: Cust
    * (IPA) this receipt came from; sent only when the channel is
    * InstaPay. */
   const [paymentInstapayAddress, setPaymentInstapayAddress] = useState('');
+  /* INV-REP-NONCASH-EVIDENCE-GATE (PD1) + STUCK-RECEIPT: the real
+   * transfer reference of this receipt. Mandatory (at least 3
+   * characters) for every non-cash channel — without it the backend
+   * gate refuses the receipt and the form deadlocked. */
+  const [paymentTransferReference, setPaymentTransferReference] = useState('');
   const [successReceipt, setSuccessReceipt] = useState<{
     customer: Customer;
     amountPaid: number;
@@ -257,11 +262,20 @@ export function CustomerBalanceInvoicesCard({ customer, disabled = false }: Cust
       if (!customer) throw new Error('اختر العميل أولًا');
       const amount = Number(paymentAmount || 0);
       if (!(amount > 0)) throw new Error('المبلغ المحصل يجب أن يكون أكبر من الصفر');
+      /* INV-REP-NONCASH-EVIDENCE-GATE (PD1) + STUCK-RECEIPT: a
+       * non-cash receipt needs a real transfer reference of at least
+       * 3 characters — the same bar as the van card gate. Refusing
+       * here keeps the cashier on the form with a clear message
+       * instead of a server 400 that used to deadlock the attempt. */
+      if (paymentChannel !== 'cash' && paymentTransferReference.trim().length < 3) {
+        throw new Error('أدخل رقم مرجع التحويل (3 أحرف/أرقام على الأقل) — التحصيل غير النقدي لا يتم بدون مرجع.');
+      }
       return accountsApi.customerPaymentCreate({
         customerId: Number(customer.id),
         amount,
         paymentChannel,
         instapayAddress: paymentChannel === 'instapay' ? paymentInstapayAddress.trim() : undefined,
+        transferReference: paymentChannel !== 'cash' ? paymentTransferReference.trim() : undefined,
         note: paymentNote || `تحصيل سريع من العميل ${customerName}`,
       });
     },
@@ -282,6 +296,7 @@ export function CustomerBalanceInvoicesCard({ customer, disabled = false }: Cust
       setPaymentAmount('');
       setPaymentNote('');
       setPaymentInstapayAddress('');
+      setPaymentTransferReference('');
     },
   });
 
@@ -526,6 +541,17 @@ export function CustomerBalanceInvoicesCard({ customer, disabled = false }: Cust
                 />
               </Field>
             )}
+            {paymentChannel !== 'cash' && (
+              <Field label="رقم العملية / المرجع البنكي *">
+                <input
+                  type="text"
+                  value={paymentTransferReference}
+                  onChange={(event) => setPaymentTransferReference(event.target.value)}
+                  placeholder="رقم مرجع التحويل أو آخر 6 أرقام من الإشعار (3 أحرف على الأقل)"
+                  disabled={paymentMutation.isPending || disabled}
+                />
+              </Field>
+            )}
             <Field label={t('accounts.customer_balance_invoices_card.s44', "ملاحظات التحصيل (اختياري)")}>
               <textarea
                 rows={2}
@@ -552,6 +578,7 @@ export function CustomerBalanceInvoicesCard({ customer, disabled = false }: Cust
                 setPaymentAmount('');
                 setPaymentNote('');
                 setPaymentInstapayAddress('');
+                setPaymentTransferReference('');
               }}
               disabled={paymentMutation.isPending}
             >

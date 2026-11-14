@@ -4,7 +4,11 @@ import { useAuthStore } from '@/stores/auth-store';
 /**
  * A financial payment attempt is persisted across renderer and Electron restarts before sending.
  * Retrying after a timeout, reload, or lost response must reuse the same key.
- * A successful server acknowledgement is the ONLY time the key is retired.
+ * A successful server acknowledgement retires the key. A stored attempt is
+ * also released when the server says it failed, or when it says the attempt
+ * was never reserved at all ('not_found'): a 4xx rejection that reserved
+ * nothing must not deadlock the form — the cashier corrects the data
+ * (for example adds the missing transfer reference) and resends.
  */
 export async function postIdempotentAccountPayment(path: '/api/customer-payments' | '/api/supplier-payments', payload: unknown): Promise<unknown> {
   const body = JSON.stringify(payload);
@@ -27,10 +31,40 @@ export async function postIdempotentAccountPayment(path: '/api/customer-payments
     throw new Error('تعذر قراءة حالة سند الدفع السابق؛ لا تعاود الإرسال قبل مراجعة التخزين');
   }
 
-  // Preserve the old uncertain attempt instead of silently replacing its
-  // reference when the cashier changes the form after a network failure.
-  if (existing && existing.body !== body) {
-    throw new Error('يوجد سند سابق لم يتم تأكيد نتيجته. أعد إرسال نفس بيانات السند أو راجعه قبل إنشاء سند مختلف لنفس الشريك.');
+  const operationType = path === '/api/customer-payments' ? 'customer_payment_create' : 'supplier_payment_create';
+  const statusPathFor = (key: string) =>
+    `/api/operations/${encodeURIComponent(operationType)}/${encodeURIComponent(key)}/status`;
+  // STUCK-RECEIPT: ask the server about the stored attempt BEFORE
+  // comparing bodies. The old order threw the stuck warning whenever
+  // the cashier changed the form, without ever learning that the
+  // server had nothing reserved ('not_found') or had already failed
+  // the attempt — so the same data re-failed the gate forever and
+  // corrected data hit the warning forever. The server's answer now
+  // arbitrates: committed returns the recorded receipt, processing
+  // still blocks, failed releases the key and asks for corrected
+  // data, and not_found releases the key because nothing was ever
+  // reserved under it. A stored attempt is never silently replaced
+  // while its outcome is uncertain.
+  if (existing) {
+    const outcome = await http<{ status: string; response?: Record<string, unknown> }>(statusPathFor(existing.key));
+    if (outcome.status === 'committed') {
+      if (!outcome.response?.id) throw new Error('تم تسجيل السند لكن بيانات تأكيده ناقصة؛ راجع الحسابات');
+      localStorage.removeItem(keyName);
+      return { ok: true, ...outcome.response };
+    }
+    if (outcome.status === 'processing' || outcome.status === 'recovery_required') {
+      throw new Error('حالة السند على الخادم غير محسومة؛ لا يمكن إعادة سداد نفس المبلغ قبل التأكيد');
+    }
+    if (outcome.status === 'failed') {
+      localStorage.removeItem(keyName);
+      throw new Error('فشل السند السابق على الخادم ولم يتم ترحيله؛ يمكن إصلاح البيانات وإعادة المحاولة');
+    }
+    if (outcome.status === 'not_found') {
+      localStorage.removeItem(keyName);
+      existing = null;
+    } else {
+      throw new Error('حالة سند الدفع غير معروفة؛ لا يمكن إعادة إرساله بأمان');
+    }
   }
 
   let attempt = existing;
@@ -47,28 +81,8 @@ export async function postIdempotentAccountPayment(path: '/api/customer-payments
     }
   }
 
-  const operationType = path === '/api/customer-payments' ? 'customer_payment_create' : 'supplier_payment_create';
-  const statusPath = `/api/operations/${encodeURIComponent(operationType)}/${encodeURIComponent(attempt.key)}/status`;
-  // After an interrupted send, first ask the server about THIS precise
-  // voucher before attempting a retry. A lost 200 response is not a new payment.
-  if (existing) {
-    const outcome = await http<{ status: string; response?: Record<string, unknown> }>(statusPath);
-    if (outcome.status === 'committed') {
-      if (!outcome.response?.id) throw new Error('تم تسجيل السند لكن بيانات تأكيده ناقصة؛ راجع الحسابات');
-      localStorage.removeItem(keyName);
-      return { ok: true, ...outcome.response };
-    }
-    if (outcome.status === 'processing' || outcome.status === 'recovery_required') {
-      throw new Error('حالة السند على الخادم غير محسومة؛ لا يمكن إعادة سداد نفس المبلغ قبل التأكيد');
-    }
-    if (outcome.status === 'failed') {
-      localStorage.removeItem(keyName);
-      throw new Error('فشل السند السابق على الخادم ولم يتم ترحيله؛ يمكن إصلاح البيانات وإعادة المحاولة');
-    }
-    if (outcome.status !== 'not_found') throw new Error('حالة سند الدفع غير معروفة؛ لا يمكن إعادة إرساله بأمان');
-  }
-
   let response: unknown;
+  const statusPath = statusPathFor(attempt.key);
   try {
     response = await http(path, {
       method: 'POST',
@@ -76,11 +90,14 @@ export async function postIdempotentAccountPayment(path: '/api/customer-payments
       headers: { 'x-idempotency-key': attempt.key },
     });
   } catch (error) {
-    // Release an unequivocally rejected voucher only after the server says
-    // it failed, never merely because the network or browser reported an error.
+    // Release an unequivocally rejected voucher once the server says
+    // it failed — or that nothing was ever reserved under this key
+    // ('not_found', e.g. a 4xx thrown before any reservation). Never
+    // release merely because the network or browser reported an
+    // error: an unknown outcome keeps the stable key for recovery.
     try {
       const outcome = await http<{ status: string }>(statusPath);
-      if (outcome.status === 'failed') {
+      if (outcome.status === 'failed' || outcome.status === 'not_found') {
         const stored = localStorage.getItem(keyName);
         if (stored && (JSON.parse(stored) as { key?: string }).key === attempt.key) localStorage.removeItem(keyName);
       }

@@ -9,7 +9,25 @@ export const customerPaymentSchema = z.object({
    * (IPA) this receipt came from; the form shows the field only when
    * the channel is InstaPay. */
   instapayAddress: z.string().trim().max(100).optional(),
+  /* INV-REP-NONCASH-EVIDENCE-GATE (PD1) + STUCK-RECEIPT: the real
+   * transfer reference of this receipt; the form shows the field for
+   * every non-cash channel and requires at least 3 characters there
+   * (enforced in the form; the backend gate refuses shorter). */
+  transferReference: z.string().trim().max(100).optional(),
   jobId: z.string().optional(),
+}).superRefine((values, ctx) => {
+  /* INV-REP-NONCASH-EVIDENCE-GATE (PD1) + STUCK-RECEIPT: a non-cash
+   * receipt without a real transfer reference is refused by the
+   * backend gate, so the form refuses it first with a field error
+   * instead of sending a receipt that can never succeed. */
+  const channel = values.paymentChannel || 'cash';
+  if (channel !== 'cash' && (values.transferReference || '').trim().length < 3) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['transferReference'],
+      message: 'أدخل رقم مرجع التحويل (3 أحرف/أرقام على الأقل) — التحصيل غير النقدي لا يتم بدون مرجع.',
+    });
+  }
 });
 
 export const supplierPaymentSchema = z.object({

@@ -38,7 +38,7 @@ export function CustomerPaymentForm({ customers, activeCustomerId, disabled = fa
 
   const form = useForm<CustomerPaymentInput, undefined, CustomerPaymentOutput>({
     resolver: zodResolver(customerPaymentSchema),
-    defaultValues: { customerId: activeCustomerId || '', amount: 0, note: '', jobId: '', paymentChannel: 'cash', instapayAddress: '' }
+    defaultValues: { customerId: activeCustomerId || '', amount: 0, note: '', jobId: '', paymentChannel: 'cash', instapayAddress: '', transferReference: '' }
   });
 
   const watchedCustomerId = useWatch({ control: form.control, name: 'customerId' });
@@ -88,7 +88,7 @@ export function CustomerPaymentForm({ customers, activeCustomerId, disabled = fa
       createdAt: res?.createdAt || new Date().toISOString(),
     };
     setLastReceipt(receiptData);
-    form.reset({ customerId: watchedCustomerId, amount: 0, note: '', jobId: '', paymentChannel: 'cash', instapayAddress: '' });
+    form.reset({ customerId: watchedCustomerId, amount: 0, note: '', jobId: '', paymentChannel: 'cash', instapayAddress: '', transferReference: '' });
   });
 
   const partyLabel =
@@ -267,6 +267,21 @@ export function CustomerPaymentForm({ customers, activeCustomerId, disabled = fa
               {...form.register('instapayAddress')}
               disabled={mutation.isPending || disabled}
               placeholder={t('accounts.payment_forms.s30', "مثال: name@instapay")}
+            />
+          </Field>
+        )}
+
+        {watchedChannel && watchedChannel !== 'cash' && (
+          <Field
+            label="رقم العملية / المرجع البنكي *"
+            hint="رقم مرجع التحويل الذي يثبت وصول التحصيل غير النقدي"
+            error={form.formState.errors.transferReference?.message}
+          >
+            <input
+              type="text"
+              {...form.register('transferReference')}
+              disabled={mutation.isPending || disabled}
+              placeholder="رقم مرجع التحويل أو آخر 6 أرقام من الإشعار (3 أحرف على الأقل)"
             />
           </Field>
         )}

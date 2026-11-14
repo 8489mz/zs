@@ -1464,11 +1464,15 @@ export class PurchasesWriteService {
     if (!Number.isFinite(amount) || amount <= 0 || Math.abs(amount * scale - Math.round(amount * scale)) > 0.000001) {
       throw new AppError('Customer payment must be positive and have at most tenant currency minor-unit precision', 'INVALID_PAYMENT_AMOUNT', 400);
     }
-    // INV-REP-NONCASH-EVIDENCE-GATE (PD1): refuse a non-cash general
-    // receipt with no real transfer reference BEFORE any idempotency
-    // reservation, ledger write or Dr 1120 posting. A free-text note
-    // alone is not evidence. Cash receipts are untouched.
-    assertNonCashTransferReference(payload.paymentChannel, payload.transferReference);
+    // INV-REP-NONCASH-EVIDENCE-GATE (PD1) + STUCK-RECEIPT: the gate
+    // runs AFTER reserveOperation and INSIDE the try. Refusing before
+    // the reservation left no operation_executions row, so the
+    // frontend could never learn the attempt had failed (server
+    // status 'not_found') and its stored attempt deadlocked the form
+    // forever. A 4xx rejection now writes a 'failed' row via the
+    // catch below, and the frontend 'failed' branch releases the
+    // stored attempt so the cashier can correct and resend. Cash
+    // receipts are untouched; the gate itself is unchanged.
     const operationType = 'customer_payment_create';
     if (idempotencyKey) {
       const existing = await this.idempotency.reserveOperation({
@@ -1485,6 +1489,7 @@ export class PurchasesWriteService {
       if (existing?.status === 'recovery_required') throw new AppError('Payment requires manual recovery', 'PAYMENT_RECOVERY_REQUIRED', 422);
     }
     try {
+    assertNonCashTransferReference(payload.paymentChannel, payload.transferReference);
     const paymentResult = await this.tx.runInTransaction(this.db, async (trx) => {
       const customer = await trx
         .selectFrom('customers')

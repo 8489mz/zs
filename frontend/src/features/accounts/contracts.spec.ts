@@ -11,6 +11,7 @@ import {
   buildCustomerPaymentPayload,
   buildSupplierPaymentPayload,
   normalizePaymentInstapayAddress,
+  normalizePaymentTransferReference,
   readSupplierInstapayAddress,
 } from './contracts';
 import { customerPaymentSchema, supplierPaymentSchema } from './schemas/payment.schema';
@@ -144,6 +145,7 @@ describe('payment form schemas accept the IPA', () => {
       amount: 150,
       paymentChannel: 'instapay',
       instapayAddress: 'sara@instapay',
+      transferReference: 'TRX-987654',
     });
     expect(parsed.instapayAddress).toBe('sara@instapay');
   });
@@ -157,5 +159,111 @@ describe('payment form schemas accept the IPA', () => {
         instapayAddress: 'x'.repeat(101),
       }),
     ).toThrow();
+  });
+});
+
+describe('normalizePaymentTransferReference', () => {
+  it('keeps a trimmed reference for a non-cash receipt', () => {
+    expect(normalizePaymentTransferReference('instapay', '  TRX-987654  ')).toBe('TRX-987654');
+    expect(normalizePaymentTransferReference('bank', 'BNK-1')).toBe('BNK-1');
+    expect(normalizePaymentTransferReference('wallet', 'WLT-1')).toBe('WLT-1');
+  });
+
+  it('drops the reference for cash', () => {
+    expect(normalizePaymentTransferReference('cash', 'TRX-987654')).toBeUndefined();
+    expect(normalizePaymentTransferReference(undefined, 'TRX-987654')).toBeUndefined();
+  });
+
+  it('drops a blank reference even for a non-cash channel', () => {
+    expect(normalizePaymentTransferReference('instapay', '')).toBeUndefined();
+    expect(normalizePaymentTransferReference('instapay', '   ')).toBeUndefined();
+    expect(normalizePaymentTransferReference('instapay', undefined)).toBeUndefined();
+  });
+});
+
+describe('party payment payloads carry the transfer reference', () => {
+  it('customer receipt via InstaPay carries the trimmed reference', () => {
+    const payload = buildCustomerPaymentPayload({
+      customerId: '3',
+      amount: 200,
+      paymentChannel: 'instapay',
+      instapayAddress: 'sara@instapay',
+      transferReference: '  TRX-987654  ',
+    });
+    expect(payload.paymentChannel).toBe('instapay');
+    expect(payload.transferReference).toBe('TRX-987654');
+  });
+
+  it('customer receipt via bank carries the reference', () => {
+    const payload = buildCustomerPaymentPayload({
+      customerId: '3',
+      amount: 200,
+      paymentChannel: 'bank',
+      transferReference: 'BNK-123',
+    });
+    expect(payload.transferReference).toBe('BNK-123');
+  });
+
+  it('customer receipt via cash drops the reference', () => {
+    const payload = buildCustomerPaymentPayload({
+      customerId: '3',
+      amount: 200,
+      paymentChannel: 'cash',
+      transferReference: 'TRX-987654',
+    });
+    expect(payload.transferReference).toBeUndefined();
+  });
+
+  it('customer receipt via InstaPay without a reference sends none (backend gate refuses it)', () => {
+    const payload = buildCustomerPaymentPayload({
+      customerId: '3',
+      amount: 200,
+      paymentChannel: 'instapay',
+      instapayAddress: 'sara@instapay',
+    });
+    expect(payload.transferReference).toBeUndefined();
+  });
+});
+
+describe('payment form schemas enforce the transfer reference', () => {
+  it('a non-cash receipt without a reference is rejected by the schema', () => {
+    expect(() =>
+      customerPaymentSchema.parse({
+        customerId: '3',
+        amount: 200,
+        paymentChannel: 'instapay',
+        instapayAddress: 'sara@instapay',
+      }),
+    ).toThrow();
+  });
+
+  it('a non-cash receipt with a short reference is rejected by the schema', () => {
+    expect(() =>
+      customerPaymentSchema.parse({
+        customerId: '3',
+        amount: 200,
+        paymentChannel: 'bank',
+        transferReference: 'ab',
+      }),
+    ).toThrow();
+  });
+
+  it('a non-cash receipt with a 3-character reference passes the schema', () => {
+    const parsed = customerPaymentSchema.parse({
+      customerId: '3',
+      amount: 200,
+      paymentChannel: 'bank',
+      transferReference: 'TRX',
+    });
+    expect(parsed.transferReference).toBe('TRX');
+  });
+
+  it('a cash receipt without a reference passes the schema', () => {
+    const parsed = customerPaymentSchema.parse({
+      customerId: '3',
+      amount: 200,
+      paymentChannel: 'cash',
+    });
+    expect(parsed.transferReference).toBeUndefined();
   });
 });

@@ -10,6 +10,13 @@ export interface CustomerPaymentPayloadInput {
    * (IPA) this receipt came from. Carried only when the channel is
    * 'instapay'. */
   instapayAddress?: string;
+  /* INV-REP-NONCASH-EVIDENCE-GATE (PD1) + STUCK-RECEIPT: the real
+   * transfer reference (bank / card / wallet / InstaPay transaction
+   * reference) of this receipt. Mandatory for any non-cash channel —
+   * the backend gate refuses the receipt without at least 3
+   * characters, and without this field the form could never send
+   * one, so every non-cash collection deadlocked. */
+  transferReference?: string;
   jobId?: string | number | null;
 }
 
@@ -54,6 +61,20 @@ export function readSupplierInstapayAddress(supplier: { metadata?: unknown } | u
   return typeof address === 'string' ? address.trim() : '';
 }
 
+/* INV-REP-NONCASH-EVIDENCE-GATE (PD1) + STUCK-RECEIPT: keep the
+ * transfer reference only for a non-cash receipt, trimmed; cash (or
+ * a blank value) carries nothing, so a stray reference can never be
+ * read as evidence for a cash receipt. Mirrors the backend
+ * normalizeTransferReference. */
+export function normalizePaymentTransferReference(
+  paymentChannel: string | undefined,
+  rawReference: string | undefined,
+): string | undefined {
+  if (!paymentChannel || paymentChannel === 'cash') return undefined;
+  const reference = String(rawReference || '').trim();
+  return reference ? reference : undefined;
+}
+
 export function buildCustomerPaymentPayload(input: CustomerPaymentPayloadInput) {
   if (!input.customerId) throw new Error('اختر العميل أولًا');
   if (Number(input.amount || 0) <= 0) throw new Error('المبلغ يجب أن يكون أكبر من صفر');
@@ -64,6 +85,7 @@ export function buildCustomerPaymentPayload(input: CustomerPaymentPayloadInput) 
     note: String(input.note || '').trim(),
     paymentChannel: input.paymentChannel || 'cash',
     instapayAddress: normalizePaymentInstapayAddress(input.paymentChannel, input.instapayAddress),
+    transferReference: normalizePaymentTransferReference(input.paymentChannel, input.transferReference),
     jobId: input.jobId ? Number(input.jobId) : undefined,
   };
 }
