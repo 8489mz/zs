@@ -71,15 +71,18 @@ function storeAttempt(body: unknown, key = 'old-key-1'): void {
 }
 
 function postCalls(): Array<{ path: string; init: unknown }> {
-  return httpMock.mock.calls
-    .filter(([path]: [string]) => path === '/api/customer-payments')
-    .map(([path, init]: [string, unknown]) => ({ path, init }));
+  // STUCK-RECEIPT repair (ci-fast typecheck): `httpMock.mock.calls` is
+  // typed `any[][]`, so destructuring its elements as 1-tuples is not
+  // assignable to the filter/map callbacks. Cast once to the real shape.
+  return (httpMock.mock.calls as Array<[string, unknown]>)
+    .filter(([path]) => path === '/api/customer-payments')
+    .map(([path, init]) => ({ path, init }));
 }
 
 function statusCalls(): string[] {
-  return httpMock.mock.calls
-    .filter(([path]: [string]) => String(path).includes('/status'))
-    .map(([path]: [string]) => String(path));
+  return (httpMock.mock.calls as Array<[string, unknown]>)
+    .filter(([path]) => String(path).includes('/status'))
+    .map(([path]) => String(path));
 }
 
 beforeEach(() => {

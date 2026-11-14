@@ -67,7 +67,12 @@ export async function postIdempotentAccountPayment(path: '/api/customer-payments
     }
   }
 
-  let attempt = existing;
+  // STUCK-RECEIPT repair (ci-fast typecheck): `existing` is narrowed to
+  // `null` after the `if (existing)` block above — every truthy path
+  // returns, throws, or sets it to null — so `let attempt = existing`
+  // would infer `attempt: null` and the assignment below would not
+  // typecheck. The explicit union type keeps the intended type.
+  let attempt: { body: string; key: string } | null = existing;
   if (!attempt) {
     const uuid = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
