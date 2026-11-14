@@ -170,7 +170,18 @@ export async function invalidateTreasuryDomain(queryClient: QueryClient) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: queryKeys.treasury, refetchType: 'active' }),
     queryClient.invalidateQueries({ queryKey: queryKeys.expenses, refetchType: 'active' }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.cashierShifts, refetchType: 'none' }),
+    // SPICE pkg #1 (stale page after close): the cash-drawer page reads
+    // the cashier-shifts page queries (['cashier-shifts','page',paramsKey]
+    // — the main list and the open-options list). With refetchType 'none'
+    // they were only marked stale and, with the global staleTime of 5
+    // minutes and refetchOnWindowFocus off, the mounted page never
+    // refetched on its own, so a closed shift stayed OPEN on screen until
+    // a manual refresh. 'active' refetches the mounted page queries
+    // immediately after every treasury mutation (open / movement / close /
+    // review), so the closed shift and the open-shift count update at once.
+    // Same defect class as INV-EXPENSES-STALE-LIST, which already pins
+    // 'active' for the expenses key in this same function.
+    queryClient.invalidateQueries({ queryKey: queryKeys.cashierShifts, refetchType: 'active' }),
     queryClient.invalidateQueries({ queryKey: queryKeys.cashierShiftsPage('open:pos'), refetchType: 'active' }),
   ]);
 }

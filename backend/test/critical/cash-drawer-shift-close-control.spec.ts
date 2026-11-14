@@ -336,6 +336,48 @@ async function main() {
     assert.ok(String(rowH3.close_note || '').includes('وردية المساء'), 'the override stamp must carry the closing-note reason for the cashier path too');
     await pg.query(`DELETE FROM held_sales WHERE id=23`);
 
+    // ---------- TRIAL REPRODUCTION (SHIFT-261113-0027 state, 2026-11-14):
+    // opener cashier, closer admin, 5 parked orders (held tables),
+    // closing note >= 10 chars, counted = expected = 4283.90, diff 0.00.
+    // Diagnostic for the live close that failed with the generic
+    // message in the agent browser session: if this closes in-test,
+    // the backend close path is sound for this state and the live
+    // failure is NOT a backend bug in the close logic (the browser
+    // hypothesis then stands: stale bundle / stale session state).
+    await drawer.openCashierShift({ openingCash: 4283.90, branchId: 1 }, cashier3);
+    const shiftT1 = await shiftIdOf(3);
+    for (let n = 1; n <= 5; n++) {
+      await pg.query(`INSERT INTO held_sales(id,tenant_id,account_id,table_number,order_type,branch_id,created_by,created_at)
+        VALUES (${30 + n},'t1','a1','T${n}','dine_in',1,3,now())`);
+    }
+    await drawer.closeCashierShift(shiftT1, { countedCash: 4283.90, note: 'الطاولات الخمس ستنتقل إلى وردية المساء', managerPin: 'pw-admin-1' }, admin1);
+    const rowT1 = await shiftRow(shiftT1);
+    assert.equal(rowT1.status, 'pending_review', 'a cashier-opener shift closes to review with 5 parked orders and a long note');
+    assert.equal(Number(rowT1.variance), 0, 'counted = expected must give zero variance');
+    assert.equal(Number(rowT1.expected_cash), 4283.9, 'expected cash must be the 4283.90 opening cash');
+    assert.ok(String(rowT1.close_note || '').includes('وردية المساء'), 'the override stamp must carry the closing-note reason');
+    for (let n = 1; n <= 5; n++) {
+      assert.ok(String(rowT1.close_note || '').includes(`T${n}`), `the override stamp must name table T${n}`);
+    }
+    await pg.query(`DELETE FROM held_sales WHERE id >= 31 AND id <= 35`);
+
+    // Same trial state, admin opener + admin closer: closes outright
+    // (no blind review), variance 0, no variance journal.
+    const journalsBeforeT = await journalCount();
+    await drawer.openCashierShift({ openingCash: 4283.90, branchId: 1 }, admin1);
+    const shiftT2 = await shiftIdOf(1);
+    for (let n = 1; n <= 5; n++) {
+      await pg.query(`INSERT INTO held_sales(id,tenant_id,account_id,table_number,order_type,branch_id,created_by,created_at)
+        VALUES (${40 + n},'t1','a1','T${n}','dine_in',1,1,now())`);
+    }
+    await drawer.closeCashierShift(shiftT2, { countedCash: 4283.90, note: 'الطاولات الخمس ستنتقل إلى وردية المساء', managerPin: 'pw-admin-1' }, admin1);
+    const rowT2 = await shiftRow(shiftT2);
+    assert.equal(rowT2.status, 'closed', 'an admin-opener shift with 5 parked orders and a long note closes outright');
+    assert.equal(Number(rowT2.variance), 0, 'counted = expected must give zero variance');
+    assert.equal(Number(rowT2.expected_cash), 4283.9, 'expected cash must be the 4283.90 opening cash');
+    assert.equal(await journalCount(), journalsBeforeT, 'a zero-variance close must post no variance journal');
+    await pg.query(`DELETE FROM held_sales WHERE id >= 41 AND id <= 45`);
+
     // ---------- INV-SHIFT-CLOSE-ADMIN-CLOSE-ANY: admin closes any
     // cashier's shift; a cashier closes only their own. The old
     // owner-only gate (super_admin excepted) blocked the shop owner
