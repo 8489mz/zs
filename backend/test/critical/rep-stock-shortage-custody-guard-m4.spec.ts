@@ -529,7 +529,7 @@ async function main(): Promise<void> {
   // the cash/waiver postings are still the ones being called.
   {
     const here = __dirname;
-    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger.service.ts'), 'utf8');
     assert.ok(vanSource.includes('INV-REP-SHORTAGE-CUSTODY-GUARD'), 'the settle names the guard invariant');
     assert.ok(vanSource.includes('REP_SHORTAGE_NO_CUSTODY_LEG'), 'the specific error code is named');
     assert.ok(vanSource.includes('van_trip_settlement'), 'the guard reads the trip-settlement journal');

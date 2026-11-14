@@ -10,13 +10,26 @@ import { resolve } from 'node:path';
 const read = (rel: string) => readFileSync(resolve(__dirname, '../../src', rel), 'utf8');
 
 function testVanSalesReadsStayInTenant(): void {
-  const src = read('modules/delivery-reps/van-sales.service.ts');
+  // Van-sales split: the reads now live across the facade + the extracted
+  // services (batch 1: lifecycle, field-sales, collections-and-swaps;
+  // batch 2: expenses-packaging-customers). The safety property is checked
+  // over every file that can hold one; add the next split's service here
+  // when it moves a read.
+  const sources = [
+    read('modules/delivery-reps/van-sales.service.ts'),
+    read('modules/delivery-reps/services/van-trip-lifecycle.service.ts'),
+    read('modules/delivery-reps/services/van-field-sales.service.ts'),
+    read('modules/delivery-reps/services/van-collections-and-swaps.service.ts'),
+    read('modules/delivery-reps/services/van-expenses-packaging-customers.service.ts'),
+  ];
 
-  for (const match of src.matchAll(/selectFrom\('(customers|products)'\)([\s\S]{0,400}?)\.executeTakeFirst(OrThrow)?\(\)/g)) {
-    assert.ok(
-      match[2].includes("'tenant_id'") || match[2].includes('tenant_id'),
-      `O27: read of ${match[1]} in van-sales must filter by tenant_id:\n${match[0].slice(0, 200)}`,
-    );
+  for (const src of sources) {
+    for (const match of src.matchAll(/selectFrom\('(customers|products)'\)([\s\S]{0,400}?)\.executeTakeFirst(OrThrow)?\(\)/g)) {
+      assert.ok(
+        match[2].includes("'tenant_id'") || match[2].includes('tenant_id'),
+        `O27: read of ${match[1]} in van-sales must filter by tenant_id:\n${match[0].slice(0, 200)}`,
+      );
+    }
   }
 
   // Every trip fetched by an id from the request body belongs to the calling rep, not just the
@@ -25,7 +38,9 @@ function testVanSalesReadsStayInTenant(): void {
   // same either way, and recordFieldReturn's removal (it bypassed the field-return approval
   // workflow entirely; see the exact same file's history) is exactly why this dropped from 4 to 3
   // under the old vt.-only regex, not because any remaining lookup lost its scope.
-  const tripLookups = [...src.matchAll(/\.where\('(?:vt\.)?id', '=', payload\.tripId\)([\s\S]{0,300}?)\.executeTakeFirst(OrThrow)?\(\)/g)];
+  const tripLookups = sources.flatMap((src) => [
+    ...src.matchAll(/\.where\('(?:vt\.)?id', '=', payload\.tripId\)([\s\S]{0,300}?)\.executeTakeFirst(OrThrow)?\(\)/g),
+  ]);
   assert.ok(tripLookups.length >= 4, 'the trip lookups are still there');
   for (const match of tripLookups) {
     assert.ok(/\b(?:vt\.)?tenant_id\b/.test(match[1]), 'O27: trip lookup filters by tenant');

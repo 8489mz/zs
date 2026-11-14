@@ -562,7 +562,7 @@ async function main(): Promise<void> {
   // invariant method appends it wherever the file ends).
   {
     const here = __dirname;
-    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger.service.ts'), 'utf8');
     assert.ok(vanSource.includes('INV-REP-SHORTAGE-CASH-SETTLE'), 'settleRepFinancialItem names the invariant');
     assert.ok(vanSource.includes('postRepShortageCashCollection'), 'the settle calls the collection posting');
     assert.ok(vanSource.includes('postRepShortageWaiver'), 'the waiver calls the waiver reversal posting');

@@ -643,7 +643,7 @@ async function main(): Promise<void> {
   // after the gate (the waiver branch still calls it).
   {
     const here = __dirname;
-    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+    const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-rep-financial-ledger.service.ts'), 'utf8');
     assert.ok(vanSource.includes('INV-REP-WAIVER-APPROVAL-RULE'), 'the settle names the waiver-approval invariant');
     assert.ok(vanSource.includes('REP_WAIVER_REASON_REQUIRED'), 'the reason-required code is named');
     assert.ok(vanSource.includes('REP_WAIVER_SUPERVISOR_PIN_REQUIRED'), 'the PIN-required code is named');

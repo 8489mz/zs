@@ -279,7 +279,7 @@ async function main(): Promise<void> {
   // ARCHITECTURE_INVARIANTS.md entry itself is owned by the
   // coordinator and is not pinned here.)
   {
-    const vanSource = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+    const vanSource = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-rep-financial-ledger.service.ts'), 'utf8');
     assert.ok(vanSource.includes('INV-PAYROLL-PUSH-FAIL-CLOSED'), 'van-sales names the invariant');
     assert.ok(vanSource.includes("amount_type: 'money'"), 'the push writes the money unit');
     assert.ok(!vanSource.includes("amount_type: 'fixed'"), 'the push no longer writes the fixed unit');

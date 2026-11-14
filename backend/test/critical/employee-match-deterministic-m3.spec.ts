@@ -257,7 +257,7 @@ async function main(): Promise<void> {
   // ARCHITECTURE_INVARIANTS.md entry itself is owned by the
   // coordinator and is not pinned here.)
   {
-    const vanSource = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+    const vanSource = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-rep-financial-ledger.service.ts'), 'utf8');
     assert.ok(vanSource.includes('INV-REP-EMPLOYEE-MATCH-DETERMINISTIC'), 'van-sales names the invariant');
     assert.ok(!vanSource.includes("eb('display_name', 'ilike', `%${item.repName}%`)"), 'the old unescaped name pattern is gone');
     assert.ok(vanSource.includes('ESCAPE'), 'the name match carries an explicit ESCAPE clause');

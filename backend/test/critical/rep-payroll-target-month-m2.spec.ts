@@ -375,7 +375,7 @@ async function main(): Promise<void> {
   // both the push and the rebuild. (The ARCHITECTURE_INVARIANTS.md
   // entry itself is owned by the coordinator and is not pinned here.)
   {
-    const vanSource = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+    const vanSource = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-rep-financial-ledger.service.ts'), 'utf8');
     assert.ok(vanSource.includes('INV-REP-PAYROLL-TARGET-MONTH'), 'van-sales names the invariant');
     assert.ok(vanSource.includes('date: effectiveDate'), 'the push dates the adjustment inside the effective run period');
     assert.ok(vanSource.includes('payroll_run_id: effectiveRunId'), 'the push writes the run link on the settlement row');
