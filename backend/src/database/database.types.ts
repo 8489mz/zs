@@ -1775,6 +1775,36 @@ export interface SupplierPaymentTable {
   evidence_payment_due_date?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
 }
 
+/* INV-SUPPLIER-NONSTOCK-BILL: a supplier bill for things that never touch
+ * stock (a program, a carton of paper, cables, a service). One bill per
+ * supplier; lines are free text + the chart account each amount belongs
+ * to. The bill raises suppliers.balance and posts Dr line accounts /
+ * Cr 2110; it writes no stock movement of any kind. */
+export interface SupplierBillTable {
+  tenant_id: ColumnType<string, string | undefined, string | undefined>;
+  account_id: ColumnType<string, string | undefined, string | undefined>;
+  id: Generated<number>;
+  supplier_id: number;
+  doc_no: string;
+  bill_date: ColumnType<Date, string | undefined, string | undefined>;
+  total: number;
+  note: string;
+  status: string;
+  created_by: number | null;
+  created_at: ColumnType<Date, string | undefined, never>;
+}
+
+export interface SupplierBillLineTable {
+  tenant_id: ColumnType<string, string | undefined, string | undefined>;
+  account_id: ColumnType<string, string | undefined, string | undefined>;
+  id: Generated<number>;
+  bill_id: number;
+  description: string;
+  chart_account_id: number;
+  amount: number;
+  sort_order: number;
+}
+
 export interface SupplierPaymentScheduleTable {
   id: Generated<number>;
   purchase_id: number | null;
@@ -2557,6 +2587,8 @@ export interface Database {
   supplier_payments: SupplierPaymentTable;
   supplier_payment_schedules: SupplierPaymentScheduleTable;
   supplier_payment_schedule_logs: SupplierPaymentScheduleLogTable;
+  supplier_bills: SupplierBillTable;
+  supplier_bill_lines: SupplierBillLineTable;
   supplier_ledger: SupplierLedgerTable;
   services: ServicesTable;
   hr_departments: HrDepartmentTable;
@@ -2825,6 +2857,8 @@ export interface Database {
   supplier_payments: SupplierPaymentTable;
   supplier_payment_schedules: SupplierPaymentScheduleTable;
   supplier_payment_schedule_logs: SupplierPaymentScheduleLogTable;
+  supplier_bills: SupplierBillTable;
+  supplier_bill_lines: SupplierBillLineTable;
   supplier_ledger: SupplierLedgerTable;
   services: ServicesTable;
   hr_departments: HrDepartmentTable;

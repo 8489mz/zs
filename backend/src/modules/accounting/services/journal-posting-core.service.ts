@@ -119,6 +119,20 @@ export class JournalPostingCoreService {
       .executeTakeFirst();
   }
 
+  /* INV-SUPPLIER-NONSTOCK-BILL: the same idempotency guard for a
+   * non-stock supplier bill (source_type 'supplier_bill'). */
+  async getExistingSupplierBillJournal(queryable: DbOrTx, billId: number, tenantId: string) {
+    return queryable
+      .selectFrom('journal_entries')
+      .select(['id', 'status'])
+      .where('source_type', '=', 'supplier_bill')
+      .where('source_id', '=', billId)
+      .where('tenant_id', '=', tenantId)
+      .where('status', 'in', ['draft', 'posted'])
+      .orderBy('id', 'desc')
+      .executeTakeFirst();
+  }
+
   async getExistingSupplierPaymentScheduleSettlementJournal(queryable: DbOrTx, settlementId: number, tenantId: string) {
     return queryable
       .selectFrom('journal_entries')

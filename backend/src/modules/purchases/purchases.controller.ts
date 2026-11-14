@@ -11,6 +11,8 @@ import { IdempotencyInterceptor } from '../../core/idempotency/idempotency.inter
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { ApplySupplierAdvanceDto, CreateCustomerPaymentDto, CreateSupplierPaymentDto } from './dto/create-party-payment.dto';
 import { CreateSupplierPaymentScheduleDto, PaySupplierScheduleInstallmentDto } from './dto/supplier-payment-schedule.dto';
+import { CreateSupplierBillDto } from './dto/supplier-bill.dto';
+import { SupplierBillsService } from './services/supplier-bills.service';
 import { UpsertPurchaseDto } from './dto/upsert-purchase.dto';
 import { PurchasesService } from './purchases.service';
 import { SupplierPaymentSchedulesService } from './services/supplier-payment-schedules.service';
@@ -24,6 +26,7 @@ export class PurchasesController {
   constructor(
     private readonly purchasesService: PurchasesService,
     private readonly scheduleService: SupplierPaymentSchedulesService,
+    @Optional() private readonly supplierBillsService?: SupplierBillsService,
     @Optional() private readonly landedCostsService?: PurchaseLandedCostsService,
     @Optional() private readonly marginProtectionService?: MarginProtectionService,
   ) {}
@@ -191,6 +194,27 @@ export class PurchasesController {
   @RequirePermissions('accounts')
   applySupplierAdvance(@Param('id', ParseIntPipe) id: number, @Body() payload: ApplySupplierAdvanceDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.purchasesService.applySupplierAdvance(id, payload, req.authContext!);
+  }
+
+  /* INV-SUPPLIER-NONSTOCK-BILL: a bill for things that never touch stock
+   * (program, paper, cables, service) — creates the payable the payment
+   * and scheduling flows settle. No stock movement of any kind. */
+  @Get('supplier-bills')
+  @RequirePermissions('purchases')
+  listSupplierBills(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+    if (!this.supplierBillsService) {
+      throw new BadRequestException('Supplier bills service unavailable');
+    }
+    return this.supplierBillsService.listSupplierBills(Number(query.supplierId || 0), req.authContext!);
+  }
+
+  @Post('supplier-bills')
+  @RequirePermissions('purchases')
+  createSupplierBill(@Body() payload: CreateSupplierBillDto, @Req() req: RequestWithAuth, @Headers('x-idempotency-key') idempotencyKey?: string): Promise<Record<string, unknown>> {
+    if (!this.supplierBillsService) {
+      throw new BadRequestException('Supplier bills service unavailable');
+    }
+    return this.supplierBillsService.createSupplierBill(payload, req.authContext!, idempotencyKey);
   }
 
   @Post('customer-payments')

@@ -98,6 +98,7 @@ export class AccountingPostingService {
       getExistingPurchaseJournal: this.getExistingPurchaseJournal.bind(this),
       getExistingPurchaseReversalJournal: this.getExistingPurchaseReversalJournal.bind(this),
       getExistingSupplierPaymentJournal: this.getExistingSupplierPaymentJournal.bind(this),
+      getExistingSupplierBillJournal: this.getExistingSupplierBillJournal.bind(this),
       getExistingSupplierPaymentScheduleSettlementJournal: this.getExistingSupplierPaymentScheduleSettlementJournal.bind(this),
       getExistingCustomerPaymentJournal: this.getExistingCustomerPaymentJournal.bind(this),
       getExistingExpenseJournal: this.getExistingExpenseJournal.bind(this),
@@ -221,6 +222,10 @@ export class AccountingPostingService {
 
   private async getExistingSupplierPaymentJournal(queryable: DbOrTx, paymentId: number, tenantId: string) {
     return this.postingCore.getExistingSupplierPaymentJournal(queryable, paymentId, tenantId);
+  }
+
+  private async getExistingSupplierBillJournal(queryable: DbOrTx, billId: number, tenantId: string) {
+    return this.postingCore.getExistingSupplierBillJournal(queryable, billId, tenantId);
   }
 
   private async getExistingSupplierPaymentScheduleSettlementJournal(queryable: DbOrTx, settlementId: number, tenantId: string) {
@@ -497,6 +502,12 @@ export class AccountingPostingService {
   }
   async postSupplierPayment(queryable: DbOrTx, paymentId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
     return this.purchasesTreasuryPosting.postSupplierPayment(queryable, paymentId, auth);
+  }
+  /* INV-SUPPLIER-NONSTOCK-BILL: post a non-stock supplier bill — Dr each
+   * bill line's chart account / Cr 2110 (see
+   * PurchasesAndTreasuryPostingService.postSupplierBill). */
+  async postSupplierBill(queryable: DbOrTx, billId: number, auth: AuthContext): Promise<{ posted: boolean; journalEntryId: number | null }> {
+    return this.purchasesTreasuryPosting.postSupplierBill(queryable, billId, auth);
   }
   /* INV-SUPPLIER-ADVANCE-ASSET-ACCOUNT: apply an advance against a
    * later bill — Dr 2110 / Cr 1185 (see
