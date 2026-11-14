@@ -50,6 +50,7 @@ import {
 import { allocateSaleFromImportLots, calculateImportSaleCost } from './helpers/import-lot-allocation.helper';
 import { applyStockDelta, lockStockProducts } from '../../common/utils/location-stock-ledger';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
@@ -7252,7 +7253,7 @@ export class ImportSalesService {
         status: 'draft', notes: `أمر شراء وارد من Proforma ${pi.pi_number} - ${pi.currency} بسعر صرف ${exchangeRate}`,
         created_by: userId,
       }).returning('id').executeTakeFirstOrThrow();
-      const orderNumber = formatDailyDocumentNumber('PO', inserted.id);
+      const orderNumber = formatDailyDocumentNumber('PO', inserted.id, new Date(), 4, await getTenantTimezone(this.db, tenantId));
       await trx.updateTable('purchase_orders').set({ order_number: orderNumber })
         .where('tenant_id', '=', tenantId).where('id', '=', inserted.id).execute();
       for (const item of lines) {

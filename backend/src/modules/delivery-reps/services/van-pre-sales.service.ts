@@ -4,6 +4,7 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { reserveLocationStock, releaseLocationStock } from '../../../common/utils/location-stock-ledger';
 import { sortItemsByProductId, generateDailySequenceNumber, listRepUsableWarehouseScope, assertWarehouseInRepScope } from './van-common.util';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
@@ -705,7 +706,7 @@ export class VanPreSalesService {
         .execute();
 
       orderId = Number(insertedOrder.id);
-      finalOrderNumber = formatDailyDocumentNumber('SO', orderId);
+      finalOrderNumber = formatDailyDocumentNumber('SO', orderId, new Date(), 4, await getTenantTimezone(trx, tenantId));
 
       await trxAny
         .updateTable('sales_orders')

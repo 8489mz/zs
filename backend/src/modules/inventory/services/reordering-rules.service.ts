@@ -7,6 +7,7 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AuditService } from '../../../core/audit/audit.service';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { normalizeArabicSearch } from '../../../common/utils/arabic-search.util';
 import {
   evaluateReorderingRule,
@@ -493,7 +494,7 @@ export class ReorderingRulesService {
 
         // The number derives from the inserted row id, exactly as
         // createOrder numbers a purchase order: never from a row count.
-        const orderNumber = formatDailyDocumentNumber('PO', Number(insertedOrder.id));
+        const orderNumber = formatDailyDocumentNumber('PO', Number(insertedOrder.id), new Date(), 4, await getTenantTimezone(trx, scope.tenantId));
         await trx
           .updateTable('purchase_orders')
           .set({ order_number: orderNumber })

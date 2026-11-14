@@ -12,6 +12,7 @@ import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { HrService } from '../hr.service';
 import { AuditService } from '../../../core/audit/audit.service';
 import {
@@ -61,7 +62,7 @@ export class RecruitmentAtsService {
       .executeTakeFirst();
 
     const seq = Number(countRes?.count || 0) + 1;
-    const jobCode = formatDailyDocumentNumber('JOB', seq);
+    const jobCode = formatDailyDocumentNumber('JOB', seq, new Date(), 4, await getTenantTimezone(this.db, tenantId));
     const id = `job_${randomUUID()}`;
 
     await (this.db as any)
@@ -162,7 +163,7 @@ export class RecruitmentAtsService {
       .executeTakeFirst();
 
     const seq = Number(countRes?.count || 0) + 1;
-    const applicantNumber = formatDailyDocumentNumber('APP', seq);
+    const applicantNumber = formatDailyDocumentNumber('APP', seq, new Date(), 4, await getTenantTimezone(this.db, tenantId));
     const id = `app_${randomUUID()}`;
 
     await (this.db as any)

@@ -19,6 +19,7 @@ import { UpsertMaintenanceTicketDto } from './dto/upsert-maintenance-ticket.dto'
 import { UpdateTicketStatusDto, AddTicketPartDto } from './dto/update-ticket-status.dto';
 import { normalizeArabicSearch } from '../../common/utils/arabic-search.util';
 import { formatDailyDocumentNumber, getDailyDocumentPrefix } from '../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 
 /**
  * Warranty expiry for a repaired ticket: repaired_at + warranty_days.
@@ -562,7 +563,7 @@ export class MaintenanceService {
       }
 
       const ticketId = Number(inserted.id);
-      const ticketNo = formatDailyDocumentNumber('ZM', ticketId);
+      const ticketNo = formatDailyDocumentNumber('ZM', ticketId, new Date(), 4, await getTenantTimezone(trx, scope.tenantId));
 
       await trx
         .updateTable('maintenance_tickets')

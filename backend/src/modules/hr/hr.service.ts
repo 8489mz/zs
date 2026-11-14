@@ -1058,7 +1058,7 @@ export class HrService {
     if (!contractId) throw new AppError('تعذر إنشاء عقد الموظف', 'HR_RECRUITMENT_CONTRACT_FAILED', 500);
     await sql`
       UPDATE hr_employment_contracts
-      SET contract_no = ${formatDailyDocumentNumber('CON', contractId)}
+      SET contract_no = ${formatDailyDocumentNumber('CON', contractId, new Date(), 4, timezone)}
       WHERE id = ${contractId} AND employee_id = ${employeeId}
         AND contract_no = ${tempNo} AND tenant_id = ${tenantId}
     `.execute(trx);
@@ -1226,6 +1226,7 @@ export class HrService {
           // with approval, then ATS/other employee number allocations.
           await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
           await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-employee:' + auth.tenantId}))`.execute(trx);
+          const businessTz = await getTenantTimezone(trx, auth.tenantId || '');
           const nextEmployeeNo = employeeNo || await this.nextAvailableEmployeeNo(trx, auth);
           await this.ensureEmployeeNoAvailable(trx, nextEmployeeNo, null, auth);
           const insertResult = await sql<{ id: number }>`
@@ -1273,7 +1274,7 @@ export class HrService {
               if (!contractId) throw new AppError('فشل إنشاء عقد الموظف', 'HR_INITIAL_CONTRACT_FAILED', 500);
               await sql`
                 UPDATE hr_employment_contracts
-                SET contract_no = ${formatDailyDocumentNumber('CON', contractId)}
+                SET contract_no = ${formatDailyDocumentNumber('CON', contractId, new Date(), 4, businessTz)}
                 WHERE id = ${contractId} AND employee_id = ${newId} AND tenant_id = ${auth.tenantId}
               `.execute(trx);
             }
@@ -1583,8 +1584,9 @@ export class HrService {
         `.execute(trx);
         if (!requestedNo) {
           const contractId = Number(inserted.rows[0].id);
+          const businessTz = await getTenantTimezone(trx, tenantId);
           await sql`
-            UPDATE hr_employment_contracts SET contract_no = ${formatDailyDocumentNumber('CON', contractId)}
+            UPDATE hr_employment_contracts SET contract_no = ${formatDailyDocumentNumber('CON', contractId, new Date(), 4, businessTz)}
             WHERE id = ${contractId} AND tenant_id = ${tenantId}
           `.execute(trx);
         }
@@ -2028,7 +2030,7 @@ export class HrService {
         RETURNING id
       `.execute(trx);
       const loanId = Number(insert.rows[0]?.id || 0);
-      const finalLoanNo = requestedLoanNo || formatDailyDocumentNumber('LOAN', loanId);
+      const finalLoanNo = requestedLoanNo || formatDailyDocumentNumber('LOAN', loanId, new Date(), 4, await getTenantTimezone(trx, auth.tenantId));
       await sql`UPDATE hr_employee_loans SET loan_no = ${finalLoanNo} WHERE id = ${loanId} AND tenant_id = ${auth.tenantId}`.execute(trx);
 
       for (let i = 1; i <= plan.installmentCount; i += 1) {
@@ -7287,7 +7289,7 @@ export class HrService {
         loanId = Number(loanRes.rows[0]?.id || 0);
         createdLoanId = loanId;
 
-        const canonicalNo = formatDailyDocumentNumber('LOAN', loanId);
+        const canonicalNo = formatDailyDocumentNumber('LOAN', loanId, new Date(), 4, await getTenantTimezone(trx, tenantId));
         await sql`UPDATE hr_employee_loans SET loan_no = ${canonicalNo} WHERE id = ${loanId} AND tenant_id = ${tenantId}`.execute(trx);
       
         const dueStr = localLoanDate;

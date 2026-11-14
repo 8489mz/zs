@@ -12,6 +12,7 @@ import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import {
   CreateWarehousePackageDto,
   UnpackPackageDto,
@@ -111,7 +112,7 @@ export class WarehousePackagesService {
         .where('package_type', '=', dto.packageType)
         .executeTakeFirst();
       const seq = Number(countRes?.count || 0) + 1;
-      packageNumber = formatDailyDocumentNumber(prefix, seq);
+      packageNumber = formatDailyDocumentNumber(prefix, seq, new Date(), 4, await getTenantTimezone(this.db, tenantId));
     }
 
     const packageId = `pkg_${randomUUID()}`;

@@ -6,6 +6,7 @@ import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { CreatePurchaseOrderDto, UpdatePurchaseOrderDto } from '../dto/purchase-order.dto';
 import { PurchasesWriteService } from './purchases-write.service';
 import { ApprovalWorkflowService } from '../../approvals/approval-workflow.service';
@@ -194,7 +195,7 @@ export class PurchaseOrdersService {
       .executeTakeFirstOrThrow();
 
     const orderId = Number(insertedOrder.id);
-    const orderNumber = formatDailyDocumentNumber('PO', orderId);
+    const orderNumber = formatDailyDocumentNumber('PO', orderId, new Date(), 4, await getTenantTimezone(trx, scope.tenantId));
     await trx.updateTable('purchase_orders').set({ order_number: orderNumber })
       .where('id', '=', orderId).where('tenant_id', '=', scope.tenantId).execute();
 

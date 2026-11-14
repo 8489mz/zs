@@ -8,6 +8,7 @@ import { AuthCacheService } from '../../core/auth/services/auth-cache.service';
 import { assertPortalTenantAllowed } from '../../core/auth/utils/portal-tenant-status';
 import { LoginAttemptLimiter } from '../../common/utils/login-attempt-limiter';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import {
   PORTAL_TOKEN_TTL_MS,
   signPortalToken,
@@ -664,7 +665,7 @@ export class MaritimeCustomerPortalService {
         .returningAll()
         .execute();
 
-      const finalNumber = formatDailyDocumentNumber('INQ', Number(inquiry.id));
+      const finalNumber = formatDailyDocumentNumber('INQ', Number(inquiry.id), new Date(), 4, await getTenantTimezone(trx, auth.tenantId));
       await trx
         .updateTable('maritime_inquiries')
         .set({ inquiry_number: finalNumber })

@@ -7,6 +7,7 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { CreateSalesOrderDto, UpdateSalesOrderDto } from '../dto/sales-order.dto';
 import { SalesWriteService } from './sales-write.service';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { randomUUID } from 'node:crypto';
 import { reserveLocationStock, releaseLocationStock, getLocationAvailability } from '../../../common/utils/location-stock-ledger';
 import { idempotencyStorage } from '../../../core/idempotency/idempotency.context';
@@ -364,6 +365,7 @@ export class SalesOrdersService {
     const initialStatus = shouldReserve ? 'confirmed' : 'draft';
 
     const result = await this.db.transaction().execute(async (trx) => {
+      const businessTz = await getTenantTimezone(trx, scope.tenantId);
       let resolvedBranchId = dto.branchId || null;
       let resolvedLocationId: number | null = null;
       if (shouldReserve) {
@@ -411,7 +413,7 @@ export class SalesOrdersService {
         .returningAll()
         .executeTakeFirstOrThrow();
       await trx.updateTable('sales_orders')
-        .set({ order_number: formatDailyDocumentNumber('SO', Number(order.id)) })
+        .set({ order_number: formatDailyDocumentNumber('SO', Number(order.id), new Date(), 4, businessTz) })
         .where('id', '=', order.id).where('tenant_id', '=', scope.tenantId).execute();
 
       // INV-SERVICE-STOCK-NO-STOCK-CHECK: services sell without stock —
@@ -462,7 +464,7 @@ export class SalesOrdersService {
         });
       }
 
-      return { ...order, order_number: formatDailyDocumentNumber('SO', Number(order.id)) };
+      return { ...order, order_number: formatDailyDocumentNumber('SO', Number(order.id), new Date(), 4, businessTz) };
     });
 
     return {

@@ -127,6 +127,7 @@
     "test/critical/business-date-display.spec.ts",
     "test/critical/fmcg-promotion-date-mapping.spec.ts",
     "test/critical/reports-tenant-day.spec.ts",
-    "test/critical/offline-sale-backdate-bound.spec.ts"
+    "test/critical/offline-sale-backdate-bound.spec.ts",
+    "test/critical/document-numbers-tenant-day.spec.ts"
   ]
 }

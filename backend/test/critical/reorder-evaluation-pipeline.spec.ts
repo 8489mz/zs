@@ -107,6 +107,10 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE product_location_stock (id bigserial PRIMARY KEY, tenant_id text, product_id bigint, location_id bigint, qty numeric, reserved_qty numeric);
     CREATE TABLE purchase_orders (id bigserial PRIMARY KEY, tenant_id text, account_id text, order_number text, supplier_id bigint, supplier_name text, supplier_phone text, warehouse_id bigint, warehouse_name text, subtotal numeric, tax_amount numeric, discount_amount numeric, total_amount numeric, status text, notes text, created_by bigint, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
     CREATE TABLE purchase_order_items (id bigserial PRIMARY KEY, tenant_id text, account_id text, purchase_order_id bigint, product_id bigint, product_name text, quantity numeric, received_quantity numeric, unit_cost numeric, tax_rate numeric, discount numeric, total numeric, notes text);
+    -- Clock P3: runEvaluation numbers each generated PO on the tenant
+    -- business day, so it reads the tenant timezone from settings inside
+    -- its transaction (a missing table would abort the transaction).
+    CREATE TABLE settings (tenant_id text, key text, value text);
   `);
   return { pg, db };
 }

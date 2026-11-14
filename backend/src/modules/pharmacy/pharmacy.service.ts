@@ -8,6 +8,7 @@ import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { normalizeArabicSearch } from '../../common/utils/arabic-search.util';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { validateDistributorInvoiceLines } from './engines/distributor-invoice-validation.engine';
 import { buildDistributorPurchaseItem } from './engines/distributor-purchase.engine';
 import { PurchasesService } from '../purchases/purchases.service';
@@ -960,7 +961,7 @@ export class PharmacyService {
           status, notes: dto.notes ?? null,
         }).returningAll().executeTakeFirstOrThrow();
         if (!dto.prescriptionNo?.trim()) {
-          const rxNo = formatDailyDocumentNumber('RX', Number(rx.id));
+          const rxNo = formatDailyDocumentNumber('RX', Number(rx.id), new Date(), 4, await getTenantTimezone(trx, scope.tenantId));
           await trx.updateTable('pharmacy_prescriptions').set({ prescription_no: rxNo })
             .where('id', '=', rx.id).where('tenant_id', '=', scope.tenantId).execute();
           rx.prescription_no = rxNo;

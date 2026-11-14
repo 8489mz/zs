@@ -983,7 +983,7 @@ export class EmployeePortalService {
       `.execute(trx);
       const loanId = Number(inserted.rows[0]?.id || 0);
       if (!Number.isSafeInteger(loanId) || loanId <= 0) throw new Error('Failed to create portal advance');
-      const no = formatDailyDocumentNumber('LOAN', loanId);
+      const no = formatDailyDocumentNumber('LOAN', loanId, new Date(), 4, await getTenantTimezone(trx, tenantId));
       await sql`
         UPDATE hr_employee_loans SET loan_no = ${no}
         WHERE id = ${loanId} AND tenant_id = ${tenantId}

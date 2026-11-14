@@ -5,6 +5,7 @@ import { Kysely, sql, type Transaction } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
 // previewConsumableStockQty is kept in this import: check-architecture-guardrails.cjs requires the token in sales-write.service.ts, although no method left in this file calls it.
 import { applyStockDelta, lockStockProducts, previewConsumableStockQty } from '../../../common/utils/location-stock-ledger';
+import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
@@ -661,7 +662,7 @@ export class SalesWriteService {
     return this.getHeldSales().clearHeldSales(auth);
   }
 
-  private async generateSaleDocNo(trx: Kysely<Database>, saleId: number, tenantId: string): Promise<string> {
+  private async generateSaleDocNo(trx: Kysely<Database>, saleId: number, tenantId: string, businessDate?: Date | null): Promise<string> {
     const settingsMap = await this.getTenantSettingsMap(trx, tenantId);
     let scheme = settingsMap.get('invoiceNumberingScheme') || 'daily';
     if (typeof scheme !== 'string') {
@@ -672,12 +673,12 @@ export class SalesWriteService {
       return `Z-${saleId}`;
     }
 
-    // Daily date-based numbering: Z-YYMMDD-0001
-    const now = new Date();
-    const yy = String(now.getFullYear()).slice(-2);
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const datePrefix = `${yy}${mm}${dd}`;
+    // Daily date-based numbering: Z-YYMMDD-0001 on the sale's business day
+    // (the offline sale's original day when present, else the tenant day) --
+    // never the host-local day (Clock P3).
+    const businessTz = await getTenantTimezone(trx, tenantId);
+    const dayKey = todayTenantDate(businessTz, businessDate ?? new Date());
+    const datePrefix = `${dayKey.slice(2, 4)}${dayKey.slice(5, 7)}${dayKey.slice(8, 10)}`;
     const seq = String(saleId).padStart(4, '0');
     return `Z-${datePrefix}-${seq}`;
   }

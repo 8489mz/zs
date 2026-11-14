@@ -8,12 +8,12 @@ import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { verifyPassword } from '../../core/auth/utils/password-hasher';
 import { authorizeManagerSecret } from '../../common/utils/manager-approval';
+import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { TransactionHelper } from '../../database/helpers/transaction.helper';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
-import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
 
@@ -1208,7 +1208,8 @@ export class CashDrawerService {
       }
       const shiftId = Number(inserted.rows?.[0]?.id || 0);
       if (!shiftId) throw new AppError('Could not open cashier shift', 'SHIFT_OPEN_FAILED', 400);
-      await sql`update cashier_shifts set doc_no = ${buildCashDrawerShiftDocNo(shiftId)} where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
+      const businessTz = await getTenantTimezone(trx, scope.tenantId);
+      await sql`update cashier_shifts set doc_no = ${buildCashDrawerShiftDocNo(shiftId, undefined, businessTz)} where tenant_id = ${scope.tenantId} and id = ${shiftId}`.execute(trx);
     });
     const listing = await this.listCashierShifts({}, auth);
     return { ok: true, cashierShifts: listing.cashierShifts, pagination: listing.pagination, summary: listing.summary };

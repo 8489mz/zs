@@ -13,6 +13,7 @@ import { AuditService } from '../../../core/audit/audit.service';
 import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway.service';
 import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import {
   extractMarketplaceEventIdentity,
   marketplaceWebhookDedupKey,
@@ -1948,7 +1949,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
 
     const existing = await this.getInboundShipments(auth);
     const prefix = input.marketplace === 'noon' ? 'FBN' : 'FBA';
-    const shipmentNumber = formatDailyDocumentNumber(prefix, existing.length + 1, new Date(), 4);
+    const shipmentNumber = formatDailyDocumentNumber(prefix, existing.length + 1, new Date(), 4, await getTenantTimezone(this.db, scope.tenantId));
 
     const totalUnits = input.items.reduce((sum, item) => sum + Number(item.quantityShipped || 0), 0);
     const totalBoxes = input.items.reduce((max, item) => Math.max(max, Number(item.boxNumber || 1)), 1);

@@ -36,6 +36,7 @@ export interface SubmitSupplierBidDto {
 }
 
 import { getDailyDocumentPrefix } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 
 @Injectable()
 export class PurchaseRfqsService {
@@ -44,7 +45,7 @@ export class PurchaseRfqsService {
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>) {}
 
   private async generateRfqNumber(tenantId: string): Promise<string> {
-    const prefix = getDailyDocumentPrefix('RFQ');
+    const prefix = getDailyDocumentPrefix('RFQ', undefined, await getTenantTimezone(this.db, tenantId));
     const countResult = await this.db
       .selectFrom('purchase_rfqs')
       .select([sql<number>`count(*)::int`.as('count')])

@@ -6,6 +6,7 @@ import { Database, GoodsReceiptLineTable, PurchaseOrderItemTable } from '../../.
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { CreateGoodsReceiptDto, CreateGrnBillDto, VerifyThreeWayMatchDto } from '../dto/goods-receipt.dto';
 import { computeThreeWayMatch, ThreeWayMatchInput } from '../three-way-match.engine';
 import { applyStockDelta, lockStockProducts } from '../../../common/utils/location-stock-ledger';
@@ -242,7 +243,7 @@ export class GoodsReceiptService {
 
       // The generated row id is unique across concurrent receipts; COUNT(*) + 1 is not.
       await trx.updateTable('goods_receipt_notes')
-        .set({ doc_no: formatDailyDocumentNumber('GRN', Number(grn.id)) })
+        .set({ doc_no: formatDailyDocumentNumber('GRN', Number(grn.id), new Date(), 4, await getTenantTimezone(trx, scope.tenantId)) })
         .where('id', '=', Number(grn.id))
         .where('tenant_id', '=', scope.tenantId)
         .execute();
@@ -1039,7 +1040,7 @@ export class GoodsReceiptService {
         tenant_id: scope.tenantId, account_id: scope.accountId,
       }).returning('id').executeTakeFirstOrThrow();
       const purchaseId = Number(inserted.id);
-      const docNo = formatDailyDocumentNumber('ZP', purchaseId, new Date(), 6);
+      const docNo = formatDailyDocumentNumber('ZP', purchaseId, new Date(), 6, await getTenantTimezone(trx, scope.tenantId));
       await trx.updateTable('purchases').set({ doc_no: docNo })
         .where('tenant_id', '=', scope.tenantId).where('id', '=', purchaseId).execute();
       for (const line of prepared) {

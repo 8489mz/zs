@@ -347,8 +347,8 @@ export function mapCashDrawerShiftRow(row: CashDrawerShiftSource): CashDrawerMap
   };
 }
 
-export function buildCashDrawerShiftDocNo(shiftId: number, date: Date = new Date()): string {
-  return formatDailyDocumentNumber('SHIFT', shiftId, date);
+export function buildCashDrawerShiftDocNo(shiftId: number, date: Date = new Date(), timeZone?: string): string {
+  return formatDailyDocumentNumber('SHIFT', shiftId, date, 4, timeZone);
 }
 
 export function normalizeShiftOpenPayload(payload: { openingCash?: number; note?: string; branchId?: number | string | null; locationId?: number | string | null; password?: string; managerPin?: string; terminalCode?: string }): { openingCash: number; note: string; branchId: number | null; locationId: number | null; password?: string; terminalCode: string | null } {

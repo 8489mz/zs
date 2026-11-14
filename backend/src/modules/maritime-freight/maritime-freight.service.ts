@@ -56,6 +56,7 @@ import {
 import { MaritimeMailService } from './maritime-mail.service';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { calculateFreightAudit, validateMakerCheckerOverride } from './engines/freight-audit.engine';
 import { evaluateAcidNumber } from './engines/acid-number.engine';
 import { checkInsuranceClaim } from './engines/cargo-insurance.engine';
@@ -922,7 +923,7 @@ export class MaritimeFreightService {
         .returningAll()
         .execute();
 
-      const finalNumber = formatDailyDocumentNumber('INQ', Number(inquiry.id));
+      const finalNumber = formatDailyDocumentNumber('INQ', Number(inquiry.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
       const [updated] = await trx
         .updateTable('maritime_inquiries')
         .set({ inquiry_number: finalNumber })
@@ -1112,7 +1113,7 @@ export class MaritimeFreightService {
         .returningAll()
         .execute();
 
-      const finalNumber = formatDailyDocumentNumber('RFQ', Number(rfq.id));
+      const finalNumber = formatDailyDocumentNumber('RFQ', Number(rfq.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
       const [updatedRfq] = await trx
         .updateTable('maritime_rfqs')
         .set({ rfq_number: finalNumber })
@@ -1882,7 +1883,7 @@ export class MaritimeFreightService {
         .returningAll()
         .execute();
 
-      const finalNumber = formatDailyDocumentNumber('QUO', Number(quote.id));
+      const finalNumber = formatDailyDocumentNumber('QUO', Number(quote.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
       const [updatedQuote] = await trx
         .updateTable('maritime_quotations')
         .set({ quotation_number: finalNumber })
@@ -2166,7 +2167,7 @@ export class MaritimeFreightService {
         .returningAll()
         .execute();
 
-      const finalJobNumber = formatDailyDocumentNumber('JOB', Number(job.id));
+      const finalJobNumber = formatDailyDocumentNumber('JOB', Number(job.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
 
       if (dto.parentJobId) {
         await trx
@@ -5476,7 +5477,7 @@ export class MaritimeFreightService {
         .returningAll()
         .execute();
 
-      const finalNumber = formatDailyDocumentNumber('DISP', Number(inserted.id), new Date());
+      const finalNumber = formatDailyDocumentNumber('DISP', Number(inserted.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
       const [renamed] = await trx
         .updateTable('maritime_carrier_disputes')
         .set({ dispute_number: finalNumber })
@@ -5993,7 +5994,7 @@ export class MaritimeFreightService {
         .returningAll()
         .execute();
 
-      const finalNumber = formatDailyDocumentNumber('MWR', Number(receipt.id));
+      const finalNumber = formatDailyDocumentNumber('MWR', Number(receipt.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
       const [updated] = await trx
         .updateTable('maritime_warehouse_receipts')
         .set({ receipt_number: finalNumber })
@@ -6824,7 +6825,7 @@ export class MaritimeFreightService {
       if (suppliedRef) return row;
       const [renamed] = await trx
         .updateTable('maritime_agent_settlements')
-        .set({ reference_number: formatDailyDocumentNumber(settlementPrefix, Number(row.id)) })
+        .set({ reference_number: formatDailyDocumentNumber(settlementPrefix, Number(row.id), new Date(), 4, await getTenantTimezone(trx, tenantId)) })
         .where('id', '=', row.id)
         .where('tenant_id', '=', tenantId)
         .returningAll()
@@ -6936,7 +6937,7 @@ export class MaritimeFreightService {
         .returningAll()
         .execute();
 
-      const finalTripNumber = formatDailyDocumentNumber('TRIP', Number(trip.id));
+      const finalTripNumber = formatDailyDocumentNumber('TRIP', Number(trip.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
 
       const [updatedTrip] = await trx
         .updateTable('maritime_inland_trucking_trips')

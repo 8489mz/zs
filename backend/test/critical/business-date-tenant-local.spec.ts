@@ -35,11 +35,12 @@
  *    the storefront checkout derives its ON prefix from
  *    todayTenantDate.
  *
- * Deliberately NOT driven here: the remaining ~49 document-number
- * call sites that still use the host-local day (HR, purchases,
- * inventory, maritime, ...), the report/query UTC slices, and the
+ * Deliberately NOT driven here: the report/query UTC slices and the
  * global schedulers -- recorded as remaining work in the invariant.
- * They need per-module tenant context, one module at a time.
+ * The remaining document-number call sites (HR, purchases, inventory,
+ * maritime, ...) were closed by Clock P3, which threads the tenant
+ * timezone through every one of them; see
+ * document-numbers-tenant-day.spec.ts for the tenant-day pins.
  */
 
 import 'reflect-metadata';

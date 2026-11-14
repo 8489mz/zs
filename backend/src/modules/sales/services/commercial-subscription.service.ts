@@ -12,6 +12,7 @@ import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
@@ -101,7 +102,7 @@ export class CommercialSubscriptionService {
         .where('tenant_id', '=', tenantId)
         .executeTakeFirst();
       const seq = Number(countRes?.count || 0) + 1;
-      contractNumber = formatDailyDocumentNumber('SUB', seq);
+      contractNumber = formatDailyDocumentNumber('SUB', seq, new Date(), 4, await getTenantTimezone(this.db, tenantId));
     }
 
     // Calculate totals at the tenant's book precision (INV-SUBSCRIPTION-BILLING-DIGITS)
@@ -376,7 +377,7 @@ export class CommercialSubscriptionService {
       );
 
       // Create Sale Record
-      const invNumber = formatDailyDocumentNumber('SUB-INV', (sub.invoices_count || 0) + 1);
+      const invNumber = formatDailyDocumentNumber('SUB-INV', (sub.invoices_count || 0) + 1, new Date(), 4, await getTenantTimezone(this.db, tenantId));
 
       await (this.db as any).transaction().execute(async (trx: any) => {
         const saleInsert = await trx

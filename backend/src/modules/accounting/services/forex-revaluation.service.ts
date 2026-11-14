@@ -6,6 +6,7 @@ import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { AccountingPostingService } from '../accounting-posting.service';
 import { lockAccountingPeriod } from '../accounting-period-lock';
 import { nextAccountingDay } from '../engines/accounting-date.engine';
@@ -309,7 +310,7 @@ export class ForexRevaluationService {
         })),
       });
       createdEntryId = entryId;
-      entryNo = formatDailyDocumentNumber(`FX-${dto.currencyCode}`, entryId, new Date(dto.periodDate));
+      entryNo = formatDailyDocumentNumber(`FX-${dto.currencyCode}`, entryId, new Date(dto.periodDate), 4, await getTenantTimezone(trx, tenantId));
 
       await trx
         .updateTable('journal_entries')

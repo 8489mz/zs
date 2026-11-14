@@ -7,6 +7,7 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { SalesFinanceService } from './sales-finance.service';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
@@ -196,7 +197,7 @@ export class CustomerInstallmentsService {
         .executeTakeFirstOrThrow();
 
       const planId = Number(inserted.id);
-      const planNumber = formatDailyDocumentNumber('INST', planId, startDate);
+      const planNumber = formatDailyDocumentNumber('INST', planId, startDate, 4, await getTenantTimezone(trx, scope.tenantId));
 
       // Update plan with authoritative daily document number
       const plan = await trx
@@ -682,7 +683,7 @@ export class CustomerInstallmentsService {
 
       const paymentId = Number(insertedPayment.id);
       // External references must never replace the unique identity-based system receipt number.
-      const receiptNo = formatDailyDocumentNumber('REC', paymentId);
+      const receiptNo = formatDailyDocumentNumber('REC', paymentId, new Date(), 4, await getTenantTimezone(trx, scope.tenantId));
       const branchId = plan?.branch_id ? Number(plan.branch_id) : null;
       const fullDesc = `سداد قسط رقم ${installment.installment_number} (إيصال #${receiptNo})`;
 

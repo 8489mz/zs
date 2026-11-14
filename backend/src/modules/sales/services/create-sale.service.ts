@@ -91,7 +91,7 @@ export type CreateSaleDeps = {
   deductPharmacyBatchesFefo: (trx: Kysely<Database> | Transaction<Database>, productId: number, allocations: any[], scope: TenantScope, saleId: number, saleLineId: number) => Promise<void>;
   resolveOnlineOrderTerms: (onlineOrderId: number, tenantId: string, existing?: SystemApprovedSaleTerms) => Promise<SystemApprovedSaleTerms | undefined>;
   refreshClosedShiftsForBackdatedOfflineSale: (trx: Kysely<Database> | Transaction<Database>, offlineCreatedAt: Date, saleId: number, branchId: number | null, locationId: number | null, auth: AuthContext, tenantId: string) => Promise<void>;
-  generateSaleDocNo: (trx: Kysely<Database>, saleId: number, tenantId: string) => Promise<string>;
+  generateSaleDocNo: (trx: Kysely<Database>, saleId: number, tenantId: string, businessDate?: Date | null) => Promise<string>;
 };
 
 export interface CreateSaleContext {
@@ -1298,7 +1298,7 @@ export class CreateSaleService {
           .where('exchange_sale_id', 'is', null).returning('id').executeTakeFirst();
         if (!linkedReturn) throw new AppError('تعذر ربط طرفَي الاستبدال', 'EXCHANGE_LINK_FAILED', 409);
       }
-      const docNo = await this.generateSaleDocNo(trx, id, scope.tenantId);
+      const docNo = await this.generateSaleDocNo(trx, id, scope.tenantId, offlineCreatedAt ?? undefined);
       await trx.updateTable('sales').set({ doc_no: docNo, updated_at: sql`NOW()` }).where('id', '=', id).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
 
       if (payments.length > 0) {

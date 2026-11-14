@@ -19,6 +19,7 @@ import { Kysely, sql } from '../../../database/kysely';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AppError } from '../../../common/errors/app-error';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { Database } from '../../../database/database.types';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -518,9 +519,8 @@ export class VanRepFinancialLedgerService {
 
       // Deterministic voucher: the settlement item id is the sequence, so a
       // retried settle can never mint a second voucher number for one item.
-      // The day part keeps the host-local behaviour this endpoint always
-      // had; tenant-timezone day resolution is recorded remaining work.
-      const receiptVoucherNo = formatDailyDocumentNumber('REC', id);
+      // The day part is the tenant business day (Clock P3).
+      const receiptVoucherNo = formatDailyDocumentNumber('REC', id, new Date(), 4, await getTenantTimezone(trx, tenantId));
 
       const settled = await trxAny
         .updateTable('van_rep_financial_settlements')

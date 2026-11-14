@@ -7,6 +7,7 @@ import { AccountingService } from '../../accounting/accounting.service';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { formatDailyDocumentNumber, getDailyDocumentPrefix } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import {
   calculateGratuity,
   calculateLeaveEncashment,
@@ -425,7 +426,7 @@ export class EndOfServiceService {
         .execute();
 
       // Canonical collision-proof document numbering based on unique returned ID
-      const settlementNo = formatDailyDocumentNumber('EOS', Number(inserted.id));
+      const settlementNo = formatDailyDocumentNumber('EOS', Number(inserted.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
       await (trx as any)
         .updateTable('hr_end_of_service_settlements')
         .set({ settlement_no: settlementNo })

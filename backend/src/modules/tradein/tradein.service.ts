@@ -9,6 +9,7 @@ import { Database } from '../../database/database.types';
 import { TransactionHelper } from '../../database/helpers/transaction.helper';
 import { applyStockDelta } from '../../common/utils/location-stock-ledger';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { UpsertTradeInDto } from './dto/upsert-tradein.dto';
 import { normalizeArabicSearch } from '../../common/utils/arabic-search.util';
 import { valueStockReceipt } from '../accounting/inventory-valuation';
@@ -281,7 +282,7 @@ export class TradeInService {
       }
 
       const txnId = Number(insertedTxn.id);
-      const docNo = formatDailyDocumentNumber('TRD', txnId);
+      const docNo = formatDailyDocumentNumber('TRD', txnId, new Date(), 4, await getTenantTimezone(trx, scope.tenantId));
 
       await trx
         .updateTable('trade_in_transactions')

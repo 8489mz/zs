@@ -42,9 +42,8 @@ booked) and 1160 for a stock shortage (clearing the rep custody trip
 settlement booked) — are the same codes postVanTripSettlement used, so
 the recovery reverses exactly what was booked; (2) the settler-shift-first
 order with a branch fallback, and no cross-cashier attribution beyond
-that branch; (3) the voucher day keeps the host-local behaviour this
-endpoint always had (tenant-timezone day resolution is recorded
-remaining work, as in the numbering util).
+that branch; (3) the voucher day is the tenant business day (Clock P3;
+the fixture seeds Africa/Cairo, the fallback when no setting exists).
 
 NOT DRIVEN: two-terminal concurrency (PGlite is single-connection — the
 FOR UPDATE lock plus the status-predicate flip that serializes concurrent
@@ -149,6 +148,7 @@ async function seedFoundation(db: Kysely<Database>): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: 'EGP' }).execute();
+  await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'timezone', value: '"Africa/Cairo"' }).execute();
   await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: 'EGP', exchange_rate: 1, is_base: true }).execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
   await anyDb.insertInto('users').values({ id: 3, tenant_id: TENANT, username: 'cashier-b', role: 'cashier', is_active: true }).execute();
@@ -270,7 +270,7 @@ async function main(): Promise<void> {
       assert.equal(await drawer.computeShiftExpectedCash(1, adminAuth), 0, 'nothing expected before the collection');
       const result = await van.settleRepFinancialItem(TENANT, ACCOUNT, 101, { method: 'cash' }, adminAuth);
       assert.equal(result.status, 'settled');
-      assert.equal(result.receiptVoucherNo, formatDailyDocumentNumber('REC', 101), 'the voucher is deterministic, never random');
+      assert.equal(result.receiptVoucherNo, formatDailyDocumentNumber('REC', 101, new Date(), 4, 'Africa/Cairo'), 'the voucher is deterministic, never random');
       assert.ok(Number(result.journalEntryId) > 0, 'the journal id is returned');
       const rows = await treasuryRows(db);
       assert.equal(rows.length, 1, 'exactly one treasury row for the collection');

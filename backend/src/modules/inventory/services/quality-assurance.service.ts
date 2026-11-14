@@ -12,6 +12,7 @@ import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import {
   CreateQCPointDto,
   CreateQCInspectionDto,
@@ -200,7 +201,7 @@ export class QualityAssuranceService {
           .executeTakeFirst();
 
         const seq = Number(countRes?.count || 0) + 1;
-        autoNcrNumber = formatDailyDocumentNumber('NCR', seq);
+        autoNcrNumber = formatDailyDocumentNumber('NCR', seq, new Date(), 4, await getTenantTimezone(trx, tenantId));
 
         const severity = suggestNCRSeverity(dto.rejectedQty, dto.inspectedQty);
 
@@ -417,7 +418,7 @@ export class QualityAssuranceService {
       .executeTakeFirst();
 
     const seq = Number(countRes?.count || 0) + 1;
-    const ncrNumber = formatDailyDocumentNumber('NCR', seq);
+    const ncrNumber = formatDailyDocumentNumber('NCR', seq, new Date(), 4, await getTenantTimezone(this.db, tenantId));
     const id = `ncr_${randomUUID()}`;
 
     await (this.db as any)

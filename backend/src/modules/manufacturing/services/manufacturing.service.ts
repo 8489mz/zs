@@ -15,6 +15,7 @@ import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { scaledBomOverhead } from '../engines/manufacturing-overhead.engine';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 
 @Injectable()
 export class ManufacturingService {
@@ -788,7 +789,7 @@ export class ManufacturingService {
           .executeTakeFirstOrThrow();
 
         unbuildId = Number(inserted.id);
-        unbuildNumber = formatDailyDocumentNumber('UB', unbuildId);
+        unbuildNumber = formatDailyDocumentNumber('UB', unbuildId, new Date(), 4, await getTenantTimezone(trx, scope.tenantId));
 
         const fgStockScope = { tenantId: scope.tenantId, accountId: scope.accountId, productId: Number(payload.productId), branchId: null, locationId };
         const fgStockChange = await applyStockDelta(trx, {

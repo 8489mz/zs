@@ -28,9 +28,10 @@ WHAT THIS PINS, driving the REAL createAgentSettlement on PGlite:
 
 NOT COVERED HERE (decision-blocked, grounding note M6b/M6d): the SOA
 mixed-currency totals and the absence of a GL posting for
-settlements. The day embedded in the number is host-local, exactly as
-every other maritime numbered document (the numbering util records
-tenant-timezone resolution as remaining work for all of them).
+settlements. The day embedded in the number is the tenant business
+day (Clock P3 threads the tenant timezone through the numbering call
+sites; the fixture seeds Africa/Cairo, the fallback when no setting
+exists).
 */
 
 import 'reflect-metadata';
@@ -55,6 +56,7 @@ async function main(): Promise<void> {
       CREATE TABLE currency_exchange_rates (id bigserial PRIMARY KEY, tenant_id text, currency_code text, exchange_rate numeric, is_base boolean);
       CREATE TABLE maritime_agent_settlements (id bigserial PRIMARY KEY, tenant_id text, agent_id text, agent_name text, job_id text, job_number text, settlement_type text, currency text, amount numeric, profit_share_percent numeric, local_equivalent_amount numeric, exchange_rate numeric, reference_number text, status text, notes text);
       INSERT INTO settings VALUES ('t1','currency','KWD');
+      INSERT INTO settings VALUES ('t1','timezone','"Africa/Cairo"');
       INSERT INTO currency_exchange_rates (tenant_id, currency_code, exchange_rate, is_base) VALUES ('t1','KWD',1,true),('t1','USD',48.5,false),('t1','EGP',1,false);
     `);
 
@@ -70,19 +72,19 @@ async function main(): Promise<void> {
     // 1. KWD: 3dp conversion + id-derived APS number.
     const first = await service.createAgentSettlement(auth, dto({}) as never);
     assert.equal(Number(first.local_equivalent_amount), 4856.063);
-    assert.equal(first.reference_number, formatDailyDocumentNumber('APS', Number(first.id)));
+    assert.equal(first.reference_number, formatDailyDocumentNumber('APS', Number(first.id), new Date(), 4, 'Africa/Cairo'));
     assert.equal(first.status, 'pending');
 
     // 2. Second settlement: different id-derived number.
     const second = await service.createAgentSettlement(auth, dto({ amount: 50 }) as never);
     assert.notEqual(second.reference_number, first.reference_number);
-    assert.equal(second.reference_number, formatDailyDocumentNumber('APS', Number(second.id)));
+    assert.equal(second.reference_number, formatDailyDocumentNumber('APS', Number(second.id), new Date(), 4, 'Africa/Cairo'));
 
     // 3. Prefixes per settlement type.
     const debit = await service.createAgentSettlement(auth, dto({ settlementType: 'debit_note' }) as never);
-    assert.equal(debit.reference_number, formatDailyDocumentNumber('ADN', Number(debit.id)));
+    assert.equal(debit.reference_number, formatDailyDocumentNumber('ADN', Number(debit.id), new Date(), 4, 'Africa/Cairo'));
     const credit = await service.createAgentSettlement(auth, dto({ settlementType: 'credit_note' }) as never);
-    assert.equal(credit.reference_number, formatDailyDocumentNumber('ACN', Number(credit.id)));
+    assert.equal(credit.reference_number, formatDailyDocumentNumber('ACN', Number(credit.id), new Date(), 4, 'Africa/Cairo'));
 
     // 4. Caller-supplied reference number kept verbatim.
     const supplied = await service.createAgentSettlement(auth, dto({ referenceNumber: 'AGT-2026-001' }) as never);
