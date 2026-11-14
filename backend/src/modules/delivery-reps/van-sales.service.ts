@@ -44,6 +44,7 @@ import { VanFieldSalesService } from './services/van-field-sales.service';
 import { VanTripLifecycleService } from './services/van-trip-lifecycle.service';
 import { VanRepFinancialLedgerService } from './services/van-rep-financial-ledger.service';
 import { VanExpensesPackagingCustomersService } from './services/van-expenses-packaging-customers.service';
+import { VanRequisitionDispatchService } from './services/van-requisition-dispatch.service';
 import { authorizeManagerSecret } from '../../common/utils/manager-approval';
 
 import type { VanStockItem, VanTripSummary } from './services/van-trip-lifecycle.service';
@@ -70,6 +71,7 @@ export class VanSalesService {
   private tripLifecycle: VanTripLifecycleService | undefined;
   private repFinancialLedger: VanRepFinancialLedgerService | undefined;
   private expensesPackagingCustomers: VanExpensesPackagingCustomersService | undefined;
+  private requisitionDispatch: VanRequisitionDispatchService | undefined;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -210,6 +212,30 @@ export class VanSalesService {
       });
     }
     return this.expensesPackagingCustomers;
+  }
+
+  // Lazy accessor (sales-write S2 pattern), LAZY-ONLY by design: the
+  // ctor must NOT call getRequisitionDispatch() — an eager bind would
+  // freeze the REAL approveAndDispatchRequisition before specs can
+  // mock it post-construction (driver-requisition-dto-whitelist case
+  // (d) mocks it on the facade instance). The accessor binds on first
+  // delegate call, after any mock is assigned, so Object.create specs
+  // (no ctor) and new-constructed specs (mock after ctor) both work.
+  // Production is unaffected: Nest never monkey-patches, and the
+  // helper is stateless, so first-call construction is behaviorally
+  // identical to ctor construction.
+  private getRequisitionDispatch(): VanRequisitionDispatchService {
+    if (!this.requisitionDispatch) {
+      this.requisitionDispatch = new VanRequisitionDispatchService({
+        db: this.db,
+        vanRequisitionsService: this.vanRequisitionsService,
+        submitLoadRequisition: this.submitLoadRequisition.bind(this),
+        dispatchRequisition: this.approveAndDispatchRequisition.bind(this),
+        loadSupplementaryStockToActiveTrip: this.loadSupplementaryStockToActiveTrip.bind(this),
+        openTripAndLoad: this.openTripAndLoad.bind(this),
+      });
+    }
+    return this.requisitionDispatch;
   }
 
   async recordSuspicionEvent(params: RecordVanSuspicionParams) {
@@ -1400,52 +1426,14 @@ export class VanSalesService {
     return this.vanRequisitionsService.submitLoadRequisition(repId, tenantId, accountId, payload);
   }
 
-  async createLoadRequisitionByAdmin(
-    tenantId: string,
-    accountId: string,
-    userId: number,
-    payload: {
+  async createLoadRequisitionByAdmin(tenantId: string, accountId: string, userId: number, payload: {
       repId: number;
       sourceWarehouseId?: number;
       items: { productId: number; qty: number; sourceWarehouseId?: number; sourceWarehouseName?: string }[];
       notes?: string;
       dispatchImmediately?: boolean;
-    },
-  ) {
-    const repId = Number(payload.repId);
-    if (!repId) {
-      throw new AppError('يرجى تحديد مندوب التوزيع أولاً', 'REP_REQUIRED', 400);
-    }
-    const subRes = await this.submitLoadRequisition(repId, tenantId, accountId, {
-      sourceWarehouseId: payload.sourceWarehouseId,
-      items: payload.items,
-      notes: payload.notes,
-      allowMultiplePending: Boolean(payload.dispatchImmediately),
-    });
-
-    if (payload.dispatchImmediately) {
-      const dispatchRes = await this.approveAndDispatchRequisition(
-        tenantId,
-        accountId,
-        subRes.requisitionId,
-        userId,
-      );
-      return {
-        ok: true,
-        docNo: subRes.docNo,
-        requisitionId: subRes.requisitionId,
-        dispatched: true,
-        tripId: dispatchRes.tripId,
-        isSupplementary: dispatchRes.isSupplementary,
-      };
-    }
-
-    return {
-      ok: true,
-      docNo: subRes.docNo,
-      requisitionId: subRes.requisitionId,
-      dispatched: false,
-    };
+    }) {
+    return this.getRequisitionDispatch().createLoadRequisitionByAdmin(tenantId, accountId, userId, payload);
   }
 
   async listLoadRequisitions(tenantId: string, filters: { status?: string; repId?: number } = {}) {
@@ -1463,54 +1451,7 @@ export class VanSalesService {
   }
 
   async approveAndDispatchRequisition(tenantId: string, accountId: string, requisitionId: number, reviewedByUserId: number) {
-    const req = await this.vanRequisitionsService.getRequisitionForDispatch(tenantId, requisitionId);
-
-    // Check if the rep already has an active open trip
-    const existingTrip = await this.anyDb
-      .selectFrom('van_sales_trips as vt')
-      .select(['vt.id'])
-      .where('vt.rep_id', '=', Number(req.rep_id))
-      .where('vt.tenant_id', '=', tenantId)
-      .where('vt.status', '=', 'open')
-      .orderBy('vt.id', 'desc')
-      .executeTakeFirst();
-
-    let tripId: number;
-    let isSupplementary = false;
-
-    if (existingTrip) {
-      // Driver already has an open trip -> Supplementary load into active trip!
-      const loadResult = await this.loadSupplementaryStockToActiveTrip(
-        Number(req.rep_id),
-        tenantId,
-        accountId,
-        Number(existingTrip.id),
-        {
-          sourceWarehouseId: Number(req.source_warehouse_id),
-          items: req.itemsToLoad,
-          notes: req.notes || `صرف وتحميل إضافي (استعواض) بناءً على طلب إذن تحميل #${req.doc_no}`,
-        },
-      );
-      tripId = loadResult.tripId;
-      isSupplementary = true;
-    } else {
-      // Open a fresh trip for the rep
-      const tripResult = await this.openTripAndLoad(
-        Number(req.rep_id),
-        tenantId,
-        accountId,
-        {
-          sourceWarehouseId: Number(req.source_warehouse_id),
-          items: req.itemsToLoad,
-          notes: req.notes || `صرف وتحميل بناءً على طلب إذن تحميل #${req.doc_no}`,
-        },
-      );
-      tripId = tripResult.tripId;
-    }
-
-    await this.vanRequisitionsService.markRequisitionDispatched(tenantId, requisitionId, tripId, reviewedByUserId);
-
-    return { ok: true, requisitionId, tripId, docNo: req.doc_no, isSupplementary };
+    return this.getRequisitionDispatch().approveAndDispatchRequisition(tenantId, accountId, requisitionId, reviewedByUserId);
   }
 
   async rejectLoadRequisition(tenantId: string, requisitionId: number, rejectionReason: string, reviewedByUserId: number) {
