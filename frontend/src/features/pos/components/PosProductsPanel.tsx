@@ -679,7 +679,11 @@ function PosProductGroupCardComponent({
               {variantCount} {t('pos.options', 'خيارات')}
             </span>
           ) : (itemKind as string) !== 'service' && typeof totalStock === 'number' ? (
-            totalStock <= 0 ? (
+            // INV-POS-GALLERY-PILL-NEGATIVE-SALES: the pill must follow the
+            // same isOutOfStock verdict as the rest of the panel (which
+            // honours allowNegativeStockSales) instead of re-deriving it
+            // from totalStock alone, or sellable zero-stock items show نفد.
+            isOutOfStock ? (
               <span
                 style={{
                   fontSize: '9px',
@@ -694,7 +698,7 @@ function PosProductGroupCardComponent({
               >
                 {t('pos.out_of_stock', 'نفد')}
               </span>
-            ) : totalStock <= 5 ? (
+            ) : totalStock > 0 && totalStock <= 5 ? (
               <span
                 style={{
                   fontSize: '9px',

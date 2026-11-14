@@ -330,4 +330,70 @@ describe('PosProductsPanel', () => {
     expect(screen.getByText('Product 001')).toBeInTheDocument();
     expect(screen.getByText('Other 002')).toBeInTheDocument();
   });
+
+  // INV-POS-GALLERY-PILL-NEGATIVE-SALES: the gallery card's floating pill
+  // derived "نفد" from totalStock <= 0 alone and never consulted the
+  // negative-selling setting, while every other POS surface (comfortable
+  // card, variant picker, add-to-cart gate) honours it — so with the
+  // setting ON, sellable zero-stock items showed نفد in the gallery
+  // (image) layout and not in the expanded-card layout.
+  it('gallery card hides the out-of-stock pill when negative sales are enabled', async () => {
+    const user = userEvent.setup();
+    const onAddProduct = vi.fn();
+    const outOfStock = { ...createProduct(2), stock: 0 };
+
+    renderWithClient(
+      <PosProductsPanel
+        search=""
+        onSearchChange={vi.fn()}
+        onSearchSubmitFirstResult={() => false}
+        priceType="retail"
+        onPriceTypeChange={vi.fn()}
+        products={[outOfStock]}
+        recentProducts={[]}
+        onAddProduct={onAddProduct}
+        productFilter="all"
+        onProductFilterChange={vi.fn()}
+        searchInputRef={createRef<HTMLInputElement>()}
+        posMode="touch"
+      />,
+      { allowNegativeStockSales: true, posHideOutOfStockItems: false, posProductCardLayout: 'gallery' }
+    );
+
+    expect(screen.getByText('Product 002')).toBeInTheDocument();
+    expect(screen.queryAllByText('نفد')).toHaveLength(0);
+
+    const cardButton = screen.getByText('Product 002').closest('button');
+    expect(cardButton).toBeTruthy();
+    if (cardButton) {
+      await user.click(cardButton);
+      expect(onAddProduct).toHaveBeenCalledTimes(1);
+      expect(onAddProduct).toHaveBeenCalledWith(expect.objectContaining({ id: outOfStock.id }));
+    }
+  });
+
+  it('gallery card still shows the out-of-stock pill when negative sales are disabled', () => {
+    const outOfStock = { ...createProduct(2), stock: 0 };
+
+    renderWithClient(
+      <PosProductsPanel
+        search=""
+        onSearchChange={vi.fn()}
+        onSearchSubmitFirstResult={() => false}
+        priceType="retail"
+        onPriceTypeChange={vi.fn()}
+        products={[outOfStock]}
+        recentProducts={[]}
+        onAddProduct={vi.fn()}
+        productFilter="all"
+        onProductFilterChange={vi.fn()}
+        searchInputRef={createRef<HTMLInputElement>()}
+        posMode="touch"
+      />,
+      { allowNegativeStockSales: false, posHideOutOfStockItems: false, posProductCardLayout: 'gallery' }
+    );
+
+    expect(screen.getByText('Product 002')).toBeInTheDocument();
+    expect(screen.getAllByText('نفد').length).toBeGreaterThan(0);
+  });
 });
