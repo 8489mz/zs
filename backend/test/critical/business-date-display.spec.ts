@@ -258,14 +258,19 @@ async function main(): Promise<void> {
     // 2026-11-08, not 2026-11-07. Deterministic: on a Cairo host the
     // old local-midnight snap (00:00 Cairo = 22:00Z the day before)
     // sliced the previous day. The child runs the REAL service method.
-    const histTmp = path.resolve(__dirname, '.tmp-r3c-histogram-check.ts');
+    // Parallel-safe temp dir: the old fixed repo-relative file collided
+    // when two workers ran this spec at once. mkdtemp stays inside
+    // test/critical/ (not os.tmpdir()) so the child script's relative
+    // src imports keep resolving — one level deeper, hence ../../../src.
+    const histDir = fs.mkdtempSync(path.join(__dirname, '.tmp-r3c-'));
+    const histTmp = path.join(histDir, 'histogram-check.ts');
     try {
       fs.writeFileSync(histTmp, `import 'reflect-metadata';
 import { PGlite } from '@electric-sql/pglite';
 import { Kysely, sql } from 'kysely';
 import { PGliteDialect } from 'kysely-pglite-dialect';
-import { Database } from '../../src/database/database.types';
-import { ContractingService } from '../../src/modules/contracting/contracting.service';
+import { Database } from '../../../src/database/database.types';
+import { ContractingService } from '../../../src/modules/contracting/contracting.service';
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
@@ -292,6 +297,7 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
       assert.ok(histOut.includes('WEEK_END=2026-11-14'), `histogram week ends 6 days later (got: ${histOut.trim()})`);
     } finally {
       try { fs.unlinkSync(histTmp); } catch { /* already gone */ }
+      try { fs.rmSync(histDir, { recursive: true, force: true }); } catch { /* already gone */ }
     }
 
     // 9. Payroll month-end under a Cairo-TZ child process: the local
