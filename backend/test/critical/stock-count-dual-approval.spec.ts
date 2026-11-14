@@ -1,30 +1,34 @@
 /*
 New file: backend/test/critical/stock-count-dual-approval.spec.ts
-Pins dual control on stock-count approval (INV-STOCK-COUNT-DUAL-APPROVAL).
+Pins approval on stock-count variance posting
+(INV-STOCK-COUNT-DUAL-APPROVAL, as revised by
+INV-STOCK-COUNT-SELF-APPROVAL, 2026-11-14).
 
-THE GAP: assertCountVarianceApproval returned early for admin /
-super_admin, so an admin posting their own count never needed any
-approval at all; and the posting code then wrote
+THE GAP (2026-11-12): assertCountVarianceApproval returned early
+for admin / super_admin, so an admin posting their own count never
+needed any approval at all; and the posting code then wrote
 approved_by: auth.userId, so counter = poster = approver for any
 variance size. A single person could count, post, and approve their
-own variance.
+own variance with no credential at all.
 
-THE RULE: there is no admin bypass -- every variance approval
+THE RULE NOW: there is no admin bypass -- every variance approval
 requires a credential, and the credential must identify an approver
-user who differs from BOTH the counter (the session's counted_by)
-and the poster (auth.userId at post time). Only the password path
-identifies its holder, so only a manager (admin / super_admin)
-password can approve: the shared manager PIN cannot identify who
-presented it and is rejected as an approval credential. approved_by
-records the approver's id, never the poster's; a zero-variance
-session needs no approval and records no approver (null).
+user via the password path (the shared manager PIN identifies no
+approver and is rejected). Self-approval is ALLOWED: the approver
+may be the counter, the poster, or both
+(INV-STOCK-COUNT-SELF-APPROVAL supersedes the different-person bans
+STOCK_COUNT_APPROVER_SAME_AS_COUNTER /
+STOCK_COUNT_APPROVER_SAME_AS_POSTER — the second manager may be a
+shop owner who does not use computers). approved_by records the
+approver's id (the password holder); a zero-variance session needs
+no approval and records no approver (null).
 
 WHAT THIS PINS, driving the REAL postStockCountSession on PGlite:
-- an admin posting their own count with a variance and no second
-  approver is rejected (ADMIN_PASSWORD_REQUIRED); their own password
-  is rejected too (approver == counter).
-- approver == counter is rejected (STOCK_COUNT_APPROVER_SAME_AS_COUNTER).
-- approver == poster is rejected (STOCK_COUNT_APPROVER_SAME_AS_POSTER).
+- an admin posting their own count with a variance and no credential
+  is rejected (ADMIN_PASSWORD_REQUIRED); their own password approves
+  and records them as approver.
+- approver == counter approves (the counter's own password posts).
+- approver == poster approves (the poster's own password posts).
 - the shared manager PIN cannot approve
   (STOCK_COUNT_APPROVER_NOT_IDENTIFIED); a wrong password is rejected
   (ADMIN_PASSWORD_INVALID).
@@ -137,31 +141,40 @@ async function main(): Promise<void> {
     }
 
     // Case 1: an admin posting their own count (counter = poster = 1)
-    // with a variance and no second approver: no credential is
-    // rejected (the bypass is gone), and their own password is
-    // rejected too -- the approver would be the counter.
+    // with a variance and no credential is rejected (the bypass is
+    // gone); their own password approves and records them as the
+    // approver (self-approval allowed, INV-STOCK-COUNT-SELF-APPROVAL).
     await seedProduct(db, 1);
     await sql`UPDATE product_location_stock SET qty = 90 WHERE product_id = 1 AND location_id = 1`.execute(db);
     await seedSession(db, 301, 1, 90, 85, 1);
     await expectCode(service.postStockCountSession(301, ADMIN1), 'ADMIN_PASSWORD_REQUIRED');
-    await expectCode(service.postStockCountSession(301, ADMIN1, 'admin1-pass'), 'STOCK_COUNT_APPROVER_SAME_AS_COUNTER');
     assert.equal((await sessionState(db, 301)).status, 'draft');
+    await service.postStockCountSession(301, ADMIN1, 'admin1-pass');
+    const selfApproved = await sessionState(db, 301);
+    assert.equal(selfApproved.status, 'posted');
+    assert.equal(selfApproved.approvedBy, 1);
+    const loc1 = await sql<{ qty: string }>`SELECT qty FROM product_location_stock WHERE product_id = 1 AND location_id = 1`.execute(db);
+    assert.equal(Number(loc1.rows[0].qty), 85);
 
     // Case 2: approver == counter. Cashier posts a count made by
-    // admin1; admin1's own password must not approve it.
+    // admin1; admin1's own password approves it.
     await seedProduct(db, 2);
     await sql`UPDATE product_location_stock SET qty = 90 WHERE product_id = 2 AND location_id = 1`.execute(db);
     await seedSession(db, 302, 2, 90, 85, 1);
-    await expectCode(service.postStockCountSession(302, CASHIER, 'admin1-pass'), 'STOCK_COUNT_APPROVER_SAME_AS_COUNTER');
-    assert.equal((await sessionState(db, 302)).status, 'draft');
+    await service.postStockCountSession(302, CASHIER, 'admin1-pass');
+    const counterApproved = await sessionState(db, 302);
+    assert.equal(counterApproved.status, 'posted');
+    assert.equal(counterApproved.approvedBy, 1);
 
     // Case 3: approver == poster. Admin1 posts a count made by the
-    // cashier; admin1's password must not approve their own posting.
+    // cashier; admin1's own password approves their own posting.
     await seedProduct(db, 3);
     await sql`UPDATE product_location_stock SET qty = 90 WHERE product_id = 3 AND location_id = 1`.execute(db);
     await seedSession(db, 303, 3, 90, 85, 2);
-    await expectCode(service.postStockCountSession(303, ADMIN1, 'admin1-pass'), 'STOCK_COUNT_APPROVER_SAME_AS_POSTER');
-    assert.equal((await sessionState(db, 303)).status, 'draft');
+    await service.postStockCountSession(303, ADMIN1, 'admin1-pass');
+    const posterApproved = await sessionState(db, 303);
+    assert.equal(posterApproved.status, 'posted');
+    assert.equal(posterApproved.approvedBy, 1);
 
     // Case 4: the shared manager PIN cannot identify its holder, so
     // it can never satisfy dual control -- even for a session whose

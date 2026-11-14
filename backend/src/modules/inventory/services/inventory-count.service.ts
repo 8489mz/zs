@@ -317,24 +317,31 @@ export class InventoryCountService {
     return '';
   }
 
-  // INV-STOCK-COUNT-DUAL-APPROVAL: variance approval is dual control.
-  // There is no admin/super_admin bypass: every variance approval
-  // requires a credential, and the credential must identify an
-  // approver user who differs from BOTH the counter (the session's
-  // counted_by) and the poster (auth.userId at post time). Only the
+  // INV-STOCK-COUNT-DUAL-APPROVAL: variance approval requires an
+  // identified manager credential — there is no admin/super_admin
+  // bypass and no credential-free posting of a variance. Only the
   // password path identifies its holder, so only a manager (admin /
   // super_admin) password can approve: the shared manager PIN cannot
   // identify who presented it and is rejected as an approval
   // credential. Returns the approver's user id, which the caller
-  // records as approved_by. A zero-variance session needs no approval
-  // (see INV-SPIRIT-COUNT-POSTING) and never calls this method.
-  private async assertCountVarianceApproval(credential: string | undefined, auth: AuthContext, countedBy: number | null): Promise<number> {
+  // records as approved_by.
+  // INV-STOCK-COUNT-SELF-APPROVAL: self-approval is allowed — the
+  // approver may be the counter, the poster, or both. The
+  // different-person bans of INV-STOCK-COUNT-DUAL-APPROVAL
+  // (STOCK_COUNT_APPROVER_SAME_AS_COUNTER /
+  // STOCK_COUNT_APPROVER_SAME_AS_POSTER) are removed: a second
+  // manager may be a shop owner who does not use computers, and
+  // waiting for one blocks the business. The audit trail survives:
+  // approved_by always records the password holder's id. A
+  // zero-variance session needs no approval (see
+  // INV-SPIRIT-COUNT-POSTING) and never calls this method.
+  private async assertCountVarianceApproval(credential: string | undefined, auth: AuthContext): Promise<number> {
     const normalized = String(credential || '').trim();
     if (!normalized) {
       throw new AppError('اعتماد فروقات الجرد يتطلب كلمة مرور مدير محدد', 'ADMIN_PASSWORD_REQUIRED', 403);
     }
     // The shared manager PIN cannot identify its holder, so it can
-    // never satisfy dual control. PIN storage itself is out of scope;
+    // never satisfy approval. PIN storage itself is out of scope;
     // only its use as a variance-approval credential ends here.
     const managerPin = await this.getManagerPin(this.db, auth);
     if (managerPin && normalized === managerPin) {
@@ -354,14 +361,7 @@ export class InventoryCountService {
         String(managerUser.password_salt || ''),
       );
       if (!check.valid) continue;
-      const approverId = Number(managerUser.id);
-      if (countedBy != null && approverId === Number(countedBy)) {
-        throw new AppError('معتمد فروقات الجرد يجب أن يكون شخصاً مختلفاً عن من قام بالجرد', 'STOCK_COUNT_APPROVER_SAME_AS_COUNTER', 403);
-      }
-      if (approverId === Number(auth.userId)) {
-        throw new AppError('معتمد فروقات الجرد يجب أن يكون شخصاً مختلفاً عن من يقوم بالترحيل', 'STOCK_COUNT_APPROVER_SAME_AS_POSTER', 403);
-      }
-      return approverId;
+      return Number(managerUser.id);
     }
     throw new AppError('كلمة مرور المدير غير صحيحة', 'ADMIN_PASSWORD_INVALID', 403);
   }
@@ -381,8 +381,9 @@ export class InventoryCountService {
     // the transaction stays authoritative for the skip itself.
     // INV-STOCK-COUNT-DUAL-APPROVAL: the approver id resolved here is
     // the only value ever written to approved_by (below); when no
-    // approval is needed it stays null, so the poster is never
-    // recorded as an approver they are not.
+    // approval is needed it stays null. The approver is the password
+    // holder, who may be the poster themself
+    // (INV-STOCK-COUNT-SELF-APPROVAL).
     let approvedBy: number | null = null;
     const approvalSession = await this.db.selectFrom('stock_count_sessions').select(['id', 'branch_id', 'location_id', 'status', 'counted_by'])
       .where('id', '=', sessionId).where(this.tenantPredicate(auth)).executeTakeFirst();
@@ -417,7 +418,7 @@ export class InventoryCountService {
         const expectedQty = Number(item.expected_qty || 0);
         if (Math.abs(currentOnHand - expectedQty) < 0.001 || Math.abs(currentAvailable - expectedQty) < 0.001) { needsApproval = true; break; }
       }
-      if (needsApproval) approvedBy = await this.assertCountVarianceApproval(adminPassword, auth, approvalSession.counted_by == null ? null : Number(approvalSession.counted_by));
+      if (needsApproval) approvedBy = await this.assertCountVarianceApproval(adminPassword, auth);
     }
 
     const chunkSize = 64;
@@ -570,8 +571,10 @@ export class InventoryCountService {
         await trx.updateTable('stock_count_sessions').set({
           status: hasMoreChunks ? 'posting' : (skippedItemIds.length ? 'draft' : 'posted'),
           // INV-STOCK-COUNT-DUAL-APPROVAL: approved_by is the identified
-          // approver resolved before the loop, never the poster; null
-          // when the session needed no approval (zero variance).
+          // approver resolved before the loop — the password holder,
+          // who may be the poster themself
+          // (INV-STOCK-COUNT-SELF-APPROVAL); null when the session
+          // needed no approval (zero variance).
           approved_by: approvedBy,
           ...(hasMoreChunks || skippedItemIds.length ? {} : { posted_at: sql`NOW()` }),
           updated_at: sql`NOW()`,
