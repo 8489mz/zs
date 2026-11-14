@@ -124,6 +124,7 @@
     "test/critical/file-size-cap-guard.spec.ts",
     "test/critical/users-grant-error-names-permission.spec.ts",
     "test/critical/category-1a-money-dates.spec.ts",
-    "test/critical/business-date-display.spec.ts"
+    "test/critical/business-date-display.spec.ts",
+    "test/critical/fmcg-promotion-date-mapping.spec.ts"
   ]
 }

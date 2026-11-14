@@ -12,6 +12,25 @@ import {
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { formatLocalCalendarDay } from '../../../common/utils/tenant-timezone.util';
+
+/**
+ * Converts a pg DATE column value to its YYYY-MM-DD calendar-day key.
+ * node-postgres returns DATE columns as local-midnight JS Dates, so
+ * String(value).slice(0, 10) yields "Sat Nov 14", not a date -- and the
+ * engine's string comparison then skips every promotion with a startDate
+ * ("Sat Nov 14" > any YYYY-MM-DD) and never expires one ("Sat Nov 13"
+ * < any YYYY-MM-DD is false). A Date is rendered from its local calendar
+ * parts (the stored day); a string already in YYYY-MM-DD form passes
+ * through; any other string is parsed and rendered the same way.
+ */
+export function promotionDateKey(value: unknown): string {
+  if (value instanceof Date) return formatLocalCalendarDay(value);
+  const s = String(value);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const parsed = new Date(s);
+  return Number.isFinite(parsed.getTime()) ? formatLocalCalendarDay(parsed) : s;
+}
 
 export interface UpsertFmcgPromotionDto {
   name: string;
@@ -209,8 +228,8 @@ export class VanPromotionsService {
       buyConditions: parseJson(r.buy_conditions),
       reward: parseJson(r.reward),
       customerTypes: parseJson(r.customer_types),
-      startDate: r.start_date ? String(r.start_date).slice(0, 10) : null,
-      endDate: r.end_date ? String(r.end_date).slice(0, 10) : null,
+      startDate: r.start_date ? promotionDateKey(r.start_date) : null,
+      endDate: r.end_date ? promotionDateKey(r.end_date) : null,
       isActive: Boolean(r.is_active),
       maxApplicationsPerOrder: Number(r.max_applications_per_order || 1),
       priority: Number(r.priority || 0),
