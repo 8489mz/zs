@@ -310,7 +310,7 @@ async function main(): Promise<void> {
   {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-write.service.ts'), 'utf8');
+    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale.service.ts'), 'utf8');
     assert.ok(serviceSource.includes('INV-POS-ADMIN-DISCOUNT-AUTHORITY'), 'service marks the admin authority');
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(invariants.split('- INV-POS-ADMIN-DISCOUNT-AUTHORITY ').length - 1, 1, 'invariant entry exists exactly once');

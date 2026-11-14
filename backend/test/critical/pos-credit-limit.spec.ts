@@ -366,7 +366,7 @@ async function main(): Promise<void> {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const here = __dirname;
-    const writeSource = readFileSync(resolve(here, '../../src/modules/sales/services/sales-write.service.ts'), 'utf8');
+    const writeSource = readFileSync(resolve(here, '../../src/modules/sales/services/create-sale.service.ts'), 'utf8');
     const financeSource = readFileSync(resolve(here, '../../src/modules/sales/services/sales-finance.service.ts'), 'utf8');
     assert.ok(!writeSource.includes("throw new AppError('Customer credit limit exceeded'"), 'no bare English throw may remain in sales-write');
     assert.ok(!financeSource.includes("throw new AppError('Customer credit limit exceeded'"), 'no bare English throw may remain in sales-finance');

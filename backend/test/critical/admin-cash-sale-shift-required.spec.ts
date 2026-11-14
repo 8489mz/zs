@@ -326,7 +326,7 @@ async function main(): Promise<void> {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/sales/services/sales-write.service.ts'), 'utf8');
+    const serviceSource = readFileSync(resolve(here, '../../src/modules/sales/services/create-sale.service.ts'), 'utf8');
     assert.ok(serviceSource.includes('INV-ADMIN-CASH-SALE-SHIFT-REQUIRED'), 'the gate names the invariant');
     const gateLine = serviceSource.split('\n').find((line) => line.includes('paymentType') && line.includes('paymentChannel') && line.includes('hasOpenShift') === false && line.includes('else if'));
     assert.ok(gateLine && !gateLine.includes('super_admin'), 'the cash-sale gate carries no role exemption');

@@ -449,7 +449,9 @@ async function main(): Promise<void> {
   {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-write.service.ts'), 'utf8');
+    const createSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale.service.ts'), 'utf8');
+    const editSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-edit-and-cancel.service.ts'), 'utf8');
+    const serviceSource = createSource + editSource;
     assert.ok(serviceSource.includes('findBelowFloorSaleItems'), 'both sites call the shared helper');
     assert.ok(serviceSource.includes('INV-SALE-EDIT-COST-FLOOR'), 'edit floor check is marked');
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');

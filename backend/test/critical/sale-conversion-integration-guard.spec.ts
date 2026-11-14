@@ -514,7 +514,7 @@ async function main(): Promise<void> {
   {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
-    const writeSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-write.service.ts'), 'utf8');
+    const writeSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/create-sale.service.ts'), 'utf8');
     assert.ok(writeSource.includes('roundSaleInvoiceTotals'), 'createSale rounds totals through the shared seam');
     const ordersSource = readFileSync(resolve(__dirname, '../../src/modules/sales/services/sales-orders.service.ts'), 'utf8');
     assert.ok(ordersSource.includes('resolveConversionDiscounts'), 'order conversion reconciles line discounts');

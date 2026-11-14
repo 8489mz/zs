@@ -161,6 +161,9 @@ function testForbiddenPatternsAreGone(): void {
     const salesWrite = read(path);
     assert.ok(!/recordPostingFailure\(/.test(salesWrite),
       'new sale transactions must propagate journal errors, not commit an unposted invoice into the recovery queue');
+  }
+  for (const path of ['modules/sales/services/create-sale.service.ts', 'modules/delivery-reps/van-sales.service.ts']) {
+    const salesWrite = read(path);
     assert.ok(/await this\.accountingPosting\.postSale\(trx,/.test(salesWrite));
     assert.ok(/clearPostingFailure\(trx,/.test(salesWrite),
       'a successful posting must still resolve a historical failure');

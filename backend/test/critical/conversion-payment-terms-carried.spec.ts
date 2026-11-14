@@ -254,7 +254,10 @@ async function main() {
     // check consumes exactly this shape.
     {
       const writer = readFileSync(
-        resolve(__dirname, '../../src/modules/sales/services/sales-write.service.ts'),
+        resolve(__dirname, '../../src/modules/sales/services/create-sale.service.ts'),
+        'utf8',
+      ) + readFileSync(
+        resolve(__dirname, '../../src/modules/sales/services/sales-edit-and-cancel.service.ts'),
         'utf8',
       );
       const limitSites = writer.split('CUSTOMER_CREDIT_LIMIT').length - 1;
