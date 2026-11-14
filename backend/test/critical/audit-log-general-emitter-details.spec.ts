@@ -42,7 +42,9 @@ import { migration as auditKeyMigration } from '../../src/database/migrations/20
 
 const ADMIN = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
 const CASHIER = { tenantId: 't1', accountId: 'a1', role: 'cashier', userId: 2, username: 'cashier', permissions: [] } as unknown as AuthContext;
-const DATE = '2026-10-31T10:00:00.000Z';
+// Relative to the tenant day (clock P6 bounds expense dates to the last
+// 7 days): three days ago, inside the window, never a fixed old date.
+const DATE = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
 
 function realPosting(): AccountingPostingService {
   const foundation = { ensureForAuth: async () => {}, ensureForScope: async () => {} } as unknown as AccountingTenantFoundationService;

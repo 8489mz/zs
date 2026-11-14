@@ -1,4 +1,5 @@
 import { todayTenantDate } from '../../common/utils/tenant-timezone.util';
+import { firstDayOfTenantMonth } from '../../common/utils/client-date-bounds.util';
 
 /**
  * محرك نقي لحسم لحظة البصمة وتاريخ يوم العمل.
@@ -70,7 +71,22 @@ export function resolveAttendancePunch(
   }
 
   // تحرير يدوي: التاريخ والأوقات من العميل، مع التحقق منها.
-  const workDate = normalizeDateOnly(input.workDate) || todayTenantDate(tenantTimezone, now);
+  // Manual corrections stay possible, but bounded to the OPEN PAYROLL
+  // MONTH — [first day of the tenant's current month, today]. Anything
+  // older or in the future is a tampered or mistaken date, not a
+  // correction. Days inside approved/paid payroll runs stay blocked by
+  // assertAttendanceDayNotPosted in the service; this is the outer fence.
+  const suppliedWorkDate = normalizeDateOnly(input.workDate);
+  if (suppliedWorkDate) {
+    const todayKey = todayTenantDate(tenantTimezone, now);
+    if (suppliedWorkDate < firstDayOfTenantMonth(todayKey) || suppliedWorkDate > todayKey) {
+      throw new AttendancePunchError(
+        'Attendance date is outside the open payroll month',
+        'HR_ATTENDANCE_DATE_OUT_OF_RANGE',
+      );
+    }
+  }
+  const workDate = suppliedWorkDate || todayTenantDate(tenantTimezone, now);
   const checkInAt = input.checkInAt ? new Date(input.checkInAt) : null;
   const checkOutAt = input.checkOutAt ? new Date(input.checkOutAt) : null;
 

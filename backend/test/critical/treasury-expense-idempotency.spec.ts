@@ -52,7 +52,9 @@ import { CashDrawerService } from '../../src/modules/cash-drawer/cash-drawer.ser
 import { migration as expenseKeyMigration } from '../../src/database/migrations/2040000000272_expense_request_key';
 
 const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
-const DATE = '2026-10-31T10:00:00.000Z';
+// Relative to the tenant day (clock P6 bounds expense dates to the last
+// 7 days): three days ago, inside the window, never a fixed old date.
+const DATE = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
 
 async function countExpenses(db: Kysely<Database>): Promise<number> {
   const rows = await sql<{ n: string }>`SELECT COUNT(*) AS n FROM expenses`.execute(db);

@@ -11,6 +11,8 @@ import { CreateExpenseDto } from './dto/create-expense.dto';
 import { CancelExpenseDto } from './dto/cancel-expense.dto';
 import { CreateTreasuryTransferDto } from './dto/create-treasury-transfer.dto';
 import { AppError } from '../../common/errors/app-error';
+import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
+import { checkClientBusinessDay, CLIENT_BUSINESS_DATE_PAST_DAYS } from '../../common/utils/client-date-bounds.util';
 import { paginateRows } from '../../common/utils/pagination';
 import { canonicalLockIds } from '../../common/utils/canonical-lock-order';
 import { lockAccountingPeriod } from '../accounting/accounting-period-lock';
@@ -152,6 +154,18 @@ export class TreasuryService {
     const expenseDate = new Date(payload.date);
     if (!Number.isFinite(expenseDate.getTime())) {
       throw new AppError('Expense date is invalid', 'INVALID_EXPENSE_DATE', 400);
+    }
+    // Single-server-clock rule (P6, RC-5): the expense date posts the
+    // journal (entryDate = expense_date), so it must fall inside the
+    // tenant's recent window [today-7d, today] — an older or future
+    // date is a tampered or mistaken date, not an expense. The closed-
+    // period journal re-check remains the backstop for the rest.
+    const expenseDay = checkClientBusinessDay(payload.date, await getTenantTimezone(this.db, scope.tenantId), {
+      minDayOffset: -CLIENT_BUSINESS_DATE_PAST_DAYS,
+      maxDayOffset: 0,
+    });
+    if (!expenseDay.ok) {
+      throw new AppError('Expense date is outside the allowed window', 'EXPENSE_DATE_OUT_OF_RANGE', 400);
     }
     const title = String(payload.title || '').trim();
     const note = String(payload.note || '').trim();

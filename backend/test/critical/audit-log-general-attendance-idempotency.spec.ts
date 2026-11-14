@@ -35,9 +35,13 @@ import { TransactionHelper } from '../../src/database/helpers/transaction.helper
 import { AuditService } from '../../src/core/audit/audit.service';
 import { HrService } from '../../src/modules/hr/hr.service';
 import { migration as auditKeyMigration } from '../../src/database/migrations/2040000000293_audit_logs_idempotency_key';
+import { todayTenantDate } from '../../src/common/utils/tenant-timezone.util';
 
 const AUTH = { tenantId: 't1', accountId: 'a1', role: 'admin', userId: 1, username: 'admin', permissions: [] } as unknown as AuthContext;
-const WORK_DATE = '2026-11-04';
+// The tenant day itself (clock P6 bounds manual work dates to the open
+// payroll month): today is always in-month, never a fixed old date.
+// The tenant timezone is Africa/Cairo, the same zone the fixture uses.
+const WORK_DATE = todayTenantDate('Africa/Cairo', new Date());
 
 const PAYLOAD = {
   workDate: WORK_DATE,
@@ -45,8 +49,8 @@ const PAYLOAD = {
     {
       employeeId: 1,
       status: 'present',
-      checkInAt: '2026-11-04T09:00:00+02:00',
-      checkOutAt: '2026-11-04T17:00:00+02:00',
+      checkInAt: `${WORK_DATE}T09:00:00+02:00`,
+      checkOutAt: `${WORK_DATE}T17:00:00+02:00`,
       source: 'manual',
       notes: '',
     },
@@ -101,7 +105,7 @@ async function main(): Promise<void> {
     assert.equal(await countAttendanceRows(db), 1, 'attendance still one upserted row');
 
     // A genuine correction (different check-out) -> a second row.
-    const corrected = { ...PAYLOAD, rows: [{ ...PAYLOAD.rows[0], checkOutAt: '2026-11-04T18:00:00+02:00' }] };
+    const corrected = { ...PAYLOAD, rows: [{ ...PAYLOAD.rows[0], checkOutAt: `${WORK_DATE}T18:00:00+02:00` }] };
     await service.bulkSaveAttendance(corrected as never, AUTH);
     assert.equal(await countAuditRows(db), 2, 'a correction with a different payload still logs');
     assert.equal(await countAttendanceRows(db), 1, 'attendance still one upserted row');

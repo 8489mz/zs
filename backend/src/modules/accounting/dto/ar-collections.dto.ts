@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, IsIn, Min, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, IsIn, IsDateString, Min, MaxLength } from 'class-validator';
 
 export class ArCollectionsQueryDto {
   @IsOptional()
@@ -38,8 +38,12 @@ export class CreateCollectionLogDto {
   @MaxLength(1000)
   details?: string;
 
+  // Single-server-clock rule (P6, RC-5): these were @IsString(), so any
+  // string — including garbage — was stored verbatim into a date column.
+  // @IsDateString() rejects non-dates at the boundary; the service
+  // additionally bounds them to [today, today+365d] in the tenant zone.
   @IsOptional()
-  @IsString()
+  @IsDateString()
   promisedDate?: string;
 
   @IsOptional()
@@ -48,13 +52,13 @@ export class CreateCollectionLogDto {
   promisedAmount?: number;
 
   @IsOptional()
-  @IsString()
+  @IsDateString()
   nextFollowupDate?: string;
 }
 
 export class RecordPromiseToPayDto {
-  @IsString()
   @IsNotEmpty()
+  @IsDateString()
   promisedDate!: string;
 
   @IsNumber()

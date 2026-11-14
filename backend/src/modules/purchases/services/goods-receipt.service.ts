@@ -7,6 +7,7 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
+import { checkClientBusinessDay, CLIENT_BUSINESS_DATE_PAST_DAYS } from '../../../common/utils/client-date-bounds.util';
 import { CreateGoodsReceiptDto, CreateGrnBillDto, VerifyThreeWayMatchDto } from '../dto/goods-receipt.dto';
 import { computeThreeWayMatch, ThreeWayMatchInput } from '../three-way-match.engine';
 import { applyStockDelta, lockStockProducts } from '../../../common/utils/location-stock-ledger';
@@ -103,6 +104,21 @@ export class GoodsReceiptService {
 
   async createGoodsReceipt(dto: CreateGoodsReceiptDto, auth: AuthContext): Promise<any> {
     const scope = requireTenantScope(auth);
+
+    // Single-server-clock rule (P6, RC-5): the receipt date becomes the
+    // GRNI journal entryDate, so a supplied receivedAt must fall inside
+    // the tenant's recent window [today-7d, today] — an older or future
+    // date is a tampered or mistaken date, not a receipt. Omitted stays
+    // server-now (the existing default).
+    if (dto.receivedAt) {
+      const receivedDay = checkClientBusinessDay(dto.receivedAt, await getTenantTimezone(this.db, scope.tenantId), {
+        minDayOffset: -CLIENT_BUSINESS_DATE_PAST_DAYS,
+        maxDayOffset: 0,
+      });
+      if (!receivedDay.ok) {
+        throw new BadRequestException('تاريخ الاستلام خارج النطاق المسموح (آخر 7 أيام حتى اليوم).');
+      }
+    }
 
     if (!dto.lines || dto.lines.length === 0) {
       throw new BadRequestException('يجب إدخال بند واحد على الأقل في إذن الاستلام.');

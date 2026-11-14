@@ -8,6 +8,11 @@ import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 import { formatLocalCalendarDay, getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
+import {
+  checkClientBusinessDay,
+  CLIENT_BUSINESS_DATE_PAST_DAYS,
+  CLIENT_INSTALLMENT_SCHEDULE_YEARS,
+} from '../../../common/utils/client-date-bounds.util';
 import { SalesFinanceService } from './sales-finance.service';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
@@ -128,7 +133,23 @@ export class CustomerInstallmentsService {
       throw new AppError('Customer not found', 'CUSTOMER_NOT_FOUND', 404);
     }
 
+    // Single-server-clock rule (P6, RC-5): startDate was not even
+    // parse-checked while firstDueDate was — asymmetric. Both are now
+    // checked against the tenant day: the plan starts inside
+    // [today-7d, today], and the first due date must fall inside the
+    // schedule [startDate, startDate + 5y].
+    const tenantTz = await getTenantTimezone(this.db, scope.tenantId);
     const startDate = dto.startDate ? new Date(dto.startDate) : new Date();
+    if (dto.startDate && Number.isNaN(startDate.getTime())) {
+      throw new AppError('Invalid start date', 'INVALID_START_DATE', 400);
+    }
+    const startDay = checkClientBusinessDay(dto.startDate ?? startDate, tenantTz, {
+      minDayOffset: -CLIENT_BUSINESS_DATE_PAST_DAYS,
+      maxDayOffset: 0,
+    });
+    if (!startDay.ok) {
+      throw new AppError('Installment start date is outside the allowed window', 'INSTALLMENT_START_DATE_OUT_OF_RANGE', 400);
+    }
 
     // INV-INSTALLMENT-FIRST-DUE-DATE: the create form labels this
     // field "first installment due date". The schedule anchor is the
@@ -138,6 +159,16 @@ export class CustomerInstallmentsService {
     const firstDueDate = dto.firstDueDate ? new Date(dto.firstDueDate) : null;
     if (firstDueDate && Number.isNaN(firstDueDate.getTime())) {
       throw new AppError('Invalid first due date', 'INVALID_FIRST_DUE_DATE', 400);
+    }
+    if (firstDueDate) {
+      const firstDueDay = checkClientBusinessDay(dto.firstDueDate, tenantTz, {
+        anchorDayKey: startDay.dayKey,
+        minDayOffset: 0,
+        maxDayOffset: CLIENT_INSTALLMENT_SCHEDULE_YEARS * 365,
+      });
+      if (!firstDueDay.ok) {
+        throw new AppError('First due date is outside the installment schedule', 'INSTALLMENT_FIRST_DUE_DATE_OUT_OF_RANGE', 400);
+      }
     }
 
     return await this.tx.runInTransaction(this.db, async (trx: Kysely<Database>) => {

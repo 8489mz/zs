@@ -18,6 +18,7 @@ import { HrService } from '../../src/modules/hr/hr.service';
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 import { TransactionHelper } from '../../src/database/helpers/transaction.helper';
 import { summarizeHourlyAttendance } from '../../src/modules/hr/engines/hourly-attendance-pay.engine';
+import { todayTenantDate } from '../../src/common/utils/tenant-timezone.util';
 
 const AUTH = { tenantId: 't1', accountId: 'a1', userId: 1, username: 'tester', role: 'admin', permissions: [] } as never;
 const AUDIT_STUB = { log: async () => ({}) } as never;
@@ -55,20 +56,26 @@ async function main(): Promise<void> {
     const posting = new AccountingPostingService(FOUNDATION_STUB as never);
     const service = new HrService(db, new TransactionHelper(), AUDIT_STUB, {} as never, posting, undefined);
 
+    // The tenant day itself (clock P6 bounds manual work dates to the
+    // open payroll month): today is always in-month, never a fixed old
+    // date. The tenant has no timezone setting, so the service falls
+    // back to Africa/Cairo — the same zone the fixture uses.
+    const WORK_DATE = todayTenantDate('Africa/Cairo', new Date());
+
     const upsert = (payload: Record<string, unknown>, label: string) =>
       withTimeout(service.upsertAttendanceRecord(payload as never, AUTH), 25000, label);
 
     await upsert({
-      employeeId: 1, workDate: '2026-03-02', status: 'present',
-      checkInAt: '2026-03-02T08:00:00.000Z', checkOutAt: '2026-03-02T12:00:00.000Z', source: 'manual',
+      employeeId: 1, workDate: WORK_DATE, status: 'present',
+      checkInAt: `${WORK_DATE}T08:00:00.000Z`, checkOutAt: `${WORK_DATE}T12:00:00.000Z`, source: 'manual',
     }, 'session 1');
     await upsert({
-      employeeId: 1, workDate: '2026-03-02', status: 'present',
-      checkInAt: '2026-03-02T13:00:00.000Z', mode: 'new_session', source: 'manual',
+      employeeId: 1, workDate: WORK_DATE, status: 'present',
+      checkInAt: `${WORK_DATE}T13:00:00.000Z`, mode: 'new_session', source: 'manual',
     }, 'session 2 check-in');
     await upsert({
-      employeeId: 1, workDate: '2026-03-02', status: 'present',
-      checkOutAt: '2026-03-02T17:00:00.000Z', source: 'manual',
+      employeeId: 1, workDate: WORK_DATE, status: 'present',
+      checkOutAt: `${WORK_DATE}T17:00:00.000Z`, source: 'manual',
     }, 'session 2 check-out');
 
     const readRow = async () => db.selectFrom('hr_attendance_records').selectAll().executeTakeFirstOrThrow() as unknown as Record<string, unknown>;
@@ -81,12 +88,12 @@ async function main(): Promise<void> {
 
     // A third session accumulates again: 480 prior + 60 current.
     await upsert({
-      employeeId: 1, workDate: '2026-03-02', status: 'present',
-      checkInAt: '2026-03-02T18:00:00.000Z', mode: 'new_session', source: 'manual',
+      employeeId: 1, workDate: WORK_DATE, status: 'present',
+      checkInAt: `${WORK_DATE}T18:00:00.000Z`, mode: 'new_session', source: 'manual',
     }, 'session 3 check-in');
     await upsert({
-      employeeId: 1, workDate: '2026-03-02', status: 'present',
-      checkOutAt: '2026-03-02T19:00:00.000Z', source: 'manual',
+      employeeId: 1, workDate: WORK_DATE, status: 'present',
+      checkOutAt: `${WORK_DATE}T19:00:00.000Z`, source: 'manual',
     }, 'session 3 check-out');
     row = await readRow();
     assert.equal(Number(row.prior_sessions_minutes), 480, 'stored prior minutes after session 3');

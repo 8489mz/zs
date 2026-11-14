@@ -12,6 +12,7 @@ import { CustomerInstallmentsService } from '../../src/modules/sales/services/cu
 import { SalesFinanceService } from '../../src/modules/sales/services/sales-finance.service';
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
+import { todayTenantDate } from '../../src/common/utils/tenant-timezone.util';
 
 /*
  * Installment first due date (INV-INSTALLMENT-FIRST-DUE-DATE).
@@ -61,6 +62,19 @@ const dateKey = (value: unknown): string => {
   return `${d.getFullYear()}-${month}-${day}`;
 };
 
+// Fixture dates are relative to the tenant day (clock P6 bounds plan
+// starts to the last 7 days): the plan starts three days ago, inside
+// the window, never on a fixed old date. The tenant has no timezone
+// setting, so the service falls back to Africa/Cairo — the same zone
+// the fixture uses. Expected schedules are derived from START by
+// UTC-calendar month arithmetic, matching the service's setMonth walk.
+const START = todayTenantDate('Africa/Cairo', new Date(Date.now() - 3 * 24 * 60 * 60 * 1000));
+const addMonthsToKey = (key: string, months: number): string => {
+  const [y, m, d] = key.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1 + months, d));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+};
+
 async function main(): Promise<void> {
   const pg = new PGlite();
   const db = new Kysely<Database>({ dialect: new PGliteDialect(pg) });
@@ -80,15 +94,15 @@ async function main(): Promise<void> {
     const service = new CustomerInstallmentsService(db, new TransactionHelper(), new SalesFinanceService(db), posting as any);
     const auth = { tenantId: 't-egp', accountId: 'a1', role: 'admin', userId: 1, permissions: [] } as unknown as AuthContext;
 
-    // The reported contract: entered first due 2026-11-05, 3 x 100.
-    // Before the fix the schedule started 2026-12-05.
+    // The reported contract: entered first due on the plan start, 3 x 100.
+    // Before the fix the schedule started one month after the start.
     const withFirstDue = await service.createPlan(
-      { customerId: 2, totalAmount: 300, downPayment: 0, interestRatePercent: 0, installmentCount: 3, startDate: '2026-11-05', firstDueDate: '2026-11-05' },
+      { customerId: 2, totalAmount: 300, downPayment: 0, interestRatePercent: 0, installmentCount: 3, startDate: START, firstDueDate: START },
       auth,
     );
     assert.deepEqual(
       withFirstDue.installments.map((row: any) => dateKey(row.due_date)),
-      ['2026-11-05', '2026-12-05', '2027-01-05'],
+      [START, addMonthsToKey(START, 1), addMonthsToKey(START, 2)],
     );
     assert.deepEqual(
       withFirstDue.installments.map((row: any) => Number(row.amount)),
@@ -96,17 +110,17 @@ async function main(): Promise<void> {
     );
     assert.equal(Number(withFirstDue.plan.monthly_amount), 100);
     assert.equal(Number(withFirstDue.plan.total_with_interest), 300);
-    assert.equal(dateKey((withFirstDue.plan as any).start_date), '2026-11-05');
+    assert.equal(dateKey((withFirstDue.plan as any).start_date), START);
 
     // Without an entered first due date the old shape is preserved:
     // first due one month after the plan start, amounts unchanged.
     const withoutFirstDue = await service.createPlan(
-      { customerId: 2, totalAmount: 300, downPayment: 0, interestRatePercent: 0, installmentCount: 3, startDate: '2026-11-05' },
+      { customerId: 2, totalAmount: 300, downPayment: 0, interestRatePercent: 0, installmentCount: 3, startDate: START },
       auth,
     );
     assert.deepEqual(
       withoutFirstDue.installments.map((row: any) => dateKey(row.due_date)),
-      ['2026-12-05', '2027-01-05', '2027-02-05'],
+      [addMonthsToKey(START, 1), addMonthsToKey(START, 2), addMonthsToKey(START, 3)],
     );
     assert.deepEqual(
       withoutFirstDue.installments.map((row: any) => Number(row.amount)),
@@ -117,7 +131,7 @@ async function main(): Promise<void> {
     // error instead of storing an invalid schedule.
     await assert.rejects(
       () => service.createPlan(
-        { customerId: 2, totalAmount: 300, downPayment: 0, interestRatePercent: 0, installmentCount: 3, startDate: '2026-11-05', firstDueDate: 'not-a-date' },
+        { customerId: 2, totalAmount: 300, downPayment: 0, interestRatePercent: 0, installmentCount: 3, startDate: START, firstDueDate: 'not-a-date' },
         auth,
       ),
       (error: unknown) => (error as { code?: string }).code === 'INVALID_FIRST_DUE_DATE',

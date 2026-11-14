@@ -14,6 +14,13 @@ import { AccountingPostingService } from '../../src/modules/accounting/accountin
 import { AccountingTenantFoundationService } from '../../src/modules/accounting/accounting-tenant-foundation.service';
 import { splitInstallmentSchedule, allocateInstallmentInterest } from '../../src/modules/accounting/engines/installment-interest.engine';
 import { toMinorUnits } from '../../src/modules/accounting/engines/money-minor-units.engine';
+import { todayTenantDate } from '../../src/common/utils/tenant-timezone.util';
+
+// Fixture starts are relative to the tenant day (clock P6 bounds plan
+// starts to the last 7 days): three days ago, inside the window. The
+// tenants have no timezone setting, so the service falls back to
+// Africa/Cairo — the same zone the fixture uses.
+const START = todayTenantDate('Africa/Cairo', new Date(Date.now() - 3 * 24 * 60 * 60 * 1000));
 
 /*
  * Customer installments minor units (INV-CUSTOMER-INSTALLMENTS-MINOR-UNITS).
@@ -131,7 +138,7 @@ async function main(): Promise<void> {
 
     // KWD: uneven 3dp total splits in fils, last row absorbs remainder.
     const kwd = await service.createPlan(
-      { customerId: 1, totalAmount: 100.126, downPayment: 0, interestRatePercent: 0, installmentCount: 3, startDate: '2026-11-01' },
+      { customerId: 1, totalAmount: 100.126, downPayment: 0, interestRatePercent: 0, installmentCount: 3, startDate: START },
       kwdAuth,
     );
     assert.equal(toMinorUnits(Number(kwd.plan.total_amount), 3), 100126);
@@ -142,7 +149,7 @@ async function main(): Promise<void> {
 
     // KWD: sub-minor input rounds leniently at book digits, no throw.
     const kwdRounded = await service.createPlan(
-      { customerId: 1, totalAmount: 100.1254, downPayment: 0, interestRatePercent: 0, installmentCount: 1, startDate: '2026-11-01' },
+      { customerId: 1, totalAmount: 100.1254, downPayment: 0, interestRatePercent: 0, installmentCount: 1, startDate: START },
       kwdAuth,
     );
     assert.equal(toMinorUnits(Number(kwdRounded.plan.total_amount), 3), 100125);
@@ -150,7 +157,7 @@ async function main(): Promise<void> {
 
     // EGP: the new last-row shape at 2dp through the real service.
     const egp = await service.createPlan(
-      { customerId: 2, totalAmount: 100, downPayment: 0, interestRatePercent: 0, installmentCount: 3, startDate: '2026-11-01' },
+      { customerId: 2, totalAmount: 100, downPayment: 0, interestRatePercent: 0, installmentCount: 3, startDate: START },
       egpAuth,
     );
     assert.equal(toMinorUnits(Number(egp.plan.total_with_interest), 2), 10000);
@@ -161,7 +168,7 @@ async function main(): Promise<void> {
     // same error code as before (message wording updated to minor units).
     await assert.rejects(
       () => service.createPlan(
-        { customerId: 2, totalAmount: 0.01, downPayment: 0, interestRatePercent: 0, installmentCount: 2, startDate: '2026-11-01' },
+        { customerId: 2, totalAmount: 0.01, downPayment: 0, interestRatePercent: 0, installmentCount: 2, startDate: START },
         egpAuth,
       ),
       (error: unknown) => (error as { code?: string }).code === 'INVALID_INSTALLMENT_COUNT',

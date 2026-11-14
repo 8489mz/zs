@@ -43,6 +43,7 @@ import {
 import { HrTreasuryAdapter } from './hr-treasury.adapter';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { getTenantTimezone, todayTenantDate, formatTimeInTimezone } from '../../common/utils/tenant-timezone.util';
+import { firstDayOfTenantMonth } from '../../common/utils/client-date-bounds.util';
 import {
   AttendancePunchError,
   resolveAttendancePunch,
@@ -5083,6 +5084,13 @@ export class HrService {
     requireTenantScope(auth);
     const workDate = normalizeDateOnly(payload.workDate);
     if (!workDate) throw new AppError('Attendance date is required', 'HR_ATTENDANCE_DATE_REQUIRED', 400);
+    // Same outer fence as the single manual edit (resolveAttendancePunch):
+    // a bulk day outside the open payroll month is rejected, not stored.
+    const tenantTimezone = await getTenantTimezone(this.db, auth.tenantId);
+    const todayKey = todayTenantDate(tenantTimezone);
+    if (workDate < firstDayOfTenantMonth(todayKey) || workDate > todayKey) {
+      throw new AppError('Attendance date is outside the open payroll month', 'HR_ATTENDANCE_DATE_OUT_OF_RANGE', 400);
+    }
     if (!Array.isArray(payload.rows) || payload.rows.length === 0) {
       throw new AppError('Attendance rows are required', 'HR_ATTENDANCE_ROWS_REQUIRED', 400);
     }
@@ -5314,6 +5322,11 @@ export class HrService {
       .execute();
     const empMap = new Map(employeesQuery.map((e) => [e.employee_no, e]));
 
+    // Tenant today, resolved once for the whole batch (same fence as the
+    // single manual edit and bulk save: the open payroll month).
+    const tenantTimezone = await getTenantTimezone(this.db, auth.tenantId);
+    const todayKey = todayTenantDate(tenantTimezone);
+
     let imported = 0;
     let skipped = 0;
     const errors: string[] = [];
@@ -5336,6 +5349,14 @@ export class HrService {
         const workDate = normalizeDateOnly(record.workDate);
         if (!workDate) {
           errors.push(`Invalid date for employee ${record.employeeNo}`);
+          skipped++;
+          continue;
+        }
+        // Same outer fence as the single manual edit: a record outside
+        // the open payroll month is skipped with an error, not imported
+        // — the batch itself keeps its per-record error pattern.
+        if (workDate < firstDayOfTenantMonth(todayKey) || workDate > todayKey) {
+          errors.push(`Date outside the open payroll month for employee ${record.employeeNo} on ${workDate}`);
           skipped++;
           continue;
         }

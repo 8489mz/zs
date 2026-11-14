@@ -8,6 +8,7 @@ import { CreateSalesOrderDto, UpdateSalesOrderDto } from '../dto/sales-order.dto
 import { SalesWriteService } from './sales-write.service';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
+import { checkClientBusinessDay, CLIENT_BUSINESS_DATE_FUTURE_DAYS } from '../../../common/utils/client-date-bounds.util';
 import { randomUUID } from 'node:crypto';
 import { reserveLocationStock, releaseLocationStock, getLocationAvailability } from '../../../common/utils/location-stock-ledger';
 import { idempotencyStorage } from '../../../core/idempotency/idempotency.context';
@@ -362,6 +363,33 @@ export class SalesOrdersService {
         total: dto.totalAmount,
       },
     );
+    // Single-server-clock rule (P6, RC-5): the order DTO is a plain
+    // interface with no validators, so these dates arrived unguarded
+    // (new Date(garbage) stored verbatim). Both are future by nature —
+    // a delivery date and a reservation expiry — so they must parse and
+    // fall inside [today, today+365d] in the tenant zone. The DTO stays
+    // a plain interface: converting it to a decorated class would need
+    // EVERY field decorated (the global pipe is whitelist +
+    // forbidNonWhitelisted), which is a separate package.
+    const orderTz = await getTenantTimezone(this.db, scope.tenantId);
+    if (dto.deliveryDate) {
+      const deliveryDay = checkClientBusinessDay(dto.deliveryDate, orderTz, {
+        minDayOffset: 0,
+        maxDayOffset: CLIENT_BUSINESS_DATE_FUTURE_DAYS,
+      });
+      if (!deliveryDay.ok) {
+        throw new BadRequestException('تاريخ التسليم غير صالح أو خارج النطاق المسموح (اليوم حتى سنة من الآن).');
+      }
+    }
+    if (dto.reservationExpiresAt) {
+      const expiryDay = checkClientBusinessDay(dto.reservationExpiresAt, orderTz, {
+        minDayOffset: 0,
+        maxDayOffset: CLIENT_BUSINESS_DATE_FUTURE_DAYS,
+      });
+      if (!expiryDay.ok) {
+        throw new BadRequestException('تاريخ انتهاء الحجز غير صالح أو خارج النطاق المسموح (اليوم حتى سنة من الآن).');
+      }
+    }
     const initialStatus = shouldReserve ? 'confirmed' : 'draft';
 
     const result = await this.db.transaction().execute(async (trx) => {

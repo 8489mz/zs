@@ -182,6 +182,7 @@
     "test/critical/van-fmcg-promotions-and-route-opt.spec.ts",
     "test/critical/withholding-tax-book-digits.spec.ts",
     "test/critical/clock-p4-utc-day-keys.spec.ts",
-    "test/critical/clock-p5-engines-tenant-tz.spec.ts"
+    "test/critical/clock-p5-engines-tenant-tz.spec.ts",
+    "test/critical/clock-p6-client-date-bounds.spec.ts"
   ]
 }

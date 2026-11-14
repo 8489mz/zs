@@ -14,6 +14,7 @@ import { tenantBaseCurrency } from '../accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
+import { checkClientBusinessDay, CLIENT_BUSINESS_DATE_FUTURE_DAYS } from '../../../common/utils/client-date-bounds.util';
 import { boundedPage } from '../../../common/utils/bounded-page';
 import {
   ArCollectionsQueryDto,
@@ -637,6 +638,30 @@ export class ArCollectionsService {
       throw new NotFoundException('Collection case not found');
     }
 
+    // Single-server-clock rule (P6, RC-5): a promise and a follow-up are
+    // future by nature — they must parse and fall inside [today,
+    // today+365d] in the tenant zone. A past promise or a date years out
+    // is a mistaken or tampered value, not a collection plan.
+    const arTz = await getTenantTimezone(this.db, tenantId);
+    if (dto.promisedDate) {
+      const promisedDay = checkClientBusinessDay(dto.promisedDate, arTz, {
+        minDayOffset: 0,
+        maxDayOffset: CLIENT_BUSINESS_DATE_FUTURE_DAYS,
+      });
+      if (!promisedDay.ok) {
+        throw new BadRequestException('Promised payment date is invalid or outside the allowed window.');
+      }
+    }
+    if (dto.nextFollowupDate) {
+      const followupDay = checkClientBusinessDay(dto.nextFollowupDate, arTz, {
+        minDayOffset: 0,
+        maxDayOffset: CLIENT_BUSINESS_DATE_FUTURE_DAYS,
+      });
+      if (!followupDay.ok) {
+        throw new BadRequestException('Next follow-up date is invalid or outside the allowed window.');
+      }
+    }
+
     const logId = `log_${randomUUID()}`;
     await (this.db as any)
       .insertInto('ar_collection_logs')
@@ -707,6 +732,17 @@ export class ArCollectionsService {
 
     if (!caseRecord) {
       throw new NotFoundException('Collection case not found');
+    }
+
+    // Single-server-clock rule (P6, RC-5): the promise date is future by
+    // nature — it must parse and fall inside [today, today+365d] in the
+    // tenant zone (same bound as logInteraction above).
+    const promisedDay = checkClientBusinessDay(dto.promisedDate, await getTenantTimezone(this.db, tenantId), {
+      minDayOffset: 0,
+      maxDayOffset: CLIENT_BUSINESS_DATE_FUTURE_DAYS,
+    });
+    if (!promisedDay.ok) {
+      throw new BadRequestException('Promised payment date is invalid or outside the allowed window.');
     }
 
     // 1. Update case status and promise date
