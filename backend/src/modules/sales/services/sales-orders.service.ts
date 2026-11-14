@@ -73,6 +73,30 @@ export class SalesOrdersService {
     return branchRow?.default_stock_location_id ? Number(branchRow.default_stock_location_id) : null;
   }
 
+  /**
+   * INV-SERVICE-STOCK-NO-STOCK-CHECK: services (products.item_type =
+   * 'service') sell without stock, so they must never be reserved —
+   * reserveLocationStock throws INSUFFICIENT_STOCK on a 0-stock line
+   * and a stamped reserved_quantity would be phantom stock. Returns
+   * the ids of the given products that are services.
+   */
+  private async loadServiceProductIds(
+    trx: Kysely<Database>,
+    scope: { tenantId: string; accountId: string },
+    productIds: number[],
+  ): Promise<Set<number>> {
+    const uniqueIds = Array.from(new Set(productIds.filter((id) => Number.isFinite(id) && id > 0)));
+    if (uniqueIds.length === 0) return new Set();
+    const rows = await trx
+      .selectFrom('products')
+      .select(['id', 'item_type'])
+      .where('tenant_id', '=', scope.tenantId)
+      .where('account_id', '=', scope.accountId)
+      .where('id', 'in', uniqueIds)
+      .execute();
+    return new Set(rows.filter((row) => row.item_type === 'service').map((row) => Number(row.id)));
+  }
+
   /** The warehouse already stored on an order, else its branch default. */
   private async resolveStoredOrderLocation(
     order: { warehouse_location_id?: number | null; branch_id?: number | null },
@@ -390,10 +414,17 @@ export class SalesOrdersService {
         .set({ order_number: formatDailyDocumentNumber('SO', Number(order.id)) })
         .where('id', '=', order.id).where('tenant_id', '=', scope.tenantId).execute();
 
+      // INV-SERVICE-STOCK-NO-STOCK-CHECK: services sell without stock —
+      // they reserve nothing (reserveLocationStock would throw
+      // INSUFFICIENT_STOCK on a 0-stock service line) and stamp no
+      // phantom reserved_quantity. Conversion releases only reserved
+      // lines, so a 0 here also means no release is handed to createSale.
+      const serviceProductIds = await this.loadServiceProductIds(trx, scope, (dto.items || []).map((item) => Number(item.productId)));
+
       if (dto.items && dto.items.length > 0) {
         for (const item of dto.items) {
           const qty = Number(item.quantity);
-          const reservedQty = shouldReserve ? qty : 0;
+          const reservedQty = shouldReserve && !serviceProductIds.has(Number(item.productId)) ? qty : 0;
 
           await trx
             .insertInto('sales_order_items')
@@ -425,7 +456,9 @@ export class SalesOrdersService {
           locationId: resolvedLocationId,
           tenantId: scope.tenantId,
           accountId: scope.accountId,
-          items: dto.items.map(item => ({ productId: item.productId, qty: Number(item.quantity) })),
+          items: dto.items
+            .filter((item) => !serviceProductIds.has(Number(item.productId)))
+            .map(item => ({ productId: item.productId, qty: Number(item.quantity) })),
         });
       }
 
@@ -515,8 +548,13 @@ export class SalesOrdersService {
         locationId = branchRow?.default_stock_location_id ? Number(branchRow.default_stock_location_id) : null;
       }
 
+      // INV-SERVICE-STOCK-NO-STOCK-CHECK: service lines reserve nothing
+      // (see createOrder) — skip both the ledger reservation and the
+      // reserved_quantity stamp for them.
+      const serviceProductIds = await this.loadServiceProductIds(trx, scope, items.map((item) => Number(item.product_id)));
       const reserveItems: Array<{ productId: number; qty: number }> = [];
       for (const item of items) {
+        if (serviceProductIds.has(Number(item.product_id))) continue;
         const qtyToReserve = Number(item.quantity) - Number(item.reserved_quantity || 0);
         if (qtyToReserve > 0) {
           reserveItems.push({

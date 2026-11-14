@@ -712,6 +712,53 @@ describe('removeItem never zeroes extras or clears the banner itself (T15-A)', (
     });
   });
 
+  // INV-SERVICE-STOCK-NO-STOCK-CHECK (spice trial D02): a grinding
+  // service is unsellable with "الصنف نافذ من المخزون" at stock 0.
+  // The handleAddProduct pre-check had no service exemption, so it
+  // refused before addPosItem (which already exempts services) ran.
+  describe('handleAddProduct sells a zero-stock service (INV-SERVICE-STOCK-NO-STOCK-CHECK)', () => {
+    const service: Product = { ...product, id: 'svc-1', name: 'Grinding', stock: 0, itemType: 'service' };
+
+    function liveCartActions() {
+      let liveCart: PosItem[] = [];
+      const setCart = vi.fn((updater: PosItem[] | ((cart: PosItem[]) => PosItem[])) => {
+        liveCart = typeof updater === 'function' ? updater(liveCart) : updater;
+        return liveCart;
+      });
+      const setSubmitMessage = vi.fn();
+      const setScannerMessage = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        cart: [],
+        setCart,
+        setSubmitMessage,
+        setScannerMessage,
+        settings: {},
+      }));
+      return { actions, setCart, setSubmitMessage, setScannerMessage, getLiveCart: () => liveCart };
+    }
+
+    it('adds the service on the first tap instead of refusing it as out of stock', () => {
+      const { actions, setSubmitMessage, getLiveCart } = liveCartActions();
+
+      const result = actions.handleAddProduct(service);
+
+      expect(result).toBe(true);
+      expect(setSubmitMessage).not.toHaveBeenCalled();
+      expect(getLiveCart().map((entry) => entry.productId)).toEqual(['svc-1']);
+      expect(getLiveCart()[0]?.qty).toBe(1);
+    });
+
+    it('adds a second unit without a phantom stock refusal', () => {
+      const { actions, setSubmitMessage, getLiveCart } = liveCartActions();
+
+      expect(actions.handleAddProduct(service)).toBe(true);
+      expect(actions.handleAddProduct(service)).toBe(true);
+      expect(setSubmitMessage).not.toHaveBeenCalled();
+      expect(getLiveCart()).toHaveLength(1);
+      expect(getLiveCart()[0]?.qty).toBe(2);
+    });
+  });
+
   /* T13-N2 — the reload half of the save-as-held reset: the canonical
    * reset must wipe the persisted draft snapshot, or a reload
    * re-initialises the workspace from it and the redemption is back.

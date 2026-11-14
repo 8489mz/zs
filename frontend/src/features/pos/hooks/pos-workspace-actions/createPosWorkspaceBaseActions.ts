@@ -2,6 +2,7 @@ import {
   addPosItem,
   addSerialToPosLine,
   isNegativeStockSalesAllowed,
+  isServiceProduct,
   isWeightedSaleUnit,
   removePosItem,
   removeSerialFromPosLine,
@@ -65,7 +66,13 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
   ) {
 
     const lineKey = unitId ? resolveUnitLineKey(product, unitId) : buildSaleLineKey(product, params.priceType);
-    const allowNegativeStockSales = isNegativeStockSalesAllowed(params.settings) || !!product.hasBom;
+    // INV-SERVICE-STOCK-NO-STOCK-CHECK (spice trial D02): services sell
+    // without stock — the same exemption addPosItem already applies.
+    // Without it the pre-check refused a 0-stock service before the
+    // add ever ran (and the in-updater live-qty check refused the
+    // second unit too). Folded in like hasBom: both gates below key
+    // off this one flag.
+    const allowNegativeStockSales = isNegativeStockSalesAllowed(params.settings) || !!product.hasBom || isServiceProduct(product);
     const unit = resolveSaleUnit(product, unitId);
     // SPICE-PKG3 (b): derive weighed from the SELECTED SALE UNIT —
     // tile taps, text search and quick-add never pass isWeighted, so

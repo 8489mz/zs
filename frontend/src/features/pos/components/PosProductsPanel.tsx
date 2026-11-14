@@ -28,7 +28,7 @@ import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { usePosUiCustomization } from '@/features/pos/hooks/usePosUiCustomization';
 import { useCachedT } from '@/features/pos/lib/cached-t';
 import { PosCustomizationDialog } from '@/features/pos/components/pos-workspace/PosCustomizationDialog';
-import { isNegativeStockSalesAllowed } from '@/features/pos/lib/pos.domain';
+import { isNegativeStockSalesAllowed, isServiceProduct } from '@/features/pos/lib/pos.domain';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits } from '@/shared/utils/money';
 import { toast } from '@/shared/components/system-alert';
@@ -1312,7 +1312,14 @@ function PosProductsPanelComponent({
   const isOutOfStockGroup = useCallback((group: PosProductGroup) => {
     if (allowNegativeStockSales) return false;
     const first = group.products[0];
-    const isService = (group.itemKind as string) === 'service' || (first as any)?.item_type === 'service';
+    // INV-SERVICE-STOCK-NO-STOCK-CHECK (spice trial D02): the old test
+    // read group.itemKind === 'service', but itemKind is only
+    // standard|fashion — the service kind lives on the products'
+    // itemType — so service groups fell through to totalStock <= 0
+    // and the trial's grinding service showed "الصنف نافذ من المخزون".
+    // Any member being a service exempts the whole group (a group never
+    // mixes a service with a stocked product).
+    const isService = group.products.some((entry) => isServiceProduct(entry));
     const hasBom = Boolean(first?.hasBom || (first as any)?.has_bom);
     if (isService || hasBom) return false;
     return typeof group.totalStock === 'number' && group.totalStock <= 0;

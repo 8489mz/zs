@@ -165,6 +165,72 @@ describe('PosProductsPanel', () => {
     expect(screen.queryByText('Product 002')).not.toBeInTheDocument();
   });
 
+  // INV-SERVICE-STOCK-NO-STOCK-CHECK (spice trial D02): a grinding
+  // service is unsellable with "الصنف نافذ من المخزون" at stock 0.
+  // isOutOfStockGroup tested group.itemKind === 'service', but
+  // itemKind is only standard|fashion — the service kind lives on
+  // itemType — so service groups fell through to totalStock <= 0.
+  it('sells a zero-stock service: clicking it adds it to the cart instead of warning out of stock', async () => {
+    const user = userEvent.setup();
+    const onAddProduct = vi.fn();
+    const service = { ...createProduct(1), name: 'Grinding 001', stock: 0, itemType: 'service' as const };
+
+    renderWithClient(
+      <PosProductsPanel
+        search=""
+        onSearchChange={vi.fn()}
+        onSearchSubmitFirstResult={() => false}
+        priceType="retail"
+        onPriceTypeChange={vi.fn()}
+        products={[service]}
+        recentProducts={[]}
+        onAddProduct={onAddProduct}
+        productFilter="all"
+        onProductFilterChange={vi.fn()}
+        searchInputRef={createRef<HTMLInputElement>()}
+        posMode="touch"
+      />,
+      { allowNegativeStockSales: false, posHideOutOfStockItems: false }
+    );
+
+    expect(screen.getByText('Grinding 001')).toBeInTheDocument();
+    expect(screen.queryAllByText('نفد')).toHaveLength(0);
+
+    const serviceButton = screen.getByText('Grinding 001').closest('button');
+    expect(serviceButton).toBeTruthy();
+    if (serviceButton) {
+      await user.click(serviceButton);
+      expect(onAddProduct).toHaveBeenCalledTimes(1);
+      expect(onAddProduct).toHaveBeenCalledWith(expect.objectContaining({ id: service.id }));
+    }
+  });
+
+  it('keeps a zero-stock service listed when out-of-stock items are hidden', () => {
+    const service = { ...createProduct(1), name: 'Grinding 001', stock: 0, itemType: 'service' as const };
+    const outOfStock = { ...createProduct(2), stock: 0 };
+
+    renderWithClient(
+      <PosProductsPanel
+        search=""
+        onSearchChange={vi.fn()}
+        onSearchSubmitFirstResult={() => false}
+        priceType="retail"
+        onPriceTypeChange={vi.fn()}
+        products={[service, outOfStock]}
+        recentProducts={[]}
+        onAddProduct={vi.fn()}
+        productFilter="all"
+        onProductFilterChange={vi.fn()}
+        searchInputRef={createRef<HTMLInputElement>()}
+        posMode="touch"
+      />,
+      { allowNegativeStockSales: false, posHideOutOfStockItems: true }
+    );
+
+    expect(screen.getByText('Grinding 001')).toBeInTheDocument();
+    expect(screen.queryByText('Product 002')).not.toBeInTheDocument();
+  });
+
   it('suppresses on-screen keyboard by default on mobile screens and allows toggling it', async () => {
     const originalInnerWidth = window.innerWidth;
     const originalMatchMedia = window.matchMedia;

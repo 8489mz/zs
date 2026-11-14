@@ -414,6 +414,18 @@ function rekeyPosLine(
   return `${base}${combo ? `::${combo[1]}` : ''}${split}`;
 }
 
+// INV-SERVICE-STOCK-NO-STOCK-CHECK (spice trial D02): the single
+// canonical service test. The service kind lives on itemType
+// ('product' | 'raw_material' | 'service'); itemKind is only
+// 'standard' | 'fashion' and can never be 'service'. The item_type
+// fallback covers database-shaped API payloads that were never
+// mapped to camelCase. Every stock gate must use this — the trial
+// bug was three ad-hoc tests disagreeing about where the kind lives.
+export function isServiceProduct(product: Product | null | undefined): boolean {
+  if (!product) return false;
+  return product.itemType === 'service' || (product as any).item_type === 'service';
+}
+
 export function addPosItem(cart: PosItem[], product: Product, options: AddPosItemOptions) {
   // INV-REST-FNB-TRUTH-2 (R-I11): 86 is enforced at the add, not at
   // checkout — the server rejects the line at submit anyway, but the
@@ -430,7 +442,7 @@ export function addPosItem(cart: PosItem[], product: Product, options: AddPosIte
   const isWeighted = options.isWeighted === true || isWeightedSaleUnit(unit.name);
   const minQty = getMinimumSaleQuantity(isWeighted);
   const requestedQty = normalizeSaleQuantity(options.quantity ?? 1, isWeighted);
-  const isService = product.itemType === 'service' || (product as any).item_type === 'service';
+  const isService = isServiceProduct(product);
   const stockLimit = (options.allowNegativeStockSales || isService) ? UNBOUNDED_STOCK_LIMIT : getResolvedStockLimit(product, unit, isWeighted);
   if (stockLimit < minQty) {
     const globalStock = Number((product as any).globalStock || 0);
@@ -614,7 +626,7 @@ export function applyComboToCart(
   }
   const comboLineId = options.comboLineId || `combo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const lineKey = buildComboLineKey(product, options.priceType, comboLineId);
-  const isService = product.itemType === 'service' || (product as any).item_type === 'service';
+  const isService = isServiceProduct(product);
   if (!options.allowNegativeStockSales && !isService) {
     const saleUnit = getSaleUnit(product);
     const comboBaseQty = Number.isFinite(Number(saleUnit.multiplier)) && Number(saleUnit.multiplier) > 0
@@ -937,7 +949,11 @@ export function syncPosCartStock(cart: PosItem[], products: Product[], options: 
     const unit = safeUnits(product).find((entry) => String(entry.id || '') === String(item.unitId || '') || String(entry.name || '') === String(item.unitName || '')) || getSaleUnit(product);
     const isWeighted = item.isWeighted === true;
     const minQty = getMinimumSaleQuantity(isWeighted);
-    const stockLimit = (options.allowNegativeStockSales || !!product.hasBom) ? UNBOUNDED_STOCK_LIMIT : getResolvedStockLimit(product, unit, isWeighted);
+    // INV-SERVICE-STOCK-NO-STOCK-CHECK: services sell without stock —
+    // the same exemption addPosItem already applies at the add. Without
+    // it a 0-stock service line was removed here (limit 0 < minQty 1).
+    const isService = isServiceProduct(product);
+    const stockLimit = (options.allowNegativeStockSales || !!product.hasBom || isService) ? UNBOUNDED_STOCK_LIMIT : getResolvedStockLimit(product, unit, isWeighted);
     /* INV-REST-HOLD-RECALL-TRUTH (R5-B): a held price is the agreed
      * price. A line restored from a hold (priceHeldAt) is never
      * repriced and never silently deleted: a stock-out held line is

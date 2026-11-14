@@ -76,6 +76,51 @@ describe('POS stock handling', () => {
     expect(result.clampedCount).toBe(0);
   });
 
+  // INV-SERVICE-STOCK-NO-STOCK-CHECK (spice trial D02): a grinding
+  // service is unsellable with "الصنف نافذ من المخزون" at stock 0.
+  // Services sell without stock: addPosItem already exempts them,
+  // but syncPosCartStock removed the line (limit 0 < minQty 1).
+  it('sells a zero-stock service without a stock error', () => {
+    const service: Product = { ...product, stock: 0, itemType: 'service' };
+    const cart = addPosItem([], service, { priceType: 'retail', digits: 2});
+
+    expect(cart).toHaveLength(1);
+    expect(cart[0].qty).toBe(1);
+  });
+
+  it('keeps a zero-stock service line during stock sync', () => {
+    const service: Product = { ...product, stock: 0, itemType: 'service' };
+    const cart = addPosItem([], service, { priceType: 'retail', digits: 2});
+    const result = syncPosCartStock(cart, [service], { allowNegativeStockSales: false, digits: 2});
+
+    expect(result.cart).toHaveLength(1);
+    expect(result.cart[0].qty).toBe(1);
+    expect(result.removedCount).toBe(0);
+    expect(result.clampedCount).toBe(0);
+  });
+
+  it('does not flag a held zero-stock service line unavailable during stock sync', () => {
+    const service: Product = { ...product, stock: 0, itemType: 'service' };
+    const cart = addPosItem([], service, { priceType: 'retail', digits: 2});
+    const held = [{ ...cart[0], priceHeldAt: Date.now() }];
+    const result = syncPosCartStock(held, [service], { allowNegativeStockSales: false, digits: 2});
+
+    expect(result.cart).toHaveLength(1);
+    expect(result.heldUnavailableCount).toBe(0);
+    // A held line that is not unavailable carries no flag at all
+    // (the sync only stamps heldUnavailable when it becomes true).
+    expect(result.cart[0].heldUnavailable).toBeFalsy();
+  });
+
+  it('treats a database-shaped service (item_type) the same as itemType during stock sync', () => {
+    const rawService = { ...product, stock: 0, itemType: undefined, item_type: 'service' } as unknown as Product;
+    const cart = addPosItem([], rawService, { priceType: 'retail', digits: 2});
+    const result = syncPosCartStock(cart, [rawService], { allowNegativeStockSales: false, digits: 2});
+
+    expect(result.cart).toHaveLength(1);
+    expect(result.removedCount).toBe(0);
+  });
+
   it('handles weighted quantities correctly when adding items', () => {
     const weightedProduct = { ...product, stock: 3 };
     const cart = addPosItem([], weightedProduct, { priceType: 'retail', isWeighted: true, quantity: 1.575, digits: 2});
