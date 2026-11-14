@@ -537,7 +537,7 @@ async function main(): Promise<void> {
   // Case 11: source + invariant pins.
   {
     const here = __dirname;
-    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/accounting-posting.service.ts'), 'utf8');
+    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
     assert.ok(postingSource.includes('vanFieldReturnCogsAmount'), 'the van field-return mirror must exist');
     assert.ok(postingSource.includes('salesReturnCogsResidual'), 'the mirror must reuse the shared residual grouping');
     assert.ok(postingSource.includes('VAN_FIELD_RETURN_FROZEN_COST_INVALID'), 'the named fail-closed error must exist');

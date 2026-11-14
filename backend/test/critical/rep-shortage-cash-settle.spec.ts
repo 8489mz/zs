@@ -140,7 +140,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE services (id bigserial PRIMARY KEY, tenant_id text, created_by bigint, service_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, payment_channel text, amount numeric);
     CREATE TABLE supplier_payments (id bigserial PRIMARY KEY, tenant_id text, created_by bigint, payment_date timestamptz, created_at timestamptz, branch_id bigint, location_id bigint, payment_channel text, amount numeric);
     CREATE TABLE customer_payments (id bigserial PRIMARY KEY, tenant_id text, created_by bigint, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, payment_channel text, amount numeric, note text);
-    CREATE TABLE expenses (id bigserial PRIMARY KEY, tenant_id text, created_by bigint, expense_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, amount numeric, title text, note text);
+    CREATE TABLE expenses (id bigserial PRIMARY KEY, tenant_id text, created_by bigint, expense_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, amount numeric, title text, note text, cancelled_at timestamptz, cancelled_by bigint, cancel_reason text);
   `);
   return { pg, db };
 }
@@ -567,7 +567,7 @@ async function main(): Promise<void> {
     assert.ok(vanSource.includes('postRepShortageCashCollection'), 'the settle calls the collection posting');
     assert.ok(vanSource.includes('postRepShortageWaiver'), 'the waiver calls the waiver reversal posting');
     assert.ok(vanSource.includes('rep-shortage-cash:'), 'the deterministic treasury request key exists');
-    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/accounting-posting.service.ts'), 'utf8');
+    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
     assert.ok(postingSource.includes('rep_shortage_cash_collection'), 'the collection journal source type exists');
     assert.ok(postingSource.includes('rep_shortage_waiver'), 'the waiver journal source type exists');
     assert.ok(postingSource.includes('INV-VAN-REP-SHORTAGE-WAIVER-REVERSAL'), 'the waiver posting names the invariant');

@@ -379,7 +379,7 @@ async function main(): Promise<void> {
       const { readFileSync } = await import('node:fs');
       const { resolve } = await import('node:path');
       const here = __dirname;
-      const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/accounting-posting.service.ts'), 'utf8');
+      const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
       assert.ok(postingSource.includes('postVanDamagedSwap'), 'the swap journal is posted by postVanDamagedSwap');
       assert.ok(postingSource.includes("'van_damaged_swap'"), 'the journal source is van_damaged_swap');
       const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');

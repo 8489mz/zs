@@ -584,7 +584,7 @@ async function main(): Promise<void> {
     assert.ok(returnsSource.includes('REFUND_METHOD_MISMATCH'), 'the named mismatch refusal must exist');
     assert.ok(returnsSource.includes('REFUND_EXCEEDS_CUSTOMER_BALANCE'), 'the named balance-floor refusal must exist');
     assert.ok(returnsSource.includes('REFUND_SALE_LEGS_UNVERIFIABLE'), 'the fail-closed unverifiable-legs refusal must exist');
-    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/accounting-posting.service.ts'), 'utf8');
+    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
     assert.ok(postingSource.includes('REFUND_METHOD_MISMATCH'), 'the posting boundary must refuse a mismatched refund');
     assert.ok(postingSource.includes('INV-VAN-RETURN-METHOD-MATCH'), 'the posting guard must be marked with the invariant id');
   }

@@ -484,7 +484,7 @@ async function main(): Promise<void> {
       assert.ok(vanSource.includes('(isCard || isInstapay) && totalSale > 0'), 'the sale gate covers instapay');
       assert.ok(vanSource.includes('isNonCashCollection'), 'the collection gate exists');
       assert.ok(vanSource.includes('transferReference: payload.transferReference'), 'the posting call hands the reference over');
-      const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/accounting-posting.service.ts'), 'utf8');
+      const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/van-and-delivery-posting.service.ts'), 'utf8');
       assert.ok(postingSource.includes('INV-VAN-FIELD-NONCASH-EVIDENCE-GATE'), 'the posting service names the invariant');
       assert.ok(postingSource.includes('transferReference?: string'), 'the posting takes a transfer reference');
       const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.controller.ts'), 'utf8');
