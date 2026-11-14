@@ -1,8 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@tanstack/react-query';
-import { http } from '@/lib/http';
-import { isCashBankAccount } from '@/features/accounting';
 import { isCashDrawerTransferType } from '@/features/cash-drawer/lib/cash-drawer-movement-request-key';
+import { useCounterpartAccounts } from '@/features/cash-drawer/hooks/useCounterpartAccounts';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { useEffect, useMemo, useState } from 'react';
 import { Controller, useWatch, type Control, type UseFormReturn } from 'react-hook-form';
@@ -55,17 +53,6 @@ interface CashDrawerFormsPanelProps {
 
 type DetailChannel = 'cardDetails' | 'walletDetails' | 'instapayDetails';
 
-/** Minimal shape of the accounts-endpoint rows the counterpart picker needs. */
-interface CashBankAccountRow {
-  id: string | number;
-  code: string;
-  nameAr?: string | null;
-  nameEn?: string | null;
-  accountType?: string | null;
-  normalBalance?: string | null;
-  isActive?: boolean | null;
-  flags?: { isCashBank?: boolean } | null;
-}
 const EMPTY_DETAIL_ROWS: Array<{ amount?: number }> = [];
 
 function normalizeCount(value: unknown): number {
@@ -572,27 +559,14 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
   // would be rejected server-side, so it is never offered — the
   // same filter rule as the import treasury dropdowns
   // (INV-IMPORT-ISCASHBANK-SWEEP).
-  // INV-DRAWER-DISBURSE-CASHIER-PASSWORD (trial T31): the drawer
-  // cash account itself (seeded code 1110) is NEVER offered — a
-  // transfer from the drawer to itself is not a transfer, and the
-  // backend rejects it with DRAWER_COUNTERPART_SAME_AS_CASH. The
-  // picker excludes by code because the frontend has no settings
-  // read for cash_account_id; the backend pre-check (which reads
-  // the tenant's real cash_account_id) stays authoritative. The
-  // dedicated safe account 1111 is offered, so a safe drop lands
-  // in the safe instead of the bank.
-  const { data: accountsData } = useQuery({
-    queryKey: ['accounts-list'],
-    queryFn: () => http<{ accounts: CashBankAccountRow[] }>('/api/accounting/accounts').catch(() => ({ accounts: [] })),
-  });
-  const cashBankAccounts = useMemo(
-    () =>
-      (accountsData?.accounts || []).filter(
-        (a) =>
-          isCashBankAccount(a) && a?.isActive !== false && a?.accountType === 'asset' && a?.normalBalance === 'debit' && String(a?.code || '').trim() !== '1110',
-      ),
-    [accountsData],
-  );
+  // INV-CASH-DRAWER-COUNTERPART-CASHIER-ACCESS: counterpart accounts
+  // come from the narrow cash-drawer endpoint (see
+  // useCounterpartAccounts) — the old query hit the admin-only
+  // chart endpoint and a cashier's 403 was swallowed into an empty
+  // list. A failed load now surfaces its real reason (s110/s111)
+  // instead of the misleading "no accounts" hint. The drawer cash
+  // account itself (1110) is still excluded inside the hook.
+  const { accounts: cashBankAccounts, loadFailed: accountsLoadFailed, loadForbidden: accountsLoadForbidden } = useCounterpartAccounts();
   const movementType = props.movementForm.watch('type');
   const isTransferMovement = isCashDrawerTransferType(movementType);
 
@@ -889,7 +863,7 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
           {isTransferMovement && (
             <Field
               label={t('cash_drawer.cash_drawer_forms_panel.s107', "الحساب المقابل (خزنة / بنك)")}
-              hint={cashBankAccounts.length === 0 ? t('cash_drawer.cash_drawer_forms_panel.s109', "لا توجد حسابات نقدية أو بنكية نشطة") : undefined}
+              hint={accountsLoadForbidden ? t('cash_drawer.cash_drawer_forms_panel.s110', "تعذّر تحميل الحسابات — لا تملك الصلاحية المطلوبة") : accountsLoadFailed ? t('cash_drawer.cash_drawer_forms_panel.s111', "تعذّر تحميل الحسابات — حاول مرة أخرى") : cashBankAccounts.length === 0 ? t('cash_drawer.cash_drawer_forms_panel.s109', "لا توجد حسابات نقدية أو بنكية نشطة") : undefined}
             >
               <Controller
                 name="counterpartAccountId"

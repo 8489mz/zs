@@ -4,6 +4,7 @@ import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
 import { CashDrawerService } from './cash-drawer.service';
+import { CashDrawerCounterpartService } from './cash-drawer-counterpart.service';
 import { CashMovementDto } from './dto/cash-movement.dto';
 import { CloseCashierShiftDto } from './dto/close-cashier-shift.dto';
 import { OpenCashierShiftDto } from './dto/open-cashier-shift.dto';
@@ -12,12 +13,25 @@ import { ReviewCashierShiftDto } from './dto/review-cashier-shift.dto';
 @Controller('api')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class CashDrawerController {
-  constructor(private readonly cashDrawerService: CashDrawerService) {}
+  constructor(
+    private readonly cashDrawerService: CashDrawerService,
+    private readonly counterpartService: CashDrawerCounterpartService,
+  ) {}
 
   @Get('cashier-shifts')
   @RequireAnyPermission('cashDrawer', 'hrPayroll', 'hrPayrollManage', 'hr', 'accounting')
   list(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.cashDrawerService.listCashierShifts(query, req.authContext!);
+  }
+
+  // INV-CASH-DRAWER-COUNTERPART-CASHIER-ACCESS: narrow counterpart
+  // list for the drawer movement form. Cashiers hold `cashDrawer`
+  // by default; the full chart endpoint stays behind
+  // AccountingAccessGuard (super_admin / admin / `accounting` only).
+  @Get('cashier-shifts/counterpart-accounts')
+  @RequirePermissions('cashDrawer')
+  counterpartAccounts(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+    return this.counterpartService.listCounterpartAccounts(req.authContext!);
   }
 
   @Post('cashier-shifts/open')

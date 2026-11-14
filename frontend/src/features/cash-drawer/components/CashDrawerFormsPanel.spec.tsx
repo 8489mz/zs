@@ -16,6 +16,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 import { useForm } from 'react-hook-form';
+import { ApiError, http } from '@/lib/http';
 import { CashDrawerFormsPanel } from './CashDrawerFormsPanel';
 import type {
   CloseShiftValues,
@@ -245,5 +246,19 @@ describe('CashDrawerFormsPanel movement types', () => {
     render(<Harness />);
     expect(screen.queryByText('الحساب المقابل (خزنة / بنك)')).toBeNull();
     expect(screen.getByRole('button', { name: 'حفظ الحركة' })).not.toBeDisabled();
+  });
+
+  // INV-CASH-DRAWER-COUNTERPART-CASHIER-ACCESS: the old picker
+  // swallowed a failed accounts load into an empty list, so a
+  // cashier's 403 read as "no active cash or bank accounts" — the
+  // exact false empty state that blocked the spice re-trial. A
+  // failed load must surface its real reason instead.
+  it('surfaces a permission hint — not the misleading empty-accounts hint — when the accounts load fails with 403', async () => {
+    vi.mocked(http).mockRejectedValueOnce(new ApiError('Forbidden', 403));
+    render(<Harness />);
+    await chooseType('تحويل للخزنة (إيداع آمن)');
+    expect(await screen.findByText('الحساب المقابل (خزنة / بنك)')).toBeTruthy();
+    expect(await screen.findByText('تعذّر تحميل الحسابات — لا تملك الصلاحية المطلوبة')).toBeTruthy();
+    expect(screen.queryByText('لا توجد حسابات نقدية أو بنكية نشطة')).toBeNull();
   });
 });
