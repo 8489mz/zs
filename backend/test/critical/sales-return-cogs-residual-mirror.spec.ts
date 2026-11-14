@@ -463,7 +463,7 @@ async function main(): Promise<void> {
   // Case 9: source + invariant pins.
   {
     const here = __dirname;
-    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/accounting-posting.service.ts'), 'utf8');
+    const postingSource = readFileSync(resolve(here, '../../src/modules/accounting/services/sales-returns-posting.service.ts'), 'utf8');
     assert.ok(postingSource.includes('salesReturnCogsResidual'), 'the return mirror must exist');
     assert.ok(postingSource.includes('residualCogsGroups'), 'the shared residual grouping must exist');
     assert.ok(postingSource.includes('resolveSalesReturnCostLines'), 'the return cost resolver must be shared');
