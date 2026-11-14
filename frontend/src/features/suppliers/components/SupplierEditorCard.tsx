@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/shared/ui/button';
@@ -9,11 +9,16 @@ import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import { MutationFeedback } from '@/shared/components/mutation-feedback';
 import { SubmitButton } from '@/shared/components/submit-button';
 import { DraftStateNotice } from '@/shared/components/draft-state-notice';
+import { StandardDialog } from '@/shared/components/StandardDialog';
 import { useUnsavedChangesGuard } from '@/shared/hooks/use-unsaved-changes-guard';
 import { useUpdateSupplierMutation } from '@/features/suppliers/hooks/useSupplierActions';
 import { supplierFormSchema, type SupplierFormInput, type SupplierFormOutput } from '@/features/suppliers/schemas/supplier.schema';
 import type { Supplier } from '@/types/domain';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
+import { SupplierPaymentForm } from '@/features/accounts';
+import { SupplierBillForm } from '@/features/suppliers/components/SupplierBillForm';
+import { SupplierBillsList } from '@/features/suppliers/components/SupplierBillsList';
+import { SupplierStatementTab } from '@/features/suppliers/components/SupplierStatementTab';
 
 export function SupplierEditorCard({ supplier, onSaved }: { supplier?: Supplier; onSaved?: () => void }) {
   const { t } = useTranslation();
@@ -21,9 +26,15 @@ export function SupplierEditorCard({ supplier, onSaved }: { supplier?: Supplier;
   const importModuleEnabled = settingsQuery.data?.importModuleEnabled === true;
   const form = useForm<SupplierFormInput, undefined, SupplierFormOutput>({
     resolver: zodResolver(supplierFormSchema),
-    defaultValues: { name: '', phone: '', address: '', balance: 0, notes: '' }
+    defaultValues: { name: '', phone: '', address: '', balance: 0, notes: '', supplierType: 'supplier', overdraftLimit: null }
   });
   const mutation = useUpdateSupplierMutation(supplier?.id ? String(supplier.id) : undefined, onSaved);
+  /* INV-SUPPLIER-PAGE-BILL-STATEMENT: the supplier page is this card —
+   * details (the form below), non-stock bills, and the statement of
+   * account. The form stays mounted when another tab is active (hidden,
+   * not unmounted) so unsaved edits survive tab switches. */
+  const [tab, setTab] = useState<'details' | 'bills' | 'statement'>('details');
+  const [paymentMode, setPaymentMode] = useState<'pay' | 'advance' | null>(null);
   useUnsavedChangesGuard(Boolean(supplier) && form.formState.isDirty && !mutation.isPending);
 
   useEffect(() => {
@@ -34,6 +45,8 @@ export function SupplierEditorCard({ supplier, onSaved }: { supplier?: Supplier;
       address: supplier.address || '',
       balance: Number(supplier.balance || 0),
       notes: supplier.notes || '',
+      supplierType: supplier.supplierType || 'supplier',
+      overdraftLimit: supplier.overdraftLimit ?? null,
       metadata: supplier.metadata || { currency: 'USD', supplierType: 'factory' }
     });
   }, [supplier, form]);
@@ -43,6 +56,26 @@ export function SupplierEditorCard({ supplier, onSaved }: { supplier?: Supplier;
   }
 
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <Button type="button" variant={tab === 'details' ? 'primary' : 'secondary'} onClick={() => setTab('details')}>
+          {t('suppliers.supplier_editor_card.s36', 'البيانات')}
+        </Button>
+        <Button type="button" variant={tab === 'bills' ? 'primary' : 'secondary'} onClick={() => setTab('bills')}>
+          {t('suppliers.supplier_editor_card.s37', 'فواتير بدون مخزون')}
+        </Button>
+        <Button type="button" variant={tab === 'statement' ? 'primary' : 'secondary'} onClick={() => setTab('statement')}>
+          {t('suppliers.supplier_editor_card.s38', 'كشف الحساب')}
+        </Button>
+        <span style={{ flex: 1 }} />
+        <Button type="button" variant="primary" onClick={() => setPaymentMode('pay')}>
+          {t('suppliers.supplier_editor_card.s39', 'دفع')}
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => setPaymentMode('advance')}>
+          {t('suppliers.supplier_editor_card.s40', 'سحبة')}
+        </Button>
+      </div>
+      <div style={{ display: tab === 'details' ? undefined : 'none' }}>
     <form className="form-grid supplier-form-grid" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
       <DraftStateNotice visible={form.formState.isDirty && !mutation.isPending} title={t('suppliers.supplier_editor_card.s1', "تعديلات المورد الحالية غير محفوظة")} hint={t('suppliers.supplier_editor_card.s2', "احفظ التغييرات أو أعد تعيين القيم قبل الانتقال إلى مورد آخر.")} />
       
@@ -91,6 +124,51 @@ export function SupplierEditorCard({ supplier, onSaved }: { supplier?: Supplier;
           {...form.register('balance')} 
           disabled={mutation.isPending} 
           placeholder="0.00"
+        />
+      </Field>
+
+      {/* INV-SUPPLIER-PAGE-BILL-STATEMENT: top-level supplier type —
+        'freelancer' is a contractor (ads/marketing) registered here,
+        not an HR employee. Do NOT confuse it with
+        metadata.supplierType in the import settings below (the import
+        classification). */}
+      <Field label={t('suppliers.supplier_editor_card.s30', "نوع المورد")} error={form.formState.errors.supplierType?.message}>
+        <Controller
+          name="supplierType"
+          control={form.control}
+          render={({ field }) => (
+            <CustomSelect
+              value={field.value || 'supplier'}
+              onChange={field.onChange}
+              disabled={mutation.isPending}
+              options={[
+                { value: 'supplier', label: t('suppliers.supplier_editor_card.s31', "عادي") },
+                { value: 'freelancer', label: t('suppliers.supplier_editor_card.s32', "فري لانس (مقاول / خدمات)") },
+              ]}
+            />
+          )}
+        />
+      </Field>
+
+      <Field
+        label={t('suppliers.supplier_editor_card.s33', "حد السحب على المكشوف")}
+        hint={t('suppliers.supplier_editor_card.s34', "أقصى مجموع الدفعات المقدمة غير المطبقة — اتركه فارغًا ليعني بدون حد")}
+        error={form.formState.errors.overdraftLimit?.message}
+      >
+        <Controller
+          name="overdraftLimit"
+          control={form.control}
+          render={({ field }) => (
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={field.value ?? ''}
+              disabled={mutation.isPending}
+              placeholder={t('suppliers.supplier_editor_card.s35', "بدون حد")}
+              onChange={(event) => field.onChange(event.target.value === '' ? null : Number(event.target.value))}
+            />
+          )}
         />
       </Field>
 
@@ -165,5 +243,32 @@ export function SupplierEditorCard({ supplier, onSaved }: { supplier?: Supplier;
         <SubmitButton type="submit" isPending={mutation.isPending} idleText={t('suppliers.supplier_editor_card.s26', "حفظ التعديل")} pendingText={t('suppliers.supplier_editor_card.s27', "جارٍ الحفظ...")} />
       </div>
     </form>
+      </div>
+      {tab === 'bills' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <SupplierBillForm supplierId={String(supplier.id)} />
+          <SupplierBillsList supplierId={String(supplier.id)} />
+        </div>
+      ) : null}
+      {tab === 'statement' ? <SupplierStatementTab supplier={supplier} /> : null}
+      <StandardDialog
+        open={paymentMode !== null}
+        onClose={() => setPaymentMode(null)}
+        title={paymentMode === 'advance' ? t('suppliers.supplier_editor_card.s41', 'سحبة / دفعة مقدمة') : t('suppliers.supplier_editor_card.s42', 'دفع للمورد')}
+        subtitle={supplier.name}
+        width="min(680px, 95vw)"
+        minHeight="auto"
+        zIndex={11000}
+      >
+        {paymentMode !== null ? (
+          <SupplierPaymentForm
+            suppliers={[supplier]}
+            activeSupplierId={String(supplier.id)}
+            defaultIsAdvance={paymentMode === 'advance'}
+            onSuccess={() => setPaymentMode(null)}
+          />
+        ) : null}
+      </StandardDialog>
+    </div>
   );
 }

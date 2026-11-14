@@ -100,6 +100,16 @@ export interface SupplierLedgerEntry {
   balance_after?: number;
   reference_type?: string;
   reference_id?: string;
+  /* INV-SUPPLIER-PAGE-BILL-STATEMENT: the API returns the camelCase
+   * shape (mapLedgerEntries) — type/amount/balanceAfter/createdAt —
+   * and a supplier_advance marker row carries its cash in
+   * advanceAmount (its amount is 0 by design, so the ledger sums
+   * still equal the balance). */
+  type?: string;
+  amount?: number;
+  balanceAfter?: number;
+  createdAt?: string;
+  advanceAmount?: number | null;
 }
 
 export interface LedgerSummary {

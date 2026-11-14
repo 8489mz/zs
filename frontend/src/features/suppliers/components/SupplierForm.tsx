@@ -14,7 +14,7 @@ import { useCreateSupplierMutation } from '@/features/suppliers/hooks/useCreateS
 import { supplierFormSchema, type SupplierFormInput, type SupplierFormOutput } from '@/features/suppliers/schemas/supplier.schema';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 
-const DEFAULT_VALUES = { name: '', phone: '', address: '', balance: 0, notes: '', metadata: { currency: 'USD', supplierType: 'factory', instapayAddress: '' } };
+const DEFAULT_VALUES = { name: '', phone: '', address: '', balance: 0, notes: '', metadata: { currency: 'USD', supplierType: 'factory', instapayAddress: '' }, supplierType: 'supplier' as const, overdraftLimit: null as number | null };
 
 export function SupplierForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   const { t } = useTranslation();
@@ -96,6 +96,50 @@ export function SupplierForm({ onSuccess }: { onSuccess?: () => void } = {}) {
           {...form.register('balance')} 
           disabled={mutation.isPending} 
           placeholder="0.00"
+        />
+      </Field>
+
+      {/* INV-SUPPLIER-PAGE-BILL-STATEMENT: top-level supplier type —
+        'freelancer' is a contractor (ads/marketing) registered here,
+        not an HR employee. Do NOT confuse it with
+        metadata.supplierType above (the import classification). */}
+      <Field label={t('suppliers.supplier_form.s30', "نوع المورد")} error={form.formState.errors.supplierType?.message}>
+        <Controller
+          name="supplierType"
+          control={form.control}
+          render={({ field }) => (
+            <CustomSelect
+              value={field.value || 'supplier'}
+              onChange={field.onChange}
+              disabled={mutation.isPending}
+              options={[
+                { value: 'supplier', label: t('suppliers.supplier_form.s31', "عادي") },
+                { value: 'freelancer', label: t('suppliers.supplier_form.s32', "فري لانس (مقاول / خدمات)") },
+              ]}
+            />
+          )}
+        />
+      </Field>
+
+      <Field
+        label={t('suppliers.supplier_form.s33', "حد السحب على المكشوف")}
+        hint={t('suppliers.supplier_form.s34', "أقصى مجموع الدفعات المقدمة غير المطبقة — اتركه فارغًا ليعني بدون حد")}
+        error={form.formState.errors.overdraftLimit?.message}
+      >
+        <Controller
+          name="overdraftLimit"
+          control={form.control}
+          render={({ field }) => (
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={field.value ?? ''}
+              disabled={mutation.isPending}
+              placeholder={t('suppliers.supplier_form.s35', "بدون حد")}
+              onChange={(event) => field.onChange(event.target.value === '' ? null : Number(event.target.value))}
+            />
+          )}
         />
       </Field>
 

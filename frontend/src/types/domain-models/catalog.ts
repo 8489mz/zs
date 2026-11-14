@@ -109,6 +109,13 @@ export interface Supplier {
   balance: number;
   notes: string;
   metadata?: any;
+  /* INV-SUPPLIER-PAGE-BILL-STATEMENT: 'freelancer' marks a contractor
+   * (ads/marketing) registered on the supplier page instead of as an HR
+   * employee. overdraftLimit caps cumulative outstanding advances; null
+   * (or absent) means uncapped. This is NOT metadata.supplierType
+   * (factory/shipping/customs — the import classification). */
+  supplierType?: 'supplier' | 'freelancer';
+  overdraftLimit?: number | null;
 }
 
 export interface Customer {

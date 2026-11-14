@@ -208,7 +208,16 @@ export function LedgerPanel({
           { key: 'type', header: t('accounts.ledger_panel.s9', "النوع"), cell: (entry) => formatLedgerEntryType(readEntryText(entry, ['entry_type', 'entryType', 'type']), readEntryText(entry, ['note', 'description'])) },
           { key: 'note', header: t('accounts.ledger_panel.s10', "الملاحظة"), cell: (entry) => readEntryText(entry, ['note', 'description']) || '—' },
           { key: 'date', header: t('accounts.ledger_panel.s11', "التاريخ"), cell: (entry) => formatDate(readEntryText(entry, ['created_at', 'createdAt', 'date'])) },
-          { key: 'debit', header: t('accounts.ledger_panel.s12', "مدين"), className: 'numeric-cell', cell: (entry) => formatCurrency(Number((entry as Entry & Record<string, unknown>).debit || 0)) },
+          { key: 'debit', header: t('accounts.ledger_panel.s12', "مدين"), className: 'numeric-cell', cell: (entry) => {
+            const row = entry as Entry & Record<string, unknown>;
+            /* INV-SUPPLIER-PAGE-BILL-STATEMENT: an advance marker row
+             * carries amount 0 — its cash lives in advanceAmount — so
+             * the statement shows the advance as the withdrawal, never 0. */
+            const entryType = readEntryText(entry, ['entry_type', 'entryType', 'type']);
+            const advanceAmount = row.advanceAmount ?? row.advance_amount;
+            const debit = entryType === 'supplier_advance' && advanceAmount != null ? Number(advanceAmount) : Number(row.debit || 0);
+            return formatCurrency(debit);
+          } },
           { key: 'credit', header: t('accounts.ledger_panel.s13', "دائن"), className: 'numeric-cell', cell: (entry) => formatCurrency(Number((entry as Entry & Record<string, unknown>).credit || 0)) },
           { key: 'balance', header: t('accounts.ledger_panel.s14', "الرصيد"), className: 'numeric-cell', cell: (entry) => formatCurrency(Number((entry as Entry & Record<string, unknown>).balance_after || (entry as Entry & Record<string, unknown>).balanceAfter || 0)) },
           {

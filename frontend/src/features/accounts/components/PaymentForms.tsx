@@ -351,11 +351,16 @@ export function CustomerPaymentForm({ customers, activeCustomerId, disabled = fa
   );
 }
 
-export function SupplierPaymentForm({ suppliers, activeSupplierId, disabled = false }: { suppliers: Supplier[]; activeSupplierId: string; disabled?: boolean }) {
+/* INV-SUPPLIER-PAGE-BILL-STATEMENT: the supplier page opens this form
+ * in two modes — a settlement ("دفع") and a withdrawal ("سحبة").
+ * defaultIsAdvance presets the advance toggle for the withdrawal mode
+ * (it wins over the balance-derived auto-toggle below); onSuccess lets
+ * the opener close its dialog after the payment posts. */
+export function SupplierPaymentForm({ suppliers, activeSupplierId, disabled = false, defaultIsAdvance, onSuccess }: { suppliers: Supplier[]; activeSupplierId: string; disabled?: boolean; defaultIsAdvance?: boolean; onSuccess?: () => void }) {
   const { t } = useTranslation();
   const form = useForm<SupplierPaymentInput, undefined, SupplierPaymentOutput>({
     resolver: zodResolver(supplierPaymentSchema),
-    defaultValues: { supplierId: activeSupplierId || '', amount: 0, note: '', paymentChannel: 'cash', instapayAddress: '', isAdvance: false }
+    defaultValues: { supplierId: activeSupplierId || '', amount: 0, note: '', paymentChannel: 'cash', instapayAddress: '', isAdvance: defaultIsAdvance === true }
   });
   // Mirror CustomerPaymentForm: a deep link (?supplierId=) must preselect
   // the supplier even when the id arrives after mount. Without this the
@@ -382,13 +387,18 @@ export function SupplierPaymentForm({ suppliers, activeSupplierId, disabled = fa
    * supplier settles nothing, so it is an advance by definition — the
    * toggle defaults ON for such a supplier. The merchant can still
    * switch it off by hand (the backend derives the same from the
-   * balance, so the payment stays an advance either way). */
+   * balance, so the payment stays an advance either way). A caller
+   * preset (defaultIsAdvance, the supplier page's سحبة button) wins
+   * over this derivation. */
   useEffect(() => {
     if (watchedSupplierId) {
-      form.setValue('isAdvance', Number(selectedSupplier?.balance || 0) <= 0);
+      form.setValue('isAdvance', defaultIsAdvance === true ? true : Number(selectedSupplier?.balance || 0) <= 0);
     }
-  }, [watchedSupplierId, form]);
-  const mutation = useSupplierPaymentMutation(activeSupplierId, () => form.reset({ supplierId: '', amount: 0, note: '', paymentChannel: 'cash', instapayAddress: '', isAdvance: false }));
+  }, [watchedSupplierId, form, defaultIsAdvance]);
+  const mutation = useSupplierPaymentMutation(activeSupplierId, () => {
+    form.reset({ supplierId: '', amount: 0, note: '', paymentChannel: 'cash', instapayAddress: '', isAdvance: false });
+    onSuccess?.();
+  });
 
   const supplierOptions = suppliers.map((s) => ({
     value: String(s.id),

@@ -30,6 +30,9 @@ export const queryKeys = {
   /* INV-SUPPLIER-ADVANCE-UI-WIRING: open advances of one supplier,
    * listed by the advances card for the apply action. */
   supplierAdvances: (supplierId: string) => ['supplier-advances', supplierId] as const,
+  /* INV-SUPPLIER-PAGE-BILL-STATEMENT: non-stock bills of one supplier,
+   * listed on the supplier page. */
+  supplierBills: (supplierId: string) => ['supplier-bills', supplierId] as const,
   settings: ['settings'] as const,
   settingsUsers: ['settings-users'] as const,
   settingsUsersPage: (paramsKey: string) => ['settings-users', 'page', paramsKey] as const,

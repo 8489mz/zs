@@ -9,6 +9,13 @@ export function formatLedgerEntryType(rawType?: string | null, note?: string | n
   if (type === 'purchase_cancel_restore') return 'إلغاء فاتورة شراء';
   if (type === 'customer_payment' || type === 'collection' || type === 'customer_collection') return 'سداد عميل';
   if (type === 'supplier_payment' || type === 'payment' || type === 'supplier_disbursement') return 'سداد للمورد';
+  /* INV-SUPPLIER-PAGE-BILL-STATEMENT: the non-stock bill and the
+   * advance marker/application rows the supplier statement shows.
+   * The marker row is a withdrawal on overdraft, not a settlement —
+   * it must read as a سحبة, never as the generic 'قيد حساب'. */
+  if (type === 'supplier_advance') return 'سحبة / دفعة مقدمة';
+  if (type === 'supplier_bill') return 'فاتورة مورد بدون مخزون';
+  if (type === 'supplier_advance_application') return 'تطبيق دفعة مقدمة';
   if (type === 'sale_return' || type === 'customer_return') return 'مرتجع مبيعات';
   if (type === 'sale_return_refund') return 'استرداد مرتجع مبيعات';
   if (type === 'purchase_return' || type === 'supplier_return') return 'مرتجع مشتريات';

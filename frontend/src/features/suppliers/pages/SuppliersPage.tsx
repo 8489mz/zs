@@ -63,7 +63,7 @@ export function SuppliersPage() {
           onClose={() => controller.setSelectedSupplier(null)}
           title={controller.selectedSupplier ? `تعديل: ${controller.selectedSupplier.name}` : ''}
           subtitle={__t('suppliers.suppliers_page.s0', "تحديث بيانات المورد أو ضبط الرصيد الافتتاحي والملاحظات")}
-          width="min(680px, 95vw)"
+          width="min(960px, 96vw)"
           minHeight="auto"
         >
           {controller.selectedSupplier && (

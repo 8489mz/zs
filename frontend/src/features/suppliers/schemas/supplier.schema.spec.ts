@@ -58,3 +58,59 @@ describe('supplier form schema round-trips the IPA', () => {
     expect((payload.metadata as Record<string, unknown>).instapayAddress).toBe('vendor@instapay');
   });
 });
+
+/* INV-SUPPLIER-PAGE-BILL-STATEMENT: the supplier card carries a
+ * top-level type (عادي / فري لانس) and an overdraft limit. The type
+ * is NOT metadata.supplierType (factory/shipping/customs — the import
+ * classification); it is its own field, and the limit is null when
+ * the owner leaves it empty (uncapped), never 0. */
+describe('buildSupplierPayload carries supplierType + overdraftLimit', () => {
+  it('passes a freelancer with a 5,000 limit through', () => {
+    const payload = buildSupplierPayload({
+      name: 'فري لانس',
+      supplierType: 'freelancer',
+      overdraftLimit: 5000,
+    });
+    expect(payload.supplierType).toBe('freelancer');
+    expect(payload.overdraftLimit).toBe(5000);
+  });
+
+  it('passes an empty limit through as null (uncapped), never 0', () => {
+    const payload = buildSupplierPayload({
+      name: 'مورد عادي',
+      supplierType: 'supplier',
+      overdraftLimit: null,
+    });
+    expect(payload.supplierType).toBe('supplier');
+    expect(payload.overdraftLimit).toBeNull();
+  });
+
+  it('parses both fields from the edit form values', () => {
+    const parsed = supplierFormSchema.parse({
+      name: 'فري لانس',
+      balance: 0,
+      supplierType: 'freelancer',
+      overdraftLimit: 5000,
+    });
+    expect(parsed.supplierType).toBe('freelancer');
+    expect(parsed.overdraftLimit).toBe(5000);
+    expect(buildSupplierPayload(parsed).overdraftLimit).toBe(5000);
+  });
+
+  it('rejects a negative overdraft limit', () => {
+    expect(() => supplierFormSchema.parse({
+      name: 'فري لانس',
+      balance: 0,
+      supplierType: 'freelancer',
+      overdraftLimit: -100,
+    })).toThrow();
+  });
+
+  it('rejects an unknown supplier type', () => {
+    expect(() => supplierFormSchema.parse({
+      name: 'مورد',
+      balance: 0,
+      supplierType: 'employee',
+    })).toThrow();
+  });
+});
