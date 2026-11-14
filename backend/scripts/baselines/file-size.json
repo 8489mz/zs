@@ -28,7 +28,7 @@
     "src/modules/delivery-reps/services/van-routes.service.ts": 1283,
     "src/modules/delivery-reps/services/van-trip-lifecycle.service.ts": 2904,
     "src/modules/delivery-reps/van-sales.controller.ts": 1828,
-    "src/modules/delivery-reps/van-sales.service.ts": 4034,
+    "src/modules/delivery-reps/van-sales.service.ts": 3239,
     "src/modules/delivery-reps/van-trip-reconciliation.engine.ts": 1295,
     "src/modules/hr/employee-portal.service.ts": 1010,
     "src/modules/hr/hr.service.ts": 7460,

@@ -527,7 +527,7 @@ async function main(): Promise<void> {
       const here = __dirname;
       const fieldSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-field-execution.service.ts'), 'utf8');
       const fleetSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-fleet.service.ts'), 'utf8');
-      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
+      const vanSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/services/van-expenses-packaging-customers.service.ts'), 'utf8');
       const controllerSource = readFileSync(resolve(here, '../../src/modules/delivery-reps/van-sales.controller.ts'), 'utf8');
       assert.ok(fieldSource.includes('INV-REP-DRIVER-WRITES-OWNERSHIP'), 'the field-execution fix names its invariant');
       assert.ok(fieldSource.includes('REP_VISIT_NOT_OWNED'), 'the visit guard names its error code');
