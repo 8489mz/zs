@@ -49,6 +49,7 @@ import { Database } from '../../src/database/database.types';
 import { VanSalesService } from '../../src/modules/delivery-reps/van-sales.service';
 import { VanFieldExecutionService } from '../../src/modules/delivery-reps/services/van-field-execution.service';
 import { AccountingPostingService } from '../../src/modules/accounting/accounting-posting.service';
+import { todayTenantDate } from '../../src/common/utils/tenant-timezone.util';
 
 const ACCOUNT = 'a-van-tracking';
 
@@ -93,6 +94,9 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>, tenant: string, currency: string): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: tenant, key: 'currency', value: currency }).execute();
+  // P7: the tenant zone is Africa/Cairo, seeded explicitly so the
+  // visit-day filter is deterministic regardless of server env.
+  await anyDb.insertInto('settings').values({ tenant_id: tenant, key: 'timezone', value: '"Africa/Cairo"' }).execute();
   await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: tenant, currency_code: currency, exchange_rate: 1, is_base: true }).execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: tenant, username: 'sys', is_active: true }).execute();
   const accounts: Array<[number, string, string]> = [
@@ -198,7 +202,9 @@ async function main(): Promise<void> {
       assert.equal(creditRow.collectionAmount, 0);
 
       // Date scoping: today sees the same totals; another date sees nothing.
-      const today = new Date().toISOString().slice(0, 10);
+      // P7: "today" is the TENANT day (Cairo, seeded above), not the
+      // UTC slice — the visit-day filter compares in the tenant zone.
+      const today = todayTenantDate('Africa/Cairo', new Date());
       const todayRes = await visits.getVisitsHistory(TENANT, { tripId: 1, date: today });
       assert.equal(todayRes.metrics.totalCollectionsAmount, 288);
       assert.equal(todayRes.metrics.totalSalesAmount, 863);

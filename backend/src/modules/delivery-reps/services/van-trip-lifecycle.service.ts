@@ -34,7 +34,7 @@ import {
   resolveIsolatedRepCustomerBalance,
   type RepTargetCalculationResult,
 } from '../rep-target.engine';
-import { todayLocalIsoDate } from '../../sales/helpers/sales-write.helper';
+import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { computeCashDrawerVariance } from '../../cash-drawer/helpers/cash-drawer.helper';
@@ -592,10 +592,10 @@ export class VanTripLifecycleService {
 
     // Query active promotional offers for van inventory items
     const prodIds = invRows.map((r: any) => Number(r.productId)).filter((id: number) => id > 0);
-    // Offer windows use the pinned shared clock (INV-OFFER-SELECTION-
-    // SHARED-POS-VAN): the same helper the sale writers use, so the
-    // inventory fetch agrees with the writer instead of sampling UTC.
-    const todayIso = todayLocalIsoDate();
+    // Offer windows use the TENANT day (P7, single-server-clock
+    // rule): the same clock the sale writers use, so the inventory
+    // fetch agrees with the writer instead of sampling host-local.
+    const todayIso = todayTenantDate(await getTenantTimezone(this.anyDb, tenantId));
     const activeOffers = prodIds.length > 0
       ? await this.anyDb
           .selectFrom('product_offers')

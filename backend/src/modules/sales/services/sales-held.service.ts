@@ -9,6 +9,7 @@ import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { Kysely, sql, type Transaction } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
@@ -73,6 +74,10 @@ async saveHeldSale(payload: HeldSaleDto, auth: AuthContext): Promise<Record<stri
     const scope = requireTenantScope(auth);
     const heldSaleId = await this.tx.runInTransaction(this.db, async (trx) => {
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+      // P7 (single-server-clock rule): offer windows are evaluated in
+      // the TENANT day — resolve the zone once per held sale on this
+      // transaction handle and pass it to the shared selector.
+      const businessTimezone = await getTenantTimezone(trx, scope.tenantId);
       const items = (Array.isArray(payload.items) ? payload.items : [])
         .map((item) => ({
           productId: Number(item.productId || 0),
@@ -143,6 +148,7 @@ async saveHeldSale(payload: HeldSaleDto, auth: AuthContext): Promise<Record<stri
           priceType: item.priceType,
           offers: activeOffers,
           qty: item.qty,
+          businessTimezone,
           moneyDigits,
         });
         await this.assertUnitPriceChangeAllowed(trx, auth, item.unitPrice, allowedUnitPrice, item.productId, payload.managerPin);

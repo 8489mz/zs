@@ -114,12 +114,28 @@ export function getCurrentBusinessDay(timezone = 'Africa/Cairo'): {
     const dayArabicName = DAY_KEY_TO_ARABIC[dayKey] || 'الأربعاء';
     return { dayKey, dayArabicName };
   } catch {
-    const arabicDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-    const englishDays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const idx = new Date().getDay();
-    return {
-      dayKey: englishDays[idx],
-      dayArabicName: arabicDays[idx],
-    };
+    // The requested zone is unusable — retry in the canonical
+    // default zone (env BUSINESS_TIMEZONE, else Africa/Cairo)
+    // before falling back to host-local parts, so a bad setting
+    // still yields a deterministic business day.
+    try {
+      const fallbackZone = process.env.BUSINESS_TIMEZONE || 'Africa/Cairo';
+      const fallbackWeekday = new Intl.DateTimeFormat('en-US', {
+        timeZone: fallbackZone,
+        weekday: 'long',
+      })
+        .format(new Date())
+        .toLowerCase();
+      const fallbackDayKey = normalizeDayKey(fallbackWeekday);
+      return { dayKey: fallbackDayKey, dayArabicName: DAY_KEY_TO_ARABIC[fallbackDayKey] || 'الأربعاء' };
+    } catch {
+      const arabicDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+      const englishDays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const idx = new Date().getDay();
+      return {
+        dayKey: englishDays[idx],
+        dayArabicName: arabicDays[idx],
+      };
+    }
   }
 }

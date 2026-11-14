@@ -32,6 +32,7 @@ import { requireTenantScope, type TenantScope } from '../../../core/auth/utils/t
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { assertBusinessAccountingDate } from '../../accounting/accounting-boundaries';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { AuditService } from '../../../core/audit/audit.service';
 import { ALL_OPERATIONAL_LOCATIONS, resolveBranchSellableLocations } from '../../../common/engines/branch-sellable-locations.engine';
@@ -572,6 +573,10 @@ export class CreateSaleService {
    */
   private async prepareSaleItems(ctx: CreateSaleContext): Promise<void> {
     const { trx, scope, normalized, auth, effectiveTerms, moneyDigits, allowNegativeStockSales, eligibleLocations } = ctx;
+    // P7 (single-server-clock rule): offer windows are evaluated in
+    // the TENANT day — resolve the zone once per sale on this
+    // transaction handle and pass it to the shared selector.
+    const businessTimezone = await getTenantTimezone(trx, scope.tenantId);
       const productIds = Array.from(new Set(normalized.items.map((it) => it.productId)));
       const productRows = productIds.length > 0
         ? await trx.selectFrom('products as p')
@@ -661,6 +666,7 @@ export class CreateSaleService {
           offers: activeOffers,
           qty: item.qty,
           unitMultiplier: item.unitMultiplier,
+          businessTimezone,
           moneyDigits,
         });
         const approvedUnitPrice = effectiveTerms?.approvedUnitPrices?.[item.productId];

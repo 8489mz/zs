@@ -27,17 +27,18 @@
  * explicit `(todayIso, now)` inputs and defaulted them to
  * host-local parts; the only change to the shared helper is
  * exporting `todayLocalIsoDate` and letting it take the instant,
- * so both writers evaluate the same instant identically. There is
- * NO tenant-local offer clock: business dates are tenant-local
- * (INV-BUSINESS-DATE-TENANT-LOCAL, tenant-timezone.util.ts), but
- * offer windows never used that mechanism on either channel, and
- * unifying the clock source to tenant-local would change POS
- * window evaluation — that stays an open P9 decision. The van
- * baseline stays each writer's own (credit_price for credit sales,
- * else retail_price, times the multiplier): only the SELECTION
- * rule is shared, not the baseline. Van pre-sales order pricing
- * and the van catalog display still select offers with their own
- * rules and are named follow-ups, not part of this package.
+ * so both writers evaluate the same instant identically. (P7,
+ * clock: the tenant-local offer clock IS now unified — the open
+ * P9 decision above is settled by the single-server-clock rule.
+ * The shared selector takes an optional `businessTimezone`
+ * (resolved per tenant by every production writer); with it, the
+ * offer day AND the day-of-week / happy-hour windows derive from
+ * the tenant zone. Without it the host-local default applies
+ * exactly as before, pinned by §6.) The van baseline stays each
+ * writer's own (credit_price for credit sales, else retail_price,
+ * times the multiplier): only the SELECTION rule is shared, not
+ * the baseline. Van pre-sales order pricing and the van inventory
+ * fetch now use the tenant day too (P7).
  * Bundle/BOGO per-type price derivation in the van writer is
  * unchanged and still computes from the winner with its own
  * formulas; only WHICH offer wins is now shared.
@@ -97,7 +98,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       CREATE TABLE journal_entry_lines (id bigserial PRIMARY KEY, tenant_id text, journal_entry_id bigint, account_id bigint, cost_center_id bigint, description text, debit numeric, credit numeric, partner_type text, partner_id bigint, branch_id bigint, location_id bigint);
       CREATE TABLE accounting_posting_failures (id bigserial PRIMARY KEY, tenant_id text, source_type text, source_id bigint, resolved_at timestamptz, last_attempt_at timestamptz);
       CREATE TABLE stock_locations (id bigserial PRIMARY KEY, tenant_id text, account_id text, branch_id bigint, name text, code text, is_active boolean DEFAULT true, location_type text);
-      CREATE TABLE delivery_representatives (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, vehicle_plate text, van_location_id bigint, is_van_rep boolean DEFAULT false, updated_at timestamptz DEFAULT NOW());
+      CREATE TABLE delivery_representatives (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, phone text, vehicle_plate text, van_location_id bigint, is_van_rep boolean DEFAULT false, updated_at timestamptz DEFAULT NOW());
       CREATE TABLE fleet_vehicles (id bigint PRIMARY KEY, tenant_id text, assigned_rep_id bigint, van_location_id bigint, current_odometer numeric);
       CREATE TABLE users (id bigint PRIMARY KEY, tenant_id text, username text, default_branch_id bigint, role text, password_hash text, password_salt text, is_active boolean DEFAULT true);
       CREATE TABLE products (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, name_en text, barcode text, style_code text, stock_qty numeric DEFAULT 0, reserved_qty numeric DEFAULT 0, cost_price numeric DEFAULT 0, retail_price numeric DEFAULT 0, wholesale_price numeric DEFAULT 0, credit_price numeric DEFAULT 0, consumer_price numeric DEFAULT 0, is_active boolean DEFAULT true, track_serials boolean DEFAULT false, default_location_id bigint, updated_at timestamptz);
@@ -121,6 +122,10 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 async function seedFoundation(db: Kysely<Database>, currency: string): Promise<void> {
   const anyDb = db as any;
   await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: currency }).execute();
+  // P7: the tenant zone is Asia/Kuwait — the offer windows below are
+  // seeded around the Kuwait hour, proving the van writer evaluates
+  // them in the tenant zone and not the host zone.
+  await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'timezone', value: '"Asia/Kuwait"' }).execute();
   await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true }).execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'sys', is_active: true }).execute();
   const accounts: Array<[number, string, string]> = [
@@ -249,7 +254,10 @@ async function main(): Promise<void> {
       await seedFoundation(db, 'EGP');
       await seedProduct(db, 103, 100, 50, 100);
       const now = new Date();
-      const h = now.getHours();
+      // P7: the van writer evaluates windows in the TENANT zone
+      // (Asia/Kuwait, seeded in seedFoundation) — seed the windows
+      // around the Kuwait hour, not the host hour.
+      const h = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kuwait', hour: 'numeric', hour12: false }).format(now));
       await seedOffer(db, {
         product_id: 103, offer_type: 'percent', value: 10, min_qty: 1,
         happy_hour_start: hhmm(h - 1, 0), happy_hour_end: hhmm(h + 1, 59),
@@ -266,8 +274,14 @@ async function main(): Promise<void> {
       const items = await saleItems(db, res.saleId);
       assert.equal(Number(items[0].unit_price), 90);
       const specNow = new Date();
+      // P7: the POS seam evaluates the SAME windows in the SAME
+      // tenant zone (Asia/Kuwait) — POS passes the tenant tz in
+      // production, so the seam agrees with the van writer at 90.
+      // Without the tz the host-local default would read the Kuwait
+      // windows in the host zone and disagree (100).
       const posPrice = calculateAllowedSaleUnitPrice({
         retailPrice: 100, priceType: 'retail', qty: 1, moneyDigits: 2, now: specNow,
+        businessTimezone: 'Asia/Kuwait',
         offers: [
           { offer_type: 'percent', value: 10, min_qty: 1, happy_hour_start: hhmm(h - 1, 0), happy_hour_end: hhmm(h + 1, 59) },
           { offer_type: 'percent', value: 30, min_qty: 1, happy_hour_start: hhmm(h + 3, 0), happy_hour_end: hhmm(h + 4, 59) },
@@ -310,7 +324,9 @@ async function main(): Promise<void> {
     try {
       await seedFoundation(db, 'EGP');
       await seedProduct(db, 105, 100, 50, 100);
-      const h = new Date().getHours();
+      // P7: window seeded around the Kuwait hour (tenant zone), as
+      // in case 3 — the BOGO must stay inactive in the tenant zone.
+      const h = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kuwait', hour: 'numeric', hour12: false }).format(new Date()));
       await seedOffer(db, {
         product_id: 105, offer_type: 'bogo', value: 100, min_qty: 1,
         bogo_buy_qty: 1, bogo_get_qty: 1, bogo_discount_percent: 100,
@@ -370,14 +386,18 @@ async function main(): Promise<void> {
   // 7. Source pins: the field-sale slice calls the shared selector
   // with the sold quantity and fetches the window columns; the old
   // highest-min-qty / base-units selector is gone from the writer.
+  // (P7: the implementation moved to VanFieldSalesService during the
+  // van-sales split — the facade only delegates now, so the pin
+  // reads the real file. The selector calls now carry the tenant
+  // timezone, and the offer day derives from it.)
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/van-sales.service.ts'), 'utf8');
-    const start = source.indexOf('private async executeFieldSaleInternal(');
-    const end = source.indexOf('async recordFieldCollection(');
+    const source = readFileSync(resolve(__dirname, '../../src/modules/delivery-reps/services/van-field-sales.service.ts'), 'utf8');
+    const start = source.indexOf('async executeFieldSaleInternal(');
+    const end = source.indexOf('async listDriverSales(');
     assert.ok(start > 0 && end > start);
     const body = source.slice(start, end);
-    assert.ok(body.includes('pickBestApplicableOffer(activeOffers, offerTodayIso, inputQty, baseUnitPrice, saleNow, bookDigits)'), 'van calls the shared selector on sold qty');
-    assert.ok(body.includes('isOfferActive(o, offerTodayIso, saleNow)'), 'BOGO bonus gate uses the shared activity rule');
+    assert.ok(body.includes('pickBestApplicableOffer(activeOffers, offerTodayIso, inputQty, baseUnitPrice, saleNow, bookDigits, businessTimezone)'), 'van calls the shared selector on sold qty in the tenant zone');
+    assert.ok(body.includes('isOfferActive(o, offerTodayIso, saleNow, businessTimezone)'), 'BOGO bonus gate uses the shared activity rule in the tenant zone');
     assert.ok(body.includes("'happy_hour_start', 'happy_hour_end', 'days_of_week'"), 'window columns fetched for selection');
     for (const gone of ['getMinQty(b) - getMinQty(a)', 'baseQty >= getMinQty', 'toISOString().slice(0, 10)']) {
       assert.ok(!body.includes(gone), `old van selector must be gone: ${gone}`);

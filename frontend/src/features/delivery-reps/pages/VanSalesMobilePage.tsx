@@ -359,6 +359,11 @@ export default function VanSalesMobilePage() {
     startedTimeStr?: string;
     latitude?: number;
     longitude?: number;
+    // P7 (RC-10): the server visit id from checkInVisit — ending the
+    // visit calls checkOutVisit on it. Absent when the check-in never
+    // reached the server (offline) or for a visit restored from an
+    // older localStorage entry written before this field existed.
+    visitId?: number;
   } | null>(() => {
     try {
       const saved = localStorage.getItem('zs_van_active_visit');
@@ -471,6 +476,19 @@ export default function VanSalesMobilePage() {
         tripId: data?.trip?.id,
         customerId,
         customerName,
+      }).then((res: any) => {
+        // P7: keep the server visit id — ending the visit calls
+        // checkOutVisit on it (server stamps check-out + dwell).
+        // The check-in is fire-and-forget, so a missing id just
+        // means there is no server visit to close.
+        if (res?.visitId) {
+          setActiveVisit((prev) => {
+            if (!prev || prev.customerId !== customerId) return prev;
+            const withId = { ...prev, visitId: Number(res.visitId) };
+            try { localStorage.setItem('zs_van_active_visit', JSON.stringify(withId)); } catch {}
+            return withId;
+          });
+        }
       }).catch(() => {
         // Silently handled in background
       });
@@ -506,6 +524,17 @@ export default function VanSalesMobilePage() {
         customerName,
         latitude: coords.latitude,
         longitude: coords.longitude,
+      }).then((res: any) => {
+        // P7: keep the server visit id — ending the visit calls
+        // checkOutVisit on it (server stamps check-out + dwell).
+        if (res?.visitId) {
+          setActiveVisit((prev) => {
+            if (!prev || prev.customerId !== customerId) return prev;
+            const withId = { ...prev, visitId: Number(res.visitId) };
+            try { localStorage.setItem('zs_van_active_visit', JSON.stringify(withId)); } catch {}
+            return withId;
+          });
+        }
       }).catch(() => {
         // Silently handled in background
       });
@@ -535,10 +564,23 @@ export default function VanSalesMobilePage() {
   };
 
   const handleEndVisit = () => {
+    // P7 (RC-10): the server owns the visit end — capture the id
+    // BEFORE clearing local state, then close the visit server-side
+    // (it stamps check_out_at + dwell_time_seconds; no client time
+    // is sent). No server visit (offline check-in, or a visit
+    // restored from an older localStorage entry without an id) means
+    // there is nothing to close. A repeated call is harmless: the
+    // backend re-stamps the same visit instead of erroring.
+    const visitId = activeVisit?.visitId;
     setActiveVisit(null);
     try {
       localStorage.removeItem('zs_van_active_visit');
     } catch {}
+    if (visitId) {
+      vanSalesApi.checkOutVisit(visitId).catch(() => {
+        toast.warning('تعذّر إغلاق الزيارة على الخادم — ستظل مفتوحة حتى إعادة المحاولة');
+      });
+    }
   };
 
   const formatDuration = (totalSecs: number) => {

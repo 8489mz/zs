@@ -2,6 +2,7 @@ import { AppError } from '../../../common/errors/app-error';
 import { NormalizedSalePayload } from '../dto/upsert-sale.dto';
 import { type MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { IDEMPOTENCY_STUCK_PROCESSING_MS } from '../../../core/idempotency/idempotency.service';
+import { todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 
 // Book digits are REQUIRED (INV-POS-OFFER-DIGITS): this rounder is
 // used for every money amount the sale helper computes, so a silent
@@ -617,14 +618,18 @@ export function normalizeDateOnly(value: unknown): string {
 }
 
 /*
- * Host-local calendar date (YYYY-MM-DD) for the shared offer clock
- * (INV-OFFER-SELECTION-SHARED-POS-VAN): both the POS sale writer and
- * the van field-sale writer evaluate offer windows from this date and
- * from the same instant, so the same offer set yields the same winner
- * on both channels. The optional instant lets the van writer derive
- * the date from the single instant it passes as `now`, instead of
- * sampling the clock twice. Defaults preserve the long-standing POS
- * behaviour exactly (host-local parts of a fresh instant).
+ * Host-local calendar date (YYYY-MM-DD) — the ORIGINAL shared offer
+ * clock (INV-OFFER-SELECTION-SHARED-POS-VAN). SUPERSEDED for business
+ * evaluation by the single-server-clock rule (P7): offer windows are
+ * now evaluated in the TENANT day via todayTenantDate(businessTimezone,
+ * now) + zonedOfferClockParts, threaded through isOfferActive /
+ * pickBestApplicableOffer / calculateAllowedSaleUnitPrice. This
+ * function is RETAINED (exported) only as the host-local primitive
+ * for the no-timezone default path — the pinned pure-function cases
+ * (business-date-sales-ops, comprehensive-offers-audit,
+ * shared-offer-selection-pos-van §6) call the selector without a
+ * timezone and must keep evaluating exactly as before. No production
+ * writer calls it anymore.
  */
 export function todayLocalIsoDate(now: Date = new Date()): string {
   const year = now.getFullYear();
@@ -633,15 +638,51 @@ export function todayLocalIsoDate(now: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
-export function isOfferActive(offer: SaleProductOfferRow, todayIso: string, now: Date = new Date()): boolean {
+/**
+ * Day-of-week (0 = Sunday, ..., 6 = Saturday) and minutes-since-midnight
+ * of an instant in the given IANA timezone — the tenant-zoned clock
+ * parts the offer windows (days_of_week, happy-hour) are evaluated
+ * against. Falls back to host-local parts only when the zone is
+ * unusable (callers pass a zone resolved by getTenantTimezone, which
+ * validates IANA, so this is belt-and-braces, never the live path).
+ */
+export function zonedOfferClockParts(timezone: string, now: Date = new Date()): { weekday: number; minutes: number } {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      weekday: 'short',
+      hour: 'numeric',
+      minute: 'numeric',
+      hourCycle: 'h23',
+    }).formatToParts(now);
+    const get = (type: string): string | undefined => parts.find((p) => p.type === type)?.value;
+    const weekdayShort = get('weekday') || 'Sun';
+    const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(weekdayShort);
+    const hour = Number(get('hour') || 0);
+    const minute = Number(get('minute') || 0);
+    if (weekday < 0 || !Number.isFinite(hour) || !Number.isFinite(minute)) throw new Error('unusable zone parts');
+    return { weekday, minutes: hour * 60 + minute };
+  } catch {
+    return { weekday: now.getDay(), minutes: now.getHours() * 60 + now.getMinutes() };
+  }
+}
+
+export function isOfferActive(offer: SaleProductOfferRow, todayIso: string, now: Date = new Date(), businessTimezone?: string): boolean {
   const from = normalizeDateOnly(offer.start_date);
   const to = normalizeDateOnly(offer.end_date);
   if (from && from > todayIso) return false;
   if (to && to < todayIso) return false;
 
+  // Offer windows (day-of-week + happy-hour) are evaluated in the
+  // TENANT zone when the caller passes it (P7, single-server-clock
+  // rule); without it the host-local parts apply exactly as before.
+  const clockParts = businessTimezone
+    ? zonedOfferClockParts(businessTimezone, now)
+    : { weekday: now.getDay(), minutes: now.getHours() * 60 + now.getMinutes() };
+
   // Day of week check (e.g. "0,1,2,3,4,5,6" or comma-separated numbers)
   if (offer.days_of_week && typeof offer.days_of_week === 'string' && offer.days_of_week.trim()) {
-    const currentDay = now.getDay(); // 0 is Sunday, ..., 6 is Saturday
+    const currentDay = clockParts.weekday; // 0 is Sunday, ..., 6 is Saturday
     const allowedDays = offer.days_of_week.split(',').map((d) => Number(d.trim())).filter((d) => !Number.isNaN(d));
     if (allowedDays.length > 0 && !allowedDays.includes(currentDay)) {
       return false;
@@ -650,7 +691,7 @@ export function isOfferActive(offer: SaleProductOfferRow, todayIso: string, now:
 
   // Happy hour time range check (HH:mm)
   if (offer.happy_hour_start && offer.happy_hour_end && String(offer.happy_hour_start).trim() && String(offer.happy_hour_end).trim()) {
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const currentMinutes = clockParts.minutes;
     const [startH, startM] = String(offer.happy_hour_start).split(':').map(Number);
     const [endH, endM] = String(offer.happy_hour_end).split(':').map(Number);
     const startMinutes = (startH || 0) * 60 + (startM || 0);
@@ -714,9 +755,9 @@ export function calculateOfferAdjustedPrice(basePrice: number, offer: SaleProduc
   return roundCurrency(basePrice, digits);
 }
 
-export function pickBestApplicableOffer(offers: SaleProductOfferRow[], todayIso: string, qty: number, basePrice: number, now: Date = new Date(), digits: MoneyDigits): SaleProductOfferRow | null {
+export function pickBestApplicableOffer(offers: SaleProductOfferRow[], todayIso: string, qty: number, basePrice: number, now: Date = new Date(), digits: MoneyDigits, businessTimezone?: string): SaleProductOfferRow | null {
   const normalizedQty = Math.max(1, Number(qty || 1));
-  const applicableOffers = offers.filter((offer) => isOfferActive(offer, todayIso, now) && normalizedQty >= getOfferEffectiveMinQty(offer));
+  const applicableOffers = offers.filter((offer) => isOfferActive(offer, todayIso, now, businessTimezone) && normalizedQty >= getOfferEffectiveMinQty(offer));
   if (!applicableOffers.length) return null;
 
   return [...applicableOffers].sort((left, right) => {
@@ -741,6 +782,13 @@ export function calculateAllowedSaleUnitPrice(params: {
   unitMultiplier?: number;
   todayIso?: string;
   now?: Date;
+  // Tenant timezone for the offer clock (P7, single-server-clock
+  // rule). When given, the offer day AND the day-of-week / happy-hour
+  // windows derive from this zone via todayTenantDate + the zoned
+  // clock parts, from the one instant in `now`. When omitted the
+  // host-local default applies exactly as before (pinned by the
+  // pure-function offer specs) — every production writer passes it.
+  businessTimezone?: string;
   moneyDigits: MoneyDigits;
 }): number {
   const multiplier = Number(params.unitMultiplier || 1) > 0 ? Number(params.unitMultiplier || 1) : 1;
@@ -748,9 +796,11 @@ export function calculateAllowedSaleUnitPrice(params: {
     return roundCurrency(Number(params.wholesalePrice || params.retailPrice || 0) * multiplier, params.moneyDigits);
   }
   const basePrice = roundCurrency(Number(params.retailPrice || 0) * multiplier, params.moneyDigits);
-  const todayIso = normalizeDateOnly(params.todayIso) || todayLocalIsoDate();
+  const now = params.now || new Date();
+  const todayIso = normalizeDateOnly(params.todayIso)
+    || (params.businessTimezone ? todayTenantDate(params.businessTimezone, now) : todayLocalIsoDate(now));
   const qty = Number(params.qty || 1);
-  const activeOffer = pickBestApplicableOffer(params.offers || [], todayIso, qty, basePrice, params.now || new Date(), params.moneyDigits);
+  const activeOffer = pickBestApplicableOffer(params.offers || [], todayIso, qty, basePrice, now, params.moneyDigits, params.businessTimezone);
 
   if (!activeOffer) {
     return roundCurrency(basePrice, params.moneyDigits);

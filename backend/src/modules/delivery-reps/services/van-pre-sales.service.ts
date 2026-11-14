@@ -4,11 +4,11 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
-import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
+import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { reserveLocationStock, releaseLocationStock } from '../../../common/utils/location-stock-ledger';
 import { sortItemsByProductId, generateDailySequenceNumber, listRepUsableWarehouseScope, assertWarehouseInRepScope } from './van-common.util';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { normalizeDateOnly, todayLocalIsoDate } from '../../sales/helpers/sales-write.helper';
+import { normalizeDateOnly } from '../../sales/helpers/sales-write.helper';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { SalesService } from '../../sales/sales.service';
 import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -267,8 +267,9 @@ export class VanPreSalesService {
       });
     }
 
-    // Fetch active offers
-    const nowIso = todayLocalIsoDate();
+    // Fetch active offers — the offer day is the TENANT day (P7,
+    // single-server-clock rule), never the host-local day.
+    const nowIso = todayTenantDate(await getTenantTimezone(this.anyDb, tenantId));
     const offers = await this.anyDb
       .selectFrom('product_offers')
       .select(['id', 'product_id', 'offer_type', 'value', 'min_qty', 'start_date', 'end_date'])
@@ -516,8 +517,9 @@ export class VanPreSalesService {
       const sortedItems = sortItemsByProductId(payload.items);
       const productIds = sortedItems.map((it) => Number(it.productId));
 
-      // Fetch active offers for these products
-      const nowIso = todayLocalIsoDate();
+      // Fetch active offers for these products — the offer day is
+      // the TENANT day (P7, single-server-clock rule).
+      const nowIso = todayTenantDate(await getTenantTimezone(trx, tenantId));
       const offers = await trxAny
         .selectFrom('product_offers')
         .select(['product_id', 'offer_type', 'value', 'min_qty', 'start_date', 'end_date', 'bogo_buy_qty', 'bogo_get_qty', 'bogo_discount_percent'])

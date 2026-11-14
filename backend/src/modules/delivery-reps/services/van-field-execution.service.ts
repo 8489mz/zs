@@ -7,6 +7,7 @@ import { VanFraudRadarService } from './van-fraud-radar.service';
 import { FmcgVisitExecutionEngine, GeofenceEvaluationResult } from '../fmcg-visit-execution.engine';
 import { extractAssignedRepIds, hasGpsCoordinates, loadRepPermissions } from '../rep-target.engine';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 
 export interface CheckInVisitPayload {
@@ -827,12 +828,18 @@ export class VanFieldExecutionService {
       .selectAll()
       .where('tenant_id', '=', tenantId);
 
+    // P7 (single-server-clock rule): a visit's business day is its
+    // check-in instant in the TENANT zone — resolve the zone once
+    // when a date filter is given; plain DATE() is the DB session
+    // timezone, which is not the tenant day.
+    const businessTimezone = filters?.date ? await getTenantTimezone(this.db, tenantId) : null;
+
     if (filters?.tripId) q = q.where('trip_id', '=', filters.tripId);
     if (filters?.repId) q = q.where('rep_id', '=', filters.repId);
     if (filters?.customerId) q = q.where('customer_id', '=', filters.customerId);
     if (filters?.noSaleOnly) q = q.where('has_sale', '=', false);
     if (filters?.date) {
-      q = q.where(sql`DATE(check_in_at)`, '=', filters.date);
+      q = q.where(sql`DATE(check_in_at AT TIME ZONE ${businessTimezone})`, '=', filters.date);
     }
 
     const rows = await q.orderBy('check_in_at', 'desc').limit(200).execute();
@@ -865,7 +872,7 @@ export class VanFieldExecutionService {
       if (filters?.repId) sq = sq.where('s.delivery_rep_id', '=', filters.repId);
       if (filters?.customerId) sq = sq.where('s.customer_id', '=', filters.customerId);
       if (filters?.date) {
-        sq = sq.where(sql`DATE(s.created_at)`, '=', filters.date);
+        sq = sq.where(sql`DATE(s.created_at AT TIME ZONE ${businessTimezone})`, '=', filters.date);
       }
       if (linkedSaleIds.length > 0) {
         sq = sq.where('s.id', 'not in', linkedSaleIds);
@@ -928,7 +935,7 @@ export class VanFieldExecutionService {
     if (filters?.repId) collectionsQuery = collectionsQuery.where('rep_id', '=', filters.repId);
     if (filters?.customerId) collectionsQuery = collectionsQuery.where('customer_id', '=', filters.customerId);
     if (filters?.date) {
-      collectionsQuery = collectionsQuery.where(sql`DATE(created_at)`, '=', filters.date);
+      collectionsQuery = collectionsQuery.where(sql`DATE(created_at AT TIME ZONE ${businessTimezone})`, '=', filters.date);
     }
     const collectionsRow = await collectionsQuery.executeTakeFirst();
     const metrics = {

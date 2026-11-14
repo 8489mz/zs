@@ -185,6 +185,7 @@
     "test/critical/clock-p5-engines-tenant-tz.spec.ts",
     "test/critical/clock-p6-client-date-bounds.spec.ts",
     "test/critical/supplier-bill.spec.ts",
-    "test/critical/supplier-advance-overdraft.spec.ts"
+    "test/critical/supplier-advance-overdraft.spec.ts",
+    "test/critical/clock-p7-offer-van-day.spec.ts"
   ]
 }

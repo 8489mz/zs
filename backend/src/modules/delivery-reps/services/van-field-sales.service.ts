@@ -18,7 +18,8 @@ import {
 import { VanFraudRadarService } from './van-fraud-radar.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
-import { isOfferActive, pickBestApplicableOffer, todayLocalIsoDate } from '../../sales/helpers/sales-write.helper';
+import { isOfferActive, pickBestApplicableOffer } from '../../sales/helpers/sales-write.helper';
+import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { resolveSaleTaxRate } from '../../sales/engines/sale-tax-rate.engine';
 import { computeInvoiceTotals } from '../../../common/utils/invoice-totals';
 
@@ -264,13 +265,14 @@ export class VanFieldSalesService {
       const vanBatchAllocations: Array<Array<{ pharmacyBatchId: number; quantity: number }>> = [];
       const sortedItems = this.sortItemsByProductId(payload.items);
       const productIds = sortedItems.map((it) => Number(it.productId));
-      // INV-OFFER-SELECTION-SHARED-POS-VAN: one instant for the whole
-      // sale, evaluated in host-local parts — the same clock the POS
-      // writer uses (todayLocalIsoDate / `now` defaults). Start/end
-      // dates and happy-hour/days-of-week windows are applied by the
-      // shared selector below, never pre-filtered here in UTC.
+      // INV-OFFER-SELECTION-SHARED-POS-VAN (P7: tenant day): one
+      // instant for the whole sale, evaluated in the TENANT zone —
+      // the same clock the POS writer uses. Start/end dates and
+      // happy-hour/days-of-week windows are applied by the shared
+      // selector below, never pre-filtered here in UTC.
       const saleNow = new Date();
-      const offerTodayIso = todayLocalIsoDate(saleNow);
+      const businessTimezone = await getTenantTimezone(trx, tenantId);
+      const offerTodayIso = todayTenantDate(businessTimezone, saleNow);
 
       const rawOffers = productIds.length > 0 ? await trxAny
         .selectFrom('product_offers')
@@ -393,7 +395,7 @@ export class VanFieldSalesService {
           // authorises a bonus must be active under the shared rule
           // (date range AND happy-hour/days-of-week windows at the
           // sale instant), not merely date-filtered as before.
-          const hasActiveBogoOffer = activeOffers.some((o: any) => o.offer_type === 'bogo' && isOfferActive(o, offerTodayIso, saleNow));
+          const hasActiveBogoOffer = activeOffers.some((o: any) => o.offer_type === 'bogo' && isOfferActive(o, offerTodayIso, saleNow, businessTimezone));
           if (!hasActiveBogoOffer && !supervisorOverrideApproved) {
             const attemptedVal = toBookMoney(defaultBasePrice * multiplier * inputQty);
             await this.vanFraudRadarService.recordSuspicionEvent({
@@ -475,7 +477,7 @@ export class VanFieldSalesService {
           // quantity (inputQty), never on base units, never by
           // highest minimum quantity. The per-type price derivation
           // below is unchanged and still computes from the winner.
-          const matchingOffer = pickBestApplicableOffer(activeOffers, offerTodayIso, inputQty, baseUnitPrice, saleNow, bookDigits);
+          const matchingOffer = pickBestApplicableOffer(activeOffers, offerTodayIso, inputQty, baseUnitPrice, saleNow, bookDigits, businessTimezone);
 
           if (matchingOffer) {
             const offerVal = Number(matchingOffer.value || 0);

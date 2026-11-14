@@ -20,6 +20,7 @@ import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-
 import { Logger } from '@nestjs/common';
 import { Kysely, sql, type Transaction } from '../../../database/kysely';
 import { AppError } from '../../../common/errors/app-error';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { computeInvoiceTotals } from '../../../common/utils/invoice-totals';
 import { ensureUniqueFlowItems } from '../../../common/utils/financial-integrity';
 import { applyStockDelta, previewConsumableStockQty } from '../../../common/utils/location-stock-ledger';
@@ -301,6 +302,10 @@ export class SalesEditAndCancelService {
     let postCloseShiftId: number | null = null;
     await this.tx.runInTransaction(this.db, async (trx) => {
       const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, scope.tenantId));
+      // P7 (single-server-clock rule): offer windows are evaluated in
+      // the TENANT day — resolve the zone once per edit on this
+      // transaction handle and pass it to the shared selector.
+      const businessTimezone = await getTenantTimezone(trx, scope.tenantId);
       const sale = await trx
         .selectFrom('sales')
         .selectAll()
@@ -894,6 +899,7 @@ export class SalesEditAndCancelService {
           offers: activeOffers,
           qty: item.qty,
           unitMultiplier: item.unitMultiplier,
+          businessTimezone,
           moneyDigits,
         });
         await this.assertUnitPriceChangeAllowed(trx, auth, Number(item.price || 0), allowedUnitPrice, item.productId, normalized.managerPin, saleId);

@@ -7,6 +7,7 @@ import { VanFleetService } from './van-fleet.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { normalizeCustomerCode, getCustomerRepBalancesMap } from './van-common.util';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import {
   extractCoordinatesFromCustomerLocation,
   evaluateGeofenceCompliance,
@@ -163,8 +164,10 @@ export class VanRoutesService {
       moneyDigits,
     });
 
-    // 1. Calculate today's Arabic & English day names based on business timezone (Africa/Cairo)
-    const { dayKey: todayDayKey, dayArabicName: currentDayName } = getCurrentBusinessDay();
+    // 1. Calculate today's Arabic & English day names in the TENANT
+    // timezone (P7, single-server-clock rule) — never the Cairo
+    // default: a Kuwait tenant's route day is Kuwait's day.
+    const { dayKey: todayDayKey, dayArabicName: currentDayName } = getCurrentBusinessDay(await getTenantTimezone(this.anyDb, tenantId));
     const currentEnglishDayName = todayDayKey;
 
     // 2. Filter customers based on rep assignment (supporting multi-rep shared customers & ledger ownership)
