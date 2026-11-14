@@ -3,6 +3,7 @@ import { Kysely, sql } from '../../database/kysely';
 import { AppError } from '../../common/errors/app-error';
 import { assertCashDrawerAmount, assertCashDrawerCountedCash, assertCashDrawerNote, buildCashDrawerShiftDocNo, buildExpectedCashBreakdown, computeCashDrawerVariance, filterCashDrawerRows, isCashDrawerOutboundType, mapCashDrawerShiftRow, normalizeCashDrawerMovementType, normalizeShiftOpenPayload, paginateCashDrawerRows, requiresSecondApproval, summarizeCashDrawerRows, toSignedCashDrawerAmount, buildShiftCashReturnItem, isDrawerCashTender, isCashDrawerTransferType } from './helpers/cash-drawer.helper';
 import type { BlindCloseChannelReconciliation, BlindCloseReconciliation, CashDrawerMovementType } from './helpers/cash-drawer.helper';
+import { computeShiftCustomerCollectionsByChannel, type ShiftCustomerCollectionsByChannel } from './helpers/shift-customer-collections.helper';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { verifyPassword } from '../../core/auth/utils/password-hasher';
@@ -57,6 +58,7 @@ type ShiftRow = {
   status?: string | null;
   terminal_code?: string | null;
   customerCollectionsTotal?: number | string | null;
+  customerCollectionsByChannel?: ShiftCustomerCollectionsByChannel | null;
   cancelledSaleCashTotal?: number | string | null;
   expected_cash?: number | string | null;
   counted_cash?: number | string | null;
@@ -531,21 +533,12 @@ export class CashDrawerService {
     return { saleReturnCashRefundTotal: this.toBookMoney(row.sale_return_cash_refund_total || 0, bookDigits), saleReturnCardRefundTotal: this.toBookMoney(row.sale_return_card_refund_total || 0, bookDigits), saleReturnTotal: this.toBookMoney(row.sale_return_total || 0, bookDigits) };
   }
 
-  private async computeShiftCustomerCollections(shift: ShiftRow, auth: AuthContext, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<number> {
+  private async computeShiftCustomerCollectionsByChannel(shift: ShiftRow, auth: AuthContext, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<ShiftCustomerCollectionsByChannel> {
     const openerId = Number(shift.opened_by || 0);
     const scope = this.scope(auth);
-    if (!(openerId > 0) || !shift.created_at) return 0;
+    if (!(openerId > 0) || !shift.created_at) return { cash: 0, card: 0, wallet: 0, instapay: 0, cashCount: 0, cardCount: 0, walletCount: 0, instapayCount: 0 };
     const bookDigits = digits ?? currencyMoneyDigits(await tenantBaseCurrency(queryable ?? this.db, scope.tenantId));
-    const result = await sql<{ total: string | number }>`
-      select coalesce(sum(cp.amount), 0) as total
-      from customer_payments cp
-      where cp.tenant_id = ${scope.tenantId} and coalesce(cp.payment_channel,'cash') = 'cash' and cp.created_by = ${openerId}
-        and cp.created_at >= ${shift.created_at}
-        and (${shift.closed_at || null}::timestamptz is null or cp.created_at <= ${shift.closed_at || null})
-        and (${shift.branch_id || null}::int is null or cp.branch_id is null or cp.branch_id = ${Number(shift.branch_id || 0) || null})
-        and (${shift.location_id || null}::int is null or cp.location_id is null or cp.location_id = ${Number(shift.location_id || 0) || null})
-    `.execute(queryable ?? this.db);
-    return this.toBookMoney(result.rows?.[0]?.total || 0, bookDigits);
+    return computeShiftCustomerCollectionsByChannel(queryable ?? this.db, { tenantId: scope.tenantId, openerId, createdAt: shift.created_at, closedAt: shift.closed_at, branchId: shift.branch_id, locationId: shift.location_id }, bookDigits);
   }
 
   private async computeShiftCancelledSaleCashReceipts(
@@ -650,7 +643,7 @@ export class CashDrawerService {
     const saleReturnTotals = await this.computeShiftSaleReturnTotals(shift, auth, queryable, bookDigits);
     const supplierPaymentsTotal = await this.computeShiftSupplierPaymentsTotal(shift, auth, queryable, bookDigits);
     const expensesTotal = await this.computeShiftExpensesTotal(shift, auth, queryable, bookDigits);
-    const customerCollections = await this.computeShiftCustomerCollections(shift, auth, queryable, bookDigits);
+    const customerCollections = (await this.computeShiftCustomerCollectionsByChannel(shift, auth, queryable, bookDigits)).cash;
     const cancelledCheckoutCash = await this.computeShiftCancelledSaleCashReceipts(shift, auth, queryable, bookDigits);
     const netDrawerMovement = movements.cashInTotal - movements.cashOutTotal;
     // INV-REST-SHIFT-CLOSE-CONTROL (I25): the sum is the one pure
@@ -862,7 +855,8 @@ export class CashDrawerService {
     // INV-REST-SHIFT-CLOSE-CONTROL (I25): the two expected-cash
     // components the close card used to hide are hydrated here so
     // the row the frontend renders already carries them.
-    const customerCollectionsTotal = await this.computeShiftCustomerCollections(row, auth);
+    const collectionsByChannel = await this.computeShiftCustomerCollectionsByChannel(row, auth);
+    const customerCollectionsTotal = collectionsByChannel.cash;
     const cancelledSaleCashTotal = await this.computeShiftCancelledSaleCashReceipts(row, auth);
     const expectedCash = String(row.status || 'open') === 'open' ? await this.computeShiftExpectedCashFromShift(row, auth, salesBreakdown, serviceBreakdown) : Number(row.expected_cash || 0);
     return {
@@ -900,6 +894,7 @@ export class CashDrawerService {
       sale_return_card_refund_total: saleReturnTotals.saleReturnCardRefundTotal,
       sale_return_total: saleReturnTotals.saleReturnTotal,
       customerCollectionsTotal,
+      customerCollectionsByChannel: collectionsByChannel,
       cancelledSaleCashTotal,
       movement_items: movementItems,
     };
@@ -1527,10 +1522,11 @@ export class CashDrawerService {
    * on the review transaction from the same breakdowns the listing
    * hydrates. The computed side mirrors the review screen's
    * definition exactly: card = card sales + service card − card
-   * return refunds; wallet/instapay = their sales totals. Counts
-   * come from the breakdown's operation counts. Declared figures
-   * are re-rounded to book digits so shifts closed at 2dp before
-   * this package reconcile against their stored values unchanged.
+   * return refunds + customer card collections; wallet/instapay =
+   * their sales totals + their customer collections, counts included.
+   * Declared figures are re-rounded to book digits so shifts closed
+   * at 2dp before this package reconcile against their stored values
+   * unchanged.
    * INV-REST-SHIFT-CLOSE-CONTROL (I22): the reconciliation also
    * compares the itemised detail totals against the declared
    * totals (detailDelta). A mismatch never blocks review by
@@ -1547,6 +1543,7 @@ export class CashDrawerService {
     const breakdown = await this.computeShiftSalesBreakdown(shift, auth, queryable, digits);
     const services = await this.computeShiftServiceBreakdown(shift, auth, queryable, digits);
     const returns = await this.computeShiftSaleReturnTotals(shift, auth, queryable, digits);
+    const collections = await this.computeShiftCustomerCollectionsByChannel(shift, auth, queryable, digits);
     const channel = (declaredTotal: number, declaredCount: number, computed: number, computedCount: number, detailTotal: number): BlindCloseChannelReconciliation => ({
       declared: this.toBookMoney(declaredTotal, digits),
       computed: this.toBookMoney(computed, digits),
@@ -1559,9 +1556,9 @@ export class CashDrawerService {
     });
     const details = declared.detailTotals || { card: 0, wallet: 0, instapay: 0 };
     return {
-      card: channel(declared.cardTotal, declared.cardCount, breakdown.cardSalesTotal + services.serviceCardTotal - returns.saleReturnCardRefundTotal, breakdown.cardOperationCount, Number(details.card || 0)),
-      wallet: channel(declared.walletTotal, declared.walletCount, breakdown.walletSalesTotal, breakdown.walletOperationCount, Number(details.wallet || 0)),
-      instapay: channel(declared.instapayTotal, declared.instapayCount, breakdown.instapaySalesTotal, breakdown.instapayOperationCount, Number(details.instapay || 0)),
+      card: channel(declared.cardTotal, declared.cardCount, breakdown.cardSalesTotal + services.serviceCardTotal - returns.saleReturnCardRefundTotal + collections.card, breakdown.cardOperationCount + collections.cardCount, Number(details.card || 0)),
+      wallet: channel(declared.walletTotal, declared.walletCount, breakdown.walletSalesTotal + collections.wallet, breakdown.walletOperationCount + collections.walletCount, Number(details.wallet || 0)),
+      instapay: channel(declared.instapayTotal, declared.instapayCount, breakdown.instapaySalesTotal + collections.instapay, breakdown.instapayOperationCount + collections.instapayCount, Number(details.instapay || 0)),
     };
   }
 

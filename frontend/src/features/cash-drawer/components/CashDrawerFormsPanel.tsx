@@ -544,9 +544,12 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
   const closeCancelledSaleCashTotal = Number(selectedCloseShift?.cancelledSaleCashTotal || 0);
   const showOpenTablesOverride = closeErrorCode(props.closeMutation.error) === 'SHIFT_CLOSE_OPEN_TABLES';
 
-  const cardOperationCount = normalizeCount(selectedCloseShift?.cardOperationCount ?? props.closeForm.watch('cardOperationCount'));
-  const walletOperationCount = normalizeCount(selectedCloseShift?.walletOperationCount ?? props.closeForm.watch('walletOperationCount'));
-  const instapayOperationCount = normalizeCount(selectedCloseShift?.instapayOperationCount ?? props.closeForm.watch('instapayOperationCount'));
+  // INV-SHIFT-EXPECTED-PER-METHOD-COLLECTIONS: close counts cover the
+  // same operations as the electronic expected totals (POS sales AND
+  // customer-account receipts). Defaults stay 0 for open shifts.
+  const cardOperationCount = normalizeCount(selectedCloseShift?.cardOperationCount ?? props.closeForm.watch('cardOperationCount')) + normalizeCount(selectedCloseShift?.customerCollectionsByChannel?.cardCount || 0);
+  const walletOperationCount = normalizeCount(selectedCloseShift?.walletOperationCount ?? props.closeForm.watch('walletOperationCount')) + normalizeCount(selectedCloseShift?.customerCollectionsByChannel?.walletCount || 0);
+  const instapayOperationCount = normalizeCount(selectedCloseShift?.instapayOperationCount ?? props.closeForm.watch('instapayOperationCount')) + normalizeCount(selectedCloseShift?.customerCollectionsByChannel?.instapayCount || 0);
 
   const [showCardDetails, setShowCardDetails] = useState(false);
   const [showWalletDetails, setShowWalletDetails] = useState(false);
@@ -597,18 +600,15 @@ export function CashDrawerFormsPanel(props: CashDrawerFormsPanelProps) {
 
   useEffect(() => {
     if (selectedCloseShift) {
-      const cardCount = normalizeCount(selectedCloseShift.cardOperationCount);
-      const walletCount = normalizeCount(selectedCloseShift.walletOperationCount);
-      const instapayCount = normalizeCount(selectedCloseShift.instapayOperationCount);
-      props.closeForm.setValue('cardOperationCount', cardCount, { shouldDirty: false });
-      props.closeForm.setValue('walletOperationCount', walletCount, { shouldDirty: false });
-      props.closeForm.setValue('instapayOperationCount', instapayCount, { shouldDirty: false });
+      props.closeForm.setValue('cardOperationCount', cardOperationCount, { shouldDirty: false });
+      props.closeForm.setValue('walletOperationCount', walletOperationCount, { shouldDirty: false });
+      props.closeForm.setValue('instapayOperationCount', instapayOperationCount, { shouldDirty: false });
     }
   }, [
     selectedCloseShift?.id,
-    selectedCloseShift?.cardOperationCount,
-    selectedCloseShift?.walletOperationCount,
-    selectedCloseShift?.instapayOperationCount,
+    cardOperationCount,
+    walletOperationCount,
+    instapayOperationCount,
     props.closeForm,
   ]);
 

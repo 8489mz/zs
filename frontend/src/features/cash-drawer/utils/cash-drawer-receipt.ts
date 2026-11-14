@@ -46,9 +46,9 @@ export function generateCashDrawerSettlementReceiptHtml(
   const netStoreSales = Number(shift.netStoreSalesTotal || Math.max(0, shiftSalesTotal - freelanceFee));
 
   const rawCashSales = Number(shift.cashSalesTotal || 0) + Number(shift.serviceCashTotal || 0);
-  const expectedCard = Number(shift.cardSalesTotal || 0) + Number(shift.serviceCardTotal || 0) - Number(shift.saleReturnCardRefundTotal || 0);
-  const expectedWallet = Number(shift.walletSalesTotal || 0);
-  const expectedInstapay = Number(shift.instapaySalesTotal || 0);
+  const expectedCard = Number(shift.cardSalesTotal || 0) + Number(shift.serviceCardTotal || 0) - Number(shift.saleReturnCardRefundTotal || 0) + Number(shift.customerCollectionsByChannel?.card || 0);
+  const expectedWallet = Number(shift.walletSalesTotal || 0) + Number(shift.customerCollectionsByChannel?.wallet || 0);
+  const expectedInstapay = Number(shift.instapaySalesTotal || 0) + Number(shift.customerCollectionsByChannel?.instapay || 0);
   const expectedCredit = Number(shift.creditSalesTotal || 0);
   const expectedDelivery = Number(shift.deliverySalesTotal || 0);
 

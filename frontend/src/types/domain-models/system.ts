@@ -66,6 +66,17 @@ export interface BlindCloseReconciliation {
   instapay: BlindCloseChannelReconciliation;
 }
 
+export interface ShiftCustomerCollectionsByChannel {
+  cash: number;
+  card: number;
+  wallet: number;
+  instapay: number;
+  cashCount: number;
+  cardCount: number;
+  walletCount: number;
+  instapayCount: number;
+}
+
 export interface CashierShift {
   id: string;
   docNo: string;
@@ -75,6 +86,8 @@ export interface CashierShift {
   terminalCode?: string | null;
   /** INV-REST-SHIFT-CLOSE-CONTROL (I25): expected-cash components the close card and Z-report render. */
   customerCollectionsTotal?: number;
+  /** INV-SHIFT-EXPECTED-PER-METHOD-COLLECTIONS: per-channel customer collections feeding the electronic expected totals. */
+  customerCollectionsByChannel?: ShiftCustomerCollectionsByChannel | null;
   cancelledSaleCashTotal?: number;
   /** INV-REST-SHIFT-CLOSE-CONTROL (I22): the server's declared-vs-computed reconciliation, when reviewed. */
   reconciliation?: BlindCloseReconciliation | null;

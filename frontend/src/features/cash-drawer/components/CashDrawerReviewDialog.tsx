@@ -78,9 +78,9 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
 
   const expected = useMemo(() => {
     const rawCashSales = toMoney((shift?.cashSalesTotal || 0) + (shift?.serviceCashTotal || 0), bookDigits);
-    const expectedCard = toMoney((shift?.cardSalesTotal || 0) + (shift?.serviceCardTotal || 0) - (shift?.saleReturnCardRefundTotal || 0), bookDigits);
-    const expectedWallet = toMoney(shift?.walletSalesTotal || 0, bookDigits);
-    const expectedInstapay = toMoney(shift?.instapaySalesTotal || 0, bookDigits);
+    const expectedCard = toMoney((shift?.cardSalesTotal || 0) + (shift?.serviceCardTotal || 0) - (shift?.saleReturnCardRefundTotal || 0) + (shift?.customerCollectionsByChannel?.card || 0), bookDigits);
+    const expectedWallet = toMoney((shift?.walletSalesTotal || 0) + (shift?.customerCollectionsByChannel?.wallet || 0), bookDigits);
+    const expectedInstapay = toMoney((shift?.instapaySalesTotal || 0) + (shift?.customerCollectionsByChannel?.instapay || 0), bookDigits);
     const expectedCredit = toMoney(shift?.creditSalesTotal || 0, bookDigits);
     const expectedDelivery = toMoney(shift?.deliverySalesTotal || 0, bookDigits);
     return { rawCashSales, expectedCard, expectedWallet, expectedInstapay, expectedCredit, expectedDelivery };
@@ -165,9 +165,9 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
         systemAmount: expected.expectedCard,
         declaredAmount: declared.card,
         amountDiff: toMoney(declared.card - expected.expectedCard, bookDigits),
-        systemCount: toCount(shift?.cardOperationCount || 0),
+        systemCount: toCount(shift?.cardOperationCount || 0) + toCount(shift?.customerCollectionsByChannel?.cardCount || 0),
         declaredCount: toCount(shift?.declaredCardCount || 0),
-        countDiff: toCount(shift?.declaredCardCount || 0) - toCount(shift?.cardOperationCount || 0)
+        countDiff: toCount(shift?.declaredCardCount || 0) - toCount(shift?.cardOperationCount || 0) - toCount(shift?.customerCollectionsByChannel?.cardCount || 0)
       },
       {
         key: 'wallet',
@@ -175,9 +175,9 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
         systemAmount: expected.expectedWallet,
         declaredAmount: declared.wallet,
         amountDiff: toMoney(declared.wallet - expected.expectedWallet, bookDigits),
-        systemCount: toCount(shift?.walletOperationCount || 0),
+        systemCount: toCount(shift?.walletOperationCount || 0) + toCount(shift?.customerCollectionsByChannel?.walletCount || 0),
         declaredCount: toCount(shift?.declaredWalletCount || 0),
-        countDiff: toCount(shift?.declaredWalletCount || 0) - toCount(shift?.walletOperationCount || 0)
+        countDiff: toCount(shift?.declaredWalletCount || 0) - toCount(shift?.walletOperationCount || 0) - toCount(shift?.customerCollectionsByChannel?.walletCount || 0)
       },
       {
         key: 'instapay',
@@ -185,9 +185,9 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
         systemAmount: expected.expectedInstapay,
         declaredAmount: declared.instapay,
         amountDiff: toMoney(declared.instapay - expected.expectedInstapay, bookDigits),
-        systemCount: toCount(shift?.instapayOperationCount || 0),
+        systemCount: toCount(shift?.instapayOperationCount || 0) + toCount(shift?.customerCollectionsByChannel?.instapayCount || 0),
         declaredCount: toCount(shift?.declaredInstapayCount || 0),
-        countDiff: toCount(shift?.declaredInstapayCount || 0) - toCount(shift?.instapayOperationCount || 0)
+        countDiff: toCount(shift?.declaredInstapayCount || 0) - toCount(shift?.instapayOperationCount || 0) - toCount(shift?.customerCollectionsByChannel?.instapayCount || 0)
       },
     ];
 

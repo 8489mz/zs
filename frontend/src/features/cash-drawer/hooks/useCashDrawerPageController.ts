@@ -226,9 +226,9 @@ export function useCashDrawerPageController() {
 
   useEffect(() => {
     if (selectedCloseShift) {
-      const cardCount = Number(selectedCloseShift.cardOperationCount || 0);
-      const walletCount = Number(selectedCloseShift.walletOperationCount || 0);
-      const instapayCount = Number(selectedCloseShift.instapayOperationCount || 0);
+      const cardCount = Number(selectedCloseShift.cardOperationCount || 0) + Number(selectedCloseShift.customerCollectionsByChannel?.cardCount || 0);
+      const walletCount = Number(selectedCloseShift.walletOperationCount || 0) + Number(selectedCloseShift.customerCollectionsByChannel?.walletCount || 0);
+      const instapayCount = Number(selectedCloseShift.instapayOperationCount || 0) + Number(selectedCloseShift.customerCollectionsByChannel?.instapayCount || 0);
 
       closeForm.setValue('cardOperationCount', cardCount, { shouldDirty: false });
       closeForm.setValue('walletOperationCount', walletCount, { shouldDirty: false });

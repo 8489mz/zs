@@ -1,5 +1,6 @@
 import { AppError } from '../../../common/errors/app-error';
 import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import type { ShiftCustomerCollectionsByChannel } from './shift-customer-collections.helper';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 import { todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 
@@ -44,6 +45,7 @@ type CashDrawerShiftSource = {
   sale_return_card_refund_total?: number | string | null;
   sale_return_total?: number | string | null;
   customerCollectionsTotal?: number | string | null;
+  customerCollectionsByChannel?: ShiftCustomerCollectionsByChannel | null;
   cancelledSaleCashTotal?: number | string | null;
   terminal_code?: string | null;
   opening_cash?: number | string | null;
@@ -299,6 +301,11 @@ export function mapCashDrawerShiftRow(row: CashDrawerShiftSource): CashDrawerMap
     // Hydrated by hydrateShiftRow; 0 on rows closed before the
     // package (the columns are computed live, never stored).
     customerCollectionsTotal: Number(row.customerCollectionsTotal || 0),
+    // INV-SHIFT-EXPECTED-PER-METHOD-COLLECTIONS: per-channel customer
+    // collections feeding the electronic expected totals (POS sales
+    // only before). Hydrated by hydrateShiftRow; null on rows closed
+    // before the package (computed live, never stored).
+    customerCollectionsByChannel: row.customerCollectionsByChannel || null,
     cancelledSaleCashTotal: Number(row.cancelledSaleCashTotal || 0),
     terminalCode: row.terminal_code ? String(row.terminal_code) : null,
     openingCash: Number(row.opening_cash || 0),

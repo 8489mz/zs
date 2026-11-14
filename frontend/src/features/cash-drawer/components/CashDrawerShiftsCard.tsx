@@ -435,10 +435,10 @@ function ShiftDetailsGrid({
                 <strong style={{ color: '#0f172a' }}>{formatCurrency(row.countedCash || 0)}</strong>
               </div>
               {(() => {
-                const expectedCard = Number(row.cardSalesTotal || 0) + Number(row.serviceCardTotal || 0) - Number(row.saleReturnCardRefundTotal || 0);
+                const expectedCard = Number(row.cardSalesTotal || 0) + Number(row.serviceCardTotal || 0) - Number(row.saleReturnCardRefundTotal || 0) + Number(row.customerCollectionsByChannel?.card || 0);
                 const cardDiff = Number(row.declaredCardTotal || 0) - expectedCard;
-                const walletDiff = Number(row.declaredWalletTotal || 0) - Number(row.walletSalesTotal || 0);
-                const instapayDiff = Number(row.declaredInstapayTotal || 0) - Number(row.instapaySalesTotal || 0);
+                const walletDiff = Number(row.declaredWalletTotal || 0) - Number(row.walletSalesTotal || 0) - Number(row.customerCollectionsByChannel?.wallet || 0);
+                const instapayDiff = Number(row.declaredInstapayTotal || 0) - Number(row.instapaySalesTotal || 0) - Number(row.customerCollectionsByChannel?.instapay || 0);
                 const electronicDiff = cardDiff + walletDiff + instapayDiff;
                 const hasElectronicDeclarations = row.declaredCardTotal != null || row.declaredWalletTotal != null || row.declaredInstapayTotal != null;
 
@@ -693,10 +693,10 @@ export function CashDrawerShiftsCard(props: CashDrawerShiftsCardProps) {
                             const expectedCash = Number(row.expectedCash || 0);
                             const drawerVariance = row.countedCash != null ? Number(row.countedCash) - expectedCash : Number(row.variance || 0);
 
-                            const expectedCard = Number(row.cardSalesTotal || 0) + Number(row.serviceCardTotal || 0) - Number(row.saleReturnCardRefundTotal || 0);
+                            const expectedCard = Number(row.cardSalesTotal || 0) + Number(row.serviceCardTotal || 0) - Number(row.saleReturnCardRefundTotal || 0) + Number(row.customerCollectionsByChannel?.card || 0);
                             const cardDiff = Number(row.declaredCardTotal || 0) - expectedCard;
-                            const walletDiff = Number(row.declaredWalletTotal || 0) - Number(row.walletSalesTotal || 0);
-                            const instapayDiff = Number(row.declaredInstapayTotal || 0) - Number(row.instapaySalesTotal || 0);
+                            const walletDiff = Number(row.declaredWalletTotal || 0) - Number(row.walletSalesTotal || 0) - Number(row.customerCollectionsByChannel?.wallet || 0);
+                            const instapayDiff = Number(row.declaredInstapayTotal || 0) - Number(row.instapaySalesTotal || 0) - Number(row.customerCollectionsByChannel?.instapay || 0);
                             const electronicDiff = cardDiff + walletDiff + instapayDiff;
                             const hasElectronicDeclarations = row.declaredCardTotal != null || row.declaredWalletTotal != null || row.declaredInstapayTotal != null;
                             const totalShiftVariance = hasElectronicDeclarations ? drawerVariance + electronicDiff : drawerVariance;
