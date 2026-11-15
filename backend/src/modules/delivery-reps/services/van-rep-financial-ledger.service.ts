@@ -19,7 +19,7 @@ import { Kysely, sql } from '../../../database/kysely';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AppError } from '../../../common/errors/app-error';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
-import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
+import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { Database } from '../../../database/database.types';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -994,12 +994,17 @@ export class VanRepFinancialLedgerService {
       // target run's period already passed, the deduction rolls
       // forward to the nearest following run and the roll-forward is
       // recorded on the settlement row.
+      // "Period passed" is judged against the TENANT's day, not the DB
+      // host's day: CURRENT_DATE is the database server's day, which
+      // differs from the tenant's around the tenant midnight — a run
+      // ending today must not roll forward early.
+      const todayKey = todayTenantDate(await getTenantTimezone(trx, tenantId), new Date());
       const targetRunRow = await trxAny
         .selectFrom('hr_payroll_runs')
         .select([
           'id',
           sql<string>`to_char(start_date, 'YYYY-MM-DD')`.as('startDate'),
-          sql<boolean>`end_date < CURRENT_DATE`.as('periodPassed'),
+          sql<boolean>`end_date < ${todayKey}`.as('periodPassed'),
         ])
         .where('tenant_id', '=', tenantId)
         .where('period_month', '=', targetMonth)

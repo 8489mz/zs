@@ -56,7 +56,7 @@ import {
 import { MaritimeMailService } from './maritime-mail.service';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
-import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
+import { formatLocalCalendarDay, getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { calculateFreightAudit, validateMakerCheckerOverride } from './engines/freight-audit.engine';
 import { evaluateAcidNumber } from './engines/acid-number.engine';
 import { checkInsuranceClaim } from './engines/cargo-insurance.engine';
@@ -152,7 +152,10 @@ export class MaritimeFreightService {
     // string comparison against it is always false) and empty_returned_at
     // is an instant: both sides are reduced to tenant-local day keys.
     const deadlineDayKey = (value: unknown): string =>
-      value instanceof Date ? value.toISOString().slice(0, 10) : String(value || '').slice(0, 10);
+      // A stored DATE arrives from pg as a host-local-midnight Date, so
+      // the UTC slice would render the previous day on any host east of
+      // UTC; key it from host-local calendar parts instead.
+      value instanceof Date ? formatLocalCalendarDay(value) : String(value || '').slice(0, 10);
     const hasDueDemurrage = (await Promise.all(containers.map(async (container) => {
       if (!container.return_deadline) return false;
       const returnedDay = await resolveBusinessDateKey(
@@ -3343,7 +3346,12 @@ export class MaritimeFreightService {
     if (deadlineDate) {
       const returnedAt = dto.emptyReturnedAt !== undefined ? dto.emptyReturnedAt : container.empty_returned_at;
       const endDay = await resolveBusinessDateKey(trx, tenantId, returnedAt ? new Date(returnedAt) : new Date());
-      const deadlineDay = new Date(deadlineDate).toISOString().slice(0, 10);
+      // database.types says string, but pg delivers a DATE column as a
+      // host-local-midnight Date at runtime; key whichever shape
+      // actually arrives from host-local calendar parts.
+      const deadlineDay = (deadlineDate as unknown) instanceof Date
+        ? formatLocalCalendarDay(deadlineDate as unknown as Date)
+        : String(deadlineDate).slice(0, 10);
       const overdueDays = Math.max(0, Math.round((Date.parse(endDay) - Date.parse(deadlineDay)) / 86_400_000));
       updatePayload.is_overdue = !returnedAt && overdueDays > 0;
       updatePayload.overdue_days = overdueDays;
@@ -4507,7 +4515,9 @@ export class MaritimeFreightService {
     // raw against a string is always false, so the expired flag below
     // could never fire. Normalize to the stored calendar day first.
     const validUntilDayKey = (value: unknown): string =>
-      value instanceof Date ? value.toISOString().slice(0, 10) : String(value || '').slice(0, 10);
+      // Same stored-DATE rule as deadlineDayKey: the UTC slice renders
+      // the previous day on any host east of UTC.
+      value instanceof Date ? formatLocalCalendarDay(value) : String(value || '').slice(0, 10);
     return rows.map((r) => this.mapRateCardRow({ ...r, status: r.status === 'active' && validUntilDayKey(r.valid_until) < today ? 'expired' : r.status }));
   }
 

@@ -13,7 +13,7 @@ import { AuthContext } from '../../../core/auth/interfaces/auth-context.interfac
 import { tenantBaseCurrency } from '../accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../engines/money-minor-units.engine';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
-import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
+import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { checkClientBusinessDay, CLIENT_BUSINESS_DATE_FUTURE_DAYS } from '../../../common/utils/client-date-bounds.util';
 import { boundedPage } from '../../../common/utils/bounded-page';
 import {
@@ -72,6 +72,10 @@ export class ArCollectionsService {
     const scope = requireTenantScope(auth);
     const tenantId = scope.tenantId;
     const digits = await this.bookDigits(tenantId);
+    // "Promised today" is the TENANT's day, not the DB host's day:
+    // CURRENT_DATE is the database server's day, which is a different
+    // calendar day from the tenant's around the tenant midnight.
+    const todayKey = todayTenantDate(await getTenantTimezone(this.db, tenantId), new Date());
 
     const casesStats = await (this.db as any)
       .selectFrom('ar_collection_cases')
@@ -80,7 +84,7 @@ export class ArCollectionsService {
         sql<number>`COUNT(CASE WHEN status IN ('open', 'promised_to_pay', 'escalated') THEN 1 END)`.as('open_cases_count'),
         sql<number>`COUNT(CASE WHEN status = 'escalated' OR oldest_overdue_days >= 30 THEN 1 END)`.as('escalated_cases_count'),
         sql<number>`COUNT(CASE WHEN status = 'promised_to_pay' AND promised_payment_date IS NOT NULL THEN 1 END)`.as('promised_count'),
-        sql<number>`COALESCE(SUM(CASE WHEN promised_payment_date = CURRENT_DATE THEN promised_amount ELSE 0 END), 0)`.as('promised_amount_today'),
+        sql<number>`COALESCE(SUM(CASE WHEN promised_payment_date = ${todayKey} THEN promised_amount ELSE 0 END), 0)`.as('promised_amount_today'),
       ])
       .where('tenant_id', '=', tenantId)
       .executeTakeFirst();

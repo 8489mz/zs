@@ -2162,11 +2162,16 @@ export class HrService {
         WHERE tenant_id = ${tenantId} AND employee_id = ${loan.employee_id}
           AND id <> ${id} AND status IN ('approved', 'paid', 'partially_repaid', 'disbursed')
       `.execute(trx);
+      // The active contract is the one active on the TENANT's day, not
+      // the DB host's day: CURRENT_DATE is the database server's day,
+      // which differs from the tenant's around the tenant midnight — a
+      // contract starting/ending today must count today.
+      const todayKey = todayTenantDate(await getTenantTimezone(trx, tenantId), new Date());
       const contract = await sql<{ base_salary: string }>`
         SELECT base_salary FROM hr_employment_contracts
         WHERE tenant_id = ${tenantId} AND employee_id = ${loan.employee_id}
-          AND status = 'active' AND start_date <= CURRENT_DATE
-          AND (end_date IS NULL OR end_date >= CURRENT_DATE)
+          AND status = 'active' AND start_date <= ${todayKey}
+          AND (end_date IS NULL OR end_date >= ${todayKey})
         ORDER BY start_date DESC, id DESC LIMIT 1
       `.execute(trx);
       const wage = Number(contract.rows[0]?.base_salary || 0);

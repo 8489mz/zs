@@ -51,6 +51,7 @@ import { allocateSaleFromImportLots, calculateImportSaleCost } from './helpers/i
 import { applyStockDelta, lockStockProducts } from '../../common/utils/location-stock-ledger';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
 import { formatLocalCalendarDay, getTenantTimezone } from '../../common/utils/tenant-timezone.util';
+import { addDaysToDayKey } from '../../common/utils/client-date-bounds.util';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
@@ -6208,13 +6209,18 @@ export class ImportSalesService {
       }
     }
 
+    // The ACI expiry window is the TENANT's day + 14 days, not the DB
+    // host's day + 14: CURRENT_DATE is the database server's day, which
+    // differs from the tenant's around the tenant midnight.
+    const todayKey = await resolveBusinessDateKey(this.db, tenantId, new Date());
+    const acidBound = addDaysToDayKey(todayKey, 14) ?? todayKey;
     const aciExpiring = await this.db
       .selectFrom('import_aci_compliance')
       .selectAll()
       .where('tenant_id', '=', tenantId)
       .where('status', 'not in', ['approved', 'expired'])
       .where('acid_expiry_date', 'is not', null)
-      .where('acid_expiry_date', '<=', sql`CURRENT_DATE + INTERVAL '14 days'`)
+      .where('acid_expiry_date', '<=', acidBound)
       .execute();
 
     const monthStart = new Date();
