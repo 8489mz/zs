@@ -1487,6 +1487,43 @@ export class CashDrawerService {
 
       const expectedCash = await this.computeShiftExpectedCashFromShift(lockedShift as ShiftRow, auth, undefined, undefined, trx);
       const variance = computeCashDrawerVariance(countedCash, expectedCash, digits);
+
+      // Declared totals are a PRESENCE gate, not a match gate: a
+      // per-method total must be PRESENT in the payload whenever the
+      // server's own breakdown of this shift shows operations for
+      // that method. An explicitly entered 0.00 stays acceptable
+      // (the cashier counted and found zero); a missing total means
+      // the cashier never declared the method at all — the retrial
+      // close of 2026-11-15 went through with Visa / wallets /
+      // InstaPay all 0.00 although the shift had operations on all
+      // three. Counts come from the server-computed breakdowns on
+      // this transaction, never from the caller-supplied operation
+      // counts in the payload (a gate that trusts caller flags is
+      // bypassed by omitting them). The sales and collections
+      // breakdowns carry counts; services, returns and cash sales
+      // carry amounts only, so a nonzero computed amount for the
+      // method is operation evidence there. The gate runs before
+      // the variance checks and before the status update, so a
+      // refused close posts nothing.
+      const serverSales = await this.computeShiftSalesBreakdown(lockedShift as ShiftRow, auth, trx, digits);
+      const serverServices = await this.computeShiftServiceBreakdown(lockedShift as ShiftRow, auth, trx, digits);
+      const serverReturns = await this.computeShiftSaleReturnTotals(lockedShift as ShiftRow, auth, trx, digits);
+      const serverCollections = await this.computeShiftCustomerCollectionsByChannel(lockedShift as ShiftRow, auth, trx, digits);
+      const serverCardOperations = serverSales.cardOperationCount + serverCollections.cardCount
+        + (serverServices.serviceCardTotal > 0 ? 1 : 0)
+        + (serverReturns.saleReturnCardRefundTotal > 0 ? 1 : 0);
+      const serverWalletOperations = serverSales.walletOperationCount + serverCollections.walletCount;
+      const serverInstapayOperations = serverSales.instapayOperationCount + serverCollections.instapayCount;
+      const serverCashOperations = serverCollections.cashCount
+        + (serverSales.cashSalesTotal > 0 ? 1 : 0)
+        + (serverServices.serviceCashTotal > 0 ? 1 : 0)
+        + (serverReturns.saleReturnCashRefundTotal > 0 ? 1 : 0);
+      const hasDeclaredTotal = (value: unknown): boolean => typeof value === 'number' && Number.isFinite(value);
+      if (serverCardOperations > 0 && !hasDeclaredTotal(payload.cardDeclaredTotal)) throw new AppError('أدخل إجمالي الفيزا المعلن قبل الإغلاق — توجد عمليات فيزا في هذه الوردية', 'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED', 400);
+      if (serverWalletOperations > 0 && !hasDeclaredTotal(payload.walletDeclaredTotal)) throw new AppError('أدخل إجمالي المحافظ المعلن قبل الإغلاق — توجد عمليات محافظ في هذه الوردية', 'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED', 400);
+      if (serverInstapayOperations > 0 && !hasDeclaredTotal(payload.instapayDeclaredTotal)) throw new AppError('أدخل إجمالي InstaPay المعلن قبل الإغلاق — توجد عمليات InstaPay في هذه الوردية', 'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED', 400);
+      if (serverCashOperations > 0 && !hasDeclaredTotal(payload.countedCash)) throw new AppError('أدخل النقدية المعدودة قبل الإغلاق — توجد عمليات نقدية في هذه الوردية', 'SHIFT_CLOSE_DECLARED_TOTAL_REQUIRED', 400);
+
       // Any real variance needs a note: the old 0.01 cutoff let a KWD
       // cashier close a shift 9 fils short with no explanation at all.
       if (!isBlindClose && variance !== 0) assertCashDrawerNote(note);

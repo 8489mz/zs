@@ -3,7 +3,7 @@ import { isCashDrawerTransferType } from '@/features/cash-drawer/lib/cash-drawer
 import { useCounterpartAccounts } from '@/features/cash-drawer/hooks/useCounterpartAccounts';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { useEffect, useMemo, useState } from 'react';
-import { Controller, useWatch, type Control, type UseFormReturn } from 'react-hook-form';
+import { Controller, useFormState, useWatch, type Control, type UseFormReturn } from 'react-hook-form';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { Field } from '@/shared/ui/field';
 import { CustomSelect } from '@/shared/ui/custom-select';
@@ -211,6 +211,13 @@ function PaymentChannelRow(props: PaymentChannelRowProps) {
   });
   const declaredTotal = Number(rawDeclared || 0);
 
+  // The declared total is mandatory whenever the channel has
+  // operations: a blank box is NOT a 0.00 declaration. An
+  // explicitly entered 0.00 stays acceptable. The server gate is
+  // the pin; this rule blocks the submit in the form itself.
+  const { errors: closeDeclaredErrors } = useFormState({ control: props.control });
+  const declaredTotalError = closeDeclaredErrors[props.declaredFieldName];
+
   // INV-FE1-FRONTEND-BOOK-DIGITS: drawer detail totals and the
   // match threshold round at the tenant's book digits (global system
   // currency; the match threshold is just under one minor unit).
@@ -289,6 +296,7 @@ function PaymentChannelRow(props: PaymentChannelRowProps) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155' }}>{t('cash_drawer.cash_drawer_forms_panel.s3', "الإجمالي المعلن:")}</span>
+            {props.count > 0 ? (<span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#dc2626' }}>{t('cash_drawer.cash_drawer_forms_panel.s127', "(مطلوب)")}</span>) : null}
             <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
               <input
                 type="number"
@@ -296,9 +304,13 @@ function PaymentChannelRow(props: PaymentChannelRowProps) {
                 step="0.01"
                 placeholder="0.00"
                 className="no-spin-arrows"
-                {...props.register(props.declaredFieldName, { valueAsNumber: true })}
+                {...props.register(props.declaredFieldName, {
+                  valueAsNumber: true,
+                  validate: (value) => (props.count > 0 ? (typeof value === 'number' && Number.isFinite(value) ? true : 'required') : true),
+                })}
                 disabled={props.disabled}
                 onFocus={(e) => e.target.select()}
+                aria-invalid={Boolean(declaredTotalError)}
                 style={{
                   width: '125px',
                   padding: '6px 30px 6px 10px',
@@ -306,7 +318,7 @@ function PaymentChannelRow(props: PaymentChannelRowProps) {
                   fontWeight: 700,
                   textAlign: 'center',
                   borderRadius: '6px',
-                  border: '1.5px solid #cbd5e1',
+                  border: declaredTotalError ? '1.5px solid #dc2626' : '1.5px solid #cbd5e1',
                   background: '#ffffff',
                   color: '#0f172a',
                   MozAppearance: 'textfield',
@@ -334,6 +346,12 @@ function PaymentChannelRow(props: PaymentChannelRowProps) {
           </Button>
         </div>
       </div>
+
+      {declaredTotalError ? (
+        <div style={{ padding: '8px 16px 12px', fontSize: '0.8rem', fontWeight: 700, color: '#dc2626' }}>
+          {t('cash_drawer.cash_drawer_forms_panel.s128', "هذا الإجمالي مطلوب — توجد عمليات في هذه الوسيلة، أدخل الإجمالي المعلن (0.00 مقبول إن كان الصفر هو الفعلي).")}
+        </div>
+      ) : null}
 
       {/* Expanded Accordion Details */}
       {props.isOpen && (

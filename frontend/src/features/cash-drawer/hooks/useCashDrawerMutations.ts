@@ -53,6 +53,20 @@ interface ReviewShiftValues {
   note?: string;
 }
 
+// A blank declared total is ABSENT, never 0.00: the close gate
+// refuses a missing total when the method has operations, while an
+// explicitly entered 0.00 stays acceptable — so the mutation must
+// not coerce a blank/NaN field into 0, or the server gate could
+// never fire from the UI and a blank would silently become a 0.00
+// declaration. JSON.stringify drops undefined keys, so the server
+// sees the field as absent. Counted cash follows the same rule:
+// the DTO already requires it, and a blank cash box must not
+// silently become a 0.00 count either.
+const declaredTotalOrUndefined = (value: number | undefined): number | undefined => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
 export function useCashDrawerMutations(actions?: {
   onOpenSuccess?: () => void;
   onMovementSuccess?: () => void;
@@ -121,12 +135,12 @@ export function useCashDrawerMutations(actions?: {
   const closeMutation = useMutation({
     mutationFn: (values: CloseShiftValues) =>
       cashDrawerApi.close(values.shiftId, {
-        countedCash: Number(values.countedCash || 0),
-        cardDeclaredTotal: Number(values.cardDeclaredTotal || 0),
+        countedCash: declaredTotalOrUndefined(values.countedCash),
+        cardDeclaredTotal: declaredTotalOrUndefined(values.cardDeclaredTotal),
         cardOperationCount: Number(values.cardOperationCount || 0),
-        walletDeclaredTotal: Number(values.walletDeclaredTotal || 0),
+        walletDeclaredTotal: declaredTotalOrUndefined(values.walletDeclaredTotal),
         walletOperationCount: Number(values.walletOperationCount || 0),
-        instapayDeclaredTotal: Number(values.instapayDeclaredTotal || 0),
+        instapayDeclaredTotal: declaredTotalOrUndefined(values.instapayDeclaredTotal),
         instapayOperationCount: Number(values.instapayOperationCount || 0),
         cardDetails: Array.isArray(values.cardDetails)
           ? values.cardDetails.map((d) => ({ amount: Number(d.amount || 0), reference: d.reference }))
