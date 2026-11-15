@@ -59,11 +59,6 @@ export async function executeWipeTables(trx: any, tenantId: string, preservedUse
   await trx.deleteFrom('customer_ledger').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
   await trx.deleteFrom('customers').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
 
-  await trx.deleteFrom('supplier_payment_schedule_logs').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
-  await trx.deleteFrom('supplier_payment_schedules').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
-  await trx.deleteFrom('supplier_payments').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
-  await trx.deleteFrom('supplier_ledger').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
-  await trx.deleteFrom('suppliers').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
 
   // Van rows that block trips / reps / products (INV-TENANT-WIPE-FK-CLOSURE):
   // load requisitions block trips + reps, stock transfers block reps,
@@ -156,6 +151,15 @@ export async function executeWipeTables(trx: any, tenantId: string, preservedUse
   await (trx as any).deleteFrom('import_sales_and_profit').where(sql<boolean>`tenant_id = ${tenantId}`).execute().catch(() => undefined);
   await (trx as any).deleteFrom('import_shipment_items').where(sql<boolean>`tenant_id = ${tenantId}`).execute().catch(() => undefined);
   await (trx as any).deleteFrom('import_shipments').where(sql<boolean>`tenant_id = ${tenantId}`).execute().catch(() => undefined);
+
+    // Suppliers must go AFTER import_shipments: import_shipments.supplier_id
+    // references suppliers.id ON DELETE RESTRICT (migration 2036), so deleting
+    // suppliers first fails with 23503 and the API answers 409 naming import_shipments.
+  await trx.deleteFrom('supplier_payment_schedule_logs').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
+  await trx.deleteFrom('supplier_payment_schedules').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
+  await trx.deleteFrom('supplier_payments').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
+  await trx.deleteFrom('supplier_ledger').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
+  await trx.deleteFrom('suppliers').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
   await (trx as any).deleteFrom('import_partners').where(sql<boolean>`tenant_id = ${tenantId}`).execute().catch(() => undefined);
 
   // Maintenance & Trade-in & Online Orders & Pharmacy

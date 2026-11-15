@@ -23,9 +23,11 @@ import { executeWipeTables } from '../../src/modules/settings/services/settings-
  * with a Postgres FK violation (23503), the transaction rolls back,
  * and the generic error mask hides the real cause from the screen.
  *
- * Blocking tables proven from the migrations at live HEAD (three FK
- * styles checked: inline REFERENCES, Kysely .references(), and
- * table-constraint FOREIGN KEY arrays / ALTER ... ADD CONSTRAINT):
+ * Blocking tables proven from the migrations at live HEAD (FOUR FK
+ * styles checked: inline REFERENCES, Kysely .references(), table-constraint
+ * FOREIGN KEY arrays / ALTER ... ADD CONSTRAINT, and alterTable().addColumn()
+ * with .references() — the fourth style is how the 409 case below was missed
+ * in the first audit):
  * - van_field_returns -> sales / customers / delivery_representatives
  * - van_load_requisitions -> delivery_representatives / van_sales_trips
  * - van_stock_transfers -> delivery_representatives
@@ -51,6 +53,21 @@ import { executeWipeTables } from '../../src/modules/settings/services/settings-
  *   block) — the spec pins that order with a seeded movement.
  * audit_logs -> users is the one handled exception: the wipe nulls
  * created_by for deleted users before deleting them.
+ *
+ * SECOND FAILURE (live, 2026-11-15 ~15:03, after the first fix was
+ * deployed): the wipe answered 409 Conflict, not 500 — the mapper
+ * (postgres-error.mapper.ts) names the referencing table from the
+ * Postgres detail: import_shipments. Cause: import_shipments.supplier_id
+ * references suppliers.id ON DELETE RESTRICT (migration 2036,
+ * alterTable().addColumn().references()), but the wipe deleted suppliers
+ * BEFORE import_shipments, so the suppliers delete died with 23503.
+ * Fix: the whole supplier block (schedules, payments, ledger,
+ * suppliers) moved to AFTER import_shipments. A mechanical audit over
+ * all 513 FK edges from the migrations now proves zero order
+ * violations in the wipe list (the only latent edges are audit_logs /
+ * tenant_subscription_payments -> users, handled by nulling, and
+ * returns -> users, whose table was dropped by migration
+ * 1710000004000 and replaced by return_documents, which IS wiped).
  *
  * THE RULE: executeWipeTables deletes every operational table that
  * references a wiped table — blockers first, in child-before-parent
@@ -153,7 +170,7 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<a
     `CREATE TABLE journal_entries (id BIGINT PRIMARY KEY, tenant_id TEXT NOT NULL)`,
     `CREATE TABLE customer_installment_plans (id BIGINT PRIMARY KEY, tenant_id TEXT NOT NULL)`,
     `CREATE TABLE customer_installments (id BIGINT PRIMARY KEY, tenant_id TEXT NOT NULL)`,
-    `CREATE TABLE import_shipments (id BIGINT PRIMARY KEY, tenant_id TEXT NOT NULL)`,
+    `CREATE TABLE import_shipments (id BIGINT PRIMARY KEY, tenant_id TEXT NOT NULL, supplier_id BIGINT REFERENCES suppliers(id) ON DELETE RESTRICT)`,
     `CREATE TABLE import_partners (id BIGINT PRIMARY KEY, tenant_id TEXT NOT NULL)`,
     `CREATE TABLE import_projects (id BIGINT PRIMARY KEY, tenant_id TEXT NOT NULL)`,
     `CREATE TABLE import_inventory_lots (id BIGINT PRIMARY KEY, tenant_id TEXT NOT NULL, product_id BIGINT REFERENCES products(id) ON DELETE RESTRICT, shipment_id BIGINT REFERENCES import_shipments(id) ON DELETE CASCADE)`,
@@ -238,7 +255,7 @@ async function main(): Promise<void> {
     await db.insertInto('journal_entries').values({ id: 1, tenant_id: TENANT }).execute();
     await db.insertInto('customer_installment_plans').values({ id: 1, tenant_id: TENANT }).execute();
     await db.insertInto('customer_installments').values({ id: 1, tenant_id: TENANT }).execute();
-    await db.insertInto('import_shipments').values({ id: 1, tenant_id: TENANT }).execute();
+    await db.insertInto('import_shipments').values({ id: 1, tenant_id: TENANT, supplier_id: 1 }).execute();
     await db.insertInto('import_partners').values({ id: 1, tenant_id: TENANT }).execute();
     await db.insertInto('import_projects').values({ id: 1, tenant_id: TENANT }).execute();
     await db.insertInto('import_inventory_lots').values({ id: 1, tenant_id: TENANT, product_id: 1, shipment_id: 1 }).execute();
@@ -337,6 +354,14 @@ async function main(): Promise<void> {
     const source = readFileSync(
       resolve(__dirname, '../../src/modules/settings/services/settings-demo-data-wipe-tables.ts'),
       'utf8',
+    );
+    // Order pin: shipments (RESTRICT child of suppliers) must be
+    // deleted BEFORE suppliers, or the suppliers delete dies with 23503
+    // and the API answers 409 naming import_shipments (live 2026-11-15).
+    assert.ok(
+      source.indexOf(`deleteFrom('import_shipments')`) <
+        source.indexOf(`deleteFrom('suppliers')`),
+      'import_shipments must be deleted before suppliers',
     );
     for (const table of [
       'van_field_returns', 'van_load_requisitions', 'van_stock_transfers',
