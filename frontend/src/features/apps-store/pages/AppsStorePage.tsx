@@ -56,6 +56,7 @@ const CONTRACTING_ALLOWED_KEYS = new Set([
   'enableEnterpriseFeatures',
   'fixedAssetsModuleEnabled',
   'taxDeclarationModuleEnabled',
+  'weightedBarcodeEnabled',
 ]);
 
 const MARITIME_ALLOWED_KEYS = new Set([
@@ -65,6 +66,7 @@ const MARITIME_ALLOWED_KEYS = new Set([
   'enableEnterpriseFeatures',
   'fixedAssetsModuleEnabled',
   'taxDeclarationModuleEnabled',
+  'weightedBarcodeEnabled',
 ]);
 
 export function AppsStorePage() {
@@ -136,6 +138,7 @@ export function AppsStorePage() {
     mutationFn: (partialSettings: Record<string, any>) => settingsApi.update(partialSettings),
     onSuccess: (response, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings });
+      queryClient.invalidateQueries({ queryKey: queryKeys.posSettings });
       // INV-REST-SUCCESS-FEEDBACK-TRUTH: toast from the CONFIRMED server
       // response, never from the requested variables. The backend deletes
       // posModuleEnabled for non-super-admin actors (protected list) and

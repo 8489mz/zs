@@ -36,6 +36,7 @@ import { normalizePosSaleMode, usePosSaleMode } from '@/features/pos/lib/pos-sal
 import { matchProductByCode } from '@/features/pos/lib/pos-workspace.helpers';
 import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 import { parseWeightedBarcode, matchProductByWeightedCode } from '@/features/pos/lib/weighted-barcode';
+import { resolveRemoteWeightedBarcode } from '@/features/pos/lib/pos-remote-weighted-barcode';
 import { parseQuantityPrefixQuery } from '@/features/pos/lib/pos-quantity-prefix';
 import { lookupProductByBarcodeFromStorage } from '@/features/pos/lib/pos-catalog-storage';
 import { useAuthStore } from '@/stores/auth-store';
@@ -372,24 +373,13 @@ export function PosWorkspace() {
 
         const weightedBarcode = parseWeightedBarcode(query, pos.settingsQuery.data || null);
         if (weightedBarcode) {
-          const weightedLookupProducts = await posApi.lookupProducts({ barcode: weightedBarcode.productCode, branchId: pos.branchId, locationId: pos.locationId, limit: 5 });
-          const weightedSubmitted = pos.handleQuickAddCodeSubmit(rawQuery, weightedLookupProducts);
-          if (weightedSubmitted) {
-            pos.setSearch('');
-            return;
-          }
-
-          const strippedProductCode = weightedBarcode.productCode.replace(/^0+/, '') || weightedBarcode.productCode;
-          if (strippedProductCode !== weightedBarcode.productCode) {
-            const strippedSearchProducts = await posApi.lookupProducts({ q: strippedProductCode, branchId: pos.branchId, locationId: pos.locationId, limit: 5 });
-            const strippedSearchSubmitted = pos.handleQuickAddCodeSubmit(rawQuery, strippedSearchProducts);
-            if (strippedSearchSubmitted) {
-              pos.setSearch('');
-              return;
-            }
-          }
-          
-          pos.setSubmitMessage(`باركود ميزان: لم يتم العثور على كود الصنف ${weightedBarcode.productCode}.`);
+          await resolveRemoteWeightedBarcode({
+            rawQuery, weightedBarcode, branchId: pos.branchId, locationId: pos.locationId, activeTenantId,
+            lookupProducts: (lookupParams) => posApi.lookupProducts(lookupParams),
+            lookupOfflineProduct: lookupProductByBarcodeFromStorage,
+            submitWeightedProducts: (rawCode, matchedProducts) => pos.handleQuickAddCodeSubmit(rawCode, matchedProducts),
+            setSearch: pos.setSearch, setSubmitMessage: pos.setSubmitMessage,
+          });
           focusBarcodeEntry();
           return;
         }
@@ -477,7 +467,7 @@ export function PosWorkspace() {
     const query = parsed.cleanQuery || raw;
     const requestedQuantity = parsed.hasPrefix ? parsed.quantity : 1;
 
-    const exactCodeMatch = matchProductByCode(pos.productsQuery.data || [], query);
+    const exactCodeMatch = matchProductByCode(pos.catalogProducts, query);
 
     // Exact product barcodes (and scale labels) win over the date-shaped invoice heuristic.
     if (exactCodeMatch.status === 'not-found' &&
@@ -518,7 +508,7 @@ export function PosWorkspace() {
     // Also check if typed in Arabic keyboard
     const remappedQuery = remapArabicKeyboardToEnglish(query);
     if (remappedQuery !== query) {
-      const remappedLocalMatch = matchProductByCode(pos.productsQuery.data || [], remappedQuery);
+      const remappedLocalMatch = matchProductByCode(pos.catalogProducts, remappedQuery);
       if (remappedLocalMatch.status === 'matched') {
         const submitted = handleQuickAddSubmit(remappedQuery);
         if (submitted) {
@@ -537,13 +527,19 @@ export function PosWorkspace() {
     if (exactCodeMatch.status === 'not-found') {
       const weightedBarcode = parseWeightedBarcode(query, pos.settingsQuery.data || null);
       if (weightedBarcode) {
-        const localWeightedMatch = matchProductByWeightedCode(pos.productsQuery.data || [], weightedBarcode.productCode);
+        const localWeightedMatch = matchProductByWeightedCode(pos.catalogProducts, weightedBarcode.productCode);
         if (localWeightedMatch.status === 'matched') {
           const submitted = handleQuickAddSubmit(raw);
           if (submitted) {
             pos.setSearch('');
             return true;
           }
+          focusBarcodeEntry();
+          return false;
+        } else if (localWeightedMatch.status === 'ambiguous') {
+          pos.setSubmitMessage(`كود الميزان ${weightedBarcode.productCode} مرتبط بأكثر من صنف أو وحدة. راجع كود الصنف أولًا.`);
+          focusBarcodeEntry();
+          return false;
         } else {
           resolveRemoteBarcodeMatch(raw);
           return true;

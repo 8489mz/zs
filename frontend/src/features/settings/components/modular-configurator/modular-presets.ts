@@ -88,7 +88,6 @@ export const SYSTEM_MODULES: ModuleDefinition[] = [
     categoryLabel: 'المبيعات ونقاط الخدمة',
     shortDesc: 'قراءة باركود الوزن من موازين السوبرماركت واستخراج الوزن والسعر لحظياً.',
     requiredPlan: 'plan_basic',
-    dependencies: ['posModuleEnabled'],
   },
   {
     key: 'comboModuleEnabled',
@@ -350,7 +349,6 @@ export const INDUSTRY_PRESETS: Record<IndustryPresetId, IndustryPreset> = {
     ],
     disabledModules: [
       'posModuleEnabled',
-      'weightedBarcodeEnabled',
       'comboModuleEnabled',
       'posShowCartMeta',
       'restaurantModuleEnabled',
@@ -391,7 +389,6 @@ export const INDUSTRY_PRESETS: Record<IndustryPresetId, IndustryPreset> = {
     disabledModules: [
       'posModuleEnabled',
       'deliveryRepsModuleEnabled',
-      'weightedBarcodeEnabled',
       'restaurantModuleEnabled',
       'enablePharmacyModule',
       'enableMobileStoreFeatures',
@@ -423,7 +420,6 @@ export const INDUSTRY_PRESETS: Record<IndustryPresetId, IndustryPreset> = {
     ],
     disabledModules: [
       'posModuleEnabled',
-      'weightedBarcodeEnabled',
       'comboModuleEnabled',
       'posShowCartMeta',
       'restaurantModuleEnabled',
@@ -459,7 +455,6 @@ export const INDUSTRY_PRESETS: Record<IndustryPresetId, IndustryPreset> = {
       'posModuleEnabled',
       'inventoryModuleEnabled',
       'contractingModuleEnabled',
-      'weightedBarcodeEnabled',
       'comboModuleEnabled',
       'restaurantModuleEnabled',
       'enablePharmacyModule',
@@ -491,7 +486,6 @@ export const INDUSTRY_PRESETS: Record<IndustryPresetId, IndustryPreset> = {
       'deliveryFleetModuleEnabled',
     ],
     disabledModules: [
-      'weightedBarcodeEnabled',
       'enablePharmacyModule',
       'enableMobileStoreFeatures',
       'clothingModuleEnabled',
@@ -523,7 +517,6 @@ export const INDUSTRY_PRESETS: Record<IndustryPresetId, IndustryPreset> = {
       'comboModuleEnabled',
     ],
     disabledModules: [
-      'weightedBarcodeEnabled',
       'restaurantModuleEnabled',
       'enablePharmacyModule',
       'enableMobileStoreFeatures',
@@ -553,7 +546,6 @@ export const INDUSTRY_PRESETS: Record<IndustryPresetId, IndustryPreset> = {
       'comboModuleEnabled',
     ],
     disabledModules: [
-      'weightedBarcodeEnabled',
       'restaurantModuleEnabled',
       'enablePharmacyModule',
       'enableMobileStoreFeatures',
@@ -584,7 +576,6 @@ export const INDUSTRY_PRESETS: Record<IndustryPresetId, IndustryPreset> = {
       'taxDeclarationModuleEnabled',
     ],
     disabledModules: [
-      'weightedBarcodeEnabled',
       'restaurantModuleEnabled',
       'enablePharmacyModule',
       'enableMobileStoreFeatures',
@@ -616,7 +607,6 @@ export const INDUSTRY_PRESETS: Record<IndustryPresetId, IndustryPreset> = {
       'taxDeclarationModuleEnabled',
     ],
     disabledModules: [
-      'weightedBarcodeEnabled',
       'restaurantModuleEnabled',
       'enablePharmacyModule',
       'manufacturingModuleEnabled',
@@ -645,7 +635,6 @@ export const INDUSTRY_PRESETS: Record<IndustryPresetId, IndustryPreset> = {
       'taxDeclarationModuleEnabled',
     ],
     disabledModules: [
-      'weightedBarcodeEnabled',
       'restaurantModuleEnabled',
       'enableMobileStoreFeatures',
       'manufacturingModuleEnabled',
@@ -676,7 +665,6 @@ export const INDUSTRY_PRESETS: Record<IndustryPresetId, IndustryPreset> = {
       'taxDeclarationModuleEnabled',
     ],
     disabledModules: [
-      'weightedBarcodeEnabled',
       'restaurantModuleEnabled',
       'enablePharmacyModule',
       'enableMobileStoreFeatures',
@@ -706,7 +694,6 @@ export const INDUSTRY_PRESETS: Record<IndustryPresetId, IndustryPreset> = {
     ],
     disabledModules: [
       'inventoryModuleEnabled',
-      'weightedBarcodeEnabled',
       'restaurantModuleEnabled',
       'enablePharmacyModule',
       'clothingModuleEnabled',
@@ -737,7 +724,6 @@ export const INDUSTRY_PRESETS: Record<IndustryPresetId, IndustryPreset> = {
       'comboModuleEnabled',
     ],
     disabledModules: [
-      'weightedBarcodeEnabled',
       'restaurantModuleEnabled',
       'enablePharmacyModule',
       'enableMobileStoreFeatures',
@@ -767,7 +753,6 @@ export const INDUSTRY_PRESETS: Record<IndustryPresetId, IndustryPreset> = {
       'installmentsModuleEnabled',
     ],
     disabledModules: [
-      'weightedBarcodeEnabled',
       'restaurantModuleEnabled',
       'enablePharmacyModule',
       'enableMobileStoreFeatures',
@@ -796,7 +781,6 @@ export const INDUSTRY_PRESETS: Record<IndustryPresetId, IndustryPreset> = {
       'taxDeclarationModuleEnabled',
     ],
     disabledModules: [
-      'weightedBarcodeEnabled',
       'restaurantModuleEnabled',
       'enablePharmacyModule',
       'manufacturingModuleEnabled',

@@ -3,7 +3,8 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { useCreateSalesOrderForm, type SalesOrderItem } from '../hooks/useCreateSalesOrderForm';
 import { useSalesOrderWarehouse } from '../hooks/useSalesOrderWarehouse';
-import { useProductsQuery } from '@/shared/hooks/use-catalog-queries';
+import { useProductsQuery, useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
+import { resolveSalesOrderBarcodeScan } from '../lib/sales-order-barcode-scan';
 import { useAppToolbar } from '@/stores/toolbar-store';
 import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/shared/ui/button';
@@ -91,6 +92,7 @@ export function CreateSalesOrderPage() {
 
   // Feature Hook for Data Access
   const { data: catalogProducts = [] } = useProductsQuery();
+  const { data: settings } = useSettingsQuery();
   const {
     customers,
     createSalesOrder,
@@ -401,32 +403,24 @@ export function CreateSalesOrderPage() {
 
   const handleBarcodeScan = () => {
     const barcode = window.prompt('امسح أو أدخل باركود الصنف:');
-    if (barcode && barcode.trim()) {
-      const found = productOptions.find((p) => p.barcode === barcode.trim() || p.sku === barcode.trim());
-      if (found) {
-        setItems((prev) => [
-          ...prev,
-          {
-            id: Date.now() + Math.random(),
-            productId: found.rawId,
-            productName: found.name,
-            unitName: found.unit,
-            quantity: 1,
-            unitPrice: found.price,
-            discount: 0,
-            total: found.price,
-            // INV-SALES-ORDER-WAREHOUSE-SELECTION: selected-warehouse
-            // availability, never the global stock.
-            stockOnHand: availabilityByProduct[found.rawId] ?? 0,
-            warehouse: 'المستودع الرئيسي',
-          },
-        ]);
-        void refreshAvailability([found.rawId]);
-        toast.success(`تمت إضافة الصنف: ${found.name}`);
-      } else {
-        toast.warning('لم يتم العثور على صنف بهذا الباركود');
-      }
+    const result = barcode ? resolveSalesOrderBarcodeScan({ scannedCode: barcode, catalogProducts, productOptions, settings }) : null;
+    if (!result) return;
+    if (result.status === 'error') {
+      toast.warning(result.message);
+      return;
     }
+    const { option: found, quantity, unitName, total } = result;
+    setItems((prev) => [
+      ...prev,
+      {
+        id: Date.now() + Math.random(), productId: found.rawId, productName: found.name, unitName,
+        quantity, unitPrice: found.price, discount: 0, total,
+        // INV-SALES-ORDER-WAREHOUSE-SELECTION: selected-warehouse availability, never global stock.
+        stockOnHand: availabilityByProduct[found.rawId] ?? 0, warehouse: 'المستودع الرئيسي',
+      },
+    ]);
+    void refreshAvailability([found.rawId]);
+    toast.success(`تمت إضافة الصنف: ${found.name}`);
   };
 
   // Calculations

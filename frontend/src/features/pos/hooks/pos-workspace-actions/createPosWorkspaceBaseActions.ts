@@ -217,7 +217,9 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
             if (!Number.isFinite(quantity) || quantity <= 0 ||
                 Math.abs(quantity * unitPrice - weightedBarcode.priceAmount) > 0.01 ||
                 Math.abs(quantity * previewPrice - weightedBarcode.priceAmount) > 0.01) {
-              params.setScannerMessage('السعر المشفر لا يطابق سعر الصنف الحالي؛ راجع إعدادات الميزان والعروض.');
+              const priceMismatchMessage = 'السعر المشفر لا يطابق سعر الصنف الحالي؛ راجع إعدادات الميزان والعروض.';
+              params.setSubmitMessage(priceMismatchMessage);
+              params.setScannerMessage(priceMismatchMessage);
               params.requestBarcodeFocus();
               return false;
             }
@@ -234,7 +236,9 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
           return true;
         }
         if (weightedResult.status === 'ambiguous') {
-          params.setScannerMessage(`كود الميزان ${weightedBarcode.productCode} مرتبط بأكثر من صنف أو وحدة. راجع كود الصنف أولًا.`);
+          const ambiguousMessage = `كود الميزان ${weightedBarcode.productCode} مرتبط بأكثر من صنف أو وحدة. راجع كود الصنف أولًا.`;
+          params.setSubmitMessage(ambiguousMessage);
+          params.setScannerMessage(ambiguousMessage);
           params.requestBarcodeFocus();
           return false;
         }

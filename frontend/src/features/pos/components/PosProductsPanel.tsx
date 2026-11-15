@@ -21,6 +21,7 @@ import { ProductIcon } from '@/shared/components/icons/product-svg-catalog';
 import { ProductIconStudioModal } from '@/shared/components/icons/ProductIconStudioModal';
 import { useProductIconSettings } from '@/shared/components/icons/product-icon-theme';
 import { isInvoiceBarcodeQuery, sanitizeSearchInputLive } from '@/features/pos/lib/pos-barcode-normalizer';
+import { isAutoSubmittableWeightedBarcode } from '@/features/pos/lib/weighted-barcode';
 import { useScannerBuffer } from '@/features/pos/hooks/useScannerBuffer';
 import { CameraBarcodeScannerModal } from '@/shared/components/CameraBarcodeScannerModal';
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
@@ -1281,13 +1282,14 @@ function PosProductsPanelComponent({
   // Scanner buffer: detects rapid barcode scanner input and batches it into a single
   // state update instead of triggering re-renders on every character.
   // Uses refs + direct DOM manipulation — ZERO React renders during scanning.
+  const settingsQuery = useSettingsQuery();
   const scannerBuffer = useScannerBuffer({
     externalValue: search,
     onFlush: onSearchChange,
     onAutoSubmit: (val) => {
       const trimmed = val.trim();
       if (!trimmed) return false;
-      if (hasExactCodeMatch(products, trimmed) || isInvoiceBarcodeQuery(trimmed)) {
+      if (hasExactCodeMatch(products, trimmed) || isInvoiceBarcodeQuery(trimmed) || isAutoSubmittableWeightedBarcode(trimmed, settingsQuery.data)) {
         return onSearchSubmitFirstResult(trimmed);
       }
       return false;
@@ -1298,8 +1300,6 @@ function PosProductsPanelComponent({
     scanFlushMs: 75,
     typeFlushMs: 120,
   });
-
-  const settingsQuery = useSettingsQuery();
   const defaultLayoutFromSettings = settingsQuery.data?.posProductCardLayout;
   const { customization, saveCustomization } = usePosUiCustomization();
   const isMobile = useIsMobile(900);

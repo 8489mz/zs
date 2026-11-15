@@ -1325,20 +1325,18 @@ export const ModulesSettingsTab = memo(function ModulesSettingsTab({ form, disab
           ) : null}
 
           {/* باركود الميزان */}
-          {(!isContractingVertical && !isMaritimeVertical) || isSuperAdmin ? (
-            <label style={getCardStyle(Boolean(isWeightedActive), true)}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={getIconBadgeStyle(Boolean(isWeightedActive))}>
-                  <ScaleIcon size={20} />
-                </div>
-                <div style={premiumCardTextStyle}>
-                  <strong style={{ fontSize: '0.88rem', color: '#0f172a', fontWeight: 800 }}>{t('settings.forms.tabs.modules_settings_tab.s119', "باركود الميزان")}</strong>
-                  <small className="muted" style={{ fontSize: '0.76rem', color: '#64748b' }}>{t('settings.forms.tabs.modules_settings_tab.s120', "باركود مضمّن فيه الوزن أو السعر مباشرةً للأوزان")}</small>
-                </div>
+          <label style={getCardStyle(Boolean(isWeightedActive), true)}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={getIconBadgeStyle(Boolean(isWeightedActive))}>
+                <ScaleIcon size={20} />
               </div>
-              <input type="checkbox" style={premiumCheckboxInputStyle} {...form.register('weightedBarcodeEnabled')} checked={Boolean(isWeightedActive)} disabled={disabled} />
-            </label>
-          ) : null}
+              <div style={premiumCardTextStyle}>
+                <strong style={{ fontSize: '0.88rem', color: '#0f172a', fontWeight: 800 }}>{t('settings.forms.tabs.modules_settings_tab.s119', "باركود الميزان")}</strong>
+                <small className="muted" style={{ fontSize: '0.76rem', color: '#64748b' }}>{t('settings.forms.tabs.modules_settings_tab.s120', "باركود مضمّن فيه الوزن أو السعر مباشرةً للأوزان")}</small>
+              </div>
+            </div>
+            <input type="checkbox" style={premiumCheckboxInputStyle} {...form.register('weightedBarcodeEnabled')} checked={Boolean(isWeightedActive)} disabled={disabled} />
+          </label>
 
           {/* موديول الشركات والمحاسبة المتقدمة */}
           <label 

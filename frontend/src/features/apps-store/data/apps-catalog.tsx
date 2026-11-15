@@ -287,7 +287,6 @@ export const APPS_CATALOG: AppItemDefinition[] = [
     shortDesc: 'قراءة باركود الوزن من موازين السوبرماركت واستخراج الوزن والسعر لحظياً.',
     features: ['دعم موازين التجزئة', 'احتساب تلقائي للسعر', 'تسريع الفوترة'],
     requiredPlan: 'plan_basic',
-    dependencies: ['posModuleEnabled'],
     icon: ScaleIcon,
     accentColor: '#0369a1',
     accentBg: '#f0f9ff',

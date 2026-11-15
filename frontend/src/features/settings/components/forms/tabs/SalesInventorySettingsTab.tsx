@@ -2207,7 +2207,7 @@ export const SalesInventorySettingsTab = memo(function SalesInventorySettingsTab
           rule as before: enabled, and not a contracting/maritime vertical
           unless super admin. Field labels keep the modules-tab i18n keys so
           the existing translations resolve unchanged. */}
-      {weightedBarcodeEnabled && ((!isContractingVertical && !isMaritimeVertical) || isSuperAdmin) ? (
+      {weightedBarcodeEnabled ? (
         <FormSection
           title={__t('settings.forms.tabs.sales_inventory_settings_tab.weighted_barcode_section_title', "إعدادات باركود الميزان")}
           description={__t('settings.forms.tabs.sales_inventory_settings_tab.weighted_barcode_section_desc', "تنسيق باركود الميزان: البادئة وطول كود الصنف وخانات الوزن ومحتوى الباركود.")}

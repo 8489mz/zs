@@ -1368,5 +1368,9 @@
 
 ---
 
+## تحديث 2026-11-15: تحرير باركود الميزان عبر كافة أنشطة المنظومة
+
+- أُزيلت قيود حجب وتصفير `weightedBarcodeEnabled` من `SettingsMainForm.tsx` (`isWarehousingVertical`) و `AppsStorePage.tsx` (`CONTRACTING_ALLOWED_KEYS` / `MARITIME_ALLOWED_KEYS` مع إبطال `queryKeys.posSettings`) و `apps-catalog.tsx` و `modular-presets.ts` (إزالة التبعية القسرية لـ `posModuleEnabled` وحذفها من `disabledModules`) و `SalesInventorySettingsTab.tsx` و `ModulesSettingsTab.tsx` بحيث يظهر ويعمل إعداد باركود الميزان طالما كان مفعّلاً أياً كان نشاط المنشأة.
+- تفاصيل محرك القراءة والاختبارات المالك لها في [SALES_CAPABILITIES.md](SALES_CAPABILITIES.md#L155) والثوابت في [ARCHITECTURE_INVARIANTS.md](ARCHITECTURE_INVARIANTS.md#L3073-L3074).
 
 <!-- migrated:cap-245:end -->

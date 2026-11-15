@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { getScaleExportItemCode, buildSampleScaleBarcode, getWeightedBarcodeConfig, matchProductByWeightedCode, parseWeightedBarcode } from './weighted-barcode';
+import {
+  getScaleExportItemCode,
+  buildSampleScaleBarcode,
+  getWeightedBarcodeConfig,
+  matchProductByWeightedCode,
+  parseWeightedBarcode,
+  isAutoSubmittableWeightedBarcode,
+} from './weighted-barcode';
 import type { Product } from '@/types/domain';
 
 const settings = { weightedBarcodeEnabled: true, weightedBarcodePrefix: '21', weightedBarcodeProductCodeLength: 5, weightedBarcodeWeightDigits: 5, weightedBarcodeWeightDecimals: 3 };
 const config = getWeightedBarcodeConfig(settings);
-const makeProduct = (id: string, barcode: string, styleCode?: string) => ({ id, barcode, styleCode, units: [], name: id } as unknown as Product);
+const makeProduct = (id: string, barcode: string, styleCode?: string, sku?: string) => ({ id, barcode, styleCode, sku, units: [], name: id } as unknown as Product);
 describe('scale barcode safety', () => {
   it('generates valid EAN-13 checksum compatible with the POS parser', () => {
     const code = getScaleExportItemCode(makeProduct('1', '101'), config);
@@ -37,5 +44,22 @@ describe('scale barcode safety', () => {
     const priceConfig = { ...config, valueMode: 'price' as const };
     const sample = buildSampleScaleBarcode('00101', priceConfig);
     expect(parseWeightedBarcode(sample, { ...settings, weightedBarcodeValueMode: 'price' })).toMatchObject({ priceAmount: 12.5 });
+  });
+  it('normalizes Arabic-Indic digits and matches unpadded numeric sku codes safely', () => {
+    const sample = buildSampleScaleBarcode('00101', config)!;
+    const toArabicDigits = (s: string) => s.replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]);
+    expect(parseWeightedBarcode(toArabicDigits(sample), settings)).toMatchObject({ productCode: '00101', quantity: 1 });
+    expect(matchProductByWeightedCode([makeProduct('p-sku', '', undefined, '101')], '00101')).toMatchObject({
+      status: 'matched',
+      match: { kind: 'sku' },
+    });
+    expect(getScaleExportItemCode(makeProduct('p-sku', '', undefined, '101'), config)).toBe('00101');
+  });
+  it('flags weighted barcodes (with optional qty prefix) for scanner auto-submit only when enabled', () => {
+    const sample = buildSampleScaleBarcode('00101', config)!;
+    expect(isAutoSubmittableWeightedBarcode(sample, settings)).toBe(true);
+    expect(isAutoSubmittableWeightedBarcode(`2*${sample}`, settings)).toBe(true);
+    expect(isAutoSubmittableWeightedBarcode(sample, { ...settings, weightedBarcodeEnabled: false })).toBe(false);
+    expect(isAutoSubmittableWeightedBarcode('6221234567890', settings)).toBe(false);
   });
 });

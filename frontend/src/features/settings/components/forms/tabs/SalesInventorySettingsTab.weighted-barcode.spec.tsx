@@ -15,8 +15,8 @@
  *   -> all five format-field labels render.
  * - Case 2: same tenant + weightedBarcodeEnabled=false -> none render.
  * - Case 3 (no regression): super admin + retail + enabled -> labels render.
- * - Case 4 (vertical gate kept): non-super-admin contracting tenant + enabled
- *   -> labels stay hidden.
+ * - Case 4 (all-modes unblock): non-super-admin contracting tenant + enabled
+ *   -> labels render (scale format works whenever weightedBarcodeEnabled is active).
  * - Case 5 (super-admin escape kept): super admin + contracting + enabled ->
  *   labels render.
  *
@@ -151,10 +151,10 @@ describe('SalesInventorySettingsTab weighted-barcode fields', () => {
     }
   });
 
-  it('keeps the scale-barcode format fields hidden on a contracting tenant for a non-super-admin', () => {
+  it('shows the scale-barcode format fields on a contracting or warehousing tenant when weighted barcode is enabled', () => {
     renderTab({ businessIndustry: 'contracting', weightedBarcodeEnabled: true, user: TENANT_ADMIN });
     for (const label of ALL_LABELS) {
-      expect(screen.queryByText(label)).not.toBeInTheDocument();
+      expect(screen.getByText(label)).toBeInTheDocument();
     }
   });
 

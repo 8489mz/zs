@@ -20,6 +20,7 @@ import { normalizePgDateOnly } from '../../../common/utils/tenant-timezone.util'
 import { currencyMoneyDigits, MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { StorefrontMediaService } from '../../storefront/storefront-media.service';
 import { availableAcrossLocations } from '../../../common/engines/branch-sellable-locations.engine';
+import { findPosProductsByBarcodeWithDb } from './pos-barcode-lookup.helper';
 
 type ProductRow = {
   id: number;
@@ -852,135 +853,13 @@ export class CatalogProductService {
   }
 
   private async findPosProductsByBarcode(barcode: string, limit: number, actor: AuthContext): Promise<PosProductLookupRow[]> {
-    if (!barcode) return [];
-    // INV-POS-BARCODE-DASH: barcode lookup is case-insensitive. The POS
-    // frontend matches barcodes case-insensitively (trim + lowercase) and a
-    // cashier may type a dashed code in lowercase while the stored value is
-    // uppercase (or scan a supplier label whose case differs from the stored
-    // value). A case-sensitive `=` missed those rows entirely, while
-    // digits-only barcodes always worked because digits have no case.
-    const lookupCode = barcode.trim().toLowerCase();
-    let productMatches = await this.db
-      .selectFrom('products as p')
-      .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true))
-      .select(['p.id', 'p.name', 'p.name_en', 'p.barcode', 'p.sku', 'p.item_type', 'p.item_kind', 'p.style_code', 'p.color', 'p.size', 'p.retail_price', 'p.wholesale_price', 'p.credit_price', 'p.consumer_price', 'p.stock_qty', 'p.min_stock_qty', 'b.id as bom_id', 'p.category_id', 'p.track_serials', 'p.metadata'])
-      .where('p.is_active', '=', true)
-      .where(sql<boolean>`LOWER(p.barcode) = ${lookupCode}`)
-      .where(this.tenantPredicate(actor, 'p'))
-      .orderBy('p.id', 'asc')
-      .limit(limit)
-      .execute() as PosProductLookupRow[];
-
-    // Prefer the physical barcode; a SKU is a fallback, not a competing code.
-    // A separate exact query preserves barcode precedence and the existing POS contract.
-    if (!productMatches.length) {
-      productMatches = await this.db
-        .selectFrom('products as p')
-        .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true))
-        .select(['p.id', 'p.name', 'p.name_en', 'p.barcode', 'p.sku', 'p.item_type', 'p.item_kind',
-          'p.style_code', 'p.color', 'p.size', 'p.retail_price', 'p.wholesale_price',
-          'p.credit_price', 'p.consumer_price', 'p.stock_qty', 'p.min_stock_qty',
-          'b.id as bom_id', 'p.category_id', 'p.track_serials', 'p.metadata'])
-        .where('p.is_active', '=', true)
-        .where(sql<boolean>`LOWER(p.sku) = ${lookupCode}`)
-        .where(this.tenantPredicate(actor, 'p'))
-        .orderBy('p.id', 'asc').limit(limit).execute() as PosProductLookupRow[];
-    }
-
-    const seenProductIds = productMatches.map((product) => Number(product.id));
-    let remaining = limit - productMatches.length;
-
-    let serialMatches: PosProductLookupRow[] = [];
-    if (remaining > 0) {
-      const serialRows = await this.db
-        .selectFrom('product_serials as ps')
-        .innerJoin('products as p', 'p.id', 'ps.product_id')
-        .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true))
-        .select([
-          'p.id',
-          'p.name',
-          'p.name_en',
-          'p.barcode',
-          'p.sku',
-          'p.item_type',
-          'p.item_kind',
-          'p.style_code',
-          'p.color',
-          'p.size',
-          'p.retail_price',
-          'p.wholesale_price',
-          'p.credit_price',
-          'p.consumer_price',
-          'p.min_selling_price',
-          'p.stock_qty',
-          'p.min_stock_qty',
-          'b.id as bom_id',
-          'p.category_id',
-          'p.track_serials',
-          'p.metadata',
-          'ps.serial_number as matched_serial_number',
-        ])
-        .where('p.is_active', '=', true)
-        .where('ps.status', '=', 'in_stock')
-        .where(this.tenantPredicate(actor, 'ps'))
-        .where((eb) =>
-          eb.or([
-            sql<boolean>`LOWER(ps.serial_number) = ${lookupCode}`,
-            sql<boolean>`LOWER(ps.imei_2) = ${lookupCode}`,
-          ]),
-        )
-        .limit(remaining)
-        .execute() as PosProductLookupRow[];
-      serialMatches = serialRows;
-      for (const sm of serialMatches) seenProductIds.push(Number(sm.id));
-      remaining = limit - productMatches.length - serialMatches.length;
-    }
-
-    if (remaining <= 0) return [...productMatches, ...serialMatches];
-
-    let unitQuery = this.db
-      .selectFrom('product_units as pu')
-      .innerJoin('products as p', 'p.id', 'pu.product_id')
-      .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').on('b.is_active', '=', true))
-      .select([
-        'p.id',
-        'p.name',
-        'p.name_en',
-        'p.barcode',
-        'p.sku',
-        'p.item_type',
-        'p.item_kind',
-        'p.style_code',
-        'p.color',
-        'p.size',
-        'p.retail_price',
-        'p.wholesale_price',
-        'p.credit_price',
-        'p.consumer_price',
-        'p.min_selling_price',
-        'p.stock_qty',
-        'p.min_stock_qty',
-        'b.id as bom_id',
-        'p.category_id',
-        'p.track_serials',
-        'p.metadata',
-        'pu.id as matched_unit_id',
-        'pu.name as matched_unit_name',
-        'pu.multiplier as matched_unit_multiplier',
-        'pu.barcode as matched_unit_barcode',
-      ])
-      .where('p.is_active', '=', true)
-      .where(sql<boolean>`LOWER(pu.barcode) = ${lookupCode}`)
-      .where(this.tenantPredicate(actor, 'p'));
-
-    if (seenProductIds.length) unitQuery = unitQuery.where('p.id', 'not in', seenProductIds);
-
-    const unitMatches = await unitQuery
-      .orderBy('p.id', 'asc')
-      .limit(remaining)
-      .execute() as PosProductLookupRow[];
-
-    return [...productMatches, ...serialMatches, ...unitMatches];
+    // INV-POS-BARCODE-DASH + Scale PLU leading-zero equivalence + style_code fallback
+    return findPosProductsByBarcodeWithDb<PosProductLookupRow>(
+      this.db,
+      (alias?: string) => this.tenantPredicate(actor, alias),
+      barcode,
+      limit,
+    );
   }
 
   private async searchPosProducts(q: string, limit: number, view: 'all' | 'offers' = 'all', actor: AuthContext, categoryId = 0): Promise<PosProductLookupRow[]> {

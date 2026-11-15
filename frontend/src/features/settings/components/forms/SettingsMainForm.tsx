@@ -937,7 +937,6 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
         values.deliveryRepsModuleEnabled = false;
         values.deliveryFleetModuleEnabled = false;
         values.vanSalesModuleEnabled = false;
-        values.weightedBarcodeEnabled = false;
         values.storefrontModuleEnabled = false;
       } else {
         values.contractingModuleEnabled = false;

@@ -94,4 +94,13 @@ describe('modular-presets variants module (package C)', () => {
       Object.keys(INDUSTRY_PRESETS).sort(),
     );
   });
+
+  it('never forces weightedBarcodeEnabled off in any preset or locks it behind posModuleEnabled', () => {
+    const scaleMod = SYSTEM_MODULES.find((mod) => mod.key === 'weightedBarcodeEnabled');
+    expect(scaleMod).toBeDefined();
+    expect(scaleMod?.dependencies || []).toEqual([]);
+    for (const preset of Object.values(INDUSTRY_PRESETS)) {
+      expect(preset.disabledModules).not.toContain('weightedBarcodeEnabled');
+    }
+  });
 });

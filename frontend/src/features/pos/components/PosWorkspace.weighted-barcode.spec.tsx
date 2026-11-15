@@ -52,6 +52,14 @@ vi.mock('@/features/catalog/api/catalog.api', () => ({
   },
 }));
 
+vi.mock('@/features/settings/api/settings.api', () => ({
+  settingsApi: {
+    settings: (...args: any[]) => (posApi.settings as any)(...args),
+    branches: (...args: any[]) => (posApi.branches as any)(...args),
+    locations: (...args: any[]) => (posApi.locations as any)(...args),
+  },
+}));
+
 vi.mock('@/lib/api/cash-drawer', () => ({
   cashDrawerApi: {
     listPage: vi.fn().mockResolvedValue({
@@ -221,7 +229,7 @@ describe('PosWorkspace - Weighted Barcodes', () => {
 
   it('adds product 00002 with qty 0.135 upon scanning 2000002001355 in all_operational_locations', async () => {
     // Override settings to use branch b2 (all_operational_locations)
-    vi.mocked(posApi.settings).mockResolvedValueOnce({
+    vi.mocked(posApi.settings).mockResolvedValue({
       weightedBarcodeEnabled: true,
       weightedBarcodePrefix: '20',
       weightedBarcodeProductCodeLength: 5,
@@ -303,5 +311,110 @@ describe('PosWorkspace - Weighted Barcodes', () => {
     await waitFor(() => {
       expect(screen.getByText('باركود ميزان: لم يتم العثور على كود الصنف 00009.')).toBeInTheDocument();
     });
+  });
+
+  it('resolves unpadded DB barcode 9 via exact barcode lookup without calling generic q search', async () => {
+    vi.mocked(posApi.lookupProducts).mockImplementation(async (params: any = {}) => {
+      if (params.q === '9') throw new Error('Should not fall back to generic q text search');
+      if (params.barcode === '9') {
+        return [{
+          id: '9',
+          name: 'رومي غير مبطن 9',
+          barcode: '9',
+          sku: 'R-9',
+          retailPrice: 120,
+          wholesalePrice: 100,
+          stock: 8,
+          units: [],
+        } as any];
+      }
+      return [];
+    });
+
+    renderWorkspace();
+    await waitFor(() => expect(screen.getByPlaceholderText('امسح باركود أو اكتب الاسم...')).toBeInTheDocument());
+    await new Promise(r => setTimeout(r, 50));
+
+    const searchInput = screen.getByPlaceholderText('امسح باركود أو اكتب الاسم...');
+    fireEvent.change(searchInput, { target: { value: '2000009015751' } });
+    fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => {
+      expect(screen.getByText('رومي غير مبطن 9')).toBeInTheDocument();
+    });
+    expect(posApi.lookupProducts).not.toHaveBeenCalledWith(expect.objectContaining({ q: '9' }));
+    expect(posApi.lookupProducts).toHaveBeenCalledWith(expect.objectContaining({ barcode: '9' }));
+  });
+
+  it('auto-submits a weighted barcode on rapid scanner bursts even when the scanner omits Enter', async () => {
+    vi.mocked(posApi.lookupProducts).mockImplementation(async (params: any = {}) => {
+      if (params.barcode === '00009') {
+        return [{
+          id: '9',
+          name: 'جبنه ميزان أوتو',
+          barcode: '00009',
+          retailPrice: 100,
+          stock: 10,
+          units: [],
+        } as any];
+      }
+      return [];
+    });
+
+    renderWorkspace();
+    await waitFor(() => expect(screen.getByPlaceholderText('امسح باركود أو اكتب الاسم...')).toBeInTheDocument());
+    await new Promise(r => setTimeout(r, 80));
+
+    const searchInput = screen.getByPlaceholderText('امسح باركود أو اكتب الاسم...');
+    fireEvent.change(searchInput, { target: { value: '20' } });
+    await new Promise(r => setTimeout(r, 5));
+    fireEvent.change(searchInput, { target: { value: '2000009' } });
+    await new Promise(r => setTimeout(r, 5));
+    fireEvent.change(searchInput, { target: { value: '20000090157' } });
+    await new Promise(r => setTimeout(r, 5));
+    fireEvent.change(searchInput, { target: { value: '2000009015751' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('جبنه ميزان أوتو')).toBeInTheDocument();
+    }, { timeout: 2000 });
+  });
+
+  it('preserves stock rejection message instead of overwriting with weighted not-found error', async () => {
+    vi.mocked(posApi.settings).mockResolvedValue({
+      weightedBarcodeEnabled: true,
+      weightedBarcodePrefix: '20',
+      weightedBarcodeProductCodeLength: 5,
+      weightedBarcodeWeightDigits: 5,
+      weightedBarcodeWeightDecimals: 3,
+      allowNegativeStockSales: false,
+      currentBranchId: 'b1',
+    } as any);
+    vi.mocked(posApi.lookupProducts).mockImplementation(async (params: any = {}) => {
+      if (params.barcode === '00009') {
+        return [{
+          id: '9',
+          name: 'صنف رصيد صفر',
+          barcode: '00009',
+          retailPrice: 100,
+          stock: 0,
+          globalStock: 0,
+          units: [],
+        } as any];
+      }
+      return [];
+    });
+
+    renderWorkspace();
+    await waitFor(() => expect(screen.getByPlaceholderText('امسح باركود أو اكتب الاسم...')).toBeInTheDocument());
+    await new Promise(r => setTimeout(r, 50));
+
+    const searchInput = screen.getByPlaceholderText('امسح باركود أو اكتب الاسم...');
+    fireEvent.change(searchInput, { target: { value: '2000009015751' } });
+    fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => {
+      expect(screen.getByText('المخزون غير متاح لهذا الصنف.')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('باركود ميزان: لم يتم العثور على كود الصنف 00009.')).not.toBeInTheDocument();
   });
 });
