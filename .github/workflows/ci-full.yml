@@ -8,13 +8,14 @@ name: ci-full
 # a backend-only head runs only the backend job and vice versa; on dispatch
 # both sides run (fail-closed).
 #
-# v2 (2026-11-08, base 0f7f82b): regenerated against the sequential ci.yml
-# (0531150). The sequential fail-fast is PRESERVED here: the backend job
-# needs [changes, frontend] and runs only when the frontend job succeeded
-# or was skipped (backend-only change) — a failed frontend still skips the
-# whole ~21m backend job. The `always()` in the backend `if:` is what lets
-# the job run at all when its needed frontend job was skipped; without it
-# GitHub would skip the backend whenever the frontend is skipped.
+# v3 (2026-11-15, user decision, INV-CI-FULL-PARALLEL-JOBS): frontend and
+# backend run IN PARALLEL (both need only [changes]). A failure in either
+# job is visible in ~12m instead of ~21m, and a green run finishes in ~12m;
+# both failures surface in the same run, so both get fixed at once. Cost,
+# accepted: when the frontend fails, the backend still runs its minutes on
+# a doomed run — the failing side no longer waits behind the passing side.
+# This supersedes the 2026-11-07 sequential fail-fast
+# (INV-CI-SEQUENTIAL-FAIL-FAST).
 
 on:
   workflow_dispatch:
@@ -110,18 +111,15 @@ jobs:
         working-directory: frontend
 
   backend:
-    # Sequential fail-fast (2026-11-07): the backend only runs after the
-    # frontend passes. A failed frontend skips the backend automatically
-    # (0 billable minutes) instead of both jobs burning minutes in
-    # parallel while the run is already doomed. Frontend first because it
-    # is the short job (~8m vs ~21m): a frontend failure saves the whole
-    # backend job, and the backend's own typecheck is already its first
-    # step, so backend-first would add no early signal.
-    # The `always()` + frontend.result check keeps this working with the
-    # path filter: a backend-only change skips the frontend job, and the
-    # backend still runs (frontend.result == 'skipped').
-    needs: [changes, frontend]
-    if: ${{ always() && (needs.changes.outputs.backend == 'true' || github.event_name != 'push') && (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') }}
+    # Parallel (2026-11-15, INV-CI-FULL-PARALLEL-JOBS): the backend runs
+    # alongside the frontend (both need only [changes]) instead of waiting
+    # for it. The path filter still applies: a frontend-only head skips
+    # this job (changes.outputs.backend == 'false'), a backend-only head
+    # skips the frontend job, and on dispatch both run. The failing side
+    # no longer waits behind the passing side, so both failures surface
+    # in one run and both get fixed at once.
+    needs: [changes]
+    if: ${{ needs.changes.outputs.backend == 'true' || github.event_name != 'push' }}
     runs-on: ubuntu-latest
     services:
       postgres:
