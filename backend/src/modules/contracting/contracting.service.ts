@@ -8217,6 +8217,7 @@ export class ContractingService {
           status: 'draft',
           notes: dto.notes || null,
           created_by: auth.userId ? Number(auth.userId) : null,
+          issued_date: todayTenantDate(businessTz),
         } as any)
         .returning('id')
         .executeTakeFirstOrThrow();

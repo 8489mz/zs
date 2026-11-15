@@ -55,6 +55,7 @@ async function makeDb(): Promise<Kysely<Database>> {
       sector text,
       category_ar text,
       data_version text,
+      effective_date date,
       created_at timestamptz DEFAULT NOW(),
       UNIQUE (tenant_id, hs_code)
     );

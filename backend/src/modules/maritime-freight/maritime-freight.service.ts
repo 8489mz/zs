@@ -2787,7 +2787,7 @@ export class MaritimeFreightService {
             .updateTable('maritime_containers')
             .set({
               discharged_at: now,
-              return_deadline: deadline.toISOString().split('T')[0],
+              return_deadline: await resolveBusinessDateKey(this.db, tenantId, deadline),
               updated_at: sql`NOW()`,
             })
             .where('id', '=', c.id as any)
@@ -5866,7 +5866,7 @@ export class MaritimeFreightService {
           premium_amount: Number(dto.premiumAmount || 0),
           currency: dto.currency || 'USD',
           coverage_type: dto.coverageType || 'all_risks',
-          issue_date: dto.issueDate || new Date().toISOString().split('T')[0],
+          issue_date: dto.issueDate || (await resolveBusinessDateKey(trx, tenantId, new Date())),
           expiry_date: dto.expiryDate || null,
           status: 'active',
           claim_amount: 0,

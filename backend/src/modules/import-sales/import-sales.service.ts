@@ -1890,6 +1890,7 @@ export class ImportSalesService {
           official_source: item.official_source,
           is_official: true,
           data_version: TARIFF_DATA_VERSION,
+          effective_date: await resolveBusinessDateKey(this.db, tenantId, new Date()),
         })
         .onConflict((oc) => oc.columns(['tenant_id', 'hs_code']).doNothing())
         .returning('hs_code')

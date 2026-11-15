@@ -38,7 +38,9 @@ const txHelper: any = { runInTransaction: async (_db: unknown, fn: (trx: unknown
 const service = new SupplierPaymentSchedulesService({} as any, txHelper, {} as any, {} as any, {} as any);
 (service as any).listForSupplier = async () => ({ schedules: inserted });
 const auth: any = { role: 'admin', userId: 7, username: 'admin', tenantId: 'tenant-A', accountId: 'account-A', permissions: [] };
-const payload = (scheduleAmount: number): any => ({ mode: 'count', installmentCount: 1, scheduleAmount, firstDueDate: '2026-10-21' });
+// B4-P3: firstDueDate is bounded [today-7, today+5y] — use a relative
+// UTC-today date (inside the window for every tenant zone).
+const payload = (scheduleAmount: number): any => ({ mode: 'count', installmentCount: 1, scheduleAmount, firstDueDate: new Date().toISOString().slice(0, 10) });
 (async () => {
   await assert.rejects(service.createForSupplier(9, payload(50), auth), /Schedule amount must be within unscheduled supplier balance/);
   assert.equal(inserted.length, 0);

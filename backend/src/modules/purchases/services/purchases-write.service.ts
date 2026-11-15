@@ -12,6 +12,8 @@ import { allocateLandedCosts } from '../engines/landed-cost-allocation.engine';
 import { advancePurchaseOrderReceipt } from '../engines/purchase-order-receipt.engine';
 import { revalueStockReturn, valueStockReceipt } from '../../accounting/inventory-valuation';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
+import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
+import { checkClientBusinessDay, CLIENT_BUSINESS_DATE_FUTURE_DAYS } from '../../../common/utils/client-date-bounds.util';
 import { ensureNonNegativeStock, ensureUniqueFlowItems } from '../../../common/utils/financial-integrity';
 import { authorizeManagerSecret } from '../../../common/utils/manager-approval';
 import { applyStockDelta, lockStockProducts, previewConsumableStockQty } from '../../../common/utils/location-stock-ledger';
@@ -292,6 +294,27 @@ export class PurchasesWriteService {
 
   async createPurchase(payload: UpsertPurchaseDto, auth: AuthContext, idempotencyKey?: string): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
+
+    // Bound the client-supplied requested delivery date to the P6
+    // sales-order delivery window [today, today+365] in the tenant zone.
+    // A DTO Date built from a date-only string is UTC-midnight: the UTC
+    // day IS the intended calendar day, so check the UTC day string —
+    // rendering that instant in the tenant zone would shift west-of-UTC
+    // tenants a day early. Absent requiredDate keeps the existing
+    // fallbacks (duplicate check uses now, store uses null).
+    if (payload.requiredDate !== undefined && payload.requiredDate !== null) {
+      const requiredDayKey =
+        payload.requiredDate instanceof Date
+          ? payload.requiredDate.toISOString().slice(0, 10)
+          : String(payload.requiredDate).slice(0, 10);
+      const requiredCheck = checkClientBusinessDay(requiredDayKey, await getTenantTimezone(this.db, scope.tenantId), {
+        minDayOffset: 0,
+        maxDayOffset: CLIENT_BUSINESS_DATE_FUTURE_DAYS,
+      });
+      if (!requiredCheck.ok) {
+        throw new AppError('تاريخ التسليم المطلوب خارج النطاق المسموح به.', 'PURCHASE_REQUIRED_DATE_OUT_OF_RANGE', 400);
+      }
+    }
 
     // SINGLE reservation point. The IdempotencyInterceptor is NOT applied to PurchasesController.
     // This is the only place reserveOperation is called for purchase_create.
@@ -828,6 +851,21 @@ export class PurchasesWriteService {
 
   async updatePurchase(purchaseId: number, payload: UpsertPurchaseDto, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
+    // Same P6 delivery window as createPurchase (see above), checked
+    // before the edit-reason / manager-approval gates.
+    if (payload.requiredDate !== undefined && payload.requiredDate !== null) {
+      const requiredDayKey =
+        payload.requiredDate instanceof Date
+          ? payload.requiredDate.toISOString().slice(0, 10)
+          : String(payload.requiredDate).slice(0, 10);
+      const requiredCheck = checkClientBusinessDay(requiredDayKey, await getTenantTimezone(this.db, scope.tenantId), {
+        minDayOffset: 0,
+        maxDayOffset: CLIENT_BUSINESS_DATE_FUTURE_DAYS,
+      });
+      if (!requiredCheck.ok) {
+        throw new AppError('تاريخ التسليم المطلوب خارج النطاق المسموح به.', 'PURCHASE_REQUIRED_DATE_OUT_OF_RANGE', 400);
+      }
+    }
     const editReason = String(payload.editReason || '').trim();
     if (!editReason) throw new AppError('سبب التعديل مطلوب.', 'PURCHASE_EDIT_REASON_REQUIRED', 400);
     await this.assertManagerApprovalForPurchaseChange(String(payload.managerPin || '').trim(), auth);

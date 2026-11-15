@@ -135,7 +135,9 @@ async function main() {
       mode: 'count',
       installmentCount: 3,
       scheduleAmount: 100.123,
-      firstDueDate: '2026-11-01',
+      // B4-P3: firstDueDate is bounded [today-7, today+5y] — use a relative
+      // UTC-today date (inside the window for every tenant zone).
+      firstDueDate: new Date().toISOString().slice(0, 10),
       intervalDays: 30,
     }, auth);
     const schedules = created.schedules as any[];

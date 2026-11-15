@@ -10,7 +10,8 @@ import { CreateSupplierPaymentScheduleDto, PaySupplierScheduleInstallmentDto } f
 import { normalizeInstapayAddress, normalizeOptionalNote, normalizePurchaseScope } from '../helpers/purchases-write.helper';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
-import { formatLocalCalendarDay } from '../../../common/utils/tenant-timezone.util';
+import { formatLocalCalendarDay, getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
+import { checkClientBusinessDay, CLIENT_BUSINESS_DATE_PAST_DAYS, CLIENT_INSTALLMENT_SCHEDULE_YEARS } from '../../../common/utils/client-date-bounds.util';
 import { currencyMoneyDigits, roundMoney, toMinorUnits, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { PurchasesFinanceService } from './purchases-finance.service';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
@@ -298,6 +299,16 @@ export class SupplierPaymentSchedulesService {
       }
       const amounts = this.buildAmounts(requested, payload, digits);
       const firstDueDate = this.parseDate(payload.firstDueDate);
+      // Supplier schedule first due date: P6 installment window [today-7,
+      // today+5y] on the tenant day. parseDate above still throws
+      // INVALID_DUE_DATE first for garbage, unchanged.
+      const firstDueCheck = checkClientBusinessDay(payload.firstDueDate, await getTenantTimezone(trx, scope.tenantId), {
+        minDayOffset: -CLIENT_BUSINESS_DATE_PAST_DAYS,
+        maxDayOffset: CLIENT_INSTALLMENT_SCHEDULE_YEARS * 365,
+      });
+      if (!firstDueCheck.ok) {
+        throw new AppError('تاريخ أول دفعة خارج النطاق المسموح به.', 'SUPPLIER_SCHEDULE_FIRST_DUE_DATE_OUT_OF_RANGE', 400);
+      }
       const intervalDays = Number(payload.intervalDays || 1);
       await db.deleteFrom('supplier_payment_schedules').where('purchase_id', '=', purchaseId).where(this.tenantPredicate(auth)).execute();
       for (let index = 0; index < amounts.length; index += 1) {
@@ -332,6 +343,14 @@ export class SupplierPaymentSchedulesService {
       
       const amounts = this.buildAmounts(total, payload, digits);
       const firstDueDate = this.parseDate(payload.firstDueDate);
+      // Same P6 installment window as createForPurchase (see above).
+      const firstDueCheck = checkClientBusinessDay(payload.firstDueDate, await getTenantTimezone(trx, scope.tenantId), {
+        minDayOffset: -CLIENT_BUSINESS_DATE_PAST_DAYS,
+        maxDayOffset: CLIENT_INSTALLMENT_SCHEDULE_YEARS * 365,
+      });
+      if (!firstDueCheck.ok) {
+        throw new AppError('تاريخ أول دفعة خارج النطاق المسموح به.', 'SUPPLIER_SCHEDULE_FIRST_DUE_DATE_OUT_OF_RANGE', 400);
+      }
       const intervalDays = Number(payload.intervalDays || 1);
       
       for (let index = 0; index < amounts.length; index += 1) {
