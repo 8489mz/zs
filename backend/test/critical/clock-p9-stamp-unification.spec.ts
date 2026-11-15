@@ -437,15 +437,19 @@ async function main(): Promise<void> {
     );
     assert.ok(!drawer.includes('updated_at = now()'), 'no DB now() left on the review stamps');
 
-    const contracting = readSource('../../src/modules/contracting/contracting.service.ts');
+    const contracting = readSource('../../src/modules/contracting/services/contracting-quality.service.ts');
+    // Fuel-log methods are held in the facade until the C14 merge (merge
+    // fallback); their pin reads the facade for now — the coordinator repoints
+    // this path to the documents slice at the C14 merge, assertion text unchanged.
+    const contractingFuelLogs = readSource('../../src/modules/contracting/contracting.service.ts');
     assert.ok(
-      contracting.includes(
+      contractingFuelLogs.includes(
         'log_date: dto.logDate || (await resolveBusinessDateKey(this.db, tenantId, new Date()))',
       ),
       'fuel-log fallback is the tenant day, not a host-local Date',
     );
     assert.ok(
-      !contracting.includes('log_date: dto.logDate || new Date()'),
+      !contractingFuelLogs.includes('log_date: dto.logDate || new Date()'),
       'fuel-log host-local fallback is gone',
     );
     assert.ok(
