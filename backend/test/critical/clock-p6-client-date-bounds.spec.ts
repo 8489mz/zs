@@ -666,7 +666,7 @@ async function main(): Promise<void> {
   }
   const engineSource = readFileSync(resolve(__dirname, '../../src/modules/hr/attendance-punch.engine.ts'), 'utf8');
   assert.ok(engineSource.includes('HR_ATTENDANCE_DATE_OUT_OF_RANGE'), 'the manual punch must bound the work date');
-  const hrSource = readFileSync(resolve(__dirname, '../../src/modules/hr/hr.service.ts'), 'utf8');
+  const hrSource = readFileSync(resolve(__dirname, '../../src/modules/hr/services/hr-attendance-records.service.ts'), 'utf8');
   assert.ok(hrSource.includes('HR_ATTENDANCE_DATE_OUT_OF_RANGE'), 'bulk save/import must bound the work date');
   const dtoSource = readFileSync(resolve(__dirname, '../../src/modules/accounting/dto/ar-collections.dto.ts'), 'utf8');
   assert.ok(dtoSource.includes('@IsDateString()\n  promisedDate?: string;'), 'the log DTO promise date must be a date string');

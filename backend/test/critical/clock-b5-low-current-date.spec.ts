@@ -236,7 +236,7 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     const newActive = await sql<{ id: number }>`SELECT id FROM hr_employment_contracts WHERE status = 'active' AND start_date <= ${tenantDay} AND (end_date IS NULL OR end_date >= ${tenantDay})`.execute(db);
     assert.equal(oldActive.rows.length, 0, 'OLD (CURRENT_DATE) must miss the tenant-day contract');
     assert.equal(newActive.rows.length, 1, 'NEW (tenant day) must find the tenant-day contract');
-    const hr = read('modules/hr/hr.service.ts');
+    const hr = read('modules/hr/services/hr-loans.service.ts');
     const approveLoan = fnSlice(hr, 'async approveLoan(', 8000);
     assert.ok(approveLoan.includes('start_date <= ${todayKey}'), 'contract lookup must bound start_date by the tenant day');
     assert.ok(approveLoan.includes('end_date >= ${todayKey}'), 'contract lookup must bound end_date by the tenant day');

@@ -380,7 +380,7 @@ async function main(): Promise<void> {
     assert.ok(vanSource.includes('date: effectiveDate'), 'the push dates the adjustment inside the effective run period');
     assert.ok(vanSource.includes('payroll_run_id: effectiveRunId'), 'the push writes the run link on the settlement row');
     assert.ok(vanSource.includes('rolledForward'), 'the push records the roll-forward');
-    const hrSource = readFileSync(resolve(__dirname, '../../src/modules/hr/hr.service.ts'), 'utf8');
+    const hrSource = readFileSync(resolve(__dirname, '../../src/modules/hr/services/hr-payroll-rebuild.service.ts'), 'utf8');
     assert.ok(hrSource.includes('INV-REP-PAYROLL-TARGET-MONTH'), 'hr names the invariant');
     assert.ok(hrSource.includes('vanSettlementIds'), 'the rebuild tracks van-settlement deductions');
     assert.ok(hrSource.includes('SET payroll_run_id = '), 'the rebuild writes the run link on the settlement row');

@@ -460,9 +460,9 @@ async function main(): Promise<void> {
     inventoryValuation.includes('weightedReceiptCost('),
     'valueStockReceipt must blend through weightedReceiptCost',
   );
-  const hrService = stripComments(readFile('backend/src/modules/hr/hr.service.ts'));
+  const hrPayrollReview = stripComments(readFile('backend/src/modules/hr/services/hr-payroll-review.service.ts'));
   assert.ok(
-    hrService.includes('calculateProgressiveDelayDeduction('),
+    hrPayrollReview.includes('calculateProgressiveDelayDeduction('),
     'payroll review must route delay deduction through the canonical engine',
   );
   const postingService = stripComments(readFile('backend/src/modules/accounting/services/hr-payroll-posting.service.ts'));

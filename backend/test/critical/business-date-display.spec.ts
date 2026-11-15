@@ -310,7 +310,7 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     }).trim().split('\n');
     assert.equal(monthOut[0], '2026-11-29', 'old local-Date month-end is Nov 29 under Cairo TZ (the bug)');
     assert.equal(monthOut[1], '2026-11-30', 'Date.UTC month-end is Nov 30 under Cairo TZ (the fix)');
-    const hrText = fs.readFileSync(path.join(SRC, 'modules/hr/hr.service.ts'), 'utf8');
+    const hrText = fs.readFileSync(path.join(SRC, 'modules/hr/services/hr-payroll-runs.service.ts'), 'utf8');
     assert.ok(hrText.includes('Date.UTC(Number(periodMonth.split'), 'payroll month-end uses Date.UTC');
     assert.ok(!hrText.includes('new Date(Number(periodMonth.split'), 'payroll month-end no longer uses the local Date constructor');
     const contractingText = fs.readFileSync(path.join(SRC, 'modules/contracting/services/contracting-site-operations.service.ts'), 'utf8');

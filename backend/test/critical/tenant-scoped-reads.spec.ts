@@ -9,6 +9,22 @@ import { resolve } from 'node:path';
 
 const read = (rel: string) => readFileSync(resolve(__dirname, '../../src', rel), 'utf8');
 
+// HR split: the reads now live across the facade + the extracted services.
+// The safety property is checked over the concatenated text; add the next
+// split's service here when it moves a read. Order matters only for MT-04
+// (withdrawals in H5 must precede summary in H6); every other section
+// sits inside a single file.
+const hrSources = [
+  'modules/hr/hr.service.ts',
+  'modules/hr/services/hr-employee-records.service.ts', // H2: MT-03
+  'modules/hr/services/hr-loans.service.ts', // H4: MT-01, MT-08
+  'modules/hr/services/hr-advances.service.ts', // H5: MT-04, O28 caller
+  'modules/hr/services/hr-reports.service.ts', // H6: MT-04 end (summary)
+  'modules/hr/services/hr-payroll-runs.service.ts', // H7: MT-02, O28 callers
+  'modules/hr/services/hr-payroll-rebuild.service.ts', // H8: O28 run lookup
+  'modules/hr/services/hr-payroll-posting.service.ts', // H10: MT-12, O28 callers
+].map(read).join('\n');
+
 function testVanSalesReadsStayInTenant(): void {
   // Van-sales split: the reads now live across the facade + the extracted
   // services (batch 1: lifecycle, field-sales, collections-and-swaps;
@@ -49,7 +65,7 @@ function testVanSalesReadsStayInTenant(): void {
 }
 
 function testPayrollRunScopeComesFromTheCaller(): void {
-  const src = read('modules/hr/hr.service.ts');
+  const src = hrSources;
 
   const runSelect = src.match(/SELECT period_month, tenant_id[\s\S]{0,400}?FROM hr_payroll_runs WHERE[^`]*/);
   assert.ok(runSelect, 'the payroll run lookup is still there');
@@ -67,7 +83,7 @@ testVanSalesReadsStayInTenant();
 testPayrollRunScopeComesFromTheCaller();
 
 function testAuditIsolationRemediations(): void {
-  const hr = read('modules/hr/hr.service.ts');
+  const hr = hrSources;
   const section = (source: string, start: string, end: string) => {
     const from = source.indexOf(start);
     const to = source.indexOf(end, from + start.length);
