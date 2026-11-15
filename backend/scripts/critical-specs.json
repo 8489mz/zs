@@ -194,6 +194,7 @@
     "test/critical/clock-b4-low-date-bounds.spec.ts",
     "test/critical/clock-b5-offer-date-bounds.spec.ts",
     "test/critical/clock-b5-driver-visits-batch-expiry.spec.ts",
-    "test/critical/clock-b5-low-current-date.spec.ts"
+    "test/critical/clock-b5-low-current-date.spec.ts",
+    "test/critical/clock-b6-pricing-coupons.spec.ts"
   ]
 }

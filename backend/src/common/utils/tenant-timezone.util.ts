@@ -174,3 +174,103 @@ export function formatTimeInTimezone(
     hour12: true,
   });
 }
+
+/**
+ * Offset of a zone at an instant, in ms (positive east of UTC).
+ * Reads the zone's wall clock for the instant via formatToParts and
+ * diffs it against the instant's UTC clock. hourCycle h23 so midnight
+ * formats as 00, never 24.
+ */
+function timezoneOffsetMs(timezone: string, instant: Date): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(instant);
+  const get = (type: string): number => Number(parts.find((p) => p.type === type)?.value);
+  const asUTC = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+  return asUTC - Math.floor(instant.getTime() / 1000) * 1000;
+}
+
+/**
+ * The instant a wall time on a calendar day is in a zone: start of
+ * the tenant day (00:00:00.000) or end of it (23:59:59.999). The
+ * offset is applied twice so a DST transition inside the day still
+ * lands on the intended wall time. NEVER build these from UTC
+ * midnight: for a zone west of UTC a UTC-midnight instant is the
+ * PREVIOUS local day, and for a zone east of UTC an end-of-day
+ * UTC-midnight instant is the NEXT local day.
+ */
+export function tenantDayStartInstant(dayKey: string, timezone: string): Date {
+  const safeTz = isValidTimezone(timezone) ? timezone : (process.env.BUSINESS_TIMEZONE || 'Africa/Cairo');
+  const [y, m, d] = dayKey.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d, 0, 0, 0, 0);
+  const first = new Date(guess - timezoneOffsetMs(safeTz, new Date(guess)));
+  return new Date(guess - timezoneOffsetMs(safeTz, first));
+}
+
+export function tenantDayEndInstant(dayKey: string, timezone: string): Date {
+  const safeTz = isValidTimezone(timezone) ? timezone : (process.env.BUSINESS_TIMEZONE || 'Africa/Cairo');
+  const [y, m, d] = dayKey.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d, 23, 59, 59, 999);
+  const first = new Date(guess - timezoneOffsetMs(safeTz, new Date(guess)));
+  return new Date(guess - timezoneOffsetMs(safeTz, first));
+}
+
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Normalizes a coupon date bound for storage (TIMESTAMPTZ). A coupon's
+ * start/end date means the WHOLE tenant day: a date-only string stores
+ * as the tenant day's start (startDate) or end (endDate) in the tenant
+ * zone. A full ISO timestamp passes through untouched -- an explicit
+ * instant means what it says. Empty input stores NULL. Storing the
+ * date-only string as `new Date(value)` (UTC midnight) is the NEW-I
+ * defect: the coupon then dies at 02:00 Cairo on its last day, and a
+ * day early for any zone west of UTC.
+ */
+export function couponBoundInstant(
+  value: string | Date | null | undefined,
+  timezone: string,
+  isEnd: boolean,
+): Date | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value;
+  const text = String(value).trim();
+  if (!text) return null;
+  if (!DATE_ONLY_RE.test(text)) return new Date(text);
+  return isEnd ? tenantDayEndInstant(text, timezone) : tenantDayStartInstant(text, timezone);
+}
+
+/**
+ * Whether a coupon is usable on a tenant day, keyed on calendar days
+ * in the tenant zone -- never on instants. The stored bounds are
+ * TIMESTAMPTZ instants; comparing them to `now` kills a coupon whose
+ * end was stored as UTC midnight at 02:00 Cairo on its last day
+ * (NEW-I), and a start stored the same way starts 2h late. A NULL
+ * bound is open-ended. An unparseable stored value is treated as no
+ * bound (the write path never stores one).
+ */
+export function couponDayState(
+  startValue: Date | string | null | undefined,
+  endValue: Date | string | null | undefined,
+  todayKey: string,
+  timezone: string,
+): 'active' | 'not-started' | 'expired' {
+  const dayOf = (value: Date | string | null | undefined): string => {
+    if (value === null || value === undefined) return '';
+    const d = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    return todayTenantDate(timezone, d);
+  };
+  const startDay = dayOf(startValue);
+  if (startDay && startDay > todayKey) return 'not-started';
+  const endDay = dayOf(endValue);
+  if (endDay && endDay < todayKey) return 'expired';
+  return 'active';
+}

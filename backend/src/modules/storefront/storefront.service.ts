@@ -4,7 +4,7 @@ import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
-import { getTenantTimezone, isValidTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
+import { couponBoundInstant, couponDayState, getTenantTimezone, isValidTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
 import { verifyPassword } from '../../core/auth/utils/password-hasher';
 import { CreateOnlineOrderDto } from './dto/create-online-order.dto';
 import { CreateProductReviewDto } from './dto/create-product-review.dto';
@@ -1455,13 +1455,17 @@ export class StorefrontService {
 
       if (coupon) {
         const alreadyClaimed = String(params.alreadyClaimedCouponCode || '').toUpperCase() === coupon.code.toUpperCase();
-        const nowDate = new Date();
-        const isStarted = !coupon.start_date || new Date(coupon.start_date) <= nowDate;
-        const isNotExpired = !coupon.end_date || new Date(coupon.end_date) >= nowDate;
+        // Coupon bounds are whole tenant days, never instants: a bound
+        // stored as UTC midnight dies at 02:00 Cairo on its last day
+        // under an instant comparison (NEW-I).
+        const couponTimezone = await getTenantTimezone(this.db, tenantId);
+        const couponTodayKey = todayTenantDate(couponTimezone);
+        const couponUsable =
+          couponDayState(coupon.start_date, coupon.end_date, couponTodayKey, couponTimezone) === 'active';
         const hasRemainingUsage = alreadyClaimed || coupon.usage_limit === null || Number(coupon.times_used || 0) < coupon.usage_limit;
         const meetsMinOrder = subtotal >= Number(coupon.min_order_amount || 0);
 
-        if (isStarted && isNotExpired && hasRemainingUsage && meetsMinOrder) {
+        if (couponUsable && hasRemainingUsage && meetsMinOrder) {
           appliedCouponCode = coupon.code;
           if (coupon.discount_type === 'free_shipping') {
             deliveryFee = 0;
@@ -4510,11 +4514,14 @@ export class StorefrontService {
       return { ok: false, message: 'هذا الكوبون تم إيقافه حالياً من قِبل المتجر' };
     }
 
-    const now = new Date();
-    if (coupon.start_date && new Date(coupon.start_date) > now) {
+    // Coupon bounds are whole tenant days, never instants (NEW-I).
+    const couponTimezone = await getTenantTimezone(this.db, tenant.id);
+    const couponTodayKey = todayTenantDate(couponTimezone);
+    const couponState = couponDayState(coupon.start_date, coupon.end_date, couponTodayKey, couponTimezone);
+    if (couponState === 'not-started') {
       return { ok: false, message: 'عذراً، هذا الكوبون لم يبدأ بعد' };
     }
-    if (coupon.end_date && new Date(coupon.end_date) < now) {
+    if (couponState === 'expired') {
       return { ok: false, message: 'عذراً، هذا الكوبون انتهت فترة صلاحيته' };
     }
 
@@ -4597,6 +4604,8 @@ export class StorefrontService {
   async createCoupon(dto: CreateCouponDto, actor: AuthContext) {
     const { tenantId, accountId } = requireTenantScope(actor);
     const codeClean = dto.code.trim().toUpperCase();
+    // A coupon date means the whole tenant day (NEW-I).
+    const businessTimezone = await getTenantTimezone(this.db, tenantId);
 
     const existing = await this.db
       .selectFrom('storefront_coupons')
@@ -4626,8 +4635,8 @@ export class StorefrontService {
         usage_limit: dto.usageLimit || null,
         times_used: 0,
         is_active: dto.isActive !== undefined ? dto.isActive : true,
-        start_date: dto.startDate ? new Date(dto.startDate) : null,
-        end_date: dto.endDate ? new Date(dto.endDate) : null,
+        start_date: couponBoundInstant(dto.startDate, businessTimezone, false),
+        end_date: couponBoundInstant(dto.endDate, businessTimezone, true),
         created_at: new Date(),
         updated_at: new Date(),
       })
@@ -4639,6 +4648,8 @@ export class StorefrontService {
 
   async updateCoupon(id: number, dto: UpdateCouponDto, actor: AuthContext) {
     const { tenantId } = requireTenantScope(actor);
+    // A coupon date means the whole tenant day (NEW-I).
+    const businessTimezone = await getTenantTimezone(this.db, tenantId);
     const existing = await this.db
       .selectFrom('storefront_coupons')
       .selectAll()
@@ -4666,8 +4677,8 @@ export class StorefrontService {
     if (dto.maxDiscountAmount !== undefined) payload.max_discount_amount = dto.maxDiscountAmount;
     if (dto.usageLimit !== undefined) payload.usage_limit = dto.usageLimit;
     if (dto.isActive !== undefined) payload.is_active = dto.isActive;
-    if (dto.startDate !== undefined) payload.start_date = dto.startDate ? new Date(dto.startDate) : null;
-    if (dto.endDate !== undefined) payload.end_date = dto.endDate ? new Date(dto.endDate) : null;
+    if (dto.startDate !== undefined) payload.start_date = couponBoundInstant(dto.startDate, businessTimezone, false);
+    if (dto.endDate !== undefined) payload.end_date = couponBoundInstant(dto.endDate, businessTimezone, true);
 
     await this.db
       .updateTable('storefront_coupons')
