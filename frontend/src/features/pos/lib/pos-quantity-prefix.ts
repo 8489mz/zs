@@ -26,6 +26,7 @@ export function isScaleBarcodeLike(text: string): boolean {
  * - "10x6221234567890" => { hasPrefix: true, quantity: 10, cleanQuery: "6221234567890" }
  * - "5*اندومي"         => { hasPrefix: true, quantity: 5, cleanQuery: "اندومي" }
  * - "2.5*طماطم"        => { hasPrefix: true, quantity: 2.5, cleanQuery: "طماطم" }
+ * - ".25*code"         => { hasPrefix: true, quantity: 0.25, cleanQuery: "code" }
  * - "2+210004400250"   => { hasPrefix: false, quantity: 1, cleanQuery: "210004400250" } (Scale barcode exempt)
  * - "10+" or "10*"     => { hasPrefix: true, quantity: 10, cleanQuery: "" }
  * - "*10" or "+10"     => { hasPrefix: true, quantity: 10, cleanQuery: "", isSuffixQuantityChange: true }
@@ -38,7 +39,7 @@ export function parseQuantityPrefixQuery(rawInput?: string | null): ParsedQuanti
   }
 
   // 1. Check if user typed "+10" or "*10" (Suffix command to update quantity of current cart line)
-  const suffixMatch = trimmed.match(/^[*+xX]\s*(\d+(?:\.\d+)?)$/);
+  const suffixMatch = trimmed.match(/^[*+xX]\s*(\d+(?:\.\d+)?|\.\d+)$/);
   if (suffixMatch) {
     const qty = Number(suffixMatch[1]);
     if (qty > 0 && !isNaN(qty)) {
@@ -47,7 +48,7 @@ export function parseQuantityPrefixQuery(rawInput?: string | null): ParsedQuanti
   }
 
   // 2. Check prefix multiplier: e.g. "10*", "10+", "10x", "2.5*", "10*اندومي", "10+6221234567890"
-  const prefixMatch = trimmed.match(/^(\d+(?:\.\d+)?)\s*[*+xX]\s*(.*)$/);
+  const prefixMatch = trimmed.match(/^(\d+(?:\.\d+)?|\.\d+)\s*[*+xX]\s*(.*)$/);
   if (prefixMatch) {
     const qty = Number(prefixMatch[1]);
     const cleanQuery = prefixMatch[2].trim();

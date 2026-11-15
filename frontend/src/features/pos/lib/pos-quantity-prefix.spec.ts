@@ -70,6 +70,42 @@ describe('parseQuantityPrefixQuery', () => {
     });
   });
 
+  it('parses leading-dot decimal quantities like ".25*code"', () => {
+    expect(parseQuantityPrefixQuery('.25*code')).toEqual({
+      hasPrefix: true,
+      quantity: 0.25,
+      cleanQuery: 'code',
+    });
+    expect(parseQuantityPrefixQuery('.5+name')).toEqual({
+      hasPrefix: true,
+      quantity: 0.5,
+      cleanQuery: 'name',
+    });
+  });
+
+  it('parses standalone leading-dot prefix awaiting scan like ".25*"', () => {
+    expect(parseQuantityPrefixQuery('.25*')).toEqual({
+      hasPrefix: true,
+      quantity: 0.25,
+      cleanQuery: '',
+    });
+  });
+
+  it('parses leading-dot suffix quantity update commands like "*.25" or "+.5"', () => {
+    expect(parseQuantityPrefixQuery('*.25')).toEqual({
+      hasPrefix: true,
+      quantity: 0.25,
+      cleanQuery: '',
+      isSuffixQuantityChange: true,
+    });
+    expect(parseQuantityPrefixQuery('+.5')).toEqual({
+      hasPrefix: true,
+      quantity: 0.5,
+      cleanQuery: '',
+      isSuffixQuantityChange: true,
+    });
+  });
+
   it('exempts scale barcodes from quantity prefix multiplier', () => {
     // Standard EAN-13 variable weight prefix 21
     expect(parseQuantityPrefixQuery('2+210004400250')).toEqual({
