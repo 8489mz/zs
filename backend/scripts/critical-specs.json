@@ -191,6 +191,7 @@
     "test/critical/clock-p9-stamp-unification.spec.ts",
     "test/critical/clock-b4-money-day-fixes.spec.ts",
     "test/critical/clock-b4-zatca-allocation-supplierbill.spec.ts",
-    "test/critical/clock-b4-low-date-bounds.spec.ts"
+    "test/critical/clock-b4-low-date-bounds.spec.ts",
+    "test/critical/clock-b5-offer-date-bounds.spec.ts"
   ]
 }

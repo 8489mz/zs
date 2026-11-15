@@ -4,11 +4,10 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
-import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
+import { getTenantTimezone, normalizePgDateOnly, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { reserveLocationStock, releaseLocationStock } from '../../../common/utils/location-stock-ledger';
 import { sortItemsByProductId, generateDailySequenceNumber, listRepUsableWarehouseScope, assertWarehouseInRepScope } from './van-common.util';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { normalizeDateOnly } from '../../sales/helpers/sales-write.helper';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { SalesService } from '../../sales/sales.service';
 import type { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -281,8 +280,8 @@ export class VanPreSalesService {
     const offersByProduct = new Map<number, any[]>();
     for (const off of offers) {
       const pid = Number(off.product_id);
-      const start = normalizeDateOnly(off.start_date);
-      const end = normalizeDateOnly(off.end_date);
+      const start = normalizePgDateOnly(off.start_date);
+      const end = normalizePgDateOnly(off.end_date);
       if ((!start || start <= nowIso) && (!end || end >= nowIso)) {
         if (!offersByProduct.has(pid)) offersByProduct.set(pid, []);
         offersByProduct.get(pid)!.push({
@@ -531,8 +530,8 @@ export class VanPreSalesService {
       const offersByProduct = new Map<number, any[]>();
       for (const off of offers) {
         const pid = Number(off.product_id);
-        const start = normalizeDateOnly(off.start_date);
-        const end = normalizeDateOnly(off.end_date);
+        const start = normalizePgDateOnly(off.start_date);
+        const end = normalizePgDateOnly(off.end_date);
         if ((!start || start <= nowIso) && (!end || end >= nowIso)) {
           if (!offersByProduct.has(pid)) offersByProduct.set(pid, []);
           offersByProduct.get(pid)!.push(off);

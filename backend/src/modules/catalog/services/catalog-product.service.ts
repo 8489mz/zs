@@ -16,6 +16,7 @@ import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
 import { assertFashionExpectedStock, assertFashionRemovedStockSafe, fashionLocationAccessMode } from '../engines/fashion-stock-safety.engine';
 import { stockMovementTotal } from '../engines/stock-movement-total.engine';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
+import { normalizePgDateOnly } from '../../../common/utils/tenant-timezone.util';
 import { currencyMoneyDigits, MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { StorefrontMediaService } from '../../storefront/storefront-media.service';
 import { availableAcrossLocations } from '../../../common/engines/branch-sellable-locations.engine';
@@ -207,17 +208,6 @@ export class CatalogProductService {
   // statement over 65,535 parameters, i.e. a large catalog would crash the page. One array parameter.
   private productIdAny(column: string, ids: number[]) {
     return sql<boolean>`${sql.ref(column)} = ANY(${ids.map((id) => Number(id))}::bigint[])`;
-  }
-
-  private normalizeDateOnly(value: unknown): string {
-    if (!value) return '';
-    if (value instanceof Date) return Number.isNaN(value.getTime()) ? '' : value.toISOString().slice(0, 10);
-    const text = String(value).trim();
-    if (!text) return '';
-    const isoMatch = text.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (isoMatch) return isoMatch[1];
-    const parsed = new Date(text);
-    return Number.isNaN(parsed.getTime()) ? text : parsed.toISOString().slice(0, 10);
   }
 
   private async getProductOfferColumnCapabilities(): Promise<ProductOfferColumnCapabilities> {
@@ -1183,8 +1173,11 @@ export class CatalogProductService {
           : 'percent',
         value: Number(offer.value || 0),
         minQty: Math.max(1, Number(offer.min_qty || 1)),
-        from: this.normalizeDateOnly(offer.start_date),
-        to: this.normalizeDateOnly(offer.end_date),
+        // Offer bounds are STORED pg DATEs (node-postgres
+        // local-midnight Dates) -- they key through
+        // normalizePgDateOnly, never through the UTC slice.
+        from: normalizePgDateOnly(offer.start_date),
+        to: normalizePgDateOnly(offer.end_date),
         bogoBuyQty: offer.bogo_buy_qty ? Number(offer.bogo_buy_qty) : null,
         bogoGetQty: offer.bogo_get_qty ? Number(offer.bogo_get_qty) : null,
         bogoDiscountPercent: offer.bogo_discount_percent != null ? Number(offer.bogo_discount_percent) : 100,

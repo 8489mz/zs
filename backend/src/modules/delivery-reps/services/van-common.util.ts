@@ -2,7 +2,7 @@ import { Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
 import { formatDailyDocumentNumber, getDailyDocumentPrefix } from '../../../common/utils/document-number.util';
-import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
+import { getTenantTimezone, formatLocalCalendarDay } from '../../../common/utils/tenant-timezone.util';
 import { AppError } from '../../../common/errors/app-error';
 
 export const FLEET_VEHICLE_STATUSES = ['available', 'assigned', 'maintenance', 'retired'] as const;
@@ -337,8 +337,15 @@ export async function getMonthlyOfficialHolidayDates(
   endOfMonth: Date,
 ): Promise<string[]> {
   try {
-    const startStr = startOfMonth.toISOString().slice(0, 10);
-    const endStr = endOfMonth.toISOString().slice(0, 10);
+    // Month bounds arrive as host-local Dates (new Date(y, m, 1) /
+    // new Date(y, m, 0, 23, 59, 59)) and holiday rows are STORED pg
+    // DATEs (node-postgres local-midnight Dates): every key here
+    // comes from the host-local calendar parts. The UTC slice
+    // rendered the previous day on any host east of UTC, so each
+    // holiday landed in the set a day early -- the wrong day was
+    // excluded from rep working-day counts.
+    const startStr = formatLocalCalendarDay(startOfMonth);
+    const endStr = formatLocalCalendarDay(endOfMonth);
     const rows = await anyDb
       .selectFrom('hr_holidays')
       .select(['start_date', 'end_date'])
@@ -353,7 +360,7 @@ export async function getMonthlyOfficialHolidayDates(
       const cur = new Date(row.start_date);
       const end = new Date(row.end_date);
       while (cur <= end) {
-        const dStr = cur.toISOString().slice(0, 10);
+        const dStr = formatLocalCalendarDay(cur);
         if (dStr >= startStr && dStr <= endStr) {
           datesSet.add(dStr);
         }

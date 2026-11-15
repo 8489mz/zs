@@ -2,7 +2,7 @@ import { AppError } from '../../../common/errors/app-error';
 import { NormalizedSalePayload } from '../dto/upsert-sale.dto';
 import { type MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { IDEMPOTENCY_STUCK_PROCESSING_MS } from '../../../core/idempotency/idempotency.service';
-import { todayTenantDate } from '../../../common/utils/tenant-timezone.util';
+import { normalizePgDateOnly, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 
 // Book digits are REQUIRED (INV-POS-OFFER-DIGITS): this rounder is
 // used for every money amount the sale helper computes, so a silent
@@ -594,10 +594,11 @@ export function normalizeDateOnly(value: unknown): string {
   if (!value) return '';
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return '';
-    // PostgreSQL DATE values arrive as UTC-midnight Date objects, so the
-    // UTC slice IS the stored calendar day (same rule as the storefront's
-    // normalizeDateOnly). Host-local parts would shift the day on any
-    // non-UTC host.
+    // UTC-midnight Dates built from DTO date-only strings: the UTC
+    // slice IS the written day. NEVER pass a pg DATE row here --
+    // node-postgres returns DATE columns as host-local-midnight
+    // Dates, so this slice renders the previous day on any host
+    // east of UTC; stored days go through normalizePgDateOnly.
     return value.toISOString().slice(0, 10);
   }
   const text = String(value).trim();
@@ -668,8 +669,11 @@ export function zonedOfferClockParts(timezone: string, now: Date = new Date()): 
 }
 
 export function isOfferActive(offer: SaleProductOfferRow, todayIso: string, now: Date = new Date(), businessTimezone?: string): boolean {
-  const from = normalizeDateOnly(offer.start_date);
-  const to = normalizeDateOnly(offer.end_date);
+  // Offer bounds are STORED pg DATEs (node-postgres local-midnight
+  // Dates) -- they key through normalizePgDateOnly, never through
+  // the UTC slice: an offer ending today must stay active today.
+  const from = normalizePgDateOnly(offer.start_date);
+  const to = normalizePgDateOnly(offer.end_date);
   if (from && from > todayIso) return false;
   if (to && to < todayIso) return false;
 

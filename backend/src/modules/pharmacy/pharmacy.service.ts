@@ -8,7 +8,7 @@ import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { normalizeArabicSearch } from '../../common/utils/arabic-search.util';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
-import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
+import { getTenantTimezone, formatLocalCalendarDay } from '../../common/utils/tenant-timezone.util';
 import { validateDistributorInvoiceLines } from './engines/distributor-invoice-validation.engine';
 import { buildDistributorPurchaseItem } from './engines/distributor-purchase.engine';
 import { PurchasesService } from '../purchases/purchases.service';
@@ -36,7 +36,12 @@ gate would skip can never be (re-)activated as saleable here.
 */
 function pharmacyExpiryText(value: unknown): string | null {
   if (value == null) return null;
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  // A stored batch expiry is a pg DATE (node-postgres local-midnight
+  // Date): it keys from the host-local calendar parts. The UTC slice
+  // rendered the previous day on any host east of UTC, so the frozen
+  // check below compared the DTO day against yesterday's stored day
+  // and rejected a legitimate edit with PHARMACY_BATCH_EXPIRY_FROZEN.
+  if (value instanceof Date) return formatLocalCalendarDay(value);
   const text = String(value).trim();
   return text ? text.slice(0, 10) : null;
 }

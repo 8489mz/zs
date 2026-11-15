@@ -16,6 +16,7 @@ import { AppError } from '../../../common/errors/app-error';
 import { lockAccountingPeriod } from '../accounting-period-lock';
 import { tenantBaseCurrency } from '../accounting-currency';
 import { resolveBusinessDateKey } from '../engines/accounting-date.engine';
+import { formatLocalCalendarDay } from '../../../common/utils/tenant-timezone.util';
 import { currencyMoneyDigits, roundMoney, MoneyDigits } from '../engines/money-minor-units.engine';
 import { scaledBomOverhead } from '../../manufacturing/engines/manufacturing-overhead.engine';
 import type { DbOrTx, JournalLineDraft } from '../accounting-posting.service';
@@ -1189,7 +1190,14 @@ export class InventoryManufacturingCashPostingService {
     for (const [index, item] of installments.entries()) {
       const amount = allocations[index];
       if (!amount) continue;
-      const dueDay = new Date(item.due_date).toISOString().slice(0, 10);
+      // due_date is a STORED pg DATE (node-postgres local-midnight
+      // Date): it keys from the host-local calendar parts, never
+      // from the UTC slice -- the old slice recognised the interest
+      // one day early on any host east of UTC, and the floor below
+      // compares against the tenant-resolved createdDay.
+      const dueDay = item.due_date instanceof Date
+        ? formatLocalCalendarDay(item.due_date)
+        : String(item.due_date).slice(0, 10);
       const recognitionDay = dueDay < createdDay ? createdDay : dueDay;
       await sql`insert into accounting_installment_interest (tenant_id, plan_id, installment_id, recognition_date, amount, account_id)
         values (${scope.tenantId}, ${planId}, ${item.id}, ${recognitionDay}, ${amount}, ${scope.accountId})

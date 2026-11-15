@@ -123,6 +123,38 @@ export function formatLocalCalendarDay(date: Date): string {
 }
 
 /**
+ * Normalizes a STORED pg DATE value (or a date-only string) to its
+ * YYYY-MM-DD key. node-postgres returns DATE columns as host-local-midnight
+ * Dates, so the UTC slice (`toISOString().slice(0, 10)`)
+ * renders the previous day on any host east of UTC -- a Date input
+ * here MUST key from the host-local calendar parts
+ * (formatLocalCalendarDay). Date-only strings pass through on their
+ * first 10 chars; non-ISO text parses as a local midnight and keys
+ * from its local parts (the day as written).
+ *
+ * This is the pg-DATE twin of the UTC-slice normalizers
+ * (`normalizeDateOnly` in the sales helper / storefront engine):
+ * those are for UTC-midnight Dates built from DTO date-only strings,
+ * where the UTC slice IS the written day -- NEVER pass a pg DATE
+ * row's start/end/due/expiry day to them. Offer bounds, installment
+ * due days, batch expiries and holiday rows all come here.
+ */
+export function normalizePgDateOnly(value: unknown): string {
+  if (!value) return '';
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return '';
+    return formatLocalCalendarDay(value);
+  }
+  const text = String(value).trim();
+  if (!text) return '';
+  const isoMatch = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) return isoMatch[1];
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return formatLocalCalendarDay(parsed);
+}
+
+/**
  * Formats a Date or UTC ISO string into localized time in the specified timezone
  */
 export function formatTimeInTimezone(

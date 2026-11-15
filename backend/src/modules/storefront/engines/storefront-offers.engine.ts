@@ -1,4 +1,5 @@
 import { type MoneyDigits, roundMoney as roundBookMoney } from '../../accounting/engines/money-minor-units.engine';
+import { normalizePgDateOnly } from '../../../common/utils/tenant-timezone.util';
 
 /**
  * Storefront Offers & Promotions Calculation Engine
@@ -47,7 +48,11 @@ export function normalizeDateOnly(value: unknown): string {
   if (!value) return '';
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return '';
-    // PostgreSQL DATE values are represented as UTC-midnight Date objects by pg.
+    // UTC-midnight Dates built from DTO date-only strings: the UTC
+    // slice IS the written day. NEVER pass a pg DATE row here --
+    // node-postgres returns DATE columns as host-local-midnight
+    // Dates, so this slice renders the previous day on any host
+    // east of UTC; stored days go through normalizePgDateOnly.
     return value.toISOString().slice(0, 10);
   }
   const text = String(value).trim();
@@ -89,8 +94,14 @@ export function isOfferActiveNow(
 
   const activeDate = todayIso ?? todayLocalIsoDate(timezone, now);
 
-  const from = normalizeDateOnly(offer.start_date);
-  const to = normalizeDateOnly(offer.end_date);
+  // Offer bounds are STORED pg DATEs (node-postgres local-midnight
+  // Dates) -- they key through normalizePgDateOnly, never through
+  // the UTC slice: an offer ending today must stay active today.
+  // (The service loaders cast start/end to ::text, so production
+  // rows arrive as strings and take the same branch either way;
+  // the Date branch must still be right for any direct row.)
+  const from = normalizePgDateOnly(offer.start_date);
+  const to = normalizePgDateOnly(offer.end_date);
   if (from && from > activeDate) return false;
   if (to && to < activeDate) return false;
 
