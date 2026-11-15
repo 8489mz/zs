@@ -50,7 +50,7 @@ import {
 import { allocateSaleFromImportLots, calculateImportSaleCost } from './helpers/import-lot-allocation.helper';
 import { applyStockDelta, lockStockProducts } from '../../common/utils/location-stock-ledger';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
-import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
+import { formatLocalCalendarDay, getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
@@ -1518,11 +1518,14 @@ export class ImportSalesService {
       });
       const payableAccountId = await this.resolveTenantAccount(trx, tenantId, 'payable');
       // start_date is a stored DATE (a Date object from pg): String()
-      // on it yields 'Wed Jan 15', not a calendar day. Normalize it;
-      // the fallback is the tenant-local business day.
+      // on it yields 'Wed Jan 15', not a calendar day. Normalize it
+      // with formatLocalCalendarDay: node-postgres returns a DATE as a
+      // host-local-midnight Date, so the UTC slice renders the previous
+      // day on any host east of UTC. The fallback is the tenant-local
+      // business day.
       const expenseDate = trip.start_date
         ? (trip.start_date instanceof Date
-          ? trip.start_date.toISOString().slice(0, 10)
+          ? formatLocalCalendarDay(trip.start_date)
           : String(trip.start_date).slice(0, 10))
         : await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date());
       await trx.insertInto('expenses').values({
@@ -6679,7 +6682,7 @@ export class ImportSalesService {
       // An expired quotation can never be selected.
       const toDateOnly = (v: any): string | null => {
         if (v === null || v === undefined || v === '') return null;
-        if (v instanceof Date) return v.toISOString().slice(0, 10);
+        if (v instanceof Date) return formatLocalCalendarDay(v);
         return String(v).slice(0, 10);
       };
       const today = await resolveBusinessDateKey(this.db, tenantId, new Date());

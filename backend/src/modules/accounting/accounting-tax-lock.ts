@@ -2,16 +2,20 @@ import { Kysely } from '../../database/kysely';
 import { Database } from '../../database/database.types';
 import { AppError } from '../../common/errors/app-error';
 import { resolveBusinessDateKey } from './engines/accounting-date.engine';
+import { formatLocalCalendarDay } from '../../common/utils/tenant-timezone.util';
 
 /**
  * Day key for STORED calendar dates (lock dates, fiscal period
- * bounds): a DATE column already is a calendar day, so slicing its
- * UTC rendering is exact. Entry INSTANTS must never use this --
- * resolve them with resolveBusinessDateKey in the tenant's timezone
+ * bounds): a DATE column already is a calendar day, and node-postgres
+ * returns it as a host-local-midnight Date, so the key comes from the
+ * local calendar parts (formatLocalCalendarDay). Slicing the UTC
+ * rendering is NOT exact: on any host east of UTC it yields the
+ * previous day. Entry INSTANTS must never use this -- resolve them
+ * with resolveBusinessDateKey in the tenant's timezone
  * (INV-BUSINESS-DATE-TENANT-LOCAL).
  */
 export function accountingDateKey(value: unknown): string {
-  return value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+  return value instanceof Date ? formatLocalCalendarDay(value) : String(value).slice(0, 10);
 }
 
 /** Infer tax impact from ledger accounts, never from a caller-controlled flag. */

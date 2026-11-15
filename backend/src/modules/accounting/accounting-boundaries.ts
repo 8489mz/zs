@@ -3,6 +3,7 @@ import { Kysely, sql } from '../../database/kysely';
 import { Database } from '../../database/database.types';
 import { lockAccountingPeriod } from './accounting-period-lock';
 import { resolveBusinessDateKey } from './engines/accounting-date.engine';
+import { formatLocalCalendarDay } from '../../common/utils/tenant-timezone.util';
 
 export async function assertBusinessAccountingDate(db: Kysely<Database>, tenantId: string, date: Date, taxable = false): Promise<void> {
   await lockAccountingPeriod(db, tenantId);
@@ -12,7 +13,7 @@ export async function assertBusinessAccountingDate(db: Kysely<Database>, tenantI
     .where('tenant_id', '=', tenantId).where('id', '=', 1).executeTakeFirst();
   for (const lock of [settings?.lock_date_all, settings?.lock_date_non_adviser, ...(taxable ? [settings?.lock_date_tax] : [])]) {
     const raw: unknown = lock;
-    const lockDay = raw instanceof Date ? raw.toISOString().slice(0, 10) : String(raw || '').slice(0, 10);
+    const lockDay = raw instanceof Date ? formatLocalCalendarDay(raw) : String(raw || '').slice(0, 10);
     if (lockDay && day <= lockDay) throw new BadRequestException(`الفترة المحاسبية مقفلة حتى ${lockDay}.`);
   }
   const closed = await db.selectFrom('accounting_fiscal_periods').select('id')

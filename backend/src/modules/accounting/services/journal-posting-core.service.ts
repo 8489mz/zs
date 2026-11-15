@@ -19,6 +19,7 @@ import { assertTaxPeriodOpen } from '../accounting-tax-lock';
 import { randomUUID } from 'node:crypto';
 import { tenantBaseCurrency } from '../accounting-currency';
 import { resolveBusinessDateKey } from '../engines/accounting-date.engine';
+import { formatLocalCalendarDay } from '../../../common/utils/tenant-timezone.util';
 import { currencyMoneyDigits, roundMoney, MoneyDigits } from '../engines/money-minor-units.engine';
 import type { DbOrTx, JournalLineDraft, DomainJournalLineDraft } from '../accounting-posting.service';
 
@@ -427,7 +428,7 @@ export class JournalPostingCoreService {
       // day: a 00:30 Cairo closing entry is the year-end day, not the previous UTC day.
       const postingDate = await resolveBusinessDateKey(queryable, params.tenantId, params.entryDate);
       const endDate = fiscalYear?.end_date instanceof Date
-        ? fiscalYear.end_date.toISOString().slice(0, 10)
+        ? formatLocalCalendarDay(fiscalYear.end_date)
         : String(fiscalYear?.end_date || '').slice(0, 10);
       if (postingDate !== endDate || fiscalYear?.status !==
           (params.sourceType === 'fiscal_year_closing' ? 'open' : 'closed')) {

@@ -34,7 +34,7 @@
     "src/modules/hr/employee-portal.service.ts": 1010,
     "src/modules/hr/hr.service.ts": 7487,
     "src/modules/import-sales/dto/import-sales.dto.ts": 1774,
-    "src/modules/import-sales/import-sales.service.ts": 10000,
+    "src/modules/import-sales/import-sales.service.ts": 10003,
     "src/modules/maintenance/maintenance.service.ts": 1267,
     "src/modules/maritime-freight/maritime-freight.service.ts": 7139,
     "src/modules/partners/partners.service.ts": 1209,
