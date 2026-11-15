@@ -13,6 +13,9 @@ import {
   supplierBillsApi,
   buildSupplierBillPayload,
   sumSupplierBillLines,
+  SUPPLIER_BILL_KINDS,
+  supplierBillKindById,
+  resolveSupplierBillKindAccountId,
   type SupplierBillLineInput,
 } from '@/features/suppliers/api/supplier-bills.api';
 
@@ -25,9 +28,9 @@ const BLOCKED_ACCOUNT_CODES = new Set([
   '1110', '1120', '1130', '1140', '2110', '1185', '1160', '1165', '1150', '2120', '2126', '2150',
 ]);
 
-type DraftLine = { description: string; accountId: string; amount: string };
+type DraftLine = { description: string; kind: string; accountId: string; amount: string };
 
-const EMPTY_LINE: DraftLine = { description: '', accountId: '', amount: '' };
+const EMPTY_LINE: DraftLine = { description: '', kind: '', accountId: '', amount: '' };
 
 export function SupplierBillForm({ supplierId, onCreated }: { supplierId: string; onCreated?: () => void }) {
   const { t } = useTranslation();
@@ -37,8 +40,8 @@ export function SupplierBillForm({ supplierId, onCreated }: { supplierId: string
   const [formError, setFormError] = useState('');
 
   const accountsQuery = useQuery({ queryKey: ['accounting-accounts'], queryFn: accountingApi.accounts });
+  const accounts = accountsQuery.data?.accounts || [];
   const accountOptions = useMemo(() => {
-    const accounts = accountsQuery.data?.accounts || [];
     return accounts
       .filter((account) => account.isActive && !account.isControlAccount)
       .filter((account) => account.accountType === 'expense' || account.accountType === 'asset')
@@ -48,6 +51,15 @@ export function SupplierBillForm({ supplierId, onCreated }: { supplierId: string
         label: `${account.code} — ${account.nameAr || account.nameEn || account.code}`,
       }));
   }, [accountsQuery.data]);
+
+  /* INV-SUPPLIER-BILL-PLAIN-KIND: the kind is the only choice the
+   * merchant makes — the account fills itself from the single mapping.
+   * The kind select stays disabled until the accounts load, so the
+   * resolve below can never run against an empty chart. */
+  const kindOptions = useMemo(
+    () => SUPPLIER_BILL_KINDS.map((kind) => ({ value: kind.id, label: kind.label })),
+    [],
+  );
 
   const mutation = useMutation({
     mutationFn: (payload: ReturnType<typeof buildSupplierBillPayload>) => supplierBillsApi.create(payload),
@@ -76,9 +88,21 @@ export function SupplierBillForm({ supplierId, onCreated }: { supplierId: string
     setLines((current) => current.map((line, i) => (i === index ? { ...line, ...patch } : line)));
   }
 
+  /* INV-SUPPLIER-BILL-PLAIN-KIND: picking a kind fills the account from
+   * the single mapping; 'other' (or a mapped code missing from this
+   * tenant's chart) clears it so the manual picker shows instead. */
+  function handleKindChange(index: number, kindId: string): void {
+    const accountId = resolveSupplierBillKindAccountId(kindId, accounts);
+    updateLine(index, { kind: kindId, accountId: accountId ?? '' });
+  }
+
   function handleSubmit(event: React.FormEvent): void {
     event.preventDefault();
     setFormError('');
+    if (lines.some((line) => !line.kind)) {
+      setFormError(t('suppliers.supplier_bill_form.s21', 'اختر نوع البند لكل سطر'));
+      return;
+    }
     let payload: ReturnType<typeof buildSupplierBillPayload>;
     try {
       payload = buildSupplierBillPayload(supplierId, numericLines, note);
@@ -94,47 +118,78 @@ export function SupplierBillForm({ supplierId, onCreated }: { supplierId: string
   return (
     <form className="form-grid" onSubmit={handleSubmit}>
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {lines.map((line, index) => (
-          <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr auto', gap: '8px', alignItems: 'end' }}>
-            <Field label={t('suppliers.supplier_bill_form.s1', 'البيان')}>
-              <input
-                type="text"
-                value={line.description}
-                disabled={mutation.isPending}
-                placeholder={t('suppliers.supplier_bill_form.s2', 'مثال: برنامج محاسبة / كرتونة ورق / كابلات')}
-                onChange={(event) => updateLine(index, { description: event.target.value })}
-              />
-            </Field>
-            <Field label={t('suppliers.supplier_bill_form.s3', 'الحساب')}>
-              <CustomSelect
-                value={line.accountId}
-                onChange={(value) => updateLine(index, { accountId: String(value) })}
-                options={accountOptions}
-                placeholder={accountsQuery.isPending ? t('suppliers.supplier_bill_form.s4', 'جارٍ تحميل الحسابات...') : t('suppliers.supplier_bill_form.s5', 'اختر الحساب...')}
-                disabled={mutation.isPending || accountsQuery.isPending}
-              />
-            </Field>
-            <Field label={t('suppliers.supplier_bill_form.s6', 'المبلغ')}>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={line.amount}
-                disabled={mutation.isPending}
-                placeholder="0.00"
-                onChange={(event) => updateLine(index, { amount: event.target.value })}
-              />
-            </Field>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={mutation.isPending || lines.length <= 1}
-              onClick={() => setLines((current) => current.filter((_, i) => i !== index))}
-            >
-              {t('suppliers.supplier_bill_form.s7', 'حذف')}
-            </Button>
-          </div>
-        ))}
+        {lines.map((line, index) => {
+          /* INV-SUPPLIER-BILL-PLAIN-KIND: a mapped kind shows the account
+           * it will post to (read-only); 'other' — or a mapped code the
+           * tenant's chart does not carry — shows the manual picker. */
+          const kind = supplierBillKindById(line.kind);
+          const resolvedAccount =
+            kind && kind.accountCode !== null
+              ? accounts.find((account) => String(account.code) === kind.accountCode)
+              : undefined;
+          const needsManualAccount =
+            line.kind === 'other' || (kind !== undefined && kind.accountCode !== null && !resolvedAccount);
+          return (
+            <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr auto', gap: '8px', alignItems: 'end' }}>
+                <Field label={t('suppliers.supplier_bill_form.s1', 'البيان')}>
+                  <input
+                    type="text"
+                    value={line.description}
+                    disabled={mutation.isPending}
+                    placeholder={t('suppliers.supplier_bill_form.s2', 'مثال: برنامج محاسبة / كرتونة ورق / كابلات')}
+                    onChange={(event) => updateLine(index, { description: event.target.value })}
+                  />
+                </Field>
+                <Field label={t('suppliers.supplier_bill_form.s17', 'نوع البند')}>
+                  <CustomSelect
+                    value={line.kind}
+                    onChange={(value) => handleKindChange(index, String(value))}
+                    options={kindOptions}
+                    placeholder={accountsQuery.isPending ? t('suppliers.supplier_bill_form.s4', 'جارٍ تحميل الحسابات...') : t('suppliers.supplier_bill_form.s18', 'اختر نوع البند...')}
+                    disabled={mutation.isPending || accountsQuery.isPending}
+                  />
+                </Field>
+                <Field label={t('suppliers.supplier_bill_form.s6', 'المبلغ')}>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={line.amount}
+                    disabled={mutation.isPending}
+                    placeholder="0.00"
+                    onChange={(event) => updateLine(index, { amount: event.target.value })}
+                  />
+                </Field>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={mutation.isPending || lines.length <= 1}
+                  onClick={() => setLines((current) => current.filter((_, i) => i !== index))}
+                >
+                  {t('suppliers.supplier_bill_form.s7', 'حذف')}
+                </Button>
+              </div>
+              {needsManualAccount ? (
+                <Field label={t('suppliers.supplier_bill_form.s3', 'الحساب')}>
+                  <CustomSelect
+                    value={line.accountId}
+                    onChange={(value) => updateLine(index, { accountId: String(value) })}
+                    options={accountOptions}
+                    placeholder={accountsQuery.isPending ? t('suppliers.supplier_bill_form.s4', 'جارٍ تحميل الحسابات...') : t('suppliers.supplier_bill_form.s5', 'اختر الحساب...')}
+                    disabled={mutation.isPending || accountsQuery.isPending}
+                  />
+                </Field>
+              ) : resolvedAccount ? (
+                <div className="muted small">
+                  {t('suppliers.supplier_bill_form.s19', 'سيُقيد على حساب {{account}}.', {
+                    account: `${resolvedAccount.code} — ${resolvedAccount.nameAr || resolvedAccount.nameEn || resolvedAccount.code}`,
+                  })}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
       <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Button type="button" variant="secondary" disabled={mutation.isPending} onClick={() => setLines((current) => [...current, { ...EMPTY_LINE }])}>

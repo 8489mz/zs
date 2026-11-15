@@ -32,6 +32,72 @@ export interface CreateSupplierBillPayload {
   billDate?: string;
 }
 
+/* INV-SUPPLIER-BILL-PLAIN-KIND: a bill line asks "what is this?" in plain
+ * words and the account fills itself — the merchant (and the cashier)
+ * never picks a raw chart code. Each kind maps to ONE chart account,
+ * verified against the tenant chart seed
+ * (accounting-tenant-foundation.service.ts, mirrored by migration
+ * 20260529000300): software -> 6700 administrative, paper -> 6900
+ * operating materials, equipment -> 1210 equipment, furniture -> 1220
+ * furniture, freelancer -> 6200 salaries and wages, maintenance -> 6600,
+ * transport -> 6400 freight, utilities -> 6300, rent -> 6100,
+ * marketing -> 6500. Every mapped account is an expense or asset with
+ * a debit balance and is NOT on the engine blocklist. "other" maps to
+ * null and keeps the manual account picker as the fallback. The posting
+ * is unchanged — the kind only chooses the account; the engine still
+ * validates the resulting account exactly as before. */
+export type SupplierBillKindId =
+  | 'software'
+  | 'paper'
+  | 'equipment'
+  | 'furniture'
+  | 'freelancer'
+  | 'maintenance'
+  | 'transport'
+  | 'utilities'
+  | 'rent'
+  | 'marketing'
+  | 'other';
+
+export interface SupplierBillKind {
+  id: SupplierBillKindId;
+  label: string;
+  accountCode: string | null;
+}
+
+export const SUPPLIER_BILL_KINDS: SupplierBillKind[] = [
+  { id: 'software', label: 'برنامج / اشتراك', accountCode: '6700' },
+  { id: 'paper', label: 'ورق ومستلزمات مكتبية', accountCode: '6900' },
+  { id: 'equipment', label: 'كابلات ومعدات وأجهزة', accountCode: '1210' },
+  { id: 'furniture', label: 'أثاث وتجهيزات', accountCode: '1220' },
+  { id: 'freelancer', label: 'أجور فريلانسر / خدمات', accountCode: '6200' },
+  { id: 'maintenance', label: 'صيانة', accountCode: '6600' },
+  { id: 'transport', label: 'نقل وشحن', accountCode: '6400' },
+  { id: 'utilities', label: 'كهرباء ومرافق', accountCode: '6300' },
+  { id: 'rent', label: 'إيجار', accountCode: '6100' },
+  { id: 'marketing', label: 'تسويق وإعلان', accountCode: '6500' },
+  { id: 'other', label: 'أخرى — اختر الحساب بنفسك', accountCode: null },
+];
+
+export function supplierBillKindById(id: string | undefined | null): SupplierBillKind | undefined {
+  if (!id) return undefined;
+  return SUPPLIER_BILL_KINDS.find((kind) => kind.id === id);
+}
+
+/* Resolves a kind to the tenant's account id by chart code. Returns null
+ * for 'other' (manual picker), for an unknown kind, and when the mapped
+ * code is not in this tenant's loaded chart (deactivated) — the form
+ * then falls back to the manual picker instead of posting nowhere. */
+export function resolveSupplierBillKindAccountId(
+  kindId: string | undefined | null,
+  accounts: Array<{ id: number | string; code: string | number }>,
+): string | null {
+  const kind = supplierBillKindById(kindId);
+  if (!kind || kind.accountCode === null) return null;
+  const found = (accounts || []).find((account) => String(account.code) === kind.accountCode);
+  return found ? String(found.id) : null;
+}
+
 /* INV-SUPPLIER-PAGE-BILL-STATEMENT: the bill total is summed in
  * integer thousandths (3dp) so 333.33 + 333.33 + 333.34 is exactly
  * 1000 and 333.336 x 3 is exactly 1000.008 — never a float wobble.
