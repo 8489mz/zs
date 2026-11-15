@@ -260,7 +260,7 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     const newAciIds = newAci.rows.map((r) => r.id).sort();
     assert.notDeepEqual(oldAciIds, newAciIds, `OLD (CURRENT_DATE + 14d) and NEW (tenant day + 14d) ACI windows must differ (old=${JSON.stringify(oldAciIds)} new=${JSON.stringify(newAciIds)})`);
     assert.deepEqual(newAciIds, [1], `NEW window must select exactly the tenant-day+14 expiry, got ${JSON.stringify(newAciIds)}`);
-    const importSales = read('modules/import-sales/import-sales.service.ts');
+    const importSales = read('modules/import-sales/services/import-profit-report.service.ts');
     const metrics = fnSlice(importSales, 'async getImportCommandCenterMetrics(', 8000);
     assert.ok(!metrics.includes("CURRENT_DATE + INTERVAL '14 days'"), 'ACI window must no longer use CURRENT_DATE + 14 days');
     assert.ok(metrics.includes('acidBound') || metrics.includes('addDaysToDayKey'), 'ACI window must derive its bound from the tenant day');
