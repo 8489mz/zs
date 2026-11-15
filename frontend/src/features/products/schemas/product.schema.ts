@@ -48,7 +48,10 @@ export const productFormSchema = z.object({
   })).optional(),
   taxCodeType: z.string().optional(),
   taxCode: z.string().optional(),
-  calories: emptyNumberToNull(z.coerce.number().optional().nullable()),
+  // z.preprocess is a pipe, and a pipe is NOT optional in the schema input
+  // type — without the outer .optional() the calories key becomes required
+  // (unknown) and the forms' defaultValues (which omit it) fail tsc TS2741.
+  calories: emptyNumberToNull(z.coerce.number().optional().nullable()).optional(),
   allergens: z.array(z.string()).optional(),
   isSpicy: z.boolean().default(false),
   isVegetarian: z.boolean().default(false),
