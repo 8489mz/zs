@@ -364,16 +364,15 @@ export const APPS_CATALOG: AppItemDefinition[] = [
   },
   {
     key: 'clothingModuleEnabled',
-    title: 'مصفوفة الألوان والمقاسات (الملابس)',
+    title: 'الأصناف المتغيرة (ألوان ومقاسات)',
     category: 'inventory',
     categoryLabel: 'المخازن وسلاسل الإمداد',
-    shortDesc: 'إدارة موديلات الملابس بالمقاسات والألوان مع طباعة ملصقات الباركود التفصيلية.',
+    shortDesc: 'إدارة الأصناف المتغيرة بالمقاسات والألوان مع طباعة ملصقات الباركود التفصيلية.',
     features: ['شبكة الألوان والمقاسات', 'توليد باركود الأصناف', 'جرد الموديلات'],
     requiredPlan: 'plan_ultimate',
     icon: ClothingIcon,
     accentColor: '#4f46e5',
     accentBg: '#eef2ff',
-    featureFlag: 'clothing',
   },
   {
     key: 'enablePharmacyModule',

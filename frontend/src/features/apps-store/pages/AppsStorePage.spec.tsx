@@ -91,6 +91,22 @@ describe('AppsStorePage Ultimate tenant self-install', () => {
     expect(screen.queryByText('شاملة كافة الوحدات المتقدمة')).toBeNull();
   });
 
+  it('retail Ultimate tenant without the clothing feature sees the variants app as installable under its new title', async () => {
+    // Package C: the variants app lost its clothing sector flag, so this
+    // tenant (plan_ultimate, features ['deliveryReps'] only) must see it
+    // in the visible catalog under the generic title and install it.
+    renderPage();
+    await waitFor(() => expect(screen.getByText('الأصناف المتغيرة (ألوان ومقاسات)')).toBeTruthy());
+    searchFor('الأصناف المتغيرة');
+
+    await waitFor(() => expect(screen.getByText('الأصناف المتغيرة (ألوان ومقاسات)')).toBeTruthy());
+    expect(screen.getAllByRole('button', { name: 'تثبيت وتفعيل' }).length).toBeGreaterThan(0);
+    expect(screen.queryByText('طلب التفعيل والترقية')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'تثبيت وتفعيل' }));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith({ clothingModuleEnabled: true }));
+  });
+
   it.each([
     ['تحديد الطاولة', 'تحديد الطاولة والعميل بالسلة'],
     ['مناديب التوصيل', 'إدارة مناديب التوصيل والدليفري'],
