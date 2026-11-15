@@ -383,16 +383,23 @@ export function SupplierPaymentForm({ suppliers, activeSupplierId, disabled = fa
       form.setValue('instapayAddress', savedSupplierIpa);
     }
   }, [watchedChannel, savedSupplierIpa, form]);
-  /* INV-SUPPLIER-ADVANCE-UI-WIRING: a payment against a zero-balance
-   * supplier settles nothing, so it is an advance by definition — the
-   * toggle defaults ON for such a supplier. The merchant can still
-   * switch it off by hand (the backend derives the same from the
-   * balance, so the payment stays an advance either way). A caller
-   * preset (defaultIsAdvance, the supplier page's سحبة button) wins
-   * over this derivation. */
+  /* INV-SUPPLIER-PAY-PRESET-WINS: an explicit caller preset wins over the
+   * balance derivation — the supplier page's دفع button passes false
+   * (settlement) and its سحبة button passes true (advance), and neither
+   * may be overridden by the snapshot balance: the page's selectedSupplier
+   * is a useState snapshot never refreshed after a bill posts, so the
+   * derivation read balance 0 and forced the toggle ON for a real
+   * 10,000 / 3,500 debt in both live trials (2026-11-15), and the backend
+   * posts payload.isAdvance when a debt exists, so the wrong default
+   * would have recorded settlements as advances (Dr 1185). The balance
+   * derivation applies ONLY when no preset was given (the Accounts
+   * workspace flow): a payment against a zero-balance supplier settles
+   * nothing, so it is an advance by definition. The merchant can still
+   * switch the toggle by hand; the backend derives the same from the
+   * balance, so the payment stays an advance either way. */
   useEffect(() => {
     if (watchedSupplierId) {
-      form.setValue('isAdvance', defaultIsAdvance === true ? true : Number(selectedSupplier?.balance || 0) <= 0);
+      form.setValue('isAdvance', defaultIsAdvance !== undefined ? defaultIsAdvance : Number(selectedSupplier?.balance || 0) <= 0);
     }
   }, [watchedSupplierId, form, defaultIsAdvance]);
   const mutation = useSupplierPaymentMutation(activeSupplierId, () => {
