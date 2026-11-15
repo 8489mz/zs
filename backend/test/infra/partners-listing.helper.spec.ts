@@ -18,7 +18,7 @@ assert.deepEqual(
 
 assert.deepEqual(
   mapSupplierRow({ id: 9 as never, name: 'Supp', phone: null as never, address: null as never, balance: '3.2' as never, notes: null as never } as never),
-  { id: '9', name: 'Supp', phone: '', address: '', balance: 3.2, notes: '', metadata: {} },
+  { id: '9', name: 'Supp', phone: '', address: '', balance: 3.2, notes: '', metadata: {}, supplierType: 'supplier', overdraftLimit: null },
 );
 
 assert.deepEqual(calculatePagination(4, 20, 35), { page: 2, pageSize: 20, totalItems: 35, totalPages: 2 });
