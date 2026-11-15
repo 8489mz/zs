@@ -21,6 +21,7 @@ import { up as up286 } from '../../src/database/migrations/2040000000286_import_
 import { up as up290 } from '../../src/database/migrations/2040000000290_import_cost_component_payees';
 import { up as up291 } from '../../src/database/migrations/2040000000291_import_quotation_estimate_basis';
 import { up as up306 } from '../../src/database/migrations/2040000000306_import_write_uniqueness';
+import { up as up330 } from '../../src/database/migrations/2040000000330_import_broker_expenses_payment_date';
 import {
   allocateSaleFromImportLots,
   restoreImportLotsFromCancelledSale,
@@ -873,6 +874,10 @@ async function setupDatabase(): Promise<{ db: Kysely<Database>; accounts: Record
   // index the deposit/preorder write paths now require (fixture:
   // real migration, additive only).
   await up306(db as any);
+  // 0330 adds import_broker_expenses.payment_date, which
+  // liquidateBrokerExpenses inserts (Step 11) — without it the insert
+  // fails with 'column "payment_date" ... does not exist' (ci-full #51).
+  await up330(db as any);
 
   // Seed default tenant
   await pglite.exec(`INSERT INTO tenants (id, name) VALUES ('tenant-e2e', 'Global Import & Trade Ltd');`);
