@@ -33,9 +33,10 @@ const GPS_DIALOG_TITLE = 'تفعيل خدمة تحديد المواقع (GPS) إ
 const CUSTOMER_NAME = 'محل اختبار تجريبي';
 const CUSTOMER_PICKER_PLACEHOLDER = 'اختر المحل / العميل من القائمة';
 
-const { currentRep, mockCheckInVisit, mockGetActiveTrip, mockRecordCollection, mockExecuteSale } = vi.hoisted(() => ({
+const { currentRep, mockCheckInVisit, mockCheckOutVisit, mockGetActiveTrip, mockRecordCollection, mockExecuteSale } = vi.hoisted(() => ({
   currentRep: { value: null as any },
   mockCheckInVisit: vi.fn(),
+  mockCheckOutVisit: vi.fn(),
   mockGetActiveTrip: vi.fn(),
   mockRecordCollection: vi.fn(),
   mockExecuteSale: vi.fn(),
@@ -76,6 +77,7 @@ vi.mock('../api/van-sales.api', () => ({
     getCustomerLastSoldPrices: vi.fn().mockResolvedValue({ lastPrices: {} }),
     getCustomerSuggestedOrder: vi.fn().mockResolvedValue({ items: [] }),
     checkInVisit: mockCheckInVisit,
+    checkOutVisit: mockCheckOutVisit,
     openTrip: vi.fn(),
     settleTrip: vi.fn(),
     recordCollection: mockRecordCollection,
@@ -169,6 +171,7 @@ describe('VanSalesMobilePage GPS flag', () => {
     localStorage.clear();
     vi.clearAllMocks();
     mockCheckInVisit.mockResolvedValue({ ok: true, visitId: 1, customerName: CUSTOMER_NAME, geofence: null, checkInAt: '2026-11-13T07:00:00.000Z' });
+    mockCheckOutVisit.mockResolvedValue({ ok: true, visitId: 1, dwellTimeSeconds: 0, dwellTimeMinutes: 0 });
     mockGetActiveTrip.mockResolvedValue(activeTripResponse());
   });
 
@@ -255,6 +258,7 @@ describe('VanSalesMobilePage collection/invoice submit guards', () => {
     localStorage.clear();
     vi.clearAllMocks();
     mockCheckInVisit.mockResolvedValue({ ok: true, visitId: 1, customerName: CUSTOMER_NAME, geofence: null, checkInAt: '2026-11-13T07:00:00.000Z' });
+    mockCheckOutVisit.mockResolvedValue({ ok: true, visitId: 1, dwellTimeSeconds: 0, dwellTimeMinutes: 0 });
     mockRecordCollection.mockResolvedValue({
       ok: true,
       receiptNo: 'COL-261113-0001',
@@ -380,6 +384,8 @@ describe('VanSalesMobilePage collection/invoice submit guards', () => {
     mockSystemConfirm.mockResolvedValue(true);
     fireEvent.click(screen.getByText('إنهاء الزيارة'));
     await waitFor(() => expect(screen.queryByText('إنهاء الزيارة')).toBeNull());
+    expect(mockCheckOutVisit).toHaveBeenCalledTimes(1);
+    expect(mockCheckOutVisit).toHaveBeenCalledWith(1);
 
     fireEvent.click(await screen.findByText('إتمام البيع والسداد (75.00 ج.م)'));
     await screen.findByText('تأكيد وإصدار الفاتورة');
