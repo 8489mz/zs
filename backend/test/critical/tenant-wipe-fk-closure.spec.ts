@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { Kysely, sql } from 'kysely';
 import { PGliteDialect } from 'kysely-pglite-dialect';
-import { SettingsDemoDataService } from '../../src/modules/settings/services/settings-demo-data.service';
+import { executeWipeTables } from '../../src/modules/settings/services/settings-demo-data-wipe-tables';
 
 /*
  * Tenant factory reset must not die with a 500 (INV-TENANT-WIPE-FK-CLOSURE).
@@ -13,8 +13,10 @@ import { SettingsDemoDataService } from '../../src/modules/settings/services/set
  * THE GAP: POST /api/saas-admin/tenants/:id/wipe-data on test10k
  * (2026-11-15) answered 500 INTERNAL_ERROR although the super-admin
  * password was accepted (a wrong password answers 401). The wipe runs
- * one transaction of deletes in settings-demo-data.service.ts
- * executeWipeTables, but the list was written when the store had only
+ * one transaction of deletes in settings-demo-data-wipe-tables.ts
+ * (executeWipeTables, extracted from SettingsDemoDataService so the
+ * service file stays under its file-size baseline), but the list was
+ * written when the store had only
  * the core modules: every table added since that holds a foreign key
  * WITHOUT a delete rule (NO ACTION) or with RESTRICT to a wiped table
  * was missing from the list. The first such row stops the whole wipe
@@ -217,8 +219,6 @@ async function count(db: Kysely<any>, table: string, tenantId: string): Promise<
 async function main(): Promise<void> {
   const { pg, db } = await makeDb();
   try {
-    const service = new SettingsDemoDataService(db as any, {} as any, {} as any);
-
     // Parents.
     await db.insertInto('users').values([
       { id: PRESERVED_USER, tenant_id: TENANT, account_id: `${TENANT}:main`, created_at: new Date('2026-01-01T00:00:00Z'), username: 'owner' },
@@ -309,7 +309,7 @@ async function main(): Promise<void> {
     // Drive the REAL wipe. On the old code this throws a Postgres FK
     // violation (23503) and the transaction rolls back.
     await db.transaction().execute(async (trx) => {
-      await (service as any).executeWipeTables(trx, TENANT, PRESERVED_USER);
+      await executeWipeTables(trx, TENANT, PRESERVED_USER);
     });
 
     // Every operational table is empty for the wiped tenant.
@@ -335,7 +335,7 @@ async function main(): Promise<void> {
 
     // Source pin: the wipe list covers the blocking tables.
     const source = readFileSync(
-      resolve(__dirname, '../../src/modules/settings/services/settings-demo-data.service.ts'),
+      resolve(__dirname, '../../src/modules/settings/services/settings-demo-data-wipe-tables.ts'),
       'utf8',
     );
     for (const table of [
