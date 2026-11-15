@@ -50,7 +50,7 @@ import {
   groupImportReceipts,
   importWeightedAverageCost,
 } from '../../src/modules/import-sales/import-inventory-cost.engine';
-import { apportionByBucketShares } from '../../src/modules/import-sales/import-sales.service';
+import { apportionByBucketShares } from '../../src/modules/import-sales/services/import-receipt-posting.service';
 import { weightedReceiptCost } from '../../src/modules/accounting/engines/inventory-valuation.engine';
 
 type MoneyDigits = 2 | 3;
