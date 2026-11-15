@@ -7,7 +7,7 @@ import { VanFleetService } from './van-fleet.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { normalizeCustomerCode, getCustomerRepBalancesMap } from './van-common.util';
-import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
+import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import {
   extractCoordinatesFromCustomerLocation,
   evaluateGeofenceCompliance,
@@ -167,7 +167,14 @@ export class VanRoutesService {
     // 1. Calculate today's Arabic & English day names in the TENANT
     // timezone (P7, single-server-clock rule) — never the Cairo
     // default: a Kuwait tenant's route day is Kuwait's day.
-    const { dayKey: todayDayKey, dayArabicName: currentDayName } = getCurrentBusinessDay(await getTenantTimezone(this.anyDb, tenantId));
+    // The tenant zone is resolved ONCE and reused for the day name AND
+    // the today-visits filter below (single-server-clock rule): the DB
+    // day (CURRENT_DATE) is the database host's day, not the tenant's,
+    // so visits in the first hours of the tenant day were missing from
+    // "today" (and visits from the tenant's yesterday were included).
+    const tenantTimezone = await getTenantTimezone(this.anyDb, tenantId);
+    const { dayKey: todayDayKey, dayArabicName: currentDayName } = getCurrentBusinessDay(tenantTimezone);
+    const todayDateKey = todayTenantDate(tenantTimezone);
     const currentEnglishDayName = todayDayKey;
 
     // 2. Filter customers based on rep assignment (supporting multi-rep shared customers & ledger ownership)
@@ -216,7 +223,7 @@ export class VanRoutesService {
       ])
       .where('vfv.tenant_id', '=', tenantId)
       .where('vfv.rep_id', '=', repId)
-      .where(sql`vfv.visited_at >= CURRENT_DATE`)
+      .where(sql`DATE(vfv.visited_at AT TIME ZONE ${tenantTimezone})`, '=', todayDateKey)
       .execute();
 
     const visitMap = new Map<number, any>();

@@ -26,7 +26,7 @@
     "src/modules/delivery-reps/services/van-pre-sales.service.ts": 1616,
     "src/modules/delivery-reps/services/van-rep-financial-ledger.service.ts": 1342,
     "src/modules/delivery-reps/services/van-returns.service.ts": 1333,
-    "src/modules/delivery-reps/services/van-routes.service.ts": 1286,
+    "src/modules/delivery-reps/services/van-routes.service.ts": 1293,
     "src/modules/delivery-reps/services/van-trip-lifecycle.service.ts": 2904,
     "src/modules/delivery-reps/van-sales.controller.ts": 1828,
     "src/modules/delivery-reps/van-sales.service.ts": 1883,

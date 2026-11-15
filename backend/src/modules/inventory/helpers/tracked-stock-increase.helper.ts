@@ -1,6 +1,7 @@
 import { Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { AppError } from '../../../common/errors/app-error';
+import { formatLocalCalendarDay } from '../../../common/utils/tenant-timezone.util';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
 
 export type TrackedIncreaseBatchAllocation = {
@@ -25,13 +26,19 @@ function preciseQty(value: unknown): number {
  * expiry (YYYY-MM) must not precede the current month, a full date
  * must not precede today, and a missing expiry never qualifies.
  *
- * DATE columns arrive as JS Date objects from the driver, so the
- * expiry is normalized to ISO first: String(date).slice(0, 10) yields
- * 'Wed Jan 01', which compares greater than every YYYY-MM-DD string
- * and would let an expired batch gain quantity.
+ * A Date input is a stored calendar day at host-local midnight (the
+ * shape node-postgres delivers for a pg DATE), so it is keyed from
+ * the LOCAL calendar parts: the UTC slice renders the previous day
+ * on any host east of UTC and would let an expired batch gain
+ * quantity. (pharmacy_batches.expiry_date is varchar(30) today, so
+ * the live path is the string branch below and is unchanged; the
+ * Date branch is hardening for a pg DATE input.)
  */
-function expiryIso(value: unknown): string {
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
+export function expiryIso(value: unknown): string {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return '';
+    return formatLocalCalendarDay(value);
+  }
   return String(value || '').trim().slice(0, 10);
 }
 
