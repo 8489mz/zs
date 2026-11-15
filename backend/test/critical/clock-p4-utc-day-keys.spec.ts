@@ -243,6 +243,18 @@ async function main(): Promise<void> {
       // getTenantTimezone reads settings.timezone with a raw sql query;
       // the mock answers it the way the real settings row would.
       executeQuery: async () => ({ rows: [{ value: '"Africa/Cairo"' }] }),
+      // Raw `sql` queries do NOT call trx.executeQuery directly:
+      // Kysely's RawBuilder.execute() calls
+      // executorProvider.getExecutor() first, and a mock without it
+      // throws there — getTenantTimezone catches that and falls back
+      // to process.env.BUSINESS_TIMEZONE, which CI sets to UTC, so
+      // the invoice was issued on the UTC day (ci-full #50). The
+      // mock must answer as a real Kysely transaction would.
+      getExecutor: () => ({
+        executeQuery: async () => ({ rows: [{ value: '"Africa/Cairo"' }] }),
+        compileQuery: (node: any) => ({ query: node, parameters: [] }),
+        transformQuery: (node: any) => node,
+      }),
     };
     const svc: any = Object.create(ZatcaPhase2Service.prototype);
     svc.db = { transaction: () => ({ execute: async (cb: any) => cb(trx) }) };
