@@ -77,7 +77,6 @@
     "src/features/settings/components/user-management/UnifiedAccessDirectoryPanel.tsx": 1144,
     "src/features/settings/components/workspace-sections/SettingsBackupImportSection.tsx": 1669,
     "src/features/settings/components/workspace-sections/SettingsDemoDataWizardSection.tsx": 1230,
-    "src/features/settings/components/workspace-sections/SettingsMarketplacesSection.tsx": 6966,
     "src/features/settings/components/workspace-sections/SettingsWhatsAppGatewaySection.tsx": 1258,
     "src/features/settings/components/workspace-sections/SystemUpdatesSection.tsx": 1129,
     "src/features/storefront/components/MerchantOrdersTable.tsx": 1028,

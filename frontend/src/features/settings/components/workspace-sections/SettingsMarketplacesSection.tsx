@@ -1,40 +1,21 @@
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { Button } from '@/shared/ui/button';
-import { SubmitButton } from '@/shared/components/submit-button';
-import { DialogShell } from '@/shared/components/dialog-shell';
-import { toast } from '@/shared/components/system-alert';
-import { formatDateTimeArabic } from '@/lib/format';
-import {
-  marketplaceSyncApi,
-  SupportedMarketplace,
-  MarketplaceSkuMapping,
-  MarketplaceOnboardingCheck,
-} from '@/features/storefront/api/marketplace-sync.api';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { productsApi } from '@/features/products';
 import {
   CheckIcon,
-  CheckCircleIcon,
   AlertTriangleIcon,
   PackageIcon,
   ShoppingCartIcon,
   RefreshCwIcon,
   ReceiptIcon,
-  XIcon,
-  PlusIcon,
   CalculatorIcon,
   FileTextIcon,
-  CopyIcon,
-  DownloadIcon,
   GlobeIcon,
   LayersIcon,
-  UploadIcon,
   SlidersIcon,
   TruckIcon,
-  PrinterIcon,
   CheckShieldIcon,
-  CameraIcon,
 } from '@/shared/components/icons/AppIcons';
 import { EditOnboardingProfileModal } from '@/features/settings/components/workspace-sections/marketplaces/marketplace-onboarding-profile-modal';
 import {
