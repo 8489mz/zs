@@ -360,7 +360,6 @@ export const ModulesSettingsTab = memo(function ModulesSettingsTab({ form, disab
   const isClothingActive = hasClothingFeature && Boolean(form.watch('clothingModuleEnabled'));
   const clothingModuleEnabled = isClothingActive;
   const isWeightedActive = Boolean(form.watch('weightedBarcodeEnabled'));
-  const weightedBarcodeEnabled = isWeightedActive;
   const isEnterpriseActive = isContractingVertical || isMaritimeVertical || isManufacturingVertical ? true : (hasEnterpriseFeature && Boolean(form.watch('enableEnterpriseFeatures')));
   const isStorefrontActive = hasStorefrontFeature && Boolean(form.watch('storefrontModuleEnabled'));
   const isInstallmentsActive = hasInstallmentsFeature && Boolean(form.watch('installmentsModuleEnabled'));
@@ -1879,33 +1878,6 @@ export const ModulesSettingsTab = memo(function ModulesSettingsTab({ form, disab
           </div>
         ) : null}
 
-        {weightedBarcodeEnabled && ((!isContractingVertical && !isMaritimeVertical) || isSuperAdmin) ? (
-          <div className="document-prototype-grid compact-grid-2" style={{ marginTop: 16 }}>
-            <div className="field">
-              <label>{t('settings.forms.tabs.modules_settings_tab.s176', "بداية باركود الميزان")}</label>
-              <input className="purchase-prototype-field-input" inputMode="numeric" {...form.register('weightedBarcodePrefix')} disabled={disabled} placeholder="21" />
-            </div>
-            <div className="field">
-              <label>{t('settings.forms.tabs.modules_settings_tab.s177', "أرقام كود الصنف")}</label>
-              <input className="purchase-prototype-field-input" type="number" min="3" max="8" {...form.register('weightedBarcodeProductCodeLength')} disabled={disabled} />
-            </div>
-            <div className="field">
-              <label>{t('settings.forms.tabs.modules_settings_tab.s178', "أرقام الوزن")}</label>
-              <input className="purchase-prototype-field-input" type="number" min="3" max="8" {...form.register('weightedBarcodeWeightDigits')} disabled={disabled} />
-            </div>
-            <div className="field">
-              <label>{t('settings.forms.tabs.modules_settings_tab.s179', "دقة الوزن (خانات عشرية)")}</label>
-              <input className="purchase-prototype-field-input" type="number" min="0" max="3" {...form.register('weightedBarcodeWeightDecimals')} disabled={disabled} />
-            </div>
-            <div className="field">
-              <label>{t('settings.forms.tabs.modules_settings_tab.s180', "محتوى باركود الميزان")}</label>
-              <select className="purchase-prototype-field-input" {...form.register('weightedBarcodeValueMode')} disabled={disabled}>
-                <option value="weight">{t('settings.forms.tabs.modules_settings_tab.s181', "وزن الصنف")}</option>
-                <option value="price">{t('settings.forms.tabs.modules_settings_tab.s182', "السعر الإجمالي بالصغرى (قرشان / هللتان)")}</option>
-              </select>
-            </div>
-          </div>
-        ) : null}
       </FormSection>
         </div>
       </div>

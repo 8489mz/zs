@@ -13,6 +13,8 @@ import { CustomSelect } from '@/shared/ui/custom-select';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { getGlobalCurrencySymbol, getGlobalSystemCurrency, isKuwait, isSaudi } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { useAuthStore } from '@/stores/auth-store';
+import { isPlatformAdmin } from '@/shared/system/runtime-environment';
 
 interface SalesInventoryTabProps {
   form: UseFormReturn<SettingsFormInput, undefined, SettingsFormOutput>;
@@ -827,6 +829,10 @@ export const SalesInventorySettingsTab = memo(function SalesInventorySettingsTab
   const loyaltyBookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
   const loyaltyPreviewPoints = Math.floor((1000 / 100) * Number(form.watch('loyaltyPointsPer100Egp') || 10));
   const loyaltyPreviewValue = roundMoneyValue(loyaltyPreviewPoints * Number(form.watch('loyaltyPointRedeemValue') || 0.1), loyaltyBookDigits);
+  const user = useAuthStore((s) => s.user);
+  // Same super-admin test as ModulesSettingsTab: platform super admin, or
+  // the platform tenant's own super_admin account.
+  const isSuperAdmin = isPlatformAdmin(user) || (user?.role === 'super_admin' && String(user?.username || '').trim().toLowerCase() === 'zs');
   const rawActivity = String(form.watch('businessIndustry') || settings?.businessIndustry || (settings as any)?.activityType || 'retail_general').trim().toLowerCase();
   const isContractingVertical = rawActivity === 'contracting' || rawActivity === 'construction' || rawActivity === 'مقاولات' || Boolean(form.watch('contractingModuleEnabled'));
   const isMaritimeVertical = rawActivity === 'maritime_freight' || rawActivity === 'maritime' || rawActivity === 'freight' || rawActivity === 'shipping' || rawActivity === 'شحن' || Boolean(form.watch('maritimeFreightModuleEnabled'));
@@ -835,6 +841,7 @@ export const SalesInventorySettingsTab = memo(function SalesInventorySettingsTab
   const isImportVertical = rawActivity === 'import_export' || rawActivity === 'import';
   const isRestaurantVertical = ['restaurant', 'cafe', 'مطعم', 'كافيه'].includes(rawActivity) || Boolean(form.watch('restaurantModuleEnabled'));
   const isRetailCommerce = !isContractingVertical && !isMaritimeVertical && !isManufacturingVertical && !isServicesVertical;
+  const weightedBarcodeEnabled = Boolean(form.watch('weightedBarcodeEnabled'));
   const isPosModuleEnabled = Boolean(form.watch('posModuleEnabled') ?? settings?.posModuleEnabled ?? true);
   const showPosSettings = isPosModuleEnabled && isRetailCommerce;
   const showPhysicalInventory = !isServicesVertical;
@@ -2190,6 +2197,48 @@ export const SalesInventorySettingsTab = memo(function SalesInventorySettingsTab
         </div>
       </FormSection>
       )}
+
+      {/* Scale-barcode format: moved here from the super-admin-only manual
+          switches block of ModulesSettingsTab so a tenant admin who enabled
+          the scale app via the Apps Store can configure it. Own section
+          (not inside the retail-gated sale-rules section above) so the
+          super-admin escape in the visibility rule can still fire on
+          contracting/maritime tenants, exactly as before. Same visibility
+          rule as before: enabled, and not a contracting/maritime vertical
+          unless super admin. Field labels keep the modules-tab i18n keys so
+          the existing translations resolve unchanged. */}
+      {weightedBarcodeEnabled && ((!isContractingVertical && !isMaritimeVertical) || isSuperAdmin) ? (
+        <FormSection
+          title={__t('settings.forms.tabs.sales_inventory_settings_tab.weighted_barcode_section_title', "إعدادات باركود الميزان")}
+          description={__t('settings.forms.tabs.sales_inventory_settings_tab.weighted_barcode_section_desc', "تنسيق باركود الميزان: البادئة وطول كود الصنف وخانات الوزن ومحتوى الباركود.")}
+        >
+          <div className="document-prototype-grid compact-grid-2">
+            <div className="field">
+              <label>{__t('settings.forms.tabs.modules_settings_tab.s176', "بداية باركود الميزان")}</label>
+              <input className="purchase-prototype-field-input" inputMode="numeric" {...form.register('weightedBarcodePrefix')} disabled={disabled} placeholder="21" />
+            </div>
+            <div className="field">
+              <label>{__t('settings.forms.tabs.modules_settings_tab.s177', "أرقام كود الصنف")}</label>
+              <input className="purchase-prototype-field-input" type="number" min="3" max="8" {...form.register('weightedBarcodeProductCodeLength')} disabled={disabled} />
+            </div>
+            <div className="field">
+              <label>{__t('settings.forms.tabs.modules_settings_tab.s178', "أرقام الوزن")}</label>
+              <input className="purchase-prototype-field-input" type="number" min="3" max="8" {...form.register('weightedBarcodeWeightDigits')} disabled={disabled} />
+            </div>
+            <div className="field">
+              <label>{__t('settings.forms.tabs.modules_settings_tab.s179', "دقة الوزن (خانات عشرية)")}</label>
+              <input className="purchase-prototype-field-input" type="number" min="0" max="3" {...form.register('weightedBarcodeWeightDecimals')} disabled={disabled} />
+            </div>
+            <div className="field">
+              <label>{__t('settings.forms.tabs.modules_settings_tab.s180', "محتوى باركود الميزان")}</label>
+              <select className="purchase-prototype-field-input" {...form.register('weightedBarcodeValueMode')} disabled={disabled}>
+                <option value="weight">{__t('settings.forms.tabs.modules_settings_tab.s181', "وزن الصنف")}</option>
+                <option value="price">{__t('settings.forms.tabs.modules_settings_tab.s182', "السعر الإجمالي بالصغرى (قرشان / هللتان)")}</option>
+              </select>
+            </div>
+          </div>
+        </FormSection>
+      ) : null}
 
       {/* ===== تخصيص واجهة الكاشير والشاشات المتنقلة ===== */}
       {showPosSettings && (
