@@ -189,6 +189,7 @@
     "test/critical/clock-p7-offer-van-day.spec.ts",
     "test/critical/clock-p8-frontend-server-time.spec.ts",
     "test/critical/clock-p9-stamp-unification.spec.ts",
-    "test/critical/clock-b4-money-day-fixes.spec.ts"
+    "test/critical/clock-b4-money-day-fixes.spec.ts",
+    "test/critical/clock-b4-zatca-allocation-supplierbill.spec.ts"
   ]
 }

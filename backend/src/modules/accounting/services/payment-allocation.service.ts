@@ -438,7 +438,11 @@ export class PaymentAllocationService {
             invoice_type: invoiceType,
             invoice_id: item.invoiceId,
             allocated_amount: allocAmount,
-            allocation_date: sql`CURRENT_DATE`,
+            // The allocation day is the TENANT day of the allocation
+            // instant — never the DB server's CURRENT_DATE (a
+            // Kuwait-tenant allocation at 00:30 Cairo time takes the
+            // Kuwait day, not the Cairo day).
+            allocation_date: todayTenantDate(await getTenantTimezone(trx, scope.tenantId), new Date()),
             notes: dto.notes || '',
             created_by: userId,
           } as any)

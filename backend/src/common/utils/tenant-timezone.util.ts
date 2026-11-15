@@ -89,6 +89,25 @@ export function todayTenantDate(timezone: string, date: Date = new Date()): stri
 }
 
 /**
+ * Formats an instant as a 24-hour HH:mm:ss wall time in the given
+ * timezone. The day half of the same instant comes from
+ * todayTenantDate in the SAME zone — date and time must always agree
+ * (ZATCA IssueDate/IssueTime). NEVER use toTimeString(): it renders
+ * the HOST's wall time, not the tenant's. hourCycle h23 (not hour12
+ * false) so midnight formats as 00:00:00, never 24:00:00.
+ */
+export function formatTenantTime24(timezone: string, date: Date = new Date()): string {
+  const safeTz = isValidTimezone(timezone) ? timezone : (process.env.BUSINESS_TIMEZONE || 'Africa/Cairo');
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: safeTz,
+    hourCycle: 'h23',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(date);
+}
+
+/**
  * Formats a Date that represents a CALENDAR DAY at local midnight into
  * its YYYY-MM-DD key, from the host-local calendar parts. node-postgres
  * returns DATE columns as local-midnight Dates, so toISOString() (UTC)

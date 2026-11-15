@@ -9,7 +9,7 @@
     "src/modules/accounting/services/fiscal-year.service.ts": 1377,
     "src/modules/accounting/services/inventory-manufacturing-cash-posting.service.ts": 1230,
     "src/modules/accounting/services/pdc-cheques.service.ts": 1072,
-    "src/modules/accounting/services/purchases-treasury-posting.service.ts": 2058,
+    "src/modules/accounting/services/purchases-treasury-posting.service.ts": 2068,
     "src/modules/accounting/services/sales-returns-posting.service.ts": 2291,
     "src/modules/accounting/services/van-and-delivery-posting.service.ts": 1041,
     "src/modules/ai-copilot/ai-copilot.service.ts": 1510,

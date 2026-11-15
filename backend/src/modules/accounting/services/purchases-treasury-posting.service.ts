@@ -16,6 +16,7 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AccountingTenantFoundationService } from '../accounting-tenant-foundation.service';
 import { AppError } from '../../../common/errors/app-error';
 import { partitionPurchaseLineTotals } from '../../purchases/helpers/purchases-write.helper';
+import { formatLocalCalendarDay } from '../../../common/utils/tenant-timezone.util';
 import { tenantBaseCurrency } from '../accounting-currency';
 import { currencyMoneyDigits, toMinorUnits, fromMinorUnits, MoneyDigits } from '../engines/money-minor-units.engine';
 import type { DbOrTx, JournalLineDraft } from '../accounting-posting.service';
@@ -34,7 +35,7 @@ export type PurchasesAndTreasuryPostingDeps = {
       sourceId: number;
       tenantId: string;
       accountId: string | null;
-      entryDate: Date;
+      entryDate: Date | string;
       description: string;
       branchId: number | null;
       locationId: number | null;
@@ -1118,7 +1119,16 @@ export class PurchasesAndTreasuryPostingService {
       sourceId: billId,
       tenantId: scope.tenantId,
       accountId: scope.accountId,
-      entryDate: (bill as any).bill_date ? new Date((bill as any).bill_date) : ((bill as any).created_at ? new Date((bill as any).created_at) : new Date()),
+      // bill_date is a stored pg DATE: pass its day string, not a
+      // new Date() of it. A Date copy is a host-local-midnight
+      // instant, and insertPostedJournal re-derives it in the TENANT
+      // zone — one day early whenever the tenant zone is west of the
+      // host zone. The day string passes through untouched.
+      entryDate: (bill as any).bill_date
+        ? ((bill as any).bill_date instanceof Date
+          ? formatLocalCalendarDay((bill as any).bill_date)
+          : String((bill as any).bill_date).slice(0, 10))
+        : ((bill as any).created_at ? new Date((bill as any).created_at) : new Date()),
       description: `قيد فاتورة مورد بدون مخزون رقم ${docNo}${supplierName ? ` - ${supplierName}` : ''}`,
       branchId,
       locationId,

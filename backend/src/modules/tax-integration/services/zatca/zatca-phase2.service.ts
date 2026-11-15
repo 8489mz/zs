@@ -5,7 +5,7 @@ import { Kysely, sql } from 'kysely';
 import { Database } from '../../../../database/database.types';
 import { TaxSettingsService } from '../tax-settings/tax-settings.service';
 import { buildDocumentTax } from '../../engines/document-tax.engine';
-import { getTenantTimezone, todayTenantDate } from '../../../../common/utils/tenant-timezone.util';
+import { getTenantTimezone, todayTenantDate, formatTenantTime24 } from '../../../../common/utils/tenant-timezone.util';
 import { resolveZatcaSellerIdentity } from '../../engines/zatca-seller-identity.engine';
 import { selectConfiguredTaxRow } from '../../engines/configured-tax-id.engine';
 
@@ -269,11 +269,17 @@ export class ZatcaPhase2Service {
       const invoiceUuid = crypto.randomUUID();
 
       const saleDate = new Date(sale.created_at || Date.now());
-      // The e-invoice issue date is the tenant's business day of the
-      // sale instant — never the UTC day (a 00:30 Cairo sale is issued
-      // on the Cairo day, not the previous UTC day).
-      const issueDate = todayTenantDate(await getTenantTimezone(trx, tenantId), saleDate);
-      const issueTime = saleDate.toTimeString().split(' ')[0];
+      // The e-invoice issue date AND time are the tenant's business
+      // day/time of the sale instant — never the UTC day and never the
+      // host's wall time (a 00:30 Cairo sale is issued on the Cairo
+      // day at 00:30, not the previous UTC day at 22:30, and not a
+      // Kuwait tenant's 00:30 stamped as the host's 23:30). The zone
+      // is resolved once so date and time can never disagree. The `Z`
+      // suffix on the QR timestamp is the pre-existing format
+      // convention at both call sites — unchanged.
+      const businessTimezone = await getTenantTimezone(trx, tenantId);
+      const issueDate = todayTenantDate(businessTimezone, saleDate);
+      const issueTime = formatTenantTime24(businessTimezone, saleDate);
 
       const isB2B = Boolean(customer?.tax_number);
       const invoiceType = isB2B ? 'standard' : 'simplified';

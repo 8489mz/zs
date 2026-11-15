@@ -270,7 +270,13 @@ export class JournalPostingCoreService {
       sourceId: number;
       tenantId: string;
       accountId: string | null;
-      entryDate: Date;
+      // A stored calendar day (YYYY-MM-DD string) or an instant.
+      // resolveBusinessDateKey passes day strings through untouched
+      // and formats instants in the tenant zone; callers with a pg
+      // DATE must pass the day string, never new Date() of it (a
+      // host-local-midnight instant re-derives one day early when the
+      // tenant zone is west of the host zone).
+      entryDate: Date | string;
       description: string;
       branchId?: number | null;
       locationId?: number | null;
@@ -304,7 +310,7 @@ export class JournalPostingCoreService {
       sourceId: number;
       tenantId: string;
       accountId: string | null;
-      entryDate: Date;
+      entryDate: Date | string;
       description: string;
       branchId: number | null;
       locationId: number | null;
