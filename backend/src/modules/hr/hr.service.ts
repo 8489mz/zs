@@ -47,20 +47,13 @@ import { HrLoansService } from './services/hr-loans.service';
 import { HrReportsService } from './services/hr-reports.service';
 import { HrAttendanceExceptionsService } from './services/hr-attendance-exceptions.service';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
-import { getTenantTimezone, todayTenantDate, formatTimeInTimezone } from '../../common/utils/tenant-timezone.util';
-import { firstDayOfTenantMonth } from '../../common/utils/client-date-bounds.util';
-import {
-  AttendancePunchError,
-  resolveAttendancePunch,
-  startsNewSession,
-  type AttendancePunchResolution,
-} from './attendance-punch.engine';
+import { getTenantTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
 import { allocateLoanDeduction, calculatePayrollLoanDueTotal, requireLoanMoney } from './payroll-loan-allocation.engine';
 import { MoneyDigits, currencyMoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
 import { calculateOvertime, calculateHourlyOvertimePremium, calculateProgressiveDelayDeduction } from './engines/payroll-calculation.engine';
 import { calculateHrPayrollRunLine, requirePayrollMonetaryCurrency, requireStoredHrMoney, requireBankPayrollPaymentReference, canReincludeAutoExcludedPayrollItem, AUTO_PAYROLL_EXCLUSION_NOTE, MANUAL_PAYROLL_EXCLUSION_NOTE } from './engines/hr-payroll-run.engine';
 import { validateHrStatutoryPolicy, requireHrPayrollJurisdictionCurrency,   type HrStatutoryPolicy } from './engines/hr-statutory-policy.engine';
-import { summarizeHourlyAttendance, calculateEffectiveContractPay, calculateEffectiveCompensationPay, calculateHistoricalOvertimePay, calculateDatedPayrollAdjustment, payrollCalendarMonthFraction, calculatePayableMinutes, resolveExpectedDailyMinutes, daysInCalendarMonth, type EffectiveSalaryContract, type EffectiveCompensationPackage, type ApprovedOvertimeDay } from './engines/hourly-attendance-pay.engine';
+import { summarizeHourlyAttendance, calculateEffectiveContractPay, calculateEffectiveCompensationPay, calculateHistoricalOvertimePay, calculateDatedPayrollAdjustment, payrollCalendarMonthFraction,   daysInCalendarMonth, type EffectiveSalaryContract, type EffectiveCompensationPackage, type ApprovedOvertimeDay } from './engines/hourly-attendance-pay.engine';
 import { calculateEmployeeWithdrawalBalance, resolveDirectAdvanceCashCap, type EmployeeWithdrawalBalanceResult } from './engines/employee-withdrawal-balance.engine';
 import { createPasswordRecord, verifyPassword } from '../../core/auth/utils/password-hasher';
 import { assertSecurePasscode } from '../../core/auth/utils/password-policy';
@@ -88,13 +81,11 @@ import {
   type AttendanceExceptionType,
   type CompensationType,
   type OvertimePolicy,
-  normalizeAttendanceStatus,
-  normalizeAttendanceSource,
-  buildAttendanceDayAuditKey,
   normalizeTimeOnly,
   timeToMinutes,
   inclusiveDaysBetween,
 } from './hr-helpers';
+import { HrAttendanceRecordsService } from './services/hr-attendance-records.service';
 
 @Injectable()
 export class HrService {
@@ -121,6 +112,8 @@ export class HrService {
   private readonly reportsService: HrReportsService;
 
   private readonly attendanceExceptionsService: HrAttendanceExceptionsService;
+
+  private readonly attendanceRecordsService: HrAttendanceRecordsService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -165,6 +158,13 @@ export class HrService {
       audit: this.audit,
       getPayrollPolicies: this.getPayrollPolicies.bind(this),
       tenantPredicate: this.tenantPredicate.bind(this),
+    });
+    this.attendanceRecordsService = new HrAttendanceRecordsService({
+      db: this.db,
+      tx: this.tx,
+      audit: this.audit,
+      tenantPredicate: this.tenantPredicate.bind(this),
+      refreshAttendanceExceptionForEmployeeDate: this.attendanceExceptionsService.refreshAttendanceExceptionForEmployeeDate.bind(this),
     });
   }
 
@@ -3399,595 +3399,19 @@ export class HrService {
   }
 
   async listAttendance(query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
-    requireTenantScope(auth);
-    const tenantTimezone = await getTenantTimezone(this.db, auth.tenantId);
-    const workDate = normalizeDateOnly(query.date) || normalizeDateOnly(query.workDate) || todayTenantDate(tenantTimezone);
-    if (!workDate) throw new AppError('Attendance date is required', 'HR_ATTENDANCE_DATE_REQUIRED', 400);
-    const search = clean(query.search).toLowerCase();
-    const requestedEmployeeId = toId(query.employeeId);
-    const requestedDepartmentId = toId(query.departmentId);
-    const rangeFrom = normalizeDateOnly(query.from);
-    const rangeTo = normalizeDateOnly(query.to);
-    if (rangeFrom || rangeTo) {
-      if (!rangeFrom || !rangeTo || rangeFrom > rangeTo) throw new AppError('اختر تاريخ بداية ونهاية صحيحين', 'HR_ATTENDANCE_RANGE_INVALID', 400);
-      const rangeDays = Math.round((Date.parse(rangeTo + 'T00:00:00Z') - Date.parse(rangeFrom + 'T00:00:00Z')) / 86400000);
-      if (rangeDays > 92) throw new AppError('الحد الأقصى لفترة الحضور 93 يومًا', 'HR_ATTENDANCE_RANGE_TOO_LARGE', 400);
-      const pageSize = Math.min(200, Math.max(1, Math.floor(Number(query.pageSize || 50)) || 50));
-      const page = Math.max(1, Math.floor(Number(query.page || 1)) || 1);
-      const match = `%${search}%`;
-      const count = await sql<{ total: string; minutes: string; payable_minutes: string; present: string; absent: string; late: string }>`
-        SELECT COUNT(*)::text AS total,
-          COALESCE(SUM(CASE WHEN a.check_in_at IS NOT NULL AND a.check_out_at IS NOT NULL
-              AND a.check_out_at > a.check_in_at AND a.check_out_at <= a.check_in_at + INTERVAL '24 hours'
-              AND a.status NOT IN ('absent', 'leave')
-              THEN FLOOR(EXTRACT(EPOCH FROM (a.check_out_at - a.check_in_at)) / 60) + COALESCE(a.prior_sessions_minutes, 0) ELSE 0 END), 0)::text AS minutes,
-          COALESCE(SUM(CASE WHEN e.compensation_type = 'hourly'
-              AND a.check_in_at IS NOT NULL AND a.check_out_at IS NOT NULL
-              AND a.check_out_at > a.check_in_at AND a.check_out_at <= a.check_in_at + INTERVAL '24 hours'
-              AND a.status NOT IN ('absent', 'leave')
-              THEN LEAST(
-                FLOOR(EXTRACT(EPOCH FROM (a.check_out_at - a.check_in_at)) / 60),
-                COALESCE(e.expected_daily_hours * 60, 480)
-              ) + CASE WHEN e.overtime_policy = 'auto_approved' THEN
-                GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (a.check_out_at - a.check_in_at)) / 60) - COALESCE(e.expected_daily_hours * 60, 480))
-              WHEN e.overtime_policy = 'disabled' THEN 0
-              ELSE
-                COALESCE((
-                  SELECT SUM(COALESCE(ex.approved_duration_minutes, ex.duration_minutes))
-                  FROM hr_attendance_exceptions ex
-                  WHERE ex.tenant_id = a.tenant_id AND ex.employee_id = a.employee_id
-                    AND ex.work_date = a.work_date AND ex.exception_type IN ('late_check_out', 'extra_hours')
-                    AND ex.status = 'approved'
-                ), 0)
-              END
-              ELSE 0 END), 0)::text AS payable_minutes,
-          COUNT(*) FILTER (WHERE a.status = 'present')::text AS present,
-          COUNT(*) FILTER (WHERE a.status = 'absent')::text AS absent,
-          COUNT(*) FILTER (WHERE a.status = 'late')::text AS late
-        FROM hr_attendance_records a
-        JOIN hr_employees e ON e.id = a.employee_id AND e.tenant_id = a.tenant_id
-        LEFT JOIN hr_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id AND d.tenant_id = e.tenant_id
-        WHERE a.tenant_id = ${auth.tenantId}
-          AND a.work_date BETWEEN ${rangeFrom}::date AND ${rangeTo}::date
-          AND (${requestedEmployeeId}::BIGINT IS NULL OR a.employee_id = ${requestedEmployeeId})
-          AND (${requestedDepartmentId}::BIGINT IS NULL OR e.department_id = ${requestedDepartmentId})
-          AND (${search} = '' OR LOWER(e.display_name) LIKE ${match} OR LOWER(e.employee_no) LIKE ${match} OR LOWER(COALESCE(d.name, '')) LIKE ${match})
-      `.execute(this.db);
-      const totalItems = Number(count.rows[0]?.total || 0);
-      const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-      const safePage = Math.min(page, totalPages);
-      const result = await sql<Record<string, unknown>>`
-        SELECT a.id AS attendance_id, e.id AS employee_id, e.employee_no, e.display_name AS employee_name,
-          d.name AS department_name, j.name AS job_title_name,
-          e.compensation_type, e.hourly_rate,
-          to_char(a.work_date, 'YYYY-MM-DD') AS work_date_text, a.status,
-          to_char(a.check_in_at AT TIME ZONE ${tenantTimezone}, 'YYYY-MM-DD"T"HH24:MI:SS') AS check_in_at_text,
-          to_char(a.check_out_at AT TIME ZONE ${tenantTimezone}, 'YYYY-MM-DD"T"HH24:MI:SS') AS check_out_at_text,
-          a.source, a.notes,
-          e.scheduled_check_in_time, e.scheduled_check_out_time, e.grace_minutes, e.department_id,
-          e.expected_daily_hours, e.overtime_policy,
-          COALESCE((
-            SELECT SUM(COALESCE(ex.approved_duration_minutes, ex.duration_minutes))
-            FROM hr_attendance_exceptions ex
-            WHERE ex.tenant_id = a.tenant_id AND ex.employee_id = a.employee_id
-              AND ex.work_date = a.work_date AND ex.exception_type IN ('late_check_out', 'extra_hours')
-              AND ex.status = 'approved'
-          ), 0) AS approved_overtime_minutes,
-          COALESCE((
-            SELECT SUM(ex.duration_minutes)
-            FROM hr_attendance_exceptions ex
-            WHERE ex.tenant_id = a.tenant_id AND ex.employee_id = a.employee_id
-              AND ex.work_date = a.work_date AND ex.exception_type IN ('late_check_out', 'extra_hours')
-              AND ex.status IN ('pending', 'needs_review')
-          ), 0) AS pending_overtime_minutes
-        FROM hr_attendance_records a
-        JOIN hr_employees e ON e.id = a.employee_id AND e.tenant_id = a.tenant_id
-        LEFT JOIN hr_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id AND d.tenant_id = e.tenant_id
-        LEFT JOIN hr_job_titles j ON j.id = e.job_title_id AND j.tenant_id = e.tenant_id AND j.tenant_id = e.tenant_id
-        WHERE a.tenant_id = ${auth.tenantId}
-          AND a.work_date BETWEEN ${rangeFrom}::date AND ${rangeTo}::date
-          AND (${requestedEmployeeId}::BIGINT IS NULL OR a.employee_id = ${requestedEmployeeId})
-          AND (${requestedDepartmentId}::BIGINT IS NULL OR e.department_id = ${requestedDepartmentId})
-          AND (${search} = '' OR LOWER(e.display_name) LIKE ${match} OR LOWER(e.employee_no) LIKE ${match} OR LOWER(COALESCE(d.name, '')) LIKE ${match})
-        ORDER BY a.work_date DESC, e.display_name ASC, a.id DESC
-        LIMIT ${pageSize} OFFSET ${(safePage - 1) * pageSize}
-      `.execute(this.db);
-      return {
-        rows: result.rows.map(row => ({
-          id: String(row.attendance_id), employeeId: String(row.employee_id),
-          employeeNo: clean(row.employee_no), employeeName: clean(row.employee_name),
-          departmentName: clean(row.department_name), jobTitleName: clean(row.job_title_name),
-          compensationType: clean(row.compensation_type), hourlyRate: Number(row.hourly_rate || 0),
-          workDate: clean(row.work_date_text), status: clean(row.status),
-          checkInAt: clean(row.check_in_at_text), checkOutAt: clean(row.check_out_at_text),
-          source: normalizeAttendanceSource(row.source), notes: clean(row.notes),
-          scheduledCheckInTime: clean(row.scheduled_check_in_time),
-          scheduledCheckOutTime: clean(row.scheduled_check_out_time),
-          graceMinutes: Number(row.grace_minutes || 0),
-          departmentId: row.department_id ? String(row.department_id) : "",
-          expectedDailyHours: row.expected_daily_hours != null ? Number(row.expected_daily_hours) : null,
-          overtimePolicy: clean(row.overtime_policy) || 'review_only',
-          approvedOvertimeMinutes: Number(row.approved_overtime_minutes || 0),
-          pendingOvertimeMinutes: Number(row.pending_overtime_minutes || 0),
-        })),
-        pagination: { page: safePage, pageSize, totalItems, totalPages },
-        summary: { totalItems, presentCount: Number(count.rows[0]?.present || 0),
-          absentCount: Number(count.rows[0]?.absent || 0), lateCount: Number(count.rows[0]?.late || 0),
-          workedMinutes: Number(count.rows[0]?.minutes || 0),
-          payableMinutes: Number(count.rows[0]?.payable_minutes || 0) },
-        serverTime: new Date().toISOString(), serverTimezone: tenantTimezone,
-        from: rangeFrom, to: rangeTo,
-      };
-    }
-
-    const result = await sql<Record<string, unknown>>`
-      SELECT
-        e.id AS employee_id,
-        e.employee_no,
-        e.compensation_type, e.hourly_rate,
-        e.display_name AS employee_name,
-        d.name AS department_name,
-        j.name AS job_title_name,
-        a.id AS attendance_id,
-        to_char(a.work_date, 'YYYY-MM-DD') AS work_date_text,
-        a.status,
-        to_char(a.check_in_at AT TIME ZONE ${tenantTimezone}, 'YYYY-MM-DD"T"HH24:MI:SS') AS check_in_at_text,
-        to_char(a.check_out_at AT TIME ZONE ${tenantTimezone}, 'YYYY-MM-DD"T"HH24:MI:SS') AS check_out_at_text,
-        a.source,
-        a.notes,
-        e.scheduled_check_in_time,
-        e.scheduled_check_out_time,
-        e.grace_minutes,
-        e.department_id,
-        e.expected_daily_hours,
-        e.overtime_policy,
-        COALESCE((
-          SELECT SUM(COALESCE(ex.approved_duration_minutes, ex.duration_minutes))
-          FROM hr_attendance_exceptions ex
-          WHERE ex.tenant_id = e.tenant_id AND ex.employee_id = e.id
-            AND ex.work_date = ${workDate}::date AND ex.exception_type IN ('late_check_out', 'extra_hours')
-            AND ex.status = 'approved'
-        ), 0) AS approved_overtime_minutes,
-        COALESCE((
-          SELECT SUM(ex.duration_minutes)
-          FROM hr_attendance_exceptions ex
-          WHERE ex.tenant_id = e.tenant_id AND ex.employee_id = e.id
-            AND ex.work_date = ${workDate}::date AND ex.exception_type IN ('late_check_out', 'extra_hours')
-            AND ex.status IN ('pending', 'needs_review')
-        ), 0) AS pending_overtime_minutes
-      FROM hr_employees e
-      LEFT JOIN hr_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id AND d.tenant_id = e.tenant_id
-      LEFT JOIN hr_job_titles j ON j.id = e.job_title_id AND j.tenant_id = e.tenant_id AND j.tenant_id = e.tenant_id
-      LEFT JOIN hr_attendance_records a ON a.employee_id = e.id AND a.tenant_id = e.tenant_id AND a.work_date = ${workDate}::date
-      WHERE ${this.tenantPredicate(auth, 'e')}
-        AND e.status IN ('active', 'inactive')
-        AND (${requestedEmployeeId}::BIGINT IS NULL OR e.id = ${requestedEmployeeId})
-        AND (${requestedDepartmentId}::BIGINT IS NULL OR e.department_id = ${requestedDepartmentId})
-      ORDER BY e.display_name ASC, e.id ASC
-    `.execute(this.db);
-
-    let rows = result.rows.map((row) => {
-      const status = normalizeAttendanceStatus(row.status);
-      return {
-        id: row.attendance_id ? String(row.attendance_id) : '',
-        employeeId: String(row.employee_id),
-        employeeNo: clean(row.employee_no),
-        employeeName: clean(row.employee_name),
-        departmentName: clean(row.department_name),
-        jobTitleName: clean(row.job_title_name),
-        compensationType: clean(row.compensation_type), hourlyRate: Number(row.hourly_rate || 0),
-        workDate,
-        status: status === 'unmarked' ? '' : status,
-        checkInAt: clean(row.check_in_at_text),
-        checkOutAt: clean(row.check_out_at_text),
-        source: normalizeAttendanceSource(row.source),
-        notes: clean(row.notes),
-        scheduledCheckInTime: clean(row.scheduled_check_in_time),
-        scheduledCheckOutTime: clean(row.scheduled_check_out_time),
-        graceMinutes: Number(row.grace_minutes || 0),
-        departmentId: row.department_id ? String(row.department_id) : "",
-        expectedDailyHours: row.expected_daily_hours != null ? Number(row.expected_daily_hours) : null,
-        overtimePolicy: clean(row.overtime_policy) || 'review_only',
-        approvedOvertimeMinutes: Number(row.approved_overtime_minutes || 0),
-        pendingOvertimeMinutes: Number(row.pending_overtime_minutes || 0),
-      };
-    });
-
-    if (search) {
-      rows = rows.filter((row) => [row.employeeNo, row.employeeName, row.departmentName, row.jobTitleName].some((value) => value.toLowerCase().includes(search)));
-    }
-
-    const summary = rows.reduce(
-      (acc, row) => {
-        const status = normalizeAttendanceStatus(row.status);
-        acc.totalItems += 1;
-        if (status === 'present') acc.presentCount += 1;
-        else if (status === 'absent') acc.absentCount += 1;
-        else if (status === 'late') acc.lateCount += 1;
-        else if (status === 'leave') acc.leaveCount += 1;
-        else if (status === 'unmarked') acc.unmarkedCount += 1;
-        return acc;
-      },
-      { totalItems: 0, presentCount: 0, absentCount: 0, lateCount: 0, leaveCount: 0, unmarkedCount: 0 },
-    );
-
-    const workedMinutes = rows.reduce((total, row) => {
-      if (!row.checkInAt || !row.checkOutAt || ['absent', 'leave'].includes(row.status)) return total;
-      const elapsed = Math.floor((new Date(row.checkOutAt).getTime() - new Date(row.checkInAt).getTime()) / 60000);
-      return total + (Number.isFinite(elapsed) && elapsed > 0 && elapsed <= 1440 ? elapsed : 0);
-    }, 0);
-    const payableMinutes = rows.reduce((total, row) => {
-      if (row.compensationType !== 'hourly' || !row.checkInAt || !row.checkOutAt || ['absent', 'leave'].includes(row.status)) return total;
-      const elapsed = Math.floor((new Date(row.checkOutAt).getTime() - new Date(row.checkInAt).getTime()) / 60000);
-      if (!Number.isFinite(elapsed) || elapsed <= 0 || elapsed > 1440) return total;
-      const expectedDailyMinutes = resolveExpectedDailyMinutes(row);
-      const { payableMinutes: rowPayable } = calculatePayableMinutes({
-        actualMinutes: elapsed,
-        expectedDailyMinutes,
-        overtimePolicy: row.overtimePolicy,
-        approvedOvertimeMinutes: row.approvedOvertimeMinutes,
-      });
-      return total + rowPayable;
-    }, 0);
-    const paged = paginateRows(rows, query, { defaultSize: 50 });
-    return {
-      rows: paged.rows,
-      pagination: paged.pagination,
-      summary: { ...summary, workedMinutes, payableMinutes },
-      serverTime: new Date().toISOString(),
-      serverTimezone: tenantTimezone,
-      workDate,
-    };
-  }
-
-  /** Booked payroll is immutable; changing underlying attendance after GL
-   * accrual silently contradicts a financial snapshot and its bank file.
-   * Call while holding the tenant-wide payroll lock inside the SAME trx.
-   */
-  private async assertAttendanceDayNotPosted(
-    trx: Kysely<Database>, employeeId: number, workDate: string, tenantId: string,
-  ): Promise<void> {
-    const booked = await sql<{ id: number }>`
-      SELECT r.id FROM hr_payroll_runs r
-      JOIN hr_payroll_run_items i ON i.run_id = r.id AND i.tenant_id = r.tenant_id
-      WHERE r.tenant_id = ${tenantId} AND i.employee_id = ${employeeId}
-        AND i.status = 'approved' AND r.status IN ('approved', 'paid')
-        AND ${workDate}::date BETWEEN r.start_date AND r.end_date
-      LIMIT 1
-    `.execute(trx);
-    if (booked.rows.length) {
-      throw new AppError('لا يمكن تعديل حضور يوم دخل مسير مرتبات معتمد؛ سجّل تسوية محاسبية مستقلة',
-        'HR_ATTENDANCE_POSTED_PERIOD_LOCKED', 409);
-    }
+    return this.attendanceRecordsService.listAttendance(query, auth);
   }
 
   async bulkSaveAttendance(payload: BulkSaveAttendanceDto, auth: AuthContext): Promise<Record<string, unknown>> {
-    requireTenantScope(auth);
-    const workDate = normalizeDateOnly(payload.workDate);
-    if (!workDate) throw new AppError('Attendance date is required', 'HR_ATTENDANCE_DATE_REQUIRED', 400);
-    // Same outer fence as the single manual edit (resolveAttendancePunch):
-    // a bulk day outside the open payroll month is rejected, not stored.
-    const tenantTimezone = await getTenantTimezone(this.db, auth.tenantId);
-    const todayKey = todayTenantDate(tenantTimezone);
-    if (workDate < firstDayOfTenantMonth(todayKey) || workDate > todayKey) {
-      throw new AppError('Attendance date is outside the open payroll month', 'HR_ATTENDANCE_DATE_OUT_OF_RANGE', 400);
-    }
-    if (!Array.isArray(payload.rows) || payload.rows.length === 0) {
-      throw new AppError('Attendance rows are required', 'HR_ATTENDANCE_ROWS_REQUIRED', 400);
-    }
-
-    await this.tx.runInTransaction(this.db, async (trx) => {
-      await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
-      const ids = payload.rows.map(row => toId(row.employeeId));
-      if (ids.some(id => !id)) throw new AppError('Employee is required', 'HR_ATTENDANCE_EMPLOYEE_REQUIRED', 400);
-      if (new Set(ids).size !== ids.length) {
-        throw new AppError('لا يمكن إرسال بصمتين لنفس الموظف في يوم واحد', 'HR_ATTENDANCE_DUPLICATE_EMPLOYEE', 400);
-      }
-      const allowed = await sql<{ id: number; status: string }>`
-        SELECT id, status FROM hr_employees
-        WHERE tenant_id = ${auth.tenantId} AND id IN (${sql.join(ids as number[])})
-      `.execute(trx);
-      const eligible = new Set(allowed.rows.filter(e => e.status === 'active').map(e => Number(e.id)));
-      if (eligible.size !== ids.length || ids.some(id => !eligible.has(Number(id)))) {
-        throw new AppError('قائمة الحضور تحتوي موظفًا غير نشط أو غير تابع للمنشأة', 'HR_ATTENDANCE_EMPLOYEE_TENANT_MISMATCH', 400);
-      }
-      for (const row of payload.rows) {
-        const employeeId = toId(row.employeeId)!;
-        await this.assertAttendanceDayNotPosted(trx, employeeId, workDate, auth.tenantId || '');
-        const status = normalizeAttendanceStatus(row.status);
-        if (status === 'unmarked') throw new AppError('Attendance status is invalid', 'HR_ATTENDANCE_STATUS_INVALID', 400);
-        const checkInAt = row.checkInAt ? new Date(row.checkInAt) : null;
-        const checkOutAt = row.checkOutAt ? new Date(row.checkOutAt) : null;
-        if ((checkInAt && Number.isNaN(checkInAt.getTime())) || (checkOutAt && Number.isNaN(checkOutAt.getTime()))) {
-          throw new AppError('Attendance check-in/out time is invalid', 'HR_ATTENDANCE_TIME_INVALID', 400);
-        }
-        await sql`
-          INSERT INTO hr_attendance_records (tenant_id, account_id, employee_id, work_date, status, check_in_at, check_out_at, source, notes, created_by, updated_by, created_at, updated_at)
-          VALUES (
-            ${auth.tenantId},
-            ${auth.accountId},
-            ${employeeId},
-            ${workDate}::date,
-            ${status},
-            ${checkInAt ? checkInAt.toISOString() : null},
-            ${checkOutAt ? checkOutAt.toISOString() : null},
-            ${normalizeAttendanceSource(row.source)},
-            ${clean(row.notes) || null},
-            ${auth.userId},
-            ${auth.userId},
-            NOW(),
-            NOW()
-          )
-          ON CONFLICT (tenant_id, employee_id, work_date) DO UPDATE
-          SET
-            status = EXCLUDED.status,
-            check_in_at = EXCLUDED.check_in_at,
-            check_out_at = EXCLUDED.check_out_at,
-            source = EXCLUDED.source,
-            notes = EXCLUDED.notes,
-            updated_by = ${auth.userId},
-            updated_at = NOW()
-        `.execute(trx);
-        await this.refreshAttendanceExceptionForEmployeeDate(trx, employeeId, workDate, auth.tenantId || '');
-      }
-    });
-
-    await this.audit.log(
-      'Save HR attendance day',
-      `Attendance saved for ${workDate} by ${auth.username}`,
-      auth,
-      { idempotencyKey: buildAttendanceDayAuditKey(auth.tenantId || '', workDate, payload.rows) },
-    );
-    return this.listAttendance({ date: workDate }, auth);
+    return this.attendanceRecordsService.bulkSaveAttendance(payload, auth);
   }
 
   async upsertAttendanceRecord(payload: UpsertAttendanceRecordDto, auth: AuthContext): Promise<Record<string, unknown>> {
-    requireTenantScope(auth);
-    const tenantTimezone = await getTenantTimezone(this.db, auth.tenantId);
-    const employeeId = toId(payload.employeeId);
-    if (!employeeId) throw new AppError('Employee is required', 'HR_ATTENDANCE_EMPLOYEE_REQUIRED', 400);
-    const status = normalizeAttendanceStatus(payload.status);
-    if (status === 'unmarked') throw new AppError('Attendance status is invalid', 'HR_ATTENDANCE_STATUS_INVALID', 400);
-
-    let punch: AttendancePunchResolution;
-    try {
-      punch = resolveAttendancePunch(payload, tenantTimezone, normalizeDateOnly);
-    } catch (error) {
-      if (error instanceof AttendancePunchError) throw new AppError(error.message, error.code, 400);
-      throw error;
-    }
-    const { checkInAt, checkOutAt, workDate } = punch;
-    if (!workDate) throw new AppError('Attendance date is required', 'HR_ATTENDANCE_DATE_REQUIRED', 400);
-
-    const empCheck = await sql<{ status: string }>`SELECT status FROM hr_employees WHERE id = ${employeeId} AND tenant_id = ${auth.tenantId}`.execute(this.db);
-    if (empCheck.rows.length === 0 || empCheck.rows[0].status !== 'active') {
-      throw new AppError('Employee is not active', 'HR_EMPLOYEE_NOT_ACTIVE', 400);
-    }
-
-    // قراءة ثم كتابة: لا بد من معاملة واحدة بقفل على صف اليوم، وإلا بصمتان متزامنتان
-    // (نقرة مزدوجة على زر البصمة، أو إعادة محاولة من الموبايل) تتجاوزان حارس
-    // "تم تسجيل الحضور بالفعل"، وبدء وردية جديدة مرتين يمحو وردية مكتملة بصمت — F1.
-    const auditEntry = await this.db.transaction().execute(async (trx) => {
-      await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
-      await this.assertAttendanceDayNotPosted(trx, employeeId, workDate, auth.tenantId || '');
-      const existingCheck = await sql<{ check_in_at: Date | null; check_out_at: Date | null; notes: string | null; prior_sessions_minutes: number | null }>`
-        SELECT check_in_at, check_out_at, notes, prior_sessions_minutes FROM hr_attendance_records
-        WHERE employee_id = ${employeeId} AND work_date = ${workDate}::date AND tenant_id = ${auth.tenantId}
-        FOR UPDATE
-      `.execute(trx);
-      const hasExisting = existingCheck.rows.length > 0;
-      const existingRow = hasExisting ? existingCheck.rows[0] : null;
-
-      if (payload.mode === 'cancel_checkout' && hasExisting) {
-        await sql`
-          UPDATE hr_attendance_records
-          SET
-            check_out_at = NULL,
-            status = 'present',
-            updated_by = ${auth.userId},
-            updated_at = NOW()
-          WHERE employee_id = ${employeeId} AND work_date = ${workDate}::date AND tenant_id = ${auth.tenantId}
-        `.execute(trx);
-        await this.refreshAttendanceExceptionForEmployeeDate(trx, employeeId, workDate, auth.tenantId || '');
-        return {
-          action: 'Cancel HR attendance checkout',
-          detail: `Checkout cancelled for employee #${employeeId} on ${workDate} by ${auth.username}`,
-        };
-      }
-
-      // O41: distinguish "no notes in this request" from "clear the notes".
-      const notesProvided = payload.notes !== undefined;
-      const hasCompletedSession = Boolean(existingRow?.check_in_at && existingRow?.check_out_at);
-      if (startsNewSession(payload, hasCompletedSession)) {
-        const prevCheckIn = formatTimeInTimezone(existingRow!.check_in_at, tenantTimezone);
-        const prevCheckOut = formatTimeInTimezone(existingRow!.check_out_at, tenantTimezone);
-        const sessionNote = `وردية سابقة (${prevCheckIn} إلى ${prevCheckOut})`;
-        const combinedNotes = combineNotes(existingRow!.notes, sessionNote);
-        // D2: accumulate the completed session's minutes on the day row
-        // instead of losing them. Only a valid session (positive minutes,
-        // at most 24h — the same validity rule hourly pay applies) counts;
-        // an invalid prior session contributes 0 and still starts the new
-        // session, as before.
-        const prevStartMs = existingRow!.check_in_at ? new Date(existingRow!.check_in_at).getTime() : NaN;
-        const prevEndMs = existingRow!.check_out_at ? new Date(existingRow!.check_out_at).getTime() : NaN;
-        const prevElapsed = Math.floor((prevEndMs - prevStartMs) / 60000);
-        const prevMinutes = Number.isFinite(prevElapsed) && prevElapsed > 0 && prevElapsed <= 1440 ? prevElapsed : 0;
-        const accumulatedPriorMinutes = Math.max(0, Math.floor(Number(existingRow!.prior_sessions_minutes || 0))) + prevMinutes;
-
-        await sql`
-          UPDATE hr_attendance_records
-          SET
-            check_in_at = ${checkInAt ? checkInAt.toISOString() : new Date().toISOString()},
-            check_out_at = NULL,
-            status = 'present',
-            notes = ${combinedNotes},
-            prior_sessions_minutes = ${accumulatedPriorMinutes},
-            source = ${normalizeAttendanceSource(payload.source)},
-            updated_by = ${auth.userId},
-            updated_at = NOW()
-          WHERE employee_id = ${employeeId} AND work_date = ${workDate}::date AND tenant_id = ${auth.tenantId}
-        `.execute(trx);
-        await this.refreshAttendanceExceptionForEmployeeDate(trx, employeeId, workDate, auth.tenantId || '');
-        return {
-          action: 'New attendance session for HR employee',
-          detail: `New session started for employee #${employeeId} on ${workDate} by ${auth.username}`,
-        };
-      }
-
-      if (checkInAt && !checkOutAt && hasExisting && existingRow?.check_in_at && !existingRow?.check_out_at) {
-        throw new AppError('Already checked in', 'HR_ATTENDANCE_ALREADY_CHECKED_IN', 400);
-      }
-
-      if (checkOutAt && !checkInAt && (!hasExisting || !existingRow?.check_in_at)) {
-        throw new AppError('Cannot check out without check in', 'HR_ATTENDANCE_NO_CHECK_IN', 400);
-      }
-
-      await sql`
-        INSERT INTO hr_attendance_records (tenant_id, account_id, employee_id, work_date, status, check_in_at, check_out_at, source, notes, created_by, updated_by, created_at, updated_at)
-        VALUES (
-          ${auth.tenantId},
-          ${auth.accountId},
-          ${employeeId},
-          ${workDate}::date,
-          ${status},
-          ${checkInAt ? checkInAt.toISOString() : null},
-          ${checkOutAt ? checkOutAt.toISOString() : null},
-          ${normalizeAttendanceSource(payload.source)},
-          ${notesProvided ? clean(payload.notes) || null : null},
-          ${auth.userId},
-          ${auth.userId},
-          NOW(),
-          NOW()
-        )
-        ON CONFLICT (tenant_id, employee_id, work_date) DO UPDATE
-        SET
-          status = EXCLUDED.status,
-          check_in_at = COALESCE(EXCLUDED.check_in_at, hr_attendance_records.check_in_at),
-          check_out_at = COALESCE(EXCLUDED.check_out_at, hr_attendance_records.check_out_at),
-          source = EXCLUDED.source,
-          -- O41: a checkout punch carries no notes, and this used to overwrite the note written at
-          -- check-in (or by the previous-session merge) with NULL. Only a notes field that is
-          -- actually present in the request changes it, like check_in_at / check_out_at above.
-          notes = CASE WHEN ${notesProvided} THEN EXCLUDED.notes ELSE hr_attendance_records.notes END,
-          updated_by = ${auth.userId},
-          updated_at = NOW()
-      `.execute(trx);
-      await this.refreshAttendanceExceptionForEmployeeDate(trx, employeeId, workDate, auth.tenantId || '');
-
-      return {
-        action: 'Upsert HR attendance record',
-        detail: `Attendance record saved for employee #${employeeId} on ${workDate} by ${auth.username}`,
-      };
-    });
-
-    await this.audit.log(auditEntry.action, auditEntry.detail, auth);
-    return this.listAttendance({ date: workDate }, auth);
+    return this.attendanceRecordsService.upsertAttendanceRecord(payload, auth);
   }
 
   async bulkImportAttendanceRecords(payload: BulkImportAttendanceDto, auth: AuthContext): Promise<{ imported: number; skipped: number; errors: string[] }> {
-    requireTenantScope(auth);
-    if (!payload.records || !payload.records.length) {
-      throw new AppError('No records to import', 'HR_ATTENDANCE_IMPORT_EMPTY', 400);
-    }
-
-    const employeeNos = [...new Set(payload.records.map((r) => r.employeeNo))];
-    if (employeeNos.length === 0) {
-      return { imported: 0, skipped: payload.records.length, errors: ['No valid employee codes'] };
-    }
-
-    const employeesQuery = await this.db
-      .selectFrom('hr_employees')
-      .select(['id', 'employee_no', 'status'])
-      .where('tenant_id', '=', auth.tenantId!)
-      .where('employee_no', 'in', employeeNos)
-      .execute();
-    const empMap = new Map(employeesQuery.map((e) => [e.employee_no, e]));
-
-    // Tenant today, resolved once for the whole batch (same fence as the
-    // single manual edit and bulk save: the open payroll month).
-    const tenantTimezone = await getTenantTimezone(this.db, auth.tenantId);
-    const todayKey = todayTenantDate(tenantTimezone);
-
-    let imported = 0;
-    let skipped = 0;
-    const errors: string[] = [];
-
-    await this.db.transaction().execute(async (trx) => {
-      await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-payroll:' + auth.tenantId}))`.execute(trx);
-      for (const record of payload.records) {
-        const emp = empMap.get(record.employeeNo);
-        if (!emp) {
-          errors.push(`Employee not found for code: ${record.employeeNo}`);
-          skipped++;
-          continue;
-        }
-        if (emp.status !== 'active') {
-          errors.push(`Employee ${record.employeeNo} is inactive`);
-          skipped++;
-          continue;
-        }
-
-        const workDate = normalizeDateOnly(record.workDate);
-        if (!workDate) {
-          errors.push(`Invalid date for employee ${record.employeeNo}`);
-          skipped++;
-          continue;
-        }
-        // Same outer fence as the single manual edit: a record outside
-        // the open payroll month is skipped with an error, not imported
-        // — the batch itself keeps its per-record error pattern.
-        if (workDate < firstDayOfTenantMonth(todayKey) || workDate > todayKey) {
-          errors.push(`Date outside the open payroll month for employee ${record.employeeNo} on ${workDate}`);
-          skipped++;
-          continue;
-        }
-        // Do not partially import a batch that rewrites booked wages: the
-        // transaction rolls back and surfaces an explicit payroll-period gate.
-        await this.assertAttendanceDayNotPosted(trx, Number(emp.id), workDate, auth.tenantId || '');
-
-        const checkInAt = record.checkInAt ? new Date(record.checkInAt) : null;
-        const checkOutAt = record.checkOutAt ? new Date(record.checkOutAt) : null;
-        if ((checkInAt && Number.isNaN(checkInAt.getTime())) || (checkOutAt && Number.isNaN(checkOutAt.getTime()))) {
-          errors.push(`Invalid time for employee ${record.employeeNo} on ${workDate}`);
-          skipped++;
-          continue;
-        }
-
-        const status = checkInAt ? 'present' : 'absent'; // Basic logic; can be refined
-
-        await sql`
-          INSERT INTO hr_attendance_records (tenant_id, account_id, employee_id, work_date, status, check_in_at, check_out_at, source, created_by, updated_by, created_at, updated_at)
-          VALUES (
-            ${auth.tenantId},
-            ${auth.accountId},
-            ${emp.id},
-            ${workDate}::date,
-            ${status},
-            ${checkInAt ? checkInAt.toISOString() : null},
-            ${checkOutAt ? checkOutAt.toISOString() : null},
-            'import',
-            ${auth.userId},
-            ${auth.userId},
-            NOW(),
-            NOW()
-          )
-          ON CONFLICT (tenant_id, employee_id, work_date) DO UPDATE
-          SET
-            status = EXCLUDED.status,
-            check_in_at = COALESCE(EXCLUDED.check_in_at, hr_attendance_records.check_in_at),
-            check_out_at = COALESCE(EXCLUDED.check_out_at, hr_attendance_records.check_out_at),
-            source = 'import',
-            updated_by = ${auth.userId},
-            updated_at = NOW()
-        `.execute(trx);
-
-        await this.refreshAttendanceExceptionForEmployeeDate(trx, emp.id, workDate, auth.tenantId || '');
-        imported++;
-      }
-    });
-
-    await this.audit.log('Bulk import HR attendance', `Imported ${imported} attendance records by ${auth.username}`, auth);
-    return { imported, skipped, errors };
+    return this.attendanceRecordsService.bulkImportAttendanceRecords(payload, auth);
   }
 
   async listAttendanceExceptions(query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
