@@ -69,6 +69,14 @@ export function mapSupplierRow(row: SupplierRow): Record<string, unknown> {
     balance: Number(row.balance || 0),
     notes: row.notes || '',
     metadata: row.metadata || {},
+    /* INV-SUPPLIER-TYPE-LIMIT-LISTED: the supplier page card and the
+     * edit form reset read the type + limit from this list payload.
+     * Without these two fields the form resets to 'supplier'/null on
+     * every reopen — and the next save writes those defaults back,
+     * silently reverting a stored freelancer + limit. Null limit
+     * stays null (uncapped), never 0. */
+    supplierType: row.supplier_type || 'supplier',
+    overdraftLimit: row.overdraft_limit == null ? null : Number(row.overdraft_limit),
   };
 }
 

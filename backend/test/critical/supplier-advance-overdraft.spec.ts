@@ -34,6 +34,10 @@
  * - updateSupplier accepts supplier_type 'freelancer' + overdraft_limit,
  *   rejects an unknown type and a negative limit, and still forbids
  *   editing the balance;
+ * - listSuppliers returns supplierType + overdraftLimit on every row
+ *   (INV-SUPPLIER-TYPE-LIMIT-LISTED): the supplier page card and the
+ *   edit form reset read them from the list — a missing mapping silently
+ *   reverts the form to 'supplier'/null on every reopen.
  * - the new INV id appears exactly once in ARCHITECTURE_INVARIANTS.md.
  */
 import 'reflect-metadata';
@@ -363,11 +367,19 @@ async function main(): Promise<void> {
       const anyDb = db as any;
       await anyDb.insertInto('suppliers').values({ id: 1, tenant_id: TENANT, account_id: ACCOUNT, name: 'فري لانس', phone: '020', balance: 0, is_active: true, supplier_type: 'supplier', overdraft_limit: null }).execute();
       const { partners } = buildServices(db);
+      const listedDefault: any = await partners.listSuppliers({}, ADMIN);
+      const defaultRow = (listedDefault.suppliers as any[]).find((s) => String(s.id) === '1');
+      assert.equal(defaultRow.supplierType, 'supplier', 'a plain supplier lists as supplier');
+      assert.equal(defaultRow.overdraftLimit, null, 'no limit lists as null (uncapped)');
       const updated: any = await partners.updateSupplier(1, { name: 'فري لانس', supplierType: 'freelancer', overdraftLimit: 5000 } as any, ADMIN);
       assert.equal(updated.ok, true);
       const row = await anyDb.selectFrom('suppliers').select(['supplier_type', 'overdraft_limit']).where('id', '=', 1).executeTakeFirstOrThrow();
       assert.equal((row as any).supplier_type, 'freelancer');
       assert.equal(Number((row as any).overdraft_limit), 5000);
+      const listedUpdated: any = await partners.listSuppliers({}, ADMIN);
+      const updatedRow = (listedUpdated.suppliers as any[]).find((s) => String(s.id) === '1');
+      assert.equal(updatedRow.supplierType, 'freelancer', 'listSuppliers must return the stored type (the edit form resets from the list)');
+      assert.equal(Number(updatedRow.overdraftLimit), 5000, 'listSuppliers must return the stored limit');
       await expectReject(
         partners.updateSupplier(1, { name: 'فري لانس', supplierType: 'employee' } as any, ADMIN),
         'SUPPLIER_TYPE_INVALID',
@@ -384,6 +396,10 @@ async function main(): Promise<void> {
       assert.equal(cleared.ok, true);
       const clearedRow = await anyDb.selectFrom('suppliers').select('overdraft_limit').where('id', '=', 1).executeTakeFirstOrThrow();
       assert.equal((clearedRow as any).overdraft_limit, null, 'null clears the limit back to uncapped');
+      const listedCleared: any = await partners.listSuppliers({}, ADMIN);
+      const clearedListedRow = (listedCleared.suppliers as any[]).find((s) => String(s.id) === '1');
+      assert.equal(clearedListedRow.supplierType, 'freelancer', 'clearing the limit keeps the stored type');
+      assert.equal(clearedListedRow.overdraftLimit, null, 'a cleared limit lists as null, not 0');
     } finally {
       await db.destroy();
     }
