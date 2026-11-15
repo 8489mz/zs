@@ -4,6 +4,8 @@ import { Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
+import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
+import { addDaysToDayKey } from '../../../common/utils/client-date-bounds.util';
 import { WhatsAppGatewayService } from './whatsapp-gateway.service';
 
 export interface DailyDigestConfig {
@@ -119,13 +121,21 @@ export class DailyDigestService {
     const includeTransfers = map.get('daily_digest_include_transfers') !== false;
     const includeShortages = map.get('daily_digest_include_shortages') !== false;
 
+    // NEW-G (clock B6-P2): the digest's "today" is the tenant day, not
+    // the DB host's UTC day and not the host's local date — CURRENT_DATE
+    // starts every bucket at 02:00 Cairo, and the header rendered the
+    // host-local date with no timeZone. Resolved once per digest.
+    const tenantTz = await getTenantTimezone(this.db, tenantId);
+    const todayKey = todayTenantDate(tenantTz);
+
     const todayDateStr = new Date().toLocaleDateString('ar-EG', {
+      timeZone: tenantTz,
       weekday: 'long',
       year: 'numeric',
       month: 'long',
       day: 'numeric',
     });
-    const nowTimeStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    const nowTimeStr = new Date().toLocaleTimeString('ar-EG', { timeZone: tenantTz, hour: '2-digit', minute: '2-digit' });
 
     let digestText = `🌙 *الملخص التنفيذي واللوجستي اليومي*\n` +
       `🏢 *${businessName}*\n` +
@@ -145,7 +155,7 @@ export class DailyDigestService {
         ])
         .where('tenant_id', '=', tenantId)
         .where('status', '!=', 'cancelled')
-        .where(sql<boolean>`created_at >= CURRENT_DATE`)
+        .where(sql<boolean>`DATE(created_at AT TIME ZONE ${tenantTz}) = ${todayKey}`)
         .executeTakeFirst();
 
       const totalSales = Number(salesAgg?.total_sales || 0).toLocaleString('ar-EG');
@@ -164,7 +174,7 @@ export class DailyDigestService {
         ])
         .where('s.tenant_id', '=', tenantId)
         .where('s.status', '!=', 'cancelled')
-        .where(sql<boolean>`s.created_at >= CURRENT_DATE`)
+        .where(sql<boolean>`DATE(s.created_at AT TIME ZONE ${tenantTz}) = ${todayKey}`)
         .groupBy('si.product_name')
         .orderBy(sql`SUM(si.qty)`, 'desc')
         .limit(3)
@@ -202,7 +212,7 @@ export class DailyDigestService {
         ])
         .where('t.tenant_id', '=', tenantId)
         .where('t.status', '!=', 'cancelled')
-        .where(sql<boolean>`t.created_at >= CURRENT_DATE`)
+        .where(sql<boolean>`DATE(t.created_at AT TIME ZONE ${tenantTz}) = ${todayKey}`)
         .orderBy('t.id', 'desc')
         .execute();
 
@@ -269,13 +279,18 @@ export class DailyDigestService {
             digestText += `  • *${sh.name}*: 🔴 نفد تماماً (0) ➔ 🚨 *شراء فوري عاجل*\n`;
           } else if (dailyRate > 0) {
             const daysRemaining = Math.max(1, Math.floor(currentStock / dailyRate));
-            const deadlineDate = new Date();
-            deadlineDate.setDate(deadlineDate.getDate() + Math.max(1, daysRemaining - 1));
-            const deadlineStr = deadlineDate.toLocaleDateString('ar-EG', {
+            // Same root cause as the header: the deadline label derives
+            // from the tenant day, not the host clock. A calendar-date
+            // label is formatted in UTC so the parts are the key's parts
+            // in every zone (a noon-UTC instant would flip the day in
+            // far-east zones; a midnight-UTC instant in far-west ones).
+            const deadlineKey = addDaysToDayKey(todayKey, Math.max(1, daysRemaining - 1)) ?? todayKey;
+            const deadlineStr = new Intl.DateTimeFormat('ar-EG', {
+              timeZone: 'UTC',
               weekday: 'long',
               day: 'numeric',
               month: 'long',
-            });
+            }).format(new Date(`${deadlineKey}T00:00:00.000Z`));
 
             digestText += `  • *${sh.name}*: 🟡 متبقي ${currentStock} (يكفي ${daysRemaining} أيام) ➔ *يجب الشراء قبل ${deadlineStr}*\n`;
           } else {

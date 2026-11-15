@@ -4922,6 +4922,12 @@ export class StorefrontService {
   async getStorefrontAnalytics(actor: AuthContext) {
     const { tenantId } = requireTenantScope(actor);
 
+    // NEW-G (clock B6-P2): "today" orders/revenue key on the tenant day,
+    // not the DB host's UTC day — CURRENT_DATE starts the bucket at 02:00
+    // Cairo and misses the tenant day's first hours.
+    const tenantTz = await getTenantTimezone(this.db, tenantId);
+    const todayKey = todayTenantDate(tenantTz);
+
     const stats = await this.db
       .selectFrom('online_orders')
       .select([
@@ -4943,7 +4949,7 @@ export class StorefrontService {
         sql<number>`COUNT(*)::int`.as('today_orders'),
         sql<number>`COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total_amount ELSE 0 END), 0)::float`.as('today_revenue'),
       ])
-      .where(sql<boolean>`tenant_id = ${tenantId} AND created_at >= CURRENT_DATE`)
+      .where(sql<boolean>`tenant_id = ${tenantId} AND DATE(created_at AT TIME ZONE ${tenantTz}) = ${todayKey}`)
       .executeTakeFirst();
 
     const cartStats = await (this.db as any)

@@ -52,7 +52,7 @@
     "src/modules/settings/settings.service.ts": 1125,
     "src/modules/storefront/services/marketplace-sync.service.ts": 3131,
     "src/modules/storefront/storefront-payment.service.ts": 1486,
-    "src/modules/storefront/storefront.service.ts": 5241,
+    "src/modules/storefront/storefront.service.ts": 5247,
     "src/modules/users/users.service.ts": 1061,
     "src/modules/sales/services/sales-edit-and-cancel.service.ts": 2080,
     "src/modules/sales/services/create-sale.service.ts": 1941

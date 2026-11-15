@@ -8,6 +8,7 @@ import { WhatsAppGatewayService } from '../../settings/services/whatsapp-gateway
 import { AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 
 export type RiskLevel = 'low' | 'medium' | 'high';
 
@@ -94,15 +95,29 @@ export class CashierFraudRadarService {
     @Optional() private readonly whatsappService?: WhatsAppGatewayService,
   ) {}
 
-  private getTimeFilter(timeframe: 'today' | '7days' | '30days'): string {
-    if (timeframe === '7days') return "NOW() - INTERVAL '7 DAYS'";
-    if (timeframe === '30days') return "NOW() - INTERVAL '30 DAYS'";
-    return 'CURRENT_DATE';
+  // NEW-G (clock B6-P2): the 'today' window keys on the tenant day, not
+  // the DB host's UTC day — CURRENT_DATE starts the window at 02:00 Cairo
+  // and misses the tenant day's first hours (and includes the next day's).
+  // The 7d/30d windows are rolling instants, not calendar days, and stay
+  // as NOW() - INTERVAL. `column` is a literal column reference from the
+  // call sites below, never user input.
+  private getTimeFilter(
+    timeframe: 'today' | '7days' | '30days',
+    tenantTz: string,
+    todayKey: string,
+    column: string,
+  ) {
+    if (timeframe === '7days') return sql<boolean>`${sql.ref(column)} >= NOW() - INTERVAL '7 DAYS'`;
+    if (timeframe === '30days') return sql<boolean>`${sql.ref(column)} >= NOW() - INTERVAL '30 DAYS'`;
+    return sql<boolean>`DATE(${sql.ref(column)} AT TIME ZONE ${tenantTz}) = ${todayKey}`;
   }
 
   async getSummary(timeframe: 'today' | '7days' | '30days' = 'today', auth: AuthContext): Promise<FraudRadarSummaryResponse> {
     const scope = requireTenantScope(auth);
-    const timeSql = this.getTimeFilter(timeframe);
+    // NEW-G: the tenant day is resolved once per call; the filter below
+    // keys 'today' on it (the 7d/30d branches ignore it).
+    const tenantTz = await getTenantTimezone(this.db, scope.tenantId);
+    const todayKey = todayTenantDate(tenantTz);
     const maxDetailedEvents = 2_000;
     // estimatedProtectedLoss is money: round at the tenant's book digits
     // (the old 2-decimal cut dropped a 3-decimal tenant's fils).
@@ -120,7 +135,7 @@ export class CashierFraudRadarService {
     const auditBase = this.db
       .selectFrom('audit_logs')
       .where('tenant_id', '=', scope.tenantId)
-      .where(sql<boolean>`created_at >= ${sql.raw(timeSql)}`)
+      .where(this.getTimeFilter(timeframe, tenantTz, todayKey, 'created_at'))
       .where((eb) =>
         eb.or([
           eb('event_code', 'in', [...RADAR_EVENT_CODES]),
@@ -170,7 +185,7 @@ export class CashierFraudRadarService {
       ])
       .where('tenant_id', '=', scope.tenantId)
       .where('status', '=', 'cancelled')
-      .where(sql<boolean>`created_at >= ${sql.raw(timeSql)}`)
+      .where(this.getTimeFilter(timeframe, tenantTz, todayKey, 'created_at'))
       .groupBy('created_by')
       .execute();
     const sampled = auditRows.length > maxDetailedEvents;
@@ -184,7 +199,7 @@ export class CashierFraudRadarService {
       ])
       .where('tenant_id', '=', scope.tenantId)
       .where('status', '!=', 'cancelled')
-      .where(sql<boolean>`created_at >= ${sql.raw(timeSql)}`)
+      .where(this.getTimeFilter(timeframe, tenantTz, todayKey, 'created_at'))
       .groupBy('created_by')
       .execute();
 
@@ -324,7 +339,10 @@ export class CashierFraudRadarService {
   async getEvents(limit = 40, auth: AuthContext, timeframe: 'today' | '7days' | '30days' = 'today'): Promise<FraudRadarEventItem[]> {
     const scope = requireTenantScope(auth);
     const safeLimit = Math.min(100, Math.max(5, limit));
-    const timeSql = this.getTimeFilter(timeframe);
+    // NEW-G: the tenant day is resolved once per call; the filter below
+    // keys 'today' on it (the 7d/30d branches ignore it).
+    const tenantTz = await getTenantTimezone(this.db, scope.tenantId);
+    const todayKey = todayTenantDate(tenantTz);
 
     const auditRows = await this.db
       .selectFrom('audit_logs as a')
@@ -339,7 +357,7 @@ export class CashierFraudRadarService {
         'u.username as cashier_name',
       ])
       .where('a.tenant_id', '=', scope.tenantId)
-      .where(sql<boolean>`a.created_at >= ${sql.raw(timeSql)}`)
+      .where(this.getTimeFilter(timeframe, tenantTz, todayKey, 'a.created_at'))
       .where((eb) =>
         eb.or([
           eb('a.event_code', 'in', [...RADAR_EVENT_CODES]),
@@ -375,7 +393,7 @@ export class CashierFraudRadarService {
       ])
       .where('s.tenant_id', '=', scope.tenantId)
       .where('s.status', '=', 'cancelled')
-      .where(sql<boolean>`s.created_at >= ${sql.raw(timeSql)}`)
+      .where(this.getTimeFilter(timeframe, tenantTz, todayKey, 's.created_at'))
       .orderBy('s.id', 'desc')
       .limit(safeLimit)
       .execute();

@@ -8,6 +8,7 @@ import { Database } from '../../../database/database.types';
 import { mapHeldSalesRows, mapSaleRows, filterSales, paginateRows, summarizeSales } from '../helpers/sales-query.helper';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { SalesAuthorizationService } from './sales-authorization.service';
 
 @Injectable()
@@ -37,6 +38,14 @@ export class SalesQueryService {
     const pageSize = Math.min(100, Math.max(1, Number(query?.pageSize || 30)));
     const lastSeenId = Number(query?.lastSeenId || query?.lastId || query?.cursor || 0);
 
+    // NEW-G (clock B6-P2): the "today" aggregates key on the tenant day,
+    // not the DB host's UTC day — CURRENT_DATE starts the bucket at 02:00
+    // Cairo and misses the tenant day's first hours (and includes the
+    // next tenant day's first hours). Resolved once per call.
+    const { tenantId } = requireTenantScope(auth);
+    const tenantTz = await getTenantTimezone(this.db, tenantId);
+    const todayKey = todayTenantDate(tenantTz);
+
     let qb = this.db
       .selectFrom('sales as s')
       .leftJoin('customers as c', (j) => j.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 's.tenant_id'))
@@ -59,8 +68,8 @@ export class SalesQueryService {
         sql<number>`COALESCE(SUM(CASE WHEN s.payment_type = 'cash' OR s.payment_channel = 'cash' THEN s.total ELSE 0 END) OVER(), 0)`.as('agg_cash_total'),
         sql<number>`COALESCE(SUM(CASE WHEN s.payment_type = 'credit' OR s.payment_channel = 'credit' THEN s.total ELSE 0 END) OVER(), 0)`.as('agg_credit_total'),
         sql<number>`COALESCE(SUM(CASE WHEN s.status = 'cancelled' THEN 1 ELSE 0 END) OVER(), 0)`.as('agg_cancelled_count'),
-        sql<number>`COALESCE(SUM(CASE WHEN s.created_at >= CURRENT_DATE THEN 1 ELSE 0 END) OVER(), 0)`.as('agg_today_sales_count'),
-        sql<number>`COALESCE(SUM(CASE WHEN s.created_at >= CURRENT_DATE THEN s.total ELSE 0 END) OVER(), 0)`.as('agg_today_sales_total')
+        sql<number>`COALESCE(SUM(CASE WHEN DATE(s.created_at AT TIME ZONE ${tenantTz}) = ${todayKey} THEN 1 ELSE 0 END) OVER(), 0)`.as('agg_today_sales_count'),
+        sql<number>`COALESCE(SUM(CASE WHEN DATE(s.created_at AT TIME ZONE ${tenantTz}) = ${todayKey} THEN s.total ELSE 0 END) OVER(), 0)`.as('agg_today_sales_total')
       ])
       .where(this.tenantPredicate(auth, 's'));
 
