@@ -6085,6 +6085,7 @@ export interface ImportBrokerExpenseTable {
   shipment_id: string | null;
   receipt_no: string;
   expense_date: ImportDate;
+  payment_date: ImportDate;
   category: string;
   amount_egp: ImportNumeric;
   is_capitalized: boolean;
