@@ -1,5 +1,17 @@
 import { z } from 'zod';
 
+/**
+ * Maps an empty numeric input to null for optional numeric fields. A
+ * `type="number"` input registered with `valueAsNumber: true` yields NaN when
+ * empty, and `z.number()` rejects NaN — so without this step an optional
+ * field still blocks submit. Any other value passes through unchanged.
+ */
+const emptyNumberToNull = <T extends z.ZodType>(schema: T) =>
+  z.preprocess(
+    (value) => (typeof value === 'number' && Number.isNaN(value) ? null : value),
+    schema,
+  );
+
 export const productFormSchema = z.object({
   name: z.string().default(''),
   nameEn: z.string().default(''),
@@ -36,7 +48,7 @@ export const productFormSchema = z.object({
   })).optional(),
   taxCodeType: z.string().optional(),
   taxCode: z.string().optional(),
-  calories: z.coerce.number().optional().nullable(),
+  calories: emptyNumberToNull(z.coerce.number().optional().nullable()),
   allergens: z.array(z.string()).optional(),
   isSpicy: z.boolean().default(false),
   isVegetarian: z.boolean().default(false),

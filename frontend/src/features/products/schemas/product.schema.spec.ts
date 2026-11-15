@@ -42,4 +42,28 @@ describe('productFormSchema', () => {
       expect(errorMsg).toContain('اسم الصنف مطلوب');
     }
   });
+
+  it('passes when calories is empty (NaN from an empty valueAsNumber input) and normalizes to null', () => {
+    const res = productFormSchema.safeParse({
+      ...baseValidData,
+      name: 'برجر لحم',
+      calories: Number.NaN,
+    });
+    expect(res.success).toBe(true);
+    if (res.success) {
+      expect(res.data.calories).toBeNull();
+    }
+  });
+
+  it('preserves a numeric calories value (e.g. 450)', () => {
+    const res = productFormSchema.safeParse({
+      ...baseValidData,
+      name: 'برجر لحم',
+      calories: 450,
+    });
+    expect(res.success).toBe(true);
+    if (res.success) {
+      expect(res.data.calories).toBe(450);
+    }
+  });
 });
