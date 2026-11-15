@@ -178,8 +178,7 @@ async function main(): Promise<void> {
       INSERT INTO contracting_guarantees (id, tenant_id, project_id, guarantee_number, guarantee_type, issuing_bank, amount, currency, issue_date, expiry_date, claim_expiry_date, status) VALUES
         (1, 't-g', 1, 'BG-1', 'advance_payment', 'Bank', 1000, 'EGP', '2026-01-01', '2026-11-14', '2026-12-01', 'active');
     `);
-    const contracting = Object.create(ContractingService.prototype) as any;
-    contracting.db = db;
+    const contracting = new ContractingService(db, {} as never);
     const raw = await contracting.getGuaranteesRaw('t-g', {});
     assert.equal(raw[0].issue_date, '2026-01-01');
     assert.equal(raw[0].expiry_date, '2026-11-14');
