@@ -349,10 +349,19 @@ export function ReturnsCreateModal(props: Props) {
                     value={form.refundMethod}
                     disabled={!settlementNeedsRefundMethod}
                     onChange={(val) => onFormChange((current) => ({ ...current, refundMethod: val as 'cash' | 'card' }))}
-                    options={[
-                      { value: 'cash', label: t('returns.method_cash', 'نقدي') },
-                      { value: 'card', label: t('returns.method_card', 'بطاقة') },
-                    ]}
+                    options={
+                      // INV-SALE-RETURN-CASH-ONLY: a sale return refunds
+                      // in full in cash — no card option exists (there
+                      // is no Visa-refund mechanism). Purchase returns
+                      // keep the card option: a supplier refund to the
+                      // shop's bank is a real flow, not a customer refund.
+                      form.type === 'sale'
+                        ? [{ value: 'cash', label: t('returns.method_cash', 'نقدي') }]
+                        : [
+                            { value: 'cash', label: t('returns.method_cash', 'نقدي') },
+                            { value: 'card', label: t('returns.method_card', 'بطاقة') },
+                          ]
+                    }
                   />
                 </Field>
               </div>

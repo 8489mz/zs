@@ -27,7 +27,11 @@ export function PosInstantExchangeDialog({ open, onClose, pos }: {
   const [serials, setSerials] = useState<Record<string, string>>({});
   const [managerPin, setManagerPin] = useState('');
   const [paymentChannel, setPaymentChannel] = useState<'cash' | 'card'>('cash');
-  const [refundMethod, setRefundMethod] = useState<'cash' | 'card' | 'store_credit'>('cash');
+  // INV-SALE-RETURN-CASH-ONLY: an exchange remainder refunds in full
+  // in cash from the drawer — no card option exists (there is no
+  // Visa-refund mechanism). Store credit stays: it is the exchange
+  // settlement mode, not a refund method.
+  const [refundMethod, setRefundMethod] = useState<'cash' | 'store_credit'>('cash');
   const [pending, setPending] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const requestKey = useRef<string | null>(null);
@@ -197,8 +201,8 @@ export function PosInstantExchangeDialog({ open, onClose, pos }: {
           <option value="cash">{t('pos.pos_workspace.pos_instant_exchange_dialog.s14', "نقدي")}</option><option value="card">{t('pos.pos_workspace.pos_instant_exchange_dialog.s15', "شبكة")}</option>
         </select>
         <label htmlFor="exchange-refund">{t('pos.pos_workspace.pos_instant_exchange_dialog.s16', "رد الفرق السالب")}</label>
-        <select id="exchange-refund" value={refundMethod} disabled={attempted} onChange={(event) => setRefundMethod(event.target.value as 'cash' | 'card' | 'store_credit')}>
-          <option value="cash">{t('pos.pos_workspace.pos_instant_exchange_dialog.s17', "حسب وسيلة الدفع الأصلية")}</option><option value="card">{t('pos.pos_workspace.pos_instant_exchange_dialog.s18', "شبكة أولاً")}</option><option value="store_credit">{t('pos.pos_workspace.pos_instant_exchange_dialog.s19', "رصيد متجر")}</option>
+        <select id="exchange-refund" value={refundMethod} disabled={attempted} onChange={(event) => setRefundMethod(event.target.value as 'cash' | 'store_credit')}>
+          <option value="cash">{t('pos.pos_workspace.pos_instant_exchange_dialog.s17', "نقدي")}</option><option value="store_credit">{t('pos.pos_workspace.pos_instant_exchange_dialog.s19', "رصيد متجر")}</option>
         </select>
         <label htmlFor="exchange-manager-pin">{t('pos.pos_workspace.pos_instant_exchange_dialog.s20', "رمز اعتماد المشرف")}</label>
         <input id="exchange-manager-pin" type="password" value={managerPin} onChange={(event) => setManagerPin(event.target.value)} disabled={pending || attempted} />

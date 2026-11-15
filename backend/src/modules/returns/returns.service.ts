@@ -271,6 +271,7 @@ export class ReturnsService {
         'rd.note',
         'rd.settlement_mode',
         'rd.refund_method',
+        'rd.refund_allocations',
         'rd.tip_relief',
         'rd.courier_relief',
         'rd.created_at',
@@ -328,6 +329,7 @@ export class ReturnsService {
         'rd.invoice_id',
         'rd.settlement_mode',
         'rd.refund_method',
+        'rd.refund_allocations',
         'rd.total',
         'rd.tip_relief',
         'rd.courier_relief',
@@ -388,6 +390,16 @@ export class ReturnsService {
         note: row.note || '',
         settlementMode: row.settlement_mode || '',
         refundMethod: row.refund_method || '',
+        refundAllocations: (() => {
+          const raw: unknown = row.refund_allocations;
+          if (raw == null) return [];
+          try {
+            const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        })(),
         date: row.created_at,
         branchName: row.branch_name || '',
         locationName: row.location_name || '',
@@ -728,19 +740,38 @@ export class ReturnsService {
       // so the dialog never has to guess it from the lines total.
       // Read inside this same transaction so the idempotent replay
       // stores the same figures.
+      // INV-SALE-RETURN-CASH-ONLY: the create response carries the
+      // refund the backend actually pays — a single cash leg for
+      // the full refund (a split-paid sale refunds 70 cash, never
+      // 35 cash + 35 card). The dialog shows the cash the cashier
+      // hands over from the drawer (live trial: 35 cash + 35 card
+      // returned as "70.00 cash" was RIGHT; the books posting only
+      // 35 cash out were wrong, drawer 35 short).
       const createdDoc = await trx.selectFrom('return_documents')
-        .select(['total', 'tip_relief', 'courier_relief'])
+        .select(['total', 'tip_relief', 'courier_relief', 'refund_method', 'refund_allocations'])
         .where('id', '=', returnIds[0])
         .where('tenant_id', '=', scope.tenantId)
         .executeTakeFirst();
       const goodsTotal = Number(createdDoc?.total || 0);
       const tipRelief = Number(createdDoc?.tip_relief || 0);
       const courierRelief = Number(createdDoc?.courier_relief || 0);
+      const refundAllocations = (() => {
+        const raw: unknown = createdDoc?.refund_allocations;
+        if (raw == null) return [];
+        try {
+          const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      })();
       const res = {
         ok: true, createdIds: returnIds, id: returnIds[0], returnDocumentId: returnIds[0],
         goodsTotal, tipRelief, courierRelief,
         totalRelief: roundBookMoney(tipRelief + courierRelief, moneyDigits),
         refundTotal: roundBookMoney(goodsTotal + tipRelief + courierRelief, moneyDigits),
+        refundMethod: String(createdDoc?.refund_method || ''),
+        refundAllocations,
       };
 
       // Idempotency: commit inside the EXACT SAME business transaction (CORE-004)
@@ -809,8 +840,13 @@ export class ReturnsService {
     requested: 'cash' | 'card' | 'store_credit', auth: AuthContext): Promise<ReturnType<typeof settlePosExchange>> {
     const exchangeDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, this.scope(auth).tenantId));
     const settlement = settlePosExchange(context.total, saleTotal, exchangeDigits);
+    // INV-SALE-RETURN-CASH-ONLY: an exchange remainder refunds in
+    // full in cash too — a requested 'card' is ignored, exactly as
+    // in createSaleReturn below. Only store_credit (the settlement
+    // mode) passes through; there is no card-reversal path.
+    const cashOnlyRequested = requested === 'store_credit' ? 'store_credit' : 'cash';
     const remainder = settlement.refundAmount > 0
-      ? allocateRefundTenders({ ...context.refundBase, amount: settlement.refundAmount, requested, digits: exchangeDigits }) : [];
+      ? allocateRefundTenders({ ...context.refundBase, amount: settlement.refundAmount, requested: cashOnlyRequested, digits: exchangeDigits }) : [];
     const allocations: Array<{ tender: RefundTender; amount: number }> = [];
     const retainedCredit = settlement.appliedCredit + remainder.filter((line) => line.tender === 'store_credit')
       .reduce((sum, line) => sum + line.amount, 0);
@@ -858,7 +894,12 @@ export class ReturnsService {
     }
     const saleItems = await trx.selectFrom('sale_items').selectAll().where('sale_id', '=', Number(payload.invoiceId)).where(this.tenantPredicate(auth)).orderBy('id', 'asc').forUpdate().execute();
     const settlementMode = payload.settlementMode === 'store_credit' ? 'store_credit' : 'refund';
-    const refundMethod = payload.refundMethod === 'card' ? 'card' : 'cash';
+    // INV-SALE-RETURN-CASH-ONLY: every sale return refunds the FULL
+    // amount in CASH from the drawer, never back to the card — there
+    // is no shop mechanism to refund to Visa, so a requested 'card'
+    // is ignored (never trust a caller-supplied method). Only the
+    // store_credit settlement mode is not cash.
+    const refundMethod = 'cash';
     const originalPayments = await trx.selectFrom('sale_payments').select(['payment_channel', 'amount'])
       .where('sale_id', '=', Number(sale.id)).where('tenant_id', '=', scope.tenantId).execute();
     const previousRefundRows = await trx.selectFrom('return_documents')
@@ -867,10 +908,15 @@ export class ReturnsService {
       .where('tenant_id', '=', scope.tenantId).execute();
     const originalPaid = originalPayments.length
       ? originalPayments.reduce((sum, row) => sum + Number(row.amount || 0), 0) : Number(sale.paid_amount || 0);
-    const originalCashPaid = originalPayments.length
-      ? originalPayments.filter((row) => row.payment_channel === 'cash').reduce((sum, row) => sum + Number(row.amount || 0), 0)
-      : sale.payment_channel === 'cash' ? originalPaid : 0;
-    const originalNonCashPaid = Math.max(0, originalPaid - originalCashPaid);
+    // INV-SALE-RETURN-CASH-ONLY: the original payment split is NOT
+    // a cap on cash — the whole paid amount is cash-available, so
+    // allocateRefundTenders can only emit a cash leg (after the
+    // receivable leg) for a refund. The non-cash share is zero: the
+    // card money stays in the shop's bank account and is never
+    // recorded as a card deduction. This also feeds the exchange
+    // refundBase below, so exchange remainders are cash-only too.
+    const originalCashPaid = originalPaid;
+    const originalNonCashPaid = 0;
     const priorAllocations: Array<{ tender: RefundTender; amount: number }> = [];
     for (const previous of previousRefundRows) {
       if (previous.refund_allocations != null) {

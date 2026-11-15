@@ -127,6 +127,11 @@ export interface ReturnRecord {
   date?: string;
   settlementMode?: string;
   refundMethod?: string;
+  /** INV-SALE-RETURN-CASH-ONLY: per-tender refund legs as stored
+   *  on the document (a single cash leg for the full refund), so
+   *  the dialog shows the cash the cashier hands over from the
+   *  drawer. Absent on old documents. */
+  refundAllocations?: Array<{ tender: string; amount: number }>;
   items?: Array<{ productId?: string; productName?: string; qty?: number; total?: number; unitTotal?: number }>;
 }
 

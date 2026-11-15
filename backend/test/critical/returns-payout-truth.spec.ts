@@ -45,9 +45,9 @@ large-cash-refund-approval spec, whose schema this reuses):
   relief 40) moves 540 through treasury AND the journal (not 500),
   and the drawer expected_cash moves by the same 540; the customer
   statement pair shows the actual refund (540), balance unchanged.
-- F1 card-last: a cash 500 + card 580 sale returned for 540 tops
-  up the CARD leg (40) — treasury moves only the 500 cash leg,
-  the journal credits bank 40; no card treasury row is invented.
+- F1 cash-only: a cash 500 + card 580 sale returned for 540 refunds
+  the full 540 in cash — treasury moves -540, the journal credits
+  cash 1110 by 540 and bank 1120 by nothing; no card leg exists.
 - F1 store-credit-last: a store-credit settlement of the same half
   return grants 540 of store credit (500 + 40 relief) — the
   customer balance moves by the full refund, treasury moves
@@ -365,9 +365,10 @@ async function main(): Promise<void> {
     }
   }
 
-  // Case 2 — F1 card-last: the relief tops up the CARD leg. Treasury
-  // moves only the 500 cash leg; the journal credits bank 40; no
-  // card treasury row is invented.
+  // Case 2 — F1 cash-only (INV-SALE-RETURN-CASH-ONLY): the same
+  // half return of a split-paid sale refunds the full 540 in cash.
+  // Treasury moves -540; the journal credits cash 1110 by 540 and
+  // bank 1120 by nothing — no card leg exists.
   {
     const { pg, db } = await makeDb();
     try {
@@ -377,11 +378,11 @@ async function main(): Promise<void> {
       const result = await createReturn(returns, 1, 1, ADMIN);
       const doc = await returnDoc(db, result.id);
       const allocations = typeof doc.refund_allocations === 'string' ? JSON.parse(doc.refund_allocations) : doc.refund_allocations;
-      assert.deepEqual(allocations, [{ tender: 'cash', amount: 500 }, { tender: 'card', amount: 40 }]);
-      assert.equal(await treasurySum(db, 'sale_return_refund'), -500);
+      assert.deepEqual(allocations, [{ tender: 'cash', amount: 540 }]);
+      assert.equal(await treasurySum(db, 'sale_return_refund'), -540);
       const journal = await journalBySource(pg, db, 'sales_return', result.id);
-      assert.equal(journal.get('1110')?.credit, 500);
-      assert.equal(journal.get('1120')?.credit, 40);
+      assert.equal(journal.get('1110')?.credit, 540);
+      assert.equal(journal.get('1120'), undefined, 'no bank leg: the card money stays in the shop bank account');
       assert.equal(journal.get('2147')?.debit, 25);
       assert.equal(journal.get('2115')?.debit, 15);
       assert.deepEqual(await ledgerEntries(db), [

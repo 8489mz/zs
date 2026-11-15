@@ -21,6 +21,22 @@ export function ReturnsSelectedReturnCard({
   const tipRelief = Number(selectedReturn?.tipRelief || 0);
   const courierRelief = Number(selectedReturn?.courierRelief || 0);
   const refundTotal = Number(selectedReturn?.refundTotal ?? (Number(selectedReturn?.total || 0) + tipRelief + courierRelief));
+  // INV-SALE-RETURN-CASH-ONLY: a sale return refunds in full in
+  // cash — the stored legs are the truth about what the cashier
+  // hands over. A 'mixed' refund is now only receivable + cash (an
+  // unpaid balance reversed plus cash for the paid part); no cash +
+  // card split can occur, so there is no mixed-method label. The
+  // per-leg rows stay: without them a mixed return would show one
+  // cash figure overstating the cash handed over.
+  const refundAllocations = Array.isArray(selectedReturn?.refundAllocations)
+    ? selectedReturn.refundAllocations.filter((leg) => leg && Number(leg.amount || 0) > 0)
+    : [];
+  const refundTenderLabel = (tender: string): string => {
+    if (tender === 'card') return t('returns.method_card_full', 'بطاقة / فيزا');
+    if (tender === 'store_credit') return t('returns.customer_credit', 'رصيد عميل');
+    if (tender === 'receivable') return t('returns.method_receivable', 'ذمم عميل (آجل)');
+    return t('returns.cash_drawer', 'نقدي (من الدرج)');
+  };
 
   return (
     <div className="workspace-panel returns-detail-card-shell" style={{ background: '#ffffff', borderRadius: '12px', padding: '16px' }}>
@@ -169,6 +185,12 @@ export function ReturnsSelectedReturnCard({
                   <strong style={{ fontSize: '12.5px', color: '#0f172a' }}>{formatCurrency(courierRelief)}</strong>
                 </div>
               ) : null}
+              {refundAllocations.length > 1 ? refundAllocations.map((leg) => (
+                <div key={leg.tender} style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>{t('returns.refund_leg_label', 'يُرد')} {refundTenderLabel(leg.tender)}:</span>
+                  <strong style={{ fontSize: '12.5px', color: '#0f172a' }}>{formatCurrency(Number(leg.amount || 0))}</strong>
+                </div>
+              )) : null}
               <div style={{
                 gridColumn: '1 / -1',
                 background: '#f8fafc',

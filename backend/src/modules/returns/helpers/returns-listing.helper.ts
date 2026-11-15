@@ -21,6 +21,11 @@ export type ReturnListRow = {
   note: string;
   settlementMode: string;
   refundMethod: string;
+  /** INV-SALE-RETURN-CASH-ONLY: per-tender refund legs as stored
+   *  on the document (a single cash leg for the full refund), so
+   *  the dialog shows the cash the cashier hands over from the
+   *  drawer. Absent on rows whose document predates the breakdown. */
+  refundAllocations?: Array<{ tender: string; amount: number }>;
   createdAt: unknown;
   date: unknown;
   createdBy?: string;
@@ -62,6 +67,16 @@ export function mapReturnRows(rows: Array<Record<string, unknown>>): ReturnListR
         note: String(row.note || ''),
         settlementMode: String(row.settlement_mode || 'refund'),
         refundMethod: String(row.refund_method || ''),
+        refundAllocations: (() => {
+          const raw: unknown = row.refund_allocations;
+          if (raw == null) return undefined;
+          try {
+            const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            return Array.isArray(parsed) ? parsed as Array<{ tender: string; amount: number }> : undefined;
+          } catch {
+            return undefined;
+          }
+        })(),
         createdAt: row.created_at,
         date: row.created_at,
         createdBy: row.created_by ? String(row.created_by) : '',

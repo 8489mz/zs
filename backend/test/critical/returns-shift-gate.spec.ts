@@ -33,9 +33,11 @@ CASES:
    and expected_cash falls by the refund.
 5. Sale return, setting false, admin, no shift -> succeeds (the
    role exemption is preserved, not replaced by the setting).
-6. Sale return, setting true, CARD refund, cashier, no shift ->
-   succeeds with no treasury row (non-cash refunds were never
-   gated and must not start being gated).
+6. Sale return, setting true, return of a CARD-paid sale, cashier,
+   no shift -> 400 OPEN_SHIFT_REQUIRED; no return document, no
+   treasury row. A card-paid sale now refunds in cash, so the
+   cash-refund gate applies to it exactly like a cash-paid sale
+   (there is no non-cash sale refund anymore).
 7. Exchange net cash-out, setting false, cashier, no shift ->
    succeeds; the treasury row exists.
 8. Exchange net cash-out, setting true, cashier, no shift -> 400
@@ -408,10 +410,13 @@ async function main(): Promise<void> {
     console.log('  5. sale return with the setting off by an admin succeeds passed');
   }
 
-  // 6. Sale return, setting true, CARD refund of a CARD-paid sale,
-  // cashier, no shift -> succeeds, no treasury row. (A card refund
-  // of a cash-paid sale still refunds cash by tender protection,
-  // so the fixture sale is card-paid.)
+  // 6. Sale return, setting true, return of a CARD-paid sale,
+  // cashier, no shift -> OPEN_SHIFT_REQUIRED, nothing written.
+  // INV-SALE-RETURN-CASH-ONLY: the return refunds in full in cash
+  // even though the sale was card-paid, so the cash-refund gate
+  // applies; the old "card refunds are never gated" exemption died
+  // with the card leg. (A requested 'card' refund is ignored by
+  // the backend, so the fixture still sends refundMethod 'card'.)
   {
     const { pg, db } = await makeDb();
     try {
@@ -419,13 +424,16 @@ async function main(): Promise<void> {
       await setShiftSetting(db, 'true');
       await seedSale(db, 'card');
       const service = buildReturnsService(db);
-      const result: any = await service.createReturn(saleReturnPayload('card'), cashierAuth);
-      assert.ok(result?.returnDocumentId, 'the card return is created');
-      assert.equal((await treasuryRows(db)).length, 0, 'a card refund writes no treasury row');
+      await assert.rejects(
+        service.createReturn(saleReturnPayload('card'), cashierAuth),
+        (err: any) => err && err.code === 'OPEN_SHIFT_REQUIRED',
+      );
+      assert.equal(await countTable(db, 'return_documents'), 0, 'no return document is written');
+      assert.equal((await treasuryRows(db)).length, 0, 'no treasury row is written');
     } finally {
       await db.destroy();
     }
-    console.log('  6. card return with the setting on and no shift is never gated passed');
+    console.log('  6. return of a card-paid sale with the setting on and no shift is rejected passed');
   }
 
   // 7. Exchange net cash-out, setting false, cashier, no shift -> succeeds.

@@ -71,4 +71,26 @@ describe('ReturnsSelectedReturnCard relief lines (T10-D)', () => {
     expect(screen.queryByText(/استرداد رسوم التوصيل/)).not.toBeInTheDocument();
     expect(screen.getAllByText('75.00').length).toBeGreaterThan(0);
   });
+
+  it('shows the per-leg breakdown for a mixed receivable + cash refund (INV-SALE-RETURN-CASH-ONLY)', () => {
+    render(
+      <ReturnsSelectedReturnCard
+        selectedReturn={record({
+          total: 50,
+          refundTotal: 50,
+          refundMethod: 'mixed',
+          refundAllocations: [{ tender: 'receivable', amount: 40 }, { tender: 'cash', amount: 10 }],
+        })}
+        onPrint={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    );
+
+    // No cash + card split can occur anymore, so no mixed-method label.
+    expect(screen.queryByText(/مختلط/)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/يُرد/).length).toBe(2);
+    expect(screen.getAllByText('40.00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('10.00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('50.00').length).toBeGreaterThan(0);
+  });
 });
