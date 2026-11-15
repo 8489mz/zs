@@ -336,7 +336,7 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     console.log('✓ §D passed: purchase requiredDate is bounded [today, today+365] on create and update');
 
     // §E — S5 contracting createDocument issued_date, source pin + value check.
-    const contractingSrc = read('modules/contracting/contracting.service.ts');
+    const contractingSrc = read('modules/contracting/services/contracting-documents.service.ts');
     const createDoc = fnSlice(contractingSrc, 'async createDocument(', 3500);
     assert.ok(createDoc.includes('issued_date: todayTenantDate(businessTz)'), 'createDocument supplies issued_date from the tenant day');
     for (const [tenantId, tz] of [['t-b4p3-mid', 'Pacific/Midway'], ['t-b4p3-kir', 'Pacific/Kiritimati']] as const) {

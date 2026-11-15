@@ -438,10 +438,10 @@ async function main(): Promise<void> {
     assert.ok(!drawer.includes('updated_at = now()'), 'no DB now() left on the review stamps');
 
     const contracting = readSource('../../src/modules/contracting/services/contracting-quality.service.ts');
-    // Fuel-log methods are held in the facade until the C14 merge (merge
-    // fallback); their pin reads the facade for now — the coordinator repoints
-    // this path to the documents slice at the C14 merge, assertion text unchanged.
-    const contractingFuelLogs = readSource('../../src/modules/contracting/contracting.service.ts');
+    // Fuel-log methods moved into the documents slice at the C14 merge
+    // (merge fallback); their pin reads the documents slice,
+    // assertion text unchanged.
+    const contractingFuelLogs = readSource('../../src/modules/contracting/services/contracting-documents.service.ts');
     assert.ok(
       contractingFuelLogs.includes(
         'log_date: dto.logDate || (await resolveBusinessDateKey(this.db, tenantId, new Date()))',
