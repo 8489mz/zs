@@ -313,7 +313,7 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     const hrText = fs.readFileSync(path.join(SRC, 'modules/hr/hr.service.ts'), 'utf8');
     assert.ok(hrText.includes('Date.UTC(Number(periodMonth.split'), 'payroll month-end uses Date.UTC');
     assert.ok(!hrText.includes('new Date(Number(periodMonth.split'), 'payroll month-end no longer uses the local Date constructor');
-    const contractingText = fs.readFileSync(path.join(SRC, 'modules/contracting/contracting.service.ts'), 'utf8');
+    const contractingText = fs.readFileSync(path.join(SRC, 'modules/contracting/services/contracting-site-operations.service.ts'), 'utf8');
     assert.ok(contractingText.includes('weekStart.setUTCHours(0, 0, 0, 0)'), 'histogram snaps with setUTCHours');
     assert.ok(!contractingText.includes('weekStart.setHours(0, 0, 0, 0)'), 'histogram no longer snaps with local setHours');
 
