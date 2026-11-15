@@ -41,7 +41,7 @@ import { assertAdvancePaymentGate, type BankGuarantee } from '../guarantee-gatew
  */
 
 export interface ContractingPostingDeps {
-  db: Kysely<any>;
+  db: Kysely<Database>;
   // accountingPosting is a REQUIRED constructor dep of the facade (no
   // @Optional, no fallback expression anywhere in the file — prep §3.1).
   // C4 is the ONLY slice that takes it, because the file's only 2 journal
@@ -61,7 +61,7 @@ export interface ContractingPostingDeps {
 
 @Injectable()
 export class ContractingPostingService {
-  private readonly db: Kysely<any>;
+  private readonly db: Kysely<Database>;
   private readonly accountingPosting: AccountingPostingService;
   private readonly getGuaranteesRaw: (tenantId: string, filters?: { projectId?: string; subcontractId?: string; status?: string }) => Promise<BankGuarantee[]>;
 

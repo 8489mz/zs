@@ -54,10 +54,10 @@ export interface ContractingAnalyticsDeps {
   // getPaymentHolds(auth: AuthContext, projectId: string);
   // getMobilizationExpenses(auth: AuthContext, projectId: string).
   getProjectById: (...args: any[]) => any;
-  getBoqItems: (...args: any[]) => any;
+  getBoqItems: (auth: AuthContext, projectId: string) => Promise<any[]>;
   getEngineeringConstants: (...args: any[]) => any;
   getMaterialRequisitions: (...args: any[]) => any;
-  getScheduleTasks: (...args: any[]) => any;
+  getScheduleTasks: (auth: AuthContext, projectId: string) => Promise<any[]>;
   getGovernmentLicenses: (...args: any[]) => any;
   getPaymentHolds: (...args: any[]) => any;
   getMobilizationExpenses: (...args: any[]) => any;
@@ -67,10 +67,10 @@ export interface ContractingAnalyticsDeps {
 export class ContractingAnalyticsService {
   private readonly db: Kysely<any>;
   private readonly getProjectById: (...args: any[]) => any;
-  private readonly getBoqItems: (...args: any[]) => any;
+  private readonly getBoqItems: (auth: AuthContext, projectId: string) => Promise<any[]>;
   private readonly getEngineeringConstants: (...args: any[]) => any;
   private readonly getMaterialRequisitions: (...args: any[]) => any;
-  private readonly getScheduleTasks: (...args: any[]) => any;
+  private readonly getScheduleTasks: (auth: AuthContext, projectId: string) => Promise<any[]>;
   private readonly getGovernmentLicenses: (...args: any[]) => any;
   private readonly getPaymentHolds: (...args: any[]) => any;
   private readonly getMobilizationExpenses: (...args: any[]) => any;
