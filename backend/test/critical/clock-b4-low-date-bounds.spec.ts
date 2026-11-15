@@ -352,7 +352,10 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
     console.log('✓ §E passed: contracting documents are issued on the tenant day (Midway + Kiritimati)');
 
     // §F — S6 tariff seed effective_date, source pin + value check.
-    const importSrc = read('modules/import-sales/import-sales.service.ts');
+    // syncOfficialTariffs lives in the sourcing slice since the
+    // import-sales split (slice S2); the pin follows the method, the
+    // assertion text is unchanged.
+    const importSrc = read('modules/import-sales/services/import-sourcing.service.ts');
     const seed = fnSlice(importSrc, 'async syncOfficialTariffs(', 3500);
     assert.ok(seed.includes('effective_date'), 'tariff seed supplies effective_date');
     assert.ok(seed.includes('resolveBusinessDateKey(this.db, tenantId, new Date())'), 'tariff seed effective_date derives via resolveBusinessDateKey');

@@ -112,12 +112,16 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   console.log('✓ §B passed: fiscal-year closing comparison keys on the stored year-end day');
 
   // §C — trip-expense date pin.
-  const importSales = read('modules/import-sales/import-sales.service.ts');
-  assert.ok(importSales.includes('formatLocalCalendarDay(trip.start_date)'), 'trip expense date derives via formatLocalCalendarDay');
-  assert.ok(!importSales.includes('trip.start_date.toISOString().slice(0, 10)'), 'trip expense date no longer uses the UTC slice');
+  // postSourcingTripExpense lives in the sourcing slice since the
+  // import-sales split (slice S2); the pin follows the method, the
+  // assertion text is unchanged.
+  const sourcing = read('modules/import-sales/services/import-sourcing.service.ts');
+  assert.ok(sourcing.includes('formatLocalCalendarDay(trip.start_date)'), 'trip expense date derives via formatLocalCalendarDay');
+  assert.ok(!sourcing.includes('trip.start_date.toISOString().slice(0, 10)'), 'trip expense date no longer uses the UTC slice');
   console.log('✓ §C passed: trip expense posts on the trip start day, not the day before');
 
   // §D — quotation expiry normalizer pin.
+  const importSales = read('modules/import-sales/import-sales.service.ts');
   assert.ok(importSales.includes('return formatLocalCalendarDay(v);'), 'quotation expiry derives via formatLocalCalendarDay');
   assert.ok(!importSales.includes('return v.toISOString().slice(0, 10);'), 'quotation expiry no longer uses the UTC slice');
   console.log('✓ §D passed: a quotation expiring today is selectable today');
