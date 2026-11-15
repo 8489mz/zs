@@ -71,6 +71,7 @@ vi.mock('@/shared/hooks/use-catalog-queries', () => ({
       },
     ],
   }),
+  useSettingsQuery: () => ({ data: undefined }),
   useBranchesQuery: () => ({
     data: [{ id: '1', name: 'الفرع الرئيسي', defaultStockLocationId: '10' }],
   }),

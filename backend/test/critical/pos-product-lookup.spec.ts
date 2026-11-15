@@ -70,6 +70,18 @@ class FakeSelectBuilder {
     const node = (columnOrExpression as any)?.toOperationNode?.();
     const fragments: string[] = node?.sqlFragments || [];
     const parameters: Array<{ value?: unknown }> = node?.parameters || [];
+    const extractSqlValues = (rawNode: any): unknown[] => {
+      if (!rawNode || typeof rawNode !== 'object') return [];
+      if (rawNode.kind === 'ValueNode' && 'value' in rawNode) return [rawNode.value];
+      const childParams: any[] = Array.isArray(rawNode.parameters) ? rawNode.parameters : [];
+      return childParams.flatMap((child) => extractSqlValues(child));
+    };
+    const inMatch = fragments.join(' ').match(/LOWER\(\s*TRIM\(\s*(p\.barcode|p\.sku|p\.style_code|pu\.barcode)\s*\)\s*\)\s+IN\s*\(/i);
+    if (inMatch) {
+      const values = extractSqlValues(node).map((v) => String(v ?? '').trim().toLowerCase());
+      this.filters.push({ column: inMatch[1].toLowerCase(), op: 'in', value: values, lower: true });
+      return this;
+    }
     const lowerMatch = fragments.join(' ').match(/LOWER\(\s*(p\.barcode|p\.sku|pu\.barcode)\s*\)/i);
     if (lowerMatch && parameters.length > 0) {
       this.filters.push({ column: lowerMatch[1].toLowerCase(), op: '=', value: parameters[0]?.value, lower: true });
@@ -94,18 +106,26 @@ class FakeSelectBuilder {
   }
 
   private executeProductLookup(): Array<Record<string, unknown>> {
-    const barcodeFilter = this.filters.find((filter) => filter.column === 'p.barcode' && filter.op === '=');
+    const matchesStringFilter = (rawVal: unknown, filter: { op: string; value: unknown; lower?: boolean }) => {
+      if (filter.op === 'in' && Array.isArray(filter.value)) {
+        return filter.value.includes(String(rawVal || '').trim().toLowerCase());
+      }
+      return filter.lower
+        ? String(rawVal || '').toLowerCase() === String(filter.value || '').toLowerCase()
+        : rawVal === filter.value;
+    };
+    const barcodeFilter = this.filters.find((filter) => filter.column === 'p.barcode' && (filter.op === '=' || filter.op === 'in'));
     let rows = this.db.products.filter((product) => product.is_active);
     if (barcodeFilter) {
-      rows = rows.filter((product) => barcodeFilter.lower
-        ? String(product.barcode || '').toLowerCase() === String(barcodeFilter.value || '').toLowerCase()
-        : product.barcode === barcodeFilter.value);
+      rows = rows.filter((product) => matchesStringFilter(product.barcode, barcodeFilter));
     }
-    const skuFilter = this.filters.find((filter) => filter.column === 'p.sku' && filter.op === '=');
+    const skuFilter = this.filters.find((filter) => filter.column === 'p.sku' && (filter.op === '=' || filter.op === 'in'));
     if (skuFilter) {
-      rows = rows.filter((product) => skuFilter.lower
-        ? String(product.sku || '').toLowerCase() === String(skuFilter.value || '').toLowerCase()
-        : product.sku === skuFilter.value);
+      rows = rows.filter((product) => matchesStringFilter(product.sku, skuFilter));
+    }
+    const styleCodeFilter = this.filters.find((filter) => filter.column === 'p.style_code' && (filter.op === '=' || filter.op === 'in'));
+    if (styleCodeFilter) {
+      rows = rows.filter((product) => matchesStringFilter(product.style_code, styleCodeFilter));
     }
     const categoryFilter = this.filters.find((filter) => filter.column === 'p.category_id' && filter.op === '=');
     if (categoryFilter) {
@@ -132,13 +152,19 @@ class FakeSelectBuilder {
   }
 
   private executeUnitBarcodeLookup(): Array<Record<string, unknown>> {
-    const barcodeFilter = this.filters.find((filter) => filter.column === 'pu.barcode' && filter.op === '=');
+    const barcodeFilter = this.filters.find((filter) => filter.column === 'pu.barcode' && (filter.op === '=' || filter.op === 'in'));
     const excludedIds = this.filters.find((filter) => filter.column === 'p.id' && filter.op === 'not in')?.value;
     const excluded = Array.isArray(excludedIds) ? excludedIds.map(Number) : [];
     const matchingUnits = this.db.productUnits
-      .filter((unit) => !barcodeFilter || (barcodeFilter.lower
-        ? String(unit.barcode || '').toLowerCase() === String(barcodeFilter.value || '').toLowerCase()
-        : unit.barcode === barcodeFilter.value))
+      .filter((unit) => {
+        if (!barcodeFilter) return true;
+        if (barcodeFilter.op === 'in' && Array.isArray(barcodeFilter.value)) {
+          return barcodeFilter.value.includes(String(unit.barcode || '').trim().toLowerCase());
+        }
+        return barcodeFilter.lower
+          ? String(unit.barcode || '').toLowerCase() === String(barcodeFilter.value || '').toLowerCase()
+          : unit.barcode === barcodeFilter.value;
+      })
       .filter((unit) => !excluded.includes(Number(unit.product_id)))
       .slice(0, this.rowLimit);
 

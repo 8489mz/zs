@@ -13,8 +13,6 @@ import { CustomSelect } from '@/shared/ui/custom-select';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { getGlobalCurrencySymbol, getGlobalSystemCurrency, isKuwait, isSaudi } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
-import { useAuthStore } from '@/stores/auth-store';
-import { isPlatformAdmin } from '@/shared/system/runtime-environment';
 
 interface SalesInventoryTabProps {
   form: UseFormReturn<SettingsFormInput, undefined, SettingsFormOutput>;
@@ -829,10 +827,6 @@ export const SalesInventorySettingsTab = memo(function SalesInventorySettingsTab
   const loyaltyBookDigits = currencyMoneyDigits(getGlobalSystemCurrency());
   const loyaltyPreviewPoints = Math.floor((1000 / 100) * Number(form.watch('loyaltyPointsPer100Egp') || 10));
   const loyaltyPreviewValue = roundMoneyValue(loyaltyPreviewPoints * Number(form.watch('loyaltyPointRedeemValue') || 0.1), loyaltyBookDigits);
-  const user = useAuthStore((s) => s.user);
-  // Same super-admin test as ModulesSettingsTab: platform super admin, or
-  // the platform tenant's own super_admin account.
-  const isSuperAdmin = isPlatformAdmin(user) || (user?.role === 'super_admin' && String(user?.username || '').trim().toLowerCase() === 'zs');
   const rawActivity = String(form.watch('businessIndustry') || settings?.businessIndustry || (settings as any)?.activityType || 'retail_general').trim().toLowerCase();
   const isContractingVertical = rawActivity === 'contracting' || rawActivity === 'construction' || rawActivity === 'مقاولات' || Boolean(form.watch('contractingModuleEnabled'));
   const isMaritimeVertical = rawActivity === 'maritime_freight' || rawActivity === 'maritime' || rawActivity === 'freight' || rawActivity === 'shipping' || rawActivity === 'شحن' || Boolean(form.watch('maritimeFreightModuleEnabled'));
@@ -2199,14 +2193,9 @@ export const SalesInventorySettingsTab = memo(function SalesInventorySettingsTab
       )}
 
       {/* Scale-barcode format: moved here from the super-admin-only manual
-          switches block of ModulesSettingsTab so a tenant admin who enabled
-          the scale app via the Apps Store can configure it. Own section
-          (not inside the retail-gated sale-rules section above) so the
-          super-admin escape in the visibility rule can still fire on
-          contracting/maritime tenants, exactly as before. Same visibility
-          rule as before: enabled, and not a contracting/maritime vertical
-          unless super admin. Field labels keep the modules-tab i18n keys so
-          the existing translations resolve unchanged. */}
+          switches block of ModulesSettingsTab so any tenant admin who enabled
+          the scale app (all activities) can configure it. Field labels keep the
+          modules-tab i18n keys so existing translations resolve unchanged. */}
       {weightedBarcodeEnabled ? (
         <FormSection
           title={__t('settings.forms.tabs.sales_inventory_settings_tab.weighted_barcode_section_title', "إعدادات باركود الميزان")}
