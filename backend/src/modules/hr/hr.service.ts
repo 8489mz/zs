@@ -1,5 +1,4 @@
 import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
-import { createHash } from 'node:crypto';
 import { CashDrawerService } from '../cash-drawer/cash-drawer.service';
 import { Kysely, sql, type Transaction } from '../../database/kysely';
 import { AppError } from '../../common/errors/app-error';
@@ -41,6 +40,7 @@ import {
   GenerateWpsDto,
 } from './dto/hr.dto';
 import { HrTreasuryAdapter } from './hr-treasury.adapter';
+import { HrPayrollPoliciesService } from './services/hr-payroll-policies.service';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { getTenantTimezone, todayTenantDate, formatTimeInTimezone } from '../../common/utils/tenant-timezone.util';
 import { firstDayOfTenantMonth } from '../../common/utils/client-date-bounds.util';
@@ -50,11 +50,11 @@ import {
   startsNewSession,
   type AttendancePunchResolution,
 } from './attendance-punch.engine';
-import { allocateLoanDeduction, calculatePayrollLoanDueTotal, calculateLoanInstallmentSchedule, addLoanInstallmentMonths, requireLoanMoney } from './payroll-loan-allocation.engine';
+import { allocateLoanDeduction, calculatePayrollLoanDueTotal, calculateLoanInstallmentSchedule,  requireLoanMoney } from './payroll-loan-allocation.engine';
 import { MoneyDigits, currencyMoneyDigits, roundMoney } from '../accounting/engines/money-minor-units.engine';
 import { calculateOvertime, calculateHourlyOvertimePremium, calculateProgressiveDelayDeduction } from './engines/payroll-calculation.engine';
 import { calculateHrPayrollRunLine, requirePayrollMonetaryCurrency, requireStoredHrMoney, requireBankPayrollPaymentReference, canReincludeAutoExcludedPayrollItem, AUTO_PAYROLL_EXCLUSION_NOTE, MANUAL_PAYROLL_EXCLUSION_NOTE } from './engines/hr-payroll-run.engine';
-import { validateHrStatutoryPolicy, requireHrPayrollJurisdictionCurrency, inferStatutoryCountry, STATUTORY_COUNTRIES, type HrStatutoryPolicy } from './engines/hr-statutory-policy.engine';
+import { validateHrStatutoryPolicy, requireHrPayrollJurisdictionCurrency,   type HrStatutoryPolicy } from './engines/hr-statutory-policy.engine';
 import { summarizeHourlyAttendance, calculateEffectiveContractPay, calculateEffectiveCompensationPay, calculateHistoricalOvertimePay, calculateDatedPayrollAdjustment, payrollCalendarMonthFraction, calculatePayableMinutes, resolveExpectedDailyMinutes, daysInCalendarMonth, type EffectiveSalaryContract, type EffectiveCompensationPackage, type ApprovedOvertimeDay } from './engines/hourly-attendance-pay.engine';
 import { calculateAttendancePenalty } from './engines/attendance-penalty.engine';
 import { buildEmployeeFinancialStatement } from './engines/employee-financial-statement.engine';
@@ -64,364 +64,50 @@ import { createPasswordRecord, verifyPassword } from '../../core/auth/utils/pass
 import { assertSecurePasscode } from '../../core/auth/utils/password-policy';
 import { formatDailyDocumentNumber } from '../../common/utils/document-number.util';
 
-type MasterKind = 'departments' | 'job-titles' | 'positions';
-type MasterConfig = {
-  table: 'hr_departments' | 'hr_job_titles' | 'hr_positions';
-  auditName: string;
-};
-
-const masterConfig: Record<MasterKind, MasterConfig> = {
-  departments: { table: 'hr_departments', auditName: 'HR department' },
-  'job-titles': { table: 'hr_job_titles', auditName: 'HR job title' },
-  positions: { table: 'hr_positions', auditName: 'HR position' },
-};
-
-function toId(value: unknown): number | null {
-  const id = Number(value || 0);
-  return id > 0 ? id : null;
-}
-
-function clean(value: unknown): string {
-  return String(value || '').trim();
-}
-
-function normalizeEmployeeNo(value: unknown): string {
-  const raw = clean(value);
-  if (!raw) return '';
-  const withoutLegacyPrefix = raw.replace(/^EMP-?/i, '');
-  if (!/^\d+$/.test(withoutLegacyPrefix)) return '';
-  const numeric = Number(withoutLegacyPrefix);
-  if (!Number.isSafeInteger(numeric) || numeric <= 0) return '';
-  return String(numeric).padStart(3, '0');
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const candidate = error as { code?: unknown; constraint?: unknown; detail?: unknown; message?: unknown };
-  return String(candidate.code || '') === '23505'
-    && (
-      String(candidate.constraint || '').includes('hr_employees_employee_no')
-    || String(candidate.detail || '').includes('employee_no')
-    || String(candidate.message || '').includes('idx_hr_employees_employee_no_unique')
-    );
-}
-
-function normalizeDateOnly(value: unknown): string | null {
-  const text = clean(value);
-  // Accept a strict date or a genuine ISO timestamp only. The old /T.*/ 
-  // pattern silently accepted malformed strings like 2026-02-01Tgarbage.
-  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})?)?$/);
-  if (isoMatch) {
-    const result = `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-    const dt = new Date(result + 'T00:00:00Z');
-    if (!Number.isFinite(dt.getTime()) || dt.toISOString().slice(0, 10) !== result) return null;
-    if (isoMatch[4] !== undefined && !Number.isFinite(Date.parse(text))) return null;
-    return result;
-  }
-  const usMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (usMatch) {
-    const month = Number(usMatch[1]);
-    const day = Number(usMatch[2]);
-    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-      return normalizeDateOnly(`${usMatch[3]}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
-    }
-  }
-  return null;
-}
-
-function nextMonthDate(value?: string | null): string {
-  const normalized = normalizeDateOnly(value);
-  if (normalized) return addMonths(normalized, 1);
-  const now = new Date();
-  return addMonths(`${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`, 1);
-}
-
-function addMonths(value: string, months: number): string {
-  const normalized = normalizeDateOnly(value);
-  if (!normalized) return nextMonthDate();
-  return addLoanInstallmentMonths(normalized, months);
-}
-
-function normalizePayrollMonth(value: unknown): string {
-  const text = clean(value);
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(text)) return '';
-  return text;
-}
-
-function monthRange(periodMonth: string): { from: string; to: string } {
-  const [year, month] = periodMonth.split('-').map(Number);
-  return {
-    from: `${periodMonth}-01`,
-    to: new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10),
-  };
-}
-
-function money(value: unknown, minorUnits: MoneyDigits): number {
-  const amount = Number(value || 0);
-  if (!Number.isFinite(amount) || amount <= 0) return 0;
-  return roundMoney(amount, minorUnits);
-}
-
-/**
- * INV-HR-PAYROLL-BOOK-PRECISION: payroll gates and rounding need the
- * tenant's book precision. Settings currency is the single source; a
- * missing or malformed currency fails closed instead of defaulting to 2.
- */
-async function tenantBookDigits(db: Kysely<Database>, tenantId: string): Promise<MoneyDigits> {
-  const currency = await tenantCurrencyCode(db, tenantId);
-  return currencyMoneyDigits(currency);
-}
-
-async function tenantCurrencyCode(db: Kysely<Database>, tenantId: string): Promise<string> {
-  const setting = await sql<{ value: string }>`
-    SELECT value FROM settings WHERE tenant_id = ${tenantId} AND key = 'currency' LIMIT 1
-  `.execute(db);
-  const currency = clean(setting.rows[0]?.value).replace(/^"|"$/g, '').toUpperCase();
-  if (!/^[A-Z]{3}$/.test(currency)) {
-    throw new AppError('حدد عملة منشأتك قبل حساب المرتبات', 'HR_TENANT_CURRENCY_REQUIRED', 400);
-  }
-  return currency;
-}
-
-function combineNotes(...notes: Array<string | null | undefined>): string {
-  const unique: string[] = [];
-  for (const note of notes) {
-    for (const part of clean(note).split('|')) {
-      const value = part.trim();
-      if (value && !unique.includes(value)) unique.push(value);
-    }
-  }
-  return unique.join(' | ');
-}
-
-function canViewSalary(auth: AuthContext): boolean {
-  return auth.role === 'super_admin' || auth.permissions.includes('hrSalaryView') || auth.permissions.includes('hrSalaryManage');
-}
-
-function hasHrPermission(auth: AuthContext, permission: string): boolean {
-  return auth.role === 'super_admin' || auth.permissions.includes(permission);
-}
-
-const attendanceStatuses = ['present', 'absent', 'late', 'half_day', 'leave', 'excused', 'early_leave'] as const;
-type AttendanceStatus = (typeof attendanceStatuses)[number];
-type PayrollOperationalReview = {
-  attendanceAbsentDays: number;
-  attendanceLateDays: number;
-  attendanceHalfDays: number;
-  attendanceEarlyLeaveDays: number;
-  approvedLeaveDays: number;
-  unpaidLeaveDays: number;
-  suggestedAttendanceDeductionAmount: number;
-  suggestedLeaveDeductionAmount: number;
-  payrollReviewNotes: string;
-  approvedOvertimeMinutes: number;
-  pendingOvertimeMinutes: number;
-};
-type AttendanceExceptionStatus = 'pending' | 'approved' | 'skipped' | 'auto_calculated' | 'needs_review';
-type AttendanceExceptionType = 'early_check_in' | 'late_check_in' | 'early_check_out' | 'late_check_out' | 'missing_check_in' | 'missing_check_out' | 'short_hours' | 'extra_hours' | 'unscheduled_time';
-type CompensationType = 'monthly' | 'hourly';
-type OvertimePolicy = 'review_only' | 'disabled' | 'auto_approved';
-
-function normalizeAttendanceStatus(value: unknown): AttendanceStatus | 'unmarked' {
-  const status = clean(value);
-  if (!status) return 'unmarked';
-  return attendanceStatuses.includes(status as AttendanceStatus) ? (status as AttendanceStatus) : 'unmarked';
-}
-
-function normalizeAttendanceSource(value: unknown): 'manual' | 'import' | 'mobile_gps' {
-  const c = clean(value);
-  if (c === 'import') return 'import';
-  if (c === 'mobile_gps') return 'mobile_gps';
-  return 'manual';
-}
-
-// Deterministic audit key for one saved attendance day: the same payload
-// replayed (double-click, row-save + save-all racing on the same POST)
-// hashes to the same key and writes one audit row; a genuine correction
-// (any field different) hashes differently and still logs. Rows are
-// sorted by employee so row order cannot change the key.
-function buildAttendanceDayAuditKey(
-  tenantId: string,
-  workDate: string,
-  rows: Array<{ employeeId?: unknown; status?: unknown; checkInAt?: unknown; checkOutAt?: unknown; source?: unknown; notes?: unknown }>,
-): string {
-  const canonical = [...rows]
-    .map((row) => ({
-      employeeId: toId(row.employeeId),
-      status: normalizeAttendanceStatus(row.status),
-      checkInAt: row.checkInAt ? new Date(String(row.checkInAt)).toISOString() : null,
-      checkOutAt: row.checkOutAt ? new Date(String(row.checkOutAt)).toISOString() : null,
-      source: normalizeAttendanceSource(row.source),
-      notes: clean(row.notes) || null,
-    }))
-    .sort((a, b) => Number(a.employeeId || 0) - Number(b.employeeId || 0));
-  const digest = createHash('sha256')
-    .update(JSON.stringify({ tenantId, workDate, rows: canonical }))
-    .digest('hex');
-  return `hr-attendance-day:${tenantId}:${workDate}:${digest}`;
-}
-
-function normalizeTimeOnly(value: unknown): string | null {
-  const text = clean(value);
-  const matched = text.match(/^(\d{1,2}):(\d{1,2})/);
-  if (!matched) return null;
-  const hour = Number(matched[1]);
-  const minute = Number(matched[2]);
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
-  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
-  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-}
-
-function timeToMinutes(value: string): number {
-  const [hh, mm] = value.split(':').map(Number);
-  return (hh * 60) + mm;
-}
-
-function inclusiveDaysBetween(from: string, to: string): number {
-  const fromDate = new Date(`${from}T00:00:00Z`);
-  const toDate = new Date(`${to}T00:00:00Z`);
-  const diffMs = toDate.getTime() - fromDate.getTime();
-  return Math.floor(diffMs / (24 * 60 * 60 * 1000)) + 1;
-}
+import {
+  type MasterKind,
+  masterConfig,
+  toId,
+  clean,
+  normalizeEmployeeNo,
+  isUniqueViolation,
+  normalizeDateOnly,
+  nextMonthDate,
+  addMonths,
+  normalizePayrollMonth,
+  monthRange,
+  money,
+  tenantBookDigits,
+  tenantCurrencyCode,
+  combineNotes,
+  canViewSalary,
+  hasHrPermission,
+  type AttendanceExceptionStatus,
+  type AttendanceExceptionType,
+  type CompensationType,
+  type OvertimePolicy,
+  normalizeAttendanceStatus,
+  normalizeAttendanceSource,
+  buildAttendanceDayAuditKey,
+  normalizeTimeOnly,
+  timeToMinutes,
+  inclusiveDaysBetween,
+} from './hr-helpers';
 
 @Injectable()
 export class HrService {
+  private readonly payrollPoliciesService: HrPayrollPoliciesService;
 
   async getPayrollPoliciesConfig(auth: any) {
-    return this.getPayrollPolicies(this.db, auth.tenantId);
+    return this.payrollPoliciesService.getPayrollPoliciesConfig(auth);
   }
 
   async getPayrollPolicies(db: any, tenantId: string) {
-    const settingRows = await sql<{ key: string; value: string }>`
-      SELECT key, value FROM settings WHERE tenant_id = ${tenantId} AND key IN ('currency', 'country')
-    `.execute(db);
-    let tenantCurrency = 'EGP';
-    let tenantCountry = '';
-    for (const r of settingRows.rows) {
-      const val = clean(r.value).replace(/^"|"$/g, '').trim().toUpperCase();
-      if (r.key === 'currency') tenantCurrency = val;
-      if (r.key === 'country') tenantCountry = val;
-    }
-    const defaultCountry = inferStatutoryCountry(tenantCurrency, tenantCountry);
-
-    const defaults = {
-      workHoursPerDay: 8,
-      latenessGracePeriodMinutes: 15,
-      latenessFirstTimePenalty: 0,
-      latenessRepeatPenaltyMultiplier: 1,
-      overtimeMultiplier: 1.5,
-      hrDelayPolicyEnabled: false,
-      hrDelayPolicyFirstTimeDeduction: 0.25,
-      hrDelayPolicySecondTimeDeduction: 0.5,
-      hrDelayPolicyThirdTimeDeduction: 1,
-      hrDelayPolicyFourthTimeDeduction: 1,
-      hrCommissionType: 'none',
-      hrCommissionValue: 0,
-      hrCommissionTarget: 0,
-      hrSocialInsuranceEnabled: false,
-      hrSocialInsuranceEmployeePct: 0,
-      hrSocialInsuranceEmployerPct: 0,
-      hrIncomeTaxEnabled: false,
-      statutoryCountry: defaultCountry,
-      statutoryEffectiveFrom: '2020-01-01',
-      statutoryEffectiveTo: '',
-      statutoryLegalReference: 'اللائحة الداخلية للمنشأة',
-      statutoryReviewed: true,
-      taxPersonalExemption: 0,
-      taxBrackets: [],
-      insuranceConfig: null,
-      maxDeductionPct: 1.0,
-      hrWeekendDays: 'friday,saturday',
-      insuranceProratePartialEmployment: false,
-    };
-
-    const result = await sql<{ value: string }>`SELECT value FROM hr_hr_settings WHERE tenant_id = ${tenantId} AND key = 'payroll_policies' LIMIT 1`.execute(db);
-    if (result.rows.length === 0) return defaults;
-    let parsed: any;
-    try {
-      parsed = JSON.parse(result.rows[0].value as string);
-    } catch {
-      throw new AppError('سياسات الرواتب المحفوظة غير صالحة؛ راجع إعداداتها قبل الاحتساب',
-        'HR_PAYROLL_POLICY_CORRUPT', 409);
-    }
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new AppError('سياسات الرواتب المحفوظة ليست كائناً صالحاً',
-        'HR_PAYROLL_POLICY_CORRUPT', 409);
-    }
-    const merged = { ...defaults, ...parsed };
-
-    // Auto-heal statutory country from tenant settings/currency if missing or unconfigured
-    if (!merged.statutoryCountry || !(STATUTORY_COUNTRIES as readonly string[]).includes(merged.statutoryCountry)) {
-      merged.statutoryCountry = defaultCountry;
-    }
-    // Auto-default statutoryEffectiveFrom if missing or blank
-    if (!merged.statutoryEffectiveFrom || !/^\d{4}-\d{2}-\d{2}$/.test(merged.statutoryEffectiveFrom)) {
-      merged.statutoryEffectiveFrom = '2020-01-01';
-    }
-    // Auto-default statutoryLegalReference if missing or blank
-    if (!merged.statutoryLegalReference || !String(merged.statutoryLegalReference).trim()) {
-      merged.statutoryLegalReference = 'اللائحة الداخلية للمنشأة';
-    }
-    // If neither social insurance nor income tax is enabled, statutory deductions do not apply;
-    // auto-mark statutoryReviewed as true so payroll approval is never blocked.
-    if (!merged.hrSocialInsuranceEnabled && !merged.hrIncomeTaxEnabled) {
-      merged.statutoryReviewed = true;
-    }
-
-    return merged;
+    return this.payrollPoliciesService.getPayrollPolicies(db, tenantId);
   }
 
   async updatePayrollPolicies(auth: any, policies: any) {
-    if (!policies || typeof policies !== 'object' || Array.isArray(policies)) {
-      throw new AppError('بيانات سياسات المرتبات غير صحيحة', 'HR_PAYROLL_POLICY_INVALID', 400);
-    }
-    const { tenantId, accountId } = requireTenantScope(auth);
-    // Resolve tenant country/currency for auto-healing missing statutory fields
-    const settingRows = await sql<{ key: string; value: string }>`
-      SELECT key, value FROM settings WHERE tenant_id = ${tenantId} AND key IN ('currency', 'country')
-    `.execute(this.db);
-    let tenantCurrency = 'EGP';
-    let tenantCountry = '';
-    for (const r of settingRows.rows) {
-      const val = clean(r.value).replace(/^"|"$/g, '').trim().toUpperCase();
-      if (r.key === 'currency') tenantCurrency = val;
-      if (r.key === 'country') tenantCountry = val;
-    }
-    const defaultCountry = inferStatutoryCountry(tenantCurrency, tenantCountry);
-
-    if (!policies.statutoryCountry || !(STATUTORY_COUNTRIES as readonly string[]).includes(policies.statutoryCountry)) {
-      policies.statutoryCountry = defaultCountry;
-    }
-    if (!policies.statutoryEffectiveFrom || !/^\d{4}-\d{2}-\d{2}$/.test(policies.statutoryEffectiveFrom)) {
-      policies.statutoryEffectiveFrom = '2020-01-01';
-    }
-    if (!policies.statutoryLegalReference || !String(policies.statutoryLegalReference).trim()) {
-      policies.statutoryLegalReference = 'اللائحة الداخلية للمنشأة';
-    }
-    if (!policies.hrSocialInsuranceEnabled && !policies.hrIncomeTaxEnabled) {
-      policies.statutoryReviewed = true;
-    } else if (policies.statutoryReviewed === undefined || policies.statutoryReviewed === null) {
-      policies.statutoryReviewed = true;
-    }
-
-    try { validateHrStatutoryPolicy(policies as HrStatutoryPolicy); } catch (error) {
-      throw new AppError(error instanceof Error ? error.message : 'قواعد الاستقطاعات غير صحيحة', 'HR_STATUTORY_POLICY_INVALID', 400);
-    }
-    const jsonStr = JSON.stringify(policies);
-    await this.tx.runInTransaction(this.db, async (trx) => {
-      // Approval obtains this same lock, so a new policy cannot arrive after
-      // validation but before the associated immutable payroll is posted.
-      await sql`SELECT pg_advisory_xact_lock(hashtext(${'hr-policy:' + tenantId}))`.execute(trx);
-      await sql`
-        INSERT INTO hr_hr_settings (tenant_id, account_id, key, value, updated_by, updated_at)
-        VALUES (${tenantId}, ${accountId}, 'payroll_policies', ${jsonStr}, ${auth.userId}, NOW())
-        ON CONFLICT (tenant_id, key)
-        DO UPDATE SET value = ${jsonStr}, updated_by = ${auth.userId}, updated_at = NOW()
-      `.execute(trx);
-    });
-    await this.audit.log('Update HR payroll policies',
-      `Statutory payroll settings updated for country ${clean(policies.statutoryCountry) || 'unconfigured'} by ${auth.username}`, auth);
-    return { success: true };
+    return this.payrollPoliciesService.updatePayrollPolicies(auth, policies);
   }
 
   constructor(
@@ -431,7 +117,13 @@ export class HrService {
     private readonly treasury: HrTreasuryAdapter,
     private readonly accountingPosting: AccountingPostingService,
     @Optional() private readonly cashDrawer?: CashDrawerService,
-  ) {}
+  ) {
+    this.payrollPoliciesService = new HrPayrollPoliciesService({
+      db: this.db,
+      tx: this.tx,
+      audit: this.audit,
+    });
+  }
 
   private scope(auth: AuthContext) {
     return requireTenantScope(auth);
