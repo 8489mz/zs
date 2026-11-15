@@ -1460,20 +1460,10 @@ export class SaasAdminService {
       if (verticalKey !== 'maintenance' && (verticalKey as string) !== 'electronics') {
         modulesToSet['enableMobileStoreFeatures'] = false;
       }
-      // The clothing switch is a plan-gated Apps Store toggle, not a
-      // vertical identity switch: grant it when the effective plan
-      // features include 'clothing' and the tenant is a retail
-      // vertical, force it off ONLY for non-retail verticals, and
-      // otherwise omit it so a tenant admin's hand toggle survives
-      // the sync (the toRevoke marker still takes back a grant this
-      // sync itself made). The old code forced it false for every
-      // vertical except clothing/fashion, overwriting even the
-      // plan-feature grant from FEATURE_TO_MODULE_MAP.
-      if (isNonRetailVertical) {
-        modulesToSet['clothingModuleEnabled'] = false;
-      } else if (effectiveFeatures.has('clothing')) {
-        modulesToSet['clothingModuleEnabled'] = true;
-      }
+      // Plan-gated toggle: off only for non-retail; grant when the plan
+      // has 'clothing'; otherwise omit so a hand toggle survives.
+      if (isNonRetailVertical) { modulesToSet['clothingModuleEnabled'] = false; }
+      else if (effectiveFeatures.has('clothing')) { modulesToSet['clothingModuleEnabled'] = true; }
       if (verticalKey !== 'auto_parts') {
         modulesToSet['autoPartsModuleEnabled'] = false;
       } else {
@@ -1509,16 +1499,8 @@ export class SaasAdminService {
       if (effectiveFeatures.has('sales')) {
         if (!isNonRetailVertical) {
           modulesToSet['posModuleEnabled'] = true;
-          // The weighted barcode is a plan-gated Apps Store toggle
-          // (requiredPlan plan_basic): grant it ONLY to the
-          // supermarket vertical, and NEVER write false for it —
-          // omit the key for every other tenant so a hand toggle
-          // survives the sync. The toRevoke marker still switches
-          // off a key this sync itself granted (e.g. a tenant that
-          // stops being a supermarket).
-          if (verticalKey === 'supermarket') {
-            modulesToSet['weightedBarcodeEnabled'] = true;
-          }
+          // Plan-gated toggle (plan_basic): grant only to supermarket, never false.
+          if (verticalKey === 'supermarket') { modulesToSet['weightedBarcodeEnabled'] = true; }
         } else {
           // For non-retail verticals (maritime, contracting, wholesale van, services),
           // 'sales' represents client invoicing / contracts / IPCs, NEVER retail POS or barcode scales!
