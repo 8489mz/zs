@@ -223,8 +223,11 @@ async function main(): Promise<void> {
 
     // Case 9 — source pin: no invented-50 fallback remains in the
     // import service file.
+    // createQuotation lives in the commercial slice since the
+    // import-sales split (slice S7); the pin follows the method, the
+    // assertion text is unchanged.
     const src = readFileSync(
-      resolve(__dirname, '../../src/modules/import-sales/import-sales.service.ts'),
+      resolve(__dirname, '../../src/modules/import-sales/services/import-commercial.service.ts'),
       'utf8',
     );
     assert.equal(src.includes('assumed_50'), false, 'No assumed_50 source remains');

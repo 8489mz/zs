@@ -121,9 +121,12 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   console.log('✓ §C passed: trip expense posts on the trip start day, not the day before');
 
   // §D — quotation expiry normalizer pin.
-  const importSales = read('modules/import-sales/import-sales.service.ts');
-  assert.ok(importSales.includes('return formatLocalCalendarDay(v);'), 'quotation expiry derives via formatLocalCalendarDay');
-  assert.ok(!importSales.includes('return v.toISOString().slice(0, 10);'), 'quotation expiry no longer uses the UTC slice');
+  // selectQuotation lives in the commercial slice since the
+  // import-sales split (slice S7); the pin follows the method, the
+  // assertion text is unchanged.
+  const commercial = read('modules/import-sales/services/import-commercial.service.ts');
+  assert.ok(commercial.includes('return formatLocalCalendarDay(v);'), 'quotation expiry derives via formatLocalCalendarDay');
+  assert.ok(!commercial.includes('return v.toISOString().slice(0, 10);'), 'quotation expiry no longer uses the UTC slice');
   console.log('✓ §D passed: a quotation expiring today is selectable today');
 
   // §E — period-lock key pin + accountingDateKey doc correction pin.
