@@ -246,11 +246,6 @@ export class HrService {
     return alias ? sql<boolean>`${sql.ref(`${alias}.tenant_id`)} = ${tenantId}` : sql<boolean>`tenant_id = ${tenantId}`;
   }
 
-  private tenantFields(auth: AuthContext) {
-    const { tenantId, accountId } = this.scope(auth);
-    return { tenant_id: tenantId, account_id: accountId };
-  }
-
   private async assertEmployeeBelongsToTenant(employeeId: number, auth: AuthContext): Promise<void> {
     const { tenantId } = this.scope(auth);
     const row = await sql<{ id: number }>`
@@ -400,13 +395,6 @@ export class HrService {
 
   async getEmployeeFinancialStatement(employeeId: number, query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {
     return this.reportsService.getEmployeeFinancialStatement(employeeId, query, auth);
-  }
-
-  private async getPayrollRunStatus(db: Kysely<Database>, runId: number, tenantId: string): Promise<string> {
-    const result = await sql<{ status: string }>`SELECT status FROM hr_payroll_runs WHERE id = ${runId} AND tenant_id = ${tenantId} LIMIT 1`.execute(db);
-    const status = clean(result.rows[0]?.status);
-    if (!status) throw new AppError('Payroll run not found', 'HR_PAYROLL_RUN_NOT_FOUND', 404);
-    return status;
   }
 
   async listPayrollRuns(query: Record<string, unknown>, auth: AuthContext): Promise<Record<string, unknown>> {

@@ -32,7 +32,6 @@
     "src/modules/delivery-reps/van-sales.service.ts": 1883,
     "src/modules/delivery-reps/van-trip-reconciliation.engine.ts": 1295,
     "src/modules/hr/employee-portal.service.ts": 1010,
-    "src/modules/hr/hr.service.ts": 7492,
     "src/modules/import-sales/dto/import-sales.dto.ts": 1774,
     "src/modules/import-sales/import-sales.service.ts": 1442,
     "src/modules/maintenance/maintenance.service.ts": 1267,
