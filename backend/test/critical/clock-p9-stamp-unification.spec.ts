@@ -469,9 +469,12 @@ async function main(): Promise<void> {
       'backcharge host-local fallback is gone',
     );
 
-    const importSales = readSource('../../src/modules/import-sales/import-sales.service.ts');
+    // liquidateBrokerExpenses lives in the treasury slice since the
+    // import-sales split (slice S9); the pin follows the method, the
+    // assertion text is unchanged.
+    const treasury = readSource('../../src/modules/import-sales/services/import-treasury.service.ts');
     assert.ok(
-      importSales.includes(
+      treasury.includes(
         'payment_date: await resolveBusinessDateKey(trx as Transaction<Database>, tenantId, new Date()),',
       ),
       'broker-expense insert supplies payment_date as the tenant day',
