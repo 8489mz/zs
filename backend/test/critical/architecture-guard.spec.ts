@@ -230,7 +230,8 @@ async function main(): Promise<void> {
     { file: 'backend/src/modules/hr/hr.service.ts', reason: 'leave-day counts + HR loan ledger listing (amounts read as stored; loan postings are payroll-engine values)', toFixed2: 11, inlineRound: 0 },
     { file: 'backend/src/modules/import-sales/engines/import-feasibility.engine.ts', reason: 'feasibility analysis: weights, volumes, ROI/margin percentages — not postings', toFixed2: 11, inlineRound: 0 },
     { file: 'backend/src/modules/import-sales/engines/import-landed-cost.engine.ts', reason: 'landed-cost shipment summary (USD total for display; per-item landed costs already route through roundMoney at book digits)', toFixed2: 1, inlineRound: 0 },
-    { file: 'backend/src/modules/import-sales/import-sales.service.ts', reason: 'import-sales non-posting math (report/summary/message values; postings route through the canonical landed-cost/WAC engines per the engine map money row)', toFixed2: 45, inlineRound: 0 },
+    { file: 'backend/src/modules/import-sales/import-sales.service.ts', reason: 'import-sales non-posting math (report/summary/message values; postings route through the canonical landed-cost/WAC engines per the engine map money row)', toFixed2: 10, inlineRound: 0 },
+    { file: 'backend/src/modules/import-sales/services/import-container-deposits.service.ts', reason: 'import-sales container-deposits slice (deposit/refund postings + autopsy sheet; the refund JE posts the toFixed(2)-rounded settled total directly and rounded totals persist to the deposit row — pre-existing, byte-preserved; autopsy values are display/summary)', toFixed2: 35, inlineRound: 0 },
     { file: 'backend/src/modules/import-sales/services/import-treasury.service.ts', reason: 'import-sales treasury slice (customs broker registry / advances / liquidation / FX acquisitions; broker list + statement summary values and advance settled/remaining balances stored on the advance row; the liquidation JE posts dto amounts through the canonical landed-cost/WAC engines per the engine map money row)', toFixed2: 8, inlineRound: 0 },
     { file: 'backend/src/modules/import-sales/services/import-closure-audit.service.ts', reason: 'import-sales closure/audit slice (project partners + close / flow-events traceability / reconciliation scan + exceptions; close-guard error-message values; postings route through the canonical landed-cost/WAC engines per the engine map money row)', toFixed2: 3, inlineRound: 0 },
     { file: 'backend/src/modules/import-sales/services/import-commercial.service.ts', reason: 'import-sales commercial slice (quotations/samples/conversion/proforma/PO/documents/approvals/profit-attribution; PO foreign-total rounding; postings route through the canonical landed-cost/WAC engines per the engine map money row)', toFixed2: 1, inlineRound: 0 },
@@ -417,10 +418,23 @@ async function main(): Promise<void> {
     accountingService.includes('resolveFxRate(this.db, scope.tenantId, fromCode, { asOf })'),
     'convertCurrency must pass asOf through resolveFxRate',
   );
-  const importSales = stripComments(readFile('backend/src/modules/import-sales/import-sales.service.ts'));
+  // The 5 import-sales FX sites live across the facade + its slices
+  // since the import-sales split (S7/S9/S10/S11 moved them out of the
+  // facade; the facade itself now holds 0). Count them all.
+  const importSalesFxFiles = [
+    'backend/src/modules/import-sales/import-sales.service.ts',
+    'backend/src/modules/import-sales/services/import-commercial.service.ts',
+    'backend/src/modules/import-sales/services/import-treasury.service.ts',
+    'backend/src/modules/import-sales/services/import-foreign-transfers.service.ts',
+    'backend/src/modules/import-sales/services/import-container-deposits.service.ts',
+  ];
+  const importSalesFxCount = importSalesFxFiles.reduce(
+    (sum, file) => sum + countOccurrences(stripComments(readFile(file)), 'resolveFxRate('),
+    0,
+  );
   assert.ok(
-    countOccurrences(importSales, 'resolveFxRate(') >= 1,
-    'import-sales must resolve FX through resolveFxRate',
+    importSalesFxCount >= 5,
+    'import-sales must resolve FX through resolveFxRate (5 sites across the facade + slices)',
   );
   const landed = readFile('backend/src/modules/import-sales/engines/import-landed-cost.engine.ts');
   assert.ok(
