@@ -204,6 +204,7 @@
     "test/critical/pos-plan-sync-module-durability.spec.ts",
     "test/critical/sale-return-cash-only.spec.ts",
     "test/critical/sale-edit-payload-contract.spec.ts",
-    "test/critical/cash-return-approval-threshold.spec.ts"
+    "test/critical/cash-return-approval-threshold.spec.ts",
+    "test/critical/exchange-approval-quantities.spec.ts"
   ]
 }

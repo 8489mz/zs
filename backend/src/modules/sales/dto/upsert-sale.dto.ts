@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Min, Validate, ValidateNested, ValidationArguments, ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
 
 class SalePaymentDto {
   @IsIn(['cash', 'card', 'wallet', 'instapay'])
@@ -23,7 +23,12 @@ class SaleItemDto {
 
   @Type(() => Number)
   @IsNumber()
-  @Min(0.001)
+  // INV-EXCHANGE-APPROVAL-QUANTITIES: NO @Min here — the quantity
+  // rule lives on UpsertSaleDto.items (SaleItemQtyConstraint). A
+  // nested item cannot see its parent's exchangeSaleId, and an
+  // exchange return line legitimately carries qty: -qty. Ordinary
+  // items still need qty >= 0.001; the constraint enforces exactly
+  // that, plus the exchange-return exception below.
   qty!: number;
 
   @IsOptional()
@@ -95,6 +100,55 @@ class SaleItemDto {
   @IsOptional()
   @IsArray()
   serials?: string[];
+}
+
+/**
+ * INV-EXCHANGE-APPROVAL-QUANTITIES: which quantity failure, if any,
+ * the sale items carry. 'min' — a line whose |qty| is below 0.001
+ * (zero, or too small in either sign); 'exchange' — a negative line
+ * whose exchange linkage is missing or malformed. null — every line
+ * is fine: qty >= 0.001, or qty <= -0.001 on a sale carrying a valid
+ * exchangeSaleId with a valid originalSaleItemId on that line.
+ */
+type SaleItemQtyFailure = 'min' | 'exchange';
+
+function findInvalidSaleItemQty(items: unknown, exchangeSaleId: unknown): SaleItemQtyFailure | null {
+  if (!Array.isArray(items)) return null; // @IsArray reports that
+  const hasExchangeSource =
+    typeof exchangeSaleId === 'number' && Number.isInteger(exchangeSaleId) && exchangeSaleId >= 1;
+  for (const item of items) {
+    const qty = (item as { qty?: unknown } | null)?.qty;
+    if (typeof qty !== 'number' || Number.isNaN(qty)) return null; // @IsNumber reports that
+    if (qty >= 0.001) continue;
+    if (qty <= -0.001 && hasExchangeSource) {
+      const originalId = (item as { originalSaleItemId?: unknown } | null)?.originalSaleItemId;
+      if (typeof originalId === 'number' && Number.isInteger(originalId) && originalId >= 1) continue;
+      return 'exchange';
+    }
+    return 'min';
+  }
+  return null;
+}
+
+@ValidatorConstraint({ name: 'saleItemQty', async: false })
+class SaleItemQtyConstraint implements ValidatorConstraintInterface {
+  validate(items: unknown, args: ValidationArguments): boolean {
+    return findInvalidSaleItemQty(items, (args.object as { exchangeSaleId?: unknown } | null)?.exchangeSaleId) === null;
+  }
+
+  defaultMessage(args?: ValidationArguments): string {
+    const failure = findInvalidSaleItemQty(
+      args?.value,
+      (args?.object as { exchangeSaleId?: unknown } | null)?.exchangeSaleId,
+    );
+    if (failure === 'exchange') {
+      return 'السطور السالبة في الاستبدال تتطلب فاتورة أصلية وسطراً أصلياً مرتبطاً';
+    }
+    // The 'min' wording is byte-identical to the message the old
+    // @Min(0.001) produced through the pipe (the pipe keeps Arabic
+    // messages verbatim), so ordinary items see no change.
+    return 'الحقل أصناف الطلب > الكمية يجب أن يكون أكبر من أو يساوي 0.001.';
+  }
 }
 
 export class UpsertSaleDto {
@@ -296,6 +350,7 @@ export class UpsertSaleDto {
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => SaleItemDto)
+  @Validate(SaleItemQtyConstraint)
   items!: SaleItemDto[];
 
   @IsArray()
