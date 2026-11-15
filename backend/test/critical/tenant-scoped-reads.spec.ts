@@ -9,13 +9,13 @@ import { resolve } from 'node:path';
 
 const read = (rel: string) => readFileSync(resolve(__dirname, '../../src', rel), 'utf8');
 
-// HR split: the reads now live across the facade + the extracted services.
-// The safety property is checked over the concatenated text; add the next
-// split's service here when it moves a read. Order matters only for MT-04
-// (withdrawals in H5 must precede summary in H6); every other section
-// sits inside a single file.
+// HR split: the reads now live in the extracted services. The safety
+// property is checked over the concatenated slice text; add the next split's
+// service here when it moves a read. The facade is NOT included: its methods
+// are thin delegates, and section() would match a delegate stub instead of
+// the real method body. Order matters only for MT-04 (withdrawals in H5
+// must precede summary in H6); every other section sits inside one file.
 const hrSources = [
-  'modules/hr/hr.service.ts',
   'modules/hr/services/hr-employee-records.service.ts', // H2: MT-03
   'modules/hr/services/hr-loans.service.ts', // H4: MT-01, MT-08
   'modules/hr/services/hr-advances.service.ts', // H5: MT-04, O28 caller

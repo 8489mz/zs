@@ -190,8 +190,8 @@ async function main(): Promise<void> {
       // 'fixed' unit this throws HR_PAYROLL_DATED_ADJUSTMENT_INVALID
       // and fails the whole run build.
       const hrService = buildHrService(db);
-      await (hrService as unknown as { rebuildPayrollRunItems: (db: unknown, runId: number, itemStatus: string, tenantId: string) => Promise<void> })
-        .rebuildPayrollRunItems(db, 7, 'draft', TENANT);
+      await (hrService as unknown as { payrollRebuildService: { rebuildPayrollRunItems: (db: unknown, runId: number, itemStatus: string, tenantId: string) => Promise<void> } })
+        .payrollRebuildService.rebuildPayrollRunItems(db, 7, 'draft', TENANT);
       const item = await (db as any).selectFrom('hr_payroll_run_items').selectAll().where('id', '=', 1).executeTakeFirst();
       assert.equal(Number(item.net_pay), 4975, 'net pay is base 5000 minus the 25 shortage');
       const applied = await adjustments(db);

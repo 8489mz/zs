@@ -175,7 +175,7 @@ async function rebuildCase(periodMonth: string, from: string, to: string, salary
       CREATE TABLE hr_employees (id bigint PRIMARY KEY, tenant_id text, display_name text, status text, compensation_type text, hourly_rate numeric, expected_daily_hours numeric, hire_date date, end_of_service_date date, has_social_insurance boolean, insurance_salary numeric, has_income_tax boolean, pay_frequency text, user_id bigint, commission_type text, commission_value numeric, commission_target numeric, delay_policy text, approved_leave_days numeric);
       CREATE TABLE hr_employment_contracts (id bigint PRIMARY KEY, tenant_id text, employee_id bigint, base_salary numeric, currency text, status text, start_date date, end_date date);
       CREATE TABLE hr_compensation_packages (id bigint PRIMARY KEY, tenant_id text, employee_id bigint, allowance_amount numeric, deduction_amount numeric, effective_from date, effective_to date);
-      CREATE TABLE hr_employee_adjustments (id bigint PRIMARY KEY, tenant_id text, employee_id bigint, run_id bigint, item_id bigint, status text, applied_in_run_id bigint, amount numeric, date date, adjustment_type text, amount_type text, accounting_category text);
+      CREATE TABLE hr_employee_adjustments (id bigint PRIMARY KEY, tenant_id text, employee_id bigint, run_id bigint, item_id bigint, status text, applied_in_run_id bigint, amount numeric, date date, adjustment_type text, amount_type text, accounting_category text, source_type text, source_id text);
       CREATE TABLE hr_payroll_item_adjustments (id bigint PRIMARY KEY, tenant_id text, payroll_item_id bigint, adjustment_type text, amount numeric);
       CREATE TABLE hr_end_of_service_settlements (id bigint PRIMARY KEY, tenant_id text, employee_id bigint, status text);
       CREATE TABLE hr_attendance_records (id bigint PRIMARY KEY, tenant_id text, employee_id bigint, work_date date, status text, check_in_at timestamptz, check_out_at timestamptz, prior_sessions_minutes integer NOT NULL DEFAULT 0);
@@ -197,7 +197,7 @@ async function rebuildCase(periodMonth: string, from: string, to: string, salary
       INSERT INTO hr_attendance_records VALUES (1,'t1',1,'${absentDate}','absent',NULL,NULL,0);
     `);
 
-    const rebuild = service as unknown as { rebuildPayrollRunItems: (db: unknown, runId: number, itemStatus: string, tenantId: string) => Promise<void> };
+    const rebuild = (service as unknown as { payrollRebuildService: { rebuildPayrollRunItems: (db: unknown, runId: number, itemStatus: string, tenantId: string) => Promise<void> } }).payrollRebuildService;
     await withTimeout(rebuild.rebuildPayrollRunItems(db, 7, 'draft', 't1'), 25000, `${periodMonth} rebuild`);
 
     const item = await pg.query<{ penalty_deduction: string; status: string }>(

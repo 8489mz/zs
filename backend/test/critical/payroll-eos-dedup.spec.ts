@@ -166,7 +166,7 @@ async function main(): Promise<void> {
 
     const range = { from: '2026-02-01', to: '2026-02-28' };
     const review = (tenantId: string, employeeId: number) =>
-      (hr as any).calculatePayrollOperationalReview(
+      (hr as any).payrollReviewService.calculatePayrollOperationalReview(
         db, range, [employeeId],
         new Map([[employeeId, 9000]]), tenantId,
         new Map([[employeeId, 9000]]), undefined, 2,

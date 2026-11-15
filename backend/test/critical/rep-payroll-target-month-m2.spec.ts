@@ -180,8 +180,11 @@ async function seedRun(db: Kysely<Database>, runId: number, monthOffset: number,
 }
 
 async function rebuild(db: Kysely<Database>, hrService: any, runId: number): Promise<void> {
-  await (hrService as unknown as { rebuildPayrollRunItems: (db: unknown, runId: number, itemStatus: string, tenantId: string) => Promise<void> })
-    .rebuildPayrollRunItems(db, runId, 'draft', TENANT);
+  // HR split: rebuildPayrollRunItems moved to the payroll-rebuild slice; the
+  // facade wires it as payrollRebuildService (public-in-slice, no facade
+  // delegate — the method was private before the split).
+  await (hrService as unknown as { payrollRebuildService: { rebuildPayrollRunItems: (db: unknown, runId: number, itemStatus: string, tenantId: string) => Promise<void> } })
+    .payrollRebuildService.rebuildPayrollRunItems(db, runId, 'draft', TENANT);
 }
 
 async function adjustments(db: Kysely<Database>): Promise<any[]> {
