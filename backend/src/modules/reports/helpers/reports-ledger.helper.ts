@@ -125,8 +125,13 @@ export function mapLedgerEntries(rows: PartnerLedgerEntryRow[], direction: Ledge
       referenceId: row.reference_id ? String(row.reference_id) : '',
       createdAt: row.created_at || '',
       /* INV-SUPPLIER-ADVANCE-OVERDRAFT-LIMIT: the advance amount of a
-       * 'supplier_advance' marker row; null on every other entry type. */
-      advanceAmount: row.advance_amount != null ? Number(row.advance_amount) : null,
+       * 'supplier_advance' marker row; omitted on every other entry type
+       * so the ledger shape stays exactly as pinned by
+       * reports-ledger.helper.spec.ts (deepStrictEqual — a null field
+       * on ordinary rows broke it in ci-full #49). */
+      ...(row.advance_amount != null
+        ? { advanceAmount: Number(row.advance_amount) }
+        : {}),
     };
   });
 }
