@@ -41,15 +41,22 @@ export const DEFAULT_OPERATOR_PERMS = [
  * without a supervisor password, price fix, wholesale price, plus
  * the read-only screens), so he never blocks waiting for a
  * supervisor; the shop owner can trim the list per user if he
- * wants less. Deliberately OFF: accounting (full financial books),
- * canEditInvoices (posted invoices are never rewritten),
- * canDelete (destructive), and the system-admin keys (settings,
- * canManageSettings, canEditUsers, canManageUsers,
- * canManageBackups). Reps and attendance were already in the
- * default and stay pinned by the spec. */
+ * wants less. canManageBranchStock is in: a branch-stock write
+ * throws LOCATION_SCOPE_FORBIDDEN without it (cashier Baghdadi
+ * could not add a product). canAdjustInventory is in: product
+ * create with opening stock > 0 throws
+ * INVENTORY_ADJUSTMENT_FORBIDDEN without it. Deliberately OFF:
+ * accounting (full financial books), reports (a cashier seeing
+ * reports mid-shift breaks the blind close), canEditInvoices
+ * (posted invoices are never rewritten), canDelete (destructive),
+ * and the system-admin keys (settings, canManageSettings,
+ * canEditUsers, canManageUsers, canManageBackups). Reps and
+ * attendance were already in the default and stay pinned by the
+ * spec. Defaults apply at creation only; existing cashiers are
+ * unchanged (no backfill). */
 export const DEFAULT_CASHIER_PERMS = [
   'sales', 'kitchen', 'cashDrawer', 'customers', 'suppliers', 'accounts', 'purchases', 'products', 'returns', 'deliveryReps', 'hr', 'hrAttendance', 'canPrint', 'services', 'treasury',
-  'dashboard', 'inventory', 'reports', 'pricingCenterView', 'canDiscount', 'canDirectReturn', 'canEditPrice', 'canSellWholesale',
+  'dashboard', 'inventory', 'pricingCenterView', 'canDiscount', 'canDirectReturn', 'canEditPrice', 'canSellWholesale', 'canManageBranchStock', 'canAdjustInventory',
 ];
 
 export const DEFAULT_MARITIME_OPS_PERMS = [

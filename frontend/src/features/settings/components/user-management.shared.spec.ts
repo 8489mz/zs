@@ -103,23 +103,30 @@ describe('cashier template is maximal for the daily job (INV-CASHIER-DEFAULT-MAX
    * invoices, deletes, or administers the system. Reps and
    * attendance were already in the default (deliveryReps gates
    * every rep endpoint; hrAttendance gates the attendance
-   * endpoints and the employees list) and stay pinned here. */
+   * endpoints and the employees list) and stay pinned here.
+   * canManageBranchStock and canAdjustInventory were added so a
+   * new cashier can add a product and create it with opening
+   * stock without a supervisor gate (branch-stock write and
+   * opening-stock create are server-gated on those keys).
+   * 'reports' was REMOVED: a cashier seeing reports mid-shift
+   * breaks the blind close. */
   const EXPECTED_CASHIER_PERMISSIONS = [
-    'accounts', 'canDirectReturn', 'canDiscount', 'canEditPrice', 'canPrint', 'canSellWholesale',
+    'accounts', 'canAdjustInventory', 'canDirectReturn', 'canDiscount', 'canEditPrice',
+    'canManageBranchStock', 'canPrint', 'canSellWholesale',
     'cashDrawer', 'customers', 'dashboard', 'deliveryReps', 'hr', 'hrAttendance', 'inventory',
-    'kitchen', 'pricingCenterView', 'products', 'purchases', 'reports', 'returns', 'sales',
+    'kitchen', 'pricingCenterView', 'products', 'purchases', 'returns', 'sales',
     'services', 'suppliers', 'treasury',
   ];
   const FORBIDDEN_CASHIER_PERMISSIONS = [
     'accounting', 'canEditInvoices', 'canDelete', 'settings',
-    'canManageSettings', 'canManageBackups', 'canEditUsers', 'canManageUsers',
+    'canManageSettings', 'canManageBackups', 'canEditUsers', 'canManageUsers', 'reports',
   ];
 
-  it('cashier template is exactly the 23-key maximal set', () => {
+  it('cashier template is exactly the 24-key maximal set', () => {
     const cashier = USER_ROLE_TEMPLATES.cashier;
     expect(cashier.role).toBe('cashier');
     expect([...cashier.permissions].sort()).toEqual([...EXPECTED_CASHIER_PERMISSIONS].sort());
-    expect(cashier.permissions).toHaveLength(23);
+    expect(cashier.permissions).toHaveLength(24);
   });
 
   it('blankUserDraft(cashier) carries the same set', () => {
@@ -133,6 +140,24 @@ describe('cashier template is maximal for the daily job (INV-CASHIER-DEFAULT-MAX
   it('includes the two supervisor gates the owner ticked by hand (discount + direct return)', () => {
     expect(USER_ROLE_TEMPLATES.cashier.permissions).toContain('canDiscount');
     expect(USER_ROLE_TEMPLATES.cashier.permissions).toContain('canDirectReturn');
+  });
+
+  it('includes the branch-stock and inventory-adjustment gates (product add / opening stock)', () => {
+    /* canManageBranchStock: inventory-scope.service.ts
+     * assertLocationScope 'write' on branch_stock locations throws
+     * LOCATION_SCOPE_FORBIDDEN without it — this is why cashier
+     * Baghdadi could not add a product. canAdjustInventory: product
+     * create with opening stock > 0 throws
+     * INVENTORY_ADJUSTMENT_FORBIDDEN without it. */
+    expect(USER_ROLE_TEMPLATES.cashier.permissions).toContain('canManageBranchStock');
+    expect(USER_ROLE_TEMPLATES.cashier.permissions).toContain('canAdjustInventory');
+    expect(DEFAULT_CASHIER_PERMS).toContain('canManageBranchStock');
+    expect(DEFAULT_CASHIER_PERMS).toContain('canAdjustInventory');
+  });
+
+  it('keeps reports out of the default (blind close)', () => {
+    expect(USER_ROLE_TEMPLATES.cashier.permissions).not.toContain('reports');
+    expect(DEFAULT_CASHIER_PERMS).not.toContain('reports');
   });
 
   it('keeps the books, posted invoices, delete and system admin out of the default', () => {
