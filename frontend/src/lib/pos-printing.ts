@@ -18,6 +18,10 @@ export interface PrintReceiptOptions {
   isPurchase?: boolean;
   footerText?: string;
   copyType?: 'customer' | 'merchant' | 'dual';
+  /* A reprint of an already-posted sale: the printed receipt is
+   * marked as a duplicate copy (see the template banner), so a
+   * reprint can never pass as the original. */
+  isReprint?: boolean;
 }
 
 export function openReceiptDocument(
@@ -191,6 +195,7 @@ function buildPostedSaleDocument(sale: Sale, options: PrintReceiptOptions) {
     tipAmount: Number((sale as any).tipAmount || (sale as any).tip_amount || 0),
     guestCount: Number((sale as any).guestCount || (sale as any).guest_count || 0),
     copyType: options.copyType || (options.settings?.printDualReceiptForOnlineDelivery && (sale.orderType === 'delivery' || sale.paymentChannel === 'instapay' || sale.paymentChannel === 'wallet' || sale.paymentChannel === 'card') ? 'dual' : 'customer'),
+    isReprint: options.isReprint,
   });
 }
 

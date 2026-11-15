@@ -29,7 +29,9 @@ export function PosScannedInvoiceModal({
 
   const handlePrint = () => {
     try {
-      printPostedSaleReceipt(sale, { pageSize: 'receipt', settings });
+      /* A print from this modal is a reprint of an already-posted
+       * sale: the printed receipt carries the duplicate mark. */
+      printPostedSaleReceipt(sale, { pageSize: 'receipt', settings, isReprint: true });
       setPrintSuccess(true);
       setTimeout(() => setPrintSuccess(false), 3000);
     } catch {

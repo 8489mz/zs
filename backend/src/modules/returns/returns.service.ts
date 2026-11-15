@@ -711,21 +711,26 @@ export class ReturnsService {
     const moneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
     const idemCtx = idempotencyStorage.getStore();
 
-    // Verify manager permission if cashier doesn't have direct return privileges.
-    // A refund-override still always needs manager approval (unchanged).
-    // Otherwise the approval decision is deferred into the transaction,
-    // where the real cash-refund amount is known: manager PIN/password
-    // is required only for a LARGE cash refund (see
+    // The approval decision is deferred into the transaction, where
+    // the real cash-refund amount is known: manager PIN/password is
+    // required only for a LARGE cash refund (see
     // INV-SPIRIT-LARGE-CASH-REFUND). Small returns proceed with the
-    // recorded reason and no approval credential.
-    const isPrivileged = auth.role === 'super_admin' || auth.role === 'admin' || (auth.permissions && auth.permissions.includes('canDirectReturn'));
+    // recorded reason and no approval credential. A refund-override
+    // still always needs manager approval (unchanged).
+    // The threshold gate binds canDirectReturn holders too: the
+    // permission no longer bypasses the gate — below the threshold
+    // the gate never fires, so small returns still need no approval,
+    // but at or above the threshold a privileged cashier must still
+    // present a manager PIN/password. Only the admin/super_admin
+    // roles bypass the gate entirely.
+    const isAdminRole = auth.role === 'super_admin' || auth.role === 'admin';
     let approvedByName: string | undefined;
     const overrideRequested = Boolean(String(payload.refundOverrideReason || '').trim());
 
     if (overrideRequested && !['admin', 'super_admin'].includes(auth.role)) {
       approvedByName = await this.verifyManagerAuthorization(this.db, payload.managerPin || '', auth);
     }
-    const approvalRequest = !isPrivileged && approvedByName === undefined
+    const approvalRequest = !isAdminRole && approvedByName === undefined
       ? { secret: payload.managerPin || '', threshold: await this.getLargeCashRefundThreshold(auth) }
       : undefined;
 

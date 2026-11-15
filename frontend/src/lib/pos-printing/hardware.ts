@@ -9,6 +9,10 @@ export interface HardwarePrintOptions {
   isPurchase?: boolean;
   footerText?: string;
   copyType?: 'customer' | 'merchant' | 'dual';
+  /* A reprint of an already-posted sale: the printed receipt is
+   * marked as a duplicate copy, so a reprint can never pass as
+   * the original — same mark as the HTML receipt template. */
+  isReprint?: boolean;
 }
 
 export interface HardwarePrinterResponse {
@@ -88,6 +92,11 @@ export function formatSaleForHardwarePrinter(sale: Sale, options?: HardwarePrint
     out += `الرقم الضريبي: ${taxNumber}\n`;
   }
   out += `${doubleDivider}\n`;
+  if (options?.isReprint) {
+    const reprintMark = '*** نسخة مكررة - REPRINT ***';
+    out += `${reprintMark.padStart(Math.floor((width + reprintMark.length) / 2))}\n`;
+    out += `${doubleDivider}\n`;
+  }
 
   const docNo = String(sale.docNo || sale.id || '—');
   out += `إيصال بيع: ${docNo}\n`;

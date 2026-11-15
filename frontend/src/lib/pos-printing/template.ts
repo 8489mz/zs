@@ -979,6 +979,10 @@ export function buildReceiptDocument(options: {
   cardScheme?: string | null;
   cardLastFour?: string | null;
   copyType?: 'customer' | 'merchant' | 'dual';
+  /* A reprint of an already-posted sale: every copy rendered
+   * carries the duplicate banner, so a reprint can never pass
+   * as the original. */
+  isReprint?: boolean;
 }) {
   const compact = isCompactReceipt(options.pageSize, options.settings);
   const showCustomer = getPrintOption(options.settings, 'printShowCustomer', true);
@@ -1068,9 +1072,13 @@ export function buildReceiptDocument(options: {
     const copyHeaderBanner = isMerchant
       ? `<div class="receipt-copy-banner" style="text-align:center; font-weight:800; font-size:11px; padding:3px 6px; border:1px dashed #000; margin-bottom:5px; background:#fff; color:#000;">*** نسخة المحل والدرج ***</div>`
       : '';
+    const reprintBanner = options.isReprint
+      ? `<div class="receipt-reprint-banner" style="text-align:center; font-weight:800; font-size:11px; padding:3px 6px; border:1px dashed #000; margin-bottom:5px; background:#fff; color:#000;">*** نسخة مكررة - REPRINT ***</div>`
+      : '';
 
     return `
       <div class="receipt-theme-${theme} receipt-copy-${copy}">
+        ${reprintBanner}
         ${copyHeaderBanner}
         ${renderStoreHeader(options.settings, compact)}
         ${renderMetaPanel(metaRows, compact, options.settings)}

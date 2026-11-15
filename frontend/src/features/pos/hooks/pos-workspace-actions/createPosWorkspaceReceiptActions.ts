@@ -18,23 +18,23 @@ export function createPosWorkspaceReceiptActions(params: PosWorkspaceActionParam
     params.requestBarcodeFocus();
   }
 
-  function printLastSaleAs(pageSize: 'receipt' | 'a4') {
+  function printLastSaleAs(pageSize: 'receipt' | 'a4', isReprint = false) {
     if (!params.lastSale) return false;
     const cashierName = (params.ownOpenShift as any)?.openedByName || params.authUserName || '—';
-    printPostedSaleReceipt(params.lastSale, { pageSize, settings: params.settings || null, cashierName });
+    printPostedSaleReceipt(params.lastSale, { pageSize, settings: params.settings || null, cashierName, isReprint });
     params.requestBarcodeFocus();
     return true;
   }
 
   function reprintLastSale() {
-    if (!printLastSaleAs(params.settings?.paperSize === 'receipt' ? 'receipt' : 'a4')) {
+    if (!printLastSaleAs(params.settings?.paperSize === 'receipt' ? 'receipt' : 'a4', true)) {
       params.setSubmitMessage('لا توجد فاتورة أخيرة لإعادة طباعتها');
       params.requestBarcodeFocus();
     }
   }
 
   function reprintLastSaleReceipt() {
-    if (!printLastSaleAs('receipt')) {
+    if (!printLastSaleAs('receipt', true)) {
       reprintLastSale();
     }
   }

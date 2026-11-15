@@ -55,6 +55,10 @@ export function PosRecentSalesReprintModal({
         pageSize,
         settings: settings || null,
         cashierName,
+        /* Every print from this modal is a reprint of an
+         * already-posted sale: the printed receipt carries the
+         * duplicate mark, so it can never pass as the original. */
+        isReprint: true,
       });
       setFeedbackMessage(`تم إرسال الفاتورة #${saleToPrint.docNo || saleToPrint.id} للطباعة (${pageSize === 'receipt' ? 'ريسيت' : 'A4'})`);
       setTimeout(() => setFeedbackMessage(''), 3500);

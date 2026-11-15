@@ -78,7 +78,6 @@ export function ReturnsWorkspace() {
   const settingsQuery = useSettingsQuery();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
-  const canDirectReturn = user?.role === 'super_admin' || user?.role === 'admin' || Boolean(user?.permissions?.includes('canDirectReturn'));
 
   const invoiceRows = useMemo(() => {
     const rawSales: Sale[] = Array.isArray(salesQuery.data)
@@ -218,9 +217,13 @@ export function ReturnsWorkspace() {
   );
   const needsManagerApprovalForGoodwill = goodwillExceedsComputed && !isAdminRole;
   // Manager approval is required only for a large cash refund; the
-  // backend enforces the same threshold authoritatively.
+  // backend enforces the same threshold authoritatively. The gate
+  // binds canDirectReturn holders too — only the admin roles
+  // bypass it — so the PIN field must appear for a privileged
+  // cashier on a large cash return, or the backend would refuse
+  // with no way to present the credential.
   const largeCashRefundThreshold = Number((settingsQuery.data as any)?.posLargeCashRefundThreshold ?? 500);
-  const needsManagerApprovalForReturn = (!canDirectReturn && form.settlementMode === 'refund' && form.refundMethod === 'cash' && expectedReturnValue >= largeCashRefundThreshold) || needsManagerApprovalForGoodwill;
+  const needsManagerApprovalForReturn = (!isAdminRole && form.settlementMode === 'refund' && form.refundMethod === 'cash' && expectedReturnValue >= largeCashRefundThreshold) || needsManagerApprovalForGoodwill;
 
   const summary = query.data?.summary;
   const salesReturns = Number(summary?.salesReturns || 0);
