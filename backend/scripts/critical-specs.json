@@ -202,6 +202,7 @@
     "test/critical/tenant-wipe-fk-closure.spec.ts",
     "test/critical/pos-weighted-barcode-toggle-persists.spec.ts",
     "test/critical/pos-plan-sync-module-durability.spec.ts",
-    "test/critical/sale-return-cash-only.spec.ts"
+    "test/critical/sale-return-cash-only.spec.ts",
+    "test/critical/sale-edit-payload-contract.spec.ts"
   ]
 }

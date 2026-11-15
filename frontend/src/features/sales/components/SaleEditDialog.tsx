@@ -24,7 +24,6 @@ interface SaleEditDialogProps {
     note: string;
     editReason: string;
     managerPin: string;
-    paidAmount: number;
     items: Array<{ productId: string; qty: number; price: number; unitName: string; unitMultiplier: number; priceType: string }>;
   }) => Promise<void> | void;
 }
@@ -181,7 +180,6 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
       note,
       editReason: String(editReason || '').trim(),
       managerPin: String(managerPin || '').trim(),
-      paidAmount: 0,
       items: normalizedItems,
     });
   };

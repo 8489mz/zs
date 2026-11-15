@@ -11,25 +11,24 @@ export function buildSaleUpdatePayload(sale: Sale, payload: {
   paymentChannel: string;
   discount: number;
   note: string;
-  paidAmount: number;
   editReason: string;
   managerPin: string;
   items: Array<{ productId: string; qty: number; price: number; unitName: string; unitMultiplier: number; priceType: string }>;
 }) {
-  // INV-FE1-FRONTEND-BOOK-DIGITS: the sale-EDIT POST payload totals
-  // round at the tenant's book digits. Digits resolve here from the
-  // global system currency because this flow (dialog -> hook -> API)
-  // carries no settings object; the backend remains the posting
-  // authority and re-derives these totals on receipt.
+  // INV-SALE-EDIT-NO-PAIDAMOUNT: this payload must contain ONLY fields
+  // UpsertSaleDto declares. The global requestValidationPipe runs with
+  // whitelist + forbidNonWhitelisted, so ANY extra key is a 400 before
+  // the service runs. The builder used to emit paidAmount (always 0),
+  // subTotal, taxAmount and total — none of them is a DTO field, so
+  // EVERY invoice edit was rejected with "paidAmount غير مسموح إرساله",
+  // not just payment-channel changes. The backend never reads those
+  // four: updateSale derives paidAmount from the tender allocation and
+  // recomputes the totals server-side, so they are simply not sent.
+  // The discount still rounds at the tenant's book digits (global
+  // system currency; this flow carries no settings object).
   const digits = currencyMoneyDigits(getGlobalSystemCurrency());
-  const subTotal = roundMoneyValue(payload.items.reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.price || 0), 0), digits);
   const discount = roundMoneyValue(Math.max(0, payload.discount || 0), digits);
-  const taxable = Math.max(0, subTotal - discount);
   const taxRate = Number(sale.taxRate || 0);
-  const taxAmount = !taxRate ? 0 : sale.pricesIncludeTax
-    ? roundMoneyValue(taxable - taxable / (1 + taxRate / 100), digits)
-    : roundMoneyValue(taxable * (taxRate / 100), digits);
-  const total = sale.pricesIncludeTax ? roundMoneyValue(taxable, digits) : roundMoneyValue(taxable + taxAmount, digits);
 
   return {
     customerId: sale.customerId ? Number(sale.customerId) : null,
@@ -45,7 +44,6 @@ export function buildSaleUpdatePayload(sale: Sale, payload: {
             : 'cash',
     discount,
     note: payload.note || '',
-    paidAmount: Number(payload.paidAmount || 0),
     editReason: String(payload.editReason || '').trim(),
     managerPin: String(payload.managerPin || '').trim(),
     storeCreditUsed: 0,
@@ -60,9 +58,6 @@ export function buildSaleUpdatePayload(sale: Sale, payload: {
       unitMultiplier: Number(item.unitMultiplier || 1),
       price: Number(item.price),
       priceType: item.priceType === 'wholesale' ? 'wholesale' : 'retail'
-    })),
-    subTotal,
-    taxAmount,
-    total
+    }))
   };
 }
