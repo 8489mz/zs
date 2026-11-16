@@ -63,6 +63,8 @@ const FE4_FILES: string[] = [
   'delivery-reps/components/VanVisitsTrackingAdminTab.tsx',
   'delivery-reps/components/VehicleMaintenanceModal.tsx',
   'delivery-reps/pages/VanSalesMobilePage.tsx',
+  'delivery-reps/pages/van-sales-mobile/useVanCockpit.tsx',
+  'delivery-reps/pages/van-sales-mobile/useVanCollection.tsx',
   'delivery-reps/utils/escpos-printer.util.ts',
   'delivery-reps/utils/van-collection-receipt.utils.ts',
   'delivery-reps/utils/van-sales-receipt.utils.ts',
@@ -134,7 +136,7 @@ function shapeBViolations(source: string, file: string): ShapeBViolation[] {
 }
 
 async function main(): Promise<void> {
-  assert.equal(FE4_FILES.length, 39, 'FE4 file list must stay at 39 files');
+  assert.equal(FE4_FILES.length, 41, 'FE4 file list must stay at 41 files');
 
   // 1. The shared rounder exists, exports roundMoney, and is the single
   //    implementation site: exactly one `.toFixed(2)` in the helper.

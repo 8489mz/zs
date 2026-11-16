@@ -458,7 +458,7 @@ async function main(): Promise<void> {
     const tabSource = readFileSync(resolve(here, '../../../frontend/src/features/delivery-reps/components/VanSettleTab.tsx'), 'utf8');
     assert.ok(tabSource.includes('INV-VAN-SELF-SETTLE-PIN-REQUIRED'), 'settle tab names the invariant');
     assert.ok(!tabSource.includes('setChargeStockVarianceToRep'), 'the rep-side charge checkbox is gone');
-    const pageSource = readFileSync(resolve(here, '../../../frontend/src/features/delivery-reps/pages/VanSalesMobilePage.tsx'), 'utf8');
+    const pageSource = readFileSync(resolve(here, '../../../frontend/src/features/delivery-reps/pages/van-sales-mobile/useVanSettle.tsx'), 'utf8');
     assert.ok(pageSource.includes('INV-VAN-SELF-SETTLE-PIN-REQUIRED'), 'mobile page names the invariant');
     console.log('  source pins passed');
   }

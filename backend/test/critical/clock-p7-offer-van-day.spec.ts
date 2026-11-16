@@ -202,7 +202,7 @@ async function main(): Promise<void> {
 // stored server visit id at end-visit, the API posts it with no
 // client timestamp, and the backend stamps check-out + dwell.
 {
-  const page = readFileSync(resolve(__dirname, '../../../frontend/src/features/delivery-reps/pages/VanSalesMobilePage.tsx'), 'utf8');
+  const page = readFileSync(resolve(__dirname, '../../../frontend/src/features/delivery-reps/pages/van-sales-mobile/useVanVisit.tsx'), 'utf8');
   assert.ok(page.includes('visitId?: number'), 'activeVisit carries the server visit id');
   assert.ok(page.includes('visitId: Number(res.visitId)'), 'the check-in response visitId is stored');
   assert.ok(page.includes('vanSalesApi.checkOutVisit(visitId)'), 'end-visit calls checkOutVisit with the stored id');
