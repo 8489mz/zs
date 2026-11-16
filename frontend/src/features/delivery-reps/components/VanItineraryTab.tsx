@@ -44,6 +44,7 @@ import { useVanItineraryFilters } from '@/features/delivery-reps/components/van-
 import { useVanItineraryOrder } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-order';
 import { useVanItineraryVisit } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-visit';
 import { useVanItineraryAddCustomer } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-add-customer';
+import { useVanItineraryNegativeVisit } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-negative-visit';
 
 interface VanItineraryTabProps {
   itinerary: VanCustomerItineraryItem[];
@@ -88,16 +89,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
   const [swapCustomer, setSwapCustomer] = useState<VanCustomerItineraryItem | null>(null);
   const order = useVanItineraryOrder();
   const add = useVanItineraryAddCustomer({ todayArabicName: filters.todayArabicName, savedDistrictsList: filters.savedDistrictsList, routes: filters.routes, onRefreshItinerary });
-
-  // Negative visit modal state
-  const [negativeModalOpen, setNegativeModalOpen] = useState(false);
-  const [activeCustomer, setActiveCustomer] = useState<VanCustomerItineraryItem | null>(null);
-  const [negativeReason, setNegativeReason] = useState<
-    'no_cash' | 'shop_closed' | 'sufficient_stock' | 'item_unavailable' | 'postponed' | 'other'
-  >('shop_closed');
-  const [postponedDate, setPostponedDate] = useState('');
-  const [negativeNotes, setNegativeNotes] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const negative = useVanItineraryNegativeVisit({ tripId, activeVisit, onEndVisit, onRefreshItinerary });
   const [statementModalCust, setStatementModalCust] = useState<VanCustomerItineraryItem | null>(null);
 
 
@@ -365,92 +357,6 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
   };
 
 
-
-
-  const openNegativeVisitModal = (customer: VanCustomerItineraryItem) => {
-    setActiveCustomer(customer);
-    setNegativeReason('shop_closed');
-    setPostponedDate('');
-    setNegativeNotes('');
-    setNegativeModalOpen(true);
-  };
-
-  const handleSubmitNegativeVisit = async () => {
-    if (!activeCustomer) return;
-    if (!tripId) {
-      toast.warning('يرجى بدء رحلة التوزيع أولاً لتسجيل الزيارات الميدانية');
-      return;
-    }
-
-    if (negativeReason === 'postponed' && !postponedDate) {
-      toast.warning('يرجى تحديد تاريخ تأجيل الزيارة');
-      return;
-    }
-
-    setIsSubmitting(true);
-    let lat: number | undefined;
-    let lng: number | undefined;
-
-    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      try {
-        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 4000 });
-        });
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
-      } catch {
-        // GPS optional if timed out or rejected
-      }
-    }
-
-    try {
-      const res = await vanSalesApi.recordFieldVisit({
-        tripId,
-        customerId: activeCustomer.customerId,
-        visitType: 'negative',
-        negativeReason,
-        postponedToDate: negativeReason === 'postponed' ? postponedDate : undefined,
-        gpsLat: lat,
-        gpsLng: lng,
-        notes: negativeNotes.trim() || undefined,
-      });
-
-      if (res.consecutiveNegativeAlert) {
-        toast.warning(
-          `تنبيه: تكررت الزيارة السلبية للمرة الثالثة على التوالي للمحل (${activeCustomer.customerName}) - تم إشعار الإدارة تلقائياً`,
-        );
-      } else {
-        toast.success(`تم تسجيل الزيارة السلبية للمحل: ${activeCustomer.customerName}`);
-      }
-
-      setNegativeModalOpen(false);
-      if (activeVisit && activeVisit.customerId === activeCustomer.customerId) {
-        onEndVisit?.();
-      }
-      onRefreshItinerary();
-    } catch (err: any) {
-      toast.error(err?.message || 'تعذر تسجيل الزيارة');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const getReasonLabel = (reason?: string) => {
-    switch (reason) {
-      case 'no_cash':
-        return 'مفيش نقدية / رفض الدفع';
-      case 'shop_closed':
-        return 'المحل مغلق';
-      case 'sufficient_stock':
-        return 'لديه بضاعة كافية';
-      case 'item_unavailable':
-        return 'الصنف المطلوب غير متوفر بالسيارة';
-      case 'postponed':
-        return 'تأجيل الزيارة';
-      default:
-        return 'أسباب أخرى';
-    }
-  };
 
   // KPIs
   const total = itinerary.length;
@@ -1216,7 +1122,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               <div
                 onClick={() => {
                   const cust = visit.selectedCustomerForHub;
-                  openNegativeVisitModal(cust);
+                  negative.openNegativeVisitModal(cust);
                 }}
                 style={{
                   flex: '1 1 0',
@@ -1287,7 +1193,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                 </span>
               ) : (
                 <span style={{ color: '#b91c1c', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {getReasonLabel(visit.selectedCustomerForHub.todayVisit.negativeReason)}
+                  {negative.getReasonLabel(visit.selectedCustomerForHub.todayVisit.negativeReason)}
                   {visit.selectedCustomerForHub.todayVisit.notes && ` — "${visit.selectedCustomerForHub.todayVisit.notes}"`}
                 </span>
               )}
@@ -2272,7 +2178,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                               </span>
                             ) : (
                               <span>
-                                {t('delivery_reps.van_itinerary_tab.s88', "السبب:")} <strong>{getReasonLabel(item.todayVisit.negativeReason)}</strong>
+                                {t('delivery_reps.van_itinerary_tab.s88', "السبب:")} <strong>{negative.getReasonLabel(item.todayVisit.negativeReason)}</strong>
                                 {item.todayVisit.postponedToDate && ` (تم التأجيل إلى: ${item.todayVisit.postponedToDate})`}
                                 {item.todayVisit.notes && ` — "${item.todayVisit.notes}"`}
                               </span>
@@ -2763,27 +2669,27 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
       )}
 
       {/* Negative Visit Dialog */}
-      {negativeModalOpen && activeCustomer && (
+      {negative.negativeModalOpen && negative.activeCustomer && (
         <StandardDialog
           open={true}
-          onClose={() => setNegativeModalOpen(false)}
+          onClose={() => negative.setNegativeModalOpen(false)}
           title={t('delivery_reps.van_itinerary_tab.s117', "تسجيل زيارة غير موفقة")}
-          subtitle={`${activeCustomer.customerName} [${activeCustomer.customerCode.replace(/^#/, '')}]`}
+          subtitle={`${negative.activeCustomer.customerName} [${negative.activeCustomer.customerCode.replace(/^#/, '')}]`}
           badge={t('delivery_reps.van_itinerary_tab.s118', "خط السير الميداني")}
           width="min(460px, 95vw)"
           compact={true}
           footerActions={
             <StandardDialogFooter
-              onClose={() => setNegativeModalOpen(false)}
+              onClose={() => negative.setNegativeModalOpen(false)}
               cancelText={t('delivery_reps.van_itinerary_tab.s119', "إلغاء")}
               extraActions={
                 <Button
                   variant="primary"
-                  onClick={handleSubmitNegativeVisit}
-                  disabled={isSubmitting}
+                  onClick={negative.handleSubmitNegativeVisit}
+                  disabled={negative.isSubmitting}
                   style={{ backgroundColor: '#dc2626', color: '#ffffff', fontSize: '12px', fontWeight: 800, padding: '6px 14px' }}
                 >
-                  {isSubmitting ? t('delivery_reps.van_itinerary_tab.s120', "جاري الحفظ...") : t('delivery_reps.van_itinerary_tab.s121', "تأكيد وحفظ الزيارة السلبية")}
+                  {negative.isSubmitting ? t('delivery_reps.van_itinerary_tab.s120', "جاري الحفظ...") : t('delivery_reps.van_itinerary_tab.s121', "تأكيد وحفظ الزيارة السلبية")}
                 </Button>
               }
             />
@@ -2809,12 +2715,12 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                   { value: 'postponed', label: t('delivery_reps.van_itinerary_tab.s127', "تأجيل الزيارة لموعد لاحق") },
                   { value: 'other', label: t('delivery_reps.van_itinerary_tab.s128', "أسباب أخرى") },
                 ].map((item) => {
-                  const isSelected = negativeReason === item.value;
+                  const isSelected = negative.negativeReason === item.value;
                   return (
                     <button
                       key={item.value}
                       type="button"
-                      onClick={() => setNegativeReason(item.value as any)}
+                      onClick={() => negative.setNegativeReason(item.value as any)}
                       style={{
                         padding: '7px 8px',
                         borderRadius: '7px',
@@ -2843,15 +2749,15 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               </div>
             </div>
 
-            {negativeReason === 'postponed' && (
+            {negative.negativeReason === 'postponed' && (
               <div style={{ backgroundColor: '#eff6ff', padding: '8px 10px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
                 <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 800, color: '#1e40af', marginBottom: '4px' }}>
                   {t('delivery_reps.van_itinerary_tab.s129', "تاريخ التأجيل المقترح:")}
                 </label>
                 <input
                   type="date"
-                  value={postponedDate}
-                  onChange={(e) => setPostponedDate(e.target.value)}
+                  value={negative.postponedDate}
+                  onChange={(e) => negative.setPostponedDate(e.target.value)}
                   style={{
                     width: '100%',
                     height: '34px',
@@ -2871,8 +2777,8 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                 {t('delivery_reps.van_itinerary_tab.s130', "ملاحظات المندوب الميدانية (اختياري):")}
               </label>
               <textarea
-                value={negativeNotes}
-                onChange={(e) => setNegativeNotes(e.target.value)}
+                value={negative.negativeNotes}
+                onChange={(e) => negative.setNegativeNotes(e.target.value)}
                 placeholder={t('delivery_reps.van_itinerary_tab.s131', "أية ملاحظات إضافية حول سبب الزيارة...")}
                 rows={2}
                 style={{
