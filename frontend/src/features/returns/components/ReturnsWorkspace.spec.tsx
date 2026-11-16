@@ -150,7 +150,16 @@ describe('ReturnsWorkspace invoice full-history search (P7)', () => {
     fireEvent.click(within(modalBody).getByPlaceholderText('اختر الفاتورة'));
     const option = await within(modalBody).findByText('Z-261115-16455', {}, { timeout: 3000 });
     fireEvent.click(option);
-    expect(await within(modalBody).findByText('(Z-261115-16455)', {}, { timeout: 3000 })).toBeInTheDocument();
+    // The (docNo) badge renders in the modal HEADER, outside
+    // returns-create-modal-body, so assert on the whole screen; the
+    // textContent matcher stays robust if the text is split across nodes.
+    expect(
+      await screen.findByText(
+        (_content, element) => element?.textContent === '(Z-261115-16455)',
+        {},
+        { timeout: 3000 },
+      ),
+    ).toBeInTheDocument();
     expect(within(modalBody).getByText('صنف قديم')).toBeInTheDocument();
   });
 
@@ -162,7 +171,15 @@ describe('ReturnsWorkspace invoice full-history search (P7)', () => {
 
     await waitFor(() => expect(mockListSalesSearch).toHaveBeenCalledWith('Z-261115-16455'), { timeout: 3000 });
     const modalBody = await screen.findByTestId('returns-create-modal-body');
-    expect(await within(modalBody).findByText('(Z-261115-16455)', {}, { timeout: 3000 })).toBeInTheDocument();
+    // The (docNo) badge renders in the modal HEADER, outside
+    // returns-create-modal-body — see the note above.
+    expect(
+      await screen.findByText(
+        (_content, element) => element?.textContent === '(Z-261115-16455)',
+        {},
+        { timeout: 3000 },
+      ),
+    ).toBeInTheDocument();
     expect(within(modalBody).getByText('صنف قديم')).toBeInTheDocument();
   });
 });
