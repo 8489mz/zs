@@ -34,7 +34,6 @@ import {
   IATA_CARGO_IQ_MILESTONES,
 } from './engines/air-freight.engine';
 import {
-  calculateTrucksRequired,
   calculateRoadFreightCost,
   STANDARD_TRUCK_SPECIFICATIONS,
 } from './engines/road-freight.engine';
@@ -66,6 +65,7 @@ import { MaritimeFreightJobsCoreService } from './maritime-freight-jobs-core.ser
 import { MaritimeFreightJobsContainersService } from './maritime-freight-jobs-containers.service';
 import { MaritimeFreightInvoicingService } from './maritime-freight-invoicing.service';
 import { MaritimeFreightConsolidationDocumentsService } from './maritime-freight-consolidation-documents.service';
+import { MaritimeFreightTruckingService } from './maritime-freight-trucking.service';
 
 @Injectable()
 export class MaritimeFreightService {
@@ -86,6 +86,7 @@ export class MaritimeFreightService {
   private readonly jobsContainersService: MaritimeFreightJobsContainersService;
   private readonly invoicingService: MaritimeFreightInvoicingService;
   private readonly consolidationDocumentsService: MaritimeFreightConsolidationDocumentsService;
+  private readonly truckingService: MaritimeFreightTruckingService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -158,6 +159,10 @@ export class MaritimeFreightService {
     this.consolidationDocumentsService = new MaritimeFreightConsolidationDocumentsService({
       db: this.db,
       createJob: this.jobsCoreService.createJob.bind(this.jobsCoreService),
+    });
+    this.truckingService = new MaritimeFreightTruckingService({
+      db: this.db,
+      assertRoadProofOfDelivery: this.jobsCoreService.assertRoadProofOfDelivery.bind(this.jobsCoreService),
     });
   }
 
@@ -2409,176 +2414,16 @@ export class MaritimeFreightService {
     return this.agentSettlementsService.getAgentStatementOfAccount(auth, agentId);
   }
 
-  // ==========================================
-  // 5. Inland Trucking Trips & Container Dispatch
-  // ==========================================
-
   async listInlandTruckingTrips(auth: AuthContext, jobId?: string | number) {
-    const { tenantId } = requireTenantScope(auth);
-    let query = this.db
-      .selectFrom('maritime_inland_trucking_trips')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
-
-    if (jobId) {
-      query = query.where('job_id', '=', String(jobId));
-    }
-
-    return await query.orderBy('id', 'desc').execute();
+    return this.truckingService.listInlandTruckingTrips(auth, jobId);
   }
 
   async createInlandTruckingTrip(auth: AuthContext, dto: CreateInlandTruckingTripDto) {
-    const { tenantId } = requireTenantScope(auth);
-    const tempTripNumber = `TRIP-TMP-${crypto.randomUUID()}`;
-
-    return await this.db.transaction().execute(async (trx) => {
-      const [trip] = await trx
-        .insertInto('maritime_inland_trucking_trips')
-        .values({
-          tenant_id: tenantId,
-          job_id: String(dto.jobId),
-          trip_number: tempTripNumber,
-          container_number: dto.containerNumber || null,
-          trucking_company: dto.truckingCompany,
-          driver_name: dto.driverName,
-          driver_phone: dto.driverPhone || null,
-          truck_plate: dto.truckPlate,
-          trailer_plate: dto.trailerPlate || null,
-          origin_port_terminal: dto.originPortTerminal,
-          delivery_destination: dto.deliveryDestination,
-          dispatch_date: dto.dispatchDate ? new Date(dto.dispatchDate) : sql`NOW()`,
-          delivery_date: dto.deliveryDate ? new Date(dto.deliveryDate) : null,
-          trip_status: 'assigned',
-          cost_amount: Number(dto.costAmount || 0),
-          sell_amount: Number(dto.sellAmount || 0),
-          currency: dto.currency || 'EGP',
-          notes: dto.notes || null,
-        })
-        .returningAll()
-        .execute();
-
-      const finalTripNumber = formatDailyDocumentNumber('TRIP', Number(trip.id), new Date(), 4, await getTenantTimezone(trx, tenantId));
-
-      const [updatedTrip] = await trx
-        .updateTable('maritime_inland_trucking_trips')
-        .set({ trip_number: finalTripNumber })
-        .where('id', '=', trip.id)
-        .where('tenant_id', '=', tenantId)
-        .returningAll()
-        .execute();
-
-      // If job exists, register milestone on the job
-      const job = await trx
-        .selectFrom('maritime_jobs')
-        .select(['id', 'transport_mode', 'status'])
-        .where('tenant_id', '=', tenantId)
-        .where('id', '=', String(dto.jobId) as any)
-        .executeTakeFirst();
-
-      if (job) {
-        if (job.status === 'completed') {
-          throw new BadRequestException('أعد فتح الشحنة قبل إضافة رحلة نقل بري جديدة');
-        }
-        await trx
-          .insertInto('maritime_job_milestones')
-          .values({
-            tenant_id: tenantId,
-            job_id: String(job.id),
-            milestone_key: 'TRK_ASSIGN',
-            milestone_title: `تعيين الشاحنة والسائق للرحلة ${finalTripNumber} (${dto.truckPlate})`,
-            location: dto.originPortTerminal,
-            notes: `تم تكليف الشاحنة ${dto.truckPlate} والسائق ${dto.driverName} بالتحرك من ${dto.originPortTerminal} إلى ${dto.deliveryDestination}`,
-            recorded_by: auth.userId ? Number(auth.userId) : null,
-          })
-          .execute();
-
-        if (job.transport_mode === 'road') {
-          await trx
-            .updateTable('maritime_jobs')
-            .set({ milestone_status: 'TRK_ASSIGN' })
-            .where('id', '=', job.id)
-            .where('tenant_id', '=', tenantId)
-            .execute();
-        }
-      }
-
-      return updatedTrip;
-    });
+    return this.truckingService.createInlandTruckingTrip(auth, dto);
   }
 
   async updateInlandTruckingTripStatus(auth: AuthContext, id: string | number, dto: UpdateInlandTruckingTripStatusDto) {
-    const { tenantId } = requireTenantScope(auth);
-    return await this.db.transaction().execute(async (trx) => {
-      const trip = await trx.selectFrom('maritime_inland_trucking_trips').selectAll()
-        .where('tenant_id', '=', tenantId).where('id', '=', String(id) as any)
-        .forUpdate().executeTakeFirst();
-      if (!trip) throw new NotFoundException('Inland trucking trip not found');
-      const job = await trx.selectFrom('maritime_jobs').select(['transport_mode', 'gross_weight_kg', 'total_cbm', 'booking_number'])
-        .where('tenant_id', '=', tenantId).where('id', '=', trip.job_id as any).executeTakeFirst();
-      if (job?.transport_mode === 'road' && dto.tripStatus === 'in_transit') {
-        const assigned = await trx.selectFrom('maritime_inland_trucking_trips').select('truck_plate')
-          .where('tenant_id', '=', tenantId).where('job_id', '=', trip.job_id)
-          .where('trip_status', 'in', ['assigned', 'loading', 'in_transit']).execute();
-        try {
-          calculateTrucksRequired({ grossWeightKg: Number(job.gross_weight_kg || 0),
-            totalCbm: Number(job.total_cbm || 0),
-            assignedTrucks: new Set(assigned.map((row) => row.truck_plate)).size });
-        } catch (error: any) {
-          throw new BadRequestException(error.message);
-        }
-      }
-      if (job?.transport_mode === 'road' && dto.tripStatus === 'delivered') {
-        await this.assertRoadProofOfDelivery(tenantId, trip.job_id, job.booking_number);
-      }
-      const [updated] = await trx
-        .updateTable('maritime_inland_trucking_trips')
-        .set({
-          trip_status: dto.tripStatus,
-          delivery_date: dto.deliveryDate ? new Date(dto.deliveryDate) : undefined,
-          notes: dto.notes !== undefined ? dto.notes : undefined,
-          updated_at: sql`NOW()`,
-        })
-        .where('tenant_id', '=', tenantId)
-        .where('id', '=', String(id) as any)
-        .returningAll()
-        .execute();
-
-      if (!updated) {
-        throw new NotFoundException('Inland trucking trip not found');
-      }
-
-      // Map trip status to job milestone progression
-      const statusMilestoneMap: Record<string, { key: string; title: string }> = {
-        loading: { key: 'TRK_LOADED', title: `إتمام تحميل وتربيط البضاعة بالشاحنة (Cargo Loaded - ${updated.trip_number})` },
-        in_transit: { key: 'TRK_DISPATCH', title: `انطلاق الشاحنة على مسار النقل (Truck In Transit - ${updated.trip_number})` },
-        delivered: { key: 'TRK_POD', title: `وصول الشاحنة وتفريغ وتسليم البضاعة وإثبات التسليم (Delivered & POD - ${updated.trip_number})` },
-      };
-
-      const mapping = statusMilestoneMap[dto.tripStatus];
-      if (mapping) {
-        await trx
-          .insertInto('maritime_job_milestones')
-          .values({
-            tenant_id: tenantId,
-            job_id: String(updated.job_id),
-            milestone_key: mapping.key,
-            milestone_title: mapping.title,
-            location: dto.tripStatus === 'delivered' ? updated.delivery_destination : updated.origin_port_terminal,
-            notes: dto.notes || `تم تحديث حالة رحلة النقل البري ${updated.trip_number} إلى ${dto.tripStatus}`,
-            recorded_by: auth.userId ? Number(auth.userId) : null,
-          })
-          .execute();
-
-        await trx
-          .updateTable('maritime_jobs')
-          .set({ milestone_status: mapping.key })
-          .where('id', '=', String(updated.job_id) as any)
-          .where('tenant_id', '=', tenantId)
-          .execute();
-      }
-
-      return updated;
-    });
+    return this.truckingService.updateInlandTruckingTripStatus(auth, id, dto);
   }
 
   async syncCarrierTracking(auth: AuthContext, carrierCode: string, trackingNumber: string) {
