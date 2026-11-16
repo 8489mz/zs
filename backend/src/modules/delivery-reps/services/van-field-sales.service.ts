@@ -20,6 +20,8 @@ import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { isOfferActive, pickBestApplicableOffer } from '../../sales/helpers/sales-write.helper';
 import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
+import { offlineSaleTimestamps } from '../../cash-drawer/helpers/cash-drawer.helper';
+import { validateVanOfflineCreatedAt } from '../van-offline-timestamps.helper';
 import { resolveSaleTaxRate } from '../../sales/engines/sale-tax-rate.engine';
 import { computeInvoiceTotals } from '../../../common/utils/invoice-totals';
 
@@ -101,15 +103,27 @@ export class VanFieldSalesService {
       notes?: string;
       deliveryGpsLat?: number;
       deliveryGpsLng?: number;
+      // INV-VAN-OFFLINE-TIMESTAMPS: why no GPS fix was captured at
+      // submit time ('timeout' | 'denied' | 'unavailable'). Recorded,
+      // never a block: a dead fix in a basement must not refuse a sale.
+      gpsMissingReason?: 'timeout' | 'denied' | 'unavailable';
       deliveryProofPhoto?: string;
       packagingBreakdown?: { cartonsCount?: number; piecesCount?: number; itemsCount?: number };
       clientTxId?: string;
       supervisorOverridePin?: string;
       supervisorOverrideReason?: string;
       cashDiscountAmount?: number;
+      // INV-VAN-OFFLINE-TIMESTAMPS: the instant the sale was made
+      // offline (outbox createdAt, ISO with offset). Absent on the
+      // online path, where the server clock stamps the row instead.
+      offlineCreatedAt?: string;
     },
   ) {
 
+    // INV-VAN-OFFLINE-TIMESTAMPS: the gate runs first, before any
+    // read — a tampered or stale offline stamp fails fast and writes
+    // nothing.
+    const offlineCreatedAt = validateVanOfflineCreatedAt(payload.offlineCreatedAt);
     const trip = await this.anyDb
       .selectFrom('van_sales_trips as vt')
       .leftJoin('stock_locations as van', 'van.id', 'vt.van_location_id')
@@ -253,6 +267,10 @@ export class VanFieldSalesService {
         .executeTakeFirst();
       branchId = lockedVanLocRow?.branch_id ? Number(lockedVanLocRow.branch_id) : null;
       await assertBusinessAccountingDate(trx, tenantId, new Date(), true);
+      // INV-VAN-OFFLINE-TIMESTAMPS: the closed-period re-check runs
+      // against the OFFLINE date too — a backdated sale into a closed
+      // period is refused, not silently booked into it.
+      if (offlineCreatedAt) await assertBusinessAccountingDate(trx, tenantId, offlineCreatedAt, true);
       // Book digits resolved once on THIS transaction handle (P2 pattern,
       // fail closed on a base-currency/rate mismatch, P0-1/P0-2/P0-3).
       // Every money derivation below rounds once with this helper; the
@@ -1049,6 +1067,12 @@ export class VanFieldSalesService {
             : payload.notes || `فاتورة بيع ميداني من سيارة المندوب`,
           delivery_gps_lat: payload.deliveryGpsLat != null ? Number(payload.deliveryGpsLat) : null,
           delivery_gps_lng: payload.deliveryGpsLng != null ? Number(payload.deliveryGpsLng) : null,
+          // INV-VAN-OFFLINE-TIMESTAMPS: an offline sale keeps its
+          // original instant as created_at and carries the server
+          // receipt instant as received_at (POS pattern, verbatim).
+          // Online: the spread is empty and the column defaults apply.
+          ...offlineSaleTimestamps(offlineCreatedAt),
+          gps_missing_reason: payload.gpsMissingReason || null,
           delivery_proof_photo: payload.deliveryProofPhoto || null,
           packaging_breakdown: payload.packagingBreakdown ? JSON.stringify(payload.packagingBreakdown) : null,
           tenant_id: tenantId,

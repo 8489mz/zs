@@ -320,6 +320,9 @@ export class VanSalesController {
       notes?: string;
       deliveryGpsLat?: number;
       deliveryGpsLng?: number;
+      // INV-VAN-OFFLINE-TIMESTAMPS: why no GPS fix was captured at
+      // submit time ('timeout' | 'denied' | 'unavailable').
+      gpsMissingReason?: 'timeout' | 'denied' | 'unavailable';
       deliveryProofPhoto?: string;
       packagingBreakdown?: { cartonsCount?: number; piecesCount?: number; itemsCount?: number };
       clientTxId?: string;
@@ -332,6 +335,9 @@ export class VanSalesController {
       recipientPhone?: string;
       recipientRole?: string;
       recipientSignature?: string;
+      // INV-VAN-OFFLINE-TIMESTAMPS: the instant the sale was made
+      // offline (outbox createdAt, ISO with offset).
+      offlineCreatedAt?: string;
     },
   ) {
     const driver = await this.verifyDriver(authHeader);
@@ -374,6 +380,9 @@ export class VanSalesController {
       gpsLat?: number;
       gpsLng?: number;
       clientTxId?: string;
+      // INV-VAN-OFFLINE-TIMESTAMPS: the instant the collection was
+      // made offline (outbox createdAt, ISO with offset).
+      offlineCreatedAt?: string;
     },
   ) {
     const driver = await this.verifyDriver(authHeader);
@@ -435,6 +444,9 @@ export class VanSalesController {
       refundMethod?: 'credit' | 'cash';
       items: { productId: number; qty: number; unitPrice: number; saleItemId?: number; unitMultiplier?: number; unitName?: string }[];
       notes?: string;
+      // INV-VAN-OFFLINE-TIMESTAMPS: the instant the return was made
+      // offline (outbox createdAt, ISO with offset).
+      offlineCreatedAt?: string;
     },
   ) {
     const driver = await this.verifyDriver(authHeader);

@@ -465,9 +465,16 @@ export class VanTripLifecycleService {
     targetMetrics?: RepTargetCalculationResult;
     requireSupervisorPinForSettlement?: boolean;
     isBlindSettlement?: boolean;
+    // INV-VAN-OFFLINE-TIMESTAMPS: the server clock anchor for the
+    // van page (useServerClock) — the receipt date and every
+    // displayed date derive from this, never the device clock.
+    serverTime: string;
+    serverTimezone: string;
   }> {
     const requireSupervisorPinForSettlement = await this.isSupervisorPinRequiredForSettlement(tenantId);
     const isBlindSettlement = await this.isBlindSettlementEnabled(tenantId);
+    const serverTimezone = await getTenantTimezone(this.anyDb, tenantId);
+    const serverTime = new Date().toISOString();
     const vanLoc = await this.getOrCreateVanLocation(repId, tenantId, accountId);
 
     const assignedVehicleRow = await this.anyDb
@@ -1044,6 +1051,8 @@ export class VanTripLifecycleService {
         targetMetrics,
         requireSupervisorPinForSettlement,
         isBlindSettlement,
+        serverTime,
+        serverTimezone,
       };
     }
 
@@ -1090,6 +1099,8 @@ export class VanTripLifecycleService {
       targetMetrics,
       requireSupervisorPinForSettlement,
       isBlindSettlement,
+      serverTime,
+      serverTimezone,
     };
   }
 

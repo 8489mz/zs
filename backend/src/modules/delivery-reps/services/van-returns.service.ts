@@ -8,6 +8,8 @@ import { AccountingPostingService } from '../../accounting/accounting-posting.se
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { moveVanStock, sortItemsByProductId, generateDailySequenceNumber, resolveRepLinkedUserId } from './van-common.util';
+import { offlineSaleTimestamps } from '../../cash-drawer/helpers/cash-drawer.helper';
+import { validateVanOfflineCreatedAt } from '../van-offline-timestamps.helper';
 import { VanFraudRadarService } from './van-fraud-radar.service';
 import { AuditService, AUDIT_EVENT_CODES } from '../../../core/audit/audit.service';
 
@@ -355,8 +357,15 @@ export class VanReturnsService {
         unitName?: string;
       }[];
       notes?: string;
+      // INV-VAN-OFFLINE-TIMESTAMPS: the instant the return was made
+      // offline (outbox createdAt, ISO with offset). Absent on the
+      // online path.
+      offlineCreatedAt?: string;
     },
   ) {
+    // INV-VAN-OFFLINE-TIMESTAMPS: the gate runs first, before any
+    // read — a tampered or stale offline stamp fails fast.
+    const offlineCreatedAt = validateVanOfflineCreatedAt(payload.offlineCreatedAt);
     if (!payload.items || !payload.items.length) {
       throw new AppError('يجب تحديد صنف واحد على الأقل للمرتجع', 'EMPTY_RETURN_ITEMS', 400);
     }
@@ -717,6 +726,11 @@ export class VanReturnsService {
           total_amount: totalAmount,
           items_json: JSON.stringify(payload.items),
           notes: payload.notes || null,
+          // INV-VAN-OFFLINE-TIMESTAMPS: an offline return keeps its
+          // original instant as created_at and carries the server
+          // receipt instant as received_at. Online: the spread is
+          // empty and the column defaults apply.
+          ...offlineSaleTimestamps(offlineCreatedAt),
         })
         .returning(['id'])
         .execute();

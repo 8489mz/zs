@@ -20,6 +20,8 @@ import { getCustomerRepBalancesMap, fieldCollectionPaymentScope, resolveFieldCol
 import { extractCoordinatesFromCustomerLocation, evaluateGeofenceCompliance, isValidCoordinatePair, extractAssignedRepIds, loadRepPermissions, resolveIsolatedRepCustomerBalance, validateIsolatedRepCollection } from '../rep-target.engine';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { offlineSaleTimestamps } from '../../cash-drawer/helpers/cash-drawer.helper';
+import { validateVanOfflineCreatedAt } from '../van-offline-timestamps.helper';
 import { VanFraudRadarService, RecordVanSuspicionParams } from './van-fraud-radar.service';
 
 export type VanCollectionsAndSwapsDeps = {
@@ -77,9 +79,17 @@ export class VanCollectionsAndSwapsService {
       gpsLat?: number;
       gpsLng?: number;
       clientTxId?: string;
+      // INV-VAN-OFFLINE-TIMESTAMPS: the instant the collection was
+      // made offline (outbox createdAt, ISO with offset). Absent on
+      // the online path.
+      offlineCreatedAt?: string;
     },
   ) {
     const amount = Number(payload.amount || 0);
+
+    // INV-VAN-OFFLINE-TIMESTAMPS: the gate runs first, before any
+    // read — a tampered or stale offline stamp fails fast.
+    const offlineCreatedAt = validateVanOfflineCreatedAt(payload.offlineCreatedAt);
 
     // H9 (D4 + B10): a cash collection is gated on the acting rep's
     // can_collect_cash flag, read on the pool handle before any
@@ -401,6 +411,11 @@ export class VanCollectionsAndSwapsService {
           transfer_receipt_url: payload.transferReceiptUrl || null,
           tenant_id: tenantId,
           account_id: accountId,
+          // INV-VAN-OFFLINE-TIMESTAMPS: an offline collection keeps
+          // its original instant as created_at and carries the server
+          // receipt instant as received_at. Online: the spread is
+          // empty and the column defaults apply.
+          ...offlineSaleTimestamps(offlineCreatedAt),
           ...fieldCollectionPaymentScope({
             tripId: payload.tripId,
             repId,

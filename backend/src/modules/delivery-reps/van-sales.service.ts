@@ -670,6 +670,10 @@ export class VanSalesService {
     targetMetrics?: RepTargetCalculationResult;
     requireSupervisorPinForSettlement?: boolean;
     isBlindSettlement?: boolean;
+    // INV-VAN-OFFLINE-TIMESTAMPS: the server clock anchor for the
+    // van page (useServerClock).
+    serverTime: string;
+    serverTimezone: string;
   }> {
     return this.getTripLifecycle().getActiveTrip(repId, tenantId, accountId);
   }
@@ -724,12 +728,18 @@ export class VanSalesService {
       notes?: string;
       deliveryGpsLat?: number;
       deliveryGpsLng?: number;
+      // INV-VAN-OFFLINE-TIMESTAMPS: why no GPS fix was captured at
+      // submit time ('timeout' | 'denied' | 'unavailable').
+      gpsMissingReason?: 'timeout' | 'denied' | 'unavailable';
       deliveryProofPhoto?: string;
       packagingBreakdown?: { cartonsCount?: number; piecesCount?: number; itemsCount?: number };
       clientTxId?: string;
       supervisorOverridePin?: string;
       supervisorOverrideReason?: string;
       cashDiscountAmount?: number;
+      // INV-VAN-OFFLINE-TIMESTAMPS: the instant the sale was made
+      // offline (outbox createdAt, ISO with offset).
+      offlineCreatedAt?: string;
     },
   ): Promise<{
     ok: boolean;
@@ -945,6 +955,9 @@ export class VanSalesService {
       gpsLat?: number;
       gpsLng?: number;
       clientTxId?: string;
+      // INV-VAN-OFFLINE-TIMESTAMPS: the instant the collection was
+      // made offline (outbox createdAt, ISO with offset).
+      offlineCreatedAt?: string;
     },
   ): Promise<{ ok: boolean; receiptNo: string; amount: number; customerName: string; previousBalance: number; newBalance: number }> {
     const amount = Number(payload.amount || 0);
@@ -1531,6 +1544,9 @@ export class VanSalesService {
         saleItemId?: number;
       }[];
       notes?: string;
+      // INV-VAN-OFFLINE-TIMESTAMPS: the instant the return was made
+      // offline (outbox createdAt, ISO with offset).
+      offlineCreatedAt?: string;
     },
   ) {
     return this.vanReturnsService.submitFieldReturn(repId, tenantId, accountId, payload);

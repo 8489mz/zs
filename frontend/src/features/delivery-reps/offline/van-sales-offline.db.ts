@@ -275,6 +275,10 @@ export const vanOfflineDb = {
     notes?: string;
     gpsLat?: number;
     gpsLng?: number;
+    // INV-VAN-OFFLINE-TIMESTAMPS: why no GPS fix was captured at
+    // submit time ('timeout' | 'denied' | 'unavailable'). Travels
+    // with the offline record so the synced sale carries it.
+    gpsMissingReason?: string;
     deliveryProofPhoto?: string;
     cartonsCount?: number;
   }): Promise<{ docNo: string; clientTxId: string; total: number }> => {
@@ -284,6 +288,11 @@ export const vanOfflineDb = {
 
     const clientTxId = generateClientTxId();
     const dateStr = getTodayYYMMDD();
+    // INV-VAN-OFFLINE-TIMESTAMPS: ONE instant for the whole record —
+    // the outbox createdAt AND the payload's offlineCreatedAt are
+    // the same value, so the synced sale is booked at the instant
+    // the rep actually made it.
+    const createdAt = new Date().toISOString();
 
     // Get & increment local invoice counter
     const seqReq = metaStore.get('offline_sale_seq');
@@ -371,8 +380,8 @@ export const vanOfflineDb = {
       clientTxId,
       type: 'sale',
       docNo,
-      payload: { ...params, docNo, clientTxId, total, paidAmount },
-      createdAt: new Date().toISOString(),
+      payload: { ...params, docNo, clientTxId, total, paidAmount, offlineCreatedAt: createdAt },
+      createdAt,
       status: 'pending',
     };
     outboxStore2.put(outboxItem);
@@ -403,6 +412,9 @@ export const vanOfflineDb = {
 
     const clientTxId = generateClientTxId();
     const dateStr = getTodayYYMMDD();
+    // INV-VAN-OFFLINE-TIMESTAMPS: one instant for the record — the
+    // outbox createdAt AND the payload's offlineCreatedAt.
+    const createdAt = new Date().toISOString();
 
     const seqReq = metaStore.get('offline_col_seq');
     const snapReq = metaStore.get('active_trip_snapshot');
@@ -463,8 +475,8 @@ export const vanOfflineDb = {
       clientTxId,
       type: 'collection',
       docNo,
-      payload: { ...params, docNo, clientTxId },
-      createdAt: new Date().toISOString(),
+      payload: { ...params, docNo, clientTxId, offlineCreatedAt: createdAt },
+      createdAt,
       status: 'pending',
     });
 
@@ -497,6 +509,9 @@ export const vanOfflineDb = {
 
     const clientTxId = generateClientTxId();
     const dateStr = getTodayYYMMDD();
+    // INV-VAN-OFFLINE-TIMESTAMPS: one instant for the record — the
+    // outbox createdAt AND the payload's offlineCreatedAt.
+    const createdAt = new Date().toISOString();
 
     const seqReq = metaStore.get('offline_ret_seq');
     const snapReq = metaStore.get('active_trip_snapshot');
@@ -552,8 +567,8 @@ export const vanOfflineDb = {
       clientTxId,
       type: 'return',
       docNo,
-      payload: { ...params, returnDocNo: docNo, clientTxId, totalAmount },
-      createdAt: new Date().toISOString(),
+      payload: { ...params, returnDocNo: docNo, clientTxId, totalAmount, offlineCreatedAt: createdAt },
+      createdAt,
       status: 'pending',
     });
 

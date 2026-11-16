@@ -243,6 +243,10 @@ export interface VanAssignedVehicle {
 
 export interface VanActiveTripResponse {
   hasActiveTrip: boolean;
+  // INV-VAN-OFFLINE-TIMESTAMPS: server clock anchor for useServerClock
+  // — the receipt date and every displayed date derive from this.
+  serverTime?: string;
+  serverTimezone?: string;
   trip?: VanTripSummary;
   assignedVehicle?: VanAssignedVehicle | null;
   vanLocation?: { id: number; name: string };
@@ -783,6 +787,9 @@ export const vanSalesApi = {
     notes?: string;
     deliveryGpsLat?: number;
     deliveryGpsLng?: number;
+    // INV-VAN-OFFLINE-TIMESTAMPS: why no GPS fix was captured at
+    // submit time ('timeout' | 'denied' | 'unavailable').
+    gpsMissingReason?: 'timeout' | 'denied' | 'unavailable';
     deliveryProofPhoto?: string;
     packagingBreakdown?: { cartonsCount?: number; piecesCount?: number; itemsCount?: number };
     clientTxId?: string;
@@ -795,6 +802,9 @@ export const vanSalesApi = {
     recipientPhone?: string;
     recipientRole?: string;
     recipientSignature?: string;
+    // INV-VAN-OFFLINE-TIMESTAMPS: the instant the sale was made
+    // offline (outbox createdAt, ISO with offset).
+    offlineCreatedAt?: string;
   }): Promise<{
     ok: boolean;
     saleId: number;
@@ -843,6 +853,9 @@ export const vanSalesApi = {
     notes?: string;
     gpsLat?: number;
     gpsLng?: number;
+    // INV-VAN-OFFLINE-TIMESTAMPS: the instant the collection was made
+    // offline (outbox createdAt, ISO with offset).
+    offlineCreatedAt?: string;
   }): Promise<{
     ok: boolean;
     receiptNo: string;
@@ -928,6 +941,9 @@ export const vanSalesApi = {
     refundMethod?: 'credit' | 'cash';
     items: { productId: number; qty: number; unitPrice: number; saleItemId?: number }[];
     notes?: string;
+    // INV-VAN-OFFLINE-TIMESTAMPS: the instant the return was made
+    // offline (outbox createdAt, ISO with offset).
+    offlineCreatedAt?: string;
   }): Promise<{ ok: boolean; returnDocNo: string; returnId: number; status: string; totalAmount: number }> => {
     return http('/api/driver-portal/van-sales/field-returns', {
       method: 'POST',

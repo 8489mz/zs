@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useMemo, useRef, type Dispatch, type SetStateAction } from 'react';
 import { useMutation, type QueryClient } from '@tanstack/react-query';
 import { vanSalesApi, VanActiveTripResponse, VanStockItem, VanCustomerItineraryItem } from '@/features/delivery-reps/api/van-sales.api';
+import { useServerClock } from '@/shared/hooks/use-server-clock';
 import { vanOfflineDb } from '@/features/delivery-reps/offline/van-sales-offline.db';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import { Button } from '@/shared/ui/button';
@@ -63,6 +64,12 @@ export function useVanSale({
   const [cart, setCart] = useState<CartItem[]>([]);
 
   const [lastSaleReceipt, setLastSaleReceipt] = useState<any | null>(null);
+
+  // INV-VAN-OFFLINE-TIMESTAMPS: the receipt date comes from the
+  // server clock anchored on the active-trip response, never the
+  // raw device clock (a device clock set days off must not move a
+  // printed receipt date).
+  const serverClock = useServerClock(data?.serverTime, data?.serverTimezone);
 
   const [isCheckoutProcessing, setIsCheckoutProcessing] = useState<boolean>(false);
   const isCheckoutProcessingRef = useRef<boolean>(false);
@@ -231,6 +238,7 @@ export function useVanSale({
           notes: payload.notes,
           gpsLat: payload.deliveryGpsLat,
           gpsLng: payload.deliveryGpsLng,
+          gpsMissingReason,
           deliveryProofPhoto: payload.deliveryProofPhoto,
           cartonsCount: payload.packagingBreakdown?.cartonsCount,
         });
@@ -268,6 +276,7 @@ export function useVanSale({
             notes: payload.notes,
             gpsLat: payload.deliveryGpsLat,
             gpsLng: payload.deliveryGpsLng,
+            gpsMissingReason,
             deliveryProofPhoto: payload.deliveryProofPhoto,
             cartonsCount: payload.packagingBreakdown?.cartonsCount,
           });
@@ -334,7 +343,7 @@ export function useVanSale({
         repName: data?.trip?.repName || (session?.rep as any)?.name || 'مندوب التوزيع',
         vehiclePlate: data?.assignedVehicle?.plateNumber || data?.trip?.vehiclePlate || '',
         warehouseName: data?.trip?.sourceWarehouseName || '',
-        date: new Date().toISOString(),
+        date: serverClock.now().toISOString(),
       });
       setCheckoutModalOpen(false);
       setSaleNotes('');
@@ -663,6 +672,12 @@ export const SaleCheckoutModal: React.FC<SaleCheckoutModalProps> = ({
 
             let gpsLat: number | undefined;
             let gpsLng: number | undefined;
+            // INV-VAN-OFFLINE-TIMESTAMPS: a failed fix is explicit,
+            // never silent — the reason travels with the sale (and
+            // with the offline record) instead of vanishing into
+            // `catch {}`. The sale is NOT blocked: a dead fix in a
+            // basement must not refuse real merchant work.
+            let gpsMissingReason: 'timeout' | 'denied' | 'unavailable' | undefined;
             if (typeof navigator !== 'undefined' && navigator.geolocation) {
               try {
                 const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -670,7 +685,12 @@ export const SaleCheckoutModal: React.FC<SaleCheckoutModalProps> = ({
                 });
                 gpsLat = pos.coords.latitude;
                 gpsLng = pos.coords.longitude;
-              } catch {}
+              } catch (err: any) {
+                const code = Number(err?.code);
+                gpsMissingReason = code === 1 ? 'denied' : code === 2 ? 'unavailable' : 'timeout';
+              }
+            } else {
+              gpsMissingReason = 'unavailable';
             }
 
             try {
@@ -687,6 +707,7 @@ export const SaleCheckoutModal: React.FC<SaleCheckoutModalProps> = ({
                 notes: checkoutData.notes,
                 deliveryGpsLat: gpsLat,
                 deliveryGpsLng: gpsLng,
+                gpsMissingReason,
                 deliveryProofPhoto: checkoutData.deliveryProofPhoto || deliveryProofPhoto || undefined,
                 supervisorOverridePin: checkoutData.supervisorOverridePin,
                 supervisorOverrideReason: checkoutData.supervisorOverrideReason,

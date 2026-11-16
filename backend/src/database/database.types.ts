@@ -878,6 +878,9 @@ export interface VanFieldReturnTable {
   approved_by?: number | null;
   approved_at?: Date | string | null;
   created_at: ColumnType<Date, string | undefined, never>;
+  // INV-VAN-OFFLINE-TIMESTAMPS: the server receipt instant of an
+  // offline field return (created_at keeps the offline instant).
+  received_at?: ColumnType<Date | null, string | Date | null | undefined, string | Date | null | undefined>;
   updated_at: ColumnType<Date, string | Date | undefined, string | Date | undefined>;
 }
 
@@ -1015,6 +1018,10 @@ export interface SalesTable {
   created_at: ColumnType<Date, string | undefined, never>;
   updated_at: ColumnType<Date, string | Date | undefined, string | Date | undefined>;
   received_at: ColumnType<Date, string | Date | undefined, string | Date | undefined>;
+  // INV-VAN-OFFLINE-TIMESTAMPS: why the sale carries no GPS fix
+  // ('timeout' | 'denied' | 'unavailable'). NULL means GPS was
+  // captured or the caller sent neither fix nor reason.
+  gps_missing_reason?: string | null;
   eta_uuid: string | null;
   eta_status: Generated<string>;
   eta_submission_id: string | null;
@@ -1342,6 +1349,9 @@ export interface CustomerPaymentTable {
   rep_id?: number | null;
   client_tx_id?: string | null;
   created_at: ColumnType<Date, string | undefined, never>;
+  // INV-VAN-OFFLINE-TIMESTAMPS: the server receipt instant of an
+  // offline collection (created_at keeps the offline instant).
+  received_at?: ColumnType<Date | null, string | Date | null | undefined, string | Date | null | undefined>;
 }
 
 export interface CustomerLedgerTable {
