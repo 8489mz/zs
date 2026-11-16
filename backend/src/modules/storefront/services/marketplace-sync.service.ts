@@ -27,6 +27,7 @@ import {
   isStorefrontEntitledForOrders,
   STOREFRONT_NOT_ENTITLED_MESSAGE,
 } from '../engines/storefront-entitlement.engine';
+import { MarketplaceSyncInventoryService } from './marketplace-sync-inventory.service';
 import { MarketplaceSyncMappingsService } from './marketplace-sync-mappings.service';
 import { MarketplaceSyncConfigService } from './marketplace-sync-config.service';
 
@@ -104,6 +105,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
   private readonly marketplaceWebhookHandlers = new Map<string, MarketplaceWebhookHandler>();
   private readonly configService: MarketplaceSyncConfigService;
   private readonly mappingsService: MarketplaceSyncMappingsService;
+  private readonly inventoryService: MarketplaceSyncInventoryService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -126,6 +128,13 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
       audit: this.audit,
       getSettingJson: this.getSettingJson.bind(this),
       setSettingJson: this.setSettingJson.bind(this),
+    });
+    this.inventoryService = new MarketplaceSyncInventoryService({
+      db: this.db,
+      audit: this.audit,
+      getSettingJson: this.getSettingJson.bind(this),
+      setSettingJson: this.setSettingJson.bind(this),
+      getConfig: this.getConfig.bind(this),
     });
   }
 
@@ -245,51 +254,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     auth: AuthContext,
     marketplace?: 'amazon' | 'noon',
   ): Promise<{ syncedCount: number; updatedMappings: MarketplaceSkuMapping[] }> {
-    const scope = requireTenantScope(auth);
-    const mappings = await this.getSettingJson<MarketplaceSkuMapping[]>('marketplace_sku_mappings', scope.tenantId, []);
-
-    if (!mappings.length) {
-      return { syncedCount: 0, updatedMappings: [] };
-    }
-
-    const filtered = marketplace ? mappings.filter((m) => m.marketplace === marketplace) : mappings;
-    const productIds = filtered.map((m) => m.productId);
-
-    const products = await this.db
-      .selectFrom('products')
-      .select(['id', 'stock_qty'])
-      .where('id', 'in', productIds)
-      .where('tenant_id', '=', scope.tenantId)
-      .execute();
-
-    const stockMap = new Map<number, number>();
-    for (const p of products) {
-      stockMap.set(Number(p.id), Number(p.stock_qty || 0));
-    }
-
-    const now = new Date().toISOString();
-    let syncedCount = 0;
-
-    for (const m of mappings) {
-      if (marketplace && m.marketplace !== marketplace) continue;
-      if (!m.syncStock) continue;
-
-      const currentStock = stockMap.get(m.productId) ?? m.currentLocalStock ?? 0;
-      m.currentLocalStock = currentStock;
-      m.lastSyncedStock = currentStock;
-      m.lastSyncedAt = now;
-      m.status = 'synced';
-      syncedCount++;
-    }
-
-    await this.setSettingJson('marketplace_sku_mappings', scope.tenantId, mappings);
-    await this.audit.log(
-      'مزامنة فورية لأرصدة مخزون أمازون ونون',
-      `تم تحديث أرصدة ${syncedCount} صنفاً على منصات البيع الخارجية لمنع البيع الزائد (Overselling Prevention)`,
-      auth,
-    );
-
-    return { syncedCount, updatedMappings: mappings };
+    return this.inventoryService.syncInventory(auth, marketplace);
   }
 
   async simulateIncomingOrder(
@@ -995,56 +960,11 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
   }
 
   async notifyProductStockChanged(productId: number, newStock: number, tenantId: string): Promise<void> {
-    try {
-      const mappings = await this.getSettingJson<MarketplaceSkuMapping[]>('marketplace_sku_mappings', tenantId, []);
-      const matching = mappings.filter((m) => m.productId === productId && m.syncStock);
-      if (!matching.length) return;
-
-      const configs = await this.getConfig({ tenantId, accountId: 'default' } as any);
-      for (const m of matching) {
-        m.currentLocalStock = newStock;
-        const cfg = configs[m.marketplace];
-        if (cfg && cfg.enabled && cfg.autoSyncStock) {
-          m.lastSyncedStock = newStock;
-          m.lastSyncedAt = new Date().toISOString();
-          m.status = 'synced';
-        }
-      }
-      await this.setSettingJson('marketplace_sku_mappings', tenantId, mappings);
-      this.logger.log(`[Marketplace Live Sync] Updated stock for product ${productId} -> ${newStock} across ${matching.length} mappings`);
-    } catch (err: any) {
-      this.logger.warn(`[Marketplace Live Sync] Failed to update stock for product ${productId}: ${err?.message || err}`);
-    }
+    return this.inventoryService.notifyProductStockChanged(productId, newStock, tenantId);
   }
 
   async syncStockLive(productId?: number, auth?: AuthContext): Promise<{ syncedCount: number; message: string }> {
-    if (!auth) throw new BadRequestException('المستخدم غير مسجل.');
-    const scope = requireTenantScope(auth);
-    const mappings = await this.getSettingJson<MarketplaceSkuMapping[]>('marketplace_sku_mappings', scope.tenantId, []);
-
-    const targetMappings = productId ? mappings.filter((m) => m.productId === productId) : mappings.filter((m) => m.syncStock);
-    if (!targetMappings.length) {
-      return { syncedCount: 0, message: 'لا توجد أصناف مطابقة للربط المباشر.' };
-    }
-
-    const configs = await this.getConfig(auth);
-    let synced = 0;
-
-    for (const m of targetMappings) {
-      const cfg = configs[m.marketplace];
-      if (cfg && cfg.enabled) {
-        m.lastSyncedStock = m.currentLocalStock;
-        m.lastSyncedAt = new Date().toISOString();
-        m.status = 'synced';
-        synced++;
-      }
-    }
-
-    await this.setSettingJson('marketplace_sku_mappings', scope.tenantId, mappings);
-    return {
-      syncedCount: synced,
-      message: `تم تحديث وبث أرصدة ${synced} صنف إلى المنصات بنجاح.`,
-    };
+    return this.inventoryService.syncStockLive(productId, auth);
   }
 
   // =========================================================================
