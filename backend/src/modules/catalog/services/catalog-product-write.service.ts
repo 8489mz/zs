@@ -61,9 +61,10 @@ import { AppError } from '../../../common/errors/app-error';
 import { InventoryScopeService } from '../../inventory/services/inventory-scope.service';
 import { StorefrontMediaService } from '../../storefront/storefront-media.service';
 import { NormalizedFashionVariant, NormalizedProductOffer, NormalizedUpsertProduct, UpsertProductDto } from '../dto/upsert-product.dto';
-import { normalizeArabicInput } from '../../../common/utils/arabic-search.util';
+import { normalizeArabicInput, normalizeArabicSearch } from '../../../common/utils/arabic-search.util';
 import { stockMovementTotal } from '../engines/stock-movement-total.engine';
-import { MoneyDigits, ProductOfferColumnCapabilities, ProductWriteExecutor } from './catalog-product-types';
+import { MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { ProductOfferColumnCapabilities, ProductWriteExecutor } from './catalog-product-types';
 
 export interface CatalogProductWriteDeps {
   db: Kysely<Database>;
