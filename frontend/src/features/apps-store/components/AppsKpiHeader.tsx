@@ -66,14 +66,26 @@ export function AppsKpiHeader({
     if (currentPlanName.includes('المقاولات')) {
       return { title: 'باقة المقاولات', tier: 'All-Inclusive', note: 'الموديولات الهندسية مدمجة' };
     }
-    if (currentPlanName.includes('الشحن')) {
+    if (currentPlanName.includes('الشحن الدولي') || currentPlanName.includes('واللوجستيات')) {
       return { title: 'باقة الشحن الدولي', tier: 'All-Inclusive', note: 'موديولات الملاحة مدمجة' };
+    }
+    if (currentPlanName.includes('Omnichannel') || currentPlanName.includes('التجارة الشاملة')) {
+      return { title: 'باقة التجارة الشاملة', tier: 'Omnichannel ERP', note: 'تشمل كافة الوحدات المتقدمة والمتجر الإلكتروني' };
     }
     if (currentPlanName.includes('Ultimate') || currentPlanName.includes('المتكاملة')) {
       return { title: 'الباقة المتكاملة', tier: 'Ultimate ERP', note: 'تشمل كافة الوحدات المتقدمة عدا المتجر الإلكتروني' };
     }
-    if (currentPlanName.includes('Pro') || currentPlanName.includes('المتقدمة')) {
+    if (currentPlanName.includes('Pro') || currentPlanName.includes('المتقدمة') || currentPlanName.includes('النمو')) {
       return { title: 'الباقة المتقدمة', tier: 'Pro ERP', note: 'إدارة الأعمال الشاملة' };
+    }
+    if (currentPlanName.includes('Basic') || currentPlanName.includes('الأساسية')) {
+      return { title: 'الباقة الأساسية', tier: 'Basic ERP', note: 'التشغيل الأساسي — يمكنك الترقية لفتح المزيد' };
+    }
+    if (currentPlanName.includes('Level 3') || currentPlanName.includes('سلسلة') || currentPlanName.includes('مؤسسة')) {
+      return { title: currentPlanName, tier: 'المستوى المؤسسي (L3)', note: 'تشمل المحاسبة والضرائب والموارد البشرية ضمن نطاقك' };
+    }
+    if (currentPlanName.includes('Level 2') || currentPlanName.includes('متعدد الفروع') || currentPlanName.includes('ثلاثة فروع') || currentPlanName.includes('— شركة')) {
+      return { title: currentPlanName, tier: 'مستوى النمو (L2)', note: 'تشمل المشتريات والمخزون والتوصيل والأقساط ضمن نطاقك' };
     }
     return { title: currentPlanName, tier: 'الاشتراك النشط', note: 'يمكنك الترقية لفتح المزيد' };
   }, [currentPlanName, isSuperAdmin]);

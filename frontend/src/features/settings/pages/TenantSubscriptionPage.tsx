@@ -6,6 +6,7 @@ import { settingsApi } from '../api/settings.api';
 import { queryKeys } from '@/app/query-keys';
 import { useAuthStore } from '@/stores/auth-store';
 import { resolveCurrentVertical } from '@/shared/verticals/vertical-scope';
+import { resolveBandForVertical, resolveFrontendCatalogLevel } from '@/shared/verticals/plan-tiers';
 import { Button } from '@/shared/ui/button';
 import { XIcon } from '@/shared/components/icons/AppIcons';
 import { toast } from '@/shared/components/system-alert';
@@ -123,19 +124,40 @@ export function TenantSubscriptionPage({ settings: propSettings }: TenantSubscri
    * «تواصل معنا» لا معرّفاً وهمياً كما كان (كانت `{ id: 1, ... }` تُمرَّر للدفع).
    */
   const LEVEL_TO_LEGACY_CODE: Record<string, string[]> = {
-    L1: ['basic', 'band1_l1', 'band2_l1', 'band3_l1', 'band4_l1', 'band5_l1'],
-    L2: ['pro', 'band1_l2', 'band2_l2', 'band3_l2', 'band4_l2', 'band5_l2'],
-    L3: ['ultimate', 'enterprise', 'omnichannel', 'band1_l3', 'band2_l3', 'band3_l3', 'band4_l3', 'band5_l3'],
+    L1: ['basic'],
+    L2: ['pro'],
+    L3: ['ultimate', 'enterprise', 'omnichannel'],
   };
   const planIdForLevel = (levelId: string): number | null => {
+    const band = resolveBandForVertical(currentVertical);
+    const levelNum = levelId === 'L1' ? 1 : levelId === 'L2' ? 2 : levelId === 'L3' ? 3 : null;
+    if (levelNum) {
+      const exactCode = `band${band}_l${levelNum}`;
+      const bandRow = availablePlans.find((p: any) => {
+        const code = String(p.code || '').toLowerCase();
+        return (
+          (Number(p.pricingBand) === band && Number(p.pricingLevel) === levelNum) ||
+          code === exactCode
+        );
+      });
+      if (bandRow) return bandRow.id;
+    }
     const codes = LEVEL_TO_LEGACY_CODE[levelId] ?? [];
     const row = availablePlans.find((p: any) => codes.includes(String(p.code || '').toLowerCase()));
     return row ? row.id : null;
   };
   const currentLevelId = (() => {
-    const code = String(subscription?.planCode || '').toLowerCase();
-    if (!code) return null;
-    return Object.keys(LEVEL_TO_LEGACY_CODE).find((lvl) => LEVEL_TO_LEGACY_CODE[lvl].includes(code)) ?? null;
+    const candidates = [
+      subscription?.planCode,
+      tenant.planId,
+      authTenant?.planId,
+      authTenant?.plan,
+    ];
+    for (const candidate of candidates) {
+      const resolved = resolveFrontendCatalogLevel(candidate);
+      if (resolved) return resolved;
+    }
+    return null;
   })();
 
   const handlePrintReceipt = (payment: TenantSubscriptionData['payments'][0]) => {

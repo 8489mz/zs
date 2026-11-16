@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { resolveCatalogLevelId } from '../../../core/tenant/plan-tier.util';
 import { PRICING_CATALOG } from './pricing-catalog.generated';
 import type {
   CatalogFeatureGroup,
@@ -238,19 +239,12 @@ export class PricingCatalogService {
   }
 
   /**
-   * ترجمة كود الباقة القديم في `saas_plans` إلى مستوى في النموذج المعتمد.
-   * الباقات الأربعة القديمة تبقى في الجدول لأن اشتراكات قائمة تشير إليها
-   * (الثابت PRICE-3: الهجرة 135 لا تُعدَّل)، لكن **السعر** لا يُقرأ منها بعد الآن.
+   * ترجمة كود الباقة (القديمة أو نظام النطاقات BAND*_L* / tier_band*_L*) إلى مستوى
+   * في النموذج المعتمد. الباقات الأربعة القديمة تبقى في الجدول لأن اشتراكات قائمة
+   * تشير إليها (الثابت PRICE-3)، لكن **السعر** لا يُقرأ منها بعد الآن.
    */
   levelIdForLegacyPlanCode(code?: string | null): string | null {
-    switch (String(code || '').trim().toUpperCase()) {
-      case 'BASIC': return 'L1';
-      case 'PRO': return 'L2';
-      case 'ULTIMATE':
-      case 'ENTERPRISE':
-      case 'OMNICHANNEL': return 'L3';
-      default: return null;
-    }
+    return resolveCatalogLevelId(code);
   }
 
   /**

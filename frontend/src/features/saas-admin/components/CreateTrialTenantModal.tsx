@@ -12,6 +12,7 @@ import {
   SYSTEM_VERTICAL_OPTIONS,
   getPlansForVertical,
 } from '@/shared/verticals/vertical-catalog';
+import { resolveFrontendPlanDisplayName } from '@/shared/verticals/plan-tiers';
 
 export interface CreateTrialTenantModalProps {
   open: boolean;
@@ -94,7 +95,7 @@ export function CreateTrialTenantModal({
       const fullTenantWithDetails: SaasTenantRow = {
         ...payload.tenant,
         ownerUsername: payload.owner.username,
-        planName: payload.tenant.planName || (createForm.featurePlanId === 'plan_omnichannel' ? 'التجارة الشاملة' : createForm.featurePlanId === 'plan_ultimate' ? 'المتكاملة' : createForm.featurePlanId === 'plan_pro' ? 'المتقدمة' : 'الأساسية'),
+        planName: payload.tenant.planName || resolveFrontendPlanDisplayName(createForm.featurePlanId) || 'الأساسية',
       } as any;
       setCreateResult({
         username: payload.owner.username,

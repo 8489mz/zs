@@ -461,6 +461,7 @@ export class TenantSubscriptionService {
         ownerName: tenant.owner_name,
         ownerPhone: tenant.owner_phone,
         status: tenant.status,
+        planId: (tenant as any).plan_id || null,
         activityType: (tenant as any).activity_type || null,
         pillar: (tenant as any).pillar || null,
         features: (tenant as any).features || (tenant as any).extra_features || [],
@@ -516,6 +517,8 @@ export class TenantSubscriptionService {
         maxUsers: p.max_users,
         maxBranches: p.max_branches,
         featurePlanId: (p as any).feature_plan_id,
+        pricingBand: (p as any).pricing_band ?? null,
+        pricingLevel: (p as any).pricing_level ?? null,
       })),
       payments: payments.map((p) => ({
         id: p.id,

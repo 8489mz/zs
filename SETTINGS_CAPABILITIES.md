@@ -14,6 +14,23 @@
 
 عند تعديل قدرة، حدّث وصفها في مكانها أو أضف سجلاً بمعرّف ثابت: السلوك والحدود، مصادر الكود، الاختبارات ونتائجها الفعلية، تاريخ التحقق والـcommit. اربط المجالات المتأثرة دون نسخ تفاصيلها.
 
+<a id="settings-apps-store-plan-compatibility"></a>
+### توحيد توافق الباقات وتثبيت تطبيقات المتجر عبر القطاعات والأنظمة (2026-11-16)
+- **السلوك الحالي والحدود:**
+  - تمكّن محرك استحقاق التبديل الذاتي (`SettingsService.saveSettings` عبر `settings-module-entitlement.engine.ts`) مدير المنشأة (`admin`) من تثبيت وتفعيل الموديولات المشمولة في باقته أو `extraFeatures` أو قطاعه مباشرة من متجر التطبيقات (`deliveryRepsModuleEnabled`, `vanSalesModuleEnabled`, `servicesModuleEnabled`, `comboModuleEnabled`, `crmModuleEnabled`, `installmentsModuleEnabled`, وغيرها)، مع بقاء إلغاء التثبيت (`false`) ومفاتيح النواة الحرجة (`posModuleEnabled`, `contractingModuleEnabled`, `maritimeFreightModuleEnabled`) محصورة بـ `super_admin` واحترام حظر القطاعات غير المتوافقة (`warehousing`, `services`, `contracting`, `maritime`, `manufacturing`).
+  - توحيد قراءة رتب وأسماء وميزات الباقات القديمة (`plan_basic`..`plan_omnichannel`) وباقات النطاقات الـ15 (`tier_band1_L1`..`tier_band5_L3` / `BAND1_L1`..`BAND5_L3`) عبر `plan-tier.util.ts` و`plan-tiers.ts`: عدم تقمّص `plan_basic` لاسم الباقة المتكاملة في `AppsStorePage`، وفتح CRM على `plan_pro` (إزالة بوابة `featureFlag: 'crm'` اليتيمة)، وفتح ميزات `plan_features` في `tier_band*_L2`، وربط `TradeInController` بميزة `'maintenance'` الفعلية بدلاً من `'tradein'`.
+  - منع تحول أنشطة `services` و`wholesale_van` تلقائياً إلى `posModuleEnabled = true` عبر فحص `'sales'` العام، وتثبيت افتراضي `servicesModuleEnabled = true` للأنشطة الخدمية (عدا استثناء `almhnds`)، وإخضاع `useFeatureGate` لنفس محرك `tenantHasFeature` مع تقييد أنشطة Band 4 بميزات باقتها عندما تكون معرّفة، وإزالة تجاوز `isCommerceVertical` في `ModulesSettingsTab`.
+- **حالة التنفيذ:** موجود ومُختبر جزئياً على الاختبارات المستهدفة.
+- **مصدر التنفيذ:**
+  - الخادم: `backend/src/core/tenant/plan-tier.util.ts`، `backend/src/modules/settings/settings-module-entitlement.engine.ts`، `backend/src/modules/settings/settings.service.ts`، `backend/src/core/auth/services/plan-feature.service.ts`، `backend/src/core/auth/services/session.service.ts`، `backend/src/modules/users/engines/user-plan-limit.engine.ts`، `backend/src/modules/tradein/tradein.controller.ts`
+  - الواجهة: `frontend/src/shared/verticals/plan-tiers.ts`، `frontend/src/features/apps-store/pages/AppsStorePage.tsx`، `frontend/src/features/apps-store/components/AppsKpiHeader.tsx`، `frontend/src/features/apps-store/data/apps-catalog.tsx`، `frontend/src/shared/components/feature-gate.tsx`، `frontend/src/app/router/access.ts`، `frontend/src/features/settings/components/forms/tabs/ModulesSettingsTab.tsx`، `frontend/src/features/settings/components/UserManagementSection.tsx`، `frontend/src/shared/system/DeveloperActivationPanel.tsx`
+- **المجالات المتأثرة:** [إدارة المنصة والاشتراكات](SAAS_CAPABILITIES.md#saas-plan-tiers-checkout-alignment) · [الثوابت المعمارية](ARCHITECTURE_INVARIANTS.md) (`INV-APPS-STORE-PLAN-TIER-COMPATIBILITY`)
+- **التحقق:**
+  - نجحت اختبارات الباك إند المستهدفة: `apps-store-plan-compatibility.spec.ts`، `pos-weighted-barcode-toggle-persists.spec.ts`، `pos-plan-sync-module-durability.spec.ts`، `user-plan-limit.spec.ts`، `subscription-read-only.spec.ts`، `storefront-order-entitlement.spec.ts`، `van-sales-admin-feature-gate.spec.ts`.
+  - نجحت 8 ملفات Vitest للواجهة (81 اختباراً): `AppsStorePage.spec.tsx`، `AppsStorePage.feedback.spec.tsx`، `AppsStorePage.tiers.spec.tsx`، `access.spec.ts`، `app-shell.spec.tsx`، `vertical-scope.spec.ts`، `useSettingsMutations.spec.tsx`، `modular-presets.spec.ts`، مع اجتياز فحص حجم ملفات الباك إند `file-size-guard.cjs` وفحص الطبقات `import-layer-check.mjs` و`page-composition-check.mjs` بلا أي مخالفة جديدة.
+- **آخر تحقق:** 2026-11-16 (على الأساس `ec8c30e40` + التعديلات غير الملتزمة).
+- **النواقص أو التعارضات:** لم يُشغّل البناء الكامل (`npm run build`) ولا فحص الأنواع (`tsc --noEmit`) ولا حراس `guards` الشاملة انتظاراً لأمر صريح؛ كما توجد مخالفتا حجم قائمتان مسبقاً خارج هذا النطاق في `PosCheckoutDialogSections.tsx` و`PosCheckoutExpressSection.tsx`.
+
 ### 258. حوكمة استيراد الأصناف وتصدير القالب ديناميكياً وعزل تكرار المخازن (Smart Dynamic Location Template & Anti-Duplication Import Engine — 27 أكتوبر 2026)
 - **المشكلة المعالجة:** كان قالب المنتجات ورصيد أول المدة ينزل بمسمى ثابت «المخزن الرئيسي»، وعندما يقوم المشترك الجديد برفعه يبحث الباك إند عن «المخزن الرئيسي» فلا يجده (لأن مخزن الفرع التلقائي اسمه «رصيد الفرع الرئيسي») فينشئ مخزناً ثانياً مكرراً يشتت رصيد الكاشير ونقطة البيع.
 - **التصدير الديناميكي للقالب (Dynamic Template Export):**

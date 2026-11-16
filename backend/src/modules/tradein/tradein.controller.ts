@@ -20,7 +20,7 @@ import { TradeInService } from './tradein.service';
 
 @Controller('api/tradein/transactions')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
-@RequireFeature('tradein')
+@RequireFeature('maintenance')
 export class TradeInController {
   constructor(private readonly tradeInService: TradeInService) {}
 

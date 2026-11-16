@@ -4,6 +4,7 @@ import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 
 import { getIndustryProfile } from '../../tenant/industry-profiles';
+import { getFallbackPlanFeatures, isOmnichannelPlanId } from '../../tenant/plan-tier.util';
 
 @Injectable()
 export class PlanFeatureService implements OnModuleInit {
@@ -76,7 +77,13 @@ export class PlanFeatureService implements OnModuleInit {
     // module on top of ANY other activity (a restaurant making chocolate, a pharmacy compounding)
     // via the literal extraFeatures check above.
 
-    if (pillar === 'commerce' || !pillar || ['retail_general', 'pharmacy', 'restaurant', 'maintenance', 'warehousing'].includes(activityType || '')) {
+    const isDedicatedPillar =
+      pillar === 'contracting' ||
+      pillar === 'maritime_freight' ||
+      activityType === 'contracting' ||
+      activityType === 'maritime_freight';
+
+    if (!isDedicatedPillar) {
       const profile = getIndustryProfile(activityType);
       if (profile.subVertical === 'warehousing' && ['pos', 'cashDrawer', 'storefront', 'kds', 'displays', 'signage', 'deliveryReps'].includes(requiredFeature)) {
         return false;
@@ -100,13 +107,14 @@ export class PlanFeatureService implements OnModuleInit {
     }
     
     // Explicit tier checks for commerce pillar
-    if (planId === 'plan_omnichannel') return true;
+    if (isOmnichannelPlanId(planId)) return true;
     if (planId === 'plan_ultimate' && requiredFeature === 'storefront') return false;
 
     const planFeatures = this.planFeatures.get(planId);
     if (!planFeatures) {
       if (planId === 'plan_ultimate') return true;
-      return false;
+      const fallback = getFallbackPlanFeatures(planId);
+      return fallback.includes(requiredFeature);
     }
 
     return planFeatures.has(requiredFeature);

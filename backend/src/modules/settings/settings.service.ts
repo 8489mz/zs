@@ -12,6 +12,8 @@ import { formatBranchStockLocationName } from '../../common/utils/branch-stock.u
 import { AuthCacheService } from '../../core/auth/services/auth-cache.service';
 import { invalidateTenantTimezoneCache, isValidTimezone } from '../../common/utils/tenant-timezone.util';
 import { getIndustryProfile, normalizeIndustryProfileKey, listSupportedIndustryProfiles, type IndustryProfile } from '../../core/tenant/industry-profiles';
+import { isEnterpriseOrUltimatePlan, isOmnichannelPlanId } from '../../core/tenant/plan-tier.util';
+import { filterProtectedModuleKeysForActor, resolveMaxBranchesForTenant } from './settings-module-entitlement.engine';
 import { PLAN_MANAGED_MODULES_SETTING_KEY } from '../../common/constants/platform-settings-keys';
 import { hashManagerPin, isBcryptHash, MANAGER_PIN_SETTING_KEYS } from '../../common/utils/manager-approval';
 import { SalesWriteService } from '../sales/services/sales-write.service';
@@ -156,8 +158,7 @@ export class SettingsService {
     // Ensure core business details and activity profile are strictly synced with tenant
     const tenant = await this.db.selectFrom('tenants').selectAll().where('id', '=', scope.tenantId).executeTakeFirst();
     const planFeatures = await this.getPlanFeatures(scope.tenantId, tenant?.plan_id);
-    const hasPosEntitlement = planFeatures.includes('pos') || planFeatures.includes('cashDrawer') || planFeatures.includes('sales');
-    const isRetailCommercePlan = tenant?.plan_id === 'plan_ultimate' || tenant?.plan_id === 'plan_omnichannel' || hasPosEntitlement;
+    const hasPosEntitlement = planFeatures.includes('pos') || planFeatures.includes('cashDrawer');
     const isAlmhnds = tenant?.slug === 'almhnds';
 
     if (tenant) {
@@ -184,12 +185,12 @@ export class SettingsService {
         primaryActivity = 'contracting';
       } else if (!primaryActivity || primaryActivity === 'retail_general' || primaryActivity === 'general') {
         const candidate = (settings.activityType || settings.businessIndustry || primaryActivity || 'retail_general') as string;
-        if ((candidate === 'services' || candidate.includes('خدمات') || candidate.includes('استشار')) && isRetailCommercePlan) {
+        if ((candidate === 'services' || candidate.includes('خدمات') || candidate.includes('استشار')) && hasPosEntitlement) {
           primaryActivity = 'retail_general';
         } else {
           primaryActivity = candidate;
         }
-      } else if ((primaryActivity === 'services' || primaryActivity.includes('خدمات') || primaryActivity.includes('استشار')) && isRetailCommercePlan) {
+      } else if ((primaryActivity === 'services' || primaryActivity.includes('خدمات') || primaryActivity.includes('استشار')) && hasPosEntitlement) {
         primaryActivity = 'retail_general';
       }
       const effectiveType = normalizeIndustryProfileKey(primaryActivity as string);
@@ -263,11 +264,11 @@ export class SettingsService {
       const isImportVertical = profileKey === 'import_export' || (settings.industryProfile as any)?.subVertical === 'import_export';
 
       // POS: enabled for all retail/hospitality/specialized verticals, disabled for wholesale_van, services, warehousing, and import_export
-      if (isWarehousing || isImportVertical) {
+      if (isWarehousing || isImportVertical || isWholesaleVan) {
         settings.posModuleEnabled = false;
         settings.requireCashierShiftForSales = false;
-      } else if (isWholesaleVan || isServiceVertical) {
-        if (isAlmhnds || isRetailCommercePlan || hasPosEntitlement) {
+      } else if (isServiceVertical) {
+        if (isAlmhnds || hasPosEntitlement) {
           settings.posModuleEnabled = true;
           settings.requireCashierShiftForSales = true;
         } else {
@@ -284,6 +285,8 @@ export class SettingsService {
         settings.requireCashierShiftForSales = true;
         settings.inventoryModuleEnabled = true;
         settings.servicesModuleEnabled = false;
+      } else if (isServiceVertical && settings.servicesModuleEnabled === undefined) {
+        settings.servicesModuleEnabled = true;
       }
 
       // Wholesale van: force van sales, delivery fleet (compat), and enterprise features
@@ -345,8 +348,8 @@ export class SettingsService {
         settings.clothingModuleEnabled = (settings.industryProfile as any)?.subVertical === 'clothing';
       }
 
-      const isOmnichannelPlan = tenant?.plan_id === 'plan_omnichannel' || (tenant as any)?.plan_id === 'OMNICHANNEL';
-      const isUltimatePlan = tenant?.plan_id === 'plan_ultimate' || (tenant as any)?.plan_id === 'ULTIMATE';
+      const isOmnichannelPlan = isOmnichannelPlanId(tenant?.plan_id);
+      const isUltimatePlan = isEnterpriseOrUltimatePlan(tenant?.plan_id) && !isOmnichannelPlan;
       const isEnterprisePlan = isOmnichannelPlan || isUltimatePlan;
 
       // Delivery reps (retail / standard): if profile or plan includes deliveryReps, ensure it's enabled (self-heal)
@@ -518,7 +521,7 @@ export class SettingsService {
 
     const tenantRow = await this.db
       .selectFrom('tenants')
-      .select(['activity_type'])
+      .select(['activity_type', 'plan_id', 'extra_features'])
       .where('id', '=', scope.tenantId)
       .executeTakeFirst();
 
@@ -600,42 +603,27 @@ export class SettingsService {
       normalizedPayload.maritimeFreightModuleEnabled = false;
       normalizedPayload.posModuleEnabled = false;
       normalizedPayload.requireCashierShiftForSales = false;
+    } else if (profile.key === 'services') {
+      normalizedPayload.contractingModuleEnabled = false;
+      normalizedPayload.maritimeFreightModuleEnabled = false;
     } else {
       normalizedPayload.contractingModuleEnabled = false;
       normalizedPayload.maritimeFreightModuleEnabled = false;
       normalizedPayload.posModuleEnabled = true;
     }
 
-    // Strictly protect module switches: only Super Admin can manually toggle or disable modules
+    // Protect core/disabled switches while allowing tenant admins to self-install
+    // modules explicitly permitted by their plan, extra features, and vertical.
     if (!isSuperAdminActor) {
-      const protectedModuleKeys = [
-        'posModuleEnabled',
-        'inventoryModuleEnabled',
-        'purchasesModuleEnabled',
-        'contractingModuleEnabled',
-        'maritimeFreightModuleEnabled',
-        'manufacturingModuleEnabled',
-        'enablePharmacyModule',
-        'enableMobileStoreFeatures',
-        'comboModuleEnabled',
-        'importModuleEnabled',
-        'storefrontModuleEnabled',
-        'crmModuleEnabled',
-        'restaurantModuleEnabled',
-        'servicesModuleEnabled',
-        'installmentsModuleEnabled',
-        'fixedAssetsModuleEnabled',
-        'taxDeclarationModuleEnabled',
-        'deliveryFleetModuleEnabled',
-        'deliveryRepsModuleEnabled',
-        'vanSalesModuleEnabled',
-        'posShowCartMeta',
-        'phoneOrdersModuleEnabled',
-        'autoPartsModuleEnabled',
-      ];
-      for (const key of protectedModuleKeys) {
-        delete normalizedPayload[key];
-      }
+      const dbPlanFeatures = await this.getPlanFeatures(scope.tenantId, tenantRow?.plan_id);
+      filterProtectedModuleKeysForActor(normalizedPayload, {
+        isSuperAdmin: false,
+        planId: tenantRow?.plan_id,
+        extraFeatures: tenantRow?.extra_features,
+        dbPlanFeatures,
+        profile,
+        posModuleEnabled: normalizedPayload.posModuleEnabled === true,
+      });
     }
 
     // Platform bookkeeping, never a tenant setting: this records which module switches the
@@ -700,21 +688,7 @@ export class SettingsService {
       const activeBranches = await this.db.selectFrom('branches').select(['id']).where(this.tenantPredicate(actor)).where('is_active', '=', true).execute();
       const tenant = await this.db.selectFrom('tenants').select(['id', 'plan_id', 'extra_features', 'status']).where('id', '=', scope.tenantId).executeTakeFirst();
       const planFeatures = await this.getPlanFeatures(scope.tenantId, tenant?.plan_id as any);
-      const extraFeatures = Array.isArray(tenant?.extra_features) ? tenant?.extra_features : typeof tenant?.extra_features === 'string' ? JSON.parse(tenant.extra_features) : [];
-      const allFeatures = new Set([...planFeatures, ...extraFeatures]);
-      
-      const hasMultiBranch = allFeatures.has('multi_branch') || allFeatures.has('branches') || allFeatures.has('inventory');
-      
-      const activeSub = await this.db
-        .selectFrom('tenant_subscriptions as s')
-        .leftJoin('saas_plans as p', 'p.id', 's.plan_id')
-        .select(['p.max_branches'])
-        .where('s.tenant_id', '=', scope.tenantId)
-        .where('s.status', 'in', ['active', 'past_due'])
-        .orderBy('s.created_at', 'desc')
-        .executeTakeFirst();
-
-      const maxBranches = activeSub?.max_branches ?? (hasMultiBranch ? (tenant?.plan_id === 'plan_pro' ? 3 : 999) : (tenant?.status === 'trial' ? 2 : 1));
+      const maxBranches = await resolveMaxBranchesForTenant(this.db, scope.tenantId, tenant, planFeatures);
       if (activeBranches.length >= maxBranches) {
         throw new AppError(`وصلت للحد الأقصى المسموح به في باقتك (${maxBranches} فرع). يرجى ترقية الباقة لإضافة فروع جديدة.`, 'PLAN_LIMIT_REACHED', 403);
       }

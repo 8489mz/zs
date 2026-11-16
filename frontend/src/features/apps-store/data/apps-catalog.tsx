@@ -264,7 +264,6 @@ export const APPS_CATALOG: AppItemDefinition[] = [
     accentColor: '#4f46e5',
     accentBg: '#eef2ff',
     routePath: '/crm',
-    featureFlag: 'crm',
   },
   {
     key: 'posModuleEnabled',

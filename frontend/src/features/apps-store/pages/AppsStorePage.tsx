@@ -10,6 +10,11 @@ import { isPlatformAdmin } from '@/app/router/access';
 import { settingsApi } from '@/features/settings/api/settings.api';
 import { queryKeys } from '@/app/query-keys';
 import { PLAN_TIERS, type PlanTierKey } from '@/features/settings/components/modular-configurator/modular-presets';
+import {
+  isTieredBandPlan,
+  resolveFrontendPlanDisplayName,
+  resolveFrontendPlanRank,
+} from '@/shared/verticals/plan-tiers';
 import { APPS_CATALOG } from '../data/apps-catalog';
 import { resolveAppToggleFeedback } from '../lib/app-toggle-feedback';
 import { AppCard } from '../components/AppCard';
@@ -190,33 +195,39 @@ export function AppsStorePage() {
     if (isSuperAdmin) return true;
     if (isContractingVertical && CONTRACTING_ALLOWED_KEYS.has(app.key)) return true;
     if (isMaritimeVertical && MARITIME_ALLOWED_KEYS.has(app.key)) return true;
+
+    const tenantFeatures = tenant?.features || [];
+    if (
+      app.key === 'posModuleEnabled' &&
+      (isWarehousingVertical || rawActivity === 'wholesale_van' || rawActivity === 'van_sales' || rawActivity === 'services') &&
+      !tenantFeatures.includes('pos')
+    ) {
+      return false;
+    }
+
+    const rawPlan = String(tenant?.plan || tenant?.planId || (tenant as any)?.plan_id || 'pro').toLowerCase();
+    const extraFeatures: string[] = Array.isArray((tenant as any)?.extraFeatures)
+      ? (tenant as any).extraFeatures
+      : [];
+
     if (app.featureFlag) {
-      const tenantFeatures = tenant?.features || [];
       if (!tenantFeatures.includes(app.featureFlag)) {
         return false;
       }
+      // Tiered band plans (tier_band*_L1..L3) and explicit extraFeatures add-ons
+      // are authoritative from backend plan_features — don't falsely lock L2/add-on
+      // apps behind legacy Ultimate rank gates.
+      if (
+        isTieredBandPlan(rawPlan) ||
+        extraFeatures.includes(app.featureFlag) ||
+        extraFeatures.includes(`+${app.featureFlag}`)
+      ) {
+        return true;
+      }
     }
-    // Plan tiers hierarchy
-    const rawPlan = String(tenant?.plan || tenant?.planId || 'pro').toLowerCase();
-    const planHierarchy: Record<string, number> = {
-      basic: 1,
-      plan_basic: 1,
-      standard: 1,
-      pro: 2,
-      plan_pro: 2,
-      ultimate: 3,
-      plan_ultimate: 3,
-      omnichannel: 4,
-      plan_omnichannel: 4,
-    };
-    const requiredRankMap: Record<PlanTierKey, number> = {
-      plan_basic: 1,
-      plan_pro: 2,
-      plan_ultimate: 3,
-      plan_omnichannel: 4,
-    };
-    const tenantRank = planHierarchy[rawPlan] || planHierarchy[rawPlan.replace('plan_', '')] || 2;
-    const requiredRank = requiredRankMap[app.requiredPlan] || 3;
+
+    const tenantRank = resolveFrontendPlanRank(rawPlan) ?? 2;
+    const requiredRank = resolveFrontendPlanRank(app.requiredPlan) ?? 3;
     return tenantRank >= requiredRank;
   };
 
@@ -307,14 +318,22 @@ export function AppsStorePage() {
   const currentPlanName = useMemo(() => {
     if (isContractingVertical) return isEn ? 'Contracting All-Inclusive Suite' : 'باقة المقاولات الشاملة (All-Inclusive)';
     if (isMaritimeVertical) return isEn ? 'Maritime Freight All-Inclusive Suite' : 'باقة الشحن واللوجستيات (All-Inclusive)';
-    const raw = String(tenant?.plan || tenant?.planId || 'pro').toLowerCase();
+    const raw = String(tenant?.plan || tenant?.planId || (tenant as any)?.plan_id || 'pro').toLowerCase();
     const map: Record<string, string> = {
       basic: isEn ? 'Basic Plan' : PLAN_TIERS.plan_basic.name,
+      plan_basic: isEn ? 'Basic Plan' : PLAN_TIERS.plan_basic.name,
+      starter: isEn ? 'Basic Plan' : PLAN_TIERS.plan_basic.name,
+      plan_starter: isEn ? 'Basic Plan' : PLAN_TIERS.plan_basic.name,
+      standard: isEn ? 'Basic Plan' : PLAN_TIERS.plan_basic.name,
       pro: isEn ? 'Pro Enterprise Plan' : PLAN_TIERS.plan_pro.name,
+      plan_pro: isEn ? 'Pro Enterprise Plan' : PLAN_TIERS.plan_pro.name,
       ultimate: isEn ? 'Ultimate Enterprise Plan' : PLAN_TIERS.plan_ultimate.name,
+      plan_ultimate: isEn ? 'Ultimate Enterprise Plan' : PLAN_TIERS.plan_ultimate.name,
+      enterprise: isEn ? 'Ultimate Enterprise Plan' : PLAN_TIERS.plan_ultimate.name,
       omnichannel: isEn ? 'Omnichannel Enterprise Plan' : PLAN_TIERS.plan_omnichannel.name,
+      plan_omnichannel: isEn ? 'Omnichannel Enterprise Plan' : PLAN_TIERS.plan_omnichannel.name,
     };
-    return map[raw] || (isEn ? 'Ultimate Enterprise Plan' : PLAN_TIERS.plan_ultimate.name);
+    return map[raw] || resolveFrontendPlanDisplayName(raw, isEn) || (isEn ? 'Pro Enterprise Plan' : PLAN_TIERS.plan_pro.name);
   }, [tenant, isContractingVertical, isMaritimeVertical, isEn]);
 
   return (

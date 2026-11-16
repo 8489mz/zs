@@ -10,6 +10,8 @@
  *    - عدم وجود باقة ولا اشتراك إطلاقاً = السقوط على الافتراضي (5 للتجربة، 3 للافتراضي).
  */
 
+import { resolvePlanRank } from '../../../core/tenant/plan-tier.util';
+
 export type UserLimit = number | null;
 
 export interface UserLimitInput {
@@ -78,8 +80,9 @@ export function resolveUserLimit(input: UserLimitInput): UserLimit {
   }
 
   // 3. مطابقة صريحة لاسم/معرف الباقة المعلق على المنشأة (tenants.plan_id)
-  if (rawTenantPlan.includes('pro')) {
-    const subUsers = typeof input.subscriptionMaxUsers === 'number' && rawSubCode === 'PRO' ? input.subscriptionMaxUsers : 0;
+  const resolvedRank = resolvePlanRank(rawTenantPlan);
+  if (rawTenantPlan.includes('pro') || resolvedRank === 2) {
+    const subUsers = typeof input.subscriptionMaxUsers === 'number' && (rawSubCode === 'PRO' || rawSubCode.endsWith('_L2')) ? input.subscriptionMaxUsers : 0;
     return Math.max(subUsers, 6);
   }
 
@@ -93,8 +96,12 @@ export function resolveUserLimit(input: UserLimitInput): UserLimit {
     }
   }
 
-  if (rawSubCode === 'PRO') {
+  if (rawSubCode === 'PRO' || rawSubCode.endsWith('_L2')) {
     return 6;
+  }
+
+  if (resolvedRank === 3 || rawSubCode.endsWith('_L3')) {
+    return 25;
   }
 
   // 5. لا اشتراك ولا باقة معروفة في saas_plans: نسقط على الافتراضي

@@ -4,6 +4,7 @@ import { DialogShell } from '@/shared/components/dialog-shell';
 import { Button } from '@/shared/ui/button';
 import { formatDate } from '@/lib/format';
 import { SaasTenantRow } from '../api/saas-admin.api';
+import { resolveFrontendPlanDisplayName } from '@/shared/verticals/plan-tiers';
 
 interface TenantWelcomeShareModalProps {
   tenant: SaasTenantRow;
@@ -31,7 +32,7 @@ export function TenantWelcomeShareModal({
     if (t.planId === 'plan_starter' || t.planId === 'plan_basic') return 'الأساسية';
     if (t.planId === 'plan_pro') return 'المتقدمة';
     if (t.planId === 'plan_ultimate' || !t.planId) return 'المتكاملة';
-    return 'المتكاملة';
+    return resolveFrontendPlanDisplayName(t.planId) || 'المتقدمة';
   };
   const planDisplayName = resolvePlanName(tenant);
 

@@ -18,6 +18,7 @@ import { SUPER_ADMIN_PERMISSIONS } from '../constants/super-admin-permissions';
 import { generatePhoneSearchVariants } from '../../utils/phone-utils';
 import { AuthCacheService } from './auth-cache.service';
 import { getIndustryProfile, resolvePillarScopedFeatures } from '../../tenant/industry-profiles';
+import { getFallbackPlanFeatures } from '../../tenant/plan-tier.util';
 
 function safeJsonArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
@@ -194,26 +195,6 @@ export class SessionService {
       ? Math.max(0, Math.ceil((trialEndsAt.getTime() - now) / (24 * 60 * 60 * 1000)))
       : null;
 
-    const FALLBACK_PLAN_FEATURES: Record<string, string[]> = {
-      plan_basic: ['sales', 'catalog', 'sessions', 'cashDrawer'],
-      plan_pro: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports', 'services'],
-      plan_ultimate: [
-        'sales', 'catalog', 'sessions', 'cashDrawer',
-        'purchases', 'inventory', 'reports', 'services',
-        'hr', 'deliveryReps', 'loyalty', 'maintenance', 'clothing', 'restaurant',
-        'accounting', 'fixed_assets', 'installments', 'taxIntegration', 'vat_declaration',
-        'manufacturing', 'import', 'pharmacy', 'maritime_freight', 'contracting',
-      ],
-      plan_omnichannel: [
-        'sales', 'catalog', 'sessions', 'cashDrawer',
-        'purchases', 'inventory', 'reports', 'services',
-        'hr', 'deliveryReps', 'loyalty', 'maintenance', 'clothing', 'restaurant',
-        'accounting', 'fixed_assets', 'installments', 'taxIntegration', 'vat_declaration',
-        'manufacturing', 'import', 'pharmacy', 'maritime_freight', 'contracting',
-        'storefront',
-      ],
-    };
-
     let planFeatures: string[] = [];
     let effectivePlanId = tenant.plan_id;
     if (!effectivePlanId) {
@@ -243,8 +224,8 @@ export class SessionService {
       planFeatures = [];
     }
 
-    if (planFeatures.length === 0 && FALLBACK_PLAN_FEATURES[effectivePlanId]) {
-      planFeatures = FALLBACK_PLAN_FEATURES[effectivePlanId];
+    if (planFeatures.length === 0) {
+      planFeatures = getFallbackPlanFeatures(effectivePlanId, { includeServicesOnPro: true });
     }
     
     const extraFeatures = Array.isArray(tenant.extra_features) ? tenant.extra_features : typeof tenant.extra_features === 'string' ? JSON.parse(tenant.extra_features) : [];

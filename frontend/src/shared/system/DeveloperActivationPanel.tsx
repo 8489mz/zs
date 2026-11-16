@@ -135,10 +135,10 @@ export const STANDARD_TIER_FEATURES: Record<string, string[]> = {
   tier_band4_L2: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments'],
   tier_band4_L3: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments', 'accounting', 'fixed_assets', 'hr', 'taxIntegration', 'vat_declaration'],
 
-  // --- Band 5: Institutional & Maritime Freight Tiers ---
-  tier_band5_L1: ['sales', 'catalog', 'sessions', 'cashDrawer', 'maritime_freight'],
-  tier_band5_L2: ['sales', 'catalog', 'sessions', 'cashDrawer', 'maritime_freight', 'purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments'],
-  tier_band5_L3: ['sales', 'catalog', 'sessions', 'cashDrawer', 'maritime_freight', 'purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments', 'accounting', 'fixed_assets', 'hr', 'taxIntegration', 'vat_declaration'],
+  // --- Band 5: Institutional, Contracting & Maritime Freight Tiers ---
+  tier_band5_L1: ['sales', 'catalog', 'sessions', 'cashDrawer', 'maritime_freight', 'contracting'],
+  tier_band5_L2: ['sales', 'catalog', 'sessions', 'cashDrawer', 'maritime_freight', 'contracting', 'purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments'],
+  tier_band5_L3: ['sales', 'catalog', 'sessions', 'cashDrawer', 'maritime_freight', 'contracting', 'purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments', 'accounting', 'fixed_assets', 'hr', 'taxIntegration', 'vat_declaration'],
 };
 
 export function DeveloperActivationPanel() {

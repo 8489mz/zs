@@ -687,13 +687,22 @@ export function tenantHasFeature(
 
   const vertical = resolveCurrentVertical(tenant);
   const verticalFeatures = VERTICAL_SUITE_FEATURES[vertical];
+  const hasExplicitFeatures = Array.isArray(tenant.features) && tenant.features.length > 0;
   if (verticalFeatures) {
-    if (verticalFeatures.includes(feature)) return true;
+    // Band 5 (contracting / maritime) is an all-inclusive suite.
+    // Band 4 (manufacturing / warehousing / wholesale_van / import_export) is tier-scoped
+    // whenever the server supplied tenant.features; only fall back to the full suite when absent.
+    const isAllInclusiveVertical = vertical === 'contracting' || vertical === 'maritime';
+    if ((isAllInclusiveVertical || !hasExplicitFeatures) && verticalFeatures.includes(feature)) {
+      return true;
+    }
+    if (vertical === 'manufacturing' && feature === 'manufacturing') return true;
+    if (vertical === 'import_export' && feature === 'import') return true;
+    if (vertical === 'wholesale_van' && feature === 'deliveryReps') return true;
   } else {
     // Retail/commerce tiers retain core selling primitives while keeping tier-gated modules
     // (hr, accounting, purchases, inventory, reports, installments, storefront) strictly bound to tenant.features.
     if (COMMERCE_CORE_FEATURES.has(feature)) return true;
-    const hasExplicitFeatures = Array.isArray(tenant.features) && tenant.features.length > 0;
     if (!hasExplicitFeatures && LEGACY_COMMERCE_FALLBACK_FEATURES.has(feature)) {
       return true;
     }

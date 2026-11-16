@@ -8,6 +8,7 @@ export type TenantSubscriptionData = {
     ownerName: string;
     ownerPhone: string;
     status: string;
+    planId?: string | null;
     activityType?: string | null;
     pillar?: string | null;
     features?: string[];
@@ -51,6 +52,8 @@ export type TenantSubscriptionData = {
     maxUsers: number | null;
     maxBranches: number | null;
     featurePlanId: string | null;
+    pricingBand?: number | null;
+    pricingLevel?: number | null;
   }>;
   payments: Array<{
     id: number;

@@ -14,6 +14,12 @@
 
 عند تعديل قدرة، حدّث وصفها في مكانها أو أضف سجلاً بمعرّف ثابت: السلوك والحدود، مصادر الكود، الاختبارات ونتائجها الفعلية، تاريخ التحقق والـcommit. اربط المجالات المتأثرة دون نسخ تفاصيلها.
 
+<a id="saas-plan-tiers-checkout-alignment"></a>
+### مواءمة باقات النطاقات `BAND*_L*` في لوحة الساس والدفع الإلكتروني (2026-11-16)
+- **السلوك الحالي والحدود:** تم ربط `PricingCatalogService.levelIdForLegacyPlanCode` و`TenantSubscriptionService.getMySubscription` و`SaasAdminService` و`TenantSubscriptionPage` و`TenantWelcomeShareModal` و`CreateTrialTenantModal` بمحرك توحيد الباقات، بحيث تُطابق صفحة اشتراك المنشأة صف `saas_plans` المطابق لـ `pricingBand` + `pricingLevel` قبل أي سقوط افتراضي، وتختفي أخطاء 404 عند تجديد أو ترقية باقات `BAND1_L1`..`BAND5_L3` أونلاين.
+- **المجال المالك للتفاصيل والاختبارات:** [قدرات الإعدادات والأنشطة والباقات — توحيد توافق الباقات](SETTINGS_CAPABILITIES.md#settings-apps-store-plan-compatibility).
+- **مصدر التنفيذ:** `backend/src/modules/saas-admin/saas-admin.service.ts`، `backend/src/modules/tenant-subscription/pricing/pricing-catalog.service.ts`، `backend/src/modules/tenant-subscription/tenant-subscription.service.ts`، `frontend/src/features/settings/api/tenant-subscription.api.ts`، `frontend/src/features/settings/pages/TenantSubscriptionPage.tsx`، `frontend/src/features/saas-admin/components/TenantWelcomeShareModal.tsx`، `frontend/src/features/saas-admin/components/CreateTrialTenantModal.tsx`.
+
 
 <a id="saas-sandbox-cloud-failclosed-p0a"></a>
 ### حصر محاكاة تجديد الاشتراك خارج Cloud SaaS — تدقيق مصدر الكود 25 أكتوبر 2026

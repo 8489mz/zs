@@ -3,6 +3,7 @@ import { useRef, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/shared/ui/button';
+import { resolveFrontendPlanRank } from '@/shared/verticals/plan-tiers';
 import { QueryFeedback } from '@/shared/components/query-feedback';
 import type { Branch } from '@/types/domain';
 import { settingsApi } from '@/features/settings/api/settings.api';
@@ -141,6 +142,7 @@ export function UserManagementSection({ branches, setupMode = false, setupStepKe
 
   // 2. احتياط محلي فقط في حال عدم اكتمال استجابة السيرفر بعد
   const rawPlan = String(authTenant?.planId || authTenant?.plan || '').toLowerCase();
+  const planRank = resolveFrontendPlanRank(rawPlan);
   const isFallbackUnlimited =
     isSuperAdmin ||
     rawPlan.includes('omnichannel') ||
@@ -158,7 +160,9 @@ export function UserManagementSection({ branches, setupMode = false, setupStepKe
     ? Infinity
     : planLimit && typeof planLimit.maxUsers === 'number'
     ? planLimit.maxUsers
-    : rawPlan.includes('pro')
+    : planRank === 3
+    ? 25
+    : planRank === 2
     ? 10
     : authTenant?.isTrial
     ? 5

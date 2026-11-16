@@ -18,6 +18,7 @@ import { SettingsDemoDataService } from '../settings/services/settings-demo-data
 import { SettingsService } from '../settings/settings.service';
 import { PLAN_MANAGED_MODULES_SETTING_KEY } from '../../common/constants/platform-settings-keys';
 import { normalizeIndustryProfileKey, getIndustryProfile } from '../../core/tenant/industry-profiles';
+import { getFallbackPlanFeatures, isEnterpriseOrUltimatePlan, isOmnichannelPlanId, resolvePlanDisplayName } from '../../core/tenant/plan-tier.util';
 import { isPlatformTenantId, requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { checkClientBusinessDay, CLIENT_BUSINESS_DATE_PAST_DAYS } from '../../common/utils/client-date-bounds.util';
@@ -278,7 +279,7 @@ export class SaasAdminService {
         ownerLocked: Boolean(owner?.locked),
         ownerIsActive: owner ? Boolean(owner.isActive) : false,
         ownerUsername: owner?.username || '',
-        planName: isPlatform ? 'مالك المنظومة (غير مقيد)' : (sub?.plan_name || (row.plan_id === 'plan_omnichannel' ? 'التجارة الشاملة' : row.plan_id === 'plan_ultimate' ? 'المتكاملة' : row.plan_id === 'plan_pro' ? 'المتقدمة' : row.plan_id === 'plan_starter' ? 'الأساسية' : 'المتكاملة')),
+        planName: isPlatform ? 'مالك المنظومة (غير مقيد)' : (sub?.plan_name || resolvePlanDisplayName(row.plan_id)),
         planId: row.plan_id || null,
         extraFeatures: Array.isArray(row.extra_features) ? row.extra_features : typeof row.extra_features === 'string' ? JSON.parse(row.extra_features) : [],
         subscriptionStatus: isPlatform ? 'active' : (sub?.sub_status || null),
@@ -359,7 +360,7 @@ export class SaasAdminService {
         lastLoginAt: owner?.last_login_at ? new Date(owner.last_login_at).toISOString() : null,
         ownerUsername: owner?.username || '',
         planId: tenant.plan_id || null,
-        planName: isPlatform ? 'مالك المنظومة (كامل الصلاحيات والأنظمة)' : (tenant.plan_id === 'plan_omnichannel' ? 'التجارة الشاملة' : tenant.plan_id === 'plan_ultimate' ? 'المتكاملة' : tenant.plan_id === 'plan_pro' ? 'المتقدمة' : tenant.plan_id === 'plan_starter' ? 'الأساسية' : 'المتكاملة'),
+        planName: isPlatform ? 'مالك المنظومة (كامل الصلاحيات والأنظمة)' : resolvePlanDisplayName(tenant.plan_id),
         isPlatform,
         extraFeatures: Array.isArray(tenant.extra_features) ? tenant.extra_features : typeof tenant.extra_features === 'string' ? JSON.parse(tenant.extra_features) : [],
       },
@@ -987,8 +988,8 @@ export class SaasAdminService {
       const patch = this.provisioning.getIndustrySettingsPatch(normalized);
       const targetPlan = dto.planId !== undefined ? dto.planId : (tenant as any).plan_id;
       const targetExtra = dto.extraFeatures !== undefined ? dto.extraFeatures : (tenant as any).extra_features;
-      const isOmni = targetPlan === 'plan_omnichannel' || targetPlan === 'omnichannel' || (Array.isArray(targetExtra) && targetExtra.includes('storefront'));
-      const isEnterprise = isOmni || targetPlan === 'plan_ultimate' || targetPlan === 'ultimate' || (Array.isArray(targetExtra) && targetExtra.includes('accounting'));
+      const isOmni = isOmnichannelPlanId(targetPlan) || (Array.isArray(targetExtra) && targetExtra.includes('storefront'));
+      const isEnterprise = isOmni || isEnterpriseOrUltimatePlan(targetPlan) || (Array.isArray(targetExtra) && targetExtra.includes('accounting'));
       if (isOmni) {
         delete patch.storefrontModuleEnabled;
       }
@@ -1270,99 +1271,6 @@ export class SaasAdminService {
         .executeTakeFirst();
       const accountId = userRow?.account_id ?? 1;
 
-      const FALLBACK_PLAN_FEATURES: Record<string, string[]> = {
-        plan_basic: ['sales', 'catalog', 'sessions', 'cashDrawer'],
-        basic: ['sales', 'catalog', 'sessions', 'cashDrawer'],
-        BASIC: ['sales', 'catalog', 'sessions', 'cashDrawer'],
-        '1': ['sales', 'catalog', 'sessions', 'cashDrawer'],
-
-        plan_pro: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports'],
-        pro: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports'],
-        PRO: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports'],
-        '2': ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports'],
-
-        plan_ultimate: [
-          'sales', 'catalog', 'sessions', 'cashDrawer',
-          'purchases', 'inventory', 'reports',
-          'hr', 'deliveryReps', 'loyalty', 'maintenance', 'clothing', 'restaurant',
-          'accounting', 'fixed_assets', 'installments', 'taxIntegration', 'vat_declaration',
-          'manufacturing', 'import', 'pharmacy', 'maritime_freight', 'contracting',
-        ],
-        ultimate: [
-          'sales', 'catalog', 'sessions', 'cashDrawer',
-          'purchases', 'inventory', 'reports',
-          'hr', 'deliveryReps', 'loyalty', 'maintenance', 'clothing', 'restaurant',
-          'accounting', 'fixed_assets', 'installments', 'taxIntegration', 'vat_declaration',
-          'manufacturing', 'import', 'pharmacy', 'maritime_freight', 'contracting',
-        ],
-        ULTIMATE: [
-          'sales', 'catalog', 'sessions', 'cashDrawer',
-          'purchases', 'inventory', 'reports',
-          'hr', 'deliveryReps', 'loyalty', 'maintenance', 'clothing', 'restaurant',
-          'accounting', 'fixed_assets', 'installments', 'taxIntegration', 'vat_declaration',
-          'manufacturing', 'import', 'pharmacy', 'maritime_freight', 'contracting',
-        ],
-        '3': [
-          'sales', 'catalog', 'sessions', 'cashDrawer',
-          'purchases', 'inventory', 'reports',
-          'hr', 'deliveryReps', 'loyalty', 'maintenance', 'clothing', 'restaurant',
-          'accounting', 'fixed_assets', 'installments', 'taxIntegration', 'vat_declaration',
-          'manufacturing', 'import', 'pharmacy', 'maritime_freight', 'contracting',
-        ],
-
-        plan_omnichannel: [
-          'sales', 'catalog', 'sessions', 'cashDrawer',
-          'purchases', 'inventory', 'reports',
-          'hr', 'deliveryReps', 'loyalty', 'maintenance', 'clothing', 'restaurant',
-          'accounting', 'fixed_assets', 'installments', 'taxIntegration', 'vat_declaration',
-          'manufacturing', 'import', 'pharmacy',
-          'storefront',
-        ],
-        omnichannel: [
-          'sales', 'catalog', 'sessions', 'cashDrawer',
-          'purchases', 'inventory', 'reports',
-          'hr', 'deliveryReps', 'loyalty', 'maintenance', 'clothing', 'restaurant',
-          'accounting', 'fixed_assets', 'installments', 'taxIntegration', 'vat_declaration',
-          'manufacturing', 'import', 'pharmacy',
-          'storefront',
-        ],
-        OMNICHANNEL: [
-          'sales', 'catalog', 'sessions', 'cashDrawer',
-          'purchases', 'inventory', 'reports',
-          'hr', 'deliveryReps', 'loyalty', 'maintenance', 'clothing', 'restaurant',
-          'accounting', 'fixed_assets', 'installments', 'taxIntegration', 'vat_declaration',
-          'manufacturing', 'import', 'pharmacy',
-          'storefront',
-        ],
-        '4': [
-          'sales', 'catalog', 'sessions', 'cashDrawer',
-          'purchases', 'inventory', 'reports',
-          'hr', 'deliveryReps', 'loyalty', 'maintenance', 'clothing', 'restaurant',
-          'accounting', 'fixed_assets', 'installments', 'taxIntegration', 'vat_declaration',
-          'manufacturing', 'import', 'pharmacy',
-          'storefront',
-        ],
-
-        // Tier band plans: Level 1 has zero rows in plan_features by design (core POS comes
-        // from industry profile defaultFeatures). Level 2 adds operations, Level 3 adds full ERP.
-        // These fallbacks ensure syncTenantModuleSettingsForPlan never thinks the plan is empty.
-        tier_band1_L1: ['sales', 'catalog', 'sessions', 'cashDrawer'],
-        tier_band1_L2: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments'],
-        tier_band1_L3: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments', 'accounting', 'fixed_assets', 'hr', 'taxIntegration', 'vat_declaration'],
-
-        tier_band2_L1: ['sales', 'catalog', 'sessions', 'cashDrawer'],
-        tier_band2_L2: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments'],
-        tier_band2_L3: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments', 'accounting', 'fixed_assets', 'hr', 'taxIntegration', 'vat_declaration'],
-
-        tier_band3_L1: ['sales', 'catalog', 'sessions', 'cashDrawer'],
-        tier_band3_L2: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments'],
-        tier_band3_L3: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments', 'accounting', 'fixed_assets', 'hr', 'taxIntegration', 'vat_declaration'],
-
-        tier_band4_L1: ['sales', 'catalog', 'sessions', 'cashDrawer'],
-        tier_band4_L2: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments'],
-        tier_band4_L3: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports', 'loyalty', 'deliveryReps', 'installments', 'accounting', 'fixed_assets', 'hr', 'taxIntegration', 'vat_declaration'],
-      };
-
       let baseFeatures: string[] = [];
       if (planId) {
         const rows = await this.db
@@ -1371,10 +1279,10 @@ export class SaasAdminService {
           .where('plan_id', '=', planId as any)
           .execute();
         baseFeatures = rows.map(r => r.feature_code);
-        if (baseFeatures.length === 0 && FALLBACK_PLAN_FEATURES[planId]) {
-          baseFeatures = FALLBACK_PLAN_FEATURES[planId];
+        if (baseFeatures.length === 0) {
+          baseFeatures = getFallbackPlanFeatures(planId, { includeBand5MarkersOnUltimate: true });
         }
-        if (['plan_omnichannel', 'omnichannel', 'OMNICHANNEL', '4'].includes(String(planId)) && !baseFeatures.includes('storefront')) {
+        if (isOmnichannelPlanId(planId) && !baseFeatures.includes('storefront')) {
           baseFeatures.push('storefront');
         }
       }
@@ -1408,6 +1316,7 @@ export class SaasAdminService {
         inventory: ['inventoryModuleEnabled'],
         hr: ['hrModuleEnabled'],
         deliveryReps: ['deliveryRepsModuleEnabled', 'deliveryFleetModuleEnabled'],
+        vanSales: ['vanSalesModuleEnabled'],
         maintenance: ['enableMobileStoreFeatures'],
         services: ['servicesModuleEnabled'],
         clothing: ['clothingModuleEnabled'],
