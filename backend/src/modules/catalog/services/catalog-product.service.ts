@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { Kysely, Transaction, sql } from '../../../database/kysely';
+import { Kysely, sql } from '../../../database/kysely';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { AppError } from '../../../common/errors/app-error';
@@ -15,156 +15,54 @@ import { AccountingTenantFoundationService } from '../../accounting/accounting-t
 import { applyStockDelta } from '../../../common/utils/location-stock-ledger';
 import { assertFashionExpectedStock, assertFashionRemovedStockSafe, fashionLocationAccessMode } from '../engines/fashion-stock-safety.engine';
 import { stockMovementTotal } from '../engines/stock-movement-total.engine';
-import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { normalizePgDateOnly } from '../../../common/utils/tenant-timezone.util';
-import { currencyMoneyDigits, MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+import { MoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { StorefrontMediaService } from '../../storefront/storefront-media.service';
 import { availableAcrossLocations } from '../../../common/engines/branch-sellable-locations.engine';
 import { findPosProductsByBarcodeWithDb } from './pos-barcode-lookup.helper';
-
-type ProductRow = {
-  id: number;
-  name: string;
-  name_en?: string | null;
-  barcode: string | null;
-  sku?: string | null;
-  catalog_updated_at?: Date | string | null;
-  item_type?: 'product' | 'raw_material' | 'service';
-  item_kind: 'standard' | 'fashion' | null;
-  style_code: string | null;
-  color: string | null;
-  size: string | null;
-  bin_location: string | null;
-  category_id: number | null;
-  supplier_id: number | null;
-  cost_price: string | number;
-  retail_price: string | number;
-  wholesale_price: string | number;
-  credit_price?: string | number | null;
-  consumer_price?: string | number | null;
-  min_selling_price?: string | number | null;
-  stock_qty: string | number;
-  min_stock_qty: string | number;
-  bom_id?: number | null;
-  default_location_id?: number | null;
-  default_location_name?: string | null;
-  notes: string;
-  track_serials?: boolean | null;
-  metadata?: string | Record<string, any> | null;
-  is_active?: boolean | null;
-  calories?: number | null;
-  allergens?: any;
-  is_spicy?: boolean | null;
-  is_vegetarian?: boolean | null;
-  is_gluten_free?: boolean | null;
-};
-
-type ProductWriteExecutor = Kysely<Database> | Transaction<Database>;
-type ProductOfferColumnCapabilities = { hasMinQty: boolean; hasAdvancedPromotions: boolean };
-type ProductOfferReadRow = {
-  id: number;
-  product_id: number;
-  offer_type: string;
-  value: string | number;
-  start_date: string | null;
-  end_date: string | null;
-  min_qty?: string | number | null;
-  bogo_buy_qty?: string | number | null;
-  bogo_get_qty?: string | number | null;
-  bogo_discount_percent?: string | number | null;
-  happy_hour_start?: string | null;
-  happy_hour_end?: string | null;
-  days_of_week?: string | null;
-};
-
-type ProductCountRow = {
-  product_id: number;
-  count: string | number | bigint;
-};
-
-type ProductUnitSearchRow = {
-  product_id: number;
-  name: string | null;
-  barcode: string | null;
-};
-
-type ProductUnitReadRow = {
-  id: number;
-  product_id: number;
-  name: string;
-  multiplier: string | number;
-  barcode: string | null;
-  is_base_unit: boolean;
-  is_sale_unit_default: boolean;
-  is_purchase_unit_default: boolean;
-};
-
-type PosProductLookupRow = Pick<ProductRow, 'id' | 'name' | 'name_en' | 'barcode' | 'sku' | 'item_type' | 'item_kind' | 'style_code' | 'color' | 'size' | 'retail_price' | 'wholesale_price' | 'credit_price' | 'consumer_price' | 'min_selling_price' | 'stock_qty' | 'min_stock_qty' | 'bom_id' | 'category_id' | 'track_serials' | 'metadata'> & {
-  calories?: number | null;
-  allergens?: any;
-  is_spicy?: boolean | null;
-  is_vegetarian?: boolean | null;
-  is_gluten_free?: boolean | null;
-  matched_unit_id?: number | null;
-  matched_unit_name?: string | null;
-  matched_unit_multiplier?: string | number | null;
-  matched_unit_barcode?: string | null;
-  matched_serial_number?: string | null;
-};
-
-type CustomerPriceReadRow = {
-  id: number;
-  product_id: number;
-  customer_id: number;
-  price: string | number;
-};
+import { CatalogProductPostingService } from './catalog-product-posting.service';
+import {
+  CustomerPriceReadRow,
+  PosProductLookupRow,
+  ProductCountRow,
+  ProductOfferColumnCapabilities,
+  ProductOfferReadRow,
+  ProductRow,
+  ProductUnitReadRow,
+  ProductUnitSearchRow,
+  ProductWriteExecutor,
+} from './catalog-product-types';
 
 @Injectable()
 export class CatalogProductService {
   private productOfferColumnCapabilitiesPromise?: Promise<ProductOfferColumnCapabilities>;
+  private readonly postingService: CatalogProductPostingService;
 
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>, private readonly audit: AuditService,
     private readonly inventoryScope: InventoryScopeService,
     @Optional() private readonly accountingPosting?: AccountingPostingService,
     @Optional() private readonly accountingFoundation?: AccountingTenantFoundationService,
-    @Optional() private readonly mediaService?: StorefrontMediaService) {}
-
-  private async ensureOpeningStockAccounts(actor: AuthContext): Promise<void> {
-    if (!this.accountingPosting || !this.accountingFoundation) {
-      throw new AppError('Accounting services are required for opening stock', 'OPENING_STOCK_LEDGER_UNAVAILABLE', 500);
-    }
-    await this.accountingFoundation.ensureForAuth(this.db, actor);
+    @Optional() private readonly mediaService?: StorefrontMediaService) {
+    this.postingService = new CatalogProductPostingService({
+      db: this.db,
+      accountingPosting: this.accountingPosting,
+      accountingFoundation: this.accountingFoundation,
+      tenantId: this.tenantId.bind(this),
+      accountId: this.accountId.bind(this),
+    });
   }
 
-  // INV-CATALOG-STOCK-TOTALS-BOOK-DIGITS: book digits resolved on the
-  // caller's own handle (the open transaction inside write flows),
-  // fail closed on a base-currency/rate mismatch via tenantBaseCurrency.
+  private async ensureOpeningStockAccounts(actor: AuthContext): Promise<void> {
+    return this.postingService.ensureOpeningStockAccounts(actor);
+  }
+
   private async bookDigits(executor: ProductWriteExecutor, actor: AuthContext): Promise<MoneyDigits> {
-    return currencyMoneyDigits(await tenantBaseCurrency(executor, this.tenantId(actor)));
+    return this.postingService.bookDigits(executor, actor);
   }
 
   private async postOpeningStock(trx: ProductWriteExecutor, productId: number, qty: number, unitCost: number,
     locationId: number | null, actor: AuthContext): Promise<void> {
-    const amount = stockMovementTotal(qty, unitCost, await this.bookDigits(trx, actor));
-    if (amount <= 0) return;
-    const accounts = await trx.selectFrom('accounting_accounts').select(['id', 'code'])
-      .where('tenant_id', '=', this.tenantId(actor)).where('code', 'in', ['1140', '3100'])
-      .where('is_active', '=', true).execute();
-    const byCode = new Map(accounts.map((account) => [account.code, Number(account.id)]));
-    if (!byCode.get('1140') || !byCode.get('3100')) {
-      throw new AppError('Inventory or opening capital account is unavailable', 'OPENING_STOCK_ACCOUNT_MISSING', 422);
-    }
-    await this.accountingPosting!.postDomainJournal(trx, {
-      sourceType: 'catalog_opening_stock', sourceId: productId,
-      tenantId: this.tenantId(actor), accountId: this.accountId(actor), entryDate: new Date(),
-      description: `رصيد افتتاحي للصنف ${productId}`, createdBy: actor.userId,
-      lines: [
-        { accountId: byCode.get('1140')!, debit: amount, credit: 0, description: 'إثبات مخزون افتتاحي',
-          partnerType: 'none', partnerId: null, branchId: null, locationId },
-        { accountId: byCode.get('3100')!, debit: 0, credit: amount, description: 'مقابل المخزون الافتتاحي ضمن رأس المال',
-          partnerType: 'none', partnerId: null, branchId: null, locationId },
-      ],
-    });
+    return this.postingService.postOpeningStock(trx, productId, qty, unitCost, locationId, actor);
   }
 
   private scope(actor: AuthContext) {
