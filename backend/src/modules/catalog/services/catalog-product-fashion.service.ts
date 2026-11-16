@@ -34,7 +34,7 @@
  * MUST export the 9 aliases (same dependency as P2/P7).
  * Clock: 0 clock reads. The 2 `new Date(x)` sites at L2086 are parses in
  * the optimistic-concurrency compare (expectedCatalogUpdatedAt vs the DB
- * catalog_updated_at, ±1ms) — NOT clock sites. Guard: toFixed(2) = 0,
+ * catalog_updated_at, ±1ms) — NOT clock sites. Guard: toFixed2 = 0,
  * inlineRound = 0 (toFixed(3) x4, informational only).
  * No driving spec pins saveFashionGroup directly (prep §7: the largest
  * single method in the file and completely unpinned); the merged proof +

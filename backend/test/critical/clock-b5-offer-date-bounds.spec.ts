@@ -249,7 +249,10 @@ console.log(out.join('\\n'));
   const vanPreSales = readSrc('modules/delivery-reps/services/van-pre-sales.service.ts');
   assert.ok(vanPreSales.includes('normalizePgDateOnly(off.start_date)'), 'van pre-sales must use the pg-aware normalizer');
   assert.ok(!vanPreSales.includes('normalizeDateOnly(off.start_date)'), 'van pre-sales must not use the UTC slice on stored bounds');
-  const catalog = readSrc('modules/catalog/services/catalog-product.service.ts');
+  // The catalog offers map lives in the P4 pos slice now (catalog-product
+  // split 2026-11-16); the facade keeps only a delegate. normalizePgDateOnly
+  // is imported into the slice, and the old private normalizeDateOnly is gone.
+  const catalog = readSrc('modules/catalog/services/catalog-product-pos.service.ts');
   assert.ok(catalog.includes('normalizePgDateOnly(offer.start_date)'), 'catalog offers map must use the pg-aware normalizer');
   assert.ok(!catalog.includes('this.normalizeDateOnly(offer.start_date)'), 'the catalog UTC-slice normalizer must be gone');
   assert.ok(!catalog.includes('private normalizeDateOnly'), 'the catalog private UTC-slice normalizer must be deleted');
