@@ -269,7 +269,7 @@ export const vanOfflineDb = {
     tripId: number;
     customerId?: number | null;
     customerName?: string;
-    items: Array<{ productId: number; qty: number; unitPrice: number; productName?: string }>;
+    items: Array<{ productId: number; qty: number; unitPrice: number; productName?: string; lineDiscount?: number }>;
     paymentMethod: 'cash' | 'credit' | 'card' | 'split';
     paidAmount?: number;
     notes?: string;
@@ -307,7 +307,10 @@ export const vanOfflineDb = {
     const docNo = `VAN-${dateStr}-OFF-${String(currentSeq).padStart(4, '0')}`;
 
     // Calculate total
-    const total = params.items.reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unitPrice || 0), 0);
+    // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the per-line
+    // discount is a TOTAL amount on the line — subtract it, or the
+    // offline receipt total overstates the sale the server books.
+    const total = params.items.reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unitPrice || 0) - Number(item.lineDiscount || 0), 0);
     const paidAmount = params.paymentMethod === 'cash' ? total : Number(params.paidAmount || 0);
     const creditAmount = Math.max(0, total - paidAmount);
 

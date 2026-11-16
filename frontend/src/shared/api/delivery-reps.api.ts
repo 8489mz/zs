@@ -20,6 +20,9 @@ export interface DeliveryRep {
     can_add_customers?: boolean;
     require_gps_on_visit?: boolean;
     can_give_discount?: boolean;
+    // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the invoice-discount
+    // channel permission (both discounts, or per-line only).
+    can_give_invoice_discount?: boolean;
     max_discount_percent?: number;
     can_sell_over_credit_limit?: boolean;
     can_collect_cash?: boolean;
@@ -44,6 +47,9 @@ export interface UpsertDeliveryRepPayload {
     can_add_customers?: boolean;
     require_gps_on_visit?: boolean;
     can_give_discount?: boolean;
+    // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the invoice-discount
+    // channel permission (both discounts, or per-line only).
+    can_give_invoice_discount?: boolean;
     max_discount_percent?: number;
     can_sell_over_credit_limit?: boolean;
     can_collect_cash?: boolean;
@@ -190,9 +196,13 @@ export interface DriverPortalUser {
   // toggle. INV-VAN-CHECKOUT-DISCOUNT-PERMISSION: can_give_discount is
   // surfaced the same way — the checkout modal must hide its discount
   // section when the flag is off (the server refuses the submit anyway).
+  // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: can_give_invoice_discount
+  // is surfaced the same way — the checkout modal must hide its
+  // invoice-discount section when the flag is off.
   permissions?: {
     require_gps_on_visit?: boolean;
     can_give_discount?: boolean;
+    can_give_invoice_discount?: boolean;
   };
 }
 

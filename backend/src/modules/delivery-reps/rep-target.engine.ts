@@ -566,9 +566,67 @@ export interface RepPermissionFlags {
   can_add_customers: boolean;
   require_gps_on_visit: boolean;
   can_give_discount: boolean;
+  // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the per-line discount
+  // permission. can_give_discount opens the per-line channel;
+  // can_give_invoice_discount opens the invoice (cashDiscountAmount)
+  // channel on top of it. A rep with only the first is per-line
+  // only; the tenant cap still binds the COMBINED effective discount
+  // per invoice for every rep, whatever the permissions say.
+  can_give_invoice_discount: boolean;
+  // Stored but INERT for enforcement since
+  // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the tenant setting
+  // vanRepDiscountCapPercent governs for all reps. Kept on the
+  // flags object so stored rows keep parsing; never read by the
+  // sale path.
   max_discount_percent: number;
   can_sell_over_credit_limit: boolean;
   can_collect_cash: boolean;
+}
+
+/** The tenant-level rep discount cap (INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING). */
+export const VAN_REP_DISCOUNT_CAP_DEFAULT_PERCENT = 5;
+
+/** Settings keys holding the tenant rep discount cap (either spelling). */
+export const VAN_REP_DISCOUNT_CAP_SETTING_KEYS = ['vanRepDiscountCapPercent', 'van_rep_discount_cap_percent'];
+
+/**
+ * INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the ONE tenant-level rep
+ * discount cap, set by the tenant admin, default 5%, applying to ALL
+ * reps. Read from the settings table with the same dual-key pattern
+ * as vanSettlementRequireSupervisorPin; missing row = 5; clamped
+ * 0–100. The stored value may be a bare number, a JSON number, or a
+ * numeric string. Runs on any queryable (pool handle or transaction
+ * handle) — the sale path calls it on the pool handle before its
+ * transaction opens.
+ */
+export async function getVanRepDiscountCapPercent(
+  queryable: any,
+  tenantId: string,
+): Promise<number> {
+  try {
+    const row = await queryable
+      .selectFrom('settings')
+      .select(['value'])
+      .where('tenant_id', '=', tenantId)
+      .where((eb: any) =>
+        eb.or(VAN_REP_DISCOUNT_CAP_SETTING_KEYS.map((key) => eb('key', '=', key))),
+      )
+      .executeTakeFirst();
+    if (row?.value == null || String(row.value).trim() === '') return VAN_REP_DISCOUNT_CAP_DEFAULT_PERCENT;
+    let parsed: unknown = row.value;
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch {
+        parsed = row.value;
+      }
+    }
+    const pct = Number(parsed);
+    if (!Number.isFinite(pct)) return VAN_REP_DISCOUNT_CAP_DEFAULT_PERCENT;
+    return Math.min(100, Math.max(0, pct));
+  } catch {
+    return VAN_REP_DISCOUNT_CAP_DEFAULT_PERCENT;
+  }
 }
 
 /** Per-key fallbacks for an explicit permissions object (creation defaults). */
@@ -577,6 +635,7 @@ export const REP_PERMISSION_DEFAULTS: RepPermissionFlags = {
   can_add_customers: true,
   require_gps_on_visit: true,
   can_give_discount: false,
+  can_give_invoice_discount: false,
   max_discount_percent: 0,
   can_sell_over_credit_limit: false,
   can_collect_cash: true,
@@ -588,6 +647,11 @@ export const REP_PERMISSION_LEGACY: RepPermissionFlags = {
   can_add_customers: true,
   require_gps_on_visit: false,
   can_give_discount: true,
+  // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: a rep with no
+  // permissions object never had an explicit invoice-discount grant,
+  // so the invoice channel stays closed (fail closed) while the
+  // per-line channel keeps the pre-flag behaviour.
+  can_give_invoice_discount: false,
   max_discount_percent: 100,
   can_sell_over_credit_limit: true,
   can_collect_cash: true,
@@ -614,6 +678,7 @@ export function parseRepPermissions(raw: unknown): RepPermissionFlags {
     can_add_customers: stored.can_add_customers !== false,
     require_gps_on_visit: stored.require_gps_on_visit !== false,
     can_give_discount: stored.can_give_discount === true,
+    can_give_invoice_discount: stored.can_give_invoice_discount === true,
     max_discount_percent: Number.isFinite(maxPct) ? Math.min(100, Math.max(0, maxPct)) : 0,
     can_sell_over_credit_limit: stored.can_sell_over_credit_limit === true,
     can_collect_cash: stored.can_collect_cash !== false,

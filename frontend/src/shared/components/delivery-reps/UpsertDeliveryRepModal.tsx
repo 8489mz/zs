@@ -50,7 +50,11 @@ export function UpsertDeliveryRepModal({
   const [canAddCustomers, setCanAddCustomers] = useState<boolean>(true);
   const [requireGpsOnVisit, setRequireGpsOnVisit] = useState<boolean>(true);
   const [canGiveDiscount, setCanGiveDiscount] = useState<boolean>(false);
-  const [maxDiscountPercent, setMaxDiscountPercent] = useState<number>(0);
+  // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the invoice-discount
+  // channel is a per-rep permission chosen here at creation (both
+  // discounts, or per-line only). The tenant cap governs the AMOUNT
+  // for every rep — there is no per-rep cap input anymore.
+  const [canGiveInvoiceDiscount, setCanGiveInvoiceDiscount] = useState<boolean>(false);
   const [canSellOverCreditLimit, setCanSellOverCreditLimit] = useState<boolean>(false);
   const [canCollectCash, setCanCollectCash] = useState<boolean>(true);
 
@@ -73,7 +77,7 @@ export function UpsertDeliveryRepModal({
         setCanAddCustomers(perms.can_add_customers !== false);
         setRequireGpsOnVisit(perms.require_gps_on_visit !== false);
         setCanGiveDiscount(Boolean(perms.can_give_discount));
-        setMaxDiscountPercent(Number(perms.max_discount_percent || 0));
+        setCanGiveInvoiceDiscount(Boolean(perms.can_give_invoice_discount));
         setCanSellOverCreditLimit(Boolean(perms.can_sell_over_credit_limit));
         setCanCollectCash(perms.can_collect_cash !== false);
       } else {
@@ -91,7 +95,7 @@ export function UpsertDeliveryRepModal({
         setCanAddCustomers(true);
         setRequireGpsOnVisit(true);
         setCanGiveDiscount(false);
-        setMaxDiscountPercent(0);
+        setCanGiveInvoiceDiscount(false);
         setCanSellOverCreditLimit(false);
         setCanCollectCash(true);
       }
@@ -173,7 +177,7 @@ export function UpsertDeliveryRepModal({
         can_add_customers: canAddCustomers,
         require_gps_on_visit: requireGpsOnVisit,
         can_give_discount: canGiveDiscount,
-        max_discount_percent: Number(maxDiscountPercent) || 0,
+        can_give_invoice_discount: canGiveInvoiceDiscount,
         can_sell_over_credit_limit: canSellOverCreditLimit,
         can_collect_cash: canCollectCash,
       },
@@ -710,18 +714,15 @@ export function UpsertDeliveryRepModal({
                     </strong>
                   </label>
                   {canGiveDiscount ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginRight: '18px' }}>
-                      <span style={{ fontSize: '10px', color: '#475569' }}>{t('shared.delivery_reps.upsert_delivery_rep_modal.s58', "الحد الأقصى:")}</span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', marginRight: '18px' }}>
                       <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={maxDiscountPercent}
-                        onChange={(e) => setMaxDiscountPercent(Number(e.target.value))}
-                        style={{ width: '45px', height: '22px', padding: '1px 4px', fontSize: '11px', fontWeight: 800, textAlign: 'center', border: '1px solid #cbd5e1', borderRadius: '5px' }}
+                        type="checkbox"
+                        checked={canGiveInvoiceDiscount}
+                        onChange={(e) => setCanGiveInvoiceDiscount(e.target.checked)}
+                        style={{ cursor: 'pointer' }}
                       />
-                      <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#170e5e' }}>%</span>
-                    </div>
+                      <span style={{ fontSize: '10px', color: '#475569' }}>{t('shared.delivery_reps.upsert_delivery_rep_modal.s58', "خصم على الفاتورة أيضاً (بجانب خصم السطور)")}</span>
+                    </label>
                   ) : (
                     <span style={{ fontSize: '9.5px', color: '#64748b', marginRight: '18px', display: 'block', lineHeight: 1.2 }}>
                       {t('shared.delivery_reps.upsert_delivery_rep_modal.s59', "السماح بخصم نسبي على الفاتورة")}

@@ -62,6 +62,9 @@ export default function VanSalesAdminManagementPage() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [requireSupervisorPinDraft, setRequireSupervisorPinDraft] = useState(false);
   const [blindSettlementDraft, setBlindSettlementDraft] = useState(false);
+  // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the ONE tenant-level
+  // rep discount cap % (default 5).
+  const [discountCapDraft, setDiscountCapDraft] = useState<number>(5);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const settingsQuery = useQuery({
@@ -73,6 +76,8 @@ export default function VanSalesAdminManagementPage() {
     if (settingsQuery.data) {
       setRequireSupervisorPinDraft(Boolean(settingsQuery.data.vanSettlementRequireSupervisorPin));
       setBlindSettlementDraft(Boolean(settingsQuery.data.vanSettlementBlindMode));
+      const storedCap = Number(settingsQuery.data.vanRepDiscountCapPercent);
+      setDiscountCapDraft(Number.isFinite(storedCap) ? Math.min(100, Math.max(0, storedCap)) : 5);
     }
   }, [settingsQuery.data]);
 
@@ -898,6 +903,40 @@ export default function VanSalesAdminManagementPage() {
               />
             </div>
 
+            {/* Setting 1.6: Rep Discount Cap (INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING) */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '12px 14px',
+                borderRadius: '10px',
+                border: '1px solid #e2e8f0',
+                backgroundColor: '#f8fafc',
+                gap: '12px',
+              }}
+            >
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', marginBottom: '3px' }}>
+                  {t('delivery_reps.van_sales_admin_management_page.s65', "سقف خصم المندوب %")}
+                </div>
+                <div style={{ fontSize: '11px', color: '#64748b', lineHeight: 1.5 }}>
+                  {t('delivery_reps.van_sales_admin_management_page.s66', "الحد الأقصى للخصم الإجمالي (سطور + فاتورة) الذي يمنحه أي مندوب بدون رمز المشرف. الافتراضي 5%. صفر يعني منع الخصم تماماً.")}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={discountCapDraft}
+                  onChange={(e) => setDiscountCapDraft(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                  style={{ width: '56px', height: '28px', padding: '1px 6px', fontSize: '13px', fontWeight: 800, textAlign: 'center', border: '1px solid #cbd5e1', borderRadius: '6px' }}
+                />
+                <span style={{ fontSize: '13px', fontWeight: 800, color: '#170e5e' }}>%</span>
+              </div>
+            </div>
+
             {/* Manager Approval PIN: single place is Settings > Security.
                 This modal no longer edits it; it only points there. */}
             <div
@@ -936,6 +975,7 @@ export default function VanSalesAdminManagementPage() {
                     await settingsApi.update({
                       vanSettlementRequireSupervisorPin: requireSupervisorPinDraft,
                       vanSettlementBlindMode: blindSettlementDraft,
+                      vanRepDiscountCapPercent: discountCapDraft,
                     });
                     await queryClient.invalidateQueries({ queryKey: ['van-settlement-settings'] });
                     await queryClient.invalidateQueries({ queryKey: ['van-sales-active-trip'] });

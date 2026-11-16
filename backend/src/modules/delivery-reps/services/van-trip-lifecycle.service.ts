@@ -32,6 +32,7 @@ import {
   evaluateBatchExpiryStatus,
   extractAssignedRepIds,
   resolveIsolatedRepCustomerBalance,
+  getVanRepDiscountCapPercent,
   type RepTargetCalculationResult,
 } from '../rep-target.engine';
 import { getTenantTimezone, normalizePgDateOnly, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
@@ -470,11 +471,16 @@ export class VanTripLifecycleService {
     // displayed date derive from this, never the device clock.
     serverTime: string;
     serverTimezone: string;
+    // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the tenant rep
+    // discount cap %, resolved once per active-trip load so the
+    // checkout gates on the same value the server enforces.
+    discountCapPercent: number;
   }> {
     const requireSupervisorPinForSettlement = await this.isSupervisorPinRequiredForSettlement(tenantId);
     const isBlindSettlement = await this.isBlindSettlementEnabled(tenantId);
     const serverTimezone = await getTenantTimezone(this.anyDb, tenantId);
     const serverTime = new Date().toISOString();
+    const discountCapPercent = await getVanRepDiscountCapPercent(this.anyDb, tenantId);
     const vanLoc = await this.getOrCreateVanLocation(repId, tenantId, accountId);
 
     const assignedVehicleRow = await this.anyDb
@@ -1053,6 +1059,7 @@ export class VanTripLifecycleService {
         isBlindSettlement,
         serverTime,
         serverTimezone,
+        discountCapPercent,
       };
     }
 
@@ -1101,6 +1108,7 @@ export class VanTripLifecycleService {
       isBlindSettlement,
       serverTime,
       serverTimezone,
+      discountCapPercent,
     };
   }
 

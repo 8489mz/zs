@@ -247,6 +247,9 @@ export interface VanActiveTripResponse {
   // — the receipt date and every displayed date derive from this.
   serverTime?: string;
   serverTimezone?: string;
+  // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the tenant rep
+  // discount cap % (default 5) — the checkout gates on this.
+  discountCapPercent?: number;
   trip?: VanTripSummary;
   assignedVehicle?: VanAssignedVehicle | null;
   vanLocation?: { id: number; name: string };
@@ -783,6 +786,9 @@ export const vanSalesApi = {
       isBonus?: boolean;
       bonusReason?: string;
       originalPrice?: number;
+      // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: per-line TOTAL
+      // discount amount (POS lineDiscount semantics).
+      lineDiscount?: number;
     }[];
     notes?: string;
     deliveryGpsLat?: number;

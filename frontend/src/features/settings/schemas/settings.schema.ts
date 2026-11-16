@@ -79,6 +79,9 @@ export const settingsFormSchema = z.object({
   defaultDeliveryFee: z.coerce.number().min(0).default(0),
   vanSettlementRequireSupervisorPin: z.boolean().default(false).optional(),
   vanSettlementBlindMode: z.boolean().default(false).optional(),
+  // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the ONE tenant-level
+  // rep discount cap % (default 5, applies to all reps).
+  vanRepDiscountCapPercent: z.coerce.number().min(0).max(100).default(5).optional(),
   allowNegativeStockSales: z.boolean().default(false),
   posHideOutOfStockItems: z.boolean().default(false),
   allowZeroPurchaseCost: z.boolean().default(false),

@@ -173,6 +173,21 @@ export function useVanSale({
     );
   };
 
+  // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the per-line discount
+  // is a TOTAL amount on the line (POS lineDiscount semantics),
+  // clamped to the line's charged gross — the server re-checks it
+  // against the tenant cap, this only keeps the cart honest.
+  const updateCartLineDiscount = (productId: number, amount: number) => {
+    setCart((prev) =>
+      prev.map((c) => {
+        if (c.productId !== productId || c.isBonus) return c;
+        const gross = c.qty * c.unitPrice;
+        const next = Math.max(0, Math.min(gross, Number(amount) || 0));
+        return { ...c, lineDiscount: next > 0 ? next : undefined };
+      }),
+    );
+  };
+
   const allAvailableCustomers = useMemo(() => {
     const map = new Map<number, any>();
     if (data?.customers && Array.isArray(data.customers)) {
@@ -209,7 +224,7 @@ export function useVanSale({
     [allAvailableCustomers, selectedCustomerId],
   );
 
-  const cartTotal = useMemo(() => cart.reduce((sum, c) => sum + (c.isBonus ? 0 : c.qty * c.unitPrice), 0), [cart]);
+  const cartTotal = useMemo(() => cart.reduce((sum, c) => sum + (c.isBonus ? 0 : c.qty * c.unitPrice - (c.lineDiscount || 0)), 0), [cart]);
 
   const cartSubtotal = useMemo(() => {
     return cart.reduce((sum, c) => {
@@ -473,6 +488,12 @@ export const SaleTab: React.FC<SaleTabProps> = ({
                   onUpdateCartQty={updateCartQty}
                   onToggleBonus={toggleCartItemBonus}
                   onChangeUnit={changeCartItemUnit}
+                  // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the
+                  // per-line discount input shows only when the rep
+                  // may discount and the tenant cap is above zero.
+                  canGiveDiscount={session?.rep?.permissions?.can_give_discount === true}
+                  discountCapPercent={data?.discountCapPercent}
+                  onLineDiscountChange={updateCartLineDiscount}
                   cartTotal={cartTotal}
                   inventory={data?.inventory || []}
                   onAddToCart={addToCart}
@@ -660,6 +681,11 @@ export const SaleCheckoutModal: React.FC<SaleCheckoutModalProps> = ({
           onNotesChange={setSaleNotes}
           isSubmitting={isCheckoutProcessing || executeSaleMutation.isPending}
           canGiveDiscount={session?.rep?.permissions?.can_give_discount === true}
+          // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the invoice
+          // discount section needs the per-rep invoice permission
+          // AND the tenant cap (the server enforces both).
+          canGiveInvoiceDiscount={session?.rep?.permissions?.can_give_invoice_discount === true}
+          discountCapPercent={data?.discountCapPercent}
           onConfirmCheckout={async (checkoutData) => {
             if (isCheckoutProcessingRef.current || executeSaleMutation.isPending) {
               return;
@@ -733,6 +759,10 @@ export const SaleCheckoutModal: React.FC<SaleCheckoutModalProps> = ({
                   unitMultiplier: c.unitMultiplier,
                   isBonus: c.isBonus,
                   bonusReason: c.bonusReason,
+                  // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the
+                  // per-line discount travels with the item — through
+                  // the online mutate and the offline outbox alike.
+                  lineDiscount: c.lineDiscount,
                 })),
               });
             } catch (err) {

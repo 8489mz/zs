@@ -199,6 +199,11 @@ export class DeliveryRepsService {
       can_add_customers: true,
       require_gps_on_visit: true,
       can_give_discount: false,
+      // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: per-line only by
+      // default — the invoice channel needs an explicit grant at rep
+      // creation (UpsertDeliveryRepModal). max_discount_percent is
+      // stored inert: the tenant cap governs enforcement.
+      can_give_invoice_discount: false,
       max_discount_percent: 0,
       can_sell_over_credit_limit: false,
       can_collect_cash: true,

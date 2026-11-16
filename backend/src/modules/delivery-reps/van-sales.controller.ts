@@ -316,6 +316,9 @@ export class VanSalesController {
         isBonus?: boolean;
         bonusReason?: string;
         originalPrice?: number;
+        // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: per-line TOTAL
+        // discount amount (POS lineDiscount semantics).
+        lineDiscount?: number;
       }[];
       notes?: string;
       deliveryGpsLat?: number;

@@ -674,6 +674,9 @@ export class VanSalesService {
     // van page (useServerClock).
     serverTime: string;
     serverTimezone: string;
+    // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the tenant rep
+    // discount cap % (default 5).
+    discountCapPercent: number;
   }> {
     return this.getTripLifecycle().getActiveTrip(repId, tenantId, accountId);
   }
@@ -724,6 +727,9 @@ export class VanSalesService {
         isBonus?: boolean;
         bonusReason?: string;
         originalPrice?: number;
+        // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: per-line TOTAL
+        // discount amount (POS lineDiscount semantics).
+        lineDiscount?: number;
       }[];
       notes?: string;
       deliveryGpsLat?: number;
@@ -921,6 +927,9 @@ export class VanSalesService {
         isBonus?: boolean;
         bonusReason?: string;
         originalPrice?: number;
+        // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: per-line TOTAL
+        // discount amount (POS lineDiscount semantics).
+        lineDiscount?: number;
       }[];
       notes?: string;
       deliveryGpsLat?: number;

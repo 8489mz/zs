@@ -14,6 +14,7 @@ import {
   isValidCoordinatePair,
   extractAssignedRepIds,
   loadRepPermissions,
+  getVanRepDiscountCapPercent,
 } from '../rep-target.engine';
 import { VanFraudRadarService } from './van-fraud-radar.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
@@ -99,6 +100,13 @@ export class VanFieldSalesService {
         isBonus?: boolean;
         bonusReason?: string;
         originalPrice?: number;
+        // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: per-line TOTAL
+        // discount amount (POS lineDiscount semantics: subtracted
+        // from this line's gross total, not a per-unit amount).
+        // Deliberately NOT named `discount`: conversion payloads
+        // historically sent a per-item `discount` that
+        // normalizeSalePayload drops.
+        lineDiscount?: number;
       }[];
       notes?: string;
       deliveryGpsLat?: number;
@@ -207,6 +215,14 @@ export class VanFieldSalesService {
     let totalSale = 0;
     let subtotalSale = 0;
     let discountSale = 0;
+    // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the rep-granted
+    // discount accumulated over the lines (explicit line discounts +
+    // lowered-price deltas below the authorized price), and the
+    // authorized pre-discount gross it is measured against. Offers
+    // never enter repLineDiscountTotal: they are system discounts,
+    // measured into systemAuthorizedPrice before this.
+    let repLineDiscountTotal = 0;
+    let capBaseTotal = 0;
     let createdSaleId = 0;
     let cashPaid = 0;
     let creditOwed = 0;
@@ -225,6 +241,13 @@ export class VanFieldSalesService {
     // exactly what the book-digits spec's 3dp cash-discount case hit
     // before this hoist.
     const repFlags = await loadRepPermissions(this.anyDb, tenantId, repId);
+
+    // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the ONE tenant-level
+    // rep discount cap (default 5%), read on the pool handle before
+    // the transaction opens, next to the rep flags — same hoist
+    // reason (a flags/settings read must never run inside the open
+    // transaction).
+    const discountCapPercent = await getVanRepDiscountCapPercent(this.anyDb, tenantId);
 
     // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the posting
     // identity and the audit actor are resolved here, on the pool
@@ -588,10 +611,81 @@ export class VanFieldSalesService {
           }
         }
 
+        // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the explicit
+        // per-line discount, enforced against the ONE tenant cap.
+        // The rep's discount on a line is the lowered-price delta
+        // below the system-authorized price PLUS the explicit line
+        // discount — both count, or the 0.05 price-cut band becomes
+        // a second, uncapped discount channel. Offers are system
+        // discounts, never rep discounts: the cut is measured
+        // against the offer-adjusted authorized price. A bonus line
+        // has authorized price 0, so its % is skipped (any explicit
+        // discount on it fails the gross check below instead).
+        const lineDiscount = Math.max(0, toBookMoney(item.lineDiscount || 0));
+        const lineGrossAuthorized = toBookMoney(systemAuthorizedPrice * inputQty);
+        const lineGrossCharged = toBookMoney(unitPrice * inputQty);
+        const priceCutDelta = Math.max(0, toBookMoney((systemAuthorizedPrice - unitPrice) * inputQty));
+        if (lineDiscount > lineGrossCharged) {
+          throw new AppError(
+            `الخصم على الصنف "${prod.name || pid}" (${lineDiscount} ج.م) يتجاوز إجمالي السطر (${lineGrossCharged} ج.م)`,
+            'INVALID_LINE_DISCOUNT',
+            400,
+          );
+        }
+        if (lineDiscount > 0 && !repFlags.can_give_discount) {
+          await this.vanFraudRadarService.recordSuspicionEvent({
+            tenantId,
+            accountId,
+            repId,
+            tripId: payload.tripId,
+            customerId: resolvedCustomerId,
+            customerName,
+            eventCode: 'VAN_SUSPICION_UNAUTHORIZED_CASH_DISCOUNT',
+            severity: 'high',
+            titleAr: 'محاولة منح خصم على سطر بدون صلاحية خصم (can_give_discount مغلقة)',
+            detailsAr: `حاول المندوب منح خصم على الصنف "${prod.name || pid}" بقيمة ${lineDiscount} ج.م رغم أن صلاحية منح الخصم (can_give_discount) مغلقة له.`,
+            attemptedAmount: lineDiscount,
+          });
+          throw new AppError(
+            'صلاحية منح الخصم (can_give_discount) مغلقة لهذا المندوب، فلا يمكنه منح خصم على سطور البيع الميداني',
+            'REP_DISCOUNT_NOT_ALLOWED',
+            403,
+          );
+        }
+        // The percent is rounded at book digits before the
+        // comparison: raw IEEE754 division makes an exact 5% read
+        // 5.000000000000001, which would wrongly refuse a
+        // sale sitting exactly on the cap.
+        const lineDiscountPercent = toBookMoney(lineGrossAuthorized > 0
+          ? ((priceCutDelta + lineDiscount) / lineGrossAuthorized) * 100
+          : 0);
+        if (lineDiscountPercent > discountCapPercent && !supervisorOverrideApproved) {
+          await this.vanFraudRadarService.recordSuspicionEvent({
+            tenantId,
+            accountId,
+            repId,
+            tripId: payload.tripId,
+            customerId: resolvedCustomerId,
+            customerName,
+            eventCode: 'VAN_SUSPICION_DISCOUNT_ABOVE_LIMIT',
+            severity: 'high',
+            titleAr: 'محاولة خصم على سطر فوق سقف خصم المناديب بدون اعتماد مشرف',
+            detailsAr: `حاول المندوب منح خصم على الصنف "${prod.name || pid}" بقيمة ${toBookMoney(priceCutDelta + lineDiscount)} ج.م (${lineDiscountPercent}%) متجاوزاً سقف خصم المناديب (${discountCapPercent}%) بدون رمز اعتماد المشرف.`,
+            attemptedAmount: toBookMoney(priceCutDelta + lineDiscount),
+          });
+          throw new AppError(
+            `الخصم على الصنف "${prod.name || pid}" (${lineDiscountPercent}%) يتجاوز سقف خصم المناديب (${discountCapPercent}%) ويتطلب اعتماد المشرف برمز PIN`,
+            'LINE_DISCOUNT_ABOVE_LIMIT_REQUIRES_SUPERVISOR_PIN',
+            403,
+          );
+        }
+        repLineDiscountTotal = toBookMoney(repLineDiscountTotal + priceCutDelta + lineDiscount);
+        capBaseTotal = toBookMoney(capBaseTotal + lineGrossAuthorized);
+
         const originalPrice = (item as any).originalPrice
           ? toBookMoney((item as any).originalPrice)
           : (isBonus ? baseUnitPrice : Math.max(unitPrice, baseUnitPrice));
-        const lineTotal = toBookMoney(unitPrice * inputQty);
+        const lineTotal = toBookMoney(unitPrice * inputQty - lineDiscount);
         const lineSubtotal = toBookMoney(originalPrice * inputQty);
         totalSale += lineTotal;
         subtotalSale += lineSubtotal;
@@ -602,6 +696,7 @@ export class VanFieldSalesService {
           qty: inputQty,
           unit_price: unitPrice,
           line_total: lineTotal,
+          line_discount: lineDiscount,
           cost_price: Number(prod.cost_price || 0) * multiplier,
           consumer_price: prod.consumer_price != null && Number(prod.consumer_price) > 0 ? Number(prod.consumer_price) * multiplier : null,
           pricing_tier_type: pricingTierType,
@@ -633,20 +728,21 @@ export class VanFieldSalesService {
         // the result at 2dp, so a 3dp discount never survived intact).
         const cashDiscount = Math.max(0, toBookMoney(payload.cashDiscountAmount || 0));
         if (cashDiscount > 0) {
-          // H9 (D3 + D4): the cash discount was a second, ungated
-          // discount channel for the same sale — the item-price guard
-          // above it needs a verified supervisor PIN, but this channel
-          // needed nothing. It is now gated on the acting rep's
-          // permission flags (loaded before the transaction, above):
-          // can_give_discount false refuses ANY cash discount (a
-          // supervisor PIN does not override a closed flag — the flag
-          // is the control, the PIN alone is not enough); a discount
-          // above max_discount_percent of the pre-discount sale total
-          // needs the already-verified supervisor PIN. The gate runs
-          // even when the discount is >= the total (which the apply
-          // below still leaves unapplied, as before) — the attempt
-          // itself is refused, not silently swallowed.
-          if (!repFlags.can_give_discount) {
+          // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the invoice
+          // discount is a per-rep PERMISSION (can_give_invoice_discount,
+          // chosen at rep creation): a per-line-only rep is refused
+          // here even with a supervisor PIN — the flag is the control,
+          // the PIN alone is not enough (the same rule the old gate
+          // applied to can_give_discount). The AMOUNT is governed by
+          // the ONE tenant cap on the COMBINED effective discount:
+          // line discounts (explicit + price cuts, accumulated above
+          // in repLineDiscountTotal) + this invoice discount, over
+          // the authorized pre-discount total (capBaseTotal). A rep
+          // with both channels open splits his cap between them;
+          // exceeding it needs the already-verified supervisor PIN.
+          // The per-rep max_discount_percent stored value is inert
+          // and is never read here.
+          if (!repFlags.can_give_invoice_discount) {
             await this.vanFraudRadarService.recordSuspicionEvent({
               tenantId,
               accountId,
@@ -656,18 +752,22 @@ export class VanFieldSalesService {
               customerName,
               eventCode: 'VAN_SUSPICION_UNAUTHORIZED_CASH_DISCOUNT',
               severity: 'high',
-              titleAr: 'محاولة منح خصم نقدي بدون صلاحية خصم (can_give_discount مغلقة)',
-              detailsAr: `حاول المندوب منح خصم نقدي بقيمة ${cashDiscount} ج.م على بيع ميداني رغم أن صلاحية منح الخصم (can_give_discount) مغلقة له.`,
+              titleAr: 'محاولة منح خصم نقدي على الفاتورة بدون صلاحية خصم الفاتورة (can_give_invoice_discount مغلقة)',
+              detailsAr: `حاول المندوب منح خصم نقدي بقيمة ${cashDiscount} ج.م على بيع ميداني رغم أن صلاحية خصم الفاتورة (can_give_invoice_discount) مغلقة له (خصم السطور فقط).`,
               attemptedAmount: cashDiscount,
             });
             throw new AppError(
-              'صلاحية منح الخصم (can_give_discount) مغلقة لهذا المندوب، فلا يمكنه منح خصم نقدي على البيع الميداني',
+              'صلاحية الخصم على الفاتورة (can_give_invoice_discount) مغلقة لهذا المندوب (خصم السطور فقط)، فلا يمكنه منح خصم نقدي على الفاتورة',
               'REP_DISCOUNT_NOT_ALLOWED',
               403,
             );
           }
-          const discountPercent = totalSale > 0 ? (cashDiscount / totalSale) * 100 : 0;
-          if (discountPercent > repFlags.max_discount_percent && !supervisorOverrideApproved) {
+          const combinedDiscount = toBookMoney(repLineDiscountTotal + cashDiscount);
+          // Rounded at book digits before the comparison (see the
+          // per-line percent above): an exact 5% must not read as
+          // 5.000000000000001 and refuse a sale sitting on the cap.
+          const combinedDiscountPercent = toBookMoney(capBaseTotal > 0 ? (combinedDiscount / capBaseTotal) * 100 : 0);
+          if (combinedDiscountPercent > discountCapPercent && !supervisorOverrideApproved) {
             await this.vanFraudRadarService.recordSuspicionEvent({
               tenantId,
               accountId,
@@ -677,12 +777,12 @@ export class VanFieldSalesService {
               customerName,
               eventCode: 'VAN_SUSPICION_DISCOUNT_ABOVE_LIMIT',
               severity: 'high',
-              titleAr: 'محاولة خصم نقدي فوق الحد المسموح بدون اعتماد مشرف',
-              detailsAr: `حاول المندوب منح خصم نقدي بقيمة ${cashDiscount} ج.م (${discountPercent.toFixed(2)}%) متجاوزاً الحد المسموح له (${repFlags.max_discount_percent}%) بدون رمز اعتماد المشرف.`,
-              attemptedAmount: cashDiscount,
+              titleAr: 'محاولة خصم إجمالي فوق سقف خصم المناديب بدون اعتماد مشرف',
+              detailsAr: `حاول المندوب منح خصم إجمالي بقيمة ${combinedDiscount} ج.م (${combinedDiscountPercent.toFixed(2)}%) — خصم السطور ${repLineDiscountTotal} ج.م + خصم نقدي ${cashDiscount} ج.م — متجاوزاً سقف خصم المناديب (${discountCapPercent}%) بدون رمز اعتماد المشرف.`,
+              attemptedAmount: combinedDiscount,
             });
             throw new AppError(
-              `الخصم النقدي (${discountPercent.toFixed(2)}%) يتجاوز الحد الأقصى المسموح لهذا المندوب (max_discount_percent = ${repFlags.max_discount_percent}%) ويتطلب اعتماد المشرف برمز PIN`,
+              `الخصم الإجمالي على الفاتورة (${combinedDiscountPercent.toFixed(2)}%) يتجاوز سقف خصم المناديب (${discountCapPercent}%) ويتطلب اعتماد المشرف برمز PIN`,
               'CASH_DISCOUNT_ABOVE_LIMIT_REQUIRES_SUPERVISOR_PIN',
               403,
             );
@@ -1122,6 +1222,7 @@ export class VanFieldSalesService {
             qty: it.qty,
             unit_price: it.unit_price,
             line_total: it.line_total,
+            line_discount: Number(it.line_discount || 0),
             cost_price: it.cost_price,
             consumer_price: it.consumer_price,
             pricing_tier_type: it.pricing_tier_type,

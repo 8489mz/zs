@@ -33,6 +33,9 @@ export interface CartItem {
   unitMultiplier?: number;
   isBonus?: boolean;
   bonusReason?: string;
+  // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: per-line TOTAL
+  // discount amount (POS lineDiscount semantics).
+  lineDiscount?: number;
   availableUnits?: { id: number; name: string; multiplier: number; isBase: boolean }[];
 }
 
@@ -59,6 +62,12 @@ interface VanSaleTabProps {
   onUpdateCartQty: (productId: number, delta: number) => void;
   onToggleBonus?: (productId: number) => void;
   onChangeUnit?: (productId: number, unitName: string, multiplier: number) => void;
+  // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the per-line discount
+  // input shows only when the rep may discount and the tenant cap
+  // is above zero (cap absent = server default 5).
+  canGiveDiscount?: boolean;
+  discountCapPercent?: number;
+  onLineDiscountChange?: (productId: number, amount: number) => void;
   cartTotal: number;
   onGoToInventory: () => void;
   onSubmitSale: () => void;
@@ -84,6 +93,9 @@ export const VanSaleTab: React.FC<VanSaleTabProps> = ({
   onUpdateCartQty,
   onToggleBonus,
   onChangeUnit,
+  canGiveDiscount,
+  discountCapPercent,
+  onLineDiscountChange,
   cartTotal,
   onGoToInventory,
   onSubmitSale,
@@ -732,7 +744,9 @@ export const VanSaleTab: React.FC<VanSaleTabProps> = ({
                 !c.isBonus && c.originalPrice && c.originalPrice > c.unitPrice
                   ? (c.originalPrice - c.unitPrice) * c.qty
                   : 0;
-              const lineTotal = c.isBonus ? 0 : c.qty * c.unitPrice;
+              // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the line
+              // total is net of the explicit per-line discount.
+              const lineTotal = c.isBonus ? 0 : Math.max(0, c.qty * c.unitPrice - (c.lineDiscount || 0));
 
               return (
                 <div
@@ -848,6 +862,24 @@ export const VanSaleTab: React.FC<VanSaleTabProps> = ({
                         >
                           {c.isBonus ? t('delivery_reps.van_sale_tab.s39', "✓ بونص") : t('delivery_reps.van_sale_tab.s40', "+ بونص")}
                         </button>
+                      )}
+
+                      {/* INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: per-line discount amount (TOTAL on the line, not per unit). Shown only when the rep may discount and the tenant cap is above zero; the server re-checks the cap — an over-cap value is refused at submit, never silently trimmed here. */}
+                      {canGiveDiscount === true && (discountCapPercent ?? 5) > 0 && !c.isBonus && onLineDiscountChange && (
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10.5px', fontWeight: 700, color: '#475569' }}>
+                          {t('delivery_reps.van_sale_tab.s43', "خصم")}
+                          <input
+                            type="number"
+                            min={0}
+                            max={c.qty * c.unitPrice}
+                            step="0.5"
+                            value={c.lineDiscount || ''}
+                            placeholder="0"
+                            onChange={(e) => onLineDiscountChange(c.productId, Number(e.target.value) || 0)}
+                            style={{ width: '52px', height: '24px', padding: '1px 4px', fontSize: '11px', fontWeight: 700, textAlign: 'center', border: '1px solid #cbd5e1', borderRadius: '5px', backgroundColor: '#ffffff' }}
+                          />
+                          <CurrencySymbol />
+                        </label>
                       )}
                     </div>
 

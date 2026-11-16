@@ -58,6 +58,13 @@ export interface VanSaleCheckoutModalProps {
   // only when the rep's can_give_discount flag is on; absent/false hides
   // it (fail closed, matching the server gate).
   canGiveDiscount?: boolean;
+  // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the invoice discount is
+  // a per-rep permission (can_give_invoice_discount, set at rep
+  // creation) — a per-line-only rep never sees this section — and
+  // the tenant cap % (default 5): the section hides at cap 0 and
+  // the quick chips never offer a % above the cap.
+  canGiveInvoiceDiscount?: boolean;
+  discountCapPercent?: number;
   onConfirmCheckout: (data: {
     paymentMethod: VanPaymentMethod;
     paidAmount?: number;
@@ -135,6 +142,8 @@ export const VanSaleCheckoutModal: React.FC<VanSaleCheckoutModalProps> = ({
   onNotesChange,
   isSubmitting,
   canGiveDiscount,
+  canGiveInvoiceDiscount,
+  discountCapPercent,
   onConfirmCheckout,
 }) => {
   const { t } = useTranslation();
@@ -1002,8 +1011,8 @@ export const VanSaleCheckoutModal: React.FC<VanSaleCheckoutModalProps> = ({
               )}
 
               {/* Optional Cash Discount Toggle */}
-              {/* INV-VAN-CHECKOUT-DISCOUNT-PERMISSION: hidden unless the rep may give discounts */}
-              {canGiveDiscount === true && (
+              {/* INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: hidden unless the rep has the invoice-discount permission AND the tenant cap is above zero (cap absent = server default 5). The server still enforces both — this only hides what the rep cannot use. */}
+              {canGiveDiscount === true && canGiveInvoiceDiscount === true && (discountCapPercent ?? 5) > 0 && (
               <div>
                 {!showCashDiscount && cashDiscountAmount === 0 ? (
                   <button
@@ -1058,7 +1067,7 @@ export const VanSaleCheckoutModal: React.FC<VanSaleCheckoutModalProps> = ({
                         backgroundColor: '#ffffff',
                       }}
                     />
-                    {[0.02, 0.05].map((pct) => {
+                    {[0.02, 0.05].filter((pct) => pct * 100 <= (discountCapPercent ?? 5)).map((pct) => {
                       const discountVal = roundMoney(cartTotal * pct);
                       return (
                         <button
