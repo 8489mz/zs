@@ -20,6 +20,9 @@ type Props = {
   search: string;
   viewFilter: SalesPaymentFilter;
   cashierFilter: string;
+  // INV-VAN-SALES-LIST-DATE-FILTER: bare YYYY-MM-DD bounds (empty = no bound).
+  dateFrom: string;
+  dateTo: string;
   cashierOptions: CashierFilterOption[];
   activeFilterLabel: string;
   totalItems: number;
@@ -40,6 +43,8 @@ type Props = {
   onSearchChange: (value: string) => void;
   onViewFilterChange: (value: SalesPaymentFilter) => void;
   onCashierFilterChange: (value: string) => void;
+  onDateFromChange: (value: string) => void;
+  onDateToChange: (value: string) => void;
   onReset: () => void;
   onSelectSale: (saleId: string) => void;
   onEditSale: (sale: Sale) => void;
@@ -57,6 +62,8 @@ export function SalesRegisterCard(props: Props) {
     search,
     viewFilter,
     cashierFilter,
+    dateFrom,
+    dateTo,
     cashierOptions,
     activeFilterLabel,
     totalItems,
@@ -77,6 +84,8 @@ export function SalesRegisterCard(props: Props) {
     onSearchChange,
     onViewFilterChange,
     onCashierFilterChange,
+    onDateFromChange,
+    onDateToChange,
     onReset,
     onSelectSale,
     onEditSale,
@@ -138,6 +147,14 @@ export function SalesRegisterCard(props: Props) {
                 <option key={option.id} value={option.id}>{option.label}</option>
               ))}
             </select>
+          </div>
+          <div className="field sales-toolbar-filter-field">
+            <span>{t('sales.dateFrom', 'من تاريخ')}</span>
+            <input type="date" value={dateFrom} onChange={(event) => onDateFromChange(event.target.value)} />
+          </div>
+          <div className="field sales-toolbar-filter-field">
+            <span>{t('sales.dateTo', 'إلى تاريخ')}</span>
+            <input type="date" value={dateTo} onChange={(event) => onDateToChange(event.target.value)} />
           </div>
         </div>
       </SearchToolbar>

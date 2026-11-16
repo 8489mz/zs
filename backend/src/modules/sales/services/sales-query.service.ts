@@ -9,6 +9,7 @@ import { mapHeldSalesRows, mapSaleRows, filterSales, paginateRows, summarizeSale
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
 import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
+import { resolveTenantDayRange } from '../../reports/helpers/reports-range.helper';
 import { SalesAuthorizationService } from './sales-authorization.service';
 
 @Injectable()
@@ -46,6 +47,14 @@ export class SalesQueryService {
     const tenantTz = await getTenantTimezone(this.db, tenantId);
     const todayKey = todayTenantDate(tenantTz);
 
+    // INV-VAN-SALES-LIST-DATE-FILTER: optional tenant-day date filter on
+    // created_at (the business instant: online = server NOW(), offline =
+    // the original offline instant kept by P2). A bare date means the
+    // whole tenant day; garbage or from-after-to is a 400. The agg_*
+    // window selects below run over this same filtered query, so the
+    // summary totals follow the filter by construction.
+    const dateRange = resolveTenantDayRange(query?.from ?? query?.dateFrom, query?.to ?? query?.dateTo, tenantTz);
+
     let qb = this.db
       .selectFrom('sales as s')
       .leftJoin('customers as c', (j) => j.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 's.tenant_id'))
@@ -72,6 +81,9 @@ export class SalesQueryService {
         sql<number>`COALESCE(SUM(CASE WHEN DATE(s.created_at AT TIME ZONE ${tenantTz}) = ${todayKey} THEN s.total ELSE 0 END) OVER(), 0)`.as('agg_today_sales_total')
       ])
       .where(this.tenantPredicate(auth, 's'));
+
+    if (dateRange.from) qb = qb.where('s.created_at', '>=', dateRange.from);
+    if (dateRange.to) qb = qb.where('s.created_at', '<=', dateRange.to);
 
     if (search) {
       const cleanSearch = search.replace(/[-\/_.\s]/g, '');

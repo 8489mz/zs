@@ -26,6 +26,11 @@ export interface SalesListParams {
   search?: string;
   filter?: SalesListFilter;
   cashier?: string;
+  // INV-VAN-SALES-LIST-DATE-FILTER: bare YYYY-MM-DD dates; the server
+  // expands each to the whole tenant day (from = tenant midnight,
+  // to = tenant 23:59:59.999). Sent verbatim via buildQueryString.
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 interface SalesListResponse {

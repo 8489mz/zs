@@ -8,6 +8,8 @@ export function useSalesWorkspaceActions(params: {
   search: string;
   viewFilter: SalesListFilter;
   cashierFilter: string;
+  dateFrom: string;
+  dateTo: string;
   totalItems: number;
   summary?: { totalSales?: number; creditTotal?: number; cancelledCount?: number } | null;
   topCustomers: Array<{ name: string; count: number; total: number }>;
@@ -16,13 +18,15 @@ export function useSalesWorkspaceActions(params: {
   setSearch: (value: string) => void;
   setViewFilter: (value: SalesListFilter) => void;
   setCashierFilter: (value: string) => void;
+  setDateFrom: (value: string) => void;
+  setDateTo: (value: string) => void;
   setSelectedSaleId: (value: string) => void;
   setSaleToCancel: (value: Sale | null) => void;
 }) {
-  const { search, viewFilter, cashierFilter, totalItems, summary, topCustomers, setPage, setPageSize, setSearch, setViewFilter, setCashierFilter, setSelectedSaleId, setSaleToCancel } = params;
+  const { search, viewFilter, cashierFilter, dateFrom, dateTo, totalItems, summary, topCustomers, setPage, setPageSize, setSearch, setViewFilter, setCashierFilter, setDateFrom, setDateTo, setSelectedSaleId, setSaleToCancel } = params;
 
   async function exportSalesCsv() {
-    const result = await salesApi.listAll({ search, filter: viewFilter, cashier: cashierFilter });
+    const result = await salesApi.listAll({ search, filter: viewFilter, cashier: cashierFilter, dateFrom, dateTo });
     downloadExcelFile('sales-register-results.xlsx', ['docNo', 'customer', 'status', 'paymentType', 'total', 'paidAmount', 'date', 'branch', 'location'], result.rows.map((sale) => [
       sale.docNo || sale.id,
       sale.customerName || 'عميل نقدي',
@@ -46,6 +50,8 @@ export function useSalesWorkspaceActions(params: {
     setSearch('');
     setViewFilter('all');
     setCashierFilter('all');
+    setDateFrom('');
+    setDateTo('');
     setSelectedSaleId('');
     setSaleToCancel(null);
   }

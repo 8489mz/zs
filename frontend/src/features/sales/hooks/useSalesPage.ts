@@ -9,6 +9,8 @@ function makeParamsKey(params: SalesListParams) {
     search: params.search || '',
     filter: params.filter || 'all',
     cashier: params.cashier || 'all',
+    dateFrom: params.dateFrom || '',
+    dateTo: params.dateTo || '',
   });
 }
 

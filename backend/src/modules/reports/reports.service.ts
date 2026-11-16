@@ -9,7 +9,7 @@ import { currencyMoneyDigits } from '../accounting/engines/money-minor-units.eng
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { ReportRangeQueryDto } from './dto/report-query.dto';
-import { buildPagination, filterScope, parseRange } from './helpers/reports-range.helper';
+import { buildPagination, filterScope, parseRange, resolveTenantDayRange } from './helpers/reports-range.helper';
 import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { buildCustomerRfmPayload, buildReportSummaryAggregates, buildReportSummaryPayload } from './helpers/reports-summary.helper';
 import {
@@ -287,6 +287,92 @@ export class ReportsService {
       reconciliation: {
         expectedNetOperatingProfit: revenue - salesTaxTotal - returnsNetOfTax - cogs - expensesTotal,
         netOperatingProfit,
+      },
+    };
+  }
+
+  // INV-VAN-SALES-LIST-DATE-FILTER: one response with sales grouped by
+  // delivery rep and purchases grouped by supplier, both bounded by the
+  // same tenant-day range. The dynamic pivot cannot do this: it
+  // executes ONE dataset per call, and its dateTo handling is
+  // server-local hours (setHours 23:59:59.999), not tenant time — so
+  // the bounds are built here explicitly via resolveTenantDayRange.
+  // Unassigned sales (delivery_rep_id null) and supplier-less
+  // purchases appear as a null-id row, so the group totals reconcile
+  // with the range totals instead of silently dropping rows.
+  async repSupplierSummary(query: ReportRangeQueryDto, auth: AuthContext): Promise<Record<string, unknown>> {
+    const timezone = await this.tenantTimezone(auth);
+    const defaultRange = parseRange(query, timezone);
+    const explicit = resolveTenantDayRange(query.from, query.to, timezone);
+    const fromDate = explicit.from ?? new Date(defaultRange.from);
+    const toDate = explicit.to ?? new Date(defaultRange.to);
+
+    const salesRows = await applyReportScopeFilter(
+      (this.db as any)
+        .selectFrom('sales as s')
+        .leftJoin('delivery_representatives as dr', (j: any) =>
+          j.onRef('dr.id', '=', 's.delivery_rep_id').onRef('dr.tenant_id', '=', 's.tenant_id'),
+        )
+        .select([
+          's.delivery_rep_id as repId',
+          sql<string | null>`dr.name`.as('repName'),
+          sql<number>`count(*)`.as('salesCount'),
+          sql<number>`coalesce(sum(s.total), 0)`.as('totalAmount'),
+        ])
+        .where('s.status', '=', 'posted')
+        .where('s.created_at', '>=', fromDate)
+        .where('s.created_at', '<=', toDate)
+        .where(this.tenantPredicate(auth, 's'))
+        .groupBy(['s.delivery_rep_id', 'dr.name'])
+        .orderBy(sql`coalesce(sum(s.total), 0)`, 'desc'),
+      query,
+      's',
+    ).execute();
+
+    const purchasesRows = await applyReportScopeFilter(
+      (this.db as any)
+        .selectFrom('purchases as p')
+        .leftJoin('suppliers as sup', (j: any) =>
+          j.onRef('sup.id', '=', 'p.supplier_id').onRef('sup.tenant_id', '=', 'p.tenant_id'),
+        )
+        .select([
+          'p.supplier_id as supplierId',
+          sql<string | null>`sup.name`.as('supplierName'),
+          sql<number>`count(*)`.as('purchasesCount'),
+          sql<number>`coalesce(sum(p.total), 0)`.as('totalAmount'),
+        ])
+        .where('p.status', '=', 'posted')
+        .where('p.created_at', '>=', fromDate)
+        .where('p.created_at', '<=', toDate)
+        .where(this.tenantPredicate(auth, 'p'))
+        .groupBy(['p.supplier_id', 'sup.name'])
+        .orderBy(sql`coalesce(sum(p.total), 0)`, 'desc'),
+      query,
+      'p',
+    ).execute();
+
+    const salesByRep = (salesRows as Array<Record<string, unknown>>).map((row) => ({
+      repId: row.repId == null ? null : Number(row.repId),
+      repName: (row.repName as string | null) ?? null,
+      salesCount: Number(row.salesCount || 0),
+      totalAmount: Number(row.totalAmount || 0),
+    }));
+    const purchasesBySupplier = (purchasesRows as Array<Record<string, unknown>>).map((row) => ({
+      supplierId: row.supplierId == null ? null : Number(row.supplierId),
+      supplierName: (row.supplierName as string | null) ?? null,
+      purchasesCount: Number(row.purchasesCount || 0),
+      totalAmount: Number(row.totalAmount || 0),
+    }));
+    return {
+      from: fromDate.toISOString(),
+      to: toDate.toISOString(),
+      salesByRep,
+      purchasesBySupplier,
+      totals: {
+        salesCount: salesByRep.reduce((sum, row) => sum + row.salesCount, 0),
+        salesTotal: salesByRep.reduce((sum, row) => sum + row.totalAmount, 0),
+        purchasesCount: purchasesBySupplier.reduce((sum, row) => sum + row.purchasesCount, 0),
+        purchasesTotal: purchasesBySupplier.reduce((sum, row) => sum + row.totalAmount, 0),
       },
     };
   }

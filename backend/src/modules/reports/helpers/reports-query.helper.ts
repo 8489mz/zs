@@ -1,5 +1,5 @@
 import { ReportRangeQueryDto } from '../dto/report-query.dto';
-import { getPagination, parseRange } from './reports-range.helper';
+import { getPagination, parseRange, resolveTenantDayRange } from './reports-range.helper';
 import { sql } from '../../../database/kysely';
 
 export function applyReportScopeFilter<T extends object>(queryBuilder: T, query: ReportRangeQueryDto, tableAlias?: string): T {
@@ -114,6 +114,21 @@ export function buildReportListState(
     state.range = range;
     state.fromDate = new Date(range.from);
     state.toDate = new Date(range.to);
+    // INV-VAN-SALES-LIST-DATE-FILTER: a bare from/to date means the
+    // whole tenant day — parseRange passes a bare `to` through as
+    // midnight UTC and silently drops the last day from every list
+    // built on this state (partner ledgers = the payments lists).
+    // Only explicit bare dates are expanded; defaults and full
+    // datetimes pass through unchanged. Garbage bounds are a 400.
+    const explicit = resolveTenantDayRange(query.from, query.to, options?.timezone);
+    if (explicit.from) {
+      state.fromDate = explicit.from;
+      state.range = { ...state.range, from: explicit.from.toISOString() };
+    }
+    if (explicit.to) {
+      state.toDate = explicit.to;
+      state.range = { ...state.range, to: explicit.to.toISOString() };
+    }
   }
 
   return state;

@@ -32,6 +32,10 @@ export function SalesWorkspace() {
   const [search, setSearch] = useState('');
   const [viewFilter, setViewFilter] = useState<SalesPaymentFilter>('all');
   const [cashierFilter, setCashierFilter] = useState('all');
+  // INV-VAN-SALES-LIST-DATE-FILTER: bare YYYY-MM-DD dates for the
+  // tenant-day filter; empty means no bound.
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [selectedSaleId, setSelectedSaleId] = useState('');
   const [saleToCancel, setSaleToCancel] = useState<Sale | null>(null);
   const [saleToEdit, setSaleToEdit] = useState<Sale | null>(null);
@@ -40,7 +44,7 @@ export function SalesWorkspace() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(30);
 
-  const { salesQuery, rows, pagination, summary } = useSalesPage({ page, pageSize, search, filter: viewFilter, cashier: cashierFilter });
+  const { salesQuery, rows, pagination, summary } = useSalesPage({ page, pageSize, search, filter: viewFilter, cashier: cashierFilter, dateFrom, dateTo });
   const { saleDetailQuery, cancelMutation, updateMutation, adjustPaymentsMutation } = useSaleActions(selectedSaleId);
   const usersQuery = useQuery({ queryKey: ['sales-cashier-filter-users'], queryFn: userDirectoryApi.users, staleTime: 60_000 });
   const settingsQuery = useSettingsQuery();
@@ -103,6 +107,8 @@ export function SalesWorkspace() {
     search,
     viewFilter,
     cashierFilter,
+    dateFrom,
+    dateTo,
     totalItems,
     summary,
     topCustomers,
@@ -111,12 +117,24 @@ export function SalesWorkspace() {
     setSearch,
     setViewFilter,
     setCashierFilter,
+    setDateFrom,
+    setDateTo,
     setSelectedSaleId,
     setSaleToCancel,
   });
 
   const handleViewFilterChange = (value: SalesPaymentFilter) => {
     setViewFilter(value);
+    setPage(1);
+  };
+
+  const handleDateFromChange = (value: string) => {
+    setDateFrom(value);
+    setPage(1);
+  };
+
+  const handleDateToChange = (value: string) => {
+    setDateTo(value);
     setPage(1);
   };
 
@@ -139,6 +157,8 @@ export function SalesWorkspace() {
           search={search}
           viewFilter={viewFilter}
           cashierFilter={cashierFilter}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
           cashierOptions={cashierOptions}
           activeFilterLabel={activeFilterLabel}
           totalItems={totalItems}
@@ -159,6 +179,8 @@ export function SalesWorkspace() {
           onSearchChange={setSearch}
           onViewFilterChange={handleViewFilterChange}
           onCashierFilterChange={(value) => { setCashierFilter(value); setPage(1); }}
+          onDateFromChange={handleDateFromChange}
+          onDateToChange={handleDateToChange}
           onReset={resetSalesView}
           onSelectSale={(id) => {
             setSelectedSaleId(id);

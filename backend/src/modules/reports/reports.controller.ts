@@ -38,6 +38,14 @@ export class ReportsController {
     return this.reportsService.netProfitReport(query, req.authContext!);
   }
 
+  // INV-VAN-SALES-LIST-DATE-FILTER: combined sales-per-rep /
+  // purchases-per-supplier report, one response, one tenant-day range.
+  @Get('reports/rep-supplier-summary')
+  @RequirePermissions('reports')
+  repSupplierSummary(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+    return this.reportsService.repSupplierSummary(query, req.authContext!);
+  }
+
   @Get('reports/inventory')
   @RequirePermissions('reports')
   reportInventory(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {

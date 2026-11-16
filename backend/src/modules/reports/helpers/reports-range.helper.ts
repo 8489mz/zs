@@ -1,4 +1,5 @@
 import { ReportRangeQueryDto } from '../dto/report-query.dto';
+import { AppError } from '../../../common/errors/app-error';
 
 export type Range = {
   from: string;
@@ -130,6 +131,54 @@ export function parseRange(query: ReportRangeQueryDto, timezone = getDefaultBusi
     branchId: query.branchId ? String(query.branchId) : undefined,
     locationId: query.locationId ? String(query.locationId) : undefined,
   };
+}
+
+const BARE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * INV-VAN-SALES-LIST-DATE-FILTER: resolve an explicit from/to pair to
+ * tenant-day bounds. A bare calendar date means the WHOLE tenant day
+ * (from = tenant midnight, to = tenant 23:59:59.999); a full datetime
+ * passes through verbatim. This is the fix for the parseRange trap:
+ * parseRange passes a bare `to` through as midnight UTC and silently
+ * drops the whole last day. Missing bounds stay undefined (the caller
+ * supplies defaults); garbage or from-after-to is a 400, never a
+ * silent full-range answer.
+ */
+export function resolveTenantDayRange(
+  from: unknown,
+  to: unknown,
+  timezone = getDefaultBusinessTimezone(),
+): { from?: Date; to?: Date } {
+  const parseBound = (value: unknown, name: 'from' | 'to'): Date | undefined => {
+    if (value == null) return undefined;
+    const raw = String(value).trim();
+    if (!raw) return undefined;
+    if (BARE_DATE_RE.test(raw)) {
+      // Noon UTC on the calendar day: getBusinessDayBounds derives the
+      // tenant day from the zoned parts, and noon UTC lands on the same
+      // calendar day for every zone in UTC-12..UTC+12 (midnight UTC
+      // would shift the day for zones west of UTC).
+      const [y, m, d] = raw.split('-').map(Number);
+      const bounds = getBusinessDayBounds(new Date(Date.UTC(y, m - 1, d, 12, 0, 0)), timezone);
+      return name === 'from' ? bounds.start : bounds.end;
+    }
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new AppError(
+        name === 'from' ? 'تاريخ البداية غير صالح' : 'تاريخ النهاية غير صالح',
+        'INVALID_DATE_RANGE',
+        400,
+      );
+    }
+    return parsed;
+  };
+  const fromDate = parseBound(from, 'from');
+  const toDate = parseBound(to, 'to');
+  if (fromDate && toDate && fromDate.getTime() > toDate.getTime()) {
+    throw new AppError('تاريخ البداية بعد تاريخ النهاية', 'INVALID_DATE_RANGE', 400);
+  }
+  return { from: fromDate, to: toDate };
 }
 
 export function dateKey(value: Date | string | null | undefined, timezone = getDefaultBusinessTimezone()): string {
