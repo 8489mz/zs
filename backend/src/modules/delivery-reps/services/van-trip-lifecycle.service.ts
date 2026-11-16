@@ -141,6 +141,14 @@ export type VanTripLifecycleDeps = {
     fromLocationId: number,
     toLocationId: number,
   ) => Promise<number>;
+  moveVanInventoryBatches: (
+    trx: Kysely<Database>,
+    scope: { tenantId: string; accountId: string },
+    productId: number,
+    qty: number,
+    fromLocationId: number,
+    toLocationId: number,
+  ) => Promise<number>;
   deductVanSalePharmacyBatches: (
     trx: Kysely<Database>,
     productId: number,
@@ -149,6 +157,14 @@ export type VanTripLifecycleDeps = {
     vanLocationId: number,
     failClosed?: boolean,
   ) => Promise<Array<{ pharmacyBatchId: number; quantity: number }>>;
+  deductVanSaleInventoryBatches: (
+    trx: Kysely<Database>,
+    productId: number,
+    qty: number,
+    scope: { tenantId: string; accountId: string },
+    vanLocationId: number,
+    failClosed?: boolean,
+  ) => Promise<Array<{ inventoryBatchId: number; quantity: number }>>;
   resolveSystemAuthContext: (tenantId: string, accountId: string, repId?: number | null) => Promise<AuthContext>;
   recordSuspicionEvent: (params: RecordVanSuspicionParams) => Promise<any>;
   listRepServedCustomerIds: (tenantId: string, repId: number) => Promise<Set<number>>;
@@ -165,7 +181,9 @@ export class VanTripLifecycleService {
   private readonly sortItemsByProductId: VanTripLifecycleDeps['sortItemsByProductId'];
   private readonly moveVanStock: VanTripLifecycleDeps['moveVanStock'];
   private readonly moveVanPharmacyBatches: VanTripLifecycleDeps['moveVanPharmacyBatches'];
+  private readonly moveVanInventoryBatches: VanTripLifecycleDeps['moveVanInventoryBatches'];
   private readonly deductVanSalePharmacyBatches: VanTripLifecycleDeps['deductVanSalePharmacyBatches'];
+  private readonly deductVanSaleInventoryBatches: VanTripLifecycleDeps['deductVanSaleInventoryBatches'];
   private readonly resolveSystemAuthContext: VanTripLifecycleDeps['resolveSystemAuthContext'];
   private readonly recordSuspicionEvent: VanTripLifecycleDeps['recordSuspicionEvent'];
   private readonly listRepServedCustomerIds: VanTripLifecycleDeps['listRepServedCustomerIds'];
@@ -180,7 +198,9 @@ export class VanTripLifecycleService {
     this.sortItemsByProductId = deps.sortItemsByProductId;
     this.moveVanStock = deps.moveVanStock;
     this.moveVanPharmacyBatches = deps.moveVanPharmacyBatches;
+    this.moveVanInventoryBatches = deps.moveVanInventoryBatches;
     this.deductVanSalePharmacyBatches = deps.deductVanSalePharmacyBatches;
+    this.deductVanSaleInventoryBatches = deps.deductVanSaleInventoryBatches;
     this.resolveSystemAuthContext = deps.resolveSystemAuthContext;
     this.recordSuspicionEvent = deps.recordSuspicionEvent;
     this.listRepServedCustomerIds = deps.listRepServedCustomerIds;
@@ -1275,6 +1295,8 @@ export class VanTripLifecycleService {
 
           // INV-VAN-FEFO-BATCHES: the batches travel with the goods.
           await this.moveVanPharmacyBatches(trx, { tenantId, accountId }, pid, qty, effectiveLocId, vanLoc.id);
+          // INV-VAN-GENERIC-FEFO: the generic batches travel too.
+          await this.moveVanInventoryBatches(trx, { tenantId, accountId }, pid, qty, effectiveLocId, vanLoc.id);
 
           await this.moveVanStock(trx, {
             productId: pid,
@@ -1523,6 +1545,8 @@ export class VanTripLifecycleService {
 
         // INV-VAN-FEFO-BATCHES: the batches travel with the goods.
         await this.moveVanPharmacyBatches(trx, { tenantId, accountId }, pid, qty, effectiveLocId, vanLoc.id);
+        // INV-VAN-GENERIC-FEFO: the generic batches travel too.
+        await this.moveVanInventoryBatches(trx, { tenantId, accountId }, pid, qty, effectiveLocId, vanLoc.id);
 
         await this.moveVanStock(trx, {
           productId: pid,
@@ -2201,6 +2225,16 @@ export class VanTripLifecycleService {
             vanLocationId,
             false,
           );
+          // INV-VAN-GENERIC-FEFO: the shortage leaves the van's generic
+          // batches too; same never-fail-closed rule as above.
+          await this.deductVanSaleInventoryBatches(
+            trx,
+            itemVariance.productId,
+            shortageQty,
+            { tenantId, accountId },
+            vanLocationId,
+            false,
+          );
         }
       }
 
@@ -2293,6 +2327,8 @@ export class VanTripLifecycleService {
 
           // INV-VAN-FEFO-BATCHES: the batches return with the goods.
           await this.moveVanPharmacyBatches(trx, { tenantId, accountId }, pid, qty, vanLocationId, Number(lockedTrip.source_warehouse_id));
+          // INV-VAN-GENERIC-FEFO: the generic batches return too.
+          await this.moveVanInventoryBatches(trx, { tenantId, accountId }, pid, qty, vanLocationId, Number(lockedTrip.source_warehouse_id));
 
           // In to warehouse
           await this.moveVanStock(trx, {

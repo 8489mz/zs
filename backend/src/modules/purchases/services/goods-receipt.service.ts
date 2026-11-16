@@ -12,6 +12,7 @@ import { CreateGoodsReceiptDto, CreateGrnBillDto, VerifyThreeWayMatchDto } from 
 import { computeThreeWayMatch, ThreeWayMatchInput } from '../three-way-match.engine';
 import { applyStockDelta, lockStockProducts } from '../../../common/utils/location-stock-ledger';
 import { allocateGrnAccrual, allocateGrniBillPortion } from '../engines/grni-settlement.engine';
+import { upsertInventoryBatchFromReceipt } from '../helpers/inventory-batch-receipt.helper';
 import { allocateLandedCosts } from '../engines/landed-cost-allocation.engine';
 import { valueStockReceipt } from '../../accounting/inventory-valuation';
 import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date.engine';
@@ -699,7 +700,11 @@ export class GoodsReceiptService {
           if (drug && (!batchNumber || !expiryDate)) {
             throw new UnprocessableEntityException('محضر استلام الدواء يتطلب رقم التشغيلة وتاريخ الصلاحية');
           }
-          if (batchNumber) {
+          // INV-VAN-GENERIC-FEFO: drug-linked products keep the pharmacy
+          // ledger above; every other product with a batch number lands
+          // in the generic ledger (this block used to write non-drug
+          // batches into pharmacy_batches too).
+          if (batchNumber && drug) {
             const today = await resolveBusinessDateKey(trx, scope.tenantId, new Date());
             if (!/^\d{4}-\d{2}(?:-\d{2})?$/.test(expiryDate) ||
               (expiryDate.length === 7 ? expiryDate < today.slice(0, 7) : expiryDate < today)) {
@@ -726,6 +731,17 @@ export class GoodsReceiptService {
                 supplier_name: grn.supplierName || null, status: 'active', notes: `وارد ${grn.docNo}`,
               }).execute();
             }
+          }
+          if (batchNumber && !drug) {
+            // INV-VAN-GENERIC-FEFO: expiry optional (NULL when absent);
+            // merge requires identical expiry. The helper owns the
+            // validation; drug-linked products never reach it.
+            await upsertInventoryBatchFromReceipt(trx, {
+              tenantId: scope.tenantId, accountId: scope.accountId,
+              productId: Number(line.productId), batchNumber, expiryDate,
+              qty: accepted, unitCost: lineUnitCost, locationId: targetLocationId,
+              supplierName: grn.supplierName || null, notes: `وارد ${grn.docNo}`,
+            });
           }
         }
       }

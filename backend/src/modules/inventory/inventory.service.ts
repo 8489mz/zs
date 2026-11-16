@@ -42,6 +42,14 @@ export class InventoryService {
     return this.scopeService.getAllLocationStocks(auth);
   }
 
+  // INV-VAN-GENERIC-FEFO: read-only list of the generic batch ledger.
+  listInventoryBatches(
+    auth: AuthContext,
+    filters?: { status?: string; q?: string; page?: number; pageSize?: number },
+  ): Promise<Record<string, unknown>> {
+    return this.scopeService.listInventoryBatches(auth, filters);
+  }
+
   // INV-ADJUST-SINGLE-QTY-BASIS: read-only availability for the
   // adjustment dialog prefill, on the same available basis the
   // adjustment targets. Thin delegation; the ledger owns the math.

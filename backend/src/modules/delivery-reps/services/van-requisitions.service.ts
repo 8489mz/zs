@@ -644,7 +644,7 @@ export class VanRequisitionsService {
     const fefoBatchMap = new Map<number, { batchNumber: string | null; expiryDate: string }>();
 
     if (productIds.length > 0) {
-      const [unitRows, batchRows] = await Promise.all([
+      const [unitRows, batchRows, genericBatchRows] = await Promise.all([
         this.anyDb
           .selectFrom('product_units')
           .select(['product_id', 'name', 'multiplier', 'is_base_unit'])
@@ -661,6 +661,19 @@ export class VanRequisitionsService {
           .orderBy('expiry_date', 'asc')
           .execute()
           .catch(() => []),
+        // INV-VAN-GENERIC-FEFO: the generic ledger feeds the same
+        // display. NULL expiry sorts LAST (dated rows win the slot);
+        // a NULL-expiry row claims it only when no dated row exists.
+        this.anyDb
+          .selectFrom('inventory_batches')
+          .select(['product_id', 'batch_number', 'expiry_date', 'quantity', 'location_id'])
+          .where('tenant_id', '=', tenantId)
+          .where('product_id', 'in', productIds)
+          .where(sql<boolean>`cast(coalesce(quantity, 0) as numeric) > 0`)
+          .orderBy('expiry_date', (ob: any) => ob.asc().nullsLast())
+          .orderBy('id', 'asc')
+          .execute()
+          .catch(() => []),
       ]);
 
       for (const b of batchRows || []) {
@@ -674,6 +687,19 @@ export class VanRequisitionsService {
             expiryDate: String(b.expiry_date),
           });
         }
+      }
+
+      // Generic rows fill only products the pharmacy query did not claim:
+      // the pharmacy ledger wins the display, same as the deduct.
+      for (const b of genericBatchRows || []) {
+        const pid = Number(b.product_id);
+        if (!pid || fefoBatchMap.has(pid)) continue;
+        if (warehouseId && b.location_id && Number(b.location_id) !== Number(warehouseId)) continue;
+        if (repScope?.hasLoadHistory && b.location_id && !repScope.sourceWarehouseIds.has(Number(b.location_id))) continue;
+        fefoBatchMap.set(pid, {
+          batchNumber: b.batch_number ? String(b.batch_number) : null,
+          expiryDate: b.expiry_date ? String(b.expiry_date) : '',
+        });
       }
 
       for (const u of unitRows) {

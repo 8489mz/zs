@@ -1,3 +1,4 @@
+import { normalizeArabicSearch } from '../../../common/utils/arabic-search.util';
 import { Inject, Injectable } from '@nestjs/common';
 import { Kysely, sql } from '../../../database/kysely';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -139,6 +140,78 @@ export class InventoryScopeService {
       locations: rows.map((row) => ({ id: String(row.id), name: row.name + (!row.is_active ? ' (محذوف)' : ''), code: row.code || '', branchId: row.branch_id ? String(row.branch_id) : '', branchName: row.branch_name || '', locationType: row.location_type })),
     };
   }
+  /**
+   * INV-VAN-GENERIC-FEFO: read-only list of the generic batch ledger
+   * (inventory_batches) — mirror of PharmacyService.listBatches minus
+   * the drug column; expiry may be NULL (shown as "no expiry").
+   */
+  async listInventoryBatches(
+    auth: AuthContext,
+    filters?: { status?: string; q?: string; page?: number; pageSize?: number },
+  ): Promise<Record<string, unknown>> {
+    const scope = requireTenantScope(auth);
+    let query = this.db
+      .selectFrom('inventory_batches as ib')
+      .leftJoin('products as p', (join) => join.onRef('p.id', '=', 'ib.product_id').onRef('p.tenant_id', '=', 'ib.tenant_id'))
+      .where(sql<boolean>`ib.tenant_id = ${scope.tenantId}`);
+
+    if (filters?.status && filters.status !== 'all') {
+      query = query.where('ib.status', '=', filters.status);
+    }
+
+    if (filters?.q && filters.q.trim()) {
+      const term = `%${normalizeArabicSearch(filters.q)}%`;
+      query = query.where(sql<boolean>`(
+        lower(ib.batch_number) like ${term}
+        OR lower(coalesce(ib.supplier_name, '')) like ${term}
+        OR lower(coalesce(ib.notes, '')) like ${term}
+        OR lower(coalesce(p.name, '')) like ${term}
+        OR lower(coalesce(p.barcode, '')) like ${term}
+      )`);
+    }
+
+    const totalRes = await query.select((eb) => eb.fn.count('ib.id').as('count')).executeTakeFirst();
+    const total = Number(totalRes?.count || 0);
+
+    const page = Math.max(1, Number(filters?.page || 1));
+    const pageSize = Math.min(100, Math.max(1, Number(filters?.pageSize || 25)));
+    const offset = (page - 1) * pageSize;
+
+    const batches = await query
+      .select([
+        'ib.id',
+        'ib.tenant_id',
+        'ib.account_id',
+        'ib.product_id',
+        'ib.batch_number',
+        'ib.expiry_date',
+        'ib.quantity',
+        'ib.unit_cost',
+        'ib.location_id',
+        'ib.supplier_name',
+        'ib.status',
+        'ib.notes',
+        'ib.created_at',
+        'ib.updated_at',
+        'p.name as product_name',
+        'p.barcode as product_barcode',
+      ])
+      .orderBy('ib.id', 'desc')
+      .limit(pageSize)
+      .offset(offset)
+      .execute();
+
+    return {
+      batches,
+      pagination: {
+        page,
+        pageSize,
+        totalItems: total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
+  }
+
   async getAllLocationStocks(auth: AuthContext): Promise<Record<string, unknown>> {
     const { tenantId, accountId } = requireTenantScope(auth);
     const scope = await this.branchScope(auth);

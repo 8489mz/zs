@@ -183,7 +183,9 @@ export class SalesWriteService {
         enforceRestaurantModifierContract: this.enforceRestaurantModifierContract.bind(this),
         autoProduceShortfall: this.autoProduceShortfall.bind(this),
         deductPharmacyBatchesFefo: this.deductPharmacyBatchesFefo.bind(this),
+        deductInventoryBatchesFefo: this.deductInventoryBatchesFefo.bind(this),
         restoreSalePharmacyBatches: this.restoreSalePharmacyBatches.bind(this),
+        restoreSaleInventoryBatches: this.restoreSaleInventoryBatches.bind(this),
         recordImportLotShortfalls: this.recordImportLotShortfalls.bind(this),
         getAllowNegativeStockSales: this.getAllowNegativeStockSales.bind(this),
         buildInsufficientStockError: this.buildInsufficientStockError.bind(this),
@@ -259,6 +261,7 @@ export class SalesWriteService {
         autoProduceShortfall: this.autoProduceShortfall.bind(this),
         recordImportLotShortfalls: this.recordImportLotShortfalls.bind(this),
         deductPharmacyBatchesFefo: this.deductPharmacyBatchesFefo.bind(this),
+        deductInventoryBatchesFefo: this.deductInventoryBatchesFefo.bind(this),
         resolveOnlineOrderTerms: this.resolveOnlineOrderTerms.bind(this),
         refreshClosedShiftsForBackdatedOfflineSale: this.refreshClosedShiftsForBackdatedOfflineSale.bind(this),
         generateSaleDocNo: this.generateSaleDocNo.bind(this),
@@ -476,6 +479,27 @@ export class SalesWriteService {
     scope: { tenantId: string; accountId: string }, removeAllocations: boolean,
   ): Promise<void> {
     return this.getRestaurantSerials().restoreSalePharmacyBatches(trx, saleId, items, scope, removeAllocations);
+  }
+
+  // INV-VAN-GENERIC-FEFO: generic-ledger twins of the two pharmacy
+  // delegates above (same signatures, inventory_batches ledger).
+  private async deductInventoryBatchesFefo(
+    trx: Kysely<Database> | Transaction<Database>,
+    productId: number,
+    allocations: Array<{ locationId: number | null; qty: number }>,
+    scope: { tenantId: string; accountId: string },
+    saleId: number,
+    saleItemId: number,
+  ): Promise<void> {
+    return this.getRestaurantSerials().deductInventoryBatchesFefo(trx, productId, allocations, scope, saleId, saleItemId);
+  }
+
+  private async restoreSaleInventoryBatches(
+    trx: Kysely<Database> | Transaction<Database>, saleId: number,
+    items: Array<{ id: number; product_id: number | null }>,
+    scope: { tenantId: string; accountId: string }, removeAllocations: boolean,
+  ): Promise<void> {
+    return this.getRestaurantSerials().restoreSaleInventoryBatches(trx, saleId, items, scope, removeAllocations);
   }
 
   async authorizeDiscountOverride(secret: string, auth: AuthContext): Promise<Record<string, unknown>> {

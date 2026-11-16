@@ -1,3 +1,7 @@
+import {
+  deductVanSaleInventoryBatches as deductVanSaleInventoryBatchesHelper,
+  moveVanInventoryBatches as moveVanInventoryBatchesHelper,
+} from './services/van-inventory-batches.helper';
 import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
 import { Inject, Injectable } from '@nestjs/common';
 import { Kysely, sql } from '../../database/kysely';
@@ -137,6 +141,7 @@ export class VanSalesService {
         accountingPosting: this.accountingPosting,
         vanFraudRadarService: this.vanFraudRadarService,
         deductVanSalePharmacyBatches: this.deductVanSalePharmacyBatches.bind(this),
+        deductVanSaleInventoryBatches: this.deductVanSaleInventoryBatches.bind(this),
         generateDailySequenceNumber: this.generateDailySequenceNumber.bind(this),
         moveVanStock: this.moveVanStock.bind(this),
         resolveSystemAuthContext: this.resolveSystemAuthContext.bind(this),
@@ -158,7 +163,9 @@ export class VanSalesService {
         sortItemsByProductId: this.sortItemsByProductId.bind(this),
         moveVanStock: this.moveVanStock.bind(this),
         moveVanPharmacyBatches: this.moveVanPharmacyBatches.bind(this),
+        moveVanInventoryBatches: this.moveVanInventoryBatches.bind(this),
         deductVanSalePharmacyBatches: this.deductVanSalePharmacyBatches.bind(this),
+        deductVanSaleInventoryBatches: this.deductVanSaleInventoryBatches.bind(this),
         resolveSystemAuthContext: this.resolveSystemAuthContext.bind(this),
         recordSuspicionEvent: this.recordSuspicionEvent.bind(this),
         listRepServedCustomerIds: this.listRepServedCustomerIds.bind(this),
@@ -616,6 +623,32 @@ export class VanSalesService {
       );
     }
     return allocations;
+  }
+
+  // INV-VAN-GENERIC-FEFO: thin wrappers over the pure generic helpers
+  // (van-inventory-batches.helper.ts) — the bodies live there so this
+  // file (1927 lines, at its exact ratchet baseline) grows by wrappers
+  // only. Signatures mirror the pharmacy twins above.
+  private async moveVanInventoryBatches(
+    trx: Kysely<Database>,
+    scope: { tenantId: string; accountId: string },
+    productId: number,
+    qty: number,
+    fromLocationId: number,
+    toLocationId: number,
+  ): Promise<number> {
+    return moveVanInventoryBatchesHelper(trx, scope, productId, qty, fromLocationId, toLocationId);
+  }
+
+  private async deductVanSaleInventoryBatches(
+    trx: Kysely<Database>,
+    productId: number,
+    qty: number,
+    scope: { tenantId: string; accountId: string },
+    vanLocationId: number,
+    failClosed = true,
+  ): Promise<Array<{ inventoryBatchId: number; quantity: number }>> {
+    return deductVanSaleInventoryBatchesHelper(trx, productId, qty, scope, vanLocationId, failClosed);
   }
 
   async getOrCreateVanLocation(repId: number, tenantId: string, accountId: string): Promise<{ id: number; name: string }> {

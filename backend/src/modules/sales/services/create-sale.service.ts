@@ -91,6 +91,7 @@ export type CreateSaleDeps = {
   autoProduceShortfall: (trx: Kysely<Database> | Transaction<Database>, items: any[], saleId: number, branchId: number | null, locationId: number | null, scope: TenantScope, auth: AuthContext, visitedProductIds?: Set<number>, depth?: number) => Promise<void>;
   recordImportLotShortfalls: (trx: Kysely<Database> | Transaction<Database>, scope: { tenantId: string; accountId: string }, saleId: number, saleLineId: number, allocation: { items: Array<{ productId: number; requestedQty: number; allocatedQty: number; shortfallQty: number; fullyCovered: boolean; reason: string }> }, auth: AuthContext) => Promise<void>;
   deductPharmacyBatchesFefo: (trx: Kysely<Database> | Transaction<Database>, productId: number, allocations: any[], scope: TenantScope, saleId: number, saleLineId: number) => Promise<void>;
+  deductInventoryBatchesFefo: (trx: Kysely<Database> | Transaction<Database>, productId: number, allocations: any[], scope: TenantScope, saleId: number, saleLineId: number) => Promise<void>;
   resolveOnlineOrderTerms: (onlineOrderId: number, tenantId: string, existing?: SystemApprovedSaleTerms) => Promise<SystemApprovedSaleTerms | undefined>;
   refreshClosedShiftsForBackdatedOfflineSale: (trx: Kysely<Database> | Transaction<Database>, offlineCreatedAt: Date, saleId: number, branchId: number | null, locationId: number | null, auth: AuthContext, tenantId: string) => Promise<void>;
   generateSaleDocNo: (trx: Kysely<Database>, saleId: number, tenantId: string, businessDate?: Date | null) => Promise<string>;
@@ -195,6 +196,7 @@ export class CreateSaleService {
   private readonly autoProduceShortfall: CreateSaleDeps['autoProduceShortfall'];
   private readonly recordImportLotShortfalls: CreateSaleDeps['recordImportLotShortfalls'];
   private readonly deductPharmacyBatchesFefo: CreateSaleDeps['deductPharmacyBatchesFefo'];
+  private readonly deductInventoryBatchesFefo: CreateSaleDeps['deductInventoryBatchesFefo'];
   private readonly resolveOnlineOrderTerms: CreateSaleDeps['resolveOnlineOrderTerms'];
   private readonly refreshClosedShiftsForBackdatedOfflineSale: CreateSaleDeps['refreshClosedShiftsForBackdatedOfflineSale'];
   private readonly generateSaleDocNo: CreateSaleDeps['generateSaleDocNo'];
@@ -229,6 +231,7 @@ export class CreateSaleService {
     this.autoProduceShortfall = deps.autoProduceShortfall;
     this.recordImportLotShortfalls = deps.recordImportLotShortfalls;
     this.deductPharmacyBatchesFefo = deps.deductPharmacyBatchesFefo;
+    this.deductInventoryBatchesFefo = deps.deductInventoryBatchesFefo;
     this.resolveOnlineOrderTerms = deps.resolveOnlineOrderTerms;
     this.refreshClosedShiftsForBackdatedOfflineSale = deps.refreshClosedShiftsForBackdatedOfflineSale;
     this.generateSaleDocNo = deps.generateSaleDocNo;
@@ -1587,6 +1590,9 @@ export class CreateSaleService {
         }
 
         await this.deductPharmacyBatchesFefo(trx, item.productId, allocations, scope, id, saleLineId);
+        // INV-VAN-GENERIC-FEFO: the generic ledger deducts the same
+        // allocations when the pharmacy ledger does not own the product.
+        await this.deductInventoryBatchesFefo(trx, item.productId, allocations, scope, id, saleLineId);
         for (const alloc of allocations) {
           const lotAllocation = await allocateSaleFromImportLots(trx, {
             tenantId: scope.tenantId,

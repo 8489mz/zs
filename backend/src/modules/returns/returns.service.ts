@@ -169,6 +169,54 @@ export class ReturnsService {
     if (remaining > 0) throw new AppError('كمية المرتجع تتجاوز التشغيلة المباعة', 'PHARMACY_BATCH_RETURN_EXCEEDED', 422);
   }
 
+  /**
+   * INV-VAN-GENERIC-FEFO: mirror of restoreReturnedPharmacyBatches over
+   * the generic ledger. One difference: a NULL-expiry batch is never
+   * expired — it restores to 'active', never to 'expired'.
+   */
+  private async restoreReturnedInventoryBatches(
+    trx: Kysely<Database>, saleId: number, saleItemId: number, productId: number,
+    previousReturnedBaseQty: number, returnBaseQty: number, auth: AuthContext,
+  ): Promise<void> {
+    const scope = this.scope(auth);
+    const allocations = await trx.selectFrom('sale_inventory_batch_allocations').selectAll()
+      .where('tenant_id', '=', scope.tenantId).where('sale_id', '=', saleId)
+      .where('sale_item_id', '=', saleItemId).where('product_id', '=', productId)
+      .orderBy('id', 'desc').forUpdate().execute();
+    if (!allocations.length) {
+      const anyBatch = await trx.selectFrom('inventory_batches').select('id')
+        .where('tenant_id', '=', scope.tenantId).where('product_id', '=', productId)
+        .limit(1).executeTakeFirst();
+      if (anyBatch) {
+        throw new AppError('الفاتورة بلا تخصيص تشغيلة رغم وجود سجل تشغيلات للصنف؛ يلزم مصالحة قبل المرتجع',
+          'INVENTORY_BATCH_RECONCILIATION_REQUIRED', 422);
+      }
+      return;
+    }
+    let skip = Number(previousReturnedBaseQty.toFixed(3));
+    let remaining = Number(returnBaseQty.toFixed(3));
+    const today = await resolveBusinessDateKey(trx, scope.tenantId, new Date());
+    for (const allocation of allocations) {
+      const sold = Number(allocation.quantity);
+      const previouslyRestored = Math.min(sold, skip);
+      skip = Number((skip - previouslyRestored).toFixed(3));
+      const restore = Math.min(Number((sold - previouslyRestored).toFixed(3)), remaining);
+      if (restore <= 0) continue;
+      const batch = await trx.selectFrom('inventory_batches').select(['id', 'quantity', 'expiry_date'])
+        .where('tenant_id', '=', scope.tenantId).where('id', '=', Number(allocation.inventory_batch_id))
+        .forUpdate().executeTakeFirstOrThrow();
+      const expiry = String(batch.expiry_date || '').slice(0, 10);
+      const expired = expiry ? (expiry.length === 7 ? expiry < today.slice(0, 7) : expiry < today) : false;
+      await trx.updateTable('inventory_batches').set({
+        quantity: Number((Number(batch.quantity) + restore).toFixed(3)),
+        status: expired ? 'expired' : 'active', updated_at: sql`NOW()`,
+      }).where('tenant_id', '=', scope.tenantId).where('id', '=', Number(batch.id)).execute();
+      remaining = Number((remaining - restore).toFixed(3));
+      if (remaining <= 0) break;
+    }
+    if (remaining > 0) throw new AppError('كمية المرتجع تتجاوز التشغيلة المباعة', 'INVENTORY_BATCH_RETURN_EXCEEDED', 422);
+  }
+
   private async generateReturnDocNo(trx: Kysely<Database>, returnDocId: number, returnType: 'sale' | 'purchase', auth: AuthContext): Promise<string> {
     const settingRow = await trx
       .selectFrom('settings')
@@ -1084,6 +1132,9 @@ export class ReturnsService {
         (pendingQtyByLine.get(saleLineId) || 0) - requestItem.qty
       ) * Number(saleItem.unit_multiplier || 1));
       await this.restoreReturnedPharmacyBatches(trx, Number(sale.id), saleLineId, requestItem.productId,
+        previouslyReturnedBaseQty, preparedLine.stockDelta, auth);
+      // INV-VAN-GENERIC-FEFO: same restore for the generic ledger.
+      await this.restoreReturnedInventoryBatches(trx, Number(sale.id), saleLineId, requestItem.productId,
         previouslyReturnedBaseQty, preparedLine.stockDelta, auth);
       await restoreImportLotsFromSalesReturn(trx as any, {
         tenantId: scope.tenantId,

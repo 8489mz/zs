@@ -8,6 +8,7 @@ import { Button } from '@/shared/ui/button';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
 import { pharmacyApi } from '@/features/pharmacy/api/pharmacy.api';
+import { inventoryApi } from '@/shared/api/inventory.api';
 import type { PharmacyBatch } from '@/features/pharmacy/types/pharmacy.types';
 import { PackageIcon, PlusIcon } from '@/shared/components/icons/AppIcons';
 
@@ -29,19 +30,31 @@ export function InventoryBatchesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
+  // INV-VAN-GENERIC-FEFO: second tab lists the generic batch ledger
+  // (inventory_batches). Pharmacy tab behavior is unchanged; generic
+  // batches are born at intake only, so the add/edit modal stays
+  // pharmacy-only.
+  const [tab, setTab] = useState<'pharmacy' | 'generic'>('pharmacy');
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBatch, setEditingBatch] = useState<Partial<PharmacyBatch> | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['inventory', 'batches', searchQuery, statusFilter, page],
+    queryKey: ['inventory', 'batches', tab, searchQuery, statusFilter, page],
     queryFn: () =>
-      pharmacyApi.listBatches({
-        q: searchQuery,
-        status: statusFilter,
-        page,
-        pageSize: 20,
-      }),
+      tab === 'generic'
+        ? inventoryApi.listInventoryBatches({
+            q: searchQuery,
+            status: statusFilter,
+            page,
+            pageSize: 20,
+          })
+        : pharmacyApi.listBatches({
+            q: searchQuery,
+            status: statusFilter,
+            page,
+            pageSize: 20,
+          }),
   });
 
   const upsertMutation = useMutation({
@@ -98,10 +111,12 @@ export function InventoryBatchesPage() {
           badge={<span className="nav-pill">{totalItems} {t('inventory.inventory_batches_page.s2', "تشغيلة مسجلة")}</span>}
           actions={
             <div className="actions compact-actions page-header-actions">
-              <Button type="button" onClick={handleOpenAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <PlusIcon size={16} />
-                <span>{t('inventory.inventory_batches_page.s3', "إضافة تشغيلة جديدة")}</span>
-              </Button>
+              {tab === 'pharmacy' && (
+                <Button type="button" onClick={handleOpenAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <PlusIcon size={16} />
+                  <span>{t('inventory.inventory_batches_page.s3', "إضافة تشغيلة جديدة")}</span>
+                </Button>
+              )}
             </div>
           }
         />
@@ -146,6 +161,26 @@ export function InventoryBatchesPage() {
               <h2 className="document-prototype-section-title" style={{ margin: 0 }}>{t('inventory.inventory_batches_page.s9', "سجل تشغيلات المخزون وتواريخ الصلاحية")}</h2>
               <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#64748b' }}>{t('inventory.inventory_batches_page.s10', "تتبع أرقام التشغيلات، الدفعات، وأرصدة المستودعات")}</p>
             </div>
+          </div>
+
+          {/* INV-VAN-GENERIC-FEFO: ledger tabs — pharmacy batches vs
+              generic (non-drug) batches. Generic batches are born at
+              intake only; the add/edit modal stays pharmacy-only. */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+            <Button
+              type="button"
+              variant={tab === 'pharmacy' ? 'primary' : 'secondary'}
+              onClick={() => { setTab('pharmacy'); setPage(1); }}
+            >
+              {t('inventory.inventory_batches_page.s53', "تشغيلات الأدوية")}
+            </Button>
+            <Button
+              type="button"
+              variant={tab === 'generic' ? 'primary' : 'secondary'}
+              onClick={() => { setTab('generic'); setPage(1); }}
+            >
+              {t('inventory.inventory_batches_page.s54', "تشغيلات عامة")}
+            </Button>
           </div>
 
           {/* Filter and Search Bar */}
@@ -233,7 +268,7 @@ export function InventoryBatchesPage() {
                         <td style={{ padding: '10px 14px', color: '#64748b', fontFamily: 'monospace' }}>{batch.product_barcode || '—'}</td>
                         <td style={{ padding: '10px 14px', fontFamily: 'monospace', direction: 'ltr', textAlign: 'left' }}>
                           <span style={{ fontWeight: 600, color: isExp ? '#dc2626' : isNear ? '#d97706' : '#0f172a' }}>
-                            {batch.expiry_date}
+                            {batch.expiry_date || '—'}
                           </span>
                         </td>
                         <td style={{ padding: '10px 14px', fontWeight: 700 }}>{Number(batch.quantity || 0).toLocaleString()}</td>
@@ -245,14 +280,16 @@ export function InventoryBatchesPage() {
                           </span>
                         </td>
                         <td style={{ padding: '10px 14px' }}>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() => { setEditingBatch(batch); setModalOpen(true); }}
-                            style={{ padding: '3px 8px', fontSize: '0.75rem' }}
-                          >
-                            {t('inventory.inventory_batches_page.s32', "تعديل")}
-                          </Button>
+                          {tab === 'pharmacy' ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={() => { setEditingBatch(batch); setModalOpen(true); }}
+                              style={{ padding: '3px 8px', fontSize: '0.75rem' }}
+                            >
+                              {t('inventory.inventory_batches_page.s32', "تعديل")}
+                            </Button>
+                          ) : '—'}
                         </td>
                       </tr>
                     );

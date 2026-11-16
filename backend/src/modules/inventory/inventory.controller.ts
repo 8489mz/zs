@@ -27,6 +27,25 @@ export class InventoryController {
     return this.inventoryService.listLocations(req.authContext!, includeInactive === 'true');
   }
 
+  // INV-VAN-GENERIC-FEFO: read-only list of the generic batch ledger
+  // (inventory_batches) for the batches page's second tab.
+  @Get('inventory/batches')
+  @RequirePermissions('inventory')
+  listInventoryBatches(
+    @Req() req: RequestWithAuth,
+    @Query('status') status?: string,
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ): Promise<Record<string, unknown>> {
+    return this.inventoryService.listInventoryBatches(req.authContext!, {
+      status,
+      q,
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+    });
+  }
+
   @Get('location-stocks')
   @AllowAuthenticated()
   getAllLocationStocks(@Req() req: RequestWithAuth): Promise<Record<string, unknown>> {

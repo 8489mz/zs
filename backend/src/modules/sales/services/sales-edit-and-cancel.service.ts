@@ -176,7 +176,22 @@ export type SalesEditAndCancelDeps = {
     saleId: number,
     saleItemId: number,
   ) => Promise<void>;
+  deductInventoryBatchesFefo: (
+    trx: Kysely<Database> | Transaction<Database>,
+    productId: number,
+    allocations: Array<{ locationId: number | null; qty: number }>,
+    scope: { tenantId: string; accountId: string },
+    saleId: number,
+    saleItemId: number,
+  ) => Promise<void>;
   restoreSalePharmacyBatches: (
+    trx: Kysely<Database> | Transaction<Database>,
+    saleId: number,
+    items: Array<{ id: number; product_id: number | null }>,
+    scope: { tenantId: string; accountId: string },
+    removeAllocations: boolean,
+  ) => Promise<void>;
+  restoreSaleInventoryBatches: (
     trx: Kysely<Database> | Transaction<Database>,
     saleId: number,
     items: Array<{ id: number; product_id: number | null }>,
@@ -246,7 +261,9 @@ export class SalesEditAndCancelService {
   private readonly enforceRestaurantModifierContract: SalesEditAndCancelDeps['enforceRestaurantModifierContract'];
   private readonly autoProduceShortfall: SalesEditAndCancelDeps['autoProduceShortfall'];
   private readonly deductPharmacyBatchesFefo: SalesEditAndCancelDeps['deductPharmacyBatchesFefo'];
+  private readonly deductInventoryBatchesFefo: SalesEditAndCancelDeps['deductInventoryBatchesFefo'];
   private readonly restoreSalePharmacyBatches: SalesEditAndCancelDeps['restoreSalePharmacyBatches'];
+  private readonly restoreSaleInventoryBatches: SalesEditAndCancelDeps['restoreSaleInventoryBatches'];
   private readonly recordImportLotShortfalls: SalesEditAndCancelDeps['recordImportLotShortfalls'];
   private readonly getAllowNegativeStockSales: SalesEditAndCancelDeps['getAllowNegativeStockSales'];
   private readonly buildInsufficientStockError: SalesEditAndCancelDeps['buildInsufficientStockError'];
@@ -275,7 +292,9 @@ export class SalesEditAndCancelService {
     this.enforceRestaurantModifierContract = deps.enforceRestaurantModifierContract;
     this.autoProduceShortfall = deps.autoProduceShortfall;
     this.deductPharmacyBatchesFefo = deps.deductPharmacyBatchesFefo;
+    this.deductInventoryBatchesFefo = deps.deductInventoryBatchesFefo;
     this.restoreSalePharmacyBatches = deps.restoreSalePharmacyBatches;
+    this.restoreSaleInventoryBatches = deps.restoreSaleInventoryBatches;
     this.recordImportLotShortfalls = deps.recordImportLotShortfalls;
     this.getAllowNegativeStockSales = deps.getAllowNegativeStockSales;
     this.buildInsufficientStockError = deps.buildInsufficientStockError;
@@ -534,6 +553,7 @@ export class SalesEditAndCancelService {
 
       await this.lockSaleStockRows(trx, scope, [...currentItems, ...(payload.items || [])]);
       await this.restoreSalePharmacyBatches(trx, saleId, currentItems, scope, true);
+      await this.restoreSaleInventoryBatches(trx, saleId, currentItems, scope, true);
       // The old and replacement customers may differ. Lock both in ascending ID order
       // after product locks, before reversing the old receivable or testing the new limit.
       for (const customerId of [...new Set([Number(sale.customer_id || 0), Number(normalized.customerId || 0)])]
@@ -1382,6 +1402,7 @@ export class SalesEditAndCancelService {
         }
 
         await this.deductPharmacyBatchesFefo(trx, item.productId, allocations, scope, saleId, saleLineId);
+        await this.deductInventoryBatchesFefo(trx, item.productId, allocations, scope, saleId, saleLineId);
         for (const alloc of allocations) {
           const lotAllocation = await allocateSaleFromImportLots(trx, {
             tenantId: scope.tenantId,
@@ -2092,6 +2113,7 @@ export class SalesEditAndCancelService {
       const items = await trx.selectFrom('sale_items').selectAll().where('sale_id', '=', saleId).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
       await this.lockSaleStockRows(trx, scope, items);
       await this.restoreSalePharmacyBatches(trx, saleId, items, scope, false);
+      await this.restoreSaleInventoryBatches(trx, saleId, items, scope, false);
       await restoreImportLotsFromCancelledSale(trx, { tenantId: scope.tenantId, saleId });
       for (const item of [...items].sort((a, b) => Number(a.product_id || 0) - Number(b.product_id || 0))) {
         if (!item.product_id) continue;

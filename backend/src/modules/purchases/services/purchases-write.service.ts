@@ -6,6 +6,7 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { AppError } from '../../../common/errors/app-error';
 import { assertUntrackedStockMutation } from '../../inventory/helpers/inventory-tracked-stock.helper';
 import { reversePurchaseTrackedStock } from '../helpers/purchase-cancellation-trace.helper';
+import { upsertInventoryBatchFromReceipt } from '../helpers/inventory-batch-receipt.helper';
 import { computeInvoiceTotals } from '../../../common/utils/invoice-totals';
 import { purchaseReceiptBaseUnitCost } from '../engines/purchase-receipt-cost.engine';
 import { allocateLandedCosts } from '../engines/landed-cost-allocation.engine';
@@ -692,7 +693,10 @@ export class PurchasesWriteService {
           if (drug && (!batchNo || !expiryDate)) {
             throw new AppError('الصنف الدوائي يتطلب رقم تشغيلة وتاريخ صلاحية عند الاستلام', 'PHARMACY_BATCH_REQUIRED', 422);
           }
-          if (batchNo) {
+          // INV-VAN-GENERIC-FEFO: drug-linked products keep the pharmacy
+          // ledger above; every other product with a batch number lands
+          // in the generic ledger.
+          if (batchNo && drug) {
               const today = await resolveBusinessDateKey(trx, scope.tenantId, new Date());
               if (!/^\d{4}-\d{2}(?:-\d{2})?$/.test(expiryDate) ||
                 (expiryDate.length === 7 ? expiryDate < today.slice(0, 7) : expiryDate < today)) {
@@ -744,6 +748,18 @@ export class PurchasesWriteService {
                   } as any)
                   .execute();
               }
+          }
+          if (batchNo && !drug) {
+              // INV-VAN-GENERIC-FEFO: expiry optional (NULL when absent);
+              // merge requires identical expiry. The helper owns the
+              // validation; drug-linked products never reach it.
+              await upsertInventoryBatchFromReceipt(trx, {
+                tenantId: scope.tenantId, accountId: scope.accountId,
+                productId: item.productId, batchNumber: batchNo, expiryDate,
+                qty: increasedQty, unitCost: netPurchaseUnitCost / item.unitMultiplier,
+                locationId: itemLocationId || null,
+                supplierName: supplier?.name || null, notes: `وارد فاتورة شراء PUR-${id}`,
+              });
           }
         }
       }

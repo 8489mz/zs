@@ -2609,6 +2609,7 @@ export interface Database {
   sale_items: SaleItemTable;
   sale_line_stock_allocations: SaleLineStockAllocationTable;
   sale_pharmacy_batch_allocations: SalePharmacyBatchAllocationTable;
+  sale_inventory_batch_allocations: SaleInventoryBatchAllocationTable;
   sale_payments: SalePaymentTable;
   held_sales: HeldSaleTable;
   held_sale_items: HeldSaleItemTable;
@@ -2955,6 +2956,7 @@ export interface Database {
   trade_in_transactions: TradeInTransactionTable;
   pharmacy_drugs: PharmacyDrugTable;
   pharmacy_batches: PharmacyBatchTable;
+  inventory_batches: InventoryBatchTable;
   pharmacy_prescriptions: PharmacyPrescriptionTable;
   pharmacy_shortages: PharmacyShortageTable;
   pharmacy_clinical_services: PharmacyClinicalServiceTable;
@@ -3106,6 +3108,38 @@ export interface SalePharmacyBatchAllocationTable {
   sale_item_id: number;
   product_id: number;
   pharmacy_batch_id: number;
+  quantity: number;
+  created_at: ColumnType<Date, string | undefined, never>;
+}
+
+// INV-VAN-GENERIC-FEFO (P9): parallel ledger to pharmacy_batches for
+// general wholesale/FMCG goods. expiry_date is NULLABLE (optional per
+// item); no drug_id column. See migration 0335.
+export interface InventoryBatchTable {
+  id: Generated<number>;
+  tenant_id: string;
+  account_id: string;
+  product_id: number | null;
+  batch_number: string;
+  expiry_date: string | null;
+  quantity: number | string;
+  unit_cost: number | string;
+  location_id: number | null;
+  supplier_name: string | null;
+  status: string;
+  notes: string | null;
+  created_at: ColumnType<Date, string | undefined, string | undefined>;
+  updated_at: ColumnType<Date, string | undefined, string | undefined>;
+}
+
+export interface SaleInventoryBatchAllocationTable {
+  id: Generated<number>;
+  tenant_id: string;
+  account_id: string;
+  sale_id: number;
+  sale_item_id: number;
+  product_id: number;
+  inventory_batch_id: number;
   quantity: number;
   created_at: ColumnType<Date, string | undefined, never>;
 }

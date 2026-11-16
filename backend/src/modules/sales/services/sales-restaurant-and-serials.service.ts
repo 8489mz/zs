@@ -654,4 +654,132 @@ async restoreSalePharmacyBatches(
         .where('tenant_id', '=', scope.tenantId).where('sale_id', '=', saleId).execute();
     }
   }
+
+  /**
+   * INV-VAN-GENERIC-FEFO: the shop FEFO deduction for general goods —
+   * a line-by-line mirror of deductPharmacyBatchesFefo over the
+   * inventory_batches ledger, with two deliberate differences:
+   * 1. PRECEDENCE: the pharmacy ledger wins. A drug-linked product, or
+   *    a product whose pharmacy rows still hold stock, never touches
+   *    the generic ledger — one sale must never be deducted from both
+   *    ledgers (legacy non-drug pharmacy rows keep selling from the
+   *    pharmacy ledger until drained; new receipts for such a product
+   *    land in the generic ledger and become reachable once the
+   *    pharmacy rows are exhausted).
+   * 2. NULL expiry is consumed LAST (ORDER BY ... NULLS LAST, explicit),
+   *    never skipped: it is not expired, it is just undated. The
+   *    pharmacy path skips empty expiries; the generic path must not.
+   */
+  async deductInventoryBatchesFefo(
+    trx: Kysely<Database> | Transaction<Database>,
+    productId: number,
+    allocations: Array<{ locationId: number | null; qty: number }>,
+    scope: { tenantId: string; accountId: string },
+    saleId: number,
+    saleItemId: number,
+  ): Promise<void> {
+    const drug = await trx.selectFrom('pharmacy_drugs').select('id')
+      .where('product_id', '=', productId).where('tenant_id', '=', scope.tenantId)
+      .executeTakeFirst();
+    if (drug) return;
+    const activePharmacy = await trx.selectFrom('pharmacy_batches').select('id')
+      .where('product_id', '=', productId).where('tenant_id', '=', scope.tenantId)
+      .where('status', '=', 'active').where('quantity', '>', 0)
+      .executeTakeFirst();
+    if (activePharmacy) return;
+    const linkedBatch = await trx.selectFrom('inventory_batches').select('id')
+      .where('product_id', '=', productId).where('tenant_id', '=', scope.tenantId)
+      .executeTakeFirst();
+    if (!linkedBatch) return;
+
+    const todayIso = await resolveBusinessDateKey(trx, scope.tenantId, new Date());
+    const currentMonthIso = todayIso.slice(0, 7);
+    for (const allocation of allocations) {
+      let remaining = Number(allocation.qty.toFixed(3));
+      const batches = await trx
+        .selectFrom('inventory_batches')
+        .selectAll()
+        .where('product_id', '=', productId)
+        .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+        .where('status', '=', 'active')
+        .where('quantity', '>', 0)
+        .where((eb) => allocation.locationId == null
+          ? eb('location_id', 'is', null)
+          : eb.or([eb('location_id', '=', allocation.locationId), eb('location_id', 'is', null)]))
+        .orderBy('expiry_date', (ob) => ob.asc().nullsLast())
+        .orderBy('id', 'asc')
+        .forUpdate()
+        .execute();
+      for (const batch of batches) {
+        if (remaining <= 0) break;
+        const exp = String(batch.expiry_date || '').trim().slice(0, 10);
+        if (exp && (exp.length === 7 ? exp < currentMonthIso : exp < todayIso)) continue;
+
+        const batchQty = Number(batch.quantity || 0);
+        const alloc = Math.min(batchQty, remaining);
+        const newQty = Number((batchQty - alloc).toFixed(3));
+        const nextStatus = newQty <= 0 ? 'depleted' : 'active';
+
+        await trx
+          .updateTable('inventory_batches')
+          .set({
+            quantity: newQty,
+            status: nextStatus,
+            updated_at: sql`NOW()`,
+          } as any)
+          .where('id', '=', Number(batch.id))
+          .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
+          .execute();
+        await trx.insertInto('sale_inventory_batch_allocations').values({
+          tenant_id: scope.tenantId, account_id: scope.accountId, sale_id: saleId,
+          sale_item_id: saleItemId, product_id: productId,
+          inventory_batch_id: Number(batch.id), quantity: alloc,
+        }).execute();
+
+        remaining = Number((remaining - alloc).toFixed(3));
+      }
+      if (remaining > 0) {
+        throw new AppError('لا توجد كمية كافية من تشغيلة سارية الصلاحية في المخزن المحدد', 'INVENTORY_FEFO_STOCK_UNAVAILABLE', 422);
+      }
+    }
+  }
+
+  /**
+   * INV-VAN-GENERIC-FEFO: mirror of restoreSalePharmacyBatches over the
+   * generic ledger. One difference: a NULL-expiry batch is never
+   * expired — it restores to 'active', never to 'expired'.
+   */
+  async restoreSaleInventoryBatches(
+    trx: Kysely<Database> | Transaction<Database>, saleId: number,
+    items: Array<{ id: number; product_id: number | null }>,
+    scope: { tenantId: string; accountId: string }, removeAllocations: boolean,
+  ): Promise<void> {
+    const rows = await trx.selectFrom('sale_inventory_batch_allocations').selectAll()
+      .where('tenant_id', '=', scope.tenantId).where('sale_id', '=', saleId)
+      .orderBy('inventory_batch_id', 'asc').forUpdate().execute();
+    const tracked = new Set(rows.map((row) => Number(row.sale_item_id)));
+    const itemIds = items.map((item) => Number(item.product_id)).filter((id) => id > 0);
+    const batched = itemIds.length ? await trx.selectFrom('inventory_batches').select('product_id')
+      .where('tenant_id', '=', scope.tenantId).where('product_id', 'in', itemIds).execute() : [];
+    const batchedProducts = new Set(batched.map((row) => Number(row.product_id)));
+    if (items.some((item) => batchedProducts.has(Number(item.product_id)) && !tracked.has(Number(item.id)))) {
+      throw new AppError('فاتورة بلا ربط بالتشغيلات رغم وجود سجل تشغيلات للصنف؛ تحتاج تسوية قبل التعديل أو الإلغاء', 'INVENTORY_BATCH_RECONCILIATION_REQUIRED', 422);
+    }
+    const today = await resolveBusinessDateKey(trx, scope.tenantId, new Date());
+    for (const row of rows) {
+      const batch = await trx.selectFrom('inventory_batches').select(['id', 'quantity', 'expiry_date'])
+        .where('tenant_id', '=', scope.tenantId).where('id', '=', Number(row.inventory_batch_id))
+        .forUpdate().executeTakeFirstOrThrow();
+      const expiry = String(batch.expiry_date || '').slice(0, 10);
+      const expired = expiry ? (expiry.length === 7 ? expiry < today.slice(0, 7) : expiry < today) : false;
+      await trx.updateTable('inventory_batches').set({
+        quantity: Number((Number(batch.quantity) + Number(row.quantity)).toFixed(3)),
+        status: expired ? 'expired' : 'active', updated_at: sql`NOW()`,
+      }).where('tenant_id', '=', scope.tenantId).where('id', '=', Number(batch.id)).execute();
+    }
+    if (removeAllocations && rows.length) {
+      await trx.deleteFrom('sale_inventory_batch_allocations')
+        .where('tenant_id', '=', scope.tenantId).where('sale_id', '=', saleId).execute();
+    }
+  }
 }

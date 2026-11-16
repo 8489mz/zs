@@ -40,6 +40,7 @@ export interface VanFieldSalesDeps {
   // the binding resolves whether the callee is still a real method or
   // already an S1 delegate at merge.
   deductVanSalePharmacyBatches: (...args: any[]) => any;
+  deductVanSaleInventoryBatches: (...args: any[]) => any;
   generateDailySequenceNumber: (...args: any[]) => any;
   moveVanStock: (...args: any[]) => any;
   resolveSystemAuthContext: (...args: any[]) => any;
@@ -54,6 +55,7 @@ export class VanFieldSalesService {
   private readonly accountingPosting: AccountingPostingService;
   private readonly vanFraudRadarService: VanFraudRadarService;
   private readonly deductVanSalePharmacyBatches: (...args: any[]) => any;
+  private readonly deductVanSaleInventoryBatches: (...args: any[]) => any;
   private readonly generateDailySequenceNumber: (...args: any[]) => any;
   private readonly moveVanStock: (...args: any[]) => any;
   private readonly resolveSystemAuthContext: (...args: any[]) => any;
@@ -66,6 +68,7 @@ export class VanFieldSalesService {
     this.accountingPosting = deps.accountingPosting;
     this.vanFraudRadarService = deps.vanFraudRadarService;
     this.deductVanSalePharmacyBatches = deps.deductVanSalePharmacyBatches;
+    this.deductVanSaleInventoryBatches = deps.deductVanSaleInventoryBatches;
     this.generateDailySequenceNumber = deps.generateDailySequenceNumber;
     this.moveVanStock = deps.moveVanStock;
     this.resolveSystemAuthContext = deps.resolveSystemAuthContext;
@@ -325,6 +328,7 @@ export class VanFieldSalesService {
       // INV-VAN-FEFO-BATCHES: batch allocations per sale item, in the same
       // order as saleItemRecords (one entry per loop iteration).
       const vanBatchAllocations: Array<Array<{ pharmacyBatchId: number; quantity: number }>> = [];
+      const vanInventoryBatchAllocations: Array<Array<{ inventoryBatchId: number; quantity: number }>> = [];
       const sortedItems = this.sortItemsByProductId(payload.items);
       const productIds = sortedItems.map((it) => Number(it.productId));
       // INV-OFFER-SELECTION-SHARED-POS-VAN (P7: tenant day): one
@@ -550,6 +554,11 @@ export class VanFieldSalesService {
         // fails closed when the van's valid batches cannot cover the sale.
         vanBatchAllocations.push(
           await this.deductVanSalePharmacyBatches(trx, pid, baseQty, { tenantId, accountId }, vanLocId),
+        );
+        // INV-VAN-GENERIC-FEFO: the generic ledger deducts the same sale
+        // when the pharmacy ledger does not own the product.
+        vanInventoryBatchAllocations.push(
+          await this.deductVanSaleInventoryBatches(trx, pid, baseQty, { tenantId, accountId }, vanLocId),
         );
 
         // The undiscounted unit price at book digits: the single baseline
@@ -1330,6 +1339,21 @@ export class VanFieldSalesService {
               sale_item_id: Number(insertedItem.id),
               product_id: it.product_id,
               pharmacy_batch_id: alloc.pharmacyBatchId,
+              quantity: alloc.quantity,
+            })
+            .execute();
+        }
+        // INV-VAN-GENERIC-FEFO: same, for the generic ledger.
+        for (const alloc of vanInventoryBatchAllocations[recordIdx] || []) {
+          await trxAny
+            .insertInto('sale_inventory_batch_allocations')
+            .values({
+              tenant_id: tenantId,
+              account_id: accountId,
+              sale_id: createdSaleId,
+              sale_item_id: Number(insertedItem.id),
+              product_id: it.product_id,
+              inventory_batch_id: alloc.inventoryBatchId,
               quantity: alloc.quantity,
             })
             .execute();

@@ -68,6 +68,12 @@ export const inventoryApi = {
   locations: async () => unwrapArray<Location>(await http<Location[] | { locations: Location[] }>('/api/locations?includeInactive=true'), 'locations'),
   report: async () => unwrapByKey<InventoryReport>(await http<InventoryReport | { inventory: InventoryReport }>('/api/reports/inventory'), 'inventory', {} as InventoryReport),
   locationStocks: async () => unwrapArray<{ productId: string; locationId: string; qty: number }>(await http<{ stocks: { productId: string; locationId: string; qty: number }[] }>('/api/location-stocks'), 'stocks'),
+  // INV-VAN-GENERIC-FEFO: read-only list of the generic batch ledger
+  // (inventory_batches) for the batches page's second tab. Same response
+  // shape as pharmacyApi.listBatches; generic rows carry the same visible
+  // fields (minus drug_id) with expiry_date nullable at runtime.
+  listInventoryBatches: async (params: { q?: string; status?: string; page?: number; pageSize?: number }) =>
+    http<{ batches: Array<Record<string, unknown>>; pagination?: PaginationMeta }>(`/api/inventory/batches${buildQueryString(params as Record<string, string | number | undefined | null>)}`),
   // INV-ADJUST-SINGLE-QTY-BASIS: the adjustment dialog's prefill read --
   // the location's available qty on the same basis the adjustment
   // targets (location qty minus reserved plus unassigned available,

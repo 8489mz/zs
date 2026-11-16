@@ -8,6 +8,7 @@ import { AccountingPostingService } from '../../accounting/accounting-posting.se
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { moveVanStock, sortItemsByProductId, generateDailySequenceNumber, resolveRepLinkedUserId } from './van-common.util';
+import { restoreReturnedInventoryBatches } from './van-inventory-batches.helper';
 import { offlineSaleTimestamps } from '../../cash-drawer/helpers/cash-drawer.helper';
 import { validateVanOfflineCreatedAt } from '../van-offline-timestamps.helper';
 import { VanFraudRadarService } from './van-fraud-radar.service';
@@ -1028,6 +1029,30 @@ export class VanReturnsService {
       }
 
       const itemsWithCost: { productId: number; qty: number; costPrice: number; saleItemId: number | null }[] = [];
+      // INV-VAN-GENERIC-FEFO: approved-only prior returns per sale line
+      // (sale units), for the batch restore's skip below — pending
+      // returns have not restored any batch yet, so they must not be
+      // skipped (skipping them would under-restore the batch).
+      const approvedReturnedBySaleItem = new Map<number, number>();
+      if (ret.sale_id) {
+        const approvedPriors = await trxAny
+          .selectFrom('van_field_returns')
+          .select(['id', 'items_json'])
+          .where('sale_id', '=', ret.sale_id)
+          .where('tenant_id', '=', tenantId)
+          .where('status', '=', 'approved')
+          .execute();
+        for (const prior of approvedPriors) {
+          if (Number(prior.id) === Number(returnId)) continue;
+          const parsed = typeof prior.items_json === 'string' ? JSON.parse(prior.items_json) : (prior.items_json || []);
+          for (const it of parsed) {
+            if (it.saleItemId) {
+              const sid = Number(it.saleItemId);
+              approvedReturnedBySaleItem.set(sid, (approvedReturnedBySaleItem.get(sid) || 0) + Number(it.qty || 0));
+            }
+          }
+        }
+      }
       const sortedReturnItems: any[] = sortItemsByProductId(
         (items || []).map((i: any) => ({ ...i, productId: Number(i.productId) })),
       );
@@ -1075,6 +1100,21 @@ export class VanReturnsService {
           skipGlobalUpdate: false,
           unitCost: pieceUnitCost,
         });
+
+        // INV-VAN-GENERIC-FEFO: restore the generic batches the original
+        // sale consumed, newest allocation first. Linked returns only:
+        // an unlinked return has no sale line to attribute the original
+        // batch to, so it restocks pooled-only (recorded limitation).
+        // Damaged returns skip the restore — the goods leave the
+        // saleable ledger instead of returning to it.
+        if (linkedLine && !isDamaged && ret.sale_id) {
+          const priorApproved = approvedReturnedBySaleItem.get(Number(linkedLine.id)) || 0;
+          await restoreReturnedInventoryBatches(
+            trx, Number(ret.sale_id), Number(linkedLine.id), pid,
+            Number((priorApproved * unitMultiplier).toFixed(3)), pieceQty,
+            { tenantId, accountId },
+          );
+        }
 
         // itemsWithCost keeps SALE-unit qty on purpose:
         // postVanFieldReturn's COGS mirror expects sold units and

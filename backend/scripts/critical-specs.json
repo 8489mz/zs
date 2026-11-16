@@ -211,6 +211,7 @@
     "test/critical/close-declared-totals-required.spec.ts",
     "test/critical/returns-invoice-full-history-search.spec.ts",
     "test/critical/delivery-reps-retail-self-install.spec.ts",
-    "test/critical/van-sales-list-date-filter.spec.ts"
+    "test/critical/van-sales-list-date-filter.spec.ts",
+    "test/critical/van-generic-fefo-batches.spec.ts"
   ]
 }
