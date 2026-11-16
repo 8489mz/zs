@@ -500,7 +500,10 @@ export const vanOfflineDb = {
   recordOfflineReturn: async (params: {
     tripId: number;
     customerId: number;
-    saleId?: number | null;
+    // INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: the original invoice is
+    // REQUIRED — the outbox record carries it so the sync replay
+    // submits a linked return (the server refuses unlinked ones).
+    saleId: number;
     returnReason: string;
     refundMethod?: 'credit' | 'cash';
     items: Array<{ productId: number; qty: number; unitPrice: number; saleItemId?: number }>;

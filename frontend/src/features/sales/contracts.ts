@@ -21,9 +21,14 @@ export function buildSaleUpdatePayload(sale: Sale, payload: {
   // the service runs. The builder used to emit paidAmount (always 0),
   // subTotal, taxAmount and total — none of them is a DTO field, so
   // EVERY invoice edit was rejected with "paidAmount غير مسموح إرساله",
-  // not just payment-channel changes. The backend never reads those
-  // four: updateSale derives paidAmount from the tender allocation and
-  // recomputes the totals server-side, so they are simply not sent.
+  // not just payment-channel changes.
+  // INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: the backend never reads the
+  // payment fields for the legs anymore — updateSale derives paidAmount
+  // from the STORED sale_payments rows and leaves them byte-identical,
+  // and recomputes the totals server-side. paymentType/paymentChannel
+  // still travel in the payload (the dialog sends the sale's stored
+  // values verbatim) but they change nothing; a money correction goes
+  // through POST /api/sales/:id/payment-adjustment instead.
   // The discount still rounds at the tenant's book digits (global
   // system currency; this flow carries no settings object).
   const digits = currencyMoneyDigits(getGlobalSystemCurrency());

@@ -948,7 +948,10 @@ export const vanSalesApi = {
   submitFieldReturn: async (payload: {
     tripId: number;
     customerId: number;
-    saleId?: number | null;
+    // INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: the original invoice is
+    // REQUIRED for a new van field return — unlinked returns are
+    // refused by the server (RETURN_REQUIRES_SALE_ID).
+    saleId: number;
     returnReason: 'damaged' | 'expired' | 'manufacturing_defect' | 'stagnant' | 'order_mismatch' | 'customer_request';
     refundMethod?: 'credit' | 'cash';
     items: { productId: number; qty: number; unitPrice: number; saleItemId?: number }[];

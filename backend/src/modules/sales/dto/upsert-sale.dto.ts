@@ -1,7 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Min, Validate, ValidateNested, ValidationArguments, ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
 
-class SalePaymentDto {
+export class SalePaymentDto {
   @IsIn(['cash', 'card', 'wallet', 'instapay'])
   paymentChannel!: 'cash' | 'card' | 'wallet' | 'instapay';
 

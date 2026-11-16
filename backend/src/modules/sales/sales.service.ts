@@ -3,6 +3,7 @@ import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { HeldSaleDto } from './dto/held-sale.dto';
 import { PosAuditEventDto } from './dto/pos-audit-event.dto';
 import { UpsertSaleDto, SalesOrderConversionRelease } from './dto/upsert-sale.dto';
+import { AdjustSalePaymentsDto } from './dto/adjust-sale-payments.dto';
 import { SalesQueryService } from './services/sales-query.service';
 import { SalesWriteService, type SystemApprovedSaleTerms } from './services/sales-write.service';
 
@@ -35,6 +36,10 @@ export class SalesService {
 
   async updateSale(saleId: number, payload: UpsertSaleDto, auth: AuthContext): Promise<Record<string, unknown>> {
     return this.write.updateSale(saleId, payload, auth);
+  }
+
+  async adjustSalePayments(saleId: number, payload: AdjustSalePaymentsDto, auth: AuthContext): Promise<Record<string, unknown>> {
+    return this.write.adjustSalePayments(saleId, payload, auth);
   }
 
   async listHeldSales(auth: AuthContext): Promise<Record<string, unknown>> {

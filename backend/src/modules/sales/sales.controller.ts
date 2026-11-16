@@ -7,6 +7,7 @@ import { IdempotencyInterceptor } from '../../core/idempotency/idempotency.inter
 import { HeldSaleDto } from './dto/held-sale.dto';
 import { PosAuditEventDto } from './dto/pos-audit-event.dto';
 import { UpsertSaleDto } from './dto/upsert-sale.dto';
+import { AdjustSalePaymentsDto } from './dto/adjust-sale-payments.dto';
 import { SalesService } from './sales.service';
 
 @Controller('api')
@@ -64,6 +65,20 @@ export class SalesController {
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.salesService.updateSale(id, payload, req.authContext!);
+  }
+
+  // INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: the ONLY writer of
+  // sale_payments after posting, besides the original sale insert.
+  // updateSale never touches the legs; a money correction comes here
+  // with the complete new leg set, a reason, and a manager PIN.
+  @Post('sales/:id/payment-adjustment')
+  @RequirePermissions('canEditInvoices')
+  adjustSalePayments(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: AdjustSalePaymentsDto,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
+    return this.salesService.adjustSalePayments(id, payload, req.authContext!);
   }
 
   @Get('held-sales')

@@ -41,7 +41,7 @@ export function SalesWorkspace() {
   const [pageSize, setPageSize] = useState(30);
 
   const { salesQuery, rows, pagination, summary } = useSalesPage({ page, pageSize, search, filter: viewFilter, cashier: cashierFilter });
-  const { saleDetailQuery, cancelMutation, updateMutation } = useSaleActions(selectedSaleId);
+  const { saleDetailQuery, cancelMutation, updateMutation, adjustPaymentsMutation } = useSaleActions(selectedSaleId);
   const usersQuery = useQuery({ queryKey: ['sales-cashier-filter-users'], queryFn: userDirectoryApi.users, staleTime: 60_000 });
   const settingsQuery = useSettingsQuery();
 
@@ -219,6 +219,17 @@ export function SalesWorkspace() {
           if (!activeSale) return;
           await updateMutation.mutateAsync({ sale: activeSale, payload });
           setSaleToEdit(null);
+          setEditFeedback(t('sales.9f6aed'));
+          setSelectedSaleId(activeSale.id);
+        }}
+        // INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: payment corrections go
+        // through the dedicated endpoint, never through the edit payload.
+        isAdjusting={adjustPaymentsMutation.isPending}
+        adjustErrorMessage={adjustPaymentsMutation.error instanceof Error ? adjustPaymentsMutation.error.message : ''}
+        onAdjustPayments={async (payload) => {
+          const activeSale = selectedSale && saleToEdit && selectedSale.id === saleToEdit.id ? selectedSale : saleToEdit;
+          if (!activeSale) return;
+          await adjustPaymentsMutation.mutateAsync({ saleId: activeSale.id, payload });
           setEditFeedback(t('sales.9f6aed'));
           setSelectedSaleId(activeSale.id);
         }}

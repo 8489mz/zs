@@ -250,6 +250,15 @@ export const VanCollectionTab: React.FC<VanCollectionTabProps> = ({
       toast.warning('يرجى اختيار العميل');
       return;
     }
+    // INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: a new van field return must
+    // link to its original invoice — unlinked returns are refused by
+    // the server (RETURN_REQUIRES_SALE_ID). The picker below has no
+    // empty option anymore; this guard covers the offline path, which
+    // shares this handler.
+    if (!selectedSaleId) {
+      toast.warning('يرجى اختيار الفاتورة الأصلية للمرتجع');
+      return;
+    }
     if (!returnCart.length) {
       toast.warning('يرجى إضافة صنف واحد على الأقل للمرتجع');
       return;
@@ -258,7 +267,7 @@ export const VanCollectionTab: React.FC<VanCollectionTabProps> = ({
     const payload = {
       tripId,
       customerId: Number(returnCustomerId),
-      saleId: selectedSaleId ? Number(selectedSaleId) : null,
+      saleId: Number(selectedSaleId),
       returnReason: returnReason as any,
       refundMethod,
       items: returnCart.map((c) => ({
@@ -1117,7 +1126,7 @@ export const VanCollectionTab: React.FC<VanCollectionTabProps> = ({
               {returnCustomerId && (
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
-                    {t('delivery_reps.van_collection_tab.s52', "ربط بالفاتورة الأصلية (لفحص صافي الخصم وسعر البند الفعلي):")}
+                    {t('delivery_reps.van_collection_tab.s52', "ربط بالفاتورة الأصلية (إلزامي لفحص صافي الخصم وسعر البند الفعلي):")}
                   </label>
                   {isLoadingSales ? (
                     <div style={{ fontSize: '12px', color: '#94a3b8' }}>{t('delivery_reps.van_collection_tab.s53', "جاري جلب فواتير العميل السابقة...")}</div>
@@ -1131,16 +1140,14 @@ export const VanCollectionTab: React.FC<VanCollectionTabProps> = ({
                       onChange={(val) => {
                         setSelectedSaleId(val ? Number(val) : '');
                         setReturnCart([]);
-                        // INV-VAN-RETURN-REFUND-METHOD-DEFAULT: default
-                        // the settlement from the picked invoice's
-                        // payment type — 'credit' for a credit sale,
-                        // 'cash' for any other method (cash, card,
-                        // split, instapay, vodafone_cash, unknown).
-                        // Clearing the sale restores the unlinked
-                        // default 'credit'. The rep can still override
-                        // manually afterwards (this fires only at pick
-                        // time). The server still validates the chosen
-                        // method against the sale's legs at submit.
+                        // INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: there is
+                        // no empty option anymore — a new return MUST link
+                        // to an invoice, so clearing the pick is not
+                        // possible and the unlinked 'credit' default is
+                        // gone. The rep can still override the refund
+                        // method manually afterwards (this fires only at
+                        // pick time). The server still validates the
+                        // chosen method against the sale's legs at submit.
                         if (!val) {
                           setRefundMethod('credit');
                           return;
@@ -1149,7 +1156,6 @@ export const VanCollectionTab: React.FC<VanCollectionTabProps> = ({
                         setRefundMethod(picked?.paymentType === 'credit' ? 'credit' : 'cash');
                       }}
                       options={[
-                        { value: '', label: t('delivery_reps.van_collection_tab.s55', "-- اختر فاتورة سابقة (موصى به) --") },
                         ...eligibleSales.map((s) => ({
                           value: String(s.id),
                           label: `فاتورة #${s.docNo} - تاريخ: ${s.createdAt.slice(0, 10)} - إجمالي: ${s.total.toFixed(2)} ${getGlobalCurrencySymbol()}`,

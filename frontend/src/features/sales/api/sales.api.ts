@@ -85,5 +85,9 @@ export const salesApi = {
   getById: async (saleId: string) => unwrapEntity<Sale>(await http<Sale | SalesEnvelope>(`/api/sales/${saleId}`), 'sale'),
   create: async (payload: unknown) => unwrapEntity<Sale>(await http<Sale | SalesMutationEnvelope>('/api/sales', { method: 'POST', body: JSON.stringify(payload) }), 'sale'),
   cancel: async (saleId: string, reason: string, managerPin: string) => unwrapEntity<Sale>(await http<Sale | SalesMutationEnvelope>(`/api/sales/${saleId}/cancel`, { method: 'POST', body: JSON.stringify({ reason, managerPin }) }), 'sale'),
-  update: async (saleId: string, payload: unknown) => unwrapEntity<Sale>(await http<Sale | SalesMutationEnvelope>(`/api/sales/${saleId}`, { method: 'PUT', body: JSON.stringify(payload) }), 'sale')
+  update: async (saleId: string, payload: unknown) => unwrapEntity<Sale>(await http<Sale | SalesMutationEnvelope>(`/api/sales/${saleId}`, { method: 'PUT', body: JSON.stringify(payload) }), 'sale'),
+  // INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: the ONLY writer of a posted
+  // sale's payment legs, besides the original sale insert. updateSale
+  // never touches the legs; a money correction comes here.
+  adjustPayments: async (saleId: string, payload: { payments: Array<{ paymentChannel: string; amount: number }>; reason: string; managerPin?: string }) => unwrapEntity<Sale>(await http<Sale | SalesMutationEnvelope>(`/api/sales/${saleId}/payment-adjustment`, { method: 'POST', body: JSON.stringify(payload) }), 'sale')
 };

@@ -27,26 +27,41 @@ interface SaleEditDialogProps {
     managerPin: string;
     items: Array<{ productId: string; qty: number; price: number; unitName: string; unitMultiplier: number; priceType: string }>;
   }) => Promise<void> | void;
+  // INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: payment corrections arrive
+  // through the dedicated endpoint, never through onSave — the edit
+  // payload still carries the sale's STORED paymentType/paymentChannel
+  // (the backend ignores them for the legs), but the dialog no longer
+  // lets the user change them.
+  onAdjustPayments?: (payload: {
+    payments: Array<{ paymentChannel: string; amount: number }>;
+    reason: string;
+    managerPin: string;
+  }) => Promise<void> | void;
+  isAdjusting?: boolean;
+  adjustErrorMessage?: string;
 }
 
-export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', onCancel, onSave }: SaleEditDialogProps) {
+export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', onCancel, onSave, onAdjustPayments, isAdjusting = false, adjustErrorMessage = '' }: SaleEditDialogProps) {
   const { t: __t } = useTranslation();
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
-  const [paymentType, setPaymentType] = useState('cash');
-  const [paymentChannel, setPaymentChannel] = useState('cash');
   const [discount, setDiscount] = useState(0);
   const [note, setNote] = useState('');
   const [items, setItems] = useState<Array<{ productId: string; name: string; qty: number; price: number; unitName: string; unitMultiplier: number; priceType: string }>>([]);
   const [editReason, setEditReason] = useState('');
   const [managerPin, setManagerPin] = useState('');
   const [localError, setLocalError] = useState('');
+  // INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: the adjustment form starts
+  // from the sale's STORED legs — the complete new leg set replaces
+  // them wholesale on submit.
+  const [adjustLegs, setAdjustLegs] = useState<Array<{ paymentChannel: string; amount: number }>>([]);
+  const [adjustReason, setAdjustReason] = useState('');
+  const [adjustPin, setAdjustPin] = useState('');
+  const [adjustLocalError, setAdjustLocalError] = useState('');
 
   useEffect(() => {
     if (!open || !sale) return;
-    setPaymentType(sale.paymentType || 'cash');
-    setPaymentChannel(sale.paymentChannel || (sale.paymentType === 'credit' ? 'credit' : 'cash'));
     setDiscount(Number(sale.discount || 0));
     setNote(sale.note || '');
     setItems((sale.items || []).map((item) => ({
@@ -61,6 +76,10 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
     setEditReason('');
     setManagerPin('');
     setLocalError('');
+    setAdjustLegs((sale.payments || []).map((leg) => ({ paymentChannel: leg.paymentChannel || 'cash', amount: Number(leg.amount || 0) })));
+    setAdjustReason('');
+    setAdjustPin('');
+    setAdjustLocalError('');
   }, [open, sale, t]);
 
   const baselineItems = useMemo(() => (sale?.items || []).map((item) => ({
@@ -84,13 +103,11 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
   const isDirty = useMemo(() => {
     if (!sale) return false;
     return (
-      paymentType !== (sale.paymentType || 'cash')
-      || paymentChannel !== (sale.paymentChannel || (sale.paymentType === 'credit' ? 'credit' : 'cash'))
-      || Number(discount || 0) !== Number(sale.discount || 0)
+      Number(discount || 0) !== Number(sale.discount || 0)
       || note !== (sale.note || '')
       || JSON.stringify(normalizedItems) !== JSON.stringify(baselineItems)
     );
-  }, [baselineItems, discount, normalizedItems, note, paymentChannel, paymentType, sale]);
+  }, [baselineItems, discount, normalizedItems, note, sale]);
 
   const canNavigateAway = useUnsavedChangesGuard(open && isDirty && !isBusy);
 
@@ -113,16 +130,21 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
     return sale.pricesIncludeTax ? roundMoneyValue(taxable, bookDigits) : roundMoneyValue(taxable + computedTax, bookDigits);
   }, [computedSubTotal, computedTax, discount, sale, bookDigits]);
 
-  const paymentTypeOptions = useMemo(() => [
-    { value: 'cash', label: t('sales.47062f') },
-    { value: 'credit', label: t('sales.80106f') },
-  ], [t]);
+  const adjustChannelOptions = useMemo(() => [
+    { value: 'cash', label: __t('sales.sale_edit_dialog.s9', 'نقدي') },
+    { value: 'card', label: __t('sales.sale_edit_dialog.s10', 'بطاقة / شبكة') },
+    { value: 'wallet', label: __t('sales.sale_edit_dialog.s11', 'محفظة إلكترونية') },
+    { value: 'instapay', label: __t('sales.sale_edit_dialog.s12', 'إنستاباي') },
+  ], [__t]);
 
-  const paymentChannelOptions = useMemo(() => [
-    { value: 'cash', label: t('sales.47062f') },
-    { value: 'card', label: t('sales.2a62eb') },
-    { value: 'credit', label: t('sales.80106f') },
-  ], [t]);
+  const recordedLegLabels: Record<string, string> = {
+    cash: __t('sales.sale_edit_dialog.s15', 'نقدي'),
+    card: __t('sales.sale_edit_dialog.s16', 'بطاقة / شبكة'),
+    wallet: __t('sales.sale_edit_dialog.s17', 'محفظة إلكترونية'),
+    instapay: __t('sales.sale_edit_dialog.s18', 'إنستاباي'),
+    credit: __t('sales.sale_edit_dialog.s19', 'آجل'),
+    mixed: __t('sales.sale_edit_dialog.s20', 'مختلط'),
+  };
 
   function handleCancel() {
     if (isBusy) return;
@@ -132,8 +154,6 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
 
   function handleReset() {
     if (!sale) return;
-    setPaymentType(sale.paymentType || 'cash');
-    setPaymentChannel(sale.paymentChannel || (sale.paymentType === 'credit' ? 'credit' : 'cash'));
     setDiscount(Number(sale.discount || 0));
     setNote(sale.note || '');
     setItems((sale.items || []).map((item) => ({
@@ -148,6 +168,10 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
     setEditReason('');
     setManagerPin('');
     setLocalError('');
+    setAdjustLegs((sale.payments || []).map((leg) => ({ paymentChannel: leg.paymentChannel || 'cash', amount: Number(leg.amount || 0) })));
+    setAdjustReason('');
+    setAdjustPin('');
+    setAdjustLocalError('');
   }
 
   const handleSaveSubmit = async () => {
@@ -163,10 +187,6 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
       setLocalError(t('sales.53dd25'));
       return;
     }
-    if (paymentType === 'credit' && !sale?.customerId) {
-      setLocalError(t('sales.ca9c8e'));
-      return;
-    }
     if (!String(editReason || '').trim()) {
       setLocalError(t('sales.bee06e'));
       return;
@@ -177,14 +197,39 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
     }
     setLocalError('');
     await onSave({
-      paymentType,
-      paymentChannel: paymentType === 'credit' ? 'credit' : paymentChannel,
+      // INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: the sale's STORED payment
+      // fields, verbatim — the edit no longer changes them, and the
+      // backend ignores them for the legs.
+      paymentType: sale.paymentType || 'cash',
+      paymentChannel: sale.paymentChannel || (sale.paymentType === 'credit' ? 'credit' : 'cash'),
       discount: Number(discount || 0),
       note,
       editReason: String(editReason || '').trim(),
       managerPin: isAdminUser ? '' : String(managerPin || '').trim(),
       items: normalizedItems,
     });
+  };
+
+  const handleAdjustSubmit = async () => {
+    if (!onAdjustPayments) return;
+    if (!String(adjustReason || '').trim()) {
+      setAdjustLocalError(__t('sales.sale_edit_dialog.s13', 'سبب تعديل الدفعات مطلوب.'));
+      return;
+    }
+    if (!isAdminUser && !String(adjustPin || '').trim()) {
+      setAdjustLocalError(__t('sales.sale_edit_dialog.s14', 'رمز اعتماد المدير مطلوب قبل تعديل الدفعات.'));
+      return;
+    }
+    setAdjustLocalError('');
+    await onAdjustPayments({
+      payments: adjustLegs
+        .filter((leg) => Number(leg.amount) > 0)
+        .map((leg) => ({ paymentChannel: leg.paymentChannel, amount: Number(leg.amount || 0) })),
+      reason: String(adjustReason || '').trim(),
+      managerPin: isAdminUser ? '' : String(adjustPin || '').trim(),
+    });
+    setAdjustReason('');
+    setAdjustPin('');
   };
 
   if (!open || !sale) return null;
@@ -217,7 +262,7 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
       isOpen={open}
       onClose={handleCancel}
       title={`تعديل الفاتورة: ${sale.docNo || sale.id}`}
-      subtitle={__t('sales.sale_edit_dialog.s0', "تعديل بنود الفاتورة وطريقة السداد مع التدقيق الإداري والرقابي")}
+      subtitle={__t('sales.sale_edit_dialog.s0', "تعديل بنود الفاتورة مع التدقيق الإداري والرقابي — الدفعات المسجلة لا تتغير من هنا، وتُعدَّل من قسم تعديل الدفعات أدناه")}
       maxWidth="980px"
       zIndex={70}
       footer={modalFooter}
@@ -241,28 +286,30 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
             {__t('sales.sale_edit_dialog.s1', "بيانات السداد والتدقيق الرقابي")}
           </div>
 
+          {/* INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: the recorded legs are
+              shown read-only — an edit never changes them. A money
+              correction goes through the adjustment section below. */}
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
+              {__t('sales.sale_edit_dialog.s4', 'الدفعات المسجلة (لا تتغير من تعديل الفاتورة):')}
+            </span>
+            {(sale.payments || []).length === 0 ? (
+              <span style={{ fontSize: '12px', color: '#64748b' }}>
+                {__t('sales.sale_edit_dialog.s5', 'لا توجد دفعات مسجلة — بيع آجل بالكامل.')}
+              </span>
+            ) : (
+              (sale.payments || []).map((leg, index) => (
+                <span key={`${leg.paymentChannel}-${index}`} style={{ fontSize: '12px', color: '#334155' }}>
+                  {recordedLegLabels[leg.paymentChannel] || leg.paymentChannel} — {formatCurrency(Number(leg.amount || 0))}
+                </span>
+              ))
+            )}
+            <span style={{ fontSize: '12px', fontWeight: 700, color: '#170e5e' }}>
+              {__t('sales.sale_edit_dialog.s6', 'المسدد:')} {formatCurrency(Number(sale.paidAmount || 0))} {__t('sales.sale_edit_dialog.s7', 'من إجمالي')} {formatCurrency(computedTotal)}
+            </span>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-            <Field label={t('sales.394ebd')}>
-              <CustomSelect
-                value={paymentType}
-                onChange={(val) => {
-                  setPaymentType(val);
-                  if (val === 'credit') setPaymentChannel('credit');
-                }}
-                disabled={isBusy}
-                options={paymentTypeOptions}
-              />
-            </Field>
-
-            <Field label={t('sales.91f4d8')}>
-              <CustomSelect
-                value={paymentChannel}
-                onChange={(val) => setPaymentChannel(val)}
-                disabled={isBusy || paymentType === 'credit'}
-                options={paymentChannelOptions}
-              />
-            </Field>
-
             <Field label={t('sales.20000a')}>
               <input
                 type="number"
@@ -383,6 +430,118 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
           <div style={{ padding: '12px 14px', backgroundColor: '#eef2ff', borderRadius: '10px', border: '1px solid #c7d2fe', textAlign: 'center' }}>
             <span style={{ fontSize: '11px', color: '#3730a3', display: 'block', marginBottom: '2px' }}>{t('sales.88fc73')}</span>
             <strong style={{ fontSize: '15px', color: '#170e5e' }}>{formatCurrency(computedTotal)}</strong>
+          </div>
+        </div>
+
+        {/* Card 3: تعديل الدفعات المسجلة */}
+        <div
+          style={{
+            padding: 16,
+            background: '#fffbeb',
+            border: '1px solid #fde68a',
+            borderRadius: 12,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+          }}
+        >
+          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#92400e', borderBottom: '1px solid #fde68a', paddingBottom: 6 }}>
+            {__t('sales.sale_edit_dialog.s2', 'تعديل الدفعات المسجلة (بإذن مدير + سبب)')}
+          </div>
+          <div style={{ fontSize: '12px', color: '#78350f' }}>
+            {__t('sales.sale_edit_dialog.s3', 'الدفعات الجديدة تحل محل الدفعات المسجلة بالكامل، ويُعكس القيد السابق بقيد عكسي. مجموع الدفعات لا يجوز أن يتجاوز إجمالي الفاتورة، والفرق المتبقي يبقى مديونية حتى يُسوَّى.')}
+          </div>
+
+          {adjustLegs.map((leg, index) => (
+            <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '12px', alignItems: 'end' }}>
+              <Field label={__t('sales.sale_edit_dialog.s21', 'قناة الدفع')}>
+                <CustomSelect
+                  value={leg.paymentChannel}
+                  onChange={(val) => setAdjustLegs((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, paymentChannel: val } : entry))}
+                  disabled={isBusy || isAdjusting}
+                  options={adjustChannelOptions}
+                />
+              </Field>
+              <Field label={__t('sales.sale_edit_dialog.s22', 'المبلغ')}>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={leg.amount}
+                  onChange={(e) => setAdjustLegs((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, amount: Number(e.target.value || 0) } : entry))}
+                  disabled={isBusy || isAdjusting}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+                />
+              </Field>
+              <Button
+                variant="secondary"
+                onClick={() => setAdjustLegs((current) => current.filter((_, entryIndex) => entryIndex !== index))}
+                disabled={isBusy || isAdjusting}
+              >
+                {__t('sales.sale_edit_dialog.s23', 'حذف')}
+              </Button>
+            </div>
+          ))}
+
+          <div>
+            <Button
+              variant="secondary"
+              onClick={() => setAdjustLegs((current) => [...current, { paymentChannel: 'cash', amount: 0 }])}
+              disabled={isBusy || isAdjusting}
+            >
+              {__t('sales.sale_edit_dialog.s24', '+ إضافة دفعة')}
+            </Button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <Field label={__t('sales.sale_edit_dialog.s25', 'سبب تعديل الدفعات')}>
+              <textarea
+                rows={2}
+                value={adjustReason}
+                onChange={(e) => setAdjustReason(e.target.value)}
+                disabled={isBusy || isAdjusting}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '12px' }}
+              />
+            </Field>
+
+            {!isAdminUser && (
+              <Field label={t('sales.2249f4')}>
+                <input
+                  type="text"
+                  className="secure-password-field"
+                  inputMode="numeric"
+                  value={adjustPin}
+                  onChange={(e) => setAdjustPin(e.target.value)}
+                  disabled={isBusy || isAdjusting}
+                  placeholder={t('sales.f7fa23')}
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+                />
+              </Field>
+            )}
+          </div>
+
+          {(adjustLocalError || adjustErrorMessage) ? (
+            <div style={{ padding: '10px 14px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#b91c1c', fontSize: '12.5px' }}>
+              {adjustLocalError || adjustErrorMessage}
+            </div>
+          ) : null}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+            <Button
+              variant="primary"
+              disabled={isBusy || isAdjusting || !onAdjustPayments}
+              style={{ backgroundColor: '#92400e', color: '#ffffff' }}
+              onClick={handleAdjustSubmit}
+            >
+              {isAdjusting ? t('sales.c793e5') : __t('sales.sale_edit_dialog.s26', 'حفظ تعديل الدفعات')}
+            </Button>
           </div>
         </div>
 

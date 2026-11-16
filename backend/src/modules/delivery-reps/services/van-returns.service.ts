@@ -366,6 +366,16 @@ export class VanReturnsService {
     // INV-VAN-OFFLINE-TIMESTAMPS: the gate runs first, before any
     // read — a tampered or stale offline stamp fails fast.
     const offlineCreatedAt = validateVanOfflineCreatedAt(payload.offlineCreatedAt);
+
+    // INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: every NEW field return must
+    // name its original sale. Historical rows keep sale_id NULL (no
+    // NOT NULL constraint — they still exist), but no new return may be
+    // recorded unlinked: the leg check below can only run against a
+    // sale, and an unlinked refund has no payment legs to match.
+    // Refused before any other validation; nothing is written.
+    if (payload.saleId == null || Number(payload.saleId) <= 0) {
+      throw new AppError('المرتجع الميداني يتطلب ربطه بالفاتورة الأصلية — اختر الفاتورة من قائمة فواتير العميل', 'RETURN_REQUIRES_SALE_ID', 400);
+    }
     if (!payload.items || !payload.items.length) {
       throw new AppError('يجب تحديد صنف واحد على الأقل للمرتجع', 'EMPTY_RETURN_ITEMS', 400);
     }
@@ -407,30 +417,83 @@ export class VanReturnsService {
     }
     totalAmount = roundMoney(totalAmount, moneyDigits);
 
-    // If saleId is linked, validate against original invoice lines and rep isolation
+    // The sale is mandatory (guard above): validate against the original invoice lines and rep isolation
     let linkedSale: any = null;
-    if (payload.saleId) {
-      const sale = await this.anyDb
-        .selectFrom('sales as s')
-        .leftJoin('van_sales_trips as vt', (join: any) =>
-          join.onRef('vt.id', '=', 's.van_trip_id').onRef('vt.tenant_id', '=', 's.tenant_id'),
-        )
-        .select([
-          's.id',
-          's.doc_no',
-          's.customer_id',
-          's.payment_type',
-          's.total',
-          's.paid_amount',
-          's.store_credit_used',
-          sql<number | null>`coalesce(s.delivery_rep_id, vt.rep_id)`.as('resolved_rep_id'),
-        ])
-        .where('s.id', '=', payload.saleId)
-        .where('s.tenant_id', '=', tenantId)
-        .executeTakeFirst();
-      if (!sale) throw new AppError('الفاتورة الأصلية غير موجودة', 'SALE_NOT_FOUND', 404);
-      linkedSale = sale;
-      if (Number(sale.customer_id) !== Number(payload.customerId)) {
+    const sale = await this.anyDb
+      .selectFrom('sales as s')
+      .leftJoin('van_sales_trips as vt', (join: any) =>
+        join.onRef('vt.id', '=', 's.van_trip_id').onRef('vt.tenant_id', '=', 's.tenant_id'),
+      )
+      .select([
+        's.id',
+        's.doc_no',
+        's.customer_id',
+        's.payment_type',
+        's.total',
+        's.paid_amount',
+        's.store_credit_used',
+        sql<number | null>`coalesce(s.delivery_rep_id, vt.rep_id)`.as('resolved_rep_id'),
+      ])
+      .where('s.id', '=', payload.saleId)
+      .where('s.tenant_id', '=', tenantId)
+      .executeTakeFirst();
+    if (!sale) throw new AppError('الفاتورة الأصلية غير موجودة', 'SALE_NOT_FOUND', 404);
+    linkedSale = sale;
+    if (Number(sale.customer_id) !== Number(payload.customerId)) {
+      await this.fraudRadar?.recordSuspicionEvent({
+        tenantId,
+        accountId,
+        repId,
+        tripId: payload.tripId,
+        customerId: payload.customerId,
+        customerName: cust.name,
+        eventCode: 'VAN_SUSPICION_FRAUDULENT_RETURN',
+        severity: 'high',
+        titleAr: 'محاولة مرتجع على فاتورة تخص عميلاً آخر',
+        detailsAr: `حاول المندوب رفع مرتجع للعميل "${cust.name}" مربوطاً بفاتورة #${sale.doc_no || sale.id} تخص عميلاً آخر.`,
+        attemptedAmount: totalAmount,
+        referenceType: 'sale',
+        referenceId: Number(payload.saleId),
+      });
+      throw new AppError('الفاتورة المحددة لا تخص هذا العميل', 'SALE_CUSTOMER_MISMATCH', 400);
+    }
+    if (sale.resolved_rep_id != null && Number(sale.resolved_rep_id) !== Number(repId)) {
+      await this.fraudRadar?.recordSuspicionEvent({
+        tenantId,
+        accountId,
+        repId,
+        tripId: payload.tripId,
+        customerId: payload.customerId,
+        customerName: cust.name,
+        eventCode: 'VAN_SUSPICION_FRAUDULENT_RETURN',
+        severity: 'critical',
+        titleAr: 'محاولة مرتجع عابر للمناديب على فاتورة زميل آخر',
+        detailsAr: `حاول المندوب عمل مرتجع بقيمة ${totalAmount} ج.م للعميل "${cust.name}" على فاتورة (#${sale.doc_no || sale.id}) تخص مندوباً آخر (#${sale.resolved_rep_id}).`,
+        attemptedAmount: totalAmount,
+        referenceType: 'sale',
+        referenceId: Number(payload.saleId),
+      });
+      throw new AppError(
+        'لا يمكن عمل مرتجع على فاتورة تخص مندوباً آخر — عهد وحسابات كل مندوب معزولة تماماً',
+        'SALE_REP_MISMATCH',
+        403,
+      );
+    }
+
+    const saleLines = await this.anyDb
+      .selectFrom('sale_items')
+      .selectAll()
+      .where('sale_id', '=', payload.saleId)
+      .where('tenant_id', '=', tenantId)
+      .execute();
+
+    const alreadyReturnedBySaleItem = await this.computeAlreadyReturnedQtyBySaleItem(tenantId, [Number(payload.saleId)]);
+
+    for (const item of payload.items) {
+      const line = item.saleItemId
+        ? saleLines.find((sl: any) => Number(sl.id) === Number(item.saleItemId))
+        : saleLines.find((sl: any) => Number(sl.product_id) === Number(item.productId));
+      if (!line) {
         await this.fraudRadar?.recordSuspicionEvent({
           tenantId,
           accountId,
@@ -440,15 +503,18 @@ export class VanReturnsService {
           customerName: cust.name,
           eventCode: 'VAN_SUSPICION_FRAUDULENT_RETURN',
           severity: 'high',
-          titleAr: 'محاولة مرتجع على فاتورة تخص عميلاً آخر',
-          detailsAr: `حاول المندوب رفع مرتجع للعميل "${cust.name}" مربوطاً بفاتورة #${sale.doc_no || sale.id} تخص عميلاً آخر.`,
+          titleAr: 'محاولة رد صنف غير مدرج في الفاتورة الأصلية',
+          detailsAr: `حاول المندوب رد الصنف #${item.productId} على الفاتورة #${sale.doc_no || sale.id} وهو غير موجود بها.`,
           attemptedAmount: totalAmount,
           referenceType: 'sale',
           referenceId: Number(payload.saleId),
         });
-        throw new AppError('الفاتورة المحددة لا تخص هذا العميل', 'SALE_CUSTOMER_MISMATCH', 400);
+        throw new AppError(`الصنف #${item.productId} لم يتم العثور عليه في الفاتورة الأصلية`, 'ITEM_NOT_IN_SALE', 400);
       }
-      if (sale.resolved_rep_id != null && Number(sale.resolved_rep_id) !== Number(repId)) {
+      const soldQty = Number(line.qty || 0);
+      const lineTotal = Number(line.line_total || 0);
+      const netUnit = soldQty > 0 ? roundMoney(lineTotal / soldQty, moneyDigits) : 0;
+      if (Number(item.unitPrice) > netUnit + 0.05) {
         await this.fraudRadar?.recordSuspicionEvent({
           tenantId,
           accountId,
@@ -458,114 +524,18 @@ export class VanReturnsService {
           customerName: cust.name,
           eventCode: 'VAN_SUSPICION_FRAUDULENT_RETURN',
           severity: 'critical',
-          titleAr: 'محاولة مرتجع عابر للمناديب على فاتورة زميل آخر',
-          detailsAr: `حاول المندوب عمل مرتجع بقيمة ${totalAmount} ج.م للعميل "${cust.name}" على فاتورة (#${sale.doc_no || sale.id}) تخص مندوباً آخر (#${sale.resolved_rep_id}).`,
+          titleAr: 'تلاعب بتضخيم سعر المرتجع فوق السعر الصافي للبيع',
+          detailsAr: `حاول المندوب رد الصنف "${line.product_name || item.productId}" بسعر (${item.unitPrice} ج.م) أعلى من سعر بيعه الصافي بعد الخصم (${netUnit} ج.م) لتضخيم رصيد العميل أو سحب كاش إضافي.`,
           attemptedAmount: totalAmount,
           referenceType: 'sale',
           referenceId: Number(payload.saleId),
         });
-        throw new AppError(
-          'لا يمكن عمل مرتجع على فاتورة تخص مندوباً آخر — عهد وحسابات كل مندوب معزولة تماماً',
-          'SALE_REP_MISMATCH',
-          403,
-        );
+        throw new AppError(`سعر المرتجع (${item.unitPrice}) يتجاوز السعر الصافي بعد الخصم بالفاتورة الأصلية (${netUnit})`, 'RETURN_PRICE_EXCEEDS_NET', 400);
       }
 
-      const saleLines = await this.anyDb
-        .selectFrom('sale_items')
-        .selectAll()
-        .where('sale_id', '=', payload.saleId)
-        .where('tenant_id', '=', tenantId)
-        .execute();
-
-      const alreadyReturnedBySaleItem = await this.computeAlreadyReturnedQtyBySaleItem(tenantId, [Number(payload.saleId)]);
-
-      for (const item of payload.items) {
-        const line = item.saleItemId
-          ? saleLines.find((sl: any) => Number(sl.id) === Number(item.saleItemId))
-          : saleLines.find((sl: any) => Number(sl.product_id) === Number(item.productId));
-        if (!line) {
-          await this.fraudRadar?.recordSuspicionEvent({
-            tenantId,
-            accountId,
-            repId,
-            tripId: payload.tripId,
-            customerId: payload.customerId,
-            customerName: cust.name,
-            eventCode: 'VAN_SUSPICION_FRAUDULENT_RETURN',
-            severity: 'high',
-            titleAr: 'محاولة رد صنف غير مدرج في الفاتورة الأصلية',
-            detailsAr: `حاول المندوب رد الصنف #${item.productId} على الفاتورة #${sale.doc_no || sale.id} وهو غير موجود بها.`,
-            attemptedAmount: totalAmount,
-            referenceType: 'sale',
-            referenceId: Number(payload.saleId),
-          });
-          throw new AppError(`الصنف #${item.productId} لم يتم العثور عليه في الفاتورة الأصلية`, 'ITEM_NOT_IN_SALE', 400);
-        }
-        const soldQty = Number(line.qty || 0);
-        const lineTotal = Number(line.line_total || 0);
-        const netUnit = soldQty > 0 ? roundMoney(lineTotal / soldQty, moneyDigits) : 0;
-        if (Number(item.unitPrice) > netUnit + 0.05) {
-          await this.fraudRadar?.recordSuspicionEvent({
-            tenantId,
-            accountId,
-            repId,
-            tripId: payload.tripId,
-            customerId: payload.customerId,
-            customerName: cust.name,
-            eventCode: 'VAN_SUSPICION_FRAUDULENT_RETURN',
-            severity: 'critical',
-            titleAr: 'تلاعب بتضخيم سعر المرتجع فوق السعر الصافي للبيع',
-            detailsAr: `حاول المندوب رد الصنف "${line.product_name || item.productId}" بسعر (${item.unitPrice} ج.م) أعلى من سعر بيعه الصافي بعد الخصم (${netUnit} ج.م) لتضخيم رصيد العميل أو سحب كاش إضافي.`,
-            attemptedAmount: totalAmount,
-            referenceType: 'sale',
-            referenceId: Number(payload.saleId),
-          });
-          throw new AppError(`سعر المرتجع (${item.unitPrice}) يتجاوز السعر الصافي بعد الخصم بالفاتورة الأصلية (${netUnit})`, 'RETURN_PRICE_EXCEEDS_NET', 400);
-        }
-
-        const alreadyReturned = alreadyReturnedBySaleItem.get(Number(line.id)) || 0;
-        const remainingReturnableQty = Number((soldQty - alreadyReturned).toFixed(3));
-        if (Number(item.qty) > remainingReturnableQty + 0.001) {
-          await this.fraudRadar?.recordSuspicionEvent({
-            tenantId,
-            accountId,
-            repId,
-            tripId: payload.tripId,
-            customerId: payload.customerId,
-            customerName: cust.name,
-            eventCode: 'VAN_SUSPICION_FRAUDULENT_RETURN',
-            severity: 'high',
-            titleAr: 'محاولة رد كمية تتجاوز المباع في الفاتورة',
-            detailsAr: `حاول المندوب رد كمية (${item.qty}) من الصنف "${line.product_name || item.productId}" بينما المتبقي القابل للرد (${Math.max(0, remainingReturnableQty)}).`,
-            attemptedAmount: totalAmount,
-            referenceType: 'sale',
-            referenceId: Number(payload.saleId),
-          });
-          throw new AppError(
-            `الكمية المطلوب ردها (${item.qty}) تتجاوز المتبقي القابل للرد من الفاتورة الأصلية (${Math.max(0, remainingReturnableQty)}) — بيع ${soldQty}، مرتجع سابقاً ${alreadyReturned}`,
-            'RETURN_QTY_EXCEEDS_SOLD',
-            400,
-          );
-        }
-      }
-    } else {
-      // Unlinked return (no saleId provided):
-      // Must still verify against the rep's actual historical sales to this customer and catalog price ceiling!
-      const repCustomerSales = await this.anyDb
-        .selectFrom('sales as s')
-        .leftJoin('van_sales_trips as vt', (join: any) =>
-          join.onRef('vt.id', '=', 's.van_trip_id').onRef('vt.tenant_id', '=', 's.tenant_id'),
-        )
-        .select(['s.id'])
-        .where('s.customer_id', '=', payload.customerId)
-        .where('s.tenant_id', '=', tenantId)
-        .where('s.status', '=', 'posted')
-        .where(sql<boolean>`coalesce(s.delivery_rep_id, vt.rep_id) = ${Number(repId)}`)
-        .execute();
-
-      const repSaleIds = repCustomerSales.map((s: any) => Number(s.id));
-      if (!repSaleIds.length) {
+      const alreadyReturned = alreadyReturnedBySaleItem.get(Number(line.id)) || 0;
+      const remainingReturnableQty = Number((soldQty - alreadyReturned).toFixed(3));
+      if (Number(item.qty) > remainingReturnableQty + 0.001) {
         await this.fraudRadar?.recordSuspicionEvent({
           tenantId,
           accountId,
@@ -574,97 +544,18 @@ export class VanReturnsService {
           customerId: payload.customerId,
           customerName: cust.name,
           eventCode: 'VAN_SUSPICION_FRAUDULENT_RETURN',
-          severity: 'critical',
-          titleAr: 'محاولة مرتجع وهمي بدون سابقة مبيعات للمندوب مع العميل',
-          detailsAr: `حاول المندوب رفع مرتجع بدون رقم فاتورة بقيمة ${totalAmount} ج.م للعميل "${cust.name}" رغم عدم وجود أي مبيعات سابقة لهذا المندوب مع العميل.`,
+          severity: 'high',
+          titleAr: 'محاولة رد كمية تتجاوز المباع في الفاتورة',
+          detailsAr: `حاول المندوب رد كمية (${item.qty}) من الصنف "${line.product_name || item.productId}" بينما المتبقي القابل للرد (${Math.max(0, remainingReturnableQty)}).`,
           attemptedAmount: totalAmount,
+          referenceType: 'sale',
+          referenceId: Number(payload.saleId),
         });
         throw new AppError(
-          'لا يمكن تسجيل مرتجع بدون فاتورة لعميل لم يسبق لهذا المندوب البيع له',
-          'NO_REP_SALES_HISTORY_FOR_RETURN',
-          403,
+          `الكمية المطلوب ردها (${item.qty}) تتجاوز المتبقي القابل للرد من الفاتورة الأصلية (${Math.max(0, remainingReturnableQty)}) — بيع ${soldQty}، مرتجع سابقاً ${alreadyReturned}`,
+          'RETURN_QTY_EXCEEDS_SOLD',
+          400,
         );
-      }
-
-      const soldLines = await this.anyDb
-        .selectFrom('sale_items')
-        .select(['product_id', 'product_name', 'qty', 'line_total'])
-        .where('sale_id', 'in', repSaleIds)
-        .where('tenant_id', '=', tenantId)
-        .execute();
-
-      const existingCustomerReturns = await this.anyDb
-        .selectFrom('van_field_returns')
-        .select(['items_json'])
-        .where('customer_id', '=', payload.customerId)
-        .where('rep_id', '=', repId)
-        .where('tenant_id', '=', tenantId)
-        .where(sql<boolean>`status in ('approved', 'pending_approval')`)
-        .execute();
-
-      const returnedByProduct = new Map<number, number>();
-      for (const retRow of existingCustomerReturns) {
-        const parsed = typeof retRow.items_json === 'string' ? JSON.parse(retRow.items_json) : (retRow.items_json || []);
-        for (const it of parsed) {
-          const pid = Number(it.productId);
-          returnedByProduct.set(pid, (returnedByProduct.get(pid) || 0) + Number(it.qty || 0));
-        }
-      }
-
-      for (const item of payload.items) {
-        const pid = Number(item.productId);
-        const matchingLines = soldLines.filter((sl: any) => Number(sl.product_id) === pid);
-        const totalSoldQty = matchingLines.reduce((sum: number, sl: any) => sum + Number(sl.qty || 0), 0);
-        const maxNetUnitPrice = matchingLines.reduce((maxP: number, sl: any) => {
-          const q = Number(sl.qty || 0);
-          const netU = q > 0 ? roundMoney(Number(sl.line_total || 0) / q, moneyDigits) : 0;
-          return Math.max(maxP, netU);
-        }, 0);
-
-        const alreadyRet = returnedByProduct.get(pid) || 0;
-        const remainingQty = Number((totalSoldQty - alreadyRet).toFixed(3));
-
-        if (totalSoldQty <= 0 || Number(item.qty) > remainingQty + 0.001) {
-          await this.fraudRadar?.recordSuspicionEvent({
-            tenantId,
-            accountId,
-            repId,
-            tripId: payload.tripId,
-            customerId: payload.customerId,
-            customerName: cust.name,
-            eventCode: 'VAN_SUSPICION_FRAUDULENT_RETURN',
-            severity: 'critical',
-            titleAr: 'محاولة مرتجع غير مربوط بفاتورة يتجاوز مبيعات المندوب للعميل',
-            detailsAr: `حاول المندوب رد كمية (${item.qty}) من الصنف #${pid} للعميل "${cust.name}" بدون فاتورة بينما المتبقي القابل للرد من سجل مبيعاته هو (${Math.max(0, remainingQty)}).`,
-            attemptedAmount: totalAmount,
-          });
-          throw new AppError(
-            `الكمية المطلوب ردها (${item.qty}) للصنف #${pid} تتجاوز إجمالي ما باعه هذا المندوب للعميل صافي المرتجعات السابقة (${Math.max(0, remainingQty)})`,
-            'RETURN_QTY_EXCEEDS_SOLD',
-            400,
-          );
-        }
-
-        if (Number(item.unitPrice) > maxNetUnitPrice + 0.05) {
-          await this.fraudRadar?.recordSuspicionEvent({
-            tenantId,
-            accountId,
-            repId,
-            tripId: payload.tripId,
-            customerId: payload.customerId,
-            customerName: cust.name,
-            eventCode: 'VAN_SUSPICION_FRAUDULENT_RETURN',
-            severity: 'critical',
-            titleAr: 'تلاعب بتضخيم سعر المرتجع فوق أعلى سعر بيع صافي للعميل',
-            detailsAr: `حاول المندوب رد الصنف #${pid} بسعر (${item.unitPrice} ج.م) أعلى من السعر الصافي الذي بيع به للعميل (${maxNetUnitPrice} ج.م).`,
-            attemptedAmount: totalAmount,
-          });
-          throw new AppError(
-            `سعر المرتجع (${item.unitPrice}) يتجاوز السعر الصافي الذي بيع به الصنف للعميل (${maxNetUnitPrice})`,
-            'RETURN_PRICE_EXCEEDS_NET',
-            400,
-          );
-        }
       }
     }
 
@@ -699,10 +590,11 @@ export class VanReturnsService {
     // The custody check above runs first on purpose: a cash refund
     // that also exceeds the rep's held cash keeps its existing
     // INSUFFICIENT_REP_CASH_FOR_REFUND refusal.
-    if (linkedSale) {
-      const legs = await this.resolveSaleRefundLegs(this.anyDb, tenantId, linkedSale, moneyDigits, {});
-      this.assertRefundMethodCoveredByLegs(legs, payload.refundMethod || 'credit', totalAmount, moneyDigits);
-    }
+    // INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: unconditional now — every
+    // new return is linked (guard above), so the guard must not survive
+    // as a dead branch a later change could re-open.
+    const legs = await this.resolveSaleRefundLegs(this.anyDb, tenantId, linkedSale, moneyDigits, {});
+    this.assertRefundMethodCoveredByLegs(legs, payload.refundMethod || 'credit', totalAmount, moneyDigits);
 
     // INV-SEQUENCE-NUMBER-FAIL-CLOSED: the insert, the locked MAX+1
     // numbering, and the rename run in one transaction. Validation
@@ -719,7 +611,7 @@ export class VanReturnsService {
           trip_id: payload.tripId,
           rep_id: repId,
           customer_id: payload.customerId,
-          sale_id: payload.saleId || null,
+          sale_id: Number(payload.saleId),
           status: 'pending_approval',
           return_reason: payload.returnReason,
           refund_method: payload.refundMethod || 'credit',

@@ -28,9 +28,19 @@ export function useSaleActions(activeSaleId: string) {
     }
   });
 
+  // INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK: payment corrections go through
+  // the dedicated endpoint, never through the edit payload.
+  const adjustPaymentsMutation = useMutation({
+    mutationFn: ({ saleId, payload }: { saleId: string; payload: { payments: Array<{ paymentChannel: string; amount: number }>; reason: string; managerPin?: string } }) => salesApi.adjustPayments(saleId, payload),
+    onSuccess: async (_, variables) => {
+      await invalidateSalesDomain(queryClient, { saleId: variables.saleId });
+    }
+  });
+
   return {
     saleDetailQuery,
     cancelMutation,
-    updateMutation
+    updateMutation,
+    adjustPaymentsMutation
   };
 }
