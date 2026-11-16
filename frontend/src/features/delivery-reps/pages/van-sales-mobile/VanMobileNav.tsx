@@ -310,8 +310,6 @@ export const BottomNav: React.FC<VanMobileNavProps> = ({
   currentTab,
   setActiveTab,
   data,
-  itinerary,
-  maintenanceAlerts,
   cart,
 }) => {
   const { t: __t } = useTranslation();

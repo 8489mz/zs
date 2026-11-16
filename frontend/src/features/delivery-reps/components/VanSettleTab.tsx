@@ -14,7 +14,7 @@ import {
   ShieldCheckIcon,
   LockIcon,
 } from '@/shared/components/icons/AppIcons';
-import { VanActiveTripResponse, VanStockItem } from '../api/van-sales.api';
+import { VanActiveTripResponse, VanPackagingMovement, VanStockItem } from '../api/van-sales.api';
 
 interface VanSettleTabProps {
   tripData: VanActiveTripResponse['trip'];
@@ -61,15 +61,7 @@ interface VanSettleTabProps {
     description?: string;
     createdAt: string;
   }[];
-  packagingMovements?: {
-    id: number;
-    packagingType: string;
-    qtyOut: number;
-    qtyIn: number;
-    customerName?: string;
-    createdAt: string;
-    notes?: string;
-  }[];
+  packagingMovements?: VanPackagingMovement[];
   onOpenExpenseModal?: () => void;
   onOpenPackagingModal?: () => void;
   inventory?: VanStockItem[];

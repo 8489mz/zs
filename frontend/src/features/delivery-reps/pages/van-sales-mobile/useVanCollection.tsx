@@ -250,7 +250,7 @@ export const CollectionTab: React.FC<CollectionTabProps> = ({
   return (
     <>
             {/* TAB CONTENT: COLLECTION */}
-              data?.hasActiveTrip ? (
+              {data?.hasActiveTrip ? (
                 <VanCollectionTab
                   tripId={data.trip!.id}
                   customers={allAvailableCustomers}
@@ -314,7 +314,7 @@ export const CollectionTab: React.FC<CollectionTabProps> = ({
                     {startTripMutation.isPending ? __t('delivery_reps.van_sales_mobile_page.s177', __t('delivery_reps.van_sales_mobile_page.s177', "جاري بدء الرحلة...")) : __t('delivery_reps.van_sales_mobile_page.s178', __t('delivery_reps.van_sales_mobile_page.s178', "بدء رحلة التوزيع الآن"))}
                   </Button>
                 </div>
-              )
+              )}
     </>
   );
 };

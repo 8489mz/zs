@@ -436,7 +436,7 @@ export const SaleTab: React.FC<SaleTabProps> = ({
   return (
     <>
             {/* TAB CONTENT: SALE */}
-              data?.hasActiveTrip ? (
+              {data?.hasActiveTrip ? (
                 <VanSaleTab
                   customers={allAvailableCustomers}
                   selectedCustomerId={selectedCustomerId}
@@ -515,7 +515,7 @@ export const SaleTab: React.FC<SaleTabProps> = ({
                     {startTripMutation.isPending ? __t('delivery_reps.van_sales_mobile_page.s171', __t('delivery_reps.van_sales_mobile_page.s171', "جاري بدء الرحلة...")) : __t('delivery_reps.van_sales_mobile_page.s172', __t('delivery_reps.van_sales_mobile_page.s172', "بدء رحلة التوزيع الآن"))}
                   </Button>
                 </div>
-              )
+              )}
     </>
   );
 };
@@ -537,7 +537,6 @@ export const PreSalesTab: React.FC<PreSalesTabProps> = ({
     allAvailableCustomers,
     selectedCustomerId,
     setSelectedCustomerId,
-    newCustomerName,
     setNewCustomerName,
   } = sale;
   return (
@@ -562,8 +561,8 @@ export const PreSalesTab: React.FC<PreSalesTabProps> = ({
                     setSelectedCustomerId('');
                   }
                 }}
-                repId={session.rep.id}
-                repName={session.rep.name}
+                repId={session!.rep.id}
+                repName={session!.rep.name}
               />
     </>
   );

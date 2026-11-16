@@ -546,6 +546,7 @@ export const GpsMandatoryModal: React.FC<GpsMandatoryModalProps> = ({ visit }) =
     gpsBlockedModalOpen,
     setGpsBlockedModalOpen,
     gpsBlockedInfo,
+    setGpsBlockedInfo,
     isCheckingGps,
     handleRetryGpsCheck,
   } = visit;

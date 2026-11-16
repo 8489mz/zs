@@ -1,22 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { getGlobalCurrencySymbol } from '@/lib/currencies';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { vanSalesApi } from '../api/van-sales.api';
-import { driverPortalApi } from '@/shared/api/delivery-reps.api';
-import { Button } from '@/shared/ui/button';
+import { useState, useMemo } from 'react';
 import {
   TruckIcon,
-  PackageIcon,
-  MapPinIcon,
-  ClockIcon,
-  ReceiptIcon,
   RefreshCwIcon,
-  ShoppingBagIcon,
 } from '@/shared/components/icons/AppIcons';
-import { systemConfirm, toast } from '@/shared/components/system-alert';
-import { vanOfflineDb } from '../offline/van-sales-offline.db';
-import { vanSyncEngine } from '../offline/van-sync.engine';
 import { VanSalesLogin } from '../components/VanSalesLogin';
 import { DriverNewLoadRequisitionView } from '../components/DriverNewLoadRequisitionView';
 import { ActiveVisitBanner, ItineraryTab, GpsMandatoryModal, useVanVisit } from '@/features/delivery-reps/pages/van-sales-mobile/useVanVisit';

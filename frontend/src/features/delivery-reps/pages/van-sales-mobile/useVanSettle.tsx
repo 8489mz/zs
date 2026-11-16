@@ -6,7 +6,7 @@
 // tab and modals take the trip data and the visit and router values
 // as props.
 import { useTranslation } from 'react-i18next';
-import React, { useState, type Dispatch, type SetStateAction } from 'react';
+import React, { useState } from 'react';
 import { useMutation, type QueryClient } from '@tanstack/react-query';
 import { vanSalesApi, VanActiveTripResponse, VanTripExpense, VanPackagingMovement } from '@/features/delivery-reps/api/van-sales.api';
 import { vanOfflineDb } from '@/features/delivery-reps/offline/van-sales-offline.db';
@@ -147,7 +147,7 @@ export const SettleTab: React.FC<SettleTabProps> = ({
   return (
     <>
             {/* TAB CONTENT: SETTLE (Active Trip Only) */}
-              data?.hasActiveTrip ? (
+              {data?.hasActiveTrip ? (
                 <VanSettleTab
                   tripData={data.trip}
                   activeVisit={activeVisit}
@@ -227,7 +227,7 @@ export const SettleTab: React.FC<SettleTabProps> = ({
                     {__t('delivery_reps.van_sales_mobile_page.s182', __t('delivery_reps.van_sales_mobile_page.s182', "لا توجد رحلة توزيع مفتوحة لتصفيتها حالياً. يتم فتح هذا القسم بعد انطلاق الرحلة لتسليم النقدية ومطابقة العهدة المسائية."))}
                   </p>
                 </div>
-              )
+              )}
     </>
   );
 };
