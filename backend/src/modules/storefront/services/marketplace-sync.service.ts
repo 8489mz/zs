@@ -19,6 +19,7 @@ import {
   type MarketplaceTenantCandidate,
 } from '../engines/marketplace-webhook-event.engine';
 import { PlanFeatureService } from '../../../core/auth/services/plan-feature.service';
+import { MarketplaceSyncAnalyticsService } from './marketplace-sync-analytics.service';
 import { MarketplaceSyncInboundService } from './marketplace-sync-inbound.service';
 import { MarketplaceSyncRepricingService } from './marketplace-sync-repricing.service';
 import { MarketplaceSyncSettlementsService } from './marketplace-sync-settlements.service';
@@ -107,6 +108,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
   private readonly settlementsService: MarketplaceSyncSettlementsService;
   private readonly repricingService: MarketplaceSyncRepricingService;
   private readonly inboundService: MarketplaceSyncInboundService;
+  private readonly analyticsService: MarketplaceSyncAnalyticsService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -167,6 +169,11 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
       audit: this.audit,
       getSettingJson: this.getSettingJson.bind(this),
       setSettingJson: this.setSettingJson.bind(this),
+    });
+    this.analyticsService = new MarketplaceSyncAnalyticsService({
+      db: this.db,
+      getMappings: this.getMappings.bind(this),
+      getSettlements: this.getSettlements.bind(this),
     });
   }
 
@@ -370,87 +377,7 @@ export class MarketplaceSyncService implements OnModuleInit, OnModuleDestroy {
     period: 'all' | '30d' | '7d',
     auth: AuthContext,
   ): Promise<MarketplaceAnalyticsSummary> {
-    const scope = requireTenantScope(auth);
-    // D6a: the analytics sums aggregate stored settlement/order money,
-    // so the per-platform and grand totals round at the book digits
-    // instead of cutting a 3-decimal tenant's totals to cents. The
-    // toFixed(1) percentages in this method are rates, not money.
-    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, scope.tenantId));
-
-    const settlements = await this.getSettlements(auth);
-    const orders = await this.db
-      .selectFrom('online_orders')
-      .select(['id', 'order_number', 'total_amount', 'status', 'shipping_carrier'])
-      .where(sql<boolean>`tenant_id = ${scope.tenantId}`)
-      .execute();
-
-    const mappings = await this.getMappings(auth);
-
-    let grossSales = 0;
-    let netPayout = 0;
-    let totalFees = 0;
-
-    for (const s of settlements) {
-      grossSales += Number(s.grossSales || 0);
-      netPayout += Number(s.netPayout || 0);
-      totalFees += Number(s.referralFees || 0) + Number(s.fulfillmentFees || 0) + Number(s.storageOrOtherFees || 0);
-    }
-
-    const platforms: SupportedMarketplace[] = ['amazon', 'noon', 'jumia', 'trendyol'];
-    const breakdown = platforms.map((plt) => {
-      const pltSettlements = settlements.filter((s) => s.marketplace === plt);
-      const pltGross = pltSettlements.reduce((sum, s) => sum + Number(s.grossSales || 0), 0);
-      const pltNet = pltSettlements.reduce((sum, s) => sum + Number(s.netPayout || 0), 0);
-      const pltFee = pltSettlements.reduce(
-        (sum, s) => sum + Number(s.referralFees || 0) + Number(s.fulfillmentFees || 0) + Number(s.storageOrOtherFees || 0),
-        0,
-      );
-
-      const pltOrders = orders.filter((o) => {
-        const sc = (o.shipping_carrier || '').toLowerCase();
-        return (
-          sc.includes(plt) ||
-          (plt === 'amazon' && sc.includes('fba')) ||
-          (plt === 'noon' && sc.includes('fbn'))
-        );
-      });
-
-      const returnedOrders = pltOrders.filter((o) => o.status === 'cancelled').length;
-      const returnRate = pltOrders.length > 0 ? Number(((returnedOrders / pltOrders.length) * 100).toFixed(1)) : 0;
-      const sharePercent = grossSales > 0 ? Number(((pltGross / grossSales) * 100).toFixed(1)) : 0;
-
-      return {
-        marketplace: plt,
-        grossSales: roundMoney(pltGross, bookDigits),
-        netPayout: roundMoney(pltNet, bookDigits),
-        fees: roundMoney(pltFee, bookDigits),
-        ordersCount: pltOrders.length,
-        sharePercent,
-        returnRatePercent: returnRate,
-      };
-    });
-
-    const topProducts = mappings.slice(0, 5).map((m: MarketplaceSkuMapping, idx: number) => ({
-      productId: m.productId,
-      productName: m.productName || 'صنف ماركت بليس',
-      marketplace: m.marketplace,
-      sku: m.marketplaceSku,
-      unitsSold: Math.max(10, 85 - idx * 14),
-      totalRevenue: roundMoney((m.customPrice || m.retailPrice || 150) * Math.max(10, 85 - idx * 14), bookDigits),
-    }));
-
-    const netMarginPercent = grossSales > 0 ? Number(((netPayout / grossSales) * 100).toFixed(1)) : 0;
-
-    return {
-      period,
-      totalGrossSales: roundMoney(grossSales, bookDigits),
-      totalNetPayout: roundMoney(netPayout, bookDigits),
-      totalFees: roundMoney(totalFees, bookDigits),
-      totalOrders: orders.length,
-      netMarginPercent,
-      marketplaceBreakdown: breakdown,
-      topSellingProducts: topProducts,
-    };
+    return this.analyticsService.getMarketplaceAnalytics(period, auth);
   }
 
   // =========================================================================
