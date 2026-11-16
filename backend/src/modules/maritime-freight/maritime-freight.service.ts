@@ -60,6 +60,7 @@ import { MaritimeFreightQuotationsService } from './maritime-freight-quotations.
 import { MaritimeFreightRateCardsService } from './maritime-freight-rate-cards.service';
 import { MaritimeFreightCustomsService } from './maritime-freight-customs.service';
 import { MaritimeFreightInsuranceWarehouseService } from './maritime-freight-insurance-warehouse.service';
+import { MaritimeFreightAgentSettlementsService } from './maritime-freight-agent-settlements.service';
 
 @Injectable()
 export class MaritimeFreightService {
@@ -71,6 +72,7 @@ export class MaritimeFreightService {
   private readonly rateCardsService: MaritimeFreightRateCardsService;
   private readonly customsService: MaritimeFreightCustomsService;
   private readonly insuranceWarehouseService: MaritimeFreightInsuranceWarehouseService;
+  private readonly agentSettlementsService: MaritimeFreightAgentSettlementsService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -98,6 +100,10 @@ export class MaritimeFreightService {
     });
     this.insuranceWarehouseService = new MaritimeFreightInsuranceWarehouseService({
       db: this.db,
+    });
+    this.agentSettlementsService = new MaritimeFreightAgentSettlementsService({
+      db: this.db,
+      resolveFreightExchangeRate: this.resolveFreightExchangeRate.bind(this),
     });
   }
 
@@ -4724,148 +4730,20 @@ export class MaritimeFreightService {
     return { success: true };
   }
 
-  // ==========================================
-  // 4. Overseas Agent Settlements & Profit Sharing (SOA)
-  // ==========================================
-
   async listAgentSettlements(auth: AuthContext, filters?: { agentId?: string; status?: string; search?: string }) {
-    const { tenantId } = requireTenantScope(auth);
-    let query = this.db
-      .selectFrom('maritime_agent_settlements')
-      .selectAll()
-      .where('tenant_id', '=', tenantId);
-
-    if (filters?.agentId) {
-      query = query.where('agent_id', '=', String(filters.agentId));
-    }
-    if (filters?.status && filters.status !== 'all') {
-      query = query.where('status', '=', filters.status as any);
-    }
-    if (filters?.search) {
-      const term = `%${filters.search}%`;
-      query = query.where((eb) => eb.or([
-        eb('agent_name', 'ilike', term),
-        eb('job_number', 'ilike', term),
-        eb('reference_number', 'ilike', term),
-      ]));
-    }
-
-    return await query.orderBy('id', 'desc').execute();
+    return this.agentSettlementsService.listAgentSettlements(auth, filters);
   }
 
   async createAgentSettlement(auth: AuthContext, dto: CreateAgentSettlementDto) {
-    const { tenantId } = requireTenantScope(auth);
-    const amount = Number(dto.amount || 0);
-    // INV-MARITIME-SETTLEMENT-RATE-RESOLVED: never assume parity. The
-    // settlement currency defaults to USD (freight's domain
-    // currency), so an omitted rate resolves through the same
-    // registered-rate resolver every other maritime path uses: 1
-    // only for the tenant base currency, a supplied positive rate,
-    // or the registered rate — fail closed when none exists.
-    const currency = dto.currency || 'USD';
-    const rate = await this.resolveFreightExchangeRate(tenantId, currency, dto.exchangeRate);
-    // INV-MARITIME-AGENT-SETTLEMENT-RECORD-INTEGRITY: the local
-    // equivalent converts at the tenant's book digits through the
-    // shared engine -- the raw float product stored 4856.0625 for a
-    // KWD tenant, a fourth decimal the books cannot hold.
-    const digits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
-    const localEq = convertFxAmount(amount, rate, digits);
-
-    const settlementPrefix = dto.settlementType === 'debit_note' ? 'ADN' : dto.settlementType === 'credit_note' ? 'ACN' : 'APS';
-    const suppliedRef = dto.referenceNumber?.trim() || null;
-
-    // The generated reference number follows the module-wide
-    // collision-proof pattern (insert with a temp value, rename by
-    // the returned identity in the same transaction): the previous
-    // random 4-digit sequence could repeat on the same day. A
-    // caller-supplied number is kept verbatim.
-    const settlement = await this.db.transaction().execute(async (trx: any) => {
-      const [row] = await trx
-        .insertInto('maritime_agent_settlements')
-        .values({
-          tenant_id: tenantId,
-          agent_id: dto.agentId ? String(dto.agentId) : null,
-          agent_name: dto.agentName,
-          job_id: dto.jobId ? String(dto.jobId) : null,
-          job_number: dto.jobNumber || null,
-          settlement_type: dto.settlementType,
-          currency: currency,
-          amount: amount,
-          profit_share_percent: dto.profitSharePercent !== undefined ? Number(dto.profitSharePercent) : 50,
-          local_equivalent_amount: localEq,
-          exchange_rate: rate,
-          reference_number: suppliedRef || `AST-TMP-${crypto.randomUUID()}`,
-          status: 'pending',
-          notes: dto.notes || null,
-        })
-        .returningAll()
-        .execute();
-
-      if (suppliedRef) return row;
-      const [renamed] = await trx
-        .updateTable('maritime_agent_settlements')
-        .set({ reference_number: formatDailyDocumentNumber(settlementPrefix, Number(row.id), new Date(), 4, await getTenantTimezone(trx, tenantId)) })
-        .where('id', '=', row.id)
-        .where('tenant_id', '=', tenantId)
-        .returningAll()
-        .execute();
-      return renamed;
-    });
-
-    return settlement;
+    return this.agentSettlementsService.createAgentSettlement(auth, dto);
   }
 
   async updateAgentSettlementStatus(auth: AuthContext, id: string | number, dto: UpdateAgentSettlementStatusDto) {
-    const { tenantId } = requireTenantScope(auth);
-    const [updated] = await this.db
-      .updateTable('maritime_agent_settlements')
-      .set({
-        status: dto.status,
-        notes: dto.notes !== undefined ? dto.notes : undefined,
-        updated_at: sql`NOW()`,
-      })
-      .where('tenant_id', '=', tenantId)
-      .where('id', '=', String(id) as any)
-      .returningAll()
-      .execute();
-
-    return updated;
+    return this.agentSettlementsService.updateAgentSettlementStatus(auth, id, dto);
   }
 
   async getAgentStatementOfAccount(auth: AuthContext, agentId: string | number) {
-    const { tenantId } = requireTenantScope(auth);
-    const settlements = await this.db
-      .selectFrom('maritime_agent_settlements')
-      .selectAll()
-      .where('tenant_id', '=', tenantId)
-      .where('agent_id', '=', String(agentId))
-      .orderBy('id', 'asc')
-      .execute();
-
-    let totalDebit = 0;
-    let totalCredit = 0;
-
-    for (const item of settlements) {
-      const amt = Number(item.amount || 0);
-      if (item.settlement_type === 'debit_note' || item.settlement_type === 'profit_share') {
-        totalDebit += amt;
-      } else if (item.settlement_type === 'credit_note') {
-        totalCredit += amt;
-      }
-    }
-
-    const netBalance = totalDebit - totalCredit;
-
-    return {
-      agentId: String(agentId),
-      settlements,
-      summary: {
-        totalDebitUsd: totalDebit,
-        totalCreditUsd: totalCredit,
-        netBalanceUsd: netBalance,
-        position: netBalance >= 0 ? 'receivable' : 'payable',
-      },
-    };
+    return this.agentSettlementsService.getAgentStatementOfAccount(auth, agentId);
   }
 
   // ==========================================
