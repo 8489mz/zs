@@ -32,7 +32,6 @@
     "src/features/delivery-reps/components/VanSaleCheckoutModal.tsx": 1476,
     "src/features/delivery-reps/components/VanSaleTab.tsx": 1228,
     "src/features/delivery-reps/components/VanSettleTab.tsx": 1719,
-    "src/features/delivery-reps/pages/VanSalesMobilePage.tsx": 4172,
     "src/features/hr/components/QuickCashAdvanceModal.tsx": 1159,
     "src/features/hr/components/payroll/PayrollReviewItemModal.tsx": 1293,
     "src/features/hr/pages/EmployeeProfilePage.tsx": 1017,
