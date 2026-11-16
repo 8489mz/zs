@@ -11,7 +11,7 @@ import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import { calcCartLineDiscount, calcCartLineNetTotal, calcModifiersTotal } from '@/features/pos/lib/pos-modifier-totals';
 import { getPosTerminalCode } from '@/features/pos/lib/pos-offline-sync';
 import { stripSaleItemNameFields } from '@/features/pos/contracts';
-import type { PosItem } from '@/features/pos/types/pos.types';
+import type { PosItem, PosPriceType } from '@/features/pos/types/pos.types';
 import {
   moveSplitBillItem,
   moveSplitBillItems,
@@ -630,7 +630,7 @@ export function PosSplitBillModal({ open, pos, initialManagerPin, onClose, onSpl
           name_en: (item as any).name_en || (item as any).nameEn || undefined,
           unitName: String(item.unitName || '').trim(),
           unitMultiplier: Number(item.unitMultiplier || 1),
-          priceType: item.priceType === 'wholesale' ? 'wholesale' : 'retail',
+          priceType: (['retail', 'wholesale', 'half_wholesale', 'credit'].includes(item.priceType as string) ? item.priceType : 'retail') as PosPriceType,
           notes: String(item.notes || '').trim(),
           modifiers: item.modifiers || [],
           /* INV-POS-LINE-DISCOUNT: the held check keeps the line's own

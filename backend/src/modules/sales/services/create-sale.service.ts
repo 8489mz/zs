@@ -44,6 +44,7 @@ import { computeInvoiceTotals } from '../../../common/utils/invoice-totals';
 import { allocateInvoiceDiscount, type AllocatedInvoiceLine } from '../engines/invoice-discount.engine';
 import { resolveSaleServiceCharge } from '../engines/sale-service-charge.engine';
 import { resolveSaleTaxRate } from '../engines/sale-tax-rate.engine';
+import { resolveListEffectivePrice, resolvePriceListContext } from '../engines/price-list-resolution.engine';
 import { allocateSaleTenders, shouldSuppressTenderFallback, type AppliedSaleTender, type SaleTenderChannel, type SaleTenderInput } from '../engines/sale-tender.engine';
 import { assertPosSubmitGates } from '../engines/pos-submit-gates.engine';
 import { assertProductsNot86ed } from './restaurant-advanced-fnb.service';
@@ -459,7 +460,7 @@ export class CreateSaleService {
       }
 
       const customer = normalized.customerId
-        ? await trx.selectFrom('customers').select(['id', 'name', 'balance', 'credit_limit', 'store_credit_balance', 'loyalty_points', 'is_credit_blocked', 'credit_block_reason']).where('id', '=', normalized.customerId).where('tenant_id', '=', scope.tenantId).where('is_active', '=', true).forUpdate().executeTakeFirst()
+        ? await trx.selectFrom('customers').select(['id', 'name', 'balance', 'credit_limit', 'store_credit_balance', 'loyalty_points', 'is_credit_blocked', 'credit_block_reason', 'customer_type', 'price_list_id']).where('id', '=', normalized.customerId).where('tenant_id', '=', scope.tenantId).where('is_active', '=', true).forUpdate().executeTakeFirst()
         : null;
       if (normalized.customerId && !customer) throw new AppError('Customer not found', 'CUSTOMER_NOT_FOUND', 404);
       if (normalized.paymentType === 'credit' && !customer) throw new AppError('Credit sale requires a customer', 'CUSTOMER_REQUIRED_FOR_CREDIT', 400);
@@ -581,7 +582,7 @@ export class CreateSaleService {
       const productRows = productIds.length > 0
         ? await trx.selectFrom('products as p')
             .leftJoin('manufacturing_boms as b', (join) => join.onRef('b.product_id', '=', 'p.id').onRef('b.tenant_id', '=', 'p.tenant_id').on('b.is_active', '=', true))
-            .select(['p.id', 'p.name', 'p.name_en', 'p.stock_qty', 'p.reserved_qty', 'p.retail_price', 'p.wholesale_price', 'p.cost_price', 'p.min_selling_price', 'p.item_type', 'b.id as bom_id'])
+            .select(['p.id', 'p.name', 'p.name_en', 'p.stock_qty', 'p.reserved_qty', 'p.retail_price', 'p.wholesale_price', 'p.half_wholesale_price', 'p.credit_price', 'p.cost_price', 'p.min_selling_price', 'p.item_type', 'b.id as bom_id'])
             .where('p.id', 'in', productIds)
             .where(sql<boolean>`p.tenant_id = ${scope.tenantId}`)
             .where('p.is_active', '=', true)
@@ -648,6 +649,21 @@ export class CreateSaleService {
         stockRowsByProductId.get(pId)!.push(sr);
       }
 
+      // INV-VAN-PRICE-LIST-WIRING: the customer's list (assigned, or
+      // the tenant default) is resolved ONCE per sale, on the sale
+      // transaction — the customer row was already locked by
+      // loadSaleContext, and a pool-handle read inside the open
+      // transaction would deadlock on PGlite's single connection.
+      // Walk-in sales (no customer) have no list and price at retail.
+      const priceListContext = normalized.customerId
+        ? await resolvePriceListContext(trx, scope.tenantId, normalized.customerId)
+        : null;
+      // The engine's credit branch runs only for non-wholesale
+      // customers on credit terms (wholesale beats credit).
+      const enginePaymentTerms: 'cash' | 'credit' = ctx.customer?.customer_type === 'wholesale'
+        ? 'cash'
+        : (normalized.paymentType === 'credit' ? 'credit' : 'cash');
+
       let subtotal = 0;
       const preparedItems = [];
       const autoProduceItems = [];
@@ -659,16 +675,49 @@ export class CreateSaleService {
         if (!product) throw new AppError(`Product #${item.productId} not found`, 'PRODUCT_NOT_FOUND', 404);
         
         const activeOffers = offersByProductId.get(item.productId) || [];
+        // INV-VAN-PRICE-LIST-WIRING: the tier is derived server-side
+        // from the customer type — the client-supplied priceType is
+        // accepted by the DTO for compatibility but is never the
+        // authority (a caller cannot claim wholesale by sending it).
+        // Walk-in (no customer) prices at retail; VIP without a list
+        // prices at retail (a list, when assigned, wins via the
+        // engine below). The customer's assigned list (or the tenant
+        // default), resolved once per sale above, discounts from the
+        // tier base; when a list rule applies, the list price is the
+        // allowed price and offers do not stack on it.
+        const customerType = ctx.customer?.customer_type as string | undefined;
+        const derivedPriceType: 'retail' | 'wholesale' | 'half_wholesale' | 'credit' =
+          customerType === 'wholesale' ? 'wholesale'
+          : customerType === 'half_wholesale' ? 'half_wholesale'
+          : customerType === 'credit' ? 'credit'
+          : 'retail';
+        const tierBasePrice = Number(
+          derivedPriceType === 'wholesale' ? (product.wholesale_price || product.retail_price)
+          : derivedPriceType === 'half_wholesale' ? (product.half_wholesale_price || product.wholesale_price || product.retail_price)
+          : derivedPriceType === 'credit' ? (product.credit_price || product.retail_price)
+          : product.retail_price,
+        ) || 0;
+        const listPrice = await resolveListEffectivePrice(
+          trx, scope.tenantId, priceListContext, item.productId, item.qty,
+          tierBasePrice, { paymentTerms: enginePaymentTerms }, moneyDigits,
+        );
+        const listApplies = listPrice.appliedRule !== 'none';
         const allowedUnitPrice = calculateAllowedSaleUnitPrice({
           retailPrice: product.retail_price,
           wholesalePrice: product.wholesale_price,
-          priceType: item.priceType,
+          halfWholesalePrice: product.half_wholesale_price,
+          creditPrice: product.credit_price,
+          priceType: derivedPriceType,
+          listEffectivePrice: listApplies ? listPrice.effectivePrice : null,
           offers: activeOffers,
           qty: item.qty,
           unitMultiplier: item.unitMultiplier,
           businessTimezone,
           moneyDigits,
         });
+        // The derived tier is what the prepared item (and the stored
+        // sale_items row) carries — the client's priceType never does.
+        item.priceType = derivedPriceType;
         const approvedUnitPrice = effectiveTerms?.approvedUnitPrices?.[item.productId];
         const isApprovedPrice = approvedUnitPrice !== undefined && Math.abs(Number(item.price || 0) - Number(approvedUnitPrice)) <= 0.0001;
         if (!isApprovedPrice) {
@@ -1385,7 +1434,7 @@ export class CreateSaleService {
             unit_name: item.unitName,
             unit_multiplier: item.unitMultiplier,
             cost_price: item.costPrice,
-            price_type: item.priceType as 'retail' | 'wholesale',
+            price_type: item.priceType as 'retail' | 'wholesale' | 'half_wholesale' | 'credit',
             notes: item.notes,
             modifiers: (item.originalPrice || item.offerDiscount || item.offerName)
               ? JSON.stringify({

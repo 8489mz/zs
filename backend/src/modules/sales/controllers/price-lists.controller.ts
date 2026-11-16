@@ -62,6 +62,10 @@ export class PriceListsController {
       productId: number;
       quantity: number;
       basePrice: number;
+      // INV-VAN-PRICE-LIST-WIRING: the credit branch of the engine
+      // runs only when paymentTerms is 'credit'; without it the
+      // preview could never reach the credit price.
+      paymentTerms?: 'cash' | 'credit';
     },
   ) {
     const data = await this.priceListsService.calculateEffectivePrice(
@@ -70,6 +74,7 @@ export class PriceListsController {
       Number(body.productId),
       Number(body.quantity || 1),
       Number(body.basePrice || 0),
+      body.paymentTerms ? { paymentTerms: body.paymentTerms } : undefined,
     );
     return { data };
   }

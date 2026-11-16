@@ -614,6 +614,33 @@ export function SalesInventoryRules({ form, disabled, settings, isRestaurantVert
                 </div>
               </div>
 
+              {/* Card 8.8: Cash Discount % (INV-VAN-PRICE-LIST-WIRING) */}
+              <div style={{ ...premiumCardStyle, cursor: 'default' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                  <div style={iconBadgeStyle}>
+                    <CheckShieldIcon size={20} color="#170e5e" />
+                  </div>
+                  <div style={premiumCardTextStyle}>
+                    <strong style={{ fontSize: '0.88rem', color: '#0f172a', fontWeight: 800 }}>{t('settings.forms.tabs.sales_inventory_settings_tab.s174', "خصم الدفع النقدي %")}</strong>
+                    <small className="muted" style={{ fontSize: '0.76rem', color: '#64748b' }}>
+                      {t('settings.forms.tabs.sales_inventory_settings_tab.s175', "خصم النظام على الدفع النقدي الفوري فقط (لا يسري على الآجل أو البطاقة أو المقسّط). يُحسب من سعر البيع بعد خصم المندوب، ولا يحتاج رمز مشرف. صفر يعني إيقافه.")}
+                    </small>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <input
+                    type="number"
+                    id="cashDiscountPercent"
+                    min={0}
+                    max={100}
+                    {...form.register('cashDiscountPercent', { valueAsNumber: true })}
+                    disabled={disabled}
+                    style={{ width: '64px', height: '30px', padding: '0 6px', fontSize: '0.85rem', fontWeight: 800, textAlign: 'center', border: '1px solid #cbd5e1', borderRadius: '6px' }}
+                  />
+                  <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#170e5e' }}>%</span>
+                </div>
+              </div>
+
               {/* Card 9: Restaurant Tables Count (Only for Restaurants & Cafes) */}
               {isRestaurantVertical && (
                 <div style={{ ...premiumCardStyle, cursor: 'default' }}>

@@ -3,7 +3,7 @@ import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import i18n from '@/lib/i18n';
 
 export interface CustomerTypeOption {
-  value: 'cash' | 'vip' | 'credit' | 'wholesale';
+  value: 'cash' | 'vip' | 'credit' | 'wholesale' | 'half_wholesale';
   label: string;
   badgeLabel: string;
   badgeStyle: {
@@ -60,6 +60,7 @@ export const MARITIME_CUSTOMER_PROFILE: CustomerProfile = {
     { value: 'vip', label: 'عميل استراتيجي VIP (أولوية حجز وتفريغ وخصومات نولون)', badgeLabel: 'VIP استراتيجي', badgeStyle: { bg: '#fef3c7', color: '#92400e' } },
     { value: 'credit', label: 'شاحن تعاقدي آجل (سحب بوالص على الحساب مع فترات سماح)', badgeLabel: 'تعاقدي آجل', badgeStyle: { bg: '#e0f2fe', color: '#0369a1' } },
     { value: 'wholesale', label: 'وكيل شحن / مجمع بضائع (Forwarder / Co-Loader)', badgeLabel: 'وكيل شحن / مجمع', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
+    { value: 'half_wholesale', label: 'نصف جملة (سعر نصف الجملة)', badgeLabel: 'نصف جملة', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
   ],
   balanceLabel: 'الرصيد الافتتاحي للنولون',
   balanceHint: 'المبلغ المستحق على الشاحن/المستورد في بداية التسجيل (إن وجد)',
@@ -92,6 +93,7 @@ export const CONTRACTING_CUSTOMER_PROFILE: CustomerProfile = {
     { value: 'vip', label: 'مطور عقاري استراتيجي VIP (مشاريع كبرى وعقود حصرية)', badgeLabel: 'مطور استراتيجي VIP', badgeStyle: { bg: '#fef3c7', color: '#92400e' } },
     { value: 'credit', label: 'جهة إسناد حكومية / تعاقد آجل (مستخلصات حكومية مع فترة صرف)', badgeLabel: 'جهة حكومية / تعاقدي', badgeStyle: { bg: '#e0f2fe', color: '#0369a1' } },
     { value: 'wholesale', label: 'مقاول رئيسي (أعمال مقاولات باطن / كونسورتيوم)', badgeLabel: 'مقاول رئيسي / باطن', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
+    { value: 'half_wholesale', label: 'نصف جملة (سعر نصف الجملة)', badgeLabel: 'نصف جملة', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
   ],
   balanceLabel: 'الرصيد الافتتاحي للتعاقدات',
   balanceHint: 'المستحقات السابقة على جهة الإسناد إن وجدت قبل بدء التسجيل',
@@ -121,6 +123,7 @@ export const DISTRIBUTION_CUSTOMER_PROFILE: CustomerProfile = {
   typeLabel: 'نوع وتصنيف منفذ التوزيع',
   types: [
     { value: 'wholesale', label: 'محل جملة / نصف جملة (أسعار جملة خاصة)', badgeLabel: 'جملة', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
+    { value: 'half_wholesale', label: 'نصف جملة (سعر نصف الجملة)', badgeLabel: 'نصف جملة', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
     { value: 'credit', label: 'منفذ توزيع آجل (سداد مع دورة التوزيع القادمة)', badgeLabel: 'آجل / دورة', badgeStyle: { bg: '#e0f2fe', color: '#0369a1' } },
     { value: 'cash', label: 'محل قطاعي / سداد نقدي فوري مع التسليم', badgeLabel: 'نقدي فوري', badgeStyle: { bg: '#f1f5f9', color: '#475569' } },
     { value: 'vip', label: 'منفذ استراتيجي كبار العملاء (VIP)', badgeLabel: 'VIP استراتيجي', badgeStyle: { bg: '#fef3c7', color: '#92400e' } },
@@ -156,6 +159,7 @@ export const GENERAL_CUSTOMER_PROFILE: CustomerProfile = {
     { value: 'vip', label: 'عميل مميز (VIP) - خصومات خاصة', badgeLabel: 'VIP مميز', badgeStyle: { bg: '#fef3c7', color: '#92400e' } },
     { value: 'credit', label: 'عميل آجل (سحب على الحساب)', badgeLabel: 'آجل', badgeStyle: { bg: '#e0f2fe', color: '#0369a1' } },
     { value: 'wholesale', label: 'عميل جملة (أسعار جملة)', badgeLabel: 'جملة', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
+    { value: 'half_wholesale', label: 'نصف جملة (سعر نصف الجملة)', badgeLabel: 'نصف جملة', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
   ],
   balanceLabel: 'الرصيد الافتتاحي',
   balanceHint: 'المبلغ المستحق على العميل عند بداية التسجيل (إن وجد)',
@@ -186,6 +190,7 @@ export const EN_DISTRIBUTION_CUSTOMER_PROFILE: CustomerProfile = {
   typeLabel: 'Outlet Type & Classification',
   types: [
     { value: 'wholesale', label: 'Wholesale / Semi-wholesale (Special wholesale rates)', badgeLabel: 'Wholesale', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
+    { value: 'half_wholesale', label: 'Half-wholesale (half-wholesale price)', badgeLabel: 'Half-wholesale', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
     { value: 'credit', label: 'Credit Outlet (Settlement with next cycle)', badgeLabel: 'Credit / Cycle', badgeStyle: { bg: '#e0f2fe', color: '#0369a1' } },
     { value: 'cash', label: 'Retail Outlet / Immediate cash on delivery', badgeLabel: 'Cash', badgeStyle: { bg: '#f1f5f9', color: '#475569' } },
     { value: 'vip', label: 'Strategic Key Account (VIP)', badgeLabel: 'VIP Strategic', badgeStyle: { bg: '#fef3c7', color: '#92400e' } },
@@ -221,6 +226,7 @@ export const EN_CONTRACTING_CUSTOMER_PROFILE: CustomerProfile = {
     { value: 'vip', label: 'Strategic Developer VIP (Major projects & exclusive contracts)', badgeLabel: 'Strategic Developer', badgeStyle: { bg: '#fef3c7', color: '#92400e' } },
     { value: 'credit', label: 'Government Authority / Deferred Contract (Progress certificates)', badgeLabel: 'Government / Contractual', badgeStyle: { bg: '#e0f2fe', color: '#0369a1' } },
     { value: 'wholesale', label: 'Main Contractor (Subcontracting / Consortium)', badgeLabel: 'Main Contractor', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
+    { value: 'half_wholesale', label: 'Half-wholesale (half-wholesale price)', badgeLabel: 'Half-wholesale', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
   ],
   balanceLabel: 'Opening Contractual Balance',
   balanceHint: 'Prior receivables from this client (if any)',
@@ -253,6 +259,7 @@ export const EN_MARITIME_CUSTOMER_PROFILE: CustomerProfile = {
     { value: 'vip', label: 'Strategic VIP Client (Priority booking & freight discounts)', badgeLabel: 'Strategic VIP', badgeStyle: { bg: '#fef3c7', color: '#92400e' } },
     { value: 'credit', label: 'Credit Account (Monthly freight invoicing)', badgeLabel: 'Credit Shipper', badgeStyle: { bg: '#e0f2fe', color: '#0369a1' } },
     { value: 'wholesale', label: 'Forwarder / Partner Agency', badgeLabel: 'Forwarder Agency', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
+    { value: 'half_wholesale', label: 'Half-wholesale (half-wholesale price)', badgeLabel: 'Half-wholesale', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
   ],
   balanceLabel: 'Opening Freight Balance',
   balanceHint: 'Prior shipper balance before system registration',
@@ -285,6 +292,7 @@ export const EN_GENERAL_CUSTOMER_PROFILE: CustomerProfile = {
     { value: 'vip', label: 'VIP Customer - Special Discounts', badgeLabel: 'VIP', badgeStyle: { bg: '#fef3c7', color: '#92400e' } },
     { value: 'credit', label: 'Credit Account (On Account)', badgeLabel: 'Credit', badgeStyle: { bg: '#e0f2fe', color: '#0369a1' } },
     { value: 'wholesale', label: 'Wholesale Customer', badgeLabel: 'Wholesale', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
+    { value: 'half_wholesale', label: 'Half-wholesale (half-wholesale price)', badgeLabel: 'Half-wholesale', badgeStyle: { bg: '#dcfce7', color: '#166534' } },
   ],
   balanceLabel: 'Opening Balance',
   balanceHint: 'Outstanding debt at the start of registration (if any)',

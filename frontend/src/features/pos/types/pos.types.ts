@@ -1,4 +1,4 @@
-export type PosPriceType = 'retail' | 'wholesale';
+export type PosPriceType = 'retail' | 'wholesale' | 'half_wholesale' | 'credit';
 
 export interface PosItem {
   lineKey: string;

@@ -40,6 +40,9 @@ interface PosProductsPanelProps {
   onSearchSubmitFirstResult: (rawQuery?: string) => boolean;
   priceType: PosPriceType;
   onPriceTypeChange: (value: PosPriceType) => void;
+  // INV-VAN-PRICE-LIST-WIRING: true while a customer is selected —
+  // the tier toggle is locked and shows the derived tier display-only.
+  isPriceTypeLocked?: boolean;
   products: Product[];
   recentProducts: Product[];
   onAddProduct: (product: Product) => void;
@@ -439,7 +442,13 @@ function InlineGroupPicker({
           ) : (
             <div className="pos-variant-row-list">
               {filteredProducts.map((product) => {
-                const price = priceType === 'wholesale' ? (product.wholesalePrice || product.retailPrice) : product.retailPrice;
+                // INV-VAN-PRICE-LIST-WIRING: the 4-tier display price
+                // (same fallback order as getProductPrice on the
+                // server: half-wholesale → wholesale → retail).
+                const price = priceType === 'wholesale' ? (product.wholesalePrice || product.retailPrice)
+                  : priceType === 'half_wholesale' ? (product.halfWholesalePrice || product.wholesalePrice || product.retailPrice)
+                  : priceType === 'credit' ? (product.creditPrice || product.retailPrice)
+                  : product.retailPrice;
                 const isOutOfStock = !allowNegativeStockSales && (product.itemType !== 'service') && !product.hasBom && (Number(product.stock) || 0) <= 0;
                 const variantLabel = [product.color, product.size].filter(Boolean).join(' / ') || product.name;
                 const colorHex = getArabicColorHex(product.color);
@@ -1264,6 +1273,7 @@ function PosProductsPanelComponent({
   onSearchSubmitFirstResult,
   priceType,
   onPriceTypeChange,
+  isPriceTypeLocked,
   products,
   recentProducts,
   onAddProduct,
@@ -1799,6 +1809,19 @@ function PosProductsPanelComponent({
 
               {customization.showPriceTierToggle && (
                 <div className="pos-price-toggle-container" style={{ width: '100%' }}>
+                  {isPriceTypeLocked ? (
+                    // INV-VAN-PRICE-LIST-WIRING: a selected customer
+                    // fixes the tier — the toggle is display-only
+                    // (the server re-derives the same tier).
+                    <div style={{ display: 'flex', background: '#f1f5f9', padding: isMobile ? '2.5px' : '4px', borderRadius: '8px', border: '1px solid #e2e8f0', gap: isMobile ? '3px' : '4px', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ flex: 1, padding: isMobile ? '5px 10px' : '7px 16px', fontSize: isMobile ? '12px' : '13px', fontWeight: '700', borderRadius: '6px', background: '#0f172a', color: '#ffffff', textAlign: 'center' }}>
+                        {priceType === 'wholesale' ? t('pos.wholesale_price', 'سعر الجملة')
+                          : priceType === 'half_wholesale' ? t('pos.half_wholesale_price', 'سعر نصف الجملة')
+                          : priceType === 'credit' ? t('pos.credit_price', 'سعر الآجل')
+                          : t('pos.retail_price', 'سعر القطاعي')}
+                      </span>
+                    </div>
+                  ) : (
                   <div className="pos-price-toggle-buttons" style={{ display: 'flex', background: '#f1f5f9', padding: isMobile ? '2.5px' : '4px', borderRadius: '8px', border: '1px solid #e2e8f0', gap: isMobile ? '3px' : '4px' }}>
                     <button
                       type="button"
@@ -1839,6 +1862,7 @@ function PosProductsPanelComponent({
                       {t('pos.wholesale_price', 'سعر الجملة')}
                     </button>
                   </div>
+                  )}
                 </div>
               )}
 

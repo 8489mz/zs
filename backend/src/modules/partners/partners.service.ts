@@ -408,7 +408,7 @@ export class PartnersService {
   async getCustomerPosSummary(id: number, actor: AuthContext): Promise<Record<string, unknown>> {
     const customer = await this.db
       .selectFrom('customers')
-      .select(['id', 'balance', 'credit_limit', 'store_credit_balance', 'customer_type', 'loyalty_points'])
+      .select(['id', 'balance', 'credit_limit', 'store_credit_balance', 'customer_type', 'price_list_id', 'loyalty_points'])
       .where('id', '=', id)
       .where('is_active', '=', true)
       .where(this.tenantPredicate(actor))
@@ -452,6 +452,10 @@ export class PartnersService {
       storeCreditBalance: Number(customer.store_credit_balance || 0),
       loyaltyPoints: Number(customer.loyalty_points || 0),
       customerType: customer.customer_type || 'cash',
+      // INV-VAN-PRICE-LIST-WIRING: the assigned list id, so the POS
+      // can show which list prices this customer (and the sale path
+      // resolves the same assignment server-side).
+      priceListId: customer.price_list_id != null ? Number(customer.price_list_id) : null,
       lastSaleAt: salesSummary?.last_sale_at || null,
       totalSalesAmount: Number(salesSummary?.total_sales_amount || 0),
       invoiceCount: Number(salesSummary?.invoice_count || 0),
@@ -703,11 +707,43 @@ export class PartnersService {
     };
   }
 
+  /**
+   * INV-VAN-PRICE-LIST-WIRING: resolves a requested price-list
+   * assignment to a storable id. null/undefined (no assignment) pass
+   * through as null. An unknown id, a foreign-tenant id, or a
+   * non-integer is refused with PRICE_LIST_NOT_FOUND (400) before
+   * anything is written. An INACTIVE list id is returned as given:
+   * the assignment is preserved for reactivation and the engine
+   * resolves it as "no list" while it is inactive.
+   */
+  private async resolveAssignablePriceListId(
+    requested: number | null | undefined,
+    actor: AuthContext,
+  ): Promise<number | null> {
+    if (requested == null) return null;
+    const id = Number(requested);
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new AppError('Price list not found', 'PRICE_LIST_NOT_FOUND', 400);
+    }
+    const list = await this.db
+      .selectFrom('price_lists')
+      .select(['id'])
+      .where('id', '=', id)
+      .where('tenant_id', '=', this.tenantId(actor))
+      .executeTakeFirst();
+    if (!list) throw new AppError('Price list not found', 'PRICE_LIST_NOT_FOUND', 400);
+    return id;
+  }
+
   async createCustomer(payload: UpsertCustomerDto, actor: AuthContext): Promise<Record<string, unknown>> {
     const name = String(payload.name || '').trim();
     if (!name) throw new AppError('Customer name is required', 'CUSTOMER_NAME_REQUIRED', 400);
     if (await this.customerNameExists(name, actor)) throw new AppError('Customer already exists', 'CUSTOMER_EXISTS', 400);
     const phone = String(payload.phone || '').trim();
+    // INV-VAN-PRICE-LIST-WIRING: an unknown or foreign list id is
+    // refused before anything is written; an inactive list id is
+    // stored (assignment preserved for reactivation).
+    const priceListId = await this.resolveAssignablePriceListId(payload.priceListId, actor);
 
     const inserted = await this.db.transaction().execute(async (trx) => {
       const inserted = await trx
@@ -717,7 +753,8 @@ export class PartnersService {
           phone,
           address: String(payload.address || '').trim(),
           balance: 0,
-          customer_type: ['vip', 'credit', 'wholesale'].includes(payload.type as string) ? (payload.type as any) : 'cash',
+          customer_type: ['vip', 'credit', 'wholesale', 'half_wholesale'].includes(payload.type as string) ? (payload.type as any) : 'cash',
+          price_list_id: priceListId,
           credit_limit: Number(payload.creditLimit || 0),
           store_credit_balance: Number(payload.storeCreditBalance || 0),
           company_name: String(payload.companyName || '').trim(),
@@ -786,6 +823,14 @@ export class PartnersService {
       throw new AppError('Store credit cannot be edited from customer form', 'CUSTOMER_CREDIT_EDIT_FORBIDDEN', 400);
     }
 
+    // INV-VAN-PRICE-LIST-WIRING: the list assignment is written only
+    // when the payload carries the key (absent = unchanged, so
+    // callers that do not manage lists never detach one); null
+    // clears it. Unknown/foreign ids are refused.
+    const priceListId = payload.priceListId !== undefined
+      ? await this.resolveAssignablePriceListId(payload.priceListId, actor)
+      : undefined;
+
     let metaToSave: any = payload.metadata ? { ...payload.metadata } : null;
     if (metaToSave && typeof metaToSave === 'object') {
       if (metaToSave.visit_day !== undefined || metaToSave.visit_days !== undefined) {
@@ -801,7 +846,8 @@ export class PartnersService {
         name,
         phone,
         address: String(payload.address || '').trim(),
-        customer_type: ['vip', 'credit', 'wholesale'].includes(payload.type as string) ? (payload.type as any) : 'cash',
+        customer_type: ['vip', 'credit', 'wholesale', 'half_wholesale'].includes(payload.type as string) ? (payload.type as any) : 'cash',
+        ...(priceListId !== undefined ? { price_list_id: priceListId } : {}),
         credit_limit: Number(payload.creditLimit || 0),
         company_name: String(payload.companyName || '').trim(),
         tax_number: String(payload.taxNumber || '').trim(),

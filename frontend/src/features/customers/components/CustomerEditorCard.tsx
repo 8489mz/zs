@@ -17,6 +17,7 @@ import type { Customer } from '@/types/domain';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { useCustomerProfile } from '@/features/customers/constants/customer-profiles';
 import { deliveryRepsApi, type DeliveryRep } from '@/shared/api/delivery-reps.api';
+import { priceListsApi } from '@/features/sales/api/price-lists.api';
 import { customersApi } from '@/shared/api/customers.api';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import { CustomerVisitDaysPicker } from './CustomerVisitDaysPicker';
@@ -61,6 +62,13 @@ export function CustomerEditorCard({
     staleTime: 60000,
   });
   const allReps: DeliveryRep[] = useMemo(() => ((repsQuery.data as any) || []) as DeliveryRep[], [repsQuery.data]);
+
+  // INV-VAN-PRICE-LIST-WIRING: the lists offered for assignment.
+  const priceListsQuery = useQuery({
+    queryKey: ['price-lists'],
+    queryFn: priceListsApi.list,
+    staleTime: 60000,
+  });
 
   // Ledger-derived current book balance (INV-EDIT-DIALOG-BALANCE-LABEL):
   // the disabled input below shows the stored customers.balance column
@@ -144,7 +152,11 @@ export function CustomerEditorCard({
       phone: customer.phone || '',
       address: customer.address || '',
       balance: Number(customer.balance || 0),
-      type: (['vip', 'credit', 'wholesale', 'cash'].includes(customer.type) ? customer.type : 'cash') as any,
+      type: (['vip', 'credit', 'wholesale', 'half_wholesale', 'cash'].includes(customer.type) ? customer.type : 'cash') as any,
+      // INV-VAN-PRICE-LIST-WIRING: reset from the mapped list payload
+      // (mapCustomerRow) — without it the form resets to null on every
+      // reopen and the next save would detach the list.
+      priceListId: (customer as any).priceListId != null ? Number((customer as any).priceListId) : null,
       creditLimit: Number(customer.creditLimit || 0),
       metadata: {
         ...meta,
@@ -279,6 +291,32 @@ export function CustomerEditorCard({
                   onChange={field.onChange}
                   disabled={mutation.isPending}
                   options={profile.types.map((t) => ({ value: t.value, label: t.label }))}
+                  style={{ height: '36px', fontSize: '12.5px' }}
+                />
+              )}
+            />
+          </Field>
+
+          {/* INV-VAN-PRICE-LIST-WIRING: assign the customer to a price
+              list. The sale paths resolve this assignment server-side;
+              an inactive list may be assigned and resolves as "no list"
+              until reactivated. */}
+          <Field label={__t('customers.customer_editor_card.s47', "قائمة الأسعار")}>
+            <Controller
+              name="priceListId"
+              control={form.control}
+              render={({ field }) => (
+                <CustomSelect
+                  value={field.value ?? ''}
+                  onChange={(v) => field.onChange(v === '' ? null : Number(v))}
+                  disabled={mutation.isPending}
+                  options={[
+                    { value: '', label: __t('customers.customer_editor_card.s48', "بدون قائمة (السعر الأساسي)") },
+                    ...(priceListsQuery.data || []).map((l) => ({
+                      value: String(l.id),
+                      label: l.is_active ? l.name : `${l.name} (${__t('customers.customer_editor_card.s49', "غير مفعّلة")})`,
+                    })),
+                  ]}
                   style={{ height: '36px', fontSize: '12.5px' }}
                 />
               )}

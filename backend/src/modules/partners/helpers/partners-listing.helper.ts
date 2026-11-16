@@ -51,6 +51,10 @@ export function mapCustomerRow(
     repBalances: repBalances || [],
     unassignedBalance: Number(unassignedBalance ?? 0),
     type: row.customer_type || 'cash',
+    // INV-VAN-PRICE-LIST-WIRING: the assigned list id, so the edit
+    // form can reset it (without it the form resets to null on every
+    // reopen — and the next save would detach the list).
+    priceListId: row.price_list_id != null ? Number(row.price_list_id) : null,
     creditLimit: Number(row.credit_limit || 0),
     storeCreditBalance: Number(row.store_credit_balance || 0),
     companyName: row.company_name || '',

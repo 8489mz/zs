@@ -75,6 +75,10 @@ export const priceListsApi = {
     productId: number;
     quantity: number;
     basePrice: number;
+    // INV-VAN-PRICE-LIST-WIRING: the engine's credit branch runs
+    // only when paymentTerms is 'credit'; without it the preview
+    // could never reach the credit price.
+    paymentTerms?: 'cash' | 'credit';
   }): Promise<{
     effectivePrice: number;
     discountPercent: number;

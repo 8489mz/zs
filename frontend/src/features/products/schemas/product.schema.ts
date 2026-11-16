@@ -28,6 +28,10 @@ export const productFormSchema = z.object({
   costPrice: z.coerce.number().min(0),
   retailPrice: z.coerce.number().min(0),
   wholesalePrice: z.coerce.number().min(0),
+  // INV-VAN-PRICE-LIST-WIRING: the half-wholesale selling price.
+  // Optional — NULL means "not set" and sale paths fall back to
+  // wholesale (then retail) for a half-wholesale customer.
+  halfWholesalePrice: z.coerce.number().min(0).optional().nullable(),
   creditPrice: z.coerce.number().min(0).optional().nullable(),
   consumerPrice: z.coerce.number().min(0).optional().nullable(),
   stock: z.coerce.number(),

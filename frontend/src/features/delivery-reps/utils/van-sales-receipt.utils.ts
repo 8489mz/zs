@@ -40,6 +40,11 @@ export interface VanSaleReceiptData {
   items?: VanSaleReceiptItem[];
   subtotal?: number;
   discount?: number;
+  // INV-VAN-PRICE-LIST-WIRING: the SYSTEM cash discount portion of
+  // `discount` (computed server-side from the tenant setting). The
+  // screen receipt shows it as a separate "of which" line; the
+  // thermal print keeps the combined discount line.
+  systemCashDiscountAmount?: number;
   repName?: string;
   vehiclePlate?: string;
   warehouseName?: string;

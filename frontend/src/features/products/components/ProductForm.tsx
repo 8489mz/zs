@@ -71,6 +71,7 @@ function getDefaultValues(itemKind: 'standard' | 'fashion' = 'standard'): Produc
     costPrice: 0,
     retailPrice: 0,
     wholesalePrice: 0,
+    halfWholesalePrice: 0,
     creditPrice: 0,
     consumerPrice: 0,
     stock: 0,
@@ -397,6 +398,7 @@ export function ProductForm({ categories, suppliers, locations, onCategoryCreate
         <Field label={t('products.product_form.s20', "سعر الشراء")}><input type="number" step="0.01" {...form.register('costPrice')} disabled={mutation.isPending} /></Field>
         <Field label={t('products.product_form.s21', "سعر القطاعي (الكاش)")}><input type="number" step="0.01" {...form.register('retailPrice')} disabled={mutation.isPending} /></Field>
         <Field label={t('products.product_form.s22', "سعر الجملة")}><input type="number" step="0.01" {...form.register('wholesalePrice')} disabled={mutation.isPending} /></Field>
+        <Field label={t('products.product_form.s72', "سعر نصف الجملة")}><input type="number" step="0.01" {...form.register('halfWholesalePrice')} disabled={mutation.isPending} placeholder={t('products.product_form.s73', "اختياري - افتراضياً نفس الجملة")} /></Field>
         <Field label={t('products.product_form.s23', "سعر البيع الآجل (توزيع)")}><input type="number" step="0.01" {...form.register('creditPrice')} disabled={mutation.isPending} placeholder={t('products.product_form.s24', "اختياري - افتراضياً نفس الكاش")} /></Field>
         <Field label={t('products.product_form.s25', "سعر المستهلك / الجمهور (SRP)")}><input type="number" step="0.01" {...form.register('consumerPrice')} disabled={mutation.isPending} placeholder={t('products.product_form.s26', "سعر بيع المحل للجمهور")} /></Field>
         {!usesVariantBuilder ? <Field label={t('products.product_form.s27', "المخزون الافتتاحي")}><input type="number" {...form.register('stock')} disabled={mutation.isPending} /></Field> : null}

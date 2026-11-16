@@ -393,7 +393,7 @@ export interface CustomerTable {
   phone: string;
   address: string;
   balance: number;
-  customer_type: 'cash' | 'vip' | 'credit' | 'wholesale';
+  customer_type: 'cash' | 'vip' | 'credit' | 'wholesale' | 'half_wholesale';
   credit_limit: number;
   store_credit_balance: number;
   company_name: string;
@@ -434,6 +434,9 @@ export interface ProductTable {
   cost_price: number;
   retail_price: number;
   wholesale_price: number;
+  // INV-VAN-PRICE-LIST-WIRING: half-wholesale selling price (migration
+  // 0333). NULL means "not set" — falls back to wholesale, then retail.
+  half_wholesale_price?: number | null;
   credit_price?: number | null;
   consumer_price?: number | null;
   min_selling_price?: number | null;
@@ -991,6 +994,13 @@ export interface SalesTable {
   payment_channel: 'cash' | 'card' | 'wallet' | 'instapay' | 'mixed' | 'credit';
   subtotal: number;
   discount: number;
+  // INV-VAN-PRICE-LIST-WIRING: the SYSTEM cash discount computed
+  // server-side from the tenant setting (migration 0333), recorded
+  // distinctly from the rep-entered invoice discount so the invoice
+  // can show rep vs cash discount as separate lines. NULL on
+  // historical rows; 0 when the setting is off or the sale is not
+  // immediate cash.
+  system_cash_discount_amount?: number | null;
   tax_rate: number;
   tax_amount: number;
   delivery_fee: number;
@@ -1089,7 +1099,7 @@ export interface SaleItemTable {
   /* INV-POS-LINE-DISCOUNT: the per-line TOTAL discount stored by
    * migration 2040000000313 (nullable; NULL reads as zero). */
   line_discount?: number | null;
-  price_type: 'retail' | 'wholesale';
+  price_type: 'retail' | 'wholesale' | 'half_wholesale' | 'credit';
   consumer_price?: number | null;
   pricing_tier_type?: 'cash' | 'credit' | 'offer' | string | null;
   unit_offer_savings?: number | null;
@@ -1134,7 +1144,7 @@ export interface HeldSaleTable {
   delivery_fee: number;
   note: string;
   search: string;
-  price_type: 'retail' | 'wholesale';
+  price_type: 'retail' | 'wholesale' | 'half_wholesale' | 'credit';
   branch_id: number | null;
   location_id: number | null;
   created_by: number | null;
@@ -1169,7 +1179,7 @@ export interface HeldSaleItemTable {
   unit_price: number;
   unit_name: string;
   unit_multiplier: number;
-  price_type: 'retail' | 'wholesale';
+  price_type: 'retail' | 'wholesale' | 'half_wholesale' | 'credit';
   notes?: string;
   modifiers: ColumnType<unknown, unknown | undefined, unknown | undefined>;
   serials?: any;

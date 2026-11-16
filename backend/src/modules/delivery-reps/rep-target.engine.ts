@@ -629,6 +629,52 @@ export async function getVanRepDiscountCapPercent(
   }
 }
 
+/** The tenant-level cash-discount % (INV-VAN-PRICE-LIST-WIRING). */
+export const VAN_CASH_DISCOUNT_DEFAULT_PERCENT = 0;
+
+/** Settings keys holding the tenant cash-discount % (either spelling). */
+export const VAN_CASH_DISCOUNT_SETTING_KEYS = ['cashDiscountPercent', 'cash_discount_percent'];
+
+/**
+ * INV-VAN-PRICE-LIST-WIRING: the tenant cash-discount % off the
+ * selling price on immediate cash payment (default 0 = off). Same
+ * dual-key pattern as getVanRepDiscountCapPercent; missing row = 0;
+ * clamped 0–100. This is a SYSTEM discount: it is computed
+ * server-side from this setting and NEVER routed through
+ * cashDiscountAmount (the rep-entered, cap-gated channel) — a system
+ * discount poured into that field would be refused over 5% and
+ * would consume the rep's cap.
+ */
+export async function getCashDiscountPercent(
+  queryable: any,
+  tenantId: string,
+): Promise<number> {
+  try {
+    const row = await queryable
+      .selectFrom('settings')
+      .select(['value'])
+      .where('tenant_id', '=', tenantId)
+      .where((eb: any) =>
+        eb.or(VAN_CASH_DISCOUNT_SETTING_KEYS.map((key) => eb('key', '=', key))),
+      )
+      .executeTakeFirst();
+    if (row?.value == null || String(row.value).trim() === '') return VAN_CASH_DISCOUNT_DEFAULT_PERCENT;
+    let parsed: unknown = row.value;
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch {
+        parsed = row.value;
+      }
+    }
+    const pct = Number(parsed);
+    if (!Number.isFinite(pct)) return VAN_CASH_DISCOUNT_DEFAULT_PERCENT;
+    return Math.min(100, Math.max(0, pct));
+  } catch {
+    return VAN_CASH_DISCOUNT_DEFAULT_PERCENT;
+  }
+}
+
 /** Per-key fallbacks for an explicit permissions object (creation defaults). */
 export const REP_PERMISSION_DEFAULTS: RepPermissionFlags = {
   can_edit_routes: false,

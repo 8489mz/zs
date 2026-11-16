@@ -22,6 +22,7 @@ export function toProductFormValues(product: Product): ProductFormOutput {
     costPrice: Number(product.costPrice || 0),
     retailPrice: Number(product.retailPrice || 0),
     wholesalePrice: Number(product.wholesalePrice || 0),
+    halfWholesalePrice: product.halfWholesalePrice != null ? Number(product.halfWholesalePrice) : 0,
     creditPrice: product.creditPrice != null ? Number(product.creditPrice) : 0,
     consumerPrice: product.consumerPrice != null ? Number(product.consumerPrice) : 0,
     stock: Number(product.stock || 0),

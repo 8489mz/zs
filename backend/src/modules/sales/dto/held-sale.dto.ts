@@ -32,8 +32,8 @@ class HeldSaleItemDto {
   unitMultiplier?: number;
 
   @IsOptional()
-  @IsIn(['retail', 'wholesale'])
-  priceType?: 'retail' | 'wholesale';
+  @IsIn(['retail', 'wholesale', 'half_wholesale', 'credit'])
+  priceType?: 'retail' | 'wholesale' | 'half_wholesale' | 'credit';
 
   @IsOptional()
   @IsString()
@@ -170,8 +170,8 @@ export class HeldSaleDto {
   orderType?: string;
 
   @IsOptional()
-  @IsIn(['retail', 'wholesale'])
-  priceType?: 'retail' | 'wholesale';
+  @IsIn(['retail', 'wholesale', 'half_wholesale', 'credit'])
+  priceType?: 'retail' | 'wholesale' | 'half_wholesale' | 'credit';
 
   @Transform(({ value }: { value: unknown }) => (value && Number(value) > 0 ? Number(value) : undefined))
   @IsOptional()

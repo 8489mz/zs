@@ -463,6 +463,28 @@ export const VanSalesReceiptModal: React.FC<VanSalesReceiptModalProps> = ({
             </span>
           </div>
 
+          {/* INV-VAN-PRICE-LIST-WIRING: the system cash-discount
+              portion of the combined discount above, shown as a
+              separate "of which" line (rep discount is the
+              remainder). Shown only when the setting applied. */}
+          {(receipt.systemCashDiscountAmount ?? 0) > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                color: '#64748b',
+                fontSize: '11.5px',
+                paddingTop: '4px',
+              }}
+            >
+              <span>{t('delivery_reps.van_sales_receipt_modal.s37', "منها: خصم الدفع النقدي:")}</span>
+              <span style={{ fontWeight: 700 }}>
+                {Number(receipt.systemCashDiscountAmount || 0).toFixed(2)} <CurrencySymbol />
+              </span>
+            </div>
+          )}
+
           <div
             style={{
               display: 'flex',

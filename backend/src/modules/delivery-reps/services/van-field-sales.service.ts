@@ -15,6 +15,7 @@ import {
   extractAssignedRepIds,
   loadRepPermissions,
   getVanRepDiscountCapPercent,
+  getCashDiscountPercent,
 } from '../rep-target.engine';
 import { VanFraudRadarService } from './van-fraud-radar.service';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
@@ -24,6 +25,7 @@ import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant
 import { offlineSaleTimestamps } from '../../cash-drawer/helpers/cash-drawer.helper';
 import { validateVanOfflineCreatedAt } from '../van-offline-timestamps.helper';
 import { resolveSaleTaxRate } from '../../sales/engines/sale-tax-rate.engine';
+import { resolveListEffectivePrice, resolvePriceListContext } from '../../sales/engines/price-list-resolution.engine';
 import { computeInvoiceTotals } from '../../../common/utils/invoice-totals';
 
 export interface VanFieldSalesDeps {
@@ -223,6 +225,9 @@ export class VanFieldSalesService {
     // measured into systemAuthorizedPrice before this.
     let repLineDiscountTotal = 0;
     let capBaseTotal = 0;
+    // INV-VAN-PRICE-LIST-WIRING: the SYSTEM cash discount for this
+    // sale (computed in the cash branch, after the rep-cap check).
+    let systemCashDiscountAmount = 0;
     let createdSaleId = 0;
     let cashPaid = 0;
     let creditOwed = 0;
@@ -248,6 +253,21 @@ export class VanFieldSalesService {
     // reason (a flags/settings read must never run inside the open
     // transaction).
     const discountCapPercent = await getVanRepDiscountCapPercent(this.anyDb, tenantId);
+
+    // INV-VAN-PRICE-LIST-WIRING: the tenant cash-discount % (default
+    // 0 = off), read on the pool handle before the transaction opens,
+    // next to the rep cap — same hoist reason (a settings read must
+    // never run inside the open transaction).
+    const cashDiscountPercent = await getCashDiscountPercent(this.anyDb, tenantId);
+
+    // INV-VAN-PRICE-LIST-WIRING: the payment terms the price-list
+    // engine sees. A wholesale-typed customer keeps the wholesale
+    // base even on a credit sale (wholesale beats credit); every
+    // other credit/split sale resolves its credit price through the
+    // engine's credit branch.
+    const enginePaymentTerms: 'cash' | 'credit' = customerType === 'wholesale'
+      ? 'cash'
+      : (isCreditOrSplit ? 'credit' : 'cash');
 
     // M18 (INV-REP-VAN-MONEY-AUDIT-ATTRIBUTION): the posting
     // identity and the audit actor are resolved here, on the pool
@@ -392,6 +412,13 @@ export class VanFieldSalesService {
         customerName = newCust.name;
       }
 
+      // INV-VAN-PRICE-LIST-WIRING: the customer's list (assigned, or
+      // the tenant default) is resolved ONCE per sale, on the
+      // transaction handle just before the item loop — a pool-handle
+      // read inside the open transaction would deadlock on PGlite's
+      // single connection. Per line only the list-item read runs.
+      const priceListContext = await resolvePriceListContext(trxAny, tenantId, resolvedCustomerId);
+
       for (const item of sortedItems) {
         const pid = Number(item.productId);
         const inputQty = Number(item.qty || 0);
@@ -406,7 +433,7 @@ export class VanFieldSalesService {
         // CANONICAL LOCK ORDER: Lock products first!
         const prod = await trxAny
           .selectFrom('products')
-          .select(['id', 'name', 'cost_price', 'retail_price', 'wholesale_price', 'credit_price', 'consumer_price'])
+          .select(['id', 'name', 'cost_price', 'retail_price', 'wholesale_price', 'half_wholesale_price', 'credit_price', 'consumer_price'])
           .where('id', '=', pid)
           .where('tenant_id', '=', tenantId)
           .forUpdate()
@@ -423,11 +450,34 @@ export class VanFieldSalesService {
         // customer is charged products.wholesale_price on both cash and
         // credit sales; wholesale beats credit_price for such a customer
         // (the type defines the price; credit terms affect payment).
+        // INV-VAN-PRICE-LIST-WIRING: a half-wholesale-typed customer
+        // is charged half_wholesale_price, falling back to
+        // wholesale_price (then retail) when it is NULL — never to
+        // zero, never straight to retail while wholesale is set.
         const defaultBasePrice = customerType === 'wholesale' && prod.wholesale_price != null && Number(prod.wholesale_price) > 0
           ? Number(prod.wholesale_price)
-          : (isCreditSale && prod.credit_price != null && Number(prod.credit_price) > 0
-            ? Number(prod.credit_price)
-            : Number(prod.retail_price || 0));
+          : (customerType === 'half_wholesale'
+            ? (prod.half_wholesale_price != null && Number(prod.half_wholesale_price) > 0
+              ? Number(prod.half_wholesale_price)
+              : (prod.wholesale_price != null && Number(prod.wholesale_price) > 0
+                ? Number(prod.wholesale_price)
+                : Number(prod.retail_price || 0)))
+            : (isCreditSale && prod.credit_price != null && Number(prod.credit_price) > 0
+              ? Number(prod.credit_price)
+              : Number(prod.retail_price || 0)));
+
+        // INV-VAN-PRICE-LIST-WIRING: the customer's assigned list (or
+        // the tenant default), resolved once per sale above, discounts
+        // from the tier base. When a list rule applies, the list price
+        // replaces the tier base for this line and public offers do
+        // NOT stack on it (a negotiated list price is the authority,
+        // like the POS wholesale branch which skips offers).
+        const listPrice = await resolveListEffectivePrice(
+          trxAny, tenantId, priceListContext, pid, inputQty, defaultBasePrice,
+          { paymentTerms: enginePaymentTerms }, bookDigits,
+        );
+        const listApplies = listPrice.appliedRule !== 'none';
+        const effectiveBasePrice = listApplies ? listPrice.effectivePrice : defaultBasePrice;
 
         // Security Invariant: Gated Bonus Items
         // Free bonus items cannot be arbitrarily flipped by the driver unless an active promotion allows it or supervisor PIN is provided
@@ -438,7 +488,7 @@ export class VanFieldSalesService {
           // sale instant), not merely date-filtered as before.
           const hasActiveBogoOffer = activeOffers.some((o: any) => o.offer_type === 'bogo' && isOfferActive(o, offerTodayIso, saleNow, businessTimezone));
           if (!hasActiveBogoOffer && !supervisorOverrideApproved) {
-            const attemptedVal = toBookMoney(defaultBasePrice * multiplier * inputQty);
+            const attemptedVal = toBookMoney(effectiveBasePrice * multiplier * inputQty);
             await this.vanFraudRadarService.recordSuspicionEvent({
               tenantId,
               accountId,
@@ -503,15 +553,19 @@ export class VanFieldSalesService {
 
         // The undiscounted unit price at book digits: the single baseline
         // for offer savings and for the original-price fallback below.
-        const baseUnitPrice = toBookMoney(defaultBasePrice * multiplier);
+        const baseUnitPrice = toBookMoney(effectiveBasePrice * multiplier);
         let systemAuthorizedPrice = baseUnitPrice;
-        let pricingTierType: 'cash' | 'credit' | 'offer' | 'bonus' | 'wholesale' = isBonus ? 'bonus' : (customerType === 'wholesale' ? 'wholesale' : (isCreditSale ? 'credit' : 'cash'));
+        let pricingTierType: 'cash' | 'credit' | 'offer' | 'bonus' | 'wholesale' | 'half_wholesale' = isBonus ? 'bonus' : (customerType === 'wholesale' ? 'wholesale' : (customerType === 'half_wholesale' ? 'half_wholesale' : (isCreditSale ? 'credit' : 'cash')));
         let unitOfferSavings = 0;
 
         if (isBonus) {
           systemAuthorizedPrice = 0;
           pricingTierType = 'bonus';
-        } else {
+        } else if (!listApplies) {
+          // INV-VAN-PRICE-LIST-WIRING: offers are skipped when a list
+          // rule applies to this line (the list price is already the
+          // negotiated authority); the offer block below runs only on
+          // the tier base.
           // INV-OFFER-SELECTION-SHARED-POS-VAN: the winner is the
           // shared POS selector — lowest adjusted price among offers
           // active at the sale instant, qualified on the SOLD
@@ -523,12 +577,12 @@ export class VanFieldSalesService {
           if (matchingOffer) {
             const offerVal = Number(matchingOffer.value || 0);
             if (matchingOffer.offer_type === 'percent' && offerVal > 0) {
-              const discountedBase = Math.max(0, toBookMoney(defaultBasePrice * (1 - offerVal / 100)));
+              const discountedBase = Math.max(0, toBookMoney(effectiveBasePrice * (1 - offerVal / 100)));
               systemAuthorizedPrice = toBookMoney(discountedBase * multiplier);
               pricingTierType = 'offer';
               unitOfferSavings = Math.max(0, toBookMoney(baseUnitPrice - systemAuthorizedPrice));
             } else if (matchingOffer.offer_type === 'fixed' && offerVal > 0) {
-              const discountedBase = Math.max(0, toBookMoney(defaultBasePrice - offerVal));
+              const discountedBase = Math.max(0, toBookMoney(effectiveBasePrice - offerVal));
               systemAuthorizedPrice = toBookMoney(discountedBase * multiplier);
               pricingTierType = 'offer';
               unitOfferSavings = Math.max(0, toBookMoney(baseUnitPrice - systemAuthorizedPrice));
@@ -540,7 +594,7 @@ export class VanFieldSalesService {
               const minQ = Math.max(1, Number(matchingOffer.min_qty || 1));
               const bundles = Math.floor(inputQty / minQ);
               const rem = inputQty % minQ;
-              const bundleTotal = (bundles * offerVal) + (rem * defaultBasePrice);
+              const bundleTotal = (bundles * offerVal) + (rem * effectiveBasePrice);
               systemAuthorizedPrice = toBookMoney((bundleTotal / inputQty) * multiplier);
               pricingTierType = 'offer';
               unitOfferSavings = Math.max(0, toBookMoney(baseUnitPrice - systemAuthorizedPrice));
@@ -553,8 +607,8 @@ export class VanFieldSalesService {
                 const fullCycles = Math.floor(inputQty / cycle);
                 const rem = inputQty % cycle;
                 const freeUnits = (fullCycles * getQ) + Math.max(0, rem - buyQ);
-                const discAmt = freeUnits * defaultBasePrice * (discPct / 100);
-                const netTot = Math.max(0, (inputQty * defaultBasePrice) - discAmt);
+                const discAmt = freeUnits * effectiveBasePrice * (discPct / 100);
+                const netTot = Math.max(0, (inputQty * effectiveBasePrice) - discAmt);
                 systemAuthorizedPrice = toBookMoney((netTot / inputQty) * multiplier);
                 pricingTierType = 'offer';
                 unitOfferSavings = Math.max(0, toBookMoney(baseUnitPrice - systemAuthorizedPrice));
@@ -599,11 +653,16 @@ export class VanFieldSalesService {
               );
             }
             unitPrice = clientPrice;
-          } else if (pricingTierType === 'wholesale') {
+          } else if (pricingTierType === 'wholesale' || pricingTierType === 'half_wholesale' || pricingTierType === 'credit' || listApplies) {
             // INV-VAN-FIELD-SALE-WHOLESALE-PRICE: the server price is
             // authoritative for the wholesale tier — a higher client
             // price (the old frontend still sends retail) must not
             // override the authorized wholesale price.
+            // INV-VAN-PRICE-LIST-WIRING: the same authority extends to
+            // the half-wholesale and credit tiers and to any line a
+            // list rule priced — a negotiated list price is the price
+            // the customer is charged, never the higher retail the
+            // client still sends.
             unitPrice = systemAuthorizedPrice;
           } else {
             // Higher price accepted
@@ -791,6 +850,24 @@ export class VanFieldSalesService {
         if (cashDiscount > 0 && cashDiscount < totalSale) {
           totalSale = toBookMoney(totalSale - cashDiscount);
           discountSale = toBookMoney(discountSale + cashDiscount);
+        }
+
+        // INV-VAN-PRICE-LIST-WIRING: the SYSTEM cash discount — computed
+        // server-side from the tenant cashDiscountPercent setting, applied
+        // AFTER the rep-cap combined check above, on the net total (the
+        // same subtotal − discount base the tax block uses at :1123).
+        // It never travels through cashDiscountAmount (the rep-entered,
+        // cap-gated channel): a rep already at the 5% cap still posts
+        // with a 10% cash discount, and no supervisor PIN is required
+        // for it. Immediate cash payment only — this branch is the
+        // only place it exists (credit/card/split never see it).
+        if (cashDiscountPercent > 0 && totalSale > 0) {
+          const computed = toBookMoney(totalSale * (cashDiscountPercent / 100));
+          if (computed > 0 && computed < totalSale) {
+            systemCashDiscountAmount = computed;
+            totalSale = toBookMoney(totalSale - systemCashDiscountAmount);
+            discountSale = toBookMoney(discountSale + systemCashDiscountAmount);
+          }
         }
         cashPaid = totalSale;
         creditOwed = 0;
@@ -1135,6 +1212,10 @@ export class VanFieldSalesService {
           total: totalSale,
           subtotal: subtotalSale,
           discount: discountSale,
+          // INV-VAN-PRICE-LIST-WIRING: the system cash discount for
+          // this sale, recorded distinctly from the rep-entered
+          // invoice discount so the invoice shows them separately.
+          system_cash_discount_amount: systemCashDiscountAmount,
           tax_rate: vanTaxRate,
           tax_amount: vanTaxAmount,
           // Cash/Credit collected in the field sits with the rep (or customer receivable) until settleTrip,
@@ -1415,6 +1496,10 @@ export class VanFieldSalesService {
       total: toBookMoney(totalSale),
       subtotal: toBookMoney(subtotalSale),
       discount: toBookMoney(discountSale),
+      // INV-VAN-PRICE-LIST-WIRING: the system cash discount, echoed
+      // distinctly from the rep discount so the receipt can show the
+      // two as separate lines.
+      systemCashDiscountAmount: toBookMoney(systemCashDiscountAmount),
       paymentMethod: payload.paymentMethod,
       customerName,
       itemsCount: payload.items.length,

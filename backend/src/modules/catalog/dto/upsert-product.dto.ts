@@ -240,6 +240,16 @@ export class UpsertProductDto {
   @Min(0)
   creditPrice?: number | null;
 
+  // INV-VAN-PRICE-LIST-WIRING: the half-wholesale selling price
+  // (migration 0333). Optional — NULL means "not set" and the sale
+  // paths fall back to wholesale (then retail) for a half-wholesale
+  // customer.
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  halfWholesalePrice?: number | null;
+
   @IsOptional()
   @Type(() => Number)
   @IsNumber()

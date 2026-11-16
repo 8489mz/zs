@@ -816,6 +816,12 @@ export const vanSalesApi = {
     saleId: number;
     docNo: string;
     total: number;
+    subtotal?: number;
+    discount?: number;
+    // INV-VAN-PRICE-LIST-WIRING: the system cash discount for this
+    // sale (server-computed from the tenant setting, after the
+    // rep-cap check). Included in `discount` above.
+    systemCashDiscountAmount?: number;
     paymentMethod: string;
     customerName: string;
     itemsCount: number;

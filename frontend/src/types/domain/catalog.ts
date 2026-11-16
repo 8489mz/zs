@@ -99,4 +99,6 @@ export interface Customer {
   type: string;
   creditLimit: number;
   storeCreditBalance: number;
+  // INV-VAN-PRICE-LIST-WIRING: the assigned price-list id (null = none).
+  priceListId?: number | null;
 }

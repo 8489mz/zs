@@ -182,6 +182,7 @@ export function PosWorkspaceMainContentComponent({
             onSearchSubmitFirstResult={onSubmitFirstSearchResult}
             priceType={pos.priceType}
             onPriceTypeChange={onPriceTypeChange || pos.setPriceType}
+            isPriceTypeLocked={pos.isPriceTypeLocked}
             products={pos.filteredSaleProducts}
             recentProducts={pos.recentProducts}
             productFilter={pos.productFilter}

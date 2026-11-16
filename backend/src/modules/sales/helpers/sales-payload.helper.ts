@@ -144,7 +144,7 @@ export function normalizeSalePayload(payload: UpsertSaleDto): NormalizedSalePayl
         offerName: item.offerName ? String(item.offerName).trim() : undefined,
         unitName: String(item.unitName || 'قطعة').trim() || 'قطعة',
         unitMultiplier: Number(item.unitMultiplier ?? 1),
-        priceType: (item.priceType === 'wholesale' ? 'wholesale' : 'retail') as 'retail' | 'wholesale',
+        priceType: (['retail', 'wholesale', 'half_wholesale', 'credit'].includes(item.priceType as string) ? item.priceType : 'retail') as 'retail' | 'wholesale' | 'half_wholesale' | 'credit',
         notes: String(item.notes || '').trim(),
         modifiers: item.modifiers || [],
         serials: Array.isArray(item.serials) ? item.serials : undefined,

@@ -44,7 +44,7 @@ export function ProductEditorCard({ product, categories, suppliers, customers, l
     resolver: zodResolver(productFormSchema),
     defaultValues: {
       name: '', barcode: '', itemKind: 'standard', styleCode: '', color: '', size: '', fashionColors: '', fashionSizes: '', variantStock: 0,
-      costPrice: 0, retailPrice: 0, wholesalePrice: 0, creditPrice: 0, consumerPrice: 0, stock: 0, minStock: 5, categoryId: '', supplierId: '', notes: ''
+      costPrice: 0, retailPrice: 0, wholesalePrice: 0, halfWholesalePrice: 0, creditPrice: 0, consumerPrice: 0, stock: 0, minStock: 5, categoryId: '', supplierId: '', notes: ''
     }
   });
 
@@ -132,6 +132,7 @@ export function ProductEditorCard({ product, categories, suppliers, customers, l
           <Field label={t('products.workspace_sections.product_editor_card.s15', "سعر الشراء")}><input type="number" step="0.01" {...form.register('costPrice')} disabled={mutation.isPending} /></Field>
           <Field label={t('products.workspace_sections.product_editor_card.s16', "سعر القطاعي (الكاش)")}><input type="number" step="0.01" {...form.register('retailPrice')} disabled={mutation.isPending} /></Field>
           <Field label={t('products.workspace_sections.product_editor_card.s17', "سعر الجملة")}><input type="number" step="0.01" {...form.register('wholesalePrice')} disabled={mutation.isPending} /></Field>
+          <Field label={t('products.workspace_sections.product_editor_card.s38', "سعر نصف الجملة")}><input type="number" step="0.01" {...form.register('halfWholesalePrice')} disabled={mutation.isPending} placeholder={t('products.workspace_sections.product_editor_card.s19', "اختياري")} /></Field>
           <Field label={t('products.workspace_sections.product_editor_card.s18', "سعر البيع الآجل (توزيع)")}><input type="number" step="0.01" {...form.register('creditPrice')} disabled={mutation.isPending} placeholder={t('products.workspace_sections.product_editor_card.s19', "اختياري")} /></Field>
           <Field label={t('products.workspace_sections.product_editor_card.s20', "سعر المستهلك / الجمهور (SRP)")}><input type="number" step="0.01" {...form.register('consumerPrice')} disabled={mutation.isPending} placeholder={t('products.workspace_sections.product_editor_card.s21', "سعر بيع المحل للمستهلك")} /></Field>
           <Field label={t('products.workspace_sections.product_editor_card.s22', "المخزون الحالي")}><input type="number" value={Number(product.stock || 0)} disabled readOnly /></Field>

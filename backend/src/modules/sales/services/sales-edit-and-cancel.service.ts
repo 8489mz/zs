@@ -1220,7 +1220,7 @@ export class SalesEditAndCancelService {
           unit_name: item.unitName,
           unit_multiplier: item.unitMultiplier,
           cost_price: item.costPrice,
-          price_type: item.priceType as 'retail' | 'wholesale',
+          price_type: item.priceType as 'retail' | 'wholesale' | 'half_wholesale' | 'credit',
           modifiers: item.modifiers ? JSON.stringify(item.modifiers) : '[]',
           serials: itemSerials.length > 0 ? JSON.stringify(itemSerials) : '[]',
           tenant_id: scope.tenantId,

@@ -54,7 +54,7 @@ export type PreparedSaleItem = {
   lineTotal: number;
   unitName: string;
   unitMultiplier: number;
-  priceType: 'retail' | 'wholesale';
+  priceType: 'retail' | 'wholesale' | 'half_wholesale' | 'credit';
   costPrice: number;
   requiredQty: number;
   beforeQty: number;
@@ -114,7 +114,11 @@ export function buildPreparedSaleItem(
     lineTotal,
     unitName: String(item.unitName || 'قطعة').trim() || 'قطعة',
     unitMultiplier: Number(item.unitMultiplier || 1) || 1,
-    priceType: item.priceType === 'wholesale' ? 'wholesale' : 'retail',
+    // INV-VAN-PRICE-LIST-WIRING: the tier is carried as derived by
+    // the sale path (from the customer type), never collapsed back
+    // to retail/wholesale — a half-wholesale or credit line keeps
+    // its tier on the stored row.
+    priceType: (['retail', 'wholesale', 'half_wholesale', 'credit'].includes(item.priceType as string) ? item.priceType : 'retail') as 'retail' | 'wholesale' | 'half_wholesale' | 'credit',
     // Stored as cost per sold unit on sale_items (not per base piece) so accounting COGS can use qty * cost_price.
     costPrice: roundCurrency((Number(product.cost_price || 0) * Number(item.unitMultiplier || 1)) + modifiersCostTotal, options.moneyDigits),
     requiredQty,
@@ -780,7 +784,17 @@ export function pickBestApplicableOffer(offers: SaleProductOfferRow[], todayIso:
 export function calculateAllowedSaleUnitPrice(params: {
   retailPrice?: number | string | null;
   wholesalePrice?: number | string | null;
-  priceType: 'retail' | 'wholesale';
+  // INV-VAN-PRICE-LIST-WIRING: the half-wholesale and credit bases.
+  // half_wholesale falls back to wholesale (then retail) when NULL;
+  // credit falls back to retail.
+  halfWholesalePrice?: number | string | null;
+  creditPrice?: number | string | null;
+  priceType: 'retail' | 'wholesale' | 'half_wholesale' | 'credit';
+  // INV-VAN-PRICE-LIST-WIRING: the engine's per-line list price.
+  // When present (a list rule applied to this line) it IS the
+  // allowed price — the tier base and public offers are both
+  // skipped, because a negotiated list price is the authority.
+  listEffectivePrice?: number | null;
   offers?: SaleProductOfferRow[];
   qty?: number;
   unitMultiplier?: number;
@@ -796,10 +810,22 @@ export function calculateAllowedSaleUnitPrice(params: {
   moneyDigits: MoneyDigits;
 }): number {
   const multiplier = Number(params.unitMultiplier || 1) > 0 ? Number(params.unitMultiplier || 1) : 1;
-  if (params.priceType === 'wholesale') {
-    return roundCurrency(Number(params.wholesalePrice || params.retailPrice || 0) * multiplier, params.moneyDigits);
+  // INV-VAN-PRICE-LIST-WIRING: a list price, when one applies, is
+  // the allowed price outright (no tier base, no offers stacked).
+  if (params.listEffectivePrice != null) {
+    return roundCurrency(Number(params.listEffectivePrice || 0) * multiplier, params.moneyDigits);
   }
-  const basePrice = roundCurrency(Number(params.retailPrice || 0) * multiplier, params.moneyDigits);
+  const tierBase = params.priceType === 'wholesale'
+    ? Number(params.wholesalePrice || params.retailPrice || 0)
+    : params.priceType === 'half_wholesale'
+      ? Number(params.halfWholesalePrice || params.wholesalePrice || params.retailPrice || 0)
+      : params.priceType === 'credit'
+        ? Number(params.creditPrice || params.retailPrice || 0)
+        : Number(params.retailPrice || 0);
+  if (params.priceType !== 'retail') {
+    return roundCurrency(tierBase * multiplier, params.moneyDigits);
+  }
+  const basePrice = roundCurrency(tierBase * multiplier, params.moneyDigits);
   const now = params.now || new Date();
   const todayIso = normalizeDateOnly(params.todayIso)
     || (params.businessTimezone ? todayTenantDate(params.businessTimezone, now) : todayLocalIsoDate(now));

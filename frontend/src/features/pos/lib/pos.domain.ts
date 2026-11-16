@@ -154,7 +154,11 @@ function getOfferMinQty(offer: ProductOffer) {
 }
 
 function getApplicableOffer(product: Product, priceType: PosPriceType, qty = 1, now = new Date(), unitMultiplier = 1, digits: MoneyDigits) {
-  if (priceType === 'wholesale') return null;
+  // INV-VAN-PRICE-LIST-WIRING: offers apply to retail only. Tier
+  // prices (wholesale / half-wholesale / credit) are the authority
+  // for their customers and never stack with a public offer — the
+  // server enforces the same rule in calculateAllowedSaleUnitPrice.
+  if (priceType !== 'retail') return null;
   const today = todayLocalIsoDate();
   const basePrice = Number(product.retailPrice || 0) * unitMultiplier;
   const normalizedQty = Math.max(1, qty);
@@ -207,7 +211,16 @@ export function getProductItemCode(product: Product, unit?: ProductUnit) {
 }
 
 export function getProductPrice(product: Product, priceType: PosPriceType, qty = 1, unitMultiplier = 1, digits: MoneyDigits) {
-  const basePrice = Number(priceType === 'wholesale' ? product.wholesalePrice || product.retailPrice || 0 : product.retailPrice || 0) * unitMultiplier;
+  // INV-VAN-PRICE-LIST-WIRING: the 4-tier base. half_wholesale falls
+  // back to wholesale (then retail) when NULL; credit falls back to
+  // retail. Mirrors the server's calculateAllowedSaleUnitPrice tier
+  // base so the displayed price is the price that posts.
+  const basePrice = Number(
+    priceType === 'wholesale' ? (product.wholesalePrice || product.retailPrice || 0)
+    : priceType === 'half_wholesale' ? (product.halfWholesalePrice || product.wholesalePrice || product.retailPrice || 0)
+    : priceType === 'credit' ? (product.creditPrice || product.retailPrice || 0)
+    : (product.retailPrice || 0),
+  ) * unitMultiplier;
   const offer = getApplicableOffer(product, priceType, qty, new Date(), unitMultiplier, digits);
   return offer ? getOfferAppliedPrice(basePrice, offer, qty, digits) : roundMoneyValue(basePrice, digits);
 }

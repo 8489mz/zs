@@ -15,6 +15,7 @@ import { customerFormSchema, type CustomerFormInput, type CustomerFormOutput } f
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { useCustomerProfile } from '@/features/customers/constants/customer-profiles';
 import { deliveryRepsApi } from '@/shared/api/delivery-reps.api';
+import { priceListsApi } from '@/features/sales/api/price-lists.api';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import { CustomerVisitDaysPicker } from './CustomerVisitDaysPicker';
 
@@ -28,6 +29,12 @@ export function CustomerForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   const repsQuery = useQuery({
     queryKey: ['delivery-reps'],
     queryFn: deliveryRepsApi.list,
+    staleTime: 60000,
+  });
+  // INV-VAN-PRICE-LIST-WIRING: the lists offered for assignment.
+  const priceListsQuery = useQuery({
+    queryKey: ['price-lists'],
+    queryFn: priceListsApi.list,
     staleTime: 60000,
   });
 
@@ -89,6 +96,31 @@ export function CustomerForm({ onSuccess }: { onSuccess?: () => void } = {}) {
               onChange={field.onChange}
               disabled={mutation.isPending}
               options={profile.types.map((t) => ({ value: t.value, label: t.label }))}
+            />
+          )}
+        />
+      </Field>
+
+      {/* INV-VAN-PRICE-LIST-WIRING: assign the customer to a price
+          list. The sale paths resolve this assignment server-side;
+          an inactive list may be assigned and resolves as "no list"
+          until reactivated. */}
+      <Field label={__t('customers.customer_form.s28', "قائمة الأسعار")}>
+        <Controller
+          name="priceListId"
+          control={form.control}
+          render={({ field }) => (
+            <CustomSelect
+              value={field.value ?? ''}
+              onChange={(v) => field.onChange(v === '' ? null : Number(v))}
+              disabled={mutation.isPending}
+              options={[
+                { value: '', label: __t('customers.customer_form.s29', "بدون قائمة (السعر الأساسي)") },
+                ...(priceListsQuery.data || []).map((l) => ({
+                  value: String(l.id),
+                  label: l.is_active ? l.name : `${l.name} (${__t('customers.customer_form.s30', "غير مفعّلة")})`,
+                })),
+              ]}
             />
           )}
         />

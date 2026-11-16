@@ -346,6 +346,25 @@ export function usePosWorkspace() {
     loyaltyPoints: 0,
   } : null);
 
+  // INV-VAN-PRICE-LIST-WIRING: the price tier follows the selected
+  // customer — wholesale / half-wholesale / credit customers price
+  // at their tier, everyone else at retail. While a customer is
+  // selected the toggle is locked (the panel reads
+  // isPriceTypeLocked and shows the tier display-only); walk-in
+  // keeps the manual retail/wholesale toggle. The server re-derives
+  // the same tier from the customer type, so the displayed price
+  // can never drift from what posts.
+  const isPriceTypeLocked = Boolean(activeCustomer);
+  useEffect(() => {
+    if (!activeCustomer) return;
+    const customerType = String((activeCustomer as any).customerType || (activeCustomer as any).type || 'cash');
+    const derived: PosPriceType = customerType === 'wholesale' ? 'wholesale'
+      : customerType === 'half_wholesale' ? 'half_wholesale'
+      : customerType === 'credit' ? 'credit'
+      : 'retail';
+    if (state.priceType !== derived) state.setPriceType(derived);
+  }, [activeCustomer, state.priceType, state.setPriceType]);
+
   usePosCustomerDisplayBroadcaster({
     cart: state.cart,
     totals: derived.totals,
@@ -467,6 +486,9 @@ export function usePosWorkspace() {
     setSearch: state.setSearch,
     priceType: state.priceType,
     setPriceType: state.setPriceType,
+    // INV-VAN-PRICE-LIST-WIRING: true while a customer is selected —
+    // the panel locks the tier toggle and shows the derived tier.
+    isPriceTypeLocked,
     branchId: effectiveBranchId,
     locationId: effectiveLocationId,
     tableNumber: state.tableNumber,

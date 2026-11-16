@@ -6,7 +6,8 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { canManagePriceLists } from '../../../core/auth/utils/commerce-operation-guards';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { currencyMoneyDigits, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
+import { resolveListEffectivePrice, resolvePriceListContext } from '../engines/price-list-resolution.engine';
 
 export interface UpsertPriceListDto {
   name: string;
@@ -283,7 +284,12 @@ export class PriceListsService {
   }
 
   /**
-   * Calculates the effective price according to active price list and quantity tiers
+   * Calculates the effective price according to active price list and quantity tiers.
+   * Delegates to price-list-resolution.engine (INV-VAN-PRICE-LIST-WIRING):
+   * the same computation the POS and van sale paths run per line, so the
+   * preview endpoint can never drift from the real sale path. An
+   * assigned list that is gone or inactive falls through to the
+   * tenant's active default list (then the base price).
    */
   async calculateEffectivePrice(
     auth: AuthContext,
@@ -299,125 +305,8 @@ export class PriceListsService {
     // Book digits resolved once (D4): effective prices round at the
     // tenant's book digits, never a hardcoded 2dp.
     const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
-
-    if (options?.paymentTerms === 'credit') {
-      const prod = await this.db
-        .selectFrom('products')
-        .select(['credit_price'])
-        .where('tenant_id', '=', tenantId)
-        .where('id', '=', productId)
-        .executeTakeFirst();
-      if (prod?.credit_price != null && Number(prod.credit_price) > 0) {
-        basePrice = Number(prod.credit_price);
-      }
-    }
-
-    let priceListId: number | null = null;
-    if (customerId) {
-      const cust = await this.db
-        .selectFrom('customers')
-        .select(['price_list_id'])
-        .where('tenant_id', '=', tenantId)
-        .where('id', '=', customerId)
-        .executeTakeFirst();
-      if (cust?.price_list_id) {
-        priceListId = Number(cust.price_list_id);
-      }
-    }
-
-    // If no customer-assigned list, check if there is a default list
-    if (!priceListId) {
-      const defaultList = await this.db
-        .selectFrom('price_lists')
-        .select(['id'])
-        .where('tenant_id', '=', tenantId)
-        .where('is_default', '=', true)
-        .where('is_active', '=', true)
-        .executeTakeFirst();
-      if (defaultList) {
-        priceListId = Number(defaultList.id);
-      }
-    }
-
-    if (!priceListId) {
-      return {
-        effectivePrice: basePrice,
-        discountPercent: 0,
-        appliedRule: 'none',
-        priceListId: null,
-      };
-    }
-
-    const priceList = await this.db
-      .selectFrom('price_lists')
-      .selectAll()
-      .where('tenant_id', '=', tenantId)
-      .where('id', '=', priceListId)
-      .where('is_active', '=', true)
-      .executeTakeFirst();
-
-    if (!priceList) {
-      return {
-        effectivePrice: basePrice,
-        discountPercent: 0,
-        appliedRule: 'none',
-        priceListId: null,
-      };
-    }
-
-    // Check specific items matching product_id with quantity >= min_quantity sorted by min_quantity desc
-    const specificItem = await this.db
-      .selectFrom('price_list_items')
-      .selectAll()
-      .where('tenant_id', '=', tenantId)
-      .where('price_list_id', '=', priceListId)
-      .where('product_id', '=', productId)
-      .where('min_quantity', '<=', quantity)
-      .orderBy('min_quantity', 'desc')
-      .executeTakeFirst();
-
-    if (specificItem) {
-      if (specificItem.fixed_price != null && Number(specificItem.fixed_price) >= 0) {
-        return {
-          effectivePrice: Number(specificItem.fixed_price),
-          discountPercent: basePrice > 0 ? Math.round((1 - Number(specificItem.fixed_price) / basePrice) * 100) : 0,
-          appliedRule: 'product_fixed_price',
-          priceListId: Number(priceList.id),
-          priceListName: priceList.name,
-        };
-      }
-      if (specificItem.discount_percent != null && Number(specificItem.discount_percent) > 0) {
-        const disc = Number(specificItem.discount_percent);
-        const finalPrice = Math.max(0, basePrice * (1 - disc / 100));
-        return {
-          effectivePrice: roundMoney(finalPrice, moneyDigits),
-          discountPercent: disc,
-          appliedRule: 'product_discount',
-          priceListId: Number(priceList.id),
-          priceListName: priceList.name,
-        };
-      }
-    }
-
-    // Fallback to default list discount
-    const defaultDiscount = Number(priceList.default_discount_percent || 0);
-    if (defaultDiscount > 0) {
-      const finalPrice = Math.max(0, basePrice * (1 - defaultDiscount / 100));
-      return {
-        effectivePrice: roundMoney(finalPrice, moneyDigits),
-        discountPercent: defaultDiscount,
-        appliedRule: 'list_default_discount',
-        priceListId: Number(priceList.id),
-        priceListName: priceList.name,
-      };
-    }
-
-    return {
-      effectivePrice: basePrice,
-      discountPercent: 0,
-      appliedRule: 'list_no_discount',
-      priceListId: Number(priceList.id),
-      priceListName: priceList.name,
-    };
+    const context = await resolvePriceListContext(this.db, tenantId, customerId);
+    return resolveListEffectivePrice(this.db, tenantId, context, productId, quantity, basePrice, options, moneyDigits);
   }
+
 }

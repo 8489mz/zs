@@ -82,6 +82,12 @@ export const settingsFormSchema = z.object({
   // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the ONE tenant-level
   // rep discount cap % (default 5, applies to all reps).
   vanRepDiscountCapPercent: z.coerce.number().min(0).max(100).default(5).optional(),
+  // INV-VAN-PRICE-LIST-WIRING: the tenant cash-discount % off the
+  // selling price on immediate cash payment (default 0 = off). A
+  // SYSTEM discount: the van/POS sale paths compute it server-side
+  // from this setting after the rep-cap check — it never travels
+  // through the rep-entered cashDiscountAmount channel.
+  cashDiscountPercent: z.coerce.number().min(0).max(100).default(0).optional(),
   allowNegativeStockSales: z.boolean().default(false),
   posHideOutOfStockItems: z.boolean().default(false),
   allowZeroPurchaseCost: z.boolean().default(false),
