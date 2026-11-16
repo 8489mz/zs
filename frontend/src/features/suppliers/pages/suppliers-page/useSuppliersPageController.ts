@@ -24,6 +24,10 @@ export function useSuppliersPageController() {
   const canDelete = useHasAnyPermission('canDelete');
   const canPrint = useHasAnyPermission('canPrint');
   const rows = useMemo(() => suppliersQuery.data?.suppliers || [], [suppliersQuery.data?.suppliers]);
+  const activeSelectedSupplier = useMemo(
+    () => (selectedSupplier ? rows.find((supplier) => String(supplier.id) === String(selectedSupplier.id)) || selectedSupplier : null),
+    [rows, selectedSupplier],
+  );
   const summary = suppliersQuery.data?.summary;
   const actions = useSuppliersPageActions({
     search,
@@ -60,7 +64,7 @@ export function useSuppliersPageController() {
   }
 
   return {
-    search, setSearch, selectedSupplier, setSelectedSupplier, supplierToDelete, setSupplierToDelete,
+    search, setSearch, selectedSupplier: activeSelectedSupplier, setSelectedSupplier, supplierToDelete, setSupplierToDelete,
     selectedIds, setSelectedIds, bulkDeleteOpen, setBulkDeleteOpen, page, setPage, pageSize, setPageSize,
     filterMode, setFilterMode, suppliersQuery, deleteMutation, canDelete, canPrint, rows, summary,
     selectedSuppliers, totalBalance, withNotes, supplierGuidanceCards, resetSuppliersView,

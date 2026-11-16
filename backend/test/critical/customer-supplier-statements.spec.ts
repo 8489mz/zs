@@ -415,6 +415,56 @@ async function main(): Promise<void> {
     console.log('  supplier unpaid purchase shows no phantom payment passed');
   }
 
+  // Case 5: multi-month full-history statement & RBAC guard on /reports/suppliers/:id/ledger.
+  {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      const reports = buildReportsService(db);
+      const anyDb = db as any;
+      await anyDb.insertInto('supplier_ledger').values([
+        {
+          tenant_id: TENANT, account_id: ACCOUNT, supplier_id: 1,
+          entry_type: 'opening_balance', amount: -1000, balance_after: -1000,
+          note: 'رصيد افتتاحي', reference_type: 'supplier', reference_id: 1,
+          branch_id: 1, location_id: 10, created_by: 1,
+          created_at: new Date('2026-08-01T10:00:00.000Z'),
+        },
+        {
+          tenant_id: TENANT, account_id: ACCOUNT, supplier_id: 1,
+          entry_type: 'purchase_credit', amount: 2500, balance_after: 1500,
+          note: 'فاتورة شراء قديمة', reference_type: 'purchase', reference_id: 2,
+          branch_id: 1, location_id: 10, created_by: 1,
+          created_at: new Date('2026-09-05T10:00:00.000Z'),
+        },
+        {
+          tenant_id: TENANT, account_id: ACCOUNT, supplier_id: 1,
+          entry_type: 'supplier_payment', amount: -500, balance_after: 1000,
+          note: 'دفعة تسوية', reference_type: 'supplier_payment', reference_id: 3,
+          branch_id: 1, location_id: 10, created_by: 1,
+          created_at: new Date(),
+        },
+      ]).execute();
+      await anyDb.updateTable('suppliers').set({ balance: 1000 }).where('id', '=', 1).execute();
+
+      const fullStatement: any = await reports.supplierLedger(1, { from: '2000-01-01T00:00:00.000Z', pageSize: 200 } as never, ADMIN);
+      assert.equal((fullStatement.entries as any[]).length, 3);
+      assert.equal((fullStatement.summary as any).openingBalance, 0);
+      assert.equal((fullStatement.summary as any).totalCredits, 2500);
+      assert.equal((fullStatement.summary as any).totalDebits, 1500);
+      assert.equal(Number((fullStatement.summary as any).closingBalance), 1000);
+
+      const defaultRecentStatement: any = await reports.supplierLedger(1, {} as never, ADMIN);
+      assert.equal((defaultRecentStatement.entries as any[]).length, 1);
+      assert.equal((defaultRecentStatement.summary as any).openingBalance, 1500);
+      assert.equal((defaultRecentStatement.summary as any).totalDebits, 500);
+      assert.equal(Number((defaultRecentStatement.summary as any).closingBalance), 1000);
+    } finally {
+      await db.destroy();
+    }
+    console.log('  supplier full-history vs 30d carryover reconciliation passed');
+  }
+
   console.log('customer-supplier statements checks passed');
 }
 

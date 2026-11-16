@@ -113,4 +113,13 @@ describe('buildSupplierPayload carries supplierType + overdraftLimit', () => {
       supplierType: 'employee',
     })).toThrow();
   });
+
+  it('allows negative supplier balance for credit/advance balances', () => {
+    const parsed = supplierFormSchema.parse({
+      name: 'بيج كولا',
+      balance: -100000,
+    });
+    expect(parsed.balance).toBe(-100000);
+    expect(buildSupplierPayload(parsed).balance).toBe(-100000);
+  });
 });

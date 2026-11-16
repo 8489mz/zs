@@ -164,6 +164,62 @@
   }
 }
 
+.supplier-modal-section-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: #ffffff;
+}
+
+.supplier-modal-section-card--subtle {
+  background: #f8fafc;
+}
+
+.supplier-modal-fields-3col {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 10px;
+}
+
+.supplier-modal-fields-3col .field {
+  margin: 0;
+  min-width: 0;
+}
+
+.supplier-modal-fields-3col .field input,
+.supplier-modal-fields-3col .field select {
+  height: 33px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+.supplier-modal-span-2 {
+  grid-column: span 2;
+}
+
+.supplier-modal-span-all {
+  grid-column: 1 / -1;
+}
+
+.supplier-bills-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .supplier-modal-fields-3col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .supplier-modal-span-2 {
+    grid-column: 1 / -1;
+  }
+  .supplier-bills-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .invoice-detail-summary-grid {
   grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: 8px;

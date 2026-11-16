@@ -3,218 +3,329 @@ import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/shared/ui/button';
 import { Field } from '@/shared/ui/field';
-import { CustomSelect } from '@/shared/ui/custom-select';
 import { MutationFeedback } from '@/shared/components/mutation-feedback';
 import { SubmitButton } from '@/shared/components/submit-button';
+import { PlusIcon, TrashIcon } from '@/shared/components/icons/AppIcons';
 import { formatCurrency } from '@/lib/format';
 import { queryKeys } from '@/app/query-keys';
 import { accountingApi } from '@/features/accounting';
+import { toast } from '@/shared/components/system-alert';
 import {
-  supplierBillsApi,
   buildSupplierBillPayload,
   sumSupplierBillLines,
-  SUPPLIER_BILL_KINDS,
-  supplierBillKindById,
-  resolveSupplierBillKindAccountId,
-  type SupplierBillLineInput,
+  supplierBillsApi,
 } from '@/features/suppliers/api/supplier-bills.api';
 
-/* INV-SUPPLIER-NONSTOCK-BILL: these are the accounts a bill line may
- * never use (cash/bank, receivable, inventory, the 2110 payable
- * itself, any advance asset, tax accounts). The backend enforces the
- * same blocklist — the picker hides them first so the merchant never
- * picks a line the server will refuse. */
-const BLOCKED_ACCOUNT_CODES = new Set([
-  '1110', '1120', '1130', '1140', '2110', '1185', '1160', '1165', '1150', '2120', '2126', '2150',
-]);
+interface DraftLine {
+  key: string;
+  description: string;
+  amount: string;
+}
 
-type DraftLine = { description: string; kind: string; accountId: string; amount: string };
+type ChartAccountRow = {
+  id: number | string;
+  code: string | number;
+  name?: string;
+  nameAr?: string;
+  nameEn?: string;
+  accountType?: string;
+  isActive?: boolean;
+  flags?: { isControlAccount?: boolean };
+};
 
-const EMPTY_LINE: DraftLine = { description: '', kind: '', accountId: '', amount: '' };
+function emptyLine(index: number): DraftLine {
+  return { key: `line-${Date.now()}-${index}`, description: '', amount: '' };
+}
 
-export function SupplierBillForm({ supplierId, onCreated }: { supplierId: string; onCreated?: () => void }) {
+function resolveDefaultBillAccountId(accounts: ChartAccountRow[], supplierType?: 'supplier' | 'freelancer'): string {
+  const activeValid = accounts.filter(
+    (account) =>
+      account.isActive !== false
+      && !account.flags?.isControlAccount
+      && (account.accountType === 'expense' || account.accountType === 'asset'),
+  );
+  const preferredCodes = supplierType === 'freelancer'
+    ? ['6200', '6700', '6900']
+    : ['6700', '6900', '6200'];
+  for (const code of preferredCodes) {
+    const found = activeValid.find((account) => String(account.code) === code);
+    if (found) return String(found.id);
+  }
+  const byAnyCode = accounts.find((account) => preferredCodes.includes(String(account.code)) && account.isActive !== false);
+  if (byAnyCode) return String(byAnyCode.id);
+  return activeValid[0] ? String(activeValid[0].id) : '';
+}
+
+/* INV-SUPPLIER-PAGE-BILL-STATEMENT: simplified non-stock bill creation
+ * collecting only line description + amount (plus optional bill note),
+ * automatically resolving the expense account without exposing a chart
+ * picker or dropdown clipping inside the modal. */
+export function SupplierBillForm({
+  supplierId,
+  supplierType,
+  onCreated,
+}: {
+  supplierId: string;
+  supplierType?: 'supplier' | 'freelancer';
+  onCreated?: () => void;
+}) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [lines, setLines] = useState<DraftLine[]>([{ ...EMPTY_LINE }]);
+  const [lines, setLines] = useState<DraftLine[]>([emptyLine(1)]);
   const [note, setNote] = useState('');
-  const [formError, setFormError] = useState('');
+  const [validationError, setValidationError] = useState('');
+  const [appliedInfo, setAppliedInfo] = useState('');
 
   const accountsQuery = useQuery({ queryKey: ['accounting-accounts'], queryFn: accountingApi.accounts });
-  const accounts = accountsQuery.data?.accounts || [];
-  const accountOptions = useMemo(() => {
-    return accounts
-      .filter((account) => account.isActive && !account.isControlAccount)
-      .filter((account) => account.accountType === 'expense' || account.accountType === 'asset')
-      .filter((account) => !BLOCKED_ACCOUNT_CODES.has(String(account.code)))
-      .map((account) => ({
-        value: String(account.id),
-        label: `${account.code} — ${account.nameAr || account.nameEn || account.code}`,
-      }));
+  const chartAccounts = useMemo<ChartAccountRow[]>(() => {
+    const raw = accountsQuery.data as ChartAccountRow[] | { accounts?: ChartAccountRow[] } | undefined;
+    if (Array.isArray(raw)) return raw;
+    if (raw && Array.isArray(raw.accounts)) return raw.accounts;
+    return [];
   }, [accountsQuery.data]);
 
-  /* INV-SUPPLIER-BILL-PLAIN-KIND: the kind is the only choice the
-   * merchant makes — the account fills itself from the single mapping.
-   * The kind select stays disabled until the accounts load, so the
-   * resolve below can never run against an empty chart. */
-  const kindOptions = useMemo(
-    () => SUPPLIER_BILL_KINDS.map((kind) => ({ value: kind.id, label: kind.label })),
-    [],
+  const defaultAccountId = useMemo(
+    () => resolveDefaultBillAccountId(chartAccounts, supplierType),
+    [chartAccounts, supplierType],
+  );
+
+  const total = useMemo(
+    () => sumSupplierBillLines(lines.map((line) => ({ amount: Number(line.amount || 0) }))),
+    [lines],
   );
 
   const mutation = useMutation({
-    mutationFn: (payload: ReturnType<typeof buildSupplierBillPayload>) => supplierBillsApi.create(payload),
-    onSuccess: async (data) => {
+    mutationFn: async () => {
+      setValidationError('');
+      setAppliedInfo('');
+      if (!defaultAccountId) {
+        throw new Error('تعذر تحديد حساب المصروف الافتراضي في شجرة الحسابات');
+      }
+      const payload = buildSupplierBillPayload(
+        supplierId,
+        lines.map((line) => ({
+          description: line.description,
+          accountId: defaultAccountId,
+          amount: Number(line.amount || 0),
+        })),
+        note,
+      );
+      return supplierBillsApi.create(payload);
+    },
+    onSuccess: async (result) => {
+      setLines([emptyLine(1)]);
+      setNote('');
+      const applied = Array.isArray(result.appliedAdvances)
+        ? result.appliedAdvances.reduce((sum, entry) => sum + Number(entry.amount || 0), 0)
+        : 0;
+      const msg = applied > 0
+        ? `تم تسجيل الفاتورة وتطبيق ${formatCurrency(applied)} من الدفعات المقدمة المفتوحة تلقائياً.`
+        : 'تم تسجيل الفاتورة بدون مخزون بنجاح.';
+      setAppliedInfo(msg);
+      toast.success(msg);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.supplierBills(supplierId) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.suppliers }),
         queryClient.invalidateQueries({ queryKey: queryKeys.supplierLedger(supplierId) }),
       ]);
-      setLines([{ ...EMPTY_LINE }]);
-      setNote('');
-      setFormError('');
       onCreated?.();
-      return data;
     },
   });
 
-  const numericLines: SupplierBillLineInput[] = lines.map((line) => ({
-    description: line.description,
-    accountId: line.accountId,
-    amount: Number(line.amount || 0),
-  }));
-  const total = sumSupplierBillLines(numericLines);
-
-  function updateLine(index: number, patch: Partial<DraftLine>): void {
-    setLines((current) => current.map((line, i) => (i === index ? { ...line, ...patch } : line)));
+  function updateLine(key: string, patch: Partial<DraftLine>) {
+    setLines((current) => current.map((line) => (line.key === key ? { ...line, ...patch } : line)));
   }
 
-  /* INV-SUPPLIER-BILL-PLAIN-KIND: picking a kind fills the account from
-   * the single mapping; 'other' (or a mapped code missing from this
-   * tenant's chart) clears it so the manual picker shows instead. */
-  function handleKindChange(index: number, kindId: string): void {
-    const accountId = resolveSupplierBillKindAccountId(kindId, accounts);
-    updateLine(index, { kind: kindId, accountId: accountId ?? '' });
-  }
-
-  function handleSubmit(event: React.FormEvent): void {
+  function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setFormError('');
-    if (lines.some((line) => !line.kind)) {
-      setFormError(t('suppliers.supplier_bill_form.s21', 'اختر نوع البند لكل سطر'));
-      return;
-    }
-    let payload: ReturnType<typeof buildSupplierBillPayload>;
     try {
-      payload = buildSupplierBillPayload(supplierId, numericLines, note);
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : t('suppliers.supplier_bill_form.s0', 'تعذر حفظ الفاتورة'));
-      return;
+      if (!defaultAccountId) {
+        throw new Error('تعذر تحديد حساب المصروف الافتراضي في شجرة الحسابات');
+      }
+      buildSupplierBillPayload(
+        supplierId,
+        lines.map((line) => ({
+          description: line.description,
+          accountId: defaultAccountId,
+          amount: Number(line.amount || 0),
+        })),
+        note,
+      );
+      setValidationError('');
+      mutation.mutate();
+    } catch (err) {
+      setValidationError(err instanceof Error ? err.message : 'تحقق من بنود الفاتورة');
     }
-    mutation.mutate(payload);
   }
-
-  const appliedTotal = (mutation.data?.appliedAdvances || []).reduce((sum, row) => sum + Number(row.amount || 0), 0);
 
   return (
-    <form className="form-grid" onSubmit={handleSubmit}>
-      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {lines.map((line, index) => {
-          /* INV-SUPPLIER-BILL-PLAIN-KIND: a mapped kind shows the account
-           * it will post to (read-only); 'other' — or a mapped code the
-           * tenant's chart does not carry — shows the manual picker. */
-          const kind = supplierBillKindById(line.kind);
-          const resolvedAccount =
-            kind && kind.accountCode !== null
-              ? accounts.find((account) => String(account.code) === kind.accountCode)
-              : undefined;
-          const needsManualAccount =
-            line.kind === 'other' || (kind !== undefined && kind.accountCode !== null && !resolvedAccount);
-          return (
-            <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr auto', gap: '8px', alignItems: 'end' }}>
-                <Field label={t('suppliers.supplier_bill_form.s1', 'البيان')}>
-                  <input
-                    type="text"
-                    value={line.description}
-                    disabled={mutation.isPending}
-                    placeholder={t('suppliers.supplier_bill_form.s2', 'مثال: برنامج محاسبة / كرتونة ورق / كابلات')}
-                    onChange={(event) => updateLine(index, { description: event.target.value })}
-                  />
-                </Field>
-                <Field label={t('suppliers.supplier_bill_form.s17', 'نوع البند')}>
-                  <CustomSelect
-                    value={line.kind}
-                    onChange={(value) => handleKindChange(index, String(value))}
-                    options={kindOptions}
-                    placeholder={accountsQuery.isPending ? t('suppliers.supplier_bill_form.s4', 'جارٍ تحميل الحسابات...') : t('suppliers.supplier_bill_form.s18', 'اختر نوع البند...')}
-                    disabled={mutation.isPending || accountsQuery.isPending}
-                  />
-                </Field>
-                <Field label={t('suppliers.supplier_bill_form.s6', 'المبلغ')}>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={line.amount}
-                    disabled={mutation.isPending}
-                    placeholder="0.00"
-                    onChange={(event) => updateLine(index, { amount: event.target.value })}
-                  />
-                </Field>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={mutation.isPending || lines.length <= 1}
-                  onClick={() => setLines((current) => current.filter((_, i) => i !== index))}
-                >
-                  {t('suppliers.supplier_bill_form.s7', 'حذف')}
-                </Button>
-              </div>
-              {needsManualAccount ? (
-                <Field label={t('suppliers.supplier_bill_form.s3', 'الحساب')}>
-                  <CustomSelect
-                    value={line.accountId}
-                    onChange={(value) => updateLine(index, { accountId: String(value) })}
-                    options={accountOptions}
-                    placeholder={accountsQuery.isPending ? t('suppliers.supplier_bill_form.s4', 'جارٍ تحميل الحسابات...') : t('suppliers.supplier_bill_form.s5', 'اختر الحساب...')}
-                    disabled={mutation.isPending || accountsQuery.isPending}
-                  />
-                </Field>
-              ) : resolvedAccount ? (
-                <div className="muted small">
-                  {t('suppliers.supplier_bill_form.s19', 'سيُقيد على حساب {{account}}.', {
-                    account: `${resolvedAccount.code} — ${resolvedAccount.nameAr || resolvedAccount.nameEn || resolvedAccount.code}`,
-                  })}
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Button type="button" variant="secondary" disabled={mutation.isPending} onClick={() => setLines((current) => [...current, { ...EMPTY_LINE }])}>
-          {t('suppliers.supplier_bill_form.s8', '+ إضافة بند')}
-        </Button>
-        <strong>{t('suppliers.supplier_bill_form.s9', 'الإجمالي')}: {formatCurrency(total)}</strong>
-      </div>
-      <Field label={t('suppliers.supplier_bill_form.s10', 'ملاحظات')} className="field-full-span">
-        <input type="text" value={note} disabled={mutation.isPending} placeholder={t('suppliers.supplier_bill_form.s11', 'ملاحظة اختيارية على الفاتورة')} onChange={(event) => setNote(event.target.value)} />
-      </Field>
-      {formError ? <div className="muted small" style={{ gridColumn: '1 / -1', color: '#b91c1c' }}>{formError}</div> : null}
-      {mutation.isSuccess && appliedTotal > 0 ? (
-        <div className="muted small" style={{ gridColumn: '1 / -1' }}>
-          {t('suppliers.supplier_bill_form.s12', 'تم تطبيق دفعة مقدمة بقيمة {{amount}} على هذه الفاتورة.', { amount: formatCurrency(appliedTotal) })}
+    <form
+      onSubmit={handleSubmit}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        padding: '12px',
+        borderRadius: '12px',
+        border: '1px solid #e2e8f0',
+        background: '#ffffff',
+      }}
+    >
+      {/* Card Header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
+          paddingBottom: '8px',
+          borderBottom: '1px solid #f1f5f9',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ width: '3px', height: '14px', borderRadius: '2px', background: '#170e5e', display: 'inline-block' }} />
+          <strong style={{ fontSize: '13.5px', color: '#0f172a', fontWeight: 800 }}>
+            {t('suppliers.supplier_bill_form.s0', 'إضافة فاتورة بدون مخزون')}
+          </strong>
         </div>
-      ) : null}
+        <span
+          style={{
+            fontSize: '11.5px',
+            fontWeight: 700,
+            color: '#170e5e',
+            background: '#eef2ff',
+            border: '1px solid #c7d2fe',
+            padding: '2px 10px',
+            borderRadius: '999px',
+          }}
+        >
+          الإجمالي: {formatCurrency(total)}
+        </span>
+      </div>
+
+      {/* Clean Line Rows: Description + Amount only */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {lines.map((line, index) => (
+          <div
+            key={line.key}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: lines.length > 1 ? 'minmax(0, 1fr) 130px 34px' : 'minmax(0, 1fr) 140px',
+              gap: '8px',
+              alignItems: 'end',
+              padding: '8px 10px',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
+              background: '#f8fafc',
+            }}
+          >
+            <Field label={t('suppliers.supplier_bill_form.s1', 'الوصف *')}>
+              <input
+                value={line.description}
+                onChange={(event) => updateLine(line.key, { description: event.target.value })}
+                disabled={mutation.isPending}
+                style={{ height: '34px', fontSize: '12.5px' }}
+              />
+            </Field>
+            <Field label={t('suppliers.supplier_bill_form.s7', 'المبلغ *')}>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                className="no-spin-arrows"
+                value={line.amount}
+                onChange={(event) => updateLine(line.key, { amount: event.target.value })}
+                disabled={mutation.isPending}
+                style={{ height: '34px', fontSize: '12.5px' }}
+              />
+            </Field>
+            {lines.length > 1 && (
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => setLines((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                disabled={mutation.isPending}
+                title="حذف البند"
+                style={{
+                  height: '34px',
+                  minHeight: '34px',
+                  padding: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <TrashIcon size={14} />
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Add Line + Optional Note */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'auto 1fr',
+          gap: '8px',
+          alignItems: 'center',
+        }}
+      >
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => setLines((current) => [...current, emptyLine(current.length + 1)])}
+          disabled={mutation.isPending}
+          style={{
+            minHeight: '34px',
+            height: '34px',
+            padding: '0 10px',
+            fontSize: '12px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '5px',
+            fontWeight: 600,
+          }}
+        >
+          <PlusIcon size={13} />
+          <span>{t('suppliers.supplier_bill_form.s9', 'إضافة بند')}</span>
+        </Button>
+
+        <input
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          aria-label={t('suppliers.supplier_bill_form.s10', 'ملاحظة الفاتورة')}
+          placeholder={t('suppliers.supplier_bill_form.s11', 'ملاحظة على الفاتورة')}
+          disabled={mutation.isPending}
+          style={{
+            height: '34px',
+            padding: '0 10px',
+            fontSize: '12.5px',
+            borderRadius: '8px',
+            border: '1px solid #cbd5e1',
+            background: '#ffffff',
+          }}
+        />
+      </div>
+
+      {validationError && <div className="error-box" style={{ fontSize: '12px', padding: '6px 10px' }}>{validationError}</div>}
+      {appliedInfo && <div className="success-box" style={{ fontSize: '12px', padding: '6px 10px' }}>{appliedInfo}</div>}
       <MutationFeedback
         isError={mutation.isError}
-        isSuccess={mutation.isSuccess}
         error={mutation.error}
-        errorFallback={t('suppliers.supplier_bill_form.s13', 'تعذر حفظ الفاتورة')}
-        successText={t('suppliers.supplier_bill_form.s14', 'تم حفظ فاتورة المورد بدون مخزون.')}
+        errorFallback={t('suppliers.supplier_bill_form.s15', 'تعذر تسجيل الفاتورة بدون مخزون')}
+        isSuccess={mutation.isSuccess}
+        successText={t('suppliers.supplier_bill_form.s12', 'تم تسجيل الفاتورة بدون مخزون بنجاح.')}
       />
-      <div className="actions sticky-form-actions">
-        <SubmitButton type="submit" isPending={mutation.isPending} idleText={t('suppliers.supplier_bill_form.s15', 'حفظ الفاتورة')} pendingText={t('suppliers.supplier_bill_form.s16', 'جارٍ الحفظ...')} />
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '6px', borderTop: '1px solid #f1f5f9' }}>
+        <SubmitButton
+          isPending={mutation.isPending}
+          isSuccess={mutation.isSuccess}
+          pendingText={t('suppliers.supplier_bill_form.s13', 'جاري تسجيل الفاتورة...')}
+          idleText={t('suppliers.supplier_bill_form.s14', 'حفظ الفاتورة بدون مخزون')}
+          style={{ minHeight: '34px', height: '34px', padding: '0 16px', fontSize: '12.5px', fontWeight: 700 }}
+        />
       </div>
     </form>
   );

@@ -14,7 +14,16 @@ import { useCreateSupplierMutation } from '@/features/suppliers/hooks/useCreateS
 import { supplierFormSchema, type SupplierFormInput, type SupplierFormOutput } from '@/features/suppliers/schemas/supplier.schema';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 
-const DEFAULT_VALUES = { name: '', phone: '', address: '', balance: 0, notes: '', metadata: { currency: 'USD', supplierType: 'factory', instapayAddress: '' }, supplierType: 'supplier' as const, overdraftLimit: null as number | null };
+const DEFAULT_VALUES = {
+  name: '',
+  phone: '',
+  address: '',
+  balance: 0,
+  notes: '',
+  metadata: { currency: 'USD', supplierType: 'factory', instapayAddress: '' },
+  supplierType: 'supplier' as const,
+  overdraftLimit: null as number | null,
+};
 
 export function SupplierForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   const { t } = useTranslation();
@@ -23,195 +32,223 @@ export function SupplierForm({ onSuccess }: { onSuccess?: () => void } = {}) {
 
   const form = useForm<SupplierFormInput, undefined, SupplierFormOutput>({
     resolver: zodResolver(supplierFormSchema),
-    defaultValues: DEFAULT_VALUES
+    defaultValues: DEFAULT_VALUES,
   });
-  const canNavigateAway = useUnsavedChangesGuard(form.formState.isDirty && !form.formState.isSubmitSuccessful && !form.formState.isSubmitting);
+
+  useUnsavedChangesGuard(
+    form.formState.isDirty,
+    t('suppliers.modal.new_unsaved_guard', 'لديك بيانات مورد جديد غير محفوظة. هل تريد المغادرة بدون حفظ؟'),
+  );
+
   const mutation = useCreateSupplierMutation(() => {
     form.reset(DEFAULT_VALUES);
     onSuccess?.();
   });
+
   const watchedValues = useWatch({ control: form.control });
-
-  const feedbackResetKey = JSON.stringify(watchedValues);
-
-  useMutationFeedbackReset(
-    mutation.isSuccess || mutation.isError,
-    mutation.reset,
-    feedbackResetKey,
-  );
-
-  function handleReset() {
-    if (!form.formState.isDirty) return;
-    if (!canNavigateAway()) return;
-    mutation.reset();
-    form.reset(DEFAULT_VALUES);
-  }
+  useMutationFeedbackReset(mutation.isSuccess || mutation.isError, mutation.reset, watchedValues);
 
   return (
-    <form className="form-grid supplier-form-grid" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
-      <DraftStateNotice visible={form.formState.isDirty && !mutation.isPending} title={t('suppliers.supplier_form.s0', "بيانات المورد الجديدة لم تُحفظ بعد")} hint={t('suppliers.supplier_form.s1', "يمكنك الحفظ أو تفريغ الحقول قبل بدء مورد جديد.")} />
-      
-      <Field label={t('suppliers.supplier_form.s2', "اسم المورد *")} error={form.formState.errors.name?.message} className="field-full-span">
-        <input 
-          {...form.register('name')} 
-          disabled={mutation.isPending} 
-          placeholder={t('suppliers.supplier_form.s3', "مثال: شركة التوحيد للتوريدات / أحمد حسن")}
-          data-autofocus
-        />
-      </Field>
-
-      <Field label={t('suppliers.supplier_form.s4', "رقم الهاتف")} error={form.formState.errors.phone?.message}>
-        <input 
-          type="tel"
-          {...form.register('phone')} 
-          disabled={mutation.isPending} 
-          placeholder={t('suppliers.supplier_form.s5', "مثال: 010xxxxxxxx")}
-        />
-      </Field>
-
-      {/* INV-INSTAPAY-FIELD-MISSING: the supplier's own InstaPay
-        account number. It is saved on the supplier record
-        (metadata.instapayAddress) and the payment forms prefill from
-        it when InstaPay is picked. */}
-      <Field
-        label={t('suppliers.supplier_form.s27', "رقم حساب إنستاباي (IPA)")}
-        hint={t('suppliers.supplier_form.s28', "حساب إنستاباي الذي تُرسَل إليه دفعات هذا المورد")}
-      >
-        <input
-          type="text"
-          {...form.register('metadata.instapayAddress')}
-          disabled={mutation.isPending}
-          placeholder={t('suppliers.supplier_form.s29', "مثال: name@instapay")}
-        />
-      </Field>
-
-      <Field 
-        label={`الرصيد الافتتاحي (${getGlobalCurrencySymbol()})`} 
-        hint={t('suppliers.supplier_form.s6', "المبلغ المستحق للمورد عند بداية التسجيل (إن وجد)")}
-        error={form.formState.errors.balance?.message}
-      >
-        <input 
-          type="number" 
-          step="0.01" 
-          {...form.register('balance')} 
-          disabled={mutation.isPending} 
-          placeholder="0.00"
-        />
-      </Field>
-
-      {/* INV-SUPPLIER-PAGE-BILL-STATEMENT: top-level supplier type —
-        'freelancer' is a contractor (ads/marketing) registered here,
-        not an HR employee. Do NOT confuse it with
-        metadata.supplierType above (the import classification). */}
-      <Field label={t('suppliers.supplier_form.s30', "نوع المورد")} error={form.formState.errors.supplierType?.message}>
-        <Controller
-          name="supplierType"
-          control={form.control}
-          render={({ field }) => (
-            <CustomSelect
-              value={field.value || 'supplier'}
-              onChange={field.onChange}
+    <form
+      onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
+      style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
+    >
+      <div className="supplier-modal-section-card">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '6px' }}>
+          <span style={{ width: '3px', height: '13px', borderRadius: '2px', background: '#170e5e', display: 'inline-block' }} />
+          <strong style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>بيانات الهوية والتواصل</strong>
+        </div>
+        <div className="supplier-modal-fields-3col">
+          <Field
+            label="اسم المورد *"
+            error={form.formState.errors.name?.message}
+            className="supplier-modal-span-2"
+          >
+            <input
+              {...form.register('name')}
               disabled={mutation.isPending}
-              options={[
-                { value: 'supplier', label: t('suppliers.supplier_form.s31', "عادي") },
-                { value: 'freelancer', label: t('suppliers.supplier_form.s32', "فري لانس (مقاول / خدمات)") },
-              ]}
             />
-          )}
-        />
-      </Field>
+          </Field>
+          <Field label="رقم الهاتف" error={form.formState.errors.phone?.message}>
+            <input
+              {...form.register('phone')}
+              disabled={mutation.isPending}
+            />
+          </Field>
+          <Field
+            label="العنوان / المقر"
+            error={form.formState.errors.address?.message}
+            className="supplier-modal-span-2"
+          >
+            <input
+              {...form.register('address')}
+              disabled={mutation.isPending}
+            />
+          </Field>
+          <Field label="حساب إنستاباي (IPA)">
+            <input
+              {...form.register('metadata.instapayAddress')}
+              disabled={mutation.isPending}
+              dir="ltr"
+            />
+          </Field>
+        </div>
+      </div>
 
-      <Field
-        label={t('suppliers.supplier_form.s33', "حد السحب على المكشوف")}
-        hint={t('suppliers.supplier_form.s34', "أقصى مجموع الدفعات المقدمة غير المطبقة — اتركه فارغًا ليعني بدون حد")}
-        error={form.formState.errors.overdraftLimit?.message}
-      >
-        <Controller
-          name="overdraftLimit"
-          control={form.control}
-          render={({ field }) => (
+      <div className="supplier-modal-section-card supplier-modal-section-card--subtle">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '6px' }}>
+          <span style={{ width: '3px', height: '13px', borderRadius: '2px', background: '#170e5e', display: 'inline-block' }} />
+          <strong style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>الإعدادات المالية والائتمانية</strong>
+        </div>
+        <div className="supplier-modal-fields-3col">
+          <Field label="نوع المورد">
+            <Controller
+              name="supplierType"
+              control={form.control}
+              render={({ field }) => (
+                <CustomSelect
+                  value={field.value || 'supplier'}
+                  onChange={(value) => field.onChange(value as 'supplier' | 'freelancer')}
+                  options={[
+                    { value: 'supplier', label: 'عادي (مورد بضاعة وخدمات)' },
+                    { value: 'freelancer', label: 'فري لانس / مستقل' },
+                  ]}
+                  disabled={mutation.isPending}
+                />
+              )}
+            />
+          </Field>
+          <Field
+            label={`الرصيد الافتتاحي (${getGlobalCurrencySymbol()})`}
+            error={form.formState.errors.balance?.message}
+          >
             <input
               type="number"
               step="0.01"
-              min="0"
-              value={field.value ?? ''}
+              className="no-spin-arrows"
+              {...form.register('balance')}
               disabled={mutation.isPending}
-              placeholder={t('suppliers.supplier_form.s35', "بدون حد")}
-              onChange={(event) => field.onChange(event.target.value === '' ? null : Number(event.target.value))}
             />
-          )}
-        />
-      </Field>
+          </Field>
+          <Field
+            label={`حد السحب على المكشوف (${getGlobalCurrencySymbol()})`}
+            error={form.formState.errors.overdraftLimit?.message}
+          >
+            <Controller
+              name="overdraftLimit"
+              control={form.control}
+              render={({ field }) => (
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="no-spin-arrows"
+                  value={field.value ?? ''}
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    field.onChange(raw === '' ? null : Number(raw));
+                  }}
+                  placeholder="بدون حد"
+                  disabled={mutation.isPending}
+                />
+              )}
+            />
+          </Field>
+        </div>
+      </div>
 
-      <Field label={t('suppliers.supplier_form.s7', "العنوان / المقر")} className="field-full-span">
-        <input 
-          {...form.register('address')} 
-          disabled={mutation.isPending} 
-          placeholder={t('suppliers.supplier_form.s8', "المدينة، المنطقة، العنوان التفصيلي...")}
-        />
-      </Field>
-
-      <Field 
-        label={t('suppliers.supplier_form.s9', "ملاحظات إضافية")} 
-        className="field-full-span"
-        hint={t('suppliers.supplier_form.s10', "ملاحظات اختيارية أو شروط سداد خاصة بالمورد")}
-      >
-        <textarea 
-          rows={3} 
-          {...form.register('notes')} 
-          disabled={mutation.isPending} 
-          placeholder={t('suppliers.supplier_form.s11', "أي شروط دفع، أرقام تواصل بديلة، أو تفاصيل خاصة بالمورد...")}
-        />
-      </Field>
-      
       {importModuleEnabled && (
-        <fieldset style={{ padding: '12px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f8fafc', gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <legend style={{ padding: '0 8px', fontWeight: 700, color: '#170e5e', fontSize: '0.82rem' }}>{t('suppliers.supplier_form.s12', "إعدادات الاستيراد")}</legend>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-            <Field label={t('suppliers.supplier_form.s13', "عملة التعامل")}>
+        <div className="supplier-modal-section-card supplier-modal-section-card--subtle">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '6px' }}>
+            <span style={{ width: '3px', height: '13px', borderRadius: '2px', background: '#170e5e', display: 'inline-block' }} />
+            <strong style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>إعدادات الاستيراد والشحن الدولي</strong>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px 10px' }}>
+            <Field label="العملة الافتراضية">
               <Controller
                 name="metadata.currency"
                 control={form.control}
                 render={({ field }) => (
                   <CustomSelect
-                    value={field.value}
+                    value={field.value || 'USD'}
                     onChange={field.onChange}
-                    disabled={mutation.isPending}
                     options={[
-                      { value: 'USD', label: t('suppliers.supplier_form.s14', "USD (دولار أمريكي)") },
-                      { value: 'EUR', label: t('suppliers.supplier_form.s15', "EUR (يورو)") },
-                      { value: 'CNY', label: t('suppliers.supplier_form.s16', "CNY (يوان صيني)") },
-                      { value: 'EGP', label: t('suppliers.supplier_form.s17', "EGP (جنيه مصري)") },
+                      { value: 'USD', label: 'دولار أمريكي (USD)' },
+                      { value: 'EUR', label: 'يورو (EUR)' },
+                      { value: 'RMB', label: 'يوان صيني (RMB)' },
+                      { value: 'GBP', label: 'جنيه استرليني (GBP)' },
+                      { value: 'SAR', label: 'ريال سعودي (SAR)' },
+                      { value: 'AED', label: 'درهم إماراتي (AED)' },
+                      { value: 'EGP', label: 'جنيه مصري (EGP)' },
                     ]}
+                    placeholder="اختر العملة"
+                    disabled={mutation.isPending}
                   />
                 )}
               />
             </Field>
-            <Field label={t('suppliers.supplier_form.s18', "تصنيف المورد")}>
+            <Field label="تصنيف المورد الدولي">
               <Controller
                 name="metadata.supplierType"
                 control={form.control}
                 render={({ field }) => (
                   <CustomSelect
-                    value={field.value}
+                    value={field.value || 'factory'}
                     onChange={field.onChange}
-                    disabled={mutation.isPending}
                     options={[
-                      { value: 'factory', label: t('suppliers.supplier_form.s19', "مصنع خارجي") },
-                      { value: 'shipping', label: t('suppliers.supplier_form.s20', "شركة شحن") },
-                      { value: 'customs', label: t('suppliers.supplier_form.s21', "مخلص جمركي") },
+                      { value: 'factory', label: 'مصنع / مورد رئيسي (Factory)' },
+                      { value: 'shipping', label: 'وكيل شحن دولي (Freight)' },
+                      { value: 'customs', label: 'مخلص جمركي (Broker)' },
+                      { value: 'local', label: 'تخليص ونقل داخلي (Local)' },
                     ]}
+                    placeholder="اختر التصنيف"
+                    disabled={mutation.isPending}
                   />
                 )}
               />
             </Field>
           </div>
-        </fieldset>
+        </div>
       )}
-      <MutationFeedback isError={mutation.isError} isSuccess={mutation.isSuccess} error={mutation.error} errorFallback={t('suppliers.supplier_form.s22', "تعذر حفظ المورد")} successText={t('suppliers.supplier_form.s23', "تم حفظ المورد بنجاح.")} />
-      <div className="actions sticky-form-actions">
-        <FormResetButton onReset={handleReset} disabled={mutation.isPending || !form.formState.isDirty}>{t('suppliers.supplier_form.s24', "تفريغ النموذج")}</FormResetButton>
-        <SubmitButton type="submit" isPending={mutation.isPending} idleText={t('suppliers.supplier_form.s25', "حفظ المورد")} pendingText={t('suppliers.supplier_form.s26', "جارٍ الحفظ...")} />
+
+      <div className="supplier-modal-section-card">
+        <Field label="ملاحظات" error={form.formState.errors.notes?.message}>
+          <input
+            type="text"
+            {...form.register('notes')}
+            disabled={mutation.isPending}
+            style={{ height: '34px', fontSize: '12.5px' }}
+          />
+        </Field>
+      </div>
+
+      <DraftStateNotice visible={form.formState.isDirty} />
+      <MutationFeedback
+        isError={mutation.isError}
+        error={mutation.error}
+        errorFallback="تعذر إضافة المورد"
+        isSuccess={mutation.isSuccess}
+        successText="تمت إضافة المورد بنجاح."
+      />
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
+          paddingTop: '8px',
+          borderTop: '1px solid #e2e8f0',
+        }}
+      >
+        <FormResetButton onReset={() => form.reset(DEFAULT_VALUES)} disabled={!form.formState.isDirty || mutation.isPending} />
+        <SubmitButton
+          isPending={mutation.isPending}
+          isSuccess={mutation.isSuccess}
+          pendingText="جاري الإضافة..."
+          idleText="إضافة المورد"
+          style={{ minHeight: '34px', height: '34px', padding: '0 20px', fontSize: '13px', fontWeight: 700 }}
+        />
       </div>
     </form>
   );

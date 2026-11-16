@@ -610,7 +610,16 @@ export class ReportsSummaryService {
       }
     }
 
-    const [totalsRow, openingRow] = await Promise.all([
+    const hasSupplierAdvanceColumns = !isCust
+      ? Boolean((await sql<{ has_cols: boolean }>`
+          select (
+            exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'supplier_payments' and column_name = 'is_advance')
+            and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'supplier_payments' and column_name = 'applied_amount')
+          ) as has_cols
+        `.execute(this.db)).rows[0]?.has_cols)
+      : false;
+
+    const [totalsRow, openingRow, openAdvanceRow] = await Promise.all([
       entriesQuery
         .clearSelect()
         .select([
@@ -627,13 +636,23 @@ export class ReportsSummaryService {
             .where(this.tenantPredicate(auth))
             .executeTakeFirst()
         : Promise.resolve(null),
+      !isCust && hasSupplierAdvanceColumns
+        ? (this.db as any)
+            .selectFrom('supplier_payments')
+            .select(sql<number>`coalesce(sum(greatest(amount - coalesce(applied_amount, 0), 0)), 0)`.as('open_advance'))
+            .where('supplier_id', '=', partnerId)
+            .where('is_advance', '=', true)
+            .where(this.tenantPredicate(auth))
+            .executeTakeFirst()
+        : Promise.resolve(null),
     ]);
 
     const openingBalance = Number(openingRow?.opening_balance || 0);
+    const openAdvanceBalance = !isCust && hasSupplierAdvanceColumns ? Number(openAdvanceRow?.open_advance || 0) : undefined;
 
     const payload = isCust
       ? buildCustomerLedgerPayload({ customer: partner, rows: rows as PartnerLedgerEntryRow[], page, pageSize, totalItems, totalsRow: totalsRow as LedgerSummaryRow | undefined, openingBalance, digits })
-      : buildSupplierLedgerPayload({ supplier: partner, rows: rows as PartnerLedgerEntryRow[], page, pageSize, totalItems, totalsRow: totalsRow as LedgerSummaryRow | undefined, openingBalance });
+      : buildSupplierLedgerPayload({ supplier: partner, rows: rows as PartnerLedgerEntryRow[], page, pageSize, totalItems, totalsRow: totalsRow as LedgerSummaryRow | undefined, openingBalance, openAdvanceBalance, digits });
 
     return this.withScope(payload, auth);
   }

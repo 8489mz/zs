@@ -276,6 +276,7 @@ async function main(): Promise<void> {
       assert.equal(Number(statement.summary?.totalDebits ?? 0), 0, 'zero-amount markers must not inflate statement totals');
       assert.equal(Number(statement.summary?.totalCredits ?? 0), 0);
       assert.equal(Number(statement.summary?.closingBalance ?? 0), 0);
+      assert.equal(Number(statement.summary?.openAdvanceBalance ?? 0), 1500);
     } finally {
       await db.destroy();
     }

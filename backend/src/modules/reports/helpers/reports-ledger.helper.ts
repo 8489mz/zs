@@ -193,16 +193,22 @@ export function buildSupplierLedgerPayload(args: {
   totalItems: number;
   totalsRow?: LedgerSummaryRow | null;
   openingBalance?: number;
+  openAdvanceBalance?: number;
   digits?: MoneyDigits;
 }) {
-  const { supplier, rows, page, pageSize, totalItems, totalsRow, openingBalance, digits = 2 } = args;
+  const { supplier, rows, page, pageSize, totalItems, totalsRow, openingBalance, openAdvanceBalance, digits = 2 } = args;
   const summary = buildLedgerSummary(totalItems, totalsRow, openingBalance, digits);
   // INV-CUSTOMER-SUPPLIER-STATEMENTS: the raw totals are sums by
   // amount sign (positive = purchases, negative = payments). For a
   // supplier those are credits and debits respectively, so the two
   // labels are swapped; closingBalance is left as computed from the
   // raw amounts (opening + purchases - payments = final balance).
-  const orientedSummary = { ...summary, totalDebits: summary.totalCredits, totalCredits: summary.totalDebits };
+  const orientedSummary = {
+    ...summary,
+    totalDebits: summary.totalCredits,
+    totalCredits: summary.totalDebits,
+    ...(openAdvanceBalance !== undefined ? { openAdvanceBalance: toMoney(openAdvanceBalance, digits) } : {}),
+  };
   return {
     supplier: {
       id: String(supplier.id),

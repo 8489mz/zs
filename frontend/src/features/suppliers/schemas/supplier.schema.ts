@@ -4,7 +4,7 @@ export const supplierFormSchema = z.object({
   name: z.string().min(2, 'اسم المورد مطلوب'),
   phone: z.string().optional(),
   address: z.string().optional(),
-  balance: z.coerce.number().min(0),
+  balance: z.coerce.number().finite('الرصيد غير صالح'),
   notes: z.string().optional(),
   metadata: z.record(z.string(), z.any()).optional(),
   /* INV-SUPPLIER-PAGE-BILL-STATEMENT: top-level supplier type, NOT

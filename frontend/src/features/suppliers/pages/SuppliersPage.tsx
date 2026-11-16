@@ -61,30 +61,17 @@ export function SuppliersPage() {
         <StandardDialog
           open={Boolean(controller.selectedSupplier)}
           onClose={() => controller.setSelectedSupplier(null)}
-          title={controller.selectedSupplier ? `تعديل: ${controller.selectedSupplier.name}` : ''}
-          subtitle={__t('suppliers.suppliers_page.s0', "تحديث بيانات المورد أو ضبط الرصيد الافتتاحي والملاحظات")}
-          width="min(960px, 96vw)"
-          minHeight="auto"
+          compact
+          title={controller.selectedSupplier ? `ملف المورد: ${controller.selectedSupplier.name}` : ''}
+          subtitle={__t('suppliers.modal.edit_subtitle', "إدارة البيانات الأساسية، فواتير الخدمات، وكشف الحساب والمدفوعات")}
+          width="min(1080px, 96vw)"
+          minHeight="min(620px, 90vh)"
         >
-          {controller.selectedSupplier && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
-              <Button
-                variant="danger"
-                onClick={() => controller.setSupplierToDelete(controller.selectedSupplier)}
-                disabled={!controller.canDelete}
-                style={{
-                  fontSize: '0.8rem',
-                  padding: '4px 12px',
-                  fontWeight: 700,
-                }}
-              >
-                {__t('suppliers.suppliers_page.s1', "حذف المورد")}
-              </Button>
-            </div>
-          )}
           <SupplierEditorCard
             supplier={controller.selectedSupplier || undefined}
             onSaved={() => controller.setSelectedSupplier(null)}
+            canDelete={controller.canDelete}
+            onRequestDelete={() => controller.selectedSupplier && controller.setSupplierToDelete(controller.selectedSupplier)}
           />
         </StandardDialog>
 

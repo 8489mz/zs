@@ -79,7 +79,7 @@ export class ReportsController {
   }
 
   @Get('reports/suppliers/:id/ledger')
-  @RequireAnyPermission('reports', 'accounts')
+  @RequireAnyPermission('reports', 'accounts', 'suppliers')
   supplierLedger(@Param('id', ParseIntPipe) id: number, @Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
     return this.reportsService.supplierLedger(id, query, req.authContext!);
   }
