@@ -49,6 +49,9 @@ export interface PosWorkspaceActionParams {
   setSearch: Dispatch<SetStateAction<string>>;
   priceType: PosPriceType;
   setPriceType: Dispatch<SetStateAction<PosPriceType>>;
+  // INV-VAN-PRICE-LIST-WIRING: true while a customer is selected — the
+  // panel locks the tier toggle and shows the derived tier.
+  isPriceTypeLocked: boolean;
   branchId: string;
   locationId: string;
   /** Product ids currently 86'd for this branch (INV-REST-FNB-TRUTH-2,

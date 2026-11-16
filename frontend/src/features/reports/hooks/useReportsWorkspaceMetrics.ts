@@ -218,7 +218,8 @@ export function useReportsWorkspaceMetrics({
       aging: 'راجع فئات تأخر السداد واتخذ إجراءات التحصيل للديون المتأخرة لأكثر من 60 يوماً.',
       forecasting: 'راجع توقعات الطلب واقتراحات إعادة الطلب للأصناف المعرضة للنفاد.',
       food_cost_variance: 'قارن الاستهلاك النظري والفعلي للمكونات وحدد الفروقات والهدر لمعالجتها.',
-      menu_engineering: 'حلل ربحية وشعبية أصناف المنيو ورتب أولويات تعديل الأسعار وتطوير الوصفات.'
+      menu_engineering: 'حلل ربحية وشعبية أصناف المنيو ورتب أولويات تعديل الأسعار وتطوير الوصفات.',
+      net_profit: 'ابدأ بصافي الربح التشغيلي ثم راجع الإيرادات والتكلفة والمصروفات لتحديد مصدر التغير.'
     };
     const attentionBySection: Record<ReportsSectionKey, string> = {
       overview: formatCurrency(financialCards?.netProfit ?? report?.commercial.netOperatingProfit ?? 0),
@@ -232,7 +233,8 @@ export function useReportsWorkspaceMetrics({
       aging: 'متابعة الديون والتحصيل',
       forecasting: 'تنبؤات حركة المخزون',
       food_cost_variance: 'مراقبة تكلفة الهدر وفروقات المكونات',
-      menu_engineering: 'تحليل مصفوفة هندسة المنيو (BCG)'
+      menu_engineering: 'تحليل مصفوفة هندسة المنيو (BCG)',
+      net_profit: formatCurrency(financialCards?.netProfit ?? report?.commercial.netOperatingProfit ?? 0)
     };
 
     return [

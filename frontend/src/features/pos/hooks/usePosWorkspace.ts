@@ -649,6 +649,9 @@ export function usePosWorkspace() {
     selectedLineKey: state.selectedLineKey,
     setSelectedLineKey: state.setSelectedLineKey,
     priceType: state.priceType,
+    // INV-VAN-PRICE-LIST-WIRING: exposed so the workspace content can
+    // pass it to the products panel.
+    isPriceTypeLocked,
     branchId: effectiveBranchId,
     locationId: effectiveLocationId,
     eightySixedProductIds,

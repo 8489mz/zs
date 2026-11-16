@@ -175,6 +175,7 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
   }
 
   const handleSaveSubmit = async () => {
+    if (!sale) return;
     if (!normalizedItems.length) {
       setLocalError(t('sales.f7181a'));
       return;
