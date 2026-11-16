@@ -57,7 +57,6 @@
     "src/features/pos/components/pos-workspace/PosTablesFloorPlanDialog.tsx": 1607,
     "src/features/pos/components/pos-workspace/PosWorkspaceHeader.tsx": 1267,
     "src/features/pos/lib/pos.domain.ts": 1087,
-    "src/features/pos/pages/SelfOrderingKioskPage.tsx": 3199,
     "src/features/pos/pages/WaiterStationPage.tsx": 1141,
     "src/features/products/components/BarcodePrintDialog.tsx": 1066,
     "src/features/products/components/EditProductForm.tsx": 1043,

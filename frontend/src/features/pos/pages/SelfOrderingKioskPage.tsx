@@ -3,24 +3,10 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/stores/auth-store';
 import { useIsolatedDisplayLanguage } from '@/features/pos/hooks/useIsolatedDisplayLanguage';
-import { formatCurrency } from '@/lib/format';
 import { toast } from '@/shared/components/system-alert';
 import {
-  UtensilsIcon,
-  ShoppingBagIcon,
-  CheckCircleIcon,
-  PlusCircleIcon,
-  CreditCardIcon,
-  XIcon,
-  Trash2Icon,
-  RefreshCwIcon,
-  QrCodeIcon,
-  AlertCircleIcon,
   AlertTriangleIcon,
-  ClockIcon,
 } from '@/shared/components/icons/AppIcons';
-import { DialogShell } from '@/shared/components/dialog-shell';
-import { Button } from '@/shared/ui/button';
 import { PosSmartUpsellModal } from '@/features/pos/components/pos-workspace/PosSmartUpsellModal';
 import {
   useSelfOrderingKiosk,
@@ -42,7 +28,6 @@ import {
   type KioskConfirmationItem,
   type KioskPaymentStatus,
 } from '@/features/pos/hooks/useSelfOrderingKiosk';
-import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 import { KioskHeader } from '@/features/pos/components/kiosk/KioskHeader';
 import { KioskConfirmationScreen } from '@/features/pos/components/kiosk/KioskConfirmationScreen';
 import { KioskModifierPickerModal } from '@/features/pos/components/kiosk/KioskModifierPickerModal';
