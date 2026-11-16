@@ -215,6 +215,8 @@ function buildLifecycle(db: Kysely<Database>): VanTripLifecycleService {
     moveVanStock: async () => ({ scopeBefore: 0, scopeAfter: 0 }),
     moveVanPharmacyBatches: async () => 0,
     deductVanSalePharmacyBatches: async () => [],
+    moveVanInventoryBatches: async () => 0,
+    deductVanSaleInventoryBatches: async () => [],
     resolveSystemAuthContext: async () => ({ ...ADMIN, userId: 2 } as never),
     recordSuspicionEvent: async () => ({}),
     listRepServedCustomerIds: async () => new Set<number>(),

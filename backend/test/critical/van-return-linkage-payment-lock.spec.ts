@@ -375,6 +375,8 @@ function buildEdit(db: Kysely<Database>): { service: SalesEditAndCancelService; 
     autoProduceShortfall: async () => {},
     deductPharmacyBatchesFefo: async () => {},
     restoreSalePharmacyBatches: async () => {},
+    deductInventoryBatchesFefo: async () => {},
+    restoreSaleInventoryBatches: async () => {},
     recordImportLotShortfalls: async () => {},
     getAllowNegativeStockSales: async () => false,
     buildInsufficientStockError: (async () => { throw new Error('unexpected stock error'); }) as never,
@@ -400,6 +402,8 @@ function buildLifecycle(db: Kysely<Database>): VanTripLifecycleService {
     moveVanStock: async () => ({ scopeBefore: 0, scopeAfter: 0 }),
     moveVanPharmacyBatches: async () => 0,
     deductVanSalePharmacyBatches: async () => [],
+    moveVanInventoryBatches: async () => 0,
+    deductVanSaleInventoryBatches: async () => [],
     resolveSystemAuthContext: async () => ({ ...ADMIN, userId: 2 } as never),
     recordSuspicionEvent: async () => ({}),
     listRepServedCustomerIds: async () => new Set<number>(),
@@ -773,7 +777,7 @@ async function main(): Promise<void> {
   }
 
   // 8. The orphan evidence spec is wired into BOTH critical lists,
-  // in identical order (211 specs — P6 wired the tax spec after it).
+  // in identical order (213 specs — P8 wired the date-filter spec, P9 wired the FEFO spec).
   {
     const specDir = __dirname;
     const jsonPath = path.join(specDir, '..', '..', 'scripts', 'critical-specs.json');
@@ -781,13 +785,13 @@ async function main(): Promise<void> {
     const list = JSON.parse(fs.readFileSync(jsonPath, 'utf8')).specs as string[];
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
     const chain = String(pkg.scripts['test:critical:serial']).split(' && ').map((x) => x.replace(/^ts-node /, ''));
-    assert.equal(list.length, 211);
-    assert.equal(chain.length, 211);
+    assert.equal(list.length, 213);
+    assert.equal(chain.length, 213);
     assert.deepEqual(list, chain);
     assert.ok(list.includes('test/critical/van-field-noncash-evidence.spec.ts'));
     const idx = list.indexOf('test/critical/van-field-noncash-evidence.spec.ts');
     assert.equal(list[idx - 1], 'test/critical/van-field-sale-wholesale-price.spec.ts');
-    console.log('8. evidence spec wired into both critical lists (211 = 211, identical order), passed');
+    console.log('8. evidence spec wired into both critical lists (213 = 213, identical order), passed');
   }
 
   // 9. Regressions: (a) a main return without invoiceId is refused

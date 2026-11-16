@@ -135,6 +135,8 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       sale_line_id bigint, product_id bigint, quantity numeric, allocation_order int, location_id bigint);
     CREATE TABLE sale_pharmacy_batch_allocations (id bigserial PRIMARY KEY, tenant_id text, account_id text,
       sale_id bigint, sale_item_id bigint, product_id bigint, batch_id bigint, qty numeric);
+    CREATE TABLE sale_inventory_batch_allocations (id bigserial PRIMARY KEY, tenant_id text, account_id text,
+      sale_id bigint, sale_item_id bigint, product_id bigint, inventory_batch_id bigint, quantity numeric);
     CREATE TABLE import_sale_allocations (id bigserial PRIMARY KEY, tenant_id text, account_id text,
       sale_id bigint, sale_item_id bigint, product_id bigint, quantity numeric, allocation_type text,
       reversal_of_allocation_id bigint, created_at timestamptz DEFAULT NOW());
@@ -159,6 +161,11 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE pharmacy_drugs (id bigserial PRIMARY KEY, tenant_id text, product_id bigint);
     CREATE TABLE pharmacy_batches (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, drug_id bigint,
       batch_number text, expiry_date text, quantity numeric DEFAULT 0, unit_cost numeric, location_id bigint, supplier_name text, status text, notes text);
+    CREATE TABLE inventory_batches (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint,
+      batch_number varchar(100) NOT NULL, expiry_date varchar(30), quantity numeric(14,3) DEFAULT 0 NOT NULL,
+      unit_cost numeric(14,3) DEFAULT 0 NOT NULL, location_id integer, supplier_name varchar(150),
+      status varchar(50) DEFAULT 'active' NOT NULL, notes text, created_at timestamptz DEFAULT NOW() NOT NULL,
+      updated_at timestamptz DEFAULT NOW() NOT NULL);
     CREATE TABLE treasury_transactions (id bigserial PRIMARY KEY, tenant_id text, account_id text, txn_type text,
       amount numeric, note text, reference_type text, reference_id bigint, return_document_id bigint,
       branch_id bigint, location_id bigint, created_by bigint);
