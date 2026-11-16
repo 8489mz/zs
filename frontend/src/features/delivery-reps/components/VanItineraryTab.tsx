@@ -41,6 +41,7 @@ import { VanDamagedSwapModal } from './VanDamagedSwapModal';
 import { VanLiveTargetBoosterWidget } from './VanLiveTargetBoosterWidget';
 export { normalizeDayKey, DAY_KEY_TO_ARABIC, ALL_WEEK_DAYS } from '@/features/delivery-reps/components/van-itinerary/van-itinerary-day';
 import { VanItineraryPagination } from '@/features/delivery-reps/components/van-itinerary/van-itinerary-pagination';
+import { useVanItineraryFilters } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-filters';
 
 interface VanItineraryTabProps {
   itinerary: VanCustomerItineraryItem[];
@@ -78,30 +79,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
   allAvailableCustomers,
 }) => {
   const { t } = useTranslation();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [routeFilter, setRouteFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'positive' | 'negative'>('all');
-  const [dayFilter, setDayFilter] = useState<'today' | 'all' | string>('today');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('zs_van_itinerary_page_size');
-      if (saved) {
-        const parsed = parseInt(saved, 10);
-        if ([10, 15, 20, 25, 50, 100].includes(parsed)) return parsed;
-      }
-    }
-    return 15;
-  });
-
-  const handlePageSizeChange = (size: number) => {
-    setPageSize(size);
-    setCurrentPage(1);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('zs_van_itinerary_page_size', String(size));
-    }
-  };
-
+  const filters = useVanItineraryFilters({ itinerary });
   // Selected customer for the unified hub modal
   const [selectedCustomerForHub, setSelectedCustomerForHub] = useState<VanCustomerItineraryItem | null>(null);
   const [inventoryCustomer, setInventoryCustomer] = useState<VanCustomerItineraryItem | null>(null);
@@ -191,29 +169,11 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
     };
   }, []);
 
-  // Memory list of saved districts
-  const savedDistrictsList = useMemo(() => {
-    const set = new Set<string>();
-    // From itinerary
-    itinerary.forEach((it) => {
-      if (it.district) set.add(it.district.trim());
-      else if (it.route) set.add(it.route.trim());
-    });
-    // From localStorage
-    if (typeof window !== 'undefined') {
-      try {
-        const localDistricts: string[] = JSON.parse(localStorage.getItem('zs_van_saved_districts') || '[]');
-        localDistricts.forEach((d) => set.add(d.trim()));
-      } catch {}
-    }
-    return Array.from(set).filter(Boolean);
-  }, [itinerary]);
-
   const filteredDistricts = useMemo(() => {
-    if (!newCustDistrict.trim()) return savedDistrictsList;
+    if (!newCustDistrict.trim()) return filters.savedDistrictsList;
     const q = newCustDistrict.trim().toLowerCase();
-    return savedDistrictsList.filter((d) => d.toLowerCase().includes(q));
-  }, [savedDistrictsList, newCustDistrict]);
+    return filters.savedDistrictsList.filter((d) => d.toLowerCase().includes(q));
+  }, [filters.savedDistrictsList, newCustDistrict]);
 
   const handleCaptureGps = () => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -255,38 +215,6 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
     const s = sec % 60;
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
-
-  const arabicDayNames = useMemo(() => ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'], []);
-  const todayArabicName = useMemo(() => {
-    return itinerary[0]?.currentDayName || arabicDayNames[new Date().getDay()];
-  }, [itinerary, arabicDayNames]);
-
-  const todayCount = useMemo(() => {
-    return itinerary.filter((i) => customerMatchesDay(i, 'today', todayArabicName)).length;
-  }, [itinerary, todayArabicName]);
-
-  const [dayDropdownOpen, setDayDropdownOpen] = useState(false);
-  const dayDropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (dayDropdownRef.current && !dayDropdownRef.current.contains(e.target as Node)) {
-        setDayDropdownOpen(false);
-      }
-    };
-    if (dayDropdownOpen) {
-      document.addEventListener('mousedown', handleOutsideClick);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-    };
-  }, [dayDropdownOpen]);
-
-  // Reset pagination to first page when search or filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, routeFilter, statusFilter, dayFilter]);
-
   // Negative visit modal state
   const [negativeModalOpen, setNegativeModalOpen] = useState(false);
   const [activeCustomer, setActiveCustomer] = useState<VanCustomerItineraryItem | null>(null);
@@ -298,43 +226,38 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statementModalCust, setStatementModalCust] = useState<VanCustomerItineraryItem | null>(null);
 
-  // Extract unique routes
-  const routes = useMemo(() => {
-    return Array.from(new Set(itinerary.map((i) => i.route).filter(Boolean)));
-  }, [itinerary]);
-
   const filteredRoutes = useMemo(() => {
-    if (!newCustRoute.trim()) return routes;
+    if (!newCustRoute.trim()) return filters.routes;
     const q = newCustRoute.trim().toLowerCase();
-    return routes.filter((r) => r.toLowerCase().includes(q));
-  }, [routes, newCustRoute]);
+    return filters.routes.filter((r) => r.toLowerCase().includes(q));
+  }, [filters.routes, newCustRoute]);
 
   // Default to today's visit day and current trip route when opening the modal
   useEffect(() => {
     if (addCustomerModalOpen) {
       if (newCustVisitDays.length === 0) {
-        setNewCustVisitDays([todayArabicName]);
+        setNewCustVisitDays([filters.todayArabicName]);
       }
-      if (!newCustRoute.trim() && routes.length > 0) {
-        setNewCustRoute(routes[0]);
+      if (!newCustRoute.trim() && filters.routes.length > 0) {
+        setNewCustRoute(filters.routes[0]);
       }
     }
-  }, [addCustomerModalOpen, todayArabicName, newCustVisitDays.length, newCustRoute, routes]);
+  }, [addCustomerModalOpen, filters.todayArabicName, newCustVisitDays.length, newCustRoute, filters.routes]);
 
   const filtered = useMemo(() => {
-    const rawSearch = searchTerm.trim().toLowerCase();
+    const rawSearch = filters.searchTerm.trim().toLowerCase();
     const cleanSearch = rawSearch.replace(/^[c#]-?/, '');
     const isPureNumeric = cleanSearch.length > 0 && /^\d+$/.test(cleanSearch);
     const isExplicitCodeSearch = rawSearch.startsWith('c') || rawSearch.startsWith('#');
 
     const matched = itinerary.filter((item) => {
       // Day / schedule filter
-      if (!customerMatchesDay(item, dayFilter, todayArabicName)) {
+      if (!customerMatchesDay(item, filters.dayFilter, filters.todayArabicName)) {
         return false;
       }
 
-      if (statusFilter !== 'all' && item.visitStatus !== statusFilter) return false;
-      if (routeFilter !== 'all' && item.route !== routeFilter) return false;
+      if (filters.statusFilter !== 'all' && item.visitStatus !== filters.statusFilter) return false;
+      if (filters.routeFilter !== 'all' && item.route !== filters.routeFilter) return false;
       if (!rawSearch) return true;
 
       const codeDigits = (item.customerCode || '').replace(/\D/g, '');
@@ -372,7 +295,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
     }
 
     return matched;
-  }, [itinerary, dayFilter, todayArabicName, statusFilter, routeFilter, searchTerm]);
+  }, [itinerary, filters.dayFilter, filters.todayArabicName, filters.statusFilter, filters.routeFilter, filters.searchTerm]);
 
   // Dynamic Route Optimization (TSP)
   const [isOptimizeModalOpen, setIsOptimizeModalOpen] = useState(false);
@@ -515,11 +438,11 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
     return list;
   }, [allDistrictGroups]);
 
-  const totalPages = Math.ceil(allSortedCustomers.length / pageSize) || 1;
-  const startIdx = (currentPage - 1) * pageSize;
+  const totalPages = Math.ceil(allSortedCustomers.length / filters.pageSize) || 1;
+  const startIdx = (filters.currentPage - 1) * filters.pageSize;
   const paginatedItems = useMemo(() => {
-    return allSortedCustomers.slice(startIdx, startIdx + pageSize);
-  }, [allSortedCustomers, startIdx, pageSize]);
+    return allSortedCustomers.slice(startIdx, startIdx + filters.pageSize);
+  }, [allSortedCustomers, startIdx, filters.pageSize]);
 
   // 3. Group ONLY the items of the current page (10 items) by District for lightning-fast mobile rendering
   const districtGroups = useMemo(() => {
@@ -598,7 +521,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
         ? `https://maps.google.com/?q=${newCustGps.lat},${newCustGps.lng}`
         : undefined;
 
-      const visitDaysVal = newCustVisitDays.length > 0 ? newCustVisitDays : [todayArabicName];
+      const visitDaysVal = newCustVisitDays.length > 0 ? newCustVisitDays : [filters.todayArabicName];
       const customerPayload = {
         name: newCustName.trim(),
         phone: newCustPhone.trim() || undefined,
@@ -654,7 +577,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
       setNewCustRoute('');
       setNewCustAddress('');
       setNewCustGps(null);
-      setNewCustVisitDays([todayArabicName]);
+      setNewCustVisitDays([filters.todayArabicName]);
       setDistrictDropdownOpen(false);
       setRouteDropdownOpen(false);
       onRefreshItinerary();
@@ -1615,14 +1538,14 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
         {/* Row 1: Visit Status Quick Filters (Height 28px) */}
         <div style={{ display: 'flex', flexDirection: 'row', gap: '4px', textAlign: 'center', width: '100%' }}>
           <div
-            onClick={() => setStatusFilter((prev) => (prev === 'positive' ? 'all' : 'positive'))}
+            onClick={() => filters.setStatusFilter((prev) => (prev === 'positive' ? 'all' : 'positive'))}
             style={{
               flex: '1 1 0',
               minWidth: 0,
-              backgroundColor: statusFilter === 'positive' ? '#15803d' : '#f0fdf4',
+              backgroundColor: filters.statusFilter === 'positive' ? '#15803d' : '#f0fdf4',
               borderRadius: '6px',
               padding: '2px 4px',
-              border: statusFilter === 'positive' ? '1.5px solid #15803d' : '1px solid #bbf7d0',
+              border: filters.statusFilter === 'positive' ? '1.5px solid #15803d' : '1px solid #bbf7d0',
               cursor: 'pointer',
               userSelect: 'none',
               display: 'flex',
@@ -1634,20 +1557,20 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
             }}
             title={t('delivery_reps.van_itinerary_tab.s38', "المحلات التي تم البيع لها")}
           >
-            <CheckCircleIcon size={12} color={statusFilter === 'positive' ? '#ffffff' : '#166534'} />
-            <span style={{ fontSize: '10px', color: statusFilter === 'positive' ? '#ffffff' : '#166534', fontWeight: 700, whiteSpace: 'nowrap' }}>{t('delivery_reps.van_itinerary_tab.s39', "تم البيع:")}</span>
-            <strong style={{ fontSize: '12px', fontWeight: 900, color: statusFilter === 'positive' ? '#ffffff' : '#15803d' }}>{positiveCount}</strong>
+            <CheckCircleIcon size={12} color={filters.statusFilter === 'positive' ? '#ffffff' : '#166534'} />
+            <span style={{ fontSize: '10px', color: filters.statusFilter === 'positive' ? '#ffffff' : '#166534', fontWeight: 700, whiteSpace: 'nowrap' }}>{t('delivery_reps.van_itinerary_tab.s39', "تم البيع:")}</span>
+            <strong style={{ fontSize: '12px', fontWeight: 900, color: filters.statusFilter === 'positive' ? '#ffffff' : '#15803d' }}>{positiveCount}</strong>
           </div>
 
           <div
-            onClick={() => setStatusFilter((prev) => (prev === 'negative' ? 'all' : 'negative'))}
+            onClick={() => filters.setStatusFilter((prev) => (prev === 'negative' ? 'all' : 'negative'))}
             style={{
               flex: '1 1 0',
               minWidth: 0,
-              backgroundColor: statusFilter === 'negative' ? '#b91c1c' : '#fef2f2',
+              backgroundColor: filters.statusFilter === 'negative' ? '#b91c1c' : '#fef2f2',
               borderRadius: '6px',
               padding: '2px 4px',
-              border: statusFilter === 'negative' ? '1.5px solid #b91c1c' : '1px solid #fecaca',
+              border: filters.statusFilter === 'negative' ? '1.5px solid #b91c1c' : '1px solid #fecaca',
               cursor: 'pointer',
               userSelect: 'none',
               display: 'flex',
@@ -1659,20 +1582,20 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
             }}
             title={t('delivery_reps.van_itinerary_tab.s40', "الزيارات السلبية")}
           >
-            <XCircleIcon size={12} color={statusFilter === 'negative' ? '#ffffff' : '#991b1b'} />
-            <span style={{ fontSize: '10px', color: statusFilter === 'negative' ? '#ffffff' : '#991b1b', fontWeight: 700, whiteSpace: 'nowrap' }}>{t('delivery_reps.van_itinerary_tab.s41', "سلبية:")}</span>
-            <strong style={{ fontSize: '12px', fontWeight: 900, color: statusFilter === 'negative' ? '#ffffff' : '#b91c1c' }}>{negativeCount}</strong>
+            <XCircleIcon size={12} color={filters.statusFilter === 'negative' ? '#ffffff' : '#991b1b'} />
+            <span style={{ fontSize: '10px', color: filters.statusFilter === 'negative' ? '#ffffff' : '#991b1b', fontWeight: 700, whiteSpace: 'nowrap' }}>{t('delivery_reps.van_itinerary_tab.s41', "سلبية:")}</span>
+            <strong style={{ fontSize: '12px', fontWeight: 900, color: filters.statusFilter === 'negative' ? '#ffffff' : '#b91c1c' }}>{negativeCount}</strong>
           </div>
 
           <div
-            onClick={() => setStatusFilter((prev) => (prev === 'pending' ? 'all' : 'pending'))}
+            onClick={() => filters.setStatusFilter((prev) => (prev === 'pending' ? 'all' : 'pending'))}
             style={{
               flex: '1 1 0',
               minWidth: 0,
-              backgroundColor: statusFilter === 'pending' ? '#170e5e' : '#f8fafc',
+              backgroundColor: filters.statusFilter === 'pending' ? '#170e5e' : '#f8fafc',
               borderRadius: '6px',
               padding: '2px 4px',
-              border: statusFilter === 'pending' ? '1.5px solid #170e5e' : '1px solid #cbd5e1',
+              border: filters.statusFilter === 'pending' ? '1.5px solid #170e5e' : '1px solid #cbd5e1',
               cursor: 'pointer',
               userSelect: 'none',
               display: 'flex',
@@ -1684,9 +1607,9 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
             }}
             title={t('delivery_reps.van_itinerary_tab.s42', "المحلات المتبقية للزيارة")}
           >
-            <ClockIcon size={12} color={statusFilter === 'pending' ? '#ffffff' : '#475569'} />
-            <span style={{ fontSize: '10px', color: statusFilter === 'pending' ? '#ffffff' : '#475569', fontWeight: 700, whiteSpace: 'nowrap' }}>{t('delivery_reps.van_itinerary_tab.s43', "متبقي:")}</span>
-            <strong style={{ fontSize: '12px', fontWeight: 900, color: statusFilter === 'pending' ? '#ffffff' : '#0f172a' }}>{pendingCount}</strong>
+            <ClockIcon size={12} color={filters.statusFilter === 'pending' ? '#ffffff' : '#475569'} />
+            <span style={{ fontSize: '10px', color: filters.statusFilter === 'pending' ? '#ffffff' : '#475569', fontWeight: 700, whiteSpace: 'nowrap' }}>{t('delivery_reps.van_itinerary_tab.s43', "متبقي:")}</span>
+            <strong style={{ fontSize: '12px', fontWeight: 900, color: filters.statusFilter === 'pending' ? '#ffffff' : '#0f172a' }}>{pendingCount}</strong>
           </div>
         </div>
 
@@ -1694,7 +1617,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
         <div style={{ display: 'flex', flexDirection: 'row', gap: '4px', width: '100%', alignItems: 'stretch' }}>
           <button
             type="button"
-            onClick={() => setDayFilter('today')}
+            onClick={() => filters.setDayFilter('today')}
             style={{
               flex: '1 1 0',
               minWidth: 0,
@@ -1705,15 +1628,15 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               cursor: 'pointer',
               boxSizing: 'border-box',
               border:
-                dayFilter === 'today' || normalizeDayKey(dayFilter) === normalizeDayKey(todayArabicName)
+                filters.dayFilter === 'today' || normalizeDayKey(filters.dayFilter) === normalizeDayKey(filters.todayArabicName)
                   ? '1.5px solid #170e5e'
                   : '1px solid #e2e8f0',
               backgroundColor:
-                dayFilter === 'today' || normalizeDayKey(dayFilter) === normalizeDayKey(todayArabicName)
+                filters.dayFilter === 'today' || normalizeDayKey(filters.dayFilter) === normalizeDayKey(filters.todayArabicName)
                   ? '#170e5e'
                   : '#f8fafc',
               color:
-                dayFilter === 'today' || normalizeDayKey(dayFilter) === normalizeDayKey(todayArabicName)
+                filters.dayFilter === 'today' || normalizeDayKey(filters.dayFilter) === normalizeDayKey(filters.todayArabicName)
                   ? '#ffffff'
                   : '#334155',
               display: 'flex',
@@ -1724,15 +1647,15 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
             }}
           >
             <CalendarIcon size={12} style={{ flexShrink: 0 }} />
-            <span style={{ whiteSpace: 'nowrap' }}>{todayArabicName}</span>
+            <span style={{ whiteSpace: 'nowrap' }}>{filters.todayArabicName}</span>
             <span
               style={{
                 backgroundColor:
-                  dayFilter === 'today' || normalizeDayKey(dayFilter) === normalizeDayKey(todayArabicName)
+                  filters.dayFilter === 'today' || normalizeDayKey(filters.dayFilter) === normalizeDayKey(filters.todayArabicName)
                     ? 'rgba(255,255,255,0.25)'
                     : '#e2e8f0',
                 color:
-                  dayFilter === 'today' || normalizeDayKey(dayFilter) === normalizeDayKey(todayArabicName)
+                  filters.dayFilter === 'today' || normalizeDayKey(filters.dayFilter) === normalizeDayKey(filters.todayArabicName)
                     ? '#ffffff'
                     : '#475569',
                 padding: '0 4px',
@@ -1742,13 +1665,13 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                 flexShrink: 0,
               }}
             >
-              {todayCount}
+              {filters.todayCount}
             </span>
           </button>
 
           <button
             type="button"
-            onClick={() => setDayFilter('all')}
+            onClick={() => filters.setDayFilter('all')}
             style={{
               flex: '1 1 0',
               minWidth: 0,
@@ -1758,9 +1681,9 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               fontWeight: 700,
               cursor: 'pointer',
               boxSizing: 'border-box',
-              border: dayFilter === 'all' ? '1.5px solid #170e5e' : '1px solid #e2e8f0',
-              backgroundColor: dayFilter === 'all' ? '#170e5e' : '#f8fafc',
-              color: dayFilter === 'all' ? '#ffffff' : '#334155',
+              border: filters.dayFilter === 'all' ? '1.5px solid #170e5e' : '1px solid #e2e8f0',
+              backgroundColor: filters.dayFilter === 'all' ? '#170e5e' : '#f8fafc',
+              color: filters.dayFilter === 'all' ? '#ffffff' : '#334155',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -1771,8 +1694,8 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
             <span style={{ whiteSpace: 'nowrap' }}>{t('delivery_reps.van_itinerary_tab.s44', "كافة المحلات")}</span>
             <span
               style={{
-                backgroundColor: dayFilter === 'all' ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
-                color: dayFilter === 'all' ? '#ffffff' : '#475569',
+                backgroundColor: filters.dayFilter === 'all' ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
+                color: filters.dayFilter === 'all' ? '#ffffff' : '#475569',
                 padding: '0 4px',
                 borderRadius: '6px',
                 fontSize: '9.5px',
@@ -1785,10 +1708,10 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
           </button>
 
           {/* Day Picker Button & Dropdown */}
-          <div ref={dayDropdownRef} style={{ position: 'relative', flex: '1 1 0', minWidth: 0, height: '30px' }}>
+          <div ref={filters.dayDropdownRef} style={{ position: 'relative', flex: '1 1 0', minWidth: 0, height: '30px' }}>
             <button
               type="button"
-              onClick={() => setDayDropdownOpen((prev) => !prev)}
+              onClick={() => filters.setDayDropdownOpen((prev) => !prev)}
               style={{
                 width: '100%',
                 padding: '0 6px',
@@ -1798,15 +1721,15 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                 cursor: 'pointer',
                 boxSizing: 'border-box',
                 border:
-                  dayFilter !== 'today' && dayFilter !== 'all' && normalizeDayKey(dayFilter) !== normalizeDayKey(todayArabicName)
+                  filters.dayFilter !== 'today' && filters.dayFilter !== 'all' && normalizeDayKey(filters.dayFilter) !== normalizeDayKey(filters.todayArabicName)
                     ? '1.5px solid #170e5e'
                     : '1px solid #e2e8f0',
                 backgroundColor:
-                  dayFilter !== 'today' && dayFilter !== 'all' && normalizeDayKey(dayFilter) !== normalizeDayKey(todayArabicName)
+                  filters.dayFilter !== 'today' && filters.dayFilter !== 'all' && normalizeDayKey(filters.dayFilter) !== normalizeDayKey(filters.todayArabicName)
                     ? '#170e5e'
                     : '#f8fafc',
                 color:
-                  dayFilter !== 'today' && dayFilter !== 'all' && normalizeDayKey(dayFilter) !== normalizeDayKey(todayArabicName)
+                  filters.dayFilter !== 'today' && filters.dayFilter !== 'all' && normalizeDayKey(filters.dayFilter) !== normalizeDayKey(filters.todayArabicName)
                     ? '#ffffff'
                     : '#334155',
                 display: 'flex',
@@ -1817,14 +1740,14 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               }}
             >
               <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {dayFilter !== 'today' && dayFilter !== 'all' && normalizeDayKey(dayFilter) !== normalizeDayKey(todayArabicName)
-                  ? dayFilter
+                {filters.dayFilter !== 'today' && filters.dayFilter !== 'all' && normalizeDayKey(filters.dayFilter) !== normalizeDayKey(filters.todayArabicName)
+                  ? filters.dayFilter
                   : t('delivery_reps.van_itinerary_tab.s45', "يوم...")}
               </span>
               <ChevronDownIcon size={11} style={{ flexShrink: 0 }} />
             </button>
 
-            {dayDropdownOpen && (
+            {filters.dayDropdownOpen && (
               <div
                 style={{
                   position: 'absolute',
@@ -1845,34 +1768,34 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               >
                 <div
                   onClick={() => {
-                    setDayFilter('all');
-                    setDayDropdownOpen(false);
+                    filters.setDayFilter('all');
+                    filters.setDayDropdownOpen(false);
                   }}
                   style={{
                     padding: '6px 8px',
                     fontSize: '11px',
-                    fontWeight: dayFilter === 'all' ? 800 : 600,
+                    fontWeight: filters.dayFilter === 'all' ? 800 : 600,
                     borderRadius: '4px',
                     cursor: 'pointer',
-                    color: dayFilter === 'all' ? '#170e5e' : '#334155',
-                    backgroundColor: dayFilter === 'all' ? '#eef2ff' : 'transparent',
+                    color: filters.dayFilter === 'all' ? '#170e5e' : '#334155',
+                    backgroundColor: filters.dayFilter === 'all' ? '#eef2ff' : 'transparent',
                   }}
                 >
                   {t('delivery_reps.van_itinerary_tab.s46', "كافة الأيام")}
                 </div>
-                {arabicDayNames.map((d) => {
-                  const isCurrent = d === todayArabicName;
-                  const isSelected = dayFilter === d || (isCurrent && dayFilter === 'today');
+                {filters.arabicDayNames.map((d) => {
+                  const isCurrent = d === filters.todayArabicName;
+                  const isSelected = filters.dayFilter === d || (isCurrent && filters.dayFilter === 'today');
                   return (
                     <div
                       key={d}
                       onClick={() => {
                         if (isCurrent) {
-                          setDayFilter('today');
+                          filters.setDayFilter('today');
                         } else {
-                          setDayFilter(d);
+                          filters.setDayFilter(d);
                         }
-                        setDayDropdownOpen(false);
+                        filters.setDayDropdownOpen(false);
                       }}
                       style={{
                         padding: '6px 8px',
@@ -1903,8 +1826,8 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
         <div style={{ position: 'relative', width: '100%' }}>
           <input
             type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            value={filters.searchTerm}
+            onChange={(e) => filters.setSearchTerm(e.target.value)}
             placeholder={t('delivery_reps.van_itinerary_tab.s49', "بحث باسم المحل، الكود، الحي، أو الهاتف...")}
             style={{
               width: '100%',
@@ -1930,8 +1853,8 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               type="button"
               onClick={() => setAddCustomerModalOpen(true)}
               style={{
-                flex: routes.length > 1 ? 1 : 'none',
-                width: routes.length > 1 ? 'auto' : '100%',
+                flex: filters.routes.length > 1 ? 1 : 'none',
+                width: filters.routes.length > 1 ? 'auto' : '100%',
                 height: '32px',
                 padding: '0 10px',
                 borderRadius: '8px',
@@ -1954,15 +1877,15 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               <span>{t('delivery_reps.van_itinerary_tab.s51', "+ إضافة محل جديد")}</span>
             </button>
 
-            {routes.length > 1 && (
+            {filters.routes.length > 1 && (
               <div style={{ flex: 1, minWidth: 0 }}>
                 <CustomSelect
-                  value={routeFilter}
-                  onChange={(val) => setRouteFilter(val || 'all')}
+                  value={filters.routeFilter}
+                  onChange={(val) => filters.setRouteFilter(val || 'all')}
                   dropdownAlign="left"
                   options={[
                     { value: 'all', label: t('delivery_reps.van_itinerary_tab.s52', "كافة الخطوط") },
-                    ...routes.map((r) => ({ value: r, label: r })),
+                    ...filters.routes.map((r) => ({ value: r, label: r })),
                   ]}
                   placeholder={t('delivery_reps.van_itinerary_tab.s53', "تصفية بالخط")}
                   style={{ height: '32px', fontSize: '11.5px' }}
@@ -2122,7 +2045,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
       )}
 
       {/* Active filter badge / reset */}
-      {(statusFilter !== 'all' || (dayFilter !== 'today' && dayFilter !== 'all')) && (
+      {(filters.statusFilter !== 'all' || (filters.dayFilter !== 'today' && filters.dayFilter !== 'all')) && (
         <div
           style={{
             display: 'flex',
@@ -2138,14 +2061,14 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
         >
           <span>
             {t('delivery_reps.van_itinerary_tab.s63', "تصفية نشطة:")}{' '}
-            {dayFilter !== 'today' && dayFilter !== 'all' && (
-              <strong style={{ color: '#170e5e', marginInlineEnd: '4px' }}>{t('delivery_reps.van_itinerary_tab.s64', "يوم")} {dayFilter}</strong>
+            {filters.dayFilter !== 'today' && filters.dayFilter !== 'all' && (
+              <strong style={{ color: '#170e5e', marginInlineEnd: '4px' }}>{t('delivery_reps.van_itinerary_tab.s64', "يوم")} {filters.dayFilter}</strong>
             )}
-            {statusFilter !== 'all' && (
+            {filters.statusFilter !== 'all' && (
               <strong>
-                {statusFilter === 'pending'
+                {filters.statusFilter === 'pending'
                   ? t('delivery_reps.van_itinerary_tab.s65', "المحلات المتبقية فقط")
-                  : statusFilter === 'positive'
+                  : filters.statusFilter === 'positive'
                   ? t('delivery_reps.van_itinerary_tab.s66', "المحلات التي تم البيع لها")
                   : t('delivery_reps.van_itinerary_tab.s67', "الزيارات السلبية")}
               </strong>
@@ -2155,8 +2078,8 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
           <button
             type="button"
             onClick={() => {
-              setStatusFilter('all');
-              setDayFilter('today');
+              filters.setStatusFilter('all');
+              filters.setDayFilter('today');
             }}
             style={{
               background: 'none',
@@ -2197,12 +2120,12 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
           {totalPages > 1 && (
             <VanItineraryPagination
               startIdx={startIdx}
-              pageSize={pageSize}
+              pageSize={filters.pageSize}
               totalCount={allSortedCustomers.length}
-              currentPage={currentPage}
+              currentPage={filters.currentPage}
               totalPages={totalPages}
-              onPageChange={setCurrentPage}
-              onPageSizeChange={handlePageSizeChange}
+              onPageChange={filters.setCurrentPage}
+              onPageSizeChange={filters.handlePageSizeChange}
             />
           )}
 
@@ -2718,7 +2641,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                     }}
                   >
                     <div style={{ padding: '6px 10px', fontSize: '10.5px', fontWeight: 700, color: '#64748b', backgroundColor: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
-                      {t('delivery_reps.van_itinerary_tab.s99', "الأحياء المحفوظة (")}{savedDistrictsList.length}):
+                      {t('delivery_reps.van_itinerary_tab.s99', "الأحياء المحفوظة (")}{filters.savedDistrictsList.length}):
                     </div>
                     {filteredDistricts.length === 0 && !newCustDistrict.trim() && (
                       <div style={{ padding: '10px 12px', fontSize: '11.5px', color: '#94a3b8', textAlign: 'center' }}>
@@ -2753,7 +2676,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                         {newCustDistrict.trim() === d && <CheckCircleIcon size={13} color="#170e5e" />}
                       </div>
                     ))}
-                    {newCustDistrict.trim() && !savedDistrictsList.some((d) => d.toLowerCase() === newCustDistrict.trim().toLowerCase()) && (
+                    {newCustDistrict.trim() && !filters.savedDistrictsList.some((d) => d.toLowerCase() === newCustDistrict.trim().toLowerCase()) && (
                       <div
                         onMouseDown={(e) => {
                           e.preventDefault();
@@ -2849,7 +2772,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                   <span style={{ fontSize: '10px', color: '#cbd5e1' }}>•</span>
                   <button
                     type="button"
-                    onClick={() => setNewCustVisitDays([todayArabicName])}
+                    onClick={() => setNewCustVisitDays([filters.todayArabicName])}
                     style={{
                       background: 'none',
                       border: 'none',
@@ -2871,7 +2794,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                   const isSelected = newCustVisitDays.some(
                     (d) => normalizeDayKey(d) === normalizeDayKey(day)
                   );
-                  const isToday = normalizeDayKey(day) === normalizeDayKey(todayArabicName);
+                  const isToday = normalizeDayKey(day) === normalizeDayKey(filters.todayArabicName);
                   return (
                     <button
                       key={day}
@@ -2948,7 +2871,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                     if (!routeDropdownOpen) setRouteDropdownOpen(true);
                   }}
                   onFocus={() => setRouteDropdownOpen(true)}
-                  placeholder={routes[0] || t('delivery_reps.van_itinerary_tab.s114', "مثال: خط فيصل الرئيسي")}
+                  placeholder={filters.routes[0] || t('delivery_reps.van_itinerary_tab.s114', "مثال: خط فيصل الرئيسي")}
                   style={{
                     width: '100%',
                     height: '36px',
@@ -2960,7 +2883,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                     backgroundColor: '#ffffff',
                   }}
                 />
-                {routes.length > 0 && (
+                {filters.routes.length > 0 && (
                   <button
                     type="button"
                     tabIndex={-1}
@@ -2992,7 +2915,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               </div>
 
               {/* Route Dropdown Card */}
-              {routeDropdownOpen && routes.length > 0 && (
+              {routeDropdownOpen && filters.routes.length > 0 && (
                 <div
                   style={{
                     position: 'absolute',
@@ -3052,12 +2975,12 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
       {/* Bottom Pagination Bar */}
       <VanItineraryPagination
         startIdx={startIdx}
-        pageSize={pageSize}
+        pageSize={filters.pageSize}
         totalCount={allSortedCustomers.length}
-        currentPage={currentPage}
+        currentPage={filters.currentPage}
         totalPages={totalPages}
-        onPageChange={setCurrentPage}
-        onPageSizeChange={handlePageSizeChange}
+        onPageChange={filters.setCurrentPage}
+        onPageSizeChange={filters.handlePageSizeChange}
       />
       </>
       )}
