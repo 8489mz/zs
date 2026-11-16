@@ -34,7 +34,7 @@ WHAT THIS PINS (real quoteOnlineOrder, stubbed Kysely db):
 
 import 'reflect-metadata';
 import { strict as assert } from 'node:assert';
-import { StorefrontService } from '../../src/modules/storefront/storefront.service';
+import { StorefrontOrderQuoteService } from '../../src/modules/storefront/services/storefront-order-quote.service';
 
 function makeFakeDb(rowsByTable: Record<string, any[]>): any {
   const eb: any = Object.assign(
@@ -73,17 +73,26 @@ const PRODUCT = {
   item_type: 'product',
 };
 
+// The quote lives in the T1 slice now (storefront split 2026-11-16). The slice
+// captures its deps at construction, so stubbing methods on a facade instance
+// no longer reaches it — construct the slice directly with stub deps. The
+// charges stub is assigned on the slice instance: quoteOnlineOrder calls the
+// slice's own resolveOrderCharges, and an own property shadows the prototype
+// method, so the fixed 0.005/0.005 charges still drive the digits pins.
 function makeService(tenantCurrency: string, settingsCurrency?: string): any {
-  const svc: any = new (StorefrontService as any)(makeFakeDb({ products: [PRODUCT], product_offers: [] }), {}, {}, {});
-  svc.getTenantBySlug = async () => ({ id: 'tenant-1', currency: tenantCurrency, slug: 'shop', activity_type: null });
-  svc.getTenantSettingsMap = async () =>
-    new Map<string, string>(settingsCurrency ? [['currency', settingsCurrency]] : []);
+  const svc: any = new StorefrontOrderQuoteService({
+    db: makeFakeDb({ products: [PRODUCT], product_offers: [] }),
+    getTenantBySlug: async () => ({ id: 'tenant-1', currency: tenantCurrency, slug: 'shop', activity_type: null }),
+    getTenantSettingsMap: async () =>
+      new Map<string, string>(settingsCurrency ? [['currency', settingsCurrency]] : []),
+  } as any);
   svc.resolveOrderCharges = async () => ({
     deliveryFee: 0.005,
     deliveryZoneId: null,
     deliveryZoneName: null,
     discountAmount: 0.005,
     appliedCouponCode: null,
+    couponId: null,
   });
   return svc;
 }
