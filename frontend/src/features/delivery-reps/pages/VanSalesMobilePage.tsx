@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { vanSalesApi, VanActiveTripResponse, VanStockItem, VanLoadRequisitionRecord } from '../api/van-sales.api';
 import { driverPortalApi } from '@/shared/api/delivery-reps.api';
 import { Button } from '@/shared/ui/button';
@@ -43,44 +43,25 @@ import { VanTripExpenseModal } from '../components/VanTripExpenseModal';
 import { VanTripPackagingModal } from '../components/VanTripPackagingModal';
 import { VanDamagedSwapModal } from '../components/VanDamagedSwapModal';
 import { VanGpsMandatoryModal } from '../components/VanGpsMandatoryModal';
+import { useVanShell } from '@/features/delivery-reps/pages/van-sales-mobile/useVanShell';
 
 export default function VanSalesMobilePage() {
   const { t: __t } = useTranslation();
-  const queryClient = useQueryClient();
-
-  const [session, setSession] = useState(() => driverPortalApi.getStoredSession());
-  const [viewMode, setViewMode] = useState<'dashboard' | 'new-requisition'>('dashboard');
-  const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
-  const [pendingSyncCount, setPendingSyncCount] = useState(0);
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  // Monitor connectivity, load pending outbox items, and listen to sync completion
-  useEffect(() => {
-    vanOfflineDb.getPendingCount().then(setPendingSyncCount);
-
-    const cleanup = vanSyncEngine.startAutoSyncListener((online) => {
-      setIsOnline(online);
-      vanOfflineDb.getPendingCount().then(setPendingSyncCount);
-    });
-
-    const handleSyncComplete = (e: any) => {
-      vanOfflineDb.getPendingCount().then(setPendingSyncCount);
-      queryClient.invalidateQueries({ queryKey: ['van-sales-active-trip'] });
-      queryClient.invalidateQueries({ queryKey: ['driver-itinerary'] });
-      queryClient.invalidateQueries({ queryKey: ['driver-sales-history'] });
-      const synced = e?.detail?.syncedCount || 0;
-      if (synced > 0) {
-        toast.success(`تمت مزامنة ${synced} عملية ميدانية مع الخادم بنجاح!`);
-      }
-    };
-
-    window.addEventListener('van-offline-sync-completed', handleSyncComplete);
-
-    return () => {
-      cleanup();
-      window.removeEventListener('van-offline-sync-completed', handleSyncComplete);
-    };
-  }, [queryClient]);
+  const {
+    queryClient,
+    session,
+    setSession,
+    viewMode,
+    setViewMode,
+    isOnline,
+    pendingSyncCount,
+    setPendingSyncCount,
+    isSyncing,
+    setIsSyncing,
+    handleLogout,
+    alert,
+    showAlert,
+  } = useVanShell();
 
   const handleManualSync = async () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -103,22 +84,6 @@ export default function VanSalesMobilePage() {
       toast.error(err?.message || 'تعذرت المزامنة');
     } finally {
       setIsSyncing(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    const confirmed = await systemConfirm({
-      title: 'تسجيل الخروج',
-      message: 'هل تود بالتأكيد تسجيل الخروج من بوابة مبيعات الفان الميدانية؟',
-      confirmText: 'تسجيل الخروج',
-      cancelText: 'إلغاء',
-      variant: 'danger',
-    });
-    if (confirmed) {
-      driverPortalApi.logout();
-      setSession(null);
-      queryClient.clear();
-      toast.info('تم تسجيل الخروج بنجاح');
     }
   };
 
@@ -595,8 +560,6 @@ export default function VanSalesMobilePage() {
 
   const [countedCash, setCountedCash] = useState<string>('');
   const [unloadRemaining, setUnloadRemaining] = useState<boolean>(true);
-
-  const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string } | null>(null);
   const [lastSaleReceipt, setLastSaleReceipt] = useState<any | null>(null);
   const [lastCollectionReceipt, setLastCollectionReceipt] = useState<VanCollectionReceiptData | null>(null);
   const [lastSettlementReceipt, setLastSettlementReceipt] = useState<VanSettlementReceiptData | null>(null);
@@ -608,11 +571,6 @@ export default function VanSalesMobilePage() {
   const pendingAutoShareWhatsAppRef = useRef<boolean>(false);
   const [isCollectionProcessing, setIsCollectionProcessing] = useState<boolean>(false);
   const isCollectionProcessingRef = useRef<boolean>(false);
-
-  const showAlert = (type: 'success' | 'error' | 'warning' | 'info', message: string) => {
-    setAlert({ type, message });
-    setTimeout(() => setAlert(null), 5000);
-  };
 
   const filteredInventory = useMemo(() => {
     if (!data?.inventory) return [];
