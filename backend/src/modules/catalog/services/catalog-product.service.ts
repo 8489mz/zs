@@ -21,6 +21,7 @@ import { StorefrontMediaService } from '../../storefront/storefront-media.servic
 import { availableAcrossLocations } from '../../../common/engines/branch-sellable-locations.engine';
 import { findPosProductsByBarcodeWithDb } from './pos-barcode-lookup.helper';
 import { CatalogProductPostingService } from './catalog-product-posting.service';
+import { CatalogProductOffersService } from './catalog-product-offers.service';
 import {
   CustomerPriceReadRow,
   PosProductLookupRow,
@@ -35,7 +36,7 @@ import {
 
 @Injectable()
 export class CatalogProductService {
-  private productOfferColumnCapabilitiesPromise?: Promise<ProductOfferColumnCapabilities>;
+  private readonly offersService: CatalogProductOffersService;
   private readonly postingService: CatalogProductPostingService;
 
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>, private readonly audit: AuditService,
@@ -49,6 +50,9 @@ export class CatalogProductService {
       accountingFoundation: this.accountingFoundation,
       tenantId: this.tenantId.bind(this),
       accountId: this.accountId.bind(this),
+    });
+    this.offersService = new CatalogProductOffersService({
+      db: this.db,
     });
   }
 
@@ -110,35 +114,11 @@ export class CatalogProductService {
   }
 
   private async getProductOfferColumnCapabilities(): Promise<ProductOfferColumnCapabilities> {
-    if (!this.productOfferColumnCapabilitiesPromise) {
-      this.productOfferColumnCapabilitiesPromise = sql<{ column_name: string }>`
-          select column_name
-          from information_schema.columns
-          where table_schema = 'public'
-            and table_name = 'product_offers'
-        `
-        .execute(this.db)
-        .then((result) => {
-          const columns = new Set(result.rows.map((row) => String(row.column_name || '').toLowerCase()));
-          return {
-            hasMinQty: columns.has('min_qty'),
-            hasAdvancedPromotions: columns.has('bogo_buy_qty'),
-          };
-        })
-        .catch(() => ({ hasMinQty: false, hasAdvancedPromotions: false }));
-    }
-    return this.productOfferColumnCapabilitiesPromise;
+    return this.offersService.getProductOfferColumnCapabilities();
   }
 
   private ensureAdvancedOffersSupported(payload: NormalizedUpsertProduct, capabilities: ProductOfferColumnCapabilities): void {
-    const requiresAdvancedOfferSchema = payload.offers.some((offer) => offer.type === 'price' || Number(offer.minQty || 1) > 1);
-    if (requiresAdvancedOfferSchema && !capabilities.hasMinQty) {
-      throw new AppError(
-        'Advanced product offers require the latest database migration. Run backend migrations first, then retry saving offers.',
-        'PRODUCT_OFFERS_MIGRATION_REQUIRED',
-        400,
-      );
-    }
+    this.offersService.ensureAdvancedOffersSupported(payload, capabilities);
   }
 
   async getNextStyleCode(actor: AuthContext): Promise<{ styleCode: string }> {
