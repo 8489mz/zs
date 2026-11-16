@@ -8,7 +8,6 @@ import { toast } from '@/shared/components/system-alert';
 import {
   vanSalesApi,
   VanCustomerItineraryItem,
-  RouteOptimizationResult,
   RepTargetMetrics,
   VanStockItem,
 } from '../api/van-sales.api';
@@ -46,6 +45,7 @@ import { useVanItineraryVisit } from '@/features/delivery-reps/components/van-it
 import { useVanItineraryAddCustomer } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-add-customer';
 import { useVanItineraryNegativeVisit } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-negative-visit';
 import { useVanItineraryList } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-list';
+import { useVanItineraryOptimize } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-optimize';
 
 interface VanItineraryTabProps {
   itinerary: VanCustomerItineraryItem[];
@@ -102,93 +102,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
     saveDistrictOrder: order.saveDistrictOrder,
     saveCustomerOrder: order.saveCustomerOrder,
   });
-  // Dynamic Route Optimization (TSP)
-  const [isOptimizeModalOpen, setIsOptimizeModalOpen] = useState(false);
-  const [isOptimizingRoute, setIsOptimizingRoute] = useState(false);
-  const [routeOptimizationResult, setRouteOptimizationResult] = useState<RouteOptimizationResult | null>(null);
-
-  const handleRunRouteOptimization = async () => {
-    const targetCustomers = list.filtered.filter((c) => c.visitStatus === 'pending');
-    const custsToOptimize = targetCustomers.length > 0 ? targetCustomers : list.filtered;
-
-    if (custsToOptimize.length <= 1) {
-      toast.info('يجب وجود عميلين على الأقل لتحسين خط السير');
-      return;
-    }
-
-    setIsOptimizingRoute(true);
-
-    const executeOpt = async (startCoords?: { lat: number; lng: number }) => {
-      try {
-        const res = await vanSalesApi.optimizeDriverRoute({
-          customerIds: custsToOptimize.map((c) => c.customerId),
-          startLat: startCoords?.lat,
-          startLng: startCoords?.lng,
-          persistSequence: false,
-        });
-
-        if (res && res.stats) {
-          setRouteOptimizationResult(res);
-          setIsOptimizeModalOpen(true);
-        } else {
-          toast.error('لم يتمكن محرك المسارات من احتساب الترتيب الأمثل');
-        }
-      } catch (err: any) {
-        toast.error(err?.message || 'حدث خطأ أثناء تحسين المسار');
-      } finally {
-        setIsOptimizingRoute(false);
-      }
-    };
-
-    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          executeOpt({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        },
-        () => {
-          executeOpt();
-        },
-        { timeout: 3500 },
-      );
-    } else {
-      executeOpt();
-    }
-  };
-
-  const handleApplyOptimalRoute = async () => {
-    if (!routeOptimizationResult) return;
-    try {
-      setIsOptimizingRoute(true);
-      const custIds = routeOptimizationResult.orderedStops.map((s) => s.id);
-      await vanSalesApi.optimizeDriverRoute({
-        customerIds: custIds,
-        persistSequence: true,
-      });
-
-      const newCustOrderMap: Record<string, number[]> = {};
-      for (const stop of routeOptimizationResult.orderedStops) {
-        const dName = (stop.district || (stop as any).route || 'المنطقة العامة').trim();
-        if (!newCustOrderMap[dName]) newCustOrderMap[dName] = [];
-        newCustOrderMap[dName].push(stop.id);
-      }
-
-      order.setCustomCustomerOrder(newCustOrderMap);
-      try {
-        localStorage.setItem('zs_van_customer_order', JSON.stringify(newCustOrderMap));
-      } catch {}
-
-      toast.success(
-        `تم اعتماد المسار الأمثل! توفير ${routeOptimizationResult.stats.savedDistanceKm} كم (${routeOptimizationResult.stats.savingsPercent}%)`,
-      );
-      setIsOptimizeModalOpen(false);
-      onRefreshItinerary();
-    } catch (err: any) {
-      toast.error(err?.message || 'فشل حفظ الترتيب الأمثل');
-    } finally {
-      setIsOptimizingRoute(false);
-    }
-  };
-
+  const optimize = useVanItineraryOptimize({ filtered: list.filtered, setCustomCustomerOrder: order.setCustomCustomerOrder, onRefreshItinerary });
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: visit.selectedCustomerForHub ? '6px' : '10px', paddingBottom: visit.selectedCustomerForHub ? '85px' : '24px' }}>
       {visit.selectedCustomerForHub ? (
@@ -1449,8 +1363,8 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
             {/* Dynamic Route Optimization Button */}
             <button
               type="button"
-              onClick={handleRunRouteOptimization}
-              disabled={isOptimizingRoute}
+              onClick={optimize.handleRunRouteOptimization}
+              disabled={optimize.isOptimizingRoute}
               style={{
                 flex: '1 1 0',
                 minWidth: 0,
@@ -1475,7 +1389,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
             >
               <MapPinIcon size={12} color="#170e5e" />
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {isOptimizingRoute ? t('delivery_reps.van_itinerary_tab.s58', "جاري التحسين...") : t('delivery_reps.van_itinerary_tab.s59', "أقصر مسار (GPS)")}
+                {optimize.isOptimizingRoute ? t('delivery_reps.van_itinerary_tab.s58', "جاري التحسين...") : t('delivery_reps.van_itinerary_tab.s59', "أقصر مسار (GPS)")}
               </span>
             </button>
           </div>
@@ -2649,10 +2563,10 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
       )}
 
       {/* Dynamic Route Optimization (TSP) Modal */}
-      {isOptimizeModalOpen && routeOptimizationResult && (
+      {optimize.isOptimizeModalOpen && optimize.routeOptimizationResult && (
         <StandardDialog
-          open={isOptimizeModalOpen}
-          onClose={() => setIsOptimizeModalOpen(false)}
+          open={optimize.isOptimizeModalOpen}
+          onClose={() => optimize.setIsOptimizeModalOpen(false)}
           title={t('delivery_reps.van_itinerary_tab.s133', "تحسين المسار الجغرافي بأقصر طريق (TSP Route Optimization)")}
           subtitle={t('delivery_reps.van_itinerary_tab.s134', "محرك الذكاء المكاني لحساب أقصر مسار بين المحلات وتوفير استهلاك الوقود وزمن الرحلة")}
           width="680px"
@@ -2664,32 +2578,32 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
                 <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>{t('delivery_reps.van_itinerary_tab.s135', "المسافة قبل التحسين")}</div>
                 <div style={{ fontSize: '18px', fontWeight: 800, color: '#64748b' }}>
-                  {routeOptimizationResult.stats.originalDistanceKm} {t('delivery_reps.van_itinerary_tab.s136', "كم")}
+                  {optimize.routeOptimizationResult.stats.originalDistanceKm} {t('delivery_reps.van_itinerary_tab.s136', "كم")}
                 </div>
               </div>
 
               <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
                 <div style={{ fontSize: '11px', color: '#166534', fontWeight: 600 }}>{t('delivery_reps.van_itinerary_tab.s137', "المسافة بعد التحسين")}</div>
                 <div style={{ fontSize: '18px', fontWeight: 800, color: '#16a34a' }}>
-                  {routeOptimizationResult.stats.optimizedDistanceKm} {t('delivery_reps.van_itinerary_tab.s138', "كم")}
+                  {optimize.routeOptimizationResult.stats.optimizedDistanceKm} {t('delivery_reps.van_itinerary_tab.s138', "كم")}
                 </div>
               </div>
 
               <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
                 <div style={{ fontSize: '11px', color: '#1e40af', fontWeight: 600 }}>{t('delivery_reps.van_itinerary_tab.s139', "التوفير في استهلاك الوقود")}</div>
                 <div style={{ fontSize: '18px', fontWeight: 800, color: '#1d4ed8' }}>
-                  {routeOptimizationResult.stats.savedDistanceKm} {t('delivery_reps.van_itinerary_tab.s140', "كم (")}{routeOptimizationResult.stats.savingsPercent}%)
+                  {optimize.routeOptimizationResult.stats.savedDistanceKm} {t('delivery_reps.van_itinerary_tab.s140', "كم (")}{optimize.routeOptimizationResult.stats.savingsPercent}%)
                 </div>
               </div>
             </div>
 
             {/* Stops Preview List */}
             <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#1e293b' }}>
-              {t('delivery_reps.van_itinerary_tab.s141', "تسلسل المحطات المقترح (")}{routeOptimizationResult.orderedStops.length} {t('delivery_reps.van_itinerary_tab.s142', "محطة):")}
+              {t('delivery_reps.van_itinerary_tab.s141', "تسلسل المحطات المقترح (")}{optimize.routeOptimizationResult.orderedStops.length} {t('delivery_reps.van_itinerary_tab.s142', "محطة):")}
             </div>
 
             <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px' }}>
-              {routeOptimizationResult.orderedStops.map((stop, sIdx) => (
+              {optimize.routeOptimizationResult.orderedStops.map((stop, sIdx) => (
                 <div
                   key={stop.id}
                   style={{
@@ -2697,7 +2611,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '8px 12px',
-                    borderBottom: sIdx < routeOptimizationResult.orderedStops.length - 1 ? '1px solid #f1f5f9' : 'none',
+                    borderBottom: sIdx < optimize.routeOptimizationResult.orderedStops.length - 1 ? '1px solid #f1f5f9' : 'none',
                     backgroundColor: stop.isUnmappedGps ? '#fffbeb' : '#ffffff',
                   }}
                 >
@@ -2740,13 +2654,13 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
             </div>
 
             <StandardDialogFooter>
-              <Button type="button" variant="secondary" onClick={() => setIsOptimizeModalOpen(false)}>
+              <Button type="button" variant="secondary" onClick={() => optimize.setIsOptimizeModalOpen(false)}>
                 {t('delivery_reps.van_itinerary_tab.s146', "إلغاء")}
               </Button>
               <Button
                 type="button"
-                onClick={handleApplyOptimalRoute}
-                disabled={isOptimizingRoute}
+                onClick={optimize.handleApplyOptimalRoute}
+                disabled={optimize.isOptimizingRoute}
                 style={{
                   backgroundColor: '#170e5e',
                   color: '#ffffff',
@@ -2754,7 +2668,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                   fontSize: '13px',
                 }}
               >
-                {isOptimizingRoute ? t('delivery_reps.van_itinerary_tab.s147', "جاري الاعتماد...") : t('delivery_reps.van_itinerary_tab.s148', "اعتماد وحفظ المسار الأمثل")}
+                {optimize.isOptimizingRoute ? t('delivery_reps.van_itinerary_tab.s147', "جاري الاعتماد...") : t('delivery_reps.van_itinerary_tab.s148', "اعتماد وحفظ المسار الأمثل")}
               </Button>
             </StandardDialogFooter>
           </div>
