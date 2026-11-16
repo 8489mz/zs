@@ -16,6 +16,7 @@ import { TaxCalcIcon, NegativeStockIcon, ZeroCostIcon, LowStockIndicatorIcon, Is
 import { SalesInventorySalesTax } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-sales-tax';
 import { ContractingVerticalSection, MaritimeVerticalSection, ImportVerticalSection, ServicesVerticalSection, ManufacturingVerticalSection } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-verticals';
 import { SalesInventoryRules, useSalesInventoryRulesState } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-rules';
+import { SalesInventoryBarcode } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-barcode';
 
 interface SalesInventoryTabProps {
   form: UseFormReturn<SettingsFormInput, undefined, SettingsFormOutput>;
@@ -839,41 +840,8 @@ export const SalesInventorySettingsTab = memo(function SalesInventorySettingsTab
       {isRetailCommerce && (
         <SalesInventoryRules form={form} disabled={disabled} settings={settings} isRestaurantVertical={isRestaurantVertical} showPosSettings={showPosSettings} showPhysicalInventory={showPhysicalInventory} isStoreFleet={isStoreFleet} isChangingPin={rules.isChangingPin} setIsChangingPin={rules.setIsChangingPin} />
       )}
-      {/* Scale-barcode format: moved here from the super-admin-only manual
-          switches block of ModulesSettingsTab so any tenant admin who enabled
-          the scale app (all activities) can configure it. Field labels keep the
-          modules-tab i18n keys so existing translations resolve unchanged. */}
       {weightedBarcodeEnabled ? (
-        <FormSection
-          title={__t('settings.forms.tabs.sales_inventory_settings_tab.weighted_barcode_section_title', "إعدادات باركود الميزان")}
-          description={__t('settings.forms.tabs.sales_inventory_settings_tab.weighted_barcode_section_desc', "تنسيق باركود الميزان: البادئة وطول كود الصنف وخانات الوزن ومحتوى الباركود.")}
-        >
-          <div className="document-prototype-grid compact-grid-2">
-            <div className="field">
-              <label>{__t('settings.forms.tabs.modules_settings_tab.s176', "بداية باركود الميزان")}</label>
-              <input className="purchase-prototype-field-input" inputMode="numeric" {...form.register('weightedBarcodePrefix')} disabled={disabled} placeholder="21" />
-            </div>
-            <div className="field">
-              <label>{__t('settings.forms.tabs.modules_settings_tab.s177', "أرقام كود الصنف")}</label>
-              <input className="purchase-prototype-field-input" type="number" min="3" max="8" {...form.register('weightedBarcodeProductCodeLength')} disabled={disabled} />
-            </div>
-            <div className="field">
-              <label>{__t('settings.forms.tabs.modules_settings_tab.s178', "أرقام الوزن")}</label>
-              <input className="purchase-prototype-field-input" type="number" min="3" max="8" {...form.register('weightedBarcodeWeightDigits')} disabled={disabled} />
-            </div>
-            <div className="field">
-              <label>{__t('settings.forms.tabs.modules_settings_tab.s179', "دقة الوزن (خانات عشرية)")}</label>
-              <input className="purchase-prototype-field-input" type="number" min="0" max="3" {...form.register('weightedBarcodeWeightDecimals')} disabled={disabled} />
-            </div>
-            <div className="field">
-              <label>{__t('settings.forms.tabs.modules_settings_tab.s180', "محتوى باركود الميزان")}</label>
-              <select className="purchase-prototype-field-input" {...form.register('weightedBarcodeValueMode')} disabled={disabled}>
-                <option value="weight">{__t('settings.forms.tabs.modules_settings_tab.s181', "وزن الصنف")}</option>
-                <option value="price">{__t('settings.forms.tabs.modules_settings_tab.s182', "السعر الإجمالي بالصغرى (قرشان / هللتان)")}</option>
-              </select>
-            </div>
-          </div>
-        </FormSection>
+        <SalesInventoryBarcode form={form} disabled={disabled} settings={settings} weightedBarcodeEnabled={weightedBarcodeEnabled} />
       ) : null}
 
       {/* ===== تخصيص واجهة الكاشير والشاشات المتنقلة ===== */}
