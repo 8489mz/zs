@@ -4,7 +4,7 @@ import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
-import { couponBoundInstant, couponDayState, getTenantTimezone, isValidTimezone, todayTenantDate } from '../../common/utils/tenant-timezone.util';
+import {  couponDayState, getTenantTimezone,  todayTenantDate } from '../../common/utils/tenant-timezone.util';
 import { verifyPassword } from '../../core/auth/utils/password-hasher';
 import { CreateOnlineOrderDto } from './dto/create-online-order.dto';
 import { CreateProductReviewDto } from './dto/create-product-review.dto';
@@ -56,135 +56,30 @@ import {
   resolveBestStorefrontOffer,
   RawStorefrontOffer,
 } from './engines/storefront-offers.engine';
-import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
+import {  roundMoney } from '../accounting/engines/money-minor-units.engine';
 import {
   enforceRestaurantModifierContract,
   type ModifierGroupRule,
   type ModifierPriceTruth,
 } from '../sales/helpers/restaurant-modifier-contract.helper';
+import { StorefrontCouponsService } from './services/storefront-coupons.service';
 
-/** Country-aware phone rule shared by order creation and edit (O56: edit used to accept Egypt only). */
-function assertValidCustomerPhone(rawPhone: string | undefined, countryCode: string): void {
-  const cleanCustomerPhone = String(rawPhone || '').replace(/[^0-9+]/g, '');
-  const digitsOnly = cleanCustomerPhone.replace(/\D/g, '');
-  if (countryCode === 'EG' && (cleanCustomerPhone.startsWith('01') || cleanCustomerPhone.length === 11)) {
-    if (!/^01[0125]\d{8}$/.test(digitsOnly)) {
-      throw new BadRequestException('يرجى إدخال رقم هاتف محمول مصري صحيح مكون من 11 رقماً ويبدأ بـ (010، 011، 012، 015)');
-    }
-  } else if (digitsOnly.length < 7 || digitsOnly.length > 16) {
-    throw new BadRequestException('يرجى إدخال رقم هاتف صحيح');
-  }
-}
-
-/*
- * INV-SPIRIT-STOREFRONT-CONTACT-MINIMA: a recipient name needs at
- * least two letters (a two-letter name is a real name); a delivery
- * address needs only to be non-empty after trimming. The phone rule
- * above is deliberately unchanged — Egypt keeps 11 digits starting
- * 010/011/012/015, other countries keep 7-16 digits.
- */
-function assertValidCustomerName(cleanName: string): void {
-  const letters = (cleanName.match(/[\p{L}\p{M}]/gu) || []).length;
-  if (letters < 2) {
-    throw new BadRequestException('يرجى إدخال اسم مستلم صحيح لا يقل عن حرفين');
-  }
-}
-
-function assertValidCustomerAddress(cleanAddress: string): void {
-  if (!cleanAddress) {
-    throw new BadRequestException('يرجى إدخال عنوان توصيل');
-  }
-}
-
-function offerTimezone(settings: Map<string, string>): string {
-  const configured = settings.get('timezone') || process.env.BUSINESS_TIMEZONE || 'Africa/Cairo';
-  return isValidTimezone(configured) ? configured : 'Africa/Cairo';
-}
-
-/**
- * Book digits for storefront display and checkout pricing
- * (INV-STOREFRONT-PRICING-DIGITS), from the same currency source the
- * order functions already read (settings currency, then the tenant's
- * currency, then EGP). An unreadable currency string keeps the
- * historical 2-decimal display instead of failing a public catalog
- * read; the posting path (tenantBaseCurrency) still throws on it, so
- * no order can post on a misconfigured currency.
- */
-function storefrontMoneyDigits(settings: Map<string, string>, tenant?: unknown): MoneyDigits {
-  const tenantCurrency = (tenant as { currency?: unknown } | null | undefined)?.currency;
-  const code = String(settings.get('currency') || tenantCurrency || 'EGP').trim().toUpperCase();
-  try {
-    return currencyMoneyDigits(code);
-  } catch {
-    return 2;
-  }
-}
-
-function catalogImageRef(value: unknown): string {
-  return typeof value === 'string' && value && !value.startsWith('data:') ? value : '';
-}
-
-/** Same rule the public catalog uses to show items as orderable when stock is zero. */
-function isOutOfStockOrderingAllowed(
-  settings: Map<string, string>,
-  tenantSlug: string,
-  tenantActivity?: string | null,
-): boolean {
-  const normActivity = (tenantActivity || '').toLowerCase().trim();
-  const normSettingType = (settings.get('activityType') || '').toLowerCase().trim();
-  const normIndustry = (settings.get('businessIndustry') || '').toLowerCase().trim();
-  const normLegacyInd = (settings.get('industry') || '').toLowerCase().trim();
-  const normLegacyBiz = (settings.get('business_type') || '').toLowerCase().trim();
-
-  const isRestaurant =
-    normActivity === 'restaurant' ||
-    normActivity === 'مطعم' ||
-    normActivity === 'مطاعم' ||
-    normActivity.includes('مطعم') ||
-    normActivity.includes('كافيه') ||
-    normSettingType === 'restaurant' ||
-    normSettingType === 'مطعم' ||
-    normSettingType.includes('مطعم') ||
-    normIndustry === 'restaurant' ||
-    normIndustry === 'مطعم' ||
-    normIndustry.includes('مطعم') ||
-    normLegacyInd === 'restaurant' ||
-    normLegacyBiz === 'restaurant';
-
-  const explicitSetting = settings.get('storefront_allow_out_of_stock');
-  if (explicitSetting === 'false' || explicitSetting === false as any) return false;
-  if (explicitSetting === 'true' || explicitSetting === true as any) return true;
-  if (settings.get('storefront_unlimited_stock') === 'true') return true;
-
-  if (isRestaurant) return true;
-
-  const cleanSlug = (tenantSlug || '').toLowerCase().trim();
-  const isDemoOrDev =
-    cleanSlug === 'default' ||
-    cleanSlug === 'dev-tenant';
-
-  return isDemoOrDev;
-}
-
-/**
- * O58: the old check was `stock_qty <= 0`, so a product with 1 unit left accepted an order for 50.
- * It is still an advisory check (the stock is actually moved when the cashier posts the sale through
- * SalesService, which enforces it for real), but it stops the store from promising what it cannot ship.
- */
-function assertOnlineStockAvailable(name: string, stockQty: number, requestedQty: number, allowOutOfStock: boolean): void {
-  if (allowOutOfStock) return;
-  if (stockQty <= 0) {
-    throw new BadRequestException(`عفواً، نفد مخزون الصنف "${name}"، يرجى حذفه من السلة لإتمام الطلب.`);
-  }
-  if (requestedQty > stockQty) {
-    throw new BadRequestException(`عفواً، المتاح من الصنف "${name}" هو ${stockQty} فقط، يرجى تعديل الكمية في السلة.`);
-  }
-}
+import {
+  assertValidCustomerPhone,
+  assertValidCustomerName,
+  assertValidCustomerAddress,
+  offerTimezone,
+  storefrontMoneyDigits,
+  catalogImageRef,
+  isOutOfStockOrderingAllowed,
+  assertOnlineStockAvailable,
+} from './storefront-helpers';
 
 export { unwrapConvertedSale };
 
 @Injectable()
 export class StorefrontService {
+  private readonly couponsService: StorefrontCouponsService;
   private readonly logger = new Logger(StorefrontService.name);
 
   constructor(
@@ -197,7 +92,13 @@ export class StorefrontService {
     // under Nest DI the global AuthFoundationModule always provides it, and the gate
     // below fails closed when it is absent.
     @Optional() private readonly planFeatureService?: PlanFeatureService,
-  ) {}
+  ) {
+    this.couponsService = new StorefrontCouponsService({
+      db: this.db,
+      getTenantBySlug: this.getTenantBySlug.bind(this),
+      getTenantSettingsMap: this.getTenantSettingsMap.bind(this),
+    });
+  }
 
   /**
    * O53: removes a dine-in order's kitchen DRAFT sale once the real invoice is posted (or the order
@@ -1496,28 +1397,8 @@ export class StorefrontService {
     return { deliveryFee, deliveryZoneId, deliveryZoneName, discountAmount, appliedCouponCode, couponId };
   }
 
-  /** Atomic conditional claim of one coupon use (lost-update safe, enforces usage_limit on the live row). */
-  private async claimCouponUse(trx: Transaction<Database>, tenantId: string, couponId: number): Promise<void> {
-    const claim = await trx
-      .updateTable('storefront_coupons')
-      .set({ times_used: sql`times_used + 1`, updated_at: new Date() })
-      .where('id', '=', couponId)
-      .where(sql<boolean>`tenant_id = ${tenantId}`)
-      .where(sql<boolean>`(usage_limit IS NULL OR times_used < usage_limit)`)
-      .executeTakeFirst();
-    if (Number(claim?.numUpdatedRows || 0) === 0) {
-      throw new BadRequestException('تم استنفاد عدد مرات استخدام كوبون الخصم.');
-    }
-  }
-
-  /** Gives back a use claimed by an order that no longer carries that coupon (edit swapped/removed it). */
   async releaseCouponUse(trx: Transaction<Database>, tenantId: string, couponCode: string): Promise<void> {
-    await trx
-      .updateTable('storefront_coupons')
-      .set({ times_used: sql`GREATEST(times_used - 1, 0)`, updated_at: new Date() })
-      .where(sql<boolean>`tenant_id = ${tenantId}`)
-      .where('code', '=', couponCode.toUpperCase())
-      .execute();
+    return this.couponsService.releaseCouponUse(trx, tenantId, couponCode);
   }
 
   /**
@@ -4490,316 +4371,40 @@ export class StorefrontService {
     };
   }
 
-  // --- Coupon & Promo Code Management ---
-
   async validateCoupon(slug: string, code: string, subtotal: number) {
-    const tenant = await this.getTenantBySlug(slug);
-    const codeUpper = String(code || '').trim().toUpperCase();
-    if (!codeUpper) {
-      throw new BadRequestException('يرجى إدخال كود الكوبون');
-    }
-
-    const coupon = await this.db
-      .selectFrom('storefront_coupons')
-      .selectAll()
-      .where(sql<boolean>`tenant_id = ${tenant.id}`)
-      .where('code', '=', codeUpper)
-      .executeTakeFirst();
-
-    if (!coupon) {
-      return { ok: false, message: 'كود الكوبون غير صحيح أو غير مسجل' };
-    }
-
-    if (!coupon.is_active) {
-      return { ok: false, message: 'هذا الكوبون تم إيقافه حالياً من قِبل المتجر' };
-    }
-
-    // Coupon bounds are whole tenant days, never instants (NEW-I).
-    const couponTimezone = await getTenantTimezone(this.db, tenant.id);
-    const couponTodayKey = todayTenantDate(couponTimezone);
-    const couponState = couponDayState(coupon.start_date, coupon.end_date, couponTodayKey, couponTimezone);
-    if (couponState === 'not-started') {
-      return { ok: false, message: 'عذراً، هذا الكوبون لم يبدأ بعد' };
-    }
-    if (couponState === 'expired') {
-      return { ok: false, message: 'عذراً، هذا الكوبون انتهت فترة صلاحيته' };
-    }
-
-    if (coupon.usage_limit !== null && Number(coupon.times_used || 0) >= coupon.usage_limit) {
-      return { ok: false, message: 'عذراً، استنفد هذا الكوبون الحد الأقصى لمرات الاستخدام المتاحة' };
-    }
-
-    const minOrder = Number(coupon.min_order_amount || 0);
-    if (subtotal < minOrder) {
-      return {
-        ok: false,
-        message: `لتفعيل هذا الكوبون، يجب أن تبلغ قيمة المشتريات ${minOrder} ج على الأقل (مشترياتك الآن: ${subtotal.toFixed(0)} ج)`,
-      };
-    }
-
-    let discountAmount = 0;
-    let isFreeShipping = false;
-    if (coupon.discount_type === 'free_shipping') {
-      isFreeShipping = true;
-    } else if (coupon.discount_type === 'percentage') {
-      const rawDiscount = (subtotal * Number(coupon.discount_value)) / 100;
-      discountAmount = coupon.max_discount_amount
-        ? Math.min(rawDiscount, Number(coupon.max_discount_amount))
-        : rawDiscount;
-    } else if (coupon.discount_type === 'fixed') {
-      discountAmount = Math.min(subtotal, Number(coupon.discount_value));
-    }
-
-    // D6a: the preview discount must agree with the charge the order
-    // path computes (line ~1232 rounds the same discount at the same
-    // book digits). A 2-decimal cut here showed a 3-decimal tenant
-    // 100.13 while the order charged 100.125. Same helper the order
-    // path uses (settings currency, then tenant currency); the
-    // posting path still fail-closes on a misconfigured currency.
-    const moneyDigits = storefrontMoneyDigits(await this.getTenantSettingsMap(tenant.id), tenant);
-
-    return {
-      ok: true,
-      code: coupon.code,
-      discountType: coupon.discount_type,
-      discountValue: Number(coupon.discount_value),
-      discountAmount: roundMoney(discountAmount, moneyDigits),
-      isFreeShipping,
-      minOrderAmount: minOrder,
-      maxDiscountAmount: coupon.max_discount_amount ? Number(coupon.max_discount_amount) : null,
-      message: isFreeShipping
-        ? 'تم تطبيق كوبون الشحن المجاني بنجاح!'
-        : `تم تطبيق كود الخصم بنجاح (- ${discountAmount.toFixed(0)} ج)!`,
-    };
+    return this.couponsService.validateCoupon(slug, code, subtotal);
   }
 
   async listCoupons(actor: AuthContext) {
-    const { tenantId } = requireTenantScope(actor);
-    const rows = await this.db
-      .selectFrom('storefront_coupons')
-      .selectAll()
-      .where(sql<boolean>`tenant_id = ${tenantId}`)
-      .orderBy('created_at', 'desc')
-      .execute();
-
-    return {
-      ok: true,
-      coupons: rows.map((c) => ({
-        id: c.id,
-        code: c.code,
-        discountType: c.discount_type,
-        discountValue: Number(c.discount_value),
-        minOrderAmount: Number(c.min_order_amount),
-        maxDiscountAmount: c.max_discount_amount ? Number(c.max_discount_amount) : null,
-        usageLimit: c.usage_limit,
-        timesUsed: Number(c.times_used || 0),
-        isActive: Boolean(c.is_active),
-        startDate: c.start_date,
-        endDate: c.end_date,
-        createdAt: c.created_at,
-      })),
-    };
+    return this.couponsService.listCoupons(actor);
   }
 
   async createCoupon(dto: CreateCouponDto, actor: AuthContext) {
-    const { tenantId, accountId } = requireTenantScope(actor);
-    const codeClean = dto.code.trim().toUpperCase();
-    // A coupon date means the whole tenant day (NEW-I).
-    const businessTimezone = await getTenantTimezone(this.db, tenantId);
-
-    const existing = await this.db
-      .selectFrom('storefront_coupons')
-      .select('id')
-      .where(sql<boolean>`tenant_id = ${tenantId}`)
-      .where('code', '=', codeClean)
-      .executeTakeFirst();
-
-    if (existing) {
-      throw new BadRequestException(`كود الكوبون "${codeClean}" موجود بالفعل، يرجى اختيار كود آخر`);
-    }
-
-    if (dto.discountType === 'percentage' && (Number(dto.discountValue) <= 0 || Number(dto.discountValue) > 100)) {
-      throw new BadRequestException('نسبة الخصم يجب أن تكون بين 1% و 100%');
-    }
-
-    const inserted = await this.db
-      .insertInto('storefront_coupons')
-      .values({
-        tenant_id: tenantId,
-        account_id: accountId,
-        code: codeClean,
-        discount_type: dto.discountType,
-        discount_value: dto.discountValue,
-        min_order_amount: dto.minOrderAmount || 0,
-        max_discount_amount: dto.maxDiscountAmount || null,
-        usage_limit: dto.usageLimit || null,
-        times_used: 0,
-        is_active: dto.isActive !== undefined ? dto.isActive : true,
-        start_date: couponBoundInstant(dto.startDate, businessTimezone, false),
-        end_date: couponBoundInstant(dto.endDate, businessTimezone, true),
-        created_at: new Date(),
-        updated_at: new Date(),
-      })
-      .returningAll()
-      .executeTakeFirstOrThrow();
-
-    return { ok: true, coupon: inserted };
+    return this.couponsService.createCoupon(dto, actor);
   }
 
   async updateCoupon(id: number, dto: UpdateCouponDto, actor: AuthContext) {
-    const { tenantId } = requireTenantScope(actor);
-    // A coupon date means the whole tenant day (NEW-I).
-    const businessTimezone = await getTenantTimezone(this.db, tenantId);
-    const existing = await this.db
-      .selectFrom('storefront_coupons')
-      .selectAll()
-      .where(sql<boolean>`tenant_id = ${tenantId}`)
-      .where('id', '=', id)
-      .executeTakeFirst();
-
-    if (!existing) {
-      throw new NotFoundException('الكوبون غير موجود');
-    }
-
-    const effectiveType = dto.discountType || existing.discount_type;
-    const effectiveValue = dto.discountValue !== undefined ? dto.discountValue : existing.discount_value;
-    if (effectiveType === 'percentage' && (Number(effectiveValue) <= 0 || Number(effectiveValue) > 100)) {
-      throw new BadRequestException('نسبة الخصم يجب أن تكون بين 1% و 100%');
-    }
-
-    const payload: any = { updated_at: new Date() };
-    if (dto.code !== undefined) {
-      payload.code = dto.code.trim().toUpperCase();
-    }
-    if (dto.discountType !== undefined) payload.discount_type = dto.discountType;
-    if (dto.discountValue !== undefined) payload.discount_value = dto.discountValue;
-    if (dto.minOrderAmount !== undefined) payload.min_order_amount = dto.minOrderAmount;
-    if (dto.maxDiscountAmount !== undefined) payload.max_discount_amount = dto.maxDiscountAmount;
-    if (dto.usageLimit !== undefined) payload.usage_limit = dto.usageLimit;
-    if (dto.isActive !== undefined) payload.is_active = dto.isActive;
-    if (dto.startDate !== undefined) payload.start_date = couponBoundInstant(dto.startDate, businessTimezone, false);
-    if (dto.endDate !== undefined) payload.end_date = couponBoundInstant(dto.endDate, businessTimezone, true);
-
-    await this.db
-      .updateTable('storefront_coupons')
-      .set(payload)
-      .where(sql<boolean>`tenant_id = ${tenantId}`)
-      .where('id', '=', id)
-      .execute();
-
-    return { ok: true, id };
+    return this.couponsService.updateCoupon(id, dto, actor);
   }
 
   async deleteCoupon(id: number, actor: AuthContext) {
-    const { tenantId } = requireTenantScope(actor);
-    await this.db
-      .deleteFrom('storefront_coupons')
-      .where(sql<boolean>`tenant_id = ${tenantId}`)
-      .where('id', '=', id)
-      .execute();
-
-    return { ok: true, id };
+    return this.couponsService.deleteCoupon(id, actor);
   }
 
-  // --- Delivery Zones Management ---
-
   async listDeliveryZones(actor: AuthContext) {
-    const { tenantId } = requireTenantScope(actor);
-    const rows = await this.db
-      .selectFrom('storefront_delivery_zones')
-      .selectAll()
-      .where(sql<boolean>`tenant_id = ${tenantId}`)
-      .orderBy('sort_order', 'asc')
-      .orderBy('name', 'asc')
-      .execute();
-
-    return {
-      ok: true,
-      zones: rows.map((z) => ({
-        id: z.id,
-        name: z.name,
-        deliveryFee: Number(z.delivery_fee || 0),
-        estimatedTime: z.estimated_time || '',
-        isActive: Boolean(z.is_active),
-        sortOrder: Number(z.sort_order || 0),
-        createdAt: z.created_at,
-        updatedAt: z.updated_at,
-      })),
-    };
+    return this.couponsService.listDeliveryZones(actor);
   }
 
   async createDeliveryZone(dto: CreateDeliveryZoneDto, actor: AuthContext) {
-    const { tenantId, accountId } = requireTenantScope(actor);
-    const nameClean = dto.name.trim();
-
-    const inserted = await this.db
-      .insertInto('storefront_delivery_zones')
-      .values({
-        tenant_id: tenantId,
-        account_id: accountId,
-        name: nameClean,
-        delivery_fee: dto.deliveryFee,
-        estimated_time: dto.estimatedTime ? dto.estimatedTime.trim() : null,
-        is_active: dto.isActive !== undefined ? dto.isActive : true,
-        sort_order: dto.sortOrder !== undefined ? dto.sortOrder : 0,
-        created_at: new Date(),
-        updated_at: new Date(),
-      })
-      .returningAll()
-      .executeTakeFirstOrThrow();
-
-    return {
-      ok: true,
-      zone: {
-        id: inserted.id,
-        name: inserted.name,
-        deliveryFee: Number(inserted.delivery_fee || 0),
-        estimatedTime: inserted.estimated_time || '',
-        isActive: Boolean(inserted.is_active),
-        sortOrder: Number(inserted.sort_order || 0),
-      },
-    };
+    return this.couponsService.createDeliveryZone(dto, actor);
   }
 
   async updateDeliveryZone(id: number, dto: UpdateDeliveryZoneDto, actor: AuthContext) {
-    const { tenantId } = requireTenantScope(actor);
-    const existing = await this.db
-      .selectFrom('storefront_delivery_zones')
-      .selectAll()
-      .where(sql<boolean>`tenant_id = ${tenantId}`)
-      .where('id', '=', id)
-      .executeTakeFirst();
-
-    if (!existing) {
-      throw new NotFoundException('منطقة التوصيل غير موجودة');
-    }
-
-    const payload: any = { updated_at: new Date() };
-    if (dto.name !== undefined) payload.name = dto.name.trim();
-    if (dto.deliveryFee !== undefined) payload.delivery_fee = dto.deliveryFee;
-    if (dto.estimatedTime !== undefined) payload.estimated_time = dto.estimatedTime ? dto.estimatedTime.trim() : null;
-    if (dto.isActive !== undefined) payload.is_active = dto.isActive;
-    if (dto.sortOrder !== undefined) payload.sort_order = dto.sortOrder;
-
-    await this.db
-      .updateTable('storefront_delivery_zones')
-      .set(payload)
-      .where(sql<boolean>`tenant_id = ${tenantId}`)
-      .where('id', '=', id)
-      .execute();
-
-    return { ok: true, id };
+    return this.couponsService.updateDeliveryZone(id, dto, actor);
   }
 
   async deleteDeliveryZone(id: number, actor: AuthContext) {
-    const { tenantId } = requireTenantScope(actor);
-    await this.db
-      .deleteFrom('storefront_delivery_zones')
-      .where(sql<boolean>`tenant_id = ${tenantId}`)
-      .where('id', '=', id)
-      .execute();
-
-    return { ok: true, id };
+    return this.couponsService.deleteDeliveryZone(id, actor);
   }
 
   async getTablesQrCodes(slug: string, fromTable: number = 1, toTable: number = 20, baseUrl?: string) {
