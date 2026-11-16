@@ -42,6 +42,7 @@ import { VanLiveTargetBoosterWidget } from './VanLiveTargetBoosterWidget';
 export { normalizeDayKey, DAY_KEY_TO_ARABIC, ALL_WEEK_DAYS } from '@/features/delivery-reps/components/van-itinerary/van-itinerary-day';
 import { VanItineraryPagination } from '@/features/delivery-reps/components/van-itinerary/van-itinerary-pagination';
 import { useVanItineraryFilters } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-filters';
+import { useVanItineraryOrder } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-order';
 
 interface VanItineraryTabProps {
   itinerary: VanCustomerItineraryItem[];
@@ -85,56 +86,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
   const [inventoryCustomer, setInventoryCustomer] = useState<VanCustomerItineraryItem | null>(null);
   const [surveyCustomer, setSurveyCustomer] = useState<VanCustomerItineraryItem | null>(null);
   const [swapCustomer, setSwapCustomer] = useState<VanCustomerItineraryItem | null>(null);
-
-  // Route Reordering Mode
-  const [isReorderingMode, setIsReorderingMode] = useState(false);
-
-  // Load saved itinerary ordering from localStorage
-  const [customDistrictOrder, setCustomDistrictOrder] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return [];
-    try {
-      const saved = localStorage.getItem('zs_van_district_order');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const [customCustomerOrder, setCustomCustomerOrder] = useState<Record<string, number[]>>(() => {
-    if (typeof window === 'undefined') return {};
-    try {
-      const saved = localStorage.getItem('zs_van_customer_order');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
-
-  const saveDistrictOrder = (newOrder: string[]) => {
-    setCustomDistrictOrder(newOrder);
-    try {
-      localStorage.setItem('zs_van_district_order', JSON.stringify(newOrder));
-    } catch {}
-  };
-
-  const saveCustomerOrder = (district: string, customerIds: number[]) => {
-    const updated = { ...customCustomerOrder, [district]: customerIds };
-    setCustomCustomerOrder(updated);
-    try {
-      localStorage.setItem('zs_van_customer_order', JSON.stringify(updated));
-    } catch {}
-  };
-
-  const resetOrderToDefault = () => {
-    setCustomDistrictOrder([]);
-    setCustomCustomerOrder({});
-    try {
-      localStorage.removeItem('zs_van_district_order');
-      localStorage.removeItem('zs_van_customer_order');
-    } catch {}
-    toast.info('تم استعادة الترتيب التلقائي لخط السير');
-  };
-
+  const order = useVanItineraryOrder();
   // Add Customer Modal State
   const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
   const [newCustName, setNewCustName] = useState('');
@@ -367,7 +319,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
         newCustOrderMap[dName].push(stop.id);
       }
 
-      setCustomCustomerOrder(newCustOrderMap);
+      order.setCustomCustomerOrder(newCustOrderMap);
       try {
         localStorage.setItem('zs_van_customer_order', JSON.stringify(newCustOrderMap));
       } catch {}
@@ -397,8 +349,8 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
     }
 
     const sortedDistrictNames = Array.from(groupsMap.keys()).sort((a, b) => {
-      const idxA = customDistrictOrder.indexOf(a);
-      const idxB = customDistrictOrder.indexOf(b);
+      const idxA = order.customDistrictOrder.indexOf(a);
+      const idxB = order.customDistrictOrder.indexOf(b);
       if (idxA !== -1 && idxB !== -1) return idxA - idxB;
       if (idxA !== -1) return -1;
       if (idxB !== -1) return 1;
@@ -407,7 +359,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
 
     return sortedDistrictNames.map((name) => {
       const items = groupsMap.get(name)!;
-      const orderList = customCustomerOrder[name] || [];
+      const orderList = order.customCustomerOrder[name] || [];
       const sortedItems = [...items].sort((a, b) => {
         const idxA = orderList.indexOf(a.customerId);
         const idxB = orderList.indexOf(b.customerId);
@@ -424,7 +376,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
         visitedCount: sortedItems.filter((i) => i.visitStatus !== 'pending').length,
       };
     });
-  }, [filtered, customDistrictOrder, customCustomerOrder]);
+  }, [filtered, order.customDistrictOrder, order.customCustomerOrder]);
 
   // 2. Flatten ordered customers with their permanent global sequence number (1, 2, ... N)
   const allSortedCustomers = useMemo(() => {
@@ -1909,7 +1861,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
             {/* Toggle Reordering Mode Button */}
             <button
               type="button"
-              onClick={() => setIsReorderingMode((prev) => !prev)}
+              onClick={() => order.setIsReorderingMode((prev) => !prev)}
               style={{
                 flex: '1 1 0',
                 minWidth: 0,
@@ -1917,9 +1869,9 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                 height: '32px',
                 padding: '0 8px',
                 borderRadius: '8px',
-                backgroundColor: isReorderingMode ? '#1e293b' : '#ffffff',
-                color: isReorderingMode ? '#ffffff' : '#334155',
-                border: isReorderingMode ? '1.5px solid #0f172a' : '1px solid #cbd5e1',
+                backgroundColor: order.isReorderingMode ? '#1e293b' : '#ffffff',
+                color: order.isReorderingMode ? '#ffffff' : '#334155',
+                border: order.isReorderingMode ? '1.5px solid #0f172a' : '1px solid #cbd5e1',
                 fontSize: '11px',
                 fontWeight: 700,
                 cursor: 'pointer',
@@ -1932,9 +1884,9 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               }}
               title={t('delivery_reps.van_itinerary_tab.s54', "إعادة ترتيب خط السير يدوياً")}
             >
-              <SlidersIcon size={12} color={isReorderingMode ? '#ffffff' : '#475569'} />
+              <SlidersIcon size={12} color={order.isReorderingMode ? '#ffffff' : '#475569'} />
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {isReorderingMode ? t('delivery_reps.van_itinerary_tab.s55', "إنهاء الترتيب") : t('delivery_reps.van_itinerary_tab.s56', "ترتيب السير")}
+                {order.isReorderingMode ? t('delivery_reps.van_itinerary_tab.s55', "إنهاء الترتيب") : t('delivery_reps.van_itinerary_tab.s56', "ترتيب السير")}
               </span>
             </button>
 
@@ -1975,7 +1927,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
       </div>
 
       {/* Active Reordering Mode Banner */}
-      {isReorderingMode && (
+      {order.isReorderingMode && (
         <div
           style={{
             backgroundColor: '#f0f7ff',
@@ -2019,7 +1971,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
           </div>
           <button
             type="button"
-            onClick={resetOrderToDefault}
+            onClick={order.resetOrderToDefault}
             style={{
               background: '#ffffff',
               border: '1px solid #fecaca',
@@ -2182,7 +2134,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                   </div>
 
                   {/* Reordering controls for District */}
-                  {isReorderingMode && (
+                  {order.isReorderingMode && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                       <button
                         type="button"
@@ -2387,7 +2339,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                             )}
 
                             {/* Up/Down buttons if in reorder mode */}
-                            {isReorderingMode && (
+                            {order.isReorderingMode && (
                               <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
                                 <button
                                   type="button"
