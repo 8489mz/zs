@@ -1,13 +1,7 @@
-import { useTranslation } from 'react-i18next';
 import { memo } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
 import type { SettingsFormInput, SettingsFormOutput } from '@/features/settings/schemas/settings.schema';
 import type { AppSettings } from '@/types/domain';
-import type { PosTerminalDeviceConfig } from '@/types/domain-models/settings';
-import { FormSection } from '@/shared/components/form-section';
-import { CustomSelect } from '@/shared/ui/custom-select';
-import { CurrencySymbol } from '@/shared/ui/currency-symbol';
-import { TaxCalcIcon, NegativeStockIcon, ZeroCostIcon, LowStockIndicatorIcon, IssueModeDocIcon, premiumCardStyle, iconBadgeStyle, premiumCardTextStyle, premiumCheckboxInputStyle, fieldControlStyle } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-shared';
 import { SalesInventorySalesTax } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-sales-tax';
 import { ContractingVerticalSection, MaritimeVerticalSection, ImportVerticalSection, ServicesVerticalSection, ManufacturingVerticalSection } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-verticals';
 import { SalesInventoryRules, useSalesInventoryRulesState } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-rules';
@@ -15,9 +9,9 @@ import { SalesInventoryBarcode } from '@/features/settings/components/forms/tabs
 import { SalesInventoryPosCustom } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-pos-custom';
 import { SalesInventoryZpay } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-zpay';
 import { useSalesInventoryTerminals } from '@/features/settings/components/forms/tabs/sales-inventory/use-sales-inventory-terminals';
+import { SalesInventoryTerminals } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-terminals';
 import { SalesInventoryLoyalty, useSalesInventoryLoyalty } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-loyalty';
 import { SalesInventoryExpiry } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-expiry';
-import { SalesInventoryTerminals } from '@/features/settings/components/forms/tabs/sales-inventory/sales-inventory-terminals';
 
 interface SalesInventoryTabProps {
   form: UseFormReturn<SettingsFormInput, undefined, SettingsFormOutput>;
@@ -31,7 +25,6 @@ export const SalesInventorySettingsTab = memo(function SalesInventorySettingsTab
   activeTab,
   settings,
 }: SalesInventoryTabProps) {
-  const { t: __t } = useTranslation();
   const loyalty = useSalesInventoryLoyalty({ form });
   const rawActivity = String(form.watch('businessIndustry') || settings?.businessIndustry || (settings as any)?.activityType || 'retail_general').trim().toLowerCase();
   const isContractingVertical = rawActivity === 'contracting' || rawActivity === 'construction' || rawActivity === 'مقاولات' || Boolean(form.watch('contractingModuleEnabled'));
