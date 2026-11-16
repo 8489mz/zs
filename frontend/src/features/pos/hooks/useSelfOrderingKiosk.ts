@@ -67,6 +67,21 @@ export interface KioskCartLineLike {
   modifiers?: GroupModifierSelection[] | null;
 }
 
+interface KioskCartItem {
+  productId: number;
+  name: string;
+  price: number;
+  qty: number;
+  notes?: string;
+  imageUrl?: string;
+  categoryName?: string;
+  /* INV-REST-KIOSK-MODIFIER-UI (R7-B2): the line's picked modifiers and
+   * its identity (product + sorted option ids). Two lines of the same
+   * product with different extras are separate lines. */
+  modifiers?: GroupModifierSelection[];
+  lineKey: string;
+}
+
 export function kioskCartLineKey(
   productId: number,
   modifiers?: GroupModifierSelection[] | null,
