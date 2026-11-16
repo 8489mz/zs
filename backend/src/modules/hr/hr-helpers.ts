@@ -151,11 +151,11 @@ export function combineNotes(...notes: Array<string | null | undefined>): string
 }
 
 export function canViewSalary(auth: AuthContext): boolean {
-  return auth.role === 'super_admin' || auth.permissions.includes('hrSalaryView') || auth.permissions.includes('hrSalaryManage');
+  return auth.role === 'super_admin' || auth.permissions.includes('*') || auth.permissions.includes('hrSalaryView') || auth.permissions.includes('hrSalaryManage');
 }
 
 export function hasHrPermission(auth: AuthContext, permission: string): boolean {
-  return auth.role === 'super_admin' || auth.permissions.includes(permission);
+  return auth.role === 'super_admin' || auth.permissions.includes('*') || auth.permissions.includes(permission);
 }
 
 export const attendanceStatuses = ['present', 'absent', 'late', 'half_day', 'leave', 'excused', 'early_leave'] as const;

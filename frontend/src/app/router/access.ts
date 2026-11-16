@@ -12,6 +12,12 @@ type RoutePermissionRequirement = string | string[] | null;
 export const routePermissionMap: Record<string, RoutePermissionRequirement> = {
   dashboard: 'dashboard',
   '/': 'dashboard',
+  'owner-companion': 'reports',
+  '/owner-companion': 'reports',
+  'owner-mobile': 'reports',
+  '/owner-mobile': 'reports',
+  'mobile/owner': 'reports',
+  '/mobile/owner': 'reports',
   products: 'products',
   '/products': 'products',
   'product-modifiers': 'products',
@@ -183,8 +189,8 @@ export const routePermissionMap: Record<string, RoutePermissionRequirement> = {
   '/trade-in': 'purchases',
   'imei-history': 'products',
   '/products/imei-history': 'products',
-  hr: 'hr',
-  '/hr': 'hr',
+  hr: ['hr', 'hrEmployees', 'hrAttendance', 'hrContracts', 'hrLoans', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrSalaryView', 'hrSalaryManage'],
+  '/hr': ['hr', 'hrEmployees', 'hrAttendance', 'hrContracts', 'hrLoans', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrSalaryView', 'hrSalaryManage'],
   'hr/employees': 'hrEmployees',
   '/hr/employees': 'hrEmployees',
   'hr/employees/new': 'hrEmployees',
@@ -203,18 +209,18 @@ export const routePermissionMap: Record<string, RoutePermissionRequirement> = {
   '/hr/documents': 'hrEmployees',
   'hr/loans': 'hrLoans',
   '/hr/loans': 'hrLoans',
-  'hr/payroll': 'hrPayrollView',
-  '/hr/payroll': 'hrPayrollView',
-  'hr-settlements': 'hr',
-  'hr/settlements': 'hr',
-  '/hr/settlements': 'hr',
-  'hr-recruitment': 'hr',
-  'hr/recruitment': 'hr',
-  '/hr/recruitment': 'hr',
-  'hr/reports': 'hr',
-  '/hr/reports': 'hr',
-  'hr/settings': 'hr',
-  '/hr/settings': 'hr',
+  'hr/payroll': ['hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove'],
+  '/hr/payroll': ['hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove'],
+  'hr-settlements': ['hrSalaryView', 'hrSalaryManage', 'hrPayrollApprove'],
+  'hr/settlements': ['hrSalaryView', 'hrSalaryManage', 'hrPayrollApprove'],
+  '/hr/settlements': ['hrSalaryView', 'hrSalaryManage', 'hrPayrollApprove'],
+  'hr-recruitment': 'hrEmployees',
+  'hr/recruitment': 'hrEmployees',
+  '/hr/recruitment': 'hrEmployees',
+  'hr/reports': ['hrEmployees', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrLoans', 'hrSalaryView', 'hrSalaryManage'],
+  '/hr/reports': ['hrEmployees', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrLoans', 'hrSalaryView', 'hrSalaryManage'],
+  'hr/settings': ['hrEmployees', 'hrPayrollManage', 'hrSalaryManage', 'settings', 'canManageSettings'],
+  '/hr/settings': ['hrEmployees', 'hrPayrollManage', 'hrSalaryManage', 'settings', 'canManageSettings'],
   'pricing-center': 'pricingCenterView',
   '/pricing-center': 'pricingCenterView',
   'saas-admin/tenants': null,
@@ -609,9 +615,11 @@ export function getRoutePermissionRequirement(target: string) {
     if (normalized.startsWith('hr/assets')) return routePermissionMap['hr/assets'] ?? 'hrEmployees';
     if (normalized.startsWith('hr/documents')) return routePermissionMap['hr/documents'] ?? 'hrEmployees';
     if (normalized.startsWith('hr/loans')) return routePermissionMap['hr/loans'] ?? 'hrLoans';
-    if (normalized.startsWith('hr/payroll')) return routePermissionMap['hr/payroll'] ?? 'hrPayrollView';
-    if (normalized.startsWith('hr/reports')) return routePermissionMap['hr/reports'] ?? 'hr';
-    if (normalized.startsWith('hr/settings')) return routePermissionMap['hr/settings'] ?? 'hr';
+    if (normalized.startsWith('hr/payroll')) return routePermissionMap['hr/payroll'] ?? ['hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove'];
+    if (normalized.startsWith('hr/settlements')) return routePermissionMap['hr/settlements'] ?? ['hrSalaryView', 'hrSalaryManage', 'hrPayrollApprove'];
+    if (normalized.startsWith('hr/recruitment')) return routePermissionMap['hr/recruitment'] ?? 'hrEmployees';
+    if (normalized.startsWith('hr/reports')) return routePermissionMap['hr/reports'];
+    if (normalized.startsWith('hr/settings')) return routePermissionMap['hr/settings'];
     return routePermissionMap.hr ?? 'hr';
   }
   const [rootSegment] = normalized.split('/').filter(Boolean);
@@ -770,4 +778,49 @@ export function findFirstAccessibleRoute(user: AuthUser | null | undefined, navi
 
 export function getFirstAccessibleRoute(user: AuthUser | null | undefined, navigationItems: NavigationItemDefinition[]) {
   return findFirstAccessibleRoute(user, navigationItems) || '/';
+}
+
+const HR_MANAGEMENT_PERMISSIONS = [
+  'hrEmployees',
+  'hrContracts',
+  'hrLoans',
+  'hrPayrollView',
+  'hrPayrollManage',
+  'hrPayrollApprove',
+  'hrSalaryView',
+  'hrSalaryManage',
+] as const;
+
+export function isAttendanceOnlyHrUser(user: AuthUser | null | undefined): boolean {
+  if (!user) return false;
+  if (user.role === 'super_admin') return false;
+  const perms = new Set((user.permissions || []).map((permission) => String(permission || '').trim()).filter(Boolean));
+  if (perms.has('*')) return false;
+  return perms.has('hrAttendance') && !HR_MANAGEMENT_PERMISSIONS.some((permission) => perms.has(permission));
+}
+
+export function getHrHomePath(user: AuthUser | null | undefined): string {
+  return isAttendanceOnlyHrUser(user) ? '/hr/attendance' : '/hr';
+}
+
+const NON_WORKSPACE_FALLBACK_KEYS = new Set([
+  'owner-companion',
+  'owner-mobile',
+  'mobile-hub',
+]);
+
+const ROLE_WORKSPACE_FALLBACKS: Record<AuthUser['role'], string[]> = {
+  cashier: ['/pos', '/cash-drawer', '/sales', '/customers', '/hr/attendance', '/services', '/expenses', '/'],
+  admin: ['/', '/pos', '/sales', '/inventory', '/accounts', '/treasury', '/purchases', '/reports/overview', '/hr', '/hr/attendance', '/settings'],
+  super_admin: ['/', '/pos', '/settings', '/sales', '/inventory', '/reports/overview', '/accounts', '/treasury', '/purchases'],
+};
+
+export function findWorkspaceFallbackRoute(user: AuthUser | null | undefined, navigationItems: NavigationItemDefinition[]): string | null {
+  if (!user) return null;
+  const preferred = ROLE_WORKSPACE_FALLBACKS[user.role] || ROLE_WORKSPACE_FALLBACKS.admin;
+  const preferredMatch = preferred.find((route) => canAccessPath(user, route));
+  if (preferredMatch) return preferredMatch;
+
+  const workspaceNavItems = navigationItems.filter((item) => !NON_WORKSPACE_FALLBACK_KEYS.has(item.key));
+  return findFirstAccessibleRoute(user, workspaceNavItems);
 }

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/shared/components/page-header';
 import { QueryFeedback } from '@/shared/components/query-feedback';
 import { Button } from '@/shared/ui/button';
+import { useHasAnyPermission } from '@/shared/hooks/use-permission';
 import type { HrEmployee, HrEmployeeAsset, HrLeaveRequest, HrLoan, HrPayrollRun } from '@/types/domain';
 import {
   useHrAttendance,
@@ -40,11 +41,14 @@ export function HrReportsPage() {
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [reportType, setReportType] = useState<ReportType>('all');
 
+  const canViewEmployees = useHasAnyPermission(['hrEmployees']);
+  const canViewAttendance = useHasAnyPermission(['hrAttendance']);
+  const canViewPayroll = useHasAnyPermission(['hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove']);
   const summaryQuery = useHrReportsSummary({ from, to, month });
   const workspace = useHrWorkspace({ page: 1, pageSize: 300, search, month });
-  const attendanceQuery = useHrAttendance({ from, to, page: 1, pageSize: 300, search });
-  const leavesQuery = useHrLeaveRequests({ from, to, page: 1, pageSize: 300, search });
-  const assetsQuery = useHrEmployeeAssets({ from, to, page: 1, pageSize: 300, search });
+  const attendanceQuery = useHrAttendance({ from, to, page: 1, pageSize: 300, search }, { enabled: canViewAttendance });
+  const leavesQuery = useHrLeaveRequests({ from, to, page: 1, pageSize: 300, search, enabled: canViewEmployees });
+  const assetsQuery = useHrEmployeeAssets({ from, to, page: 1, pageSize: 300, search, enabled: canViewEmployees });
 
   const summary = summaryQuery.data?.summary;
   const employees = useMemo(() => (workspace.employees.data?.employees || []) as HrEmployee[], [workspace.employees.data?.employees]);
@@ -103,9 +107,9 @@ export function HrReportsPage() {
   }, [assets, attendanceQuery.data?.summary?.unmarkedCount, filteredEmployees, leaves, loans, payrollRuns]);
 
   const hasAnyData = filteredEmployees.length > 0 || loans.length > 0 || leaves.length > 0 || assets.length > 0 || payrollRuns.length > 0 || Number(summary?.employeeCount || 0) > 0;
-  const loading = summaryQuery.isLoading || workspace.employees.isLoading || attendanceQuery.isLoading || leavesQuery.isLoading || assetsQuery.isLoading;
-  const isError = summaryQuery.isError || workspace.employees.isError || attendanceQuery.isError || leavesQuery.isError || assetsQuery.isError;
-  const error = summaryQuery.error || workspace.employees.error || attendanceQuery.error || leavesQuery.error || assetsQuery.error;
+  const loading = summaryQuery.isLoading || (canViewEmployees && (workspace.employees.isLoading || leavesQuery.isLoading || assetsQuery.isLoading)) || (canViewAttendance && attendanceQuery.isLoading);
+  const isError = summaryQuery.isError || (canViewEmployees && (workspace.employees.isError || leavesQuery.isError || assetsQuery.isError)) || (canViewAttendance && attendanceQuery.isError);
+  const error = summaryQuery.error || (canViewEmployees ? (workspace.employees.error || leavesQuery.error || assetsQuery.error) : null) || (canViewAttendance ? attendanceQuery.error : null);
 
   return (
     <div className="page-stack page-shell" dir="rtl">
@@ -116,8 +120,8 @@ export function HrReportsPage() {
           actions={
             <div className="actions compact-actions">
               <Button variant="secondary" onClick={() => navigate('/hr')}>{t('hr.hr_reports_page.s2', "نظرة عامة HR")}</Button>
-              <Button variant="secondary" onClick={() => navigate('/hr/payroll')}>{t('hr.hr_reports_page.s3', "فتح المرتبات")}</Button>
-              <Button variant="secondary" onClick={() => navigate('/hr/employees')}>{t('hr.hr_reports_page.s4', "رجوع للموظفين")}</Button>
+              {canViewPayroll && <Button variant="secondary" onClick={() => navigate('/hr/payroll')}>{t('hr.hr_reports_page.s3', "فتح المرتبات")}</Button>}
+              {canViewEmployees && <Button variant="secondary" onClick={() => navigate('/hr/employees')}>{t('hr.hr_reports_page.s4', "رجوع للموظفين")}</Button>}
             </div>
           }
         />

@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '@/stores/auth-store';
+import { canAccessPath } from '@/app/router/access';
 import { mobileBridge } from '@/shared/native/mobile-bridge';
 import {
   SmartphoneIcon,
@@ -224,7 +225,9 @@ export function MobileHubPage() {
             marginBottom: '16px',
           }}
         >
-          {modules.map((m) => {
+          {modules
+            .filter((m) => m.path === '/mobile/punch' || canAccessPath(user, m.path))
+            .map((m) => {
             const Icon = m.IconComponent;
             return (
               <Link
@@ -337,6 +340,7 @@ export function MobileHubPage() {
           <SmartphoneIcon size={20} color="#170e5e" strokeWidth={2.4} />
           <span style={{ fontSize: '11px', fontWeight: 800 }}>{t('dashboard.mobile_hub_page.s14', "الرئيسية")}</span>
         </Link>
+        {canAccessPath(user, '/owner-mobile') && (
         <Link
           to="/owner-mobile"
           style={{
@@ -352,6 +356,7 @@ export function MobileHubPage() {
           <BuildingIcon size={20} color="#64748b" strokeWidth={2} />
           <span style={{ fontSize: '11px', fontWeight: 600 }}>{t('dashboard.mobile_hub_page.s15', "المالك")}</span>
         </Link>
+        )}
         <Link
           to="/van-sales/mobile"
           style={{

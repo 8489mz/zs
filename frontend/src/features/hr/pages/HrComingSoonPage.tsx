@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { canAccessPath, isAttendanceOnlyHrUser } from '@/app/router/access';
+import { useAuthStore } from '@/stores/auth-store';
 import { PageHeader } from '@/shared/components/page-header';
 import { QueryFeedback } from '@/shared/components/query-feedback';
 import { Button } from '@/shared/ui/button';
@@ -80,19 +82,22 @@ export function HrComingSoonPage() {
   const { t, i18n } = useTranslation();
   const isEn = i18n.language === 'en';
   const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
+  const attendanceOnly = isAttendanceOnlyHrUser(user);
   const today = todayDate();
   const month = today.slice(0, 7);
   const canViewEmployees = useHasAnyPermission(['hrEmployees']);
   const canViewAttendance = useHasAnyPermission(['hrAttendance']);
   const canViewLoans = useHasAnyPermission('hrLoans');
   const canViewPayroll = useHasAnyPermission(['hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove']);
+  const canViewHrReports = canAccessPath(user, '/hr/reports');
 
   const workspace = useHrWorkspace({ page: 1, pageSize: 200, month });
-  const reports = useHrReportsSummary({ from: monthStartDate(today), to: today, month });
-  const attendance = useHrAttendance({ date: today, page: 1, pageSize: 300 }, { enabled: canViewAttendance });
-  const attendanceExceptions = useHrAttendanceExceptions({ date: today, page: 1, pageSize: 200 }, { enabled: canViewAttendance });
-  const leaves = useHrLeaveRequests({ page: 1, pageSize: 200, status: 'pending', enabled: canViewEmployees });
-  const assets = useHrEmployeeAssets({ page: 1, pageSize: 300, enabled: canViewEmployees });
+  const reports = useHrReportsSummary({ from: monthStartDate(today), to: today, month }, { enabled: !attendanceOnly && canViewHrReports });
+  const attendance = useHrAttendance({ date: today, page: 1, pageSize: 300 }, { enabled: !attendanceOnly && canViewAttendance });
+  const attendanceExceptions = useHrAttendanceExceptions({ date: today, page: 1, pageSize: 200 }, { enabled: !attendanceOnly && canViewAttendance });
+  const leaves = useHrLeaveRequests({ page: 1, pageSize: 200, status: 'pending', enabled: !attendanceOnly && canViewEmployees });
+  const assets = useHrEmployeeAssets({ page: 1, pageSize: 300, enabled: !attendanceOnly && canViewEmployees });
 
   const employees = useMemo(() => (workspace.employees.data?.employees || []) as HrEmployee[], [workspace.employees.data?.employees]);
   const loans = useMemo(() => (workspace.loans.data?.loans || []) as HrLoan[], [workspace.loans.data?.loans]);
@@ -171,6 +176,33 @@ export function HrComingSoonPage() {
   const isError = (canViewEmployees && workspace.employees.isError) || (canViewAttendance && attendance.isError);
   const error = (canViewEmployees ? workspace.employees.error : null) || (canViewAttendance ? attendance.error : null);
 
+  if (attendanceOnly) {
+    return <Navigate to="/hr/attendance" replace />;
+  }
+
+  const summaryStats = [
+    { visible: canViewEmployees, label: t('hr.hr_coming_soon_page.s8', "إجمالي الموظفين"), value: totalEmployees, to: '/hr/employees', isAlert: false },
+    { visible: canViewEmployees, label: t('hr.hr_coming_soon_page.s9', "نشط"), value: activeEmployees, to: '/hr/employees', isAlert: false },
+    { visible: canViewAttendance, label: t('hr.hr_coming_soon_page.s10', "حاضر اليوم"), value: presentToday, to: '/hr/attendance', isAlert: false },
+    { visible: canViewEmployees, label: t('hr.hr_coming_soon_page.s11', "طلبات إجازة"), value: pendingLeaves.length, to: '/hr/leaves', isAlert: pendingLeaves.length > 0 },
+    { visible: canViewAttendance, label: t('hr.hr_coming_soon_page.s12', "استثناءات حضور"), value: exceptionRows.length, to: '/hr/attendance', isAlert: exceptionRows.length > 0 },
+    { visible: canViewEmployees, label: t('hr.hr_coming_soon_page.s13', "عُهد للمراجعة"), value: assetsNeedReview, to: '/hr/assets', isAlert: assetsNeedReview > 0 },
+    { visible: canViewLoans, label: t('hr.hr_coming_soon_page.s14', "أقساط مستحقة"), value: money(dueLoanAmount), to: '/hr/loans', isAlert: false },
+    { visible: canViewPayroll, label: t('hr.hr_coming_soon_page.s15', "مرتبات للمراجعة"), value: payrollReviewCount, to: '/hr/payroll', isAlert: payrollReviewCount > 0 },
+  ].filter((item) => item.visible);
+
+  const quickActions = [
+    { label: t('hr.hr_coming_soon_page.s16', "إضافة موظف"), icon: <UsersIcon size={14} />, to: '/hr/employees/new', variant: 'primary' as const },
+    { label: t('hr.hr_coming_soon_page.s17', "تسجيل الحضور"), icon: <ClockIcon size={14} />, to: '/hr/attendance', variant: 'secondary' as const },
+    { label: t('hr.hr_coming_soon_page.s18', "طلب إجازة"), icon: <CalendarIcon size={14} />, to: '/hr/leaves', variant: 'secondary' as const },
+    { label: t('hr.hr_coming_soon_page.s19', "سلفة جديدة"), icon: <WalletIcon size={14} />, to: '/hr/loans', variant: 'secondary' as const },
+    { label: t('hr.hr_coming_soon_page.s20', "تسليم عهدة"), icon: <BriefcaseIcon size={14} />, to: '/hr/assets', variant: 'secondary' as const },
+    { label: t('hr.hr_coming_soon_page.s21', "المرتبات والأجور"), icon: <BanknotesIcon size={14} />, to: '/hr/payroll', variant: 'secondary' as const },
+    { label: t('hr.hr_coming_soon_page.s22', "المستندات"), icon: <FileTextIcon size={14} />, to: '/hr/documents', variant: 'secondary' as const },
+    { label: t('hr.hr_coming_soon_page.s23', "التقارير"), icon: <ChartBarIcon size={14} />, to: '/hr/reports', variant: 'secondary' as const },
+    { label: t('hr.hr_coming_soon_page.s24', "الإعدادات"), icon: <CogIcon size={14} />, to: '/hr/settings', variant: 'secondary' as const },
+  ].filter((act) => canAccessPath(user, act.to));
+
   return (
     <div className="page-stack page-shell" dir="rtl">
       <main className="document-prototype-column" style={{ paddingBottom: '20px' }}>
@@ -194,23 +226,15 @@ export function HrComingSoonPage() {
             errorTitle={t('hr.hr_coming_soon_page.s5', "تعذر تحميل نظرة الموارد البشرية")}
           >
             {/* Compact Single-Row KPI Summary Bar */}
+            {summaryStats.length > 0 && (
             <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#0f172a' }}>{t('hr.hr_coming_soon_page.s6', "ملخص تشغيلي سريع")}</span>
                 <span style={{ fontSize: '0.725rem', color: '#64748b' }}>{t('hr.hr_coming_soon_page.s7', "مؤشرات اليوم لجميع أقسام الموارد البشرية")}</span>
               </div>
               
-              <div className="hr-operational-summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(8, minmax(0, 1fr))', gap: '8px' }}>
-                {[
-                  { label: t('hr.hr_coming_soon_page.s8', "إجمالي الموظفين"), value: totalEmployees, to: '/hr/employees', isAlert: false },
-                  { label: t('hr.hr_coming_soon_page.s9', "نشط"), value: activeEmployees, to: '/hr/employees', isAlert: false },
-                  { label: t('hr.hr_coming_soon_page.s10', "حاضر اليوم"), value: canViewAttendance ? presentToday : '—', to: canViewAttendance ? '/hr/attendance' : '/hr', isAlert: false },
-                  { label: t('hr.hr_coming_soon_page.s11', "طلبات إجازة"), value: pendingLeaves.length, to: '/hr/leaves', isAlert: pendingLeaves.length > 0 },
-                  { label: t('hr.hr_coming_soon_page.s12', "استثناءات حضور"), value: canViewAttendance ? exceptionRows.length : '—', to: canViewAttendance ? '/hr/attendance' : '/hr', isAlert: canViewAttendance && exceptionRows.length > 0 },
-                  { label: t('hr.hr_coming_soon_page.s13', "عُهد للمراجعة"), value: assetsNeedReview, to: '/hr/assets', isAlert: assetsNeedReview > 0 },
-                  { label: t('hr.hr_coming_soon_page.s14', "أقساط مستحقة"), value: money(dueLoanAmount), to: '/hr/loans', isAlert: false },
-                  { label: t('hr.hr_coming_soon_page.s15', "مرتبات للمراجعة"), value: payrollReviewCount, to: '/hr/payroll', isAlert: payrollReviewCount > 0 },
-                ].map((stat, idx) => (
+              <div className="hr-operational-summary-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(summaryStats.length, 8)}, minmax(0, 1fr))`, gap: '8px' }}>
+                {summaryStats.map((stat, idx) => (
                   <div
                     key={idx}
                     onClick={() => navigate(stat.to)}
@@ -240,20 +264,12 @@ export function HrComingSoonPage() {
                 ))}
               </div>
             </div>
+            )}
 
             {/* Quick Actions Shortcuts Row (3x3 Grid on Mobile) */}
+            {quickActions.length > 0 && (
             <div className="hr-quick-actions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '8px', marginBottom: '14px' }}>
-              {[
-                { label: t('hr.hr_coming_soon_page.s16', "إضافة موظف"), icon: <UsersIcon size={14} />, to: '/hr/employees/new', variant: 'primary' as const },
-                { label: t('hr.hr_coming_soon_page.s17', "تسجيل الحضور"), icon: <ClockIcon size={14} />, to: '/hr/attendance', variant: 'secondary' as const },
-                { label: t('hr.hr_coming_soon_page.s18', "طلب إجازة"), icon: <CalendarIcon size={14} />, to: '/hr/leaves', variant: 'secondary' as const },
-                { label: t('hr.hr_coming_soon_page.s19', "سلفة جديدة"), icon: <WalletIcon size={14} />, to: '/hr/loans', variant: 'secondary' as const },
-                { label: t('hr.hr_coming_soon_page.s20', "تسليم عهدة"), icon: <BriefcaseIcon size={14} />, to: '/hr/assets', variant: 'secondary' as const },
-                { label: t('hr.hr_coming_soon_page.s21', "المرتبات والأجور"), icon: <BanknotesIcon size={14} />, to: '/hr/payroll', variant: 'secondary' as const },
-                { label: t('hr.hr_coming_soon_page.s22', "المستندات"), icon: <FileTextIcon size={14} />, to: '/hr/documents', variant: 'secondary' as const },
-                { label: t('hr.hr_coming_soon_page.s23', "التقارير"), icon: <ChartBarIcon size={14} />, to: '/hr/reports', variant: 'secondary' as const },
-                { label: t('hr.hr_coming_soon_page.s24', "الإعدادات"), icon: <CogIcon size={14} />, to: '/hr/settings', variant: 'secondary' as const },
-              ].map((act, i) => (
+              {quickActions.map((act, i) => (
                 <Button
                   key={i}
                   type="button"
@@ -267,6 +283,7 @@ export function HrComingSoonPage() {
                 </Button>
               ))}
             </div>
+            )}
 
             {/* Tasks that need immediate action */}
             <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px' }}>

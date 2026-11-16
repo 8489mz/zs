@@ -6,8 +6,8 @@ const SETUP_ENTRY_ROUTE = '/settings/core?setup=1';
 const ONBOARDING_ROUTE = '/onboarding';
 
 const ROUTE_PREFERENCES: Record<AuthUser['role'], string[]> = {
-  cashier: ['/pos', '/cash-drawer', '/sales', '/customers', '/services', '/expenses', '/'],
-  admin: ['/', '/pos', '/sales', '/inventory', '/accounts', '/treasury', '/purchases', '/reports/overview', '/customers', '/suppliers', '/products', '/returns', '/cash-drawer', '/services', '/settings'],
+  cashier: ['/pos', '/cash-drawer', '/sales', '/customers', '/hr/attendance', '/services', '/expenses', '/'],
+  admin: ['/', '/pos', '/sales', '/inventory', '/accounts', '/treasury', '/purchases', '/reports/overview', '/hr', '/hr/attendance', '/customers', '/suppliers', '/products', '/returns', '/cash-drawer', '/services', '/settings'],
   super_admin: ['/', '/pos', '/settings', '/sales', '/inventory', '/reports/overview', '/accounts', '/treasury', '/purchases', '/products', '/returns', '/cash-drawer', '/customers', '/suppliers', '/services'],
 };
 

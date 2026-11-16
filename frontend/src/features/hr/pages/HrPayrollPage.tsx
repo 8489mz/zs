@@ -7,6 +7,8 @@ import { PageHeader } from '@/shared/components/page-header';
 import { QueryFeedback } from '@/shared/components/query-feedback';
 import { Button } from '@/shared/ui/button';
 import { useHasAnyPermission } from '@/shared/hooks/use-permission';
+import { canAccessPath } from '@/app/router/access';
+import { useAuthStore } from '@/stores/auth-store';
 import { DataTable } from '@/shared/ui/data-table';
 import type { HrEmployee, HrPayrollRun, HrPayrollRunItem } from '@/types/domain';
 import { getErrorMessage } from '@/lib/errors';
@@ -73,6 +75,7 @@ function filterRunsByTabAndStatus(runs: HrPayrollRun[], tab: PayrollRunTab, stat
 export function HrPayrollPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
   const mutations = useHrMutations();
   const canViewPayroll = useHasAnyPermission(['hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove']);
   const canManagePayroll = useHasAnyPermission(['hrPayrollManage', 'hrPayrollApprove']);
@@ -803,14 +806,10 @@ export function HrPayrollPage() {
           }
           actions={
             <div className="actions compact-actions">
-              {hasCreatePayrollRun && canManagePayroll ? (
-                <Button onClick={openCreateModal}>
-                  {isEg ? 'إنشاء كشف المرتبات' : 'تجهيز مسير الرواتب'}
-                </Button>
-              ) : null}
-              <Button variant="secondary" onClick={() => navigate('/hr/attendance')}>{t('hr.hr_payroll_page.s3', "مراجعة الحضور")}</Button>
-              <Button variant="secondary" onClick={() => navigate('/hr/loans')}>{t('hr.hr_payroll_page.s4', "مراجعة السلف")}</Button>
-              <Button variant="secondary" onClick={() => navigate('/hr/employees')}>{t('hr.hr_payroll_page.s5', "رجوع للموظفين")}</Button>
+              {hasCreatePayrollRun && canManagePayroll ? <Button onClick={openCreateModal}>{isEg ? 'إنشاء كشف المرتبات' : 'تجهيز مسير الرواتب'}</Button> : null}
+              {canAccessPath(user, '/hr/attendance') && <Button variant="secondary" onClick={() => navigate('/hr/attendance')}>{t('hr.hr_payroll_page.s3', "مراجعة الحضور")}</Button>}
+              {canAccessPath(user, '/hr/loans') && <Button variant="secondary" onClick={() => navigate('/hr/loans')}>{t('hr.hr_payroll_page.s4', "مراجعة السلف")}</Button>}
+              {canAccessPath(user, '/hr/employees') && <Button variant="secondary" onClick={() => navigate('/hr/employees')}>{t('hr.hr_payroll_page.s5', "رجوع للموظفين")}</Button>}
             </div>
           }
         />

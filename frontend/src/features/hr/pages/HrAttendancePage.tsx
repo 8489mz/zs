@@ -164,11 +164,13 @@ export function HrAttendancePage() {
   const [manualNoteInput, setManualNoteInput] = useState('');
 
   // Active employees for combobox
-  const canViewEmployees = useHasAnyPermission(['hrEmployees', 'hrAttendance']);
+  const canFetchEmployees = useHasAnyPermission(['hrEmployees', 'hrAttendance']);
+  const canViewEmployees = useHasAnyPermission(['hrEmployees']);
+  const canViewPayroll = useHasAnyPermission(['hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove']);
   const employeesQuery = useQuery({
     queryKey: ['hr', 'attendance-active-employees'],
     queryFn: () => hrApi.employees({ status: 'active', pageSize: 500 }),
-    enabled: canViewEmployees,
+    enabled: canFetchEmployees,
   });
   const activeEmployees = useMemo(() => employeesQuery.data?.employees || [], [employeesQuery.data?.employees]);
 
@@ -570,12 +572,8 @@ export function HrAttendancePage() {
               <Button variant={importOpen ? 'primary' : 'secondary'} onClick={() => setImportOpen(!importOpen)}>
                 {t('hr.hr_attendance_page.s2', "استيراد")}
               </Button>
-              <Button variant="secondary" onClick={() => navigate('/hr/payroll')}>
-                {t('hr.hr_attendance_page.s3', "المرتبات")}
-              </Button>
-              <Button variant="secondary" onClick={() => navigate('/hr/employees')}>
-                {t('hr.hr_attendance_page.s4', "الموظفون")}
-              </Button>
+              {canViewPayroll && <Button variant="secondary" onClick={() => navigate('/hr/payroll')}>{t('hr.hr_attendance_page.s3', "المرتبات")}</Button>}
+              {canViewEmployees && <Button variant="secondary" onClick={() => navigate('/hr/employees')}>{t('hr.hr_attendance_page.s4', "الموظفون")}</Button>}
             </div>
           }
         />

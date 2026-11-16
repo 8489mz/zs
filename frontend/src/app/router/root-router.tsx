@@ -8,7 +8,7 @@ import { Button } from '@/shared/ui/button';
 import { useBootstrapAuth } from '@/features/auth/useBootstrapAuth';
 import { useAuthStore } from '@/stores/auth-store';
 import { appRoutes, navigationItems } from '@/app/router/registry';
-import { canAccessPath, findFirstAccessibleRoute } from '@/app/router/access';
+import { canAccessPath, findWorkspaceFallbackRoute } from '@/app/router/access';
 import { getPostLoginRoute } from '@/features/auth/lib/post-login-route';
 import { AppCloseGuard } from '@/shared/layout/AppCloseGuard';
 import { getStoreHostSlug } from '@/lib/store-public-url';
@@ -171,11 +171,11 @@ function ProtectedLayout() {
     return <Navigate to="/pos" replace />;
   }
 
-  const firstAccessibleRoute = findFirstAccessibleRoute(user, navigationItems);
+  const fallbackRoute = findWorkspaceFallbackRoute(user, navigationItems);
 
   if (!canAccessPath(user, location.pathname)) {
-    if (!firstAccessibleRoute) return <NoWorkspaceAccess />;
-    return <Navigate to={firstAccessibleRoute} replace />;
+    if (!fallbackRoute) return <NoWorkspaceAccess />;
+    return <Navigate to={fallbackRoute} replace />;
   }
 
   return (

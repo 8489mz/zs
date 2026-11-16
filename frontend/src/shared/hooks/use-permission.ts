@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
-import { tenantHasFeature } from '@/app/router/access';
+import { canAccessPath, isAttendanceOnlyHrUser, tenantHasFeature } from '@/app/router/access';
+
+export { canAccessPath, isAttendanceOnlyHrUser };
 
 function normalizePermissions(input: Array<string | null | undefined>) {
   return input.map((value) => String(value || '').trim()).filter(Boolean);

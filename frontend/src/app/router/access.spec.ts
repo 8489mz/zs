@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import type { NavigationItemDefinition } from '@/app/router/types';
-import { canAccessNavigationItem, canAccessPath, findFirstAccessibleRoute, getFirstAccessibleRoute, getRoutePermissionRequirement, hasAnyPermission, hasRequiredFeature, matchesNavigationSearch, tenantHasFeature } from '@/app/router/access';
+import {
+  canAccessNavigationItem,
+  canAccessPath,
+  findFirstAccessibleRoute,
+  findWorkspaceFallbackRoute,
+  getFirstAccessibleRoute,
+  getHrHomePath,
+  getRoutePermissionRequirement,
+  hasAnyPermission,
+  hasRequiredFeature,
+  isAttendanceOnlyHrUser,
+  matchesNavigationSearch,
+  tenantHasFeature,
+} from '@/app/router/access';
 import { normalizeArabicSearchKey } from '@/lib/arabic-normalization';
 import { useAuthStore } from '@/stores/auth-store';
 import type { AuthUser } from '@/types/auth';
@@ -221,5 +234,107 @@ describe('matchesNavigationSearch', () => {
 
   it('matches everything on an empty query', () => {
     expect(matchesNavigationSearch(forexItem, '')).toBe(true);
+  });
+});
+
+describe('INV-HR-ATTENDANCE-SCOPE-AND-OWNER-ROUTE-GUARD', () => {
+  const fullFeatureTenant = {
+    id: 't-hr',
+    accountId: 'a-hr',
+    slug: 'hr-shop',
+    businessName: 'HR Shop',
+    activityType: 'retail_general',
+    status: 'active' as const,
+    isTrial: false,
+    trialEndsAt: null,
+    trialDaysRemaining: null,
+    features: ['sales', 'catalog', 'sessions', 'cashDrawer', 'reports', 'hr'],
+  };
+
+  it('locks owner-companion and owner-mobile behind reports and prevents cashier fallback leak', () => {
+    const restrictedCashier: AuthUser = {
+      ...adminUser,
+      id: 'u-cashier-no-dash',
+      username: 'cashier-att',
+      role: 'cashier',
+      permissions: ['sales', 'cashDrawer', 'hr', 'hrAttendance'],
+    };
+    const defaultCashierWithDashboard: AuthUser = {
+      ...restrictedCashier,
+      permissions: ['dashboard', 'sales', 'cashDrawer', 'hr', 'hrAttendance'],
+    };
+    const attendanceOnlyUser: AuthUser = {
+      ...restrictedCashier,
+      permissions: ['hr', 'hrAttendance'],
+    };
+    const zeroPermUser: AuthUser = {
+      ...restrictedCashier,
+      permissions: [],
+    };
+    const navItems: NavigationItemDefinition[] = [
+      { key: 'apps', label: 'متجر التطبيقات', to: '/apps' },
+      { key: 'dashboard', label: 'الرئيسية', to: '/' },
+      { key: 'owner-companion', label: 'متابعة المالك', to: '/owner-companion' },
+      { key: 'owner-mobile', label: 'لوحة المالك (موبايل)', to: '/owner-mobile' },
+      { key: 'mobile-hub', label: 'تطبيقات الموبايل', to: '/mobile' },
+      { key: 'pos', label: 'نقطة البيع', to: '/pos' },
+      { key: 'hr', label: 'الموارد البشرية', to: '/hr' },
+    ];
+
+    useAuthStore.setState({ user: restrictedCashier, tenant: fullFeatureTenant });
+    try {
+      expect(getRoutePermissionRequirement('/owner-companion')).toBe('reports');
+      expect(getRoutePermissionRequirement('/owner-mobile')).toBe('reports');
+      expect(canAccessPath(restrictedCashier, '/owner-companion')).toBe(false);
+      expect(canAccessPath(restrictedCashier, '/owner-mobile')).toBe(false);
+      expect(canAccessPath(defaultCashierWithDashboard, '/owner-companion')).toBe(false);
+      expect(canAccessPath(defaultCashierWithDashboard, '/owner-mobile')).toBe(false);
+      expect(canAccessPath(adminUser, '/owner-companion')).toBe(true);
+
+      // Redirect fallback never lands on /owner-companion, /owner-mobile, or /mobile
+      expect(findWorkspaceFallbackRoute(restrictedCashier, navItems)).toBe('/pos');
+      expect(findWorkspaceFallbackRoute(attendanceOnlyUser, navItems)).toBe('/hr/attendance');
+      expect(findWorkspaceFallbackRoute(zeroPermUser, navItems)).toBeNull();
+    } finally {
+      useAuthStore.setState({ user: null, tenant: null });
+    }
+  });
+
+  it('tightens HR sub-routes so bare hr/hrAttendance cashiers cannot open settlements, reports, settings, or recruitment', () => {
+    const attendanceCashier: AuthUser = {
+      ...adminUser,
+      role: 'cashier',
+      permissions: ['sales', 'cashDrawer', 'hr', 'hrAttendance'],
+    };
+    const hrManager: AuthUser = {
+      ...adminUser,
+      role: 'admin',
+      permissions: ['hr', 'hrEmployees', 'hrAttendance', 'hrLoans', 'hrPayrollView', 'hrSalaryView'],
+    };
+
+    useAuthStore.setState({ user: attendanceCashier, tenant: fullFeatureTenant });
+    try {
+      expect(canAccessPath(attendanceCashier, '/hr/attendance')).toBe(true);
+      expect(canAccessPath(attendanceCashier, '/hr/employees')).toBe(false);
+      expect(canAccessPath(attendanceCashier, '/hr/leaves')).toBe(false);
+      expect(canAccessPath(attendanceCashier, '/hr/loans')).toBe(false);
+      expect(canAccessPath(attendanceCashier, '/hr/payroll')).toBe(false);
+      expect(canAccessPath(attendanceCashier, '/hr/settlements')).toBe(false);
+      expect(canAccessPath(attendanceCashier, '/hr/recruitment')).toBe(false);
+      expect(canAccessPath(attendanceCashier, '/hr/reports')).toBe(false);
+      expect(canAccessPath(attendanceCashier, '/hr/settings')).toBe(false);
+      expect(isAttendanceOnlyHrUser(attendanceCashier)).toBe(true);
+      expect(getHrHomePath(attendanceCashier)).toBe('/hr/attendance');
+
+      expect(canAccessPath(hrManager, '/hr/employees')).toBe(true);
+      expect(canAccessPath(hrManager, '/hr/settlements')).toBe(true);
+      expect(canAccessPath(hrManager, '/hr/recruitment')).toBe(true);
+      expect(canAccessPath(hrManager, '/hr/reports')).toBe(true);
+      expect(canAccessPath(hrManager, '/hr/settings')).toBe(true);
+      expect(isAttendanceOnlyHrUser(hrManager)).toBe(false);
+      expect(getHrHomePath(hrManager)).toBe('/hr');
+    } finally {
+      useAuthStore.setState({ user: null, tenant: null });
+    }
   });
 });

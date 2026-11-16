@@ -12,6 +12,20 @@
 
 ## التحديثات الحالية
 
+### قدرة: عزل صلاحيات الموارد البشرية ومنع تسرب لوحة متابعة المالك (HR RBAC Hardening & Owner-Companion Route Guard) — 16 نوفمبر 2026
+- **تأمين مسارات المالك والجوال (`frontend/src/app/router/access.ts`, `root-router.tsx`, `OwnerCompanionPage.tsx`, `OwnerMobileDashboardPage.tsx`, `MobileHubPage.tsx`):**
+  - إضافة مسارات `owner-companion` و`owner-mobile` و`mobile/owner` إلى `routePermissionMap` بصلاحية `'reports'` لمنع وصول الكاشير إليها أو ظهورها في البحث الشامل أو لوحة تطبيقات الموبايل، وحمايتها أيضاً داخل مكونات الصفحات.
+  - إضافة `findWorkspaceFallbackRoute` في `ProtectedLayout` (`root-router.tsx`) بحيث يرتد المسار المرفوض دائماً إلى أول مساحة عمل تشغيلية مناسبة لدور المستخدم (`/pos` أو `/hr/attendance` للكاشير، أو شاشة انعدام الصلاحيات `NoWorkspaceAccess` عند عدم وجود صلاحيات) دون التوجيه أبداً إلى `/owner-companion` أو `/owner-mobile` أو `/mobile`.
+- **تقييد مسارات وتابات الموارد البشرية حسب الصلاحية الفعلية:**
+  - `HrSectionNav.tsx` (عبر إعادة التصدير في `shared/hooks/use-permission.ts` التزاماً بحدود الطبقات): تصفية التابات عبر `canAccessPath` وإخفاء نظرة عامة `/hr` عند الاقتصار على التحضير (`isAttendanceOnlyHrUser`)؛ وتوجيه رابط «الموارد البشرية» في `app-shell.tsx` والصفحة `/hr` (`HrComingSoonPage.tsx`) مباشرة إلى `/hr/attendance` لمن يملك `hrAttendance` فقط.
+  - تصفية بطاقات الملخص وأزرار الإجراءات السريعة في `HrComingSoonPage.tsx`، وأزرار الهيدر في `HrAttendancePage.tsx` و`HrReportsPage.tsx` و`HrSettingsPage.tsx` و`HrLoansPage.tsx` و`HrPayrollPage.tsx`، وتقييد استعلامات `useHr.ts` واختصار الحضور السريع (`QuickAttendanceShortcut`) حسب الصلاحية.
+  - تشديد مسارات `hr/settlements` (`hrSalaryView`/`hrSalaryManage`/`hrPayrollApprove`)، `hr/recruitment` (`hrEmployees`)، `hr/reports` (`hrEmployees`/`hrLoans`/`hrPayroll*`/`hrSalary*`)، و`hr/settings` (`hrEmployees`/`hrPayrollManage`/`hrSalaryManage`/`settings`/`canManageSettings`) بدلاً من الصلاحية العامة `'hr'`.
+- **تشديد نقاط الباك إند (`backend/src/modules/hr/`):**
+  - حماية `RecruitmentAtsController` (`recruitment-ats.controller.ts` + `recruitment-ats.service.ts`) بـ `PermissionsGuard` و`@RequireFeature('hr')` وصلاحية `hrEmployees` (و`hrSalaryManage` عند التعيين)، وإلغاء تجاوز `admin` و`'hr'` العامة.
+  - تشديد `GET /api/hr/reports/summary` (`hr.controller.ts` + `hr-reports.service.ts`) وتصفية الأقسام المالية (الرواتب والسلف) في الاستجابة حسب الصلاحيات، وتشديد تعديلات الأقسام والمسميات والوظائف والعطلات الرسمية من `'hr'` العامة إلى صلاحيات الإدارة المعنية.
+  - حجب الحقول الشخصية والمالية الحساسة (`nationalId`, `hourlyRate`, `insuranceSalary`, `commission*`, `bank*`) في `HrEmployeesService.listEmployees` لمن يملك `hrAttendance` فقط دون `hrEmployees` / `canViewSalary`.
+- **التحقق:** اختبارات الوحدة المستهدفة `frontend/src/app/router/access.spec.ts` و`frontend/src/features/hr/components/HrSectionNav.spec.tsx`.
+
 ### قدرة: منظومة صرف المسحوبات النقدية من الراتب وسلف الكاشير السريعة (Quick Cash Advance & Earned Salary Withdrawal Engine) — 25 أكتوبر 2026
 - **المحرك الحسابي للاستحقاق اللحظي (`employee-withdrawal-balance.engine.ts`):**
   - احتساب الاستحقاق الفعلي اللحظي للموظف بدقة ملليمترية بحسب دورة القبض (بالساعة عبر البصمات `summarizeHourlyAttendance`، باليوم عبر عدد الأيام المسجلة، أو بالشهر عبر الكشف النشط أو النسبة العقدية `prorateMonthlyWage`).

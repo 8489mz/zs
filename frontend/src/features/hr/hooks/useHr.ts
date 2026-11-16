@@ -22,15 +22,18 @@ function paramsKey(params: HrListParams) {
 export function useHrWorkspace(params: HrListParams) {
   const key = paramsKey(params);
   const canViewEmployees = useHasAnyPermission(['hrEmployees']);
+  const canViewAttendance = useHasAnyPermission(['hrAttendance']);
   const canViewLoans = useHasAnyPermission(['hrLoans']);
   const canViewPayroll = useHasAnyPermission(['hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove']);
+  const canViewHrSetup = useHasAnyPermission(['hrEmployees', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrSalaryManage', 'settings', 'canManageSettings']);
+  const canViewSummary = useHasAnyPermission(['hr', 'hrEmployees', 'hrAttendance', 'hrLoans', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove']);
 
   return {
-    summary: useQuery({ queryKey: queryKeys.hrSummary, queryFn: hrApi.summary }),
+    summary: useQuery({ queryKey: queryKeys.hrSummary, queryFn: hrApi.summary, enabled: canViewSummary }),
     employees: useQuery({ queryKey: queryKeys.hrEmployees(key), queryFn: () => hrApi.employees(params), placeholderData: (previous) => previous, enabled: canViewEmployees }),
-    departments: useQuery({ queryKey: queryKeys.hrMasterData('departments'), queryFn: () => hrApi.masterData('departments') }),
-    jobTitles: useQuery({ queryKey: queryKeys.hrMasterData('job-titles'), queryFn: () => hrApi.masterData('job-titles') }),
-    positions: useQuery({ queryKey: queryKeys.hrMasterData('positions'), queryFn: () => hrApi.masterData('positions') }),
+    departments: useQuery({ queryKey: queryKeys.hrMasterData('departments'), queryFn: () => hrApi.masterData('departments'), enabled: canViewEmployees || canViewAttendance || canViewPayroll || canViewHrSetup }),
+    jobTitles: useQuery({ queryKey: queryKeys.hrMasterData('job-titles'), queryFn: () => hrApi.masterData('job-titles'), enabled: canViewHrSetup }),
+    positions: useQuery({ queryKey: queryKeys.hrMasterData('positions'), queryFn: () => hrApi.masterData('positions'), enabled: canViewHrSetup }),
     loans: useQuery({ queryKey: queryKeys.hrLoans(key), queryFn: () => hrApi.loans(params), placeholderData: (previous) => previous, enabled: canViewLoans }),
     withdrawals: useQuery({ queryKey: queryKeys.hrWithdrawals(key), queryFn: () => hrApi.withdrawals(params), enabled: Boolean(params.employeeId) && canViewLoans, placeholderData: (previous) => previous }),
     payrollRuns: useQuery({ queryKey: queryKeys.hrPayrollRuns(key), queryFn: () => hrApi.payrollRuns(params), placeholderData: (previous) => previous, enabled: canViewPayroll }),
@@ -77,63 +80,79 @@ export function useHrAttendanceExceptions(params: HrListParams & { date?: string
   });
 }
 
-export function useHrLeaveTypes(params: HrListParams = {}) {
+export function useHrLeaveTypes(params: HrListParams = {}, options?: { enabled?: boolean }) {
   const key = paramsKey(params);
+  const canViewEmployees = useHasAnyPermission(['hrEmployees', 'settings', 'canManageSettings']);
   return useQuery({
     queryKey: ['hr', 'leave-types', key],
     queryFn: () => hrApi.leaveTypes(params),
     placeholderData: (previous) => previous,
+    enabled: canViewEmployees && (options?.enabled ?? true),
   });
 }
 
-export function useHrHolidays(params: HrListParams = {}) {
+export function useHrHolidays(params: HrListParams = {}, options?: { enabled?: boolean }) {
   const key = paramsKey(params);
+  const canViewHolidays = useHasAnyPermission(['hrEmployees', 'hrAttendance', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'settings', 'canManageSettings']);
   return useQuery({
     queryKey: ['hr', 'holidays', key],
     queryFn: () => hrApi.listHolidays(params),
     placeholderData: (previous) => previous,
+    enabled: canViewHolidays && (options?.enabled ?? true),
   });
 }
 
 export function useHrLeaveRequests(params: HrListParams & { enabled?: boolean } = {}) {
   const key = paramsKey(params);
+  const canViewEmployees = useHasAnyPermission(['hrEmployees']);
   return useQuery({
     queryKey: ['hr', 'leave-requests', key],
     queryFn: () => hrApi.leaveRequests(params),
     placeholderData: (previous) => previous,
-    enabled: params.enabled,
+    enabled: canViewEmployees && (params.enabled ?? true),
   });
 }
 
 export function useHrEmployeeAssets(params: HrListParams & { enabled?: boolean } = {}) {
   const key = paramsKey(params);
+  const canViewEmployees = useHasAnyPermission(['hrEmployees']);
   return useQuery({
     queryKey: ['hr', 'employee-assets', key],
     queryFn: () => hrApi.employeeAssets(params),
     placeholderData: (previous) => previous,
-    enabled: params.enabled,
+    enabled: canViewEmployees && (params.enabled ?? true),
   });
 }
 
 export function useHrEmployeeAdjustments(employeeId?: string) {
+  const canViewAdjustments = useHasAnyPermission(['hrSalaryView', 'hrSalaryManage', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove']);
   const q = useQuery({
     queryKey: ['hr', 'employee-adjustments', employeeId],
     queryFn: () => hrApi.employeeAdjustments(employeeId!),
-    enabled: !!employeeId,
+    enabled: Boolean(employeeId) && canViewAdjustments,
   });
   return { ...q, adjustments: q.data?.rows || [] };
 }
 
-export function useHrReportsSummary(params: HrListParams = {}) {
+export function useHrReportsSummary(params: HrListParams = {}, options?: { enabled?: boolean }) {
   const key = paramsKey(params);
+  const canViewHrReports = useHasAnyPermission(['hrEmployees', 'hrLoans', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrSalaryView', 'hrSalaryManage']);
   return useQuery({
     queryKey: ['hr', 'reports-summary', key],
     queryFn: () => hrApi.reportsSummary(params),
     placeholderData: (previous) => previous,
+    enabled: canViewHrReports && (options?.enabled ?? true),
   });
 }
 
-export function useHrPayrollPolicies() { return useQuery({ queryKey: ['hr', 'payroll-policies'], queryFn: hrApi.getPayrollPolicies }); }
+export function useHrPayrollPolicies(options?: { enabled?: boolean }) {
+  const canViewPolicies = useHasAnyPermission(['hrPayrollView', 'hrPayrollManage', 'hrSalaryView', 'hrSalaryManage']);
+  return useQuery({
+    queryKey: ['hr', 'payroll-policies'],
+    queryFn: hrApi.getPayrollPolicies,
+    enabled: canViewPolicies && (options?.enabled ?? true),
+  });
+}
 
 export function useHrMutations() {
   const queryClient = useQueryClient();

@@ -38,8 +38,7 @@ export class RecruitmentAtsService {
   private assertAccess(auth: AuthContext): void {
     if (
       auth.role === 'super_admin' ||
-      auth.role === 'admin' ||
-      auth.permissions.includes('hr') ||
+      auth.permissions.includes('*') ||
       auth.permissions.includes('hrEmployees')
     ) {
       return;

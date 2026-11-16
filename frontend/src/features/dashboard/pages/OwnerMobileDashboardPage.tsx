@@ -7,9 +7,10 @@ import { cashDrawerApi } from '@/lib/api/cash-drawer';
 import { formatCurrency } from '@/lib/format';
 import { Link } from 'react-router-dom';
 import { SmartphoneIcon, ShoppingCartIcon, BarChartIcon, FileTextIcon, RefreshCwIcon, AlertTriangleIcon } from '@/shared/components/icons/AppIcons';
-import { useHasFeature } from '@/shared/hooks/use-permission';
+import { useHasAnyPermission, useHasFeature } from '@/shared/hooks/use-permission';
 import { useAuthStore } from '@/stores/auth-store';
-import { isPlatformAdmin } from '@/app/router/access';
+import { findWorkspaceFallbackRoute, isPlatformAdmin } from '@/app/router/access';
+import { navigationItems } from '@/app/router/registry';
 
 type TimeRange = 'today' | 'yesterday' | 'week' | 'month';
 
@@ -37,9 +38,10 @@ export function OwnerMobileDashboardPage() {
   const user = useAuthStore((s) => s.user);
   const isPlatformAdminUser = isPlatformAdmin(user);
   const hasReportsFeature = useHasFeature('reports') || isPlatformAdminUser;
+  const canViewReports = useHasAnyPermission('reports') || isPlatformAdminUser;
 
-  if (!hasReportsFeature) {
-    return <Navigate to="/pos" replace />;
+  if (!hasReportsFeature || !canViewReports) {
+    return <Navigate to={findWorkspaceFallbackRoute(user, navigationItems) || '/pos'} replace />;
   }
 
   const [range, setRange] = useState<TimeRange>('today');

@@ -89,10 +89,16 @@ function getTenantNowEpoch(nowDate: Date, timezone: string): number {
   }
 }
 
-export function QuickAttendanceShortcut({ onClose }: QuickAttendanceShortcutProps) {
+export function QuickAttendanceShortcut({ open, onClose }: QuickAttendanceShortcutProps) {
   const { t } = useTranslation();
   const mutations = useHrMutations();
   const [shortcutOpen, setShortcutOpen] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setShortcutOpen(true);
+    }
+  }, [open]);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');

@@ -1,5 +1,8 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { SessionAuthGuard } from '../../../core/auth/guards/session-auth.guard';
+import { PermissionsGuard } from '../../../core/auth/guards/permissions.guard';
+import { RequireFeature } from '../../../core/auth/decorators/feature.decorator';
+import { RequirePermissions } from '../../../core/auth/decorators/permissions.decorator';
 import { RequestWithAuth } from '../../../core/auth/interfaces/request-with-auth.interface';
 import { RecruitmentAtsService } from '../services/recruitment-ats.service';
 import {
@@ -10,7 +13,9 @@ import {
 } from '../dto/recruitment-ats.dto';
 
 @Controller('api/hr/recruitment')
-@UseGuards(SessionAuthGuard)
+@UseGuards(SessionAuthGuard, PermissionsGuard)
+@RequireFeature('hr')
+@RequirePermissions('hrEmployees')
 export class RecruitmentAtsController {
   constructor(private readonly recruitmentService: RecruitmentAtsService) {}
 
@@ -55,6 +60,7 @@ export class RecruitmentAtsController {
   }
 
   @Post('applicants/:id/hire')
+  @RequirePermissions('hrEmployees', 'hrSalaryManage')
   hireApplicant(
     @Param('id') id: string,
     @Body() dto: HireApplicantDto,

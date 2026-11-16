@@ -63,13 +63,13 @@ export class HrController {
   constructor(private readonly hr: HrService) {}
 
   @Get('summary')
-  @RequirePermissions('hr')
+  @RequireAnyPermission('hr', 'hrEmployees', 'hrAttendance', 'hrLoans', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove')
   summary(@Req() req: RequestWithAuth) {
     return this.hr.summary(req.authContext!);
   }
 
   @Get('reports/summary')
-  @RequirePermissions('hr')
+  @RequireAnyPermission('hrEmployees', 'hrLoans', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrSalaryView', 'hrSalaryManage')
   reportsSummary(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth) {
     return this.hr.reportsSummary(query, req.authContext!);
   }
@@ -309,73 +309,73 @@ export class HrController {
   }
 
   @Get('departments')
-  @RequireAnyPermission('hr', 'hrEmployees', 'hrAttendance')
+  @RequireAnyPermission('hr', 'hrEmployees', 'hrAttendance', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'settings', 'canManageSettings')
   listDepartments(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth) {
     return this.hr.listMasterData('departments', query, req.authContext!);
   }
 
   @Post('departments')
-  @RequireAnyPermission('hr', 'hrEmployees')
+  @RequireAnyPermission('hrEmployees', 'settings', 'canManageSettings')
   createDepartment(@Body() payload: UpsertHrMasterDataDto, @Req() req: RequestWithAuth) {
     return this.hr.upsertMasterData('departments', null, payload, req.authContext!);
   }
 
   @Put('departments/:id')
-  @RequireAnyPermission('hr', 'hrEmployees')
+  @RequireAnyPermission('hrEmployees', 'settings', 'canManageSettings')
   updateDepartment(@Param('id', ParseIntPipe) id: number, @Body() payload: UpsertHrMasterDataDto, @Req() req: RequestWithAuth) {
     return this.hr.upsertMasterData('departments', id, payload, req.authContext!);
   }
 
   @Delete('departments/:id')
-  @RequireAnyPermission('hr', 'hrEmployees')
+  @RequireAnyPermission('hrEmployees', 'settings', 'canManageSettings')
   deactivateDepartment(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {
     return this.hr.deactivateMasterData('departments', id, req.authContext!);
   }
 
   @Get('job-titles')
-  @RequireAnyPermission('hr', 'hrEmployees')
+  @RequireAnyPermission('hrEmployees', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'settings', 'canManageSettings')
   listJobTitles(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth) {
     return this.hr.listMasterData('job-titles', query, req.authContext!);
   }
 
   @Post('job-titles')
-  @RequireAnyPermission('hr', 'hrEmployees')
+  @RequireAnyPermission('hrEmployees', 'settings', 'canManageSettings')
   createJobTitle(@Body() payload: UpsertHrMasterDataDto, @Req() req: RequestWithAuth) {
     return this.hr.upsertMasterData('job-titles', null, payload, req.authContext!);
   }
 
   @Put('job-titles/:id')
-  @RequireAnyPermission('hr', 'hrEmployees')
+  @RequireAnyPermission('hrEmployees', 'settings', 'canManageSettings')
   updateJobTitle(@Param('id', ParseIntPipe) id: number, @Body() payload: UpsertHrMasterDataDto, @Req() req: RequestWithAuth) {
     return this.hr.upsertMasterData('job-titles', id, payload, req.authContext!);
   }
 
   @Delete('job-titles/:id')
-  @RequireAnyPermission('hr', 'hrEmployees')
+  @RequireAnyPermission('hrEmployees', 'settings', 'canManageSettings')
   deactivateJobTitle(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {
     return this.hr.deactivateMasterData('job-titles', id, req.authContext!);
   }
 
   @Get('positions')
-  @RequireAnyPermission('hr', 'hrEmployees')
+  @RequireAnyPermission('hrEmployees', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'settings', 'canManageSettings')
   listPositions(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth) {
     return this.hr.listMasterData('positions', query, req.authContext!);
   }
 
   @Post('positions')
-  @RequireAnyPermission('hr', 'hrEmployees')
+  @RequireAnyPermission('hrEmployees', 'settings', 'canManageSettings')
   createPosition(@Body() payload: UpsertHrMasterDataDto, @Req() req: RequestWithAuth) {
     return this.hr.upsertMasterData('positions', null, payload, req.authContext!);
   }
 
   @Put('positions/:id')
-  @RequireAnyPermission('hr', 'hrEmployees')
+  @RequireAnyPermission('hrEmployees', 'settings', 'canManageSettings')
   updatePosition(@Param('id', ParseIntPipe) id: number, @Body() payload: UpsertHrMasterDataDto, @Req() req: RequestWithAuth) {
     return this.hr.upsertMasterData('positions', id, payload, req.authContext!);
   }
 
   @Delete('positions/:id')
-  @RequireAnyPermission('hr', 'hrEmployees')
+  @RequireAnyPermission('hrEmployees', 'settings', 'canManageSettings')
   deactivatePosition(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {
     return this.hr.deactivateMasterData('positions', id, req.authContext!);
   }
@@ -585,25 +585,25 @@ export class HrController {
   }
 
   @Get('holidays')
-  @RequirePermissions('hr')
+  @RequireAnyPermission('hrEmployees', 'hrAttendance', 'hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'settings', 'canManageSettings')
   listHolidays(@Query() query: Record<string, unknown>, @Req() req: RequestWithAuth) {
     return this.hr.listHolidays(query, req.authContext!);
   }
 
   @Post('holidays')
-  @RequirePermissions('hr')
+  @RequireAnyPermission('hrEmployees', 'hrPayrollManage', 'settings', 'canManageSettings')
   createHoliday(@Body() payload: UpsertHolidayDto, @Req() req: RequestWithAuth) {
     return this.hr.upsertHoliday(null, payload, req.authContext!);
   }
 
   @Put('holidays/:id')
-  @RequirePermissions('hr')
+  @RequireAnyPermission('hrEmployees', 'hrPayrollManage', 'settings', 'canManageSettings')
   updateHoliday(@Param('id', ParseIntPipe) id: number, @Body() payload: UpsertHolidayDto, @Req() req: RequestWithAuth) {
     return this.hr.upsertHoliday(id, payload, req.authContext!);
   }
 
   @Delete('holidays/:id')
-  @RequirePermissions('hr')
+  @RequireAnyPermission('hrEmployees', 'hrPayrollManage', 'settings', 'canManageSettings')
   deleteHoliday(@Param('id', ParseIntPipe) id: number, @Req() req: RequestWithAuth) {
     return this.hr.deleteHoliday(id, req.authContext!);
   }

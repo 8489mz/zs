@@ -15,7 +15,7 @@ import { createPasswordRecord } from '../../../core/auth/utils/password-hasher';
 import { assertSecurePasscode } from '../../../core/auth/utils/password-policy';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
 import { type RawBuilder } from 'kysely';
-import { toId, clean, normalizeEmployeeNo, isUniqueViolation, normalizeDateOnly, tenantBookDigits, hasHrPermission, normalizeTimeOnly, type CompensationType, type OvertimePolicy } from '../hr-helpers';
+import { toId, clean, normalizeEmployeeNo, isUniqueViolation, normalizeDateOnly, tenantBookDigits, hasHrPermission, canViewSalary, normalizeTimeOnly, type CompensationType, type OvertimePolicy } from '../hr-helpers';
 
 /**
  * HrEmployeesService — slice H1 of the hr split.
@@ -181,18 +181,20 @@ export class HrEmployeesService {
       result.rows.map((row) => Number(row.id)),
       String(auth.tenantId || ''),
     );
+    const canViewEmployeeFiles = hasHrPermission(auth, 'hrEmployees') || auth.permissions.includes('*');
+    const canViewSalaryFields = canViewSalary(auth) || auth.permissions.includes('*');
     let rows = result.rows.map((row) => ({
       id: String(row.id),
       employeeNo: clean(row.employee_no),
-      nationalId: clean(row.national_id),
+      nationalId: canViewEmployeeFiles ? clean(row.national_id) : '',
       // الرمز نفسه لا يُعاد أبداً — حالة وجوده فقط (البند O20)
       hasPinCode: Boolean(row.pin_hash),
       firstName: clean(row.first_name),
       lastName: clean(row.last_name),
       displayName: clean(row.display_name) || `${clean(row.first_name)} ${clean(row.last_name)}`.trim(),
       status: clean(row.status) || 'active',
-      phone: clean(row.primary_phone),
-      mobile: clean(row.primary_phone),
+      phone: canViewEmployeeFiles ? clean(row.primary_phone) : '',
+      mobile: canViewEmployeeFiles ? clean(row.primary_phone) : '',
       userId: row.user_id ? String(row.user_id) : '',
       username: clean(row.username),
       departmentId: row.department_id ? String(row.department_id) : '',
@@ -208,24 +210,24 @@ export class HrEmployeesService {
       hireDate: clean(row.hire_date_text),
       compensationType: clean(row.compensation_type) || 'monthly',
       payFrequency: clean(row.pay_frequency) || 'monthly',
-      hourlyRate: row.hourly_rate != null ? Number(row.hourly_rate) : null,
+      hourlyRate: canViewSalaryFields && row.hourly_rate != null ? Number(row.hourly_rate) : null,
       expectedDailyHours: row.expected_daily_hours != null ? Number(row.expected_daily_hours) : null,
       scheduledCheckInTime: clean(row.scheduled_check_in_time),
       scheduledCheckOutTime: clean(row.scheduled_check_out_time),
       graceMinutes: Number(row.grace_minutes || 0),
       overtimePolicy: clean(row.overtime_policy) || 'review_only',
       attendancePolicy: clean(row.attendance_policy) || 'strict',
-      commissionType: clean(row.commission_type) || 'inherit',
-      commissionValue: row.commission_value == null ? null : Number(row.commission_value),
-      commissionTarget: row.commission_target == null ? null : Number(row.commission_target),
+      commissionType: canViewSalaryFields ? (clean(row.commission_type) || 'inherit') : 'inherit',
+      commissionValue: canViewSalaryFields && row.commission_value != null ? Number(row.commission_value) : null,
+      commissionTarget: canViewSalaryFields && row.commission_target != null ? Number(row.commission_target) : null,
       delayPolicy: clean(row.delay_policy) || 'inherit',
-      hasSocialInsurance: row.has_social_insurance === true,
-      insuranceSalary: row.insurance_salary == null ? null : Number(row.insurance_salary),
-      hasIncomeTax: row.has_income_tax === true,
-      bankName: clean(row.bank_name),
-      bankAccountNumber: clean(row.bank_account_number),
-      iban: clean(row.iban),
-      bankSwiftCode: clean(row.bank_swift_code),
+      hasSocialInsurance: canViewSalaryFields ? row.has_social_insurance === true : false,
+      insuranceSalary: canViewSalaryFields && row.insurance_salary != null ? Number(row.insurance_salary) : null,
+      hasIncomeTax: canViewSalaryFields ? row.has_income_tax === true : false,
+      bankName: canViewEmployeeFiles ? clean(row.bank_name) : '',
+      bankAccountNumber: canViewEmployeeFiles ? clean(row.bank_account_number) : '',
+      iban: canViewEmployeeFiles ? clean(row.iban) : '',
+      bankSwiftCode: canViewEmployeeFiles ? clean(row.bank_swift_code) : '',
       annualLeaveBalance: row.annual_leave_balance == null ? 21 : Number(row.annual_leave_balance),
       // INV-LEAVE-BALANCE-NOT-DEDUCTING: reconciled against the
       // approved requests — never the stored counter raw.
@@ -233,7 +235,7 @@ export class HrEmployeesService {
         row.used_annual_leaves == null ? 0 : Number(row.used_annual_leaves),
         reconciledUsedByEmployee.get(Number(row.id)) || 0,
       ),
-      notes: clean(row.notes),
+      notes: canViewEmployeeFiles ? clean(row.notes) : '',
     }));
     if (search) {
       rows = rows.filter((row) => [row.employeeNo, row.displayName, row.username, row.departmentName, row.jobTitleName, row.phone].some((value) => value && value.toLowerCase().includes(search)));

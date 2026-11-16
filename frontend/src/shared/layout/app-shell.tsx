@@ -9,7 +9,7 @@ import { authApi } from '@/shared/api/auth';
 import { resetAuthenticatedClient } from '@/lib/query-client-session';
 import { DEFAULT_STORE_NAME, useAuthStore } from '@/stores/auth-store';
 import { navigationItems } from '@/app/router/registry';
-import { canAccessNavigationItem, matchesNavigationSearch, isDesktopOfflineApp, isPlatformAdmin } from '@/app/router/access';
+import { canAccessNavigationItem, canAccessPath, getHrHomePath, matchesNavigationSearch, isDesktopOfflineApp, isPlatformAdmin } from '@/app/router/access';
 import { userHasAnyPermission } from '@/shared/hooks/use-permission';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { PasswordRotationGate } from '@/shared/system/password-rotation-gate';
@@ -1137,7 +1137,7 @@ export function AppShell({ children }: PropsWithChildren) {
 
         return true;
       })
-      .map((item) => ({ ...item, label: labelOverrides[item.key] || t(`sidebar.${item.key}`, item.label) }))
+      .map((item) => ({ ...item, to: item.key === 'hr' ? getHrHomePath(user) : item.to, label: labelOverrides[item.key] || t(`sidebar.${item.key}`, item.label) }))
       .sort((a, b) => {
         const aIndex = preferredOrder.indexOf(a.key);
         const bIndex = preferredOrder.indexOf(b.key);
@@ -2046,7 +2046,7 @@ export function AppShell({ children }: PropsWithChildren) {
       if (isTypingTarget(event.target)) return;
       
       // Quick Attendance: Alt + Shift + F9
-      if (event.altKey && event.shiftKey && event.key === 'F9') {
+      if (event.altKey && event.shiftKey && event.key === 'F9' && canAccessPath(user, '/hr/attendance')) {
         event.preventDefault();
         setQuickAttendanceOpen(true);
         return;
@@ -2375,7 +2375,7 @@ export function AppShell({ children }: PropsWithChildren) {
       {!isPosRoute && !isStandalonePosTerminal() && (isMobileScreen || !isPosChromeHidden) && <MobileBottomNav />}
       <PasswordRotationGate />
       <PwaInstallBanner />
-      <QuickAttendanceShortcut open={quickAttendanceOpen} onClose={() => setQuickAttendanceOpen(false)} />
+      {canAccessPath(user, '/hr/attendance') && <QuickAttendanceShortcut open={quickAttendanceOpen} onClose={() => setQuickAttendanceOpen(false)} />}
       <Suspense fallback={null}>
         {canQueryOnlineOrders && (isStorefrontEntitled || pendingOrdersCount > 0) ? <LiveOrderNotificationBanner /> : null}
         <GlobalSearchModal />

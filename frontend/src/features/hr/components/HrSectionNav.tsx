@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { useEffect, useRef, useState, MouseEvent as ReactMouseEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { canAccessPath, isAttendanceOnlyHrUser } from '@/shared/hooks/use-permission';
+import { useAuthStore } from '@/stores/auth-store';
 
 const HR_SECTIONS = [
   { label: 'نظرة عامة', shortLabel: 'نظرة عامة', to: '/hr', match: (pathname: string) => pathname === '/hr' },
@@ -19,6 +21,12 @@ const HR_SECTIONS = [
 export function HrSectionNav() {
   const { t: __t } = useTranslation();
   const location = useLocation();
+  const user = useAuthStore((state) => state.user);
+  const attendanceOnly = isAttendanceOnlyHrUser(user);
+  const visibleSections = HR_SECTIONS.filter((section) => {
+    if (section.to === '/hr' && attendanceOnly) return false;
+    return canAccessPath(user, section.to);
+  });
   const navRef = useRef<HTMLDivElement | null>(null);
   const activeLinkRef = useRef<HTMLAnchorElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -87,6 +95,10 @@ export function HrSectionNav() {
     isDragging.current = false;
   };
 
+  if (visibleSections.length <= 1) {
+    return null;
+  }
+
   return (
     <div className="hr-nav-wrapper" style={{ position: 'relative', width: '100%', minWidth: 0, display: 'flex', alignItems: 'center' }}>
       {/* Scroll Right Button (in RTL: moves toward beginning) */}
@@ -142,7 +154,7 @@ export function HrSectionNav() {
           userSelect: 'none',
         }}
       >
-        {HR_SECTIONS.map((section) => {
+        {visibleSections.map((section) => {
           const isActive = section.match(location.pathname);
           return (
             <Link

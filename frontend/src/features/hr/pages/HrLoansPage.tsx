@@ -6,6 +6,8 @@ import { QueryFeedback } from '@/shared/components/query-feedback';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { Button } from '@/shared/ui/button';
 import { useHasAnyPermission } from '@/shared/hooks/use-permission';
+import { canAccessPath } from '@/app/router/access';
+import { useAuthStore } from '@/stores/auth-store';
 import { DataTable } from '@/shared/ui/data-table';
 import type { HrEmployee, HrLoan, HrLoanInstallment } from '@/types/domain';
 import { getErrorMessage } from '@/lib/errors';
@@ -83,6 +85,7 @@ function formatRepaymentMethodLabel(method?: string, entryType?: string): string
 export function HrLoansPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
   const mutations = useHrMutations();
   const canViewLoans = useHasAnyPermission('hrLoans');
   const canManageLoans = useHasAnyPermission('hrLoans');
@@ -209,8 +212,8 @@ export function HrLoansPage() {
               <Button type="button" variant="secondary" onClick={() => window.dispatchEvent(new CustomEvent('open-quick-cash-advance'))}>
                 {t('hr.hr_loans_page.quick_advance_btn', "صرف سلفة سريعة (كاشير)")}
               </Button>
-              <Button variant="secondary" onClick={() => navigate('/hr/payroll')}>{t('hr.hr_loans_page.s4', "المرتبات")}</Button>
-              <Button variant="secondary" onClick={() => navigate('/hr/employees')}>{t('hr.hr_loans_page.s5', "الموظفون")}</Button>
+              {canAccessPath(user, '/hr/payroll') && <Button variant="secondary" onClick={() => navigate('/hr/payroll')}>{t('hr.hr_loans_page.s4', "المرتبات")}</Button>}
+              {canAccessPath(user, '/hr/employees') && <Button variant="secondary" onClick={() => navigate('/hr/employees')}>{t('hr.hr_loans_page.s5', "الموظفون")}</Button>}
             </div>
           }
         />

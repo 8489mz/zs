@@ -6,6 +6,7 @@ import { PageHeader } from '@/shared/components/page-header';
 import { QueryFeedback } from '@/shared/components/query-feedback';
 import { Button } from '@/shared/ui/button';
 import { DataTable } from '@/shared/ui/data-table';
+import { useHasAnyPermission } from '@/shared/hooks/use-permission';
 import { getErrorMessage } from '@/lib/errors';
 import { useHrLeaveTypes, useHrMutations, useHrWorkspace } from '@/features/hr/hooks/useHr';
 import { HrSettingsHealthSummaryCard } from '@/features/hr/pages/settings/HrSettingsHealthSummaryCard';
@@ -43,6 +44,7 @@ function shouldShowSection(activeSection: SettingsSection, section: SettingsSect
 export function HrSettingsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const canViewEmployees = useHasAnyPermission(['hrEmployees']);
   const workspace = useHrWorkspace({ page: 1, pageSize: 200 });
   const leaveTypesQuery = useHrLeaveTypes({ page: 1, pageSize: 200 });
   const mutations = useHrMutations();
@@ -118,8 +120,8 @@ export function HrSettingsPage() {
           description={t('hr.hr_settings_page.s1', "إدارة الهيكل التنظيمي، أنواع الإجازات، العطلات، وسياسات الحضور والمرتبات.")}
           actions={
             <div className="actions compact-actions">
-              <Button variant="secondary" onClick={() => navigate('/hr/employees/new')}>{t('hr.hr_settings_page.s2', "إضافة موظف")}</Button>
-              <Button variant="secondary" onClick={() => navigate('/hr/employees')}>{t('hr.hr_settings_page.s3', "رجوع للموظفين")}</Button>
+              {canViewEmployees && <Button variant="secondary" onClick={() => navigate('/hr/employees/new')}>{t('hr.hr_settings_page.s2', "إضافة موظف")}</Button>}
+              {canViewEmployees && <Button variant="secondary" onClick={() => navigate('/hr/employees')}>{t('hr.hr_settings_page.s3', "رجوع للموظفين")}</Button>}
             </div>
           }
         />

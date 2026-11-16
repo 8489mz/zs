@@ -6,8 +6,9 @@ import { Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { dashboardApi } from '../api/dashboard.api';
 import { useAuthStore } from '@/stores/auth-store';
-import { useHasFeature } from '@/shared/hooks/use-permission';
-import { isPlatformAdmin } from '@/app/router/access';
+import { useHasAnyPermission, useHasFeature } from '@/shared/hooks/use-permission';
+import { findWorkspaceFallbackRoute, isPlatformAdmin } from '@/app/router/access';
+import { navigationItems } from '@/app/router/registry';
 import { Button } from '@/shared/ui/button';
 import { SmartphoneIcon, BellIcon } from '@/shared/components/icons/AppIcons';
 import type { DashboardTopItem } from '../api/dashboard.types';
@@ -17,9 +18,10 @@ export function OwnerCompanionPage() {
   const user = useAuthStore((s) => s.user);
   const isPlatformAdminUser = isPlatformAdmin(user);
   const hasReportsFeature = useHasFeature('reports') || isPlatformAdminUser;
+  const canViewReports = useHasAnyPermission('reports') || isPlatformAdminUser;
 
-  if (!hasReportsFeature) {
-    return <Navigate to="/pos" replace />;
+  if (!hasReportsFeature || !canViewReports) {
+    return <Navigate to={findWorkspaceFallbackRoute(user, navigationItems) || '/pos'} replace />;
   }
 
   const tenant = useAuthStore((state) => state.tenant);

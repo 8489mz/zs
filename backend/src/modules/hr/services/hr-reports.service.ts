@@ -305,39 +305,45 @@ export class HrReportsService {
     const assetsRow = assets.rows[0] || {};
     const payrollRow = payroll.rows[0] || {};
 
+    const canSeeEmployees = hasHrPermission(auth, 'hrEmployees');
+    const canSeeAttendance = hasHrPermission(auth, 'hrAttendance');
+    const canSeeLoans = hasHrPermission(auth, 'hrLoans');
+    const canSeePayroll = ['hrPayrollView', 'hrPayrollManage', 'hrPayrollApprove', 'hrSalaryView', 'hrSalaryManage']
+      .some((permission) => hasHrPermission(auth, permission));
+
     return {
       period: { from: range.from, to: range.to, month: month || '' },
       summary: {
-        employeeCount: Number(employeeRow.employee_count || 0),
-        activeEmployeeCount: Number(employeeRow.active_count || 0),
+        employeeCount: canSeeEmployees ? Number(employeeRow.employee_count || 0) : 0,
+        activeEmployeeCount: canSeeEmployees ? Number(employeeRow.active_count || 0) : 0,
         attendance: {
-          presentCount: Number(attendanceRow.present_count || 0),
-          absentCount: Number(attendanceRow.absent_count || 0),
-          lateCount: Number(attendanceRow.late_count || 0),
-          halfDayCount: Number(attendanceRow.half_day_count || 0),
-          leaveCount: Number(attendanceRow.leave_count || 0),
+          presentCount: canSeeAttendance ? Number(attendanceRow.present_count || 0) : 0,
+          absentCount: canSeeAttendance ? Number(attendanceRow.absent_count || 0) : 0,
+          lateCount: canSeeAttendance ? Number(attendanceRow.late_count || 0) : 0,
+          halfDayCount: canSeeAttendance ? Number(attendanceRow.half_day_count || 0) : 0,
+          leaveCount: canSeeAttendance ? Number(attendanceRow.leave_count || 0) : 0,
         },
         leaves: {
-          pendingCount: Number(leavesRow.pending_count || 0),
-          approvedCount: Number(leavesRow.approved_count || 0),
-          rejectedCount: Number(leavesRow.rejected_count || 0),
-          cancelledCount: Number(leavesRow.cancelled_count || 0),
-          unpaidLeaveDays: Number(leavesRow.unpaid_leave_days || 0),
+          pendingCount: canSeeEmployees ? Number(leavesRow.pending_count || 0) : 0,
+          approvedCount: canSeeEmployees ? Number(leavesRow.approved_count || 0) : 0,
+          rejectedCount: canSeeEmployees ? Number(leavesRow.rejected_count || 0) : 0,
+          cancelledCount: canSeeEmployees ? Number(leavesRow.cancelled_count || 0) : 0,
+          unpaidLeaveDays: canSeeEmployees ? Number(leavesRow.unpaid_leave_days || 0) : 0,
         },
         loans: {
-          openLoanCount: Number(loansRow.open_loan_count || 0),
-          outstandingAmount: Number(loansRow.outstanding_amount || 0),
+          openLoanCount: canSeeLoans ? Number(loansRow.open_loan_count || 0) : 0,
+          outstandingAmount: canSeeLoans ? Number(loansRow.outstanding_amount || 0) : 0,
         },
         assets: {
-          assignedCount: Number(assetsRow.assigned_count || 0),
-          returnedCount: Number(assetsRow.returned_count || 0),
-          lostCount: Number(assetsRow.lost_count || 0),
-          damagedCount: Number(assetsRow.damaged_count || 0),
+          assignedCount: canSeeEmployees ? Number(assetsRow.assigned_count || 0) : 0,
+          returnedCount: canSeeEmployees ? Number(assetsRow.returned_count || 0) : 0,
+          lostCount: canSeeEmployees ? Number(assetsRow.lost_count || 0) : 0,
+          damagedCount: canSeeEmployees ? Number(assetsRow.damaged_count || 0) : 0,
         },
         payroll: {
-          runCount: Number(payrollRow.run_count || 0),
-          approvedRunCount: Number(payrollRow.approved_run_count || 0),
-          totalNetPay: Number(payrollRow.total_net_pay || 0),
+          runCount: canSeePayroll ? Number(payrollRow.run_count || 0) : 0,
+          approvedRunCount: canSeePayroll ? Number(payrollRow.approved_run_count || 0) : 0,
+          totalNetPay: canSeePayroll ? Number(payrollRow.total_net_pay || 0) : 0,
         },
       },
     };
