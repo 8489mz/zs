@@ -41,7 +41,9 @@ export function printSaleDocument(
   settings?: Partial<AppSettings> | null,
   pageSize: 'a4' | 'receipt' = 'receipt',
 ) {
-  printPostedSaleReceipt(sale, { pageSize, settings });
+  // Register + details prints are reprints of an already-posted sale:
+  // mark the receipt as a duplicate copy so it can never pass as the original.
+  printPostedSaleReceipt(sale, { pageSize, settings, isReprint: true });
 }
 
 export function getSalesNextStep(params: {
