@@ -17,6 +17,7 @@ import {
 } from '@/features/sales/lib/sales-workspace.helpers';
 import { useHasAnyPermission } from '@/shared/hooks/use-permission';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
+import { useAuthStore } from '@/stores/auth-store';
 import { isPosAvailable } from '@/features/pos';
 import { userDirectoryApi } from '@/shared/api/user-directory';
 import type { Sale } from '@/types/domain';
@@ -24,6 +25,8 @@ import { useTranslation } from "react-i18next";
 
 export function SalesWorkspace() {
     const { t } = useTranslation();
+  const user = useAuthStore((s) => s.user);
+  const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
   const [search, setSearch] = useState('');
   const [viewFilter, setViewFilter] = useState<SalesPaymentFilter>('all');
   const [cashierFilter, setCashierFilter] = useState('all');
@@ -217,7 +220,7 @@ export function SalesWorkspace() {
         title={t('sales.d35686')}
         description={cancelDescription}
         confirmLabel={t('sales.5b8465')}
-        managerPinRequired
+        managerPinRequired={!isAdminUser}
         managerPinLabel={t('sales.manager_pin_label', 'رمز اعتماد المدير أو كلمة مرور المدير')}
         managerPinHint={t('sales.3bec5f')}
         reasonRequired

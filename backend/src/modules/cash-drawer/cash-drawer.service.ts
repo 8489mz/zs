@@ -1286,7 +1286,13 @@ export class CashDrawerService {
         throw new AppError('لا يمكن تحويل النقدية إلى حساب الدرج نفسه؛ اختر حساب الخزنة الآمنة (1111) أو البنك', 'DRAWER_COUNTERPART_SAME_AS_CASH', 400);
       }
     }
-    if (isCashDrawerOutboundType(movementType)) await this.assertCashDrawerApproval(movementType, String(payload.managerPin || '').trim(), auth);
+    if (isCashDrawerOutboundType(movementType)) {
+      const isAdmin = auth.role === 'admin' || auth.role === 'super_admin';
+      const secret = String(payload.managerPin || '').trim();
+      if (!isAdmin || secret) {
+        await this.assertCashDrawerApproval(movementType, secret, auth);
+      }
+    }
     const signedAmount = toSignedCashDrawerAmount(movementType, amount);
 
     // The drawer movement and the expected_cash recomputation must be atomic and serialized on the

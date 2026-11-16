@@ -204,7 +204,7 @@ export class RestaurantAdvancedFnbController {
     const scope = requireTenantScope(req.authContext!);
     const userId = Number(req.authContext?.userId || 0);
     return this.service.recordManagerComp(
-      { ...scope, userId, role: req.authContext?.role, permissions: req.authContext?.permissions ?? [] },
+      { ...scope, userId, username: req.authContext?.username, role: req.authContext?.role, permissions: req.authContext?.permissions ?? [] },
       dto,
     );
   }

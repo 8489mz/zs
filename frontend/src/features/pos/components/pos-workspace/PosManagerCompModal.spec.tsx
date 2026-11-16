@@ -28,7 +28,7 @@
  * backend/test/critical/restaurant-manager-comp-gate.spec.ts (a
  * cashier fails 403 even with the correct PIN; a manager with the
  * correct PIN records the comp with the VERIFIED approver). */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PosManagerCompModal } from './PosManagerCompModal';
@@ -110,6 +110,7 @@ function managerNameInput(): HTMLInputElement {
 
 describe('PosManagerCompModal — manager PIN gate (S7)', () => {
   afterEach(() => {
+    cleanup();
     useAuthStore.setState({ user: null, tenant: null });
     vi.clearAllMocks();
   });
@@ -132,15 +133,20 @@ describe('PosManagerCompModal — manager PIN gate (S7)', () => {
     expect(screen.queryByDisplayValue('مدير الصالة')).toBeNull();
   });
 
-  it('(4) the manager-name field is pre-filled with the manager displayName', () => {
+  it('(4) an admin user gets auto-approval without typing a PIN, while pos_manager cashier still requires a PIN', () => {
     renderModal(manager);
     expect(managerNameInput().value).toBe('مدير الصالة');
-    // …and the approve button is still disabled until a PIN is typed.
+    expect(screen.queryByPlaceholderText('••••')).toBeNull();
+    expect(approveButton().disabled).toBe(false);
+
+    cleanup();
+    renderModal({ ...cashier, permissions: ['pos_manager'] });
+    expect(screen.getByPlaceholderText('••••')).toBeInTheDocument();
     expect(approveButton().disabled).toBe(true);
   });
 
-  it('(5) with a PIN typed, approve sends the PIN to the server and applies the comp', async () => {
-    const { onClose, onApplyComp } = renderModal(manager);
+  it('(5) with a PIN typed by pos_manager cashier, approve sends the PIN to the server and applies the comp', async () => {
+    const { onClose, onApplyComp } = renderModal({ ...cashier, permissions: ['pos_manager'] });
     const recordMock = restaurantAdvancedFnbApi.recordManagerComp as unknown as ReturnType<typeof vi.fn>;
     recordMock.mockResolvedValue({ success: true, comp: {}, message: 'ok' });
     fireEvent.change(pinInput(), { target: { value: '1234' } });

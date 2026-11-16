@@ -20,6 +20,7 @@ export interface TenantScope {
   // permissions are the caller's own, read from the session — never from
   // the request body. The controller forwards them from req.authContext.
   accountId?: string | null;
+  username?: string | null;
   role?: string | null;
   permissions?: string[];
 }
@@ -958,11 +959,19 @@ export class RestaurantAdvancedFnbService {
       // active admin's login password; R3-D stores the PIN hashed). The
       // recorded manager is the VERIFIED approver it returns, never the
       // client-supplied free-text name.
-      const approval = await authorizeManagerSecret(
-        trx,
-        { tenantId: scope.tenantId, accountId } as AuthContext,
-        dto.managerPin ?? '',
-      );
+      const isAdminCaller = String(scope.role || '') === 'admin' || String(scope.role || '') === 'super_admin';
+      const cleanPin = String(dto.managerPin || '').trim();
+      const approval = (!isAdminCaller || cleanPin)
+        ? await authorizeManagerSecret(
+            trx,
+            { tenantId: scope.tenantId, accountId } as AuthContext,
+            cleanPin,
+          )
+        : {
+            mode: 'account' as const,
+            authorizedById: Number(scope.userId || 0) || undefined,
+            authorizedByName: String(scope.username || 'المدير'),
+          };
 
       // INV-REST-FNB-CLAIMS-POST: a comp on a named sale posts against a
       // REAL, POSTED sale of this tenant only. The sale must already have

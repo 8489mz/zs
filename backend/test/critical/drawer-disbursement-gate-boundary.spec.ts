@@ -487,6 +487,37 @@ async function main(): Promise<void> {
     console.log('  cash_in with the cashier own password unchanged passed');
   }
 
+  // Part A7: admin/super_admin bypasses empty password on outbound drawer movements
+  // (but wrong supplied password still fails), while shift close still enforces
+  // mandatory password for all roles including admin.
+  {
+    const { pg, db } = await makeDrawerDb();
+    try {
+      await seedDrawerFoundation(db);
+      const adminRecord = await createPasswordRecord('admin-secret-1');
+      await (db as any).updateTable('users').set({ password_hash: adminRecord.hash, password_salt: adminRecord.salt }).where('id', '=', 1).execute();
+      await (db as any).insertInto('cashier_shifts').values({
+        id: 2, tenant_id: TENANT, account_id: ACCOUNT, doc_no: 'SHIFT-2',
+        opened_by: 1, status: 'open', branch_id: 1, location_id: 10,
+        opening_cash: 0, expected_cash: 0, created_at: SHIFT_OPENED_AT,
+      }).execute();
+      const { drawer } = buildDrawerServices(db);
+      await drawer.recordCashMovement(2, { type: 'cash_out', amount: 10, note: 'صرف إداري', managerPin: '', requestKey: 'gate-admin-cash-out-0001' } as never, adminAuth);
+      assert.equal((await treasuryRows(db, 2)).length, 1, 'admin outbound succeeds without password');
+      await expectCode(
+        drawer.recordCashMovement(2, { type: 'cash_out', amount: 10, note: 'صرف إداري', managerPin: 'wrong-pass', requestKey: 'gate-admin-cash-out-0002' } as never, adminAuth),
+        'CURRENT_USER_PASSWORD_INVALID',
+      );
+      await expectCode(
+        drawer.closeCashierShift(2, { countedCash: 0, note: 'close', managerPin: '' } as never, adminAuth),
+        'CURRENT_USER_PASSWORD_REQUIRED',
+      );
+    } finally {
+      await db.destroy(); (globalThis as any).gc?.();
+    }
+    console.log('  admin outbound bypasses empty secret while close stays mandatory passed');
+  }
+
   // Part B1: the cashier's own password presented as a manager PIN
   // does NOT open a posted-invoice edit.
   {

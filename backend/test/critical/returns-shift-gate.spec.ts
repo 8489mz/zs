@@ -493,6 +493,39 @@ async function main(): Promise<void> {
     console.log('  8. exchange cash-out with the setting on and no shift is rejected passed');
   }
 
+  // 8b. Large exchange cash-out (>= threshold 500) requires manager PIN for cashiers only; store_credit & admin bypass.
+  {
+    const { pg, db } = await makeDb();
+    try {
+      await seedFoundation(db);
+      await setShiftSetting(db, 'false');
+      await seedManagerPin(db, JSON.stringify(await hashManagerPin(MANAGER_PIN)));
+      await seedExchange(db);
+      await (db as any).updateTable('customers').set({ store_credit_balance: 700 }).where('id', '=', 1).execute();
+      const service = buildReturnsService(db);
+      const largeContext = {
+        returnId: 1, total: 700, customerId: 1, branchId: 1, locationId: 10,
+        refundBase: {
+          originalCashPaid: 700, originalNonCashPaid: 0, originalDebt: 0,
+          previousCashRefunded: 0, previousNonCashRefunded: 0, previousDebtReversed: 0,
+          hasCustomer: true,
+        },
+      };
+      await assert.rejects(
+        db.transaction().execute(async (trx) =>
+          service.settleExchangeReturn(trx as any, largeContext as any, 100, 'cash', cashierAuth)),
+        (err: any) => err && err.code === 'MANAGER_AUTH_REQUIRED',
+      );
+      await db.transaction().execute(async (trx) =>
+        service.settleExchangeReturn(trx as any, largeContext as any, 100, 'store_credit', cashierAuth));
+      await db.transaction().execute(async (trx) =>
+        service.settleExchangeReturn(trx as any, largeContext as any, 100, 'cash', adminAuth));
+    } finally {
+      await db.destroy();
+    }
+    console.log('  8b. exchange large cash-out PIN threshold + admin/store_credit bypass passed');
+  }
+
   // 9. Purchase return, setting false, cashier, no shift -> succeeds.
   {
     const { pg, db } = await makeDb();

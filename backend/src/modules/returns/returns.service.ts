@@ -663,9 +663,12 @@ export class ReturnsService {
   // for cash refunds, in tenant currency units. Coordinator-chosen
   // default 500, owner-set via the posLargeCashRefundThreshold
   // setting; 0 means every cash refund needs approval.
-  private async getLargeCashRefundThreshold(auth: AuthContext): Promise<number> {
+  private async getLargeCashRefundThreshold(
+    auth: AuthContext,
+    executor: Kysely<Database> | Transaction<Database> = this.db,
+  ): Promise<number> {
     const { tenantId } = requireTenantScope(auth);
-    const row = await sql<{ value?: string }>`select value from settings where key = 'posLargeCashRefundThreshold' and tenant_id = ${tenantId}`.execute(this.db);
+    const row = await sql<{ value?: string }>`select value from settings where key = 'posLargeCashRefundThreshold' and tenant_id = ${tenantId}`.execute(executor);
     const raw = String(row.rows?.[0]?.value || '').trim();
     if (raw) {
       try {
@@ -833,7 +836,11 @@ export class ReturnsService {
   }
 
   async prepareExchangeReturn(trx: Transaction<Database>, payload: CreateReturnDto, auth: AuthContext): Promise<ExchangeReturnContext> {
-    const approved = await this.verifyManagerAuthorization(trx, payload.managerPin || '', auth);
+    const cleanPin = String(payload.managerPin || '').trim();
+    const isAdminRole = auth.role === 'admin' || auth.role === 'super_admin';
+    const approved = cleanPin
+      ? await this.verifyManagerAuthorization(trx, cleanPin, auth)
+      : (isAdminRole ? (auth.username || 'المدير') : undefined);
     let context: ExchangeReturnContext | undefined;
     await this.createSaleReturn(trx, { ...payload, settlementMode: 'store_credit' }, normalizeReturnItems(payload), auth, approved,
       (result) => { context = result; });
@@ -842,7 +849,7 @@ export class ReturnsService {
   }
 
   async settleExchangeReturn(trx: Transaction<Database>, context: ExchangeReturnContext, saleTotal: number,
-    requested: 'cash' | 'card' | 'store_credit', auth: AuthContext): Promise<ReturnType<typeof settlePosExchange>> {
+    requested: 'cash' | 'card' | 'store_credit', auth: AuthContext, managerPin?: string): Promise<ReturnType<typeof settlePosExchange>> {
     const exchangeDigits = currencyMoneyDigits(await tenantBaseCurrency(trx, this.scope(auth).tenantId));
     const settlement = settlePosExchange(context.total, saleTotal, exchangeDigits);
     // INV-SALE-RETURN-CASH-ONLY: an exchange remainder refunds in
@@ -852,6 +859,14 @@ export class ReturnsService {
     const cashOnlyRequested = requested === 'store_credit' ? 'store_credit' : 'cash';
     const remainder = settlement.refundAmount > 0
       ? allocateRefundTenders({ ...context.refundBase, amount: settlement.refundAmount, requested: cashOnlyRequested, digits: exchangeDigits }) : [];
+    const cashRefundOut = remainder
+      .filter((line) => line.tender === 'cash')
+      .reduce((sum, line) => sum + Number(line.amount || 0), 0);
+    const isAdminRole = auth.role === 'admin' || auth.role === 'super_admin';
+    const cleanPin = String(managerPin || '').trim();
+    if (!isAdminRole && cashRefundOut > 0 && cashRefundOut >= await this.getLargeCashRefundThreshold(auth, trx)) {
+      await this.verifyManagerAuthorization(trx, cleanPin, auth);
+    }
     const allocations: Array<{ tender: RefundTender; amount: number }> = [];
     const retainedCredit = settlement.appliedCredit + remainder.filter((line) => line.tender === 'store_credit')
       .reduce((sum, line) => sum + line.amount, 0);

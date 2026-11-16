@@ -51,9 +51,11 @@ export function PosManagerCompModal({
   // `currentUser?.name` was always undefined); the server records the
   // VERIFIED approver, never this free text, so the field stays empty
   // for a non-manager instead of presenting them as the approver.
-  const isManagerUser =
+  const isAdminUser =
     currentUser?.role === 'admin' ||
-    currentUser?.role === 'super_admin' ||
+    currentUser?.role === 'super_admin';
+  const isManagerUser =
+    isAdminUser ||
     (currentUser?.permissions ?? []).includes('pos_manager') ||
     (currentUser?.permissions ?? []).includes('manage_restaurant');
   const [managerName, setManagerName] = useState<string>(
@@ -87,7 +89,7 @@ export function PosManagerCompModal({
     // server verifies it via authorizeManagerSecret and refuses the comp
     // without it. It accepts the shared manager PIN or an active admin's
     // login password.
-    if (!managerPin.trim()) {
+    if (!isAdminUser && !managerPin.trim()) {
       toast.warning('أدخل رمز PIN المدير أو كلمة مرور المدير للاعتماد');
       return;
     }
@@ -104,7 +106,7 @@ export function PosManagerCompModal({
         compType,
         amount: finalCompAmount,
         managerName: managerName.trim(),
-        managerPin: managerPin.trim(),
+        managerPin: isAdminUser ? '' : managerPin.trim(),
         tableNumber: currentTableNumber || undefined,
         itemsSummary: cartSummary || undefined,
         notes: notes.trim() || undefined,
@@ -171,7 +173,7 @@ export function PosManagerCompModal({
             // is typed. The confirm-time PIN check below stays as
             // defence in depth, and the server verifies the PIN and
             // the caller role before anything is recorded.
-            disabled={isSubmitting || finalCompAmount <= 0 || !managerPin.trim()}
+            disabled={isSubmitting || finalCompAmount <= 0 || (!isAdminUser && !managerPin.trim())}
             style={{
               minHeight: '34px',
               height: '34px',
@@ -268,30 +270,61 @@ export function PosManagerCompModal({
                   }}
                 />
               </div>
-              <div>
-                <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
-                  <LockIcon size={13} color="#170e5e" />
-                  <span>{__t('pos.pos_workspace.pos_manager_comp_modal.s11', __t('pos.pos_workspace.pos_manager_comp_modal.s11', "رمز PIN الأمني أو كلمة مرور المدير:"))}</span>
-                </label>
-                <input
-                  type="password"
-                  maxLength={6}
-                  value={managerPin}
-                  onChange={(e) => setManagerPin(e.target.value)}
-                  placeholder="••••"
-                  style={{
-                    width: '100%',
-                    height: '34px',
-                    borderRadius: '6px',
-                    border: '1px solid #cbd5e1',
-                    padding: '0 10px',
-                    fontSize: '12px',
-                    textAlign: 'center',
-                    boxSizing: 'border-box',
-                    background: '#ffffff',
-                  }}
-                />
-              </div>
+              {!isAdminUser ? (
+                <div>
+                  <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
+                    <LockIcon size={13} color="#170e5e" />
+                    <span>{__t('pos.pos_workspace.pos_manager_comp_modal.s11', __t('pos.pos_workspace.pos_manager_comp_modal.s11', "رمز PIN الأمني أو كلمة مرور المدير:"))}</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="secure-password-field"
+                    maxLength={6}
+                    value={managerPin}
+                    onChange={(e) => setManagerPin(e.target.value)}
+                    placeholder="••••"
+                    autoComplete="off"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    style={{
+                      width: '100%',
+                      height: '34px',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      padding: '0 10px',
+                      fontSize: '12px',
+                      textAlign: 'center',
+                      boxSizing: 'border-box',
+                      background: '#ffffff',
+                    }}
+                  />
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                  <div
+                    style={{
+                      height: '34px',
+                      borderRadius: '6px',
+                      border: '1px solid #bbf7d0',
+                      background: '#f0fdf4',
+                      color: '#15803d',
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '0 10px',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    اعتماد تلقائي بصلاحية المدير
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -402,10 +435,13 @@ export function PosManagerCompModal({
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <input
                     type="number"
+                    className="no-spin-arrows"
                     min="0.01"
                     max={currentCartTotal}
                     step="0.5"
                     value={customAmount}
+                    onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                    onFocus={(e) => e.currentTarget.select()}
                     onChange={(e) => setCustomAmount(e.target.value)}
                     placeholder={__t('pos.pos_workspace.pos_manager_comp_modal.s22', __t('pos.pos_workspace.pos_manager_comp_modal.s22', "أدخل مبلغ الضيافة"))}
                     style={{

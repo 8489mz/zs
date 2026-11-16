@@ -363,7 +363,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // (4) Comp with no PIN fails; nothing is recorded.
+  // (4) Comp with no PIN fails for non-admin manager (pos_manager cashier); admin bypasses cleanly.
   {
     await resetDb(pg);
     {
@@ -372,13 +372,17 @@ async function main(): Promise<void> {
       await seedPostedSaleJournal(db);
       const service = buildService(db);
       await expectAppError(
-        service.recordManagerComp(managerScope, compDto({ saleId: 1, managerPin: undefined })),
+        service.recordManagerComp(permCashierScope, compDto({ saleId: 1, managerPin: undefined })),
         'MANAGER_AUTH_REQUIRED',
         400,
       );
       assert.equal(await countRows(pg, 'restaurant_manager_comps'), 0);
       assert.equal(await countRows(pg, 'journal_entries', `WHERE source_type = 'manager_comp'`), 0);
-      console.log('  (4) comp with no PIN fails passed');
+
+      const adminOk: any = await service.recordManagerComp(managerScope, compDto({ saleId: 1, managerPin: undefined }));
+      assert.equal(adminOk.success, true);
+      assert.equal(await countRows(pg, 'restaurant_manager_comps'), 1);
+      console.log('  (4) non-admin manager no PIN fails & admin bypasses passed');
     }
   }
 

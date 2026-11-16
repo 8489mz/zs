@@ -134,7 +134,8 @@ export function CashDrawerPage() {
   // close, so the PIN is required for those only. Money-IN movements
   // (cash_in, safe_replenishment) post with no secret — the dialog
   // hides the PIN field and sends ''.
-  const isPinRequired = !isMovement || isOutboundMovement;
+  const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
+  const isPinRequired = !isMovement || (isOutboundMovement && !isAdminUser);
 
   return (
     <div className="page-stack page-shell cash-drawer-page" dir="rtl">

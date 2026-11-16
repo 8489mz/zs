@@ -908,7 +908,7 @@ export class CreateSaleService {
 
       if (exchange) {
         const settlement = await this.returnsService.settleExchangeReturn(trx, exchange, total,
-          payload.exchangeRefundMethod || 'cash', auth);
+          payload.exchangeRefundMethod || 'cash', auth, normalized.managerPin || payload.managerPin);
         normalized.storeCreditUsed = settlement.appliedCredit;
         if (!customer) throw new AppError('عميل الاستبدال غير موجود', 'CUSTOMER_NOT_FOUND', 404);
         const refreshed = await trx.selectFrom('customers').select('store_credit_balance')

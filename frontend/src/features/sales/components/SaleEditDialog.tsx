@@ -8,6 +8,7 @@ import { useUnsavedChangesGuard } from '@/shared/hooks/use-unsaved-changes-guard
 import { formatCurrency } from '@/lib/format';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
+import { useAuthStore } from '@/stores/auth-store';
 import type { Sale } from '@/types/domain';
 import { useTranslation } from "react-i18next";
 
@@ -31,6 +32,8 @@ interface SaleEditDialogProps {
 export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', onCancel, onSave }: SaleEditDialogProps) {
   const { t: __t } = useTranslation();
   const { t } = useTranslation();
+  const user = useAuthStore((s) => s.user);
+  const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
   const [paymentType, setPaymentType] = useState('cash');
   const [paymentChannel, setPaymentChannel] = useState('cash');
   const [discount, setDiscount] = useState(0);
@@ -168,7 +171,7 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
       setLocalError(t('sales.bee06e'));
       return;
     }
-    if (!String(managerPin || '').trim()) {
+    if (!isAdminUser && !String(managerPin || '').trim()) {
       setLocalError(t('sales.d0c62a'));
       return;
     }
@@ -179,7 +182,7 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
       discount: Number(discount || 0),
       note,
       editReason: String(editReason || '').trim(),
-      managerPin: String(managerPin || '').trim(),
+      managerPin: isAdminUser ? '' : String(managerPin || '').trim(),
       items: normalizedItems,
     });
   };
@@ -272,25 +275,27 @@ export function SaleEditDialog({ open, sale, isBusy = false, errorMessage = '', 
               />
             </Field>
 
-            <Field label={t('sales.2249f4')}>
-              <input
-                type="text"
-                className="secure-password-field"
-                inputMode="numeric"
-                value={managerPin}
-                onChange={(e) => setManagerPin(e.target.value)}
-                disabled={isBusy}
-                placeholder={t('sales.f7fa23')}
-                autoComplete="off"
-                data-lpignore="true"
-                data-1p-ignore="true"
-                data-form-type="other"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
-              />
-            </Field>
+            {!isAdminUser && (
+              <Field label={t('sales.2249f4')}>
+                <input
+                  type="text"
+                  className="secure-password-field"
+                  inputMode="numeric"
+                  value={managerPin}
+                  onChange={(e) => setManagerPin(e.target.value)}
+                  disabled={isBusy}
+                  placeholder={t('sales.f7fa23')}
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+                />
+              </Field>
+            )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>

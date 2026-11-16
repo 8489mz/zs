@@ -189,19 +189,24 @@ async function main(): Promise<void> {
       console.log('  (2) controller cashier with an empty PIN fails 403 passed');
     }
 
-    // (3) Through the CONTROLLER, a manager caller with an empty PIN
-    // fails 400 MANAGER_AUTH_REQUIRED; nothing is recorded.
+    // (3) Through the CONTROLLER, a non-admin manager (pos_manager cashier)
+    // with an empty PIN fails 400 MANAGER_AUTH_REQUIRED; an admin caller
+    // approves directly via verified admin session without re-entering PIN.
     {
       await resetDb(pg);
       await seedBase(db);
       const controller = new RestaurantAdvancedFnbController(service);
       await expectAppError(
-        controller.recordManagerComp(reqFor('admin', [], 1), compDto({ managerPin: '' })),
+        controller.recordManagerComp(reqFor('cashier', ['pos_manager'], 3), compDto({ managerPin: '' })),
         'MANAGER_AUTH_REQUIRED',
         400,
       );
       assert.equal(await countComps(pg), 0, 'the refused comp must write nothing');
-      console.log('  (3) controller manager with an empty PIN fails passed');
+
+      const adminRes: any = await controller.recordManagerComp(reqFor('admin', [], 1), compDto({ managerPin: '' }));
+      assert.equal(adminRes.success, true);
+      assert.equal(await countComps(pg), 1, 'admin caller succeeds without redundant PIN');
+      console.log('  (3) controller pos_manager empty PIN fails & admin bypasses passed');
     }
 
     // (4) Through the CONTROLLER, a manager caller with a wrong PIN

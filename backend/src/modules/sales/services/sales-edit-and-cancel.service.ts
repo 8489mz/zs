@@ -361,7 +361,7 @@ export class SalesEditAndCancelService {
       // a POS sale still blocks it (fail closed).
       postCloseEdit = originalShift ? String(originalShift.status || '') !== 'open' : false;
       postCloseShiftId = postCloseEdit && originalShift ? Number(originalShift.id) : null;
-      if (postCloseEdit) {
+      if (postCloseEdit && !isAdmin) {
         if (!managerPin) throw new AppError('رمز اعتماد المدير مطلوب قبل تعديل فاتورة بعد إغلاق ورديتها.', 'MANAGER_AUTH_REQUIRED', 400);
         await this.authz.authorizeDiscountOverride(managerPin, auth, trx);
       }
@@ -1687,8 +1687,9 @@ export class SalesEditAndCancelService {
 
   async cancelSale(saleId: number, reason: string, managerPin: string, auth: AuthContext): Promise<Record<string, unknown>> {
     const scope = requireTenantScope(auth);
-    if (!managerPin) throw new AppError('رمز اعتماد المدير مطلوب لإلغاء الفاتورة.', 'MANAGER_AUTH_REQUIRED', 400);
-    await this.authz.authorizeDiscountOverride(managerPin, auth, this.db);
+    const isAdmin = auth.role === 'admin' || auth.role === 'super_admin';
+    if (!isAdmin && !managerPin) throw new AppError('رمز اعتماد المدير مطلوب لإلغاء الفاتورة.', 'MANAGER_AUTH_REQUIRED', 400);
+    if (!isAdmin || managerPin) await this.authz.authorizeDiscountOverride(managerPin, auth, this.db);
     await this.tx.runInTransaction(this.db, async (trx) => {
       // Cancel previously had no book-digits resolution: its reversal
       // residuals rounded with toFixed(2). Resolve the tenant's digits
