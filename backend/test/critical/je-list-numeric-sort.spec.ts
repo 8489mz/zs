@@ -141,7 +141,7 @@ async function main(): Promise<void> {
 
   // Case 3: source pins — service order, page default sort, column key.
   {
-    const service = readFileSync(resolve(__dirname, '../../src/modules/accounting/accounting.service.ts'), 'utf8');
+    const service = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/accounting-journals-read.service.ts'), 'utf8');
     const start = service.indexOf('async listJournalEntries(');
     const end = service.indexOf('async getJournalEntry(');
     assert.ok(start > 0 && end > start);

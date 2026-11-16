@@ -7,7 +7,7 @@ import { Database } from '../../../database/database.types';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { CreateAccountDto, UpdateAccountDto } from '../dto/accounting.dto';
 import { lockAccountingPeriod } from '../accounting-period-lock';
-import { AccountingTenantFoundationService } from '../../../accounting-tenant-foundation.service';
+import { AccountingTenantFoundationService } from '../accounting-tenant-foundation.service';
 
 /**
  * AccountingAccountsService — slice S3 of the accounting split.

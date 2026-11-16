@@ -1,14 +1,14 @@
-import { tenantBaseCurrency } from './accounting-currency';
-import { currencyMoneyDigits, roundMoney, type MoneyDigits } from './engines/money-minor-units.engine';
+import { roundMoney, type MoneyDigits } from './engines/money-minor-units.engine';
 
-import { assertHierarchyParent } from './accounting-boundaries';
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, Optional } from '@nestjs/common';
 import { Kysely, sql } from '../../database/kysely';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import {
+  CreateAccountDto,
+  UpdateAccountDto,
   CashMovementQueryDto,
   FinancialSummaryQueryDto,
   InventoryValueQueryDto,
@@ -19,16 +19,14 @@ import {
   UpdateAccountingSettingsDto,
   CreateManualJournalEntryDto,
   CreateBankStatementDto,
-  CreateBankStatementLineDto,
   ReconcileMatchDto,
   CreateBankFeeAdjustmentDto,
 } from './dto/accounting.dto';
 import { AccountingTenantFoundationService } from './accounting-tenant-foundation.service';
 import { AccountingPostingService } from './accounting-posting.service';
-import { lockAccountingPeriod } from './accounting-period-lock';
 import { resolveBusinessDateKey } from './engines/accounting-date.engine';
-import { nextAccountingDay } from './engines/accounting-date.engine';
-import type { PartnerType } from './accounting-types';
+import type { DraftJournalEntryInput, DraftJournalLineInput, OpeningBalanceAccount, OpeningBalanceLine, PartnerType } from './accounting-types';
+export { bankStatementAmountsEqual } from './accounting-types';
 import { AccountingJournalsReadService } from './services/accounting-journals-read.service';
 import { AccountingJournalsWriteService } from './services/accounting-journals-write.service';
 import { AccountingAccountsService } from './services/accounting-accounts.service';

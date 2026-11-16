@@ -14,8 +14,13 @@ function check(file: string, required: string[]): void {
   }
 }
 function run(): void {
-  check('accounting/accounting.service.ts', [
+  // Accounting split: the joins now live in the extracted services — the
+  // journal-entries/lines join in S3 (listAccounts), the bank-statement and
+  // journal-entries/lines joins in S10 (reconciliation workspace).
+  check('accounting/services/accounting-accounts.service.ts', [
     "join.onRef('je.id', '=', 'l.journal_entry_id').onRef('je.tenant_id', '=', 'l.tenant_id')",
+  ]);
+  check('accounting/services/accounting-bank-statements.service.ts', [
     "join.onRef('bs.id', '=', 'bsl.statement_id').onRef('bs.tenant_id', '=', 'bsl.tenant_id')",
     "join.onRef('je.id', '=', 'jel.journal_entry_id').onRef('je.tenant_id', '=', 'jel.tenant_id')",
   ]);

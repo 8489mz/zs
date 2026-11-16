@@ -355,7 +355,7 @@ async function main(): Promise<void> {
   // Case 9: source pin — the manual-journal slice goes through the
   // boundary at book digits, with no direct inserts and no 2dp bands.
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/accounting/accounting.service.ts'), 'utf8');
+    const source = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/accounting-journals-write.service.ts'), 'utf8');
     const start = source.indexOf('async createManualJournalEntry(');
     const end = source.indexOf('async reverseJournalEntry(');
     assert.ok(start > 0 && end > start);

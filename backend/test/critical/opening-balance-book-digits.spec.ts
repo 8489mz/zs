@@ -283,11 +283,14 @@ async function main(): Promise<void> {
   // Source pin: the preview->post slice routes through the boundary
   // at book digits, with no direct journal insert and no 2dp helper.
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/accounting/accounting.service.ts'), 'utf8');
+    // Source pin REWORKED at the accounting merge: the preview->post range
+    // lives in the S4 slice now, and the end marker createDraftJournalEntry
+    // moved to the S2 slice — the range runs from previewOpeningBalances to
+    // end-of-file (postOpeningBalances is the slice's last method).
+    const source = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/accounting-opening-balances.service.ts'), 'utf8');
     const start = source.indexOf('async previewOpeningBalances(');
-    const end = source.indexOf('async createDraftJournalEntry(');
-    assert.ok(start > 0 && end > start);
-    const body = source.slice(start, end);
+    assert.ok(start > 0);
+    const body = source.slice(start);
     assert.ok(body.includes('postDomainJournal('), 'opening-balance post must go through the posting boundary');
     assert.ok(body.includes('tenantBaseCurrency(this.db,'), 'preview resolves digits on the pool handle');
     assert.ok(body.includes('tenantBaseCurrency(trx,'), 'post resolves digits on the transaction handle');
