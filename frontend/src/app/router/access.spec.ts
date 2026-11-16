@@ -182,6 +182,41 @@ describe('router access guards', () => {
       useAuthStore.setState({ user: null, tenant: null });
     }
   });
+
+  it('opens delivery reps management on retail tenants on every plan, including starter (INV-DELIVERY-REPS-RETAIL-CORE)', () => {
+    const fullAdminUser: AuthUser = { ...adminUser, permissions: ['*'] };
+    const proTenant = {
+      id: 't-pro',
+      name: 'Pro Commerce',
+      activityType: 'retail_general',
+      plan_id: 'plan_pro',
+      features: ['sales', 'catalog', 'sessions', 'cashDrawer', 'purchases', 'inventory', 'reports', 'suppliers'],
+    } as any;
+    const basicTenant = {
+      id: 't-basic',
+      name: 'Basic Commerce',
+      activityType: 'retail_general',
+      plan_id: 'plan_basic',
+      features: ['sales', 'catalog', 'sessions', 'cashDrawer'],
+    } as any;
+
+    try {
+      // Retail core: delivery + rep settlement is a daily money flow for any retail shop,
+      // so deliveryReps is open by default on every plan — no explicit tenant feature needed.
+      useAuthStore.setState({ user: fullAdminUser, tenant: proTenant });
+      expect(tenantHasFeature('deliveryReps', proTenant, fullAdminUser)).toBe(true);
+      expect(hasRequiredFeature('/delivery-reps', fullAdminUser)).toBe(true);
+      expect(canAccessPath(fullAdminUser, '/delivery-reps')).toBe(true);
+
+      // Starter (plan_basic) gets it too — the gate was vertical + tenant.features, not plan.
+      useAuthStore.setState({ user: fullAdminUser, tenant: basicTenant });
+      expect(tenantHasFeature('deliveryReps', basicTenant, fullAdminUser)).toBe(true);
+      expect(hasRequiredFeature('/delivery-reps', fullAdminUser)).toBe(true);
+      expect(canAccessPath(fullAdminUser, '/delivery-reps')).toBe(true);
+    } finally {
+      useAuthStore.setState({ user: null, tenant: null });
+    }
+  });
 });
 
 // INV-IMPORT-FX-RATE-REGISTRATION (I9-E): the R11 search failure —
