@@ -326,18 +326,20 @@ async function main(): Promise<void> {
     console.log('  cash_out with no password fails closed passed');
   }
 
-  // 5. safe_drop with NO secret: fails CURRENT_USER_PASSWORD_REQUIRED
+  // 5. cashier safe_drop with NO secret: fails CURRENT_USER_PASSWORD_REQUIRED
   // before any write (the counterpart is valid, so the gate is the
-  // only thing that can reject it).
+  // only thing that can reject it). Same re-anchor as §4: the admin is
+  // exempt per INV-PIN-PASSWORD-FRICTION-POLICY; the cashier is not.
+  // The shift is opened BY the cashier (as in §3/§4).
   {
     const { pg, db } = await makeDb();
     try {
       await seedFoundation(db);
       await seedOperatorPassword(db);
-      await seedShift(db, 1, 1);
+      await seedShift(db, 1, 2);
       const { drawer } = buildServices(db);
       await assert.rejects(
-        drawer.recordCashMovement(1, { type: 'safe_drop', amount: 300, note: 'إيداع الخزينة', requestKey: 'safe-drop-nopw-key-001', counterpartAccountId: 1111 } as never, adminAuth),
+        drawer.recordCashMovement(1, { type: 'safe_drop', amount: 300, note: 'إيداع الخزينة', requestKey: 'safe-drop-nopw-key-001', counterpartAccountId: 1111 } as never, cashierAuth),
         (err: any) => err && err.code === 'CURRENT_USER_PASSWORD_REQUIRED',
       );
       assert.equal((await treasuryRows(db, 1)).length, 0, 'no treasury row is written');
@@ -402,7 +404,8 @@ async function main(): Promise<void> {
     assert.ok(helperSource.includes('export function isCashDrawerOutboundType'), 'the outbound helper exists');
     assert.ok(helperSource.includes("type === 'cash_out' || type === 'safe_drop'"), 'outbound is exactly cash_out + safe_drop');
     const serviceSource = readFileSync(resolve(here, '../../src/modules/cash-drawer/cash-drawer.service.ts'), 'utf8');
-    assert.ok(serviceSource.includes('if (isCashDrawerOutboundType(movementType)) await this.assertCashDrawerApproval'), 'the gate runs only for outbound movements');
+    assert.ok(serviceSource.includes('if (isCashDrawerOutboundType(movementType)) {'), 'the gate runs only for outbound movements');
+    assert.ok(serviceSource.includes('await this.assertCashDrawerApproval(movementType, secret, auth);'), 'the gate calls the approval check with the provided secret');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     // Line-anchored counts: the entry text itself mentions the #9 id,
     // so a substring split would count the mention as a second entry.
