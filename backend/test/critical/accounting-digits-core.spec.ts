@@ -144,10 +144,13 @@ function buildFiscalYear(db: Kysely<Database>): FiscalYearService {
   return service as FiscalYearService;
 }
 
+// The facade builds its 10 slices eagerly in the constructor, so the
+// Object.create shape (which skips the constructor) leaves every slice
+// field undefined and the delegates throw. Build through the real
+// constructor instead; the cases here only drive S1/S2 methods, which
+// need no foundation (validateBalancedLines uses no foundation/posting).
 function buildAccounting(db: Kysely<Database>): AccountingService {
-  const service = Object.create(AccountingService.prototype) as any;
-  service.db = db;
-  return service as AccountingService;
+  return new AccountingService(db, {} as any);
 }
 
 function buildTrialBalanceService(db: Kysely<Database>): TrialBalanceService {

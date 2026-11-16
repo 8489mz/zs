@@ -40,7 +40,9 @@ async function scenario(isBank: boolean, failLines: boolean) {
     return callback(tx);
   } }; } };
   const service = new AccountingService(db, {} as any);
-  (service as any).getBankStatement = async (id: number) => ({ statement: { id }, lines: [] });
+  // Split seam: createBankStatement re-reads through the S10 slice's
+  // getBankStatement (slice L223), not the facade method — stub the slice.
+  (service as any).bankStatementsService.getBankStatement = async (id: number) => ({ statement: { id }, lines: [] });
   const auth: any = { userId: 7, role: 'admin', permissions: [], tenantId: 'tenant-A', accountId: 'account-A' };
   const dto: any = {
     accountId: 5, statementNo: 'S1', statementDate: '2026-10-21',
