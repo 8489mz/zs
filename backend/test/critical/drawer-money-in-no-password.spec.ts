@@ -302,8 +302,9 @@ async function main(): Promise<void> {
     console.log('  cashier cash_in with no password succeeds passed');
   }
 
-  // 4. cash_out with NO secret: fails CURRENT_USER_PASSWORD_REQUIRED
-  // before any write.
+  // 4. cashier cash_out with NO secret: fails CURRENT_USER_PASSWORD_REQUIRED
+  // before any write. (Admin is exempt per INV-PIN-PASSWORD-FRICTION-POLICY,
+  // pinned by drawer-disbursement-gate-boundary.spec.ts; the cashier is not.)
   {
     const { pg, db } = await makeDb();
     try {
@@ -312,7 +313,7 @@ async function main(): Promise<void> {
       await seedShift(db, 1, 1);
       const { drawer } = buildServices(db);
       await assert.rejects(
-        drawer.recordCashMovement(1, { type: 'cash_out', amount: 10, note: 'صرف', requestKey: 'cash-out-nopw-key-001' } as never, adminAuth),
+        drawer.recordCashMovement(1, { type: 'cash_out', amount: 10, note: 'صرف', requestKey: 'cash-out-nopw-key-001' } as never, cashierAuth),
         (err: any) => err && err.code === 'CURRENT_USER_PASSWORD_REQUIRED',
       );
       assert.equal((await treasuryRows(db, 1)).length, 0, 'no treasury row is written');
