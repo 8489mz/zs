@@ -45,6 +45,7 @@ import { useVanItineraryOrder } from '@/features/delivery-reps/components/van-it
 import { useVanItineraryVisit } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-visit';
 import { useVanItineraryAddCustomer } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-add-customer';
 import { useVanItineraryNegativeVisit } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-negative-visit';
+import { useVanItineraryList } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-list';
 
 interface VanItineraryTabProps {
   itinerary: VanCustomerItineraryItem[];
@@ -93,67 +94,22 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
   const [statementModalCust, setStatementModalCust] = useState<VanCustomerItineraryItem | null>(null);
 
 
-  const filtered = useMemo(() => {
-    const rawSearch = filters.searchTerm.trim().toLowerCase();
-    const cleanSearch = rawSearch.replace(/^[c#]-?/, '');
-    const isPureNumeric = cleanSearch.length > 0 && /^\d+$/.test(cleanSearch);
-    const isExplicitCodeSearch = rawSearch.startsWith('c') || rawSearch.startsWith('#');
-
-    const matched = itinerary.filter((item) => {
-      // Day / schedule filter
-      if (!customerMatchesDay(item, filters.dayFilter, filters.todayArabicName)) {
-        return false;
-      }
-
-      if (filters.statusFilter !== 'all' && item.visitStatus !== filters.statusFilter) return false;
-      if (filters.routeFilter !== 'all' && item.route !== filters.routeFilter) return false;
-      if (!rawSearch) return true;
-
-      const codeDigits = (item.customerCode || '').replace(/\D/g, '');
-
-      // Explicit code prefix search (e.g. "c1", "c-1", "#1", "c-0001")
-      if (isExplicitCodeSearch && isPureNumeric) {
-        return codeDigits === cleanSearch || Number(codeDigits) === Number(cleanSearch);
-      }
-
-      // Normal multi-field search:
-      const matchesCode =
-        (item.customerCode || '').toLowerCase().includes(rawSearch) ||
-        (isPureNumeric && (codeDigits === cleanSearch || Number(codeDigits) === Number(cleanSearch)));
-
-      return (
-        matchesCode ||
-        item.customerName.toLowerCase().includes(rawSearch) ||
-        item.customerPhone.includes(rawSearch) ||
-        item.route.toLowerCase().includes(rawSearch) ||
-        (item.district && item.district.toLowerCase().includes(rawSearch))
-      );
-    });
-
-    // If searching by number (e.g. "1"), prioritize exact customer code matches to the very top!
-    if (isPureNumeric) {
-      return matched.sort((a, b) => {
-        const aDigits = (a.customerCode || '').replace(/\D/g, '');
-        const bDigits = (b.customerCode || '').replace(/\D/g, '');
-        const aExact = aDigits === cleanSearch || Number(aDigits) === Number(cleanSearch);
-        const bExact = bDigits === cleanSearch || Number(bDigits) === Number(cleanSearch);
-        if (aExact && !bExact) return -1;
-        if (!aExact && bExact) return 1;
-        return 0;
-      });
-    }
-
-    return matched;
-  }, [itinerary, filters.dayFilter, filters.todayArabicName, filters.statusFilter, filters.routeFilter, filters.searchTerm]);
-
+  const list = useVanItineraryList({
+    itinerary,
+    filters,
+    customDistrictOrder: order.customDistrictOrder,
+    customCustomerOrder: order.customCustomerOrder,
+    saveDistrictOrder: order.saveDistrictOrder,
+    saveCustomerOrder: order.saveCustomerOrder,
+  });
   // Dynamic Route Optimization (TSP)
   const [isOptimizeModalOpen, setIsOptimizeModalOpen] = useState(false);
   const [isOptimizingRoute, setIsOptimizingRoute] = useState(false);
   const [routeOptimizationResult, setRouteOptimizationResult] = useState<RouteOptimizationResult | null>(null);
 
   const handleRunRouteOptimization = async () => {
-    const targetCustomers = filtered.filter((c) => c.visitStatus === 'pending');
-    const custsToOptimize = targetCustomers.length > 0 ? targetCustomers : filtered;
+    const targetCustomers = list.filtered.filter((c) => c.visitStatus === 'pending');
+    const custsToOptimize = targetCustomers.length > 0 ? targetCustomers : list.filtered;
 
     if (custsToOptimize.length <= 1) {
       toast.info('يجب وجود عميلين على الأقل لتحسين خط السير');
@@ -232,137 +188,6 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
       setIsOptimizingRoute(false);
     }
   };
-
-  // 1. Group ALL filtered items by District to establish canonical itinerary ordering
-  const allDistrictGroups = useMemo(() => {
-    const groupsMap = new Map<string, VanCustomerItineraryItem[]>();
-
-    for (const item of filtered) {
-      const dName = (item.district || item.route || 'حي عام / بدون تحديد').trim();
-      if (!groupsMap.has(dName)) {
-        groupsMap.set(dName, []);
-      }
-      groupsMap.get(dName)!.push(item);
-    }
-
-    const sortedDistrictNames = Array.from(groupsMap.keys()).sort((a, b) => {
-      const idxA = order.customDistrictOrder.indexOf(a);
-      const idxB = order.customDistrictOrder.indexOf(b);
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
-      return a.localeCompare(b, 'ar');
-    });
-
-    return sortedDistrictNames.map((name) => {
-      const items = groupsMap.get(name)!;
-      const orderList = order.customCustomerOrder[name] || [];
-      const sortedItems = [...items].sort((a, b) => {
-        const idxA = orderList.indexOf(a.customerId);
-        const idxB = orderList.indexOf(b.customerId);
-        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-        if (idxA !== -1) return -1;
-        if (idxB !== -1) return 1;
-        return a.customerName.localeCompare(b.customerName, 'ar');
-      });
-
-      return {
-        name,
-        items: sortedItems,
-        totalCount: sortedItems.length,
-        visitedCount: sortedItems.filter((i) => i.visitStatus !== 'pending').length,
-      };
-    });
-  }, [filtered, order.customDistrictOrder, order.customCustomerOrder]);
-
-  // 2. Flatten ordered customers with their permanent global sequence number (1, 2, ... N)
-  const allSortedCustomers = useMemo(() => {
-    const list: Array<VanCustomerItineraryItem & { globalSeq: number }> = [];
-    let seq = 1;
-    for (const group of allDistrictGroups) {
-      for (const item of group.items) {
-        list.push({ ...item, globalSeq: seq++ });
-      }
-    }
-    return list;
-  }, [allDistrictGroups]);
-
-  const totalPages = Math.ceil(allSortedCustomers.length / filters.pageSize) || 1;
-  const startIdx = (filters.currentPage - 1) * filters.pageSize;
-  const paginatedItems = useMemo(() => {
-    return allSortedCustomers.slice(startIdx, startIdx + filters.pageSize);
-  }, [allSortedCustomers, startIdx, filters.pageSize]);
-
-  // 3. Group ONLY the items of the current page (10 items) by District for lightning-fast mobile rendering
-  const districtGroups = useMemo(() => {
-    const groupsMap = new Map<string, Array<VanCustomerItineraryItem & { globalSeq: number }>>();
-
-    for (const item of paginatedItems) {
-      const dName = (item.district || item.route || 'حي عام / بدون تحديد').trim();
-      if (!groupsMap.has(dName)) {
-        groupsMap.set(dName, []);
-      }
-      groupsMap.get(dName)!.push(item);
-    }
-
-    const result: Array<{
-      name: string;
-      items: Array<VanCustomerItineraryItem & { globalSeq: number }>;
-      totalCount: number;
-      visitedCount: number;
-    }> = [];
-
-    for (const group of allDistrictGroups) {
-      const pageItems = groupsMap.get(group.name);
-      if (pageItems && pageItems.length > 0) {
-        result.push({
-          name: group.name,
-          items: pageItems,
-          totalCount: group.totalCount,
-          visitedCount: group.visitedCount,
-        });
-      }
-    }
-
-    return result;
-  }, [paginatedItems, allDistrictGroups]);
-
-  const moveDistrict = (districtName: string, dir: 'up' | 'down') => {
-    const currentOrder = allDistrictGroups.map((g) => g.name);
-    const idx = currentOrder.indexOf(districtName);
-    if (idx === -1) return;
-    const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
-    if (targetIdx < 0 || targetIdx >= currentOrder.length) return;
-    const newOrder = [...currentOrder];
-    const temp = newOrder[idx];
-    newOrder[idx] = newOrder[targetIdx];
-    newOrder[targetIdx] = temp;
-    saveDistrictOrder(newOrder);
-    toast.success(`تم ${dir === 'up' ? 'تقديم' : 'تأخير'} ${districtName}`);
-  };
-
-  const moveCustomer = (districtName: string, customerId: number, dir: 'up' | 'down') => {
-    const grp = allDistrictGroups.find((g) => g.name === districtName);
-    if (!grp) return;
-    const currentIds = grp.items.map((i) => i.customerId);
-    const idx = currentIds.indexOf(customerId);
-    if (idx === -1) return;
-    const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
-    if (targetIdx < 0 || targetIdx >= currentIds.length) return;
-    const newIds = [...currentIds];
-    const temp = newIds[idx];
-    newIds[idx] = newIds[targetIdx];
-    newIds[targetIdx] = temp;
-    saveCustomerOrder(districtName, newIds);
-  };
-
-
-
-  // KPIs
-  const total = itinerary.length;
-  const positiveCount = itinerary.filter((i) => i.visitStatus === 'positive').length;
-  const negativeCount = itinerary.filter((i) => i.visitStatus === 'negative').length;
-  const pendingCount = total - positiveCount - negativeCount;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: visit.selectedCustomerForHub ? '6px' : '10px', paddingBottom: visit.selectedCustomerForHub ? '85px' : '24px' }}>
@@ -1242,7 +1067,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
           >
             <CheckCircleIcon size={12} color={filters.statusFilter === 'positive' ? '#ffffff' : '#166534'} />
             <span style={{ fontSize: '10px', color: filters.statusFilter === 'positive' ? '#ffffff' : '#166534', fontWeight: 700, whiteSpace: 'nowrap' }}>{t('delivery_reps.van_itinerary_tab.s39', "تم البيع:")}</span>
-            <strong style={{ fontSize: '12px', fontWeight: 900, color: filters.statusFilter === 'positive' ? '#ffffff' : '#15803d' }}>{positiveCount}</strong>
+            <strong style={{ fontSize: '12px', fontWeight: 900, color: filters.statusFilter === 'positive' ? '#ffffff' : '#15803d' }}>{list.positiveCount}</strong>
           </div>
 
           <div
@@ -1267,7 +1092,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
           >
             <XCircleIcon size={12} color={filters.statusFilter === 'negative' ? '#ffffff' : '#991b1b'} />
             <span style={{ fontSize: '10px', color: filters.statusFilter === 'negative' ? '#ffffff' : '#991b1b', fontWeight: 700, whiteSpace: 'nowrap' }}>{t('delivery_reps.van_itinerary_tab.s41', "سلبية:")}</span>
-            <strong style={{ fontSize: '12px', fontWeight: 900, color: filters.statusFilter === 'negative' ? '#ffffff' : '#b91c1c' }}>{negativeCount}</strong>
+            <strong style={{ fontSize: '12px', fontWeight: 900, color: filters.statusFilter === 'negative' ? '#ffffff' : '#b91c1c' }}>{list.negativeCount}</strong>
           </div>
 
           <div
@@ -1292,7 +1117,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
           >
             <ClockIcon size={12} color={filters.statusFilter === 'pending' ? '#ffffff' : '#475569'} />
             <span style={{ fontSize: '10px', color: filters.statusFilter === 'pending' ? '#ffffff' : '#475569', fontWeight: 700, whiteSpace: 'nowrap' }}>{t('delivery_reps.van_itinerary_tab.s43', "متبقي:")}</span>
-            <strong style={{ fontSize: '12px', fontWeight: 900, color: filters.statusFilter === 'pending' ? '#ffffff' : '#0f172a' }}>{pendingCount}</strong>
+            <strong style={{ fontSize: '12px', fontWeight: 900, color: filters.statusFilter === 'pending' ? '#ffffff' : '#0f172a' }}>{list.pendingCount}</strong>
           </div>
         </div>
 
@@ -1386,7 +1211,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                 flexShrink: 0,
               }}
             >
-              {total}
+              {list.total}
             </span>
           </button>
 
@@ -1756,7 +1581,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                   : t('delivery_reps.van_itinerary_tab.s67', "الزيارات السلبية")}
               </strong>
             )}{' '}
-            ({filtered.length} {t('delivery_reps.van_itinerary_tab.s68', "محل)")}
+            ({list.filtered.length} {t('delivery_reps.van_itinerary_tab.s68', "محل)")}
           </span>
           <button
             type="button"
@@ -1784,7 +1609,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
         <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8', fontSize: '13px' }}>
           {t('delivery_reps.van_itinerary_tab.s70', "جاري تحميل خط السير...")}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : list.filtered.length === 0 ? (
         <div
           style={{
             backgroundColor: '#ffffff',
@@ -1800,19 +1625,19 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {/* Top Compact Pagination Bar - only shown if more than 1 page */}
-          {totalPages > 1 && (
+          {list.totalPages > 1 && (
             <VanItineraryPagination
-              startIdx={startIdx}
+              startIdx={list.startIdx}
               pageSize={filters.pageSize}
-              totalCount={allSortedCustomers.length}
+              totalCount={list.allSortedCustomers.length}
               currentPage={filters.currentPage}
-              totalPages={totalPages}
+              totalPages={list.totalPages}
               onPageChange={filters.setCurrentPage}
               onPageSizeChange={filters.handlePageSizeChange}
             />
           )}
 
-          {districtGroups.map((group, groupIdx) => {
+          {list.districtGroups.map((group, groupIdx) => {
             return (
               <div
                 key={group.name}
@@ -1869,7 +1694,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                       <button
                         type="button"
-                        onClick={() => moveDistrict(group.name, 'up')}
+                        onClick={() => list.moveDistrict(group.name, 'up')}
                         disabled={groupIdx === 0}
                         style={{
                           width: '26px',
@@ -1893,8 +1718,8 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                       </button>
                       <button
                         type="button"
-                        onClick={() => moveDistrict(group.name, 'down')}
-                        disabled={groupIdx === districtGroups.length - 1}
+                        onClick={() => list.moveDistrict(group.name, 'down')}
+                        disabled={groupIdx === list.districtGroups.length - 1}
                         style={{
                           width: '26px',
                           height: '24px',
@@ -1906,8 +1731,8 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                           backgroundColor: '#ffffff',
                           border: '1px solid #cbd5e1',
                           borderRadius: '6px',
-                          cursor: groupIdx === districtGroups.length - 1 ? 'not-allowed' : 'pointer',
-                          opacity: groupIdx === districtGroups.length - 1 ? 0.35 : 1,
+                          cursor: groupIdx === list.districtGroups.length - 1 ? 'not-allowed' : 'pointer',
+                          opacity: groupIdx === list.districtGroups.length - 1 ? 0.35 : 1,
                           color: '#1e293b',
                           boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                         }}
@@ -2074,7 +1899,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                               <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
                                 <button
                                   type="button"
-                                  onClick={() => moveCustomer(group.name, item.customerId, 'up')}
+                                  onClick={() => list.moveCustomer(group.name, item.customerId, 'up')}
                                   disabled={itemIdx === 0}
                                   style={{
                                     width: '24px',
@@ -2098,7 +1923,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => moveCustomer(group.name, item.customerId, 'down')}
+                                  onClick={() => list.moveCustomer(group.name, item.customerId, 'down')}
                                   disabled={itemIdx === group.items.length - 1}
                                   style={{
                                     width: '24px',
@@ -2657,11 +2482,11 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
 
       {/* Bottom Pagination Bar */}
       <VanItineraryPagination
-        startIdx={startIdx}
+        startIdx={list.startIdx}
         pageSize={filters.pageSize}
-        totalCount={allSortedCustomers.length}
+        totalCount={list.allSortedCustomers.length}
         currentPage={filters.currentPage}
-        totalPages={totalPages}
+        totalPages={list.totalPages}
         onPageChange={filters.setCurrentPage}
         onPageSizeChange={filters.handlePageSizeChange}
       />
