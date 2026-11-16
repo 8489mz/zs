@@ -305,12 +305,14 @@ async function main(): Promise<void> {
   // 4. cashier cash_out with NO secret: fails CURRENT_USER_PASSWORD_REQUIRED
   // before any write. (Admin is exempt per INV-PIN-PASSWORD-FRICTION-POLICY,
   // pinned by drawer-disbursement-gate-boundary.spec.ts; the cashier is not.)
+  // The shift is opened BY the cashier (as in §3): a cashier may not touch
+  // another user's shift (SHIFT_FORBIDDEN), which would fire before the gate.
   {
     const { pg, db } = await makeDb();
     try {
       await seedFoundation(db);
       await seedOperatorPassword(db);
-      await seedShift(db, 1, 1);
+      await seedShift(db, 1, 2);
       const { drawer } = buildServices(db);
       await assert.rejects(
         drawer.recordCashMovement(1, { type: 'cash_out', amount: 10, note: 'صرف', requestKey: 'cash-out-nopw-key-001' } as never, cashierAuth),
