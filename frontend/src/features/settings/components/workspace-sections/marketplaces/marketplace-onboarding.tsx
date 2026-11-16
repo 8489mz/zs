@@ -90,14 +90,9 @@ export const MarketplaceOnboardingTab: React.FC<MarketplaceOnboardingTabProps> =
   const { t } = useTranslation();
   const {
     onboardingQuery,
-    showEditOnboardingModal,
     setShowEditOnboardingModal,
-    onboardingTargetSection,
     setOnboardingTargetSection,
-    showLoaModal,
     setShowLoaModal,
-    loaLanguage,
-    setLoaLanguage,
     activePlatformGuide,
     setActivePlatformGuide,
   } = onboarding;

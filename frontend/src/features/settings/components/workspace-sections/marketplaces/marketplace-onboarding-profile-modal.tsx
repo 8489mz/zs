@@ -61,7 +61,7 @@ const sectionMeta: Record<string, { title: string; subtitle: string }> = {
   },
 };
 
-const EditOnboardingProfileModal: React.FC<EditOnboardingProfileModalProps> = React.memo(({
+export const EditOnboardingProfileModal: React.FC<EditOnboardingProfileModalProps> = React.memo(({
   open,
   initialData,
   targetSection,
