@@ -274,7 +274,8 @@ async function main(): Promise<void> {
     { file: 'backend/src/modules/settings/services/whatsapp-gateway.service.ts', reason: 'message text (amount formatted into a WhatsApp message), display only', toFixed2: 1, inlineRound: 0 },
     { file: 'backend/src/modules/storefront/services/marketplace-sync.service.ts', reason: 'marketplace fee/payout estimator (commercial fee tables; estimate for display/decision — order postings route through the canonical sale engines)', toFixed2: 0, inlineRound: 7 },
     { file: 'backend/src/modules/storefront/storefront-payment.service.ts', reason: 'payment-gateway signature string (gateway requires the 2dp format in the hash input; not a posting value)', toFixed2: 1, inlineRound: 0 },
-    { file: 'backend/src/modules/storefront/storefront.service.ts', reason: 'storefront display formatter (digits-aware: 3dp when book digits are 3, else 2dp/whole-EGP; display only)', toFixed2: 1, inlineRound: 0 },
+    { file: 'backend/src/modules/storefront/storefront.service.ts', reason: 'storefront display formatter (digits-aware: 3dp when book digits are 3, else 2dp/whole-EGP; display only)', toFixed2: 0, inlineRound: 0 },
+    { file: 'backend/src/modules/storefront/services/storefront-order-create.service.ts', reason: 'storefront display formatter (createOnlineOrder formatMoney, digits-aware: 3dp when book digits are 3, else 2dp/whole-EGP; display only)', toFixed2: 1, inlineRound: 0 },
     { file: 'backend/src/modules/tax-integration/services/eta-serializer/eta-serializer.service.ts', reason: 'ETA e-invoice document serialization (amounts already computed by canonical engines; document format)', toFixed2: 1, inlineRound: 0 },
     { file: 'backend/src/modules/tax-integration/services/zatca/zatca-phase2.service.ts', reason: 'ZATCA e-invoice document XML (SAR amounts at the spec 2dp; amounts already computed by canonical engines)', toFixed2: 21, inlineRound: 0 },
   ];
