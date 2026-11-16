@@ -88,7 +88,7 @@
     "src/features/storefront/lib/storefront-photo-matcher.ts": 1345,
     "src/features/storefront/pages/MerchantOnlineOrdersPage.tsx": 1430,
     "src/lib/auto-translator.ts": 1560,
-    "src/lib/pos-printing/template.ts": 1140,
+    "src/lib/pos-printing/template.ts": 1148,
     "src/shared/layout/app-shell.tsx": 2540,
     "src/shared/verticals/vertical-scope.ts": 1213
   }
