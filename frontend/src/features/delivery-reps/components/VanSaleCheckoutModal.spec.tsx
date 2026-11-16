@@ -9,8 +9,14 @@
  * WHAT IS DRIVEN (real modal, mocked i18n only): render the modal with a
  * 72.00 cart and assert the discount section.
  * - Case 1 (P7): canGiveDiscount={false} -> no discount control renders.
- * - Case 2 (P7): canGiveDiscount={true} -> the control renders and 2%
- *   applies locally (confirm passes cashDiscountAmount 1.44).
+ * - Case 2 (P7, contract updated by P3 INV-VAN-REP-DISCOUNT-CAP-TENANT-
+ *   SETTING): canGiveDiscount={true} + canGiveInvoiceDiscount={true} ->
+ *   the control renders and 2% applies locally (confirm passes
+ *   cashDiscountAmount 1.44). The invoice-discount section needs the
+ *   per-rep invoice permission too — canGiveDiscount alone no longer
+ *   opens it (user decision 2026-11-16 15:31).
+ * - Case 2b (P3): canGiveDiscount={true} + canGiveInvoiceDiscount=
+ *   {false} (per-line-only rep) -> no discount control renders.
  * - Case 3 (P7, fail closed): prop omitted -> no discount control.
  *
  * NOT DRIVEN: the server-side discount gate (van-sales.service.ts
@@ -68,13 +74,18 @@ describe('VanSaleCheckoutModal discount permission (P7)', () => {
     expect(screen.queryByText(DISCOUNT_TOGGLE)).toBeNull();
   });
 
-  it('case 2: canGiveDiscount={true} renders the control and 2% applies locally', () => {
-    const { onConfirmCheckout } = renderModal({ canGiveDiscount: true, customer: customerNoPhone });
+  it('case 2: canGiveDiscount={true} + canGiveInvoiceDiscount={true} renders the control and 2% applies locally', () => {
+    const { onConfirmCheckout } = renderModal({ canGiveDiscount: true, canGiveInvoiceDiscount: true, customer: customerNoPhone });
     fireEvent.click(screen.getByText(DISCOUNT_TOGGLE));
     fireEvent.click(screen.getByText(/2% \(1\.44/));
     fireEvent.click(screen.getByText(CONFIRM_LABEL));
     expect(onConfirmCheckout).toHaveBeenCalledTimes(1);
     expect(onConfirmCheckout.mock.calls[0][0].cashDiscountAmount).toBe(1.44);
+  });
+
+  it('case 2b: per-line-only rep (canGiveInvoiceDiscount={false}) sees no invoice-discount control', () => {
+    renderModal({ canGiveDiscount: true, canGiveInvoiceDiscount: false, customer: customerNoPhone });
+    expect(screen.queryByText(DISCOUNT_TOGGLE)).toBeNull();
   });
 
   it('case 3: prop omitted hides the discount control (fail closed)', () => {
