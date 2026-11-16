@@ -216,6 +216,11 @@ export interface AppSettings {
   printDeliveryRepOnReceipt?: boolean;
   vanSettlementRequireSupervisorPin?: boolean;
   vanSettlementBlindMode?: boolean;
+  // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the ONE tenant-level rep discount
+  // cap % (default 5, applies to all reps). The zod form schema and the backend
+  // settings round-trip already carry this key; the response type was the only
+  // place missing it, which broke the van admin page's read of the stored cap.
+  vanRepDiscountCapPercent?: number;
   printShowCustomer?: boolean;
   printShowDocumentNumber?: boolean;
   printShowOrderType?: boolean;

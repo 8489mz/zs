@@ -253,7 +253,7 @@ export function useVanSale({
           notes: payload.notes,
           gpsLat: payload.deliveryGpsLat,
           gpsLng: payload.deliveryGpsLng,
-          gpsMissingReason,
+          gpsMissingReason: payload.gpsMissingReason,
           deliveryProofPhoto: payload.deliveryProofPhoto,
           cartonsCount: payload.packagingBreakdown?.cartonsCount,
         });
@@ -291,7 +291,7 @@ export function useVanSale({
             notes: payload.notes,
             gpsLat: payload.deliveryGpsLat,
             gpsLng: payload.deliveryGpsLng,
-            gpsMissingReason,
+            gpsMissingReason: payload.gpsMissingReason,
             deliveryProofPhoto: payload.deliveryProofPhoto,
             cartonsCount: payload.packagingBreakdown?.cartonsCount,
           });
@@ -405,6 +405,7 @@ export function useVanSale({
     toggleCartItemBonus,
     changeCartItemUnit,
     updateCartQty,
+    updateCartLineDiscount,
     allAvailableCustomers,
     selectedCustomer,
     cartTotal,
@@ -446,6 +447,7 @@ export const SaleTab: React.FC<SaleTabProps> = ({
     setPaymentMethod,
     cart,
     updateCartQty,
+    updateCartLineDiscount,
     toggleCartItemBonus,
     changeCartItemUnit,
     cartTotal,
