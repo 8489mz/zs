@@ -33,7 +33,7 @@ export function normalizeDayKey(day?: string | null): string {
   return d;
 }
 
-function customerMatchesDay(
+export function customerMatchesDay(
   item: VanCustomerItineraryItem,
   targetDay: string,
   todayArabicName: string,

@@ -1,26 +1,9 @@
-import { useTranslation } from 'react-i18next';
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { CurrencySymbol } from '@/shared/ui/currency-symbol';
-import { Button } from '@/shared/ui/button';
-import { StandardDialog, StandardDialogFooter } from '@/shared/components/StandardDialog';
-import { toast } from '@/shared/components/system-alert';
+import React, { useState } from 'react';
 import {
-  vanSalesApi,
   VanCustomerItineraryItem,
   RepTargetMetrics,
   VanStockItem,
 } from '../api/van-sales.api';
-import {
-  MapPinIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  ClockIcon,
-  SearchIcon,
-  ArrowRightIcon,
-  ChevronDownIcon,
-  PlusIcon,
-  RotateCcwIcon,
-} from '@/shared/components/icons/AppIcons';
 import { VanCustomerStatementModal } from './VanCustomerStatementModal';
 import { VanStoreInventoryModal } from './VanStoreInventoryModal';
 import { VanTradeSurveyModal } from './VanTradeSurveyModal';
@@ -76,7 +59,6 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
   inventory,
   allAvailableCustomers,
 }) => {
-  const { t } = useTranslation();
   const filters = useVanItineraryFilters({ itinerary });
   const visit = useVanItineraryVisit({ activeVisit });
   const [inventoryCustomer, setInventoryCustomer] = useState<VanCustomerItineraryItem | null>(null);
