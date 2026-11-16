@@ -14,7 +14,6 @@
     "src/modules/accounting/services/van-and-delivery-posting.service.ts": 1041,
     "src/modules/ai-copilot/ai-copilot.service.ts": 1510,
     "src/modules/cash-drawer/cash-drawer.service.ts": 1706,
-    "src/modules/catalog/services/catalog-product.service.ts": 3285,
     "src/modules/contracting/contracting.controller.ts": 1363,
     "src/modules/contracting/contracting.service.ts": 1004,
     "src/modules/contracting/dto/contracting.dto.ts": 2615,
