@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ActionConfirmDialog } from '@/shared/components/action-confirm-dialog';
 import { StandardDialog } from '@/shared/components/StandardDialog';
@@ -24,9 +25,10 @@ import type { Sale } from '@/types/domain';
 import { useTranslation } from "react-i18next";
 
 export function SalesWorkspace() {
-    const { t } = useTranslation();
+  const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [viewFilter, setViewFilter] = useState<SalesPaymentFilter>('all');
   const [cashierFilter, setCashierFilter] = useState('all');
@@ -45,6 +47,10 @@ export function SalesWorkspace() {
 
   const canPrint = useHasAnyPermission('canPrint');
   const canEditInvoices = useHasAnyPermission('canEditInvoices');
+  // INV-RETURNS-FULL-HISTORY-SEARCH: the register's return action
+  // is gated on the same 'returns' permission the /returns route
+  // enforces (src/app/router/access.ts).
+  const canReturn = useHasAnyPermission('returns');
   const selectedSale = saleDetailQuery.data;
   const activeFilterLabel = getSalesViewFilterLabel(viewFilter);
   const totalItems = pagination?.totalItems || 0;
@@ -194,6 +200,9 @@ export function SalesWorkspace() {
             onCancel={canEditInvoices && selectedSale && selectedSale.status !== 'cancelled' ? () => {
               setSaleToCancel(selectedSale);
               setIsDetailOpen(false);
+            } : undefined}
+            onReturn={canReturn && selectedSale && selectedSale.status !== 'cancelled' ? () => {
+              navigate(`/returns?invoiceId=${selectedSale.id}`);
             } : undefined}
           />
         </StandardDialog>

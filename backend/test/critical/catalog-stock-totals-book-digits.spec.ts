@@ -237,14 +237,34 @@ async function main(): Promise<void> {
   // via roundMoney); no 2-decimal cut remains anywhere in the file,
   // and both consolidation legs still use the single computation at
   // book digits.
+  // The book-digits pin now spans the whole split (catalog-product split
+  // 2026-11-16): facade + types module + all 8 slices. The toFixed(2) /
+  // roundCurrency bans apply to every file; the stockMovementTotal call
+  // sites are counted across all files (9 total: archive 2, fashion 5,
+  // posting 1, write 1).
   {
-    const servicePath = resolve(__dirname, '../../src/modules/catalog/services/catalog-product.service.ts');
-    const source = readFileSync(servicePath, 'utf8');
-    const toFixedLines = source.split('\n').filter((line) => line.includes('toFixed(2)'));
-    assert.equal(toFixedLines.length, 0, `unexpected toFixed(2) site: ${toFixedLines.map((line) => line.trim()).join(' | ')}`);
-    const helperCalls = source.match(/stockMovementTotal\(/g) ?? [];
+    const serviceFiles = [
+      'catalog-product.service.ts',
+      'catalog-product-types.ts',
+      'catalog-product-posting.service.ts',
+      'catalog-product-offers.service.ts',
+      'catalog-product-style-code.service.ts',
+      'catalog-product-pos.service.ts',
+      'catalog-product-list.service.ts',
+      'catalog-product-archive.service.ts',
+      'catalog-product-write.service.ts',
+      'catalog-product-fashion.service.ts',
+    ];
+    const sources = serviceFiles.map((file) =>
+      readFileSync(resolve(__dirname, '../../src/modules/catalog/services', file), 'utf8'),
+    );
+    for (const [index, source] of sources.entries()) {
+      const toFixedLines = source.split('\n').filter((line) => line.includes('toFixed(2)'));
+      assert.equal(toFixedLines.length, 0, `unexpected toFixed(2) site in ${serviceFiles[index]}: ${toFixedLines.map((line) => line.trim()).join(' | ')}`);
+      assert.ok(!source.includes('roundCurrency'), `no roundCurrency helper may remain in ${serviceFiles[index]}`);
+    }
+    const helperCalls = sources.flatMap((source) => source.match(/stockMovementTotal\(/g) ?? []);
     assert.ok(helperCalls.length >= 9, `expected at least 9 stockMovementTotal call sites, found ${helperCalls.length}`);
-    assert.ok(!source.includes('roundCurrency'), 'no roundCurrency helper may remain in the catalog service');
   }
 
   console.log('catalog-stock-totals-book-digits: all cases passed');

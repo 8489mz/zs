@@ -144,13 +144,19 @@ export function CustomSelect({
     }
   }, [filteredOptions.length, value, canCreate]);
 
-  // Scroll highlighted item into view
+  // Scroll highlighted item into view. Guarded: the method does not
+  // exist in jsdom (and the `?.` only guards a null ref, not a missing
+  // method) — without the guard the dropdown crashes on open. Real
+  // browsers always have scrollIntoView, so behaviour is unchanged there.
   useEffect(() => {
-    if (isOpen && highlightedIndex >= 0 && itemRefs.current[highlightedIndex]) {
-      itemRefs.current[highlightedIndex]?.scrollIntoView({
-        block: 'nearest',
-        behavior: 'smooth',
-      });
+    if (isOpen && highlightedIndex >= 0) {
+      const el = itemRefs.current[highlightedIndex];
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({
+          block: 'nearest',
+          behavior: 'smooth',
+        });
+      }
     }
   }, [highlightedIndex, isOpen]);
 

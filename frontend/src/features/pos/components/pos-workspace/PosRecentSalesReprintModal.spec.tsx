@@ -97,6 +97,7 @@ describe('PosRecentSalesReprintModal', () => {
       expect.objectContaining({
         pageSize: 'receipt',
         cashierName: 'طاهر',
+        isReprint: true,
       })
     );
     printSpy.mockRestore();
@@ -135,6 +136,7 @@ describe('PosRecentSalesReprintModal', () => {
       expect.objectContaining({
         pageSize: 'receipt',
         cashierName: 'طاهر',
+        isReprint: true,
       })
     );
     printSpy.mockRestore();

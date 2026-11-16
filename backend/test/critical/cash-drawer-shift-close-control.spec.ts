@@ -30,7 +30,7 @@
  *   approver. Blind close keys off the OPENER's role, so a
  *   super_admin closing a cashier's shift goes to pending_review.
  * I22 — review takes a decision: approve with any declared/computed
- *   delta, count delta, or detail-total delta and no >=10-char note
+ *   delta, count delta, or detail-total delta and no >=3-char note
  *   throws; reject reopens the shift with the reason stamped and
  *   posts NO variance journal; a clean approve closes it.
  * I23 — the POS/cash-sale shift gate honours requireCashierShiftForSales:
@@ -456,9 +456,9 @@ async function main() {
       'approving a 100.000 card mismatch with no note must throw',
     );
     await assert.rejects(
-      drawer.reviewCashierShiftClose(shiftF, { decision: 'reject', note: 'قصير' }, manager2),
+      drawer.reviewCashierShiftClose(shiftF, { decision: 'reject', note: 'لا' }, manager2),
       (err: unknown) => codeOf(err) === 'SHIFT_REVIEW_NOTE_REQUIRED',
-      'rejecting without a >=10-char reason must throw',
+      'rejecting without a >=3-char reason must throw',
     );
     await drawer.reviewCashierShiftClose(shiftF, { decision: 'reject', note: 'الإقرار لا يطابق تقرير الماكينة إطلاقا' }, manager2);
     const rowF = await shiftRow(shiftF);
@@ -484,6 +484,30 @@ async function main() {
     await drawer.closeCashierShift(shiftG, { countedCash: 100, managerPin: 'pw-cashier-3' }, cashier3);
     await drawer.reviewCashierShiftClose(shiftG, { decision: 'approve', note: 'مطابق' }, manager2);
     assert.equal((await shiftRow(shiftG)).status, 'closed');
+
+    // INV-CLOSE-REVIEW-ZERO-DIFF: the review-note floor is 3 chars,
+    // for approve-with-mismatch AND reject alike — a 3-char true
+    // reason is a complete audit record with all figures visible
+    // on the same screen. The 3-char approve below is the RED case
+    // for the floor change: under the old 10-char floor it threw.
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
+    const shiftJ = await shiftIdOf(3);
+    await drawer.closeCashierShift(shiftJ, { countedCash: 100, cardDeclaredTotal: 100, cardOperationCount: 1, managerPin: 'pw-cashier-3' }, cashier3);
+    assert.equal((await shiftRow(shiftJ)).status, 'pending_review');
+    await assert.rejects(
+      drawer.reviewCashierShiftClose(shiftJ, { decision: 'approve', note: 'لا' }, manager2),
+      (err: unknown) => codeOf(err) === 'SHIFT_REVIEW_NOTE_REQUIRED',
+      'approving a genuine mismatch with a 2-char note must throw',
+    );
+    await drawer.reviewCashierShiftClose(shiftJ, { decision: 'approve', note: 'فرق' }, manager2);
+    assert.equal((await shiftRow(shiftJ)).status, 'closed', 'a 3-char note must approve a genuine mismatch');
+
+    // A zero-difference shift approves with no note at all.
+    await drawer.openCashierShift({ openingCash: 100, branchId: 1 }, cashier3);
+    const shiftK = await shiftIdOf(3);
+    await drawer.closeCashierShift(shiftK, { countedCash: 100, managerPin: 'pw-cashier-3' }, cashier3);
+    await drawer.reviewCashierShiftClose(shiftK, { decision: 'approve', note: '' }, manager2);
+    assert.equal((await shiftRow(shiftK)).status, 'closed', 'a zero-difference shift must approve with no note at all');
 
     // ---------- I23: the setting-aware sale gate (small service only). ----------
     const noShiftFalse = await authz.hasOpenCashierShiftForSale(db, admin1, null, new Map([['requireCashierShiftForSales', false]]));

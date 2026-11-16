@@ -30,6 +30,7 @@ import {
   formatMoney,
   formatSignedCount,
   formatTimeOnly,
+  isZeroDifference,
   toCount,
   toDisplayCount,
   toMoney,
@@ -123,9 +124,15 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
     totalDeductions
   ) : 0;
 
-  const dynamicVariance = shift ? (
+  // INV-CLOSE-REVIEW-ZERO-DIFF: round the cash variance at book
+  // digits, exactly as electronicDiff already is. The raw sum of
+  // ~10 Number() values carries binary float dust (e.g. +0.004)
+  // that formatCurrency rounds to 0.00 for display while the raw
+  // `> 0` label test and the `!== 0` mismatch gate still saw a
+  // surplus — one value, two labels.
+  const dynamicVariance = toMoney(shift ? (
     (shift.declaredCash ?? shift.countedCash) != null ? Number(shift.declaredCash ?? shift.countedCash) - dynamicExpectedCash : Number(shift.variance || 0)
-  ) : 0;
+  ) : 0, bookDigits);
 
   const electronicDiff = toMoney(
     (declared.card - expected.expectedCard) +
@@ -140,20 +147,24 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
   // delta from the server reconciliation (falling back to the
   // client-computed diffs when the shift predates the package).
   // Approving a mismatch — and any rejection — needs a note of
-  // at least 10 characters; the server enforces the same rule.
+  // at least 3 characters; the server enforces the same rule.
+  // INV-CLOSE-REVIEW-ZERO-DIFF: money deltas use the canonical
+  // zero test — a sub-minor-unit dust difference is a match, not
+  // a mismatch. Count/detail deltas stay exact: they are integers,
+  // so any non-zero value is a real mismatch.
   const hasReviewMismatch = useMemo(() => {
     const rec = shift?.reconciliation;
     if (rec) {
       return (['card', 'wallet', 'instapay'] as const).some((channel) => {
         const row = rec[channel];
-        return !!row && (row.delta !== 0 || row.countDelta !== 0 || (row.detailDelta || 0) !== 0);
+        return !!row && (!isZeroDifference(row.delta, bookDigits) || row.countDelta !== 0 || (row.detailDelta || 0) !== 0);
       });
     }
-    return dynamicVariance !== 0 || electronicDiff !== 0;
+    return !isZeroDifference(dynamicVariance, bookDigits) || !isZeroDifference(electronicDiff, bookDigits);
   }, [shift?.reconciliation, dynamicVariance, electronicDiff]);
   const reviewNoteValue = String(props.managerNote || '').trim();
-  const approveBlockedByNote = hasReviewMismatch && reviewNoteValue.length < 10;
-  const rejectBlockedByNote = reviewNoteValue.length < 10;
+  const approveBlockedByNote = hasReviewMismatch && reviewNoteValue.length < 3;
+  const rejectBlockedByNote = reviewNoteValue.length < 3;
 
   const isKwd = getGlobalSystemCurrency() === 'KWD';
 
@@ -255,7 +266,7 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
     shift?.walletOperationCount
   ]);
 
-  const reviewMatched = Math.abs(totalShiftDiscrepancy) <= 0.009 && comparison.opsDiffTotal === 0;
+  const reviewMatched = isZeroDifference(totalShiftDiscrepancy, bookDigits) && comparison.opsDiffTotal === 0;
 
   // Grouped drawer movements
   const movementGroups = useMemo(() => {
@@ -865,7 +876,7 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <Field label={hasReviewMismatch ? t('cash_drawer.cash_drawer_review_dialog.s80', "ملاحظة المشرف للاعتماد (إلزامية عند وجود فرق — 10 أحرف على الأقل)") : t('cash_drawer.cash_drawer_review_dialog.s73', "ملاحظة المشرف للاعتماد (اختياري)")}>
+                <Field label={hasReviewMismatch ? t('cash_drawer.cash_drawer_review_dialog.s80', "ملاحظة المشرف للاعتماد (إلزامية عند وجود فرق — 3 أحرف على الأقل)") : t('cash_drawer.cash_drawer_review_dialog.s73', "ملاحظة المشرف للاعتماد (اختياري)")}>
                   <input
                     type="text"
                     value={props.managerNote}
@@ -901,11 +912,11 @@ export function CashDrawerReviewDialog(props: CashDrawerReviewDialogProps) {
                   {t('cash_drawer.cash_drawer_review_dialog.s77', "إلغاء")}
                 </Button>
                 {props.onReject ? (
-                  <Button variant="secondary" onClick={props.onReject} disabled={props.isPending || rejectBlockedByNote} title={rejectBlockedByNote ? t('cash_drawer.cash_drawer_review_dialog.s82', "اكتب سبب الرفض (10 أحرف على الأقل) أولاً") : undefined} style={{ padding: '5px 16px', fontSize: '0.82rem' }}>
+                  <Button variant="secondary" onClick={props.onReject} disabled={props.isPending || rejectBlockedByNote} title={rejectBlockedByNote ? t('cash_drawer.cash_drawer_review_dialog.s82', "اكتب سبب الرفض (3 أحرف على الأقل) أولاً") : undefined} style={{ padding: '5px 16px', fontSize: '0.82rem' }}>
                     {t('cash_drawer.cash_drawer_review_dialog.s83', "رفض وإعادة فتح الوردية")}
                   </Button>
                 ) : null}
-                <Button variant="primary" onClick={props.onApprove} disabled={props.isPending || approveBlockedByNote} title={approveBlockedByNote ? t('cash_drawer.cash_drawer_review_dialog.s84', "يوجد فرق؛ اكتب ملاحظة مراجعة (10 أحرف على الأقل) قبل الاعتماد") : undefined} style={{ padding: '5px 16px', fontSize: '0.82rem' }}>
+                <Button variant="primary" onClick={props.onApprove} disabled={props.isPending || approveBlockedByNote} title={approveBlockedByNote ? t('cash_drawer.cash_drawer_review_dialog.s84', "يوجد فرق؛ اكتب ملاحظة مراجعة (3 أحرف على الأقل) قبل الاعتماد") : undefined} style={{ padding: '5px 16px', fontSize: '0.82rem' }}>
                   {props.isPending ? t('cash_drawer.cash_drawer_review_dialog.s78', "جاري اعتماد الإغلاق...") : t('cash_drawer.cash_drawer_review_dialog.s79', "اعتماد الإغلاق النهائي")}
                 </Button>
               </div>

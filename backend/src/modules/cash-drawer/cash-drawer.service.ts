@@ -1586,7 +1586,7 @@ export class CashDrawerService {
    * compares the itemised detail totals against the declared
    * totals (detailDelta). A mismatch never blocks review by
    * itself — it is recorded — but approving one now requires a
-   * >=10-char note (see reviewCashierShiftClose).
+   * >=3-char note (see reviewCashierShiftClose).
    */
   private async computeBlindCloseReconciliation(
     shift: ShiftRow,
@@ -1621,7 +1621,7 @@ export class CashDrawerService {
    * INV-REST-SHIFT-CLOSE-CONTROL (I22): the review is a decision.
    * 'approve' closes the shift and posts the variance — but any
    * mismatch (declared/computed delta, count delta, or
-   * itemised-detail delta) requires a note of at least 10
+   * itemised-detail delta) requires a note of at least 3
    * characters. 'reject' reopens the shift (status back to open,
    * counted cash / variance / closer cleared, reason stamped) and
    * posts NO variance journal: the cashier re-counts and closes
@@ -1644,8 +1644,8 @@ export class CashDrawerService {
     // mixes two clocks.
     const reviewNow = new Date();
     const managerNote = String(payload.note || '').trim();
-    if (decision === 'reject' && managerNote.length < 10) {
-      throw new AppError('اكتب سبب الرفض (10 أحرف على الأقل) قبل إعادة فتح الوردية', 'SHIFT_REVIEW_NOTE_REQUIRED', 400);
+    if (decision === 'reject' && managerNote.length < 3) {
+      throw new AppError('اكتب سبب الرفض (3 أحرف على الأقل) قبل إعادة فتح الوردية', 'SHIFT_REVIEW_NOTE_REQUIRED', 400);
     }
     const rawCloseNote = String(shift.close_note || '');
     const parsedBlindClose = this.parseBlindCloseNote(rawCloseNote);
@@ -1693,8 +1693,8 @@ export class CashDrawerService {
           const channel = reconciliation?.[channelName];
           return !!channel && (channel.delta !== 0 || channel.countDelta !== 0 || channel.detailDelta !== 0);
         });
-        if (hasMismatch && managerNote.length < 10) {
-          throw new AppError('يوجد فرق في إقرار الإغلاق؛ اكتب ملاحظة مراجعة (10 أحرف على الأقل) قبل الاعتماد', 'SHIFT_REVIEW_NOTE_REQUIRED', 400);
+        if (hasMismatch && managerNote.length < 3) {
+          throw new AppError('يوجد فرق في إقرار الإغلاق؛ اكتب ملاحظة مراجعة (3 أحرف على الأقل) قبل الاعتماد', 'SHIFT_REVIEW_NOTE_REQUIRED', 400);
         }
         parsedBlindClose.managerReview = { note: managerNote, reviewedById: Number(auth.userId || 0), reviewedByName: String(auth.username || ''), reviewedAt: reviewNow.toISOString() };
         parsedBlindClose.reconciliation = reconciliation;

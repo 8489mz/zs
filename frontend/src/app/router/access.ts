@@ -670,6 +670,9 @@ const COMMERCE_CORE_FEATURES = new Set([
   'customers',
   'treasury',
   'expenses',
+  // INV-DELIVERY-REPS-RETAIL-CORE: delivery + rep settlement is a daily money flow for any
+  // retail shop, so deliveryReps is retail core, default-on, on every plan (starter included).
+  'deliveryReps',
 ]);
 
 const LEGACY_COMMERCE_FALLBACK_FEATURES = new Set([

@@ -50,9 +50,19 @@ export function differenceLabel(value: number, digits: MoneyDigits): string {
   const isEn = i18n.language === 'en';
   const money = formatMoney(Math.abs(value), digits);
   // A difference smaller than one minor unit counts as matched.
-  if (Math.abs(value) < 10 ** -digits) return isEn ? `${formatMoney(0, digits)} (Matched)` : `${formatMoney(0, digits)} (مطابق)`;
+  if (isZeroDifference(value, digits)) return isEn ? `${formatMoney(0, digits)} (Matched)` : `${formatMoney(0, digits)} (مطابق)`;
   if (value < 0) return `-${money}`;
   return `+${money}`;
+}
+
+// INV-CLOSE-REVIEW-ZERO-DIFF: the one canonical "is this money
+// difference zero" test — a difference smaller than one minor unit
+// counts as matched, the same threshold differenceLabel already
+// used. The dialog's mismatch gate and matched verdict must agree
+// with the label, or sub-minor-unit float dust (+0.004) shows
+// "(مطابق)" in one place and blocks approval in another.
+export function isZeroDifference(value: number, digits: MoneyDigits): boolean {
+  return Math.abs(value) < 10 ** -digits;
 }
 
 function parseIso(value?: string): Date | null {

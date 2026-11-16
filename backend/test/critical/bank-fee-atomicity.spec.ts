@@ -31,11 +31,14 @@ const db: any = {
 };
 const service: any = new AccountingService(db, {} as any);
 let sameTransactionForBoth = false;
-service.createManualJournalEntry = async (_dto: unknown, _auth: unknown, passedTrx: unknown) => {
+// Split seam: the fee adjustment calls the S10 slice's bound S2 method
+// (slice L500) and its private reconcileMatchInTransaction (slice L518),
+// not the facade methods — stub the slice instance.
+service.bankStatementsService.createManualJournalEntry = async (_dto: unknown, _auth: unknown, passedTrx: unknown) => {
   assert.equal(passedTrx, trx, 'journal must use reconciliation transaction');
   return { entry: { id: 77 } };
 };
-service.reconcileMatchInTransaction = async (passedTrx: unknown) => {
+service.bankStatementsService.reconcileMatchInTransaction = async (passedTrx: unknown) => {
   assert.equal(passedTrx, trx, 'reconciliation must use journal transaction');
   sameTransactionForBoth = true;
   throw new Error('forced reconciliation failure');

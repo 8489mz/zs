@@ -247,7 +247,10 @@ async function main(): Promise<void> {
   // Case 6: source pin — no save return runs the full-catalog list anymore,
   // and create/update return through getProduct.
   {
-    const servicePath = resolve(__dirname, '../../src/modules/catalog/services/catalog-product.service.ts');
+    // The save returns live in the P6 write slice now (catalog-product split
+    // 2026-11-16); the facade keeps only delegates. create/update return
+    // through getProduct (a P7 archive dep bound into the write slice).
+    const servicePath = resolve(__dirname, '../../src/modules/catalog/services/catalog-product-write.service.ts');
     const source = readFileSync(servicePath, 'utf8');
     assert.ok(!source.includes('products: (await this.listProducts({}, actor)).products'),
       'no save return may run listProducts anymore');

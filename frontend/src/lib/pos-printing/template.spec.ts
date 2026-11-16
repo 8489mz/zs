@@ -125,4 +125,14 @@ describe('Receipt Printing Payment QR Section', () => {
     expect(doc.html).toContain('+ بطه (×3)');
     expect(doc.html).toContain('item-modifiers');
   });
+  it('should render the duplicate-copy banner when isReprint is true', () => {
+    const doc = buildReceiptDocument({ ...baseOptions, isReprint: true });
+    expect(doc.html).toContain('receipt-reprint-banner');
+    expect(doc.html).toContain('*** نسخة مكررة - REPRINT ***');
+  });
+  it('should omit the duplicate-copy banner when isReprint is not set', () => {
+    const doc = buildReceiptDocument({ ...baseOptions });
+    expect(doc.html).not.toContain('receipt-reprint-banner');
+    expect(doc.html).not.toContain('*** نسخة مكررة - REPRINT ***');
+  });
 });

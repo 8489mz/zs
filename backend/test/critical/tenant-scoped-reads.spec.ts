@@ -125,7 +125,14 @@ function testAuditIsolationRemediations(): void {
   expect(manufacturing, /\.deleteFrom\('manufacturing_bom_lines'\)[\s\S]{0,170}\.selectFrom\('manufacturing_boms'\)/, 'MT-15');
   const purchases = read('modules/purchases/services/purchases-query.service.ts');
   expect(purchases, /\.where\('pa\.tenant_id', '=', scope\.tenantId\)/, 'MT-13');
-  const accounting = read('modules/accounting/accounting.service.ts');
+  // Accounting split: the reads now live in the extracted services (S1 holds
+  // the journal list MT-14; S6 holds the inventory-value join MT-16). The
+  // safety property is checked over the concatenated slice text; the facade
+  // is NOT included — its methods are thin delegates.
+  const accounting = [
+    read('modules/accounting/services/accounting-journals-read.service.ts'),
+    read('modules/accounting/services/accounting-reports.service.ts'),
+  ].join('\n');
   expect(accounting, /\.where\('l\.tenant_id', '=', tenantId\)/, 'MT-14');
   expect(accounting, /onRef\('pls\.tenant_id', '=', 'p\.tenant_id'\)/, 'MT-16');
   const mobile = read('modules/hr/mobile-attendance.service.ts');

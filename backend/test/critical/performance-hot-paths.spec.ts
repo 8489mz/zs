@@ -4,6 +4,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 import { CatalogProductService } from '../../src/modules/catalog/services/catalog-product.service';
+import { CatalogProductPosService } from '../../src/modules/catalog/services/catalog-product-pos.service';
 import { StorefrontCatalogService } from '../../src/modules/storefront/services/storefront-catalog.service';
 import { SalesWriteService } from '../../src/modules/sales/services/sales-write.service';
 import { buildPosCatalogVersion } from '../../src/modules/catalog/engines/pos-catalog-version.engine';
@@ -39,7 +40,24 @@ function fakeDbReturning(rows: StockRow[]) {
 }
 
 function createCatalogService(rows: StockRow[]): any {
-  return new CatalogProductService(fakeDbReturning(rows) as any, {} as any, {} as any);
+  // resolveScopedStockByProduct lives in the P4 pos slice now
+  // (catalog-product split 2026-11-16): construct the slice directly
+  // (storefront PERF-4 precedent). It touches only db + productIdAny +
+  // tenantPredicate in these paths; the kernel helpers are borrowed bound
+  // from a facade built on the same fake db, and the unused deps are
+  // throwing stubs so a new call path fails loudly instead of silently.
+  const facade: any = new CatalogProductService(fakeDbReturning(rows) as any, {} as any, {} as any);
+  return new CatalogProductPosService({
+    db: fakeDbReturning(rows) as any,
+    inventoryScope: {} as any,
+    bookDigits: async () => { throw new Error('PERF-2: bookDigits must not be called by resolveScopedStockByProduct'); },
+    getProductOfferColumnCapabilities: async () => { throw new Error('PERF-2: getProductOfferColumnCapabilities must not be called by resolveScopedStockByProduct'); },
+    productIdAny: facade.productIdAny.bind(facade),
+    normalizeUnitName: facade.normalizeUnitName.bind(facade),
+    getListProductStock: facade.getListProductStock.bind(facade),
+    tenantId: facade.tenantId.bind(facade),
+    tenantPredicate: facade.tenantPredicate.bind(facade),
+  } as any);
 }
 
 // PERF-2 — behaviour of the scoped-stock aggregation must be exactly what it was before the rewrite.
@@ -96,18 +114,25 @@ async function testScopedStockIsLinear(): Promise<void> {
 // PERF-2 — whole-catalog id lists go out as ONE array parameter, not one bind parameter per id
 // (Postgres rejects > 65,535 parameters, i.e. a big catalog would crash the products page).
 function testWholeCatalogIdListsUseArrayParameter(): void {
-  const service = createCatalogService([]);
-  const compiled = service.productIdAny('pls.product_id', [1, 2, 3]);
+  // productIdAny stays in the facade kernel (no repoint): build the facade
+  // for the compilation check; the source pins below read the slices.
+  const facade: any = new CatalogProductService(fakeDbReturning([]) as any, {} as any, {} as any);
+  const compiled = facade.productIdAny('pls.product_id', [1, 2, 3]);
   const node = compiled.toOperationNode();
   const json = JSON.stringify(node);
   assert.ok(json.includes('ANY('), 'productIdAny must compile to = ANY($1::bigint[])');
 
-  const source = read('modules/catalog/services/catalog-product.service.ts');
-  const body = source.slice(source.indexOf('private async resolveScopedStockByProduct'), source.indexOf('private async buildListProductsContext'));
+  // resolveScopedStockByProduct lives in the P4 pos slice (it is the last
+  // method there — a bare `async` method, public by default — so the body
+  // runs to the end of the file); the context builder lives in the P5
+  // list slice.
+  const posSource = read('modules/catalog/services/catalog-product-pos.service.ts');
+  const body = posSource.slice(posSource.indexOf('async resolveScopedStockByProduct'));
   assert.ok(!/stockRows\.(filter|find|some|reduce)\(/.test(body.slice(body.indexOf('for (const product of products)'))),
     'the per-product loop must read pre-aggregated maps, never rescan stockRows');
   assert.ok(body.includes("this.productIdAny('pls.product_id', productIds)"), 'stock rows filter uses the array parameter');
-  const contextBody = source.slice(source.indexOf('private async buildListProductsContext'), source.indexOf('private filterListProducts'));
+  const listSource = read('modules/catalog/services/catalog-product-list.service.ts');
+  const contextBody = listSource.slice(listSource.indexOf('private async buildListProductsContext'), listSource.indexOf('private filterListProducts'));
   assert.ok(!contextBody.includes("'in', productIds"), 'buildListProductsContext receives every product id — use productIdAny');
 }
 
@@ -215,7 +240,9 @@ function testPosCatalogVersionIgnoresStock(): void {
   assert.notEqual(buildPosCatalogVersion({ ...base, offerCount: 2 }), v, 'deactivated offer moves it');
   assert.equal(buildPosCatalogVersion({ ...base, lastUpdatedAt: '1969-12-31T22:00:00.000Z' }), 'v2-100-120-3-0');
 
-  const source = read('modules/catalog/services/catalog-product.service.ts');
+  // getPosCatalogVersion + listPosProducts both live in the P4 pos slice now
+  // (catalog-product split 2026-11-16).
+  const source = read('modules/catalog/services/catalog-product-pos.service.ts');
   const body = source.slice(source.indexOf('async getPosCatalogVersion'), source.indexOf('async listPosProducts'));
   assert.ok(body.includes('MAX(p.catalog_updated_at)'), 'version must read products.catalog_updated_at');
   assert.ok(!/MAX\(p\.updated_at\)/.test(body), 'products.updated_at moves on every sale (applyStockDelta) — never use it for the POS version');

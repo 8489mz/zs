@@ -423,7 +423,13 @@ async function main(): Promise<void> {
   );
   const fxResolution = readFile('backend/src/modules/accounting/fx-rate-resolution.ts');
   assert.ok(fxResolution.includes('exchangeRateAsOf'), 'fx-rate-resolution must read the as-of rate history');
-  const accountingService = stripComments(readFile('backend/src/modules/accounting/accounting.service.ts'));
+  // The convertCurrency FX site lives in the S8 slice since the accounting
+  // split; the facade itself now holds 0. Check the facade + the slice.
+  const accountingFxFiles = [
+    'backend/src/modules/accounting/accounting.service.ts',
+    'backend/src/modules/accounting/services/accounting-currencies.service.ts',
+  ];
+  const accountingService = accountingFxFiles.map((file) => stripComments(readFile(file))).join('\n');
   assert.ok(
     accountingService.includes('resolveFxRate(this.db, scope.tenantId, fromCode, { asOf })'),
     'convertCurrency must pass asOf through resolveFxRate',
