@@ -16,6 +16,12 @@ type Props = {
   onClose: () => void;
   form: ReturnFormState;
   invoiceRows: Array<Sale | Purchase>;
+  // INV-RETURNS-FULL-HISTORY-SEARCH: the invoice-number search
+  // owned by the workspace — typing ≥3 characters fetches older
+  // invoices from the backend and merges them into invoiceRows.
+  invoiceSearch?: string;
+  onInvoiceSearchChange?: (value: string) => void;
+  invoiceSearchLoading?: boolean;
   selectedInvoice?: Sale | Purchase;
   invoiceItems: Array<SaleItem | PurchaseItem>;
   selectedItems: Record<string, string>;
@@ -82,6 +88,9 @@ export function ReturnsCreateModal(props: Props) {
     onClose,
     form,
     invoiceRows,
+    invoiceSearch = '',
+    onInvoiceSearchChange,
+    invoiceSearchLoading = false,
     selectedInvoice,
     invoiceItems,
     selectedItems,
@@ -271,6 +280,43 @@ export function ReturnsCreateModal(props: Props) {
         >
           {/* Right Column: Options + Items Table + Return Reason */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minWidth: 0 }}>
+            {/* INV-RETURNS-FULL-HISTORY-SEARCH: the invoice picker
+                below only holds the latest 30 sales. Typing ≥3
+                characters of an older invoice number fetches it
+                from the backend and merges it into the picker
+                options, so a return can target any posted invoice. */}
+            {form.type === 'sale' ? (
+              <div
+                style={{
+                  background: '#f8fafc',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  border: '1px solid #e2e8f0',
+                }}
+              >
+                <Field label={t('returns.field_invoice_search', 'بحث برقم فاتورة قديمة')}>
+                  <input
+                    type="text"
+                    data-testid="returns-invoice-search"
+                    value={invoiceSearch}
+                    onChange={(e) => onInvoiceSearchChange?.(e.target.value)}
+                    placeholder={t('returns.invoice_search_placeholder', 'اكتب 3 أحرف على الأقل من رقم الفاتورة…')}
+                    style={{
+                      width: '100%',
+                      padding: '7px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '12.5px',
+                    }}
+                  />
+                </Field>
+                {invoiceSearchLoading ? (
+                  <div role="status" style={{ color: '#64748b', fontSize: '11.5px', marginTop: '4px' }}>
+                    {t('returns.invoice_search_loading', 'جارٍ البحث في سجل الفواتير…')}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {/* Options Row */}
             <div
               style={{
@@ -315,6 +361,7 @@ export function ReturnsCreateModal(props: Props) {
                 >
                   <CustomSelect
                     value={form.invoiceId}
+                    placeholder={t('returns.select_invoice', 'اختر الفاتورة')}
                     onChange={(val) => onFormChange((current) => ({ ...current, invoiceId: val }))}
                     options={[
                       { value: '', label: t('returns.select_invoice', 'اختر الفاتورة') },

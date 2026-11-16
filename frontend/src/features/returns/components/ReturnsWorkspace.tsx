@@ -28,12 +28,34 @@ import {
 import { formatCurrency, formatDate } from '@/lib/format';
 import type { Purchase, PurchaseItem, Sale, SaleItem } from '@/types/domain';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
+import { useDebouncedValue } from '@/shared/hooks/use-debounced-value';
 import { remainingInvoiceLineQuantity, isSelectedReturnQuantityValid, toggleReturnLineSelection } from '@/features/returns/lib/return-remaining-quantity';
 import { findReturnInRegisterOrRadar } from '@/features/returns/lib/return-radar-selection';
 import { buildReturnRegisterExportQuery } from '@/features/returns/lib/return-register-export-query';
 import { mayReleaseReturnIdempotencyKey, wasReturnCommitted } from '@/features/returns/lib/return-submission-recovery';
 import { toast } from '@/shared/components/system-alert';
 import { useAuthStore } from '@/stores/auth-store';
+
+// INV-RETURNS-FULL-HISTORY-SEARCH: merge the backend invoice-number
+// search hits (typed in the create dialog, or the deep-linked invoice)
+// into the latest-30 list, de-duplicated by id. Posted only, like the
+// base list — a draft or cancelled invoice is never returnable.
+function mergeInvoiceSearchHits(postedSales: Sale[], searchData: unknown): Sale[] {
+  const hits: Sale[] = Array.isArray(searchData)
+    ? searchData
+    : Array.isArray((searchData as any)?.rows)
+    ? (searchData as any).rows
+    : Array.isArray((searchData as any)?.sales)
+    ? (searchData as any).sales
+    : [];
+  if (hits.length === 0) return postedSales;
+  const merged = [...postedSales];
+  for (const hit of hits) {
+    if (hit.status !== 'posted') continue;
+    if (!merged.some((row) => String(row.id) === String(hit.id))) merged.push(hit);
+  }
+  return merged;
+}
 
 export function ReturnsWorkspace() {
   const { t, i18n } = useTranslation();
@@ -74,6 +96,24 @@ export function ReturnsWorkspace() {
 
   const query = useReturnsPage({ page, pageSize, search, filter: viewFilter, employee: employeeFilter });
   const salesQuery = useQuery({ queryKey: ['sales'], queryFn: catalogApi.listSales });
+  // INV-RETURNS-FULL-HISTORY-SEARCH: the dialog's latest-30 list
+  // cannot reach an old invoice. The merchant types ≥3 characters
+  // of the invoice number in the create dialog (or arrives via
+  // ?invoiceId/?docNo from the register) and the backend search
+  // (doc_no ILIKE, tenant-scoped) fetches it; the hits merge into
+  // invoiceRows below so the picker — and the deep-link resolver —
+  // see them. Empty search keeps today's latest 30.
+  const [invoiceSearch, setInvoiceSearch] = useState('');
+  const debouncedInvoiceSearch = useDebouncedValue(invoiceSearch, 300);
+  const deepLinkInvoiceTerm = (searchParams.get('invoiceId') || searchParams.get('docNo') || '').trim();
+  const typedInvoiceTerm = debouncedInvoiceSearch.trim();
+  const activeInvoiceSearchTerm = typedInvoiceTerm.length >= 3 ? typedInvoiceTerm : deepLinkInvoiceTerm;
+  const invoiceSearchQuery = useQuery({
+    queryKey: ['sales', 'invoice-search', activeInvoiceSearchTerm],
+    queryFn: () => catalogApi.listSalesSearch(activeInvoiceSearchTerm),
+    enabled: form.type === 'sale' && activeInvoiceSearchTerm.length > 0 && (typedInvoiceTerm.length >= 3 || deepLinkInvoiceTerm.length > 0),
+    staleTime: 30_000,
+  });
   const purchasesQuery = useQuery({ queryKey: ['purchases'], queryFn: catalogApi.listPurchases });
   const settingsQuery = useSettingsQuery();
   const queryClient = useQueryClient();
@@ -97,9 +137,9 @@ export function ReturnsWorkspace() {
       : [];
 
     return form.type === 'sale'
-      ? rawSales.filter((sale) => sale.status === 'posted')
+      ? mergeInvoiceSearchHits(rawSales.filter((sale) => sale.status === 'posted'), invoiceSearchQuery.data)
       : rawPurchases.filter((purchase) => purchase.status === 'posted');
-  }, [form.type, purchasesQuery.data, salesQuery.data]);
+  }, [form.type, purchasesQuery.data, salesQuery.data, invoiceSearchQuery.data]);
 
   const selectedInvoice = invoiceRows.find((row) => String(row.id) === String(form.invoiceId) || (Boolean(row.docNo) && String(row.docNo).toLowerCase() === String(form.invoiceId).toLowerCase())) as Sale | Purchase | undefined;
   const rows = useMemo(() => query.data?.returns || [], [query.data?.returns]);
@@ -569,6 +609,9 @@ export function ReturnsWorkspace() {
         {/* Premium Modal for Creating Return */}
         <ReturnsCreateModal
           isOpen={isCreateOpen}
+          invoiceSearch={invoiceSearch}
+          onInvoiceSearchChange={setInvoiceSearch}
+          invoiceSearchLoading={invoiceSearchQuery.isFetching}
           onClose={() => {
             if (returnAttempt.current) {
               toast.warning('لا تغلق طلب مرتجع لم تُؤكّد نتيجته؛ أعد المحاولة بنفس المفتاح');

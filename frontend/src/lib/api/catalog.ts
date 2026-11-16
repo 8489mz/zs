@@ -15,6 +15,12 @@ export const catalogApi = {
   createProduct: (payload: unknown) => http<Product>('/api/products', { method: 'POST', body: JSON.stringify(payload) }),
   listCategories: async () => unwrapArray<Category>(await http<Category[] | { categories: Category[] }>('/api/categories'), 'categories'),
   listSales: async () => unwrapArray<Sale>(await http<Sale[] | { sales: Sale[] }>('/api/sales'), 'sales'),
+  // INV-RETURNS-FULL-HISTORY-SEARCH: the returns dialog's latest-30
+  // list cannot reach an old invoice. The backend already searches
+  // by doc_no (GET /api/sales?search=, tenant-scoped); this is the
+  // returns feature's own entry point to it (it must not import
+  // the sales feature's salesApi).
+  listSalesSearch: async (search: string) => unwrapArray<Sale>(await http<Sale[] | { sales: Sale[] }>(`/api/sales?search=${encodeURIComponent(search)}`), 'sales'),
   createSale: (payload: unknown) => http('/api/sales', { method: 'POST', body: JSON.stringify(payload) }),
   listPurchases: async () => unwrapArray<Purchase>(await http<Purchase[] | { purchases: Purchase[] }>('/api/purchases'), 'purchases'),
   createPurchase: (payload: unknown) => http('/api/purchases', { method: 'POST', body: JSON.stringify(payload) }),

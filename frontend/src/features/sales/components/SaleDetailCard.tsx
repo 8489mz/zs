@@ -14,9 +14,13 @@ interface SaleDetailCardProps {
   onEdit?: () => void;
   onCancel?: () => void;
   onPrint?: () => void;
+  // INV-RETURNS-FULL-HISTORY-SEARCH: open the returns dialog
+  // deep-linked to this invoice. Hidden when cancelled, like the
+  // other actions — the whole bar renders only for live invoices.
+  onReturn?: () => void;
 }
 
-export function SaleDetailCard({ sale, isLoading = false, onEdit, onCancel, onPrint }: SaleDetailCardProps) {
+export function SaleDetailCard({ sale, isLoading = false, onEdit, onCancel, onPrint, onReturn }: SaleDetailCardProps) {
   const { t: __t } = useTranslation();
   const { t } = useTranslation();
   const { storeName } = useAuthStore();
@@ -110,7 +114,7 @@ export function SaleDetailCard({ sale, isLoading = false, onEdit, onCancel, onPr
       {sale.status !== 'cancelled' && (
         <div className="invoice-detail-actions-bar" style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+          gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
           gap: '8px',
           marginBottom: '14px',
         }}>
@@ -138,6 +142,7 @@ export function SaleDetailCard({ sale, isLoading = false, onEdit, onCancel, onPr
           </Button>
           {onPrint ? <Button variant="secondary" style={{ fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center' }} onClick={onPrint}>{t('sales.88c5d1')}</Button> : null}
           {onEdit ? <Button variant="secondary" style={{ fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center' }} onClick={onEdit}>{t('sales.78b222')}</Button> : null}
+          {onReturn ? <Button variant="secondary" style={{ fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center' }} onClick={onReturn}>{__t('sales.sale_detail_card.s19', 'مرتجع')}</Button> : null}
           {onCancel ? <Button variant="danger" style={{ fontSize: '12.5px', padding: '7px 8px', justifyContent: 'center' }} onClick={onCancel}>{t('sales.d07516')}</Button> : null}
         </div>
       )}
