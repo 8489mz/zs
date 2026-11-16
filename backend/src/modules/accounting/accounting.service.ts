@@ -37,6 +37,7 @@ import { AccountingSettingsService } from './services/accounting-settings.servic
 import { AccountingReportsService } from './services/accounting-reports.service';
 import { AccountingFixedAssetsService } from './services/accounting-fixed-assets.service';
 import { AccountingCurrenciesService } from './services/accounting-currencies.service';
+import { AccountingCostCentersService } from './services/accounting-cost-centers.service';
 
 @Injectable()
 export class AccountingService {
@@ -48,6 +49,7 @@ export class AccountingService {
   private readonly reportsService: AccountingReportsService;
   private readonly fixedAssetsService: AccountingFixedAssetsService;
   private readonly currenciesService: AccountingCurrenciesService;
+  private readonly costCentersService: AccountingCostCentersService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -108,6 +110,10 @@ export class AccountingService {
     });
     this.currenciesService = new AccountingCurrenciesService({
       db: this.db,
+    });
+    this.costCentersService = new AccountingCostCentersService({
+      db: this.db,
+      assertAccountingAccess: this.assertAccountingAccess.bind(this),
     });
   }
 
@@ -374,93 +380,15 @@ export class AccountingService {
     return this.currenciesService.convertCurrency(body, auth);
   }
 
-  // ---------------------------------------------------------------------------
-  // COST CENTERS ENGINE
-  // ---------------------------------------------------------------------------
-
   async listCostCenters(auth: AuthContext): Promise<{ ok: boolean; costCenters: Record<string, unknown>[] }> {
-    this.assertAccountingAccess(auth);
-    const scope = requireTenantScope(auth);
-    const rows = await (this.db as any)
-      .selectFrom('cost_centers as cc')
-      .leftJoin('cost_centers as p', (join: any) => join.onRef('cc.parent_id', '=', 'p.id').onRef('cc.tenant_id', '=', 'p.tenant_id'))
-      .select([
-        'cc.id',
-        'cc.code',
-        'cc.name',
-        'cc.dimension',
-        'cc.budget_amount as budgetAmount',
-        'cc.parent_id as parentId',
-        'p.name as parentName',
-        'cc.is_active as isActive',
-        'cc.description',
-        'cc.created_at as createdAt',
-        'cc.updated_at as updatedAt',
-      ])
-      .where('cc.tenant_id', '=', scope.tenantId)
-      .orderBy('cc.code', 'asc')
-      .execute();
-
-    return {
-      ok: true,
-      costCenters: rows.map((r: any) => ({
-        ...r,
-        id: Number(r.id),
-        dimension: r.dimension || 'operational',
-        budgetAmount: Number(r.budgetAmount || 0),
-        parentId: r.parentId ? Number(r.parentId) : null,
-        isActive: Boolean(r.isActive),
-      })),
-    };
+    return this.costCentersService.listCostCenters(auth);
   }
 
   async createCostCenter(
     body: { code: string; name: string; dimension?: string; budgetAmount?: number; parentId?: number | null; description?: string; isActive?: boolean },
     auth: AuthContext,
   ) {
-    this.assertAccountingAccess(auth);
-    const scope = requireTenantScope(auth);
-    return this.db.transaction().execute(async (trx) => {
-      await lockAccountingPeriod(trx, scope.tenantId);
-      await assertHierarchyParent(trx, 'cost_centers', scope.tenantId, null, body.parentId == null ? null : Number(body.parentId));
-      const code = String(body.code || '').trim().toUpperCase();
-      const name = String(body.name || '').trim();
-      if (!code || !name) {
-        throw new BadRequestException('كود واسم مركز التكلفة مطلوبان.');
-      }
-      const dimension = body.dimension ? String(body.dimension).trim() : 'operational';
-      const budgetAmount = body.budgetAmount !== undefined ? Number(body.budgetAmount) : 0;
-      const parentId = body.parentId ? Number(body.parentId) : null;
-      const description = body.description ? String(body.description).trim() : null;
-      const isActive = body.isActive !== false;
-
-      const inserted = await trx
-        .insertInto('cost_centers')
-        .values({
-          tenant_id: scope.tenantId,
-          code,
-          name,
-          dimension,
-          budget_amount: budgetAmount,
-          parent_id: parentId,
-          description,
-          is_active: isActive,
-        } as any)
-        .returningAll()
-        .executeTakeFirstOrThrow();
-
-      return {
-        ok: true,
-        costCenter: {
-          ...inserted,
-          id: Number(inserted.id),
-          dimension: (inserted as any).dimension || 'operational',
-          budgetAmount: Number((inserted as any).budget_amount || 0),
-          parentId: inserted.parent_id ? Number(inserted.parent_id) : null,
-          isActive: Boolean(inserted.is_active),
-        },
-      };
-    });
+    return this.costCentersService.createCostCenter(body, auth);
   }
 
   async updateCostCenter(
@@ -468,76 +396,11 @@ export class AccountingService {
     body: { code?: string; name?: string; dimension?: string; budgetAmount?: number; parentId?: number | null; description?: string; isActive?: boolean },
     auth: AuthContext,
   ) {
-    this.assertAccountingAccess(auth);
-    const scope = requireTenantScope(auth);
-    return this.db.transaction().execute(async (trx) => {
-      await lockAccountingPeriod(trx, scope.tenantId);
-      await assertHierarchyParent(trx, 'cost_centers', scope.tenantId, id, body.parentId == null ? null : Number(body.parentId));
-      const updates: Record<string, unknown> = {
-        updated_at: sql`NOW()`,
-      };
-      if (body.code !== undefined) updates.code = String(body.code).trim().toUpperCase();
-      if (body.name !== undefined) updates.name = String(body.name).trim();
-      if (body.dimension !== undefined) updates.dimension = String(body.dimension).trim();
-      if (body.budgetAmount !== undefined) updates.budget_amount = Number(body.budgetAmount);
-      if (body.parentId !== undefined) updates.parent_id = body.parentId ? Number(body.parentId) : null;
-      if (body.description !== undefined) updates.description = body.description ? String(body.description).trim() : null;
-      if (body.isActive !== undefined) updates.is_active = Boolean(body.isActive);
-
-      const updated = await trx
-        .updateTable('cost_centers')
-        .set(updates as any)
-        .where('id', '=', id)
-        .where('tenant_id', '=', scope.tenantId)
-        .returningAll()
-        .executeTakeFirst();
-
-      if (!updated) {
-        throw new NotFoundException('مركز التكلفة غير موجود.');
-      }
-
-      return {
-        ok: true,
-        costCenter: {
-          ...updated,
-          id: Number(updated.id),
-          dimension: (updated as any).dimension || 'operational',
-          budgetAmount: Number((updated as any).budget_amount || 0),
-          parentId: updated.parent_id ? Number(updated.parent_id) : null,
-          isActive: Boolean(updated.is_active),
-        },
-      };
-    });
+    return this.costCentersService.updateCostCenter(id, body, auth);
   }
 
   async deleteCostCenter(id: number, auth: AuthContext) {
-    this.assertAccountingAccess(auth);
-    const scope = requireTenantScope(auth);
-
-    const linkedLines = await this.db
-      .selectFrom('journal_entry_lines')
-      .select((eb) => eb.fn.countAll<number>().as('count'))
-      .where('tenant_id', '=', scope.tenantId)
-      .where('cost_center_id', '=', id)
-      .executeTakeFirst();
-
-    if (Number(linkedLines?.count || 0) > 0) {
-      await this.db
-        .updateTable('cost_centers')
-        .set({ is_active: false, updated_at: sql`NOW()` } as any)
-        .where('id', '=', id)
-        .where('tenant_id', '=', scope.tenantId)
-        .execute();
-      return { ok: true, message: 'تم تعطيل مركز التكلفة لارتباطه بحركات محاسبية سابقة.' };
-    }
-
-    await this.db
-      .deleteFrom('cost_centers')
-      .where('id', '=', id)
-      .where('tenant_id', '=', scope.tenantId)
-      .execute();
-
-    return { ok: true, message: 'تم حذف مركز التكلفة بنجاح.' };
+    return this.costCentersService.deleteCostCenter(id, auth);
   }
 
   async getCostCenterReport(
