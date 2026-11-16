@@ -478,8 +478,10 @@ async function main(): Promise<void> {
   // 11. Source pins: the routes are wired and production registers
   //     no handler.
   {
+    // MERGE (file #11 split): register/relay moved to the S11 slice — the pin
+    // now reads the slice file. Assertions unchanged.
     const serviceSource = fs.readFileSync(
-      path.join(__dirname, '../../src/modules/storefront/services/marketplace-sync.service.ts'),
+      path.join(__dirname, '../../src/modules/storefront/services/marketplace-sync-webhook-relay.service.ts'),
       'utf8',
     );
     const publicSource = fs.readFileSync(

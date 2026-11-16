@@ -240,10 +240,27 @@ async function main(): Promise<void> {
 
     // 10. Source pin: the old reply strings claiming stock/repricing
     //     updates are gone, and the persist path is present.
-    const serviceSource = fs.readFileSync(
-      path.join(__dirname, '../../src/modules/storefront/services/marketplace-sync.service.ts'),
-      'utf8',
-    );
+    // MERGE (file #11 split): the webhook code moved into the S10/S11 slices —
+    // the pin now reads the facade + all slice files. Assertions unchanged.
+    const serviceSource = [
+      'marketplace-sync.service.ts',
+      'marketplace-sync.types.ts',
+      'marketplace-sync-config.service.ts',
+      'marketplace-sync-mappings.service.ts',
+      'marketplace-sync-inventory.service.ts',
+      'marketplace-sync-simulation.service.ts',
+      'marketplace-sync-fees-listing.service.ts',
+      'marketplace-sync-settlements.service.ts',
+      'marketplace-sync-repricing.service.ts',
+      'marketplace-sync-inbound.service.ts',
+      'marketplace-sync-analytics.service.ts',
+      'marketplace-sync-webhooks-receive.service.ts',
+      'marketplace-sync-webhook-relay.service.ts',
+      'marketplace-sync-onboarding.service.ts',
+      'marketplace-sync-gtin.service.ts',
+    ]
+      .map((rel) => fs.readFileSync(path.join(__dirname, '../../src/modules/storefront/services', rel), 'utf8'))
+      .join('\n');
     assert.equal(serviceSource.includes('تحديث رصيد المخزن تلقائياً'), false);
     assert.equal(serviceSource.includes('روبوت التسعير الذكي'), false);
     assert.equal(serviceSource.includes('marketplace_webhook_events'), true);

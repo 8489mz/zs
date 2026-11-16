@@ -115,7 +115,7 @@
     "test/critical/van-trip-started-audit.spec.ts",
     "test/critical/van-field-sale-wholesale-price.spec.ts",
     "test/critical/van-field-noncash-evidence.spec.ts",
-  "test/critical/van-field-sale-tax-optional.spec.ts",
+    "test/critical/van-field-sale-tax-optional.spec.ts",
     "test/critical/audit-search-arabic-normalization.spec.ts",
     "test/critical/customer-search-by-code.spec.ts",
     "test/critical/van-field-return-carton-qty.spec.ts",
@@ -212,6 +212,12 @@
     "test/critical/returns-invoice-full-history-search.spec.ts",
     "test/critical/delivery-reps-retail-self-install.spec.ts",
     "test/critical/van-sales-list-date-filter.spec.ts",
-    "test/critical/van-generic-fefo-batches.spec.ts"
+    "test/critical/van-generic-fefo-batches.spec.ts",
+    "test/critical/marketplace-outbox-relay.spec.ts",
+    "test/critical/marketplace-settlement-book-digits.spec.ts",
+    "test/critical/marketplace-simulation-stock-atomic.spec.ts",
+    "test/critical/marketplace-webhook-persistence.spec.ts",
+    "test/critical/storefront-simulate-order-gate.spec.ts",
+    "test/critical/storefront-catalog-book-digits.spec.ts"
   ]
 }
