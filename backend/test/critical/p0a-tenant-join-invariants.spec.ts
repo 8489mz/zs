@@ -45,7 +45,7 @@ function run(): void {
   check('maritime-freight/maritime-freight-job-close.service.ts', [
     "join.onRef('jl.journal_entry_id', '=', 'je.id').onRef('jl.tenant_id', '=', 'je.tenant_id')",
   ]);
-  check('contracting/contracting.service.ts', [
+  check('contracting/services/contracting-documents.service.ts', [
     "trx.selectFrom('contracting_documents').selectAll().where('id', '=', documentId).where('tenant_id', '=', tenantId)",
   ]);
 }
