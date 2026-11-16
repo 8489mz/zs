@@ -52,7 +52,6 @@
     "src/features/pos/components/PosProductsPanel.tsx": 2430,
     "src/features/pos/components/PosWorkspace.tsx": 1288,
     "src/features/pos/components/pos-workspace/PosCheckoutDialogSections.tsx": 2043,
-    "src/features/pos/components/pos-workspace/PosCheckoutExpressSection.tsx": 1105,
     "src/features/pos/components/pos-workspace/PosPhoneOrderDialog.tsx": 2171,
     "src/features/pos/components/pos-workspace/PosSplitBillModal.tsx": 1755,
     "src/features/pos/components/pos-workspace/PosTablesFloorPlanDialog.tsx": 1607,

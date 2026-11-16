@@ -72,6 +72,7 @@ export function PosWorkspace() {
   const [saleSuccessDialogOpen, setSaleSuccessDialogOpen] = useState(false);
   const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
   const [splitBillOpen, setSplitBillOpen] = useState(false);
+  const [splitBillManagerPin, setSplitBillManagerPin] = useState('');
   const [heldDraftsDialogOpen, setHeldDraftsDialogOpen] = useState(false);
   const [restaurantTablesOpen, setRestaurantTablesOpen] = useState(false);
   const [restaurantInitialTab, setRestaurantInitialTab] = useState<'floor' | 'list'>('floor');
@@ -716,7 +717,7 @@ export function PosWorkspace() {
           setCheckoutDialogOpen(false);
           focusBarcodeEntry();
         }}
-        onOpenSplitBill={isRestaurantActive ? () => setSplitBillOpen(true) : undefined}
+        onOpenSplitBill={isRestaurantActive ? (pin) => { setSplitBillManagerPin(pin || ''); setSplitBillOpen(true); } : undefined}
         onConfirmSale={(managerPin, tenderedAmount) => {
           // T10-A (INV-REST-COMBO-TOTALS-TRUTH): close ONLY on a real
           // post. handleSubmit resolves false on every gate refusal
@@ -735,12 +736,15 @@ export function PosWorkspace() {
         <PosSplitBillModal
           open={splitBillOpen}
           pos={pos}
+          initialManagerPin={splitBillManagerPin}
           onClose={() => {
             setSplitBillOpen(false);
+            setSplitBillManagerPin('');
             focusBarcodeEntry();
           }}
           onSplitCompleted={() => {
             setSplitBillOpen(false);
+            setSplitBillManagerPin('');
             focusBarcodeEntry();
           }}
         />

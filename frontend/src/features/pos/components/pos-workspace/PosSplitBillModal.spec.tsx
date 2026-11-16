@@ -68,7 +68,7 @@
  * discount never given (Trap 2). */
 
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { buildPosSalePayload } from '@/features/pos/contracts';
 import { calcCartLineNetTotal, calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
@@ -1482,5 +1482,109 @@ describe('PosSplitBillModal — saving split checks as held drafts resets the wo
     await waitFor(() => expect(mockPos.saveHeldDraftMutation.mutateAsync).toHaveBeenCalledTimes(1));
     expect(mockPos.resetPosDraft).not.toHaveBeenCalled();
     expect(mockPos.setCart).not.toHaveBeenCalledWith([]);
+  });
+});
+
+describe('PosSplitBillModal — transfer channel, managerPin, terminalCode, tableless held labels, and partial sync', () => {
+  it('sends terminalCode, initialManagerPin, instapay for transfer, and syncs remaining discount/tip/points', async () => {
+    cleanup();
+    const a = item({ lineKey: 'LA', productId: '1', name: 'صنف أ', price: 100, modifiers: [] });
+    const b = item({ lineKey: 'LB', productId: '2', name: 'صنف ب', price: 100, modifiers: [] });
+    const totals = orderTotals({
+      subTotal: 200,
+      discountValue: 20,
+      manualDiscount: 20,
+      serviceCharge: 0,
+      taxRate: 0,
+      tipAmount: 10,
+      loyaltyPointsRedeemed: 0,
+      total: 190,
+    });
+    const setDiscount = vi.fn();
+    const setTipAmount = vi.fn();
+    const setLoyaltyPointsRedeemed = vi.fn();
+    const setDeliveryFee = vi.fn();
+    const mockPos = {
+      ...createMockPos([a, b], totals, { discount: 20 }),
+      tableNumber: '',
+      setDiscount,
+      setTipAmount,
+      setLoyaltyPointsRedeemed,
+      setDeliveryFee,
+    };
+
+    render(
+      <MemoryRouter>
+        <PosSplitBillModal open pos={mockPos as never} initialManagerPin="9999" onClose={vi.fn()} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getAllByTitle('نقل إلى الشيك 2')[1]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'تحصيل تحويل' })[0]);
+    await waitFor(() => expect(mockPos.createSale.mutateAsync).toHaveBeenCalledTimes(1));
+
+    const first = mockPos.createSale.mutateAsync.mock.calls[0][0];
+    expect(first.paymentChannel).toBe('instapay');
+    expect(first.payments).toEqual([{ paymentChannel: 'instapay', amount: 95 }]);
+    expect(first.managerPin).toBe('9999');
+    expect(typeof first.terminalCode).toBe('string');
+    expect(first.terminalCode.length).toBeGreaterThan(0);
+    expect(first.note).toBe('فاتورة مجزأة - الشيك 1 (الرئيسي)');
+    expect(setDiscount).toHaveBeenCalledWith(10);
+    expect(setTipAmount).toHaveBeenCalledWith(5);
+    expect(setLoyaltyPointsRedeemed).toHaveBeenCalledWith(0);
+    expect(setDeliveryFee).toHaveBeenCalledWith(0);
+  });
+
+  it('gives held checks distinct names even when the order has no tableNumber, and passes transfer/terminalCode/managerPin in even mode', async () => {
+    cleanup();
+    const a = item({ lineKey: 'LA', productId: '1', name: 'صنف أ', price: 50, modifiers: [] });
+    const b = item({ lineKey: 'LB', productId: '2', name: 'صنف ب', price: 50, modifiers: [] });
+    const totals = orderTotals({ subTotal: 100, discountValue: 0, serviceCharge: 0, taxRate: 0, tipAmount: 0, total: 100 });
+    const mockPos = {
+      ...createMockPos([a, b], totals),
+      tableNumber: '',
+    };
+
+    render(
+      <MemoryRouter>
+        <PosSplitBillModal open pos={mockPos as never} initialManagerPin="8888" onClose={vi.fn()} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getAllByTitle('نقل إلى الشيك 2')[1]);
+    fireEvent.click(screen.getByRole('button', { name: 'حفظ الشيكات كطلبات معلقة منفصلة في الصالة' }));
+    await waitFor(() => expect(mockPos.saveHeldDraftMutation.mutateAsync).toHaveBeenCalledTimes(2));
+
+    const [h1, h2] = mockPos.saveHeldDraftMutation.mutateAsync.mock.calls.map((c) => c[0]);
+    expect(h1.tableNumber).toBe('الشيك 1 (الرئيسي)');
+    expect(h2.tableNumber).toBe('الشيك 2');
+
+    // Switch to even mode and verify transfer guest payment passes instapay + terminalCode + managerPin.
+    cleanup();
+    const mockPos2 = {
+      ...createMockPos([a, b], totals),
+      tableNumber: '7',
+    };
+    render(
+      <MemoryRouter>
+        <PosSplitBillModal open pos={mockPos2 as never} initialManagerPin="7777" onClose={vi.fn()} />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'تقسيم بالتساوي (ضيوف)' }));
+    const transferButtons = screen.getAllByRole('button', { name: 'سداد تحويل' });
+    expect(transferButtons).toHaveLength(2);
+    fireEvent.click(transferButtons[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'سداد نقد' })[0]);
+    await waitFor(() => expect(mockPos2.createSale.mutateAsync).toHaveBeenCalledTimes(1));
+
+    const evenPayload = mockPos2.createSale.mutateAsync.mock.calls[0][0];
+    expect(evenPayload.managerPin).toBe('7777');
+    expect(typeof evenPayload.terminalCode).toBe('string');
+    expect(evenPayload.paymentChannel).toBe('mixed');
+    expect(evenPayload.payments).toEqual([
+      { paymentChannel: 'cash', amount: 50 },
+      { paymentChannel: 'instapay', amount: 50 },
+    ]);
   });
 });

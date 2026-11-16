@@ -1,14 +1,10 @@
-import { createPortal } from 'react-dom';
-import { CurrencySymbol } from '@/shared/ui/currency-symbol';
-import { getGlobalCurrencySymbol, getGlobalSystemCurrency, getSystemCountryCode, isKuwait, isSaudi } from '@/lib/currencies';
+import { getGlobalSystemCurrency, getSystemCountryCode, isKuwait, isSaudi } from '@/lib/currencies';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
-import { useState, useEffect, useMemo, useRef, useCallback, type FormEvent, type RefObject } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { customersApi } from '@/shared/api/customers.api';
+import { useState, useEffect, useMemo, type FormEvent, type RefObject } from 'react';
 import { posApi } from '@/features/pos/api/pos.api';
 import { Button } from '@/shared/ui/button';
 import { formatCurrency } from '@/lib/format';
-import { CreditCardIcon, StarIcon, CheckIcon } from '@/shared/components/icons/AppIcons';
+import { CreditCardIcon, CheckIcon } from '@/shared/components/icons/AppIcons';
 import { HardwareBridgeClient } from '@/features/pos/lib/hardware-bridge-client';
 import { shouldTryAlternateTerminalCharge, canChangePaymentAfterTerminalApproval, isTerminalApprovalLive, terminalAuthorizationLabel } from './pos-terminal-charge-safety';
 import { toast } from '@/shared/components/system-alert';
@@ -16,11 +12,10 @@ import { getBalanceState } from '@/features/pos/lib/pos-balance-state';
 import { useAuthStore } from '@/stores/auth-store';
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
-import type { DeliveryRep } from '@/shared/api/delivery-reps.api';
+export { PosCheckoutCustomerSection, type PosCheckoutCustomerSectionProps } from './PosCheckoutCustomerSection';
+export { PosCheckoutOrderTypeSection, PosCheckoutDeliverySection } from './PosCheckoutFulfillmentSections';
 
 export type PaymentPreset = 'cash' | 'card' | 'wallet' | 'instapay' | 'credit';
-
-type CustomerOption = { id: string | number; name: string; phone?: string | null; address?: string | null };
 
 /* R5-A (INV-REST-TOTALS-TRUTH-2, M24): this used to return NEGATIVE
  * remaining (-remainingDebt / -amountDue) while the cart panel showed
@@ -36,349 +31,6 @@ function getBalancePreview(pos: Pick<PosWorkspaceState, 'paymentType' | 'amountD
     changeAmount: Number(pos.changeAmount || 0),
     total: Number(pos.totals?.total || 0),
   });
-}
-
-export interface PosCheckoutCustomerSectionProps {
-  pos: PosWorkspaceState;
-  selectedCustomerName: string;
-  selectedCustomer: CustomerOption | null;
-  filteredCustomers: CustomerOption[];
-  customerPickerOpen: boolean;
-  customerQuery: string;
-  onCustomerPickerOpenChange: (value: boolean | ((current: boolean) => boolean)) => void;
-  onCustomerQueryChange: (value: string) => void;
-  onQuickCustomerSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  needsCustomer?: boolean;
-  isManualOpen?: boolean;
-  onManualOpen?: () => void;
-  isMobile?: boolean;
-}
-
-export function PosCheckoutCustomerSection({
-  pos,
-  selectedCustomerName,
-  selectedCustomer,
-  filteredCustomers,
-  customerQuery,
-  onCustomerPickerOpenChange,
-  onCustomerQueryChange,
-  onQuickCustomerSubmit,
-  needsCustomer,
-  isManualOpen,
-  onManualOpen,
-  isMobile: isMobileProp,
-}: PosCheckoutCustomerSectionProps) {
-  // INV-FE1-FRONTEND-BOOK-DIGITS: loyalty money values round at the
-  // tenant's book digits (settings currency, global fallback).
-  const bookDigits = currencyMoneyDigits(pos.settings?.currency || pos.settingsQuery?.data?.currency || getGlobalSystemCurrency());
-  const isMobileHook = useIsMobile(860);
-  const isMobile = isMobileProp ?? isMobileHook;
-  const [addressDropdownOpen, setAddressDropdownOpen] = useState(false);
-  const addressesQuery = useQuery({
-    queryKey: ['customerAddresses', pos.customerId],
-    queryFn: () => pos.customerId ? customersApi.addresses(pos.customerId) : Promise.resolve([]),
-    enabled: !!pos.customerId,
-  });
-
-  const addresses = Array.from(new Set([
-    ...(selectedCustomer?.address ? [selectedCustomer.address] : []),
-    ...(addressesQuery.data || [])
-  ])).filter(Boolean);
-
-  const customerPosSummaryQuery = useQuery({
-    queryKey: ['posCustomerSummaryCheckout', pos.customerId],
-    queryFn: () => pos.customerId ? posApi.customerPosSummary(String(pos.customerId)) : Promise.resolve(null),
-    enabled: !!pos.customerId,
-    staleTime: 30_000,
-  });
-  const loyaltyPoints = Number(customerPosSummaryQuery.data?.loyaltyPoints || 0);
-
-  const [isAddingCustomer, setIsAddingCustomer] = useState(false);
-
-  const handleSelectCustomer = (id: string, phone: string, address: string) => {
-    pos.setCustomerId(id);
-    pos.setQuickCustomerPhone(phone);
-    pos.setQuickCustomerAddress(address);
-    pos.setLoyaltyPointsRedeemed?.(0);
-    setIsAddingCustomer(false);
-    onCustomerQueryChange('');
-    onCustomerPickerOpenChange(false);
-  };
-
-  const isHidden = !needsCustomer && !isManualOpen && !pos.customerId;
-
-  if (isHidden) {
-    return (
-      <section className="pos-checkout-dialog-section pos-checkout-customer-section" style={{ padding: 0, marginBottom: 0, border: 'none', background: 'transparent' }}>
-        <Button type="button" variant="secondary" onClick={onManualOpen} style={{ width: '100%', borderStyle: 'dashed', minHeight: '38px', fontSize: '12.5px' }}>
-          + ربط الفاتورة ببيانات عميل (اختياري)
-        </Button>
-      </section>
-    );
-  }
-
-  return (
-    <section className="pos-checkout-dialog-section pos-checkout-customer-section" style={{ padding: 0, marginBottom: 0, border: 'none', background: 'transparent' }}>
-      {!pos.customerId ? (
-        isAddingCustomer ? (
-          <form onSubmit={onQuickCustomerSubmit} style={{ display: 'flex', gap: '6px', alignItems: 'center', width: '100%' }}>
-            <input
-              autoFocus
-              value={pos.quickCustomerName}
-              onChange={(event) => pos.setQuickCustomerName(event.target.value)}
-              placeholder="اسم العميل *"
-              disabled={pos.quickCustomerMutation.isPending}
-              style={{ flex: 1.5, padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1', height: '38px' }}
-            />
-            <input
-              value={pos.quickCustomerPhone}
-              onChange={(event) => pos.setQuickCustomerPhone(event.target.value)}
-              placeholder="الهاتف"
-              disabled={pos.quickCustomerMutation.isPending}
-              style={{ flex: 1.2, padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1', height: '38px' }}
-            />
-            <input
-              value={pos.quickCustomerAddress}
-              onChange={(event) => pos.setQuickCustomerAddress(event.target.value)}
-              placeholder="العنوان (اختياري)"
-              disabled={pos.quickCustomerMutation.isPending}
-              style={{ flex: 2, padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1', height: '38px' }}
-            />
-            <Button type="submit" variant="primary" style={{ flex: '0 0 auto', height: '38px', whiteSpace: 'nowrap', fontSize: '13px', borderRadius: '6px', padding: '0 12px' }} disabled={pos.quickCustomerMutation.isPending || !pos.quickCustomerName.trim()}>
-              {pos.quickCustomerMutation.isPending ? 'جاري...' : 'حفظ'}
-            </Button>
-            <Button type="button" variant="secondary" style={{ flex: '0 0 auto', height: '38px', whiteSpace: 'nowrap', fontSize: '13px', borderRadius: '6px', padding: '0 10px' }} onClick={() => setIsAddingCustomer(false)}>
-              إلغاء
-            </Button>
-          </form>
-        ) : (
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', position: 'relative' }}>
-            <div style={{ flex: 1, position: 'relative' }}>
-              <input
-                autoFocus
-                value={customerQuery}
-                onChange={(event) => onCustomerQueryChange(event.target.value)}
-                placeholder="ابحث عن عميل بالاسم أو رقم الهاتف..."
-                style={{ width: '100%', padding: '8px 12px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1', height: '38px' }}
-              />
-              {customerQuery.trim() && (
-                <div className="pos-checkout-customer-results" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: '4px', background: '#fff', borderRadius: '8px', padding: '6px', border: '1px solid #cbd5e1', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', maxHeight: '200px', overflowY: 'auto' }}>
-                  {filteredCustomers.length ? filteredCustomers.map((customer) => {
-                    const isSelected = String(customer.id) === String(pos.customerId);
-                    return (
-                      <button
-                        key={customer.id}
-                        type="button"
-                        className={`pos-checkout-customer-result ${isSelected ? 'is-selected' : ''}`.trim()}
-                        onClick={() => handleSelectCustomer(String(customer.id), customer.phone || '', customer.address || '')}
-                        style={{ width: '100%', textAlign: 'right', display: 'flex', justifyContent: 'space-between', padding: '8px 10px', borderRadius: '4px', border: 'none', background: isSelected ? '#eff6ff' : 'transparent', cursor: 'pointer' }}
-                      >
-                        <strong>{customer.name}</strong>
-                        <span className="muted small">{customer.phone || 'بدون هاتف'}</span>
-                      </button>
-                    );
-                  }) : (
-                    <div className="surface-note" style={{ padding: '8px', fontSize: '13px' }}>
-                      لا توجد نتائج لـ "{customerQuery}".
-                      <Button type="button" variant="secondary" style={{ marginTop: '8px', width: '100%', height: '34px' }} onClick={() => {
-                        pos.setQuickCustomerName(customerQuery);
-                        setIsAddingCustomer(true);
-                      }}>
-                        إضافة "{customerQuery}" كعميل جديد
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                pos.setQuickCustomerName(customerQuery);
-                setIsAddingCustomer(true);
-              }}
-              style={{ flex: '0 0 auto', height: '38px', whiteSpace: 'nowrap', fontSize: '13px', borderRadius: '6px', padding: '0 12px' }}
-            >
-              + عميل جديد
-            </Button>
-          </div>
-        )
-      ) : (
-        <div
-          className="pos-checkout-selected-customer-card"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '5px',
-            background: '#ffffff',
-            padding: '7px 10px',
-            borderRadius: '8px',
-            border: '1px solid #cbd5e1',
-            width: '100%',
-            boxSizing: 'border-box',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
-              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 700, flexShrink: 0 }}>العميل:</span>
-              <strong style={{ fontSize: '13.5px', color: '#0f172a', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {selectedCustomer?.name || pos.quickCustomerName || (selectedCustomerName !== 'عميل نقدي' ? selectedCustomerName : '') || 'عميل نقدي'}
-              </strong>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => handleSelectCustomer('', '', '')}
-              style={{ flexShrink: 0, height: '26px', minHeight: '26px', padding: '0 10px', fontSize: '11.5px', borderRadius: '5px' }}
-            >
-              تغيير
-            </Button>
-          </div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 0.9fr) minmax(0, 1.3fr)',
-              gap: '6px',
-              width: '100%',
-              boxSizing: 'border-box',
-            }}
-          >
-            <input
-              value={pos.quickCustomerPhone || selectedCustomer?.phone || ''}
-              onChange={(event) => pos.setQuickCustomerPhone(event.target.value)}
-              placeholder="رقم الهاتف"
-              style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', padding: '4px 8px', fontSize: '12.5px', height: '30px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff' }}
-            />
-            <div style={{ minWidth: 0, position: 'relative' }}>
-              <input
-                value={pos.quickCustomerAddress || selectedCustomer?.address || ''}
-                onChange={(event) => pos.setQuickCustomerAddress(event.target.value)}
-                onFocus={() => setAddressDropdownOpen(true)}
-                onBlur={() => setTimeout(() => setAddressDropdownOpen(false), 200)}
-                placeholder="العنوان أو المكان"
-                style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', padding: '4px 8px', fontSize: '12.5px', height: '30px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff' }}
-              />
-              {addressDropdownOpen && addresses.length > 0 && (
-              <div className="pos-checkout-customer-results" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: '2px', background: '#fff', borderRadius: '6px', padding: '4px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-                {addresses.map((addr, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="pos-checkout-customer-result"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      pos.setQuickCustomerAddress(addr);
-                      setAddressDropdownOpen(false);
-                    }}
-                    style={{ width: '100%', textAlign: 'right', padding: '6px 10px', fontSize: '12px', border: 'none', background: 'transparent', cursor: 'pointer' }}
-                  >
-                    <strong>{addr}</strong>
-                  </button>
-                ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {pos.customerId && (pos.settings?.loyaltyEnabled === true) && (loyaltyPoints > 0 || (pos.loyaltyPointsRedeemed || 0) > 0) ? (() => {
-        const pointValue = Number(pos.settings?.loyaltyPointRedeemValue ?? 0.1);
-        const minPoints = Number(pos.settings?.loyaltyMinRedeemPoints ?? 0);
-        const maxPct = Number(pos.settings?.loyaltyMaxDiscountPercentage ?? 100);
-        /* INV-REST-LOYALTY-TRUTH (R6-C, I10): the banner used to show the
-         * UNCAPPED product (points x pointValue) while the totals line
-         * next to it uses the capped loyaltyDiscount — with a tenant cap
-         * below 100% the banner overstated the discount actually given.
-         * Display the already-capped totals value instead; the cap math
-         * itself stays in the derived hook. The minimum gate below used
-         * to default to 50 while the backend defaults to 0 — the display
-         * gate now uses the backend's default. */
-        const discountInCurrency = Number(pos.totals?.loyaltyDiscount || 0);
-        const totalValueInCurrency = roundMoneyValue(loyaltyPoints * pointValue, bookDigits);
-        const subTotal = Number(pos.totals?.subTotal || 0);
-
-        return (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '8px 12px',
-            marginTop: '6px',
-            background: (pos.loyaltyPointsRedeemed || 0) > 0 ? '#ecfdf5' : 'linear-gradient(135deg, #fef3c7, #fde68a)',
-            border: (pos.loyaltyPointsRedeemed || 0) > 0 ? '1px solid #a7f3d0' : '1px solid #fcd34d',
-            borderRadius: '6px',
-            fontSize: '12px',
-            color: (pos.loyaltyPointsRedeemed || 0) > 0 ? '#065f46' : '#92400e'
-          }}>
-            {(pos.loyaltyPointsRedeemed || 0) > 0 ? (
-              <>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <StarIcon size={14} color="#059669" />
-                  <span>تم استبدال <strong>{(pos.loyaltyPointsRedeemed || 0).toLocaleString()} نقطة</strong> بخصم <strong>{discountInCurrency.toLocaleString()} <CurrencySymbol /></strong></span>
-                </span>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => pos.setLoyaltyPointsRedeemed?.(0)}
-                  style={{
-                    height: '28px',
-                    padding: '0 10px',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    background: '#fef2f2',
-                    color: '#991b1b',
-                    border: '1px solid #fecaca',
-                    borderRadius: '4px'
-                  }}
-                >
-                  إلغاء الاستبدال
-                </Button>
-              </>
-            ) : (
-              <>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <StarIcon size={14} color="#b45309" />
-                  <span>رصيد نقاط الولاء: <strong>{loyaltyPoints.toLocaleString()} نقطة</strong> (تساوي {totalValueInCurrency.toLocaleString()} {getGlobalCurrencySymbol()} خصم)</span>
-                </span>
-                {loyaltyPoints < minPoints ? (
-                  <span style={{ fontSize: '11px', color: '#92400e', fontWeight: 600 }}>
-                    (الحد الأدنى للاستبدال: {minPoints} نقطة)
-                  </span>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      const maxAllowedDiscount = (subTotal * maxPct) / 100;
-                      const maxPointsAllowedByCap = Math.floor(maxAllowedDiscount / pointValue);
-                      const pointsToRedeem = Math.min(loyaltyPoints, maxPointsAllowedByCap);
-                      if (pointsToRedeem > 0) {
-                        pos.setLoyaltyPointsRedeemed?.(pointsToRedeem);
-                      }
-                    }}
-                    style={{
-                      height: '28px',
-                      padding: '0 10px',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      background: '#b45309',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '4px'
-                    }}
-                  >
-                    استبدال النقاط بخصم
-                  </Button>
-                )}
-              </>
-            )}
-          </div>
-        );
-      })() : null}
-    </section>
-  );
 }
 
 interface PosCheckoutPaymentSectionProps {
@@ -822,29 +474,43 @@ export function PosCheckoutPaymentSection({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
+        gap: '7px',
         flex: isMobile ? undefined : '1 1 auto',
         height: isMobile ? 'auto' : '100%',
         background: '#ffffff',
-        padding: isMobile ? '10px 12px' : '12px 14px',
+        padding: isMobile ? '10px 12px' : '11px 14px',
         borderRadius: '8px',
         border: '1px solid #cbd5e1',
         boxSizing: 'border-box',
       }}
     >
       {/* Step 1: Payment method buttons (Strict Country Isolation) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', minHeight: '20px' }}>
-          <span style={{ fontSize: '12px', fontWeight: 800, color: '#1e293b', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0 }}>
+        <div
+          className="pos-checkout-payment-card-header"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            height: '26px',
+            minHeight: '26px',
+            maxHeight: '26px',
+            overflow: 'hidden',
+            flexShrink: 0,
+            boxSizing: 'border-box',
+          }}
+        >
+          <span style={{ fontSize: '12px', fontWeight: 800, color: '#1e293b', display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', flexShrink: 0 }}>
             <span style={{ width: '3px', height: '13px', background: '#170e5e', borderRadius: '1px', display: 'inline-block' }} />
             طريقة الدفع والتحصيل
           </span>
           {isSplitActive ? (
-            <span style={{ fontSize: '11px', fontWeight: 700, color: '#170e5e', background: '#eef2ff', border: '1px solid #c7d2fe', padding: '1px 7px', borderRadius: '4px' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', height: '22px', lineHeight: 1, fontSize: '11px', fontWeight: 700, color: '#170e5e', background: '#eef2ff', border: '1px solid #c7d2fe', padding: '0 8px', borderRadius: '4px', whiteSpace: 'nowrap', flexShrink: 0, boxSizing: 'border-box' }}>
               دفع مقسّم ({activeLegsCount} طرق)
             </span>
           ) : isCodUnpaid ? (
-            <span style={{ fontSize: '11px', fontWeight: 700, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', padding: '1px 7px', borderRadius: '4px' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', height: '22px', lineHeight: 1, fontSize: '11px', fontWeight: 700, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', padding: '0 8px', borderRadius: '4px', whiteSpace: 'nowrap', flexShrink: 0, boxSizing: 'border-box' }}>
               تحصيل عند التسليم
             </span>
           ) : null}
@@ -864,7 +530,7 @@ export function PosCheckoutPaymentSection({
                 onSelectPaymentPreset('cash');
                 pos.setTerminalPaymentDetails?.(null);
               }}
-              style={{ minHeight: '36px', fontSize: '12.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cashVal > 0) : undefined) }}
+              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cashVal > 0) : undefined) }}
             >
               نقدي
             </Button>
@@ -887,7 +553,7 @@ export function PosCheckoutPaymentSection({
                   provider: 'knet_pos',
                 });
               }}
-              style={{ minHeight: '36px', fontSize: '11.5px', fontWeight: 800, ...(isCardSplitActive && (pos.terminalPaymentDetails?.cardScheme === 'knet' || !pos.terminalPaymentDetails?.cardScheme) ? splitLegStyle(true) : undefined) }}
+              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '11.5px', fontWeight: 700, ...(isCardSplitActive && (pos.terminalPaymentDetails?.cardScheme === 'knet' || !pos.terminalPaymentDetails?.cardScheme) ? splitLegStyle(true) : undefined) }}
             >
               كي نت K-NET
             </Button>
@@ -909,7 +575,7 @@ export function PosCheckoutPaymentSection({
                   cardScheme: 'visa',
                 });
               }}
-              style={{ minHeight: '36px', fontSize: '12px', fontWeight: 700, ...(isCardSplitActive && pos.terminalPaymentDetails?.cardScheme && pos.terminalPaymentDetails?.cardScheme !== 'knet' ? splitLegStyle(true) : undefined) }}
+              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 700, ...(isCardSplitActive && pos.terminalPaymentDetails?.cardScheme && pos.terminalPaymentDetails?.cardScheme !== 'knet' ? splitLegStyle(true) : undefined) }}
             >
               فيزا / ماستر
             </Button>
@@ -924,7 +590,7 @@ export function PosCheckoutPaymentSection({
                 onSelectPaymentPreset('credit');
                 pos.setTerminalPaymentDetails?.(null);
               }}
-              style={{ minHeight: '36px', fontSize: '12.5px', fontWeight: 700 }}
+              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12.5px', fontWeight: 700 }}
             >
               آجل
             </Button>
@@ -939,7 +605,7 @@ export function PosCheckoutPaymentSection({
                 onSelectPaymentPreset(pos.paymentChannel === 'instapay' ? 'instapay' : 'wallet');
                 pos.setTerminalPaymentDetails?.(null);
               }}
-              style={{ minHeight: '36px', fontSize: '11.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(transferVal > 0) : undefined) }}
+              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '11.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(transferVal > 0) : undefined) }}
             >
               روابط دفع / تحويل
             </Button>
@@ -958,7 +624,7 @@ export function PosCheckoutPaymentSection({
                 onSelectPaymentPreset('cash');
                 pos.setTerminalPaymentDetails?.(null);
               }}
-              style={{ minHeight: '36px', fontSize: '12.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cashVal > 0) : undefined) }}
+              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cashVal > 0) : undefined) }}
             >
               نقدي
             </Button>
@@ -981,7 +647,7 @@ export function PosCheckoutPaymentSection({
                   provider: 'geidea',
                 });
               }}
-              style={{ minHeight: '36px', fontSize: '11.5px', fontWeight: 800, ...(isCardSplitActive && (pos.terminalPaymentDetails?.cardScheme === 'mada' || !pos.terminalPaymentDetails?.cardScheme) ? splitLegStyle(true) : undefined) }}
+              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '11.5px', fontWeight: 700, ...(isCardSplitActive && (pos.terminalPaymentDetails?.cardScheme === 'mada' || !pos.terminalPaymentDetails?.cardScheme) ? splitLegStyle(true) : undefined) }}
             >
               مدى mada
             </Button>
@@ -1003,7 +669,7 @@ export function PosCheckoutPaymentSection({
                   cardScheme: 'visa',
                 });
               }}
-              style={{ minHeight: '36px', fontSize: '12px', fontWeight: 700, ...(isCardSplitActive && pos.terminalPaymentDetails?.cardScheme && pos.terminalPaymentDetails?.cardScheme !== 'mada' ? splitLegStyle(true) : undefined) }}
+              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 700, ...(isCardSplitActive && pos.terminalPaymentDetails?.cardScheme && pos.terminalPaymentDetails?.cardScheme !== 'mada' ? splitLegStyle(true) : undefined) }}
             >
               فيزا / ماستر
             </Button>
@@ -1018,7 +684,7 @@ export function PosCheckoutPaymentSection({
                 onSelectPaymentPreset('credit');
                 pos.setTerminalPaymentDetails?.(null);
               }}
-              style={{ minHeight: '36px', fontSize: '12.5px', fontWeight: 700 }}
+              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12.5px', fontWeight: 700 }}
             >
               آجل
             </Button>
@@ -1033,7 +699,7 @@ export function PosCheckoutPaymentSection({
                 onSelectPaymentPreset(pos.paymentChannel === 'wallet' ? 'wallet' : 'instapay');
                 pos.setTerminalPaymentDetails?.(null);
               }}
-              style={{ minHeight: '36px', fontSize: '11.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(transferVal > 0) : undefined) }}
+              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '11.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(transferVal > 0) : undefined) }}
             >
               دفع إلكتروني / محافظ
             </Button>
@@ -1052,7 +718,7 @@ export function PosCheckoutPaymentSection({
                 onSelectPaymentPreset('cash');
                 pos.setTerminalPaymentDetails?.(null);
               }}
-              style={{ minHeight: '36px', fontSize: '12.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cashVal > 0) : undefined) }}
+              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cashVal > 0) : undefined) }}
             >
               نقدي
             </Button>
@@ -1070,7 +736,7 @@ export function PosCheckoutPaymentSection({
                   cardScheme: isKwdStore ? 'knet' : isKsaStore ? 'mada' : 'visa',
                 });
               }}
-              style={{ minHeight: '36px', fontSize: '12px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cardVal > 0) : undefined) }}
+              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cardVal > 0) : undefined) }}
             >
               {isKwdStore ? 'KNET كي نت' : isKsaStore ? 'شبكة / مدى' : 'فيزا / كارت'}
             </Button>
@@ -1085,7 +751,7 @@ export function PosCheckoutPaymentSection({
                 onSelectPaymentPreset(pos.paymentChannel === 'wallet' ? 'wallet' : 'instapay');
                 pos.setTerminalPaymentDetails?.(null);
               }}
-              style={{ minHeight: '36px', fontSize: '11.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(transferVal > 0) : undefined) }}
+              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '11.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(transferVal > 0) : undefined) }}
             >
               تحويلات / محافظ
             </Button>
@@ -1100,7 +766,7 @@ export function PosCheckoutPaymentSection({
                 onSelectPaymentPreset('credit');
                 pos.setTerminalPaymentDetails?.(null);
               }}
-              style={{ minHeight: '36px', fontSize: '12.5px', fontWeight: 700 }}
+              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12.5px', fontWeight: 700 }}
             >
               آجل
             </Button>
@@ -1109,40 +775,45 @@ export function PosCheckoutPaymentSection({
 
         {/* Fixed-height Sub-Slot: prevents any vertical layout jump when switching payment methods */}
         <div
+          className="pos-checkout-payment-subslot"
           style={{
+            height: '38px',
             minHeight: '38px',
+            maxHeight: '38px',
             display: 'flex',
             alignItems: 'center',
             width: '100%',
+            overflow: 'hidden',
+            flexShrink: 0,
             boxSizing: 'border-box',
           }}
         >
           {transferSelected ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '6px', width: '100%' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '6px', width: '100%', height: '36px', boxSizing: 'border-box' }}>
               {isKwdStore ? (
                 <>
-                  <Button type="button" variant={pos.paymentChannel !== 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('instapay')} style={{ minHeight: '34px', fontSize: '11.5px', fontWeight: 700 }}>
+                  <Button type="button" variant={pos.paymentChannel !== 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('instapay')} style={{ height: '36px', minHeight: '36px', maxHeight: '36px', fontSize: '11.5px', fontWeight: 700, boxSizing: 'border-box', whiteSpace: 'nowrap' }}>
                     رابط دفع K-NET
                   </Button>
-                  <Button type="button" variant={pos.paymentChannel === 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('wallet')} style={{ minHeight: '34px', fontSize: '11.5px', fontWeight: 700 }}>
+                  <Button type="button" variant={pos.paymentChannel === 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('wallet')} style={{ height: '36px', minHeight: '36px', maxHeight: '36px', fontSize: '11.5px', fontWeight: 700, boxSizing: 'border-box', whiteSpace: 'nowrap' }}>
                     Apple Pay / محفظة
                   </Button>
                 </>
               ) : isKsaStore ? (
                 <>
-                  <Button type="button" variant={pos.paymentChannel === 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('wallet')} style={{ minHeight: '34px', fontSize: '11.5px', fontWeight: 700 }}>
+                  <Button type="button" variant={pos.paymentChannel === 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('wallet')} style={{ height: '36px', minHeight: '36px', maxHeight: '36px', fontSize: '11.5px', fontWeight: 700, boxSizing: 'border-box', whiteSpace: 'nowrap' }}>
                     STC Pay / محفظة
                   </Button>
-                  <Button type="button" variant={pos.paymentChannel !== 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('instapay')} style={{ minHeight: '34px', fontSize: '11.5px', fontWeight: 700 }}>
+                  <Button type="button" variant={pos.paymentChannel !== 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('instapay')} style={{ height: '36px', minHeight: '36px', maxHeight: '36px', fontSize: '11.5px', fontWeight: 700, boxSizing: 'border-box', whiteSpace: 'nowrap' }}>
                     Apple Pay / سداد
                   </Button>
                 </>
               ) : (
                 <>
-                  <Button type="button" variant={pos.paymentChannel !== 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('instapay')} style={{ minHeight: '34px', fontSize: '12px', fontWeight: 800 }}>
+                  <Button type="button" variant={pos.paymentChannel !== 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('instapay')} style={{ height: '36px', minHeight: '36px', maxHeight: '36px', fontSize: '12px', fontWeight: 700, boxSizing: 'border-box', whiteSpace: 'nowrap' }}>
                     InstaPay
                   </Button>
-                  <Button type="button" variant={pos.paymentChannel === 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('wallet')} style={{ minHeight: '34px', fontSize: '12px', fontWeight: 700 }}>
+                  <Button type="button" variant={pos.paymentChannel === 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('wallet')} style={{ height: '36px', minHeight: '36px', maxHeight: '36px', fontSize: '12px', fontWeight: 700, boxSizing: 'border-box', whiteSpace: 'nowrap' }}>
                     محافظ إلكترونية
                   </Button>
                 </>
@@ -1156,23 +827,27 @@ export function PosCheckoutPaymentSection({
                 justifyContent: 'space-between',
                 gap: '6px',
                 width: '100%',
+                height: '36px',
                 minHeight: '36px',
+                maxHeight: '36px',
                 background: '#f8fafc',
                 border: '1px solid #e2e8f0',
                 borderRadius: '6px',
-                padding: '3px 8px',
+                padding: '0 8px',
+                overflow: 'hidden',
                 boxSizing: 'border-box',
               }}
             >
-              <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#64748b', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#64748b', whiteSpace: 'nowrap', flexShrink: 0 }}>
                 المستلم:
               </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'nowrap', overflowX: 'auto', scrollbarWidth: 'none', justifyContent: 'flex-end', minWidth: 0 }}>
                 <button
                   type="button"
                   onClick={() => pos.setCashAmount(totalAmount)}
                   style={{
                     height: '26px',
+                    lineHeight: 1,
                     padding: '0 8px',
                     borderRadius: '5px',
                     border: Math.abs(cashVal - totalAmount) < 0.001 ? '1.5px solid #170e5e' : '1px solid #cbd5e1',
@@ -1182,6 +857,8 @@ export function PosCheckoutPaymentSection({
                     fontWeight: 700,
                     cursor: 'pointer',
                     whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                    boxSizing: 'border-box',
                   }}
                 >
                   بالضبط ({totalAmount})
@@ -1195,6 +872,7 @@ export function PosCheckoutPaymentSection({
                       onClick={() => pos.setCashAmount(denom)}
                       style={{
                         height: '26px',
+                        lineHeight: 1,
                         padding: '0 9px',
                         borderRadius: '5px',
                         border: isSelected ? '1.5px solid #170e5e' : '1px solid #cbd5e1',
@@ -1204,6 +882,8 @@ export function PosCheckoutPaymentSection({
                         fontWeight: 700,
                         cursor: 'pointer',
                         whiteSpace: 'nowrap',
+                        flexShrink: 0,
+                        boxSizing: 'border-box',
                       }}
                     >
                       {denom}
@@ -1216,7 +896,9 @@ export function PosCheckoutPaymentSection({
             <div
               style={{
                 width: '100%',
+                height: '36px',
                 minHeight: '36px',
+                maxHeight: '36px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -1227,10 +909,11 @@ export function PosCheckoutPaymentSection({
                 fontSize: '11.5px',
                 fontWeight: 600,
                 color: '#475569',
+                overflow: 'hidden',
                 boxSizing: 'border-box',
               }}
             >
-              <span>
+              <span style={{ display: 'block', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {isSplitActive
                   ? `دفع مقسّم (${activeLegsCount} طرق): عدّل المبالغ أدناه أو اختر طريقة للتحويل الكامل.`
                   : isCreditSale
@@ -1258,7 +941,7 @@ export function PosCheckoutPaymentSection({
       >
         {/* Cash Leg */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px', minHeight: '18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px', height: '20px', minHeight: '20px', maxHeight: '20px', overflow: 'hidden', boxSizing: 'border-box' }}>
             <label
               htmlFor="pos-checkout-cash-input"
               style={{
@@ -1268,6 +951,8 @@ export function PosCheckoutPaymentSection({
                 margin: 0,
                 cursor: isCreditSale ? 'not-allowed' : 'pointer',
                 whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}
             >
               نقدي
@@ -1281,11 +966,17 @@ export function PosCheckoutPaymentSection({
                   border: '1px solid #cbd5e1',
                   color: '#170e5e',
                   borderRadius: '4px',
+                  height: '18px',
+                  lineHeight: 1,
                   padding: '0 6px',
                   fontSize: '10.5px',
                   fontWeight: 700,
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  flexShrink: 0,
+                  boxSizing: 'border-box',
                 }}
               >
                 + {remainingUnpaid}
@@ -1312,7 +1003,7 @@ export function PosCheckoutPaymentSection({
               borderRadius: '6px',
               fontSize: '14px',
               fontWeight: 800,
-              border: cashVal > 0 && !isCreditSale ? '1.5px solid #170e5e' : '1px solid #cbd5e1',
+              border: cashVal > 0 && !isCreditSale ? '1.5px solid #170e5e' : '1.5px solid #cbd5e1',
               background: isCreditSale ? '#f1f5f9' : '#ffffff',
               color: isCreditSale ? '#94a3b8' : '#0f172a',
               textAlign: 'center',
@@ -1322,7 +1013,7 @@ export function PosCheckoutPaymentSection({
 
         {/* Card Leg */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px', minHeight: '18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px', height: '20px', minHeight: '20px', maxHeight: '20px', overflow: 'hidden', boxSizing: 'border-box' }}>
             <label
               htmlFor="pos-checkout-card-input"
               style={{
@@ -1332,6 +1023,8 @@ export function PosCheckoutPaymentSection({
                 margin: 0,
                 cursor: isCreditSale ? 'not-allowed' : 'pointer',
                 whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}
             >
               {(isKwdStore && pos.terminalPaymentDetails?.cardScheme === 'knet'
@@ -1349,11 +1042,17 @@ export function PosCheckoutPaymentSection({
                   border: '1px solid #cbd5e1',
                   color: '#170e5e',
                   borderRadius: '4px',
+                  height: '18px',
+                  lineHeight: 1,
                   padding: '0 6px',
                   fontSize: '10.5px',
                   fontWeight: 700,
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  flexShrink: 0,
+                  boxSizing: 'border-box',
                 }}
               >
                 + {remainingUnpaid}
@@ -1378,7 +1077,7 @@ export function PosCheckoutPaymentSection({
               borderRadius: '6px',
               fontSize: '14px',
               fontWeight: 800,
-              border: cardVal > 0 && !isCreditSale ? '1.5px solid #170e5e' : '1px solid #cbd5e1',
+              border: cardVal > 0 && !isCreditSale ? '1.5px solid #170e5e' : '1.5px solid #cbd5e1',
               background: isCreditSale || isTerminalApproved ? '#f1f5f9' : '#ffffff',
               color: isCreditSale ? '#94a3b8' : '#0f172a',
               textAlign: 'center',
@@ -1388,7 +1087,7 @@ export function PosCheckoutPaymentSection({
 
         {/* Transfer / Wallet Leg */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px', minHeight: '18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px', height: '20px', minHeight: '20px', maxHeight: '20px', overflow: 'hidden', boxSizing: 'border-box' }}>
             <label
               htmlFor="pos-checkout-transfer-input"
               style={{
@@ -1398,6 +1097,8 @@ export function PosCheckoutPaymentSection({
                 margin: 0,
                 cursor: isCreditSale ? 'not-allowed' : 'pointer',
                 whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}
             >
               {pos.paymentChannel === 'instapay'
@@ -1415,11 +1116,17 @@ export function PosCheckoutPaymentSection({
                   border: '1px solid #cbd5e1',
                   color: '#170e5e',
                   borderRadius: '4px',
+                  height: '18px',
+                  lineHeight: 1,
                   padding: '0 6px',
                   fontSize: '10.5px',
                   fontWeight: 700,
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  flexShrink: 0,
+                  boxSizing: 'border-box',
                 }}
               >
                 + {remainingUnpaid}
@@ -1444,7 +1151,7 @@ export function PosCheckoutPaymentSection({
               borderRadius: '6px',
               fontSize: '14px',
               fontWeight: 800,
-              border: transferVal > 0 && !isCreditSale ? '1.5px solid #170e5e' : '1px solid #cbd5e1',
+              border: transferVal > 0 && !isCreditSale ? '1.5px solid #170e5e' : '1.5px solid #cbd5e1',
               background: isCreditSale ? '#f1f5f9' : '#ffffff',
               color: isCreditSale ? '#94a3b8' : '#0f172a',
               textAlign: 'center',
@@ -1674,23 +1381,32 @@ export function PosCheckoutPaymentSection({
 
       {/* Gratuity / Tip Selector (Restaurants Only) */}
       {isRestaurant && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          background: '#f8fafc',
-          border: '1px solid #e2e8f0',
-          borderRadius: '6px',
-          padding: '5px 10px',
-          gap: '8px',
-          flexWrap: 'wrap',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div
+          className="pos-checkout-tip-row"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: '6px',
+            padding: isMobile ? '5px 8px' : '0 8px',
+            height: isMobile ? undefined : '36px',
+            minHeight: isMobile ? undefined : '36px',
+            maxHeight: isMobile ? undefined : '36px',
+            gap: '4px',
+            flexWrap: isMobile ? 'wrap' : 'nowrap',
+            overflow: isMobile ? 'visible' : 'hidden',
+            flexShrink: 0,
+            boxSizing: 'border-box',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', minWidth: 0 }}>
             <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
               إكرامية:
             </span>
             {Number(pos.tipAmount || 0) > 0 ? (
-              <span style={{ background: '#eef2ff', color: '#170e5e', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', height: '20px', lineHeight: 1, background: '#eef2ff', color: '#170e5e', padding: '0 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
                 +{formatCurrency(pos.tipAmount)}
               </span>
             ) : null}
@@ -1723,7 +1439,7 @@ export function PosCheckoutPaymentSection({
               }
             };
             return (
-              <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
                 {tipPresets.map((preset) => (
                   <button
                     key={preset}
@@ -1731,8 +1447,9 @@ export function PosCheckoutPaymentSection({
                     onClick={() => applyTipChange(preset)}
                     disabled={isTerminalApproved}
                     style={{
-                      height: '26px',
-                      padding: '0 8px',
+                      height: '24px',
+                      lineHeight: 1,
+                      padding: '0 7px',
                       borderRadius: '4px',
                       border: (pos.tipAmount || 0) === preset ? '1px solid #170e5e' : '1px solid #cbd5e1',
                       background: (pos.tipAmount || 0) === preset ? '#170e5e' : '#ffffff',
@@ -1740,6 +1457,9 @@ export function PosCheckoutPaymentSection({
                       fontSize: '11px',
                       fontWeight: 700,
                       cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                      boxSizing: 'border-box',
                     }}
                   >
                     {preset === 0
@@ -1761,19 +1481,21 @@ export function PosCheckoutPaymentSection({
                   disabled={isTerminalApproved}
                   placeholder="مخصص"
                   style={{
-                    width: isKwdStore ? '70px' : '60px',
-                    height: '26px',
+                    width: isKwdStore ? '64px' : '54px',
+                    height: '24px',
                     borderRadius: '4px',
                     border: Number(pos.tipAmount || 0) > 0 && !tipPresets.includes(Number(pos.tipAmount || 0))
                       ? '1.5px solid #170e5e'
-                      : '1px solid #cbd5e1',
+                      : '1.5px solid #cbd5e1',
                     textAlign: 'center',
-                    fontSize: '11.5px',
+                    fontSize: '11px',
                     fontWeight: 700,
                     color: '#0f172a',
                     background: Number(pos.tipAmount || 0) > 0 && !tipPresets.includes(Number(pos.tipAmount || 0))
                       ? '#eef2ff'
                       : '#ffffff',
+                    boxSizing: 'border-box',
+                    flexShrink: 0,
                   }}
                 />
               </div>
@@ -1862,599 +1584,6 @@ export function PosCheckoutPaymentSection({
 
       {!pos.canApplyDiscount ? <div className="pos-payment-strip-notes" style={{ margin: 0 }}><span className="pos-payment-strip-note">{pos.discountApprovalGranted ? 'تم اعتماد الخصم لهذه الفاتورة فقط.' : 'لا تملك صلاحية تعديل الخصم. استخدم اعتماد المدير لهذه الفاتورة.'}</span></div> : null}
       {pos.hasDiscountPermissionViolation ? <div className="error-box" style={{ margin: 0, textAlign: 'center' }}>تم اكتشاف خصم غير مسموح به في هذه الفاتورة.</div> : null}
-    </div>
-  );
-}
-
-export function PosCheckoutOrderTypeSection({
-  pos,
-  onDeliverySelected
-}: {
-  pos: PosWorkspaceState;
-  onDeliverySelected?: () => void;
-}) {
-  const currentSettings = pos.settingsQuery?.data;
-  const isRestaurant = currentSettings?.restaurantModuleEnabled === true;
-  const isKwdStore = isKuwait(currentSettings);
-  const isKsaStore = isSaudi(currentSettings);
-
-  // The pager field is strictly for restaurants in Kuwait/Saudi, or if explicitly enabled by the restaurant
-  const showPager = isRestaurant && pos.orderType !== 'delivery' && (isKwdStore || isKsaStore || Boolean(currentSettings?.enableGuestPagers));
-  // INV-REST-PAID-GATES-2 (R4-D, I40): the order type drives the
-  // service charge, so it is a total-changing input — frozen while a
-  // terminal approval is live.
-  const isTerminalApproved = isTerminalApprovalLive(pos.terminalPaymentDetails);
-
-  return (
-    <div style={{ display: 'flex', gap: '8px', width: '100%', alignItems: 'center' }}>
-      <Button
-        type="button"
-        variant={pos.orderType === 'takeaway' || !pos.orderType ? 'primary' : 'secondary'}
-        onClick={() => pos.setOrderType('takeaway')}
-        disabled={isTerminalApproved}
-        style={{ flex: 1, minHeight: '36px', fontSize: '13px', fontWeight: 700 }}
-      >
-        {isRestaurant ? 'تيك أواي' : 'بيع مباشر (استلام)'}
-      </Button>
-      <Button 
-        type="button" 
-        variant={pos.orderType === 'delivery' ? 'primary' : 'secondary'} 
-        onClick={() => {
-          pos.setOrderType('delivery');
-          if (pos.orderType !== 'delivery') {
-            onDeliverySelected?.();
-          }
-        }}
-        disabled={isTerminalApproved}
-        style={{ flex: 1, minHeight: '36px', fontSize: '13px', fontWeight: 700 }}
-      >
-        دليفري (توصيل)
-      </Button>
-      {isRestaurant && (
-        <Button
-          type="button"
-          variant={pos.orderType === 'dine_in' ? 'primary' : 'secondary'}
-          onClick={() => pos.setOrderType('dine_in')}
-          disabled={isTerminalApproved}
-          style={{ flex: 1, minHeight: '36px', fontSize: '13px', fontWeight: 700 }}
-        >
-          صالة (طاولات)
-        </Button>
-      )}
-      {showPager && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: '#ffffff',
-            border: '1px solid #cbd5e1',
-            borderRadius: '6px',
-            padding: '2px 8px',
-            height: '38px',
-            boxSizing: 'border-box',
-          }}
-        >
-          <span style={{ fontSize: '11px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>البيجر:</span>
-          <input
-            type="text"
-            value={(pos as any).pagerNumber || ''}
-            onChange={(e) => (pos as any).setPagerNumber?.(e.target.value)}
-            placeholder="رقم البيجر..."
-            style={{
-              width: '90px',
-              height: '28px',
-              padding: '0 6px',
-              fontSize: '12px',
-              fontWeight: 800,
-              border: '1px solid #e2e8f0',
-              borderRadius: '4px',
-              textAlign: 'center',
-              background: '#f8fafc',
-            }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function PosCheckoutDeliverySection({ pos, deliveryReps, isMobile: isMobileProp }: { pos: PosWorkspaceState, deliveryReps: DeliveryRep[], isMobile?: boolean }) {
-  const isMobileHook = useIsMobile(860);
-  const isMobile = isMobileProp ?? isMobileHook;
-  const currentSettings = pos.settings || pos.settingsQuery?.data;
-  const isKwdStore = isKuwait(currentSettings);
-  const isKsaStore = isSaudi(currentSettings);
-  // INV-REST-PAID-GATES-2 (R4-D, I40): the delivery fee is a
-  // total-changing input — frozen while a terminal approval is live.
-  const isTerminalApproved = isTerminalApprovalLive(pos.terminalPaymentDetails);
-
-  const deliveryChannels = isKwdStore
-    ? [
-        { id: 'direct', label: 'مباشر (المحل)' },
-        { id: 'talabat', label: 'طلبات Talabat' },
-        { id: 'deliveroo', label: 'دليفرو Deliveroo' },
-        { id: 'jahez', label: 'جاهز Jahez' },
-        { id: 'cari', label: 'كاري Cari' },
-      ]
-    : isKsaStore
-    ? [
-        { id: 'direct', label: 'مباشر (المحل)' },
-        { id: 'jahez', label: 'جاهز Jahez' },
-        { id: 'hungerstation', label: 'هنقرستيشن Hungerstation' },
-        { id: 'toyou', label: 'تويو ToYou' },
-        { id: 'mrsool', label: 'مرسول Mrsool' },
-      ]
-    : [
-        { id: 'direct', label: 'مباشر (المحل)' },
-        { id: 'talabat', label: 'طلبات Talabat' },
-      ];
-
-  const [repSearchOpen, setRepSearchOpen] = useState(false);
-  const [repSearchQuery, setRepSearchQuery] = useState('');
-  const inputContainerRef = useRef<HTMLDivElement | null>(null);
-  const dropdownPortalRef = useRef<HTMLDivElement | null>(null);
-  const [dropdownCoords, setDropdownCoords] = useState<{ top: number; left: number; width: number } | null>(null);
-
-  const activeReps = deliveryReps.filter((r) => r.is_active);
-  const selectedRep = activeReps.find((r) => String(r.id) === String(pos.deliveryRepId));
-  const filteredReps = activeReps.filter(r => r.name.toLowerCase().includes(repSearchQuery.toLowerCase()) || r.phone?.includes(repSearchQuery));
-
-  const updateDropdownCoords = useCallback(() => {
-    if (!inputContainerRef.current) return;
-    const rect = inputContainerRef.current.getBoundingClientRect();
-    setDropdownCoords({
-      top: Math.round(rect.bottom + 4),
-      left: Math.round(rect.left),
-      width: Math.round(rect.width),
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!repSearchOpen) {
-      setDropdownCoords(null);
-      return;
-    }
-    updateDropdownCoords();
-    const handleViewportChange = () => {
-      updateDropdownCoords();
-    };
-    window.addEventListener('resize', handleViewportChange);
-    window.addEventListener('scroll', handleViewportChange, true);
-    return () => {
-      window.removeEventListener('resize', handleViewportChange);
-      window.removeEventListener('scroll', handleViewportChange, true);
-    };
-  }, [repSearchOpen, updateDropdownCoords]);
-
-  useEffect(() => {
-    if (!repSearchOpen) return;
-    const handleDocumentMouseDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        inputContainerRef.current && !inputContainerRef.current.contains(target) &&
-        dropdownPortalRef.current && !dropdownPortalRef.current.contains(target)
-      ) {
-        setRepSearchOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleDocumentMouseDown);
-    return () => document.removeEventListener('mousedown', handleDocumentMouseDown);
-  }, [repSearchOpen]);
-
-  const handleClearRep = (e?: React.MouseEvent) => {
-    e?.preventDefault();
-    e?.stopPropagation();
-    pos.setDeliveryRepId('');
-    pos.setDeliveryFeeMode('store_fleet');
-    setRepSearchQuery('');
-    setRepSearchOpen(false);
-  };
-
-  const handleSelectRep = (repId: string, repType?: string) => {
-    pos.setDeliveryRepId(repId);
-    if (repType === 'store_fleet') {
-      pos.setDeliveryFeeMode('store_fleet');
-    } else if (repType === 'freelance') {
-      pos.setDeliveryFeeMode('freelance_courier');
-    }
-    setRepSearchQuery('');
-    setRepSearchOpen(false);
-  };
-
-  if (pos.orderType !== 'delivery') return null;
-
-  const isRepRequired = pos.collectionStatus === 'cod';
-  const isRepMissing = isRepRequired && !selectedRep;
-
-  return (
-    <div style={{
-      display: 'grid',
-      gap: '5px',
-      background: '#fff',
-      padding: '7px 10px',
-      borderRadius: '8px',
-      border: '1px solid #cbd5e1',
-      marginBottom: 0,
-      boxSizing: 'border-box',
-      width: '100%'
-    }}>
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: isMobile ? 'minmax(0, 1fr) 110px' : 'minmax(0, 2fr) minmax(0, 1fr)',
-        gap: '8px',
-        alignItems: 'end',
-        width: '100%',
-        boxSizing: 'border-box'
-      }}>
-        <div style={{ position: 'relative', minWidth: 0 }}>
-          <label className="field" style={{ margin: 0, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: '12px', fontWeight: 700, color: isRepMissing ? '#dc2626' : '#64748b', marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', whiteSpace: 'nowrap' }}>
-              <span>مندوب التوصيل {isRepRequired ? <span style={{ color: '#dc2626' }}>*</span> : <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: '11px' }}>(اختياري)</span>}</span>
-              {selectedRep && (
-                <button
-                  type="button"
-                  onMouseDown={handleClearRep}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#ef4444',
-                    fontSize: '11.5px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    padding: '0 4px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '2px'
-                  }}
-                  title="مسح المندوب"
-                >
-                  ✕ إلغاء المندوب
-                </button>
-              )}
-            </span>
-            <div ref={inputContainerRef} style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'center' }}>
-              <input
-                placeholder={selectedRep?.name || (isRepRequired ? "-- اختر مندوب التوصيل --" : "-- مندوب التوصيل (اختياري) --")}
-                value={repSearchOpen ? repSearchQuery : (selectedRep?.name || '')}
-                onFocus={() => {
-                  setRepSearchOpen(true);
-                  updateDropdownCoords();
-                }}
-                onClick={() => {
-                  setRepSearchOpen(true);
-                  updateDropdownCoords();
-                }}
-                onChange={(e) => {
-                  setRepSearchQuery(e.target.value);
-                  if (!repSearchOpen) setRepSearchOpen(true);
-                  updateDropdownCoords();
-                }}
-                style={{
-                  boxSizing: 'border-box',
-                  padding: selectedRep ? '4px 34px 4px 30px' : '4px 30px 4px 10px',
-                  height: '34px',
-                  width: '100%',
-                  minWidth: 0,
-                  borderRadius: '6px',
-                  border: isRepMissing ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                  background: isRepMissing ? '#fff5f5' : 'white',
-                  fontSize: '12.5px',
-                  fontWeight: selectedRep && !repSearchOpen ? 800 : 500,
-                  color: selectedRep && !repSearchOpen ? '#0f172a' : 'inherit',
-                  cursor: 'pointer'
-                }}
-              />
-              {selectedRep && (
-                <button
-                  type="button"
-                  onMouseDown={handleClearRep}
-                  style={{
-                    position: 'absolute',
-                    left: '8px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: '#fee2e2',
-                    border: 'none',
-                    borderRadius: '50%',
-                    width: '22px',
-                    height: '22px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#dc2626',
-                    cursor: 'pointer',
-                    fontSize: '11px',
-                    fontWeight: 900,
-                    zIndex: 2
-                  }}
-                  title="مسح المندوب"
-                >
-                  ✕
-                </button>
-              )}
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  setRepSearchOpen(prev => {
-                    const next = !prev;
-                    if (next) updateDropdownCoords();
-                    return next;
-                  });
-                }}
-                style={{
-                  position: 'absolute',
-                  right: '8px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#94a3b8',
-                  cursor: 'pointer',
-                  fontSize: '11px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '4px',
-                  zIndex: 2
-                }}
-                title={repSearchOpen ? 'إغلاق القائمة' : 'فتح قائمة المناديب'}
-              >
-                {repSearchOpen ? '▲' : '▼'}
-              </button>
-            </div>
-          </label>
-
-          {repSearchOpen && dropdownCoords && typeof document !== 'undefined' && createPortal(
-            <div 
-              ref={dropdownPortalRef}
-              style={{ 
-                position: 'fixed',
-                top: `${dropdownCoords.top}px`,
-                left: `${dropdownCoords.left}px`,
-                width: `${dropdownCoords.width}px`,
-                background: '#ffffff',
-                border: '1.5px solid #cbd5e1', 
-                borderRadius: '8px',
-                zIndex: 100000,
-                maxHeight: '230px', 
-                overflowY: 'auto',
-                boxShadow: '0 12px 32px rgba(15, 23, 42, 0.25), 0 4px 12px rgba(0, 0, 0, 0.1)',
-                boxSizing: 'border-box',
-              }}
-              dir="rtl"
-            >
-              {selectedRep && (
-                <div
-                  style={{
-                    padding: '8px 12px',
-                    cursor: 'pointer',
-                    borderBottom: '1.5px dashed #fecaca',
-                    background: '#fff5f5',
-                    color: '#dc2626',
-                    fontSize: '12px',
-                    fontWeight: 800,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
-                  }}
-                  onMouseDown={handleClearRep}
-                >
-                  <span>✕ إلغاء تحديد المندوب (حذف)</span>
-                  <span style={{ fontSize: '11px', color: '#991b1b', fontWeight: 500 }}>مسح المندوب الحالي</span>
-                </div>
-              )}
-
-              {filteredReps.length === 0 && (
-                <div style={{ padding: '10px 12px', color: '#dc2626', fontSize: '12px', fontWeight: 600 }}>
-                  {activeReps.length === 0 ? 'لا يوجد مناديب مسجلين بالنظام' : 'لا توجد نتائج مطابقة'}
-                </div>
-              )}
-              {filteredReps.map(rep => (
-                <div 
-                  key={rep.id}
-                  style={{ 
-                    padding: '8px 12px', cursor: 'pointer', 
-                    borderBottom: '1px solid #f1f5f9',
-                    background: String(rep.id) === String(pos.deliveryRepId) ? '#eff6ff' : '#ffffff',
-                    color: String(rep.id) === String(pos.deliveryRepId) ? '#170c5c' : '#334155',
-                    fontSize: '13px',
-                    fontWeight: String(rep.id) === String(pos.deliveryRepId) ? 800 : 500,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
-                  }}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    handleSelectRep(String(rep.id), (rep as any).rep_type);
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = '#f8fafc')}
-                  onMouseLeave={(e) => {
-                    if (String(rep.id) !== String(pos.deliveryRepId)) e.currentTarget.style.background = '#ffffff';
-                    else e.currentTarget.style.background = '#eff6ff';
-                  }}
-                >
-                  <div>
-                    <span>{rep.name}</span>
-                    {rep.phone ? <span style={{ color: '#94a3b8', fontSize: '11px', marginRight: '6px' }}>({rep.phone})</span> : null}
-                    {(rep as any).rep_type === 'store_fleet' ? <span style={{ color: '#059669', fontSize: '10px', marginRight: '6px', background: '#ecfdf5', padding: '1px 6px', borderRadius: '4px' }}>أسطول المحل</span> : null}
-                  </div>
-                  {String(rep.id) === String(pos.deliveryRepId) && (
-                    <span style={{ color: '#10b981', fontSize: '12px', fontWeight: 900 }}>✓ محدد</span>
-                  )}
-                </div>
-              ))}
-            </div>,
-            document.body
-          )}
-        </div>
-
-        <div className="field" style={{ margin: 0, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', marginBottom: '2px', display: 'block', textAlign: 'center', whiteSpace: 'nowrap' }}>رسوم التوصيل ({getGlobalCurrencySymbol()})</span>
-          <input
-            className="no-spin-arrows"
-            type="number"
-            min="0"
-            step="0.01"
-            value={pos.deliveryFee === 0 ? '' : pos.deliveryFee}
-            onWheel={(e) => e.currentTarget.blur()}
-            onFocus={(e) => e.currentTarget.select()}
-            onChange={(event) => pos.setDeliveryFee(Number(event.target.value || 0))}
-            disabled={isTerminalApproved}
-            placeholder="0"
-            style={{ boxSizing: 'border-box', padding: '4px 8px', height: '34px', width: '100%', minWidth: 0, borderRadius: '6px', border: '1px solid #cbd5e1', fontWeight: 700, fontSize: '13.5px', textAlign: 'center' }}
-          />
-        </div>
-      </div>
-
-      {/* Aggregator / Channel Source Tag Selector */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', minWidth: 0 }}>
-        <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>
-          مصدر طلب التوصيل (قناة الاستلام):
-        </span>
-        <div
-          className="pos-checkout-channels-row"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            flexWrap: 'nowrap',
-            overflowX: 'auto',
-            WebkitOverflowScrolling: 'touch',
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-            paddingBottom: '2px',
-            width: '100%',
-            boxSizing: 'border-box',
-          }}
-        >
-          {deliveryChannels.map((channel) => {
-            const isSelected = channel.id === 'direct'
-              ? !deliveryChannels.filter(c => c.id !== 'direct').some(c => (pos.note || '').includes(c.label.split(' ')[0]))
-              : (pos.note || '').includes(channel.label.split(' ')[0]);
-
-            return (
-              <button
-                key={channel.id}
-                type="button"
-                className="pos-checkout-channel-btn"
-                onClick={() => {
-                  const hadPlatformTag = (pos.note || '') !== (pos.note || '').replace(/\[(مصدر|منصة|قناة):[^\]]+\]/g, '') ||
-                    deliveryChannels.filter(c => c.id !== 'direct').some(c => (pos.note || '').includes(c.label.split(' ')[0]));
-                  let nextNote = (pos.note || '').replace(/\[(مصدر|منصة|قناة):[^\]]+\]/g, '').trim();
-                  deliveryChannels.filter(c => c.id !== 'direct').forEach(c => {
-                    nextNote = nextNote.replace(new RegExp(`\\[?منصة:?\\s*${c.label.split(' ')[0]}[^\\]]*\\]?`, 'gi'), '').trim();
-                  });
-                  if (channel.id !== 'direct') {
-                    nextNote = `[منصة: ${channel.label}] ${nextNote}`.trim();
-                    // Auto-set collection to prepaid_online because customers pay through the aggregator app
-                    pos.setCollectionStatus('prepaid_online');
-                    pos.setPaymentChannel('wallet');
-                    pos.setTransferAmount(Number(pos.totals.total || 0));
-                    pos.setCashAmount(0);
-                    pos.setCardAmount(0);
-                  } else if (hadPlatformTag && pos.collectionStatus === 'prepaid_online') {
-                    pos.setCollectionStatus('cod');
-                    pos.setPaymentChannel('cash');
-                    pos.setTransferAmount(0);
-                    pos.setCashAmount(0);
-                    pos.setCardAmount(0);
-                  }
-                  pos.setNote(nextNote);
-                }}
-                style={{
-                  flexShrink: 0,
-                  whiteSpace: 'nowrap',
-                  padding: isMobile ? '3px 8px' : '4px 10px',
-                  borderRadius: '6px',
-                  fontSize: isMobile ? '11px' : '12px',
-                  fontWeight: isSelected ? 800 : 600,
-                  border: isSelected ? '1.5px solid #170e5e' : '1px solid #cbd5e1',
-                  background: isSelected ? '#170e5e' : '#f8fafc',
-                  color: isSelected ? '#ffffff' : '#334155',
-                  cursor: 'pointer',
-                  transition: 'none',
-                }}
-              >
-                {channel.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: isMobile ? '4px' : '8px', width: '100%', boxSizing: 'border-box' }}>
-        {(['cod', 'prepaid_by_rep', 'prepaid_online'] as const).map((status) => (
-          <Button
-            key={status}
-            type="button"
-            variant={pos.collectionStatus === status ? 'primary' : 'secondary'}
-            onClick={() => {
-              pos.setCollectionStatus(status);
-              if (status === 'cod') {
-                pos.setPaymentChannel('cash');
-                pos.setCashAmount(0);
-                pos.setCardAmount(0);
-                pos.setTransferAmount(0);
-              } else if (status === 'prepaid_by_rep') {
-                pos.setPaymentChannel('cash');
-                pos.setCashAmount(Number(pos.totals.total || 0));
-                pos.setCardAmount(0);
-                pos.setTransferAmount(0);
-              } else if (status === 'prepaid_online') {
-                pos.setPaymentChannel('wallet');
-                pos.setTransferAmount(Number(pos.totals.total || 0));
-                pos.setCashAmount(0);
-                pos.setCardAmount(0);
-              }
-            }}
-            style={{
-              fontSize: isMobile ? '11px' : '12.5px',
-              padding: isMobile ? '5px 2px' : '5px 4px',
-              minHeight: '34px',
-              fontWeight: 700,
-              textAlign: 'center',
-              lineHeight: 1.2,
-            }}
-          >
-            {status === 'cod' ? 'تحصيل من العميل' : status === 'prepaid_by_rep' ? 'خالص من المندوب' : 'خالص أونلاين'}
-          </Button>
-        ))}
-      </div>
-
-      {/* INV-REST-COD-COLLECTION-TRUTH (T11-D): the effective
-       * collection status, in words, before confirm — the cashier
-       * sees who holds the cash (courier / rep / gateway) instead of
-       * discovering it on the posted invoice. An unstated status is
-       * COD: the courier collects, nothing is prepaid. */}
-      <div
-        data-testid="pos-collection-status-summary"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '1px',
-          width: '100%',
-          boxSizing: 'border-box',
-          padding: '5px 8px',
-          borderRadius: '6px',
-          border: `1px solid ${pos.collectionStatus === 'cod' || !pos.collectionStatus ? '#fde68a' : '#bbf7d0'}`,
-          background: pos.collectionStatus === 'cod' || !pos.collectionStatus ? '#fffbeb' : '#f0fdf4',
-        }}
-      >
-        <span style={{ fontSize: '11.5px', fontWeight: 800, color: '#170e5e' }}>
-          {`التحصيل: ${pos.collectionStatus === 'prepaid_by_rep' ? 'خالص من المندوب' : pos.collectionStatus === 'prepaid_online' ? 'خالص أونلاين' : 'تحصيل من العميل'}`}
-        </span>
-        <span style={{ fontSize: '11px', fontWeight: 600, color: '#475569', lineHeight: 1.35 }}>
-          {pos.collectionStatus === 'prepaid_by_rep'
-            ? 'المبلغ مع المندوب — لا يُحصَّل من العميل عند التسليم.'
-            : pos.collectionStatus === 'prepaid_online'
-              ? 'المبلغ مدفوع مسبقاً عبر القناة الإلكترونية — لا يُحصَّل من العميل عند التسليم.'
-              : selectedRep
-                ? `المندوب ${selectedRep.name} يحصّل المبلغ عند التسليم — لم يُسجَّل أي نقد بعد.`
-                : 'المندوب يحصّل المبلغ عند التسليم — لم يُسجَّل أي نقد بعد. اختر المندوب قبل التأكيد.'}
-        </span>
-      </div>
     </div>
   );
 }

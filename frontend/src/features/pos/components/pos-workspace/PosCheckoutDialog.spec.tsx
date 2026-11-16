@@ -361,6 +361,12 @@ describe('PosCheckoutDialog — single active payment button & no-spin inputs', 
     const totalLabel = screen.getByText('الإجمالي');
     const totalRow = totalLabel.parentElement as HTMLElement | null;
     expect(totalRow?.style.fontSize).toBe('17.5px');
+
+    const totalsCard = document.body.querySelector('.pos-checkout-totals-card') as HTMLElement | null;
+    const rightCol = document.body.querySelectorAll('.pos-checkout-col-pane')[0] as HTMLElement | null;
+    expect(totalsCard).not.toBeNull();
+    expect(totalsCard?.style.marginTop).toBe('auto');
+    expect(rightCol?.lastElementChild).toBe(totalsCard);
   }, 30000);
 
   it('suppresses redundant customer-added success banner and stacks selected customer card cleanly on delivery', () => {
@@ -380,5 +386,61 @@ describe('PosCheckoutDialog — single active payment button & no-spin inputs', 
     expect(customerCard).not.toBeNull();
     expect(screen.getByPlaceholderText('رقم الهاتف')).toHaveValue('01205004477');
     expect(screen.getByPlaceholderText('العنوان أو المكان')).toHaveValue('المعادي شارع 9');
+  }, 30000);
+
+  it('locks header, subslot, tip bar, and delivery summary dimensions when تحصيل عند التسليم toggles', () => {
+    const { rerender } = renderDialog(makePos({
+      orderType: 'delivery',
+      collectionStatus: 'cod',
+      cashAmount: 0,
+      cardAmount: 0,
+      transferAmount: 0,
+      settings: { restaurantModuleEnabled: true },
+      settingsQuery: { data: { restaurantModuleEnabled: true } },
+    }));
+
+    const codBadge = screen.getByText('تحصيل عند التسليم');
+    const cardHeader = document.body.querySelector('.pos-checkout-payment-card-header') as HTMLElement;
+    const subslot = document.body.querySelector('.pos-checkout-payment-subslot') as HTMLElement;
+    const tipRow = document.body.querySelector('.pos-checkout-tip-row') as HTMLElement;
+    const collectionSummary = screen.getByTestId('pos-collection-status-summary');
+    const columns = document.body.querySelectorAll('.pos-checkout-col-pane');
+
+    expect(columns).toHaveLength(2);
+    expect(codBadge.style.height).toBe('22px');
+    expect(cardHeader.style.height).toBe('26px');
+    expect(cardHeader.style.minHeight).toBe('26px');
+    expect(cardHeader.style.maxHeight).toBe('26px');
+    expect(subslot.style.height).toBe('38px');
+    expect(tipRow.style.height).toBe('36px');
+    expect(collectionSummary.style.height).toBe('46px');
+
+    rerender(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <MemoryRouter>
+          <PosCheckoutDialog
+            open
+            pos={makePos({
+              orderType: 'delivery',
+              collectionStatus: 'prepaid_by_rep',
+              cashAmount: 150,
+              paidAmount: 150,
+              amountDue: 0,
+              settings: { restaurantModuleEnabled: true },
+              settingsQuery: { data: { restaurantModuleEnabled: true } },
+            }) as any}
+            selectedCustomerName="عميل نقدي"
+            onClose={vi.fn()}
+            onConfirmSale={vi.fn()}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.queryByText('تحصيل عند التسليم')).toBeNull();
+    expect(cardHeader.style.height).toBe('26px');
+    expect(subslot.style.height).toBe('38px');
+    expect(tipRow.style.height).toBe('36px');
+    expect(screen.getByTestId('pos-collection-status-summary').style.height).toBe('46px');
   }, 30000);
 });

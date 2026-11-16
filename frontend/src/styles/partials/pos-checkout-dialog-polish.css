@@ -47,6 +47,35 @@
 
   .dialog-overlay.pos-checkout-dialog-overlay .pos-checkout-dialog-shell.is-detailed .pos-checkout-dialog {
     flex: 1 1 0px !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    padding-inline-end: 0 !important;
+  }
+
+  .dialog-overlay.pos-checkout-dialog-overlay .pos-checkout-dialog-shell.is-detailed .pos-checkout-main-grid {
+    flex: 1 1 0px !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .dialog-overlay.pos-checkout-dialog-overlay .pos-checkout-dialog-shell.is-detailed .pos-checkout-col-pane {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    scrollbar-gutter: stable;
+  }
+
+  .dialog-overlay.pos-checkout-dialog-overlay .pos-checkout-dialog-shell.is-detailed .pos-checkout-dialog-actions {
+    height: auto !important;
+    min-height: 52px !important;
+    max-height: none !important;
+    flex: 0 0 auto !important;
+    padding: 10px 0 4px !important;
+    margin-top: 4px !important;
+    overflow: visible !important;
   }
 }
 
@@ -390,8 +419,8 @@
 
 .pos-checkout-dialog-actions {
   flex-shrink: 0 !important;
-  margin-top: 8px !important;
-  padding-top: 8px !important;
+  margin-top: 6px !important;
+  padding: 10px 0 4px !important;
   border-top: 1px solid #e2e8f0 !important;
   background: #fff !important;
   display: flex !important;
@@ -399,7 +428,8 @@
   gap: 8px !important;
   justify-content: space-between !important;
   width: 100% !important;
-  min-height: 46px !important;
+  min-height: 52px !important;
+  overflow: visible !important;
   box-sizing: border-box !important;
 }
 
