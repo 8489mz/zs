@@ -1,7 +1,10 @@
 import 'reflect-metadata';
 import { strict as assert } from 'node:assert';
 import { validate } from 'class-validator';
-import { StorefrontService } from '../../src/modules/storefront/storefront.service';
+import { Logger } from '@nestjs/common';
+import { StorefrontOrderCreateService } from '../../src/modules/storefront/services/storefront-order-create.service';
+import { StorefrontCustomerOrdersService } from '../../src/modules/storefront/services/storefront-customer-orders.service';
+import { hashOrderAccessToken } from '../../src/modules/storefront/engines/online-order-access.engine';
 import { CreateOnlineOrderDto } from '../../src/modules/storefront/dto/create-online-order.dto';
 
 /*
@@ -60,21 +63,66 @@ const PRODUCT = {
   is_active: true, item_type: 'product', stock_qty: 100, reserved_qty: 0,
 };
 
+// The gates live in the T2 (create) and T3 (edit) slices now (storefront split
+// 2026-11-16). The slices capture their deps at construction, so stubbing
+// methods on a facade instance no longer reaches them — construct the slices
+// directly with stub deps instead. The edit token must be >= 16 chars: the
+// real findCustomerOrderByToken verifies it against the stored sha256 hash.
+const ORDER_TOKEN = 'test-token-0123456789';
+
 function makeService(): any {
-  const svc: any = new (StorefrontService as any)(makeFakeDb({ products: [PRODUCT], product_offers: [] }), {}, {}, {});
-  svc.getTenantBySlug = async () => ({ id: 'tenant-1', currency: 'EGP', slug: 'shop', activity_type: null });
-  svc.getTenantSettingsMap = async () => new Map<string, string>([['currency', 'EGP']]);
-  svc.reapExpiredReservations = async () => undefined;
-  svc.resolveOrderCharges = async () => ({
+  const fakeDb = makeFakeDb({
+    products: [PRODUCT],
+    product_offers: [],
+    online_orders: [{
+      id: 1,
+      tenant_id: 'tenant-1',
+      order_number: 'ORD-1',
+      status: 'pending',
+      kitchen_draft_sale_id: null,
+      sale_id: null,
+      payment_status: 'unpaid',
+      fulfillment_type: 'delivery',
+      order_type: 'delivery',
+      country_code: 'EG',
+      access_token_hash: hashOrderAccessToken(ORDER_TOKEN),
+    }],
+  });
+  const tenant = { id: 'tenant-1', currency: 'EGP', slug: 'shop', activity_type: null };
+  const settings = new Map<string, string>([['currency', 'EGP']]);
+  const charges = {
     deliveryFee: 0, deliveryZoneId: null, deliveryZoneName: null,
-    discountAmount: 0, appliedCouponCode: null,
-  });
-  svc.findCustomerOrderByToken = async () => ({
-    status: 'pending', kitchen_draft_sale_id: null, sale_id: null,
-    payment_status: 'unpaid', fulfillment_type: 'delivery', order_type: 'delivery',
-    country_code: 'EG',
-  });
-  return svc;
+    discountAmount: 0, appliedCouponCode: null, couponId: null,
+  };
+  const orderCreate = new StorefrontOrderCreateService({
+    db: fakeDb,
+    planFeatureService: { hasFeature: () => true } as any,
+    getTenantBySlug: async () => tenant,
+    getTenantSettingsMap: async () => settings,
+    claimCouponUse: async () => undefined,
+    resolveStorefrontStockScope: async () => ({ branchId: null, locations: [] }),
+    resolveOrderCharges: async () => charges,
+    normalizeOnlineOrderModifiers: () => [],
+    onlineOrderModifiersTotal: () => 0,
+    enforceOnlineOrderModifierContract: async () => undefined,
+    reapExpiredReservations: async () => undefined,
+  } as any);
+  const customerOrders = new StorefrontCustomerOrdersService({
+    db: fakeDb,
+    getTenantBySlug: async () => tenant,
+    getTenantSettingsMap: async () => settings,
+    resolveOrderCharges: async () => charges,
+    normalizeOnlineOrderModifiers: () => [],
+    onlineOrderModifiersTotal: () => 0,
+    enforceOnlineOrderModifierContract: async () => undefined,
+    claimCouponUse: async () => undefined,
+    releaseCouponUse: async () => undefined,
+    logger: new Logger('contact-minima-spec'),
+  } as any);
+  return {
+    createOnlineOrder: (...args: any[]) => (orderCreate as any).createOnlineOrder(...args),
+    updateCustomerOrder: (...args: any[]) => (customerOrders as any).updateCustomerOrder(...args),
+  };
 }
 
 const GATE_WORDS = /اسم|عنوان|هاتف/;
@@ -112,14 +160,14 @@ async function main(): Promise<void> {
   await expectGateError(
     svc.createOnlineOrder('shop', { ...baseDto, customerName: 'ل' }), 'حرفين');
   await expectGateError(
-    svc.updateCustomerOrder('shop', 'ORD-1', 'tok', { ...baseDto, customerName: 'A' }), 'حرفين');
+    svc.updateCustomerOrder('shop', 'ORD-1', ORDER_TOKEN, { ...baseDto, customerName: 'A' }), 'حرفين');
 
   // A blank (whitespace-only) address is rejected; a short real address passes.
   await expectGateError(
     svc.createOnlineOrder('shop', { ...baseDto, customerAddress: '   ' }), 'عنوان');
   await expectPastGates(svc.createOnlineOrder('shop', { ...baseDto, customerAddress: 'ab' }));
   await expectGateError(
-    svc.updateCustomerOrder('shop', 'ORD-1', 'tok', { ...baseDto, customerAddress: '   ' }), 'عنوان');
+    svc.updateCustomerOrder('shop', 'ORD-1', ORDER_TOKEN, { ...baseDto, customerAddress: '   ' }), 'عنوان');
 
   // PHONE REGRESSION — the Egyptian rule is unchanged.
   await expectGateError(
