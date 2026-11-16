@@ -48,11 +48,12 @@ export class DeliveryRepsController {
     @Query('dateFrom') dateFrom: string,
     @Query('dateTo') dateTo: string,
     @Query('status') status: string,
+    @Query('discountedOnly') discountedOnly: string,
     @Query('page') page: string,
     @Query('pageSize') pageSize: string,
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
-    return this.service.listOrders(id, req.authContext!, { dateFrom, dateTo, status, page: Number(page), pageSize: Number(pageSize) });
+    return this.service.listOrders(id, req.authContext!, { dateFrom, dateTo, status, discountedOnly: discountedOnly === 'true', page: Number(page), pageSize: Number(pageSize) });
   }
 
   @Get(':id/settlements')
@@ -114,6 +115,16 @@ export class DeliveryRepsController {
     @Req() req: RequestWithAuth,
   ): Promise<Record<string, unknown>> {
     return this.service.getRepSummary(id, req.authContext!);
+  }
+
+  // INV-VAN-PROFIT-REP-REPORTING: unified rep lifetime report.
+  @Get(':id/lifetime-report')
+  @RequirePermissions('deliveryReps')
+  getRepLifetimeReport(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithAuth,
+  ): Promise<Record<string, unknown>> {
+    return this.service.getRepLifetimeReport(id, req.authContext!);
   }
 
   @Post('dispatch')

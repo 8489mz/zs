@@ -20,6 +20,14 @@ export function DeliveryRepPerformance({ repId }: { repId: number | null }) {
     enabled: !!repId,
   });
 
+  // INV-VAN-PROFIT-REP-REPORTING: unified lifetime report — today's
+  // sales, the current target and the lifetime totals in one response.
+  const lifetimeQuery = useQuery({
+    queryKey: ['delivery-rep-lifetime', repId],
+    queryFn: () => deliveryRepsApi.getLifetimeReport(repId!),
+    enabled: !!repId,
+  });
+
   const repsQuery = useQuery({
     queryKey: ['delivery-reps'],
     queryFn: deliveryRepsApi.list,
@@ -172,6 +180,54 @@ export function DeliveryRepPerformance({ repId }: { repId: number | null }) {
           <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t('delivery_reps.delivery_rep_performance.s18', "متوسط وقت التوريد لكل طلب")}</span>
         </div>
       </div>
+
+      {/* INV-VAN-PROFIT-REP-REPORTING: lifetime report — today, target, lifetime totals */}
+      {lifetimeQuery.data && (
+        <div style={{ background: '#ffffff', padding: '16px', border: '1px solid #cbd5e1', borderRadius: '10px', boxShadow: '0 2px 6px rgba(15, 23, 42, 0.03)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>{t('delivery_reps.delivery_rep_performance.s19', "تقرير المندوب الشامل (من أول يوم)")}</span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', fontSize: '12px' }}>
+            <div>
+              <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>{t('delivery_reps.delivery_rep_performance.s20', "مبيعات اليوم")}</span>
+              <strong style={{ color: '#0f172a', fontSize: '16px' }}>{Number(lifetimeQuery.data.today.salesTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+              <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>{lifetimeQuery.data.today.salesCount} {t('delivery_reps.delivery_rep_performance.s21', "فاتورة")}</span>
+            </div>
+            <div>
+              <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>{t('delivery_reps.delivery_rep_performance.s22', "إجمالي المبيعات (من أول يوم)")}</span>
+              <strong style={{ color: '#0f172a', fontSize: '16px' }}>{Number(lifetimeQuery.data.lifetime.salesTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+              <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>{lifetimeQuery.data.lifetime.salesCount} {t('delivery_reps.delivery_rep_performance.s21', "فاتورة")}</span>
+            </div>
+            <div>
+              <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>{t('delivery_reps.delivery_rep_performance.s23', "إجمالي التحصيلات")}</span>
+              <strong style={{ color: '#0f172a', fontSize: '16px' }}>{Number(lifetimeQuery.data.lifetime.collectionsTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+            </div>
+            <div>
+              <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>{t('delivery_reps.delivery_rep_performance.s24', "إجمالي الخصومات")}</span>
+              <strong style={{ color: '#0f172a', fontSize: '16px' }}>{Number(lifetimeQuery.data.lifetime.discountsTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+              <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>{lifetimeQuery.data.lifetime.discountedInvoicesCount} {t('delivery_reps.delivery_rep_performance.s25', "فاتورة مخصومة")}</span>
+            </div>
+            <div>
+              <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>{t('delivery_reps.delivery_rep_performance.s26', "المستحق حسب اليوم (من أول يوم)")}</span>
+              <strong style={{ color: lifetimeQuery.data.totalDue > 0 ? '#dc2626' : '#15803d', fontSize: '16px' }}>{Number(lifetimeQuery.data.totalDue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+            </div>
+          </div>
+          {lifetimeQuery.data.currentTarget && (
+            <div>
+              <span style={{ color: '#64748b', fontSize: '11px' }}>
+                {t('delivery_reps.delivery_rep_performance.s27', "هدف الشهر الحالي:")} {Number(lifetimeQuery.data.currentTarget.actualSalesMtd || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })} / {Number(lifetimeQuery.data.currentTarget.targetAmount || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+              </span>
+              <div style={{ height: '8px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden', marginTop: '4px' }}>
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${lifetimeQuery.data.currentTarget.targetAmount > 0 ? Math.min(100, (Number(lifetimeQuery.data.currentTarget.actualSalesMtd || 0) / Number(lifetimeQuery.data.currentTarget.targetAmount)) * 100) : 0}%`,
+                    background: '#170e5e',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -110,20 +110,55 @@ export class DailyCommercialRollupService {
       cogsQuery = cogsQuery.where('s.branch_id', '=', branchId);
     }
 
-    // 3. Cancelled / Returns Aggregate
+    // 3. Real returns aggregate (INV-VAN-PROFIT-REP-REPORTING).
+    // BEFORE: returns were counted as CANCELLED sales only
+    // (status = 'cancelled') — a cancelled sale is not a return, and
+    // real return_documents were never subtracted, so the rollup's
+    // net profit disagreed with the summary's netOperatingProfit on
+    // any day with returns. NOW: real returns (return_documents
+    // joined to sales, return_type = 'sale', same tenant-day window
+    // on the RETURN's date — the day the return happened, matching
+    // the summary, which counts returns in the period regardless of
+    // the sale date). Cancelled sales stay excluded from salesTotal
+    // (section 1) and are counted nowhere: they never happened
+    // commercially. The branch filter uses the return's own branch
+    // (rd.branch_id), the same column the summary's scope filter
+    // applies to return_documents.
     let returnsQuery = (this.db as any)
-      .selectFrom('sales')
+      .selectFrom('return_documents as rd')
+      .innerJoin('sales as s', (j: any) => j.onRef('s.id', '=', 'rd.invoice_id').onRef('s.tenant_id', '=', 'rd.tenant_id'))
       .select([
         sql<number>`COALESCE(COUNT(*), 0)`.as('returns_count'),
-        sql<number>`COALESCE(SUM(total), 0)`.as('returns_total'),
+        sql<number>`COALESCE(SUM(rd.total), 0)`.as('returns_total'),
       ])
-      .where('tenant_id', '=', tenantId)
-      .where('status', '=', 'cancelled')
-      .where('created_at', '>=', startOfDay)
-      .where('created_at', '<=', endOfDay);
+      .where('rd.tenant_id', '=', tenantId)
+      .where('rd.return_type', '=', 'sale')
+      .where('rd.created_at', '>=', startOfDay)
+      .where('rd.created_at', '<=', endOfDay);
 
     if (branchId) {
-      returnsQuery = returnsQuery.where('branch_id', '=', branchId);
+      returnsQuery = returnsQuery.where('rd.branch_id', '=', branchId);
+    }
+
+    // 3b. Returned-items COGS (same fallback as the pivot's
+    // item-level net_profit: the return line's cost, else the sale
+    // line's cost). The stored cogs_total below is NET of this, so
+    // a stored row reconciles from its own columns:
+    // gross_profit = (sales_total − returns_total) − cogs_total.
+    let returnedCogsQuery = (this.db as any)
+      .selectFrom('return_items as ri')
+      .innerJoin('return_documents as rd', (j: any) => j.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'))
+      .leftJoin('sale_items as si', (j: any) => j.onRef('si.id', '=', 'ri.sale_item_id').onRef('si.tenant_id', '=', 'ri.tenant_id'))
+      .select(
+        sql<number>`COALESCE(SUM(ri.qty * COALESCE(ri.cost_price, si.cost_price, 0)), 0)`.as('returned_cogs_total'),
+      )
+      .where('rd.tenant_id', '=', tenantId)
+      .where('rd.return_type', '=', 'sale')
+      .where('rd.created_at', '>=', startOfDay)
+      .where('rd.created_at', '<=', endOfDay);
+
+    if (branchId) {
+      returnedCogsQuery = returnedCogsQuery.where('rd.branch_id', '=', branchId);
     }
 
     // 4. Expenses Aggregate
@@ -138,10 +173,11 @@ export class DailyCommercialRollupService {
       expensesQuery = expensesQuery.where('branch_id', '=', branchId);
     }
 
-    const [salesRow, cogsRow, returnsRow, expensesRow] = await Promise.all([
+    const [salesRow, cogsRow, returnsRow, returnedCogsRow, expensesRow] = await Promise.all([
       salesQuery.executeTakeFirst(),
       cogsQuery.executeTakeFirst(),
       returnsQuery.executeTakeFirst(),
+      returnedCogsQuery.executeTakeFirst(),
       expensesQuery.executeTakeFirst(),
     ]);
 
@@ -150,10 +186,17 @@ export class DailyCommercialRollupService {
     const salesTotal = this.toBookMoney(salesRow?.sales_total, bookDigits);
     const cashSalesTotal = this.toBookMoney(salesRow?.cash_total, bookDigits);
     const creditSalesTotal = this.toBookMoney(salesRow?.credit_total, bookDigits);
-    const cogsTotal = this.toBookMoney(cogsRow?.cogs_total, bookDigits);
-    const grossProfit = this.toBookMoney(salesTotal - cogsTotal, bookDigits);
+    // INV-VAN-PROFIT-REP-REPORTING: cogs_total is stored NET of
+    // returned-items COGS, so gross profit reconciles from the stored
+    // row: (sales_total − returns_total) − cogs_total. The pre-P6
+    // stored value was gross COGS with returns never subtracted.
+    const cogsTotal = this.toBookMoney(
+      Number(cogsRow?.cogs_total || 0) - Number(returnedCogsRow?.returned_cogs_total || 0),
+      bookDigits,
+    );
     const returnsCount = Number(returnsRow?.returns_count || 0);
     const returnsTotal = this.toBookMoney(returnsRow?.returns_total, bookDigits);
+    const grossProfit = this.toBookMoney(salesTotal - returnsTotal - cogsTotal, bookDigits);
     const expensesTotal = this.toBookMoney(expensesRow?.expenses_total, bookDigits);
     const netProfit = this.toBookMoney(grossProfit - expensesTotal, bookDigits);
 
@@ -208,6 +251,39 @@ export class DailyCommercialRollupService {
       expensesTotal,
       netProfit,
     };
+  }
+
+  /**
+   * INV-VAN-PROFIT-REP-REPORTING: one-off backfill for the P6 returns
+   * fix. Stored rollup rows are DERIVED aggregates, not posted
+   * journals — recomputing them changes no journal, no sale, no
+   * return. Each day in [dateFrom, dateTo] is recomputed through
+   * computeAndStoreDailyRollup (idempotent upsert), so the run is
+   * safe to repeat. The operator runs it once after deploy for the
+   * affected range (e.g. from the first return date); the manual
+   * compute-day endpoint and any nightly job keep future days
+   * correct automatically. Branch-scoped rows recompute only when
+   * branchId is given; otherwise the tenant-wide row (branch_key -1)
+   * is recomputed. Returns {recomputedDays} for the caller to log.
+   */
+  async recomputeRollupsForRange(
+    tenantId: string,
+    dateFrom: string,
+    dateTo: string,
+    branchId?: number,
+  ): Promise<{ recomputedDays: number; from: string; to: string }> {
+    const from = new Date(`${dateFrom}T00:00:00.000Z`);
+    const to = new Date(`${dateTo}T00:00:00.000Z`);
+    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || to < from) {
+      throw new Error('recomputeRollupsForRange requires a valid dateFrom <= dateTo (YYYY-MM-DD)');
+    }
+    let recomputedDays = 0;
+    for (let d = new Date(from); d <= to; d = new Date(d.getTime() + 24 * 60 * 60 * 1000)) {
+      const key = d.toISOString().slice(0, 10);
+      await this.computeAndStoreDailyRollup(tenantId, key, branchId);
+      recomputedDays += 1;
+    }
+    return { recomputedDays, from: dateFrom, to: dateTo };
   }
 
   /**

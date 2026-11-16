@@ -355,6 +355,7 @@ export class VanSalesController {
     @Query('paymentMethod') paymentMethod?: string,
     @Query('search') search?: string,
     @Query('tripId') tripId?: string,
+    @Query('discountedOnly') discountedOnly?: string,
   ) {
     const driver = await this.verifyDriver(authHeader);
     const sales = await this.vanSalesService.listDriverSales(driver.tenantId, driver.repId, {
@@ -363,6 +364,7 @@ export class VanSalesController {
       paymentMethod,
       search,
       tripId: tripId ? Number(tripId) : undefined,
+      discountedOnly: discountedOnly === 'true',
     });
     return { ok: true, sales };
   }

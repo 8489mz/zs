@@ -1,7 +1,7 @@
 import { type Kysely, sql } from '../../../database/kysely';
 import { Database } from '../../../database/database.types';
 import { ReportRangeQueryDto } from '../dto/report-query.dto';
-import { applyReportScopeFilter, buildTenantPredicate } from './reports-query.helper';
+import { applyDeliveryRepReturnsFilter, applyDeliveryRepSalesFilter, applyReportScopeFilter, buildTenantPredicate } from './reports-query.helper';
 import { sumMoney, toMoney } from './reports-math.helper';
 import { roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 
@@ -168,6 +168,14 @@ export function buildCommercialSummary(counts: SummaryCounts, totals: SummaryTot
       netOperatingProfit,
       informationalOnlyPurchasesInPeriod: netPurchases,
     },
+    // INV-VAN-PROFIT-REP-REPORTING: the net-profit view needs the tax
+    // components explicitly (the summary previously exposed only the
+    // netted figures). Additive — no existing consumer changes.
+    tax: {
+      salesTaxTotal: toMoney(totals.salesTaxTotal || 0),
+      salesReturnTaxTotal: toMoney(totals.salesReturnTaxTotal || 0),
+      returnsNetOfTax: returnedNetOfTax,
+    },
     delivery: {
       count: totals.deliveryCount ?? 0,
       total: totals.deliveryTotal ?? 0,
@@ -331,7 +339,8 @@ export async function buildReportSummaryAggregates(args: {
     ? sql<boolean>`delivery_fee > 0 and (delivery_fee_mode = 'store_fleet' or delivery_fee_mode is null)`
     : sql<boolean>`delivery_fee > 0 and delivery_fee_mode = 'store_fleet'`;
 
-  const salesAggQuery = applyReportScopeFilter(
+  // INV-VAN-PROFIT-REP-REPORTING: the rep filter scopes the sales side.
+  const salesAggQuery = applyDeliveryRepSalesFilter(applyReportScopeFilter(
     db
       .selectFrom('sales')
       .select([
@@ -351,7 +360,7 @@ export async function buildReportSummaryAggregates(args: {
       .where('created_at', '<=', toDate)
       .where(buildTenantPredicate(tenantId)),
     query,
-  );
+  ), query);
 
   const purchasesAggQuery = applyReportScopeFilter(
     db
@@ -408,7 +417,7 @@ export async function buildReportSummaryAggregates(args: {
     query, 'm',
   );
 
-  const returnsAggQuery = applyReportScopeFilter(
+  const returnsAggQuery = applyDeliveryRepReturnsFilter(applyReportScopeFilter(
     db
       .selectFrom('return_documents')
       .select([
@@ -421,9 +430,9 @@ export async function buildReportSummaryAggregates(args: {
       .where(buildTenantPredicate(tenantId))
       .groupBy('return_type'),
     query,
-  );
+  ), query);
 
-  const salesReturnTaxQuery = applyReportScopeFilter(
+  const salesReturnTaxQuery = applyDeliveryRepReturnsFilter(applyReportScopeFilter(
     db.selectFrom('return_items as ri')
       .innerJoin('return_documents as rd', (join) => join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'))
       .select(sql<number>`coalesce(sum(ri.allocated_tax), 0)`.as('tax_total'))
@@ -434,7 +443,7 @@ export async function buildReportSummaryAggregates(args: {
       .where(buildTenantPredicate(tenantId, 'ri')),
     query,
     'rd',
-  );
+  ), query, 'rd');
 
   const treasuryAggQuery = applyReportScopeFilter(
     db
@@ -449,7 +458,7 @@ export async function buildReportSummaryAggregates(args: {
     query,
   );
 
-  const rawCogsQuery = applyReportScopeFilter(
+  const rawCogsQuery = applyDeliveryRepSalesFilter(applyReportScopeFilter(
     db
       .selectFrom('sale_items as si')
       .innerJoin('sales as s', (join) => join.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id'))
@@ -461,9 +470,9 @@ export async function buildReportSummaryAggregates(args: {
       .where(buildTenantPredicate(tenantId, 'si')),
     query,
     's',
-  );
+  ), query, 's');
 
-  const returnedCogsQuery = applyReportScopeFilter(
+  const returnedCogsQuery = applyDeliveryRepReturnsFilter(applyReportScopeFilter(
     db
       .selectFrom('return_items as ri')
       .innerJoin('return_documents as rd', (join) => join.onRef('rd.id', '=', 'ri.return_document_id').onRef('rd.tenant_id', '=', 'ri.tenant_id'))
@@ -481,9 +490,9 @@ export async function buildReportSummaryAggregates(args: {
       .where(buildTenantPredicate(tenantId, 'ri')),
     query,
     'rd',
-  );
+  ), query, 'rd');
 
-  const topProductsQuery = applyReportScopeFilter(
+  const topProductsQuery = applyDeliveryRepSalesFilter(applyReportScopeFilter(
     db
       .selectFrom('sale_items as si')
       .innerJoin('sales as s', (join) => join.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id'))
@@ -504,7 +513,7 @@ export async function buildReportSummaryAggregates(args: {
       .limit(10),
     query,
     's',
-  );
+  ), query, 's');
 
   const [
     salesAggRow,

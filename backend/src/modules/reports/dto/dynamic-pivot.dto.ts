@@ -17,7 +17,7 @@ export class ExecuteDynamicPivotDto {
 
   @IsString()
   @IsNotEmpty()
-  @IsIn(['total_amount', 'net_profit', 'quantity', 'count', 'avg_amount'])
+  @IsIn(['total_amount', 'net_profit', 'quantity', 'count', 'avg_amount', 'net_profit_percent'])
   metric!: PivotMetric;
 
   @IsOptional()

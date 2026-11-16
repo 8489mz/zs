@@ -3,6 +3,24 @@ import { unwrapArray, unwrapByKey } from '@/lib/api/contracts';
 import type { Customer, InventoryReport, Product, ReportSummary } from '@/types/domain';
 import { buildQueryString } from '@/lib/query-string';
 
+export interface NetProfitReport {
+  range?: { from: string; to: string };
+  scope?: Record<string, unknown>;
+  lines: {
+    revenue: number;
+    salesTaxTotal: number;
+    returnsNetOfTax: number;
+    /** Informational only — already netted inside revenue. */
+    discountsTotal: number;
+    netSales: number;
+    cogs: number;
+    grossProfit: number;
+    expensesTotal: number;
+    netOperatingProfit: number;
+  };
+  reconciliation: { expectedNetOperatingProfit: number; netOperatingProfit: number };
+}
+
 export interface ReportInventoryLocationBreakdown {
   locationId: string;
   locationName: string;
@@ -204,6 +222,15 @@ export const reportsApi = {
     if (options?.locationId && options.locationId !== 'all') params.locationId = options.locationId;
     if (options?.userId && options.userId !== 'all') params.userId = options.userId;
     return http<ReportSummary>(`/api/reports/summary${buildQueryString(params)}`);
+  },
+  // INV-VAN-PROFIT-REP-REPORTING: standalone net-profit view.
+  netProfit: (from: string, to: string, options?: { branchId?: string; locationId?: string; userId?: string; deliveryRepId?: number }) => {
+    const params: Record<string, string | number | undefined | null> = { from, to };
+    if (options?.branchId && options.branchId !== 'all') params.branchId = options.branchId;
+    if (options?.locationId && options.locationId !== 'all') params.locationId = options.locationId;
+    if (options?.userId && options.userId !== 'all') params.userId = options.userId;
+    if (options?.deliveryRepId) params.deliveryRepId = options.deliveryRepId;
+    return http<NetProfitReport>(`/api/reports/net-profit${buildQueryString(params)}`);
   },
   inventory: async () => unwrapByKey<InventoryReport>(await http<InventoryReport | { inventory: InventoryReport }>('/api/reports/inventory'), 'inventory', {} as InventoryReport),
   inventoryPage: async (params: ReportInventoryQueryParams) => {
@@ -616,4 +643,4 @@ export interface FoodCostVarianceResponse {
     overallVariancePct: number;
   };
   items: FoodCostVarianceItem[];
-}
+}

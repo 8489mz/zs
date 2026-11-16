@@ -50,6 +50,18 @@ export class ReportRangeQueryDto {
   @Min(1)
   userId?: number;
 
+  // INV-VAN-PROFIT-REP-REPORTING: scopes the SALES side of a report to
+  // one delivery rep (delivery_rep_id). Sales totals, tax, discounts,
+  // COGS and top products filter to the rep; sale returns filter to
+  // the rep's invoices; purchases, services, expenses and treasury
+  // are not rep-attributable and stay tenant-wide. employeeSummary
+  // stays per-user (created_by) and is unaffected.
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  deliveryRepId?: number;
+
   @IsOptional()
   @IsString()
   role?: string;

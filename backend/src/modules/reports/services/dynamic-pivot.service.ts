@@ -46,12 +46,20 @@ export class DynamicPivotService {
           .leftJoin('branches as b', (j: any) => j.onRef('b.id', '=', 's.branch_id').onRef('b.tenant_id', '=', 's.tenant_id'))
           .leftJoin('customers as c', (j: any) => j.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 's.tenant_id'))
           .leftJoin('users as u', (j: any) => j.onRef('u.id', '=', 's.created_by').onRef('u.tenant_id', '=', 's.tenant_id'))
+          // INV-VAN-PROFIT-REP-REPORTING: the rep dimension attributes
+          // by delivery_rep_id (the rep who owns the sale), not by the
+          // login user who created it — a supervisor-created van sale
+          // belongs to its rep. ID + name pair, per the engine's
+          // `${dimension}_name` convention (dimension 'delivery_rep').
+          .leftJoin('delivery_representatives as dr', (j: any) => j.onRef('dr.id', '=', 's.delivery_rep_id').onRef('dr.tenant_id', '=', 's.tenant_id'))
           .select([
             sql`to_char(s.created_at, 'YYYY-MM')`.as('date_month'),
             sql`to_char(s.created_at, 'YYYY-MM-DD')`.as('date_day'),
             'b.name as branch',
             'c.name as customer',
             'u.display_name as rep',
+            's.delivery_rep_id as delivery_rep',
+            'dr.name as delivery_rep_name',
             's.payment_type as payment_type',
             'p.name as product',
             'cat.name as category',
@@ -95,12 +103,17 @@ export class DynamicPivotService {
           .leftJoin('branches as b', (j: any) => j.onRef('b.id', '=', 's.branch_id').onRef('b.tenant_id', '=', 's.tenant_id'))
           .leftJoin('customers as c', (j: any) => j.onRef('c.id', '=', 's.customer_id').onRef('c.tenant_id', '=', 's.tenant_id'))
           .leftJoin('users as u', (j: any) => j.onRef('u.id', '=', 's.created_by').onRef('u.tenant_id', '=', 's.tenant_id'))
+          // INV-VAN-PROFIT-REP-REPORTING: same rep dimension as the
+          // item-level query (delivery_rep_id, not the login user).
+          .leftJoin('delivery_representatives as dr', (j: any) => j.onRef('dr.id', '=', 's.delivery_rep_id').onRef('dr.tenant_id', '=', 's.tenant_id'))
           .select([
             sql`to_char(s.created_at, 'YYYY-MM')`.as('date_month'),
             sql`to_char(s.created_at, 'YYYY-MM-DD')`.as('date_day'),
             'b.name as branch',
             'c.name as customer',
             'u.display_name as rep',
+            's.delivery_rep_id as delivery_rep',
+            'dr.name as delivery_rep_name',
             's.payment_type as payment_type',
             's.order_type as order_type',
             's.status as status',

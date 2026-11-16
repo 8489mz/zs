@@ -26,6 +26,7 @@ import { offlineSaleTimestamps } from '../../cash-drawer/helpers/cash-drawer.hel
 import { validateVanOfflineCreatedAt } from '../van-offline-timestamps.helper';
 import { resolveSaleTaxRate } from '../../sales/engines/sale-tax-rate.engine';
 import { resolveListEffectivePrice, resolvePriceListContext } from '../../sales/engines/price-list-resolution.engine';
+import { discountedSaleSql } from '../../sales/helpers/sales-discount-filter.helper';
 import { computeInvoiceTotals } from '../../../common/utils/invoice-totals';
 
 export interface VanFieldSalesDeps {
@@ -1522,6 +1523,7 @@ export class VanFieldSalesService {
       paymentMethod?: string;
       search?: string;
       tripId?: number;
+      discountedOnly?: boolean;
       limit?: number;
     },
   ) {
@@ -1569,6 +1571,12 @@ export class VanFieldSalesService {
 
     if (filters?.tripId) {
       query = query.where('s.van_trip_id', '=', filters.tripId);
+    }
+
+    // INV-VAN-PROFIT-REP-REPORTING: discounted-invoices-only — the
+    // shared predicate (invoice discount OR any line discount).
+    if (filters?.discountedOnly) {
+      query = query.where(discountedSaleSql('s'));
     }
 
     if (filters?.search && filters.search.trim()) {

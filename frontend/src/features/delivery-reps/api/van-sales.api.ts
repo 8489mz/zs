@@ -841,6 +841,8 @@ export const vanSalesApi = {
     paymentMethod?: string;
     search?: string;
     tripId?: number;
+    // INV-VAN-PROFIT-REP-REPORTING: discounted-invoices-only.
+    discountedOnly?: boolean;
   }): Promise<{ ok: boolean; sales: DriverSaleHistoryItem[] }> => {
     const sp = new URLSearchParams();
     if (params?.dateScope) sp.set('dateScope', params.dateScope);
@@ -848,6 +850,7 @@ export const vanSalesApi = {
     if (params?.paymentMethod) sp.set('paymentMethod', params.paymentMethod);
     if (params?.search) sp.set('search', params.search);
     if (params?.tripId) sp.set('tripId', String(params.tripId));
+    if (params?.discountedOnly) sp.set('discountedOnly', 'true');
     const qs = sp.toString();
     return http(`/api/driver-portal/van-sales/sales${qs ? '?' + qs : ''}`, {
       method: 'GET',

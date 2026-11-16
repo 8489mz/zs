@@ -30,6 +30,35 @@ export function applyReportScopeFilter<T extends object>(queryBuilder: T, query:
   return qb;
 }
 
+// INV-VAN-PROFIT-REP-REPORTING: scopes the SALES side of a report to
+// one delivery rep. Only call on queries whose table (or join) carries
+// delivery_rep_id — never inside applyReportScopeFilter, which also
+// wraps purchases / expenses / services tables that have no such column.
+export function applyDeliveryRepSalesFilter<T extends object>(queryBuilder: T, query: ReportRangeQueryDto, tableAlias?: string): T {
+  const repId = query.deliveryRepId;
+  if (repId == null) return queryBuilder;
+  const repIdNum = Number(repId);
+  if (!Number.isFinite(repIdNum) || repIdNum <= 0) return queryBuilder;
+  const col = tableAlias ? `${tableAlias}.delivery_rep_id` : 'delivery_rep_id';
+  return (queryBuilder as any).where(sql.ref(col), '=', repIdNum);
+}
+
+// INV-VAN-PROFIT-REP-REPORTING: sale returns carry no rep column — a
+// return belongs to a rep through its invoice. When a rep filter is
+// on, the returns side counts ONLY sale returns whose invoice belongs
+// to the rep (purchase returns drop out: they are not rep sales).
+// Only call on return_documents(-aliased) queries.
+export function applyDeliveryRepReturnsFilter<T extends object>(queryBuilder: T, query: ReportRangeQueryDto, tableAlias?: string): T {
+  const repId = query.deliveryRepId;
+  if (repId == null) return queryBuilder;
+  const repIdNum = Number(repId);
+  if (!Number.isFinite(repIdNum) || repIdNum <= 0) return queryBuilder;
+  const alias = tableAlias ?? 'return_documents';
+  return (queryBuilder as any)
+    .where(sql.ref(`${alias}.return_type`), '=', 'sale')
+    .where(sql<boolean>`exists (select 1 from sales s2 where s2.id = ${sql.ref(`${alias}.invoice_id`)} and s2.tenant_id = ${sql.ref(`${alias}.tenant_id`)} and s2.delivery_rep_id = ${repIdNum})`);
+}
+
 // Single source of truth for the reports tenant predicate (extracted
 // from ReportsService.tenantPredicate when the financial-summary
 // aggregates moved to reports-summary.helper.ts, so the tenant

@@ -17,6 +17,7 @@ import {
 import { AppError } from '../../common/errors/app-error';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
+import { discountedSaleSql } from '../sales/helpers/sales-discount-filter.helper';
 import { UpsertDeliveryRepDto } from './dto/upsert-delivery-rep.dto';
 import { LoginAttemptLimiter, normalizePhoneForRateLimit } from '../../common/utils/login-attempt-limiter';
 import { assertPortalTenantAllowed } from '../../core/auth/utils/portal-tenant-status';
@@ -27,6 +28,13 @@ import { AccountingPostingService } from '../accounting/accounting-posting.servi
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { SalesFinanceService } from '../sales/services/sales-finance.service';
+import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
+import { getBusinessDayBounds } from '../reports/helpers/reports-range.helper';
+// INV-VAN-PROFIT-REP-REPORTING: the lifetime per-day due reuses P1's
+// bucketing engine on rep-wide rows (same cash-portion rule, same
+// day buckets — the only difference from computeTripDayBuckets is
+// the row source: all the rep's trips instead of one).
+import { bucketTripCashByDay, cashPortionOfSale, type DayBucket } from './van-settlement-split.engine';
 
 const DRIVER_TOKEN_ERRORS: PortalTokenErrorSpec = {
   missing: { message: 'غير مصرح - مطلوب تسجيل الدخول', code: 'UNAUTHORIZED_DRIVER' },
@@ -329,7 +337,7 @@ export class DeliveryRepsService {
     return this.list(actor);
   }
 
-  async listOrders(repId: number, actor: AuthContext, filters?: { dateFrom?: string; dateTo?: string; status?: string; page?: number; pageSize?: number }): Promise<Record<string, unknown>> {
+  async listOrders(repId: number, actor: AuthContext, filters?: { dateFrom?: string; dateTo?: string; status?: string; discountedOnly?: boolean; page?: number; pageSize?: number }): Promise<Record<string, unknown>> {
     const { tenantId } = requireTenantScope(actor);
     const { page, pageSize, offset } = boundedPage(filters?.page, filters?.pageSize);
     let query = this.db
@@ -382,6 +390,12 @@ export class DeliveryRepsService {
       const dateTo = new Date(filters.dateTo);
       dateTo.setHours(23, 59, 59, 999);
       query = query.where('sales.created_at', '<=', dateTo);
+    }
+
+    // INV-VAN-PROFIT-REP-REPORTING: discounted-invoices-only — the
+    // shared predicate (invoice discount OR any line discount).
+    if (filters?.discountedOnly) {
+      query = query.where(discountedSaleSql('sales'));
     }
 
     const orders = await query.orderBy('sales.created_at', 'desc').orderBy('sales.id', 'desc').limit(pageSize + 1).offset(offset).execute();
@@ -931,6 +945,278 @@ export class DeliveryRepsService {
         collectedAmount: roundMoney(collectedAmount, moneyDigits),
         pendingAmount: roundMoney(pendingAmount, moneyDigits),
       }
+    };
+  }
+
+  /**
+   * INV-VAN-PROFIT-REP-REPORTING: unified rep lifetime report — one
+   * response instead of five separate calls. Lifetime sales +
+   * collections + discounts + targets history + per-day due (P1
+   * buckets, rep-wide) + today's sales + the current target.
+   *
+   * Attribution is by delivery_rep_id everywhere, never by the login
+   * user who created the sale: a supervisor-created van sale belongs
+   * to its rep. Sales aggregates count POSTED sales only (drafts are
+   * not sales); the per-day due mirrors P1's computeTripDayBuckets
+   * exactly (all sales on the rep's trips regardless of status,
+   * cash refunds, collections) so the buckets agree with
+   * getTripDueByDay summed over the rep's trips. Lifetime returns
+   * count APPROVED returns only — a pending return has not happened
+   * yet. "Today" is the tenant-local business day
+   * (INV-BUSINESS-DATE-TENANT-LOCAL), not the UTC day.
+   */
+  async getRepLifetimeReport(repId: number, actor: AuthContext): Promise<Record<string, unknown>> {
+    const { tenantId } = requireTenantScope(actor);
+    const rep = await this.db
+      .selectFrom('delivery_representatives')
+      .select(['id', 'name'])
+      .where('id', '=', repId)
+      .where(this.tenantPredicate(actor))
+      .executeTakeFirst();
+    if (!rep) throw new AppError('Delivery representative not found', 'NOT_FOUND', 404);
+
+    const timezone = await getTenantTimezone(this.db, tenantId);
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.db, tenantId));
+    const money = (v: unknown): number => roundMoney(Number(v || 0), bookDigits);
+    const todayBounds = getBusinessDayBounds(new Date(), timezone);
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    const salesBase = () =>
+      this.db
+        .selectFrom('sales')
+        .where('delivery_rep_id', '=', repId)
+        .where('tenant_id', '=', tenantId)
+        .where('status', '=', 'posted');
+
+    const [lifetimeRow, todayRow, mtdRow, discountedRow] = await Promise.all([
+      salesBase()
+        .select([
+          sql<number>`count(*)::int`.as('sales_count'),
+          sql<number>`coalesce(sum(total), 0)`.as('sales_total'),
+          sql<number>`coalesce(sum(discount), 0)`.as('invoice_discounts_total'),
+          sql<number>`coalesce(sum(tax_amount), 0)`.as('tax_total'),
+          sql<number>`coalesce(sum(paid_amount), 0)`.as('paid_total'),
+        ])
+        .executeTakeFirst(),
+      salesBase()
+        .select([
+          sql<number>`count(*)::int`.as('sales_count'),
+          sql<number>`coalesce(sum(total), 0)`.as('sales_total'),
+        ])
+        .where('created_at', '>=', todayBounds.start)
+        .where('created_at', '<=', todayBounds.end)
+        .executeTakeFirst(),
+      salesBase()
+        .select([sql<number>`coalesce(sum(total), 0)`.as('sales_total')])
+        .where('created_at', '>=', monthStart)
+        .where('created_at', '<=', monthEnd)
+        .executeTakeFirst(),
+      salesBase()
+        .select([
+          sql<number>`count(*)::int`.as('discounted_count'),
+          sql<number>`coalesce(sum(total), 0)`.as('discounted_total'),
+        ])
+        .where(discountedSaleSql('sales'))
+        .executeTakeFirst(),
+    ]);
+
+    const lineDiscountsRow = await this.db
+      .selectFrom('sale_items as si')
+      .innerJoin('sales as s', (j) => j.onRef('s.id', '=', 'si.sale_id').onRef('s.tenant_id', '=', 'si.tenant_id'))
+      .select([sql<number>`coalesce(sum(si.line_discount), 0)`.as('line_discounts_total')])
+      .where('s.delivery_rep_id', '=', repId)
+      .where('s.tenant_id', '=', tenantId)
+      .where('s.status', '=', 'posted')
+      .executeTakeFirst();
+
+    const collectionsBase = () =>
+      this.db
+        .selectFrom('customer_payments')
+        .where('rep_id', '=', repId)
+        .where('tenant_id', '=', tenantId);
+    const [collectionsRow, todayCollectionsRow, mtdCollectionsRow] = await Promise.all([
+      collectionsBase()
+        .select([
+          sql<number>`count(*)::int`.as('collections_count'),
+          sql<number>`coalesce(sum(amount), 0)`.as('collections_total'),
+        ])
+        .executeTakeFirst(),
+      collectionsBase()
+        .select([sql<number>`coalesce(sum(amount), 0)`.as('collections_total')])
+        .where('created_at', '>=', todayBounds.start)
+        .where('created_at', '<=', todayBounds.end)
+        .executeTakeFirst(),
+      collectionsBase()
+        .select([sql<number>`coalesce(sum(amount), 0)`.as('collections_total')])
+        .where('created_at', '>=', monthStart)
+        .where('created_at', '<=', monthEnd)
+        .executeTakeFirst(),
+    ]);
+
+    const returnsBase = () =>
+      this.db
+        .selectFrom('van_field_returns')
+        .where('rep_id', '=', repId)
+        .where('tenant_id', '=', tenantId)
+        .where('status', '=', 'approved');
+    const [returnsRow, todayReturnsRow] = await Promise.all([
+      returnsBase()
+        .select([
+          sql<number>`count(*)::int`.as('returns_count'),
+          sql<number>`coalesce(sum(total_amount), 0)`.as('returns_total'),
+        ])
+        .executeTakeFirst(),
+      returnsBase()
+        .select([sql<number>`coalesce(sum(total_amount), 0)`.as('returns_total')])
+        .where('created_at', '>=', todayBounds.start)
+        .where('created_at', '<=', todayBounds.end)
+        .executeTakeFirst(),
+    ]);
+
+    const [currentTargetRow, targetsHistory] = await Promise.all([
+      this.db
+        .selectFrom('delivery_rep_targets')
+        .select(['period_month', 'target_amount', 'collection_target', 'visits_target'])
+        .where('rep_id', '=', repId)
+        .where('tenant_id', '=', tenantId)
+        .where('period_month', '=', monthKey)
+        .executeTakeFirst(),
+      this.db
+        .selectFrom('delivery_rep_targets')
+        .select(['period_month', 'target_amount', 'collection_target', 'visits_target'])
+        .where('rep_id', '=', repId)
+        .where('tenant_id', '=', tenantId)
+        .orderBy('period_month', 'desc')
+        .limit(24)
+        .execute(),
+    ]);
+
+    // Per-day due, rep-wide: the same three row sets P1's
+    // computeTripDayBuckets reads per trip, bucketed by the same
+    // engine — so the sum over days equals the sum of
+    // getTripDueByDay over the rep's trips.
+    const dueSales = await this.db
+      .selectFrom('sales')
+      .select(['id', 'created_at', 'total', 'payment_type', 'payment_channel'])
+      .where('delivery_rep_id', '=', repId)
+      .where('tenant_id', '=', tenantId)
+      .orderBy('created_at', 'asc')
+      .orderBy('id', 'asc')
+      .execute();
+    const splitIds = (dueSales as Array<Record<string, unknown>>)
+      .filter((s) => String(s.payment_type || '').toLowerCase() === 'split' || String(s.payment_channel || '').toLowerCase() === 'mixed')
+      .map((s) => Number(s.id));
+    const creditOwedBySale = new Map<number, number>();
+    if (splitIds.length > 0) {
+      const ledgerRows = await this.db
+        .selectFrom('customer_ledger')
+        .select(['reference_id', sql<number>`cast(coalesce(sum(amount), 0) as numeric)`.as('creditOwed')])
+        .where('tenant_id', '=', tenantId)
+        .where('reference_type', '=', 'sale')
+        .where('entry_type', '=', 'sale_credit')
+        .where('reference_id', 'in', splitIds)
+        .groupBy('reference_id')
+        .execute();
+      for (const r of ledgerRows as Array<{ reference_id: unknown; creditOwed: unknown }>) {
+        creditOwedBySale.set(Number(r.reference_id), Number(r.creditOwed || 0));
+      }
+    }
+    const [duePayments, dueRefunds] = await Promise.all([
+      this.db
+        .selectFrom('customer_payments')
+        .select(['id', 'created_at', 'amount'])
+        .where('rep_id', '=', repId)
+        .where('tenant_id', '=', tenantId)
+        .orderBy('created_at', 'asc')
+        .orderBy('id', 'asc')
+        .execute(),
+      this.db
+        .selectFrom('van_field_returns')
+        .select(['id', 'created_at', 'total_amount'])
+        .where('rep_id', '=', repId)
+        .where('tenant_id', '=', tenantId)
+        .where('refund_method', '=', 'cash')
+        .orderBy('created_at', 'asc')
+        .orderBy('id', 'asc')
+        .execute(),
+    ]);
+    const dueRows: Array<{ kind: 'sale' | 'collection' | 'refund'; id: number; createdAt: Date | string; cashAmount: number }> = [];
+    for (const s of dueSales as Array<Record<string, unknown>>) {
+      dueRows.push({
+        kind: 'sale',
+        id: Number(s.id),
+        createdAt: s.created_at as Date | string,
+        cashAmount: cashPortionOfSale(
+          {
+            paymentType: String(s.payment_type || ''),
+            paymentChannel: String(s.payment_channel || ''),
+            total: Number(s.total || 0),
+            creditOwed: creditOwedBySale.get(Number(s.id)) || 0,
+          },
+          bookDigits,
+        ),
+      });
+    }
+    for (const p of duePayments as Array<Record<string, unknown>>) {
+      dueRows.push({ kind: 'collection', id: Number(p.id), createdAt: p.created_at as Date | string, cashAmount: Number(p.amount || 0) });
+    }
+    for (const r of dueRefunds as Array<Record<string, unknown>>) {
+      dueRows.push({ kind: 'refund', id: Number(r.id), createdAt: r.created_at as Date | string, cashAmount: Number(r.total_amount || 0) });
+    }
+    dueRows.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id - b.id);
+    const dueByDay: DayBucket[] = bucketTripCashByDay(dueRows, timezone, bookDigits);
+
+    const invoiceDiscountsTotal = money((lifetimeRow as any)?.invoice_discounts_total);
+    const lineDiscountsTotal = money((lineDiscountsRow as any)?.line_discounts_total);
+    const actualSalesMtd = money((mtdRow as any)?.sales_total);
+    const actualCollectionsMtd = money((mtdCollectionsRow as any)?.collections_total);
+
+    return {
+      ok: true,
+      rep: { id: rep.id, name: rep.name },
+      lifetime: {
+        salesCount: Number((lifetimeRow as any)?.sales_count || 0),
+        salesTotal: money((lifetimeRow as any)?.sales_total),
+        invoiceDiscountsTotal,
+        lineDiscountsTotal,
+        discountsTotal: roundMoney(invoiceDiscountsTotal + lineDiscountsTotal, bookDigits),
+        taxTotal: money((lifetimeRow as any)?.tax_total),
+        paidTotal: money((lifetimeRow as any)?.paid_total),
+        collectionsCount: Number((collectionsRow as any)?.collections_count || 0),
+        collectionsTotal: money((collectionsRow as any)?.collections_total),
+        returnsCount: Number((returnsRow as any)?.returns_count || 0),
+        returnsTotal: money((returnsRow as any)?.returns_total),
+        discountedInvoicesCount: Number((discountedRow as any)?.discounted_count || 0),
+        discountedInvoicesTotal: money((discountedRow as any)?.discounted_total),
+      },
+      today: {
+        businessDay: todayBounds.key,
+        salesCount: Number((todayRow as any)?.sales_count || 0),
+        salesTotal: money((todayRow as any)?.sales_total),
+        collectionsTotal: money((todayCollectionsRow as any)?.collections_total),
+        returnsTotal: money((todayReturnsRow as any)?.returns_total),
+      },
+      currentTarget: currentTargetRow
+        ? {
+            periodMonth: (currentTargetRow as any).period_month,
+            targetAmount: money((currentTargetRow as any).target_amount),
+            collectionTarget: (currentTargetRow as any).collection_target == null ? null : money((currentTargetRow as any).collection_target),
+            visitsTarget: (currentTargetRow as any).visits_target == null ? null : Number((currentTargetRow as any).visits_target),
+            actualSalesMtd,
+            actualCollectionsMtd,
+          }
+        : null,
+      targetsHistory: (targetsHistory as Array<Record<string, unknown>>).map((t) => ({
+        periodMonth: t.period_month,
+        targetAmount: money(t.target_amount),
+        collectionTarget: t.collection_target == null ? null : money(t.collection_target),
+        visitsTarget: t.visits_target == null ? null : Number(t.visits_target),
+      })),
+      dueByDay,
+      totalDue: roundMoney(dueByDay.reduce((s, d) => s + d.due, 0), bookDigits),
     };
   }
 

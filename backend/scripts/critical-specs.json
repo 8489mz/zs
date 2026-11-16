@@ -115,6 +115,7 @@
     "test/critical/van-trip-started-audit.spec.ts",
     "test/critical/van-field-sale-wholesale-price.spec.ts",
     "test/critical/van-field-noncash-evidence.spec.ts",
+  "test/critical/van-field-sale-tax-optional.spec.ts",
     "test/critical/audit-search-arabic-normalization.spec.ts",
     "test/critical/customer-search-by-code.spec.ts",
     "test/critical/van-field-return-carton-qty.spec.ts",

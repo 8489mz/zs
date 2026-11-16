@@ -57,6 +57,9 @@ export const PivotBuilderPage: React.FC = () => {
         { value: 'branch', label: 'الفرع' },
         { value: 'customer', label: 'العميل' },
         { value: 'rep', label: 'المندوب / البائع' },
+        // INV-VAN-PROFIT-REP-REPORTING: the delivery rep who owns the
+        // sale (delivery_rep_id), not the login user who created it.
+        { value: 'delivery_rep', label: 'مندوب التوصيل / الفان' },
         { value: 'category', label: 'تصنيف الصنف' },
         { value: 'product', label: 'المنتج' },
         { value: 'payment_type', label: 'طريقة السداد' },
@@ -98,6 +101,10 @@ export const PivotBuilderPage: React.FC = () => {
   const metricOptions = [
     { value: 'total_amount', label: 'إجمالي القيمة المالية (Sum Amount)' },
     { value: 'net_profit', label: 'صافي الربح (Net Profit)' },
+    // INV-VAN-PROFIT-REP-REPORTING: ratio of sums per group
+    // (SUM(net_profit) / SUM(total_amount) × 100), never an average
+    // of row percents; zero total yields 0.
+    { value: 'net_profit_percent', label: 'نسبة صافي الربح % (Net Profit %)' },
     { value: 'quantity', label: 'إجمالي الكميات المباعة / المتوفرة (Quantity)' },
     { value: 'count', label: 'عدد العمليات والفواتير (Transaction Count)' },
     { value: 'avg_amount', label: 'متوسط قيمة العملية (Average Ticket)' },

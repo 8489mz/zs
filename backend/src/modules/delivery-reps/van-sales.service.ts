@@ -1334,6 +1334,7 @@ export class VanSalesService {
       paymentMethod?: string;
       search?: string;
       tripId?: number;
+      discountedOnly?: boolean;
       limit?: number;
     },
   ) {

@@ -30,6 +30,14 @@ export class ReportsController {
     return this.reportsService.reportSummary(query, req.authContext!);
   }
 
+  // INV-VAN-PROFIT-REP-REPORTING: standalone net-profit view (same
+  // range query as the summary, including the deliveryRepId scope).
+  @Get('reports/net-profit')
+  @RequirePermissions('reports')
+  netProfitReport(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
+    return this.reportsService.netProfitReport(query, req.authContext!);
+  }
+
   @Get('reports/inventory')
   @RequirePermissions('reports')
   reportInventory(@Query() query: ReportRangeQueryDto, @Req() req: RequestWithAuth): Promise<Record<string, unknown>> {
@@ -186,5 +194,24 @@ export class ReportsController {
     // which is the wrong business day around local midnight.
     const targetDate = (date || '').trim();
     return this.rollupService.computeAndStoreDailyRollup(req.authContext!.tenantId!, targetDate, branchId);
+  }
+
+  // INV-VAN-PROFIT-REP-REPORTING: one-off backfill after the returns
+  // fix — recomputes stored rollup rows for a date range (derived
+  // aggregates, never journals). Run once after deploy, repeatable.
+  @Post('reports/rollups/recompute-range')
+  @RequirePermissions('reports')
+  recomputeRangeRollups(
+    @Body('dateFrom') dateFrom: string,
+    @Body('dateTo') dateTo: string,
+    @Body('branchId') branchId: number,
+    @Req() req: RequestWithAuth,
+  ) {
+    return this.rollupService.recomputeRollupsForRange(
+      req.authContext!.tenantId!,
+      (dateFrom || '').trim(),
+      (dateTo || '').trim(),
+      branchId,
+    );
   }
 }

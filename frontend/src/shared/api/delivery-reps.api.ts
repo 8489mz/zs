@@ -105,6 +105,20 @@ export interface DeliveryRepSummary {
   pendingAmount: number;
 }
 
+export interface RepLifetimeReport {
+  rep: { id: number; name: string };
+  lifetime: {
+    salesCount: number; salesTotal: number; invoiceDiscountsTotal: number; lineDiscountsTotal: number;
+    discountsTotal: number; taxTotal: number; paidTotal: number; collectionsCount: number; collectionsTotal: number;
+    returnsCount: number; returnsTotal: number; discountedInvoicesCount: number; discountedInvoicesTotal: number;
+  };
+  today: { businessDay: string; salesCount: number; salesTotal: number; collectionsTotal: number; returnsTotal: number };
+  currentTarget: { periodMonth: string; targetAmount: number; collectionTarget: number | null; visitsTarget: number | null; actualSalesMtd: number; actualCollectionsMtd: number } | null;
+  targetsHistory: Array<{ periodMonth: string; targetAmount: number; collectionTarget: number | null; visitsTarget: number | null }>;
+  dueByDay: Array<{ businessDay: string; cashSales: number; collections: number; refunds: number; due: number }>;
+  totalDue: number;
+}
+
 function unwrapArray<T>(raw: unknown, key: string): T[] {
   if (Array.isArray(raw)) return raw as T[];
   if (raw && typeof raw === 'object' && key in raw) return (raw as Record<string, unknown>)[key] as T[];
@@ -124,11 +138,13 @@ export const deliveryRepsApi = {
   remove: async (id: number): Promise<unknown> =>
     http(`/api/delivery-reps/${id}`, { method: 'DELETE' }),
 
-  listOrders: async (repId: number, params?: { dateFrom?: string; dateTo?: string; status?: string }): Promise<DeliveryOrder[]> => {
+  listOrders: async (repId: number, params?: { dateFrom?: string; dateTo?: string; status?: string; discountedOnly?: boolean }): Promise<DeliveryOrder[]> => {
     const searchParams = new URLSearchParams();
     if (params?.dateFrom) searchParams.set('dateFrom', params.dateFrom);
     if (params?.dateTo) searchParams.set('dateTo', params.dateTo);
     if (params?.status) searchParams.set('status', params.status);
+    // INV-VAN-PROFIT-REP-REPORTING: discounted-invoices-only.
+    if (params?.discountedOnly) searchParams.set('discountedOnly', 'true');
     const qs = searchParams.toString();
     return unwrapArray<DeliveryOrder>(await http<DeliveryOrder[] | { orders: DeliveryOrder[] }>(`/api/delivery-reps/${repId}/orders${qs ? `?${qs}` : ''}`), 'orders');
   },
@@ -155,6 +171,12 @@ export const deliveryRepsApi = {
   getSummary: async (repId: number): Promise<DeliveryRepSummary> => {
     const res = await http<{ summary: DeliveryRepSummary }>(`/api/delivery-reps/${repId}/summary`);
     return res.summary;
+  },
+
+  // INV-VAN-PROFIT-REP-REPORTING: unified rep lifetime report.
+  getLifetimeReport: async (repId: number): Promise<RepLifetimeReport> => {
+    const res = await http<{ ok: boolean } & RepLifetimeReport>(`/api/delivery-reps/${repId}/lifetime-report`);
+    return res as RepLifetimeReport;
   },
 
   listVehicles: async (): Promise<Array<{ id: number; plateNumber: string; modelName?: string }>> => {

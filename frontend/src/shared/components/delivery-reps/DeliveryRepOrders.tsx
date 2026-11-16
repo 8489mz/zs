@@ -34,6 +34,8 @@ export function DeliveryRepOrders({ repId }: { repId: number | null }) {
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [filterStatus, setFilterStatus] = useState('unsettled');
+  // INV-VAN-PROFIT-REP-REPORTING: discounted-invoices-only filter.
+  const [discountedOnly, setDiscountedOnly] = useState(false);
   const [expectedAmountInput, setExpectedAmountInput] = useState('');
   const [feedbackPopup, setFeedbackPopup] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [orderToSettle, setOrderToSettle] = useState<any | null>(null);
@@ -41,11 +43,12 @@ export function DeliveryRepOrders({ repId }: { repId: number | null }) {
   const [viewingSaleId, setViewingSaleId] = useState<number | null>(null);
 
   const ordersQuery = useQuery({
-    queryKey: ['delivery-rep-orders', repId, filterDateFrom, filterDateTo, filterStatus],
+    queryKey: ['delivery-rep-orders', repId, filterDateFrom, filterDateTo, filterStatus, discountedOnly],
     queryFn: () => deliveryRepsApi.listOrders(repId!, {
       dateFrom: filterDateFrom,
       dateTo: filterDateTo,
-      status: filterStatus
+      status: filterStatus,
+      discountedOnly,
     }),
     enabled: !!repId,
   });
@@ -184,6 +187,11 @@ export function DeliveryRepOrders({ repId }: { repId: number | null }) {
           <option value="settled">{__t('shared.delivery_reps.delivery_rep_orders.s11', "تمت التسوية")}</option>
           <option value="unsettled">{__t('shared.delivery_reps.delivery_rep_orders.s12', "معلق (لم يسدد)")}</option>
         </select>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap', cursor: 'pointer', flexShrink: 0 }}>
+          <input type="checkbox" checked={discountedOnly} onChange={(e) => setDiscountedOnly(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#170e5e' }} />
+          {__t('shared.delivery_reps.delivery_rep_orders.s16', "الفواتير المخصومة فقط")}
+        </label>
 
         <div style={{ marginInlineStart: 'auto', display: 'flex', gap: '6px', flexWrap: 'wrap', flexShrink: 0 }}>
           <Button 
