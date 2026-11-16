@@ -15,7 +15,7 @@ import { customerFormSchema, type CustomerFormInput, type CustomerFormOutput } f
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { useCustomerProfile } from '@/features/customers/constants/customer-profiles';
 import { deliveryRepsApi } from '@/shared/api/delivery-reps.api';
-import { priceListsApi } from '@/features/sales/api/price-lists.api';
+import { priceListsApi } from '@/features/sales';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import { CustomerVisitDaysPicker } from './CustomerVisitDaysPicker';
 

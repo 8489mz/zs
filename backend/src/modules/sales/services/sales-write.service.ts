@@ -12,6 +12,7 @@ import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
+import { AdjustSalePaymentsDto } from '../dto/adjust-sale-payments.dto';
 import { HeldSaleDto } from '../dto/held-sale.dto';
 import { PosAuditEventDto } from '../dto/pos-audit-event.dto';
 import { UpsertSaleDto, SalesOrderConversionRelease } from '../dto/upsert-sale.dto';
@@ -632,6 +633,10 @@ export class SalesWriteService {
 
   async updateSale(saleId: number, payload: UpsertSaleDto, auth: AuthContext): Promise<Record<string, unknown>> {
     return this.editAndCancel().updateSale(saleId, payload, auth);
+  }
+
+  async adjustSalePayments(saleId: number, payload: AdjustSalePaymentsDto, auth: AuthContext): Promise<Record<string, unknown>> {
+    return this.editAndCancel().adjustSalePayments(saleId, payload, auth);
   }
 
   private async refreshClosedShiftsForBackdatedOfflineSale(

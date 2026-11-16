@@ -773,7 +773,7 @@ async function main(): Promise<void> {
   }
 
   // 8. The orphan evidence spec is wired into BOTH critical lists,
-  // in identical order (210 specs).
+  // in identical order (211 specs — P6 wired the tax spec after it).
   {
     const specDir = __dirname;
     const jsonPath = path.join(specDir, '..', '..', 'scripts', 'critical-specs.json');
@@ -781,13 +781,13 @@ async function main(): Promise<void> {
     const list = JSON.parse(fs.readFileSync(jsonPath, 'utf8')).specs as string[];
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
     const chain = String(pkg.scripts['test:critical:serial']).split(' && ').map((x) => x.replace(/^ts-node /, ''));
-    assert.equal(list.length, 210);
-    assert.equal(chain.length, 210);
+    assert.equal(list.length, 211);
+    assert.equal(chain.length, 211);
     assert.deepEqual(list, chain);
     assert.ok(list.includes('test/critical/van-field-noncash-evidence.spec.ts'));
     const idx = list.indexOf('test/critical/van-field-noncash-evidence.spec.ts');
     assert.equal(list[idx - 1], 'test/critical/van-field-sale-wholesale-price.spec.ts');
-    console.log('8. evidence spec wired into both critical lists (210 = 210, identical order), passed');
+    console.log('8. evidence spec wired into both critical lists (211 = 211, identical order), passed');
   }
 
   // 9. Regressions: (a) a main return without invoiceId is refused

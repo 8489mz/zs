@@ -27,11 +27,11 @@ export const migration: Migration = {
   async up(db) {
     await db.schema
       .alterTable('products')
-      .addColumn('half_wholesale_price', 'numeric(14,3)')
+      .addColumn('half_wholesale_price', 'numeric(14, 3)')
       .execute();
     await db.schema
       .alterTable('sales')
-      .addColumn('system_cash_discount_amount', 'numeric(14,3)')
+      .addColumn('system_cash_discount_amount', 'numeric(14, 3)')
       .execute();
   },
   async down(db) {

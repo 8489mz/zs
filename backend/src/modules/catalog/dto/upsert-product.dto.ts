@@ -459,6 +459,7 @@ export type NormalizedUpsertProduct = {
   retailPrice: number;
   wholesalePrice: number;
   creditPrice?: number | null;
+  halfWholesalePrice?: number | null;
   consumerPrice?: number | null;
   minSellingPrice?: number | null;
   minStock: number;

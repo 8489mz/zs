@@ -17,7 +17,7 @@ import type { Customer } from '@/types/domain';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { useCustomerProfile } from '@/features/customers/constants/customer-profiles';
 import { deliveryRepsApi, type DeliveryRep } from '@/shared/api/delivery-reps.api';
-import { priceListsApi } from '@/features/sales/api/price-lists.api';
+import { priceListsApi } from '@/features/sales';
 import { customersApi } from '@/shared/api/customers.api';
 import { getGlobalCurrencySymbol } from '@/lib/currencies';
 import { CustomerVisitDaysPicker } from './CustomerVisitDaysPicker';

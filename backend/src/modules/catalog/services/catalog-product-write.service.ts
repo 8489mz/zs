@@ -277,6 +277,7 @@ export class CatalogProductWriteService {
       retailPrice: Number(payload.retailPrice || 0),
       wholesalePrice: Number(payload.wholesalePrice || 0),
       creditPrice: payload.creditPrice === undefined ? undefined : payload.creditPrice === null ? null : Number(payload.creditPrice),
+      halfWholesalePrice: payload.halfWholesalePrice === undefined ? undefined : payload.halfWholesalePrice === null ? null : Number(payload.halfWholesalePrice),
       consumerPrice: payload.consumerPrice === undefined ? undefined : payload.consumerPrice === null ? null : Number(payload.consumerPrice),
       minSellingPrice: payload.minSellingPrice === undefined ? undefined : payload.minSellingPrice === null ? null : Number(payload.minSellingPrice),
       minStock: Number(payload.minStock || 0),
