@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException, BadRequestException, ServiceUnavailableException, Optional, Logger } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, BadRequestException, Optional, Logger } from '@nestjs/common';
 import { Kysely, sql, type Transaction } from 'kysely';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
@@ -17,7 +17,6 @@ import { StorefrontMediaService } from './storefront-media.service';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
 import { PlanFeatureService } from '../../core/auth/services/plan-feature.service';
 import { CustomerOrderRefDto } from './dto/customer-order-lookup.dto';
-import { computeTableBillTotals } from './engines/table-bill.engine';
 import {
   unwrapConvertedSale,
 } from './engines/online-order-access.engine';
@@ -37,6 +36,7 @@ import {
 } from './storefront-helpers';
 import { StorefrontOrderCreateService } from './services/storefront-order-create.service';
 import { StorefrontOrderConvertService } from './services/storefront-order-convert.service';
+import { StorefrontTableBillService } from './services/storefront-table-bill.service';
 
 export { unwrapConvertedSale };
 
@@ -62,6 +62,8 @@ export class StorefrontService {
 
   private readonly orderConvertService: StorefrontOrderConvertService;
 
+  private readonly tableBillService: StorefrontTableBillService;
+
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly salesService: SalesService,
@@ -74,6 +76,11 @@ export class StorefrontService {
     @Optional() private readonly planFeatureService?: PlanFeatureService,
   ) {
     this.couponsService = new StorefrontCouponsService({
+      db: this.db,
+      getTenantBySlug: this.getTenantBySlug.bind(this),
+      getTenantSettingsMap: this.getTenantSettingsMap.bind(this),
+    });
+    this.tableBillService = new StorefrontTableBillService({
       db: this.db,
       getTenantBySlug: this.getTenantBySlug.bind(this),
       getTenantSettingsMap: this.getTenantSettingsMap.bind(this),
@@ -482,189 +489,16 @@ export class StorefrontService {
     return this.engagementService.getStorefrontAnalytics(actor);
   }
 
-  /**
-   * Next-Gen F&B: Get active table check / bill for Pay-at-Table via QR code
-   */
   async getActiveTableBill(slug: string, tableNumber: string) {
-    const cleanSlug = String(slug || '').trim().toLowerCase();
-    const cleanTable = String(tableNumber || '').trim();
-    const tenant = await this.getTenantBySlug(cleanSlug);
-
-    // 1. Look for active held sale draft for this table
-    const heldSale = await this.db
-      .selectFrom('held_sales as hs')
-      .select([
-        'hs.id',
-        'hs.table_number',
-        'hs.order_type',
-        'hs.discount',
-        'hs.note',
-        'hs.delivery_fee',
-        'hs.paid_online',
-        'hs.paid_online_amount',
-        'hs.paid_online_ref',
-        'hs.created_at',
-      ])
-      .where(sql<boolean>`hs.tenant_id = ${tenant.id}`)
-      .where('hs.table_number', '=', cleanTable)
-      .orderBy('hs.id', 'desc')
-      .executeTakeFirst();
-
-    if (!heldSale) {
-      // Also check if there is an active unpaid dine-in sale in sales
-      const activeSale = await this.db
-        .selectFrom('sales as s')
-        .select([
-          's.id',
-          's.doc_no',
-          's.table_number',
-          's.total',
-          's.subtotal',
-          's.tax_amount',
-          's.discount',
-          's.service_charge',
-          's.tip_amount',
-          's.status',
-          's.created_at',
-        ])
-        .where(sql<boolean>`s.tenant_id = ${tenant.id}`)
-        .where('s.table_number', '=', cleanTable)
-        .where('s.order_type', '=', 'dine_in')
-        .where('s.status', 'not in', ['cancelled', 'completed'])
-        .orderBy('s.id', 'desc')
-        .executeTakeFirst();
-
-      if (!activeSale) {
-        return {
-          hasActiveBill: false,
-          tableNumber: cleanTable,
-          message: 'لا توجد فواتير أو طلبات نشطة مسجلة على هذه الطاولة حالياً.',
-        };
-      }
-
-      const saleItems = await this.db
-        .selectFrom('sale_items')
-        .select(['id', 'product_name', 'qty', 'unit_price', 'line_total', 'notes'])
-        .where(sql<boolean>`tenant_id = ${tenant.id}`)
-        .where('sale_id', '=', activeSale.id)
-        .execute();
-
-      return {
-        hasActiveBill: true,
-        source: 'sale',
-        billId: Number(activeSale.id),
-        invoiceNo: activeSale.doc_no || `SALE-${activeSale.id}`,
-        tableNumber: cleanTable,
-        isPaidOnline: false,
-        paidOnlineAmount: 0,
-        paidOnlineRef: null,
-        items: saleItems.map((it) => ({
-          name: it.product_name,
-          qty: Number(it.qty),
-          unitPrice: Number(it.unit_price),
-          total: Number(it.line_total),
-          notes: it.notes || '',
-        })),
-        subtotal: Number(activeSale.subtotal || 0),
-        discount: Number(activeSale.discount || 0),
-        serviceCharge: Number(activeSale.service_charge || 0),
-        tax: Number(activeSale.tax_amount || 0),
-        total: Number(activeSale.total || 0),
-        currency: (tenant as any).currency || 'SAR',
-      };
-    }
-
-    // Held draft found
-    const items = await this.db
-      .selectFrom('held_sale_items')
-      .select(['id', 'product_name', 'qty', 'unit_price', 'modifiers'])
-      .where(sql<boolean>`tenant_id = ${tenant.id}`)
-      .where('held_sale_id', '=', heldSale.id)
-      .execute();
-
-    const formattedItems = items.map((it) => {
-      let mods: any[] = [];
-      try {
-        if (typeof it.modifiers === 'string' && it.modifiers.trim()) {
-          mods = JSON.parse(it.modifiers);
-        } else if (Array.isArray(it.modifiers)) {
-          mods = it.modifiers;
-        }
-      } catch {}
-      const itemTotal = Number(it.qty) * Number(it.unit_price);
-      return {
-        name: it.product_name,
-        qty: Number(it.qty),
-        unitPrice: Number(it.unit_price),
-        total: itemTotal,
-        modifiers: mods,
-      };
-    });
-
-    const subtotal = formattedItems.reduce((acc, it) => acc + it.total, 0);
-    const discount = Number(heldSale.discount || 0);
-
-    // Read settings to check service charge and tax. Rates arrive raw so
-    // the table-bill engine can tell "never set" from "garbled": only an
-    // absent rate falls back (0 tax, 12 service percent); a present but
-    // invalid rate fails closed inside the engine.
-    const settings = await this.getTenantSettingsMap(tenant.id);
-    const serviceChargeEnabled = settings.get('restaurant_service_charge_enabled') === 'true' || settings.get('restaurantServiceChargeEnabled') === 'true';
-    const totals = computeTableBillTotals({
-      subtotal,
-      discount,
-      serviceChargeEnabled,
-      serviceChargePercent: settings.get('restaurant_service_charge_rate') ?? settings.get('restaurantServiceChargePercent'),
-      taxRate: settings.get('tax_rate') ?? settings.get('taxRate'),
-      digits: storefrontMoneyDigits(settings, tenant),
-    });
-    const serviceCharge = totals.serviceCharge;
-    const tax = totals.tax;
-    const grandTotal = totals.total;
-
-    return {
-      hasActiveBill: true,
-      source: 'held_draft',
-      billId: Number(heldSale.id),
-      tableNumber: cleanTable,
-      isPaidOnline: Boolean(heldSale.paid_online),
-      paidOnlineAmount: Number(heldSale.paid_online_amount || 0),
-      paidOnlineRef: heldSale.paid_online_ref || null,
-      items: formattedItems,
-      subtotal,
-      discount,
-      serviceCharge,
-      tax,
-      total: grandTotal,
-      currency: (tenant as any).currency || 'SAR',
-    };
+    return this.tableBillService.getActiveTableBill(slug, tableNumber);
   }
 
-  /**
-   * Next-Gen F&B: Pay active table check / bill via QR online checkout.
-   *
-   * INV-TABLE-BILL-PAY-CLOSED: this endpoint is CLOSED until a verified
-   * gateway capture exists. It used to mark the bill paid_online with a
-   * generated TAB-PAY reference and no payment of any kind, on a public
-   * route anyone could call with a shop slug and a table number — a
-   * guest could close a check and walk out with the food unpaid. The
-   * throw below runs before any read or write, so no bill state and no
-   * service-call row can ever be produced from this route. Re-enable
-   * only through a gateway charge plus webhook-verified capture; never
-   * by restoring the generated-reference marking. Viewing the bill
-   * (getActiveTableBill) is unchanged.
-   */
   async payActiveTableBill(
     slug: string,
     tableNumber: string,
     dto: { tipAmount?: number; paymentMethod?: string; guestName?: string; guestPhone?: string },
   ) {
-    void slug;
-    void tableNumber;
-    void dto;
-    throw new ServiceUnavailableException(
-      'الدفع الإلكتروني لفاتورة الطاولة غير متاح حالياً — ادفع عند الكاشير.',
-    );
+    return this.tableBillService.payActiveTableBill(slug, tableNumber, dto);
   }
 }
 
