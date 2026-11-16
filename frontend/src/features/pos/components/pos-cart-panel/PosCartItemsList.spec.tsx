@@ -152,9 +152,13 @@ describe('PosCartItemsList', () => {
     fireEvent.click(addButtons[0]);
     const input = screen.getByLabelText(/خصم الصنف/) as HTMLInputElement;
     expect(input).toBeInTheDocument();
+    expect(input.classList.contains('no-spin-arrows')).toBe(true);
 
     // Changing value calls the handler
     fireEvent.change(input, { target: { value: '25' } });
     expect(onLineDiscountChange).toHaveBeenCalledWith(cart[0].lineKey, 25);
+
+    const qtyInputs = screen.getAllByLabelText(/الكمية/) as HTMLInputElement[];
+    expect(qtyInputs[0].classList.contains('no-spin-arrows')).toBe(true);
   });
 });

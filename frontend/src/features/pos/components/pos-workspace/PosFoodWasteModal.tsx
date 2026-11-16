@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { RestaurantOperationsDialog } from './RestaurantOperationsDialog';
 import { Button } from '@/shared/ui/button';
+import { CustomSelect } from '@/shared/ui/custom-select';
 import {
   PlusCircleIcon,
 } from '@/shared/components/icons/AppIcons';
@@ -196,8 +197,10 @@ export function PosFoodWasteModal({ open, onClose, branchId = 1, onBack }: PosFo
                 </label>
                 <input
                   type="number"
+                  className="no-spin-arrows"
                   placeholder={t('pos.pos_workspace.pos_food_waste_modal.s9', "مثال: 104")}
                   value={productId}
+                  onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                   onChange={(e) => setProductId(e.target.value)}
                   required
                   style={{
@@ -217,9 +220,11 @@ export function PosFoodWasteModal({ open, onClose, branchId = 1, onBack }: PosFo
                 </label>
                 <input
                   type="number"
+                  className="no-spin-arrows"
                   step="0.01"
                   min="0.01"
                   value={quantity}
+                  onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                   onChange={(e) => setQuantity(e.target.value)}
                   required
                   style={{
@@ -239,25 +244,19 @@ export function PosFoodWasteModal({ open, onClose, branchId = 1, onBack }: PosFo
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
                   {t('pos.pos_workspace.pos_food_waste_modal.s11', "سبب الهدر والتلف *")}
                 </label>
-                <select
+                <CustomSelect
                   value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: '6px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  <option value="spoilage">{t('pos.pos_workspace.pos_food_waste_modal.s12', "تلف أو فساد مادة خام")}</option>
-                  <option value="prep_error">{t('pos.pos_workspace.pos_food_waste_modal.s13', "خطأ إعداد وتحضير بالمطبخ")}</option>
-                  <option value="expired">{t('pos.pos_workspace.pos_food_waste_modal.s14', "انتهاء صلاحية الصنف")}</option>
-                  <option value="customer_complaint">{t('pos.pos_workspace.pos_food_waste_modal.s15', "شكوى أو استرجاع طبق من الزبون")}</option>
-                  <option value="other">{t('pos.pos_workspace.pos_food_waste_modal.s16', "أسباب أخرى")}</option>
-                </select>
+                  onChange={(val) => setReason(val)}
+                  searchable={false}
+                  style={{ width: '100%' }}
+                  options={[
+                    { value: 'spoilage', label: t('pos.pos_workspace.pos_food_waste_modal.s12', 'تلف أو فساد مادة خام') },
+                    { value: 'prep_error', label: t('pos.pos_workspace.pos_food_waste_modal.s13', 'خطأ إعداد وتحضير بالمطبخ') },
+                    { value: 'expired', label: t('pos.pos_workspace.pos_food_waste_modal.s14', 'انتهاء صلاحية الصنف') },
+                    { value: 'customer_complaint', label: t('pos.pos_workspace.pos_food_waste_modal.s15', 'شكوى أو استرجاع طبق من الزبون') },
+                    { value: 'other', label: t('pos.pos_workspace.pos_food_waste_modal.s16', 'أسباب أخرى') },
+                  ]}
+                />
               </div>
 
               <div>

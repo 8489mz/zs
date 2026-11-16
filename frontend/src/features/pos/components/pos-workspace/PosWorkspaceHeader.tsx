@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/shared/ui/button';
-import { DialogShell } from '@/shared/components/dialog-shell';
+import { StandardDialog } from '@/shared/components/StandardDialog';
 import { posApi } from '@/features/pos/api/pos.api';
 import { applyComboToCart, isNegativeStockSalesAllowed } from '@/features/pos/lib/pos.domain';
 import { transferTableOrder } from '@/features/pos/lib/pos-table-transfer';
@@ -1023,17 +1023,68 @@ function PosWorkspaceHeaderComponent({
       />
     )}
     {isNoSaleOpen && (
-      <DialogShell open={isNoSaleOpen} onClose={() => { if (!isNoSalePending) setIsNoSaleOpen(false); }} width="min(480px, 100%)">
-        <div dir="rtl" style={{ padding: 24, background: '#fff' }}>
-          <h2 style={{ marginTop: 0 }}>{t('pos.pos_workspace.pos_workspace_header.s53', "فتح الدرج بدون بيع")}</h2>
-          <p>{t('pos.pos_workspace.pos_workspace_header.s54', "سيُحفظ اسم المستخدم والوردية والسبب في سجل التدقيق قبل إرسال أمر فتح الدرج.")}</p>
-          <label htmlFor="pos-no-sale-reason">{t('pos.pos_workspace.pos_workspace_header.s55', "سبب فتح الدرج")}</label>
-          <textarea id="pos-no-sale-reason" value={noSaleReason} onChange={(event) => setNoSaleReason(event.target.value)} maxLength={500} rows={3} style={{ width: '100%', marginBottom: 12 }} disabled={isNoSalePending} />
-          <Button type="button" variant="primary" onClick={() => { void handleNoSaleDrawerKick(); }} disabled={isNoSalePending || !noSaleReason.trim()}>
-            {isNoSalePending ? t('pos.pos_workspace.pos_workspace_header.s57', "جاري فتح الدرج...") : t('pos.pos_workspace.pos_workspace_header.s58', "فتح الدرج")}
-          </Button>
+      <StandardDialog
+        open={isNoSaleOpen}
+        onClose={() => { if (!isNoSalePending) setIsNoSaleOpen(false); }}
+        title={t('pos.pos_workspace.pos_workspace_header.s53', "فتح الدرج بدون بيع")}
+        subtitle={t('pos.pos_workspace.pos_workspace_header.s54', "سيُحفظ اسم المستخدم والوردية والسبب في سجل التدقيق قبل إرسال أمر فتح الدرج.")}
+        width="min(520px, 95vw)"
+        compact
+        closeOnBackdrop={!isNoSalePending}
+        footerActions={(
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setIsNoSaleOpen(false)}
+              disabled={isNoSalePending}
+            >
+              إلغاء
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => { void handleNoSaleDrawerKick(); }}
+              disabled={isNoSalePending || !noSaleReason.trim()}
+            >
+              {isNoSalePending
+                ? t('pos.pos_workspace.pos_workspace_header.s57', "جاري فتح الدرج...")
+                : t('pos.pos_workspace.pos_workspace_header.s58', "فتح الدرج")}
+            </Button>
+          </>
+        )}
+      >
+        <div dir="rtl" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label
+            htmlFor="pos-no-sale-reason"
+            style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', margin: 0 }}
+          >
+            {t('pos.pos_workspace.pos_workspace_header.s55', "سبب فتح الدرج")}
+          </label>
+          <textarea
+            id="pos-no-sale-reason"
+            value={noSaleReason}
+            onChange={(event) => setNoSaleReason(event.target.value)}
+            maxLength={500}
+            rows={3}
+            placeholder="اكتب سبب فتح الدرج يدوياً (مثل: فكة نقدية، مراجعة عهدة)..."
+            disabled={isNoSalePending}
+            style={{
+              width: '100%',
+              boxSizing: 'border-box',
+              padding: '10px 12px',
+              borderRadius: '8px',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.84rem',
+              fontWeight: 600,
+              color: '#0f172a',
+              background: '#ffffff',
+              resize: 'vertical',
+              outline: 'none',
+            }}
+          />
         </div>
-      </DialogShell>
+      </StandardDialog>
     )}
     {isExchangeOpen && (
       <PosInstantExchangeDialog open={isExchangeOpen} onClose={() => setIsExchangeOpen(false)} pos={pos} />

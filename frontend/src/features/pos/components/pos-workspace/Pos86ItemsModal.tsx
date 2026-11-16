@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { RestaurantOperationsDialog } from './RestaurantOperationsDialog';
 import { toast } from '@/shared/components/system-alert';
+import { CustomSelect } from '@/shared/ui/custom-select';
 import { BanIcon, SearchIcon, CheckCircleIcon } from '@/shared/components/icons/AppIcons';
 import { restaurantAdvancedFnbApi, Restaurant86Item } from '@/features/pos/api/restaurant-advanced-fnb.api';
 import type { Product } from '@/types/domain';
@@ -143,46 +144,35 @@ export function Pos86ItemsModal({
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '11px', color: '#475569', fontWeight: 700 }}>{t('pos.pos_workspace.pos86_items_modal.s7', "سبب الاستبعاد الافتراضي:")}</label>
-            <select
+            <CustomSelect
               value={selectedReason}
-              onChange={(e) => setSelectedReason(e.target.value)}
-              style={{
-                padding: '5px 8px',
-                fontSize: '12px',
-                borderRadius: '6px',
-                border: '1px solid #cbd5e1',
-                background: '#fff',
-                color: '#0f172a',
-                outline: 'none',
-              }}
-            >
-              <option value={t('pos.pos_workspace.pos86_items_modal.s8', "نفاد الكمية بالمطبخ")}>{t('pos.pos_workspace.pos86_items_modal.s9', "نفاد الكمية بالمطبخ")}</option>
-              <option value={t('pos.pos_workspace.pos86_items_modal.s10', "تلف المواد الخام")}>{t('pos.pos_workspace.pos86_items_modal.s11', "تلف المواد الخام")}</option>
-              <option value={t('pos.pos_workspace.pos86_items_modal.s12', "عطل بمعدة الطهي")}>{t('pos.pos_workspace.pos86_items_modal.s13', "عطل بمعدة الطهي")}</option>
-              <option value={t('pos.pos_workspace.pos86_items_modal.s14', "توقف مؤقت للتجهيز")}>{t('pos.pos_workspace.pos86_items_modal.s15', "توقف مؤقت للتجهيز")}</option>
-            </select>
+              onChange={(val) => setSelectedReason(val)}
+              searchable={false}
+              style={{ width: '100%' }}
+              options={[
+                { value: t('pos.pos_workspace.pos86_items_modal.s8', 'نفاد الكمية بالمطبخ'), label: t('pos.pos_workspace.pos86_items_modal.s9', 'نفاد الكمية بالمطبخ') },
+                { value: t('pos.pos_workspace.pos86_items_modal.s10', 'تلف المواد الخام'), label: t('pos.pos_workspace.pos86_items_modal.s11', 'تلف المواد الخام') },
+                { value: t('pos.pos_workspace.pos86_items_modal.s12', 'عطل بمعدة الطهي'), label: t('pos.pos_workspace.pos86_items_modal.s13', 'عطل بمعدة الطهي') },
+                { value: t('pos.pos_workspace.pos86_items_modal.s14', 'توقف مؤقت للتجهيز'), label: t('pos.pos_workspace.pos86_items_modal.s15', 'توقف مؤقت للتجهيز') },
+              ]}
+            />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '11px', color: '#475569', fontWeight: 700 }}>{t('pos.pos_workspace.pos86_items_modal.s16', "إعادة الإتاحة التلقائية:")}</label>
-            <select
-              value={autoHours}
-              onChange={(e) => setAutoHours(Number(e.target.value))}
-              style={{
-                padding: '5px 8px',
-                fontSize: '12px',
-                borderRadius: '6px',
-                border: '1px solid #cbd5e1',
-                background: '#fff',
-                color: '#0f172a',
-                outline: 'none',
-              }}
-            >
-              <option value={0}>{t('pos.pos_workspace.pos86_items_modal.s17', "يدوي (حتى إعادة التفعيل الصريحة)")}</option>
-              <option value={8}>{t('pos.pos_workspace.pos86_items_modal.s18', "بعد 8 ساعات (نهاية الوردية)")}</option>
-              <option value={12}>{t('pos.pos_workspace.pos86_items_modal.s19', "بعد 12 ساعة")}</option>
-              <option value={24}>{t('pos.pos_workspace.pos86_items_modal.s20', "بعد 24 ساعة (صباح اليوم التالي)")}</option>
-            </select>
+            <CustomSelect
+              value={String(autoHours)}
+              onChange={(val) => setAutoHours(Number(val))}
+              searchable={false}
+              dropdownAlign="left"
+              style={{ width: '100%' }}
+              options={[
+                { value: '0', label: t('pos.pos_workspace.pos86_items_modal.s17', 'يدوي (حتى إعادة التفعيل الصريحة)') },
+                { value: '8', label: t('pos.pos_workspace.pos86_items_modal.s18', 'بعد 8 ساعات (نهاية الوردية)') },
+                { value: '12', label: t('pos.pos_workspace.pos86_items_modal.s19', 'بعد 12 ساعة') },
+                { value: '24', label: t('pos.pos_workspace.pos86_items_modal.s20', 'بعد 24 ساعة (صباح اليوم التالي)') },
+              ]}
+            />
           </div>
         </div>
 

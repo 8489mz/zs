@@ -140,7 +140,8 @@ function buildPosLookupPath(params: PosLookupParams = {}) {
 
 export const posApi = {
   getSaleForExchange: (id: number) => http<{ sale: {
-    id: string; customerId: string; branchId: string; status: string;
+    id: string; docNo?: string; customerId: string; customerName?: string; customerPhone?: string;
+    branchId: string; status: string; paymentChannel?: string;
     total: number; paidAmount: number; storeCreditUsed: number;
     items: Array<{ id: string; productId: string; name: string; qty: number;
       total: number; netLineTotal: number | null; allocatedTax: number | null; serials: string[] }>;

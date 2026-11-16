@@ -312,6 +312,7 @@ const PosCartItemRow = memo(function PosCartItemRow({
           </button>
           <input
             type="number"
+            className="no-spin-arrows"
             inputMode="decimal"
             aria-label={__t('pos.pos_cart_panel.pos_cart_items_list.s1', __t('pos.pos_cart_panel.pos_cart_items_list.s1', "الكمية"))}
             dir="ltr"
@@ -332,6 +333,7 @@ const PosCartItemRow = memo(function PosCartItemRow({
             step={inputStep}
             max={item.stockLimit}
             value={item.qty}
+            onWheel={(event) => (event.currentTarget as HTMLInputElement).blur()}
             onFocus={() => onSelectLine(item.lineKey)}
             onClick={(event) => event.stopPropagation()}
             onChange={(event) => onQtyChange(item.lineKey, Number(event.target.value || minQty))}
@@ -416,7 +418,7 @@ const PosCartItemRow = memo(function PosCartItemRow({
               </span>
               <input
                 type="number"
-                className="pos-cart-discount-input"
+                className="pos-cart-discount-input no-spin-arrows"
                 aria-label={t('pos.line_discount', 'خصم الصنف')}
                 value={Number(item.lineDiscount || 0) > 0 ? String(item.lineDiscount) : ''}
                 placeholder="0"
@@ -425,6 +427,7 @@ const PosCartItemRow = memo(function PosCartItemRow({
                 step="0.01"
                 disabled={!canApplyDiscount}
                 autoFocus={isEditingDiscount}
+                onWheel={(event) => (event.currentTarget as HTMLInputElement).blur()}
                 onBlur={() => {
                   if (!Number(item.lineDiscount || 0)) {
                     setIsEditingDiscount(false);

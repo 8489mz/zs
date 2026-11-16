@@ -253,6 +253,9 @@ describe('PosWorkspaceHeader — lazy modals (closed modals are not mounted)', (
     fireEvent.click(screen.getByText('فتح الدرج يدوياً (No-Sale)'));
 
     expect(screen.getByText('فتح الدرج بدون بيع')).toBeInTheDocument();
+    expect(document.body.querySelector('.standard-dialog-container')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'إلغاء' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'فتح الدرج' })).toBeDisabled();
     for (const testId of MODAL_TEST_IDS) {
       expect(screen.queryByTestId(testId)).not.toBeInTheDocument();
     }

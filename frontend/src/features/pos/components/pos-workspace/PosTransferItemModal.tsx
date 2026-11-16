@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { Button } from '@/shared/ui/button';
+import { CustomSelect } from '@/shared/ui/custom-select';
 import { XIcon, CheckCircleIcon, ArrowLeftIcon } from '@/shared/components/icons/AppIcons';
 import { formatCurrency } from '@/lib/format';
 import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
@@ -213,33 +214,28 @@ export function PosTransferItemModal({
               <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>
                 {__t('pos.pos_workspace.pos_transfer_item_modal.s6', __t('pos.pos_workspace.pos_transfer_item_modal.s6', "طاولة الوجهة:"))}
               </span>
-              <select
+              <CustomSelect
                 value={targetTable}
-                onChange={(e) => setTargetTable(e.target.value)}
-                style={{
-                  height: '34px',
-                  borderRadius: '6px',
-                  border: '1.5px solid #170e5e',
-                  padding: '0 10px',
-                  fontSize: '12.5px',
-                  fontWeight: 800,
-                  color: '#170e5e',
-                  background: '#ffffff',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value="">{__t('pos.pos_workspace.pos_transfer_item_modal.s7', __t('pos.pos_workspace.pos_transfer_item_modal.s7', "-- اختر طاولة الوجهة --"))}</option>
-                {allTables
-                  .filter((t) => t !== sourceTable)
-                  .map((t) => {
-                    const isOccupied = occupiedTables.includes(t);
-                    return (
-                      <option key={t} value={t}>
-                        {__t('pos.pos_workspace.pos_transfer_item_modal.s8', __t('pos.pos_workspace.pos_transfer_item_modal.s8', "طاولة"))} {t} {isOccupied ? __t('pos.pos_workspace.pos_transfer_item_modal.s9', __t('pos.pos_workspace.pos_transfer_item_modal.s9', "(مشغولة - سيتم الإلحاق)")) : __t('pos.pos_workspace.pos_transfer_item_modal.s10', __t('pos.pos_workspace.pos_transfer_item_modal.s10', "(شاغرة)"))}
-                      </option>
-                    );
-                  })}
-              </select>
+                onChange={(val) => setTargetTable(val)}
+                searchable={false}
+                placeholder={__t('pos.pos_workspace.pos_transfer_item_modal.s7', '-- اختر طاولة الوجهة --')}
+                style={{ minWidth: '210px' }}
+                options={[
+                  { value: '', label: __t('pos.pos_workspace.pos_transfer_item_modal.s7', '-- اختر طاولة الوجهة --') },
+                  ...allTables
+                    .filter((t) => t !== sourceTable)
+                    .map((t) => {
+                      const isOccupied = occupiedTables.includes(t);
+                      const statusText = isOccupied
+                        ? __t('pos.pos_workspace.pos_transfer_item_modal.s9', '(مشغولة - سيتم الإلحاق)')
+                        : __t('pos.pos_workspace.pos_transfer_item_modal.s10', '(شاغرة)');
+                      return {
+                        value: t,
+                        label: `${__t('pos.pos_workspace.pos_transfer_item_modal.s8', 'طاولة')} ${t} ${statusText}`,
+                      };
+                    }),
+                ]}
+              />
             </div>
 
             <div style={{ display: 'flex', gap: '6px' }}>
