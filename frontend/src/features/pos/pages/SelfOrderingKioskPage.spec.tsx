@@ -374,9 +374,22 @@ describe('SelfOrderingKioskPage — tray neutral wording (T15-C)', () => {
   });
 
   it('page fallbacks and the empty-cart toast are neutral in source', () => {
-    const source = readSourceT15C(
+    // MERGE (file #10 split): the literals moved with their JSX into the slices —
+    // the pin now reads the facade + all 9 slice files. Assertions unchanged.
+    const source = [
       'src/features/pos/pages/SelfOrderingKioskPage.tsx',
-    );
+      'src/features/pos/components/kiosk/KioskWelcomeScreen.tsx',
+      'src/features/pos/components/kiosk/KioskConfirmationScreen.tsx',
+      'src/features/pos/components/kiosk/KioskHeader.tsx',
+      'src/features/pos/components/kiosk/KioskCategorySidebar.tsx',
+      'src/features/pos/components/kiosk/KioskProductGrid.tsx',
+      'src/features/pos/components/kiosk/KioskOrderTray.tsx',
+      'src/features/pos/components/kiosk/KioskReviewDialog.tsx',
+      'src/features/pos/components/kiosk/KioskTerminalDialog.tsx',
+      'src/features/pos/components/kiosk/KioskQrDialog.tsx',
+    ]
+      .map((rel) => readSourceT15C(rel))
+      .join('\n');
     const oldLiterals = [
       'ابحث عن وجبة أو مشروب...',
       'جارٍ تحميل قائمة الوجبات...',
