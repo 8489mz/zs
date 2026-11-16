@@ -100,19 +100,19 @@ export class StorefrontService {
       db: this.db,
       getTenantBySlug: this.getTenantBySlug.bind(this),
       getTenantSettingsMap: this.getTenantSettingsMap.bind(this),
-      resolveStorefrontStockScope: this.resolveStorefrontStockScope.bind(this),
-      loadStorefrontAvailability: this.loadStorefrontAvailability.bind(this),
+      resolveStorefrontStockScope: this.catalogDetailService.resolveStorefrontStockScope.bind(this.catalogDetailService),
+      loadStorefrontAvailability: this.catalogDetailService.loadStorefrontAvailability.bind(this.catalogDetailService),
     });
     this.customerOrdersService = new StorefrontCustomerOrdersService({
       db: this.db,
       getTenantBySlug: this.getTenantBySlug.bind(this),
       getTenantSettingsMap: this.getTenantSettingsMap.bind(this),
-      resolveOrderCharges: this.resolveOrderCharges.bind(this),
-      normalizeOnlineOrderModifiers: this.normalizeOnlineOrderModifiers.bind(this),
-      onlineOrderModifiersTotal: this.onlineOrderModifiersTotal.bind(this),
-      enforceOnlineOrderModifierContract: this.enforceOnlineOrderModifierContract.bind(this),
-      claimCouponUse: this.claimCouponUse.bind(this),
-      releaseCouponUse: this.releaseCouponUse.bind(this),
+      resolveOrderCharges: this.orderQuoteService.resolveOrderCharges.bind(this.orderQuoteService),
+      normalizeOnlineOrderModifiers: this.orderQuoteService.normalizeOnlineOrderModifiers.bind(this.orderQuoteService),
+      onlineOrderModifiersTotal: this.orderQuoteService.onlineOrderModifiersTotal.bind(this.orderQuoteService),
+      enforceOnlineOrderModifierContract: this.orderQuoteService.enforceOnlineOrderModifierContract.bind(this.orderQuoteService),
+      claimCouponUse: this.couponsService.claimCouponUse.bind(this.couponsService),
+      releaseCouponUse: this.couponsService.releaseCouponUse.bind(this.couponsService),
       logger: this.logger,
     });
     this.orderCreateService = new StorefrontOrderCreateService({
@@ -134,18 +134,18 @@ export class StorefrontService {
       media: this.media,
       getTenantBySlug: this.getTenantBySlug.bind(this),
       getTenantSettingsMap: this.getTenantSettingsMap.bind(this),
-      invalidateCatalogCache: this.invalidateCatalogCache.bind(this),
+      invalidateCatalogCache: this.catalogService.invalidateCatalogCache.bind(this.catalogService),
     });
     this.engagementService = new StorefrontEngagementService({
       db: this.db,
       getTenantBySlug: this.getTenantBySlug.bind(this),
-      invalidateCatalogCache: this.invalidateCatalogCache.bind(this),
+      invalidateCatalogCache: this.catalogService.invalidateCatalogCache.bind(this.catalogService),
     });
     this.merchantOrdersService = new StorefrontMerchantOrdersService({
       db: this.db,
       kdsService: this.kdsService,
       logger: this.logger,
-      releaseCouponUse: this.releaseCouponUse.bind(this),
+      releaseCouponUse: this.couponsService.releaseCouponUse.bind(this.couponsService),
     });
     this.orderConvertService = new StorefrontOrderConvertService({
       db: this.db,
@@ -213,22 +213,6 @@ export class StorefrontService {
   }
 
 
-  private async resolveStorefrontStockScope(
-    tenantId: string,
-    settings: Map<string, string>,
-    branchId?: number | null,
-  ): Promise<{ branchId: number | null; locations: Array<{ id: number; branchId: number | null }> }> {
-    return this.catalogDetailService.resolveStorefrontStockScope(tenantId, settings, branchId);
-  }
-
-  private async loadStorefrontAvailability(
-    tenantId: string,
-    locationIds: number[],
-    productIds?: number[],
-  ): Promise<Map<number, number>> {
-    return this.catalogDetailService.loadStorefrontAvailability(tenantId, locationIds, productIds);
-  }
-
   private async getTenantSettingsMap(tenantId: string): Promise<Map<string, string>> {
     const rows = await this.db
       .selectFrom('settings')
@@ -252,10 +236,6 @@ export class StorefrontService {
 
   public static invalidateGlobalCatalogCache(slug?: string) {
     return StorefrontCatalogService.invalidateGlobalCatalogCache(slug);
-  }
-
-  public invalidateCatalogCache(slug?: string) {
-    return this.catalogService.invalidateCatalogCache(slug);
   }
 
   // --- Public Storefront Methods ---
@@ -289,49 +269,6 @@ export class StorefrontService {
 
   async getProductModifiers(slug: string, productId: number) {
     return this.catalogDetailService.getProductModifiers(slug, productId);
-  }
-
-  private normalizeOnlineOrderModifiers(raw: unknown): any[] {
-    return this.orderQuoteService.normalizeOnlineOrderModifiers(raw);
-  }
-
-  private onlineOrderModifiersTotal(modifiers: any[] | undefined): number {
-    return this.orderQuoteService.onlineOrderModifiersTotal(modifiers);
-  }
-
-  private async enforceOnlineOrderModifierContract(
-    items: Array<{ productId: number; modifiers?: any[] }>,
-    tenant: { id: string; plan_id?: string | null; extra_features?: unknown; activity_type?: string | null },
-  ): Promise<void> {
-    return this.orderQuoteService.enforceOnlineOrderModifierContract(items, tenant);
-  }
-
-  private async resolveOrderCharges(
-    tenantId: string,
-    settings: Map<string, string>,
-    params: {
-      isDineIn: boolean;
-      isPickup: boolean;
-      deliveryZoneId?: number | null;
-      deliveryZoneName?: string | null;
-      subtotal: number;
-      couponCode?: string | null;
-      alreadyClaimedCouponCode?: string | null;
-    },
-  ): Promise<{
-    deliveryFee: number;
-    deliveryZoneId: number | null;
-    deliveryZoneName: string | null;
-    discountAmount: number;
-    appliedCouponCode: string | null;
-    /** Coupon whose use must be claimed in the order transaction (null when none, or already claimed). */
-    couponId: number | null;
-  }> {
-    return this.orderQuoteService.resolveOrderCharges(tenantId, settings, params);
-  }
-
-  async releaseCouponUse(trx: Transaction<Database>, tenantId: string, couponCode: string): Promise<void> {
-    return this.couponsService.releaseCouponUse(trx, tenantId, couponCode);
   }
 
   async quoteOnlineOrder(slug: string, dto: {
