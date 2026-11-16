@@ -273,7 +273,9 @@ describe('matchesNavigationSearch', () => {
   });
 
   it('INV-DELIVERY-REPS-RETAIL-SELF-INSTALL: matches delivery-reps sidebar navigation by Arabic keywords', () => {
-    const repNav = deliveryRepsRoutes.navigation[0];
+    const repNav = deliveryRepsRoutes.navigation?.[0];
+    expect(repNav).toBeDefined();
+    if (!repNav) throw new Error('delivery-reps navigation entry missing');
     expect(repNav.key).toBe('delivery-reps');
     for (const term of ['مندوب', 'المناديب', 'توصيل', 'دليفري', 'تسوية']) {
       expect(matchesNavigationSearch(repNav, normalizeArabicSearchKey(term))).toBe(true);
