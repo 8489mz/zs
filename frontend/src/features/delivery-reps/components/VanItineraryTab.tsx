@@ -43,6 +43,7 @@ export { normalizeDayKey, DAY_KEY_TO_ARABIC, ALL_WEEK_DAYS } from '@/features/de
 import { VanItineraryPagination } from '@/features/delivery-reps/components/van-itinerary/van-itinerary-pagination';
 import { useVanItineraryFilters } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-filters';
 import { useVanItineraryOrder } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-order';
+import { useVanItineraryVisit } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-visit';
 
 interface VanItineraryTabProps {
   itinerary: VanCustomerItineraryItem[];
@@ -81,8 +82,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
 }) => {
   const { t } = useTranslation();
   const filters = useVanItineraryFilters({ itinerary });
-  // Selected customer for the unified hub modal
-  const [selectedCustomerForHub, setSelectedCustomerForHub] = useState<VanCustomerItineraryItem | null>(null);
+  const visit = useVanItineraryVisit({ activeVisit });
   const [inventoryCustomer, setInventoryCustomer] = useState<VanCustomerItineraryItem | null>(null);
   const [surveyCustomer, setSurveyCustomer] = useState<VanCustomerItineraryItem | null>(null);
   const [swapCustomer, setSwapCustomer] = useState<VanCustomerItineraryItem | null>(null);
@@ -148,24 +148,6 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
       },
       { timeout: 5000, enableHighAccuracy: true }
     );
-  };
-
-  // Live timer interval for active visit duration
-  const [timerTick, setTimerTick] = useState(Date.now());
-  useEffect(() => {
-    if (!activeVisit) return;
-    const interval = setInterval(() => setTimerTick(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, [activeVisit]);
-
-  const elapsedVisitSeconds = activeVisit
-    ? Math.max(0, Math.floor((timerTick - activeVisit.startedAt) / 1000))
-    : 0;
-
-  const formatElapsed = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
   // Negative visit modal state
   const [negativeModalOpen, setNegativeModalOpen] = useState(false);
@@ -634,8 +616,8 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
   const pendingCount = total - positiveCount - negativeCount;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: selectedCustomerForHub ? '6px' : '10px', paddingBottom: selectedCustomerForHub ? '85px' : '24px' }}>
-      {selectedCustomerForHub ? (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: visit.selectedCustomerForHub ? '6px' : '10px', paddingBottom: visit.selectedCustomerForHub ? '85px' : '24px' }}>
+      {visit.selectedCustomerForHub ? (
         /* Z-SYSTEMS OFFICIAL MOBILE VISUAL IDENTITY: ZERO-SCROLL CUSTOMER VISIT HUB */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {/* 1. STORE PROFILE HEADER CARD (Top Bar + Store Info + Quick Actions) */}
@@ -656,7 +638,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
                 <button
                   type="button"
-                  onClick={() => setSelectedCustomerForHub(null)}
+                  onClick={() => visit.setSelectedCustomerForHub(null)}
                   style={{
                     backgroundColor: '#f8fafc',
                     border: '1px solid #cbd5e1',
@@ -686,17 +668,17 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                   }}
-                  title={selectedCustomerForHub.customerName}
+                  title={visit.selectedCustomerForHub.customerName}
                 >
-                  {selectedCustomerForHub.customerName}
+                  {visit.selectedCustomerForHub.customerName}
                 </h2>
               </div>
 
               {/* Call & GPS Action Buttons with soft squircle styling */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                {selectedCustomerForHub.customerPhone ? (
+                {visit.selectedCustomerForHub.customerPhone ? (
                   <a
-                    href={`tel:${selectedCustomerForHub.customerPhone}`}
+                    href={`tel:${visit.selectedCustomerForHub.customerPhone}`}
                     style={{
                       backgroundColor: '#ffffff',
                       border: '1px solid #cbd5e1',
@@ -711,16 +693,16 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                       textDecoration: 'none',
                       boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                     }}
-                    title={selectedCustomerForHub.customerPhone}
+                    title={visit.selectedCustomerForHub.customerPhone}
                   >
                     <PhoneIcon size={12} color="#170e5e" />
                     <span>{t('delivery_reps.van_itinerary_tab.s5', "اتصال")}</span>
                   </a>
                 ) : null}
 
-                {selectedCustomerForHub.locationUrl ? (
+                {visit.selectedCustomerForHub.locationUrl ? (
                   <a
-                    href={selectedCustomerForHub.locationUrl}
+                    href={visit.selectedCustomerForHub.locationUrl}
                     target="_blank"
                     rel="noreferrer"
                     style={{
@@ -761,28 +743,28 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                     flexShrink: 0,
                   }}
                 >
-                  [{selectedCustomerForHub.customerCode.replace(/^#/, '')}]
+                  [{visit.selectedCustomerForHub.customerCode.replace(/^#/, '')}]
                 </span>
 
                 <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {selectedCustomerForHub.district ? `حي: ${selectedCustomerForHub.district}` : (selectedCustomerForHub.route ? `خط: ${selectedCustomerForHub.route}` : '')}
-                  {selectedCustomerForHub.customerAddress ? ` • ${selectedCustomerForHub.customerAddress}` : ''}
+                  {visit.selectedCustomerForHub.district ? `حي: ${visit.selectedCustomerForHub.district}` : (visit.selectedCustomerForHub.route ? `خط: ${visit.selectedCustomerForHub.route}` : '')}
+                  {visit.selectedCustomerForHub.customerAddress ? ` • ${visit.selectedCustomerForHub.customerAddress}` : ''}
                 </span>
               </div>
 
               {/* Status Badge */}
               <div style={{ flexShrink: 0 }}>
-                {selectedCustomerForHub.visitStatus === 'positive' && (
+                {visit.selectedCustomerForHub.visitStatus === 'positive' && (
                   <span style={{ backgroundColor: '#dcfce7', color: '#15803d', fontSize: '10px', fontWeight: 800, padding: '2px 7px', borderRadius: '6px', border: '1px solid #86efac' }}>
                     {t('delivery_reps.van_itinerary_tab.s6', "تم البيع")}
                   </span>
                 )}
-                {selectedCustomerForHub.visitStatus === 'negative' && (
+                {visit.selectedCustomerForHub.visitStatus === 'negative' && (
                   <span style={{ backgroundColor: '#fee2e2', color: '#b91c1c', fontSize: '10px', fontWeight: 800, padding: '2px 7px', borderRadius: '6px', border: '1px solid #fca5a5' }}>
                     {t('delivery_reps.van_itinerary_tab.s7', "زيارة سلبية")}
                   </span>
                 )}
-                {selectedCustomerForHub.visitStatus === 'pending' && (
+                {visit.selectedCustomerForHub.visitStatus === 'pending' && (
                   <span style={{ backgroundColor: '#f1f5f9', color: '#475569', fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                     {t('delivery_reps.van_itinerary_tab.s8', "بانتظار الزيارة")}
                   </span>
@@ -808,7 +790,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                 flex: '1 1 0',
                 minWidth: 0,
                 backgroundColor: '#ffffff',
-                border: selectedCustomerForHub.creditLimit > 0 && selectedCustomerForHub.balance > selectedCustomerForHub.creditLimit ? '1px solid #fecaca' : '1px solid #e2e8f0',
+                border: visit.selectedCustomerForHub.creditLimit > 0 && visit.selectedCustomerForHub.balance > visit.selectedCustomerForHub.creditLimit ? '1px solid #fecaca' : '1px solid #e2e8f0',
                 borderRadius: '12px',
                 padding: '8px 10px',
                 textAlign: 'center',
@@ -819,10 +801,10 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '2px' }}>
                 {t('delivery_reps.van_itinerary_tab.s9', "المديونية المستحقة")}
               </span>
-              <strong style={{ fontSize: '14px', fontWeight: 900, color: selectedCustomerForHub.balance > 0 ? '#b91c1c' : '#0f172a', display: 'block', lineHeight: 1.15 }}>
-                {Number(selectedCustomerForHub.balance.toFixed(0)).toLocaleString()} <CurrencySymbol />
+              <strong style={{ fontSize: '14px', fontWeight: 900, color: visit.selectedCustomerForHub.balance > 0 ? '#b91c1c' : '#0f172a', display: 'block', lineHeight: 1.15 }}>
+                {Number(visit.selectedCustomerForHub.balance.toFixed(0)).toLocaleString()} <CurrencySymbol />
               </strong>
-              {selectedCustomerForHub.creditLimit > 0 && selectedCustomerForHub.balance > selectedCustomerForHub.creditLimit && (
+              {visit.selectedCustomerForHub.creditLimit > 0 && visit.selectedCustomerForHub.balance > visit.selectedCustomerForHub.creditLimit && (
                 <span style={{ backgroundColor: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', fontSize: '9px', fontWeight: 800, padding: '1px 5px', borderRadius: '4px', display: 'inline-block', marginTop: '2px' }}>
                   {t('delivery_reps.van_itinerary_tab.s10', "تجاوز سقف الائتمان")}
                 </span>
@@ -847,16 +829,16 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                 {t('delivery_reps.van_itinerary_tab.s11', "سقف الائتمان")}
               </span>
               <strong style={{ fontSize: '14px', fontWeight: 900, color: '#0f172a', display: 'block', lineHeight: 1.15 }}>
-                {Number(selectedCustomerForHub.creditLimit.toFixed(0)).toLocaleString()} <CurrencySymbol />
+                {Number(visit.selectedCustomerForHub.creditLimit.toFixed(0)).toLocaleString()} <CurrencySymbol />
               </strong>
-              {selectedCustomerForHub.creditLimit > 0 ? (
-                selectedCustomerForHub.balance >= selectedCustomerForHub.creditLimit ? (
+              {visit.selectedCustomerForHub.creditLimit > 0 ? (
+                visit.selectedCustomerForHub.balance >= visit.selectedCustomerForHub.creditLimit ? (
                   <span style={{ fontSize: '9px', color: '#b91c1c', fontWeight: 700, display: 'block', marginTop: '2px' }}>
                     {t('delivery_reps.van_itinerary_tab.s12', "المتاح: 0")} <CurrencySymbol />
                   </span>
                 ) : (
                   <span style={{ fontSize: '9px', color: '#15803d', fontWeight: 700, display: 'block', marginTop: '2px' }}>
-                    {t('delivery_reps.van_itinerary_tab.s13', "المتاح:")} {Number((selectedCustomerForHub.creditLimit - selectedCustomerForHub.balance).toFixed(0)).toLocaleString()} <CurrencySymbol />
+                    {t('delivery_reps.van_itinerary_tab.s13', "المتاح:")} {Number((visit.selectedCustomerForHub.creditLimit - visit.selectedCustomerForHub.balance).toFixed(0)).toLocaleString()} <CurrencySymbol />
                   </span>
                 )
               ) : (
@@ -868,7 +850,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
           </div>
 
           {/* 3. PRIMARY FULL-WIDTH VISIT TIMER BUTTON / COCKPIT BAR */}
-          {activeVisit?.customerId === selectedCustomerForHub.customerId ? (
+          {activeVisit?.customerId === visit.selectedCustomerForHub.customerId ? (
             /* Active Visit Bar */
             <div
               style={{
@@ -914,7 +896,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                       lineHeight: 1.1,
                     }}
                   >
-                    {formatElapsed(elapsedVisitSeconds)}
+                    {visit.formatElapsed(visit.elapsedVisitSeconds)}
                   </span>
                 </div>
               </div>
@@ -944,7 +926,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
             /* Standalone Primary Full-Width CTA to Start Visit */
             <button
               type="button"
-              onClick={() => onStartVisit?.(selectedCustomerForHub.customerId, selectedCustomerForHub.customerName)}
+              onClick={() => onStartVisit?.(visit.selectedCustomerForHub.customerId, visit.selectedCustomerForHub.customerName)}
               style={{
                 width: '100%',
                 backgroundColor: '#170e5e',
@@ -996,10 +978,10 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               {/* Tile 1: New Sale Invoice */}
               <div
                 onClick={() => {
-                  const cId = selectedCustomerForHub.customerId;
-                  const cName = selectedCustomerForHub.customerName;
+                  const cId = visit.selectedCustomerForHub.customerId;
+                  const cName = visit.selectedCustomerForHub.customerName;
                   const proceedToSale = () => {
-                    setSelectedCustomerForHub(null);
+                    visit.setSelectedCustomerForHub(null);
                     onSelectCustomerForSale(cId);
                   };
                   if (!activeVisit || activeVisit.customerId !== cId) {
@@ -1052,10 +1034,10 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               {/* Tile 2: Customer Return */}
               <div
                 onClick={() => {
-                  const cId = selectedCustomerForHub.customerId;
-                  const cName = selectedCustomerForHub.customerName;
+                  const cId = visit.selectedCustomerForHub.customerId;
+                  const cName = visit.selectedCustomerForHub.customerName;
                   const proceedToReturn = () => {
-                    setSelectedCustomerForHub(null);
+                    visit.setSelectedCustomerForHub(null);
                     if (onSelectCustomerForReturn) {
                       onSelectCustomerForReturn(cId);
                     } else {
@@ -1115,10 +1097,10 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               {/* Tile 3: Debt Collection */}
               <div
                 onClick={() => {
-                  const cId = selectedCustomerForHub.customerId;
-                  const cName = selectedCustomerForHub.customerName;
+                  const cId = visit.selectedCustomerForHub.customerId;
+                  const cName = visit.selectedCustomerForHub.customerName;
                   const proceedToCollection = () => {
-                    setSelectedCustomerForHub(null);
+                    visit.setSelectedCustomerForHub(null);
                     if (onSelectCustomerForCollection) {
                       onSelectCustomerForCollection(cId);
                     }
@@ -1173,7 +1155,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               {/* Tile 4: Field Statement */}
               <div
                 onClick={() => {
-                  setStatementModalCust(selectedCustomerForHub);
+                  setStatementModalCust(visit.selectedCustomerForHub);
                 }}
                 style={{
                   flex: '1 1 0',
@@ -1222,9 +1204,9 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               {/* Tile 5: Instant Damaged Goods Swap (Egyptian FMCG Standard) */}
               <div
                 onClick={() => {
-                  const cust = selectedCustomerForHub;
+                  const cust = visit.selectedCustomerForHub;
                   const proceedToSwap = () => {
-                    setSelectedCustomerForHub(null);
+                    visit.setSelectedCustomerForHub(null);
                     setSwapCustomer(cust);
                   };
                   if (!activeVisit || activeVisit.customerId !== cust.customerId) {
@@ -1277,9 +1259,9 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               {/* Tile 6: Store Shelf Inventory */}
               <div
                 onClick={() => {
-                  const cust = selectedCustomerForHub;
+                  const cust = visit.selectedCustomerForHub;
                   const proceedToInventory = () => {
-                    setSelectedCustomerForHub(null);
+                    visit.setSelectedCustomerForHub(null);
                     setInventoryCustomer(cust);
                   };
                   if (!activeVisit || activeVisit.customerId !== cust.customerId) {
@@ -1335,9 +1317,9 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               {/* Tile 7: Trade Marketing & Cooler Inspection */}
               <div
                 onClick={() => {
-                  const cust = selectedCustomerForHub;
+                  const cust = visit.selectedCustomerForHub;
                   const proceedToSurvey = () => {
-                    setSelectedCustomerForHub(null);
+                    visit.setSelectedCustomerForHub(null);
                     setSurveyCustomer(cust);
                   };
                   if (!activeVisit || activeVisit.customerId !== cust.customerId) {
@@ -1390,7 +1372,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               {/* Tile 8: Negative Visit */}
               <div
                 onClick={() => {
-                  const cust = selectedCustomerForHub;
+                  const cust = visit.selectedCustomerForHub;
                   openNegativeVisitModal(cust);
                 }}
                 style={{
@@ -1437,7 +1419,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
           </div>
 
           {/* 5. Today's Visit Summary if already visited today (Z-Systems Crisp White Card) */}
-          {selectedCustomerForHub.todayVisit && (
+          {visit.selectedCustomerForHub.todayVisit && (
             <div
               style={{
                 backgroundColor: '#ffffff',
@@ -1456,14 +1438,14 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                 <ClockIcon size={13} color="#64748b" />
                 <span style={{ fontWeight: 700, color: '#475569', flexShrink: 0 }}>{t('delivery_reps.van_itinerary_tab.s36', "زيارة سابقة اليوم:")}</span>
               </div>
-              {selectedCustomerForHub.todayVisit.visitType === 'positive' ? (
+              {visit.selectedCustomerForHub.todayVisit.visitType === 'positive' ? (
                 <span style={{ color: '#15803d', fontWeight: 800 }}>
-                  {t('delivery_reps.van_itinerary_tab.s37', "فاتورة #")}{selectedCustomerForHub.todayVisit.saleDocNo} ({selectedCustomerForHub.todayVisit.saleTotal} <CurrencySymbol />)
+                  {t('delivery_reps.van_itinerary_tab.s37', "فاتورة #")}{visit.selectedCustomerForHub.todayVisit.saleDocNo} ({visit.selectedCustomerForHub.todayVisit.saleTotal} <CurrencySymbol />)
                 </span>
               ) : (
                 <span style={{ color: '#b91c1c', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {getReasonLabel(selectedCustomerForHub.todayVisit.negativeReason)}
-                  {selectedCustomerForHub.todayVisit.notes && ` — "${selectedCustomerForHub.todayVisit.notes}"`}
+                  {getReasonLabel(visit.selectedCustomerForHub.todayVisit.negativeReason)}
+                  {visit.selectedCustomerForHub.todayVisit.notes && ` — "${visit.selectedCustomerForHub.todayVisit.notes}"`}
                 </span>
               )}
             </div>
@@ -2199,7 +2181,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                     return (
                       <div
                         key={item.customerId}
-                        onClick={() => setSelectedCustomerForHub(item)}
+                        onClick={() => visit.setSelectedCustomerForHub(item)}
                         style={{
                           backgroundColor: isActiveVisiting ? '#f8faff' : '#ffffff',
                           borderRadius: '8px',
@@ -2277,7 +2259,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                                 }}
                               >
                                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#2563eb', animation: 'pulse 1.5s infinite' }} />
-                                <span>{t('delivery_reps.van_itinerary_tab.s76', "الزيارة جارية (")}{formatElapsed(elapsedVisitSeconds)})</span>
+                                <span>{t('delivery_reps.van_itinerary_tab.s76', "الزيارة جارية (")}{visit.formatElapsed(visit.elapsedVisitSeconds)})</span>
                               </span>
                             )}
                             {isPositive && (
