@@ -33,7 +33,6 @@ import {
   PackageIcon,
   RefreshCwIcon,
 } from '@/shared/components/icons/AppIcons';
-import { catalogApi } from '@/lib/api/catalog';
 import { VanCustomerStatementModal } from './VanCustomerStatementModal';
 import { VanStoreInventoryModal } from './VanStoreInventoryModal';
 import { VanTradeSurveyModal } from './VanTradeSurveyModal';
@@ -44,6 +43,7 @@ import { VanItineraryPagination } from '@/features/delivery-reps/components/van-
 import { useVanItineraryFilters } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-filters';
 import { useVanItineraryOrder } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-order';
 import { useVanItineraryVisit } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-visit';
+import { useVanItineraryAddCustomer } from '@/features/delivery-reps/components/van-itinerary/use-van-itinerary-add-customer';
 
 interface VanItineraryTabProps {
   itinerary: VanCustomerItineraryItem[];
@@ -87,68 +87,8 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
   const [surveyCustomer, setSurveyCustomer] = useState<VanCustomerItineraryItem | null>(null);
   const [swapCustomer, setSwapCustomer] = useState<VanCustomerItineraryItem | null>(null);
   const order = useVanItineraryOrder();
-  // Add Customer Modal State
-  const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
-  const [newCustName, setNewCustName] = useState('');
-  const [newCustPhone, setNewCustPhone] = useState('');
-  const [newCustDistrict, setNewCustDistrict] = useState('');
-  const [newCustRoute, setNewCustRoute] = useState('');
-  const [newCustAddress, setNewCustAddress] = useState('');
-  const [newCustGps, setNewCustGps] = useState<{ lat: number; lng: number } | null>(null);
-  const [isLocatingGps, setIsLocatingGps] = useState(false);
-  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
-  const [districtDropdownOpen, setDistrictDropdownOpen] = useState(false);
-  const [routeDropdownOpen, setRouteDropdownOpen] = useState(false);
-  const [newCustVisitDays, setNewCustVisitDays] = useState<string[]>([]);
-  const districtContainerRef = useRef<HTMLDivElement | null>(null);
-  const routeContainerRef = useRef<HTMLDivElement | null>(null);
+  const add = useVanItineraryAddCustomer({ todayArabicName: filters.todayArabicName, savedDistrictsList: filters.savedDistrictsList, routes: filters.routes, onRefreshItinerary });
 
-  // Close combobox dropdowns on outside click
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-      if (districtContainerRef.current && !districtContainerRef.current.contains(e.target as Node)) {
-        setDistrictDropdownOpen(false);
-      }
-      if (routeContainerRef.current && !routeContainerRef.current.contains(e.target as Node)) {
-        setRouteDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
-    };
-  }, []);
-
-  const filteredDistricts = useMemo(() => {
-    if (!newCustDistrict.trim()) return filters.savedDistrictsList;
-    const q = newCustDistrict.trim().toLowerCase();
-    return filters.savedDistrictsList.filter((d) => d.toLowerCase().includes(q));
-  }, [filters.savedDistrictsList, newCustDistrict]);
-
-  const handleCaptureGps = () => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      toast.warning('خدمة تحديد المواقع (GPS) غير مدعومة في جهازك');
-      return;
-    }
-    setIsLocatingGps(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setIsLocatingGps(false);
-        setNewCustGps({
-          lat: Number(pos.coords.latitude.toFixed(6)),
-          lng: Number(pos.coords.longitude.toFixed(6)),
-        });
-        toast.success('تم التقاط إحداثيات موقع المحل عبر GPS بنجاح');
-      },
-      () => {
-        setIsLocatingGps(false);
-        toast.warning('تعذر تحديد الموقع، يرجى تفعيل الـ GPS في الهاتف');
-      },
-      { timeout: 5000, enableHighAccuracy: true }
-    );
-  };
   // Negative visit modal state
   const [negativeModalOpen, setNegativeModalOpen] = useState(false);
   const [activeCustomer, setActiveCustomer] = useState<VanCustomerItineraryItem | null>(null);
@@ -160,23 +100,6 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statementModalCust, setStatementModalCust] = useState<VanCustomerItineraryItem | null>(null);
 
-  const filteredRoutes = useMemo(() => {
-    if (!newCustRoute.trim()) return filters.routes;
-    const q = newCustRoute.trim().toLowerCase();
-    return filters.routes.filter((r) => r.toLowerCase().includes(q));
-  }, [filters.routes, newCustRoute]);
-
-  // Default to today's visit day and current trip route when opening the modal
-  useEffect(() => {
-    if (addCustomerModalOpen) {
-      if (newCustVisitDays.length === 0) {
-        setNewCustVisitDays([filters.todayArabicName]);
-      }
-      if (!newCustRoute.trim() && filters.routes.length > 0) {
-        setNewCustRoute(filters.routes[0]);
-      }
-    }
-  }, [addCustomerModalOpen, filters.todayArabicName, newCustVisitDays.length, newCustRoute, filters.routes]);
 
   const filtered = useMemo(() => {
     const rawSearch = filters.searchTerm.trim().toLowerCase();
@@ -441,86 +364,6 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
     saveCustomerOrder(districtName, newIds);
   };
 
-  const handleCreateCustomer = async () => {
-    if (!newCustName.trim()) {
-      toast.warning('يرجى كتابة اسم المحل / العميل');
-      return;
-    }
-    setIsCreatingCustomer(true);
-    try {
-      const districtVal = newCustDistrict.trim() || undefined;
-      const routeVal = newCustRoute.trim() || undefined;
-      const addressVal = newCustAddress.trim() || districtVal;
-      const locationUrl = newCustGps
-        ? `https://maps.google.com/?q=${newCustGps.lat},${newCustGps.lng}`
-        : undefined;
-
-      const visitDaysVal = newCustVisitDays.length > 0 ? newCustVisitDays : [filters.todayArabicName];
-      const customerPayload = {
-        name: newCustName.trim(),
-        phone: newCustPhone.trim() || undefined,
-        district: districtVal,
-        route: routeVal,
-        address: addressVal,
-        visitDays: visitDaysVal,
-        metadata: {
-          district: districtVal,
-          route: routeVal,
-          visit_days: visitDaysVal,
-          visit_day: visitDaysVal[0] || '',
-          gpsLat: newCustGps?.lat,
-          gpsLng: newCustGps?.lng,
-          locationUrl,
-        },
-      };
-
-      let createRes: any = null;
-      try {
-        createRes = await vanSalesApi.createCustomer(customerPayload);
-      } catch (vanErr: any) {
-        // Fallback to standard catalog API if in web session
-        await catalogApi.createCustomer({
-          name: newCustName.trim(),
-          phone: newCustPhone.trim() || undefined,
-          type: 'cash',
-          creditLimit: 0,
-          balance: 0,
-          address: addressVal,
-          metadata: customerPayload.metadata,
-        });
-      }
-
-      if (districtVal && typeof window !== 'undefined') {
-        try {
-          const saved: string[] = JSON.parse(localStorage.getItem('zs_van_saved_districts') || '[]');
-          if (!saved.includes(districtVal)) {
-            localStorage.setItem('zs_van_saved_districts', JSON.stringify([...saved, districtVal].slice(-50)));
-          }
-        } catch {}
-      }
-
-      if (createRes?.alreadyExisted) {
-        toast.info(createRes.message || `المحل مسجل مسبقاً وتم ربطه بخط سيرك بنجاح`);
-      } else {
-        toast.success(`تم إضافة المحل (${newCustName.trim()}) لخط السير بنجاح`);
-      }
-      setAddCustomerModalOpen(false);
-      setNewCustName('');
-      setNewCustPhone('');
-      setNewCustDistrict('');
-      setNewCustRoute('');
-      setNewCustAddress('');
-      setNewCustGps(null);
-      setNewCustVisitDays([filters.todayArabicName]);
-      setDistrictDropdownOpen(false);
-      setRouteDropdownOpen(false);
-      onRefreshItinerary();
-    } catch (err: any) {
-      toast.error(err?.message || 'تعذر إضافة العميل');
-    } finally {
-      setIsCreatingCustomer(false);
-    }
-  };
 
 
 
@@ -1785,7 +1628,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', width: '100%' }}>
             <button
               type="button"
-              onClick={() => setAddCustomerModalOpen(true)}
+              onClick={() => add.setAddCustomerModalOpen(true)}
               style={{
                 flex: filters.routes.length > 1 ? 1 : 'none',
                 width: filters.routes.length > 1 ? 'auto' : '100%',
@@ -2447,25 +2290,25 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
       )}
 
       {/* Add New Customer / Store to Route Modal */}
-      {addCustomerModalOpen && (
+      {add.addCustomerModalOpen && (
         <StandardDialog
-          open={addCustomerModalOpen}
-          onClose={() => setAddCustomerModalOpen(false)}
+          open={add.addCustomerModalOpen}
+          onClose={() => add.setAddCustomerModalOpen(false)}
           title={t('delivery_reps.van_itinerary_tab.s89', "إضافة محل جديد لخط السير")}
           subtitle={t('delivery_reps.van_itinerary_tab.s90', "تسجيل بيانات المحل وإدراجه بخط سير اليوم")}
           minHeight="490px"
           footerActions={
             <StandardDialogFooter
-              onClose={() => setAddCustomerModalOpen(false)}
+              onClose={() => add.setAddCustomerModalOpen(false)}
               cancelText={t('delivery_reps.van_itinerary_tab.s91', "إلغاء")}
               extraActions={
                 <Button
                   variant="primary"
-                  onClick={handleCreateCustomer}
-                  disabled={isCreatingCustomer || !newCustName.trim()}
+                  onClick={add.handleCreateCustomer}
+                  disabled={add.isCreatingCustomer || !add.newCustName.trim()}
                   style={{ backgroundColor: '#170e5e', color: '#ffffff', fontWeight: 800 }}
                 >
-                  {isCreatingCustomer ? t('delivery_reps.van_itinerary_tab.s92', "جاري الحفظ...") : t('delivery_reps.van_itinerary_tab.s93', "حفظ وإدراج في خط السير")}
+                  {add.isCreatingCustomer ? t('delivery_reps.van_itinerary_tab.s92', "جاري الحفظ...") : t('delivery_reps.van_itinerary_tab.s93', "حفظ وإدراج في خط السير")}
                 </Button>
               }
             />
@@ -2479,8 +2322,8 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               </label>
               <input
                 type="text"
-                value={newCustName}
-                onChange={(e) => setNewCustName(e.target.value)}
+                value={add.newCustName}
+                onChange={(e) => add.setNewCustName(e.target.value)}
                 placeholder={t('delivery_reps.van_itinerary_tab.s95', "مثال: سوبرماركت البركة")}
                 style={{ width: '100%', height: '36px', padding: '0 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', boxSizing: 'border-box' }}
               />
@@ -2494,8 +2337,8 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                 </label>
                 <input
                   type="tel"
-                  value={newCustPhone}
-                  onChange={(e) => setNewCustPhone(e.target.value)}
+                  value={add.newCustPhone}
+                  onChange={(e) => add.setNewCustPhone(e.target.value)}
                   placeholder="01xxxxxxxxx"
                   dir="ltr"
                   style={{ width: '100%', height: '36px', padding: '0 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', boxSizing: 'border-box', textAlign: 'right' }}
@@ -2503,26 +2346,26 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               </div>
 
               {/* District Custom Combobox */}
-              <div ref={districtContainerRef} style={{ position: 'relative' }}>
+              <div ref={add.districtContainerRef} style={{ position: 'relative' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '3px' }}>
                   {t('delivery_reps.van_itinerary_tab.s97', "الحي / المربع السكني")}
                 </label>
                 <div style={{ position: 'relative' }}>
                   <input
                     type="text"
-                    value={newCustDistrict}
+                    value={add.newCustDistrict}
                     onChange={(e) => {
-                      setNewCustDistrict(e.target.value);
-                      if (!districtDropdownOpen) setDistrictDropdownOpen(true);
+                      add.setNewCustDistrict(e.target.value);
+                      if (!add.districtDropdownOpen) add.setDistrictDropdownOpen(true);
                     }}
-                    onFocus={() => setDistrictDropdownOpen(true)}
+                    onFocus={() => add.setDistrictDropdownOpen(true)}
                     placeholder={t('delivery_reps.van_itinerary_tab.s98', "اختر أو اكتب الحي...")}
                     style={{
                       width: '100%',
                       height: '36px',
                       padding: '0 26px 0 10px',
                       borderRadius: '6px',
-                      border: districtDropdownOpen ? '1px solid #170e5e' : '1px solid #cbd5e1',
+                      border: add.districtDropdownOpen ? '1px solid #170e5e' : '1px solid #cbd5e1',
                       fontSize: '12.5px',
                       boxSizing: 'border-box',
                       backgroundColor: '#ffffff',
@@ -2531,7 +2374,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                   <button
                     type="button"
                     tabIndex={-1}
-                    onClick={() => setDistrictDropdownOpen((prev) => !prev)}
+                    onClick={() => add.setDistrictDropdownOpen((prev) => !prev)}
                     style={{
                       position: 'absolute',
                       left: '8px',
@@ -2551,14 +2394,14 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                       size={14}
                       style={{
                         transition: 'transform 0.15s ease',
-                        transform: districtDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transform: add.districtDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
                       }}
                     />
                   </button>
                 </div>
 
                 {/* Dropdown Card */}
-                {districtDropdownOpen && (
+                {add.districtDropdownOpen && (
                   <div
                     style={{
                       position: 'absolute',
@@ -2577,25 +2420,25 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                     <div style={{ padding: '6px 10px', fontSize: '10.5px', fontWeight: 700, color: '#64748b', backgroundColor: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
                       {t('delivery_reps.van_itinerary_tab.s99', "الأحياء المحفوظة (")}{filters.savedDistrictsList.length}):
                     </div>
-                    {filteredDistricts.length === 0 && !newCustDistrict.trim() && (
+                    {add.filteredDistricts.length === 0 && !add.newCustDistrict.trim() && (
                       <div style={{ padding: '10px 12px', fontSize: '11.5px', color: '#94a3b8', textAlign: 'center' }}>
                         {t('delivery_reps.van_itinerary_tab.s100', "لا توجد أحياء مسجلة سابقاً")}
                       </div>
                     )}
-                    {filteredDistricts.map((d) => (
+                    {add.filteredDistricts.map((d) => (
                       <div
                         key={d}
                         onMouseDown={(e) => {
                           e.preventDefault();
-                          setNewCustDistrict(d);
-                          setDistrictDropdownOpen(false);
+                          add.setNewCustDistrict(d);
+                          add.setDistrictDropdownOpen(false);
                         }}
                         style={{
                           padding: '7px 10px',
                           fontSize: '12px',
-                          fontWeight: newCustDistrict.trim() === d ? 700 : 500,
-                          color: newCustDistrict.trim() === d ? '#170e5e' : '#0f172a',
-                          backgroundColor: newCustDistrict.trim() === d ? '#eef2ff' : 'transparent',
+                          fontWeight: add.newCustDistrict.trim() === d ? 700 : 500,
+                          color: add.newCustDistrict.trim() === d ? '#170e5e' : '#0f172a',
+                          backgroundColor: add.newCustDistrict.trim() === d ? '#eef2ff' : 'transparent',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
@@ -2604,17 +2447,17 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <MapPinIcon size={13} color={newCustDistrict.trim() === d ? '#170e5e' : '#94a3b8'} />
+                          <MapPinIcon size={13} color={add.newCustDistrict.trim() === d ? '#170e5e' : '#94a3b8'} />
                           <span>{d}</span>
                         </div>
-                        {newCustDistrict.trim() === d && <CheckCircleIcon size={13} color="#170e5e" />}
+                        {add.newCustDistrict.trim() === d && <CheckCircleIcon size={13} color="#170e5e" />}
                       </div>
                     ))}
-                    {newCustDistrict.trim() && !filters.savedDistrictsList.some((d) => d.toLowerCase() === newCustDistrict.trim().toLowerCase()) && (
+                    {add.newCustDistrict.trim() && !filters.savedDistrictsList.some((d) => d.toLowerCase() === add.newCustDistrict.trim().toLowerCase()) && (
                       <div
                         onMouseDown={(e) => {
                           e.preventDefault();
-                          setDistrictDropdownOpen(false);
+                          add.setDistrictDropdownOpen(false);
                         }}
                         style={{
                           padding: '7px 10px',
@@ -2629,7 +2472,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                         }}
                       >
                         <PlusIcon size={12} color="#2563eb" />
-                        <span>{t('delivery_reps.van_itinerary_tab.s101', "إضافة حي جديد: \"")}{newCustDistrict.trim()}&quot;</span>
+                        <span>{t('delivery_reps.van_itinerary_tab.s101', "إضافة حي جديد: \"")}{add.newCustDistrict.trim()}&quot;</span>
                       </div>
                     )}
                   </div>
@@ -2645,27 +2488,27 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                 </label>
                 <button
                   type="button"
-                  onClick={handleCaptureGps}
-                  disabled={isLocatingGps}
+                  onClick={add.handleCaptureGps}
+                  disabled={add.isLocatingGps}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '4px',
                     padding: '2px 8px',
                     borderRadius: '5px',
-                    border: newCustGps ? '1px solid #86efac' : '1px solid #cbd5e1',
-                    backgroundColor: newCustGps ? '#f0fdf4' : '#f8fafc',
-                    color: newCustGps ? '#15803d' : '#475569',
+                    border: add.newCustGps ? '1px solid #86efac' : '1px solid #cbd5e1',
+                    backgroundColor: add.newCustGps ? '#f0fdf4' : '#f8fafc',
+                    color: add.newCustGps ? '#15803d' : '#475569',
                     fontSize: '11px',
                     fontWeight: 700,
                     cursor: 'pointer',
                   }}
                 >
-                  <MapPinIcon size={12} color={newCustGps ? '#15803d' : '#64748b'} />
+                  <MapPinIcon size={12} color={add.newCustGps ? '#15803d' : '#64748b'} />
                   <span>
-                    {isLocatingGps
+                    {add.isLocatingGps
                       ? t('delivery_reps.van_itinerary_tab.s103', "جاري التحديد...")
-                      : newCustGps
+                      : add.newCustGps
                         ? t('delivery_reps.van_itinerary_tab.s104', "تم تثبيت GPS")
                         : t('delivery_reps.van_itinerary_tab.s105', "التقاط موقع المحل (GPS)")}
                   </span>
@@ -2673,8 +2516,8 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               </div>
               <input
                 type="text"
-                value={newCustAddress}
-                onChange={(e) => setNewCustAddress(e.target.value)}
+                value={add.newCustAddress}
+                onChange={(e) => add.setNewCustAddress(e.target.value)}
                 placeholder={t('delivery_reps.van_itinerary_tab.s106', "مثال: شارع الجمهورية - بجوار مسجد النور")}
                 style={{ width: '100%', height: '36px', padding: '0 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', boxSizing: 'border-box' }}
               />
@@ -2689,14 +2532,14 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <button
                     type="button"
-                    onClick={() => setNewCustVisitDays([...ALL_WEEK_DAYS])}
+                    onClick={() => add.setNewCustVisitDays([...ALL_WEEK_DAYS])}
                     style={{
                       background: 'none',
                       border: 'none',
                       padding: 0,
                       fontSize: '11px',
                       fontWeight: 700,
-                      color: newCustVisitDays.length === 7 ? '#170e5e' : '#2563eb',
+                      color: add.newCustVisitDays.length === 7 ? '#170e5e' : '#2563eb',
                       cursor: 'pointer',
                       textDecoration: 'underline',
                     }}
@@ -2706,7 +2549,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                   <span style={{ fontSize: '10px', color: '#cbd5e1' }}>•</span>
                   <button
                     type="button"
-                    onClick={() => setNewCustVisitDays([filters.todayArabicName])}
+                    onClick={() => add.setNewCustVisitDays([filters.todayArabicName])}
                     style={{
                       background: 'none',
                       border: 'none',
@@ -2725,7 +2568,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               {/* 7 Day Touch Pills */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
                 {ALL_WEEK_DAYS.map((day) => {
-                  const isSelected = newCustVisitDays.some(
+                  const isSelected = add.newCustVisitDays.some(
                     (d) => normalizeDayKey(d) === normalizeDayKey(day)
                   );
                   const isToday = normalizeDayKey(day) === normalizeDayKey(filters.todayArabicName);
@@ -2735,15 +2578,15 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                       type="button"
                       onClick={() => {
                         if (isSelected) {
-                          if (newCustVisitDays.length > 1) {
-                            setNewCustVisitDays((prev) =>
+                          if (add.newCustVisitDays.length > 1) {
+                            add.setNewCustVisitDays((prev) =>
                               prev.filter((d) => normalizeDayKey(d) !== normalizeDayKey(day))
                             );
                           } else {
                             toast.warning(t('delivery_reps.van_itinerary_tab.s110', "يجب تحديد يوم واحد على الأقل لزيارة العميل"));
                           }
                         } else {
-                          setNewCustVisitDays((prev) => [...prev, day]);
+                          add.setNewCustVisitDays((prev) => [...prev, day]);
                         }
                       }}
                       style={{
@@ -2787,7 +2630,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
             </div>
 
             {/* 5. Main Route Combobox */}
-            <div ref={routeContainerRef} style={{ position: 'relative' }}>
+            <div ref={add.routeContainerRef} style={{ position: 'relative' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
                 <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>
                   {t('delivery_reps.van_itinerary_tab.s112', "خط السير الرئيسي (Route)")}
@@ -2799,19 +2642,19 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               <div style={{ position: 'relative' }}>
                 <input
                   type="text"
-                  value={newCustRoute}
+                  value={add.newCustRoute}
                   onChange={(e) => {
-                    setNewCustRoute(e.target.value);
-                    if (!routeDropdownOpen) setRouteDropdownOpen(true);
+                    add.setNewCustRoute(e.target.value);
+                    if (!add.routeDropdownOpen) add.setRouteDropdownOpen(true);
                   }}
-                  onFocus={() => setRouteDropdownOpen(true)}
+                  onFocus={() => add.setRouteDropdownOpen(true)}
                   placeholder={filters.routes[0] || t('delivery_reps.van_itinerary_tab.s114', "مثال: خط فيصل الرئيسي")}
                   style={{
                     width: '100%',
                     height: '36px',
                     padding: '0 26px 0 10px',
                     borderRadius: '6px',
-                    border: routeDropdownOpen ? '1px solid #170e5e' : '1px solid #cbd5e1',
+                    border: add.routeDropdownOpen ? '1px solid #170e5e' : '1px solid #cbd5e1',
                     fontSize: '12.5px',
                     boxSizing: 'border-box',
                     backgroundColor: '#ffffff',
@@ -2821,7 +2664,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                   <button
                     type="button"
                     tabIndex={-1}
-                    onClick={() => setRouteDropdownOpen((prev) => !prev)}
+                    onClick={() => add.setRouteDropdownOpen((prev) => !prev)}
                     style={{
                       position: 'absolute',
                       left: '8px',
@@ -2841,7 +2684,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                       size={14}
                       style={{
                         transition: 'transform 0.15s ease',
-                        transform: routeDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transform: add.routeDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
                       }}
                     />
                   </button>
@@ -2849,7 +2692,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
               </div>
 
               {/* Route Dropdown Card */}
-              {routeDropdownOpen && filters.routes.length > 0 && (
+              {add.routeDropdownOpen && filters.routes.length > 0 && (
                 <div
                   style={{
                     position: 'absolute',
@@ -2868,20 +2711,20 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                   <div style={{ padding: '6px 10px', fontSize: '10.5px', fontWeight: 700, color: '#64748b', backgroundColor: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
                     {t('delivery_reps.van_itinerary_tab.s115', "خطوط سير الرحلة الحالية:")}
                   </div>
-                  {filteredRoutes.map((r) => (
+                  {add.filteredRoutes.map((r) => (
                     <div
                       key={r}
                       onMouseDown={(e) => {
                         e.preventDefault();
-                        setNewCustRoute(r);
-                        setRouteDropdownOpen(false);
+                        add.setNewCustRoute(r);
+                        add.setRouteDropdownOpen(false);
                       }}
                       style={{
                         padding: '7px 10px',
                         fontSize: '12px',
-                        fontWeight: newCustRoute.trim() === r ? 700 : 500,
-                        color: newCustRoute.trim() === r ? '#170e5e' : '#0f172a',
-                        backgroundColor: newCustRoute.trim() === r ? '#eef2ff' : 'transparent',
+                        fontWeight: add.newCustRoute.trim() === r ? 700 : 500,
+                        color: add.newCustRoute.trim() === r ? '#170e5e' : '#0f172a',
+                        backgroundColor: add.newCustRoute.trim() === r ? '#eef2ff' : 'transparent',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
@@ -2890,7 +2733,7 @@ export const VanItineraryTab: React.FC<VanItineraryTabProps> = ({
                       }}
                     >
                       <span>{r}</span>
-                      {newCustRoute.trim() === r && <CheckCircleIcon size={13} color="#170e5e" />}
+                      {add.newCustRoute.trim() === r && <CheckCircleIcon size={13} color="#170e5e" />}
                     </div>
                   ))}
                 </div>
