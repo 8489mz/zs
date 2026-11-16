@@ -212,16 +212,23 @@ export function AppsStorePage() {
       : [];
     const vertical = resolveCurrentVertical(tenant, settings);
     const tenantRank = resolveFrontendPlanRank(rawPlan) ?? 2;
+    // Backend blocks delivery modules by the tenant's raw activity profile
+    // (DELIVERY_BLOCKED_PROFILES); the resolved vertical alone misses
+    // services tenants with POS entitlement (they resolve to retail_general),
+    // so the raw activity must be consulted too (ci-full #68).
+    const deliveryBlocked =
+      ['contracting', 'maritime', 'warehousing', 'services', 'manufacturing', 'import_export'].includes(vertical) ||
+      ['contracting', 'maritime', 'warehousing', 'services', 'manufacturing', 'import_export'].includes(rawActivity);
 
     if (app.key === 'deliveryRepsModuleEnabled') {
-      if (['contracting', 'maritime', 'warehousing', 'services', 'manufacturing', 'import_export'].includes(vertical)) {
+      if (deliveryBlocked) {
         return false;
       }
       return !extraFeatures.includes('-deliveryReps');
     }
 
     if (app.key === 'vanSalesModuleEnabled') {
-      if (['contracting', 'maritime', 'warehousing', 'services', 'manufacturing', 'import_export'].includes(vertical)) {
+      if (deliveryBlocked) {
         return false;
       }
       if (vertical === 'wholesale_van') {
