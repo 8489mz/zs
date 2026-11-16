@@ -33,9 +33,11 @@ interface PosTotalsBreakdownProps {
   showTotal?: boolean;
   /* CFD passes 'cfd-summary-row' to keep its own styling. */
   rowClassName?: string;
+  /* Highlights the final total row inside checkout dialog summaries. */
+  emphasizeTotal?: boolean;
 }
 
-export function PosTotalsBreakdown({ totals, showTotal = true, rowClassName }: PosTotalsBreakdownProps) {
+export function PosTotalsBreakdown({ totals, showTotal = true, rowClassName, emphasizeTotal = false }: PosTotalsBreakdownProps) {
   const { t } = useTranslation();
   const discount = Number(totals.discountValue ?? (Number(totals.manualDiscount || 0) + Number(totals.loyaltyDiscount || 0)));
   const lineDiscountTotal = Number(totals.lineDiscountTotal || 0);
@@ -45,7 +47,15 @@ export function PosTotalsBreakdown({ totals, showTotal = true, rowClassName }: P
   const tip = Number(totals.tipAmount || 0);
   const rowStyle: React.CSSProperties | undefined = rowClassName
     ? undefined
-    : { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', fontWeight: 600, color: '#475569', padding: '2px 0' };
+    : {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        fontSize: emphasizeTotal ? '12.5px' : '12px',
+        fontWeight: 600,
+        color: '#475569',
+        padding: emphasizeTotal ? '3px 0' : '2px 0',
+      };
 
   return (
     <div>
@@ -97,9 +107,20 @@ export function PosTotalsBreakdown({ totals, showTotal = true, rowClassName }: P
       )}
 
       {showTotal && (
-        <div className={rowClassName} style={{ ...rowStyle, fontSize: '13px', fontWeight: 900, color: '#170e5e', borderTop: '1px solid #e2e8f0', paddingTop: '4px', marginTop: '2px' }}>
+        <div
+          className={rowClassName}
+          style={{
+            ...rowStyle,
+            fontSize: emphasizeTotal ? '17.5px' : '13px',
+            fontWeight: 900,
+            color: '#170e5e',
+            borderTop: emphasizeTotal ? '1px solid #cbd5e1' : '1px solid #e2e8f0',
+            paddingTop: emphasizeTotal ? '6px' : '4px',
+            marginTop: emphasizeTotal ? '4px' : '2px',
+          }}
+        >
           <span>{t('pos.total', 'الإجمالي')}</span>
-          <span>{formatCurrency(totals.total)}</span>
+          <span style={emphasizeTotal ? { fontVariantNumeric: 'tabular-nums' } : undefined}>{formatCurrency(totals.total)}</span>
         </div>
       )}
     </div>

@@ -24,6 +24,7 @@ import { usePosUiCustomization } from '@/features/pos/hooks/usePosUiCustomizatio
 import { isKuwait, isSaudi } from '@/lib/currencies';
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
 import { isStandalonePosTerminal } from '@/features/pos/lib/pos-shell';
+import { CheckIcon } from '@/shared/components/icons/AppIcons';
 
 interface PosCheckoutDialogProps {
   open: boolean;
@@ -229,6 +230,26 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
     (pos.settingsQuery?.data as any)?.posTerminalEnabled
   ), [pos.settings?.posTerminalEnabled, pos.settingsQuery?.data]);
 
+  const isPaymentActive = useCallback((preset: PaymentPreset) => {
+    if (preset === 'credit') return pos.paymentType === 'credit';
+    if (pos.paymentType === 'credit') return false;
+    const cash = Number(pos.cashAmount || 0);
+    const card = Number(pos.cardAmount || 0);
+    const transfer = Number(pos.transferAmount || 0);
+    const activeLegs = (cash > 0 ? 1 : 0) + (card > 0 ? 1 : 0) + (transfer > 0 ? 1 : 0);
+    if (activeLegs === 0) {
+      const isCodDelivery = pos.orderType === 'delivery' && (pos.collectionStatus === 'cod' || !pos.collectionStatus);
+      if (isCodDelivery) return false;
+      return pos.paymentChannel === preset;
+    }
+    if (activeLegs > 1) return false;
+    if (preset === 'cash') return cash > 0;
+    if (preset === 'card') return card > 0;
+    if (preset === 'wallet') return transfer > 0 && pos.paymentChannel === 'wallet';
+    if (preset === 'instapay') return transfer > 0 && pos.paymentChannel !== 'wallet';
+    return false;
+  }, [pos.cardAmount, pos.cashAmount, pos.collectionStatus, pos.orderType, pos.paymentChannel, pos.paymentType, pos.transferAmount]);
+
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -240,7 +261,7 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
         void handleInlineManagerApproval();
         return;
       }
-      if (isPaymentActive('card') && isTerminalHardwareManaged && !pos.terminalPaymentDetails?.authCode && !pos.terminalPaymentDetails?.rrn) {
+      if ((isPaymentActive('card') || Number(pos.cardAmount || 0) > 0) && isTerminalHardwareManaged && !pos.terminalPaymentDetails?.authCode && !pos.terminalPaymentDetails?.rrn) {
         toast.warning(t('pos.card_payment_required_notice', 'يرجى إتمام عملية الدفع بالماكينة أو اعتماد الإيصال اليدوي أولاً'));
         return;
       }
@@ -248,7 +269,7 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleConfirmSale, handleInlineManagerApproval, isPaymentActive, isTerminalHardwareManaged, managerApprovalOpen, open, pos.createSale.isPending, pos.discountApprovalGranted, pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn, t]);
+  }, [handleConfirmSale, handleInlineManagerApproval, isPaymentActive, isTerminalHardwareManaged, managerApprovalOpen, open, pos.cardAmount, pos.createSale.isPending, pos.discountApprovalGranted, pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn, t]);
 
   const customers = useMemo(() => (Array.isArray(pos.customersQuery.data) ? pos.customersQuery.data : []), [pos.customersQuery.data]);
   const selectedCustomer = useMemo(
@@ -271,14 +292,6 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
     event.preventDefault();
     await pos.handleQuickCustomerSubmit(event);
   }
-  function isPaymentActive(preset: PaymentPreset) {
-    if (preset === 'credit') return pos.paymentType === 'credit';
-    if (pos.paymentType === 'credit') return false;
-    if (pos.paymentChannel === preset) return true;
-    if (preset === 'card' && pos.cardAmount > 0 && pos.cashAmount === 0 && pos.transferAmount === 0) return true;
-    if (preset === 'cash' && pos.cashAmount > 0 && pos.cardAmount === 0 && pos.transferAmount === 0) return true;
-    return false;
-  }
 
   if (!open) return null;
 
@@ -286,8 +299,8 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
     <DialogShell
       open={open}
       onClose={handleDialogClose}
-      width={isMobile ? 'calc(100vw - 12px)' : (checkoutViewMode === 'express' ? 'min(490px, calc(100vw - 20px))' : 'min(1080px, calc(100vw - 32px))')}
-      maxHeight={isMobile ? 'calc(100dvh - 16px)' : 'calc(100vh - 24px)'}
+      width={isMobile ? 'calc(100vw - 12px)' : (checkoutViewMode === 'express' ? 'min(490px, calc(100vw - 20px))' : 'min(1060px, calc(100vw - 28px))')}
+      maxHeight={isMobile ? 'calc(100dvh - 16px)' : 'calc(100vh - 20px)'}
       zIndex={86}
       ariaLabel={t('pos.review_and_checkout', 'مراجعة وإتمام البيع')}
       overlayClassName="pos-checkout-dialog-overlay"
@@ -295,15 +308,23 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
     >
       <Card
         title={(
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '10px' }}>
-            <span style={{ fontSize: isMobile ? '13.5px' : '15px', fontWeight: 800, color: '#0f172a' }}>
-              {t('pos.review_and_checkout', 'مراجعة وإتمام البيع')}
-            </span>
-            {pos.orderType !== 'delivery' && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '10px', flexWrap: 'wrap', minHeight: '34px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: isMobile ? '13.5px' : '15px', fontWeight: 800, color: '#0f172a' }}>
+                {t('pos.review_and_checkout', 'مراجعة وإتمام البيع')}
+              </span>
+              {checkoutViewMode === 'detailed' && (
+                <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
+                  ({t('pos.items_count', 'العناصر:')} {itemsCount} • {t('pos.quantities_count', 'الكميات:')} {cartQtySummaries.length ? cartQtySummaries.join(' + ') : '0'})
+                </span>
+              )}
+            </div>
+            {isMobile && pos.orderType !== 'delivery' && (
               <div
                 style={{
                   display: 'inline-flex',
                   background: '#f1f5f9',
+                  border: '1px solid #cbd5e1',
                   padding: '2px',
                   borderRadius: '6px',
                   gap: '2px',
@@ -314,7 +335,7 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
                   type="button"
                   onClick={() => setCheckoutViewMode('express')}
                   style={{
-                    padding: '3px 8px',
+                    padding: '3px 9px',
                     borderRadius: '4px',
                     border: 'none',
                     background: checkoutViewMode === 'express' ? '#170e5e' : 'transparent',
@@ -322,7 +343,6 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
                     fontWeight: 700,
                     cursor: 'pointer',
                     fontSize: '11px',
-                    transition: 'background 0.1s ease',
                   }}
                 >
                   {t('pos.express_touch_mode', 'دفع سريع')}
@@ -331,7 +351,7 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
                   type="button"
                   onClick={() => setCheckoutViewMode('detailed')}
                   style={{
-                    padding: '3px 8px',
+                    padding: '3px 9px',
                     borderRadius: '4px',
                     border: 'none',
                     background: checkoutViewMode === 'detailed' ? '#170e5e' : 'transparent',
@@ -339,7 +359,6 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
                     fontWeight: 700,
                     cursor: 'pointer',
                     fontSize: '11px',
-                    transition: 'background 0.1s ease',
                   }}
                 >
                   {t('pos.detailed_mode', 'تفصيلي')}
@@ -350,8 +369,8 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
         )}
         className="dialog-card pos-checkout-dialog-card"
         style={{
-          height: isMobile ? 'calc(100dvh - 16px)' : 'auto',
-          maxHeight: isMobile ? 'calc(100dvh - 16px)' : 'calc(100vh - 24px)',
+          height: isMobile ? 'calc(100dvh - 16px)' : (checkoutViewMode === 'detailed' ? '100%' : 'auto'),
+          maxHeight: isMobile ? 'calc(100dvh - 16px)' : '100%',
           display: 'flex',
           flexDirection: 'column',
           boxSizing: 'border-box',
@@ -361,13 +380,13 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
         {/* T11-A (INV-REST-COMBO-SUBMIT-TRUTH, follow-up A): the dialog
          * stays open on a failed submit, so the failure reason must be
          * visible INSIDE it — it previously lived only in the footer
-         * banner underneath. Same message and tone as PosCartFooter:
-         * error when the sale mutation errored, success otherwise. */}
-        {pos.submitMessage && (pos.createSale?.isError || !pos.canShowLastSaleActions) ? (
+         * banner underneath. Keep informational customer-added notes out
+         * of this header slot so they don't push delivery layouts down. */}
+        {pos.submitMessage && (pos.createSale?.isError || (!pos.canShowLastSaleActions && !pos.submitMessage.startsWith('تم إضافة العميل'))) ? (
           <div
             role="alert"
             className={pos.createSale?.isError ? 'error-box pos-compact-message' : 'success-box pos-compact-message'}
-            style={{ marginBottom: '8px' }}
+            style={{ marginBottom: '6px' }}
           >
             <div>{pos.submitMessage}</div>
           </div>
@@ -416,62 +435,38 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
           /* Detailed Desktop / Delivery Mode */
           <>
             <div className="pos-checkout-dialog thin-scrollbar">
-              <section className="pos-checkout-dialog-section pos-checkout-summary-section" style={{ padding: 0, border: 'none', background: 'transparent', marginBottom: '2px' }}>
-                <div style={{
-                  display: 'flex',
-                  gap: isMobile ? '6px' : '12px',
-                  background: '#f8fafc',
-                  padding: isMobile ? '4px 8px' : '4px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #e2e8f0',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  fontSize: isMobile ? '11px' : '12px',
-                  minHeight: '30px',
-                  lineHeight: 1
-                }}>
-                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                    <span style={{ color: '#64748b', fontWeight: 600 }}>{t('pos.items_count', 'العناصر:')}</span>
-                    <strong style={{ fontSize: isMobile ? '12px' : '13px', fontWeight: 800, color: '#0f172a' }}>{itemsCount}</strong>
-                  </div>
-                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                    <span style={{ color: '#64748b', fontWeight: 600 }}>{t('pos.quantities_count', 'الكميات:')}</span>
-                    <strong style={{ fontSize: isMobile ? '12px' : '13px', fontWeight: 800, color: '#0f172a' }}>{cartQtySummaries.length ? cartQtySummaries.join(' + ') : '0'}</strong>
-                  </div>
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    <span style={{ color: '#64748b', fontWeight: 700 }}>{t('pos.due_amount', 'المطلوب:')}</span>
-                    <strong className="is-primary" style={{ fontSize: isMobile ? '14px' : '15px', fontWeight: 900, color: '#170c5c' }}>{formatCurrency(pos.totals.total)}</strong>
-                  </div>
-                </div>
-                {/* R5-A (INV-REST-TOTALS-TRUTH-2, R-I46): the breakdown
-                 * behind the single total — subtotal, discount, service
-                 * charge, delivery, tax, tip — fed by pos.totals, the
-                 * same rows the cart panel shows. */}
-                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 12px', marginTop: '6px' }}>
-                  <PosTotalsBreakdown totals={pos.totals} />
-                </div>
-              </section>
-
-              <PosCheckoutOrderTypeSection
-                pos={pos}
-                onDeliverySelected={() => setCustomerPickerOpen(true)}
-              />
-
               <div
                 className="pos-checkout-main-grid"
                 style={{
                   display: 'grid',
                   gridTemplateColumns: isMobile
                     ? 'minmax(0, 1fr)'
-                    : 'minmax(0, 1.15fr) minmax(0, 1fr)',
+                    : 'minmax(0, 0.9fr) minmax(0, 1.3fr)',
                   gap: isMobile ? '8px' : '12px',
-                  alignItems: 'start',
+                  alignItems: 'stretch',
+                  flex: isMobile ? undefined : '1 1 auto',
+                  minHeight: isMobile ? undefined : 0,
                   width: '100%',
                   boxSizing: 'border-box'
                 }}
               >
-                {/* Right Column: Customer, Delivery & Notes */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
+                {/* Right Column: Order Type, Totals Breakdown, Customer, Delivery & Notes */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0, width: '100%', height: isMobile ? 'auto' : '100%', boxSizing: 'border-box' }}>
+                  <PosCheckoutOrderTypeSection
+                    pos={pos}
+                    onDeliverySelected={() => setCustomerPickerOpen(true)}
+                  />
+
+                  {/* R5-A (INV-REST-TOTALS-TRUTH-2, R-I46): single flat ERP invoice breakdown */}
+                  <div style={{
+                    background: '#f8fafc',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    padding: isMobile ? '8px 10px' : '9px 13px',
+                  }}>
+                    <PosTotalsBreakdown totals={pos.totals} emphasizeTotal />
+                  </div>
+
                   <PosCheckoutCustomerSection
                     pos={pos}
                     selectedCustomerName={selectedCustomerName}
@@ -494,31 +489,20 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
                     isMobile={isMobile}
                   />
 
-                  <section className="pos-checkout-dialog-section" style={{ padding: 0, marginTop: '2px', width: '100%', boxSizing: 'border-box' }}>
+                  <section className="pos-checkout-dialog-section" style={{ padding: 0, marginTop: '0', border: 'none', background: 'transparent', width: '100%', boxSizing: 'border-box' }}>
                     {!isNotesOpen && !pos.note ? (
-                      <Button type="button" variant="secondary" onClick={() => setIsNotesOpen(true)} style={{ width: '100%', minHeight: '32px', fontSize: '12px' }}>+ {t('pos.add_order_note', 'إضافة ملاحظة للفاتورة')}</Button>
+                      <Button type="button" variant="secondary" onClick={() => setIsNotesOpen(true)} style={{ width: '100%', minHeight: '34px', fontSize: '12.5px' }}>+ {t('pos.add_order_note', 'إضافة ملاحظة للفاتورة')}</Button>
                     ) : (
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center', width: '100%', boxSizing: 'border-box' }}>
-                        <input autoFocus={isNotesOpen && !pos.note} value={pos.note} onChange={(event) => pos.setNote(event.target.value)} placeholder={t('pos.optional_order_notes', 'ملاحظات اختيارية على الفاتورة...')} disabled={pos.createSale.isPending} style={{ flex: 1, padding: '4px 8px', fontSize: '12px', height: '32px', borderRadius: '4px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
-                        <Button type="button" variant="secondary" onClick={() => { setIsNotesOpen(false); pos.setNote(''); }} style={{ flexShrink: 0, height: '32px', padding: '0 8px', fontSize: '11px', borderRadius: '4px' }}>{t('common.clear', 'مسح')}</Button>
+                        <input autoFocus={isNotesOpen && !pos.note} value={pos.note} onChange={(event) => pos.setNote(event.target.value)} placeholder={t('pos.optional_order_notes', 'ملاحظات اختيارية على الفاتورة...')} disabled={pos.createSale.isPending} style={{ flex: 1, padding: '4px 10px', fontSize: '12px', height: '34px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                        <Button type="button" variant="secondary" onClick={() => { setIsNotesOpen(false); pos.setNote(''); }} style={{ flexShrink: 0, height: '34px', padding: '0 10px', fontSize: '11.5px', borderRadius: '6px' }}>{t('common.clear', 'مسح')}</Button>
                       </div>
                     )}
                   </section>
-
-                  {pos.orderType === 'delivery' && pos.collectionStatus === 'cod' && (!pos.deliveryRepId || Number(pos.deliveryRepId) <= 0) && (
-                    <div className="error-box" style={{ margin: '4px 0 0', background: '#fef2f2', border: '1.5px solid #f87171', color: '#b91c1c', padding: '8px 12px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', boxSizing: 'border-box', width: '100%' }}>
-                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                        <line x1="12" y1="9" x2="12" y2="13"/>
-                        <line x1="12" y1="17" x2="12.01" y2="17"/>
-                      </svg>
-                      <span>يجب اختيار مندوب التوصيل لتسجيل عهدة التحصيل عليه (في حالة تحصيل من العميل).</span>
-                    </div>
-                  )}
                 </div>
 
-                {/* Left Column: Payment Section */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
+                {/* Left Column: Payment Station */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, width: '100%', height: isMobile ? 'auto' : '100%', boxSizing: 'border-box' }}>
                   <PosCheckoutPaymentSection
                     pos={pos}
                     cashAmountInputRef={cashAmountInputRef}
@@ -540,77 +524,85 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
                   />
                 </div>
               </div>
+              <PosCreditLimitNotice customerId={pos.customerId} total={pos.totals.total} paidAmount={pos.paidAmount} />
             </div>
 
-            <PosCreditLimitNotice customerId={pos.customerId} total={pos.totals.total} paidAmount={pos.paidAmount} />
-            {pos.adminDiscountWarning && (
-              <div
-                style={{
-                  fontSize: '11.5px',
-                  color: '#92400e',
-                  background: '#fef3c7',
-                  border: '1px solid #fde68a',
-                  padding: '6px 10px',
-                  borderRadius: '6px',
-                  textAlign: 'center',
-                  fontWeight: 700,
-                  marginTop: '8px',
-                }}
-              >
-                {pos.adminDiscountWarning}
+            <div className="actions compact-actions pos-checkout-dialog-actions" style={{ marginTop: '8px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {!pos.canSubmitSale && pos.canSubmitHint ? (
+                  <div
+                    style={{
+                      fontSize: '11.5px',
+                      color: '#92400e',
+                      background: '#fffbeb',
+                      border: '1px solid #fde68a',
+                      padding: '5px 10px',
+                      borderRadius: '6px',
+                      fontWeight: 700,
+                      whiteSpace: isMobile ? 'normal' : 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {pos.canSubmitHint}
+                  </div>
+                ) : pos.adminDiscountWarning ? (
+                  <div
+                    style={{
+                      fontSize: '11.5px',
+                      color: '#92400e',
+                      background: '#fffbeb',
+                      border: '1px solid #fde68a',
+                      padding: '5px 10px',
+                      borderRadius: '6px',
+                      fontWeight: 700,
+                      whiteSpace: isMobile ? 'normal' : 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {pos.adminDiscountWarning}
+                  </div>
+                ) : null}
               </div>
-            )}
-            {!pos.canSubmitSale && pos.canSubmitHint && (
-              <div
-                style={{
-                  fontSize: '11.5px',
-                  color: '#92400e',
-                  background: '#fef3c7',
-                  border: '1px solid #fde68a',
-                  padding: '6px 10px',
-                  borderRadius: '6px',
-                  textAlign: 'center',
-                  fontWeight: 700,
-                  marginTop: '8px',
-                }}
-              >
-                {pos.canSubmitHint}
-              </div>
-            )}
-            <div className="actions compact-actions pos-checkout-dialog-actions" style={{ marginTop: '8px' }}>
-              <Button type="button" variant="secondary" onClick={handleDialogClose} disabled={pos.createSale.isPending}>{t('pos.back_to_cart', 'رجوع للسلة')}</Button>
-              {isRestaurant && onOpenSplitBill && pos.cart.length > 0 && (
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                <Button type="button" variant="secondary" onClick={handleDialogClose} disabled={pos.createSale.isPending}>{t('pos.back_to_cart', 'رجوع للسلة')}</Button>
+                {isRestaurant && onOpenSplitBill && pos.cart.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      if (pos.terminalPaymentDetails?.authCode || pos.terminalPaymentDetails?.rrn) {
+                        toast.warning('لا يمكن تقسيم الشيك بعد اعتماد خصم الماكينة. أكمل الفاتورة أو راجع تسوية الدفع أولًا.');
+                        return;
+                      }
+                      onClose();
+                      onOpenSplitBill();
+                    }}
+                    disabled={pos.createSale.isPending}
+                    style={{ borderColor: '#170e5e', color: '#170e5e', fontWeight: 700 }}
+                  >
+                    {t('pos.split_bill', 'تجزئة / تقسيم الشيك')}
+                  </Button>
+                )}
                 <Button
                   type="button"
-                  variant="secondary"
+                  variant="success"
                   onClick={() => {
-                    if (pos.terminalPaymentDetails?.authCode || pos.terminalPaymentDetails?.rrn) {
-                      toast.warning('لا يمكن تقسيم الشيك بعد اعتماد خصم الماكينة. أكمل الفاتورة أو راجع تسوية الدفع أولًا.');
+                    if ((isPaymentActive('card') || Number(pos.cardAmount || 0) > 0) && isTerminalHardwareManaged && !pos.terminalPaymentDetails?.authCode && !pos.terminalPaymentDetails?.rrn) {
+                      toast.warning(t('pos.card_payment_required_notice', 'يرجى إتمام عملية الدفع بالماكينة أو اعتماد الإيصال اليدوي أولاً'));
                       return;
                     }
-                    onClose();
-                    onOpenSplitBill();
+                    handleConfirmSale();
                   }}
-                  disabled={pos.createSale.isPending}
-                  style={{ borderColor: '#170e5e', color: '#170e5e', fontWeight: 800 }}
+                  disabled={pos.createSale.isPending || !pos.canSubmitSale || ((isPaymentActive('card') || Number(pos.cardAmount || 0) > 0) && isTerminalHardwareManaged && !pos.terminalPaymentDetails?.authCode && !pos.terminalPaymentDetails?.rrn)}
+                  style={{ minWidth: isMobile ? undefined : '165px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                 >
-                  {t('pos.split_bill', 'تجزئة / تقسيم الشيك')}
+                  <CheckIcon size={15} />
+                  <span>{pos.createSale.isPending ? t('common.saving', 'جاري الحفظ...') : t('pos.confirm_sale_f2', 'تأكيد البيع (F2)')}</span>
                 </Button>
-              )}
-              <Button
-                type="button"
-                variant="success"
-                onClick={() => {
-                  if (isPaymentActive('card') && isTerminalHardwareManaged && !pos.terminalPaymentDetails?.authCode && !pos.terminalPaymentDetails?.rrn) {
-                    toast.warning(t('pos.card_payment_required_notice', 'يرجى إتمام عملية الدفع بالماكينة أو اعتماد الإيصال اليدوي أولاً'));
-                    return;
-                  }
-                  handleConfirmSale();
-                }}
-                disabled={pos.createSale.isPending || !pos.canSubmitSale || (isPaymentActive('card') && isTerminalHardwareManaged && !pos.terminalPaymentDetails?.authCode && !pos.terminalPaymentDetails?.rrn)}
-              >
-                {pos.createSale.isPending ? t('common.saving', 'جاري الحفظ...') : t('pos.confirm_sale_f2', 'تأكيد البيع (F2)')}
-              </Button>
+              </div>
             </div>
           </>
         )}

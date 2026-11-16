@@ -731,11 +731,14 @@ export function PosCheckoutExpressSection({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
               <div style={{ position: 'relative', flex: 1 }}>
                 <input
+                  className="no-spin-arrows"
                   type="number"
                   step="any"
                   min="0"
                   placeholder={String(total)}
                   value={customCashInput}
+                  onWheel={(e) => e.currentTarget.blur()}
+                  onFocus={(e) => e.currentTarget.select()}
                   onChange={(e) => setCustomCashInput(e.target.value)}
                   style={{
                     boxSizing: 'border-box',
@@ -990,7 +993,7 @@ export function PosCheckoutExpressSection({
                   cursor: 'pointer',
                 }}
               >
-                {t('pos.switch_to_detailed_view', 'الانتقال إلى شاشة الدفع التفصيلية الكاملة ⚙')}
+                {t('pos.switch_to_detailed_view', 'الانتقال إلى شاشة الدفع التفصيلية الكاملة')}
               </button>
             </div>
           </div>

@@ -109,8 +109,8 @@ export function PosCheckoutCustomerSection({
 
   if (isHidden) {
     return (
-      <section className="pos-checkout-dialog-section pos-checkout-customer-section" style={{ padding: 0, marginBottom: '6px' }}>
-        <Button type="button" variant="secondary" onClick={onManualOpen} style={{ width: '100%', borderStyle: 'dashed', minHeight: '34px', fontSize: '13px' }}>
+      <section className="pos-checkout-dialog-section pos-checkout-customer-section" style={{ padding: 0, marginBottom: 0, border: 'none', background: 'transparent' }}>
+        <Button type="button" variant="secondary" onClick={onManualOpen} style={{ width: '100%', borderStyle: 'dashed', minHeight: '38px', fontSize: '12.5px' }}>
           + ربط الفاتورة ببيانات عميل (اختياري)
         </Button>
       </section>
@@ -118,7 +118,7 @@ export function PosCheckoutCustomerSection({
   }
 
   return (
-    <section className="pos-checkout-dialog-section pos-checkout-customer-section" style={{ padding: 0, marginBottom: '6px' }}>
+    <section className="pos-checkout-dialog-section pos-checkout-customer-section" style={{ padding: 0, marginBottom: 0, border: 'none', background: 'transparent' }}>
       {!pos.customerId ? (
         isAddingCustomer ? (
           <form onSubmit={onQuickCustomerSubmit} style={{ display: 'flex', gap: '6px', alignItems: 'center', width: '100%' }}>
@@ -205,51 +205,61 @@ export function PosCheckoutCustomerSection({
           </div>
         )
       ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr auto' : 'minmax(140px, 1.2fr) minmax(110px, 1fr) minmax(160px, 2fr) auto',
-          gap: '8px',
-          alignItems: 'center',
-          background: '#fff',
-          padding: '8px 10px',
-          borderRadius: '8px',
-          border: '1px solid #e2e8f0',
-          width: '100%',
-          boxSizing: 'border-box',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 700, flexShrink: 0 }}>العميل:</span>
-            <strong style={{ fontSize: '14px', color: '#0f172a', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {selectedCustomer?.name || pos.quickCustomerName || (selectedCustomerName !== 'عميل نقدي' ? selectedCustomerName : '') || 'عميل نقدي'}
-            </strong>
+        <div
+          className="pos-checkout-selected-customer-card"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '5px',
+            background: '#ffffff',
+            padding: '7px 10px',
+            borderRadius: '8px',
+            border: '1px solid #cbd5e1',
+            width: '100%',
+            boxSizing: 'border-box',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
+              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 700, flexShrink: 0 }}>العميل:</span>
+              <strong style={{ fontSize: '13.5px', color: '#0f172a', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {selectedCustomer?.name || pos.quickCustomerName || (selectedCustomerName !== 'عميل نقدي' ? selectedCustomerName : '') || 'عميل نقدي'}
+              </strong>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => handleSelectCustomer('', '', '')}
+              style={{ flexShrink: 0, height: '26px', minHeight: '26px', padding: '0 10px', fontSize: '11.5px', borderRadius: '5px' }}
+            >
+              تغيير
+            </Button>
           </div>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => handleSelectCustomer('', '', '')}
-            style={{ flexShrink: 0, height: '32px', padding: '0 12px', fontSize: '12px', borderRadius: '6px' }}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 0.9fr) minmax(0, 1.3fr)',
+              gap: '6px',
+              width: '100%',
+              boxSizing: 'border-box',
+            }}
           >
-            تغيير
-          </Button>
-          <div style={{ minWidth: 0, gridColumn: isMobile ? '1 / -1' : undefined }}>
             <input
               value={pos.quickCustomerPhone || selectedCustomer?.phone || ''}
               onChange={(event) => pos.setQuickCustomerPhone(event.target.value)}
               placeholder="رقم الهاتف"
-              style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', fontSize: '13px', height: '36px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff' }}
+              style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', padding: '4px 8px', fontSize: '12.5px', height: '30px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff' }}
             />
-          </div>
-          <div style={{ minWidth: 0, position: 'relative', gridColumn: isMobile ? '1 / -1' : undefined }}>
-            <input
-              value={pos.quickCustomerAddress || selectedCustomer?.address || ''}
-              onChange={(event) => pos.setQuickCustomerAddress(event.target.value)}
-              onFocus={() => setAddressDropdownOpen(true)}
-              onBlur={() => setTimeout(() => setAddressDropdownOpen(false), 200)}
-              placeholder="العنوان أو المكان"
-              style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', fontSize: '13px', height: '36px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff' }}
-            />
-            {addressDropdownOpen && addresses.length > 0 && (
+            <div style={{ minWidth: 0, position: 'relative' }}>
+              <input
+                value={pos.quickCustomerAddress || selectedCustomer?.address || ''}
+                onChange={(event) => pos.setQuickCustomerAddress(event.target.value)}
+                onFocus={() => setAddressDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setAddressDropdownOpen(false), 200)}
+                placeholder="العنوان أو المكان"
+                style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', padding: '4px 8px', fontSize: '12.5px', height: '30px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff' }}
+              />
+              {addressDropdownOpen && addresses.length > 0 && (
               <div className="pos-checkout-customer-results" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: '2px', background: '#fff', borderRadius: '6px', padding: '4px', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
                 {addresses.map((addr, idx) => (
                   <button
@@ -266,8 +276,9 @@ export function PosCheckoutCustomerSection({
                     <strong>{addr}</strong>
                   </button>
                 ))}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -416,9 +427,19 @@ export function PosCheckoutPaymentSection({
   const isMobile = isMobileProp ?? isMobileHook;
   const balance = getBalancePreview(pos);
   const paidAmount = Number(pos.paidAmount || 0);
+  const totalAmount = Number(pos.totals?.total || 0);
   const isCreditSale = pos.paymentType === 'credit';
-  const needsCreditCustomer = isCreditSale && !String(pos.customerId || '').trim();
-  const transferSelected = !isCreditSale && (pos.paymentChannel === 'wallet' || pos.paymentChannel === 'instapay');
+  const cashVal = Number(pos.cashAmount || 0);
+  const cardVal = Number(pos.cardAmount || 0);
+  const transferVal = Number(pos.transferAmount || 0);
+  const activeLegsCount = (cashVal > 0 ? 1 : 0) + (cardVal > 0 ? 1 : 0) + (transferVal > 0 ? 1 : 0);
+  const isSplitActive = !isCreditSale && activeLegsCount > 1;
+  const isCodUnpaid = pos.orderType === 'delivery' && (pos.collectionStatus === 'cod' || !pos.collectionStatus) && activeLegsCount === 0;
+  const transferSelected = !isCreditSale && (
+    transferVal > 0 ||
+    (activeLegsCount === 0 && !isCodUnpaid && (pos.paymentChannel === 'wallet' || pos.paymentChannel === 'instapay'))
+  );
+  const remainingUnpaid = roundMoneyValue(Math.max(0, totalAmount - paidAmount), bookDigits);
   // INV-REST-PAID-GATES-2 (R4-D, I40): while a terminal approval is
   // live the total-changing inputs are frozen — discount, tip,
   // delivery fee, order type — because any of them would move the
@@ -439,6 +460,22 @@ export function PosCheckoutPaymentSection({
   const isKwdStore = isKuwait(currentSettings);
   const isKsaStore = isSaudi(currentSettings);
   const countryCode = getSystemCountryCode(currentSettings);
+
+  const quickCashDenominations = useMemo(() => {
+    if (totalAmount <= 0) return [];
+    const baseList = isKwdStore
+      ? [1, 5, 10, 20]
+      : isKsaStore
+      ? [10, 20, 50, 100, 200, 500]
+      : [20, 50, 100, 200, 500];
+    let candidates = baseList.filter((b) => b > totalAmount);
+    if (candidates.length < 3) {
+      const step = isKwdStore ? 5 : isKsaStore ? 100 : 100;
+      const nextRound = Math.ceil((totalAmount + 0.01) / step) * step;
+      candidates = Array.from(new Set([...candidates, nextRound, nextRound + step, nextRound + step * 2])).filter((b) => b > totalAmount);
+    }
+    return candidates.slice(0, 4);
+  }, [totalAmount, isKwdStore, isKsaStore]);
 
   const activeTerminals = useMemo(() => {
     const list = pos.settingsQuery?.data?.posTerminals;
@@ -771,97 +808,692 @@ export function PosCheckoutPaymentSection({
     setTerminalSession({ status: 'idle' });
   };
 
+  const splitLegStyle = (activeInSplit: boolean) => (
+    activeInSplit
+      ? { background: '#eef2ff', border: '1.5px solid #170e5e', color: '#170e5e', fontWeight: 800 }
+      : undefined
+  );
+  const isCardSplitActive = isSplitActive && cardVal > 0;
+  const isCardLegOrPresetActive = isPaymentActive('card') || isCardSplitActive;
+
   return (
-    <div style={{
-      display: 'grid',
-      gap: '8px',
-      background: '#fff',
-      padding: '8px 10px',
-      borderRadius: '8px',
-      border: '1px solid #e2e8f0',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-    }}>
-      {/* Single Unified Row: Cash, Card, Transfer, Discount (Amount), Discount (%)
-       * SPICE-PKG8 (INV-THREE-WAY-PAYMENT-SPLIT): card and transfer used
-       * to share ONE input whose value and setter flipped with
-       * paymentChannel, so a cash + card + transfer split had nowhere
-       * to type its third leg. Each leg now has its own input bound
-       * to its own state scalar; typing one leg never touches another. */}
+    <div
+      className="pos-checkout-payment-card"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        flex: isMobile ? undefined : '1 1 auto',
+        height: isMobile ? 'auto' : '100%',
+        background: '#ffffff',
+        padding: isMobile ? '10px 12px' : '12px 14px',
+        borderRadius: '8px',
+        border: '1px solid #cbd5e1',
+        boxSizing: 'border-box',
+      }}
+    >
+      {/* Step 1: Payment method buttons (Strict Country Isolation) */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', minHeight: '20px' }}>
+          <span style={{ fontSize: '12px', fontWeight: 800, color: '#1e293b', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ width: '3px', height: '13px', background: '#170e5e', borderRadius: '1px', display: 'inline-block' }} />
+            طريقة الدفع والتحصيل
+          </span>
+          {isSplitActive ? (
+            <span style={{ fontSize: '11px', fontWeight: 700, color: '#170e5e', background: '#eef2ff', border: '1px solid #c7d2fe', padding: '1px 7px', borderRadius: '4px' }}>
+              دفع مقسّم ({activeLegsCount} طرق)
+            </span>
+          ) : isCodUnpaid ? (
+            <span style={{ fontSize: '11px', fontWeight: 700, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', padding: '1px 7px', borderRadius: '4px' }}>
+              تحصيل عند التسليم
+            </span>
+          ) : null}
+        </div>
+
+        {isKwdStore ? (
+          /* Kuwait Mode: Cash, K-NET, Visa/Master, Credit, Payment Links / Transfers */
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(5, minmax(0, 1fr))', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
+            <Button
+              type="button"
+              variant={!isSplitActive && isPaymentActive('cash') ? 'primary' : 'secondary'}
+              onClick={() => {
+                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+                  return;
+                }
+                onSelectPaymentPreset('cash');
+                pos.setTerminalPaymentDetails?.(null);
+              }}
+              style={{ minHeight: '36px', fontSize: '12.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cashVal > 0) : undefined) }}
+            >
+              نقدي
+            </Button>
+            <Button
+              type="button"
+              variant={
+                !isSplitActive && isPaymentActive('card') && (pos.terminalPaymentDetails?.cardScheme === 'knet' || !pos.terminalPaymentDetails?.cardScheme)
+                  ? 'primary'
+                  : 'secondary'
+              }
+              onClick={() => {
+                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+                  return;
+                }
+                onSelectPaymentPreset('card');
+                pos.setTerminalPaymentDetails?.({
+                  ...(pos.terminalPaymentDetails || {}),
+                  cardScheme: 'knet',
+                  provider: 'knet_pos',
+                });
+              }}
+              style={{ minHeight: '36px', fontSize: '11.5px', fontWeight: 800, ...(isCardSplitActive && (pos.terminalPaymentDetails?.cardScheme === 'knet' || !pos.terminalPaymentDetails?.cardScheme) ? splitLegStyle(true) : undefined) }}
+            >
+              كي نت K-NET
+            </Button>
+            <Button
+              type="button"
+              variant={
+                !isSplitActive && isPaymentActive('card') && pos.terminalPaymentDetails?.cardScheme && pos.terminalPaymentDetails?.cardScheme !== 'knet'
+                  ? 'primary'
+                  : 'secondary'
+              }
+              onClick={() => {
+                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+                  return;
+                }
+                onSelectPaymentPreset('card');
+                pos.setTerminalPaymentDetails?.({
+                  ...(pos.terminalPaymentDetails || {}),
+                  cardScheme: 'visa',
+                });
+              }}
+              style={{ minHeight: '36px', fontSize: '12px', fontWeight: 700, ...(isCardSplitActive && pos.terminalPaymentDetails?.cardScheme && pos.terminalPaymentDetails?.cardScheme !== 'knet' ? splitLegStyle(true) : undefined) }}
+            >
+              فيزا / ماستر
+            </Button>
+            <Button
+              type="button"
+              variant={isPaymentActive('credit') ? 'primary' : 'secondary'}
+              onClick={() => {
+                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+                  return;
+                }
+                onSelectPaymentPreset('credit');
+                pos.setTerminalPaymentDetails?.(null);
+              }}
+              style={{ minHeight: '36px', fontSize: '12.5px', fontWeight: 700 }}
+            >
+              آجل
+            </Button>
+            <Button
+              type="button"
+              variant={!isSplitActive && transferSelected ? 'primary' : 'secondary'}
+              onClick={() => {
+                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+                  return;
+                }
+                onSelectPaymentPreset(pos.paymentChannel === 'instapay' ? 'instapay' : 'wallet');
+                pos.setTerminalPaymentDetails?.(null);
+              }}
+              style={{ minHeight: '36px', fontSize: '11.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(transferVal > 0) : undefined) }}
+            >
+              روابط دفع / تحويل
+            </Button>
+          </div>
+        ) : isKsaStore ? (
+          /* Saudi Mode: Cash, Mada, Visa/Master, Credit, Bank Transfer / Wallets */
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(5, minmax(0, 1fr))', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
+            <Button
+              type="button"
+              variant={!isSplitActive && isPaymentActive('cash') ? 'primary' : 'secondary'}
+              onClick={() => {
+                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+                  return;
+                }
+                onSelectPaymentPreset('cash');
+                pos.setTerminalPaymentDetails?.(null);
+              }}
+              style={{ minHeight: '36px', fontSize: '12.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cashVal > 0) : undefined) }}
+            >
+              نقدي
+            </Button>
+            <Button
+              type="button"
+              variant={
+                !isSplitActive && isPaymentActive('card') && (pos.terminalPaymentDetails?.cardScheme === 'mada' || !pos.terminalPaymentDetails?.cardScheme)
+                  ? 'primary'
+                  : 'secondary'
+              }
+              onClick={() => {
+                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+                  return;
+                }
+                onSelectPaymentPreset('card');
+                pos.setTerminalPaymentDetails?.({
+                  ...(pos.terminalPaymentDetails || {}),
+                  cardScheme: 'mada',
+                  provider: 'geidea',
+                });
+              }}
+              style={{ minHeight: '36px', fontSize: '11.5px', fontWeight: 800, ...(isCardSplitActive && (pos.terminalPaymentDetails?.cardScheme === 'mada' || !pos.terminalPaymentDetails?.cardScheme) ? splitLegStyle(true) : undefined) }}
+            >
+              مدى mada
+            </Button>
+            <Button
+              type="button"
+              variant={
+                !isSplitActive && isPaymentActive('card') && pos.terminalPaymentDetails?.cardScheme && pos.terminalPaymentDetails?.cardScheme !== 'mada'
+                  ? 'primary'
+                  : 'secondary'
+              }
+              onClick={() => {
+                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+                  return;
+                }
+                onSelectPaymentPreset('card');
+                pos.setTerminalPaymentDetails?.({
+                  ...(pos.terminalPaymentDetails || {}),
+                  cardScheme: 'visa',
+                });
+              }}
+              style={{ minHeight: '36px', fontSize: '12px', fontWeight: 700, ...(isCardSplitActive && pos.terminalPaymentDetails?.cardScheme && pos.terminalPaymentDetails?.cardScheme !== 'mada' ? splitLegStyle(true) : undefined) }}
+            >
+              فيزا / ماستر
+            </Button>
+            <Button
+              type="button"
+              variant={isPaymentActive('credit') ? 'primary' : 'secondary'}
+              onClick={() => {
+                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+                  return;
+                }
+                onSelectPaymentPreset('credit');
+                pos.setTerminalPaymentDetails?.(null);
+              }}
+              style={{ minHeight: '36px', fontSize: '12.5px', fontWeight: 700 }}
+            >
+              آجل
+            </Button>
+            <Button
+              type="button"
+              variant={!isSplitActive && transferSelected ? 'primary' : 'secondary'}
+              onClick={() => {
+                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+                  return;
+                }
+                onSelectPaymentPreset(pos.paymentChannel === 'wallet' ? 'wallet' : 'instapay');
+                pos.setTerminalPaymentDetails?.(null);
+              }}
+              style={{ minHeight: '36px', fontSize: '11.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(transferVal > 0) : undefined) }}
+            >
+              دفع إلكتروني / محافظ
+            </Button>
+          </div>
+        ) : (
+          /* Universal 4 Main Presets: Cash, Card, Transfers/Wallets, Credit */
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
+            <Button
+              type="button"
+              variant={!isSplitActive && isPaymentActive('cash') ? 'primary' : 'secondary'}
+              onClick={() => {
+                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+                  return;
+                }
+                onSelectPaymentPreset('cash');
+                pos.setTerminalPaymentDetails?.(null);
+              }}
+              style={{ minHeight: '36px', fontSize: '12.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cashVal > 0) : undefined) }}
+            >
+              نقدي
+            </Button>
+            <Button
+              type="button"
+              variant={!isSplitActive && isPaymentActive('card') ? 'primary' : 'secondary'}
+              onClick={() => {
+                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+                  return;
+                }
+                onSelectPaymentPreset('card');
+                pos.setTerminalPaymentDetails?.({
+                  ...(pos.terminalPaymentDetails || {}),
+                  cardScheme: isKwdStore ? 'knet' : isKsaStore ? 'mada' : 'visa',
+                });
+              }}
+              style={{ minHeight: '36px', fontSize: '12px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cardVal > 0) : undefined) }}
+            >
+              {isKwdStore ? 'KNET كي نت' : isKsaStore ? 'شبكة / مدى' : 'فيزا / كارت'}
+            </Button>
+            <Button
+              type="button"
+              variant={!isSplitActive && transferSelected ? 'primary' : 'secondary'}
+              onClick={() => {
+                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+                  return;
+                }
+                onSelectPaymentPreset(pos.paymentChannel === 'wallet' ? 'wallet' : 'instapay');
+                pos.setTerminalPaymentDetails?.(null);
+              }}
+              style={{ minHeight: '36px', fontSize: '11.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(transferVal > 0) : undefined) }}
+            >
+              تحويلات / محافظ
+            </Button>
+            <Button
+              type="button"
+              variant={isPaymentActive('credit') ? 'primary' : 'secondary'}
+              onClick={() => {
+                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+                  return;
+                }
+                onSelectPaymentPreset('credit');
+                pos.setTerminalPaymentDetails?.(null);
+              }}
+              style={{ minHeight: '36px', fontSize: '12.5px', fontWeight: 700 }}
+            >
+              آجل
+            </Button>
+          </div>
+        )}
+
+        {/* Fixed-height Sub-Slot: prevents any vertical layout jump when switching payment methods */}
+        <div
+          style={{
+            minHeight: '38px',
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            boxSizing: 'border-box',
+          }}
+        >
+          {transferSelected ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '6px', width: '100%' }}>
+              {isKwdStore ? (
+                <>
+                  <Button type="button" variant={pos.paymentChannel !== 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('instapay')} style={{ minHeight: '34px', fontSize: '11.5px', fontWeight: 700 }}>
+                    رابط دفع K-NET
+                  </Button>
+                  <Button type="button" variant={pos.paymentChannel === 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('wallet')} style={{ minHeight: '34px', fontSize: '11.5px', fontWeight: 700 }}>
+                    Apple Pay / محفظة
+                  </Button>
+                </>
+              ) : isKsaStore ? (
+                <>
+                  <Button type="button" variant={pos.paymentChannel === 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('wallet')} style={{ minHeight: '34px', fontSize: '11.5px', fontWeight: 700 }}>
+                    STC Pay / محفظة
+                  </Button>
+                  <Button type="button" variant={pos.paymentChannel !== 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('instapay')} style={{ minHeight: '34px', fontSize: '11.5px', fontWeight: 700 }}>
+                    Apple Pay / سداد
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button type="button" variant={pos.paymentChannel !== 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('instapay')} style={{ minHeight: '34px', fontSize: '12px', fontWeight: 800 }}>
+                    InstaPay
+                  </Button>
+                  <Button type="button" variant={pos.paymentChannel === 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('wallet')} style={{ minHeight: '34px', fontSize: '12px', fontWeight: 700 }}>
+                    محافظ إلكترونية
+                  </Button>
+                </>
+              )}
+            </div>
+          ) : !isCreditSale && cardVal === 0 && transferVal === 0 && totalAmount > 0 && !isCodUnpaid ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '6px',
+                width: '100%',
+                minHeight: '36px',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px',
+                padding: '3px 8px',
+                boxSizing: 'border-box',
+              }}
+            >
+              <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#64748b', whiteSpace: 'nowrap' }}>
+                المستلم:
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => pos.setCashAmount(totalAmount)}
+                  style={{
+                    height: '26px',
+                    padding: '0 8px',
+                    borderRadius: '5px',
+                    border: Math.abs(cashVal - totalAmount) < 0.001 ? '1.5px solid #170e5e' : '1px solid #cbd5e1',
+                    background: Math.abs(cashVal - totalAmount) < 0.001 ? '#eef2ff' : '#ffffff',
+                    color: Math.abs(cashVal - totalAmount) < 0.001 ? '#170e5e' : '#334155',
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  بالضبط ({totalAmount})
+                </button>
+                {quickCashDenominations.map((denom) => {
+                  const isSelected = Math.abs(cashVal - denom) < 0.001;
+                  return (
+                    <button
+                      key={denom}
+                      type="button"
+                      onClick={() => pos.setCashAmount(denom)}
+                      style={{
+                        height: '26px',
+                        padding: '0 9px',
+                        borderRadius: '5px',
+                        border: isSelected ? '1.5px solid #170e5e' : '1px solid #cbd5e1',
+                        background: isSelected ? '#eef2ff' : '#ffffff',
+                        color: isSelected ? '#170e5e' : '#0f172a',
+                        fontSize: '11.5px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {denom}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                width: '100%',
+                minHeight: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px',
+                padding: '0 10px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                color: '#475569',
+                boxSizing: 'border-box',
+              }}
+            >
+              <span>
+                {isSplitActive
+                  ? `دفع مقسّم (${activeLegsCount} طرق): عدّل المبالغ أدناه أو اختر طريقة للتحويل الكامل.`
+                  : isCreditSale
+                  ? 'البيع الآجل: يُسجّل كامل الإجمالي على حساب العميل.'
+                  : isCodUnpaid
+                  ? 'تحصيل عند التسليم: لا يُسجّل نقد الآن ويحصّل المندوب عند التوصيل.'
+                  : 'الدفع بالبطاقة: المبلغ محدد في خانة البطاقة.'}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Step 2: Three Clean ERP Payment Inputs (No double boxes, No Spinners)
+       * SPICE-PKG8 (INV-THREE-WAY-PAYMENT-SPLIT): each leg has its own
+       * dedicated scalar input bound only to its own state setter. */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: isMobile
-            ? 'repeat(2, minmax(0, 1fr))'
-            : (isDiscountLocked ? 'repeat(auto-fit, minmax(130px, 1fr))' : 'repeat(5, minmax(0, 1fr))'),
+          gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(3, minmax(0, 1fr))',
+          gap: '8px',
+          width: '100%',
+          boxSizing: 'border-box',
+        }}
+      >
+        {/* Cash Leg */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px', minHeight: '18px' }}>
+            <label
+              htmlFor="pos-checkout-cash-input"
+              style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: cashVal > 0 && !isCreditSale ? '#170e5e' : '#475569',
+                margin: 0,
+                cursor: isCreditSale ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              نقدي
+            </label>
+            {!isCreditSale && remainingUnpaid > 0 && cashVal === 0 && (
+              <button
+                type="button"
+                onClick={() => pos.setCashAmount(remainingUnpaid)}
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  color: '#170e5e',
+                  borderRadius: '4px',
+                  padding: '0 6px',
+                  fontSize: '10.5px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                + {remainingUnpaid}
+              </button>
+            )}
+          </div>
+          <input
+            id="pos-checkout-cash-input"
+            ref={cashAmountInputRef}
+            data-autofocus={!customerPickerOpen ? true : undefined}
+            className="no-spin-arrows"
+            type="number"
+            step="0.01"
+            min="0"
+            value={pos.cashAmount}
+            disabled={isCreditSale}
+            onWheel={(e) => e.currentTarget.blur()}
+            onFocus={(e) => e.currentTarget.select()}
+            onChange={(event) => pos.setCashAmount(Number(event.target.value || 0))}
+            style={{
+              boxSizing: 'border-box',
+              width: '100%',
+              height: '36px',
+              borderRadius: '6px',
+              fontSize: '14px',
+              fontWeight: 800,
+              border: cashVal > 0 && !isCreditSale ? '1.5px solid #170e5e' : '1px solid #cbd5e1',
+              background: isCreditSale ? '#f1f5f9' : '#ffffff',
+              color: isCreditSale ? '#94a3b8' : '#0f172a',
+              textAlign: 'center',
+            }}
+          />
+        </div>
+
+        {/* Card Leg */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px', minHeight: '18px' }}>
+            <label
+              htmlFor="pos-checkout-card-input"
+              style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: cardVal > 0 && !isCreditSale ? '#170e5e' : '#475569',
+                margin: 0,
+                cursor: isCreditSale ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {(isKwdStore && pos.terminalPaymentDetails?.cardScheme === 'knet'
+                ? 'كي نت K-NET'
+                : isKsaStore && pos.terminalPaymentDetails?.cardScheme === 'mada'
+                ? 'مدى mada'
+                : 'فيزا / كارت')}
+            </label>
+            {!isCreditSale && !isTerminalApproved && remainingUnpaid > 0 && cardVal === 0 && (
+              <button
+                type="button"
+                onClick={() => pos.setCardAmount(remainingUnpaid)}
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  color: '#170e5e',
+                  borderRadius: '4px',
+                  padding: '0 6px',
+                  fontSize: '10.5px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                + {remainingUnpaid}
+              </button>
+            )}
+          </div>
+          <input
+            id="pos-checkout-card-input"
+            className="no-spin-arrows"
+            type="number"
+            step="0.01"
+            min="0"
+            value={pos.cardAmount}
+            disabled={isCreditSale || isTerminalApproved}
+            onWheel={(e) => e.currentTarget.blur()}
+            onFocus={(e) => e.currentTarget.select()}
+            onChange={(event) => pos.setCardAmount(Number(event.target.value || 0))}
+            style={{
+              boxSizing: 'border-box',
+              width: '100%',
+              height: '36px',
+              borderRadius: '6px',
+              fontSize: '14px',
+              fontWeight: 800,
+              border: cardVal > 0 && !isCreditSale ? '1.5px solid #170e5e' : '1px solid #cbd5e1',
+              background: isCreditSale || isTerminalApproved ? '#f1f5f9' : '#ffffff',
+              color: isCreditSale ? '#94a3b8' : '#0f172a',
+              textAlign: 'center',
+            }}
+          />
+        </div>
+
+        {/* Transfer / Wallet Leg */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px', minHeight: '18px' }}>
+            <label
+              htmlFor="pos-checkout-transfer-input"
+              style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: transferVal > 0 && !isCreditSale ? '#170e5e' : '#475569',
+                margin: 0,
+                cursor: isCreditSale ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {pos.paymentChannel === 'instapay'
+                ? (isKwdStore ? 'رابط دفع' : 'InstaPay')
+                : pos.paymentChannel === 'wallet'
+                ? (isKwdStore ? 'محفظة رقمية' : 'محافظ إلكترونية')
+                : (isKwdStore ? 'محفظة رقمية' : 'محافظ / InstaPay')}
+            </label>
+            {!isCreditSale && remainingUnpaid > 0 && transferVal === 0 && (
+              <button
+                type="button"
+                onClick={() => pos.setTransferAmount(remainingUnpaid)}
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  color: '#170e5e',
+                  borderRadius: '4px',
+                  padding: '0 6px',
+                  fontSize: '10.5px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                + {remainingUnpaid}
+              </button>
+            )}
+          </div>
+          <input
+            id="pos-checkout-transfer-input"
+            className="no-spin-arrows"
+            type="number"
+            step="0.01"
+            min="0"
+            value={pos.transferAmount}
+            disabled={isCreditSale}
+            onWheel={(e) => e.currentTarget.blur()}
+            onFocus={(e) => e.currentTarget.select()}
+            onChange={(event) => pos.setTransferAmount(Number(event.target.value || 0))}
+            style={{
+              boxSizing: 'border-box',
+              width: '100%',
+              height: '36px',
+              borderRadius: '6px',
+              fontSize: '14px',
+              fontWeight: 800,
+              border: transferVal > 0 && !isCreditSale ? '1.5px solid #170e5e' : '1px solid #cbd5e1',
+              background: isCreditSale ? '#f1f5f9' : '#ffffff',
+              color: isCreditSale ? '#94a3b8' : '#0f172a',
+              textAlign: 'center',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Step 3: Dedicated Discount Strip (Cleanly separated from payment legs) */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isDiscountLocked
+            ? (isMobile ? 'repeat(2, minmax(0, 1fr))' : '1fr 1fr auto')
+            : 'repeat(2, minmax(0, 1fr))',
           gap: '8px',
           alignItems: 'end',
+          paddingTop: '6px',
+          borderTop: '1px solid #e2e8f0',
           width: '100%',
-          boxSizing: 'border-box'
+          boxSizing: 'border-box',
         }}
       >
         <label className="field" style={{ margin: 0 }}>
-          <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', marginBottom: '2px', display: 'block', textAlign: 'center' }}>نقدي</span>
+          <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#64748b', marginBottom: '2px', display: 'block', textAlign: 'center' }}>الخصم (مبلغ)</span>
           <input
-            ref={cashAmountInputRef}
-            data-autofocus={!customerPickerOpen ? true : undefined}
+            className="no-spin-arrows"
             type="number"
             step="0.01"
-            value={pos.cashAmount}
-            onChange={(event) => pos.setCashAmount(Number(event.target.value || 0))}
-            style={{ boxSizing: 'border-box', width: '100%', height: '38px', borderRadius: '6px', fontSize: '14px', fontWeight: 700, border: '1px solid #cbd5e1', textAlign: 'center' }}
-          />
-        </label>
-        <label className="field" style={{ margin: 0 }}>
-          <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', marginBottom: '2px', display: 'block', textAlign: 'center' }}>
-            {(isKwdStore && pos.terminalPaymentDetails?.cardScheme === 'knet'
-              ? 'كي نت K-NET'
-              : isKsaStore && pos.terminalPaymentDetails?.cardScheme === 'mada'
-              ? 'مدى mada'
-              : 'فيزا / كارت')}
-          </span>
-          <input
-            type="number"
-            step="0.01"
-            value={pos.cardAmount}
-            onChange={(event) => pos.setCardAmount(Number(event.target.value || 0))}
-            style={{ boxSizing: 'border-box', width: '100%', height: '38px', borderRadius: '6px', fontSize: '14px', fontWeight: 700, border: '1px solid #cbd5e1', textAlign: 'center' }}
-          />
-        </label>
-        <label className="field" style={{ margin: 0 }}>
-          <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', marginBottom: '2px', display: 'block', textAlign: 'center' }}>
-            {pos.paymentChannel === 'instapay'
-              ? (isKwdStore ? 'رابط دفع' : 'InstaPay')
-              : pos.paymentChannel === 'wallet'
-              ? (isKwdStore ? 'محفظة رقمية' : 'محافظ إلكترونية')
-              : (isKwdStore ? 'محفظة رقمية' : 'محافظ / InstaPay')}
-          </span>
-          <input
-            type="number"
-            step="0.01"
-            value={pos.transferAmount}
-            onChange={(event) => pos.setTransferAmount(Number(event.target.value || 0))}
-            style={{ boxSizing: 'border-box', width: '100%', height: '38px', borderRadius: '6px', fontSize: '14px', fontWeight: 700, border: '1px solid #cbd5e1', textAlign: 'center' }}
-          />
-        </label>
-        <label className="field" style={{ margin: 0 }}>
-          <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', marginBottom: '2px', display: 'block', textAlign: 'center' }}>الخصم (مبلغ)</span>
-          <input
-            type="number"
-            step="0.01"
+            min="0"
             value={pos.discount === 0 ? '' : pos.discount}
+            onWheel={(e) => e.currentTarget.blur()}
+            onFocus={(e) => e.currentTarget.select()}
             onChange={(event) => pos.setDiscount(Number(event.target.value || 0))}
             disabled={isDiscountLocked || isTerminalApproved}
             placeholder="0"
-            style={{ boxSizing: 'border-box', width: '100%', height: '38px', borderRadius: '6px', fontSize: '14px', border: '1px solid #cbd5e1', textAlign: 'center' }}
+            style={{ boxSizing: 'border-box', width: '100%', height: '34px', borderRadius: '6px', fontSize: '13.5px', fontWeight: 700, border: '1px solid #cbd5e1', background: (isDiscountLocked || isTerminalApproved) ? '#f1f5f9' : '#ffffff', textAlign: 'center' }}
           />
         </label>
         <label className="field" style={{ margin: 0 }}>
-          <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', marginBottom: '2px', display: 'block', textAlign: 'center' }}>الخصم (%)</span>
+          <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#64748b', marginBottom: '2px', display: 'block', textAlign: 'center' }}>الخصم (%)</span>
           <input
+            className="no-spin-arrows"
             type="number"
             step="0.01"
+            min="0"
             value={isPercentFocused ? percentStr : (pos.discount > 0 && pos.totals.subTotal > 0 ? ((pos.discount / pos.totals.subTotal) * 100).toFixed(2).replace(/\.00$/, '') : '')}
-            onFocus={() => setIsPercentFocused(true)}
+            onWheel={(e) => e.currentTarget.blur()}
+            onFocus={(e) => { setIsPercentFocused(true); e.currentTarget.select(); }}
             onBlur={() => setIsPercentFocused(false)}
             onChange={(event) => {
               setPercentStr(event.target.value);
@@ -870,7 +1502,7 @@ export function PosCheckoutPaymentSection({
             }}
             disabled={isDiscountLocked || isTerminalApproved || pos.totals.subTotal === 0}
             placeholder="0"
-            style={{ boxSizing: 'border-box', width: '100%', height: '38px', borderRadius: '6px', fontSize: '14px', border: '1px solid #cbd5e1', textAlign: 'center' }}
+            style={{ boxSizing: 'border-box', width: '100%', height: '34px', borderRadius: '6px', fontSize: '13.5px', fontWeight: 700, border: '1px solid #cbd5e1', background: (isDiscountLocked || isTerminalApproved || pos.totals.subTotal === 0) ? '#f1f5f9' : '#ffffff', textAlign: 'center' }}
           />
         </label>
         {isDiscountLocked ? (
@@ -884,311 +1516,15 @@ export function PosCheckoutPaymentSection({
               onManagerApprovalOpenChange((current) => !current);
             }}
             disabled={pos.discountAuthorizationMutation.isPending}
-            style={{ height: '38px', alignSelf: 'end', fontSize: '12px', gridColumn: isMobile ? '1 / -1' : undefined }}
+            style={{ height: '34px', alignSelf: 'end', fontSize: '12px', gridColumn: isMobile ? '1 / -1' : undefined }}
           >
             {pos.discountAuthorizationMutation.isPending ? 'جاري...' : (pos.discountApprovalGranted ? 'معتمد' : 'اعتماد المدير')}
           </Button>
         ) : null}
       </div>
 
-      {/* Row 2: Payment method buttons (Strict Country Isolation) */}
-      {isKwdStore ? (
-        /* Kuwait Mode: Cash, K-NET, Visa/Master, Credit, Payment Links / Transfers */
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(5, minmax(0, 1fr))', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
-          <Button
-            type="button"
-            variant={isPaymentActive('cash') ? 'primary' : 'secondary'}
-            onClick={() => {
-              if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                return;
-              }
-              onSelectPaymentPreset('cash');
-              pos.setTerminalPaymentDetails?.(null);
-            }}
-            style={{ minHeight: '38px', fontSize: '12.5px', fontWeight: 700 }}
-          >
-            نقدي
-          </Button>
-          <Button
-            type="button"
-            variant={
-              isPaymentActive('card') && pos.terminalPaymentDetails?.cardScheme === 'knet'
-                ? 'primary'
-                : (isPaymentActive('card') && !pos.terminalPaymentDetails?.cardScheme)
-                ? 'primary'
-                : 'secondary'
-            }
-            onClick={() => {
-              if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                return;
-              }
-              onSelectPaymentPreset('card');
-              pos.setTerminalPaymentDetails?.({
-                ...(pos.terminalPaymentDetails || {}),
-                cardScheme: 'knet',
-                provider: 'knet_pos',
-              });
-            }}
-            style={{ minHeight: '38px', fontSize: '11.5px', fontWeight: 800 }}
-          >
-            كي نت K-NET
-          </Button>
-          <Button
-            type="button"
-            variant={
-              isPaymentActive('card') && pos.terminalPaymentDetails?.cardScheme && pos.terminalPaymentDetails?.cardScheme !== 'knet'
-                ? 'primary'
-                : 'secondary'
-            }
-            onClick={() => {
-              if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                return;
-              }
-              onSelectPaymentPreset('card');
-              pos.setTerminalPaymentDetails?.({
-                ...(pos.terminalPaymentDetails || {}),
-                cardScheme: 'visa',
-              });
-            }}
-            style={{ minHeight: '38px', fontSize: '12px', fontWeight: 700 }}
-          >
-            فيزا / ماستر
-          </Button>
-          <Button
-            type="button"
-            variant={isPaymentActive('credit') ? 'primary' : 'secondary'}
-            onClick={() => {
-              if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                return;
-              }
-              onSelectPaymentPreset('credit');
-              pos.setTerminalPaymentDetails?.(null);
-            }}
-            style={{ minHeight: '38px', fontSize: '12.5px', fontWeight: 700 }}
-          >
-            آجل
-          </Button>
-          <Button
-            type="button"
-            variant={transferSelected ? 'primary' : 'secondary'}
-            onClick={() => {
-              if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                return;
-              }
-              onSelectPaymentPreset(pos.paymentChannel === 'instapay' ? 'instapay' : 'wallet');
-              pos.setTerminalPaymentDetails?.(null);
-            }}
-            style={{ minHeight: '38px', fontSize: '11.5px', fontWeight: 700 }}
-          >
-            روابط دفع / تحويل
-          </Button>
-        </div>
-      ) : isKsaStore ? (
-        /* Saudi Mode: Cash, Mada, Visa/Master, Credit, Bank Transfer / Wallets */
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(5, minmax(0, 1fr))', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
-          <Button
-            type="button"
-            variant={isPaymentActive('cash') ? 'primary' : 'secondary'}
-            onClick={() => {
-              if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                return;
-              }
-              onSelectPaymentPreset('cash');
-              pos.setTerminalPaymentDetails?.(null);
-            }}
-            style={{ minHeight: '38px', fontSize: '12.5px', fontWeight: 700 }}
-          >
-            نقدي
-          </Button>
-          <Button
-            type="button"
-            variant={
-              isPaymentActive('card') && pos.terminalPaymentDetails?.cardScheme === 'mada'
-                ? 'primary'
-                : (isPaymentActive('card') && !pos.terminalPaymentDetails?.cardScheme)
-                ? 'primary'
-                : 'secondary'
-            }
-            onClick={() => {
-              if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                return;
-              }
-              onSelectPaymentPreset('card');
-              pos.setTerminalPaymentDetails?.({
-                ...(pos.terminalPaymentDetails || {}),
-                cardScheme: 'mada',
-                provider: 'geidea',
-              });
-            }}
-            style={{ minHeight: '38px', fontSize: '11.5px', fontWeight: 800 }}
-          >
-            مدى mada
-          </Button>
-          <Button
-            type="button"
-            variant={
-              isPaymentActive('card') && pos.terminalPaymentDetails?.cardScheme && pos.terminalPaymentDetails?.cardScheme !== 'mada'
-                ? 'primary'
-                : 'secondary'
-            }
-            onClick={() => {
-              if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                return;
-              }
-              onSelectPaymentPreset('card');
-              pos.setTerminalPaymentDetails?.({
-                ...(pos.terminalPaymentDetails || {}),
-                cardScheme: 'visa',
-              });
-            }}
-            style={{ minHeight: '38px', fontSize: '12px', fontWeight: 700 }}
-          >
-            فيزا / ماستر
-          </Button>
-          <Button
-            type="button"
-            variant={isPaymentActive('credit') ? 'primary' : 'secondary'}
-            onClick={() => {
-              if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                return;
-              }
-              onSelectPaymentPreset('credit');
-              pos.setTerminalPaymentDetails?.(null);
-            }}
-            style={{ minHeight: '38px', fontSize: '12.5px', fontWeight: 700 }}
-          >
-            آجل
-          </Button>
-          <Button
-            type="button"
-            variant={transferSelected ? 'primary' : 'secondary'}
-            onClick={() => {
-              if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                return;
-              }
-              onSelectPaymentPreset(pos.paymentChannel === 'wallet' ? 'wallet' : 'instapay');
-              pos.setTerminalPaymentDetails?.(null);
-            }}
-            style={{ minHeight: '38px', fontSize: '11.5px', fontWeight: 700 }}
-          >
-            دفع إلكتروني / محافظ
-          </Button>
-        </div>
-      ) : (
-        /* Universal 4 Main Presets: Cash, Card, Transfers/Wallets, Credit */
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
-          <Button
-            type="button"
-            variant={isPaymentActive('cash') ? 'primary' : 'secondary'}
-            onClick={() => {
-              if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                return;
-              }
-              onSelectPaymentPreset('cash');
-              pos.setTerminalPaymentDetails?.(null);
-            }}
-            style={{ minHeight: '38px', fontSize: '12.5px', fontWeight: 700 }}
-          >
-            نقدي
-          </Button>
-          <Button
-            type="button"
-            variant={isPaymentActive('card') ? 'primary' : 'secondary'}
-            onClick={() => {
-              if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                return;
-              }
-              onSelectPaymentPreset('card');
-              pos.setTerminalPaymentDetails?.({
-                ...(pos.terminalPaymentDetails || {}),
-                cardScheme: isKwdStore ? 'knet' : isKsaStore ? 'mada' : 'visa',
-              });
-            }}
-            style={{ minHeight: '38px', fontSize: '12px', fontWeight: 700 }}
-          >
-            {isKwdStore ? 'KNET كي نت' : isKsaStore ? 'شبكة / مدى' : 'فيزا / كارت'}
-          </Button>
-          <Button
-            type="button"
-            variant={transferSelected ? 'primary' : 'secondary'}
-            onClick={() => {
-              if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                return;
-              }
-              onSelectPaymentPreset(pos.paymentChannel === 'wallet' ? 'wallet' : 'instapay');
-              pos.setTerminalPaymentDetails?.(null);
-            }}
-            style={{ minHeight: '38px', fontSize: '11.5px', fontWeight: 700 }}
-          >
-            تحويلات / محافظ
-          </Button>
-          <Button
-            type="button"
-            variant={isPaymentActive('credit') ? 'primary' : 'secondary'}
-            onClick={() => {
-              if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                return;
-              }
-              onSelectPaymentPreset('credit');
-              pos.setTerminalPaymentDetails?.(null);
-            }}
-            style={{ minHeight: '38px', fontSize: '12.5px', fontWeight: 700 }}
-          >
-            آجل
-          </Button>
-        </div>
-      )}
-
-      {/* Sub-presets row for Transfers / Digital Wallets */}
-      {transferSelected ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px', padding: '6px', background: '#f1f0fa', borderRadius: '6px' }}>
-          {isKwdStore ? (
-            <>
-              <Button type="button" variant={pos.paymentChannel === 'instapay' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('instapay')} style={{ minHeight: '34px', fontSize: '11.5px', fontWeight: 700 }}>
-                رابط دفع K-NET
-              </Button>
-              <Button type="button" variant={pos.paymentChannel === 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('wallet')} style={{ minHeight: '34px', fontSize: '11.5px', fontWeight: 700 }}>
-                Apple Pay / محفظة
-              </Button>
-            </>
-          ) : isKsaStore ? (
-            <>
-              <Button type="button" variant={pos.paymentChannel === 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('wallet')} style={{ minHeight: '34px', fontSize: '11.5px', fontWeight: 700 }}>
-                STC Pay / محفظة
-              </Button>
-              <Button type="button" variant={pos.paymentChannel === 'instapay' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('instapay')} style={{ minHeight: '34px', fontSize: '11.5px', fontWeight: 700 }}>
-                Apple Pay / سداد
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button type="button" variant={pos.paymentChannel === 'instapay' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('instapay')} style={{ minHeight: '34px', fontSize: '12px', fontWeight: 800 }}>
-                InstaPay
-              </Button>
-              <Button type="button" variant={pos.paymentChannel === 'wallet' ? 'primary' : 'secondary'} onClick={() => onSelectPaymentPreset('wallet')} style={{ minHeight: '34px', fontSize: '12px', fontWeight: 700 }}>
-                محافظ إلكترونية
-              </Button>
-            </>
-          )}
-        </div>
-      ) : null}
-
       {/* EDC / Sunmi POS Terminal Direct Dispatch Banner (Active for Card payments when terminal exists) */}
-      {(isPaymentActive('card') || pos.cardAmount > 0) && (pos.settingsQuery?.data?.posTerminalEnabled === true) && activeTerminals.length > 0 && (
+      {(isCardLegOrPresetActive || pos.cardAmount > 0) && (pos.settingsQuery?.data?.posTerminalEnabled === true) && activeTerminals.length > 0 && (
         <div style={{
           padding: '8px 12px',
           background: '#f8fafc',
@@ -1345,17 +1681,17 @@ export function PosCheckoutPaymentSection({
           background: '#f8fafc',
           border: '1px solid #e2e8f0',
           borderRadius: '6px',
-          padding: '6px 10px',
+          padding: '5px 10px',
           gap: '8px',
           flexWrap: 'wrap',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
-              إكرامية / بقشيش (Tip):
+              إكرامية:
             </span>
             {Number(pos.tipAmount || 0) > 0 ? (
               <span style={{ background: '#eef2ff', color: '#170e5e', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
-                +{formatCurrency(pos.tipAmount)} مضاف للمطلوب
+                +{formatCurrency(pos.tipAmount)}
               </span>
             ) : null}
           </div>
@@ -1395,7 +1731,8 @@ export function PosCheckoutPaymentSection({
                     onClick={() => applyTipChange(preset)}
                     disabled={isTerminalApproved}
                     style={{
-                      padding: '3px 8px',
+                      height: '26px',
+                      padding: '0 8px',
                       borderRadius: '4px',
                       border: (pos.tipAmount || 0) === preset ? '1px solid #170e5e' : '1px solid #cbd5e1',
                       background: (pos.tipAmount || 0) === preset ? '#170e5e' : '#ffffff',
@@ -1413,21 +1750,30 @@ export function PosCheckoutPaymentSection({
                   </button>
                 ))}
                 <input
+                  className="no-spin-arrows pos-checkout-tip-custom-input"
                   type="number"
                   min="0"
                   step={tipStep}
                   value={pos.tipAmount || ''}
+                  onWheel={(e) => e.currentTarget.blur()}
+                  onFocus={(e) => e.currentTarget.select()}
                   onChange={(e) => applyTipChange(Math.max(0, Number(e.target.value || 0)))}
                   disabled={isTerminalApproved}
                   placeholder="مخصص"
                   style={{
-                    width: isKwdStore ? '68px' : '55px',
-                    height: '24px',
+                    width: isKwdStore ? '70px' : '60px',
+                    height: '26px',
                     borderRadius: '4px',
-                    border: '1px solid #cbd5e1',
+                    border: Number(pos.tipAmount || 0) > 0 && !tipPresets.includes(Number(pos.tipAmount || 0))
+                      ? '1.5px solid #170e5e'
+                      : '1px solid #cbd5e1',
                     textAlign: 'center',
                     fontSize: '11.5px',
                     fontWeight: 700,
+                    color: '#0f172a',
+                    background: Number(pos.tipAmount || 0) > 0 && !tipPresets.includes(Number(pos.tipAmount || 0))
+                      ? '#eef2ff'
+                      : '#ffffff',
                   }}
                 />
               </div>
@@ -1436,23 +1782,84 @@ export function PosCheckoutPaymentSection({
         </div>
       )}
 
-      {/* Summary 3-Column Chips: Centered and Balanced */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: isMobile ? '4px' : '8px', width: '100%', boxSizing: 'border-box' }}>
-        <div className="pos-checkout-dialog-chip" style={{ minHeight: isMobile ? '44px' : '48px', padding: isMobile ? '4px 6px' : '6px 8px', borderRadius: '6px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
-          <span style={{ fontSize: isMobile ? '10.5px' : '11.5px', whiteSpace: 'nowrap', textAlign: 'center' }}>المطلوب دفعه</span>
-          <strong className="is-primary" style={{ fontSize: isMobile ? '13px' : '15px', textAlign: 'center', whiteSpace: 'nowrap' }}>{formatCurrency(pos.totals.total)}</strong>
+      {/* Summary 3-Column Chips: Centered, Enlarged, and Anchored at Bottom */}
+      <div
+        className="pos-checkout-money-cards"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          gap: isMobile ? '6px' : '10px',
+          width: '100%',
+          marginTop: isMobile ? '0' : 'auto',
+          paddingTop: isMobile ? '0' : '4px',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div
+          className="pos-checkout-dialog-chip"
+          style={{
+            minHeight: isMobile ? '48px' : '62px',
+            padding: isMobile ? '6px 8px' : '8px 12px',
+            borderRadius: '8px',
+            border: '1px solid #cbd5e1',
+            background: '#f8fafc',
+            boxShadow: 'none',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '3px',
+            minWidth: 0,
+          }}
+        >
+          <span style={{ fontSize: isMobile ? '11px' : '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap', textAlign: 'center' }}>المطلوب دفعه</span>
+          <strong className="is-primary" style={{ fontSize: isMobile ? '15px' : '19px', fontWeight: 900, fontVariantNumeric: 'tabular-nums', textAlign: 'center', whiteSpace: 'nowrap' }}>{formatCurrency(pos.totals.total)}</strong>
         </div>
-        <div className="pos-checkout-dialog-chip" style={{ minHeight: isMobile ? '44px' : '48px', padding: isMobile ? '4px 6px' : '6px 8px', borderRadius: '6px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
-          <span style={{ fontSize: isMobile ? '10.5px' : '11.5px', whiteSpace: 'nowrap', textAlign: 'center' }}>المدفوع</span>
-          <strong className="is-success" style={{ fontSize: isMobile ? '13px' : '15px', textAlign: 'center', whiteSpace: 'nowrap' }}>{formatCurrency(paidAmount)}</strong>
+        <div
+          className="pos-checkout-dialog-chip"
+          style={{
+            minHeight: isMobile ? '48px' : '62px',
+            padding: isMobile ? '6px 8px' : '8px 12px',
+            borderRadius: '8px',
+            border: paidAmount > 0 ? '1px solid #bbf7d0' : '1px solid #cbd5e1',
+            background: paidAmount > 0 ? '#f0fdf4' : '#f8fafc',
+            boxShadow: 'none',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '3px',
+            minWidth: 0,
+          }}
+        >
+          <span style={{ fontSize: isMobile ? '11px' : '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap', textAlign: 'center' }}>المدفوع</span>
+          <strong className="is-success" style={{ fontSize: isMobile ? '15px' : '19px', fontWeight: 900, fontVariantNumeric: 'tabular-nums', textAlign: 'center', whiteSpace: 'nowrap' }}>{formatCurrency(paidAmount)}</strong>
         </div>
-        <div className="pos-checkout-dialog-chip" style={{ minHeight: isMobile ? '44px' : '48px', padding: isMobile ? '4px 6px' : '6px 8px', borderRadius: '6px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
-          <span style={{ fontSize: isMobile ? '10.5px' : '11.5px', whiteSpace: 'nowrap', textAlign: 'center' }}>{balance.label}</span>
-          <strong className={balance.tone === 'danger' ? 'is-danger' : 'is-primary'} style={{ fontSize: isMobile ? '13px' : '15px', textAlign: 'center', whiteSpace: 'nowrap' }}>{formatCurrency(balance.value)}</strong>
+        <div
+          className="pos-checkout-dialog-chip"
+          style={{
+            minHeight: isMobile ? '48px' : '62px',
+            padding: isMobile ? '6px 8px' : '8px 12px',
+            borderRadius: '8px',
+            border: balance.tone === 'danger' ? '1px solid #fca5a5' : Number(pos.changeAmount || 0) > 0 ? '1px solid #86efac' : '1px solid #cbd5e1',
+            boxShadow: 'none',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '3px',
+            minWidth: 0,
+            background: balance.tone === 'danger' ? '#fef2f2' : Number(pos.changeAmount || 0) > 0 ? '#f0fdf4' : '#f8fafc',
+          }}
+        >
+          <span style={{ fontSize: isMobile ? '11px' : '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap', textAlign: 'center' }}>{balance.label}</span>
+          <strong className={balance.tone === 'danger' ? 'is-danger' : Number(pos.changeAmount || 0) > 0 ? 'is-success' : 'is-primary'} style={{ fontSize: isMobile ? '15px' : '19px', fontWeight: 900, fontVariantNumeric: 'tabular-nums', textAlign: 'center', whiteSpace: 'nowrap' }}>{formatCurrency(balance.value)}</strong>
         </div>
       </div>
 
-      {needsCreditCustomer ? <div className="error-box" style={{ margin: 0, textAlign: 'center' }}>البيع الآجل يحتاج اختيار عميل.</div> : null}
       {!pos.canApplyDiscount ? <div className="pos-payment-strip-notes" style={{ margin: 0 }}><span className="pos-payment-strip-note">{pos.discountApprovalGranted ? 'تم اعتماد الخصم لهذه الفاتورة فقط.' : 'لا تملك صلاحية تعديل الخصم. استخدم اعتماد المدير لهذه الفاتورة.'}</span></div> : null}
       {pos.hasDiscountPermissionViolation ? <div className="error-box" style={{ margin: 0, textAlign: 'center' }}>تم اكتشاف خصم غير مسموح به في هذه الفاتورة.</div> : null}
     </div>
@@ -1479,13 +1886,13 @@ export function PosCheckoutOrderTypeSection({
   const isTerminalApproved = isTerminalApprovalLive(pos.terminalPaymentDetails);
 
   return (
-    <div style={{ display: 'flex', gap: '8px', width: '100%', marginBottom: '6px', alignItems: 'center' }}>
+    <div style={{ display: 'flex', gap: '8px', width: '100%', alignItems: 'center' }}>
       <Button
         type="button"
         variant={pos.orderType === 'takeaway' || !pos.orderType ? 'primary' : 'secondary'}
         onClick={() => pos.setOrderType('takeaway')}
         disabled={isTerminalApproved}
-        style={{ flex: 1, minHeight: '38px', fontSize: '13px', fontWeight: 700 }}
+        style={{ flex: 1, minHeight: '36px', fontSize: '13px', fontWeight: 700 }}
       >
         {isRestaurant ? 'تيك أواي' : 'بيع مباشر (استلام)'}
       </Button>
@@ -1499,7 +1906,7 @@ export function PosCheckoutOrderTypeSection({
           }
         }}
         disabled={isTerminalApproved}
-        style={{ flex: 1, minHeight: '38px', fontSize: '13px', fontWeight: 700 }}
+        style={{ flex: 1, minHeight: '36px', fontSize: '13px', fontWeight: 700 }}
       >
         دليفري (توصيل)
       </Button>
@@ -1509,7 +1916,7 @@ export function PosCheckoutOrderTypeSection({
           variant={pos.orderType === 'dine_in' ? 'primary' : 'secondary'}
           onClick={() => pos.setOrderType('dine_in')}
           disabled={isTerminalApproved}
-          style={{ flex: 1, minHeight: '38px', fontSize: '13px', fontWeight: 700 }}
+          style={{ flex: 1, minHeight: '36px', fontSize: '13px', fontWeight: 700 }}
         >
           صالة (طاولات)
         </Button>
@@ -1663,13 +2070,12 @@ export function PosCheckoutDeliverySection({ pos, deliveryReps, isMobile: isMobi
   return (
     <div style={{
       display: 'grid',
-      gap: '8px',
+      gap: '5px',
       background: '#fff',
-      padding: '8px 10px',
+      padding: '7px 10px',
       borderRadius: '8px',
-      border: '1px solid #e2e8f0',
-      marginBottom: '6px',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+      border: '1px solid #cbd5e1',
+      marginBottom: 0,
       boxSizing: 'border-box',
       width: '100%'
     }}>
@@ -1726,14 +2132,14 @@ export function PosCheckoutDeliverySection({ pos, deliveryReps, isMobile: isMobi
                 }}
                 style={{
                   boxSizing: 'border-box',
-                  padding: selectedRep ? '6px 36px 6px 32px' : '6px 32px 6px 10px',
-                  height: '38px',
+                  padding: selectedRep ? '4px 34px 4px 30px' : '4px 30px 4px 10px',
+                  height: '34px',
                   width: '100%',
                   minWidth: 0,
                   borderRadius: '6px',
                   border: isRepMissing ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                   background: isRepMissing ? '#fff5f5' : 'white',
-                  fontSize: '13px',
+                  fontSize: '12.5px',
                   fontWeight: selectedRep && !repSearchOpen ? 800 : 500,
                   color: selectedRep && !repSearchOpen ? '#0f172a' : 'inherit',
                   cursor: 'pointer'
@@ -1887,14 +2293,17 @@ export function PosCheckoutDeliverySection({ pos, deliveryReps, isMobile: isMobi
         <div className="field" style={{ margin: 0, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', marginBottom: '2px', display: 'block', textAlign: 'center', whiteSpace: 'nowrap' }}>رسوم التوصيل ({getGlobalCurrencySymbol()})</span>
           <input
+            className="no-spin-arrows"
             type="number"
             min="0"
             step="0.01"
             value={pos.deliveryFee === 0 ? '' : pos.deliveryFee}
+            onWheel={(e) => e.currentTarget.blur()}
+            onFocus={(e) => e.currentTarget.select()}
             onChange={(event) => pos.setDeliveryFee(Number(event.target.value || 0))}
             disabled={isTerminalApproved}
             placeholder="0"
-            style={{ boxSizing: 'border-box', padding: '6px 10px', height: '38px', width: '100%', minWidth: 0, borderRadius: '6px', border: '1px solid #cbd5e1', fontWeight: 700, fontSize: '14px', textAlign: 'center' }}
+            style={{ boxSizing: 'border-box', padding: '4px 8px', height: '34px', width: '100%', minWidth: 0, borderRadius: '6px', border: '1px solid #cbd5e1', fontWeight: 700, fontSize: '13.5px', textAlign: 'center' }}
           />
         </div>
       </div>
@@ -1931,6 +2340,8 @@ export function PosCheckoutDeliverySection({ pos, deliveryReps, isMobile: isMobi
                 type="button"
                 className="pos-checkout-channel-btn"
                 onClick={() => {
+                  const hadPlatformTag = (pos.note || '') !== (pos.note || '').replace(/\[(مصدر|منصة|قناة):[^\]]+\]/g, '') ||
+                    deliveryChannels.filter(c => c.id !== 'direct').some(c => (pos.note || '').includes(c.label.split(' ')[0]));
                   let nextNote = (pos.note || '').replace(/\[(مصدر|منصة|قناة):[^\]]+\]/g, '').trim();
                   deliveryChannels.filter(c => c.id !== 'direct').forEach(c => {
                     nextNote = nextNote.replace(new RegExp(`\\[?منصة:?\\s*${c.label.split(' ')[0]}[^\\]]*\\]?`, 'gi'), '').trim();
@@ -1941,6 +2352,12 @@ export function PosCheckoutDeliverySection({ pos, deliveryReps, isMobile: isMobi
                     pos.setCollectionStatus('prepaid_online');
                     pos.setPaymentChannel('wallet');
                     pos.setTransferAmount(Number(pos.totals.total || 0));
+                    pos.setCashAmount(0);
+                    pos.setCardAmount(0);
+                  } else if (hadPlatformTag && pos.collectionStatus === 'prepaid_online') {
+                    pos.setCollectionStatus('cod');
+                    pos.setPaymentChannel('cash');
+                    pos.setTransferAmount(0);
                     pos.setCashAmount(0);
                     pos.setCardAmount(0);
                   }
@@ -1993,12 +2410,12 @@ export function PosCheckoutDeliverySection({ pos, deliveryReps, isMobile: isMobi
               }
             }}
             style={{
-              fontSize: isMobile ? '11px' : '13px',
-              padding: isMobile ? '6px 2px' : '6px 4px',
-              minHeight: '38px',
+              fontSize: isMobile ? '11px' : '12.5px',
+              padding: isMobile ? '5px 2px' : '5px 4px',
+              minHeight: '34px',
               fontWeight: 700,
               textAlign: 'center',
-              lineHeight: 1.25,
+              lineHeight: 1.2,
             }}
           >
             {status === 'cod' ? 'تحصيل من العميل' : status === 'prepaid_by_rep' ? 'خالص من المندوب' : 'خالص أونلاين'}
@@ -2016,19 +2433,19 @@ export function PosCheckoutDeliverySection({ pos, deliveryReps, isMobile: isMobi
         style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: '2px',
+          gap: '1px',
           width: '100%',
           boxSizing: 'border-box',
-          padding: '8px 10px',
+          padding: '5px 8px',
           borderRadius: '6px',
           border: `1px solid ${pos.collectionStatus === 'cod' || !pos.collectionStatus ? '#fde68a' : '#bbf7d0'}`,
           background: pos.collectionStatus === 'cod' || !pos.collectionStatus ? '#fffbeb' : '#f0fdf4',
         }}
       >
-        <span style={{ fontSize: '12px', fontWeight: 800, color: '#170e5e' }}>
+        <span style={{ fontSize: '11.5px', fontWeight: 800, color: '#170e5e' }}>
           {`التحصيل: ${pos.collectionStatus === 'prepaid_by_rep' ? 'خالص من المندوب' : pos.collectionStatus === 'prepaid_online' ? 'خالص أونلاين' : 'تحصيل من العميل'}`}
         </span>
-        <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#475569', lineHeight: 1.5 }}>
+        <span style={{ fontSize: '11px', fontWeight: 600, color: '#475569', lineHeight: 1.35 }}>
           {pos.collectionStatus === 'prepaid_by_rep'
             ? 'المبلغ مع المندوب — لا يُحصَّل من العميل عند التسليم.'
             : pos.collectionStatus === 'prepaid_online'

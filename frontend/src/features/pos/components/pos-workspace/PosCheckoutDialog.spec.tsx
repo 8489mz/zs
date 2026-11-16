@@ -264,3 +264,121 @@ describe('PosCheckoutDialog — three-way payment split (SPICE-PKG8)', () => {
     expect(screen.getByText('المتبقي').parentElement?.textContent).toContain(formatCurrency(0.01));
   }, 30000);
 });
+
+describe('PosCheckoutDialog — single active payment button & no-spin inputs', () => {
+  it('never highlights both cash and card buttons when cash holds 100 and card holds 0', () => {
+    renderDialog(makePos({
+      totals: { total: 100, subTotal: 100, discountValue: 0, deliveryFee: 0, taxRate: 0, pricesIncludeTax: false, serviceCharge: 0, taxAmount: 0, tipAmount: 0 },
+      paidAmount: 100,
+      amountDue: 0,
+      cashAmount: 100,
+      cardAmount: 0,
+      transferAmount: 0,
+      paymentType: 'cash',
+      paymentChannel: 'card', // even if stale channel says card while cash leg holds 100
+    }));
+
+    const cashBtn = screen.getByRole('button', { name: 'نقدي' });
+    const cardBtn = screen.getByRole('button', { name: 'فيزا / كارت' });
+    expect(cashBtn.className).toContain('btn-primary');
+    expect(cardBtn.className).toContain('btn-secondary');
+    expect(cardBtn.className).not.toContain('btn-primary');
+  }, 30000);
+
+  it('adds no-spin-arrows to all payment and discount numeric inputs', () => {
+    renderDialog(makePos({
+      totals: { total: 100, subTotal: 100, discountValue: 0, deliveryFee: 0, taxRate: 0, pricesIncludeTax: false, serviceCharge: 0, taxAmount: 0, tipAmount: 0 },
+      cashAmount: 100,
+      paidAmount: 100,
+      amountDue: 0,
+    }));
+
+    expect((screen.getByLabelText('نقدي') as HTMLInputElement).className).toContain('no-spin-arrows');
+    expect((screen.getByLabelText('فيزا / كارت') as HTMLInputElement).className).toContain('no-spin-arrows');
+    expect((screen.getByLabelText('محافظ / InstaPay') as HTMLInputElement).className).toContain('no-spin-arrows');
+    expect((screen.getByLabelText('الخصم (مبلغ)') as HTMLInputElement).className).toContain('no-spin-arrows');
+    expect((screen.getByLabelText('الخصم (%)') as HTMLInputElement).className).toContain('no-spin-arrows');
+  }, 30000);
+
+  it('disables payment leg inputs during a credit sale', () => {
+    renderDialog(makePos({
+      paymentType: 'credit',
+      paymentChannel: 'credit',
+      cashAmount: 0,
+      cardAmount: 0,
+      transferAmount: 0,
+    }));
+
+    expect(screen.getByLabelText('نقدي')).toBeDisabled();
+    expect(screen.getByLabelText('فيزا / كارت')).toBeDisabled();
+    expect(screen.getByLabelText('محافظ / InstaPay')).toBeDisabled();
+  }, 30000);
+
+  it('shows credit customer warning at most once (no duplicate banners)', () => {
+    renderDialog(makePos({
+      paymentType: 'credit',
+      paymentChannel: 'credit',
+      customerId: '',
+      cashAmount: 0,
+      cardAmount: 0,
+      transferAmount: 0,
+      canSubmitSale: false,
+      canSubmitHint: 'البيع الآجل يحتاج اختيار عميل.',
+    }));
+
+    expect(screen.getAllByText('البيع الآجل يحتاج اختيار عميل.')).toHaveLength(1);
+  }, 30000);
+
+  it('hides the express/detailed switcher on desktop viewports', () => {
+    renderDialog(makePos({ orderType: 'takeaway' }));
+
+    expect(screen.queryByRole('button', { name: 'دفع سريع' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'تفصيلي' })).toBeNull();
+  }, 30000);
+
+  it('stretches payment card to full height, anchors enlarged money KPI cards, and emphasizes invoice total', () => {
+    renderDialog(makePos({
+      orderType: 'takeaway',
+      totals: { subTotal: 70.29, total: 70.29 },
+      settings: { restaurantModuleEnabled: true },
+      settingsQuery: { data: { restaurantModuleEnabled: true } },
+    }));
+
+    const paymentCard = document.body.querySelector('.pos-checkout-payment-card') as HTMLElement | null;
+    const moneyCards = document.body.querySelector('.pos-checkout-money-cards') as HTMLElement | null;
+    const customTipInput = document.body.querySelector('.pos-checkout-tip-custom-input') as HTMLInputElement | null;
+
+    expect(paymentCard).not.toBeNull();
+    expect(paymentCard?.style.height).toBe('100%');
+    expect(moneyCards).not.toBeNull();
+    expect(moneyCards?.style.marginTop).toBe('auto');
+    expect(customTipInput).not.toBeNull();
+    expect(customTipInput?.classList.contains('no-spin-arrows')).toBe(true);
+
+    const kpiStrong = moneyCards?.querySelector('strong') as HTMLElement | null;
+    expect(kpiStrong?.style.fontSize).toBe('19px');
+
+    const totalLabel = screen.getByText('الإجمالي');
+    const totalRow = totalLabel.parentElement as HTMLElement | null;
+    expect(totalRow?.style.fontSize).toBe('17.5px');
+  }, 30000);
+
+  it('suppresses redundant customer-added success banner and stacks selected customer card cleanly on delivery', () => {
+    renderDialog(makePos({
+      orderType: 'delivery',
+      customerId: '10',
+      quickCustomerPhone: '01205004477',
+      quickCustomerAddress: 'المعادي شارع 9',
+      customersQuery: { data: [{ id: '10', name: 'كريم', phone: '01205004477', address: 'المعادي شارع 9' }] },
+      submitMessage: 'تم إضافة العميل وتحديده داخل فاتورة الكاشير.',
+      createSale: { isPending: false, isError: false },
+      canShowLastSaleActions: false,
+    }));
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    const customerCard = document.body.querySelector('.pos-checkout-selected-customer-card') as HTMLElement | null;
+    expect(customerCard).not.toBeNull();
+    expect(screen.getByPlaceholderText('رقم الهاتف')).toHaveValue('01205004477');
+    expect(screen.getByPlaceholderText('العنوان أو المكان')).toHaveValue('المعادي شارع 9');
+  }, 30000);
+});

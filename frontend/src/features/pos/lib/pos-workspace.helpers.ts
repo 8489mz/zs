@@ -10,21 +10,30 @@ export function normalizePaymentChannel(
   currentChannel?: PaymentChannel,
 ): PaymentChannel {
   if (paymentType === 'credit') return 'credit';
-  if (currentChannel === 'cash') return 'cash';
-  if (currentChannel === 'card') return 'card';
-  if (currentChannel === 'wallet' || currentChannel === 'instapay') return currentChannel;
-  if (currentChannel === 'mixed') return 'mixed';
 
   const cash = Number(cashAmount || 0);
   const card = Number(cardAmount || 0);
   const transfer = Number(transferAmount || 0);
-
-  if (card > 0 && cash === 0 && transfer === 0) return 'card';
-  if (transfer > 0 && cash === 0 && card === 0) return 'instapay';
-  if (cash > 0 && card === 0 && transfer === 0) return 'cash';
-
   const channelsCount = (cash > 0 ? 1 : 0) + (card > 0 ? 1 : 0) + (transfer > 0 ? 1 : 0);
-  if (channelsCount > 1) return 'mixed';
+
+  if (channelsCount === 1) {
+    if (card > 0) return 'card';
+    if (transfer > 0) return currentChannel === 'wallet' ? 'wallet' : 'instapay';
+    return 'cash';
+  }
+
+  if (channelsCount > 1) {
+    // Keep transfer sub-channel when transfer is part of a split so submit
+    // preserves 'wallet' vs 'instapay' choice.
+    if (transfer > 0 && (currentChannel === 'wallet' || currentChannel === 'instapay')) {
+      return currentChannel;
+    }
+    return 'mixed';
+  }
+
+  if (currentChannel === 'cash' || currentChannel === 'card' || currentChannel === 'wallet' || currentChannel === 'instapay' || currentChannel === 'mixed') {
+    return currentChannel;
+  }
 
   return 'cash';
 }

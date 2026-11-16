@@ -512,6 +512,81 @@ describe('createPosWorkspaceBaseActions', () => {
       expect(setCardAmount).toHaveBeenCalledWith(600);
       expect(setTransferAmount).toHaveBeenCalledWith(0);
     });
+
+    it('switching from full default cash (100) to card moves the full total into card and zeroes cash', () => {
+      const setPaymentChannel = vi.fn();
+      const setCashAmount = vi.fn();
+      const setCardAmount = vi.fn();
+      const setTransferAmount = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        totals: { discountValue: 0, deliveryFee: 0, taxRate: 0, pricesIncludeTax: false, total: 100 },
+        paymentChannel: 'cash',
+        cashAmount: 100,
+        cardAmount: 0,
+        transferAmount: 0,
+        setPaymentChannel,
+        setCashAmount,
+        setCardAmount,
+        setTransferAmount,
+      }));
+
+      actions.setPaymentPreset('card');
+
+      expect(setPaymentChannel).toHaveBeenCalledWith('card');
+      expect(setCashAmount).toHaveBeenCalledWith(0);
+      expect(setCardAmount).toHaveBeenCalledWith(100);
+      expect(setTransferAmount).toHaveBeenCalledWith(0);
+    });
+
+    it('switching from full card (100) to cash moves the full total into cash and zeroes card', () => {
+      const setPaymentChannel = vi.fn();
+      const setCashAmount = vi.fn();
+      const setCardAmount = vi.fn();
+      const setTransferAmount = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        totals: { discountValue: 0, deliveryFee: 0, taxRate: 0, pricesIncludeTax: false, total: 100 },
+        paymentChannel: 'card',
+        cashAmount: 0,
+        cardAmount: 100,
+        transferAmount: 0,
+        setPaymentChannel,
+        setCashAmount,
+        setCardAmount,
+        setTransferAmount,
+      }));
+
+      actions.setPaymentPreset('cash');
+
+      expect(setPaymentChannel).toHaveBeenCalledWith('cash');
+      expect(setCashAmount).toHaveBeenCalledWith(100);
+      expect(setCardAmount).toHaveBeenCalledWith(0);
+      expect(setTransferAmount).toHaveBeenCalledWith(0);
+    });
+
+    it('switching from full card (100) to wallet moves the full total into transfer and zeroes card', () => {
+      const setPaymentChannel = vi.fn();
+      const setCashAmount = vi.fn();
+      const setCardAmount = vi.fn();
+      const setTransferAmount = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        totals: { discountValue: 0, deliveryFee: 0, taxRate: 0, pricesIncludeTax: false, total: 100 },
+        paymentChannel: 'card',
+        cashAmount: 0,
+        cardAmount: 100,
+        transferAmount: 0,
+        setPaymentChannel,
+        setCashAmount,
+        setCardAmount,
+        setTransferAmount,
+      }));
+
+      actions.setPaymentPreset('wallet');
+
+      expect(setPaymentChannel).toHaveBeenCalledWith('wallet');
+      expect(setCashAmount).toHaveBeenCalledWith(0);
+      expect(setCardAmount).toHaveBeenCalledWith(0);
+      expect(setTransferAmount).toHaveBeenCalledWith(100);
+    });
   });
 
   /* SPICE-PKG8 (INV-THREE-WAY-PAYMENT-SPLIT): the 'mixed' fill wiped

@@ -11,17 +11,42 @@ type PaymentPreset = 'cash' | 'card' | 'wallet' | 'instapay' | 'credit';
 function isPresetActive(
   paymentType: PosCartPanelProps['paymentType'],
   paymentChannel: PosCartPanelProps['paymentChannel'],
+  cashAmount: number,
+  cardAmount: number,
+  transferAmount: number,
   preset: PaymentPreset,
 ) {
   if (preset === 'credit') return paymentType === 'credit';
   if (paymentType === 'credit') return false;
-  if (preset === 'wallet' || preset === 'instapay') return paymentChannel === preset;
-  if (preset === 'card') return paymentChannel === 'card';
-  return paymentChannel === 'cash';
+  const cash = Number(cashAmount || 0);
+  const card = Number(cardAmount || 0);
+  const transfer = Number(transferAmount || 0);
+  const activeLegs = (cash > 0 ? 1 : 0) + (card > 0 ? 1 : 0) + (transfer > 0 ? 1 : 0);
+  if (activeLegs === 0) {
+    if (preset === 'wallet' || preset === 'instapay') return paymentChannel === preset;
+    if (preset === 'card') return paymentChannel === 'card';
+    return paymentChannel === 'cash';
+  }
+  if (activeLegs > 1) return false;
+  if (preset === 'cash') return cash > 0;
+  if (preset === 'card') return card > 0;
+  if (preset === 'wallet') return transfer > 0 && paymentChannel === 'wallet';
+  if (preset === 'instapay') return transfer > 0 && paymentChannel !== 'wallet';
+  return false;
 }
 
-function isTransferPreset(paymentType: PosCartPanelProps['paymentType'], paymentChannel: PosCartPanelProps['paymentChannel']) {
-  return paymentType !== 'credit' && (paymentChannel === 'wallet' || paymentChannel === 'instapay');
+function isTransferPreset(
+  paymentType: PosCartPanelProps['paymentType'],
+  paymentChannel: PosCartPanelProps['paymentChannel'],
+  cashAmount: number,
+  cardAmount: number,
+  transferAmount: number,
+) {
+  if (paymentType === 'credit') return false;
+  const transfer = Number(transferAmount || 0);
+  if (transfer > 0) return true;
+  const hasOtherLeg = Number(cashAmount || 0) > 0 || Number(cardAmount || 0) > 0;
+  return !hasOtherLeg && (paymentChannel === 'wallet' || paymentChannel === 'instapay');
 }
 
 /* R5-A (INV-REST-TOTALS-TRUTH-2, M24): the local getBalanceState used to
@@ -50,7 +75,7 @@ export function PosCartPaymentSection(props: Pick<PosCartPanelProps,
   });
   const isCreditSale = props.paymentType === 'credit';
   const isDiscountLocked = !props.canApplyDiscount;
-  const transferSelected = isTransferPreset(props.paymentType, props.paymentChannel);
+  const transferSelected = isTransferPreset(props.paymentType, props.paymentChannel, props.cashAmount, props.cardAmount, props.transferAmount);
 
   function selectPaymentPreset(preset: PaymentPreset) {
     writeCheckoutIntent({
@@ -68,14 +93,14 @@ export function PosCartPaymentSection(props: Pick<PosCartPanelProps,
       <div className="pos-payment-strip" aria-label={t('pos.payment_method', 'طريقة الدفع والمدفوع')}>
         <div className="pos-strip-field pos-strip-field-inline pos-strip-presets">
           <div className="actions compact-actions pos-payment-preset-row pos-payment-preset-row-inline" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '4px' }}>
-            <Button type="button" variant={isPresetActive(props.paymentType, props.paymentChannel, 'cash') ? 'primary' : 'secondary'} onClick={() => selectPaymentPreset('cash')}>{t('pos.cash', 'نقدي')}</Button>
-            <Button type="button" variant={isPresetActive(props.paymentType, props.paymentChannel, 'card') ? 'primary' : 'secondary'} onClick={() => selectPaymentPreset('card')}>{t('pos.card', 'فيزا')}</Button>
+            <Button type="button" variant={isPresetActive(props.paymentType, props.paymentChannel, props.cashAmount, props.cardAmount, props.transferAmount, 'cash') ? 'primary' : 'secondary'} onClick={() => selectPaymentPreset('cash')}>{t('pos.cash', 'نقدي')}</Button>
+            <Button type="button" variant={isPresetActive(props.paymentType, props.paymentChannel, props.cashAmount, props.cardAmount, props.transferAmount, 'card') ? 'primary' : 'secondary'} onClick={() => selectPaymentPreset('card')}>{t('pos.card', 'فيزا')}</Button>
             <Button type="button" variant={transferSelected ? 'primary' : 'secondary'} onClick={() => selectPaymentPreset(props.paymentChannel === 'wallet' ? 'wallet' : 'instapay')}>{t('pos.transfers', 'تحويلات / محافظ')}</Button>
-            <Button type="button" variant={isPresetActive(props.paymentType, props.paymentChannel, 'credit') ? 'primary' : 'secondary'} onClick={() => selectPaymentPreset('credit')}>{t('pos.credit', 'آجل')}</Button>
+            <Button type="button" variant={isPresetActive(props.paymentType, props.paymentChannel, props.cashAmount, props.cardAmount, props.transferAmount, 'credit') ? 'primary' : 'secondary'} onClick={() => selectPaymentPreset('credit')}>{t('pos.credit', 'آجل')}</Button>
           </div>
           {transferSelected ? (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginTop: '4px' }}>
-              <Button type="button" variant={props.paymentChannel === 'instapay' ? 'primary' : 'secondary'} onClick={() => selectPaymentPreset('instapay')} style={{ minHeight: '28px', fontSize: '11.5px', fontWeight: 800 }}>InstaPay</Button>
+              <Button type="button" variant={props.paymentChannel !== 'wallet' ? 'primary' : 'secondary'} onClick={() => selectPaymentPreset('instapay')} style={{ minHeight: '28px', fontSize: '11.5px', fontWeight: 800 }}>InstaPay</Button>
               <Button type="button" variant={props.paymentChannel === 'wallet' ? 'primary' : 'secondary'} onClick={() => selectPaymentPreset('wallet')} style={{ minHeight: '28px', fontSize: '11px', fontWeight: 700 }}>{__t('pos.pos_cart_panel.pos_cart_payment_section.s0', __t('pos.pos_cart_panel.pos_cart_payment_section.s0', "محافظ إلكترونية"))}</Button>
             </div>
           ) : null}
@@ -85,9 +110,12 @@ export function PosCartPaymentSection(props: Pick<PosCartPanelProps,
           <span>{t('pos.cash', 'نقدي')}</span>
           <div className="pos-strip-input-shell">
             <input
+              className="no-spin-arrows"
               type="number"
               step="0.01"
               value={props.cashAmount}
+              onWheel={(e) => e.currentTarget.blur()}
+              onFocus={(e) => e.currentTarget.select()}
               onChange={(event) => props.onCashAmountChange(Number(event.target.value || 0))}
             />
             <Button
@@ -104,9 +132,12 @@ export function PosCartPaymentSection(props: Pick<PosCartPanelProps,
         <label className="pos-strip-field pos-strip-field-inline pos-strip-field-input pos-strip-field-card">
           <span>{t('pos.card', 'فيزا')}</span>
           <input
+            className="no-spin-arrows"
             type="number"
             step="0.01"
             value={props.cardAmount}
+            onWheel={(e) => e.currentTarget.blur()}
+            onFocus={(e) => e.currentTarget.select()}
             onChange={(event) => props.onCardAmountChange(Number(event.target.value || 0))}
           />
         </label>
@@ -115,9 +146,12 @@ export function PosCartPaymentSection(props: Pick<PosCartPanelProps,
           <label className="pos-strip-field pos-strip-field-inline pos-strip-field-input pos-strip-field-card">
             <span>{props.paymentChannel === 'instapay' ? t('pos.paid_instapay', 'مدفوع InstaPay') : t('pos.paid_wallet', 'مدفوع محفظة')}</span>
             <input
+              className="no-spin-arrows"
               type="number"
               step="0.01"
               value={props.transferAmount}
+              onWheel={(e) => e.currentTarget.blur()}
+              onFocus={(e) => e.currentTarget.select()}
               onChange={(event) => props.onTransferAmountChange(Number(event.target.value || 0))}
               disabled={isCreditSale}
             />
@@ -128,9 +162,12 @@ export function PosCartPaymentSection(props: Pick<PosCartPanelProps,
           <span>{t('pos.discount', 'الخصم')}</span>
           <div className="pos-strip-input-shell">
             <input
+              className="no-spin-arrows"
               type="number"
               step="0.01"
               value={props.discount}
+              onWheel={(e) => e.currentTarget.blur()}
+              onFocus={(e) => e.currentTarget.select()}
               onChange={(event) => props.onDiscountChange(Number(event.target.value || 0))}
               disabled={isDiscountLocked}
             />
@@ -152,9 +189,12 @@ export function PosCartPaymentSection(props: Pick<PosCartPanelProps,
           <span>{t('pos.delivery_fee', 'التوصيل')}</span>
           <div className="pos-strip-input-shell">
             <input
+              className="no-spin-arrows"
               type="number"
               step="0.01"
               value={props.deliveryFee}
+              onWheel={(e) => e.currentTarget.blur()}
+              onFocus={(e) => e.currentTarget.select()}
               onChange={(event) => props.onDeliveryFeeChange(Number(event.target.value || 0))}
             />
           </div>

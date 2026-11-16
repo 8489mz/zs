@@ -3,6 +3,8 @@
   align-items: center !important;
   justify-content: center !important;
   overflow: hidden !important;
+  animation: none !important;
+  transition: none !important;
 }
 
 .pos-checkout-dialog-shell {
@@ -11,7 +13,41 @@
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
-  border-radius: 12px !important;
+  border-radius: 10px !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+.pos-checkout-dialog-shell *,
+.pos-checkout-dialog-shell button:active:not(:disabled),
+.pos-checkout-dialog-shell .btn,
+.pos-checkout-dialog-shell .btn:active:not(:disabled) {
+  animation: none !important;
+  transition: none !important;
+}
+
+.pos-checkout-dialog-shell button:active:not(:disabled),
+.pos-checkout-dialog-shell .btn:active:not(:disabled) {
+  transform: none !important;
+}
+
+@media (min-width: 861px) {
+  .dialog-overlay.pos-checkout-dialog-overlay .pos-checkout-dialog-shell.is-detailed {
+    height: min(675px, calc(100vh - 20px)) !important;
+    min-height: min(675px, calc(100vh - 20px)) !important;
+    max-height: min(675px, calc(100vh - 20px)) !important;
+    overflow: hidden !important;
+  }
+
+  .dialog-overlay.pos-checkout-dialog-overlay .pos-checkout-dialog-shell.is-detailed .dialog-card.pos-checkout-dialog-card {
+    height: 100% !important;
+    max-height: 100% !important;
+    padding: 12px 18px !important;
+  }
+
+  .dialog-overlay.pos-checkout-dialog-overlay .pos-checkout-dialog-shell.is-detailed .pos-checkout-dialog {
+    flex: 1 1 0px !important;
+  }
 }
 
 .pos-checkout-dialog-shell.is-express {
@@ -19,19 +55,27 @@
   max-height: calc(100vh - 24px) !important;
 }
 
-.pos-checkout-dialog-card {
+.pos-checkout-dialog-shell .dialog-card.pos-checkout-dialog-card {
   height: auto !important;
   max-height: calc(100vh - 24px) !important;
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
   box-sizing: border-box !important;
-  padding: 12px 16px !important;
+  padding: 12px 18px !important;
 }
 
-.pos-checkout-dialog-card .section-title {
+.pos-checkout-dialog-shell .dialog-card.pos-checkout-dialog-card .section-title {
   flex: 0 0 auto !important;
-  margin-bottom: 6px !important;
+  min-height: 41px !important;
+  box-sizing: border-box !important;
+  margin-bottom: 8px !important;
+  padding-bottom: 6px !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.pos-checkout-dialog-shell .dialog-card.pos-checkout-dialog-card .section-heading-copy {
+  width: 100% !important;
 }
 
 .pos-checkout-dialog {
@@ -40,9 +84,9 @@
   gap: 8px;
   overflow-y: auto !important;
   overflow-x: hidden !important;
-  padding-inline-end: 4px;
+  padding-inline-end: 2px;
   flex: 1 1 auto !important;
-  max-height: calc(100vh - 160px) !important;
+  max-height: none !important;
   min-height: 0 !important;
   box-sizing: border-box !important;
 }
@@ -50,11 +94,33 @@
 
 .pos-checkout-main-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
   box-sizing: border-box;
+}
+
+.pos-checkout-tip-custom-input::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+  font-weight: 700;
+}
+
+.pos-checkout-dialog input[type="number"]::-webkit-outer-spin-button,
+.pos-checkout-dialog input[type="number"]::-webkit-inner-spin-button,
+.pos-payment-strip input[type="number"]::-webkit-outer-spin-button,
+.pos-payment-strip input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
+
+.pos-checkout-dialog input[type="number"],
+.pos-payment-strip input[type="number"] {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
 }
 
 .pos-checkout-dialog-section {
@@ -326,18 +392,20 @@
   flex-shrink: 0 !important;
   margin-top: 8px !important;
   padding-top: 8px !important;
-  border-top: 1px solid rgba(226, 232, 240, 0.8) !important;
+  border-top: 1px solid #e2e8f0 !important;
   background: #fff !important;
   display: flex !important;
+  align-items: center !important;
   gap: 8px !important;
-  justify-content: flex-end !important;
+  justify-content: space-between !important;
   width: 100% !important;
+  min-height: 46px !important;
   box-sizing: border-box !important;
 }
 
 .pos-checkout-dialog-actions .btn {
-  min-height: 40px;
-  border-radius: 8px;
+  min-height: 38px;
+  border-radius: 6px;
 }
 
 @media (max-width: 860px) {

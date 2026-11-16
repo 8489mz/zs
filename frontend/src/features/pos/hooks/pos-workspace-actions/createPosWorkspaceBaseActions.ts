@@ -459,44 +459,44 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
     const currentTransfer = toMoney(params.transferAmount);
     const isCurrentTransfer = params.paymentChannel === 'wallet' || params.paymentChannel === 'instapay';
 
-    // SPICE-PKG8 (INV-THREE-WAY-PAYMENT-SPLIT): picking a payment
-    // method used to ZERO the other legs — card wiped cash +
-    // transfer, cash wiped card + transfer, wallet wiped card — so a
-    // cash + card + transfer split could never be built: every tap
-    // destroyed a leg the cashier had already typed. When a split is
-    // already in progress the preset keeps the entered legs and fills
-    // only the unpaid remainder into the newly picked leg. A fresh
-    // single-channel pick keeps the old full-fill behaviour.
+    // SPICE-PKG8 (INV-THREE-WAY-PAYMENT-SPLIT): when a partial split is
+    // genuinely in progress (other legs cover > 0 and < total, and the
+    // picked leg is currently 0), keep the entered legs and fill only the
+    // unpaid remainder. When the other legs already cover the full total
+    // (such as the auto-filled cash default on dialog open) or all legs
+    // are 0, switch cleanly to full payment on the chosen channel and
+    // zero the other legs so two channels never collide.
     if (preset === 'wallet' || preset === 'instapay') {
+      const otherSum = toMoney(currentCash + currentCard);
       params.setPaymentChannel(preset);
       if (isCurrentTransfer) {
         // Switching between electronic sub-channels (Wallet <-> InstaPay):
-        // Keep cash and transfer distributions untouched!
-        if (currentTransfer === 0 && currentCash === 0 && currentCard === 0) {
-          params.setTransferAmount(total);
-        }
-      } else if (currentCard > 0 || (currentCash > 0 && currentCash < total)) {
-        // A split is in progress (cash and/or card already entered):
-        // keep those legs and fill only the unpaid remainder into transfer.
+        // Keep cash and transfer distributions untouched unless transfer is 0!
         if (currentTransfer === 0) {
-          params.setTransferAmount(toMoney(Math.max(0, total - currentCash - currentCard)));
+          if (otherSum > 0 && otherSum < total) {
+            params.setTransferAmount(toMoney(total - otherSum));
+          } else {
+            params.setCashAmount(0);
+            params.setCardAmount(0);
+            params.setTransferAmount(total);
+          }
         }
-      } else if (currentTransfer > 0) {
-        // Keep existing transfer and cash (and card, if any).
+      } else if (otherSum > 0 && otherSum < total && currentTransfer === 0) {
+        params.setTransferAmount(toMoney(total - otherSum));
+      } else if (currentTransfer > 0 && toMoney(otherSum + currentTransfer) <= total) {
+        // Keep existing transfer distribution in a split.
       } else {
-        // Full single payment
         params.setCashAmount(0);
         params.setCardAmount(0);
         params.setTransferAmount(total);
       }
     } else if (preset === 'card') {
+      const otherSum = toMoney(currentCash + currentTransfer);
       params.setPaymentChannel('card');
-      if (currentCash > 0 || currentTransfer > 0) {
-        // A split is in progress: keep cash/transfer, fill only the
-        // unpaid remainder into card.
-        if (currentCard === 0) {
-          params.setCardAmount(toMoney(Math.max(0, total - currentCash - currentTransfer)));
-        }
+      if (params.paymentChannel === 'card' && currentCard > 0) {
+        // Preserve card amount & any split when switching card scheme (e.g. K-NET <-> Visa).
+      } else if (otherSum > 0 && otherSum < total && currentCard === 0) {
+        params.setCardAmount(toMoney(total - otherSum));
       } else {
         params.setCashAmount(0);
         params.setCardAmount(total);
@@ -504,13 +504,10 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
       }
     } else {
       // Preset is 'cash'
+      const otherSum = toMoney(currentCard + currentTransfer);
       params.setPaymentChannel('cash');
-      if (currentCard > 0 || currentTransfer > 0) {
-        // A split is in progress: keep card/transfer, fill only the
-        // unpaid remainder into cash.
-        if (currentCash === 0) {
-          params.setCashAmount(toMoney(Math.max(0, total - currentCard - currentTransfer)));
-        }
+      if (otherSum > 0 && otherSum < total && currentCash === 0) {
+        params.setCashAmount(toMoney(total - otherSum));
       } else {
         params.setCashAmount(total);
         params.setCardAmount(0);
