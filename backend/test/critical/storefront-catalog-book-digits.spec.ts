@@ -47,7 +47,7 @@ import { PGliteDialect } from 'kysely-pglite-dialect';
 import { Database } from '../../src/database/database.types';
 import { StorefrontService } from '../../src/modules/storefront/storefront.service';
 import { MarketplaceSyncService } from '../../src/modules/storefront/services/marketplace-sync.service';
-import { CatalogProductService } from '../../src/modules/catalog/services/catalog-product.service';
+import { CatalogProductPosService } from '../../src/modules/catalog/services/catalog-product-pos.service';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
 const TENANT = 't1';
@@ -107,14 +107,21 @@ function makeStorefrontService(settingsCurrency: string): any {
   const svc: any = new (StorefrontService as any)(makeFakeDb({ storefront_coupons: [COUPON] }), {}, {}, {});
   svc.getTenantBySlug = async () => ({ id: TENANT, currency: settingsCurrency, slug: 'shop', activity_type: null });
   svc.getTenantSettingsMap = async () => new Map<string, string>([['currency', settingsCurrency]]);
+  // The coupons service captures getTenantBySlug / getTenantSettingsMap
+  // bound at construction, so the post-construction stubs above never
+  // reach it — re-point the captured bindings at the stubs.
+  svc.couponsService.getTenantBySlug = svc.getTenantBySlug;
+  svc.couponsService.getTenantSettingsMap = svc.getTenantSettingsMap;
   return svc;
 }
 
-/* (d) POS combo original price ------------------------------------------ */
-
+/* (d) POS combo original price ------------------------------------------
+   fetchPosBomCombos is private on the CatalogProductPosService slice
+   (file #5 split) — construct the slice directly with stubbed deps
+   (the file #5 merge precedent), since the facade no longer exposes it. */
 function makeCatalogService(currency: string): any {
-  const svc: any = new (CatalogProductService as any)(
-    makeFakeDb({
+  const svc: any = new (CatalogProductPosService as any)({
+    db: makeFakeDb({
       'manufacturing_bom_lines as bl': [
         { bom_id: 7, component_product_id: 1, quantity: 2, component_name: 'A', component_retail_price: 33.375 },
         { bom_id: 7, component_product_id: 2, quantity: 1, component_name: 'B', component_retail_price: 33.375 },
@@ -122,9 +129,15 @@ function makeCatalogService(currency: string): any {
       settings: [{ value: currency }],
       currency_exchange_rates: [{ currency_code: currency, exchange_rate: 1 }],
     }),
-    {},
-    {},
-  );
+    inventoryScope: {},
+    bookDigits: async () => (currency === 'KWD' ? 3 : 2),
+    getProductOfferColumnCapabilities: async () => ({}),
+    productIdAny: () => true,
+    normalizeUnitName: (name: unknown) => String(name ?? ''),
+    getListProductStock: () => 0,
+    tenantId: () => TENANT,
+    tenantPredicate: () => true,
+  });
   return svc;
 }
 

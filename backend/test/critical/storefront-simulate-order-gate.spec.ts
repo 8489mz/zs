@@ -202,8 +202,10 @@ async function main(): Promise<void> {
 
     // 6. Source pins: the gate is the canonical check, and the 150
     // fallback is gone from the simulate path.
+    // MERGE (file #11 split): the simulate path moved to the S4 slice — the
+    // pin now reads the slice file. Assertions unchanged.
     const source = fs.readFileSync(
-      path.resolve(__dirname, '../../src/modules/storefront/services/marketplace-sync.service.ts'),
+      path.resolve(__dirname, '../../src/modules/storefront/services/marketplace-sync-simulation.service.ts'),
       'utf8',
     );
     assert.ok(source.includes('isStorefrontEntitledForOrders'), 'simulate must call the canonical entitlement check');

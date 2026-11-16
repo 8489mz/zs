@@ -155,8 +155,10 @@ async function main(): Promise<void> {
     assert.equal(await orderCount(), 1, 'no second (paid, undeducted) order may survive a failed deduction');
 
     // 3. No pool-handle stock call remains in this service.
+    // MERGE (file #11 split): the simulate path moved to the S4 slice — the
+    // pin now reads the slice file. Assertions unchanged.
     const source = fs.readFileSync(
-      path.resolve(__dirname, '../../src/modules/storefront/services/marketplace-sync.service.ts'),
+      path.resolve(__dirname, '../../src/modules/storefront/services/marketplace-sync-simulation.service.ts'),
       'utf8',
     );
     assert.ok(!source.includes('applyStockDelta(this.db'), 'stock deduction must run on a transaction handle');
