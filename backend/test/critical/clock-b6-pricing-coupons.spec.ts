@@ -69,6 +69,28 @@ function readSrc(rel: string): string {
   return fs.readFileSync(path.join(BACKEND_ROOT, 'src', rel), 'utf8');
 }
 
+// The storefront split (2026-11-16): the facade is a thin delegate shell;
+// the coupon pins live in the T8 slice (validate/create/update) and the
+// checkout pin in the T1 slice, so source pins read the facade + all slices.
+const STOREFRONT_FILES = [
+  'modules/storefront/storefront.service.ts',
+  'modules/storefront/storefront-helpers.ts',
+  'modules/storefront/services/storefront-coupons.service.ts',
+  'modules/storefront/services/storefront-order-quote.service.ts',
+  'modules/storefront/services/storefront-catalog-detail.service.ts',
+  'modules/storefront/services/storefront-catalog.service.ts',
+  'modules/storefront/services/storefront-customer-orders.service.ts',
+  'modules/storefront/services/storefront-order-create.service.ts',
+  'modules/storefront/services/storefront-settings.service.ts',
+  'modules/storefront/services/storefront-engagement.service.ts',
+  'modules/storefront/services/storefront-merchant-orders.service.ts',
+  'modules/storefront/services/storefront-order-convert.service.ts',
+  'modules/storefront/services/storefront-table-bill.service.ts',
+];
+function readStorefrontSrc(): string {
+  return STOREFRONT_FILES.map((f) => readSrc(f)).join('\n');
+}
+
 async function main(): Promise<void> {
   // ---- §0: Cairo-child mechanism + the genuine RED for NEW-H ----
   // A local-midnight Date is what node-postgres delivers for a pg
@@ -330,7 +352,7 @@ console.log(out.join('\\n'));
   const isOfferActiveBody = pricing.slice(pricing.indexOf('private isOfferActive'));
   assert.ok(!isOfferActiveBody.includes('Date.now()'), 'isOfferActive must not compare instants');
   assert.ok(!isOfferActiveBody.includes('getTime()'), 'isOfferActive must not derive instants from the bounds');
-  const storefront = readSrc('modules/storefront/storefront.service.ts');
+  const storefront = readStorefrontSrc();
   assert.ok(storefront.includes('couponDayState(coupon.start_date, coupon.end_date, couponTodayKey, couponTimezone)'), 'checkout must read the coupon by tenant day');
   assert.ok(storefront.includes('couponState = couponDayState(coupon.start_date, coupon.end_date, couponTodayKey, couponTimezone)'), 'validate must read the coupon by tenant day');
   assert.ok(storefront.includes('couponBoundInstant(dto.startDate, businessTimezone, false)'), 'create/update must store the start bound by tenant day');

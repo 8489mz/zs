@@ -174,8 +174,9 @@ async function main(): Promise<void> {
     const barePrefixCalls = contractingSource.match(/getDailyDocumentPrefix\('[^']+'\)/g) || [];
     assert.equal(barePrefixCalls.length, 0);
     assert.equal(contractingSource.includes('getTenantTimezone'), true);
+    // The pin lives in resolveOrderCharges (T1 slice, storefront split 2026-11-16).
     const storefrontSource = fs.readFileSync(
-      path.join(__dirname, '../../src/modules/storefront/storefront.service.ts'),
+      path.join(__dirname, '../../src/modules/storefront/services/storefront-order-quote.service.ts'),
       'utf8',
     );
     assert.equal(storefrontSource.includes('todayTenantDate(businessTz, now)'), true);

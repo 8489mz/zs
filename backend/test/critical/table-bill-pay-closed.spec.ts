@@ -115,18 +115,37 @@ async function main(): Promise<void> {
   }
 
   // Case 3: source + invariant pins (presence only — no last-line pin).
+  // payActiveTableBill lives in the T10 slice (storefront split 2026-11-16);
+  // the method/invariant pins read that slice, the negatives read the whole
+  // storefront code (facade + all slices) so a resurrected write anywhere fails.
   {
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/storefront/storefront.service.ts'), 'utf8');
+    const serviceSource = readFileSync(resolve(here, '../../src/modules/storefront/services/storefront-table-bill.service.ts'), 'utf8');
+    const storefrontFiles = [
+      'modules/storefront/storefront.service.ts',
+      'modules/storefront/storefront-helpers.ts',
+      'modules/storefront/services/storefront-coupons.service.ts',
+      'modules/storefront/services/storefront-order-quote.service.ts',
+      'modules/storefront/services/storefront-catalog-detail.service.ts',
+      'modules/storefront/services/storefront-catalog.service.ts',
+      'modules/storefront/services/storefront-customer-orders.service.ts',
+      'modules/storefront/services/storefront-order-create.service.ts',
+      'modules/storefront/services/storefront-settings.service.ts',
+      'modules/storefront/services/storefront-engagement.service.ts',
+      'modules/storefront/services/storefront-merchant-orders.service.ts',
+      'modules/storefront/services/storefront-order-convert.service.ts',
+      'modules/storefront/services/storefront-table-bill.service.ts',
+    ];
+    const storefrontAll = storefrontFiles.map((f) => readFileSync(resolve(here, '../../src', f), 'utf8')).join('\n');
     const methodStart = serviceSource.indexOf('async payActiveTableBill');
     assert.ok(methodStart >= 0, 'payActiveTableBill exists');
     const invariantAt = serviceSource.indexOf('INV-TABLE-BILL-PAY-CLOSED');
     assert.ok(invariantAt >= 0 && invariantAt < methodStart, 'the invariant is named in the closed method doc comment');
     const methodSource = serviceSource.slice(methodStart);
     assert.ok(methodSource.includes('ServiceUnavailableException'), 'the method fails closed with 503');
-    assert.ok(!serviceSource.includes('TAB-PAY-'), 'no generated payment reference remains in the service');
-    assert.ok(!serviceSource.includes('paid_online: true'), 'no paid_online marking remains in the service');
-    assert.ok(!serviceSource.includes('restaurant_table_service_calls'), 'no service-call write remains in the service');
+    assert.ok(!storefrontAll.includes('TAB-PAY-'), 'no generated payment reference remains in the service');
+    assert.ok(!storefrontAll.includes('paid_online: true'), 'no paid_online marking remains in the service');
+    assert.ok(!storefrontAll.includes('restaurant_table_service_calls'), 'no service-call write remains in the service');
     const apiSource = readFileSync(resolve(here, '../../../frontend/src/features/storefront/api/storefront.api.ts'), 'utf8');
     assert.ok(apiSource.includes('INV-TABLE-BILL-PAY-CLOSED'), 'the API helper names the invariant');
     assert.ok(!apiSource.includes('paidOnline: true'), 'the API helper never fabricates a paid result');

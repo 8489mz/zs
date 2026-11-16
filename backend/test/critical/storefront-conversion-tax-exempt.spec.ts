@@ -130,8 +130,10 @@ async function main(): Promise<void> {
   const lineSum = captured.items.reduce((sum: number, line: any) => sum + Number(line.qty || line.quantity || 0) * Number(line.unitPrice ?? line.price ?? 0), 0);
   assert.equal(lineSum, 200, 'payload lines must sum to the order total with no tax added');
 
+  // convertToSale lives in the T5 slice (storefront split 2026-11-16); the two
+  // methods are adjacent there, so the slice between them is the method body.
   const source = fs.readFileSync(
-    path.resolve(__dirname, '../../src/modules/storefront/storefront.service.ts'),
+    path.resolve(__dirname, '../../src/modules/storefront/services/storefront-order-convert.service.ts'),
     'utf8',
   );
   const body = source.slice(source.indexOf('async convertToSale('), source.indexOf('async prepareOrderForPos('));

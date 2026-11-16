@@ -129,8 +129,8 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   console.log('✓ §B passed: digest buckets, header and deadline label key on the tenant day');
 
   // §C — storefront analytics: today_orders / today_revenue key on the
-  // tenant day.
-  const storefront = read('modules/storefront/storefront.service.ts');
+  // tenant day. getStorefrontAnalytics lives in the T9 slice (storefront split 2026-11-16).
+  const storefront = read('modules/storefront/services/storefront-engagement.service.ts');
   const analytics = fnSlice(storefront, 'async getStorefrontAnalytics(', 9000);
   assert.ok(analytics.includes('DATE(created_at AT TIME ZONE ${tenantTz}) = ${todayKey}'), 'getStorefrontAnalytics must key today orders/revenue on DATE(created_at AT TIME ZONE tenantTz) = todayKey');
   assert.ok(!analytics.includes('created_at >= CURRENT_DATE'), 'getStorefrontAnalytics must no longer use CURRENT_DATE');

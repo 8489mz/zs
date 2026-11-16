@@ -32,6 +32,26 @@ const SRC = join(__dirname, '..', '..', 'src');
 const read = (relative: string) => readFileSync(join(SRC, relative), 'utf8');
 const codeOf = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
+// The storefront split (2026-11-16): the facade is a thin delegate shell;
+// the method bodies live in the slice services under services/. Source-text
+// pins read the facade + all slices concatenated.
+const STOREFRONT_FILES = [
+  'modules/storefront/storefront.service.ts',
+  'modules/storefront/storefront-helpers.ts',
+  'modules/storefront/services/storefront-coupons.service.ts',
+  'modules/storefront/services/storefront-order-quote.service.ts',
+  'modules/storefront/services/storefront-catalog-detail.service.ts',
+  'modules/storefront/services/storefront-catalog.service.ts',
+  'modules/storefront/services/storefront-customer-orders.service.ts',
+  'modules/storefront/services/storefront-order-create.service.ts',
+  'modules/storefront/services/storefront-settings.service.ts',
+  'modules/storefront/services/storefront-engagement.service.ts',
+  'modules/storefront/services/storefront-merchant-orders.service.ts',
+  'modules/storefront/services/storefront-order-convert.service.ts',
+  'modules/storefront/services/storefront-table-bill.service.ts',
+];
+const readStorefront = () => STOREFRONT_FILES.map((f) => read(f)).join('\n');
+
 const LOCATIONS = [
   { id: 1, location_type: 'internal_warehouse', branch_id: null },   // المخزن الرئيسي، بلا فرع
   { id: 2, location_type: 'internal_warehouse', branch_id: 14 },     // مخزن فرع الاماراتي (الافتراضي)
@@ -108,7 +128,7 @@ function testSingleLocationPick(): void {
 /** كلا المسارين يمرّان بالمحرك — وهذا هو جوهر الإصلاح. */
 function testBothPathsUseTheEngine(): void {
   const pos = codeOf(read('modules/sales/services/create-sale.service.ts'));
-  const storefront = codeOf(read('modules/storefront/storefront.service.ts'));
+  const storefront = codeOf(readStorefront());
 
   for (const [name, source] of [['create-sale.service.ts', pos], ['storefront.service.ts', storefront]] as const) {
     assert.ok(
@@ -141,7 +161,7 @@ function testCatalogueShowsWhatCanBeReserved(): void {
   assert.equal(availableAcrossLocations([{ qty: 2, reserved: 9 }]), 0, 'over-reserved never goes negative');
   assert.equal(availableAcrossLocations([]), 0);
 
-  const storefront = codeOf(read('modules/storefront/storefront.service.ts'));
+  const storefront = codeOf(readStorefront());
   assert.ok(
     !/const rawStock = Math\.max\(0, Number\(p\.stock_qty/.test(storefront),
     'the catalogue must not advertise the GLOBAL figure: that is what let a customer see stock the order path refused',

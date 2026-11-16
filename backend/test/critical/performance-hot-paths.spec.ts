@@ -4,7 +4,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 import { CatalogProductService } from '../../src/modules/catalog/services/catalog-product.service';
-import { StorefrontService } from '../../src/modules/storefront/storefront.service';
+import { StorefrontCatalogService } from '../../src/modules/storefront/services/storefront-catalog.service';
 import { SalesWriteService } from '../../src/modules/sales/services/sales-write.service';
 import { buildPosCatalogVersion } from '../../src/modules/catalog/engines/pos-catalog-version.engine';
 
@@ -160,14 +160,24 @@ function testHotPathIndexMigration(): void {
 
 // PERF-4 — storefront catalog: stale data is served immediately while the refresh runs in background.
 async function testStorefrontStaleWhileRevalidate(): Promise<void> {
-  const service: any = Object.create(StorefrontService.prototype);
+  // The catalog lives in the T6a slice now (storefront split 2026-11-16): the
+  // facade keeps only a thin delegate, and Object.create(StorefrontService.prototype)
+  // cannot satisfy it (the delegate needs this.catalogService). Construct the
+  // slice directly; the cache maps are static with instance accessors, so
+  // assigning them here resets the shared cache for this spec.
+  let refreshStarted = 0;
+  const service: any = new StorefrontCatalogService({
+    db: {} as any,
+    getTenantBySlug: () => {
+      refreshStarted++;
+      return new Promise(() => undefined); // a refresh that never finishes
+    },
+    getTenantSettingsMap: async () => new Map(),
+    resolveStorefrontStockScope: async () => ({ branchId: null, locations: [] }),
+    loadStorefrontAvailability: async () => new Map(),
+  } as any);
   service.catalogCache = new Map();
   service.inFlightCatalogPromises = new Map();
-  let refreshStarted = 0;
-  service.getTenantBySlug = () => {
-    refreshStarted++;
-    return new Promise(() => undefined); // a refresh that never finishes
-  };
 
   const staleData = { categories: [], products: [{ id: 1 }] };
   const now = Date.now();
@@ -188,7 +198,7 @@ async function testStorefrontStaleWhileRevalidate(): Promise<void> {
   assert.equal(await service.getStorefrontCatalog('fresh'), fresh);
   assert.equal(refreshStarted, 1, 'a fresh hit touches nothing');
 
-  const source = read('modules/storefront/storefront.service.ts');
+  const source = read('modules/storefront/services/storefront-catalog.service.ts');
   const body = source.slice(source.indexOf('async getStorefrontCatalog'), source.indexOf('async getSearchSuggestions'));
   assert.ok(body.includes('Promise.all('), 'catalog rebuild reads run in parallel (PERF-4)');
 }
@@ -249,7 +259,7 @@ async function run(): Promise<void> {
  * والبيانات مخزَّنة أصلاً: التخزين كان يوفّر الاستعلام ولا يوفّر المعالج.
  */
 function testPublicCatalogIsSerializedOnce(): void {
-  const service = read('modules/storefront/storefront.service.ts');
+  const service = read('modules/storefront/services/storefront-catalog.service.ts');
   const controller = read('modules/storefront/storefront-public.controller.ts');
 
   assert.ok(
