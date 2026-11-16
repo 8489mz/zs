@@ -22,6 +22,7 @@ import { availableAcrossLocations } from '../../../common/engines/branch-sellabl
 import { findPosProductsByBarcodeWithDb } from './pos-barcode-lookup.helper';
 import { CatalogProductPostingService } from './catalog-product-posting.service';
 import { CatalogProductOffersService } from './catalog-product-offers.service';
+import { CatalogProductStyleCodeService } from './catalog-product-style-code.service';
 import {
   CustomerPriceReadRow,
   PosProductLookupRow,
@@ -38,6 +39,7 @@ import {
 export class CatalogProductService {
   private readonly offersService: CatalogProductOffersService;
   private readonly postingService: CatalogProductPostingService;
+  private readonly styleCodeService: CatalogProductStyleCodeService;
 
   constructor(@Inject(KYSELY_DB) private readonly db: Kysely<Database>, private readonly audit: AuditService,
     private readonly inventoryScope: InventoryScopeService,
@@ -53,6 +55,10 @@ export class CatalogProductService {
     });
     this.offersService = new CatalogProductOffersService({
       db: this.db,
+    });
+    this.styleCodeService = new CatalogProductStyleCodeService({
+      db: this.db,
+      tenantPredicate: this.tenantPredicate.bind(this),
     });
   }
 
@@ -122,97 +128,25 @@ export class CatalogProductService {
   }
 
   async getNextStyleCode(actor: AuthContext): Promise<{ styleCode: string }> {
-    const result = await this.db
-      .selectFrom('products')
-      .select(['style_code'])
-      .where('style_code', 'is not', null)
-      .where(this.tenantPredicate(actor))
-      .execute();
-      
-    let maxNumeric = 1000;
-    for (const row of result) {
-      if (!row.style_code) continue;
-      const parsed = parseInt(row.style_code.trim(), 10);
-      if (!isNaN(parsed) && parsed.toString() === row.style_code.trim()) {
-        if (parsed > maxNumeric) {
-          maxNumeric = parsed;
-        }
-      }
-    }
-    
-    return { styleCode: (maxNumeric + 1).toString() };
+    return this.styleCodeService.getNextStyleCode(actor);
   }
 
   async allocateStyleCode(actor: AuthContext): Promise<{ styleCode: string }> {
-    return this.db.transaction().execute(async (trx) => {
-      const { tenantId } = requireTenantScope(actor);
-      let counter = await trx
-        .selectFrom('style_code_counters')
-        .select('next_value')
-        .where('tenant_id', '=', tenantId)
-        .where('scope', '=', 'fashion')
-        .forUpdate()
-        .executeTakeFirst();
+    return this.styleCodeService.allocateStyleCode(actor);
+  }
 
-      if (!counter) {
-        const maxResult = await trx
-          .selectFrom('products')
-          .select(['style_code'])
-          .where('style_code', 'is not', null)
-          .where(this.tenantPredicate(actor))
-          .execute();
-          
-        let maxNumeric = 1000;
-        for (const row of maxResult) {
-          if (!row.style_code) continue;
-          const parsed = parseInt(row.style_code.trim(), 10);
-          // Exclude legacy timestamp-like codes: the counter column is an INTEGER.
-          if (Number.isSafeInteger(parsed) && parsed <= 2_000_000_000 && parsed.toString() === row.style_code.trim()) {
-            if (parsed > maxNumeric) maxNumeric = parsed;
-          }
-        }
-        
-        const seedValue = maxNumeric + 1;
-        await trx
-          .insertInto('style_code_counters')
-          .values({
-            tenant_id: tenantId,
-            scope: 'fashion',
-            next_value: seedValue
-          })
-          .onConflict((oc) => oc.columns(['tenant_id', 'scope']).doNothing())
-          .execute();
-          
-        counter = await trx
-          .selectFrom('style_code_counters')
-          .select('next_value')
-          .where('tenant_id', '=', tenantId)
-          .where('scope', '=', 'fashion')
-          .forUpdate()
-          .executeTakeFirst();
-      }
+  private coerceNewStyleCode(rawValue: string): string {
+    return this.styleCodeService.coerceNewStyleCode(rawValue);
+  }
 
-      let allocated = Math.max(1001, Number(counter!.next_value));
-      // Manual product codes can be created after the counter was seeded.
-      // Never suggest a style code that is already in use by this tenant.
-      while (allocated <= 2_000_000_000) {
-        const taken = await trx.selectFrom('products').select('id')
-          .where('style_code', '=', String(allocated))
-          .where('is_active', '=', true).where(this.tenantPredicate(actor)).executeTakeFirst();
-        if (!taken) break;
-        allocated++;
-      }
-      if (allocated > 2_000_000_000) throw new AppError('نفدت أكواد الموديلات المتاحة', 'STYLE_CODE_EXHAUSTED', 409);
-
-      await trx
-        .updateTable('style_code_counters')
-        .set({ next_value: allocated + 1 })
-        .where('tenant_id', '=', tenantId)
-        .where('scope', '=', 'fashion')
-        .execute();
-        
-      return { styleCode: allocated.toString() };
-    });
+  private async ensureStyleCodeAvailable(
+    styleCode: string | null | undefined,
+    itemKind: 'standard' | 'fashion' | null | undefined,
+    actor: AuthContext,
+    excludeProductIds: number[] = [],
+    drafts: Pick<NormalizedUpsertProduct, 'color' | 'size'>[] = [],
+  ): Promise<void> {
+    return this.styleCodeService.ensureStyleCodeAvailable(styleCode, itemKind, actor, excludeProductIds, drafts);
   }
 
   // INV-SLOW-INITIAL-LOADS: the unfiltered products list used to fetch the
@@ -1587,67 +1521,6 @@ export class CatalogProductService {
     const size = String(variant.size || '').trim();
     if (color && size) return `${color} / ${size}`;
     return color || size;
-  }
-
-  private normalizeArabicDigits(value: string): string {
-    const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
-    return String(value || '').replace(/[٠-٩]/g, (digit) => String(arabicDigits.indexOf(digit)));
-  }
-
-  private coerceNewStyleCode(rawValue: string): string {
-    const trimmed = String(rawValue || '').trim();
-    if (!trimmed) return '';
-    const normalized = this.normalizeArabicDigits(trimmed);
-    if (!/^\d+$/.test(normalized)) {
-      throw new AppError('كود المجموعة / الصنف الرئيسي يجب أن يكون أرقامًا فقط', 'STYLE_CODE_INVALID', 400);
-    }
-    return normalized;
-  }
-
-  private async ensureStyleCodeAvailable(
-    styleCode: string | null | undefined,
-    itemKind: 'standard' | 'fashion' | null | undefined,
-    actor: AuthContext,
-    excludeProductIds: number[] = [],
-    drafts: Pick<NormalizedUpsertProduct, 'color' | 'size'>[] = [],
-  ): Promise<void> {
-    const normalized = String(styleCode || '').trim();
-    if (!normalized) return;
-    
-    let query = this.db
-      .selectFrom('products')
-      .select(['id', 'item_kind', 'color', 'size'])
-      .where('is_active', '=', true)
-      .where('style_code', '=', normalized)
-      .where(this.tenantPredicate(actor));
-
-    if (excludeProductIds.length) {
-      query = query.where('id', 'not in', excludeProductIds);
-    }
-    const existingRows = await query.execute();
-    if (existingRows.length === 0) return;
-
-    if (itemKind !== 'fashion') {
-      throw new AppError('هذا الكود مستخدم بالفعل في صنف سابق', 'STYLE_CODE_EXISTS', 400);
-    }
-
-    const hasNonFashion = existingRows.some(row => row.item_kind !== 'fashion');
-    if (hasNonFashion) {
-      throw new AppError('هذا الكود مستخدم بالفعل في صنف غير ملابس', 'STYLE_CODE_EXISTS', 400);
-    }
-
-    for (const row of existingRows) {
-      const normExistingColor = normalizeArabicSearch(row.color || '');
-      const normExistingSize = normalizeArabicSearch(row.size || '');
-      
-      for (const draft of drafts) {
-        const normDraftColor = normalizeArabicSearch(draft.color || '');
-        const normDraftSize = normalizeArabicSearch(draft.size || '');
-        if (normExistingColor === normDraftColor && normExistingSize === normDraftSize) {
-          throw new AppError('هذا اللون والمقاس موجودان بالفعل لهذا الموديل', 'VARIANT_EXISTS', 400);
-        }
-      }
-    }
   }
 
   private async ensureProductIdentityAvailable(payload: NormalizedUpsertProduct, actor: AuthContext, productId?: number): Promise<void> {
