@@ -20,12 +20,7 @@ import { systemConfirm, toast } from '@/shared/components/system-alert';
 import { vanOfflineDb } from '../offline/van-sales-offline.db';
 import { vanSyncEngine } from '../offline/van-sync.engine';
 import { VanSalesLogin } from '../components/VanSalesLogin';
-import { VanSettlementReceiptModal } from '../components/VanSettlementReceiptModal';
-import { VanSettlementReceiptData } from '../utils/van-settlement-receipt.utils';
-import { VanSettleTab } from '../components/VanSettleTab';
 import { DriverNewLoadRequisitionView } from '../components/DriverNewLoadRequisitionView';
-import { VanTripExpenseModal } from '../components/VanTripExpenseModal';
-import { VanTripPackagingModal } from '../components/VanTripPackagingModal';
 import { ActiveVisitBanner, ItineraryTab, GpsMandatoryModal, useVanVisit } from '@/features/delivery-reps/pages/van-sales-mobile/useVanVisit';
 import {
   useVanTrip,
@@ -37,6 +32,7 @@ import { CockpitTab, FleetTab, useVanCockpit } from '@/features/delivery-reps/pa
 import { SaleTab, PreSalesTab, SalesHistoryTab, SaleCheckoutModal, SalesReceiptModal, useVanSale } from '@/features/delivery-reps/pages/van-sales-mobile/useVanSale';
 import { InventoryTab, RequisitionsTab, TransferModal, DamagedSwapModal, useVanInventory } from '@/features/delivery-reps/pages/van-sales-mobile/useVanInventory';
 import { CollectionTab, CollectionReceiptModal, useVanCollection } from '@/features/delivery-reps/pages/van-sales-mobile/useVanCollection';
+import { SettleTab, SettlementReceiptModal, TripExpenseModal, TripPackagingModal, useVanSettle } from '@/features/delivery-reps/pages/van-sales-mobile/useVanSettle';
 
 export default function VanSalesMobilePage() {
   const { t: __t } = useTranslation();
@@ -57,60 +53,7 @@ export default function VanSalesMobilePage() {
   } = useVanShell();
 
   const [activeTab, setActiveTab] = useState<'cockpit' | 'itinerary' | 'inventory' | 'sale' | 'pre-sales' | 'sales-history' | 'collection' | 'fleet' | 'settle' | 'requisitions'>('cockpit');
-  const [expenseModalOpen, setExpenseModalOpen] = useState(false);
-  const [packagingModalOpen, setPackagingModalOpen] = useState(false);
-
-  const [countedCash, setCountedCash] = useState<string>('');
-  const [unloadRemaining, setUnloadRemaining] = useState<boolean>(true);
-  const [lastSettlementReceipt, setLastSettlementReceipt] = useState<VanSettlementReceiptData | null>(null);
   const { showFleetInCockpit, setShowFleetInCockpit } = useVanCockpit();
-
-  const settleTripMutation = useMutation({
-    mutationFn: vanSalesApi.settleTrip,
-    onSuccess: (res) => {
-      const isBlind = Boolean(data?.isBlindSettlement);
-      if (isBlind) {
-        showAlert('success', 'تم إغلاق وتصفية رحلة التوزيع بنجاح وتسليم النقدية الفعلية للخزينة للمطابقة الرقابية!');
-      } else {
-        showAlert('success', `تم إغلاق وتصفية رحلة التوزيع بنجاح! عجز/زيادة الكاش: ${res.variance} ${getGlobalCurrencySymbol()}`);
-      }
-      setCountedCash('');
-      setActiveTab('cockpit');
-      handleEndVisit();
-      queryClient.invalidateQueries({ queryKey: ['van-sales-active-trip'] });
-      queryClient.invalidateQueries({ queryKey: ['driver-itinerary'] });
-      queryClient.invalidateQueries({ queryKey: ['driver-fuel-logs'] });
-
-      // Automatically launch Cash Handover Clearance Certificate Modal
-      const receiptData: VanSettlementReceiptData = {
-        tripId: res.tripId,
-        receiptNo: `SETTLE-TRIP-${res.tripId}`,
-        repName: res.repName || session?.rep?.name || 'مندوب التوزيع',
-        repPhone: session?.rep?.phone || undefined,
-        cashierName: res.cashierName || 'أمين الخزينة',
-        vehiclePlate: data?.trip?.vehiclePlate || undefined,
-        warehouseName: data?.trip?.sourceWarehouseName || undefined,
-        settledAt: res.settledAt || new Date().toISOString(),
-        salesAmount: res.salesAmount ?? Number(data?.trip?.salesAmount || 0),
-        cashSales: res.cashSales ?? Math.max(0, Number(data?.trip?.salesAmount || 0) - Number(data?.trip?.creditSales || 0)),
-        creditSales: res.creditSales ?? Number(data?.trip?.creditSales || 0),
-        collectionsTotal: res.collectionsTotal ?? Number(data?.trip?.cashCollected || 0),
-        returnsAmount: res.returnsAmount ?? Number(data?.trip?.returnsAmount || 0),
-        cashRefunds: res.cashRefunds ?? Number(data?.trip?.cashRefunds || 0),
-        creditReturns: res.creditReturns ?? 0,
-        tripExpenses: res.tripExpenses ?? 0,
-        expectedCash: res.expectedCash,
-        countedCash: res.countedCash,
-        variance: res.variance,
-        stockVarianceAmount: res.stockVarianceAmount ?? 0,
-        unloadedItemsCount: res.unloadedItemsCount ?? 0,
-        distanceKm: res.distanceKm,
-        stockVariances: res.stockVariances as any,
-      };
-      setLastSettlementReceipt(receiptData);
-    },
-    onError: (err: any) => showAlert('error', err?.message || 'فشل تصفية الرحلة'),
-  });
 
   const {
     data, isLoading, refetch,
@@ -152,6 +95,14 @@ export default function VanSalesMobilePage() {
   const { setInventorySubMode } = inv;
   const collection = useVanCollection({ session, queryClient, setPendingSyncCount, showAlert, data, allAvailableCustomers, activeVisit });
   const { setColCustomerId, setColSubMode, setColReturnCustomerId } = collection;
+  const settle = useVanSettle({
+    session,
+    queryClient,
+    showAlert,
+    data,
+    setActiveTab,
+    handleEndVisit,
+  });
 
   if (!session) {
     return <VanSalesLogin onLoginSuccess={(sess) => { setSession(sess); queryClient.invalidateQueries({ queryKey: ['van-sales-active-trip'] }); }} />;
@@ -825,90 +776,15 @@ export default function VanSalesMobilePage() {
                 showAlert={showAlert}
               />
             )}
-
-            {/* TAB CONTENT: SETTLE (Active Trip Only) */}
             {currentTab === 'settle' && (
-              data?.hasActiveTrip ? (
-                <VanSettleTab
-                  tripData={data.trip}
-                  activeVisit={activeVisit}
-                  sales={data.sales || []}
-                  collections={data.collections || []}
-                  returns={data.returns || []}
-                  expenses={tripExpensesList}
-                  packagingMovements={tripPackagingList}
-                  onOpenExpenseModal={() => setExpenseModalOpen(true)}
-                  onOpenPackagingModal={() => setPackagingModalOpen(true)}
-                  inventory={data.inventory || []}
-                  countedCash={countedCash}
-                  onCountedCashChange={setCountedCash}
-                  unloadRemaining={unloadRemaining}
-                  onUnloadRemainingChange={setUnloadRemaining}
-                  requireSupervisorPin={Boolean(data?.requireSupervisorPinForSettlement)}
-                  isBlindSettlement={Boolean(data?.isBlindSettlement)}
-                  onSubmitSettle={async (
-                    supervisorPin?: string,
-                    countedStock?: { productId: number; countedQty: number }[],
-                    nightStockApproved?: boolean,
-                  ) => {
-                    const isBlind = Boolean(data?.isBlindSettlement);
-                    const expectedToRemit = Number((data.trip as any)?.expectedCashToRemit ?? data.trip?.cashCollected ?? 0);
-                    const finalCountedCash = isBlind ? countedCash : (countedCash === '' ? (expectedToRemit === 0 ? '0' : '') : countedCash);
-                    if (finalCountedCash === '') {
-                      showAlert('error', __t('delivery_reps.van_sales_mobile_page.s179', __t('delivery_reps.van_sales_mobile_page.s179', "يرجى جرد وإدخال النقدية الفعلية الموجودة معك للتوريد")));
-                      return;
-                    }
-
-                    // Security Invariant: Outbox Zero-Debt Settlement Gate
-                    // Block trip settlement if there are unsynced sales or collections in local storage
-                    try {
-                      const pendingOutbox = await vanOfflineDb.getPendingOutbox();
-                      if (pendingOutbox && pendingOutbox.length > 0) {
-                        showAlert('warning', `توجد ${pendingOutbox.length} حركة مبيعات أو تحصيل معلقة في ذاكرة الهاتف. جاري محاولة المزامنة مع السيرفر أولاً...`);
-                        await vanSyncEngine.syncAll();
-                        const remaining = await vanOfflineDb.getPendingOutbox();
-                        if (remaining && remaining.length > 0) {
-                          showAlert('error', `تعذر إتمام التصفية: توجد ${remaining.length} حركة بيع أو تحصيل معلقة لم يتم ترحيلها للسيرفر بعد. يرجى التأكد من اتصال الإنترنت ثم الضغط على "مزامنة العمليات المعلقة" قبل تسليم العهدة.`);
-                          return;
-                        }
-                        showAlert('success', __t('delivery_reps.van_sales_mobile_page.s180', __t('delivery_reps.van_sales_mobile_page.s180', "تمت مزامنة العمليات المعلقة بنجاح، جاري استكمال تصفية اليومية...")));
-                      }
-                    } catch (err) {
-                      console.warn('[SettlementGate] Outbox verification error:', err);
-                    }
-
-                    const activeCustId = activeVisit?.customerId;
-                    // INV-VAN-SELF-SETTLE-PIN-REQUIRED: the rep's phone
-                    // never sends chargeStockVarianceToRep — the backend
-                    // treats a driver-path shortage as pending until a
-                    // supervisor decides from the admin side.
-                    // nightStockApproved is the supervisor's explicit
-                    // approval (authorized by the PIN) to keep stock
-                    // in the van overnight; without it the backend
-                    // refuses the settlement when stock remains.
-                    settleTripMutation.mutate({
-                      tripId: data.trip!.id,
-                      countedCash: Number(finalCountedCash),
-                      unloadRemainingToWarehouse: unloadRemaining,
-                      countedStock,
-                      nightStockApproved,
-                      activeVisitCustomerId: activeCustId,
-                      supervisorPin,
-                    });
-                  }}
-                  isSubmitting={settleTripMutation.isPending}
-                />
-              ) : (
-                <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '36px 20px', textAlign: 'center' }}>
-                  <div style={{ width: '56px', height: '56px', backgroundColor: '#fef3c7', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-                    <ClockIcon size={28} color="#d97706" />
-                  </div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: '0 0 6px' }}>{__t('delivery_reps.van_sales_mobile_page.s181', __t('delivery_reps.van_sales_mobile_page.s181', "تصفية اليومية وإغلاق العهدة"))}</h3>
-                  <p style={{ fontSize: '12.5px', color: '#64748b', margin: '0 auto 16px', maxWidth: '380px', lineHeight: 1.5 }}>
-                    {__t('delivery_reps.van_sales_mobile_page.s182', __t('delivery_reps.van_sales_mobile_page.s182', "لا توجد رحلة توزيع مفتوحة لتصفيتها حالياً. يتم فتح هذا القسم بعد انطلاق الرحلة لتسليم النقدية ومطابقة العهدة المسائية."))}
-                  </p>
-                </div>
-              )
+              <SettleTab
+                settle={settle}
+                data={data}
+                tripExpensesList={tripExpensesList}
+                tripPackagingList={tripPackagingList}
+                activeVisit={activeVisit}
+                showAlert={showAlert}
+              />
             )}
           </>
         )}
@@ -925,43 +801,9 @@ export default function VanSalesMobilePage() {
       <SaleCheckoutModal sale={sale} data={data} session={session} />
       <SalesReceiptModal sale={sale} data={data} />
       <CollectionReceiptModal collection={collection} data={data} />
-
-      {/* Cashier Handover Clearance Receipt Modal */}
-      {lastSettlementReceipt && (
-        <VanSettlementReceiptModal
-          receipt={lastSettlementReceipt}
-          onClose={() => setLastSettlementReceipt(null)}
-          storeName={data?.trip?.sourceWarehouseName || __t('delivery_reps.van_sales_mobile_page.s185', __t('delivery_reps.van_sales_mobile_page.s185', "إدارة مبيعات وتوزيع الفان"))}
-        />
-      )}
-
-      {/* Trip Operational Expenses Modal */}
-      {data?.trip && expenseModalOpen && (
-        <VanTripExpenseModal
-          open={expenseModalOpen}
-          onClose={() => setExpenseModalOpen(false)}
-          tripId={data.trip.id}
-          onSuccess={() => {
-            refetch();
-            refetchTripExpenses();
-          }}
-        />
-      )}
-
-      {/* Returnable Packaging Movements Modal */}
-      {data?.trip && packagingModalOpen && (
-        <VanTripPackagingModal
-          open={packagingModalOpen}
-          onClose={() => setPackagingModalOpen(false)}
-          tripId={data.trip.id}
-          customers={allAvailableCustomers}
-          defaultCustomerId={selectedCustomerId ? Number(selectedCustomerId) : (activeVisit?.customerId || null)}
-          onSuccess={() => {
-            refetch();
-            refetchTripPackaging();
-          }}
-        />
-      )}
+      <SettlementReceiptModal settle={settle} data={data} />
+      <TripExpenseModal settle={settle} data={data} refetch={refetch} refetchTripExpenses={refetchTripExpenses} />
+      <TripPackagingModal settle={settle} data={data} allAvailableCustomers={allAvailableCustomers} selectedCustomerId={selectedCustomerId} activeVisit={activeVisit} refetch={refetch} refetchTripPackaging={refetchTripPackaging} />
       <DamagedSwapModal
         inv={inv}
         data={data}
