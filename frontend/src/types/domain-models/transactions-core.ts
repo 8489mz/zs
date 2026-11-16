@@ -143,6 +143,16 @@ export interface ReturnRecord {
   date?: string;
   settlementMode?: string;
   refundMethod?: string;
+  /** INV-SALE-RETURN-CASH-ONLY: per-tender refund legs as stored
+   *  on the document (a single cash leg for the full refund), so
+   *  the dialog shows the cash the cashier hands over from the
+   *  drawer. Absent on old documents.
+   *  NOTE: this is the RESOLVED ReturnRecord — '@/types/domain'
+   *  resolves to domain.ts, which re-exports this file
+   *  (domain-models/transactions-core). The same field also lives
+   *  in domain/transactions.ts (P2's original edit), but that copy
+   *  is shadowed by this file and never reaches the component. */
+  refundAllocations?: Array<{ tender: string; amount: number }>;
   createdBy?: string;
   createdByName?: string;
   items?: { productId: string; productName: string; qty: number; total: number; }[];
