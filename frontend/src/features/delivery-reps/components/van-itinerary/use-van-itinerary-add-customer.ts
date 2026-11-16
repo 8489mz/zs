@@ -3,7 +3,7 @@
 // handleCreateCustomer, and (Option A) the filteredDistricts + filteredRoutes memos, which ref
 // H-add form state while H-add refs H-filters returns — a mutual dep, TDZ either way, so they move here.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/shared/components/system-alert';
 import { vanSalesApi } from '@/features/delivery-reps/api/van-sales.api';
 import { catalogApi } from '@/lib/api/catalog';
