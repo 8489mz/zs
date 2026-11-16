@@ -61,6 +61,7 @@ import { MaritimeFreightRateCardsService } from './maritime-freight-rate-cards.s
 import { MaritimeFreightCustomsService } from './maritime-freight-customs.service';
 import { MaritimeFreightInsuranceWarehouseService } from './maritime-freight-insurance-warehouse.service';
 import { MaritimeFreightAgentSettlementsService } from './maritime-freight-agent-settlements.service';
+import { MaritimeFreightTrackingService } from './maritime-freight-tracking.service';
 
 @Injectable()
 export class MaritimeFreightService {
@@ -73,6 +74,7 @@ export class MaritimeFreightService {
   private readonly customsService: MaritimeFreightCustomsService;
   private readonly insuranceWarehouseService: MaritimeFreightInsuranceWarehouseService;
   private readonly agentSettlementsService: MaritimeFreightAgentSettlementsService;
+  private readonly trackingService: MaritimeFreightTrackingService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -104,6 +106,9 @@ export class MaritimeFreightService {
     this.agentSettlementsService = new MaritimeFreightAgentSettlementsService({
       db: this.db,
       resolveFreightExchangeRate: this.resolveFreightExchangeRate.bind(this),
+    });
+    this.trackingService = new MaritimeFreightTrackingService({
+      db: this.db,
     });
   }
 
@@ -4918,79 +4923,15 @@ export class MaritimeFreightService {
     });
   }
 
-  // ==========================================
-  // 6. Carrier Tracking Hub & API Events (estimated/scheduled only)
-  // ==========================================
-
   async syncCarrierTracking(auth: AuthContext, carrierCode: string, trackingNumber: string) {
-    const { tenantId } = requireTenantScope(auth);
-
-    // INV-MARITIME-TRACKING-HONEST-LABELLING: there is NO live
-    // carrier integration anywhere in this module (zero fetch calls):
-    // these are estimated, scheduled timeline events derived from
-    // fixed offsets, labelled as such in the stored payload, the
-    // returned status and the frontend copy. They must never be
-    // presented as a live carrier synchronisation.
-    const estimatedEvents = [
-      { eventType: 'BOOK', eventLocation: 'Port Origin', hoursAgo: 72, label: 'Booking Confirmed with Carrier' },
-      { eventType: 'GTI', eventLocation: 'Terminal Gate-in', hoursAgo: 48, label: 'Container Gate-in at POL' },
-      { eventType: 'LOAD', eventLocation: 'Vessel Berth', hoursAgo: 24, label: 'Loaded on Vessel' },
-      { eventType: 'DEPT', eventLocation: 'En Route Sea', hoursAgo: 12, label: 'Vessel Departed Origin Port' },
-    ];
-
-    for (const evt of estimatedEvents) {
-      const eventTime = new Date(Date.now() - evt.hoursAgo * 3600 * 1000);
-      await this.db
-        .insertInto('maritime_carrier_api_events')
-        .values({
-          tenant_id: tenantId,
-          carrier_code: carrierCode.toUpperCase(),
-          tracking_number: trackingNumber,
-          event_type: evt.eventType,
-          event_location: evt.eventLocation,
-          event_time: eventTime,
-          raw_payload: JSON.stringify({ source: 'ESTIMATED_SCHEDULE', estimated: true, note: evt.label }),
-        })
-        .execute();
-    }
-
-    return {
-      carrierCode: carrierCode.toUpperCase(),
-      trackingNumber,
-      status: 'estimated',
-      estimated: true,
-      eventsCount: estimatedEvents.length,
-      lastEvent: estimatedEvents[estimatedEvents.length - 1],
-    };
+    return this.trackingService.syncCarrierTracking(auth, carrierCode, trackingNumber);
   }
 
   async recordCarrierApiEvent(auth: AuthContext, dto: CarrierTrackingEventDto) {
-    const { tenantId } = requireTenantScope(auth);
-    const [event] = await this.db
-      .insertInto('maritime_carrier_api_events')
-      .values({
-        tenant_id: tenantId,
-        carrier_code: dto.carrierCode.toUpperCase(),
-        tracking_number: dto.trackingNumber,
-        event_type: dto.eventType,
-        event_location: dto.eventLocation || null,
-        event_time: dto.eventTime ? new Date(dto.eventTime) : sql`NOW()`,
-        raw_payload: dto.rawPayload ? JSON.stringify(dto.rawPayload) : null,
-      })
-      .returningAll()
-      .execute();
-
-    return event;
+    return this.trackingService.recordCarrierApiEvent(auth, dto);
   }
 
   async listCarrierApiEvents(auth: AuthContext, trackingNumber: string) {
-    const { tenantId } = requireTenantScope(auth);
-    return await this.db
-      .selectFrom('maritime_carrier_api_events')
-      .selectAll()
-      .where('tenant_id', '=', tenantId)
-      .where('tracking_number', '=', trackingNumber)
-      .orderBy('event_time', 'desc')
-      .execute();
+    return this.trackingService.listCarrierApiEvents(auth, trackingNumber);
   }
 }
