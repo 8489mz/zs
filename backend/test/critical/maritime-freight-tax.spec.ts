@@ -211,7 +211,17 @@ async function main(): Promise<void> {
 
     // 13. Source pins: all three sites route through the canonical
     // engine on the transaction handle; no inline DTO rate survives.
-    const source = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight.service.ts'), 'utf8');
+    // Maritime split: the three tax sites live in the quotations (S3),
+    // jobs-core (S12) and job-close (S17) slices — count them over the
+    // concatenated read (facade + the three slices).
+    const source = [
+      'maritime-freight.service.ts',
+      'maritime-freight-quotations.service.ts',
+      'maritime-freight-jobs-core.service.ts',
+      'maritime-freight-job-close.service.ts',
+    ]
+      .map((file) => readFileSync(resolve(__dirname, '../../src/modules/maritime-freight', file), 'utf8'))
+      .join('\n');
     const engineCalls = source.match(/resolveSaleTaxRate\(chg\.taxRatePercent, configuredTaxRate\)/g) || [];
     assert.equal(engineCalls.length, 3, 'all three tax sites call the canonical engine');
     const trxResolves = source.match(/resolveTenantConfiguredTaxRate\(trx, tenantId\)/g) || [];

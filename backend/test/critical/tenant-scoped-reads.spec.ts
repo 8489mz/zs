@@ -102,7 +102,10 @@ function testAuditIsolationRemediations(): void {
   expect(section(hr, 'async createLoan(', 'async updateLoan('), /\.where\('tenant_id', '=', requireTenantScope\(auth\)\.tenantId\)/, 'MT-08');
   expect(section(hr, 'private async settlePayrollLoanDeductions(', 'async approvePayrollRun('), /WHERE id = \$\{row\.installment_id\} AND tenant_id = \$\{tenantId\}/, 'MT-12');
 
-  const maritime = read('modules/maritime-freight/maritime-freight.service.ts');
+  // Maritime split: the public-portal reads live in the public-portal
+  // slice (MT-05 + MT-10 both). The facade is NOT included: its methods
+  // are thin delegates, and section() would match a delegate stub.
+  const maritime = read('modules/maritime-freight/maritime-freight-public-portal.service.ts');
   const tracking = section(maritime, 'async getPublicTrackingByToken(', 'private assertValidPublicQuoteToken');
   const trackingLookup = tracking.slice(0, tracking.indexOf('if (!job)'));
   expect(trackingLookup, /\.where\('tracking_token', '=', cleanToken\)/, 'MT-05');

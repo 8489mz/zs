@@ -241,7 +241,9 @@ async function main(): Promise<void> {
     assert.equal((await journalLines(dec5Id)).length, 0);
 
     // 7. Source pins.
-    const source = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight.service.ts'), 'utf8');
+    // Maritime split: the customs methods live in the customs slice; the
+    // `// Freight Audit` banner travelled with them.
+    const source = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-customs.service.ts'), 'utf8');
     const createStart = source.indexOf('async createCustomsDeclaration(');
     const addStart = source.indexOf('async addCustomsDeclarationItem(');
     const statusStart = source.indexOf('async updateCustomsDeclarationStatus(');

@@ -199,7 +199,9 @@ async function main(): Promise<void> {
     // digits on the transaction handle and keeps no toFixed(2) on the
     // remainder or the paid total; the sibling writer is still the
     // unrounded float sum (separate decision, pinned as unchanged).
-    const source = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight.service.ts'), 'utf8');
+    // Maritime split: settleJobFromCustomerBalance + getCustomerActiveJobs
+    // both live in the invoicing slice.
+    const source = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-invoicing.service.ts'), 'utf8');
     const start = source.indexOf('async settleJobFromCustomerBalance(');
     const end = source.indexOf('async getCustomerActiveJobs(');
     assert.ok(start > 0 && end > start);

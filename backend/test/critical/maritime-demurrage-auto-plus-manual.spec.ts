@@ -181,7 +181,9 @@ async function main(): Promise<void> {
     assert.ok(!schedulerSource.includes('|| 50'), 'no invented rate may remain in the scan');
     assert.ok(schedulerSource.includes('demurrage_rate_per_day || 0'), 'an unset rate is zero, never invented');
     assert.ok(schedulerSource.includes('syncDemurrageChargeForContainer'), 'the scan must call the sync helper');
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight.service.ts'), 'utf8');
+    // Maritime split: the demurrage sync + updateContainer both live in
+    // the jobs-containers slice.
+    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-jobs-containers.service.ts'), 'utf8');
     const syncStart = serviceSource.indexOf('async syncDemurrageChargeForContainer(');
     const updateStart = serviceSource.indexOf('async updateContainer(');
     const syncBody = serviceSource.slice(syncStart, updateStart);

@@ -228,20 +228,26 @@ async function main(): Promise<void> {
 
     // 6. Source pins: both close paths call the posting, and the
     // helper never reads container rows (demurrage stays out).
-    const source = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight.service.ts'), 'utf8');
-    const helperStart = source.indexOf('async postStoredMoneyAtClose(');
-    const consolidationStart = source.indexOf('2. Consolidation & Sub-Jobs');
+    // Maritime split: postStoredMoneyAtClose + updateJob live in the
+    // job-close slice (the `2. Consolidation & Sub-Jobs` banner travelled
+    // with them, trailing after the helper); addJobMilestone +
+    // releaseDeliveryOrder live in the jobs-milestones slice — per-slice
+    // reads.
+    const jobClose = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-job-close.service.ts'), 'utf8');
+    const milestones = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-jobs-milestones.service.ts'), 'utf8');
+    const helperStart = jobClose.indexOf('async postStoredMoneyAtClose(');
+    const consolidationStart = jobClose.indexOf('2. Consolidation & Sub-Jobs');
     assert.ok(helperStart > 0 && consolidationStart > helperStart);
-    const helperBody = source.slice(helperStart, consolidationStart);
+    const helperBody = jobClose.slice(helperStart, consolidationStart);
     assert.ok(helperBody.includes('maritime_job_forex_close'));
     assert.ok(helperBody.includes('maritime_trucking_close'));
     assert.ok(helperBody.includes('maritime_insurance_close'));
     assert.ok(!helperBody.includes('maritime_containers'));
     assert.ok(!helperBody.includes('demurrage'));
-    const updateJobStart = source.indexOf('async updateJob(');
-    const milestoneStart = source.indexOf('async addJobMilestone(');
-    assert.ok(source.slice(updateJobStart, milestoneStart).includes('postStoredMoneyAtClose'));
-    assert.ok(source.slice(milestoneStart, source.indexOf('async releaseDeliveryOrder(')).includes('postStoredMoneyAtClose'));
+    const updateJobStart = jobClose.indexOf('async updateJob(');
+    const updateJobEnd = jobClose.indexOf('async getQuotationCharges(');
+    assert.ok(jobClose.slice(updateJobStart, updateJobEnd).includes('postStoredMoneyAtClose'));
+    assert.ok(milestones.slice(milestones.indexOf('async addJobMilestone('), milestones.indexOf('async releaseDeliveryOrder(')).includes('postStoredMoneyAtClose'));
 
     console.log('maritime stored money post at close checks passed');
   } finally {

@@ -102,10 +102,13 @@ async function main(): Promise<void> {
     assert.ok(!String(storedRow.value).includes('defaultExchangeRate'), 'the stored JSON must not keep the key');
 
     // 4. Source pins.
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight.service.ts'), 'utf8');
+    // Maritime split: the pipeline lives in the pipeline slice, and
+    // processAutomatedPipelineForTenant is its LAST method, so the
+    // next-method search returns -1 — fall back to EOF.
+    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-pipeline.service.ts'), 'utf8');
     const pipelineStart = serviceSource.indexOf('async processAutomatedPipelineForTenant(');
     const pipelineEnd = serviceSource.indexOf('\n  async ', pipelineStart + 10);
-    const pipelineBody = serviceSource.slice(pipelineStart, pipelineEnd);
+    const pipelineBody = serviceSource.slice(pipelineStart, pipelineEnd === -1 ? undefined : pipelineEnd);
     assert.ok(pipelineBody.includes('resolveAutoQuoteExchangeRate'), 'the pipeline must resolve through the helper');
     assert.ok(!pipelineBody.includes('48.5'), 'no hardcoded rate in the pipeline');
     assert.ok(!pipelineBody.includes('defaultExchangeRate'), 'no config-default rate in the pipeline');

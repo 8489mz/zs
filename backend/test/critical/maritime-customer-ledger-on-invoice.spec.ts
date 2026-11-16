@@ -194,7 +194,9 @@ async function main(): Promise<void> {
 
     // 5. Source pin: the invoice path maintains the ledger; the
     // expense-voucher path does not (supplier subledger undecided).
-    const source = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight.service.ts'), 'utf8');
+    // Maritime split: the invoice path (issue + expense voucher + settle
+    // + the ledger helper) lives entirely in the invoicing slice.
+    const source = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-invoicing.service.ts'), 'utf8');
     const invoiceStart = source.indexOf('async issueJobSalesInvoice(');
     const expenseStart = source.indexOf('async recordJobExpenseVoucher(');
     const settleStart = source.indexOf('async settleJobFromCustomerBalance(');

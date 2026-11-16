@@ -173,7 +173,9 @@ async function main(): Promise<void> {
     );
 
     // 7. Source pins.
-    const source = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight.service.ts'), 'utf8');
+    // Maritime split: updateJobCharges + calculateJobForexGainLoss both
+    // live in the job-close slice.
+    const source = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-job-close.service.ts'), 'utf8');
     const updateStart = source.indexOf('async updateJobCharges(');
     const forexStart = source.indexOf('async calculateJobForexGainLoss(');
     const updateBody = source.slice(updateStart, forexStart);

@@ -413,7 +413,18 @@ async function main(): Promise<void> {
     countOccurrences(subscription, 'resolveSaleTaxRate(') >= 1,
     'subscription billing must resolve its tax rate through resolveSaleTaxRate',
   );
-  const maritime = stripComments(readFile('backend/src/modules/maritime-freight/maritime-freight.service.ts'));
+  // The maritime tax/FX sites live across the facade + its slices since
+  // the maritime-freight split (S3/S12/S17 hold the tax sites; the kernel
+  // + S12/S13/S5/S17 hold the FX sites). Count them all.
+  const maritimeFxFiles = [
+    'backend/src/modules/maritime-freight/maritime-freight.service.ts',
+    'backend/src/modules/maritime-freight/maritime-freight-quotations.service.ts',
+    'backend/src/modules/maritime-freight/maritime-freight-jobs-core.service.ts',
+    'backend/src/modules/maritime-freight/maritime-freight-jobs-containers.service.ts',
+    'backend/src/modules/maritime-freight/maritime-freight-customs.service.ts',
+    'backend/src/modules/maritime-freight/maritime-freight-job-close.service.ts',
+  ];
+  const maritime = maritimeFxFiles.map((file) => stripComments(readFile(file))).join('\n');
   assert.ok(
     countOccurrences(maritime, 'resolveSaleTaxRate(') >= 3,
     'maritime charge tax must resolve through resolveSaleTaxRate at all three sites',

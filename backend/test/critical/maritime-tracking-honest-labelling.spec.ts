@@ -72,7 +72,9 @@ async function main(): Promise<void> {
 
     // Source pins: no live-sync claim survives in the tracking
     // method or the user-facing copy.
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight.service.ts'), 'utf8');
+    // Maritime split: the tracking methods live in the tracking slice;
+    // the whole-module assertions read the facade + all 20 slices.
+    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/maritime-freight/maritime-freight-tracking.service.ts'), 'utf8');
     const trackingStart = serviceSource.indexOf('async syncCarrierTracking(');
     const trackingEnd = serviceSource.indexOf('async recordCarrierApiEvent(');
     assert.ok(trackingStart > 0 && trackingEnd > trackingStart);
@@ -81,7 +83,31 @@ async function main(): Promise<void> {
     assert.ok(!trackingBody.includes('CARRIER_API_HUB'));
     assert.ok(trackingBody.includes("'estimated'"));
     assert.ok(trackingBody.includes('ESTIMATED_SCHEDULE'));
-    const moduleSource = serviceSource;
+    const moduleSource = [
+      'maritime-freight.service.ts',
+      'maritime-freight-master-data.service.ts',
+      'maritime-freight-rfq-bids.service.ts',
+      'maritime-freight-quotations.service.ts',
+      'maritime-freight-rate-cards.service.ts',
+      'maritime-freight-customs.service.ts',
+      'maritime-freight-insurance-warehouse.service.ts',
+      'maritime-freight-agent-settlements.service.ts',
+      'maritime-freight-tracking.service.ts',
+      'maritime-freight-public-portal.service.ts',
+      'maritime-freight-pipeline.service.ts',
+      'maritime-freight-inquiries.service.ts',
+      'maritime-freight-jobs-core.service.ts',
+      'maritime-freight-jobs-containers.service.ts',
+      'maritime-freight-invoicing.service.ts',
+      'maritime-freight-consolidation-documents.service.ts',
+      'maritime-freight-trucking.service.ts',
+      'maritime-freight-job-close.service.ts',
+      'maritime-freight-jobs-milestones.service.ts',
+      'maritime-freight-carrier-invoices.service.ts',
+      'maritime-freight-carrier-disputes.service.ts',
+    ]
+      .map((file) => readFileSync(resolve(__dirname, '../../src/modules/maritime-freight', file), 'utf8'))
+      .join('\n');
     assert.ok(!moduleSource.includes('CARRIER_API_HUB'));
     // No fetch call exists in this service file: the events cannot
     // be live carrier data.

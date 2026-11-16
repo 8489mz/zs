@@ -32,7 +32,17 @@ function run(): void {
     "join.onRef('s.id', '=', 'rd.invoice_id').onRef('s.tenant_id', '=', 'rd.tenant_id')",
     "join.onRef('b.id', '=', 's.branch_id').onRef('b.tenant_id', '=', 's.tenant_id')",
   ]);
-  check('maritime-freight/maritime-freight.service.ts', [
+  // Maritime split: the tenant-aware journal join lives in three slices
+  // (assertJobCanClose + postContainerDepositJournal in S12, the sales
+  // invoice in S14, the charge update in S17). The facade holds 0: its
+  // methods are thin delegates.
+  check('maritime-freight/maritime-freight-jobs-core.service.ts', [
+    "join.onRef('jl.journal_entry_id', '=', 'je.id').onRef('jl.tenant_id', '=', 'je.tenant_id')",
+  ]);
+  check('maritime-freight/maritime-freight-invoicing.service.ts', [
+    "join.onRef('jl.journal_entry_id', '=', 'je.id').onRef('jl.tenant_id', '=', 'je.tenant_id')",
+  ]);
+  check('maritime-freight/maritime-freight-job-close.service.ts', [
     "join.onRef('jl.journal_entry_id', '=', 'je.id').onRef('jl.tenant_id', '=', 'je.tenant_id')",
   ]);
   check('contracting/contracting.service.ts', [

@@ -136,22 +136,28 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
 
   // §A — NEW-D demurrage: deadlineDayKey keys the stored DATE from
   // host-local calendar parts, not the UTC slice.
-  const maritime = read('modules/maritime-freight/maritime-freight.service.ts');
-  const closure = fnSlice(maritime, 'private async assertJobCanClose(', 6000);
+  // Maritime split: assertJobCanClose lives in the jobs-core slice, PUBLIC
+  // there (the facade delegate keeps the private signature).
+  const jobsCore = read('modules/maritime-freight/maritime-freight-jobs-core.service.ts');
+  const closure = fnSlice(jobsCore, 'async assertJobCanClose(', 6000);
   assert.ok(closure.includes('formatLocalCalendarDay(value)'), 'deadlineDayKey must use formatLocalCalendarDay for the Date branch');
   assert.ok(!closure.includes('value.toISOString().slice(0, 10)'), 'deadlineDayKey must no longer UTC-slice the stored DATE');
   console.log('✓ §A passed: demurrage deadline keys on the stored calendar day');
 
   // §B — NEW-D rate cards: validUntilDayKey keys the stored DATE from
   // host-local calendar parts, not the UTC slice.
-  const rateCards = fnSlice(maritime, 'async listRateCards(', 6000);
+  // Maritime split: listRateCards lives in the rate-cards slice.
+  const rateCardsSource = read('modules/maritime-freight/maritime-freight-rate-cards.service.ts');
+  const rateCards = fnSlice(rateCardsSource, 'async listRateCards(', 6000);
   assert.ok(rateCards.includes('formatLocalCalendarDay(value)'), 'validUntilDayKey must use formatLocalCalendarDay for the Date branch');
   assert.ok(!rateCards.includes('value.toISOString().slice(0, 10)'), 'validUntilDayKey must no longer UTC-slice the stored DATE');
   console.log('✓ §B passed: rate-card expiry keys on the stored calendar day');
 
   // §C — NEW-D extra (:3346): the updateContainer deadline derivation
   // must not UTC-slice a value that can be the pg DATE.
-  const updateContainer = fnSlice(maritime, 'async updateContainer(', 8000);
+  // Maritime split: updateContainer lives in the jobs-containers slice.
+  const containers = read('modules/maritime-freight/maritime-freight-jobs-containers.service.ts');
+  const updateContainer = fnSlice(containers, 'async updateContainer(', 8000);
   assert.ok(updateContainer.includes('formatLocalCalendarDay(deadlineDate as unknown as Date)'), 'updateContainer must key deadlineDate from host-local calendar parts');
   assert.ok(!updateContainer.includes('new Date(deadlineDate).toISOString().slice(0, 10)'), 'updateContainer must no longer UTC-slice deadlineDate');
   // :3338 stays: baseDate is UTC-midnight built from a tenant day string.

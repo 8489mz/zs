@@ -130,14 +130,17 @@ main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); }
   }
 
   // §A — maritime S1: cargo-insurance issue_date derives from the tenant day.
-  const maritime = read('modules/maritime-freight/maritime-freight.service.ts');
-  const cargo = fnSlice(maritime, 'async createCargoInsurance(');
+  // Maritime split: createCargoInsurance lives in the insurance-warehouse slice.
+  const insuranceWarehouse = read('modules/maritime-freight/maritime-freight-insurance-warehouse.service.ts');
+  const cargo = fnSlice(insuranceWarehouse, 'async createCargoInsurance(');
   assert.ok(cargo.includes('resolveBusinessDateKey(trx, tenantId, new Date())'), 'cargo insurance issue_date default derives via resolveBusinessDateKey');
   assert.ok(!cargo.includes("new Date().toISOString().split('T')[0]"), 'cargo insurance issue_date no longer uses the UTC slice');
   console.log('✓ §A passed: cargo insurance defaults to the tenant day, not the UTC day');
 
   // §B — maritime S2: container return_deadline derives from the tenant day.
-  const milestone = fnSlice(maritime, 'async addJobMilestone(', 6000);
+  // Maritime split: addJobMilestone lives in the jobs-milestones slice.
+  const milestones = read('modules/maritime-freight/maritime-freight-jobs-milestones.service.ts');
+  const milestone = fnSlice(milestones, 'async addJobMilestone(', 6000);
   assert.ok(milestone.includes('resolveBusinessDateKey(this.db, tenantId, deadline)'), 'return_deadline derives via resolveBusinessDateKey');
   assert.ok(!milestone.includes("deadline.toISOString().split('T')[0]"), 'return_deadline no longer uses the UTC slice');
   console.log('✓ §B passed: container return_deadline keys on the tenant day of the same instant');
