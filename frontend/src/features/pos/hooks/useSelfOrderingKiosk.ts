@@ -67,7 +67,7 @@ export interface KioskCartLineLike {
   modifiers?: GroupModifierSelection[] | null;
 }
 
-interface KioskCartItem {
+export interface KioskCartItem {
   productId: number;
   name: string;
   price: number;
