@@ -353,7 +353,7 @@ export class SettingsService {
       const isEnterprisePlan = isOmnichannelPlan || isUltimatePlan;
 
       // Delivery reps (retail / standard): if profile or plan includes deliveryReps, ensure it's enabled (self-heal)
-      if (profileDefaults.includes('deliveryReps') || isEnterprisePlan || planFeatures.includes('deliveryReps')) {
+      if (!isWarehousing && !isServiceVertical && !isImportVertical && (profileDefaults.includes('deliveryReps') || isEnterprisePlan || planFeatures.includes('deliveryReps'))) {
         if (settings.deliveryRepsModuleEnabled === undefined) {
           settings.deliveryRepsModuleEnabled = true;
         }
@@ -1022,6 +1022,7 @@ export class SettingsService {
       modulePatch.autoPartsModuleEnabled = normalizedKey === 'auto_parts';
       modulePatch.clothingModuleEnabled = normalizedKey === 'clothing' || normalizedKey === 'perfumes';
       modulePatch.comboModuleEnabled = normalizedKey === 'clothing' || normalizedKey === 'perfumes' || normalizedKey === 'restaurant' || normalizedKey === 'retail_general';
+      modulePatch.deliveryRepsModuleEnabled = !['services', 'warehousing', 'wholesale_van', 'import_export'].includes(normalizedKey);
 
       if (normalizedKey === 'perfumes') {
         modulePatch.posModuleEnabled = true;

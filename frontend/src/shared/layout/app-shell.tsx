@@ -9,7 +9,7 @@ import { authApi } from '@/shared/api/auth';
 import { resetAuthenticatedClient } from '@/lib/query-client-session';
 import { DEFAULT_STORE_NAME, useAuthStore } from '@/stores/auth-store';
 import { navigationItems } from '@/app/router/registry';
-import { canAccessNavigationItem, canAccessPath, getHrHomePath, matchesNavigationSearch, isDesktopOfflineApp, isPlatformAdmin } from '@/app/router/access';
+import { canAccessNavigationItem, canAccessPath, getHrHomePath, matchesNavigationSearch, isDesktopOfflineApp, isPlatformAdmin, tenantHasFeature } from '@/app/router/access';
 import { userHasAnyPermission } from '@/shared/hooks/use-permission';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { PasswordRotationGate } from '@/shared/system/password-rotation-gate';
@@ -937,11 +937,10 @@ export function AppShell({ children }: PropsWithChildren) {
       if (isPlatformAdminUser) return true;
       if (feat === 'import' && (isImportVertical || settings?.importModuleEnabled === true)) return true;
 
+      if (feat === 'deliveryReps') return tenantHasFeature('deliveryReps', tenant, user);
       // 1. Strict Plan-Tier Entitlement: if tenant has an explicit features payload from the active plan
       if (Array.isArray(tenant?.features) && tenant.features.length > 0 && !isImportVertical) {
-        if (['catalog', 'products', 'sales'].includes(feat)) {
-          return true;
-        }
+        if (['catalog', 'products', 'sales'].includes(feat)) return true;
         return tenant.features.includes(feat);
       }
 

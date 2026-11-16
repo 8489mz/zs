@@ -40,7 +40,12 @@ export const deliveryRepsRoutes: FeatureRouteModule = {
     },
   ],
   navigation: [
-    { key: 'delivery-reps', label: 'إدارة المناديب', to: '/delivery-reps' },
+    {
+      key: 'delivery-reps',
+      label: 'إدارة المناديب',
+      to: '/delivery-reps',
+      keywords: ['مندوب', 'المناديب', 'مناديب التوصيل', 'توصيل', 'دليفري', 'تسوية', 'عهدة', 'كباتن'],
+    },
     { key: 'driver-mobile', label: 'شاشة المندوب', to: '/driver-mobile' },
     { key: 'van-sales-mobile', label: 'البيع الميداني (موبايل)', to: '/van-sales/mobile' },
     { key: 'van-sales-admin', label: 'سيارات التوزيع (الفان)', to: '/inventory/van-sales' },

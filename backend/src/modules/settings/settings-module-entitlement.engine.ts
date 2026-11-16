@@ -42,6 +42,12 @@ interface SelfInstallRule {
   blockedProfiles?: string[];
   allowedProfiles?: string[];
   requiresPos?: boolean;
+  /**
+   * When true (vanSales/deliveryFleet), retail defaultFeatures['deliveryReps'] must NOT
+   * unlock the module on starter (plan_basic / tier_band*_L1); require plan rank >= requiredRank
+   * and plan-table/extra grant (or wholesale_van profile).
+   */
+  requirePlanOrExtraForFeature?: boolean;
 }
 
 const POS_BLOCKED_PROFILES = [
@@ -132,19 +138,23 @@ export const SELF_INSTALLABLE_MODULE_RULES: Record<string, SelfInstallRule> = {
     altFeatureCode: 'taxIntegration',
   },
   deliveryRepsModuleEnabled: {
-    requiredRank: 2,
+    requiredRank: 1,
     featureCode: 'deliveryReps',
     blockedProfiles: DELIVERY_BLOCKED_PROFILES,
   },
   deliveryFleetModuleEnabled: {
     requiredRank: 2,
     featureCode: 'deliveryReps',
+    altFeatureCode: 'vanSales',
     blockedProfiles: DELIVERY_BLOCKED_PROFILES,
+    requirePlanOrExtraForFeature: true,
   },
   vanSalesModuleEnabled: {
     requiredRank: 2,
     featureCode: 'deliveryReps',
+    altFeatureCode: 'vanSales',
     blockedProfiles: DELIVERY_BLOCKED_PROFILES,
+    requirePlanOrExtraForFeature: true,
   },
   storefrontModuleEnabled: {
     requiredRank: 4,
@@ -241,12 +251,20 @@ export function canTenantAdminSelfInstallModule(
       : getFallbackPlanFeatures(context.planId);
 
   const effectiveFeatures = new Set(resolvePillarScopedFeatures(profile.key, baseFeatures, extraList));
+  const rank = resolvePlanRank(context.planId) ?? 1;
+
+  if (rule.requirePlanOrExtraForFeature && profile.key !== 'wholesale_van') {
+    if (rank < rule.requiredRank) {
+      return false;
+    }
+    const planFeatureSet = new Set(baseFeatures);
+    return featureCodes.some((code) => planFeatureSet.has(code));
+  }
 
   if (featureCodes.length > 0) {
     return featureCodes.some((code) => effectiveFeatures.has(code));
   }
 
-  const rank = resolvePlanRank(context.planId) ?? 1;
   return rank >= rule.requiredRank;
 }
 

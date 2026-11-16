@@ -358,5 +358,40 @@ describe('AppShell', () => {
     expect(keys).toContain('purchases');
     unmount();
   });
+
+  it('INV-DELIVERY-REPS-RETAIL-SELF-INSTALL: shows delivery-reps nav on Starter retail tenant without pre-existing feature', () => {
+    useAuthStore.setState({
+      user: { ...buildUser(), role: 'admin', permissions: ['*'] },
+      tenant: {
+        id: 't-starter-retail',
+        accountId: 'a-starter',
+        slug: 'starter-retail',
+        businessName: 'Starter Retail',
+        activityType: 'retail_general',
+        status: 'active',
+        isTrial: false,
+        trialEndsAt: null,
+        trialDaysRemaining: null,
+        plan: 'plan_basic',
+        planId: 'plan_basic',
+        features: ['catalog', 'products', 'sales', 'sessions', 'cashDrawer'],
+      },
+      storeName: 'Starter Retail',
+      theme: 'light',
+      initialized: true,
+    });
+
+    settingsMock.mockResolvedValue({
+      activityType: 'retail_general',
+      businessIndustry: 'retail_general',
+      posModuleEnabled: true,
+      deliveryRepsModuleEnabled: true,
+    });
+
+    const { unmount } = renderShell('/dashboard');
+    const keys = Array.from(document.querySelectorAll('.sidebar-nav a[data-key]')).map((el) => el.getAttribute('data-key'));
+    expect(keys).toContain('delivery-reps');
+    unmount();
+  });
 });
 

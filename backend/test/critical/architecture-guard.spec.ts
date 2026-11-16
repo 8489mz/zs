@@ -554,7 +554,7 @@ async function main(): Promise<void> {
     .map((line) => line.split(' ')[1]);
   assert.ok(invariantIds.length > 0, 'the invariants file must list INV- entries');
   assert.equal(new Set(invariantIds).size, invariantIds.length, 'invariant ids must be unique: no duplicated entry');
-  assert.equal(invariantIds[invariantIds.length - 1], 'INV-POS-CHECKOUT-LAYOUT-AND-SPLIT-WIRING', 'the newest invariant entry must be the last INV- line');
+  assert.equal(invariantIds[invariantIds.length - 1], 'INV-DELIVERY-REPS-RETAIL-SELF-INSTALL', 'the newest invariant entry must be the last INV- line');
 
   console.log('architecture guard checks passed');
 }

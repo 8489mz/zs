@@ -556,7 +556,7 @@ export const APPS_CATALOG: AppItemDefinition[] = [
     categoryLabel: 'اللوجستيات والتجارة السحابية',
     shortDesc: 'إسناد الطلبات للكباتن، تتبع الشحنات، تصفية العهد النقدية، وبوابة السائق PWA.',
     features: ['بوابة السائقين PWA', 'إسناد الطلبات للكباتن', 'تصفية العهد النقدية'],
-    requiredPlan: 'plan_ultimate',
+    requiredPlan: 'plan_basic',
     icon: DeliveryIcon,
     accentColor: '#ca8a04',
     accentBg: '#fefce8',

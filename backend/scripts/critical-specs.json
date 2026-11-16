@@ -207,6 +207,7 @@
     "test/critical/cash-return-approval-threshold.spec.ts",
     "test/critical/exchange-approval-quantities.spec.ts",
     "test/critical/close-declared-totals-required.spec.ts",
-    "test/critical/returns-invoice-full-history-search.spec.ts"
+    "test/critical/returns-invoice-full-history-search.spec.ts",
+    "test/critical/delivery-reps-retail-self-install.spec.ts"
   ]
 }

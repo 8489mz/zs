@@ -15,6 +15,7 @@ import {
   tenantHasFeature,
 } from '@/app/router/access';
 import { normalizeArabicSearchKey } from '@/lib/arabic-normalization';
+import { deliveryRepsRoutes } from '@/features/delivery-reps/routes';
 import { useAuthStore } from '@/stores/auth-store';
 import type { AuthUser } from '@/types/auth';
 
@@ -269,6 +270,14 @@ describe('matchesNavigationSearch', () => {
 
   it('matches everything on an empty query', () => {
     expect(matchesNavigationSearch(forexItem, '')).toBe(true);
+  });
+
+  it('INV-DELIVERY-REPS-RETAIL-SELF-INSTALL: matches delivery-reps sidebar navigation by Arabic keywords', () => {
+    const repNav = deliveryRepsRoutes.navigation[0];
+    expect(repNav.key).toBe('delivery-reps');
+    for (const term of ['مندوب', 'المناديب', 'توصيل', 'دليفري', 'تسوية']) {
+      expect(matchesNavigationSearch(repNav, normalizeArabicSearchKey(term))).toBe(true);
+    }
   });
 });
 

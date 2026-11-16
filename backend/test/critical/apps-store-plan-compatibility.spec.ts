@@ -1,10 +1,12 @@
 /*
  * Proves cross-plan and Apps Store self-install compatibility across:
  * 1) Real SettingsService.saveSettings + getSettings on PGlite (tenant admin self-install of
- *    entitled modules: deliveryRepsModuleEnabled, vanSalesModuleEnabled, servicesModuleEnabled,
- *    comboModuleEnabled, crmModuleEnabled, installmentsModuleEnabled on plan_ultimate & tier_band1_L2;
- *    blocking unentitled tiers like plan_basic; blocking incompatible verticals like warehousing,
- *    services, contracting, maritime; keeping uninstalls & posModuleEnabled super_admin-only).
+ *    entitled modules: deliveryRepsModuleEnabled on all retail plans including plan_basic per P8b,
+ *    vanSalesModuleEnabled, servicesModuleEnabled, comboModuleEnabled, crmModuleEnabled,
+ *    installmentsModuleEnabled on plan_ultimate & tier_band1_L2;
+ *    blocking unentitled tiers like plan_basic for vanSales/crm/installments; blocking incompatible
+ *    verticals like warehousing, services, contracting, maritime; keeping uninstalls &
+ *    posModuleEnabled super_admin-only).
  * 2) Services & wholesale_van profiles never silently auto-enabling posModuleEnabled.
  * 3) PlanFeatureService supporting tier_band1..5_L1..L3 and commerce profiles consistently.
  * 4) PricingCatalogService.levelIdForLegacyPlanCode resolving BAND1_L1..BAND5_L3 and tier_band*.
@@ -189,7 +191,8 @@ async function main(): Promise<void> {
     await settingsService.saveSettings({ deliveryRepsModuleEnabled: false }, adminAuth('t-ult-retail'));
     assert.equal(await rawSetting(anyDb, 't-ult-retail', 'deliveryRepsModuleEnabled'), 'true', 'tenant admin cannot self-uninstall active module');
 
-    // 3) Basic retail admin cannot self-install Pro/Ultimate apps
+    // 3) Basic retail admin CAN self-install deliveryReps (retail core on all plans per P8b),
+    //    while Van Sales / CRM / Installments stay blocked on plan_basic
     await settingsService.saveSettings(
       {
         deliveryRepsModuleEnabled: true,
@@ -199,7 +202,7 @@ async function main(): Promise<void> {
       },
       adminAuth('t-basic-retail'),
     );
-    assert.equal(await rawSetting(anyDb, 't-basic-retail', 'deliveryRepsModuleEnabled'), undefined, 'plan_basic cannot self-install deliveryReps');
+    assert.equal(await rawSetting(anyDb, 't-basic-retail', 'deliveryRepsModuleEnabled'), 'true', 'plan_basic retail can self-install deliveryReps (P8b)');
     assert.equal(await rawSetting(anyDb, 't-basic-retail', 'vanSalesModuleEnabled'), undefined, 'plan_basic cannot self-install vanSales');
     assert.equal(await rawSetting(anyDb, 't-basic-retail', 'crmModuleEnabled'), undefined, 'plan_basic cannot self-install crm');
     assert.equal(await rawSetting(anyDb, 't-basic-retail', 'installmentsModuleEnabled'), undefined, 'plan_basic cannot self-install installments');

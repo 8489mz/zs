@@ -15,6 +15,7 @@ import {
   resolveFrontendPlanDisplayName,
   resolveFrontendPlanRank,
 } from '@/shared/verticals/plan-tiers';
+import { resolveCurrentVertical } from '@/shared/verticals/vertical-scope';
 import { APPS_CATALOG } from '../data/apps-catalog';
 import { resolveAppToggleFeedback } from '../lib/app-toggle-feedback';
 import { AppCard } from '../components/AppCard';
@@ -209,6 +210,30 @@ export function AppsStorePage() {
     const extraFeatures: string[] = Array.isArray((tenant as any)?.extraFeatures)
       ? (tenant as any).extraFeatures
       : [];
+    const vertical = resolveCurrentVertical(tenant, settings);
+    const tenantRank = resolveFrontendPlanRank(rawPlan) ?? 2;
+
+    if (app.key === 'deliveryRepsModuleEnabled') {
+      if (['contracting', 'maritime', 'warehousing', 'services', 'manufacturing', 'import_export'].includes(vertical)) {
+        return false;
+      }
+      return !extraFeatures.includes('-deliveryReps');
+    }
+
+    if (app.key === 'vanSalesModuleEnabled') {
+      if (['contracting', 'maritime', 'warehousing', 'services', 'manufacturing', 'import_export'].includes(vertical)) {
+        return false;
+      }
+      if (vertical === 'wholesale_van') {
+        return !extraFeatures.includes('-deliveryReps') && !extraFeatures.includes('-vanSales');
+      }
+      if (extraFeatures.includes('vanSales') || extraFeatures.includes('+vanSales')) {
+        return true;
+      }
+      if (tenantRank < 2) {
+        return false;
+      }
+    }
 
     if (app.featureFlag) {
       if (!tenantFeatures.includes(app.featureFlag)) {
@@ -226,7 +251,6 @@ export function AppsStorePage() {
       }
     }
 
-    const tenantRank = resolveFrontendPlanRank(rawPlan) ?? 2;
     const requiredRank = resolveFrontendPlanRank(app.requiredPlan) ?? 3;
     return tenantRank >= requiredRank;
   };

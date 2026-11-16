@@ -93,7 +93,7 @@ export class TrialTenantProvisioningService {
       servicesModuleEnabled: false,
       storefrontModuleEnabled: false,
       deliveryFleetModuleEnabled: false,
-      deliveryRepsModuleEnabled: false,
+      deliveryRepsModuleEnabled: true,
       vanSalesModuleEnabled: false,
       purchasesModuleEnabled: true,
       inventoryModuleEnabled: true,
@@ -105,6 +105,7 @@ export class TrialTenantProvisioningService {
         base.contractingModuleEnabled = true;
         base.posModuleEnabled = false;
         base.requireCashierShiftForSales = false;
+        base.deliveryRepsModuleEnabled = false;
         base.hrModuleEnabled = true;
         base.enableEnterpriseFeatures = true;
         base.fixedAssetsModuleEnabled = true;
@@ -118,6 +119,7 @@ export class TrialTenantProvisioningService {
         base.posModuleEnabled = false;
         base.inventoryModuleEnabled = false;
         base.requireCashierShiftForSales = false;
+        base.deliveryRepsModuleEnabled = false;
         base.hrModuleEnabled = true;
         base.enableEnterpriseFeatures = true;
         base.taxDeclarationModuleEnabled = true;
@@ -133,6 +135,7 @@ export class TrialTenantProvisioningService {
 
       case 'import_export':
         base.importModuleEnabled = true;
+        base.deliveryRepsModuleEnabled = false;
         base.enableEnterpriseFeatures = true;
         base.taxDeclarationModuleEnabled = true;
         base.installmentsModuleEnabled = true;
@@ -178,6 +181,7 @@ export class TrialTenantProvisioningService {
         base.requireCashierShiftForSales = false;
         base.servicesModuleEnabled = true;
         base.inventoryModuleEnabled = false;
+        base.deliveryRepsModuleEnabled = false;
         base.installmentsModuleEnabled = true;
         base.enableEnterpriseFeatures = true;
         break;
@@ -187,6 +191,7 @@ export class TrialTenantProvisioningService {
         base.requireCashierShiftForSales = false;
         base.inventoryModuleEnabled = true;
         base.purchasesModuleEnabled = true;
+        base.deliveryRepsModuleEnabled = false;
         base.enableEnterpriseFeatures = true;
         break;
 
@@ -205,6 +210,7 @@ export class TrialTenantProvisioningService {
       case 'manufacturing':
         base.manufacturingModuleEnabled = true;
         base.importModuleEnabled = true;
+        base.deliveryRepsModuleEnabled = false;
         base.enableEnterpriseFeatures = true;
         break;
 
