@@ -65,6 +65,7 @@ import { MaritimeFreightInquiriesService } from './maritime-freight-inquiries.se
 import { MaritimeFreightJobsCoreService } from './maritime-freight-jobs-core.service';
 import { MaritimeFreightJobsContainersService } from './maritime-freight-jobs-containers.service';
 import { MaritimeFreightInvoicingService } from './maritime-freight-invoicing.service';
+import { MaritimeFreightConsolidationDocumentsService } from './maritime-freight-consolidation-documents.service';
 
 @Injectable()
 export class MaritimeFreightService {
@@ -84,6 +85,7 @@ export class MaritimeFreightService {
   private readonly jobsCoreService: MaritimeFreightJobsCoreService;
   private readonly jobsContainersService: MaritimeFreightJobsContainersService;
   private readonly invoicingService: MaritimeFreightInvoicingService;
+  private readonly consolidationDocumentsService: MaritimeFreightConsolidationDocumentsService;
 
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
@@ -152,6 +154,10 @@ export class MaritimeFreightService {
       resolveFreightExchangeRate: this.resolveFreightExchangeRate.bind(this),
       resolveAccountId: this.resolveAccountId.bind(this),
       assertMaritimeJournalPeriodOpen: this.assertMaritimeJournalPeriodOpen.bind(this),
+    });
+    this.consolidationDocumentsService = new MaritimeFreightConsolidationDocumentsService({
+      db: this.db,
+      createJob: this.jobsCoreService.createJob.bind(this.jobsCoreService),
     });
   }
 
@@ -2368,98 +2374,23 @@ export class MaritimeFreightService {
   // ==========================================
 
   async listConsolidationSubJobs(auth: AuthContext, parentJobId: string | number) {
-    const { tenantId } = requireTenantScope(auth);
-    return await this.db
-      .selectFrom('maritime_jobs')
-      .selectAll()
-      .where('tenant_id', '=', tenantId)
-      .where('parent_job_id', '=', String(parentJobId))
-      .orderBy('id', 'desc')
-      .execute();
+    return this.consolidationDocumentsService.listConsolidationSubJobs(auth, parentJobId);
   }
 
   async createConsolidationSubJob(auth: AuthContext, parentJobId: string | number, dto: Partial<CreateMaritimeJobDto>) {
-    const { tenantId } = requireTenantScope(auth);
-    const parentJob = await this.db
-      .selectFrom('maritime_jobs')
-      .selectAll()
-      .where('tenant_id', '=', tenantId)
-      .where('id', '=', String(parentJobId) as any)
-      .executeTakeFirst();
-
-    if (!parentJob) throw new NotFoundException('Parent Master Job not found');
-
-    const subJobDto: CreateMaritimeJobDto = {
-      ...dto,
-      parentJobId: String(parentJobId),
-      isConsolidationMaster: false,
-      customerName: dto.customerName || 'عميل تجزئة مشترك',
-      shippingLineName: parentJob.shipping_line_name,
-      shippingLineId: parentJob.shipping_line_id,
-      polCode: parentJob.pol_code,
-      polName: parentJob.pol_name,
-      podCode: parentJob.pod_code,
-      podName: parentJob.pod_name,
-      vesselName: parentJob.vessel_name || undefined,
-      voyageNumber: parentJob.voyage_number || undefined,
-      bookingNumber: parentJob.booking_number || undefined,
-      mblNumber: parentJob.mbl_number || undefined,
-      direction: parentJob.direction,
-      transportMode: parentJob.transport_mode,
-      etd: parentJob.etd || undefined,
-      eta: parentJob.eta || undefined,
-    } as CreateMaritimeJobDto;
-
-    return await this.createJob(auth, subJobDto);
+    return this.consolidationDocumentsService.createConsolidationSubJob(auth, parentJobId, dto);
   }
 
-  // ==========================================
-  // 3. Digital Shipment e-Folder / Document Binder
-  // ==========================================
-
   async listJobDocuments(auth: AuthContext, jobId: string | number) {
-    const { tenantId } = requireTenantScope(auth);
-    return await this.db
-      .selectFrom('maritime_job_documents')
-      .selectAll()
-      .where('tenant_id', '=', tenantId)
-      .where('job_id', '=', String(jobId) as any)
-      .orderBy('id', 'desc')
-      .execute();
+    return this.consolidationDocumentsService.listJobDocuments(auth, jobId);
   }
 
   async createJobDocument(auth: AuthContext, jobId: string | number, dto: CreateJobDocumentDto, uploadedBy?: string) {
-    const { tenantId } = requireTenantScope(auth);
-    const [doc] = await this.db
-      .insertInto('maritime_job_documents')
-      .values({
-        tenant_id: tenantId,
-        job_id: String(jobId),
-        doc_type: dto.docType,
-        title: dto.title,
-        file_name: dto.fileName,
-        file_url: dto.fileUrl,
-        file_size_bytes: dto.fileSizeBytes || 0,
-        mime_type: dto.mimeType || 'application/pdf',
-        notes: dto.notes || null,
-        uploaded_by: uploadedBy || (auth.userId ? `User #${auth.userId}` : 'Admin'),
-      })
-      .returningAll()
-      .execute();
-
-    return doc;
+    return this.consolidationDocumentsService.createJobDocument(auth, jobId, dto, uploadedBy);
   }
 
   async deleteJobDocument(auth: AuthContext, jobId: string | number, docId: string | number) {
-    const { tenantId } = requireTenantScope(auth);
-    await this.db
-      .deleteFrom('maritime_job_documents')
-      .where('tenant_id', '=', tenantId)
-      .where('job_id', '=', String(jobId) as any)
-      .where('id', '=', String(docId) as any)
-      .execute();
-
-    return { success: true };
+    return this.consolidationDocumentsService.deleteJobDocument(auth, jobId, docId);
   }
 
   async listAgentSettlements(auth: AuthContext, filters?: { agentId?: string; status?: string; search?: string }) {
