@@ -996,6 +996,9 @@ export const vanSalesApi = {
   settleTrip: async (payload: {
     tripId: number;
     countedCash: number;
+    // INV-VAN-DAILY-SPLIT-SETTLEMENT: counted cash split per tenant
+    // day; omitted for a single-day trip (legacy lump path).
+    perDayCash?: { businessDay: string; countedCash: number }[];
     unloadRemainingToWarehouse: boolean;
     countedStock?: { productId: number; countedQty: number }[];
     // INV-VAN-SELF-SETTLE-PIN-REQUIRED: the rep's phone never sends a
@@ -1012,6 +1015,7 @@ export const vanSalesApi = {
     tripId: number;
     expectedCash: number;
     countedCash: number;
+    dailySplit?: Array<{ businessDay: string; due: number; countedCash: number; remittedCash: number }>;
     tripExpenses?: number;
     variance: number;
     stockVarianceAmount?: number;
@@ -1044,6 +1048,32 @@ export const vanSalesApi = {
       method: 'POST',
       headers: getDriverAuthHeaders(),
       body: JSON.stringify(payload),
+    });
+  },
+
+  // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day cash due for one trip —
+  // the settle tab's per-day inputs read this; the server settles
+  // from the same buckets.
+  getTripDueByDay: async (tripId: number): Promise<{
+    ok: boolean;
+    tripId: number;
+    businessDay: string | null;
+    timezone: string;
+    days: Array<{
+      businessDay: string;
+      cashSales: number;
+      collections: number;
+      refunds: number;
+      due: number;
+      saleIds: number[];
+      paymentIds: number[];
+      refundIds: number[];
+      hasActivity: boolean;
+    }>;
+    totalDue: number;
+  }> => {
+    return http(`/api/driver-portal/van-sales/trips/${tripId}/due-by-day`, {
+      headers: getDriverAuthHeaders(),
     });
   },
 

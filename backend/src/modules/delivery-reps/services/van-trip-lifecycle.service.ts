@@ -34,7 +34,17 @@ import {
   resolveIsolatedRepCustomerBalance,
   type RepTargetCalculationResult,
 } from '../rep-target.engine';
-import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
+import { getTenantTimezone, normalizePgDateOnly, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
+import {
+  allocateDayRemittance,
+  bucketTripCashByDay,
+  cashPortionOfSale,
+  normalizePerDayCash,
+  parseSubmittedPerDayCash,
+  sumPerDayCash,
+  type DayBucket,
+  type PerDayCashInput,
+} from '../van-settlement-split.engine';
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../../accounting/engines/money-minor-units.engine';
 import { computeCashDrawerVariance } from '../../cash-drawer/helpers/cash-drawer.helper';
@@ -1142,6 +1152,10 @@ export class VanTripLifecycleService {
     // Book digits resolved once, before the transaction below opens
     // (D4): the loaded value below rounds at book digits.
     const moneyDigits: MoneyDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
+    // INV-VAN-DAILY-SPLIT-SETTLEMENT: the tenant-local day the trip
+    // opens on, resolved on the pool handle before the transaction
+    // (P2 pattern) — the trip never spans days silently from here on.
+    const tenantTimezone = await getTenantTimezone(this.anyDb, tenantId);
     let createdTripId = 0;
     const hasItemsToLoad = Boolean(payload.items && payload.items.length > 0);
 
@@ -1291,6 +1305,7 @@ export class VanTripLifecycleService {
           source_warehouse_id: sourceLocId || vanLoc.id,
           status: 'open',
           settlement_status: 'open',
+          business_day: todayTenantDate(tenantTimezone),
           loaded_amount: roundMoney(totalLoadedValue, moneyDigits),
           sales_amount: 0,
           cash_collected: 0,
@@ -1565,6 +1580,11 @@ export class VanTripLifecycleService {
     payload: {
       tripId: number;
       countedCash: number;
+      // INV-VAN-DAILY-SPLIT-SETTLEMENT: the rep's counted cash split
+      // per tenant day. When present it must sum to countedCash; it
+      // is stored on the trip and the settle step falls back to it
+      // when the settler sends no breakdown of his own.
+      perDayCash?: PerDayCashInput[];
       endOdometer?: number;
       unloadRemainingToWarehouse: boolean;
       activeVisitCustomerId?: number;
@@ -1575,6 +1595,7 @@ export class VanTripLifecycleService {
     tripId: number;
     expectedCash: number;
     countedCash: number;
+    perDayCash?: PerDayCashInput[];
     variance: number;
     distanceKm: number;
     status: 'submitted_by_rep';
@@ -1586,7 +1607,7 @@ export class VanTripLifecycleService {
       .where('vt.id', '=', payload.tripId)
       .where('vt.tenant_id', '=', tenantId)
       .where('vt.rep_id', '=', repId)
-      .where((eb: any) => eb.or([eb('vt.status', '=', 'open'), eb('vt.settlement_status', '=', 'open')]))
+      .where((eb: any) => eb.or([eb('vt.status', '=', 'open'), eb('vt.settlement_status', '=', 'open'), eb('vt.settlement_status', '=', 'submitted_by_rep')]))
       .executeTakeFirst();
 
     if (!trip) {
@@ -1628,11 +1649,28 @@ export class VanTripLifecycleService {
     const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
     const variance = computeCashDrawerVariance(countedCash, expectedCash, bookDigits);
 
+    // INV-VAN-DAILY-SPLIT-SETTLEMENT: a per-day declaration must sum
+    // to the declared total, or the declaration is internally
+    // inconsistent. A re-submission replaces the stored breakdown
+    // (absent = null), so the settle step never reads a stale one.
+    let normalizedPerDayCash: PerDayCashInput[] | null = null;
+    if (payload.perDayCash !== undefined) {
+      try {
+        normalizedPerDayCash = normalizePerDayCash(payload.perDayCash, bookDigits);
+      } catch (e: any) {
+        throw new AppError('تفصيل النقدية بالأيام غير صالح', String(e?.message || 'SETTLEMENT_PER_DAY_INVALID'), 400);
+      }
+      if (sumPerDayCash(normalizedPerDayCash, bookDigits) !== roundMoney(countedCash, bookDigits)) {
+        throw new AppError('مجموع النقدية بالأيام لا يساوي إجمالي النقدية المعلنة', 'SETTLEMENT_PER_DAY_MISMATCH', 400);
+      }
+    }
+
     await this.anyDb
       .updateTable('van_sales_trips')
       .set({
         settlement_status: 'submitted_by_rep',
         submitted_at: sql`NOW()`,
+        submitted_per_day_cash: normalizedPerDayCash ? JSON.stringify(normalizedPerDayCash) : null,
         end_odometer: payload.endOdometer !== undefined ? payload.endOdometer : null,
         distance_km: odometerResult.distanceKm,
         variance,
@@ -1706,6 +1744,7 @@ export class VanTripLifecycleService {
       tripId: payload.tripId,
       expectedCash,
       countedCash,
+      perDayCash: normalizedPerDayCash ?? undefined,
       variance,
       distanceKm: odometerResult.distanceKm,
       status: 'submitted_by_rep',
@@ -1726,6 +1765,11 @@ export class VanTripLifecycleService {
     payload: {
       tripId: number;
       countedCash: number;
+      // INV-VAN-DAILY-SPLIT-SETTLEMENT: counted cash split per tenant
+      // day. When absent, the rep's submitted declaration is used;
+      // when neither exists and the trip spans days, the settle is
+      // refused (SETTLEMENT_REQUIRES_PER_DAY_BREAKDOWN).
+      perDayCash?: PerDayCashInput[];
       unloadRemainingToWarehouse: boolean;
       countedStock?: { productId: number; countedQty: number }[];
       nightStockApproved?: boolean;
@@ -1759,6 +1803,9 @@ export class VanTripLifecycleService {
     tripId: number;
     expectedCash: number;
     countedCash: number;
+    // INV-VAN-DAILY-SPLIT-SETTLEMENT: the per-day split as settled
+    // (one entry per day with counted cash, including zero days).
+    dailySplit?: Array<{ businessDay: string; due: number; countedCash: number; remittedCash: number }>;
     tripExpenses?: number;
     variance: number;
     stockVarianceAmount: number;
@@ -1946,6 +1993,13 @@ export class VanTripLifecycleService {
     let bookDigits: MoneyDigits = 2;
     let lockedTripTotals: any = null;
     const countedCash = Number(payload.countedCash || 0);
+    // INV-VAN-DAILY-SPLIT-SETTLEMENT: the settled per-day split, for
+    // the return echo — assigned inside the transaction below.
+    let settleDailySplit: Array<{ businessDay: string; due: number; countedCash: number; remittedCash: number }> = [];
+    // INV-VAN-DAILY-SPLIT-SETTLEMENT: the tenant timezone is resolved
+    // on the pool handle before the transaction (P2 pattern) — the
+    // per-day buckets inside it derive tenant days from it.
+    const tenantTimezone = await getTenantTimezone(this.anyDb, tenantId);
     let unloadedItemsCount = 0;
     let totalStockVarianceCost = 0;
     let totalStockOverageCost = 0;
@@ -1966,7 +2020,7 @@ export class VanTripLifecycleService {
       // 'settled' and fails closed instead of repeating the effects.
       const lockedTrip = await trxAny
         .selectFrom('van_sales_trips')
-        .select(['id', 'status', 'van_location_id', 'source_warehouse_id', 'cash_collected', 'vehicle_id', 'sales_amount', 'credit_sales', 'returns_amount', 'cash_refunds', 'total_instapay_sales', 'total_instapay_collections'])
+        .select(['id', 'status', 'van_location_id', 'source_warehouse_id', 'cash_collected', 'vehicle_id', 'sales_amount', 'credit_sales', 'returns_amount', 'cash_refunds', 'total_instapay_sales', 'total_instapay_collections', 'business_day', 'submitted_per_day_cash'])
         .where('id', '=', payload.tripId)
         .where('tenant_id', '=', tenantId)
         .where('rep_id', '=', repId)
@@ -1999,6 +2053,48 @@ export class VanTripLifecycleService {
       lockedTripTotals = lockedTrip;
       expectedCash = roundMoney(grossCashCollected - totalTripExpenses, bookDigits);
       cashVariance = computeCashDrawerVariance(countedCash, expectedCash, bookDigits);
+
+      // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day buckets, computed
+      // inside the transaction from locked rows (F3) — never from an
+      // unlocked read. The effective breakdown is the settler's
+      // payload, else the rep's submitted declaration; a trip whose
+      // activity spans more than one tenant day settles ONLY with a
+      // breakdown, or the old lump sum re-enters through the back door.
+      const dayBuckets = await this.computeTripDayBuckets(trxAny, tenantId, payload.tripId, tenantTimezone, bookDigits);
+      const spannedDays = dayBuckets.filter((b) => b.hasActivity);
+      let effectivePerDay: PerDayCashInput[] | null = null;
+      if (payload.perDayCash !== undefined) {
+        try {
+          effectivePerDay = normalizePerDayCash(payload.perDayCash, bookDigits);
+        } catch (e: any) {
+          throw new AppError('تفصيل النقدية بالأيام غير صالح', String(e?.message || 'SETTLEMENT_PER_DAY_INVALID'), 400);
+        }
+      } else {
+        try {
+          effectivePerDay = parseSubmittedPerDayCash((lockedTrip as any).submitted_per_day_cash, bookDigits);
+        } catch (e: any) {
+          throw new AppError('تفصيل النقدية بالأيام المحفوظ غير صالح', String(e?.message || 'SETTLEMENT_PER_DAY_INVALID'), 400);
+        }
+      }
+      if (spannedDays.length > 1 && !effectivePerDay) {
+        throw new AppError('هذه الرحلة تمتد على أكثر من يوم؛ يجب إدخال النقدية المعدودة لكل يوم على حدة قبل التصفية', 'SETTLEMENT_REQUIRES_PER_DAY_BREAKDOWN', 400);
+      }
+      if (effectivePerDay) {
+        if (sumPerDayCash(effectivePerDay, bookDigits) !== roundMoney(countedCash, bookDigits)) {
+          throw new AppError('مجموع النقدية بالأيام لا يساوي إجمالي النقدية المعدودة', 'SETTLEMENT_PER_DAY_MISMATCH', 400);
+        }
+        const spannedKeys = new Set(spannedDays.map((b) => b.businessDay));
+        for (const day of effectivePerDay) {
+          if (!spannedKeys.has(day.businessDay) && day.countedCash > 0) {
+            throw new AppError(`لا توجد حركة نقدية في يوم ${day.businessDay} ضمن هذه الرحلة`, 'SETTLEMENT_PER_DAY_UNKNOWN_DAY', 400);
+          }
+        }
+        for (const b of spannedDays) {
+          if (!effectivePerDay.some((d) => d.businessDay === b.businessDay)) {
+            throw new AppError(`يوم ${b.businessDay} له حركة نقدية ولم يُدخل له مبلغ معدود`, 'SETTLEMENT_PER_DAY_MISSING_DAY', 400);
+          }
+        }
+      }
 
       // 1. Fetch current remaining van stock
       const vanLocationId = Number(lockedTrip.van_location_id);
@@ -2214,12 +2310,20 @@ export class VanTripLifecycleService {
       }
 
       // 6. Update trip status to settled
+      // INV-VAN-DAILY-SPLIT-SETTLEMENT: stamp a legacy trip's day
+      // when its activity falls on exactly one tenant day; a
+      // multi-day legacy trip keeps its open day (its split lives in
+      // the per-day rows below, not on the trip).
+      const tripBusinessDay = (lockedTrip as any).business_day
+        ? normalizePgDateOnly((lockedTrip as any).business_day)
+        : (spannedDays.length === 1 ? spannedDays[0].businessDay : '');
       await trxAny
         .updateTable('van_sales_trips')
         .set({
           status: 'settled',
           settlement_status: 'settled',
           closed_at: sql`NOW()`,
+          ...(tripBusinessDay ? { business_day: tripBusinessDay } : {}),
           settled_by: actorUserId || null,
           supervisor_id: actorUserId || null,
           stock_variance_amount: totalStockVarianceCost,
@@ -2416,8 +2520,29 @@ export class VanTripLifecycleService {
       // builds a 1110 line, so the posting either journals or
       // throws) — gating the row on the id would only break
       // callers that stub the posting, not protect the books.
-      const remittedCash = roundMoney(countedCash, bookDigits);
-      if (remittedCash > 0) {
+      // INV-VAN-DAILY-SPLIT-SETTLEMENT: one remittance row + one
+      // 'cash_remittance' ledger row + allocation rows PER DAY. The
+      // single-day / legacy shape keeps the old request key; an
+      // explicit breakdown uses per-day keys. The trip journal above
+      // stays one per trip — the split lives in treasury + ledger +
+      // allocations only. A day with zero counted cash writes no rows.
+      const remittanceDays: PerDayCashInput[] = effectivePerDay
+        ? effectivePerDay.filter((d) => d.countedCash > 0)
+        : [{
+            businessDay: spannedDays.length === 1
+              ? spannedDays[0].businessDay
+              : (normalizePgDateOnly((lockedTrip as any).business_day) || todayTenantDate(tenantTimezone)),
+            countedCash,
+          }];
+      const dailySplitEcho: Array<{ businessDay: string; due: number; countedCash: number; remittedCash: number }> = [];
+      for (const day of remittanceDays) {
+        const remittedCash = roundMoney(day.countedCash, bookDigits);
+        const bucket = dayBuckets.find((b) => b.businessDay === day.businessDay);
+        const due = bucket ? bucket.due : 0;
+        if (remittedCash <= 0) {
+          dailySplitEcho.push({ businessDay: day.businessDay, due, countedCash: day.countedCash, remittedCash: 0 });
+          continue;
+        }
         await this.insertRepCashRemittanceRow(trx, {
           tenantId,
           accountId,
@@ -2427,8 +2552,48 @@ export class VanTripLifecycleService {
           branchId,
           actorUserId,
           createdBy: actorUserId > 0 ? actorUserId : (systemAuth.userId ? Number(systemAuth.userId) : null),
+          businessDay: effectivePerDay ? day.businessDay : undefined,
         });
+        const insertedSettlement = await trxAny
+          .insertInto('van_rep_financial_settlements')
+          .values({
+            tenant_id: tenantId,
+            account_id: accountId,
+            rep_id: repId,
+            trip_id: payload.tripId,
+            entry_type: 'cash_remittance',
+            amount: remittedCash,
+            status: 'settled',
+            business_day: day.businessDay,
+            settled_at: sql`NOW()`,
+            settled_by: actorUserId || null,
+            settlement_method: 'cash',
+            notes: `توريد نقدية مندوب يوم ${day.businessDay} — رحلة #${payload.tripId}`,
+            created_at: sql`NOW()`,
+            updated_at: sql`NOW()`,
+          })
+          .returning(['id'])
+          .executeTakeFirstOrThrow();
+        if (bucket) {
+          const allocations = allocateDayRemittance(bucket, remittedCash, bookDigits);
+          for (const alloc of allocations) {
+            await trxAny
+              .insertInto('settlement_allocations')
+              .values({
+                tenant_id: tenantId,
+                settlement_id: Number(insertedSettlement.id),
+                sale_id: alloc.saleId,
+                customer_payment_id: alloc.customerPaymentId,
+                amount: alloc.amount,
+                business_day: alloc.businessDay,
+                created_at: sql`NOW()`,
+              })
+              .execute();
+          }
+        }
+        dailySplitEcho.push({ businessDay: day.businessDay, due, countedCash: day.countedCash, remittedCash });
       }
+      settleDailySplit = dailySplitEcho;
 
       // Post unload stock transfer if items were returned to warehouse
       if (payload.unloadRemainingToWarehouse && totalUnloadedCost > 0) {
@@ -2507,6 +2672,7 @@ export class VanTripLifecycleService {
       tripId: payload.tripId,
       expectedCash,
       countedCash,
+      dailySplit: settleDailySplit,
       tripExpenses: totalTripExpenses,
       variance: cashVariance,
       stockVarianceAmount: totalStockVarianceCost,
@@ -2529,6 +2695,136 @@ export class VanTripLifecycleService {
       totalInstapayCollections: Number(lockedTripTotals.total_instapay_collections || 0),
       expectedBankTransfers: roundMoney(Number(lockedTripTotals.total_instapay_sales || 0) + Number(lockedTripTotals.total_instapay_collections || 0), bookDigits),
       stockVariances: (stockAuditResult as any)?.itemVariances || [],
+    };
+  }
+
+  /**
+   * INV-VAN-DAILY-SPLIT-SETTLEMENT: the trip's cash movements
+   * bucketed by tenant day, from the rows the caller locks (F3) —
+   * never from an unlocked read. Cash portions follow the same
+   * accumulation rules as the trip aggregates: cash sale = total,
+   * split = total - credit leg, collection = amount, cash refund =
+   * -amount. The caller passes its own queryable (the settle
+   * transaction handle, or the pool for a read).
+   */
+  private async computeTripDayBuckets(
+    queryable: any,
+    tenantId: string,
+    tripId: number,
+    timezone: string,
+    bookDigits: MoneyDigits,
+  ): Promise<DayBucket[]> {
+    const sales = await queryable
+      .selectFrom('sales')
+      .select(['id', 'created_at', 'total', 'payment_type', 'payment_channel'])
+      .where('van_trip_id', '=', tripId)
+      .where('tenant_id', '=', tenantId)
+      .orderBy('created_at', 'asc')
+      .orderBy('id', 'asc')
+      .execute();
+    const splitIds = (sales as Array<Record<string, unknown>>)
+      .filter((s) => String(s.payment_type || '').toLowerCase() === 'split' || String(s.payment_channel || '').toLowerCase() === 'mixed')
+      .map((s) => Number(s.id));
+    const creditOwedBySale = new Map<number, number>();
+    if (splitIds.length > 0) {
+      const ledgerRows = await queryable
+        .selectFrom('customer_ledger')
+        .select(['reference_id', sql<number>`cast(coalesce(sum(amount), 0) as numeric)`.as('creditOwed')])
+        .where('tenant_id', '=', tenantId)
+        .where('reference_type', '=', 'sale')
+        .where('entry_type', '=', 'sale_credit')
+        .where('reference_id', 'in', splitIds)
+        .groupBy('reference_id')
+        .execute();
+      for (const r of ledgerRows as Array<{ reference_id: unknown; creditOwed: unknown }>) {
+        creditOwedBySale.set(Number(r.reference_id), Number(r.creditOwed || 0));
+      }
+    }
+    const payments = await queryable
+      .selectFrom('customer_payments')
+      .select(['id', 'created_at', 'amount'])
+      .where('van_trip_id', '=', tripId)
+      .where('tenant_id', '=', tenantId)
+      .orderBy('created_at', 'asc')
+      .orderBy('id', 'asc')
+      .execute();
+    const refunds = await queryable
+      .selectFrom('van_field_returns')
+      .select(['id', 'created_at', 'total_amount'])
+      .where('trip_id', '=', tripId)
+      .where('tenant_id', '=', tenantId)
+      .where('refund_method', '=', 'cash')
+      .orderBy('created_at', 'asc')
+      .orderBy('id', 'asc')
+      .execute();
+    const rows: Array<{ kind: 'sale' | 'collection' | 'refund'; id: number; createdAt: Date | string; cashAmount: number }> = [];
+    for (const s of sales as Array<Record<string, unknown>>) {
+      rows.push({
+        kind: 'sale',
+        id: Number(s.id),
+        createdAt: s.created_at as Date | string,
+        cashAmount: cashPortionOfSale(
+          {
+            paymentType: String(s.payment_type || ''),
+            paymentChannel: String(s.payment_channel || ''),
+            total: Number(s.total || 0),
+            creditOwed: creditOwedBySale.get(Number(s.id)) || 0,
+          },
+          bookDigits,
+        ),
+      });
+    }
+    for (const p of payments as Array<Record<string, unknown>>) {
+      rows.push({ kind: 'collection', id: Number(p.id), createdAt: p.created_at as Date | string, cashAmount: Number(p.amount || 0) });
+    }
+    for (const r of refunds as Array<Record<string, unknown>>) {
+      rows.push({ kind: 'refund', id: Number(r.id), createdAt: r.created_at as Date | string, cashAmount: Number(r.total_amount || 0) });
+    }
+    rows.sort((a, b) => {
+      const ta = new Date(a.createdAt).getTime();
+      const tb = new Date(b.createdAt).getTime();
+      return ta - tb || a.id - b.id;
+    });
+    return bucketTripCashByDay(rows, timezone, bookDigits);
+  }
+
+  /**
+   * INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day cash due for one trip —
+   * the same buckets the settle step settles from, so the UI's
+   * per-day inputs and the server's per-day guard can never disagree.
+   */
+  async getTripDueByDay(
+    repId: number,
+    tenantId: string,
+    tripId: number,
+  ): Promise<{
+    ok: boolean;
+    tripId: number;
+    businessDay: string | null;
+    timezone: string;
+    days: DayBucket[];
+    totalDue: number;
+  }> {
+    const trip = await this.anyDb
+      .selectFrom('van_sales_trips')
+      .select(['id', 'business_day', 'cash_collected'])
+      .where('id', '=', tripId)
+      .where('tenant_id', '=', tenantId)
+      .where('rep_id', '=', repId)
+      .executeTakeFirst();
+    if (!trip) {
+      throw new AppError('الرحلة غير موجودة', 'TRIP_NOT_FOUND', 404);
+    }
+    const timezone = await getTenantTimezone(this.anyDb, tenantId);
+    const bookDigits = currencyMoneyDigits(await tenantBaseCurrency(this.anyDb, tenantId));
+    const days = await this.computeTripDayBuckets(this.anyDb, tenantId, tripId, timezone, bookDigits);
+    return {
+      ok: true,
+      tripId,
+      businessDay: (trip as any).business_day ? normalizePgDateOnly((trip as any).business_day) : null,
+      timezone,
+      days,
+      totalDue: roundMoney(days.reduce((s, d) => s + d.due, 0), bookDigits),
     };
   }
 
@@ -2562,6 +2858,12 @@ export class VanTripLifecycleService {
       branchId: number | null;
       actorUserId: number;
       createdBy: number | null;
+      // INV-VAN-DAILY-SPLIT-SETTLEMENT: the tenant day this handover
+      // belongs to. With it the row carries the per-day request key
+      // 'rep-remittance:trip:{id}:day:{YYYY-MM-DD}' (same partial
+      // unique index, so a retried day collides instead of doubling);
+      // without it the legacy per-trip key is kept.
+      businessDay?: string;
     },
   ): Promise<void> {
     const { tenantId, accountId, tripId, amount, branchId } = params;
@@ -2602,14 +2904,18 @@ export class VanTripLifecycleService {
         account_id: accountId,
         txn_type: 'rep_cash_remittance',
         amount,
-        note: `توريد نقدية مندوب ${params.repName} - رحلة #${tripId}`,
+        note: params.businessDay
+          ? `توريد نقدية مندوب ${params.repName} - رحلة #${tripId} — يوم ${params.businessDay}`
+          : `توريد نقدية مندوب ${params.repName} - رحلة #${tripId}`,
         reference_type: 'cashier_shift',
         reference_id: Number(shift.id),
         branch_id: shift.branch_id ? Number(shift.branch_id) : null,
         location_id: shift.location_id ? Number(shift.location_id) : null,
         created_by: params.createdBy,
         payment_channel: 'cash',
-        request_key: `rep-remittance:trip:${tripId}`,
+        request_key: params.businessDay
+          ? `rep-remittance:trip:${tripId}:day:${params.businessDay}`
+          : `rep-remittance:trip:${tripId}`,
       } as any)
       .execute();
   }

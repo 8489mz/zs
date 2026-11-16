@@ -19,7 +19,7 @@ import { Kysely, sql } from '../../../database/kysely';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AppError } from '../../../common/errors/app-error';
 import { formatDailyDocumentNumber } from '../../../common/utils/document-number.util';
-import { getTenantTimezone, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
+import { getTenantTimezone, normalizePgDateOnly, todayTenantDate } from '../../../common/utils/tenant-timezone.util';
 import { Database } from '../../../database/database.types';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
@@ -62,6 +62,9 @@ export class VanRepFinancialLedgerService {
       status?: string;
       dateFrom?: string;
       dateTo?: string;
+      // INV-VAN-DAILY-SPLIT-SETTLEMENT: filter by the settlement's
+      // tenant-local business day (YYYY-MM-DD).
+      businessDay?: string;
     },
   ) {
     // Book digits resolved once (D4): the ledger summary totals
@@ -95,6 +98,7 @@ export class VanRepFinancialLedgerService {
         'fs.notes',
         'fs.receipt_voucher_no as receiptVoucherNo',
         'fs.payroll_run_id as payrollRunId',
+        'fs.business_day as businessDay',
         'fs.created_at as createdAt',
         'fs.updated_at as updatedAt',
       ])
@@ -102,6 +106,9 @@ export class VanRepFinancialLedgerService {
 
     if (filters.repId) {
       query = query.where('fs.rep_id', '=', Number(filters.repId));
+    }
+    if (filters.businessDay) {
+      query = query.where('fs.business_day', '=', filters.businessDay);
     }
     if (filters.status && filters.status !== 'all') {
       query = query.where('fs.status', '=', filters.status);
@@ -139,6 +146,7 @@ export class VanRepFinancialLedgerService {
       notes: r.notes || null,
       receiptVoucherNo: r.receiptVoucherNo || r.receipt_voucher_no || r.receiptvoucherno || null,
       payrollRunId: (r.payrollRunId || r.payroll_run_id || r.payrollrunid) ? Number(r.payrollRunId || r.payroll_run_id || r.payrollrunid) : null,
+      businessDay: normalizePgDateOnly(r.businessDay || r.business_day || r.businessday || null) || null,
       createdAt: r.createdAt || r.created_at || r.createdat,
       updatedAt: r.updatedAt || r.updated_at || r.updatedat,
     }));

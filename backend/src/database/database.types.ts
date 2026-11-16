@@ -841,6 +841,10 @@ export interface VanSalesTripTable {
   variance?: number;
   settlement_status?: 'open' | 'submitted_by_rep' | 'settled' | string;
   submitted_at?: Date | null;
+  /** INV-VAN-DAILY-SPLIT-SETTLEMENT: tenant-local day the trip was opened on (YYYY-MM-DD). */
+  business_day?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  /** INV-VAN-DAILY-SPLIT-SETTLEMENT: the rep's per-day counted-cash declaration, JSON [{businessDay, countedCash}]. */
+  submitted_per_day_cash?: any | null;
   supervisor_id?: number | null;
   settled_by?: number | null;
   stock_variance_amount?: number;
@@ -932,8 +936,21 @@ export interface VanRepFinancialSettlementTable {
   notes?: string | null;
   receipt_voucher_no?: string | null;
   payroll_run_id?: number | null;
+  /** INV-VAN-DAILY-SPLIT-SETTLEMENT: tenant-local day this settlement row belongs to (YYYY-MM-DD). */
+  business_day?: ColumnType<string | null, string | null | undefined, string | null | undefined>;
   created_at: ColumnType<Date, string | undefined, never>;
   updated_at: ColumnType<Date, string | Date | undefined, string | Date | undefined>;
+}
+
+export interface SettlementAllocationTable {
+  id: Generated<number>;
+  tenant_id: ColumnType<string, string | undefined, string | undefined>;
+  settlement_id: number;
+  sale_id?: number | null;
+  customer_payment_id?: number | null;
+  amount: number;
+  business_day: ColumnType<string, string | undefined, string | undefined>;
+  created_at: ColumnType<Date, string | undefined, never>;
 }
 
 export interface VanLoadRequisitionTable {
@@ -2635,6 +2652,7 @@ export interface Database {
   delivery_rep_targets: DeliveryRepTargetTable;
   van_load_requisitions: VanLoadRequisitionTable;
   van_rep_financial_settlements: VanRepFinancialSettlementTable;
+  settlement_allocations: SettlementAllocationTable;
   updated_by: number | null;
   created_at: ColumnType<Date, string | undefined, never>;
   updated_at: ColumnType<Date, string | Date | undefined, string | Date | undefined>;

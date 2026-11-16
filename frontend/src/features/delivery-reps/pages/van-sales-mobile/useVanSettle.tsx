@@ -7,7 +7,7 @@
 // as props.
 import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
-import { useMutation, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, type QueryClient } from '@tanstack/react-query';
 import { vanSalesApi, VanActiveTripResponse, VanTripExpense, VanPackagingMovement } from '@/features/delivery-reps/api/van-sales.api';
 import { vanOfflineDb } from '@/features/delivery-reps/offline/van-sales-offline.db';
 import { vanSyncEngine } from '@/features/delivery-reps/offline/van-sync.engine';
@@ -45,6 +45,43 @@ export function useVanSettle({
   const [countedCash, setCountedCash] = useState<string>('');
   const [unloadRemaining, setUnloadRemaining] = useState<boolean>(true);
 
+  // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day counted cash for a trip
+  // spanning more than one tenant day. The due comes from the server
+  // (same buckets the settle step settles from); the inputs prefill
+  // with the due and the rep adjusts what he actually counted.
+  const [perDayCash, setPerDayCash] = useState<Record<string, string>>({});
+  const [perDayPrefilledFor, setPerDayPrefilledFor] = useState<number | null>(null);
+  const tripIdForDue = data?.trip?.id;
+  const dueByDayQuery = useQuery({
+    queryKey: ['van-trip-due-by-day', tripIdForDue],
+    queryFn: () => vanSalesApi.getTripDueByDay(Number(tripIdForDue)),
+    enabled: Boolean(tripIdForDue),
+  });
+  const perDayDue = dueByDayQuery.data?.days ?? [];
+  const perDayMode = perDayDue.length > 1;
+  React.useEffect(() => {
+    if (!tripIdForDue || perDayPrefilledFor === tripIdForDue) return;
+    const days = dueByDayQuery.data?.days;
+    if (!days || days.length <= 1) return;
+    const next: Record<string, string> = {};
+    for (const d of days) next[d.businessDay] = String(d.due);
+    setPerDayCash(next);
+    setCountedCash(String(dueByDayQuery.data?.totalDue ?? ''));
+    setPerDayPrefilledFor(tripIdForDue);
+  }, [tripIdForDue, dueByDayQuery.data, perDayPrefilledFor]);
+  const handlePerDayCashChange = (day: string, val: string) => {
+    const next = { ...perDayCash, [day]: val };
+    setPerDayCash(next);
+    const total = Object.values(next).reduce((s, v) => s + (Number(v) || 0), 0);
+    setCountedCash(Object.values(next).every((v) => v === '') ? '' : String(total));
+  };
+  const fillPerDayWithDue = () => {
+    const next: Record<string, string> = {};
+    for (const d of perDayDue) next[d.businessDay] = String(d.due);
+    setPerDayCash(next);
+    setCountedCash(String(perDayDue.reduce((s, d) => s + Number(d.due || 0), 0)));
+  };
+
   const [lastSettlementReceipt, setLastSettlementReceipt] = useState<VanSettlementReceiptData | null>(null);
 
   const settleTripMutation = useMutation({
@@ -57,6 +94,8 @@ export function useVanSettle({
         showAlert('success', `تم إغلاق وتصفية رحلة التوزيع بنجاح! عجز/زيادة الكاش: ${res.variance} ${getGlobalCurrencySymbol()}`);
       }
       setCountedCash('');
+      setPerDayCash({});
+      setPerDayPrefilledFor(null);
       setActiveTab('cockpit');
       handleEndVisit();
       queryClient.invalidateQueries({ queryKey: ['van-sales-active-trip'] });
@@ -103,6 +142,11 @@ export function useVanSettle({
     setCountedCash,
     unloadRemaining,
     setUnloadRemaining,
+    perDayDue,
+    perDayCash,
+    perDayMode,
+    handlePerDayCashChange,
+    fillPerDayWithDue,
     lastSettlementReceipt,
     setLastSettlementReceipt,
     settleTripMutation,
@@ -143,6 +187,11 @@ export const SettleTab: React.FC<SettleTabProps> = ({
     setExpenseModalOpen,
     setPackagingModalOpen,
     settleTripMutation,
+    perDayDue,
+    perDayCash,
+    perDayMode,
+    handlePerDayCashChange,
+    fillPerDayWithDue,
   } = settle;
   return (
     <>
@@ -161,6 +210,10 @@ export const SettleTab: React.FC<SettleTabProps> = ({
                   inventory={data.inventory || []}
                   countedCash={countedCash}
                   onCountedCashChange={setCountedCash}
+                  perDayDue={perDayDue}
+                  perDayCash={perDayCash}
+                  onPerDayCashChange={handlePerDayCashChange}
+                  onFillPerDayWithDue={fillPerDayWithDue}
                   unloadRemaining={unloadRemaining}
                   onUnloadRemainingChange={setUnloadRemaining}
                   requireSupervisorPin={Boolean(data?.requireSupervisorPinForSettlement)}
@@ -208,6 +261,11 @@ export const SettleTab: React.FC<SettleTabProps> = ({
                     settleTripMutation.mutate({
                       tripId: data.trip!.id,
                       countedCash: Number(finalCountedCash),
+                      // INV-VAN-DAILY-SPLIT-SETTLEMENT: multi-day trips
+                      // settle per day; single-day trips keep the lump.
+                      perDayCash: perDayMode
+                        ? perDayDue.map((d) => ({ businessDay: d.businessDay, countedCash: Number(perDayCash[d.businessDay] ?? d.due) }))
+                        : undefined,
                       unloadRemainingToWarehouse: unloadRemaining,
                       countedStock,
                       nightStockApproved,

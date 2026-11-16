@@ -67,6 +67,14 @@ interface VanSettleTabProps {
   inventory?: VanStockItem[];
   countedCash: string;
   onCountedCashChange: (val: string) => void;
+  // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day due + counted cash for a
+  // trip spanning more than one tenant day. When perDayDue has more
+  // than one day, the single counted input below becomes the derived
+  // total (read-only) and these rows are the editors.
+  perDayDue?: { businessDay: string; due: number }[];
+  perDayCash?: Record<string, string>;
+  onPerDayCashChange?: (day: string, val: string) => void;
+  onFillPerDayWithDue?: () => void;
   unloadRemaining: boolean;
   onUnloadRemainingChange: (val: boolean) => void;
   // INV-VAN-SELF-SETTLE-PIN-REQUIRED: no charge/waive argument — the
@@ -97,6 +105,10 @@ export const VanSettleTab: React.FC<VanSettleTabProps> = ({
   inventory = [],
   countedCash,
   onCountedCashChange,
+  perDayDue,
+  perDayCash,
+  onPerDayCashChange,
+  onFillPerDayWithDue,
   unloadRemaining,
   onUnloadRemainingChange,
   onSubmitSettle,
@@ -190,6 +202,8 @@ export const VanSettleTab: React.FC<VanSettleTabProps> = ({
   const instapayCollections = Number((tripData as any)?.totalInstapayCollections ?? 0);
   const totalInstapay = instapaySales + instapayCollections;
   const countedNum = Number(countedCash);
+  // INV-VAN-DAILY-SPLIT-SETTLEMENT: multi-day trips settle per day.
+  const perDayMode = (perDayDue?.length ?? 0) > 1;
   const totalActivities = sales.length + collections.length + returns.length + safeExpenses.length + safePackaging.length;
   const totalDiscounts = sales.reduce((sum, s) => sum + Number(s.discount || 0), 0);
 
@@ -697,7 +711,12 @@ export const VanSettleTab: React.FC<VanSettleTabProps> = ({
             {!isBlindSettlement ? (
               <button
                 type="button"
-                onClick={() => onCountedCashChange(String(cashCollected))}
+                onClick={() => {
+                  // INV-VAN-DAILY-SPLIT-SETTLEMENT: in per-day mode the
+                  // match button fills every day with its due.
+                  if (perDayMode && onFillPerDayWithDue) onFillPerDayWithDue();
+                  else onCountedCashChange(String(cashCollected));
+                }}
                 style={{
                   backgroundColor: '#f1f5f9',
                   border: '1px solid #cbd5e1',
@@ -737,6 +756,31 @@ export const VanSettleTab: React.FC<VanSettleTabProps> = ({
               </span>
             )}
           </div>
+          {/* INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day counted cash */}
+          {perDayMode && perDayDue && (
+            <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {perDayDue.map((day) => (
+                <div key={day.businessDay} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#334155', minWidth: '92px', whiteSpace: 'nowrap' }}>
+                    {t('delivery_reps.van_settle_tab.s37', "يوم")} {day.businessDay}
+                  </span>
+                  <span style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap' }}>
+                    {t('delivery_reps.van_settle_tab.s38', "مستحق")} {Number(day.due || 0).toFixed(2)} <CurrencySymbol />
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={perDayCash?.[day.businessDay] ?? ''}
+                    onChange={(e) => onPerDayCashChange?.(day.businessDay, e.target.value)}
+                    placeholder={t('delivery_reps.van_settle_tab.s39', "المعدود...")}
+                    style={{ flex: 1, minWidth: 0, height: '34px', border: '1.5px solid #cbd5e1', borderRadius: '8px', padding: '0 10px', fontSize: '13px', fontWeight: 800, color: '#0f172a', boxSizing: 'border-box', outline: 'none' }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
           <input
             id="counted_physical_cash_input"
             name="counted_physical_cash_amount"
@@ -748,6 +792,7 @@ export const VanSettleTab: React.FC<VanSettleTabProps> = ({
             data-form-type="other"
             value={countedCash}
             onChange={(e) => onCountedCashChange(e.target.value)}
+            readOnly={perDayMode}
             placeholder={
               isBlindSettlement
                 ? t('delivery_reps.van_settle_tab.s30', "قم بعدّ الأوراق النقدية وأدخل المبلغ الفعلي للتوريد...")

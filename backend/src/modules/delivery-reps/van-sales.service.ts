@@ -1199,6 +1199,9 @@ export class VanSalesService {
     async submitTripSettlement(repId: number, tenantId: string, accountId: string, payload: {
       tripId: number;
       countedCash: number;
+      // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day counted cash; stored
+      // on the trip and used by the settle step when it sends none.
+      perDayCash?: { businessDay: string; countedCash: number }[];
       endOdometer?: number;
       unloadRemainingToWarehouse: boolean;
       activeVisitCustomerId?: number;
@@ -1208,6 +1211,7 @@ export class VanSalesService {
     tripId: number;
     expectedCash: number;
     countedCash: number;
+    perDayCash?: { businessDay: string; countedCash: number }[];
     variance: number;
     distanceKm: number;
     status: 'submitted_by_rep';
@@ -1219,6 +1223,9 @@ export class VanSalesService {
     async settleTrip(repId: number, tenantId: string, accountId: string, payload: {
       tripId: number;
       countedCash: number;
+      // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day counted cash (see the
+      // lifecycle service for the fallback + refusal rules).
+      perDayCash?: { businessDay: string; countedCash: number }[];
       unloadRemainingToWarehouse: boolean;
       countedStock?: { productId: number; countedQty: number }[];
       nightStockApproved?: boolean;
@@ -1250,6 +1257,7 @@ export class VanSalesService {
     tripId: number;
     expectedCash: number;
     countedCash: number;
+    dailySplit?: Array<{ businessDay: string; due: number; countedCash: number; remittedCash: number }>;
     tripExpenses?: number;
     variance: number;
     stockVarianceAmount: number;
@@ -1274,6 +1282,12 @@ export class VanSalesService {
     stockVariances?: any[];
   }> {
     return this.getTripLifecycle().settleTrip(repId, tenantId, accountId, payload, authContext);
+  }
+
+  // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day cash due for one trip
+  // (same buckets the settle step settles from).
+  async getTripDueByDay(repId: number, tenantId: string, tripId: number) {
+    return this.getTripLifecycle().getTripDueByDay(repId, tenantId, tripId);
   }
 
   

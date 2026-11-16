@@ -98,6 +98,15 @@ export class VanSalesController {
     return this.vanSalesService.getActiveTrip(driver.repId, driver.tenantId, driver.accountId);
   }
 
+  // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day cash due for one trip —
+  // the settle tab's per-day inputs read this; the server settles
+  // from the same buckets, so the two can never disagree.
+  @Get('trips/:id/due-by-day')
+  async getTripDueByDay(@Headers('authorization') authHeader: string, @Param('id', ParseIntPipe) id: number) {
+    const driver = await this.verifyDriver(authHeader);
+    return this.vanSalesService.getTripDueByDay(driver.repId, driver.tenantId, id);
+  }
+
   @Post('trips/open')
   async openTrip(
     @Headers('authorization') authHeader: string,
@@ -137,6 +146,8 @@ export class VanSalesController {
     body: {
       tripId: number;
       countedCash: number;
+      // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day counted cash.
+      perDayCash?: { businessDay: string; countedCash: number }[];
       endOdometer?: number;
       unloadRemainingToWarehouse: boolean;
       countedStock?: { productId: number; countedQty: number }[];
@@ -244,6 +255,7 @@ export class VanSalesController {
       {
         tripId: body.tripId,
         countedCash: body.countedCash,
+        perDayCash: body.perDayCash,
         unloadRemainingToWarehouse: body.unloadRemainingToWarehouse,
         countedStock: body.countedStock,
         chargeStockVarianceDecidedBySupervisor: false,
@@ -270,6 +282,8 @@ export class VanSalesController {
     body: {
       tripId: number;
       countedCash: number;
+      // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day counted cash.
+      perDayCash?: { businessDay: string; countedCash: number }[];
       endOdometer?: number;
       unloadRemainingToWarehouse: boolean;
       notes?: string;
@@ -962,6 +976,8 @@ export class VanSalesAdminController {
     body: {
       repId: number;
       countedCash: number;
+      // INV-VAN-DAILY-SPLIT-SETTLEMENT: per-day counted cash.
+      perDayCash?: { businessDay: string; countedCash: number }[];
       unloadRemainingToWarehouse: boolean;
       countedStock?: { productId: number; countedQty: number }[];
       nightStockApproved?: boolean;
@@ -979,6 +995,7 @@ export class VanSalesAdminController {
       {
         tripId: id,
         countedCash: body.countedCash,
+        perDayCash: body.perDayCash,
         unloadRemainingToWarehouse: body.unloadRemainingToWarehouse,
         countedStock: body.countedStock,
         nightStockApproved: body.nightStockApproved,
