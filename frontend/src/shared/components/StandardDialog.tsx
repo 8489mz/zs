@@ -34,6 +34,7 @@ export interface StandardDialogProps {
   containerStyle?: CSSProperties;
   bodyStyle?: CSSProperties;
   autoFocus?: boolean;
+  closeOnBackdrop?: boolean;
 }
 
 /**
@@ -73,6 +74,7 @@ export function StandardDialog({
   containerStyle,
   bodyStyle,
   autoFocus = true,
+  closeOnBackdrop,
 }: StandardDialogProps) {
   const { t: __t } = useTranslation();
   const { t, i18n } = useTranslation();
@@ -120,6 +122,7 @@ export function StandardDialog({
       shellClassName={finalShellClass}
       ariaLabel={ariaLabel || (typeof displayTitle === 'string' ? displayTitle : (isLtr ? 'Dialog' : __t('shared.standard_dialog.s0', "نافذة منبثقة")))}
       autoFocus={autoFocus}
+      closeOnBackdrop={closeOnBackdrop}
     >
       <div
         className={`standard-dialog-container ${compact ? 'standard-dialog-compact' : ''}`}

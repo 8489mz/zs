@@ -318,7 +318,6 @@ export const ModulesSettingsTab = memo(function ModulesSettingsTab({ form, disab
   const isWholesaleVanVertical = rawActivity === 'wholesale_van' || rawActivity === 'wholesale' || rawActivity === 'distribution' || rawActivity.includes('توزيع') || rawActivity.includes('فان') || rawActivity.includes('جمل');
   const isWarehousingVertical = rawActivity === 'warehousing' || rawActivity === 'warehouse' || rawActivity === 'wms' || rawActivity.includes('مخازن') || rawActivity.includes('مستودع');
   const isImportVertical = rawActivity === 'import_export' || rawActivity === 'import' || rawActivity.includes('استيراد');
-  const isCommerceVertical = !isContractingVertical && !isMaritimeVertical && !isManufacturingVertical && !isWholesaleVanVertical && !isWarehousingVertical;
 
   const hasManufacturingFeature = useHasFeature('manufacturing') || isManufacturingVertical || isSuperAdmin;
   const hasImportFeature = useHasFeature('import') || isImportVertical || isSuperAdmin;

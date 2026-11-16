@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { isPlatformAdmin } from '@/app/router/access';
 import { settingsApi } from '@/features/settings/api/settings.api';
 import { queryKeys } from '@/app/query-keys';
-import { PLAN_TIERS, type PlanTierKey } from '@/features/settings/components/modular-configurator/modular-presets';
+import { PLAN_TIERS } from '@/features/settings/components/modular-configurator/modular-presets';
 import {
   isTieredBandPlan,
   resolveFrontendPlanDisplayName,
