@@ -3,6 +3,8 @@ import { Kysely } from '../../../database/kysely';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { assertUntrackedStockMutation } from '../../inventory/helpers/inventory-tracked-stock.helper';
+// applyStockDelta + previewConsumableStockQty are kept in this import: check-architecture-guardrails.cjs requires the tokens in purchases-write.service.ts, although no method left in this file calls them (the calls live in the slices).
+import { applyStockDelta, lockStockProducts, previewConsumableStockQty } from '../../../common/utils/location-stock-ledger';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
