@@ -411,7 +411,7 @@ async function main(): Promise<void> {
 
   // ── §C. Source pins for the five one-line seams ─────────────────────────
   {
-    const drawer = readSource('../../src/modules/cash-drawer/cash-drawer.service.ts');
+    const drawer = readSource('../../src/modules/cash-drawer/cash-drawer-write.service.ts');
     assert.ok(drawer.includes('const closeNow = new Date();'), 'close captures one instant');
     assert.ok(
       drawer.includes('closed_at = ${closeNow}'),

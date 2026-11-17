@@ -403,7 +403,7 @@ async function main(): Promise<void> {
     const helperSource = readFileSync(resolve(here, '../../src/modules/cash-drawer/helpers/cash-drawer.helper.ts'), 'utf8');
     assert.ok(helperSource.includes('export function isCashDrawerOutboundType'), 'the outbound helper exists');
     assert.ok(helperSource.includes("type === 'cash_out' || type === 'safe_drop'"), 'outbound is exactly cash_out + safe_drop');
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/cash-drawer/cash-drawer.service.ts'), 'utf8');
+    const serviceSource = readFileSync(resolve(here, '../../src/modules/cash-drawer/cash-drawer-write.service.ts'), 'utf8');
     assert.ok(serviceSource.includes('if (isCashDrawerOutboundType(movementType)) {'), 'the gate runs only for outbound movements');
     assert.ok(serviceSource.includes('await this.assertCashDrawerApproval(movementType, secret, auth);'), 'the gate calls the approval check with the provided secret');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');

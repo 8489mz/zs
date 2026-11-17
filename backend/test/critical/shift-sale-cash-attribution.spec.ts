@@ -377,7 +377,7 @@ async function main(): Promise<void> {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/cash-drawer/cash-drawer.service.ts'), 'utf8');
+    const serviceSource = readFileSync(resolve(here, '../../src/modules/cash-drawer/cash-drawer-compute.service.ts'), 'utf8');
     assert.ok(serviceSource.split('shiftSaleCashAttribution').length - 1 >= 4, 'one helper definition plus three call sites');
     const invariants = readFileSync(resolve(here, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');
     assert.equal(invariants.split('INV-SHIFT-SALE-CASH-ATTRIBUTION').length - 1, 1, 'the invariant entry must exist exactly once');

@@ -254,6 +254,15 @@
     "test/critical/return-document-details.spec.ts",
     "test/critical/returns-conditional-discount-forfeit.spec.ts",
     "test/critical/returns-relief-preview-truth.spec.ts",
-    "test/critical/returns-shift-gate.spec.ts"
+    "test/critical/returns-shift-gate.spec.ts",
+    "test/critical/blind-close-declared-reconciliation.spec.ts",
+    "test/critical/cash-drawer-expected-cash-precision.spec.ts",
+    "test/critical/cash-drawer-movement-types.spec.ts",
+    "test/critical/closed-shift-post-close-refresh.spec.ts",
+    "test/critical/drawer-disbursement-gate-boundary.spec.ts",
+    "test/critical/expected-cash-single-window.spec.ts",
+    "test/critical/manager-pin-drawer.spec.ts",
+    "test/critical/shift-expected-per-method-collections.spec.ts",
+    "test/critical/treasury-expense-idempotency.spec.ts"
   ]
 }
