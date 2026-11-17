@@ -45,6 +45,7 @@ import { PurchasesQueryService } from '../../src/modules/purchases/services/purc
 import { PurchasesWriteService } from '../../src/modules/purchases/services/purchases-write.service';
 import { SupplierBillsService } from '../../src/modules/purchases/services/supplier-bills.service';
 import { buildBillTotal } from '../../src/modules/purchases/engines/supplier-bill.engine';
+import { invalidateTenantTimezoneCache } from '../../src/common/utils/tenant-timezone.util';
 import { AuthContext } from '../../src/core/auth/interfaces/auth-context.interface';
 
 const TENANT = 't1';
@@ -90,8 +91,12 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
 
 async function seedFoundation(db: Kysely<Database>, currency = 'EGP'): Promise<void> {
   const anyDb = db as any;
+  invalidateTenantTimezoneCache(TENANT);
   await anyDb.insertInto('tenants').values({ id: TENANT }).execute();
-  await anyDb.insertInto('settings').values({ tenant_id: TENANT, key: 'currency', value: currency }).execute();
+  await anyDb.insertInto('settings').values([
+    { tenant_id: TENANT, key: 'currency', value: currency },
+    { tenant_id: TENANT, key: 'timezone', value: 'Africa/Cairo' },
+  ]).execute();
   await anyDb.insertInto('currency_exchange_rates').values({ tenant_id: TENANT, currency_code: currency, exchange_rate: 1, is_base: true }).execute();
   await anyDb.insertInto('users').values({ id: 1, tenant_id: TENANT, username: 'admin', role: 'admin', is_active: true }).execute();
   for (const [id, code, accountType] of [
