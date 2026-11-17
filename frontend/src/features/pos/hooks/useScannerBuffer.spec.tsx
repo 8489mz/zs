@@ -121,4 +121,31 @@ describe('useScannerBuffer external sync', () => {
     expect(input.value).toBe('');
     expect(onFlush).not.toHaveBeenCalled();
   });
+
+  it('ignores rapid window keydown scanner bursts while a POS modal dialog is open', () => {
+    const onFlush = vi.fn();
+    const onAutoSubmit = vi.fn(() => true);
+    render(
+      <div>
+        <Harness externalValue="" onFlush={onFlush} onAutoSubmit={onAutoSubmit} />
+        <div role="dialog" aria-modal="true">
+          <button type="button">modal target</button>
+        </div>
+      </div>,
+    );
+
+    const modalBtn = document.querySelector('[role="dialog"] button') as HTMLButtonElement;
+    for (const key of ['6', '2', '2', '0', '1', '3']) {
+      fireEvent.keyDown(modalBtn, { key });
+      act(() => {
+        vi.advanceTimersByTime(10);
+      });
+    }
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+
+    expect(onAutoSubmit).not.toHaveBeenCalled();
+    expect(onFlush).not.toHaveBeenCalled();
+  });
 });

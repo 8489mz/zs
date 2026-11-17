@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { UserIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon } from '@/shared/components/icons/AppIcons';
 import { toast } from '@/shared/components/system-alert';
-import { isTerminalApprovalLive } from '@/features/pos/components/pos-workspace/pos-terminal-charge-safety';
+import { canChangePaymentAfterTerminalApproval, isTerminalApprovalLive } from '@/features/pos/components/pos-workspace/pos-terminal-charge-safety';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import type { PaymentPreset } from '@/features/pos/components/pos-workspace/PosCheckoutDialogSections';
 
@@ -103,13 +103,35 @@ export function PosCheckoutExpressFooter({
               <Button
                 type="button"
                 variant={pos.paymentType === 'credit' ? 'primary' : 'secondary'}
+                aria-keyshortcuts="Alt+4"
+                title={`${t('pos.credit_sale', 'بيع آجل')} (Alt+4)`}
                 onClick={() => {
+                  if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+                    toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+                    return;
+                  }
                   onSelectPaymentPreset('credit');
+                  pos.setTerminalPaymentDetails?.(null);
                   if (!pos.customerId) onOpenCustomerPicker();
                 }}
-                style={{ fontSize: '11.5px', minHeight: '32px' }}
+                style={{ fontSize: '11.5px', minHeight: '32px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
               >
                 {t('pos.credit_sale', 'بيع آجل')}
+                <kbd
+                  aria-hidden="true"
+                  style={{
+                    fontSize: '9.5px',
+                    fontWeight: 700,
+                    padding: '1px 4px',
+                    borderRadius: '4px',
+                    fontFamily: 'inherit',
+                    border: pos.paymentType === 'credit' ? '1px solid rgba(255,255,255,0.38)' : '1px solid #cbd5e1',
+                    background: pos.paymentType === 'credit' ? 'rgba(255,255,255,0.16)' : '#f8fafc',
+                    color: pos.paymentType === 'credit' ? '#ffffff' : '#64748b',
+                  }}
+                >
+                  Alt+4
+                </kbd>
               </Button>
             </div>
 

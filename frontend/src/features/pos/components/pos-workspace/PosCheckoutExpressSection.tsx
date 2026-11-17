@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, type MutableRefObject, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui/button';
 import { formatCurrency } from '@/lib/format';
@@ -6,11 +6,17 @@ import { CreditCardIcon, CheckIcon } from '@/shared/components/icons/AppIcons';
 import { toast } from '@/shared/components/system-alert';
 import { isStandalonePosTerminal } from '@/features/pos/lib/pos-shell';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
-import { isTerminalApprovalLive } from '@/features/pos/components/pos-workspace/pos-terminal-charge-safety';
+import { canChangePaymentAfterTerminalApproval, isTerminalApprovalLive } from '@/features/pos/components/pos-workspace/pos-terminal-charge-safety';
 import { currencyMoneyDigits, roundMoneyValue } from '@/shared/utils/money';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import type { PaymentPreset } from '@/features/pos/components/pos-workspace/PosCheckoutDialogSections';
 import { PosCheckoutExpressFooter } from './PosCheckoutExpressFooter';
+
+export interface PosCheckoutExpressShortcutHandlers {
+  selectCash: () => void;
+  selectCard: (cardScheme?: 'knet' | 'mada' | 'visa', provider?: 'knet_pos' | 'geidea') => void;
+  selectCredit: () => void;
+}
 
 interface PosCheckoutExpressSectionProps {
   pos: PosWorkspaceState;
@@ -25,6 +31,8 @@ interface PosCheckoutExpressSectionProps {
   onOpenNotes: () => void;
   isNotesOpen: boolean;
   cartQtySummaries: string[];
+  expressCashInputRef?: RefObject<HTMLInputElement | null>;
+  shortcutActionsRef?: MutableRefObject<PosCheckoutExpressShortcutHandlers | null>;
 }
 
 export function PosCheckoutExpressSection({
@@ -40,6 +48,8 @@ export function PosCheckoutExpressSection({
   onOpenNotes: _onOpenNotes,
   isNotesOpen: _isNotesOpen,
   cartQtySummaries,
+  expressCashInputRef,
+  shortcutActionsRef,
 }: PosCheckoutExpressSectionProps) {
   const { t } = useTranslation();
   // INV-FE1-FRONTEND-BOOK-DIGITS: change/underpaid amounts round at the
@@ -122,7 +132,30 @@ export function PosCheckoutExpressSection({
     toast.success(isKwdStore ? `تم تسجيل مرجع إيصال كي نت (${code}) وتفعيل إتمام البيع` : `تم تسجيل مرجع الدفع اليدوي (${code})`);
   };
 
-  const handleSelectCard = async () => {
+  const handleSelectCash = () => {
+    if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+      toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+      return;
+    }
+    onSelectPaymentPreset('cash');
+    pos.setCashAmount?.(effectiveReceivedCash);
+    pos.setCardAmount?.(0);
+    pos.setTransferAmount?.(0);
+    pos.setPaymentChannel?.('cash');
+    pos.setTerminalPaymentDetails?.(null);
+    setTerminalDispatchStatus('idle');
+    setTerminalMsg('');
+    setIsManualCardConfirmed(false);
+  };
+
+  const handleSelectCard = async (
+    cardSchemeOverride?: 'knet' | 'mada' | 'visa',
+    providerOverride?: 'knet_pos' | 'geidea',
+  ) => {
+    if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+      toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+      return;
+    }
     onSelectPaymentPreset('card');
     pos.setCardAmount?.(total);
     pos.setCashAmount?.(0);
@@ -131,11 +164,12 @@ export function PosCheckoutExpressSection({
     setCustomCashInput('');
 
     const currency = isKwdStore ? 'KWD' : isKsaStore ? 'SAR' : (pos.settings?.currency || (pos.settingsQuery?.data as any)?.currency || 'EGP');
-    const defaultProvider = isKwdStore ? 'knet' : isKsaStore ? 'geidea' : 'fawry';
+    const defaultProvider = providerOverride || (isKwdStore ? 'knet' : isKsaStore ? 'geidea' : 'fawry');
+    const nextScheme = cardSchemeOverride || (isKwdStore ? 'knet' : isKsaStore ? 'mada' : 'visa');
 
     pos.setTerminalPaymentDetails?.({
       ...(pos.terminalPaymentDetails || {}),
-      cardScheme: isKwdStore ? 'knet' : isKsaStore ? 'mada' : 'visa',
+      cardScheme: nextScheme,
       provider: defaultProvider,
     });
 
@@ -196,6 +230,28 @@ export function PosCheckoutExpressSection({
       setTerminalDispatchStatus('idle');
     }
   };
+
+  useEffect(() => {
+    if (!shortcutActionsRef) return;
+    shortcutActionsRef.current = {
+      selectCash: handleSelectCash,
+      selectCard: (scheme, provider) => {
+        void handleSelectCard(scheme, provider);
+      },
+      selectCredit: () => {
+        if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+          toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+          return;
+        }
+        onSelectPaymentPreset('credit');
+        pos.setTerminalPaymentDetails?.(null);
+        if (!pos.customerId) onOpenCustomerPicker();
+      },
+    };
+    return () => {
+      shortcutActionsRef.current = null;
+    };
+  });
 
   // Compute smart cash banknote denomination shortcuts >= total
   const cashDenominations = useMemo(() => {
@@ -283,7 +339,11 @@ export function PosCheckoutExpressSection({
         {/* Tile A: Electronic Card / K-NET */}
         <button
           type="button"
-          onClick={handleSelectCard}
+          aria-keyshortcuts="Alt+2"
+          title={`${isKwdStore ? 'كي نت K-NET' : isKsaStore ? 'شبكة / مدى mada' : 'فيزا / كارت / Apple Pay'} (Alt+2)`}
+          onClick={() => {
+            void handleSelectCard();
+          }}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -323,6 +383,21 @@ export function PosCheckoutExpressSection({
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <kbd
+              aria-hidden="true"
+              style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                padding: '1px 5px',
+                borderRadius: '4px',
+                fontFamily: 'inherit',
+                border: isPaymentActive('card') ? '1px solid rgba(255,255,255,0.38)' : '1px solid #cbd5e1',
+                background: isPaymentActive('card') ? 'rgba(255,255,255,0.16)' : '#f8fafc',
+                color: isPaymentActive('card') ? '#ffffff' : '#64748b',
+              }}
+            >
+              Alt+2
+            </kbd>
             {isPaymentActive('card') && (
               <span
                 style={{
@@ -621,16 +696,9 @@ export function PosCheckoutExpressSection({
         {/* Tile B: Cash */}
         <button
           type="button"
-          onClick={() => {
-            onSelectPaymentPreset('cash');
-            pos.setCashAmount?.(effectiveReceivedCash);
-            pos.setCardAmount?.(0);
-            pos.setTransferAmount?.(0);
-            pos.setPaymentChannel?.('cash');
-            setTerminalDispatchStatus('idle');
-            setTerminalMsg('');
-            setIsManualCardConfirmed(false);
-          }}
+          aria-keyshortcuts="Alt+1"
+          title={`${t('pos.cash_payment', 'نقدي / كاش Cash')} (Alt+1)`}
+          onClick={handleSelectCash}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -673,6 +741,21 @@ export function PosCheckoutExpressSection({
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <kbd
+              aria-hidden="true"
+              style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                padding: '1px 5px',
+                borderRadius: '4px',
+                fontFamily: 'inherit',
+                border: isPaymentActive('cash') ? '1px solid rgba(255,255,255,0.38)' : '1px solid #cbd5e1',
+                background: isPaymentActive('cash') ? 'rgba(255,255,255,0.16)' : '#f8fafc',
+                color: isPaymentActive('cash') ? '#ffffff' : '#64748b',
+              }}
+            >
+              Alt+1
+            </kbd>
             {isPaymentActive('cash') && (
               <span
                 style={{
@@ -732,6 +815,7 @@ export function PosCheckoutExpressSection({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
               <div style={{ position: 'relative', flex: 1 }}>
                 <input
+                  ref={expressCashInputRef}
                   className="no-spin-arrows"
                   type="number"
                   step="any"

@@ -14,7 +14,16 @@ import {
   PosCheckoutDeliverySection,
   type PaymentPreset,
 } from '@/features/pos/components/pos-workspace/PosCheckoutDialogSections';
-import { PosCheckoutExpressSection } from './PosCheckoutExpressSection';
+import { PosCheckoutExpressSection, type PosCheckoutExpressShortcutHandlers } from './PosCheckoutExpressSection';
+import {
+  getCheckoutPaymentRegion,
+  parseCheckoutAltDigit,
+  resolveCheckoutActionForSlot,
+  resolveInitialCheckoutPreset,
+  resolvePresetForCheckoutAction,
+  type CheckoutPaymentButtonAction,
+} from './pos-checkout-shortcuts';
+import { canChangePaymentAfterTerminalApproval } from './pos-terminal-charge-safety';
 import { PosCreditLimitNotice } from './PosCreditLimitNotice';
 import { PosTotalsBreakdown } from '@/features/pos/components/pos-cart-panel/PosTotalsBreakdown';
 import { summarizeCartQuantities } from '@/features/pos/lib/pos.domain';
@@ -44,10 +53,16 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
   const [managerPinDraft, setManagerPinDraft] = useState('');
   const [managerPinError, setManagerPinError] = useState('');
   const cashAmountInputRef = useRef<HTMLInputElement | null>(null);
+  const cardAmountInputRef = useRef<HTMLInputElement | null>(null);
+  const transferAmountInputRef = useRef<HTMLInputElement | null>(null);
+  const expressCashInputRef = useRef<HTMLInputElement | null>(null);
+  const expressShortcutActionsRef = useRef<PosCheckoutExpressShortcutHandlers | null>(null);
   const managerPinInputRef = useRef<HTMLInputElement | null>(null);
   const approvedManagerPinRef = useRef('');
   const openedOnceRef = useRef(false);
   const autoFilledOnOpenRef = useRef(false);
+  const initialFocusPresetRef = useRef<PaymentPreset>('cash');
+  const focusFrameRef = useRef<number | null>(null);
   const onCloseRef = useRef(onClose);
   const createSalePendingRef = useRef(Boolean(pos.createSale.isPending));
   
@@ -58,6 +73,7 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
   const currentSettings = pos.settings || pos.settingsQuery?.data;
   const isKwdStore = isKuwait(currentSettings);
   const isKsaStore = isSaudi(currentSettings);
+  const paymentRegion = getCheckoutPaymentRegion(isKwdStore, isKsaStore);
 
   const isMobile = useIsMobile(860);
   const isSmallScreen = typeof window !== 'undefined' ? window.innerWidth <= 640 : false;
@@ -80,6 +96,34 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
     }
   }, [pos.orderType, checkoutViewMode]);
 
+  const cancelScheduledFocus = useCallback(() => {
+    if (focusFrameRef.current !== null && typeof window !== 'undefined') {
+      window.cancelAnimationFrame(focusFrameRef.current);
+      focusFrameRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => cancelScheduledFocus, [cancelScheduledFocus]);
+
+  const focusPaymentInputForPreset = useCallback((preset: PaymentPreset) => {
+    if (typeof window === 'undefined') return;
+    cancelScheduledFocus();
+    focusFrameRef.current = window.requestAnimationFrame(() => {
+      focusFrameRef.current = null;
+      if (customerPickerOpen || managerApprovalOpen) return;
+      if (preset === 'credit') return;
+      const targetInput = preset === 'card'
+        ? cardAmountInputRef.current
+        : (preset === 'wallet' || preset === 'instapay')
+          ? transferAmountInputRef.current
+          : (cashAmountInputRef.current || (!isMobile ? expressCashInputRef.current : null));
+      if (targetInput && !targetInput.disabled) {
+        targetInput.focus({ preventScroll: true });
+        targetInput.select();
+      }
+    });
+  }, [cancelScheduledFocus, customerPickerOpen, isMobile, managerApprovalOpen]);
+
   // Smart Auto-fill payment on dialog open if no payment entered yet (runs once on open)
   useEffect(() => {
     if (!open) {
@@ -91,12 +135,10 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
 
     const hasExistingPayment = (pos.cashAmount > 0 || pos.cardAmount > 0 || pos.transferAmount > 0) || pos.paymentType === 'credit';
     if (!hasExistingPayment && pos.totals.total > 0) {
-      const pref = customization.defaultPaymentChannel;
-      const shouldUseCard = pref === 'card' || (pref === 'auto' && (isKwdStore || isKsaStore));
-      const shouldUseWallet = pref === 'wallet';
-
-      if (shouldUseCard) {
-        pos.setPaymentPreset('card');
+      const initialPreset = resolveInitialCheckoutPreset(customization.defaultPaymentChannel, isKwdStore, isKsaStore);
+      initialFocusPresetRef.current = initialPreset;
+      pos.setPaymentPreset(initialPreset);
+      if (initialPreset === 'card') {
         if (isKwdStore) {
           pos.setTerminalPaymentDetails?.({
             ...(pos.terminalPaymentDetails || {}),
@@ -110,11 +152,15 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
             provider: 'geidea',
           });
         }
-      } else if (shouldUseWallet) {
-        pos.setPaymentPreset(isKwdStore ? 'instapay' : 'wallet');
-      } else {
-        pos.setPaymentPreset('cash');
       }
+    } else {
+      initialFocusPresetRef.current = pos.paymentType === 'credit'
+        ? 'credit'
+        : pos.cardAmount > 0 && pos.cashAmount === 0 && pos.transferAmount === 0
+          ? 'card'
+          : pos.transferAmount > 0 && pos.cashAmount === 0 && pos.cardAmount === 0
+            ? (pos.paymentChannel === 'wallet' ? 'wallet' : 'instapay')
+            : 'cash';
     }
   }, [open, isKwdStore, isKsaStore, customization.defaultPaymentChannel, pos]);
 
@@ -195,18 +241,14 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
   useEffect(() => {
     if (!open) {
       openedOnceRef.current = false;
+      cancelScheduledFocus();
       clearInlineManagerApproval();
       return;
     }
     if (openedOnceRef.current) return;
     openedOnceRef.current = true;
-    const frameId = window.requestAnimationFrame(() => {
-      if (customerPickerOpen || managerApprovalOpen) return;
-      cashAmountInputRef.current?.focus();
-      cashAmountInputRef.current?.select();
-    });
-    return () => window.cancelAnimationFrame(frameId);
-  }, [clearInlineManagerApproval, customerPickerOpen, managerApprovalOpen, open]);
+    focusPaymentInputForPreset(initialFocusPresetRef.current);
+  }, [cancelScheduledFocus, clearInlineManagerApproval, focusPaymentInputForPreset, open]);
 
   useEffect(() => {
     if (!pos.discountApprovalGranted) approvedManagerPinRef.current = '';
@@ -249,9 +291,60 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
     return false;
   }, [pos.cardAmount, pos.cashAmount, pos.collectionStatus, pos.orderType, pos.paymentChannel, pos.paymentType, pos.transferAmount]);
 
+  const handleSelectPaymentAction = useCallback((action: CheckoutPaymentButtonAction) => {
+    if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+      toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+      return;
+    }
+
+    const targetPreset = resolvePresetForCheckoutAction(action, pos.paymentChannel, paymentRegion);
+
+    if (checkoutViewMode === 'express' && expressShortcutActionsRef.current) {
+      if (action.kind === 'cash') {
+        expressShortcutActionsRef.current.selectCash();
+        focusPaymentInputForPreset('cash');
+        return;
+      }
+      if (action.kind === 'card') {
+        expressShortcutActionsRef.current.selectCard(action.cardScheme, action.provider);
+        return;
+      }
+      if (action.kind === 'credit') {
+        expressShortcutActionsRef.current.selectCredit();
+        return;
+      }
+      // Transfer methods live in detailed view; switch smoothly and focus the transfer field.
+      setCheckoutViewMode('detailed');
+    }
+
+    pos.setPaymentPreset(targetPreset);
+    if (action.kind === 'card') {
+      pos.setTerminalPaymentDetails?.({
+        ...(pos.terminalPaymentDetails || {}),
+        ...(action.cardScheme ? { cardScheme: action.cardScheme } : {}),
+        ...(action.provider ? { provider: action.provider } : {}),
+      });
+    } else {
+      pos.setTerminalPaymentDetails?.(null);
+    }
+    focusPaymentInputForPreset(targetPreset);
+  }, [checkoutViewMode, focusPaymentInputForPreset, paymentRegion, pos]);
+
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
+      const altSlot = parseCheckoutAltDigit(event);
+      if (altSlot !== null) {
+        const matchedAction = resolveCheckoutActionForSlot(paymentRegion, altSlot);
+        if (!matchedAction) return;
+        if (pos.createSale.isPending) return;
+        if (managerApprovalOpen && !pos.discountApprovalGranted) return;
+        event.preventDefault();
+        event.stopPropagation();
+        handleSelectPaymentAction(matchedAction);
+        return;
+      }
+
       if (event.key !== 'F2') return;
       event.preventDefault();
       event.stopPropagation();
@@ -268,7 +361,7 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleConfirmSale, handleInlineManagerApproval, isPaymentActive, isTerminalHardwareManaged, managerApprovalOpen, open, pos.cardAmount, pos.createSale.isPending, pos.discountApprovalGranted, pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn, t]);
+  }, [handleConfirmSale, handleInlineManagerApproval, handleSelectPaymentAction, isPaymentActive, isTerminalHardwareManaged, managerApprovalOpen, open, paymentRegion, pos.cardAmount, pos.createSale.isPending, pos.discountApprovalGranted, pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn, t]);
 
   const customers = useMemo(() => (Array.isArray(pos.customersQuery.data) ? pos.customersQuery.data : []), [pos.customersQuery.data]);
   const selectedCustomer = useMemo(
@@ -418,6 +511,8 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
               onOpenNotes={() => setIsNotesOpen(true)}
               isNotesOpen={isNotesOpen}
               cartQtySummaries={cartQtySummaries}
+              expressCashInputRef={expressCashInputRef}
+              shortcutActionsRef={expressShortcutActionsRef}
             />
             <PosCreditLimitNotice customerId={pos.customerId} total={pos.totals.total} paidAmount={pos.paidAmount} />
             <Button
@@ -510,6 +605,8 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
                   <PosCheckoutPaymentSection
                     pos={pos}
                     cashAmountInputRef={cashAmountInputRef}
+                    cardAmountInputRef={cardAmountInputRef}
+                    transferAmountInputRef={transferAmountInputRef}
                     managerPinInputRef={managerPinInputRef}
                     customerPickerOpen={customerPickerOpen}
                     managerApprovalOpen={managerApprovalOpen}
@@ -523,6 +620,7 @@ function PosCheckoutDialogContent({ open, pos, selectedCustomerName, onClose, on
                     onInlineManagerApproval={(event) => { void handleInlineManagerApproval(event); }}
                     isPaymentActive={isPaymentActive}
                     onSelectPaymentPreset={(preset) => pos.setPaymentPreset(preset)}
+                    onSelectPaymentAction={handleSelectPaymentAction}
                     onConfirmSale={handleConfirmSale}
                     isMobile={isMobile}
                   />

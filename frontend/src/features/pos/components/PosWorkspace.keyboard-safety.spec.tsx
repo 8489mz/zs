@@ -320,4 +320,45 @@ describe('POS workspace destructive keyboard safety', () => {
 
     expect(screen.getAllByText(/إعادة طباعة الفواتير/).length).toBeGreaterThan(0);
   });
+
+  it('never steals focus back to background search input while checkout modal is open and switching payment methods', async () => {
+    let registeredFocusBarcode: (() => void) | null = null;
+    testState.pos = {
+      ...createPosMock(),
+      canOpenCheckout: true,
+      requiresCashierShift: false,
+      orderType: 'takeaway',
+      transferAmount: 0,
+      setTransferAmount: vi.fn(),
+      setOrderType: vi.fn(),
+      setTerminalPaymentDetails: vi.fn(),
+      terminalPaymentDetails: null,
+      registerBarcodeFocusListener: vi.fn((listener: () => void) => {
+        registeredFocusBarcode = listener;
+        return () => {
+          if (registeredFocusBarcode === listener) registeredFocusBarcode = null;
+        };
+      }),
+    } as unknown as ReturnType<typeof createPosMock>;
+
+    renderWorkspace();
+    const barcodeInput = screen.getByLabelText('barcode') as HTMLInputElement;
+    barcodeInput.focus();
+    expect(document.activeElement).toBe(barcodeInput);
+
+    // Open checkout modal with F2.
+    fireEvent.keyDown(barcodeInput, { key: 'F2' });
+
+    const cashCheckoutInput = await screen.findByLabelText('نقدي') as HTMLInputElement;
+    await waitFor(() => expect(document.activeElement).toBe(cashCheckoutInput));
+
+    // Switch payment preset via Alt+2 inside checkout dialog AND invoke any registered barcode-focus callback:
+    // focus must stay inside the dialog and never jump back to the background search input.
+    fireEvent.keyDown(cashCheckoutInput, { key: '2', code: 'Digit2', altKey: true });
+    registeredFocusBarcode?.();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    expect(document.activeElement).not.toBe(barcodeInput);
+    expect(testState.pos?.setPaymentPreset).toHaveBeenCalledWith('card');
+  });
 });

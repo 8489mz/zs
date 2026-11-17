@@ -12,6 +12,12 @@ import { getBalanceState } from '@/features/pos/lib/pos-balance-state';
 import { useAuthStore } from '@/stores/auth-store';
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
+import {
+  getCheckoutPaymentActions,
+  getCheckoutPaymentRegion,
+  resolvePresetForCheckoutAction,
+  type CheckoutPaymentButtonAction,
+} from './pos-checkout-shortcuts';
 export { PosCheckoutCustomerSection, type PosCheckoutCustomerSectionProps } from './PosCheckoutCustomerSection';
 export { PosCheckoutOrderTypeSection, PosCheckoutDeliverySection } from './PosCheckoutFulfillmentSections';
 
@@ -36,6 +42,8 @@ function getBalancePreview(pos: Pick<PosWorkspaceState, 'paymentType' | 'amountD
 interface PosCheckoutPaymentSectionProps {
   pos: PosWorkspaceState;
   cashAmountInputRef: RefObject<HTMLInputElement | null>;
+  cardAmountInputRef?: RefObject<HTMLInputElement | null>;
+  transferAmountInputRef?: RefObject<HTMLInputElement | null>;
   managerPinInputRef: RefObject<HTMLInputElement | null>;
   customerPickerOpen: boolean;
   managerApprovalOpen: boolean;
@@ -49,6 +57,7 @@ interface PosCheckoutPaymentSectionProps {
   onInlineManagerApproval: (event?: FormEvent<HTMLFormElement>) => void;
   isPaymentActive: (preset: PaymentPreset) => boolean;
   onSelectPaymentPreset: (preset: PaymentPreset) => void;
+  onSelectPaymentAction?: (action: CheckoutPaymentButtonAction) => void;
   onConfirmSale?: () => void;
   isMobile?: boolean;
 }
@@ -56,6 +65,8 @@ interface PosCheckoutPaymentSectionProps {
 export function PosCheckoutPaymentSection({
   pos,
   cashAmountInputRef,
+  cardAmountInputRef,
+  transferAmountInputRef,
   managerPinInputRef,
   customerPickerOpen,
   managerApprovalOpen,
@@ -69,6 +80,7 @@ export function PosCheckoutPaymentSection({
   onInlineManagerApproval,
   isPaymentActive,
   onSelectPaymentPreset,
+  onSelectPaymentAction,
   onConfirmSale,
   isMobile: isMobileProp,
 }: PosCheckoutPaymentSectionProps) {
@@ -467,6 +479,101 @@ export function PosCheckoutPaymentSection({
   );
   const isCardSplitActive = isSplitActive && cardVal > 0;
   const isCardLegOrPresetActive = isPaymentActive('card') || isCardSplitActive;
+  const paymentRegion = getCheckoutPaymentRegion(isKwdStore, isKsaStore);
+
+  const handlePaymentPresetButtonClick = (action: CheckoutPaymentButtonAction) => {
+    if (onSelectPaymentAction) {
+      onSelectPaymentAction(action);
+      return;
+    }
+    if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
+      toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
+      return;
+    }
+    const targetPreset = resolvePresetForCheckoutAction(action, pos.paymentChannel, paymentRegion);
+    onSelectPaymentPreset(targetPreset);
+    if (action.kind === 'card') {
+      pos.setTerminalPaymentDetails?.({
+        ...(pos.terminalPaymentDetails || {}),
+        ...(action.cardScheme ? { cardScheme: action.cardScheme } : {}),
+        ...(action.provider ? { provider: action.provider } : {}),
+      });
+    } else {
+      pos.setTerminalPaymentDetails?.(null);
+    }
+  };
+
+  const paymentPresetButtons = getCheckoutPaymentActions(paymentRegion).map((action) => {
+    if (action.kind === 'cash') {
+      return {
+        action,
+        label: 'نقدي',
+        active: !isSplitActive && isPaymentActive('cash'),
+        splitStyle: isSplitActive ? splitLegStyle(cashVal > 0) : undefined,
+        fontSize: paymentRegion === 'universal' ? '12.5px' : '12px',
+      };
+    }
+    if (action.kind === 'credit') {
+      return {
+        action,
+        label: 'آجل',
+        active: isPaymentActive('credit'),
+        splitStyle: undefined,
+        fontSize: paymentRegion === 'universal' ? '12.5px' : '12px',
+      };
+    }
+    if (action.kind === 'transfer') {
+      return {
+        action,
+        label: paymentRegion === 'kuwait'
+          ? 'روابط دفع / تحويل'
+          : paymentRegion === 'ksa'
+          ? 'دفع إلكتروني / محافظ'
+          : 'تحويلات / محافظ',
+        active: !isSplitActive && transferSelected,
+        splitStyle: isSplitActive ? splitLegStyle(transferVal > 0) : undefined,
+        fontSize: paymentRegion === 'universal' ? '11.5px' : '11px',
+      };
+    }
+    if (action.cardScheme === 'knet') {
+      const knetSelected = pos.terminalPaymentDetails?.cardScheme === 'knet' || !pos.terminalPaymentDetails?.cardScheme;
+      return {
+        action,
+        label: 'كي نت K-NET',
+        active: !isSplitActive && isPaymentActive('card') && knetSelected,
+        splitStyle: isCardSplitActive && knetSelected ? splitLegStyle(true) : undefined,
+        fontSize: '11px',
+      };
+    }
+    if (action.cardScheme === 'mada') {
+      const madaSelected = pos.terminalPaymentDetails?.cardScheme === 'mada' || !pos.terminalPaymentDetails?.cardScheme;
+      return {
+        action,
+        label: 'مدى mada',
+        active: !isSplitActive && isPaymentActive('card') && madaSelected,
+        splitStyle: isCardSplitActive && madaSelected ? splitLegStyle(true) : undefined,
+        fontSize: '11px',
+      };
+    }
+    if (paymentRegion !== 'universal') {
+      const secondaryScheme = paymentRegion === 'kuwait' ? 'knet' : 'mada';
+      const visaSelected = Boolean(pos.terminalPaymentDetails?.cardScheme && pos.terminalPaymentDetails?.cardScheme !== secondaryScheme);
+      return {
+        action,
+        label: 'فيزا / ماستر',
+        active: !isSplitActive && isPaymentActive('card') && visaSelected,
+        splitStyle: isCardSplitActive && visaSelected ? splitLegStyle(true) : undefined,
+        fontSize: '11.5px',
+      };
+    }
+    return {
+      action,
+      label: 'فيزا / كارت',
+      active: !isSplitActive && isPaymentActive('card'),
+      splitStyle: isSplitActive ? splitLegStyle(cardVal > 0) : undefined,
+      fontSize: '12px',
+    };
+  });
 
   return (
     <div
@@ -516,262 +623,62 @@ export function PosCheckoutPaymentSection({
           ) : null}
         </div>
 
-        {isKwdStore ? (
-          /* Kuwait Mode: Cash, K-NET, Visa/Master, Credit, Payment Links / Transfers */
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(5, minmax(0, 1fr))', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : `repeat(${paymentPresetButtons.length}, minmax(0, 1fr))`,
+            gap: '6px',
+            width: '100%',
+            boxSizing: 'border-box',
+          }}
+        >
+          {paymentPresetButtons.map(({ action, label, active, splitStyle, fontSize }) => (
             <Button
+              key={`${paymentRegion}-${action.slot}`}
               type="button"
-              variant={!isSplitActive && isPaymentActive('cash') ? 'primary' : 'secondary'}
-              onClick={() => {
-                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                  return;
-                }
-                onSelectPaymentPreset('cash');
-                pos.setTerminalPaymentDetails?.(null);
+              variant={active ? 'primary' : 'secondary'}
+              aria-keyshortcuts={action.shortcutLabel}
+              title={`${label} (${action.shortcutLabel})`}
+              onClick={() => handlePaymentPresetButtonClick(action)}
+              style={{
+                height: '36px',
+                minHeight: '36px',
+                maxHeight: '36px',
+                boxSizing: 'border-box',
+                whiteSpace: 'nowrap',
+                padding: '0 6px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                fontSize,
+                fontWeight: 700,
+                ...(splitStyle || undefined),
               }}
-              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cashVal > 0) : undefined) }}
             >
-              نقدي
+              {label}
+              {!isMobile && (
+                <kbd
+                  aria-hidden="true"
+                  style={{
+                    fontSize: '9.5px',
+                    fontWeight: 700,
+                    lineHeight: 1.15,
+                    padding: '1px 4px',
+                    borderRadius: '4px',
+                    fontFamily: 'inherit',
+                    flexShrink: 0,
+                    border: active ? '1px solid rgba(255,255,255,0.38)' : '1px solid #cbd5e1',
+                    background: active ? 'rgba(255,255,255,0.16)' : '#f8fafc',
+                    color: active ? '#ffffff' : '#64748b',
+                  }}
+                >
+                  {action.shortcutLabel}
+                </kbd>
+              )}
             </Button>
-            <Button
-              type="button"
-              variant={
-                !isSplitActive && isPaymentActive('card') && (pos.terminalPaymentDetails?.cardScheme === 'knet' || !pos.terminalPaymentDetails?.cardScheme)
-                  ? 'primary'
-                  : 'secondary'
-              }
-              onClick={() => {
-                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                  return;
-                }
-                onSelectPaymentPreset('card');
-                pos.setTerminalPaymentDetails?.({
-                  ...(pos.terminalPaymentDetails || {}),
-                  cardScheme: 'knet',
-                  provider: 'knet_pos',
-                });
-              }}
-              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '11.5px', fontWeight: 700, ...(isCardSplitActive && (pos.terminalPaymentDetails?.cardScheme === 'knet' || !pos.terminalPaymentDetails?.cardScheme) ? splitLegStyle(true) : undefined) }}
-            >
-              كي نت K-NET
-            </Button>
-            <Button
-              type="button"
-              variant={
-                !isSplitActive && isPaymentActive('card') && pos.terminalPaymentDetails?.cardScheme && pos.terminalPaymentDetails?.cardScheme !== 'knet'
-                  ? 'primary'
-                  : 'secondary'
-              }
-              onClick={() => {
-                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                  return;
-                }
-                onSelectPaymentPreset('card');
-                pos.setTerminalPaymentDetails?.({
-                  ...(pos.terminalPaymentDetails || {}),
-                  cardScheme: 'visa',
-                });
-              }}
-              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 700, ...(isCardSplitActive && pos.terminalPaymentDetails?.cardScheme && pos.terminalPaymentDetails?.cardScheme !== 'knet' ? splitLegStyle(true) : undefined) }}
-            >
-              فيزا / ماستر
-            </Button>
-            <Button
-              type="button"
-              variant={isPaymentActive('credit') ? 'primary' : 'secondary'}
-              onClick={() => {
-                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                  return;
-                }
-                onSelectPaymentPreset('credit');
-                pos.setTerminalPaymentDetails?.(null);
-              }}
-              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12.5px', fontWeight: 700 }}
-            >
-              آجل
-            </Button>
-            <Button
-              type="button"
-              variant={!isSplitActive && transferSelected ? 'primary' : 'secondary'}
-              onClick={() => {
-                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                  return;
-                }
-                onSelectPaymentPreset(pos.paymentChannel === 'instapay' ? 'instapay' : 'wallet');
-                pos.setTerminalPaymentDetails?.(null);
-              }}
-              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '11.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(transferVal > 0) : undefined) }}
-            >
-              روابط دفع / تحويل
-            </Button>
-          </div>
-        ) : isKsaStore ? (
-          /* Saudi Mode: Cash, Mada, Visa/Master, Credit, Bank Transfer / Wallets */
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(5, minmax(0, 1fr))', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
-            <Button
-              type="button"
-              variant={!isSplitActive && isPaymentActive('cash') ? 'primary' : 'secondary'}
-              onClick={() => {
-                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                  return;
-                }
-                onSelectPaymentPreset('cash');
-                pos.setTerminalPaymentDetails?.(null);
-              }}
-              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cashVal > 0) : undefined) }}
-            >
-              نقدي
-            </Button>
-            <Button
-              type="button"
-              variant={
-                !isSplitActive && isPaymentActive('card') && (pos.terminalPaymentDetails?.cardScheme === 'mada' || !pos.terminalPaymentDetails?.cardScheme)
-                  ? 'primary'
-                  : 'secondary'
-              }
-              onClick={() => {
-                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                  return;
-                }
-                onSelectPaymentPreset('card');
-                pos.setTerminalPaymentDetails?.({
-                  ...(pos.terminalPaymentDetails || {}),
-                  cardScheme: 'mada',
-                  provider: 'geidea',
-                });
-              }}
-              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '11.5px', fontWeight: 700, ...(isCardSplitActive && (pos.terminalPaymentDetails?.cardScheme === 'mada' || !pos.terminalPaymentDetails?.cardScheme) ? splitLegStyle(true) : undefined) }}
-            >
-              مدى mada
-            </Button>
-            <Button
-              type="button"
-              variant={
-                !isSplitActive && isPaymentActive('card') && pos.terminalPaymentDetails?.cardScheme && pos.terminalPaymentDetails?.cardScheme !== 'mada'
-                  ? 'primary'
-                  : 'secondary'
-              }
-              onClick={() => {
-                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                  return;
-                }
-                onSelectPaymentPreset('card');
-                pos.setTerminalPaymentDetails?.({
-                  ...(pos.terminalPaymentDetails || {}),
-                  cardScheme: 'visa',
-                });
-              }}
-              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 700, ...(isCardSplitActive && pos.terminalPaymentDetails?.cardScheme && pos.terminalPaymentDetails?.cardScheme !== 'mada' ? splitLegStyle(true) : undefined) }}
-            >
-              فيزا / ماستر
-            </Button>
-            <Button
-              type="button"
-              variant={isPaymentActive('credit') ? 'primary' : 'secondary'}
-              onClick={() => {
-                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                  return;
-                }
-                onSelectPaymentPreset('credit');
-                pos.setTerminalPaymentDetails?.(null);
-              }}
-              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12.5px', fontWeight: 700 }}
-            >
-              آجل
-            </Button>
-            <Button
-              type="button"
-              variant={!isSplitActive && transferSelected ? 'primary' : 'secondary'}
-              onClick={() => {
-                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                  return;
-                }
-                onSelectPaymentPreset(pos.paymentChannel === 'wallet' ? 'wallet' : 'instapay');
-                pos.setTerminalPaymentDetails?.(null);
-              }}
-              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '11.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(transferVal > 0) : undefined) }}
-            >
-              دفع إلكتروني / محافظ
-            </Button>
-          </div>
-        ) : (
-          /* Universal 4 Main Presets: Cash, Card, Transfers/Wallets, Credit */
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
-            <Button
-              type="button"
-              variant={!isSplitActive && isPaymentActive('cash') ? 'primary' : 'secondary'}
-              onClick={() => {
-                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                  return;
-                }
-                onSelectPaymentPreset('cash');
-                pos.setTerminalPaymentDetails?.(null);
-              }}
-              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cashVal > 0) : undefined) }}
-            >
-              نقدي
-            </Button>
-            <Button
-              type="button"
-              variant={!isSplitActive && isPaymentActive('card') ? 'primary' : 'secondary'}
-              onClick={() => {
-                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                  return;
-                }
-                onSelectPaymentPreset('card');
-                pos.setTerminalPaymentDetails?.({
-                  ...(pos.terminalPaymentDetails || {}),
-                  cardScheme: isKwdStore ? 'knet' : isKsaStore ? 'mada' : 'visa',
-                });
-              }}
-              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(cardVal > 0) : undefined) }}
-            >
-              {isKwdStore ? 'KNET كي نت' : isKsaStore ? 'شبكة / مدى' : 'فيزا / كارت'}
-            </Button>
-            <Button
-              type="button"
-              variant={!isSplitActive && transferSelected ? 'primary' : 'secondary'}
-              onClick={() => {
-                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                  return;
-                }
-                onSelectPaymentPreset(pos.paymentChannel === 'wallet' ? 'wallet' : 'instapay');
-                pos.setTerminalPaymentDetails?.(null);
-              }}
-              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '11.5px', fontWeight: 700, ...(isSplitActive ? splitLegStyle(transferVal > 0) : undefined) }}
-            >
-              تحويلات / محافظ
-            </Button>
-            <Button
-              type="button"
-              variant={isPaymentActive('credit') ? 'primary' : 'secondary'}
-              onClick={() => {
-                if (!canChangePaymentAfterTerminalApproval(pos.terminalPaymentDetails?.authCode, pos.terminalPaymentDetails?.rrn)) {
-                  toast.warning('تم اعتماد دفع إلكتروني؛ لا تغيّر طريقة الدفع قبل إتمام الفاتورة أو التسوية.');
-                  return;
-                }
-                onSelectPaymentPreset('credit');
-                pos.setTerminalPaymentDetails?.(null);
-              }}
-              style={{ height: '36px', minHeight: '36px', maxHeight: '36px', boxSizing: 'border-box', whiteSpace: 'nowrap', fontSize: '12.5px', fontWeight: 700 }}
-            >
-              آجل
-            </Button>
-          </div>
-        )}
+          ))}
+        </div>
 
         {/* Fixed-height Sub-Slot: prevents any vertical layout jump when switching payment methods */}
         <div
@@ -986,7 +893,7 @@ export function PosCheckoutPaymentSection({
           <input
             id="pos-checkout-cash-input"
             ref={cashAmountInputRef}
-            data-autofocus={!customerPickerOpen ? true : undefined}
+            data-autofocus={!customerPickerOpen && !isCreditSale ? true : undefined}
             className="no-spin-arrows"
             type="number"
             step="0.01"
@@ -1061,6 +968,7 @@ export function PosCheckoutPaymentSection({
           </div>
           <input
             id="pos-checkout-card-input"
+            ref={cardAmountInputRef}
             className="no-spin-arrows"
             type="number"
             step="0.01"
@@ -1135,6 +1043,7 @@ export function PosCheckoutPaymentSection({
           </div>
           <input
             id="pos-checkout-transfer-input"
+            ref={transferAmountInputRef}
             className="no-spin-arrows"
             type="number"
             step="0.01"

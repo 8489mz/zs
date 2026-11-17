@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import { listenToHardwareBarcode } from '@/shared/utils/hardware-scanner';
+import { isPosModalOpen } from '@/features/pos/lib/pos-keyboard-safety';
 
 /**
  * Scanner Input Buffer — Zero-Render Edition
@@ -167,6 +168,7 @@ export function useScannerBuffer(opts: {
     let windowFlushTimer: number = 0;
 
     const handleWindowKeyDown = (e: KeyboardEvent) => {
+      if (isPosModalOpen()) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || (e.target as HTMLElement).isContentEditable) {
         return;
       }

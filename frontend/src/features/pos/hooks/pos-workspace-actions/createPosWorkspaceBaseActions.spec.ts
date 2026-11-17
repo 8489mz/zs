@@ -587,6 +587,24 @@ describe('createPosWorkspaceBaseActions', () => {
       expect(setCardAmount).toHaveBeenCalledWith(0);
       expect(setTransferAmount).toHaveBeenCalledWith(100);
     });
+
+    it('never steals focus back to background barcode input by default when switching payment presets', () => {
+      const requestBarcodeFocus = vi.fn();
+      const actions = createPosWorkspaceBaseActions(makeParams({
+        requestBarcodeFocus,
+        setTransferAmount: vi.fn(),
+      }));
+
+      actions.setPaymentPreset('cash');
+      actions.setPaymentPreset('card');
+      actions.setPaymentPreset('wallet');
+      actions.setPaymentPreset('credit');
+
+      expect(requestBarcodeFocus).not.toHaveBeenCalled();
+
+      actions.setPaymentPreset('cash', { focusBarcode: true });
+      expect(requestBarcodeFocus).toHaveBeenCalledTimes(1);
+    });
   });
 
   /* SPICE-PKG8 (INV-THREE-WAY-PAYMENT-SPLIT): the 'mixed' fill wiped

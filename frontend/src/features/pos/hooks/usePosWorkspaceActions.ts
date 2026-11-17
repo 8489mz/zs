@@ -47,7 +47,7 @@ interface PosWorkspaceActions {
   removeItem: (lineKey: string) => void;
   fillPaidAmount: () => void;
   setPriceType: (nextPriceType: PosPriceType) => void;
-  setPaymentPreset: (preset: 'cash' | 'card' | 'wallet' | 'instapay' | 'credit') => void;
+  setPaymentPreset: (preset: 'cash' | 'card' | 'wallet' | 'instapay' | 'credit', options?: { focusBarcode?: boolean }) => void;
   selectCartLine: (lineKey: string) => void;
   changeSelectedQty: (delta: number) => boolean;
   changeLineQtyByDelta: (lineKey: string, delta: number) => boolean;

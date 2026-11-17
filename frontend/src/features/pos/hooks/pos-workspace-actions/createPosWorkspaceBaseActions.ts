@@ -439,7 +439,10 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
     params.setTransferAmount(0);
   }
 
-  function setPaymentPreset(preset: 'cash' | 'card' | 'wallet' | 'instapay' | 'credit') {
+  function setPaymentPreset(
+    preset: 'cash' | 'card' | 'wallet' | 'instapay' | 'credit',
+    options?: { focusBarcode?: boolean },
+  ) {
     params.setSubmitMessage('');
     params.setPostSaleSaleKey('');
     if (preset === 'credit') {
@@ -448,7 +451,7 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
       params.setCashAmount(0);
       params.setCardAmount(0);
       params.setTransferAmount(0);
-      params.requestBarcodeFocus();
+      if (options?.focusBarcode) params.requestBarcodeFocus();
       return;
     }
     const total = toMoney(params.totals.total);
@@ -514,7 +517,7 @@ export function createPosWorkspaceBaseActions(params: PosWorkspaceActionParams) 
         params.setTransferAmount(0);
       }
     }
-    params.requestBarcodeFocus();
+    if (options?.focusBarcode) params.requestBarcodeFocus();
   }
 
   function changeLineQtyByDelta(lineKey: string, delta: number) {

@@ -22,10 +22,8 @@ import { PosPhoneOrderDialog } from '@/features/pos/components/pos-workspace/Pos
 import { PosCallerIdFloatingAlert } from '@/features/pos/components/pos-workspace/PosCallerIdFloatingAlert';
 import { printOrderCupLabels } from '@/lib/pos-printing/cup-label';
 import { salesApi } from '@/features/sales/api/sales.api';
-import {
-  getSelectedCustomerName,
-  printCurrentPosDraft,
-} from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
+import { getSelectedCustomerName, printCurrentPosDraft } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
+import { isPosModalOpen } from '@/features/pos/lib/pos-keyboard-safety';
 import { posApi } from '@/features/pos/api/pos.api';
 import { applyPosLineTransfer, isNegativeStockSalesAllowed, repriceCartLine, getProductItemCode, getSaleUnit, summarizeCartQuantities } from '@/features/pos/lib/pos.domain';
 import { renameHeldDraftTableAndRefresh, transferTableOrder } from '@/features/pos/lib/pos-table-transfer';
@@ -202,7 +200,9 @@ export function PosWorkspace() {
     if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) {
       return () => {};
     }
+    if (isPosModalOpen()) return () => {};
     const handle = window.requestAnimationFrame(() => {
+      if (isPosModalOpen()) return;
       searchInputRef.current?.focus();
       searchInputRef.current?.select();
     });

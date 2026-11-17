@@ -5,7 +5,7 @@
   "description": "Phase 1 NestJS backend scaffold for POS migration",
   "scripts": {
     "start": "node dist/main.js",
-    "prestart:dev": "node -e \"if (!require('fs').existsSync('dist/main.js')) { require('fs').rmSync('node_modules/.cache', { recursive: true, force: true }); }\"",
+    "prestart:dev": "node -e \"const fs=require('fs'),p=require('path'),m='src/modules';const stale=!fs.existsSync('dist/main.js')||(fs.existsSync(m)&&fs.readdirSync(m,{withFileTypes:true}).some(d=>d.isDirectory()&&['engines','services','controllers','helpers','dto'].some(sub=>{const sd=p.join(m,d.name,sub);return fs.existsSync(sd)&&fs.readdirSync(sd).some(f=>f.endsWith('.ts')&&!f.endsWith('.spec.ts')&&!f.endsWith('.d.ts')&&!fs.existsSync(p.join('dist/modules',d.name,sub,f.replace(/\\.ts$/,'.js'))));})));if(stale){fs.rmSync('dist',{recursive:true,force:true});fs.rmSync('node_modules/.cache',{recursive:true,force:true});}\"",
     "start:dev": "nest start --watch",
     "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true}); require('fs').rmSync('node_modules/.cache',{recursive:true,force:true})\" && nest build",
     "release:generate": "ts-node scripts/generate-release-package.ts",

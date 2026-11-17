@@ -7,13 +7,8 @@ import { Card } from '@/shared/ui/card';
 import { StarIcon, SlidersIcon, PlusIcon, ChevronDownIcon, XIcon, KeyboardIcon } from '@/shared/components/icons/AppIcons';
 import { formatCurrencyWithCode } from '@/lib/format';
 import { sharedProductsApi } from '@/shared/api/products';
-import {
-  buildPosProductGroups,
-  buildRecentGroupKeys,
-  getGroupShelfGroups,
-  type PosGroupShelf,
-  type PosProductGroup,
-} from '@/features/pos/lib/pos-product-groups';
+import { buildPosProductGroups, buildRecentGroupKeys, getGroupShelfGroups, type PosGroupShelf, type PosProductGroup } from '@/features/pos/lib/pos-product-groups';
+import { isPosModalOpen } from '@/features/pos/lib/pos-keyboard-safety';
 import type { Product } from '@/types/domain';
 import type { PosPriceType } from '@/features/pos/types/pos.types';
 import type { PosSaleMode } from '@/features/pos/lib/pos-sale-mode';
@@ -112,7 +107,9 @@ function groupMetaLabel(group: PosProductGroup) {
 function focusSearchInput(searchInputRef: RefObject<HTMLInputElement | null>) {
   if (typeof window === 'undefined') return;
   if (window.matchMedia('(pointer: coarse)').matches) return;
+  if (isPosModalOpen()) return;
   window.requestAnimationFrame(() => {
+    if (isPosModalOpen()) return;
     searchInputRef.current?.focus();
     searchInputRef.current?.select();
   });
