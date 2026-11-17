@@ -2,6 +2,7 @@
 import { queryKeys } from '@/app/query-keys';
 import { queryClient } from '@/app/providers';
 import { DEFAULT_STORE_NAME, useAuthStore } from '@/stores/auth-store';
+import { resolveBridgePrinter, resolveElectronPrinter } from '@/lib/printer-preferences';
 import type { AppSettings } from '@/types/domain';
 
 export function escapeHtml(value: unknown) {
@@ -191,9 +192,12 @@ export function resolvePrintSettings() {
     address: String(cachedSettings.address || '').trim(),
     invoiceFooter: String(cachedSettings.invoiceFooter || '').trim(),
     logoData: String(cachedSettings.logoData || '').trim(),
-    windowsPrinterName: String(cachedSettings.posWindowsPrinterName || '').trim(),
-    electronCashierPrinter: String(cachedSettings.posElectronCashierPrinter || '').trim(),
-    electronBarcodePrinter: String(cachedSettings.posElectronBarcodePrinter || '').trim(),
+    windowsPrinterName: resolveBridgePrinter('cashier', cachedSettings),
+    windowsDocumentPrinter: resolveBridgePrinter('document', cachedSettings),
+    windowsBarcodePrinter: resolveBridgePrinter('barcode', cachedSettings),
+    electronCashierPrinter: resolveElectronPrinter('cashier', cachedSettings),
+    electronDocumentPrinter: resolveElectronPrinter('document', cachedSettings),
+    electronBarcodePrinter: resolveElectronPrinter('barcode', cachedSettings),
     paperSize: cachedSettings.paperSize === 'a4' ? ('a4' as const) : ('receipt' as const),
   };
 }
@@ -251,7 +255,9 @@ export interface PrintDocumentOptions {
   windowsPrinterName?: string;
   receiptWidthMm?: 58 | 80;
   pageSizeMm?: { widthMm: number; heightMm: number };
+  pageMarginMm?: number;
   hideHeader?: boolean;
+  disableWindowsBridge?: boolean;
 }
 
 export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, options: PrintDocumentOptions = {}) {
@@ -277,7 +283,9 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
     deviceName,
     receiptWidthMm = 80,
     pageSizeMm,
+    pageMarginMm,
     hideHeader = false,
+    disableWindowsBridge = false,
   } = options;
 
   const branding = resolvePrintSettings();
@@ -290,13 +298,17 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
     : (pageSize === 'receipt' ? sanitizePrintText(footerHtml || branding.invoiceFooter) : sanitizePrintText(footerHtml));
   const printedAt = new Date().toLocaleString('ar-EG');
 
-  const pageRule = pageSize === 'A4'
-    ? orientation === 'landscape'
-      ? '@page { size: A4 landscape; margin: 8mm; }'
-      : '@page { size: A4 portrait; margin: 8mm; }'
-    : pageSize === 'receipt'
-      ? `@page { size: ${receiptWidthMm === 58 ? 58 : 80}mm auto; margin: 0; }`
-      : '@page { size: auto; margin: 8mm; }';
+  const resolvedMarginMm = typeof pageMarginMm === 'number' && Number.isFinite(pageMarginMm)
+    ? Math.max(0, pageMarginMm)
+    : undefined;
+
+  const pageRule = pageSizeMm && pageSizeMm.widthMm > 0 && pageSizeMm.heightMm > 0
+    ? `@page { size: ${pageSizeMm.widthMm}mm ${pageSizeMm.heightMm}mm; margin: ${resolvedMarginMm ?? 0}mm; }`
+    : pageSize === 'A4'
+      ? `@page { size: A4 ${orientation === 'landscape' ? 'landscape' : 'portrait'}; margin: ${resolvedMarginMm ?? 8}mm; }`
+      : pageSize === 'receipt'
+        ? `@page { size: ${receiptWidthMm === 58 ? 58 : 80}mm auto; margin: ${resolvedMarginMm ?? 0}mm; }`
+        : `@page { size: auto; margin: ${resolvedMarginMm ?? 8}mm; }`;
 
   const html = `<!doctype html>
   <html lang="ar" dir="${documentDirection}">
@@ -599,8 +611,12 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
     </body>
   </html>`;
 
-  if (deviceName && typeof window !== 'undefined' && (window as any).electronPrinter) {
-    (window as any).electronPrinter.printHtmlSilent({ html, deviceName, pageSize, receiptWidthMm, pageSizeMm, orientation })
+  const effectiveElectronDeviceName = String(
+    deviceName || (pageSize !== 'receipt' && !pageSizeMm ? branding.electronDocumentPrinter : '') || ''
+  ).trim();
+
+  if (effectiveElectronDeviceName && typeof window !== 'undefined' && (window as any).electronPrinter) {
+    (window as any).electronPrinter.printHtmlSilent({ html, deviceName: effectiveElectronDeviceName, pageSize, receiptWidthMm, pageSizeMm, orientation })
       .catch((err: any) => console.error('Silent print failed:', err));
     return;
   }
@@ -628,7 +644,12 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
   // contentWindow.print() shows the usual dialog without a popup.
   // print() needs no user activation, so no window has to be opened
   // synchronously before the async bridge attempt.
-  const windowsPrinterName = String(options.windowsPrinterName || branding.windowsPrinterName || '').trim();
+  const fallbackBridgePrinter = pageSize === 'receipt'
+    ? branding.windowsPrinterName
+    : (branding.windowsDocumentPrinter || branding.windowsPrinterName);
+  const windowsPrinterName = disableWindowsBridge
+    ? ''
+    : String(options.windowsPrinterName || fallbackBridgePrinter || '').trim();
   const bridgeAttemptPlanned = Boolean(windowsPrinterName);
 
   const printViaDialog = () => {
@@ -698,6 +719,7 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
           deviceName: windowsPrinterName,
           pageSize,
           receiptWidthMm,
+          ...(pageSizeMm ? { pageSizeMm } : {}),
         });
         if (result?.success) {
           return;

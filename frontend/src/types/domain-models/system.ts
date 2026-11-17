@@ -308,7 +308,10 @@ export interface AppSettings {
   posElectronCashierPrinter?: string;
   posElectronKitchenPrinter?: string;
   posElectronBarcodePrinter?: string;
+  posElectronDocumentPrinter?: string;
   posWindowsPrinterName?: string;
+  posWindowsBarcodePrinterName?: string;
+  posWindowsDocumentPrinterName?: string;
   posNetworkThermalPrinterIp?: string;
   posNetworkThermalPrinterPort?: number;
   weightedBarcodeEnabled?: boolean;

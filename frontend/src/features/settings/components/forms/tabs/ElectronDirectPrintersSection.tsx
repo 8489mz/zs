@@ -26,6 +26,7 @@ interface ElectronDirectPrintersSectionProps {
   systemPrinters: ElectronSystemPrinter[];
   savedCashierPrinter?: string;
   savedBarcodePrinter?: string;
+  savedDocumentPrinter?: string;
   showCashierPrinter: boolean;
   showBarcodePrinter: boolean;
 }
@@ -36,12 +37,12 @@ export function ElectronDirectPrintersSection({
   systemPrinters,
   savedCashierPrinter,
   savedBarcodePrinter,
+  savedDocumentPrinter,
   showCashierPrinter,
   showBarcodePrinter,
 }: ElectronDirectPrintersSectionProps) {
   const { t } = useTranslation();
   if (typeof window === 'undefined' || !(window as any).electronPrinter) return null;
-  if (!showCashierPrinter && !showBarcodePrinter) return null;
 
   const defaultOptionLabel = t('settings.forms.tabs.printing_settings_tab.s68', '- الطباعة العادية (نافذة المتصفح) -');
 
@@ -50,7 +51,7 @@ export function ElectronDirectPrintersSection({
       title={t('settings.forms.tabs.printing_settings_tab.s187', 'الطابعات المباشرة (نسخة الإلكترون)')}
       description={t(
         'settings.forms.tabs.printing_settings_tab.s188',
-        'اختر طابعات ويندوز المتصلة بالجهاز للطباعة المباشرة بدون نافذة تأكيد في نسخة الإلكترون (اختياري).',
+        'اختر طابعات ويندوز المتصلة بالجهاز للطباعة المباشرة وتذكّرها تلقائياً بدون نافذة تأكيد في كل مرة (اختياري).',
       )}
     >
       <div className="document-prototype-grid compact-grid-2">
@@ -78,11 +79,21 @@ export function ElectronDirectPrintersSection({
           </div>
         )}
 
+        <div className="field">
+          <label>طابعة الفواتير والمستندات الكبيرة (A4 — اختياري)</label>
+          <CustomSelect
+            value={form.watch('posElectronDocumentPrinter') || ''}
+            onChange={(val) => form.setValue('posElectronDocumentPrinter', val, { shouldDirty: true, shouldValidate: true })}
+            options={buildElectronPrinterOptions(systemPrinters, savedDocumentPrinter, defaultOptionLabel)}
+            disabled={disabled}
+          />
+        </div>
+
         <div className="muted small" style={{ gridColumn: '1 / -1' }}>
           <strong>{t('settings.forms.tabs.printing_settings_tab.s71', 'معلومة:')}</strong>{' '}
           {t(
             'settings.forms.tabs.printing_settings_tab.s189',
-            'إذا اخترت طابعة هنا، سيتم إرسال الإيصال أو ملصقات الباركود مباشرة وبدون أي شاشة تأكيد؛ واتركها على «الطباعة العادية» إذا لم تكن لديك طابعة مخصصة.',
+            'أي طابعة تختارها وتُحفظ هنا ستبقى مثبتة للطباعة التلقائية بدون نافذة اختيار في كل مرة (ويمكن اختيار طابعة مختلفة لكل جهاز).',
           )}
         </div>
       </div>

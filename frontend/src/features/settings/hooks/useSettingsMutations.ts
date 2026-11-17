@@ -8,6 +8,7 @@ import { FORCED_SETTINGS_KEY_LABELS_AR, findOverriddenSettingsValues } from '@/f
 import { setGlobalSystemCurrency } from '@/lib/currencies';
 import { authApi } from '@/shared/api/auth';
 import { toast } from '@/shared/components/system-alert';
+import { syncWorkstationPrintersFromSettings } from '@/lib/printer-preferences';
 import type { AppSettings } from '@/types/domain';
 import type { BranchFormOutput, LocationFormOutput, SettingsFormOutput } from '@/features/settings/schemas/settings.schema';
 
@@ -46,6 +47,7 @@ export function useSettingsUpdateMutation(currentSettings?: AppSettings, onSucce
 
       queryClient.setQueryData(queryKeys.settings, updatedSettings);
       queryClient.setQueryData(queryKeys.posSettings, updatedSettings);
+      syncWorkstationPrintersFromSettings(updatedSettings);
       if (updatedSettings?.currency) {
         setGlobalSystemCurrency(updatedSettings.currency);
       }

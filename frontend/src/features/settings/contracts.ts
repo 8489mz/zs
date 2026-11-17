@@ -326,9 +326,18 @@ export function buildSettingsUpdatePayload(
     posElectronBarcodePrinter: values.posElectronBarcodePrinter !== undefined
       ? cleanText(values.posElectronBarcodePrinter)
       : cleanText(current?.posElectronBarcodePrinter),
+    posElectronDocumentPrinter: values.posElectronDocumentPrinter !== undefined
+      ? cleanText(values.posElectronDocumentPrinter)
+      : cleanText(current?.posElectronDocumentPrinter),
     posWindowsPrinterName: values.posWindowsPrinterName !== undefined
       ? cleanText(values.posWindowsPrinterName)
       : cleanText(current?.posWindowsPrinterName),
+    posWindowsBarcodePrinterName: values.posWindowsBarcodePrinterName !== undefined
+      ? cleanText(values.posWindowsBarcodePrinterName)
+      : cleanText(current?.posWindowsBarcodePrinterName),
+    posWindowsDocumentPrinterName: values.posWindowsDocumentPrinterName !== undefined
+      ? cleanText(values.posWindowsDocumentPrinterName)
+      : cleanText(current?.posWindowsDocumentPrinterName),
     posNetworkThermalPrinterIp: values.posNetworkThermalPrinterIp !== undefined
       ? cleanText(values.posNetworkThermalPrinterIp)
       : cleanText(current?.posNetworkThermalPrinterIp),

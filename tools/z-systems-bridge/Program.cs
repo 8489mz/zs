@@ -1295,19 +1295,31 @@ namespace ZSystems.HardwareBridge
                 }
                 printerName = matchedPrinterName;
 
-                // A4 (794px at 96dpi) or receipt width (58mm ~ 220px, 80mm ~ 302px).
+                // A4 (794px at 96dpi), receipt width (58mm ~ 220px, 80mm ~ 302px), or explicit pageSizeMm.
                 int viewportWidth = string.Equals(pageSize, "receipt", StringComparison.OrdinalIgnoreCase)
                     ? (receiptWidthMm == 58 ? 220 : 302)
                     : 794;
+                int viewportHeight = 1100;
+                if (body.ContainsKey("pageSizeMm") && body["pageSizeMm"] is Dictionary<string, object> sizeMm)
+                {
+                    try
+                    {
+                        double wMm = sizeMm.ContainsKey("widthMm") && sizeMm["widthMm"] != null ? Convert.ToDouble(sizeMm["widthMm"]) : 0;
+                        double hMm = sizeMm.ContainsKey("heightMm") && sizeMm["heightMm"] != null ? Convert.ToDouble(sizeMm["heightMm"]) : 0;
+                        if (wMm > 0) viewportWidth = Math.Max(80, (int)Math.Round(wMm * 96.0 / 25.4));
+                        if (hMm > 0) viewportHeight = Math.Max(60, (int)Math.Round(hMm * 96.0 / 25.4));
+                    }
+                    catch { }
+                }
 
                 BroadcastSse("printer_status", new Dictionary<string, object>
                 {
                     { "status", "printing" },
                     { "printer", printerName },
-                    { "message", "جاري إرسال الإيصال إلى طابعة ويندوز: " + printerName }
+                    { "message", "جاري إرسال المستند إلى طابعة ويندوز: " + printerName }
                 });
 
-                string error = PrintHtmlOnWindowsPrinter(html, printerName, viewportWidth);
+                string error = PrintHtmlOnWindowsPrinter(html, printerName, viewportWidth, viewportHeight);
                 if (error == null)
                 {
                     BroadcastSse("printer_status", new Dictionary<string, object>
@@ -1408,7 +1420,7 @@ namespace ZSystems.HardwareBridge
             catch { }
         }
 
-        private static string PrintHtmlOnWindowsPrinter(string html, string printerName, int viewportWidth)
+        private static string PrintHtmlOnWindowsPrinter(string html, string printerName, int viewportWidth, int viewportHeight = 1100)
         {
             string error = null;
             MethodInvoker doPrint = delegate()
@@ -1448,12 +1460,12 @@ namespace ZSystems.HardwareBridge
                     hostForm.ShowInTaskbar = false;
                     hostForm.StartPosition = FormStartPosition.Manual;
                     hostForm.Location = new Point(-32000, -32000);
-                    hostForm.Size = new Size(viewportWidth, 1100);
+                    hostForm.Size = new Size(viewportWidth, viewportHeight);
 
                     browser = new WebBrowser();
                     browser.Dock = DockStyle.Fill;
                     browser.Width = viewportWidth;
-                    browser.Height = 1100;
+                    browser.Height = viewportHeight;
                     browser.ScrollBarsEnabled = false;
                     browser.ScriptErrorsSuppressed = true;
                     hostForm.Controls.Add(browser);

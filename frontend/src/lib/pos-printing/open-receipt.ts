@@ -1,4 +1,5 @@
 import { getCachedAppSettings, printHtmlDocument } from '@/lib/browser';
+import { resolveBridgePrinter, resolveElectronPrinter } from '@/lib/printer-preferences';
 import { getInvoiceStyles } from '@/lib/pos-printing/template';
 import type { AppSettings } from '@/types/domain';
 import type { PosPrintPageSize } from '@/lib/pos-printing/shared';
@@ -27,13 +28,17 @@ export function openReceiptDocument(
   const effectiveSettings = options.settings ?? getCachedAppSettings();
   const targetPageSize = options.pageSize === 'receipt' ? 'receipt' : 'A4';
   const configuredPaperSize = effectiveSettings?.paperSize === 'a4' ? 'a4' : 'receipt';
-  const cashierPrinter = String(effectiveSettings?.posElectronCashierPrinter || '').trim();
+  const cashierPrinter = resolveElectronPrinter('cashier', effectiveSettings);
+  const documentPrinter = resolveElectronPrinter('document', effectiveSettings);
   // Never dump an explicit A4 print (e.g. F10) onto a thermal receipt printer
   // when the store's configured paperSize is 'receipt'.
-  const deviceName =
-    cashierPrinter && (targetPageSize === 'receipt' || configuredPaperSize === 'a4')
-      ? cashierPrinter
-      : undefined;
+  const deviceName = targetPageSize === 'receipt'
+    ? (cashierPrinter || undefined)
+    : (documentPrinter || (configuredPaperSize === 'a4' ? cashierPrinter : '') || undefined);
+
+  const windowsPrinterName = targetPageSize === 'receipt'
+    ? (resolveBridgePrinter('cashier', effectiveSettings) || undefined)
+    : (resolveBridgePrinter('document', effectiveSettings) || undefined);
 
   printHtmlDocument(title, documentHtml, {
     subtitle,
@@ -41,7 +46,7 @@ export function openReceiptDocument(
     pageSize: targetPageSize,
     extraStyles: getInvoiceStyles(compact),
     deviceName,
-    windowsPrinterName: effectiveSettings?.posWindowsPrinterName || undefined,
+    windowsPrinterName,
     receiptWidthMm: effectiveSettings?.receiptWidthMm === 58 ? 58 : 80,
     hideHeader: true,
   });

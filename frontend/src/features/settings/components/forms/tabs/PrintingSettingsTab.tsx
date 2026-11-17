@@ -9,6 +9,7 @@ import { CustomSelect } from '@/shared/ui/custom-select';
 import { HardwareBridgeClient } from '@/features/pos';
 import { openReceiptDocument } from '@/lib/pos-printing/open-receipt';
 import { ElectronDirectPrintersSection, buildElectronPrinterOptions } from './ElectronDirectPrintersSection';
+import { BridgeDirectPrintersSection } from './BridgeDirectPrintersSection';
 import { buildPrintingPreviewIframeHtml, buildPrintingTestReceiptDocument } from './printing-test-receipt';
 
 const checkboxGridStyle: CSSProperties = {
@@ -114,6 +115,7 @@ interface PrintingTabProps {
   savedCashierPrinter?: string;
   savedKitchenPrinter?: string;
   savedBarcodePrinter?: string;
+  savedDocumentPrinter?: string;
   posKitchenPrinterEnabled?: boolean;
   branchName?: string;
   locationName?: string;
@@ -128,6 +130,7 @@ export const PrintingSettingsTab = memo(function PrintingSettingsTab({
   savedCashierPrinter,
   savedKitchenPrinter,
   savedBarcodePrinter,
+  savedDocumentPrinter,
   posKitchenPrinterEnabled,
   branchName,
   locationName,
@@ -144,10 +147,21 @@ export const PrintingSettingsTab = memo(function PrintingSettingsTab({
   const isInventoryModuleEnabled = Boolean(form.watch('inventoryModuleEnabled') ?? settings?.inventoryModuleEnabled ?? true);
   const showPosSettings = isPosModuleEnabled && !isNonPosVertical;
   const showElectronBarcodePrinter = showPosSettings || (!isContractingVertical && !isMaritimeVertical && !isServicesVertical && isInventoryModuleEnabled);
-  const savedWindowsPrinter = String(form.watch('posWindowsPrinterName') || settings?.posWindowsPrinterName || '').trim();
-  // Windows printers installed on the bridge PC (null = bridge unreachable:
-  // the name field stays a free-text input instead of a picker).
   const [bridgePrinters, setBridgePrinters] = useState<string[] | null>(null);
+  const [bridgeScanning, setBridgeScanning] = useState(false);
+  const refreshBridgePrinters = () => {
+    setBridgeScanning(true);
+    HardwareBridgeClient.listPrinters()
+      .then((res) => {
+        if (res?.success && Array.isArray(res.printers) && res.printers.length > 0) {
+          setBridgePrinters(res.printers);
+        } else {
+          setBridgePrinters(null);
+        }
+      })
+      .catch(() => setBridgePrinters(null))
+      .finally(() => setBridgeScanning(false));
+  };
   useEffect(() => {
     let cancelled = false;
     HardwareBridgeClient.listPrinters()
@@ -475,72 +489,26 @@ export const PrintingSettingsTab = memo(function PrintingSettingsTab({
         </FormSection>
       )}
 
-      {/* ===== 2c. الطباعة الصامتة من المتصفح عبر الجسر (طابعة ويندوز) ===== */}
-      {showPosSettings && (
-        <FormSection
-          title={t('settings.forms.tabs.printing_settings_tab.s177', "الطباعة الصامتة من المتصفح عبر الجسر")}
-          description={t('settings.forms.tabs.printing_settings_tab.s178', "اطبع الإيصال مباشرة على طابعة ويندوز المتصلة بالجهاز (مثل EPSON) بدون نافذة الطباعة، عبر الجسر المحلي. إذا تعذر الوصول للجسر تظهر نافذة الطباعة العادية كالمعتاد.")}
-        >
-          <div className="document-prototype-grid compact-grid-2">
-            <div className="field">
-              <label>{t('settings.forms.tabs.printing_settings_tab.s179', "اسم طابعة ويندوز (للطباعة الصامتة)")}</label>
-              {bridgePrinters !== null && bridgePrinters.length > 0 ? (
-                <CustomSelect
-                  value={form.watch('posWindowsPrinterName') || ''}
-                  onChange={(val) => form.setValue('posWindowsPrinterName', val, { shouldDirty: true, shouldValidate: true })}
-                  options={[
-                    { value: '', label: t('settings.forms.tabs.printing_settings_tab.s180', "- الطباعة العادية (نافذة المتصفح) -") },
-                    ...(savedWindowsPrinter && !bridgePrinters.includes(savedWindowsPrinter) ? [{ value: savedWindowsPrinter, label: savedWindowsPrinter }] : []),
-                    ...bridgePrinters.map((name) => ({ value: name, label: name })),
-                  ]}
-                  disabled={disabled}
-                />
-              ) : (
-                <input
-                  className="purchase-prototype-field-input"
-                  {...form.register('posWindowsPrinterName')}
-                  disabled={disabled}
-                  placeholder={t('settings.forms.tabs.printing_settings_tab.s181', "مثال: EPSON WF-C5290BA — اكتب الاسم كما يظهر في ويندوز")}
-                />
-              )}
-              <small style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
-                {bridgePrinters !== null && bridgePrinters.length > 0
-                  ? t('settings.forms.tabs.printing_settings_tab.s182', "القائمة من الجسر المحلي على هذا الجهاز.")
-                  : t('settings.forms.tabs.printing_settings_tab.s183', "الجسر غير متصل على هذا الجهاز — اكتب اسم الطابعة يدوياً كما يظهر في إعدادات ويندوز.")}
-              </small>
-            </div>
+      {/* ===== 2c. الطابعات المحفوظة في المتصفح عبر الجسر المحلي (Cloud SaaS) ===== */}
+      <BridgeDirectPrintersSection
+        form={form}
+        disabled={disabled}
+        settings={settings}
+        bridgePrinters={bridgePrinters}
+        isScanning={bridgeScanning}
+        onRefreshPrinters={refreshBridgePrinters}
+        showPosSettings={showPosSettings}
+        showBarcodePrinter={showElectronBarcodePrinter}
+      />
 
-            <div className="field">
-              <label>{t('settings.forms.tabs.printing_settings_tab.s184', "عنوان IP لطابعة الشبكة الحرارية")}</label>
-              <input
-                className="purchase-prototype-field-input"
-                {...form.register('posNetworkThermalPrinterIp')}
-                disabled={disabled}
-                placeholder={t('settings.forms.tabs.printing_settings_tab.s185', "مثال: 192.168.1.50")}
-              />
-            </div>
-
-            <div className="field">
-              <label>{t('settings.forms.tabs.printing_settings_tab.s186', "منفذ طابعة الشبكة الحرارية")}</label>
-              <input
-                type="number"
-                className="purchase-prototype-field-input"
-                {...form.register('posNetworkThermalPrinterPort', { valueAsNumber: true })}
-                disabled={disabled}
-                placeholder="9100"
-              />
-            </div>
-          </div>
-        </FormSection>
-      )}
-
-      {/* ===== 2d. الطابعات المباشرة في نسخة الإلكترون (الكاشير والباركود لكل الأنشطة) ===== */}
+      {/* ===== 2d. الطابعات المباشرة في نسخة الإلكترون (الكاشير والباركود والمستندات) ===== */}
       <ElectronDirectPrintersSection
         form={form}
         disabled={disabled}
         systemPrinters={systemPrinters}
         savedCashierPrinter={savedCashierPrinter}
         savedBarcodePrinter={savedBarcodePrinter}
+        savedDocumentPrinter={savedDocumentPrinter}
         showCashierPrinter={showPosSettings}
         showBarcodePrinter={showElectronBarcodePrinter}
       />

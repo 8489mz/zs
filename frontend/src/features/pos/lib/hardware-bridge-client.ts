@@ -44,6 +44,7 @@ export interface BridgeWindowsPrintRequest {
   deviceName?: string;
   pageSize?: 'A4' | 'receipt' | 'auto';
   receiptWidthMm?: number;
+  pageSizeMm?: { widthMm: number; heightMm: number };
 }
 
 export interface BridgeWindowsPrintResponse {

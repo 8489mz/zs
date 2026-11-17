@@ -16,6 +16,7 @@ import { useLocalePreference } from '@/shared/locale/LocaleProvider';
 import { useSettingsUpdateMutation } from '@/features/settings/hooks/useSettingsMutations';
 import { buildZPayFormValues } from '@/features/settings/contracts';
 import { DraftStateNotice } from '@/shared/components/draft-state-notice';
+import { resolveBridgePrinter, resolveElectronPrinter } from '@/lib/printer-preferences';
 import { useAuthStore } from '@/stores/auth-store';
 
 import { GeneralSettingsTab } from './tabs/GeneralSettingsTab';
@@ -291,10 +292,8 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
       posKitchenPrinterMode: 'detailed',
       posKitchenLanguage: 'dual',
       printBilingualItemNames: false,
-      posElectronCashierPrinter: '',
-      posElectronKitchenPrinter: '',
-      posElectronBarcodePrinter: '',
-      posWindowsPrinterName: '',
+      posElectronCashierPrinter: '', posElectronKitchenPrinter: '', posElectronBarcodePrinter: '', posElectronDocumentPrinter: '',
+      posWindowsPrinterName: '', posWindowsBarcodePrinterName: '', posWindowsDocumentPrinterName: '',
       posNetworkThermalPrinterIp: '',
       posNetworkThermalPrinterPort: 9100,
       weightedBarcodeEnabled: false,
@@ -439,7 +438,7 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
   // because the <select> loses its value if the matching <option> wasn't rendered yet during form.reset()
   useEffect(() => {
     if (!systemPrinters.length || !settings) return;
-    for (const key of ['posElectronCashierPrinter', 'posElectronKitchenPrinter', 'posElectronBarcodePrinter'] as const) {
+    for (const key of ['posElectronCashierPrinter', 'posElectronKitchenPrinter', 'posElectronBarcodePrinter', 'posElectronDocumentPrinter'] as const) {
       const saved = String((settings as any)[key] || '').trim();
       if (saved && form.getValues(key) !== saved) form.setValue(key, saved, { shouldDirty: false });
     }
@@ -581,10 +580,8 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
       posKitchenPrinterMode: settings.posKitchenPrinterMode || 'detailed',
       posKitchenLanguage: (settings as any).posKitchenLanguage || 'dual',
       printBilingualItemNames: (settings as any).printBilingualItemNames === true,
-      posElectronCashierPrinter: settings.posElectronCashierPrinter || '',
-      posElectronKitchenPrinter: settings.posElectronKitchenPrinter || '',
-      posElectronBarcodePrinter: settings.posElectronBarcodePrinter || '',
-      posWindowsPrinterName: settings.posWindowsPrinterName || '',
+      posElectronCashierPrinter: resolveElectronPrinter('cashier', settings), posElectronKitchenPrinter: resolveElectronPrinter('kitchen', settings), posElectronBarcodePrinter: resolveElectronPrinter('barcode', settings), posElectronDocumentPrinter: resolveElectronPrinter('document', settings),
+      posWindowsPrinterName: resolveBridgePrinter('cashier', settings), posWindowsBarcodePrinterName: resolveBridgePrinter('barcode', settings), posWindowsDocumentPrinterName: resolveBridgePrinter('document', settings),
       posNetworkThermalPrinterIp: settings.posNetworkThermalPrinterIp || '',
       posNetworkThermalPrinterPort: Number((settings as any).posNetworkThermalPrinterPort ?? 9100) || 9100,
       weightedBarcodeEnabled: settings.weightedBarcodeEnabled === true,
@@ -1311,6 +1308,7 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
           savedCashierPrinter={form.watch('posElectronCashierPrinter')}
           savedKitchenPrinter={form.watch('posElectronKitchenPrinter')}
           savedBarcodePrinter={form.watch('posElectronBarcodePrinter')}
+          savedDocumentPrinter={form.watch('posElectronDocumentPrinter')}
           posKitchenPrinterEnabled={form.watch('posKitchenPrinterEnabled')}
           branchName={selectedBranch?.name}
           locationName={visibleLocations.find((loc) => String(loc.id) === String(form.watch('currentLocationId')))?.name}
