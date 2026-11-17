@@ -219,6 +219,15 @@
     "test/critical/marketplace-webhook-persistence.spec.ts",
     "test/critical/storefront-simulate-order-gate.spec.ts",
     "test/critical/storefront-catalog-book-digits.spec.ts",
-    "test/critical/van-general-feature-overrides.spec.ts"
+    "test/critical/van-general-feature-overrides.spec.ts",
+    "test/critical/purchase-cancel-wac-recompute.spec.ts",
+    "test/critical/purchase-landed-cost-at-receipt.spec.ts",
+    "test/critical/purchase-manager-approval.spec.ts",
+    "test/critical/po-received-quantity-advance.spec.ts",
+    "test/critical/supplier-advance-ui-wiring.spec.ts",
+    "test/critical/supplier-payment-details.spec.ts",
+    "test/critical/noncash-receipt-evidence-gate.spec.ts",
+    "test/critical/stuck-receipt-idempotency.spec.ts",
+    "test/critical/party-payment-instapay-address.spec.ts"
   ]
 }

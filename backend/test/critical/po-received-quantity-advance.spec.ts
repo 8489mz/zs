@@ -133,7 +133,7 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
       partner_type text, partner_id bigint, branch_id bigint, location_id bigint, is_reconciled boolean DEFAULT false);
     CREATE TABLE cost_centers (id bigint, tenant_id text, code text, name text);
     CREATE TABLE accounting_posting_failures (id bigserial PRIMARY KEY, tenant_id text, source_type text, source_id bigint, resolved_at timestamptz);
-    CREATE TABLE products (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, sku text,
+    CREATE TABLE products (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, sku text, item_type text,
       stock_qty numeric DEFAULT 0, reserved_qty numeric DEFAULT 0, cost_price numeric DEFAULT 0,
       track_serials boolean DEFAULT false, updated_at timestamptz);
     CREATE TABLE product_location_stock (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint,
@@ -519,14 +519,16 @@ async function main(): Promise<void> {
     assert.ok(billStart > 0, 'createBillFromReceipts exists');
     const billBody = grnSource.slice(billStart, grnSource.indexOf('\n  async ', billStart + 1));
     assert.ok(!billBody.includes('advancePurchaseOrderReceipt'), 'the GRN bill must never advance: its stock was already received');
-    const writeSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write.service.ts'), 'utf8');
-    const receiveStart = writeSource.indexOf('async receivePurchaseGoods(');
+    const receiveSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write-receive-goods.service.ts'), 'utf8');
+    const receiveStart = receiveSource.indexOf('async receivePurchaseGoods(');
     assert.ok(receiveStart > 0, 'receivePurchaseGoods exists');
-    const receiveBody = writeSource.slice(receiveStart, writeSource.indexOf('\n  async ', receiveStart + 1) === -1 ? undefined : writeSource.indexOf('\n  async ', receiveStart + 1));
+    const receiveBody = receiveSource.slice(receiveStart, receiveSource.indexOf('\n  async ', receiveStart + 1) === -1 ? undefined : receiveSource.indexOf('\n  async ', receiveStart + 1));
     assert.ok(receiveBody.includes('await advancePurchaseOrderReceipt('), 'the legacy receipt must advance the PO in its transaction');
-    const updateStart = writeSource.indexOf('async updatePurchase(');
+    const updateSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write-update.service.ts'), 'utf8');
+    const updateStart = updateSource.indexOf('async updatePurchase(');
     assert.ok(updateStart > 0, 'updatePurchase exists');
-    const updateBody = writeSource.slice(updateStart, writeSource.indexOf('\n  async ', updateStart + 1));
+    const updateEnd = updateSource.indexOf('\n  async ', updateStart + 1);
+    const updateBody = updateSource.slice(updateStart, updateEnd === -1 ? undefined : updateEnd);
     assert.ok(!updateBody.includes('advancePurchaseOrderReceipt'), 'the unreachable edit path must never advance');
     const ordersSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchase-orders.service.ts'), 'utf8');
     assert.ok(!ordersSource.includes('advancePurchaseOrderReceipt'), 'conversion must never advance: it posts no stock');

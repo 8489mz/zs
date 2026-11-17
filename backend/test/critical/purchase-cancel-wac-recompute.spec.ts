@@ -417,17 +417,20 @@ async function main(): Promise<void> {
     // to 6dp, so the basis pin compares at that precision.
     assert.equal(Number(purchaseReceiptBaseUnitCost(33, 2, 10, true).toFixed(6)), 15);
     assert.equal(purchaseReceiptBaseUnitCost(33, 2, 10, false), 16.5);
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write.service.ts'), 'utf8');
-    const cancelStart = serviceSource.indexOf('async cancelPurchase(');
+    const cancelSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write-cancel.service.ts'), 'utf8');
+    const cancelStart = cancelSource.indexOf('async cancelPurchase(');
     assert.ok(cancelStart > 0, 'cancelPurchase exists');
-    const cancelBody = serviceSource.slice(cancelStart, serviceSource.indexOf('\n  async ', cancelStart + 1));
+    const cancelEnd = cancelSource.indexOf('\n  async ', cancelStart + 1);
+    const cancelBody = cancelSource.slice(cancelStart, cancelEnd === -1 ? undefined : cancelEnd);
     assert.ok(cancelBody.includes('await revalueStockReturn(trx, scope.tenantId, Number(item.product_id), stockChange.globalAfter, removeQty'),
       'cancel must re-blend WAC from the corrected globalAfter in the same transaction');
     assert.ok(cancelBody.includes('purchaseReceiptBaseUnitCost('), 'cancel must derive the removed value from the receipt-cost engine');
     assert.ok(cancelBody.includes('PURCHASE_CANCEL_COST_INVALID'), 'cancel must fail closed on a corrupt stored cost');
-    const updateStart = serviceSource.indexOf('async updatePurchase(');
+    const updateSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write-update.service.ts'), 'utf8');
+    const updateStart = updateSource.indexOf('async updatePurchase(');
     assert.ok(updateStart > 0, 'updatePurchase exists');
-    const updateBody = serviceSource.slice(updateStart, serviceSource.indexOf('\n  async ', updateStart + 1));
+    const updateEnd = updateSource.indexOf('\n  async ', updateStart + 1);
+    const updateBody = updateSource.slice(updateStart, updateEnd === -1 ? undefined : updateEnd);
     assert.ok(!updateBody.includes('revalueStockReturn'), 'the edit path stays untouched (unreachable reversal)');
     const postingSource = readFileSync(resolve(__dirname, '../../src/modules/accounting/accounting-posting.service.ts'), 'utf8');
     const reverseStart = postingSource.indexOf('async reversePurchaseJournal(');

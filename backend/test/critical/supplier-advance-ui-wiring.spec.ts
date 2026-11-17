@@ -378,7 +378,7 @@ async function main(): Promise<void> {
   {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
-    const writeSrc = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write.service.ts'), 'utf8');
+    const writeSrc = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write-supplier-payments.service.ts'), 'utf8');
     const derivation = writeSrc.split('\n').find((line) => line.includes('const isAdvance') && line.includes('currentBalance <= 0'));
     assert.ok(derivation, 'createSupplierPayment must derive isAdvance from the zero balance (payload flag OR currentBalance <= 0)');
     const invariants = readFileSync(resolve(__dirname, '../../../ARCHITECTURE_INVARIANTS.md'), 'utf8');

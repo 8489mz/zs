@@ -460,10 +460,10 @@ async function main(): Promise<void> {
   // createPurchase only, through the canonical allocator and the
   // canonical WAC writer; the post-posting step is untouched.
   {
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write.service.ts'), 'utf8');
-    const createStart = serviceSource.indexOf('async createPurchase(');
+    const createSource = readFileSync(resolve(__dirname, '../../src/modules/purchases/services/purchases-write-create.service.ts'), 'utf8');
+    const createStart = createSource.indexOf('async createPurchase(');
     assert.ok(createStart > 0, 'createPurchase exists');
-    const createBody = serviceSource.slice(createStart, serviceSource.indexOf('\n  async updatePurchase(', createStart));
+    const createBody = createSource.slice(createStart, createSource.indexOf('\n  private async generatePurchaseDocNo(', createStart));
     assert.ok(createBody.includes('validateAtReceiptLandedCosts('), 'create must validate at-receipt freight');
     assert.ok(createBody.includes('allocateAtReceiptLandedCosts('), 'create must allocate at-receipt freight over the stocked lines');
     assert.ok(createBody.includes('landedBaseUnitCost'), 'the receipt blend must use the landed base unit cost');
@@ -471,9 +471,9 @@ async function main(): Promise<void> {
       'the WAC blend must receive the landed receipt value');
     assert.ok(createBody.includes("insertInto('purchase_landed_costs')"), 'create must store the freight breakdown');
     assert.ok(createBody.includes('landed_cost_applied_at'), 'create must stamp the header like the post-posting step');
-    const validateStart = serviceSource.indexOf('private validateAtReceiptLandedCosts(');
+    const validateStart = createSource.indexOf('private validateAtReceiptLandedCosts(');
     assert.ok(validateStart > 0, 'the at-receipt validator exists');
-    const validateBody = serviceSource.slice(validateStart, serviceSource.indexOf('\n  private allocateAtReceiptLandedCosts(', validateStart));
+    const validateBody = createSource.slice(validateStart, createSource.indexOf('\n  private allocateAtReceiptLandedCosts(', validateStart));
     assert.ok(validateBody.includes('PURCHASE_LANDED_COST_VENDOR_MISMATCH'), 'a third-party freight vendor must fail closed');
     assert.ok(validateBody.includes('PURCHASE_LANDED_COST_UNSUPPORTED_DOCUMENT'), 'freight on a purchase order must fail closed');
     assert.ok(validateBody.includes('PURCHASE_LANDED_COST_PRECISION'), 'a sub-minor freight amount must fail closed');
