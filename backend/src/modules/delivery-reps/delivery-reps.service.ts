@@ -4,16 +4,12 @@ import { AuditService } from '../../core/audit/audit.service';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
 import { AuthCacheService } from '../../core/auth/services/auth-cache.service';
-import { boundedPage } from '../../common/utils/bounded-page';
-import { AppError } from '../../common/errors/app-error';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { UpsertDeliveryRepDto } from './dto/upsert-delivery-rep.dto';
-import { assertSecurePasscode } from '../../core/auth/utils/password-policy';
 
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
-import { tenantBaseCurrency } from '../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
+import { type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { SalesFinanceService } from '../sales/services/sales-finance.service';
 import { DeliveryRepsAdminService } from './delivery-reps-admin.service';
 import { DeliveryRepsReadsService } from './delivery-reps-reads.service';
