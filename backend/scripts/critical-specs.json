@@ -228,6 +228,22 @@
     "test/critical/supplier-payment-details.spec.ts",
     "test/critical/noncash-receipt-evidence-gate.spec.ts",
     "test/critical/stuck-receipt-idempotency.spec.ts",
-    "test/critical/party-payment-instapay-address.spec.ts"
+    "test/critical/party-payment-instapay-address.spec.ts",
+    "test/critical/delivery-cod-custody-gl.spec.ts",
+    "test/critical/delivery-rep-custody-net-returns.spec.ts",
+    "test/critical/delivery-rep-prepaid-shift-treasury-m6.spec.ts",
+    "test/critical/delivery-rep-settle-all-confirmation-counted-cash.spec.ts",
+    "test/critical/delivery-rep-single-settle-counted-cash.spec.ts",
+    "test/critical/dispatch-state-guards-audit.spec.ts",
+    "test/critical/driver-portal-pin-change.spec.ts",
+    "test/critical/driver-portal-remaining-amount.spec.ts",
+    "test/critical/driver-token-invalidation-m14.spec.ts",
+    "test/critical/partial-cod-settlement-m13.spec.ts",
+    "test/critical/portal-tenant-status.spec.ts",
+    "test/critical/rep-custody-ledger-m12.spec.ts",
+    "test/critical/rep-driver-writes-ownership-m16.spec.ts",
+    "test/critical/rest-cod-collection-truth.spec.ts",
+    "test/critical/restaurant-paid-gates.spec.ts",
+    "test/critical/van-profit-rep-reporting.spec.ts"
   ]
 }
