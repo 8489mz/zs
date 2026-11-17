@@ -248,7 +248,14 @@ async function main(): Promise<void> {
         CREATE TABLE import_sale_allocations (id bigserial PRIMARY KEY, tenant_id text, account_id text,
           sale_id bigint, sale_item_id bigint, product_id bigint, quantity numeric, allocation_type text,
           reversal_of_allocation_id bigint, created_at timestamptz DEFAULT NOW());
-        CREATE TABLE import_inventory_lots (id bigserial PRIMARY KEY, tenant_id text, product_id bigint, status text,
+        CREATE TABLE sale_inventory_batch_allocations (id bigserial PRIMARY KEY, tenant_id text, account_id text,
+      sale_id bigint, sale_item_id bigint, product_id bigint, inventory_batch_id bigint, quantity numeric);
+    CREATE TABLE inventory_batches (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint,
+      batch_number varchar(100) NOT NULL, expiry_date varchar(30), quantity numeric(14,3) DEFAULT 0 NOT NULL,
+      unit_cost numeric(14,3) DEFAULT 0 NOT NULL, location_id integer, supplier_name varchar(150),
+      status varchar(50) DEFAULT 'active' NOT NULL, notes text, created_at timestamptz DEFAULT NOW() NOT NULL,
+      updated_at timestamptz DEFAULT NOW() NOT NULL);
+    CREATE TABLE import_inventory_lots (id bigserial PRIMARY KEY, tenant_id text, product_id bigint, status text,
           remaining_quantity numeric, location_id bigint, receipt_date date, created_at timestamptz DEFAULT NOW());
         CREATE TABLE return_documents (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, return_type text,
           invoice_id bigint, settlement_mode text, refund_method text, refund_allocations jsonb, total numeric, note text,

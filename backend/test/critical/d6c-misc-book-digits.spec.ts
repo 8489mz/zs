@@ -232,10 +232,10 @@ async function main(): Promise<void> {
     const { pg, db } = await makeDb();
     try {
       await pg.exec(`
-        CREATE TABLE customers (id bigint PRIMARY KEY, tenant_id text, balance numeric, credit_limit numeric, store_credit_balance numeric, customer_type text, loyalty_points numeric, is_active boolean);
+        CREATE TABLE customers (id bigint PRIMARY KEY, tenant_id text, balance numeric, credit_limit numeric, store_credit_balance numeric, customer_type text, loyalty_points numeric, is_active boolean, price_list_id integer);
         CREATE TABLE sales (id bigint PRIMARY KEY, tenant_id text, customer_id bigint, total numeric, status text, created_at timestamptz);
         CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text, return_type text, invoice_id bigint,
-      tip_relief numeric(15, 3), courier_relief numeric(15, 3));
+      tip_relief numeric(15, 3), courier_relief numeric(15, 3), refund_allocations jsonb);
         INSERT INTO customers VALUES (1, 't1', 0.005, 100.13, 0, 'cash', 0, true), (2, 't3', 0.005, 100.13, 0, 'cash', 0, true);
       `);
       await seedCurrency(db, 't1', 'KWD');
@@ -260,13 +260,13 @@ async function main(): Promise<void> {
         CREATE TABLE sessions (id bigint PRIMARY KEY, tenant_id text, expires_at timestamptz);
         CREATE TABLE branches (id bigint PRIMARY KEY, tenant_id text, is_active boolean);
         CREATE TABLE stock_locations (id bigint PRIMARY KEY, tenant_id text, is_active boolean);
-        CREATE TABLE customers (id bigint PRIMARY KEY, tenant_id text, is_active boolean, balance numeric);
+        CREATE TABLE customers (id bigint PRIMARY KEY, tenant_id text, is_active boolean, balance numeric, price_list_id integer);
         CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, is_active boolean, balance numeric, supplier_type text, overdraft_limit numeric);
         CREATE TABLE products (id bigint PRIMARY KEY, tenant_id text, is_active boolean);
         CREATE TABLE sales (id bigint PRIMARY KEY, tenant_id text);
         CREATE TABLE purchases (id bigint PRIMARY KEY, tenant_id text);
         CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text,
-      tip_relief numeric(15, 3), courier_relief numeric(15, 3));
+      tip_relief numeric(15, 3), courier_relief numeric(15, 3), refund_allocations jsonb);
         CREATE TABLE expenses (id bigint PRIMARY KEY, tenant_id text);
         CREATE TABLE treasury_transactions (id bigint PRIMARY KEY, tenant_id text, amount numeric);
         CREATE TABLE backup_snapshots (id bigint PRIMARY KEY, tenant_id text);
@@ -443,10 +443,10 @@ async function main(): Promise<void> {
       await pg.exec(`
         CREATE TABLE return_items (id bigint PRIMARY KEY, return_document_id bigint, product_id bigint, product_name text, qty numeric, line_total numeric, tenant_id text);
         CREATE TABLE return_documents (id bigint PRIMARY KEY, doc_no text, return_type text, invoice_id bigint, note text, settlement_mode text, refund_method text, created_at timestamptz, created_by bigint, tenant_id text,
-      tip_relief numeric(15, 3), courier_relief numeric(15, 3));
+      tip_relief numeric(15, 3), courier_relief numeric(15, 3), refund_allocations jsonb);
         CREATE TABLE users (id bigint PRIMARY KEY, username text, tenant_id text);
         CREATE TABLE sales (id bigint PRIMARY KEY, doc_no text, order_type text, customer_id bigint, tenant_id text);
-        CREATE TABLE customers (id bigint PRIMARY KEY, name text, tenant_id text);
+        CREATE TABLE customers (id bigint PRIMARY KEY, name text, tenant_id text, price_list_id integer);
         CREATE TABLE purchases (id bigint PRIMARY KEY, doc_no text, supplier_id bigint, tenant_id text);
         CREATE TABLE suppliers (id bigint PRIMARY KEY, name text, tenant_id text, supplier_type text, overdraft_limit numeric);
         INSERT INTO sales VALUES (20, 'Z-20', 'pos', NULL, 't1'), (21, 'Z-21', 'pos', NULL, 't3');
@@ -494,7 +494,7 @@ async function main(): Promise<void> {
     try {
       await pg.exec(`
         CREATE TABLE ar_dunning_levels (id text PRIMARY KEY, tenant_id text, level_order int, level_name text, days_past_due int, auto_block_sales boolean, action_type text, template_text text);
-        CREATE TABLE customers (id bigint PRIMARY KEY, tenant_id text, name text, phone text, balance numeric, credit_limit numeric, is_credit_blocked boolean, is_active boolean);
+        CREATE TABLE customers (id bigint PRIMARY KEY, tenant_id text, name text, phone text, balance numeric, credit_limit numeric, is_credit_blocked boolean, is_active boolean, price_list_id integer);
         CREATE TABLE sales (id bigint PRIMARY KEY, tenant_id text, customer_id bigint, created_at timestamptz, total numeric, paid_amount numeric, status text);
         CREATE TABLE ar_collection_cases (id text PRIMARY KEY, tenant_id text, customer_id bigint, current_level_id text, total_overdue numeric, oldest_overdue_days int, status text, promised_payment_date timestamptz, promised_amount numeric, updated_at timestamptz, UNIQUE (tenant_id, customer_id));
         INSERT INTO ar_dunning_levels VALUES ('lvl-1-t1', 't1', 1, 'تذكير ودي', 7, false, 'whatsapp', 'مستحق {total_overdue}'), ('lvl-1-t3', 't3', 1, 'تذكير ودي', 7, false, 'whatsapp', 'مستحق {total_overdue}');
@@ -549,10 +549,10 @@ async function main(): Promise<void> {
         CREATE TABLE supplier_payments (id bigint PRIMARY KEY, tenant_id text, supplier_id bigint, created_by bigint, payment_date timestamptz, created_at timestamptz, branch_id bigint, location_id bigint, payment_channel text, amount numeric, note text);
         CREATE TABLE suppliers (id bigint PRIMARY KEY, tenant_id text, name text, supplier_type text, overdraft_limit numeric);
         CREATE TABLE customer_payments (id bigint PRIMARY KEY, tenant_id text, created_by bigint, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, payment_channel text, amount numeric, note text);
-        CREATE TABLE expenses (id bigint PRIMARY KEY, tenant_id text, created_by bigint, expense_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, amount numeric, title text, note text);
+        CREATE TABLE expenses (id bigint PRIMARY KEY, tenant_id text, created_by bigint, expense_date timestamptz, created_at timestamptz DEFAULT NOW(), branch_id bigint, location_id bigint, amount numeric, title text, note text, cancelled_at timestamptz);
         CREATE TABLE treasury_transactions (id bigserial PRIMARY KEY, tenant_id text, account_id text, txn_type text, amount numeric, note text, reference_type text, reference_id bigint, created_by bigint, branch_id bigint, location_id bigint, payment_channel text, return_document_id bigint, request_key text, created_at timestamptz DEFAULT NOW());
         CREATE TABLE delivery_representatives (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, vehicle_plate text, van_location_id bigint, is_van_rep boolean DEFAULT false, updated_at timestamptz DEFAULT NOW());
-        CREATE TABLE cashier_shifts (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, opened_by bigint, status text, branch_id bigint, location_id bigint, opening_cash numeric, opening_note text, expected_cash numeric, counted_cash numeric, variance numeric, close_note text, closed_by bigint, created_at timestamptz DEFAULT NOW(), closed_at timestamptz, updated_at timestamptz, variance_resolution text, variance_journal_entry_id bigint, variance_charged_to_user_id bigint, variance_approved_by bigint, variance_approved_at timestamptz);
+        CREATE TABLE cashier_shifts (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, opened_by bigint, status text, branch_id bigint, location_id bigint, opening_cash numeric, opening_note text, expected_cash numeric, counted_cash numeric, variance numeric, close_note text, closed_by bigint, created_at timestamptz DEFAULT NOW(), closed_at timestamptz, updated_at timestamptz, variance_resolution text, variance_journal_entry_id bigint, variance_charged_to_user_id bigint, variance_approved_by bigint, variance_approved_at timestamptz, terminal_code varchar(32));
         INSERT INTO users VALUES (2, 't1', 'cashier-a', NULL, 'cashier', NULL, NULL, true), (3, 't3', 'cashier-a', NULL, 'cashier', NULL, NULL, true);
         INSERT INTO cashier_shifts (id, tenant_id, account_id, doc_no, opened_by, status, opening_cash, expected_cash, counted_cash, variance, created_at) VALUES (1, 't1', 'a1', 'SHIFT-1', 2, 'open', 0, 0, 0, 100.125, '2026-01-01T00:00:00Z'), (2, 't3', 'a1', 'SHIFT-2', 3, 'open', 0, 0, 0, 100.125, '2026-01-01T00:00:00Z');
         INSERT INTO return_documents (id, tenant_id, doc_no, return_type, settlement_mode, refund_method, refund_allocations, created_at) VALUES (10, 't1', 'RET-10', 'sale', 'refund', 'cash', '[]', '2026-01-01T10:00:00Z'), (11, 't3', 'RET-11', 'sale', 'refund', 'cash', '[]', '2026-01-01T10:00:00Z');
