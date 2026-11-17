@@ -1,17 +1,10 @@
-import { resolveBusinessDateKey } from '../accounting/engines/accounting-date.engine';
-import { tenantBaseCurrency } from '../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney as roundBookMoney } from '../accounting/engines/money-minor-units.engine';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Kysely, Transaction, sql } from '../../database/kysely';
 import { AuditService } from '../../core/audit/audit.service';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
-import { AppError } from '../../common/errors/app-error';
-import { ensureReturnQtyWithinLimit } from '../../common/utils/financial-integrity';
 // previewConsumableStockQty is kept in this import: check-architecture-guardrails.cjs requires the token in returns.service.ts, although no method left in this file calls it.
-import { applyStockDelta, lockStockProducts, previewConsumableStockQty } from '../../common/utils/location-stock-ledger';
-import { normalizeReturnItems } from './helpers/return-payload.helper';
-import { buildSaleReturnLine, calculateReturnDocumentTotal } from './helpers/returns-write.helper';
+import { applyStockDelta, previewConsumableStockQty } from '../../common/utils/location-stock-ledger';
 import { KYSELY_DB } from '../../database/database.constants';
 import { Database } from '../../database/database.types';
 import { TransactionHelper } from '../../database/helpers/transaction.helper';
@@ -19,29 +12,16 @@ import { CreateReturnDto } from './dto/create-return.dto';
 import { AccountingPostingService } from '../accounting/accounting-posting.service';
 import { IdempotencyService } from '../../core/idempotency/idempotency.service';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
-import { allocateRefundTenders, type RefundTender } from './engines/refund-tender.engine';
 import { type ConditionalDiscountForfeitBreakdown, type ConditionalDiscountForfeitResult } from './engines/conditional-header-discount-return.engine';
-import { allocateInvoiceDiscount } from '../sales/engines/invoice-discount.engine';
 import { settlePosExchange } from '../sales/engines/pos-exchange.engine';
 import { ReturnsWriteHelpersService } from './returns-write-helpers.service';
-import type { ReturnDocumentInput } from './returns.types';
+import type { ExchangeReturnContext, ReturnInputItem, ReturnDocumentInput } from './returns.types';
+export type { ExchangeReturnContext };
 import { ReturnsReliefService } from './returns-relief.service';
 import { ReturnsReadsService } from './returns-reads.service';
 import { ReturnsCreateService } from './returns-create.service';
 import { ReturnsSaleReturnService } from './returns-sale-return.service';
 import { ReturnsPurchaseReturnService } from './returns-purchase-return.service';
-
-export interface ExchangeReturnContext {
-  returnId: number;
-  total: number;
-  customerId: number;
-  branchId: number | null;
-  locationId: number | null;
-  refundBase: Omit<Parameters<typeof allocateRefundTenders>[0], 'amount' | 'requested'>;
-}
-
-type ReturnInputItem = { productId: number; productName: string; qty: number; saleItemId?: number; purchaseItemId?: number; batchId?: number; serials?: string[] };
-type ReturnDocumentInput = { returnType: 'sale' | 'purchase'; invoiceId: number; settlementMode: string; refundMethod: string; total: number; note: string; branchId: number | null; locationId: number | null; refundAllocations?: Array<{ tender: RefundTender | 'payable'; amount: number }>; tipRelief?: number; courierRelief?: number; forfeitedHeaderDiscount?: number | null; goodwillAmount?: number | null; goodwillReason?: string | null; headerDiscountMode?: string | null };
 
 @Injectable()
 export class ReturnsService {
