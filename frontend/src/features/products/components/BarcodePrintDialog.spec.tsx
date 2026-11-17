@@ -43,7 +43,7 @@ vi.mock('@/features/pos/lib/hardware-bridge-client', () => ({
 
 function makeProduct(overrides: Partial<Product>): Product {
   return {
-    id: 1,
+    id: '1',
     name: 'تيشيرت قطن',
     nameEn: 'Cotton Tee',
     barcode: '100001',
@@ -60,12 +60,12 @@ describe('BarcodePrintDialog', () => {
       defaultOptions: { queries: { retry: false } },
     });
 
-    const singleProduct = makeProduct({ id: 10, name: 'تيشيرت أبيض M', color: 'ابيض', size: 'M', barcode: '100010' });
+    const singleProduct = makeProduct({ id: '10', name: 'تيشيرت أبيض M', color: 'ابيض', size: 'M', barcode: '100010' });
 
     const batchItems: BarcodePrintItem[] = [
-      { product: makeProduct({ id: 1, name: 'تيشيرت أسود XL', color: 'اسود', size: 'XL', barcode: '100001', stock: 2 }), copies: 2 },
-      { product: makeProduct({ id: 2, name: 'تيشيرت أبيض M', color: 'ابيض', size: 'M', barcode: '100002', stock: 3 }), copies: 3 },
-      { product: makeProduct({ id: 3, name: 'تيشيرت أزرق L', color: 'ازرق', size: 'L', barcode: '100003', stock: 0 }), copies: 1 },
+      { product: makeProduct({ id: '1', name: 'تيشيرت أسود XL', color: 'اسود', size: 'XL', barcode: '100001', stock: 2 }), copies: 2 },
+      { product: makeProduct({ id: '2', name: 'تيشيرت أبيض M', color: 'ابيض', size: 'M', barcode: '100002', stock: 3 }), copies: 3 },
+      { product: makeProduct({ id: '3', name: 'تيشيرت أزرق L', color: 'ازرق', size: 'L', barcode: '100003', stock: 0 }), copies: 1 },
     ];
 
     const wrap = (ui: React.ReactElement) => (
