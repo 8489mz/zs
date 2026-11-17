@@ -1,5 +1,5 @@
-import { getIndustryProfile, resolvePillarScopedFeatures, type IndustryProfile } from '../../core/tenant/industry-profiles';
-import { getFallbackPlanFeatures, resolvePlanRank, type PlanRank } from '../../core/tenant/plan-tier.util';
+import { resolvePlanRank } from '../../core/tenant/plan-tier.util';
+import type { IndustryProfile } from '../../core/tenant/industry-profiles';
 import { sql, type Kysely } from '../../database/kysely';
 import type { Database } from '../../database/database.types';
 
@@ -27,150 +27,10 @@ export const PROTECTED_MODULE_KEYS = [
   'posShowCartMeta',
   'phoneOrdersModuleEnabled',
   'autoPartsModuleEnabled',
+  'weightedBarcodeEnabled',
+  'clothingModuleEnabled',
+  'enableEnterpriseFeatures',
 ] as const;
-
-const ALWAYS_PROTECTED_SWITCHES = new Set<string>([
-  'posModuleEnabled',
-  'contractingModuleEnabled',
-  'maritimeFreightModuleEnabled',
-]);
-
-interface SelfInstallRule {
-  requiredRank: PlanRank;
-  featureCode?: string;
-  altFeatureCode?: string;
-  blockedProfiles?: string[];
-  allowedProfiles?: string[];
-  requiresPos?: boolean;
-  /**
-   * When true (vanSales/deliveryFleet), retail defaultFeatures['deliveryReps'] must NOT
-   * unlock the module on starter (plan_basic / tier_band*_L1); require plan rank >= requiredRank
-   * and plan-table/extra grant (or wholesale_van profile).
-   */
-  requirePlanOrExtraForFeature?: boolean;
-}
-
-const POS_BLOCKED_PROFILES = [
-  'contracting',
-  'maritime_freight',
-  'warehousing',
-  'wholesale_van',
-  'services',
-  'import_export',
-  'manufacturing',
-];
-
-const DELIVERY_BLOCKED_PROFILES = [
-  'contracting',
-  'maritime_freight',
-  'warehousing',
-  'services',
-  'manufacturing',
-];
-
-export const SELF_INSTALLABLE_MODULE_RULES: Record<string, SelfInstallRule> = {
-  comboModuleEnabled: {
-    requiredRank: 2,
-    blockedProfiles: ['contracting', 'maritime_freight', 'warehousing', 'services'],
-  },
-  crmModuleEnabled: {
-    requiredRank: 2,
-  },
-  servicesModuleEnabled: {
-    requiredRank: 2,
-    blockedProfiles: ['contracting', 'maritime_freight'],
-  },
-  purchasesModuleEnabled: {
-    requiredRank: 2,
-    featureCode: 'purchases',
-  },
-  inventoryModuleEnabled: {
-    requiredRank: 2,
-    featureCode: 'inventory',
-    blockedProfiles: ['maritime_freight', 'services'],
-  },
-  posShowCartMeta: {
-    requiredRank: 3,
-    requiresPos: true,
-    blockedProfiles: POS_BLOCKED_PROFILES,
-  },
-  restaurantModuleEnabled: {
-    requiredRank: 3,
-    featureCode: 'restaurant',
-    requiresPos: true,
-  },
-  enablePharmacyModule: {
-    requiredRank: 3,
-    featureCode: 'pharmacy',
-  },
-  enableMobileStoreFeatures: {
-    requiredRank: 3,
-    featureCode: 'maintenance',
-  },
-  manufacturingModuleEnabled: {
-    requiredRank: 3,
-    featureCode: 'manufacturing',
-  },
-  importModuleEnabled: {
-    requiredRank: 3,
-    featureCode: 'import',
-  },
-  hrModuleEnabled: {
-    requiredRank: 3,
-    featureCode: 'hr',
-  },
-  enableEnterpriseFeatures: {
-    requiredRank: 3,
-    featureCode: 'accounting',
-  },
-  installmentsModuleEnabled: {
-    requiredRank: 2,
-    featureCode: 'installments',
-    blockedProfiles: ['maritime_freight'],
-  },
-  fixedAssetsModuleEnabled: {
-    requiredRank: 3,
-    featureCode: 'fixed_assets',
-  },
-  taxDeclarationModuleEnabled: {
-    requiredRank: 3,
-    featureCode: 'vat_declaration',
-    altFeatureCode: 'taxIntegration',
-  },
-  deliveryRepsModuleEnabled: {
-    requiredRank: 1,
-    featureCode: 'deliveryReps',
-    blockedProfiles: DELIVERY_BLOCKED_PROFILES,
-  },
-  deliveryFleetModuleEnabled: {
-    requiredRank: 2,
-    featureCode: 'deliveryReps',
-    altFeatureCode: 'vanSales',
-    blockedProfiles: DELIVERY_BLOCKED_PROFILES,
-    requirePlanOrExtraForFeature: true,
-  },
-  vanSalesModuleEnabled: {
-    requiredRank: 2,
-    featureCode: 'deliveryReps',
-    altFeatureCode: 'vanSales',
-    blockedProfiles: DELIVERY_BLOCKED_PROFILES,
-    requirePlanOrExtraForFeature: true,
-  },
-  storefrontModuleEnabled: {
-    requiredRank: 4,
-    featureCode: 'storefront',
-    blockedProfiles: ['contracting', 'maritime_freight', 'warehousing', 'services'],
-  },
-  phoneOrdersModuleEnabled: {
-    requiredRank: 2,
-    requiresPos: true,
-    blockedProfiles: POS_BLOCKED_PROFILES,
-  },
-  autoPartsModuleEnabled: {
-    requiredRank: 1,
-    allowedProfiles: ['auto_parts'],
-  },
-};
 
 export interface ModuleToggleAuthContext {
   isSuperAdmin: boolean;
@@ -201,71 +61,18 @@ export function parseTenantExtraFeaturesList(raw: unknown): string[] {
 }
 
 /**
- * Determines whether a non-super-admin tenant settings manager may apply a
- * module toggle (`true` only — uninstalling `false` stays super-admin-only)
- * based on the tenant's actual plan, extra features, and business vertical.
+ * Strict SaaS-Only Module Control (INV-SAAS-ONLY-MODULE-CONTROL):
+ * Non-platform actors (regular tenant admins/cashiers) cannot install or
+ * uninstall module toggles via PUT /api/settings. Only platform `super_admin`
+ * (or an active `sessions.impersonated_by` platform session) and SaaS Admin plan sync
+ * manage application switches; tenant admins retain operational settings.
  */
 export function canTenantAdminSelfInstallModule(
-  key: string,
-  requestedValue: unknown,
-  context: Omit<ModuleToggleAuthContext, 'isSuperAdmin'>,
+  _key: string,
+  _requestedValue: unknown,
+  _context: Omit<ModuleToggleAuthContext, 'isSuperAdmin'>,
 ): boolean {
-  if (requestedValue !== true) return false;
-  if (ALWAYS_PROTECTED_SWITCHES.has(key)) return false;
-
-  const rule = SELF_INSTALLABLE_MODULE_RULES[key];
-  if (!rule) return false;
-
-  const profile = context.profile || getIndustryProfile(null);
-  if (rule.allowedProfiles && !rule.allowedProfiles.includes(profile.key)) {
-    return false;
-  }
-
-  const extraList = parseTenantExtraFeaturesList(context.extraFeatures);
-  const extraSet = new Set(extraList);
-
-  const featureCodes = [rule.featureCode, rule.altFeatureCode].filter((c): c is string => Boolean(c));
-  if (featureCodes.some((c) => extraSet.has(`-${c}`))) {
-    return false;
-  }
-
-  const explicitlyGranted = featureCodes.some((c) => extraSet.has(c) || extraSet.has(`+${c}`));
-  if (explicitlyGranted) {
-    return true;
-  }
-
-  if (rule.blockedProfiles?.includes(profile.key)) {
-    return false;
-  }
-
-  if (rule.requiresPos) {
-    const posDisabledByProfile = POS_BLOCKED_PROFILES.includes(profile.key);
-    if (posDisabledByProfile || context.posModuleEnabled === false) {
-      return false;
-    }
-  }
-
-  const baseFeatures =
-    context.dbPlanFeatures && context.dbPlanFeatures.length > 0
-      ? context.dbPlanFeatures
-      : getFallbackPlanFeatures(context.planId);
-
-  const effectiveFeatures = new Set(resolvePillarScopedFeatures(profile.key, baseFeatures, extraList));
-  const rank = resolvePlanRank(context.planId) ?? 1;
-
-  if (rule.requirePlanOrExtraForFeature && profile.key !== 'wholesale_van') {
-    if (rank < rule.requiredRank) {
-      return false;
-    }
-    const planFeatureSet = new Set(baseFeatures);
-    return featureCodes.some((code) => planFeatureSet.has(code));
-  }
-
-  if (featureCodes.length > 0) {
-    return featureCodes.some((code) => effectiveFeatures.has(code));
-  }
-
-  return rank >= rule.requiredRank;
+  return false;
 }
 
 export function filterProtectedModuleKeysForActor(

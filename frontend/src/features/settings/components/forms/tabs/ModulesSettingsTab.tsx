@@ -7,7 +7,7 @@ import { FormSection } from '@/shared/components/form-section';
 import { LightbulbIcon, XIcon, CheckIcon, StarIcon, ChevronDownIcon, MonitorIcon, PackageIcon, ReceiptIcon, UsersIcon, PhoneCallIcon, TruckIcon } from '@/shared/components/icons/AppIcons';
 import { useHasFeature } from '@/shared/hooks/use-permission';
 import { useAuthStore } from '@/stores/auth-store';
-import { isPlatformAdmin, isDesktopOfflineApp } from '@/app/router/access';
+import { isPlatformAdmin, isDesktopOfflineApp, canManagePlatformModules } from '@/app/router/access';
 import { DialogShell } from '@/shared/components/dialog-shell';
 import { MAINTENANCE_PROFILES, getMaintenanceProfile, type MaintenanceProfileKey } from '@/features/maintenance/constants/maintenance-profiles';
 import { IndustryModeSelectorCard } from '@/features/settings/components/workspace-sections/IndustryModeSelectorCard';
@@ -309,7 +309,7 @@ export const ModulesSettingsTab = memo(function ModulesSettingsTab({ form, disab
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const tenant = useAuthStore((s) => s.tenant);
-  const isSuperAdmin = isPlatformAdmin(user) || (user?.role === 'super_admin' && String(user?.username || '').trim().toLowerCase() === 'zs');
+  const isSuperAdmin = canManagePlatformModules(user) || (user?.role === 'super_admin' && String(user?.username || '').trim().toLowerCase() === 'zs');
 
   const rawActivity = String(tenant?.activityType || tenant?.pillar || form.watch('businessIndustry') || form.watch('activityType') || 'retail_general').trim().toLowerCase();
   const isContractingVertical = rawActivity === 'contracting' || rawActivity === 'construction' || rawActivity === 'مقاولات';
@@ -548,24 +548,39 @@ export const ModulesSettingsTab = memo(function ModulesSettingsTab({ form, disab
                 {t('settings.forms.tabs.modules_settings_tab.s10', "اختر النمط المناسب لحجم نشاطك لضبط القوائم والواجهات؛ يتم تدوين القيود المحاسبية في الخلفية تلقائياً في كلا النمطين.")}
               </span>
             </div>
-            <span style={{
-              fontSize: '0.72rem',
-              fontWeight: 800,
-              background: form.watch('enableEnterpriseFeatures') ? '#eff6ff' : '#f0fdf4',
-              color: form.watch('enableEnterpriseFeatures') ? '#1d4ed8' : '#166534',
-              border: `1px solid ${form.watch('enableEnterpriseFeatures') ? '#bfdbfe' : '#bbf7d0'}`,
-              padding: '3px 10px',
-              borderRadius: '6px',
-            }}>
-              {form.watch('enableEnterpriseFeatures') ? t('settings.forms.tabs.modules_settings_tab.s11', "النمط المؤسسي المتقدم") : t('settings.forms.tabs.modules_settings_tab.s12', "النمط التجاري المبسط")}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {!isSuperAdmin && (
+                <span style={{
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  background: '#f8fafc',
+                  color: '#475569',
+                  border: '1px solid #cbd5e1',
+                  padding: '3px 9px',
+                  borderRadius: '6px',
+                }}>
+                  يُدار عبر إدارة المنصة (SaaS)
+                </span>
+              )}
+              <span style={{
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                background: form.watch('enableEnterpriseFeatures') ? '#eff6ff' : '#f0fdf4',
+                color: form.watch('enableEnterpriseFeatures') ? '#1d4ed8' : '#166534',
+                border: `1px solid ${form.watch('enableEnterpriseFeatures') ? '#bfdbfe' : '#bbf7d0'}`,
+                padding: '3px 10px',
+                borderRadius: '6px',
+              }}>
+                {form.watch('enableEnterpriseFeatures') ? t('settings.forms.tabs.modules_settings_tab.s11', "النمط المؤسسي المتقدم") : t('settings.forms.tabs.modules_settings_tab.s12', "النمط التجاري المبسط")}
+              </span>
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '14px' }}>
             {/* Option 1: Simple Retail Mode */}
             <div
               onClick={() => {
-                if (disabled) return;
+                if (disabled || !isSuperAdmin) return;
                 form.setValue('enableEnterpriseFeatures', false, { shouldDirty: true, shouldValidate: true });
               }}
               style={{
@@ -573,7 +588,7 @@ export const ModulesSettingsTab = memo(function ModulesSettingsTab({ form, disab
                 background: !form.watch('enableEnterpriseFeatures') ? '#f8fafc' : '#ffffff',
                 borderRadius: '10px',
                 padding: '14px 16px',
-                cursor: disabled ? 'not-allowed' : 'pointer',
+                cursor: (disabled || !isSuperAdmin) ? 'default' : 'pointer',
                 transition: 'all 0.15s ease',
                 display: 'flex',
                 flexDirection: 'column',
@@ -608,7 +623,7 @@ export const ModulesSettingsTab = memo(function ModulesSettingsTab({ form, disab
             {/* Option 2: Enterprise Trading Mode */}
             <div
               onClick={() => {
-                if (disabled) return;
+                if (disabled || !isSuperAdmin) return;
                 form.setValue('enableEnterpriseFeatures', true, { shouldDirty: true, shouldValidate: true });
               }}
               style={{
@@ -616,7 +631,7 @@ export const ModulesSettingsTab = memo(function ModulesSettingsTab({ form, disab
                 background: form.watch('enableEnterpriseFeatures') ? '#f8fafc' : '#ffffff',
                 borderRadius: '10px',
                 padding: '14px 16px',
-                cursor: disabled ? 'not-allowed' : 'pointer',
+                cursor: (disabled || !isSuperAdmin) ? 'default' : 'pointer',
                 transition: 'all 0.15s ease',
                 display: 'flex',
                 flexDirection: 'column',

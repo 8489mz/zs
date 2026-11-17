@@ -259,8 +259,9 @@ async function main(): Promise<void> {
     const settingsService = new SettingsService(db, { log: async () => undefined } as never, {} as never);
     const provisioning = new TrialTenantProvisioningService(db);
 
-    // 1) All 11 retail tenant types self-install deliveryRepsModuleEnabled on starter/pro/ultimate
-    //    WITHOUT plan_features rows and WITHOUT extra_features, even when DB starts with false (muse2 case).
+    // 1) All 11 retail tenant types x 4 plans block regular tenant-admin self-install per
+    //    INV-SAAS-ONLY-MODULE-CONTROL, while SaaS/platform impersonation (impersonatedBy = 1)
+    //    activates deliveryRepsModuleEnabled on starter/pro/ultimate even starting from false.
     const plansToCheck = ['plan_basic', 'tier_band1_L1', 'plan_pro', 'plan_ultimate'] as const;
     for (const activity of RETAIL_PROFILES) {
       for (const planId of plansToCheck) {
@@ -298,14 +299,24 @@ async function main(): Promise<void> {
           `explicit false in DB must remain observable before activation (${tenantId})`,
         );
 
-        const saved = await settingsService.saveSettings(
+        await settingsService.saveSettings(
           { deliveryRepsModuleEnabled: true },
           ownerAuth(tenantId, { planId, activityType: activity }),
         );
         assert.equal(
+          await rawSetting(anyDb, tenantId, 'deliveryRepsModuleEnabled'),
+          'false',
+          `regular tenant admin cannot self-toggle deliveryRepsModuleEnabled (${tenantId})`,
+        );
+
+        const saved = await settingsService.saveSettings(
+          { deliveryRepsModuleEnabled: true },
+          ownerAuth(tenantId, { planId, activityType: activity, impersonatedBy: 1 }),
+        );
+        assert.equal(
           saved.deliveryRepsModuleEnabled,
           true,
-          `retail owner on ${activity} / ${planId} must activate deliveryRepsModuleEnabled`,
+          `SaaS impersonator on ${activity} / ${planId} must activate deliveryRepsModuleEnabled`,
         );
         assert.equal(
           await rawSetting(anyDb, tenantId, 'deliveryRepsModuleEnabled'),
@@ -314,7 +325,7 @@ async function main(): Promise<void> {
         );
       }
     }
-    console.log('  1) all 11 retail types x 4 plans (starter included) self-install persisted: OK');
+    console.log('  1) all 11 retail types x 4 plans enforce SaaS-only activation + persist under impersonation: OK');
 
     // 2) Unset retail starter tenant defaults deliveryRepsModuleEnabled=true in getSettings
     await anyDb

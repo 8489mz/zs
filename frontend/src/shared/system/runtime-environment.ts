@@ -34,3 +34,15 @@ export function isPlatformAdmin(user: { role?: string; tenantId?: string; accoun
   return Boolean(isPlatformTenant || canUseAccountFallback);
 }
 
+/**
+ * تحديد ما إذا كان المستخدم يملك صلاحية تفعيل/إيقاف الموديولات والباقات
+ * (سوبر أدمن المنصة أو أثناء التصفح كمالك من لوحة الساس عبر sessions.impersonated_by).
+ */
+export function canManagePlatformModules(
+  user: { role?: string; tenantId?: string; accountId?: string; isPlatformImpersonation?: boolean } | null | undefined,
+): boolean {
+  if (isPlatformAdmin(user)) return true;
+  if (!user || isDesktopOfflineApp()) return false;
+  return Boolean(user.isPlatformImpersonation);
+}
+

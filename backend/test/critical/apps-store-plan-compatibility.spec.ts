@@ -1,17 +1,17 @@
 /*
- * Proves cross-plan and Apps Store self-install compatibility across:
- * 1) Real SettingsService.saveSettings + getSettings on PGlite (tenant admin self-install of
- *    entitled modules: deliveryRepsModuleEnabled on all retail plans including plan_basic per P8b,
- *    vanSalesModuleEnabled, servicesModuleEnabled, comboModuleEnabled, crmModuleEnabled,
- *    installmentsModuleEnabled on plan_ultimate & tier_band1_L2;
- *    blocking unentitled tiers like plan_basic for vanSales/crm/installments; blocking incompatible
- *    verticals like warehousing, services, contracting, maritime; keeping uninstalls &
- *    posModuleEnabled super_admin-only).
- * 2) Services & wholesale_van profiles never silently auto-enabling posModuleEnabled.
- * 3) PlanFeatureService supporting tier_band1..5_L1..L3 and commerce profiles consistently.
- * 4) PricingCatalogService.levelIdForLegacyPlanCode resolving BAND1_L1..BAND5_L3 and tier_band*.
- * 5) User plan limits resolving L1/L2/L3 tiered band plans accurately.
- * 6) TradeInController gated by real 'maintenance' feature code instead of orphan 'tradein'.
+ * Proves strict SaaS-Only Module Control (INV-SAAS-ONLY-MODULE-CONTROL) + cross-plan compatibility:
+ * 1) Real SettingsService.saveSettings + getSettings on PGlite:
+ *    - Regular tenant admins ('admin', impersonatedBy=null) cannot enable OR disable any module
+ *      switch (vanSalesModuleEnabled, deliveryRepsModuleEnabled, weightedBarcodeEnabled, etc.),
+ *      while operational settings (weightedBarcodePrefix, invoicePrefix) still persist cleanly.
+ *    - Active platform impersonation sessions (role='admin', impersonatedBy=1) AND super_admin
+ *      CAN install and uninstall module switches freely (including turning off an accidentally
+ *      installed vanSalesModuleEnabled while keeping deliveryRepsModuleEnabled active).
+ * 2) SaasAdminService.syncTenantModuleSettingsForPlan immediately revokes accidental
+ *    vanSalesModuleEnabled ('false') when vanSales is absent on retail plans while keeping
+ *    deliveryRepsModuleEnabled ('true'), and respects explicit extraFeatures (+/-).
+ * 3) Services & wholesale_van profiles never silently auto-enable posModuleEnabled.
+ * 4) PlanFeatureService, PricingCatalogService, user-plan-limit, and TradeInController alignment.
  */
 
 import 'reflect-metadata';
@@ -31,6 +31,7 @@ import {
   resolvePlanRank,
 } from '../../src/core/tenant/plan-tier.util';
 import type { Database } from '../../src/database/database.types';
+import { SaasAdminService } from '../../src/modules/saas-admin/saas-admin.service';
 import { SettingsService } from '../../src/modules/settings/settings.service';
 import { resolveMaxBranchesForTenant } from '../../src/modules/settings/settings-module-entitlement.engine';
 import { PricingCatalogService } from '../../src/modules/tenant-subscription/pricing/pricing-catalog.service';
@@ -39,7 +40,7 @@ import { resolveUserLimit } from '../../src/modules/users/engines/user-plan-limi
 
 const ACCOUNT = 'acc-compat';
 
-function adminAuth(tenantId: string): AuthContext {
+function adminAuth(tenantId: string, impersonatedBy: number | null = null): AuthContext {
   return {
     userId: 10,
     sessionId: `sess-${tenantId}`,
@@ -48,6 +49,7 @@ function adminAuth(tenantId: string): AuthContext {
     permissions: ['canManageSettings'],
     tenantId,
     accountId: ACCOUNT,
+    impersonatedBy,
   } as unknown as AuthContext;
 }
 
@@ -148,6 +150,10 @@ async function main(): Promise<void> {
           created_at: new Date('2026-01-01T00:00:00Z'),
         })
         .execute();
+      await anyDb
+        .insertInto('users')
+        .values({ tenant_id: t.id, account_id: ACCOUNT, username: 'admin', role: 'admin' })
+        .execute();
     }
 
     await anyDb
@@ -166,61 +172,73 @@ async function main(): Promise<void> {
       .execute();
 
     const settingsService = new SettingsService(db, { log: async () => undefined } as never, {} as never);
+    const saasAdminService = new SaasAdminService(
+      db,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      settingsService,
+      {} as never,
+    );
 
-    // 1) Ultimate retail tenant admin installs deliveryReps, vanSales, services, combo, crm
-    const ultSaved = await settingsService.saveSettings(
+    // 1) Regular tenant admin cannot toggle any module switch, while operational settings persist cleanly
+    const adminSaved = await settingsService.saveSettings(
       {
         deliveryRepsModuleEnabled: true,
         vanSalesModuleEnabled: true,
         servicesModuleEnabled: true,
         comboModuleEnabled: true,
         crmModuleEnabled: true,
+        weightedBarcodeEnabled: true,
+        clothingModuleEnabled: true,
         posModuleEnabled: true,
+        weightedBarcodePrefix: '24',
+        invoicePrefix: 'OPS',
       },
-      adminAuth('t-ult-retail'),
+      adminAuth('t-ult-retail', null),
     );
-    assert.equal(ultSaved.deliveryRepsModuleEnabled, true, 'Ultimate retail admin must self-install deliveryRepsModuleEnabled');
-    assert.equal(ultSaved.vanSalesModuleEnabled, true, 'Ultimate retail admin must self-install vanSalesModuleEnabled');
-    assert.equal(ultSaved.servicesModuleEnabled, true, 'Ultimate retail admin must self-install servicesModuleEnabled');
-    assert.equal(ultSaved.comboModuleEnabled, true, 'Ultimate retail admin must self-install comboModuleEnabled');
-    assert.equal(ultSaved.crmModuleEnabled, true, 'Ultimate retail admin must self-install crmModuleEnabled');
-    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'deliveryRepsModuleEnabled'), 'true');
-    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'posModuleEnabled'), undefined, 'posModuleEnabled stays super_admin-only');
+    assert.equal(adminSaved.weightedBarcodePrefix, '24', 'operational barcode settings remain writable by tenant admin');
+    assert.equal(adminSaved.invoicePrefix, 'OPS', 'operational invoice prefix remains writable by tenant admin');
+    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'vanSalesModuleEnabled'), undefined, 'tenant admin cannot enable vanSalesModuleEnabled');
+    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'weightedBarcodeEnabled'), undefined, 'tenant admin cannot enable weightedBarcodeEnabled');
+    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'clothingModuleEnabled'), undefined, 'tenant admin cannot enable clothingModuleEnabled');
+    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'comboModuleEnabled'), undefined, 'tenant admin cannot enable comboModuleEnabled');
+    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'posModuleEnabled'), undefined, 'tenant admin cannot alter posModuleEnabled');
 
-    // 2) Uninstall (false) stays super_admin-only for tenant admin
-    await settingsService.saveSettings({ deliveryRepsModuleEnabled: false }, adminAuth('t-ult-retail'));
-    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'deliveryRepsModuleEnabled'), 'true', 'tenant admin cannot self-uninstall active module');
-
-    // 3) Basic retail admin CAN self-install deliveryReps (retail core on all plans per P8b),
-    //    while Van Sales / CRM / Installments stay blocked on plan_basic
-    await settingsService.saveSettings(
-      {
-        deliveryRepsModuleEnabled: true,
-        vanSalesModuleEnabled: true,
-        crmModuleEnabled: true,
-        installmentsModuleEnabled: true,
-      },
-      adminAuth('t-basic-retail'),
+    // 2) Active SaaS impersonation session (impersonatedBy = 1) CAN turn modules ON and OFF
+    const impOn = await settingsService.saveSettings(
+      { deliveryRepsModuleEnabled: true, vanSalesModuleEnabled: true },
+      adminAuth('t-ult-retail', 1),
     );
-    assert.equal(await rawSetting(anyDb, 't-basic-retail', 'deliveryRepsModuleEnabled'), 'true', 'plan_basic retail can self-install deliveryReps (P8b)');
-    assert.equal(await rawSetting(anyDb, 't-basic-retail', 'vanSalesModuleEnabled'), undefined, 'plan_basic cannot self-install vanSales');
-    assert.equal(await rawSetting(anyDb, 't-basic-retail', 'crmModuleEnabled'), undefined, 'plan_basic cannot self-install crm');
-    assert.equal(await rawSetting(anyDb, 't-basic-retail', 'installmentsModuleEnabled'), undefined, 'plan_basic cannot self-install installments');
+    assert.equal(impOn.deliveryRepsModuleEnabled, true, 'impersonating platform admin can enable deliveryRepsModuleEnabled');
+    assert.equal(impOn.vanSalesModuleEnabled, true, 'impersonating platform admin can enable vanSalesModuleEnabled');
 
-    // 4) Tiered band L2 tenant admin can self-install Level-2 granted modules (deliveryReps & installments)
-    const l2Saved = await settingsService.saveSettings(
-      { deliveryRepsModuleEnabled: true, installmentsModuleEnabled: true, fixedAssetsModuleEnabled: true },
-      adminAuth('t-band1-l2'),
+    const impOff = await settingsService.saveSettings(
+      { vanSalesModuleEnabled: false },
+      adminAuth('t-ult-retail', 1),
     );
-    assert.equal(l2Saved.deliveryRepsModuleEnabled, true, 'tier_band1_L2 admin must self-install deliveryRepsModuleEnabled');
-    assert.equal(l2Saved.installmentsModuleEnabled, true, 'tier_band1_L2 admin must self-install installmentsModuleEnabled');
-    assert.equal(await rawSetting(anyDb, 't-band1-l2', 'fixedAssetsModuleEnabled'), undefined, 'tier_band1_L2 cannot self-install Level-3 fixedAssets');
+    assert.equal(impOff.vanSalesModuleEnabled, false, 'impersonating platform admin can disable vanSalesModuleEnabled');
+    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'vanSalesModuleEnabled'), 'false');
+    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'deliveryRepsModuleEnabled'), 'true', 'deliveryReps remains active when vanSales is turned off');
 
-    // 5) Incompatible vertical guards: warehousing cannot self-install vanSales/deliveryReps; services & wholesale_van never flip POS on
-    await settingsService.saveSettings({ vanSalesModuleEnabled: true, deliveryRepsModuleEnabled: true }, adminAuth('t-wh-ult'));
-    assert.equal(await rawSetting(anyDb, 't-wh-ult', 'vanSalesModuleEnabled'), undefined, 'warehousing must block vanSales self-install');
-    assert.equal(await rawSetting(anyDb, 't-wh-ult', 'deliveryRepsModuleEnabled'), undefined, 'warehousing must block deliveryReps self-install');
+    // 3) SaaS Admin syncTenantModuleSettingsForPlan turns OFF accidental vanSales while keeping deliveryReps ON
+    await anyDb
+      .insertInto('settings')
+      .values({ key: 'vanSalesModuleEnabled', value: 'true', tenant_id: 't-ult-retail', account_id: ACCOUNT })
+      .onConflict((oc: any) => oc.columns(['tenant_id', 'key']).doUpdateSet({ value: 'true' }))
+      .execute();
+    await saasAdminService.syncTenantModuleSettingsForPlan('t-ult-retail', 'plan_ultimate', []);
+    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'vanSalesModuleEnabled'), 'false', 'SaaS Admin sync must switch off accidental vanSales on non-wholesale vertical');
+    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'deliveryRepsModuleEnabled'), 'true', 'SaaS Admin sync keeps plan-included deliveryReps active');
 
+    // And explicitly adding vanSales / excluding deliveryReps in SaaS Admin works cleanly
+    await saasAdminService.syncTenantModuleSettingsForPlan('t-ult-retail', 'plan_ultimate', ['vanSales', '-deliveryReps']);
+    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'vanSalesModuleEnabled'), 'true');
+    assert.equal(await rawSetting(anyDb, 't-ult-retail', 'deliveryRepsModuleEnabled'), 'false');
+
+    // 4) Non-POS verticals retain their profile (never flip POS on via generic sales flag)
     const svcSettings = await settingsService.getSettings(adminAuth('t-services-ult'));
     assert.equal(svcSettings.posModuleEnabled, false, 'services profile must not auto-enable POS from legacy sales flag');
     assert.equal(svcSettings.servicesModuleEnabled, true, 'services profile keeps servicesModuleEnabled enabled');
@@ -229,7 +247,7 @@ async function main(): Promise<void> {
     assert.equal(vanSettings.posModuleEnabled, false, 'wholesale_van profile must not auto-enable POS from legacy sales flag');
     assert.equal(vanSettings.vanSalesModuleEnabled, true, 'wholesale_van profile keeps vanSalesModuleEnabled enabled');
 
-    // 6) PlanFeatureService supports tiered band plans & omnichannel
+    // 5) PlanFeatureService supports tiered band plans & omnichannel
     const featureService = new PlanFeatureService(db);
     await featureService.refreshCache();
     assert.equal(featureService.hasFeature('tier_band1_L2', [], 'deliveryReps', undefined, 'retail_general'), true);
@@ -239,7 +257,7 @@ async function main(): Promise<void> {
     assert.equal(featureService.hasFeature('plan_omnichannel', [], 'storefront', undefined, 'retail_general'), true);
     assert.equal(featureService.hasFeature('plan_ultimate', [], 'contracting', undefined, 'services'), false);
 
-    // 7) PricingCatalogService & plan-tier helpers normalize BAND*_L* and tier_band*_L*
+    // 6) PricingCatalogService & plan-tier helpers normalize BAND*_L* and tier_band*_L*
     const pricingCatalog = new PricingCatalogService();
     assert.equal(pricingCatalog.levelIdForLegacyPlanCode('BAND1_L1'), 'L1');
     assert.equal(pricingCatalog.levelIdForLegacyPlanCode('tier_band3_L2'), 'L2');
@@ -254,7 +272,7 @@ async function main(): Promise<void> {
     assert.equal(resolvePlanDisplayName('tier_band1_L1'), 'تجزئة عامة — محل');
     assert.ok(getFallbackPlanFeatures('tier_band1_L3').includes('taxIntegration'));
 
-    // 8) Branch & user limit compatibility on tiered L1/L2/L3 plans
+    // 7) Branch & user limit compatibility on tiered L1/L2/L3 plans
     const maxBranchesL2 = await resolveMaxBranchesForTenant(
       db,
       't-band1-l2',
@@ -275,7 +293,7 @@ async function main(): Promise<void> {
       null,
     );
 
-    // 9) TradeInController feature decorator matches real seeded feature code 'maintenance'
+    // 8) TradeInController feature decorator matches real seeded feature code 'maintenance'
     assert.equal(Reflect.getMetadata(REQUIRED_FEATURE_KEY, TradeInController), 'maintenance');
 
     console.log('apps-store-plan-compatibility: OK');

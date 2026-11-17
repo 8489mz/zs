@@ -9,10 +9,11 @@ import type { AppItemDefinition } from '../types/apps-store.types';
 interface AppUpgradeModalProps {
   app: AppItemDefinition | null;
   isOpen: boolean;
+  isIncludedInPlan?: boolean;
   onClose: () => void;
 }
 
-export function AppUpgradeModal({ app, isOpen, onClose }: AppUpgradeModalProps) {
+export function AppUpgradeModal({ app, isOpen, isIncludedInPlan = false, onClose }: AppUpgradeModalProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   if (!app) return null;
@@ -24,7 +25,7 @@ export function AppUpgradeModal({ app, isOpen, onClose }: AppUpgradeModalProps) 
   const isOffline = isDesktopOfflineApp();
   const handleGoToSubscription = () => {
     onClose();
-    if (isOffline) return;
+    if (isOffline || isIncludedInPlan) return;
     navigate('/settings/subscription');
   };
 
@@ -32,8 +33,20 @@ export function AppUpgradeModal({ app, isOpen, onClose }: AppUpgradeModalProps) 
     <StandardDialog
       isOpen={isOpen}
       onClose={onClose}
-      title={isOffline ? `تفعيل تطبيق ${app.title}` : `ترقية الباقة لتفعيل تطبيق ${app.title}`}
-      subtitle={isOffline ? t('apps_store.app_upgrade_modal.s0', "هذا التطبيق متاح في مستوى أعلى من ترخيصك الحالي") : t('apps_store.app_upgrade_modal.s1', "هذا التطبيق مخصص لباقات المنظومة المتقدمة")}
+      title={
+        isIncludedInPlan
+          ? `طلب تفعيل تطبيق ${app.title}`
+          : isOffline
+          ? `تفعيل تطبيق ${app.title}`
+          : `ترقية الباقة لتفعيل تطبيق ${app.title}`
+      }
+      subtitle={
+        isIncludedInPlan
+          ? 'تفعيل وإدارة التطبيقات يتم حصرياً عبر إدارة المنصة (SaaS) لمنع تفعيل موديولات غير مناسبة بالخطأ'
+          : isOffline
+          ? t('apps_store.app_upgrade_modal.s0', "هذا التطبيق متاح في مستوى أعلى من ترخيصك الحالي")
+          : t('apps_store.app_upgrade_modal.s1', "هذا التطبيق مخصص لباقات المنظومة المتقدمة")
+      }
       maxWidth="580px"
     >
       <div style={{ padding: '8px 0', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -99,10 +112,14 @@ export function AppUpgradeModal({ app, isOpen, onClose }: AppUpgradeModalProps) 
         }}>
           <div>
             <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#170e5e', marginBottom: '2px' }}>
-              {t('apps_store.app_upgrade_modal.s2', "متاح ضمن:")} {planInfo.name}
+              {isIncludedInPlan
+                ? 'التفعيل عبر إدارة المنصة والدعم الفني'
+                : `${t('apps_store.app_upgrade_modal.s2', "متاح ضمن:")} ${planInfo.name}`}
             </div>
             <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-              {planInfo.summary}
+              {isIncludedInPlan
+                ? 'هذا التطبيق متوافق مع باقتك ونشاطك — تواصل مع إدارة المنصة لتفعيله في لوحة التحكم وتظهر شاشاته فوراً.'
+                : planInfo.summary}
             </div>
           </div>
         </div>
@@ -178,7 +195,13 @@ export function AppUpgradeModal({ app, isOpen, onClose }: AppUpgradeModalProps) 
               gap: '8px',
             }}
           >
-            <span>{isOffline ? t('apps_store.app_upgrade_modal.s5', "تواصل معنا لترقية الترخيص") : t('apps_store.app_upgrade_modal.s6', "ترقية الباقة الآن")}</span>
+            <span>
+              {isIncludedInPlan
+                ? 'فهمت — التواصل مع الإدارة للتفعيل'
+                : isOffline
+                ? t('apps_store.app_upgrade_modal.s5', "تواصل معنا لترقية الترخيص")
+                : t('apps_store.app_upgrade_modal.s6', "ترقية الباقة الآن")}
+            </span>
             <ArrowRightIcon size={14} />
           </button>
         </div>

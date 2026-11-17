@@ -10,6 +10,7 @@ export interface AuthUser {
   defaultBranchId: string;
   tenantId?: string;
   accountId?: string;
+  isPlatformImpersonation?: boolean;
   mustChangePassword?: boolean;
   usingDefaultAdminPassword?: boolean;
 }

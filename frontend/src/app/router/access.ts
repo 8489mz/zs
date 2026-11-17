@@ -1,5 +1,7 @@
-import { isDesktopOfflineApp, isPlatformAdmin } from '@/shared/system/runtime-environment';
+import { isDesktopOfflineApp, isPlatformAdmin, canManagePlatformModules } from '@/shared/system/runtime-environment';
 import { normalizeArabicSearchKey } from '@/lib/arabic-normalization';
+
+export { canManagePlatformModules };
 
 import type { NavigationItemDefinition } from '@/app/router/types';
 import type { AuthUser } from '@/types/auth';

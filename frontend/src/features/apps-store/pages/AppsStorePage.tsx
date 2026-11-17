@@ -6,7 +6,7 @@ import { PageHeader } from '@/shared/components/page-header';
 import { SearchIcon } from '@/shared/components/icons/AppIcons';
 import { toast, systemConfirm } from '@/shared/components/system-alert';
 import { useAuthStore } from '@/stores/auth-store';
-import { isPlatformAdmin } from '@/app/router/access';
+import { isPlatformAdmin, canManagePlatformModules } from '@/app/router/access';
 import { settingsApi } from '@/features/settings/api/settings.api';
 import { queryKeys } from '@/app/query-keys';
 import { PLAN_TIERS } from '@/features/settings/components/modular-configurator/modular-presets';
@@ -81,7 +81,8 @@ export function AppsStorePage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const tenant = useAuthStore((s) => s.tenant);
-  const isSuperAdmin = isPlatformAdmin(user) || (user?.role === 'super_admin' && String(user?.username || '').trim().toLowerCase() === 'zs');
+  const isPlatformOwner = isPlatformAdmin(user) || (user?.role === 'super_admin' && String(user?.username || '').trim().toLowerCase() === 'zs');
+  const isSuperAdmin = canManagePlatformModules(user) || isPlatformOwner;
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<AppCategoryKey>('all');
@@ -228,7 +229,7 @@ export function AppsStorePage() {
     }
 
     if (app.key === 'vanSalesModuleEnabled') {
-      if (deliveryBlocked) {
+      if (deliveryBlocked || extraFeatures.includes('-vanSales')) {
         return false;
       }
       if (vertical === 'wholesale_van') {
@@ -243,7 +244,7 @@ export function AppsStorePage() {
     }
 
     if (app.featureFlag) {
-      if (!tenantFeatures.includes(app.featureFlag)) {
+      if (!tenantFeatures.includes(app.featureFlag) || extraFeatures.includes(`-${app.featureFlag}`)) {
         return false;
       }
       // Tiered band plans (tier_band*_L1..L3) and explicit extraFeatures add-ons
@@ -262,12 +263,12 @@ export function AppsStorePage() {
     return tenantRank >= requiredRank;
   };
 
-  // Handle Toggle App (Install or Uninstall)
+  // Handle Toggle App (Install or Uninstall — strictly SaaS/Super-Admin only per INV-SAAS-ONLY-MODULE-CONTROL)
   const handleToggle = async (app: AppItemDefinition, currentStatus: boolean) => {
     if (updateMutation.isPending) return;
 
-    if (!isSuperAdmin && (currentStatus || !isAppAllowedByPlan(app))) {
-      toast.warning('إدارة وتثبيت الموديولات مخصصة حصرياً لإدارة المنصة (السوبر أدمن). يرجى التواصل لترقية باقتك وتفعيل الموديول المطلوب.');
+    if (!isSuperAdmin) {
+      toast.warning('تفعيل وإيقاف التطبيقات والموديولات مخصص حصرياً لإدارة المنصة (SaaS). يرجى التواصل مع الإدارة لتعديل التطبيقات المفعلة.');
       return;
     }
 
@@ -497,7 +498,7 @@ export function AppsStorePage() {
           activeAppsCount={activeAppsCount}
           availableToInstallCount={availableToInstallCount}
           currentPlanName={currentPlanName}
-          isSuperAdmin={isSuperAdmin}
+          isSuperAdmin={isPlatformOwner}
         />
 
         {/* Toolbar: Search and Filter Pills */}
@@ -688,10 +689,11 @@ export function AppsStorePage() {
           </div>
         )}
 
-        {/* Upgrade Dialog */}
+        {/* Upgrade / Request Activation Dialog */}
         <AppUpgradeModal
           app={upgradeModalApp}
           isOpen={Boolean(upgradeModalApp)}
+          isIncludedInPlan={upgradeModalApp ? isAppAllowedByPlan(upgradeModalApp) : false}
           onClose={() => setUpgradeModalApp(null)}
         />
       </main>

@@ -1412,6 +1412,12 @@ export class SaasAdminService {
         contracting: ['contractingModuleEnabled'],
         pharmacy: ['enablePharmacyModule'],
         storefront: ['storefrontModuleEnabled'],
+        weightedBarcode: ['weightedBarcodeEnabled'],
+        combo: ['comboModuleEnabled'],
+        crm: ['crmModuleEnabled'],
+        posShowCartMeta: ['posShowCartMeta'],
+        phoneOrders: ['phoneOrdersModuleEnabled'],
+        autoParts: ['autoPartsModuleEnabled'],
       };
 
       const modulesToSet: Record<string, boolean> = {};
@@ -1427,47 +1433,41 @@ export class SaasAdminService {
       // (tenantRow and verticalKey already fetched above when building effectiveFeatures)
       const isNonRetailVertical = ['maritime_freight', 'contracting', 'wholesale_van', 'services', 'warehousing'].includes(verticalKey);
 
-      // Strict vertical module isolation: do not let fallback plan features or previous settings leak across boundaries
-      if (verticalKey !== 'maritime_freight') {
-        modulesToSet['maritimeFreightModuleEnabled'] = false;
+      // Strict vertical isolation + respect explicit SaaS Admin add-ons where permitted
+      if (verticalKey !== 'maritime_freight') modulesToSet['maritimeFreightModuleEnabled'] = false;
+      if (verticalKey !== 'contracting') modulesToSet['contractingModuleEnabled'] = false;
+      if (verticalKey !== 'import_export' && !effectiveFeatures.has('import')) modulesToSet['importModuleEnabled'] = false;
+      if (verticalKey !== 'manufacturing' && !effectiveFeatures.has('manufacturing')) modulesToSet['manufacturingModuleEnabled'] = false;
+      if (verticalKey !== 'restaurant' && !effectiveFeatures.has('restaurant')) modulesToSet['restaurantModuleEnabled'] = false;
+      if (verticalKey !== 'pharmacy' && !effectiveFeatures.has('pharmacy')) modulesToSet['enablePharmacyModule'] = false;
+      if (verticalKey !== 'maintenance' && (verticalKey as string) !== 'electronics' && !effectiveFeatures.has('maintenance')) modulesToSet['enableMobileStoreFeatures'] = false;
+      // Plan-gated toggle: off for non-retail; grant when plan has 'clothing'; omit otherwise to preserve sync marker semantics.
+      if (isNonRetailVertical) modulesToSet['clothingModuleEnabled'] = false;
+      else if (effectiveFeatures.has('clothing')) modulesToSet['clothingModuleEnabled'] = true;
+      modulesToSet['autoPartsModuleEnabled'] = verticalKey === 'auto_parts' || effectiveFeatures.has('autoParts');
+      modulesToSet['servicesModuleEnabled'] = verticalKey === 'services' || effectiveFeatures.has('services');
+      // Ensure foundational operational & plan-gated switches match SaaS Admin truth
+      modulesToSet['purchasesModuleEnabled'] = effectiveFeatures.has('purchases');
+      modulesToSet['comboModuleEnabled'] = (effectiveFeatures.has('combo') || effectiveFeatures.has('purchases')) && !excluded.has('combo');
+      modulesToSet['inventoryModuleEnabled'] = effectiveFeatures.has('inventory') && !['maritime_freight', 'services'].includes(verticalKey);
+      if (!effectiveFeatures.has('deliveryReps') && verticalKey !== 'wholesale_van') {
+        modulesToSet['deliveryRepsModuleEnabled'] = false;
       }
-      if (verticalKey !== 'contracting') {
-        modulesToSet['contractingModuleEnabled'] = false;
+      for (const gatedFeat of ['hr', 'installments', 'fixed_assets', 'storefront', 'accounting'] as const) {
+        if (!effectiveFeatures.has(gatedFeat)) {
+          for (const mk of FEATURE_TO_MODULE_MAP[gatedFeat] || []) modulesToSet[mk] = false;
+        }
       }
-      if (verticalKey !== 'import_export') {
-        modulesToSet['importModuleEnabled'] = false;
-      }
-      if (verticalKey !== 'manufacturing') {
-        modulesToSet['manufacturingModuleEnabled'] = false;
-      }
-      if (verticalKey !== 'restaurant') {
-        modulesToSet['restaurantModuleEnabled'] = false;
-      }
-      if (verticalKey !== 'pharmacy') {
-        modulesToSet['enablePharmacyModule'] = false;
-      }
-      if (verticalKey !== 'maintenance' && (verticalKey as string) !== 'electronics') {
-        modulesToSet['enableMobileStoreFeatures'] = false;
-      }
-      // Plan-gated toggle: off only for non-retail; grant when the plan
-      // has 'clothing'; otherwise omit so a hand toggle survives.
-      if (isNonRetailVertical) { modulesToSet['clothingModuleEnabled'] = false; }
-      else if (effectiveFeatures.has('clothing')) { modulesToSet['clothingModuleEnabled'] = true; }
-      if (verticalKey !== 'auto_parts') {
-        modulesToSet['autoPartsModuleEnabled'] = false;
-      } else {
-        modulesToSet['autoPartsModuleEnabled'] = true;
-      }
-      if (verticalKey !== 'services') {
-        modulesToSet['servicesModuleEnabled'] = false;
-      } else {
-        modulesToSet['servicesModuleEnabled'] = true;
+      if (!effectiveFeatures.has('taxIntegration') && !effectiveFeatures.has('vat_declaration')) {
+        modulesToSet['taxDeclarationModuleEnabled'] = false;
       }
       if (verticalKey === 'wholesale_van') {
         modulesToSet['vanSalesModuleEnabled'] = true;
         modulesToSet['deliveryFleetModuleEnabled'] = true;
         modulesToSet['posModuleEnabled'] = false;
         modulesToSet['enableEnterpriseFeatures'] = true;
+      } else if (!effectiveFeatures.has('vanSales')) {
+        modulesToSet['vanSalesModuleEnabled'] = false;
       }
       if (verticalKey === 'warehousing') {
         modulesToSet['posModuleEnabled'] = false;
@@ -1475,24 +1475,16 @@ export class SaasAdminService {
         modulesToSet['purchasesModuleEnabled'] = true;
         modulesToSet['enableEnterpriseFeatures'] = true;
       }
-
-      // Ensure foundational operational defaults
-      if (effectiveFeatures.has('purchases')) {
-        modulesToSet['purchasesModuleEnabled'] = true;
-        modulesToSet['comboModuleEnabled'] = true;
-      }
-      if (effectiveFeatures.has('inventory')) {
-        // In maritime freight and pure consulting services, physical inventory is disabled
-        modulesToSet['inventoryModuleEnabled'] = !['maritime_freight', 'services'].includes(verticalKey);
+      for (const ex of excluded) {
+        for (const mk of FEATURE_TO_MODULE_MAP[ex] || []) modulesToSet[mk] = false;
       }
       if (effectiveFeatures.has('sales')) {
         if (!isNonRetailVertical) {
           modulesToSet['posModuleEnabled'] = true;
-          // Plan-gated toggle (plan_basic): grant only to supermarket, never false.
-          if (verticalKey === 'supermarket') { modulesToSet['weightedBarcodeEnabled'] = true; }
+          if (verticalKey === 'supermarket' && !excluded.has('weightedBarcode')) {
+            modulesToSet['weightedBarcodeEnabled'] = true;
+          }
         } else {
-          // For non-retail verticals (maritime, contracting, wholesale van, services),
-          // 'sales' represents client invoicing / contracts / IPCs, NEVER retail POS or barcode scales!
           modulesToSet['posModuleEnabled'] = false;
         }
       }
@@ -1515,18 +1507,8 @@ export class SaasAdminService {
         modulesToSet['requireCashierShiftForSales'] = false;
       }
 
-      // --- Revoke what this sync itself granted, and nothing else.
-      //
-      // These `*ModuleEnabled` keys are the TENANT's own operational switches (the apps
-      // store screen), not the entitlement gate — paid access is enforced by
-      // PermissionsGuard + @RequireFeature against tenants.plan_id, which a downgrade
-      // already revokes. So this sync must not behave like an authority over them: it may
-      // only take back a switch that it turned on itself for a plan that no longer grants
-      // it, and must leave anything the tenant toggled by hand alone.
-      //
-      // Provenance lives in a marker key holding exactly what the last sync set.
       const previouslyGranted = await this.readPlanManagedModuleKeys(tenantId);
-      const desiredKeys = Object.keys(modulesToSet);
+      const desiredKeys = Object.entries(modulesToSet).filter(([, value]) => value === true).map(([key]) => key);
       const desiredSet = new Set(desiredKeys);
       const toRevoke = previouslyGranted.filter((key) => !desiredSet.has(key));
 

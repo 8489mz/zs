@@ -915,7 +915,7 @@ export class SessionService {
       this.getSessionUserProfile(auth),
       this.getTenantPayload(auth),
     ]);
-    return { user: { id: profile.id, username: profile.username, role: profile.role, permissions: profile.permissions, displayName: profile.displayName, branchIds: profile.branchIds, defaultBranchId: profile.defaultBranchId, tenantId: profile.tenantId, accountId: profile.accountId }, tenant, mustChangePassword: profile.mustChangePassword };
+    return { user: { id: profile.id, username: profile.username, role: profile.role, permissions: profile.permissions, displayName: profile.displayName, branchIds: profile.branchIds, defaultBranchId: profile.defaultBranchId, tenantId: profile.tenantId, accountId: profile.accountId, isPlatformImpersonation: Boolean(auth.impersonatedBy) }, tenant, mustChangePassword: profile.mustChangePassword };
   }
 
   async changePassword(auth: AuthContext, currentPassword: string, newPassword: string): Promise<void> {
@@ -1005,7 +1005,7 @@ export class SessionService {
         branchIds: profile.branchIds,
         defaultBranchId: profile.defaultBranchId,
         tenantId: profile.tenantId,
-        accountId: profile.accountId,
+        accountId: profile.accountId, isPlatformImpersonation: Boolean(auth.impersonatedBy),
       },
       tenant,
       settings: {

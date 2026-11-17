@@ -649,17 +649,13 @@ export class SettingsService {
       normalizedPayload.posModuleEnabled = true;
     }
 
-    // Protect core/disabled switches while allowing tenant admins to self-install
-    // modules explicitly permitted by their plan, extra features, and vertical.
-    if (!isSuperAdminActor) {
-      const dbPlanFeatures = await this.getPlanFeatures(scope.tenantId, tenantRow?.plan_id);
+    // Only platform super_admin or an active SaaS impersonation session may flip module switches;
+    // regular tenant admins retain operational settings (prefixes, VAT, receipts, printers).
+    const isPlatformModuleOperator = isSuperAdminActor || Boolean(actor.impersonatedBy);
+    if (!isPlatformModuleOperator) {
       filterProtectedModuleKeysForActor(normalizedPayload, {
         isSuperAdmin: false,
-        planId: tenantRow?.plan_id,
-        extraFeatures: tenantRow?.extra_features,
-        dbPlanFeatures,
         profile,
-        posModuleEnabled: normalizedPayload.posModuleEnabled === true,
       });
     }
 

@@ -1,33 +1,11 @@
 /*
- * Package B (weighted-barcode / scale install for tenant admin):
- * a tenant admin toggling the Apps Store weighted-barcode or clothing
- * switches must have the toggle persist.
- *
- * ROOT CAUSE (verified at base f3db3a35c): SettingsService.saveSettings
- * deletes every key in `protectedModuleKeys` from the payload for any
- * non-super_admin actor — and that list contained
- * 'weightedBarcodeEnabled' and 'clothingModuleEnabled'. The Apps Store
- * toggle therefore never reached the settings table, while the UI
- * reported "لم يؤكد النظام التثبيت". The fix removes exactly those
- * two keys from the list; every other key stays protected, and the
- * frontend plan gate (requiredPlan plan_basic) is unchanged.
- *
- * WHAT IS DRIVEN: the REAL SettingsService.saveSettings (the path the
- * PUT /api/settings controller calls as updateSettings) on PGlite,
- * with a tenant-admin actor (role 'admin') and a super_admin actor.
- *
- * Tables mirrored from the migration set: settings (key/value/
- * tenant_id/account_id, PK (tenant_id, key) per
- * 20260527000500_tenant_scope_settings_users_constraints), tenants
- * (20260527000100_saas_trial_foundation + plan_id per
- * 2031000000000_plans_and_features), users (tenant_id/account_id per
- * 20260527000100), plan_features (2031000000000). No plan_features
- * rows are seeded: getSettings reads none, so plan features are [].
- *
- * NOTE: assertions about "still protected" read the RAW settings row,
- * not the object saveSettings returns — getSettings self-heals
- * posModuleEnabled=true for any retail profile whose defaults include
- * 'sales', so the returned object would mask a leaked write.
+ * INV-SAAS-ONLY-MODULE-CONTROL:
+ * Only platform `super_admin` (or an active `sessions.impersonated_by` SaaS
+ * session) may flip module toggles (`weightedBarcodeEnabled`,
+ * `clothingModuleEnabled`, `posModuleEnabled`, `inventoryModuleEnabled`, etc.).
+ * Regular tenant admins (`admin`) cannot modify module toggles via
+ * SettingsService.saveSettings, while their operational settings (such as
+ * `weightedBarcodePrefix`) still persist normally.
  *
  * Run: npx ts-node test/critical/pos-weighted-barcode-toggle-persists.spec.ts
  */
@@ -52,6 +30,14 @@ function adminAuth(tenantId: string): AuthContext {
     permissions: ['canManageSettings'],
     tenantId,
     accountId: ACCOUNT,
+    impersonatedBy: null,
+  } as unknown as AuthContext;
+}
+
+function impersonatedAdminAuth(tenantId: string): AuthContext {
+  return {
+    ...adminAuth(tenantId),
+    impersonatedBy: 1,
   } as unknown as AuthContext;
 }
 
@@ -107,29 +93,49 @@ async function main(): Promise<void> {
       return row?.value as string | undefined;
     }
 
-    // 1. A tenant admin toggling both switches persists them.
+    // 1. Regular tenant admin cannot alter any module toggle, while operational format fields still save.
     const returned = await service.saveSettings(
-      { weightedBarcodeEnabled: true, clothingModuleEnabled: true, posModuleEnabled: true, inventoryModuleEnabled: true },
+      {
+        weightedBarcodeEnabled: true,
+        clothingModuleEnabled: true,
+        posModuleEnabled: true,
+        inventoryModuleEnabled: true,
+        weightedBarcodePrefix: '23',
+      },
       adminAuth('t1'),
     );
-    assert.equal(returned.weightedBarcodeEnabled, true, 'tenant-admin toggle of weightedBarcodeEnabled must persist');
-    assert.equal(returned.clothingModuleEnabled, true, 'tenant-admin toggle of clothingModuleEnabled must persist');
-    assert.equal(await rawSetting('t1', 'weightedBarcodeEnabled'), 'true', 'weightedBarcodeEnabled row must be written true');
-    assert.equal(await rawSetting('t1', 'clothingModuleEnabled'), 'true', 'clothingModuleEnabled row must be written true');
-    // Every other protected key stays protected for a non-super-admin.
-    assert.equal(await rawSetting('t1', 'posModuleEnabled'), undefined, 'posModuleEnabled must still be deleted for a non-super-admin');
-    assert.equal(await rawSetting('t1', 'inventoryModuleEnabled'), undefined, 'inventoryModuleEnabled must still be deleted for a non-super-admin');
-    console.log('  tenant-admin toggles of weightedBarcodeEnabled + clothingModuleEnabled persist; pos/inventory still protected: passed');
+    assert.equal(returned.weightedBarcodePrefix, '23', 'operational barcode format field must still persist for tenant admin');
+    assert.equal(await rawSetting('t1', 'weightedBarcodePrefix'), '"23"');
+    assert.equal(await rawSetting('t1', 'weightedBarcodeEnabled'), undefined, 'weightedBarcodeEnabled must be protected for tenant admin');
+    assert.equal(await rawSetting('t1', 'clothingModuleEnabled'), undefined, 'clothingModuleEnabled must be protected for tenant admin');
+    assert.equal(await rawSetting('t1', 'posModuleEnabled'), undefined, 'posModuleEnabled must remain protected');
+    assert.equal(await rawSetting('t1', 'inventoryModuleEnabled'), undefined, 'inventoryModuleEnabled must remain protected');
+    console.log('  tenant-admin module switches blocked while operational settings persist: passed');
 
-    // 2. A super_admin toggle still works.
+    // 2. Platform impersonator (sessions.impersonated_by) can enable & disable modules cleanly.
+    const returnedImpOn = await service.saveSettings(
+      { weightedBarcodeEnabled: true, clothingModuleEnabled: true },
+      impersonatedAdminAuth('t1'),
+    );
+    assert.equal(returnedImpOn.weightedBarcodeEnabled, true);
+    assert.equal(await rawSetting('t1', 'weightedBarcodeEnabled'), 'true');
+    const returnedImpOff = await service.saveSettings(
+      { weightedBarcodeEnabled: false },
+      impersonatedAdminAuth('t1'),
+    );
+    assert.equal(returnedImpOff.weightedBarcodeEnabled, false);
+    assert.equal(await rawSetting('t1', 'weightedBarcodeEnabled'), 'false');
+    console.log('  platform impersonation toggles persist (true & false): passed');
+
+    // 3. Direct super_admin toggle works cleanly.
     const returnedSuper = await service.saveSettings(
       { weightedBarcodeEnabled: true, clothingModuleEnabled: true },
       superAdminAuth('t2'),
     );
-    assert.equal(returnedSuper.weightedBarcodeEnabled, true, 'super_admin toggle of weightedBarcodeEnabled must persist');
-    assert.equal(returnedSuper.clothingModuleEnabled, true, 'super_admin toggle of clothingModuleEnabled must persist');
-    assert.equal(await rawSetting('t2', 'weightedBarcodeEnabled'), 'true', 'super_admin weightedBarcodeEnabled row must be written true');
-    assert.equal(await rawSetting('t2', 'clothingModuleEnabled'), 'true', 'super_admin clothingModuleEnabled row must be written true');
+    assert.equal(returnedSuper.weightedBarcodeEnabled, true);
+    assert.equal(returnedSuper.clothingModuleEnabled, true);
+    assert.equal(await rawSetting('t2', 'weightedBarcodeEnabled'), 'true');
+    assert.equal(await rawSetting('t2', 'clothingModuleEnabled'), 'true');
     console.log('  super_admin toggles still work: passed');
 
     console.log('pos-weighted-barcode-toggle-persists.spec: ok');

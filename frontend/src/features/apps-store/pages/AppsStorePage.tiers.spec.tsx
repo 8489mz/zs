@@ -30,6 +30,7 @@ const authState = vi.hoisted(() => ({
     branchIds: [],
     defaultBranchId: '1',
     tenantId: 't1',
+    isPlatformImpersonation: false,
   },
   tenant: {
     id: 't1',
@@ -96,6 +97,7 @@ function searchFor(query: string) {
 describe('AppsStorePage & shared plan-tier compatibility', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authState.user = { ...authState.user, role: 'admin', isPlatformImpersonation: false };
     apiMocks.settings.mockResolvedValue(makeSettings());
     apiMocks.update.mockResolvedValue(makeSettings());
   });
@@ -114,7 +116,7 @@ describe('AppsStorePage & shared plan-tier compatibility', () => {
     expect(screen.queryByText('تشمل كافة الوحدات المتقدمة عدا المتجر الإلكتروني')).toBeNull();
   });
 
-  it('unlocks deliveryReps and installments on tier_band1_L2 without requiring Ultimate', async () => {
+  it('recognizes deliveryReps on tier_band1_L2 without requiring Ultimate upgrade', async () => {
     authState.tenant = {
       ...authState.tenant,
       plan: 'tier_band1_L2',
@@ -129,11 +131,12 @@ describe('AppsStorePage & shared plan-tier compatibility', () => {
 
     searchFor('مناديب التوصيل');
     await waitFor(() => expect(screen.getByText('إدارة مناديب التوصيل والدليفري')).toBeTruthy());
-    expect(screen.getAllByRole('button', { name: 'تثبيت وتفعيل' }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'طلب التفعيل من الإدارة' })).toBeTruthy();
     expect(screen.queryByText('طلب التفعيل والترقية')).toBeNull();
   });
 
-  it('unlocks CRM app on plan_pro because broken crm featureFlag gate was removed', async () => {
+  it('unlocks CRM app on plan_pro for SaaS impersonator without broken crm featureFlag gate', async () => {
+    authState.user = { ...authState.user, isPlatformImpersonation: true };
     authState.tenant = {
       ...authState.tenant,
       plan: 'plan_pro',
@@ -187,96 +190,5 @@ describe('AppsStorePage & shared plan-tier compatibility', () => {
     } as any;
     expect(tenantHasFeature('hr', contractingTenant, null)).toBe(true);
     expect(tenantHasFeature('accounting', contractingTenant, null)).toBe(true);
-  });
-
-  it.each([
-    { activityType: 'retail_general', planId: 'plan_basic' },
-    { activityType: 'pharmacy', planId: 'tier_band1_L1' },
-    { activityType: 'restaurant', planId: 'tier_band3_L1' },
-    { activityType: 'clothing', planId: 'plan_basic' },
-    { activityType: 'supermarket', planId: 'plan_pro' },
-  ])(
-    'INV-DELIVERY-REPS-RETAIL-SELF-INSTALL: unlocks and installs deliveryRepsModuleEnabled on $activityType ($planId) without pre-existing feature',
-    async ({ activityType, planId }) => {
-      authState.tenant = {
-        ...authState.tenant,
-        activityType,
-        plan: planId,
-        planId,
-        features: ['sales', 'catalog', 'sessions', 'cashDrawer'],
-        extraFeatures: undefined,
-      };
-      const baseSettings = {
-        ...makeSettings(),
-        activityType,
-        businessIndustry: activityType,
-        deliveryRepsModuleEnabled: false,
-      };
-      apiMocks.settings.mockResolvedValue(baseSettings);
-      apiMocks.update.mockResolvedValue({ ...baseSettings, deliveryRepsModuleEnabled: true });
-
-      renderStore();
-
-      await waitFor(() => expect(screen.getByText('إدارة مناديب التوصيل والدليفري')).toBeTruthy());
-      searchFor('مناديب التوصيل');
-      await waitFor(() => expect(screen.getByText('إدارة مناديب التوصيل والدليفري')).toBeTruthy());
-      expect(screen.getByText('متاح للتثبيت')).toBeTruthy();
-      expect(screen.queryByText('طلب التفعيل والترقية')).toBeNull();
-
-      const installBtns = screen.getAllByRole('button', { name: 'تثبيت وتفعيل' });
-      expect(installBtns.length).toBe(1);
-      fireEvent.click(installBtns[0]);
-      await waitFor(() =>
-        expect(apiMocks.update).toHaveBeenCalledWith({ deliveryRepsModuleEnabled: true }),
-      );
-    },
-  );
-
-  it('INV-DELIVERY-REPS-RETAIL-SELF-INSTALL: keeps Van Sales tier-locked on L1 and blocks non-retail verticals from deliveryRepsModuleEnabled', async () => {
-    authState.tenant = {
-      ...authState.tenant,
-      activityType: 'retail_general',
-      plan: 'tier_band1_L1',
-      planId: 'tier_band1_L1',
-      features: ['sales', 'catalog', 'sessions', 'cashDrawer'],
-      extraFeatures: undefined,
-    };
-    apiMocks.settings.mockResolvedValue({
-      ...makeSettings(),
-      activityType: 'retail_general',
-      businessIndustry: 'retail_general',
-    });
-
-    const firstRender = renderStore();
-    await waitFor(() => expect(screen.getByText('مبيعات وتوزيع الفان (الأسطول الميداني)')).toBeTruthy());
-    searchFor('الأسطول الميداني');
-    await waitFor(() => expect(screen.getByText('مبيعات وتوزيع الفان (الأسطول الميداني)')).toBeTruthy());
-    expect(screen.queryByRole('button', { name: 'تثبيت وتفعيل' })).toBeNull();
-    expect(screen.getByText('طلب التفعيل والترقية')).toBeTruthy();
-    firstRender.unmount();
-
-    for (const blockedActivity of ['warehousing', 'services'] as const) {
-      authState.tenant = {
-        ...authState.tenant,
-        activityType: blockedActivity,
-        plan: 'plan_ultimate',
-        planId: 'plan_ultimate',
-        features: ['sales', 'catalog', 'sessions', 'cashDrawer'],
-        extraFeatures: undefined,
-      };
-      apiMocks.settings.mockResolvedValue({
-        ...makeSettings(),
-        activityType: blockedActivity,
-        businessIndustry: blockedActivity,
-      });
-
-      const { unmount } = renderStore();
-      await waitFor(() => expect(screen.getByText('إدارة مناديب التوصيل والدليفري')).toBeTruthy());
-      searchFor('مناديب التوصيل');
-      await waitFor(() => expect(screen.getByText('إدارة مناديب التوصيل والدليفري')).toBeTruthy());
-      expect(screen.queryByRole('button', { name: 'تثبيت وتفعيل' })).toBeNull();
-      expect(screen.getByText('طلب التفعيل والترقية')).toBeTruthy();
-      unmount();
-    }
   });
 });

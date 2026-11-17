@@ -98,7 +98,7 @@ export function AppCard({
                 <CheckIcon size={12} color="#047857" />
                 <span>{isSuperAdmin ? t('apps_store.app_card.s0', "مُثبت ونشط") : t('apps_store.app_card.s1', "مُفعّل ضمن باقتك")}</span>
               </span>
-            ) : isAllowedByPlan ? (
+            ) : isAllowedByPlan && isSuperAdmin ? (
               <span
                 style={{
                   fontSize: '0.72rem',
@@ -111,6 +111,20 @@ export function AppCard({
                 }}
               >
                 {t('apps_store.app_card.s2', "متاح للتثبيت")}
+              </span>
+            ) : isAllowedByPlan ? (
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  background: '#f8fafc',
+                  color: '#475569',
+                  border: '1px solid #e2e8f0',
+                  padding: '3px 9px',
+                  borderRadius: '6px',
+                }}
+              >
+                {t('apps_store.app_card.managed_by_saas', "مُتاح عبر الإدارة")}
               </span>
             ) : (
               <span
@@ -302,7 +316,7 @@ export function AppCard({
                 <span>{t('apps_store.app_card.s6', "مُدرج بالاشتراك")}</span>
               </span>
             )
-          ) : isAllowedByPlan ? (
+          ) : isAllowedByPlan && isSuperAdmin ? (
             <button
               type="button"
               disabled={isPending}
@@ -356,7 +370,11 @@ export function AppCard({
               }}
             >
               <LockIcon size={12} color="#170e5e" />
-              <span>{t('apps_store.app_card.s8', "طلب التفعيل والترقية")}</span>
+              <span>
+                {isAllowedByPlan
+                  ? t('apps_store.app_card.request_saas_activation', "طلب التفعيل من الإدارة")
+                  : t('apps_store.app_card.s8', "طلب التفعيل والترقية")}
+              </span>
             </button>
           )}
         </div>

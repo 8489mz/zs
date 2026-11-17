@@ -1,31 +1,14 @@
 /*
-New file: frontend/src/features/apps-store/components/AppCard.spec.tsx
-Pins the tenant-admin install gate (INV-ULTIMATE-TENANT-SELF-INSTALL).
-
-THE GAP: a tenant admin on the Ultimate plan saw every installable app as
-locked — the card showed the plan-name lock badge and a
-"طلب التفعيل والترقية" button even for apps his plan already allows
-(table selection, delivery couriers, van sales, barcode scales), while the
-page's own isAppAllowedByPlan said they were allowed.
-
-THE RULE: the card's badge and action follow isAllowedByPlan, not the
-admin's role. An allowed, inactive app shows "متاح للتثبيت" and
-"تثبيت وتفعيل" for a tenant admin exactly as for the super admin; only a
-not-allowed app shows the lock badge (naming the REQUIRED plan, never the
-tenant's own plan as the barrier) and "طلب التفعيل والترقية". Active apps
-keep "مُفعّل ضمن باقتك" for a tenant admin and "إلغاء التثبيت" for the
-super admin; uninstall stays super-admin-only.
-
-WHAT THIS PINS, driving the REAL AppCard with the REAL catalog entries:
-- Table selection, couriers, van sales and barcode scales (allowed,
-  inactive, tenant admin): badge "متاح للتثبيت", button "تثبيت وتفعيل",
-  and clicking it calls onToggle(app, false).
-- Online store (not allowed, inactive, tenant admin): lock badge
-  "باقة التجارة الشاملة (Omnichannel)", button "طلب التفعيل والترقية",
-  and clicking it opens the upgrade modal, never onToggle.
-- Active app, tenant admin: "مُفعّل ضمن باقتك", no install/uninstall button.
-- Super admin, inactive + allowed: "تثبيت وتفعيل"; active: "إلغاء التثبيت".
-*/
+ * Pins the SaaS-Only Module Control rule (INV-SAAS-ONLY-MODULE-CONTROL) on AppCard:
+ * - Regular tenant admins never see a self-install ("تثبيت وتفعيل") or uninstall
+ *   ("إلغاء التثبيت") button:
+ *   - Included & inactive apps show badge "مُتاح عبر الإدارة" and button "طلب التفعيل من الإدارة"
+ *     which opens the activation dialog (onOpenUpgradeModal) and never calls onToggle.
+ *   - Higher-plan apps show the required plan lock badge and "طلب التفعيل والترقية".
+ *   - Active apps show "مُفعّل ضمن باقتك" and "مُدرج بالاشتراك" without toggle buttons.
+ * - Super admin (and active SaaS impersonation session) keeps "تثبيت وتفعيل" for inactive
+ *   apps and "إلغاء التثبيت" for active apps.
+ */
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -70,23 +53,24 @@ function installButton() {
   return screen.getByRole('button', { name: 'تثبيت وتفعيل' });
 }
 
-describe('AppCard tenant-admin install gate', () => {
+describe('AppCard SaaS-only module control', () => {
   it.each([
     ['posShowCartMeta', 'تحديد الطاولة والعميل بالسلة'],
     ['deliveryRepsModuleEnabled', 'إدارة مناديب التوصيل والدليفري'],
     ['vanSalesModuleEnabled', 'مبيعات وتوزيع الفان (الأسطول الميداني)'],
     ['weightedBarcodeEnabled', 'تشفير باركود الموازين الإلكترونية'],
-  ])('tenant admin sees %s as installable, never as an upgrade request', (key, title) => {
+  ])('tenant admin sees %s as SaaS-managed activation request, never self-install', (key, title) => {
     const app = appByKey(key);
     const { onToggle, onOpenUpgradeModal } = renderCard({ app, isActive: false, isAllowedByPlan: true, isSuperAdmin: false });
 
     expect(screen.getByText(title)).toBeTruthy();
-    expect(screen.getByText('متاح للتثبيت')).toBeTruthy();
+    expect(screen.getByText('مُتاح عبر الإدارة')).toBeTruthy();
+    expect(screen.queryByText('تثبيت وتفعيل')).toBeNull();
     expect(screen.queryByText('طلب التفعيل والترقية')).toBeNull();
 
-    fireEvent.click(installButton());
-    expect(onToggle).toHaveBeenCalledWith(app, false);
-    expect(onOpenUpgradeModal).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'طلب التفعيل من الإدارة' }));
+    expect(onOpenUpgradeModal).toHaveBeenCalledWith(app);
+    expect(onToggle).not.toHaveBeenCalled();
   });
 
   it('tenant admin sees the online store as locked by its required plan, with the upgrade path', () => {
@@ -106,18 +90,22 @@ describe('AppCard tenant-admin install gate', () => {
     renderCard({ app: appByKey('posShowCartMeta'), isActive: true, isAllowedByPlan: true, isSuperAdmin: false });
 
     expect(screen.getByText('مُفعّل ضمن باقتك')).toBeTruthy();
+    expect(screen.getByText('مُدرج بالاشتراك')).toBeTruthy();
     expect(screen.queryByText('تثبيت وتفعيل')).toBeNull();
     expect(screen.queryByText('إلغاء التثبيت')).toBeNull();
   });
 
-  it('super admin keeps the install button on an allowed app and uninstall on an active app', () => {
+  it('super admin / SaaS impersonator keeps the install button on an allowed app and uninstall on an active app', () => {
     const { onToggle } = renderCard({ app: appByKey('posShowCartMeta'), isActive: false, isAllowedByPlan: true, isSuperAdmin: true });
+    expect(screen.getByText('متاح للتثبيت')).toBeTruthy();
     fireEvent.click(installButton());
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 
-  it('super admin sees the uninstall button on an active app', () => {
-    renderCard({ app: appByKey('posShowCartMeta'), isActive: true, isAllowedByPlan: true, isSuperAdmin: true });
-    expect(screen.getByRole('button', { name: 'إلغاء التثبيت' })).toBeTruthy();
+  it('super admin / SaaS impersonator sees the uninstall button on an active app', () => {
+    const app = appByKey('vanSalesModuleEnabled');
+    const { onToggle } = renderCard({ app, isActive: true, isAllowedByPlan: true, isSuperAdmin: true });
+    fireEvent.click(screen.getByRole('button', { name: 'إلغاء التثبيت' }));
+    expect(onToggle).toHaveBeenCalledWith(app, true);
   });
 });

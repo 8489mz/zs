@@ -1,32 +1,13 @@
 /*
-New file: frontend/src/features/apps-store/pages/AppsStorePage.spec.tsx
-Pins the tenant-admin install gate end to end (INV-ULTIMATE-TENANT-SELF-INSTALL).
-
-THE GAP: a tenant admin on the Ultimate plan saw every installable app as
-locked — handleToggle blocked ALL tenant-admin installs with a
-super-admin-only toast, even though isAppAllowedByPlan already said the
-apps were allowed, and the card agreed with the block.
-
-THE RULE: a tenant admin installs an app his plan allows himself. The
-install button calls settingsApi.update with the app key; the block (and
-the super-admin-only toast) applies only to apps above the tenant's plan,
-and uninstall stays super-admin-only. The online store (plan_omnichannel)
-stays locked for Ultimate, and the Ultimate header note says so
-explicitly instead of "شاملة كافة الوحدات المتقدمة".
-
-WHAT THIS PINS, driving the REAL AppsStorePage as a real Ultimate tenant
-(admin role, plan_ultimate, deliveryReps feature granted), settings mocked
-at the api boundary, all apps inactive:
-- The header note reads "تشمل كافة الوحدات المتقدمة عدا المتجر الإلكتروني".
-- Searching each allowed app (table selection, couriers, van sales,
-  barcode scales) shows "تثبيت وتفعيل" and never "طلب التفعيل والترقية".
-- Installing the couriers app calls settingsApi.update with
-  { deliveryRepsModuleEnabled: true }.
-- The online store shows the lock badge "باقة التجارة الشاملة
-  (Omnichannel)" and "طلب التفعيل والترقية"; opening it shows the upgrade
-  dialog ("متاح ضمن: باقة التجارة الشاملة (Omnichannel)") and never calls
-  settingsApi.update.
-*/
+ * Pins the SaaS-Only Module Control flow on AppsStorePage:
+ * - Regular tenant admin sees Ultimate header note and active apps cleanly, while
+ *   inactive apps within their plan show "مُتاح عبر الإدارة" / "طلب التفعيل من الإدارة"
+ *   (opening the activation info modal, never calling settingsApi.update).
+ * - Higher-tier storefront keeps "باقة التجارة الشاملة (Omnichannel)" + "طلب التفعيل والترقية".
+ * - Active SaaS impersonation session (role='admin', isPlatformImpersonation=true) sees
+ *   "تثبيت وتفعيل" on inactive apps AND "إلغاء التثبيت" on active apps (calling settingsApi.update
+ *   with { vanSalesModuleEnabled: false } when uninstalling).
+ */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -44,18 +25,39 @@ vi.mock('@/features/settings/api/settings.api', () => ({
   settingsApi: apiMocks,
 }));
 
-const settingsMock = apiMocks.settings;
-const updateMock = apiMocks.update;
+const confirmMock = vi.hoisted(() => vi.fn(() => Promise.resolve(true)));
+
+vi.mock('@/shared/components/system-alert', () => ({
+  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
+  systemConfirm: confirmMock,
+  systemAlert: vi.fn(),
+  showToast: vi.fn(),
+  useToast: () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() } }),
+}));
 
 const authState = vi.hoisted(() => ({
   user: {
-    id: 'u1', username: 'owner', role: 'admin', permissions: [],
-    displayName: 'Owner', branchIds: [], defaultBranchId: '1', tenantId: 't1',
+    id: 'u1',
+    username: 'owner',
+    role: 'admin',
+    permissions: [],
+    displayName: 'Owner',
+    branchIds: [],
+    defaultBranchId: '1',
+    tenantId: 't1',
+    isPlatformImpersonation: false,
   },
   tenant: {
-    id: 't1', accountId: 'a1', slug: 't1', businessName: 'Test Co',
-    status: 'active', isTrial: false, trialEndsAt: null, trialDaysRemaining: null,
-    plan: 'plan_ultimate', features: ['deliveryReps'],
+    id: 't1',
+    accountId: 'a1',
+    slug: 't1',
+    businessName: 'Test Co',
+    status: 'active',
+    isTrial: false,
+    trialEndsAt: null,
+    trialDaysRemaining: null,
+    plan: 'plan_ultimate',
+    features: ['deliveryReps'],
   },
 }));
 
@@ -64,7 +66,9 @@ vi.mock('@/stores/auth-store', () => ({
 }));
 
 function renderPage() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   return render(
     <MemoryRouter>
       <QueryClientProvider client={queryClient}>
@@ -78,12 +82,21 @@ function searchFor(query: string) {
   fireEvent.change(screen.getByPlaceholderText('ابحث في التطبيقات، الموديولات، أو المزايا...'), { target: { value: query } });
 }
 
-describe('AppsStorePage Ultimate tenant self-install', () => {
+describe('AppsStorePage SaaS-only module control', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    confirmMock.mockResolvedValue(true);
+    authState.user = {
+      ...authState.user,
+      role: 'admin',
+      isPlatformImpersonation: false,
+    };
     settingsMock.mockResolvedValue({} as AppSettings);
     updateMock.mockResolvedValue({} as AppSettings);
   });
+
+  const settingsMock = apiMocks.settings;
+  const updateMock = apiMocks.update;
 
   it('says the Ultimate plan includes all advanced modules except the online store', async () => {
     renderPage();
@@ -91,45 +104,18 @@ describe('AppsStorePage Ultimate tenant self-install', () => {
     expect(screen.queryByText('شاملة كافة الوحدات المتقدمة')).toBeNull();
   });
 
-  it('retail Ultimate tenant without the clothing feature sees the variants app as installable under its new title', async () => {
-    // Package C: the variants app lost its clothing sector flag, so this
-    // tenant (plan_ultimate, features ['deliveryReps'] only) must see it
-    // in the visible catalog under the generic title and install it.
-    renderPage();
-    await waitFor(() => expect(screen.getByText('الأصناف المتغيرة (ألوان ومقاسات)')).toBeTruthy());
-    searchFor('الأصناف المتغيرة');
-
-    await waitFor(() => expect(screen.getByText('الأصناف المتغيرة (ألوان ومقاسات)')).toBeTruthy());
-    expect(screen.getAllByRole('button', { name: 'تثبيت وتفعيل' }).length).toBeGreaterThan(0);
-    expect(screen.queryByText('طلب التفعيل والترقية')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'تثبيت وتفعيل' }));
-    await waitFor(() => expect(updateMock).toHaveBeenCalledWith({ clothingModuleEnabled: true }));
-  });
-
-  it.each([
-    ['تحديد الطاولة', 'تحديد الطاولة والعميل بالسلة'],
-    ['مناديب التوصيل', 'إدارة مناديب التوصيل والدليفري'],
-    ['مبيعات وتوزيع الفان', 'مبيعات وتوزيع الفان (الأسطول الميداني)'],
-    ['تشفير باركود', 'تشفير باركود الموازين الإلكترونية'],
-  ])('Ultimate tenant sees %s as installable, never as an upgrade request', async (query, title) => {
-    renderPage();
-    await waitFor(() => expect(screen.getByText(title)).toBeTruthy());
-    searchFor(query);
-
-    await waitFor(() => expect(screen.getByText(title)).toBeTruthy());
-    expect(screen.getAllByRole('button', { name: 'تثبيت وتفعيل' }).length).toBeGreaterThan(0);
-    expect(screen.queryByText('طلب التفعيل والترقية')).toBeNull();
-    expect(screen.queryByText('متاح للتثبيت')).toBeTruthy();
-  });
-
-  it('installs an allowed app through settingsApi.update', async () => {
+  it('hides self-install buttons for regular tenant admins even on included Ultimate modules', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('إدارة مناديب التوصيل والدليفري')).toBeTruthy());
     searchFor('مناديب التوصيل');
 
-    fireEvent.click(screen.getByRole('button', { name: 'تثبيت وتفعيل' }));
-    await waitFor(() => expect(updateMock).toHaveBeenCalledWith({ deliveryRepsModuleEnabled: true }));
+    await waitFor(() => expect(screen.getByText('إدارة مناديب التوصيل والدليفري')).toBeTruthy());
+    expect(screen.queryByRole('button', { name: 'تثبيت وتفعيل' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'طلب التفعيل من الإدارة' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'طلب التفعيل من الإدارة' }));
+    await waitFor(() => expect(screen.getByText('طلب تفعيل تطبيق إدارة مناديب التوصيل والدليفري')).toBeTruthy());
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   it('keeps the online store locked for Ultimate and opens the upgrade dialog, never installing', async () => {
@@ -142,10 +128,31 @@ describe('AppsStorePage Ultimate tenant self-install', () => {
     expect(screen.queryByText('تثبيت وتفعيل')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /طلب التفعيل والترقية/ }));
-    // The upgrade dialog opens (its title names the app); the card badge and
-    // the dialog banner agree on the required plan.
     await waitFor(() => expect(screen.getByText('ترقية الباقة لتفعيل تطبيق المتجر الإلكتروني السحابي وبوابات الدفع')).toBeTruthy());
     expect(screen.getAllByText('باقة التجارة الشاملة (Omnichannel)').length).toBeGreaterThanOrEqual(2);
     expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('allows platform impersonator to install AND uninstall accidental Van Sales directly via settingsApi.update', async () => {
+    authState.user = {
+      ...authState.user,
+      role: 'admin',
+      isPlatformImpersonation: true,
+    };
+    settingsMock.mockResolvedValue({
+      vanSalesModuleEnabled: true,
+      deliveryRepsModuleEnabled: false,
+    } as AppSettings);
+    updateMock.mockResolvedValue({
+      vanSalesModuleEnabled: false,
+      deliveryRepsModuleEnabled: false,
+    } as AppSettings);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('مبيعات وتوزيع الفان (الأسطول الميداني)')).toBeTruthy());
+    searchFor('مبيعات وتوزيع الفان');
+
+    fireEvent.click(screen.getByRole('button', { name: 'إلغاء التثبيت' }));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith({ vanSalesModuleEnabled: false }));
   });
 });
