@@ -14,6 +14,24 @@
 
 عند تعديل قدرة، حدّث وصفها في مكانها أو أضف سجلاً بمعرّف ثابت: السلوك والحدود، مصادر الكود، الاختبارات ونتائجها الفعلية، تاريخ التحقق والـcommit. اربط المجالات المتأثرة دون نسخ تفاصيلها.
 
+<a id="settings-settlement-allocations-wipe-order"></a>
+### ترتيب حذف `settlement_allocations` قبل `sales` و`customer_payments` عند المسح وإعادة التعيين (2026-11-17)
+- **السلوك الحالي والحدود:**
+  - يحمل جدول `settlement_allocations` (الهجرة 0331) القيد `settlement_allocations_one_source_chk` الذي يشترط إسناد الصف إلى مصدر واحد فقط (`sale_id` أو `customer_payment_id`) مع `ON DELETE SET NULL` لكلٍّ منهما؛ لذا فإن أي حذف لصفوف `sales` أو `customer_payments` قبل حذف `settlement_allocations` يصفّر المصدر الوحيد إلى `NULL` ويُبطل المعاملة بـ SQLSTATE `23514`.
+  - تم ضمان حذف `settlement_allocations` (و`van_rep_financial_settlements` في مسارات التصفير الكلي) قبل `sales` و`customer_payments` و`van_sales_trips` في كافة مسارات الحذف المشتركة: `executeWipeTables`، `SettingsDemoDataService` (`resetStockBalances`، `wipeCatalogAndStock`، `clearDemoData`) عبر مساعد مشترك `clearVanSettlementRows`، و`SaasAdminService.deleteTenant` (بترتيب الجدول في أول قائمة الحذف دون الاعتماد على إعادة محاولة `23503`)، و`repair-platform-tenant-zs.js`، وجميع تنظيفات اختبارات E2E للفان (`van-sales-field-flow.e2e.ts` ورفاقها).
+- **حالة التنفيذ:** منفّذ ومغطى باختبارات الوحدة الحرجة على PGlite فعلي، وبانتظار إثبات E2E في CI-full.
+- **مصدر التنفيذ:**
+  - `backend/src/modules/settings/services/settings-demo-data-wipe-tables.ts`
+  - `backend/src/modules/settings/services/settings-demo-data.service.ts`
+  - `backend/src/modules/saas-admin/saas-admin.service.ts`
+  - `backend/scripts/repair-platform-tenant-zs.js`
+  - `backend/test/e2e/van-sales-field-flow.e2e.ts` (و`van-distribution-comprehensive.e2e.ts`، `van-sales-rogue-rep-and-multi-rep.e2e.ts`، `fleet-vehicle-reassignment.e2e.ts`، `van-field-returns.e2e.ts`، `van-sales-distribution-master-simulation.ts`)
+- **المجالات المتأثرة:** [التوزيع الميداني والفان](VANS_CAPABILITIES.md) · [إدارة المنصة والاشتراكات](SAAS_CAPABILITIES.md) · [الثوابت المعمارية](ARCHITECTURE_INVARIANTS.md) (`INV-SETTLEMENT-ALLOCATIONS-DELETE-ORDER`)
+- **التحقق:**
+  - `settlement-allocations-delete-order.spec.ts` (RED-proven قبل الإصلاح -> GREEN بعده على PGlite فعلي)، `tenant-wipe-fk-closure.spec.ts`، `architecture-guard.spec.ts`، و`tsc --noEmit`.
+- **آخر تحقق:** 2026-11-17 (على الأساس `ffd9828c7` داخل worktree الإصلاح).
+- **النواقص أو التعارضات:** التحقق من `van-sales-field-flow.e2e.ts` ضد PostgreSQL الحي يتم عبر GitHub Actions `ci-full`.
+
 <a id="settings-apps-store-plan-compatibility"></a>
 ### توحيد توافق الباقات وتثبيت تطبيقات المتجر عبر القطاعات والأنظمة (2026-11-16)
 - **السلوك الحالي والحدود:**

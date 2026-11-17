@@ -30,6 +30,7 @@ export async function executeWipeTables(trx: any, tenantId: string, preservedUse
   await (trx as any).deleteFrom('import_preorder_refund_events').where(sql<boolean>`tenant_id = ${tenantId}`).execute().catch(() => undefined);
   await (trx as any).deleteFrom('import_container_preorders').where(sql<boolean>`tenant_id = ${tenantId}`).execute().catch(() => undefined);
   await (trx as any).deleteFrom('import_proforma_invoices').where(sql<boolean>`tenant_id = ${tenantId}`).execute().catch(() => undefined);
+  await (trx as any).deleteFrom('settlement_allocations').where(sql<boolean>`tenant_id = ${tenantId}`).execute().catch(() => undefined);
   await (trx as any).deleteFrom('van_field_returns').where(sql<boolean>`tenant_id = ${tenantId}`).execute().catch(() => undefined);
 
   // 1. Operational tables

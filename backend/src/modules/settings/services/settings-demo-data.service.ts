@@ -101,6 +101,12 @@ export class SettingsDemoDataService {
     await this.backupService.savePreMutationBackup(actor, reason);
   }
 
+  /** Clear daily-split allocation rows before deleting sales/payments (ON DELETE SET NULL + CHECK constraint). */
+  private async clearVanSettlementRows(trx: any, tenantId: string): Promise<void> {
+    await trx.deleteFrom('settlement_allocations').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
+    await trx.deleteFrom('van_rep_financial_settlements').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
+  }
+
   async getDemoDataStatus(actor: AuthContext): Promise<{ isEmpty: boolean; productCount: number; saleCount: number; isSuperAdmin: boolean }> {
     const scope = this.scope(actor);
     const productCountRes = await this.db
@@ -167,6 +173,7 @@ export class SettingsDemoDataService {
       await (trx as any).deleteFrom('quotation_items').where(sql<boolean>`tenant_id = ${tenantId}`).execute().catch(() => undefined);
       await (trx as any).deleteFrom('quotations').where(sql<boolean>`tenant_id = ${tenantId}`).execute().catch(() => undefined);
 
+      await this.clearVanSettlementRows(trx, tenantId);
       await trx.deleteFrom('sale_items').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
       await trx.deleteFrom('sale_payments').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
       await trx.deleteFrom('held_sale_items').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
@@ -246,6 +253,7 @@ export class SettingsDemoDataService {
       await (trx as any).deleteFrom('quotation_items').where(sql<boolean>`tenant_id = ${tenantId}`).execute().catch(() => undefined);
       await (trx as any).deleteFrom('quotations').where(sql<boolean>`tenant_id = ${tenantId}`).execute().catch(() => undefined);
 
+      await this.clearVanSettlementRows(trx, tenantId);
       await trx.deleteFrom('sale_items').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
       await trx.deleteFrom('sale_payments').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
       await trx.deleteFrom('held_sale_items').where(sql<boolean>`tenant_id = ${tenantId}`).execute();
@@ -1279,6 +1287,7 @@ export class SettingsDemoDataService {
 
         const demoSaleIds = demoSales.map((s) => Number(s.sale_id)).filter(Boolean);
         if (demoSaleIds.length > 0) {
+          await (trx as any).deleteFrom('settlement_allocations').where('sale_id', 'in', demoSaleIds).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
           await trx.deleteFrom('sale_items').where('sale_id', 'in', demoSaleIds).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
           await trx.deleteFrom('sale_payments').where('sale_id', 'in', demoSaleIds).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();
           await trx.deleteFrom('sales').where('id', 'in', demoSaleIds).where(sql<boolean>`tenant_id = ${scope.tenantId}`).execute();

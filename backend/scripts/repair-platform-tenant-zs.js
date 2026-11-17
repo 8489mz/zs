@@ -22,6 +22,8 @@ async function repair() {
     const commercialTables = [
       'held_sale_items',
       'held_sales',
+      'settlement_allocations',
+      'van_rep_financial_settlements',
       'sale_items',
       'sale_line_stock_allocations',
       'sale_payments',

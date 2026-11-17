@@ -244,6 +244,7 @@
     "test/critical/rep-driver-writes-ownership-m16.spec.ts",
     "test/critical/rest-cod-collection-truth.spec.ts",
     "test/critical/restaurant-paid-gates.spec.ts",
-    "test/critical/van-profit-rep-reporting.spec.ts"
+    "test/critical/van-profit-rep-reporting.spec.ts",
+    "test/critical/settlement-allocations-delete-order.spec.ts"
   ]
 }

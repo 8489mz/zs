@@ -204,6 +204,8 @@ async function makeDb(): Promise<{ pg: InstanceType<typeof PGlite>; db: Kysely<a
     `CREATE TABLE fleet_oil_changes (id BIGINT PRIMARY KEY, tenant_id TEXT NOT NULL, vehicle_id BIGINT REFERENCES fleet_vehicles(id) ON DELETE CASCADE, rep_id BIGINT REFERENCES delivery_representatives(id) ON DELETE SET NULL)`,
     `CREATE TABLE fleet_fuel_logs (id BIGINT PRIMARY KEY, tenant_id TEXT NOT NULL, vehicle_id BIGINT REFERENCES fleet_vehicles(id) ON DELETE CASCADE, trip_id BIGINT REFERENCES van_sales_trips(id) ON DELETE SET NULL, rep_id BIGINT REFERENCES delivery_representatives(id) ON DELETE SET NULL)`,
     `CREATE TABLE van_rep_financial_settlements (id BIGINT PRIMARY KEY, tenant_id TEXT NOT NULL, rep_id BIGINT REFERENCES delivery_representatives(id) ON DELETE CASCADE, trip_id BIGINT REFERENCES van_sales_trips(id) ON DELETE SET NULL)`,
+    `CREATE TABLE customer_payments (id BIGINT PRIMARY KEY, tenant_id TEXT NOT NULL)`,
+    `CREATE TABLE settlement_allocations (id SERIAL PRIMARY KEY, tenant_id VARCHAR NOT NULL, settlement_id BIGINT NOT NULL REFERENCES van_rep_financial_settlements(id) ON DELETE CASCADE, sale_id BIGINT REFERENCES sales(id) ON DELETE SET NULL, customer_payment_id BIGINT REFERENCES customer_payments(id) ON DELETE SET NULL, amount NUMERIC(14, 3) NOT NULL DEFAULT 0, business_day DATE NOT NULL DEFAULT '2026-11-17', CONSTRAINT settlement_allocations_one_source_chk CHECK ((sale_id IS NOT NULL AND customer_payment_id IS NULL) OR (sale_id IS NULL AND customer_payment_id IS NOT NULL)))`,
     `CREATE TABLE van_trip_expenses (id BIGINT PRIMARY KEY, tenant_id TEXT NOT NULL, trip_id BIGINT REFERENCES van_sales_trips(id) ON DELETE CASCADE)`,
     `CREATE TABLE van_trip_packaging_movements (id BIGINT PRIMARY KEY, tenant_id TEXT NOT NULL, trip_id BIGINT REFERENCES van_sales_trips(id) ON DELETE CASCADE, customer_id BIGINT REFERENCES customers(id) ON DELETE SET NULL)`,
     // stock_movements references the receipt (RESTRICT): the wipe must
@@ -311,6 +313,10 @@ async function main(): Promise<void> {
       const row = await db.selectFrom(table).select('id').where('tenant_id', '=', TENANT).executeTakeFirst();
       if (!row) await db.insertInto(table).values({ id: 1, tenant_id: TENANT }).execute();
     }
+    await db.insertInto('settlement_allocations').values([
+      { tenant_id: TENANT, settlement_id: 1, sale_id: 1, customer_payment_id: null, amount: 50 },
+      { tenant_id: TENANT, settlement_id: 1, sale_id: null, customer_payment_id: 1, amount: 25 },
+    ]).execute();
     await db.insertInto('manufacturing_work_orders').values({ id: 1, tenant_id: TENANT }).execute();
     await db.insertInto('manufacturing_wo_consumptions').values({ id: 1, tenant_id: TENANT, work_order_id: 1 }).execute();
     await db.insertInto('manufacturing_boms').values({ id: 1, tenant_id: TENANT }).execute();
@@ -334,6 +340,7 @@ async function main(): Promise<void> {
       if (table === 'users') continue;
       assert.equal(await count(db, table, TENANT), 0, `${table} must be empty after the wipe`);
     }
+    assert.equal(await count(db, 'settlement_allocations', TENANT), 0, 'settlement_allocations must be empty after the wipe');
     assert.equal(await count(db, 'audit_logs', TENANT), 1, 'audit_logs rows are kept, only unlinked');
     const audit = await db.selectFrom('audit_logs').select('created_by').where('tenant_id', '=', TENANT).executeTakeFirst();
     assert.equal(audit?.created_by, null, 'audit_logs.created_by must be nulled for the deleted user');
@@ -364,7 +371,7 @@ async function main(): Promise<void> {
       'import_shipments must be deleted before suppliers',
     );
     for (const table of [
-      'van_field_returns', 'van_load_requisitions', 'van_stock_transfers',
+      'van_field_returns', 'settlement_allocations', 'van_load_requisitions', 'van_stock_transfers',
       'van_stock_transfer_items', 'van_damaged_swaps',
       'accounting_installment_interest', 'accounting_supplier_links',
       'accounting_marketplace_settlements', 'treasury_transfers',

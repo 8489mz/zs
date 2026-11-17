@@ -47,6 +47,8 @@ async function cleanup(db: Kysely<Database>): Promise<void> {
     'journal_entry_lines',
     'journal_entries',
     'accounting_posting_failures',
+    'settlement_allocations',
+    'van_rep_financial_settlements',
     'customer_ledger',
     'customer_payments',
     'sale_items',

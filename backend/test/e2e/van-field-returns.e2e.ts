@@ -34,6 +34,8 @@ async function cleanup(db: Kysely<Database>): Promise<void> {
   const tables = [
     'journal_entries',
     'accounting_posting_failures',
+    'settlement_allocations',
+    'van_rep_financial_settlements',
     'van_field_returns',
     'customer_ledger',
     'sale_items',

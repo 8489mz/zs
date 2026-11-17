@@ -554,6 +554,8 @@ export async function runVanSalesDistributionMasterSimulation(): Promise<void> {
     await sql`DELETE FROM sales_order_items WHERE sales_order_id IN (SELECT id FROM sales_orders WHERE tenant_id = ${testTenantId})`.execute(db);
     await sql`DELETE FROM sales_orders WHERE tenant_id = ${testTenantId}`.execute(db);
     await sql`DELETE FROM van_field_visits WHERE tenant_id = ${testTenantId}`.execute(db);
+    await sql`DELETE FROM settlement_allocations WHERE tenant_id = ${testTenantId}`.execute(db);
+    await sql`DELETE FROM van_rep_financial_settlements WHERE tenant_id = ${testTenantId}`.execute(db);
     await sql`DELETE FROM customer_ledger WHERE tenant_id = ${testTenantId}`.execute(db);
     await sql`DELETE FROM customer_payments WHERE tenant_id = ${testTenantId}`.execute(db);
     await sql`DELETE FROM van_trip_expenses WHERE tenant_id = ${testTenantId}`.execute(db);

@@ -922,7 +922,7 @@ export class SaasAdminService {
       WHERE column_name = 'tenant_id' AND table_schema = 'public'
     `.execute(this.db);
 
-    const allTables = tablesQuery.rows.map(r => r.table_name).filter(t => t !== 'tenants');
+    const allTables = tablesQuery.rows.map(r => r.table_name).filter(t => t !== 'tenants').sort((a, b) => (a === 'settlement_allocations' ? -1 : b === 'settlement_allocations' ? 1 : 0));
 
     // One transaction for the whole purge. Each table used to be deleted on its own
     // connection, so a foreign key we could not resolve - or any unexpected error - left
