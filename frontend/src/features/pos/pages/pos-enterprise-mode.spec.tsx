@@ -104,6 +104,11 @@ describe('I5-D1 POS availability rule', () => {
     ['module off via activityType', { activityType: 'warehousing', posModuleEnabled: true }, false, 'warehousing'],
     ['retail industry, module on', { businessIndustry: 'retail_general', posModuleEnabled: true }, true, null],
     ['no settings at all', null, true, null],
+    // P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): a super-admin POS grant
+    // lifts POS even where the industry blocks it and the module is off.
+    ['wholesale van + pos override grant', { businessIndustry: 'wholesale_van', posModuleEnabled: false, posGrantedByOverride: true }, true, null],
+    ['warehousing + pos override grant', { businessIndustry: 'warehousing', posModuleEnabled: false, posGrantedByOverride: true }, true, null],
+    ['wholesale van, override flag false', { businessIndustry: 'wholesale_van', posGrantedByOverride: false }, false, 'wholesale'],
   ])('%s -> available=%s reason=%s', (_label, settings, available, reason) => {
     expect(getPosAvailability(settings)).toEqual({ available, reason });
     expect(isPosAvailable(settings)).toBe(available);

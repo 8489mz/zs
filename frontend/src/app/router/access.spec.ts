@@ -197,6 +197,24 @@ describe('router access guards', () => {
     }
   });
 
+  it('P10: a super-admin hide override on deliveryReps is respected on wholesale_van', () => {
+    const fullAdminUser: AuthUser = { ...adminUser, permissions: ['*'] };
+    // Explicit features list WITHOUT deliveryReps: the old hardcoded
+    // wholesale_van grant ignored the list and always returned true.
+    const hiddenTenant = {
+      id: 't-van', name: 'Van Client', activityType: 'wholesale_van',
+      plan_id: 'plan_basic',
+      features: ['sales', 'catalog', 'vanSales', 'pos', 'cashDrawer'],
+    } as any;
+    expect(tenantHasFeature('deliveryReps', hiddenTenant, fullAdminUser)).toBe(false);
+    // With deliveryReps in the list, the feature is on.
+    const shownTenant = { ...hiddenTenant, features: [...hiddenTenant.features, 'deliveryReps'] };
+    expect(tenantHasFeature('deliveryReps', shownTenant, fullAdminUser)).toBe(true);
+    // Legacy fallback (no explicit list) still grants deliveryReps.
+    const legacyTenant = { ...hiddenTenant, features: [] };
+    expect(tenantHasFeature('deliveryReps', legacyTenant, fullAdminUser)).toBe(true);
+  });
+
   it('opens delivery reps management on retail tenants on every plan, including starter (INV-DELIVERY-REPS-RETAIL-CORE)', () => {
     const fullAdminUser: AuthUser = { ...adminUser, permissions: ['*'] };
     const proTenant = {

@@ -2957,6 +2957,7 @@ export interface Database {
   pharmacy_drugs: PharmacyDrugTable;
   pharmacy_batches: PharmacyBatchTable;
   inventory_batches: InventoryBatchTable;
+  tenant_feature_overrides: TenantFeatureOverrideTable;
   pharmacy_prescriptions: PharmacyPrescriptionTable;
   pharmacy_shortages: PharmacyShortageTable;
   pharmacy_clinical_services: PharmacyClinicalServiceTable;
@@ -3142,6 +3143,18 @@ export interface SaleInventoryBatchAllocationTable {
   inventory_batch_id: number;
   quantity: number;
   created_at: ColumnType<Date, string | undefined, never>;
+}
+
+export interface TenantFeatureOverrideTable {
+  id: Generated<number>;
+  tenant_id: string;
+  feature_code: string;
+  granted: boolean;
+  granted_by: number | null;
+  granted_at: ColumnType<Date, string | undefined, never>;
+  reason: string | null;
+  created_at: ColumnType<Date, string | undefined, string | undefined>;
+  updated_at: ColumnType<Date, string | undefined, string | undefined>;
 }
 
 export interface PharmacyPrescriptionTable {

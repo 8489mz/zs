@@ -584,6 +584,7 @@ export function resolvePillarScopedFeatures(
   activityType: string | null | undefined,
   planFeatures: string[],
   extraFeatures: string[] = [],
+  featureOverrides: Record<string, boolean> = {},
 ): string[] {
   const profile = getIndustryProfile(activityType);
   const extraAdd = extraFeatures.filter((f) => !f.startsWith('+') && !f.startsWith('-'));
@@ -687,6 +688,15 @@ export function resolvePillarScopedFeatures(
   // Filter out any explicit exclusions
   for (const excluded of explicitMinus) {
     candidates.delete(excluded);
+  }
+
+  // P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): super-admin per-tenant
+  // overrides apply last, over every pillar/subVertical/plan rule above
+  // (including the wholesale_van pos/cashDrawer deletions and the
+  // explicitMinus exclusions).
+  for (const [feature, granted] of Object.entries(featureOverrides)) {
+    if (granted) candidates.add(feature);
+    else candidates.delete(feature);
   }
 
   return Array.from(candidates);

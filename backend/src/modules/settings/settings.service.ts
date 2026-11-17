@@ -46,6 +46,26 @@ export class SettingsService {
     return features;
   }
 
+  /**
+   * P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): reads one super-admin
+   * per-tenant feature override. Returns true (granted), false (hidden),
+   * or null (no override — the profile/plan default applies). Returns null
+   * when the table does not exist yet (migrations not run).
+   */
+  async loadFeatureOverride(tenantId: string, featureCode: string): Promise<boolean | null> {
+    try {
+      const row = await this.db
+        .selectFrom('tenant_feature_overrides')
+        .select('granted')
+        .where('tenant_id', '=', tenantId)
+        .where('feature_code', '=', featureCode)
+        .executeTakeFirst();
+      return row ? Boolean(row.granted) : null;
+    } catch {
+      return null;
+    }
+  }
+
   invalidatePlanFeaturesCache(tenantId?: string) {
     if (tenantId) {
       for (const key of this._planFeaturesCache.keys()) {
@@ -401,6 +421,23 @@ export class SettingsService {
       }
     }
 
+    // P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): a super-admin POS grant
+    // re-enables the module + the cashier-shift gate on profiles that
+    // force them off (wholesale_van / warehousing / import_export); a hide
+    // turns POS off on profiles that default it on. Read-path safety net
+    // for rows written before the override existed; the plan sync is the
+    // primary writer of these two keys. Applied last so it wins over every
+    // profile branch above.
+    const posOverride = await this.loadFeatureOverride(scope.tenantId, 'pos');
+    settings.posGrantedByOverride = posOverride === true;
+    if (posOverride === true) {
+      settings.posModuleEnabled = true;
+      settings.requireCashierShiftForSales = true;
+    } else if (posOverride === false) {
+      settings.posModuleEnabled = false;
+      settings.requireCashierShiftForSales = false;
+    }
+
     this.remember(this._settingsCache, cacheKey, settings);
     return { ...settings, scope };
   }
@@ -626,12 +663,33 @@ export class SettingsService {
       });
     }
 
+    // P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): a super-admin POS override
+    // is re-applied AFTER the protected-keys filter, because the override
+    // is super-admin authority and wins over it (posModuleEnabled is in
+    // ALWAYS_PROTECTED_SWITCHES, so the filter would otherwise strip a
+    // grant a tenant admin's save round-tripped). A grant keeps POS + the
+    // cashier-shift gate on; a hide keeps them off; no row leaves the
+    // profile branch's values alone.
+    const posOverride = await this.loadFeatureOverride(scope.tenantId, 'pos');
+    if (posOverride === true) {
+      normalizedPayload.posModuleEnabled = true;
+      normalizedPayload.requireCashierShiftForSales = true;
+    } else if (posOverride === false) {
+      normalizedPayload.posModuleEnabled = false;
+      normalizedPayload.requireCashierShiftForSales = false;
+    }
+
     // Platform bookkeeping, never a tenant setting: this records which module switches the
     // last plan sync granted, and the next sync takes its revocation list from it. It is
     // returned by getSettings like any other row, so a full round-trip of the settings
     // object would otherwise write it straight back — and a crafted value would steer what
     // the next sync switches off.
     delete normalizedPayload[PLAN_MANAGED_MODULES_SETTING_KEY];
+
+    // P10: posGrantedByOverride is a computed read-path flag, never a
+    // persisted setting — a round-tripped value must not land in the
+    // settings table.
+    delete normalizedPayload['posGrantedByOverride'];
 
     // The developer master-password hash is set ONLY through the
     // guarded POST /api/developer/master-password endpoint, by the
@@ -1062,6 +1120,19 @@ export class SettingsService {
         modulePatch.hrModuleEnabled = true;
         modulePatch.storefrontModuleEnabled = false;
       }
+    }
+
+    // P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): a super-admin POS override
+    // survives an activity change — a grant keeps POS + the cashier-shift
+    // gate on even when the new profile forces them off (wholesale_van),
+    // a hide keeps them off even when the new profile defaults them on.
+    const posOverride = await this.loadFeatureOverride(scope.tenantId, 'pos');
+    if (posOverride === true) {
+      modulePatch.posModuleEnabled = true;
+      modulePatch.requireCashierShiftForSales = true;
+    } else if (posOverride === false) {
+      modulePatch.posModuleEnabled = false;
+      modulePatch.requireCashierShiftForSales = false;
     }
 
     const defaultProductKind = normalizedKey === 'clothing' ? 'fashion' : 'standard';

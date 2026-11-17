@@ -218,6 +218,7 @@
     "test/critical/marketplace-simulation-stock-atomic.spec.ts",
     "test/critical/marketplace-webhook-persistence.spec.ts",
     "test/critical/storefront-simulate-order-gate.spec.ts",
-    "test/critical/storefront-catalog-book-digits.spec.ts"
+    "test/critical/storefront-catalog-book-digits.spec.ts",
+    "test/critical/van-general-feature-overrides.spec.ts"
   ]
 }

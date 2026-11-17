@@ -21,6 +21,12 @@
 - **مصدر التنفيذ:** `backend/src/modules/saas-admin/saas-admin.service.ts`، `backend/src/modules/tenant-subscription/pricing/pricing-catalog.service.ts`، `backend/src/modules/tenant-subscription/tenant-subscription.service.ts`، `frontend/src/features/settings/api/tenant-subscription.api.ts`، `frontend/src/features/settings/pages/TenantSubscriptionPage.tsx`، `frontend/src/features/saas-admin/components/TenantWelcomeShareModal.tsx`، `frontend/src/features/saas-admin/components/CreateTrialTenantModal.tsx`.
 
 
+<a id="saas-tenant-feature-overrides"></a>
+### تجاوزات الميزات لكل منشأة من السوبر أدمن (2026-11-17)
+- **السلوك الحالي والحدود:** يستطيع السوبر أدمن منح أو إخفاء أي ميزة لمنشأة معينة فوق إعدادات النمط الافتراضية (أول استخدام: نقطة البيع والدرج على `wholesale_van`)، عبر جدول `tenant_feature_overrides` (صف واحد لكل منشأة+ميزة، `granted` صحيح/خطأ، مع سبب ومدقق). المنح يفتح كل المستويات (حارس الصلاحيات `hasFeature`، `resolvePillarScopedFeatures`، إعدادات المنشأة، القائمة الجانبية، حارس المسارات `isRouteAllowedInVertical`)؛ الإخفاء يغلقها بإحكام حتى مع وجود الصلاحية. المنح يبقى بعد حفظ الإعدادات وتغيير النشاط ومزامنة الباقة؛ عند منح نقطة البيع يُكتب `posModuleEnabled=true` و`requireCashierShiftForSales=true`، ومبيعات نقطة البيع تخصم من مخزون فرع المستودع لا مخزون الفان، ونقد الدرج لا يختلط بنقد تسوية الرحلة. كل تغيير يُسجَّل بحدث تدقيق `SAAS_TENANT_FEATURE_OVERRIDE`. الإعدادات الافتراضية عند التهيئة لم تتغير.
+- **مصدر التنفيذ:** `backend/src/database/migrations/2040000000336_tenant_feature_overrides.ts`، `backend/src/core/auth/services/plan-feature.service.ts`، `backend/src/core/tenant/industry-profiles.ts`، `backend/src/modules/settings/settings.service.ts`، `backend/src/modules/saas-admin/saas-admin.service.ts`، `backend/src/modules/sales/services/create-sale.service.ts`، `backend/src/modules/cash-drawer/cash-drawer.controller.ts`، `frontend/src/features/saas-admin/components/UpdateTenantPlanModal.tsx`.
+- **الانحدار المكتوب:** `backend/test/critical/van-general-feature-overrides.spec.ts` (10 حالات، شُغِّل بـ `ts-node` العادي: نجاح، خروج 0) + `backend/test/critical/architecture-guard.spec.ts` (خروج 0). `INV-VAN-GENERAL-FEATURE-OVERRIDES`.
+
 <a id="saas-sandbox-cloud-failclosed-p0a"></a>
 ### حصر محاكاة تجديد الاشتراك خارج Cloud SaaS — تدقيق مصدر الكود 25 أكتوبر 2026
 - السلوك الحالي: إتمام دفع تجريبي يولّد اشتراكًا حقيقيًا، لذلك يُرفض في Cloud SaaS حتى لو غابت مفاتيح بوابات الدفع، ويُسمح به فقط في الوضع المحلي الصريح دون بوابة حقيقية. لا يتحول فشل XPay/Paymob/Stripe إلى نجاح افتراضي.

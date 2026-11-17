@@ -8,6 +8,14 @@ export interface AuthContext {
   accountId?: string;
   planId?: string;
   extraFeatures?: string[];
+  /**
+   * P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): super-admin per-tenant feature
+   * overrides loaded from tenant_feature_overrides at login/session
+   * resolution — never from the request. A granted feature is ON even
+   * where the mode default is OFF; a hidden feature is OFF even where the
+   * plan grants it. Checked first by PlanFeatureService.hasFeature.
+   */
+  featureOverrides?: Record<string, boolean>;
   activityType?: string;
   pillar?: string;
   /**

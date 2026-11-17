@@ -709,7 +709,12 @@ export function tenantHasFeature(
     }
     if (vertical === 'manufacturing' && feature === 'manufacturing') return true;
     if (vertical === 'import_export' && feature === 'import') return true;
-    if (vertical === 'wholesale_van' && feature === 'deliveryReps') return true;
+    // P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): the wholesale_van
+    // deliveryReps grant is a LEGACY fallback only — once the server
+    // supplies an explicit features list, a super-admin hide override on
+    // deliveryReps must be respected (the old hardcoded grant ignored
+    // tenant.features entirely and defeated the hide).
+    if (vertical === 'wholesale_van' && feature === 'deliveryReps' && (!hasExplicitFeatures || tenant.features.includes('deliveryReps'))) return true;
   } else {
     // Retail/commerce tiers retain core selling primitives while keeping tier-gated modules
     // (hr, accounting, purchases, inventory, reports, installments, storefront) strictly bound to tenant.features.
@@ -734,7 +739,9 @@ export function hasRequiredFeature(target: string, user?: AuthUser | null): bool
 
   const tenant = useAuthStore.getState().tenant;
   const vertical = resolveCurrentVertical(tenant);
-  if (!isRouteAllowedInVertical(vertical, target)) {
+  // P10: tenant.features is built override-aware by the backend, so the
+  // granted features ride along as the route guard's 4th argument.
+  if (!isRouteAllowedInVertical(vertical, target, undefined, tenant?.features)) {
     return false;
   }
 

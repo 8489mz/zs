@@ -52,7 +52,11 @@ export class PermissionsGuard implements CanActivate {
 
     // 1. Mandatory Feature Check: MUST RUN FIRST before permission checks to prevent guard bypass
     if (!isSuperAdmin && requiredFeature && auth) {
-      if (!this.planFeatureService.hasFeature(auth.planId, auth.extraFeatures, requiredFeature, auth.pillar, auth.activityType)) {
+      // P10: the super-admin per-tenant overrides ride on the auth context
+      // (loaded from tenant_feature_overrides at session resolution), so a
+      // hide override refuses the endpoint even when the user holds the
+      // permission, and a grant opens it even where the mode default blocks it.
+      if (!this.planFeatureService.hasFeature(auth.planId, auth.extraFeatures, requiredFeature, auth.pillar, auth.activityType, auth.featureOverrides)) {
         throw new ForbiddenException('هذه الميزة غير متاحة في باقتك الحالية أو نشاط منشأتك. يرجى مراجعة إدارة المنظومة.');
       }
     }

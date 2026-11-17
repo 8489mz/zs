@@ -285,7 +285,7 @@ function normalizeKey(target: string): string {
  * Universal Vertical Isolation Check:
  * Enforces strict boundaries between business models across desktop, mobile, search, and routes.
  */
-export function isRouteAllowedInVertical(vertical: BusinessVertical, target: string, settings?: any): boolean {
+export function isRouteAllowedInVertical(vertical: BusinessVertical, target: string, settings?: any, grantedFeatures?: string[]): boolean {
   const key = normalizeKey(target);
 
   // INV-STOREFRONT-ORDERS: the recorded-orders list is the tenant's own order record,
@@ -295,6 +295,19 @@ export function isRouteAllowedInVertical(vertical: BusinessVertical, target: str
   // to 'sales' by the router (routePermissionMap).
   if (key === 'online-orders') {
     return true;
+  }
+
+  // P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): a super-admin per-tenant
+  // override lifts the route for the granted feature even where the
+  // vertical blocks it below (wholesale_van blocks 'pos'; warehousing /
+  // services block 'pos' and 'cash-drawer'). grantedFeatures comes from
+  // tenant.features, which the backend builds override-aware.
+  if (grantedFeatures && grantedFeatures.length > 0) {
+    const routeFeature =
+      key === 'pos' || key.startsWith('pos/') ? 'pos'
+      : key === 'cash-drawer' || key.startsWith('cash-drawer/') ? 'cashDrawer'
+      : null;
+    if (routeFeature && grantedFeatures.includes(routeFeature)) return true;
   }
 
   // Specific settings routes that belong exclusively to retail e-commerce or retail warehouse management

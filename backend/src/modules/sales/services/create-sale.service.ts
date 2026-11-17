@@ -470,6 +470,17 @@ export class CreateSaleService {
 
       let branch: any = null;
       if (normalized.source === 'pos') {
+        // P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): POS is a source-scoped
+        // feature gate, not a sidebar toggle. A wholesale_van tenant
+        // without a super-admin 'pos' grant is refused here — before any
+        // branch/stock validation — and a grant (auth.featureOverrides,
+        // loaded from tenant_feature_overrides at session resolution) opens
+        // it even where the mode default blocks POS. The sales controller
+        // deliberately carries NO @RequireFeature('pos'): /sales invoicing
+        // must stay open for wholesale_van.
+        if (!this.planFeatureService.hasFeature(auth.planId, auth.extraFeatures, 'pos', auth.pillar, auth.activityType, auth.featureOverrides)) {
+          throw new AppError('نقطة البيع غير متاحة لهذه المنشأة.', 'POS_FEATURE_NOT_AVAILABLE', 403);
+        }
         if (!normalized.branchId) {
           throw new AppError('يجب تحديد الفرع لعمليات البيع عبر الكاشير.', 'POS_BRANCH_REQUIRED', 400);
         }

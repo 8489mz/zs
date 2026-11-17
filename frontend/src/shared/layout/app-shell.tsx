@@ -1099,7 +1099,14 @@ export function AppShell({ children }: PropsWithChildren) {
         // displays portal: only visible when restaurant module is enabled and plan includes restaurant
         if (item.key === 'displays' && (settings?.restaurantModuleEnabled !== true || !hasFeature('restaurant'))) return false;
         // POS & Retail Sales gating:
-        if ((item.key === 'pos' || item.key === 'cash-drawer') && (settings?.posModuleEnabled === false || isWholesaleVanVertical || isWarehousingVertical)) return false;
+        // P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): a super-admin override
+        // grant (visible in tenant.features, which the backend builds
+        // override-aware) opens the item even where the module switch is
+        // off or the vertical blocks it; without a grant the old rules
+        // stand. The direct features check (not hasFeature) keeps the
+        // platform-admin bypass out of this gate.
+        if (item.key === 'pos' && (settings?.posModuleEnabled === false || isWholesaleVanVertical || isWarehousingVertical) && !tenant?.features?.includes('pos')) return false;
+        if (item.key === 'cash-drawer' && (settings?.posModuleEnabled === false || isWholesaleVanVertical || isWarehousingVertical) && !tenant?.features?.includes('cashDrawer')) return false;
         if ((item.key === 'sales' || item.key === 'returns') && settings?.posModuleEnabled === false && !isWholesaleVanVertical && !isWarehousingVertical && !isImportVertical && !isEnterpriseCommerceActive) return false;
         if (item.key === 'customers' && settings?.posModuleEnabled === false && !isEnterpriseCommerceActive && settings?.installmentsModuleEnabled === false && !isContractingVertical && !isMaritimeVertical && !isManufacturingVertical && !isImportVertical && !isWholesaleVanVertical && !isWarehousingVertical) return false;
 
@@ -1176,7 +1183,10 @@ export function AppShell({ children }: PropsWithChildren) {
     }
 
     if (isWholesaleVanVertical) {
-      return [...dashKeys, 'online-orders', 'van-sales-admin'];
+      // P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): an overridden tenant gets
+      // the POS + drawer shortcuts too (same pattern as the services branch).
+      const posOverridden = Boolean(tenant?.features?.includes('pos'));
+      return [...dashKeys, 'online-orders', 'van-sales-admin', ...(posOverridden ? ['pos', 'cash-drawer'] : [])];
     }
 
     if (currentVertical === 'warehousing') {

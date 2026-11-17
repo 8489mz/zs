@@ -36,11 +36,21 @@ export interface PosSettingsLike {
   activityType?: string | null;
   posModuleEnabled?: boolean;
   enableEnterpriseFeatures?: boolean;
+  /**
+   * P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): true when a super-admin
+   * granted the 'pos' override for this tenant. Computed by the backend
+   * (getSettings); never persisted, never sent back by the client.
+   */
+  posGrantedByOverride?: boolean;
 }
 
 export function getPosAvailability(
   settings: PosSettingsLike | null | undefined,
 ): { available: boolean; reason: PosDisabledReason | null } {
+  // P10: a super-admin POS grant lifts POS before the industry early
+  // returns below — a wholesale_van tenant with the override sells from
+  // the warehouse branch like any retail tenant.
+  if (settings?.posGrantedByOverride === true) return { available: true, reason: null };
   const rawIndustry = String(settings?.businessIndustry || settings?.activityType || '').toLowerCase();
   const isWholesaleVertical =
     rawIndustry === 'wholesale_van' ||

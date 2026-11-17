@@ -337,6 +337,21 @@ export class SaasAdminService {
       String(tenant.id || '') === this.getPlatformTenantId() ||
       String(tenant.slug || '').toLowerCase() === 'zs';
 
+    // P10: current super-admin feature overrides, so the plan modal can
+    // show them (grant / hide / default). Empty when the table is absent.
+    let featureOverrides: Array<{ featureCode: string; granted: boolean; reason: string | null }> = [];
+    try {
+      const overrideRows = await this.db
+        .selectFrom('tenant_feature_overrides')
+        .select(['feature_code', 'granted', 'reason'])
+        .where('tenant_id', '=', tenantId)
+        .orderBy('feature_code', 'asc')
+        .execute();
+      featureOverrides = overrideRows.map((r) => ({ featureCode: String(r.feature_code), granted: Boolean(r.granted), reason: r.reason ?? null }));
+    } catch {
+      featureOverrides = [];
+    }
+
     const cleanSlug = tenant.slug;
 
     return {
@@ -363,6 +378,7 @@ export class SaasAdminService {
         planName: isPlatform ? 'مالك المنظومة (كامل الصلاحيات والأنظمة)' : resolvePlanDisplayName(tenant.plan_id),
         isPlatform,
         extraFeatures: Array.isArray(tenant.extra_features) ? tenant.extra_features : typeof tenant.extra_features === 'string' ? JSON.parse(tenant.extra_features) : [],
+        featureOverrides,
       },
     };
   }
@@ -972,12 +988,65 @@ export class SaasAdminService {
     };
   }
 
-  async updateTenantPlan(id: string, dto: { planId?: string; extraFeatures?: string[]; activityType?: string }, auth: AuthContext) {
+  /**
+   * P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): applies super-admin per-tenant
+   * feature overrides. Each entry: granted true (grant), false (hide), or
+   * null (remove — back to the profile/plan default). Only rows whose value
+   * actually changes are written, and each change gets one audit event.
+   * Returns the number of features whose effective override changed.
+   */
+  private async applyFeatureOverrides(
+    tenantId: string,
+    overrides: Array<{ featureCode: string; granted?: boolean | null; reason?: string }> | undefined,
+    auth: AuthContext,
+  ): Promise<number> {
+    if (!overrides) return 0;
+    let current: Array<{ feature_code: string; granted: boolean }> = [];
+    try {
+      current = await this.db
+        .selectFrom('tenant_feature_overrides')
+        .select(['feature_code', 'granted'])
+        .where('tenant_id', '=', tenantId)
+        .execute();
+    } catch {
+      current = [];
+    }
+    const currentByCode = new Map(current.map((r) => [String(r.feature_code), Boolean(r.granted)]));
+    let changed = 0;
+    for (const entry of overrides) {
+      const code = String(entry.featureCode || '').trim();
+      if (!code) continue;
+      const previous = currentByCode.has(code) ? currentByCode.get(code)! : null;
+      const next = entry.granted === null || entry.granted === undefined ? null : Boolean(entry.granted);
+      if (previous === next) continue;
+      if (next === null) {
+        await this.db.deleteFrom('tenant_feature_overrides').where('tenant_id', '=', tenantId).where('feature_code', '=', code).execute();
+      } else {
+        await sql`INSERT INTO tenant_feature_overrides (tenant_id, feature_code, granted, granted_by, granted_at, reason)
+          VALUES (${tenantId}, ${code}, ${next}, ${auth.userId}, NOW(), ${entry.reason ?? null})
+          ON CONFLICT (tenant_id, feature_code) DO UPDATE SET granted = EXCLUDED.granted, granted_by = EXCLUDED.granted_by, granted_at = EXCLUDED.granted_at, reason = EXCLUDED.reason, updated_at = NOW()`.execute(this.db);
+      }
+      changed += 1;
+      await this.audit.log(
+        next === null ? 'إزالة تجاوز ميزة' : next ? 'منح تجاوز ميزة' : 'إخفاء تجاوز ميزة',
+        `الميزة ${code} على النسخة ${tenantId}: ${previous === null ? 'افتراضي' : previous ? 'ممنوحة' : 'مخفاة'} إلى ${next === null ? 'افتراضي' : next ? 'ممنوحة' : 'مخفاة'}${entry.reason ? ` — ${entry.reason}` : ''}`,
+        auth,
+        { targetTenantId: tenantId, eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_FEATURE_OVERRIDE },
+      );
+    }
+    return changed;
+  }
+
+  async updateTenantPlan(id: string, dto: { planId?: string; extraFeatures?: string[]; activityType?: string; featureOverrides?: Array<{ featureCode: string; granted?: boolean | null; reason?: string }> }, auth: AuthContext) {
     this.assertPlatformAccess(auth);
     this.assertNotPlatformTenantTarget(id);
 
     const tenant = await this.db.selectFrom('tenants').select(['id', 'slug', 'plan_id', 'extra_features']).where('id', '=', id).executeTakeFirst();
     if (!tenant) throw new NotFoundException('Tenant not found');
+
+    // P10: overrides apply first, so the plan sync below (and the activity
+    // patch above it) reads the new value from the table.
+    const overrideChanges = await this.applyFeatureOverrides(id, dto.featureOverrides, auth);
 
     const updateData: any = {};
     if (dto.planId !== undefined) updateData.plan_id = dto.planId;
@@ -1035,6 +1104,17 @@ export class SaasAdminService {
         targetTenantId: tenant.id,
         eventCode: AUDIT_EVENT_CODES.SAAS_TENANT_PLAN_UPDATED,
       });
+    } else if (overrideChanges > 0) {
+      // P10: overrides alone (no plan/activity change) still need the plan
+      // sync — it is the writer of the module switches the override drives
+      // (posModuleEnabled / requireCashierShiftForSales), and create-sale
+      // reads the RAW settings rows, not the getSettings safety net.
+      const effectivePlanId = (tenant as any).plan_id;
+      const effectiveExtra = (tenant as any).extra_features;
+      await this.syncTenantModuleSettingsForPlan(id, effectivePlanId, effectiveExtra);
+      this.authCache.invalidateTenant(id);
+      this.settingsService.invalidateSettingsCache(id);
+      this.settingsService.invalidatePlanFeaturesCache(id);
     }
 
     return { ok: true };
@@ -1415,6 +1495,24 @@ export class SaasAdminService {
           // 'sales' represents client invoicing / contracts / IPCs, NEVER retail POS or barcode scales!
           modulesToSet['posModuleEnabled'] = false;
         }
+      }
+
+      // P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): a super-admin POS override
+      // is applied AFTER every profile/plan branch, so it wins over the
+      // wholesale_van / warehousing / services force-off above — and over
+      // the 'sales' branch, which would otherwise turn POS off for
+      // non-retail verticals. The sync also writes requireCashierShiftForSales
+      // (it never managed that key before) because create-sale reads the RAW
+      // settings rows, not the getSettings safety net. Both keys land in
+      // desiredKeys below, so the provenance marker tracks them and a later
+      // revoke (or a removed override) restores the profile default.
+      const posOverride = await this.settingsService.loadFeatureOverride(tenantId, 'pos');
+      if (posOverride === true) {
+        modulesToSet['posModuleEnabled'] = true;
+        modulesToSet['requireCashierShiftForSales'] = true;
+      } else if (posOverride === false) {
+        modulesToSet['posModuleEnabled'] = false;
+        modulesToSet['requireCashierShiftForSales'] = false;
       }
 
       // --- Revoke what this sync itself granted, and nothing else.

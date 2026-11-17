@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsEmail, IsIn, IsInt, IsOptional, IsString, Max, Min, IsNumber, IsNotEmpty } from 'class-validator';
+import { IsArray, IsEmail, IsIn, IsInt, IsOptional, IsString, Max, Min, IsNumber, IsNotEmpty, IsBoolean, ValidateNested } from 'class-validator';
 
 export class ListSaasTenantsQueryDto {
   @IsOptional()
@@ -216,6 +216,24 @@ export class RecordPaymentDto {
   date?: string;
 }
 
+export class FeatureOverrideDto {
+  // P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): one super-admin per-tenant
+  // feature override. granted true = grant (feature ON over the mode
+  // default), false = hide (feature OFF over the plan default),
+  // null = remove the override (back to the profile/plan default).
+  @IsString()
+  @IsNotEmpty()
+  featureCode!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  granted?: boolean | null;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
 export class UpdateTenantPlanDto {
   @IsOptional()
   @IsString()
@@ -229,6 +247,12 @@ export class UpdateTenantPlanDto {
   @IsOptional()
   @IsString()
   activityType?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => FeatureOverrideDto)
+  featureOverrides?: FeatureOverrideDto[];
 }
 
 export class UpdateSaasPlanDto {

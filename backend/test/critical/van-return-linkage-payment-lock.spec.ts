@@ -777,7 +777,7 @@ async function main(): Promise<void> {
   }
 
   // 8. The orphan evidence spec is wired into BOTH critical lists,
-  // in identical order (213 specs — P8 wired the date-filter spec, P9 wired the FEFO spec).
+  // in identical order (220 specs — P8 wired the date-filter spec, P9 wired the FEFO spec, file #11 wired 6 marketplace specs, P10 wired the feature-overrides spec).
   {
     const specDir = __dirname;
     const jsonPath = path.join(specDir, '..', '..', 'scripts', 'critical-specs.json');
@@ -785,13 +785,13 @@ async function main(): Promise<void> {
     const list = JSON.parse(fs.readFileSync(jsonPath, 'utf8')).specs as string[];
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
     const chain = String(pkg.scripts['test:critical:serial']).split(' && ').map((x) => x.replace(/^ts-node /, ''));
-    assert.equal(list.length, 213);
-    assert.equal(chain.length, 213);
+    assert.equal(list.length, 220);
+    assert.equal(chain.length, 220);
     assert.deepEqual(list, chain);
     assert.ok(list.includes('test/critical/van-field-noncash-evidence.spec.ts'));
     const idx = list.indexOf('test/critical/van-field-noncash-evidence.spec.ts');
     assert.equal(list[idx - 1], 'test/critical/van-field-sale-wholesale-price.spec.ts');
-    console.log('8. evidence spec wired into both critical lists (213 = 213, identical order), passed');
+    console.log('8. evidence spec wired into both critical lists (220 = 220, identical order), passed');
   }
 
   // 9. Regressions: (a) a main return without invoiceId is refused

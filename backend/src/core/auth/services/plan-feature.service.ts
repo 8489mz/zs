@@ -42,7 +42,16 @@ export class PlanFeatureService implements OnModuleInit {
     requiredFeature: string,
     pillar?: string,
     activityType?: string,
+    featureOverrides?: Record<string, boolean>,
   ): boolean {
+    // P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): a super-admin per-tenant
+    // override beats every other source — plan exclusion, extra_features
+    // grant/exclusion, and the profile/subVertical blocks below. A grant
+    // turns the feature on even where the mode default is off (POS on
+    // wholesale_van); a hide turns it off even where the plan grants it.
+    if (featureOverrides && requiredFeature in featureOverrides) {
+      return featureOverrides[requiredFeature];
+    }
     if (extraFeatures && extraFeatures.includes(`-${requiredFeature}`)) {
       return false;
     }

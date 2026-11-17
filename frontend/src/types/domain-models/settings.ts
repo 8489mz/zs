@@ -54,6 +54,12 @@ export interface AppSettings {
   printNumberFormat?: 'arabic' | 'english' | string;
   printDualReceiptForOnlineDelivery?: boolean;
   posModuleEnabled?: boolean;
+  /**
+   * P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): computed by the backend
+   * (getSettings) — true when a super-admin granted the 'pos' override
+   * for this tenant. Never persisted; the settings save strips it.
+   */
+  posGrantedByOverride?: boolean;
   purchasesModuleEnabled?: boolean;
   inventoryModuleEnabled?: boolean;
   hrModuleEnabled?: boolean;

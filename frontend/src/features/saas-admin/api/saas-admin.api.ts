@@ -27,6 +27,15 @@ export interface SaasDiagnosticsListResponse {
 
 export type SaasTenantStatus = 'trial' | 'active' | 'expired' | 'suspended' | string;
 
+// P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): one super-admin per-tenant
+// feature override as returned by getTenantById (granted true = grant,
+// false = hide). No row for a feature means the profile default applies.
+export type TenantFeatureOverride = {
+  featureCode: string;
+  granted: boolean;
+  reason?: string | null;
+};
+
 export type SaasTenantRow = {
   id: string;
   slug: string;
@@ -50,6 +59,7 @@ export type SaasTenantRow = {
   planName: string | null;
   planId: string | null;
   extraFeatures: string[];
+  featureOverrides?: TenantFeatureOverride[];
   subscriptionStatus: string | null;
   subscriptionEndDate: string | null;
   graceEndDate: string | null;
@@ -131,7 +141,7 @@ export const saasAdminApi = {
   activateTenant: (id: string, payload: { durationMonths?: number; planId?: number; paymentAmount?: number; paymentMethod?: string; paymentReference?: string }) => http<{ ok: boolean }>(`/api/saas-admin/tenants/${encodeURIComponent(id)}/activate`, { method: 'POST', body: JSON.stringify(payload) }),
   suspendTenant: (id: string, notes?: string) => http<{ ok: boolean }>(`/api/saas-admin/tenants/${encodeURIComponent(id)}/suspend`, { method: 'POST', body: JSON.stringify({ notes: notes || '' }) }),
   expireTenant: (id: string, notes?: string) => http<{ ok: boolean }>(`/api/saas-admin/tenants/${encodeURIComponent(id)}/expire`, { method: 'POST', body: JSON.stringify({ notes: notes || '' }) }),
-  updateTenantPlan: (id: string, payload: { planId?: string; extraFeatures?: string[]; activityType?: string }) => http<{ ok: boolean }>(`/api/saas-admin/tenants/${encodeURIComponent(id)}/plan`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateTenantPlan: (id: string, payload: { planId?: string; extraFeatures?: string[]; activityType?: string; featureOverrides?: Array<{ featureCode: string; granted: boolean | null; reason?: string }> }) => http<{ ok: boolean }>(`/api/saas-admin/tenants/${encodeURIComponent(id)}/plan`, { method: 'POST', body: JSON.stringify(payload) }),
   extendTrial: (id: string, days: number) =>
     http<{ ok: boolean; trialEndsAt: string; daysAdded: number }>(`/api/saas-admin/tenants/${encodeURIComponent(id)}/extend-trial`, {
       method: 'POST',

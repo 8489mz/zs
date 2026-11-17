@@ -170,6 +170,29 @@ export class SessionService {
     this.authCache.setTenantAllowed(normalizedTenantId, true);
   }
 
+  /**
+   * P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): loads the super-admin
+   * per-tenant feature overrides for one tenant. Returns {} when the
+   * tenant has none — and also when the table does not exist yet
+   * (migrations not run), so a fresh database keeps the profile defaults.
+   */
+  async loadTenantFeatureOverrides(tenantId: string): Promise<Record<string, boolean>> {
+    try {
+      const rows = await this.db
+        .selectFrom('tenant_feature_overrides')
+        .select(['feature_code', 'granted'])
+        .where('tenant_id', '=', tenantId)
+        .execute();
+      const overrides: Record<string, boolean> = {};
+      for (const row of rows) {
+        overrides[String(row.feature_code)] = Boolean(row.granted);
+      }
+      return overrides;
+    } catch {
+      return {};
+    }
+  }
+
   private async getTenantPayload(auth: AuthContext): Promise<Record<string, unknown> | null> {
     const { tenantId, accountId } = this.scope(auth);
 
@@ -230,10 +253,12 @@ export class SessionService {
     
     const extraFeatures = Array.isArray(tenant.extra_features) ? tenant.extra_features : typeof tenant.extra_features === 'string' ? JSON.parse(tenant.extra_features) : [];
     const profile = getIndustryProfile(tenant.activity_type);
+    const featureOverrides = await this.loadTenantFeatureOverrides(tenant.id);
     const activeFeatures = resolvePillarScopedFeatures(
       tenant.activity_type,
       planFeatures,
       extraFeatures,
+      featureOverrides,
     );
 
     const payload = {
@@ -286,6 +311,7 @@ export class SessionService {
     const effectiveRole = (row.role === 'super_admin' && !isPlatformTenant) ? 'admin' : row.role;
     const permissions = effectiveRole === 'super_admin' ? Array.from(new Set([...SUPER_ADMIN_PERMISSIONS, ...safeJsonArray(row.permissions_json)])) : safeJsonArray(row.permissions_json);
     const profile = getIndustryProfile(row.activity_type);
+    const featureOverrides = await this.loadTenantFeatureOverrides(tenantContext.tenantId);
     const auth: AuthContext = {
       userId: row.user_id,
       sessionId: row.session_id,
@@ -294,6 +320,7 @@ export class SessionService {
       permissions,
       planId: row.plan_id || undefined,
       extraFeatures: safeJsonArray(row.extra_features),
+      featureOverrides,
       activityType: profile.key,
       pillar: profile.pillar,
       // Comes from the session row, never from the request: this is what makes an action

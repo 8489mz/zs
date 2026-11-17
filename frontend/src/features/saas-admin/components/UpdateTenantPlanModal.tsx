@@ -60,6 +60,15 @@ export function UpdateTenantPlanModal({ tenant, onClose, onSuccess }: UpdateTena
   const [planId, setPlanId] = useState<string>('');
   const [activityType, setActivityType] = useState<string>('retail');
   const [extraFeatures, setExtraFeatures] = useState<string[]>([]);
+  // P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): per-tenant feature overrides
+  // (grant / hide / default) for the two features the super-admin can
+  // override from this modal. 'default' means no override row — the
+  // profile/plan default applies.
+  type OverrideChoice = 'default' | 'grant' | 'hide';
+  const [posOverride, setPosOverride] = useState<OverrideChoice>('default');
+  const [drawerOverride, setDrawerOverride] = useState<OverrideChoice>('default');
+  const [posOverrideReason, setPosOverrideReason] = useState('');
+  const [drawerOverrideReason, setDrawerOverrideReason] = useState('');
   const [renewSubscription, setRenewSubscription] = useState(false);
   const [durationMonths, setDurationMonths] = useState(12);
   const [paymentAmount, setPaymentAmount] = useState<number | ''>('');
@@ -83,6 +92,15 @@ export function UpdateTenantPlanModal({ tenant, onClose, onSuccess }: UpdateTena
       }
       setActivityType(norm);
       setExtraFeatures(tenant.extraFeatures || []);
+      // P10: initialise the override controls from the tenant's current
+      // override rows (getTenantById returns them).
+      const initialOverrides = new Map((tenant.featureOverrides || []).map((o) => [o.featureCode, o]));
+      const posRow = initialOverrides.get('pos');
+      const drawerRow = initialOverrides.get('cashDrawer');
+      setPosOverride(posRow?.granted === true ? 'grant' : posRow?.granted === false ? 'hide' : 'default');
+      setDrawerOverride(drawerRow?.granted === true ? 'grant' : drawerRow?.granted === false ? 'hide' : 'default');
+      setPosOverrideReason(posRow?.reason || '');
+      setDrawerOverrideReason(drawerRow?.reason || '');
       setRenewSubscription(false);
       setDurationMonths(12);
       setPaymentAmount('');
@@ -97,6 +115,12 @@ export function UpdateTenantPlanModal({ tenant, onClose, onSuccess }: UpdateTena
         planId: planId || undefined,
         extraFeatures,
         activityType,
+        // P10: both rows are always sent; the backend writes only the
+        // ones whose value actually changed (and audits each change).
+        featureOverrides: [
+          { featureCode: 'pos', granted: posOverride === 'default' ? null : posOverride === 'grant', reason: posOverrideReason.trim() || undefined },
+          { featureCode: 'cashDrawer', granted: drawerOverride === 'default' ? null : drawerOverride === 'grant', reason: drawerOverrideReason.trim() || undefined },
+        ],
       });
 
       if (renewSubscription) {
@@ -403,6 +427,75 @@ export function UpdateTenantPlanModal({ tenant, onClose, onSuccess }: UpdateTena
                   </label>
                 );
               })}
+            </div>
+          </div>
+          {/* 4. تجاوزات الميزات (سوبر أدمن) — P10 INV-VAN-GENERAL-FEATURE-OVERRIDES */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 800, color: '#1e293b' }}>
+                  {t('saas_admin.update_tenant_plan_modal.overrides_title', "تجاوزات الميزات (سوبر أدمن فقط):")}
+                </h4>
+                <p style={{ margin: '2px 0 0 0', fontSize: '11.5px', color: '#64748b' }}>
+                  {t('saas_admin.update_tenant_plan_modal.overrides_sub', "منح أو إخفاء ميزة لنسخة معينة فوق إعدادات النمط الافتراضية — تُطبق فوراً على الصلاحيات والإعدادات والقائمة.")}
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '8px',
+                padding: '6px',
+                background: '#f8fafc',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', padding: '8px 10px', background: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#334155' }}>
+                  {t('saas_admin.update_tenant_plan_modal.override_pos', "نقطة البيع (POS)")}
+                </span>
+                <select
+                  value={posOverride}
+                  onChange={(e) => setPosOverride(e.target.value as 'default' | 'grant' | 'hide')}
+                  style={{ height: '35px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 12px 0 36px', fontSize: '12.5px', fontWeight: 600, width: '100%', background: '#ffffff' }}
+                >
+                  <option value="default">{t('saas_admin.update_tenant_plan_modal.override_default', "افتراضي (حسب النمط)")}</option>
+                  <option value="grant">{t('saas_admin.update_tenant_plan_modal.override_grant', "منح — تفعيل فوق النمط")}</option>
+                  <option value="hide">{t('saas_admin.update_tenant_plan_modal.override_hide', "إخفاء — إيقاف فوق الباقة")}</option>
+                </select>
+                <input
+                  type="text"
+                  value={posOverrideReason}
+                  onChange={(e) => setPosOverrideReason(e.target.value)}
+                  placeholder={t('saas_admin.update_tenant_plan_modal.override_reason', "سبب التجاوز (اختياري)")}
+                  style={{ height: '35px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 12px', fontSize: '12.5px', width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', padding: '8px 10px', background: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#334155' }}>
+                  {t('saas_admin.update_tenant_plan_modal.override_drawer', "صندوق الكاشير (الدرج)")}
+                </span>
+                <select
+                  value={drawerOverride}
+                  onChange={(e) => setDrawerOverride(e.target.value as 'default' | 'grant' | 'hide')}
+                  style={{ height: '35px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 12px 0 36px', fontSize: '12.5px', fontWeight: 600, width: '100%', background: '#ffffff' }}
+                >
+                  <option value="default">{t('saas_admin.update_tenant_plan_modal.override_default', "افتراضي (حسب النمط)")}</option>
+                  <option value="grant">{t('saas_admin.update_tenant_plan_modal.override_grant', "منح — تفعيل فوق النمط")}</option>
+                  <option value="hide">{t('saas_admin.update_tenant_plan_modal.override_hide', "إخفاء — إيقاف فوق الباقة")}</option>
+                </select>
+                <input
+                  type="text"
+                  value={drawerOverrideReason}
+                  onChange={(e) => setDrawerOverrideReason(e.target.value)}
+                  placeholder={t('saas_admin.update_tenant_plan_modal.override_reason', "سبب التجاوز (اختياري)")}
+                  style={{ height: '35px', borderRadius: '6px', border: '1px solid #cbd5e1', padding: '0 12px', fontSize: '12.5px', width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
             </div>
           </div>
         </div>

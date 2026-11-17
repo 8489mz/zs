@@ -64,6 +64,28 @@ describe('Vertical Scope & Enterprise Isolation Constitution', () => {
     expect(vertical).toBe('wholesale_van');
     expect(isRouteAllowedInVertical(vertical, '/pos')).toBe(false);
     expect(isRouteAllowedInVertical(vertical, '/van-sales/admin')).toBe(true);
+    // P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): a super-admin 'pos'
+    // override lifts the route (incl. nested pos/...); an unrelated
+    // grant does not.
+    expect(isRouteAllowedInVertical(vertical, '/pos', undefined, ['pos'])).toBe(true);
+    expect(isRouteAllowedInVertical(vertical, '/pos/new', undefined, ['pos'])).toBe(true);
+    expect(isRouteAllowedInVertical(vertical, '/pos', undefined, ['cashDrawer'])).toBe(false);
+  });
+
+  it('P10: a super-admin override lifts pos and cash-drawer on warehousing', () => {
+    const tenant = {
+      id: 'wh-1',
+      slug: 'wh-1',
+      businessName: 'مخازن البركة',
+      activityType: 'warehousing',
+    };
+    const vertical = resolveCurrentVertical(tenant);
+    expect(vertical).toBe('warehousing');
+    expect(isRouteAllowedInVertical(vertical, '/pos')).toBe(false);
+    expect(isRouteAllowedInVertical(vertical, '/cash-drawer')).toBe(false);
+    expect(isRouteAllowedInVertical(vertical, '/pos', undefined, ['pos'])).toBe(true);
+    expect(isRouteAllowedInVertical(vertical, '/cash-drawer', undefined, ['cashDrawer'])).toBe(true);
+    expect(isRouteAllowedInVertical(vertical, '/cash-drawer', undefined, ['pos'])).toBe(false);
   });
 
   it('resolves maritime when settings.maritimeFreightModuleEnabled is true even if tenant.activityType is retail_general', () => {

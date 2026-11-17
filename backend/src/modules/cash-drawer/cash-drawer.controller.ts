@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { RequirePermissions, RequireAnyPermission } from '../../core/auth/decorators/permissions.decorator';
+import { RequireFeature } from '../../core/auth/decorators/feature.decorator';
 import { PermissionsGuard } from '../../core/auth/guards/permissions.guard';
 import { SessionAuthGuard } from '../../core/auth/guards/session-auth.guard';
 import { RequestWithAuth } from '../../core/auth/interfaces/request-with-auth.interface';
@@ -12,6 +13,12 @@ import { ReviewCashierShiftDto } from './dto/review-cashier-shift.dto';
 
 @Controller('api')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
+// P10 (INV-VAN-GENERAL-FEATURE-OVERRIDES): the drawer is a feature-gated
+// surface, not permission-only. A super-admin hide override on
+// 'cashDrawer' refuses every endpoint on this controller — even for a
+// user holding the cashDrawer permission — and a grant opens it on
+// wholesale_van where the mode default blocks it.
+@RequireFeature('cashDrawer')
 export class CashDrawerController {
   constructor(
     private readonly cashDrawerService: CashDrawerService,
