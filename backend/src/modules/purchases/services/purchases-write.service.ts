@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Kysely, sql, type Selectable } from '../../../database/kysely';
+import { Kysely, sql } from '../../../database/kysely';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
@@ -33,44 +33,11 @@ import { assertCustomerPaymentJobOwnership } from '../helpers/customer-payment-j
 import { tenantBaseCurrency } from '../../accounting/accounting-currency';
 import { currencyMoneyDigits, fromMinorUnits, roundMoney, toMinorUnits } from '../../accounting/engines/money-minor-units.engine';
 
-type PurchaseRepricingCandidate = {
-  productId: number;
-  name: string;
-  itemKind: 'standard' | 'fashion';
-  styleCode: string;
-  previousCost: number;
-  newCost: number;
-  retailPrice: number;
-  wholesalePrice: number;
-};
-
-type PurchaseRepricingProduct = Pick<Selectable<Database['products']>, 'id' | 'name' | 'item_kind' | 'style_code' | 'cost_price' | 'retail_price' | 'wholesale_price'>;
-
-type PurchaseRepricingInsights = {
-  purchaseId: number;
-  supplierId: number;
-  supplierName: string;
-  affectedCount: number;
-  increasedCount: number;
-  decreasedCount: number;
-  unchangedCount: number;
-  productIds: number[];
-  rows: Array<{
-    productId: number;
-    name: string;
-    itemKind: 'standard' | 'fashion';
-    styleCode: string;
-    previousCost: number;
-    newCost: number;
-    costChangePercent: number;
-    retailPrice: number;
-    wholesalePrice: number;
-    recommendedRetailPrice: number;
-    recommendedWholesalePrice: number;
-    recommendedRetailDelta: number;
-    recommendedWholesaleDelta: number;
-  }>;
-};
+export type {
+  PurchaseRepricingCandidate,
+  PurchaseRepricingProduct,
+  PurchaseRepricingInsights,
+} from './purchases-write.types';
 
 @Injectable()
 export class PurchasesWriteService {
