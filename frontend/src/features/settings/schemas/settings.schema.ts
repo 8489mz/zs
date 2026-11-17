@@ -4,6 +4,12 @@ const accentColorSchema = z
   .string()
   .regex(/^#[0-9a-fA-F]{6}$/, 'اكتب لونًا صحيحًا مثل #170c5c');
 
+const emptyOrNanToDefault = (fallback: number) => (val: unknown) => {
+  if (val === '' || val === null || val === undefined || typeof val === 'boolean') return fallback;
+  const num = Number(val);
+  return Number.isNaN(num) ? fallback : num;
+};
+
 export const settingsFormSchema = z.object({
   storeName: z.string().min(2, 'اسم النشاط / المتجر مطلوب'),
   brandName: z.string().optional(),
@@ -81,13 +87,19 @@ export const settingsFormSchema = z.object({
   vanSettlementBlindMode: z.boolean().default(false).optional(),
   // INV-VAN-REP-DISCOUNT-CAP-TENANT-SETTING: the ONE tenant-level
   // rep discount cap % (default 5, applies to all reps).
-  vanRepDiscountCapPercent: z.coerce.number().min(0).max(100).default(5).optional(),
+  vanRepDiscountCapPercent: z.preprocess(
+    emptyOrNanToDefault(5),
+    z.coerce.number().min(0, 'سقف خصم المناديب يجب أن يكون بين 0 و 100%').max(100, 'سقف خصم المناديب يجب أن يكون بين 0 و 100%')
+  ).default(5).optional(),
   // INV-VAN-PRICE-LIST-WIRING: the tenant cash-discount % off the
   // selling price on immediate cash payment (default 0 = off). A
   // SYSTEM discount: the van/POS sale paths compute it server-side
   // from this setting after the rep-cap check — it never travels
   // through the rep-entered cashDiscountAmount channel.
-  cashDiscountPercent: z.coerce.number().min(0).max(100).default(0).optional(),
+  cashDiscountPercent: z.preprocess(
+    emptyOrNanToDefault(0),
+    z.coerce.number().min(0, 'خصم الدفع النقدي يجب أن يكون بين 0 و 100%').max(100, 'خصم الدفع النقدي يجب أن يكون بين 0 و 100%')
+  ).default(0).optional(),
   allowNegativeStockSales: z.boolean().default(false),
   posHideOutOfStockItems: z.boolean().default(false),
   allowZeroPurchaseCost: z.boolean().default(false),
@@ -124,7 +136,10 @@ export const settingsFormSchema = z.object({
   posWindowsBarcodePrinterName: z.string().optional(),
   posWindowsDocumentPrinterName: z.string().optional(),
   posNetworkThermalPrinterIp: z.string().optional(),
-  posNetworkThermalPrinterPort: z.coerce.number().int().min(1).max(65535).default(9100),
+  posNetworkThermalPrinterPort: z.preprocess(
+    emptyOrNanToDefault(9100),
+    z.coerce.number().int().min(1, 'منفذ طابعة الشبكة يجب أن يكون بين 1 و 65535').max(65535, 'منفذ طابعة الشبكة يجب أن يكون بين 1 و 65535')
+  ).default(9100),
   weightedBarcodeEnabled: z.boolean().default(false),
   weightedBarcodePrefix: z.string().regex(/^\d{1,4}$/, 'اكتب بادئة أرقام فقط مثل 21').default('21'),
   weightedBarcodeProductCodeLength: z.coerce.number().int().min(3).max(8).default(5),

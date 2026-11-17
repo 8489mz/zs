@@ -63,6 +63,10 @@ export const SETTINGS_FIELD_METADATA: Record<
   deliveryFeeMode: { tab: 'sales_inventory', label: 'نمط خدمة التوصيل' },
   storeFleetCommissionRate: { tab: 'sales_inventory', label: 'عمولة مناديب المتجر' },
   defaultDeliveryFee: { tab: 'sales_inventory', label: 'رسوم التوصيل الافتراضية' },
+  vanSettlementRequireSupervisorPin: { tab: 'sales_inventory', label: 'إلزامية رمز المشرف (PIN) لتصفية المناديب' },
+  vanSettlementBlindMode: { tab: 'sales_inventory', label: 'إلزام التوريد العمياني لكاش المناديب' },
+  vanRepDiscountCapPercent: { tab: 'sales_inventory', label: 'سقف خصم المناديب %' },
+  cashDiscountPercent: { tab: 'sales_inventory', label: 'خصم الدفع النقدي %' },
   defaultBranchIssueMode: { tab: 'sales_inventory', label: 'طريقة صرف بضاعة الفرع الافتراضية' },
   posMaxDiscountThresholdEnabled: { tab: 'sales_inventory', label: 'تفعيل حد أقصى للخصم' },
   posMaxDiscountThresholdType: { tab: 'sales_inventory', label: 'نوع سقف الخصم' },
@@ -169,7 +173,10 @@ export const SETTINGS_FIELD_METADATA: Record<
   posElectronCashierPrinter: { tab: 'printing', label: 'طابعة الكاشير الافتراضية' },
   posElectronKitchenPrinter: { tab: 'printing', label: 'طابعة المطبخ الافتراضية' },
   posElectronBarcodePrinter: { tab: 'printing', label: 'طابعة الباركود الافتراضية' },
+  posElectronDocumentPrinter: { tab: 'printing', label: 'طابعة المستندات والفواتير (Electron)' },
   posWindowsPrinterName: { tab: 'printing', label: 'اسم طابعة ويندوز (الطباعة الصامتة)' },
+  posWindowsBarcodePrinterName: { tab: 'printing', label: 'اسم طابعة الباركود (ويندوز)' },
+  posWindowsDocumentPrinterName: { tab: 'printing', label: 'اسم طابعة المستندات (ويندوز)' },
   posNetworkThermalPrinterIp: { tab: 'printing', label: 'عنوان IP لطابعة الشبكة الحرارية' },
   posNetworkThermalPrinterPort: { tab: 'printing', label: 'منفذ طابعة الشبكة الحرارية' },
 
@@ -196,6 +203,13 @@ export const SETTINGS_FIELD_METADATA: Record<
   servicesBillingMethod: { tab: 'sales_inventory', label: 'نمط احتساب فواتير الخدمات' },
   servicesContractRenewalNoticeDays: { tab: 'sales_inventory', label: 'فترة السماح لتجديد عقود الخدمات (أيام)' },
 };
+
+function parseBoundedNumber(raw: unknown, fallback: number, min: number, max: number): number {
+  if (raw === '' || raw === null || raw === undefined || typeof raw === 'boolean') return fallback;
+  const num = Number(raw);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(max, Math.max(min, num));
+}
 
 export function SettingsMainForm({ settings, branches, locations, canManageSettings, setupMode = false, onSetupAdvance, onUpdateBranch }: SettingsMainFormProps) {
   const { t: __t } = useTranslation();
@@ -269,6 +283,10 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
       deliveryFeeMode: 'freelance_courier',
       storeFleetCommissionRate: 0,
       defaultDeliveryFee: 0,
+      vanSettlementRequireSupervisorPin: false,
+      vanSettlementBlindMode: false,
+      vanRepDiscountCapPercent: 5,
+      cashDiscountPercent: 0,
       allowNegativeStockSales: false,
       posHideOutOfStockItems: false,
       allowZeroPurchaseCost: false,
@@ -523,6 +541,20 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
       deliveryFeeMode: settings.deliveryFeeMode === 'store_fleet' ? 'store_fleet' : 'freelance_courier',
       storeFleetCommissionRate: Number(settings.storeFleetCommissionRate ?? 0),
       defaultDeliveryFee: Number(settings.defaultDeliveryFee ?? 0),
+      vanSettlementRequireSupervisorPin: (settings as any).vanSettlementRequireSupervisorPin === true,
+      vanSettlementBlindMode: (settings as any).vanSettlementBlindMode === true,
+      vanRepDiscountCapPercent: parseBoundedNumber(
+        (settings as any).vanRepDiscountCapPercent ?? (settings as any).van_rep_discount_cap_percent,
+        5,
+        0,
+        100,
+      ),
+      cashDiscountPercent: parseBoundedNumber(
+        (settings as any).cashDiscountPercent ?? (settings as any).cash_discount_percent,
+        0,
+        0,
+        100,
+      ),
       manufacturingModuleEnabled: settings.manufacturingModuleEnabled === true,
       importModuleEnabled: settings.importModuleEnabled === true,
       maritimeFreightModuleEnabled: isMaritimeVertical ? true : (settings.maritimeFreightModuleEnabled === true),
