@@ -714,7 +714,7 @@ export function tenantHasFeature(
     // supplies an explicit features list, a super-admin hide override on
     // deliveryReps must be respected (the old hardcoded grant ignored
     // tenant.features entirely and defeated the hide).
-    if (vertical === 'wholesale_van' && feature === 'deliveryReps' && (!hasExplicitFeatures || tenant.features.includes('deliveryReps'))) return true;
+    if (vertical === 'wholesale_van' && feature === 'deliveryReps' && (!hasExplicitFeatures || (tenant.features?.includes('deliveryReps') ?? false))) return true;
   } else {
     // Retail/commerce tiers retain core selling primitives while keeping tier-gated modules
     // (hr, accounting, purchases, inventory, reports, installments, storefront) strictly bound to tenant.features.
