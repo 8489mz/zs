@@ -13,7 +13,13 @@ assert.equal(unpaged.isUnpagedDefault, true);
 
 assert.deepEqual(
   mapCustomerRow({ id: 7 as never, name: 'Ali', phone: null as never, address: null as never, balance: '4.5' as never, customer_type: 'vip' as never, credit_limit: '10' as never, store_credit_balance: '2' as never, company_name: null as never, tax_number: null as never } as never),
-  { id: '7', name: 'Ali', phone: '', address: '', customerCode: 'C-0007', balance: 4.5, repBalances: [], unassignedBalance: 0, type: 'vip', creditLimit: 10, storeCreditBalance: 2, companyName: '', taxNumber: '', loyaltyPoints: 0, metadata: {} },
+  { id: '7', name: 'Ali', phone: '', address: '', customerCode: 'C-0007', balance: 4.5, repBalances: [], unassignedBalance: 0, type: 'vip', priceListId: null, creditLimit: 10, storeCreditBalance: 2, companyName: '', taxNumber: '', loyaltyPoints: 0, metadata: {} },
+);
+
+// INV-VAN-PRICE-LIST-WIRING: an assigned list survives the mapping.
+assert.deepEqual(
+  mapCustomerRow({ id: 8 as never, name: 'Sara', phone: null as never, address: null as never, balance: '0' as never, customer_type: 'cash' as never, credit_limit: '0' as never, store_credit_balance: '0' as never, company_name: null as never, tax_number: null as never, price_list_id: 3 as never } as never),
+  { id: '8', name: 'Sara', phone: '', address: '', customerCode: 'C-0008', balance: 0, repBalances: [], unassignedBalance: 0, type: 'cash', priceListId: 3, creditLimit: 0, storeCreditBalance: 0, companyName: '', taxNumber: '', loyaltyPoints: 0, metadata: {} },
 );
 
 assert.deepEqual(

@@ -15,22 +15,34 @@
  * - Case 1: customer with no invoices -> the unlinked picker renders
  *   the van-stock items.
  * - Case 2: adding an unlinked item fills the cart and enables submit.
- * - Case 3: submitting an unlinked return calls submitFieldReturn
- *   with saleId: null and the picked item at the retail price.
- * - Case 4: a wholesale-typed customer -> the unlinked line prices at
- *   the wholesale price (same rule as the sale cart).
+ * - Case 3 (CORRECTED 2026-11-17, ci-full #74): submitting an unlinked
+ *   return is REFUSED — INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK (2026-11-16)
+ *   superseded the 2026-11-13 unlinked-submit expectation: the server
+ *   refuses a missing saleId with 400 RETURN_REQUIRES_SALE_ID, and the
+ *   form guard toasts "يرجى اختيار الفاتورة الأصلية للمرتجع" without
+ *   calling submitFieldReturn. The case pins that refusal.
+ * - Case 4 (CORRECTED 2026-11-17, ci-full #74): a wholesale-typed
+ *   customer -> the unlinked cart line still prices at the wholesale
+ *   price (same rule as the sale cart), and submitting it is refused
+ *   the same way — no API call.
  * - Case 5 (no-regression): the linked flow is unchanged — picking an
  *   eligible sale renders its items and hides the unlinked picker.
  *
- * NOT DRIVEN: the backend acceptance of saleId: null (proven by the
- * submit path + the P13 approval specs); the approval-time stock
- * posting for unlinked lines (legacy plain path, unchanged).
+ * NOT DRIVEN: the backend refusal of saleId: null (pinned by
+ * van-return-linkage-payment-lock.spec.ts — missing saleId is refused
+ * 400 RETURN_REQUIRES_SALE_ID before any other validation); the
+ * approval-time stock posting for unlinked lines (legacy plain path,
+ * unchanged). NOTE: the unlinked picker + cart still render (cases 1/2)
+ * even though an unlinked return can no longer be submitted under the
+ * linkage lock — whether the picker should stay or go is an open
+ * product question, not decided by this repair.
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 import { VanCollectionTab } from './VanCollectionTab';
 import { createTestQueryClient } from '@/test/test-query-client';
+import { toast } from '@/shared/components/system-alert';
 
 // jsdom has no Element.scrollIntoView; the shared CustomSelect calls it
 // when its dropdown opens.
@@ -217,34 +229,27 @@ describe('VanCollectionTab unlinked return picker (P6)', () => {
     expect(submitAfter).not.toBeDisabled();
   });
 
-  it('case 3: submitting an unlinked return sends saleId null at the retail price', async () => {
+  it('case 3: submitting an unlinked return is refused — no API call (INV-VAN-RETURN-LINKAGE-PAYMENT-LOCK)', async () => {
     renderTab();
     await screen.findByText('لا توجد فواتير مرحلة سابقة لهذا العميل.');
     fireEvent.click(screen.getAllByText('+ إضافة')[0]);
     fireEvent.click(screen.getByRole('button', { name: /إرسال إذن المرتجع للإدارة/ }));
-    await waitFor(() => expect(mockSubmitReturn).toHaveBeenCalledTimes(1));
-    const payload = mockSubmitReturn.mock.calls[0][0];
-    expect(payload.tripId).toBe(6);
-    expect(payload.customerId).toBe(3060);
-    expect(payload.saleId).toBeNull();
-    expect(payload.refundMethod).toBe('credit');
-    expect(payload.items).toHaveLength(1);
-    expect(payload.items[0].productId).toBe(1);
-    expect(payload.items[0].qty).toBe(1);
-    expect(payload.items[0].unitPrice).toBe(12);
-    expect(payload.items[0].saleItemId).toBeUndefined();
-    expect(payload.items[0].unitMultiplier).toBe(1);
+    // The guard runs synchronously before any await: the warning fires
+    // and submitFieldReturn is never reached.
+    expect(toast.warning).toHaveBeenCalledWith('يرجى اختيار الفاتورة الأصلية للمرتجع');
+    expect(mockSubmitReturn).not.toHaveBeenCalled();
   });
 
-  it('case 4: a wholesale-typed customer prices the unlinked line at wholesale', async () => {
+  it('case 4: a wholesale-typed customer prices the unlinked line at wholesale — and submitting it is refused', async () => {
     renderTab({ customer: wholesaleCustomer });
     await screen.findByText('لا توجد فواتير مرحلة سابقة لهذا العميل.');
     fireEvent.click(screen.getAllByText('+ إضافة')[0]);
+    // The cart line still carries the wholesale price (same rule as the
+    // sale cart), even though the return cannot be submitted unlinked.
+    expect(await screen.findByText(/سعر الإرجاع: 10\.00/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /إرسال إذن المرتجع للإدارة/ }));
-    await waitFor(() => expect(mockSubmitReturn).toHaveBeenCalledTimes(1));
-    const payload = mockSubmitReturn.mock.calls[0][0];
-    expect(payload.customerId).toBe(3061);
-    expect(payload.items[0].unitPrice).toBe(10);
+    expect(toast.warning).toHaveBeenCalledWith('يرجى اختيار الفاتورة الأصلية للمرتجع');
+    expect(mockSubmitReturn).not.toHaveBeenCalled();
   });
 
   it('case 5: linked flow unchanged — picking a sale renders its items and hides the unlinked picker', async () => {
