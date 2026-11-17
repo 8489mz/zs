@@ -322,7 +322,7 @@ describe('POS workspace destructive keyboard safety', () => {
   });
 
   it('never steals focus back to background search input while checkout modal is open and switching payment methods', async () => {
-    let registeredFocusBarcode: (() => void) | null = null;
+    const focusBarcodeRef: { current: (() => void) | null } = { current: null };
     testState.pos = {
       ...createPosMock(),
       canOpenCheckout: true,
@@ -334,9 +334,9 @@ describe('POS workspace destructive keyboard safety', () => {
       setTerminalPaymentDetails: vi.fn(),
       terminalPaymentDetails: null,
       registerBarcodeFocusListener: vi.fn((listener: () => void) => {
-        registeredFocusBarcode = listener;
+        focusBarcodeRef.current = listener;
         return () => {
-          if (registeredFocusBarcode === listener) registeredFocusBarcode = null;
+          if (focusBarcodeRef.current === listener) focusBarcodeRef.current = null;
         };
       }),
     } as unknown as ReturnType<typeof createPosMock>;
@@ -355,7 +355,7 @@ describe('POS workspace destructive keyboard safety', () => {
     // Switch payment preset via Alt+2 inside checkout dialog AND invoke any registered barcode-focus callback:
     // focus must stay inside the dialog and never jump back to the background search input.
     fireEvent.keyDown(cashCheckoutInput, { key: '2', code: 'Digit2', altKey: true });
-    registeredFocusBarcode?.();
+    focusBarcodeRef.current?.();
     await new Promise((resolve) => setTimeout(resolve, 40));
 
     expect(document.activeElement).not.toBe(barcodeInput);

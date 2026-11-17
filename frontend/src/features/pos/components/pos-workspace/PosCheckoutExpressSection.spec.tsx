@@ -1,8 +1,12 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MobileTerminalBridge } from '@/features/pos/lib/mobile-terminal-bridge';
 import { PosCheckoutExpressSection } from './PosCheckoutExpressSection';
 
 describe('PosCheckoutExpressSection - Cash Input & Change Calculation', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   const createMockPos = (total = 50) => ({
     totals: { total },
     cart: [{ id: 1, name: 'تيشيرت قطن', qty: 1, price: total }],
@@ -231,6 +235,51 @@ describe('PosCheckoutExpressSection - Cash Input & Change Calculation', () => {
 
     fireEvent.click(confirmButton);
     expect(confirmSaleMock).toHaveBeenCalled();
+  });
+
+  it('retries declined terminal payment cleanly without forwarding click event as cardScheme', async () => {
+    vi.spyOn(MobileTerminalBridge, 'getCapabilities').mockResolvedValue({ canDirectPay: true } as any);
+    const requestPaymentSpy = vi
+      .spyOn(MobileTerminalBridge, 'requestPayment')
+      .mockResolvedValueOnce({ success: false, status: 'declined', message: 'رفضت البطاقة' })
+      .mockResolvedValueOnce({ success: true, status: 'approved', authCode: '777888', rrn: 'RRN-1' });
+
+    const mockPos = {
+      ...createMockPos(25),
+      settings: { currency: 'KWD', posTerminalEnabled: true },
+      settingsQuery: { data: { currency: 'KWD', posTerminalEnabled: true } },
+    };
+
+    render(
+      <PosCheckoutExpressSection
+        pos={mockPos as any}
+        isKwdStore={true}
+        isKsaStore={false}
+        isPaymentActive={(preset) => preset === 'card'}
+        onSelectPaymentPreset={vi.fn()}
+        onConfirmSale={vi.fn()}
+        onSwitchToDetailed={vi.fn()}
+        selectedCustomerName="عميل نقدي"
+        onOpenCustomerPicker={vi.fn()}
+        onOpenNotes={vi.fn()}
+        isNotesOpen={false}
+        cartQtySummaries={['1 قطعة']}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /كي نت K-NET/i }));
+    const retryButton = await screen.findByRole('button', { name: /إعادة المحاولة/i });
+
+    mockPos.setTerminalPaymentDetails.mockClear();
+    fireEvent.click(retryButton);
+
+    await waitFor(() => expect(requestPaymentSpy).toHaveBeenCalledTimes(2));
+    expect(mockPos.setTerminalPaymentDetails).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardScheme: 'knet',
+        provider: 'knet',
+      }),
+    );
   });
 });
 

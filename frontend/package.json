@@ -48,6 +48,7 @@
     "qa:uat": "npm run qa:guards && npm run qa:critical && npm run qa:release",
     "test": "npm run test:run",
     "test:run": "node ./node_modules/vitest/vitest.mjs run",
+    "test:electron": "npm run typecheck && npm run qa:perf && npm run qa:architecture && node ./node_modules/vitest/vitest.mjs run src/features/settings/components/forms/tabs/PrintingSettingsTab.spec.tsx src/lib/electron-printing.spec.ts src/lib/browser-print-bridge.spec.ts src/lib/__tests__/barcode-labels.test.ts src/features/pos/components/PosWorkspace.keyboard-safety.spec.tsx src/features/pos/components/pos-workspace/PosCheckoutExpressSection.spec.tsx",
     "test:watch": "node ./node_modules/vitest/vitest.mjs",
     "qa:tests": "npm run test:run",
     "test:e2e": "playwright test"

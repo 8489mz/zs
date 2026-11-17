@@ -1,6 +1,6 @@
 import type { SettingsFormInput } from '@/features/settings/schemas/settings.schema';
 import { escapeHtml } from '@/lib/browser/escape';
-import { formatDateTime } from '@/lib/pos-printing/shared';
+import { formatDateTime, type PosPrintPageSize } from '@/lib/pos-printing/shared';
 import { buildReceiptDocument, getInvoiceStyles } from '@/lib/pos-printing/template';
 import type { AppSettings } from '@/types/domain';
 
@@ -37,7 +37,7 @@ export function buildLiveTestSettings(
 
 export function buildPrintingTestReceiptDocument(ctx: PrintingTestReceiptContext) {
   const liveSettings = buildLiveTestSettings(ctx.settings, ctx.formValues);
-  const pageSize = liveSettings.paperSize === 'a4' ? 'a4' : 'receipt';
+  const pageSize: PosPrintPageSize = liveSettings.paperSize === 'a4' ? 'a4' : 'receipt';
   const taxRate = liveSettings.taxRate !== undefined && liveSettings.taxRate !== null
     ? Math.max(0, Number(liveSettings.taxRate))
     : 14;

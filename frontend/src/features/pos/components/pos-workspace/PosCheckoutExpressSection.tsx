@@ -597,7 +597,9 @@ export function PosCheckoutExpressSection({
                 </button>
                 <button
                   type="button"
-                  onClick={handleSelectCard}
+                  onClick={() => {
+                    void handleSelectCard();
+                  }}
                   style={{
                     background: 'none',
                     border: 'none',

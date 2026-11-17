@@ -25,6 +25,7 @@
     "migration:list:all-local": "ts-node src/database/migrate-all-local.ts list",
     "migration:phase5": "ts-node src/migration/index.ts",
     "test:infra": "node scripts/run-critical.mjs --list scripts/infra-specs.json --workers 4 && npm run test:critical",
+    "test:electron": "ts-node test/critical/offline-update-sha256.spec.ts && ts-node test/critical/offline-update-channel.spec.ts && ts-node test/critical/pos-bridge-security.spec.ts && ts-node test/critical/offline-sale-backdate-bound.spec.ts",
     "test:critical": "node scripts/run-critical.mjs --workers 4",
     "test:auth": "ts-node test/critical/session-auth.spec.ts && ts-node test/critical/session-auth.guard.spec.ts && ts-node test/critical/super-admin-role.guard.spec.ts && ts-node test/critical/bootstrap-admin-safety.spec.ts && ts-node test/critical/login-rate-limit.spec.ts",
     "test:returns-cost": "ts-node test/critical/sales-return-cost.spec.ts",

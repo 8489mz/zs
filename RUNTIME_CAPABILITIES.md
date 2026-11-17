@@ -15,6 +15,12 @@
 عند تعديل قدرة، حدّث وصفها في مكانها أو أضف سجلاً بمعرّف ثابت: السلوك والحدود، مصادر الكود، الاختبارات ونتائجها الفعلية، تاريخ التحقق والـcommit. اربط المجالات المتأثرة دون نسخ تفاصيلها.
 
 
+<a id="runtime-electron-release-preflight"></a>
+### بوابة فحص جاهزية إصدار Electron وإصلاحات TypeScript — 2026-11-17
+- السلوك: إصلاح أخطاء `tsc -b` الأربعة التي كانت تمنع بناء `build:electron-frontend` (`PosCheckoutExpressSection` عبر منع تمرير حدث الضغط إلى `handleSelectCard`, `PosWorkspace.keyboard-safety.spec.tsx` عبر `focusBarcodeRef`, إزالة الاستيراد غير المستخدم `isPlatformAdmin` في `ModulesSettingsTab.tsx`, وتثبيت نوع `pageSize: PosPrintPageSize` في `printing-test-receipt.ts`). توسيع `npm run qa:electron` لفحص `preload.cjs` وتنفيذ حزمة عقود الإصدار `scripts/test-electron-release-contracts.cjs` مع `test-electron-customer-config.cjs` و`test-electron-postgres-auth.cjs`، وإضافة الأمر الجامع `npm run test:electron` لفحص أنواع الفرونت والباك إند وحراس الأداء والمعمارية واختبارات الطباعة/POS والتحديث الصامت قبل تعبئة ملفات `.exe`.
+- المصادر: `scripts/test-electron-release-contracts.cjs` · `package.json` · `frontend/package.json` · `backend/package.json` · `frontend/src/features/pos/components/pos-workspace/PosCheckoutExpressSection.tsx` · `frontend/src/features/pos/components/PosWorkspace.keyboard-safety.spec.tsx` · `frontend/src/features/settings/components/forms/tabs/ModulesSettingsTab.tsx` · `frontend/src/features/settings/components/forms/tabs/printing-test-receipt.ts`.
+- القيود: تظل حزمة `test:electron` بوابة ما قبل التعبئة بدون تشغيل `vite build` أو `electron-builder` أو اختبار تشغيل Windows `.exe` الفعلي.
+
 <a id="runtime-backup-platform-exclusion-p0a"></a>
 ### فصل بيانات المنصة عن Backup شركة واتساق لقطة التصدير — تدقيق مصدر الكود 25 أكتوبر 2026
 - السلوك الحالي: استرجاع بيانات شركة لا يعيد كتابة صفوف الفوترة والجلسات وسجلات التجارب وحجوزات Offline IDs التابعة للمنصة، حتى لو تضمنتها أرشيفات قديمة. تُصدَّر الجداول داخل معاملة قراءة موحدة `REPEATABLE READ`، وفشل الحذف أثناء Restore يوقف المعاملة دون كتمان.
