@@ -19,6 +19,17 @@ const BATCH_STATUS_OPTIONS = [
   { value: 'returned', label: 'مرتجعة للشركة' },
 ];
 
+// INV-VAN-GENERIC-FEFO: the two tabs share one list contract. The pharmacy
+// endpoint returns PharmacyBatch rows, the generic endpoint returns untyped
+// ledger rows — a bare ternary over the two incompatible promise types
+// matches no useQuery overload (PharmacyBatch is an interface, so
+// PharmacyBatch[] is not assignable to Array<Record<string, unknown>>),
+// which left `data` typed as {} and broke pagination/batches reads below.
+type BatchesListData = {
+  batches: Array<PharmacyBatch | Record<string, unknown>>;
+  pagination?: { page: number; pageSize: number; totalItems: number; totalPages: number };
+};
+
 export function InventoryBatchesPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -39,7 +50,7 @@ export function InventoryBatchesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBatch, setEditingBatch] = useState<Partial<PharmacyBatch> | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<BatchesListData>({
     queryKey: ['inventory', 'batches', tab, searchQuery, statusFilter, page],
     queryFn: () =>
       tab === 'generic'
