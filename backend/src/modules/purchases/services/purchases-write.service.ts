@@ -16,7 +16,6 @@ import { resolveBusinessDateKey } from '../../accounting/engines/accounting-date
 import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
 import { checkClientBusinessDay, CLIENT_BUSINESS_DATE_FUTURE_DAYS } from '../../../common/utils/client-date-bounds.util';
 import { ensureNonNegativeStock, ensureUniqueFlowItems } from '../../../common/utils/financial-integrity';
-import { authorizeManagerSecret } from '../../../common/utils/manager-approval';
 import { applyStockDelta, lockStockProducts, previewConsumableStockQty } from '../../../common/utils/location-stock-ledger';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
@@ -27,6 +26,7 @@ import { allocatePurchaseInvoiceDiscount, buildHistoricCostMap, buildNormalizedP
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { PurchasesFinanceService } from './purchases-finance.service';
 import { PurchasesQueryService } from './purchases-query.service';
+import { PurchasesWriteSharedHelpersService } from './purchases-write-shared-helpers.service';
 import { IdempotencyService } from '../../../core/idempotency/idempotency.service';
 import { PurchasesWriteRepricingService } from './purchases-write-repricing.service';
 import { detectDuplicateBills, normalizeBillNumber, type HistoricalPurchaseRecord } from '../engines/duplicate-bill-detector.engine';
@@ -42,6 +42,8 @@ export type {
 
 @Injectable()
 export class PurchasesWriteService {
+  private readonly sharedHelpersService: PurchasesWriteSharedHelpersService;
+
   private readonly repricing: PurchasesWriteRepricingService;
 
   constructor(
@@ -54,29 +56,18 @@ export class PurchasesWriteService {
     private readonly idempotency: IdempotencyService,
   ) {
     this.repricing = new PurchasesWriteRepricingService();
+    this.sharedHelpersService = new PurchasesWriteSharedHelpersService({
+      db: this.db,
+      queryService: this.queryService,
+    });
   }
 
   private hasPermission(auth: AuthContext, permission: string): boolean {
-    return auth.role === 'super_admin' || auth.permissions.includes(permission);
+    return this.sharedHelpersService.hasPermission(auth, permission);
   }
 
-  /*
-   * INV-SPIRIT-PURCHASE-MANAGER-APPROVAL: editing or cancelling a
-   * purchase reverses stock, supplier and journal balances, so the
-   * manager secret the dialogs already collect is actually verified
-   * here — it used to travel to the server and be discarded. The rule
-   * mirrors sale edit: a non-admin must supply the shared manager PIN
-   * or a manager account password; an admin bypasses unless a secret
-   * was supplied, in which case it is verified too.
-   */
   private async assertManagerApprovalForPurchaseChange(secret: string, auth: AuthContext): Promise<void> {
-    const isAdmin = auth.role === 'admin' || auth.role === 'super_admin';
-    if (!isAdmin && !secret) {
-      throw new AppError('رمز اعتماد المدير مطلوب قبل تعديل أو إلغاء فاتورة المشتريات.', 'MANAGER_AUTH_REQUIRED', 400);
-    }
-    if (!isAdmin || secret) {
-      await authorizeManagerSecret(this.db, auth, secret);
-    }
+    return this.sharedHelpersService.assertManagerApprovalForPurchaseChange(secret, auth);
   }
 
   private buildPurchaseRepricingCandidate(product: PurchaseRepricingProduct, newCost: number): PurchaseRepricingCandidate {
@@ -97,9 +88,7 @@ export class PurchasesWriteService {
     auth: AuthContext,
     extras: Record<string, unknown> = {},
   ): Promise<Record<string, unknown>> {
-    const purchaseResult = await this.queryService.getPurchaseById(purchaseId, auth);
-    const purchases = await this.queryService.listPurchases({ page: 1, pageSize: 25 }, auth);
-    return { ok: true, purchaseId, purchase: purchaseResult.purchase, purchases: purchases.purchases, ...extras };
+    return this.sharedHelpersService.buildPurchaseMutationResponse(purchaseId, auth, extras);
   }
 
   /*
