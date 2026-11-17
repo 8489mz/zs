@@ -20,6 +20,7 @@ if (!gotTheLock) {
 }
 
 const RuntimeConfig = require('./runtime-config.cjs');
+const { printThermalLabelsOnWindows } = require('./thermal-label-printer.cjs');
 let runtimeConfigInstance = null;
 let currentConfig = null;
 
@@ -953,8 +954,23 @@ app.whenReady().then(async () => {
     }
     const customWidthMm = Number(pageSizeMm && pageSizeMm.widthMm);
     const customHeightMm = Number(pageSizeMm && pageSizeMm.heightMm);
+    const hasCustomLabelSize =
+      Number.isFinite(customWidthMm) && customWidthMm > 0 && Number.isFinite(customHeightMm) && customHeightMm > 0;
+    if (process.platform === 'win32' && hasCustomLabelSize) {
+      const thermalRes = await printThermalLabelsOnWindows({
+        BrowserWindow,
+        html,
+        deviceName,
+        widthMm: customWidthMm,
+        heightMm: customHeightMm,
+      });
+      if (thermalRes && thermalRes.ok) {
+        return thermalRes;
+      }
+      console.warn('[ELECTRON] Windows thermal label spooler failed, falling back to Chromium print:', thermalRes && thermalRes.error);
+    }
     const resolvedPageSize =
-      Number.isFinite(customWidthMm) && customWidthMm > 0 && Number.isFinite(customHeightMm) && customHeightMm > 0
+      hasCustomLabelSize
         ? { width: Math.round(customWidthMm * 1000), height: Math.round(customHeightMm * 1000) }
         : pageSize === 'receipt'
           ? { width: receiptWidthMm === 58 ? 58000 : 80000, height: 297000 }

@@ -616,8 +616,19 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
   ).trim();
 
   if (effectiveElectronDeviceName && typeof window !== 'undefined' && (window as any).electronPrinter) {
-    (window as any).electronPrinter.printHtmlSilent({ html, deviceName: effectiveElectronDeviceName, pageSize, receiptWidthMm, pageSizeMm, orientation })
-      .catch((err: any) => console.error('Silent print failed:', err));
+    Promise.resolve(
+      (window as any).electronPrinter.printHtmlSilent({ html, deviceName: effectiveElectronDeviceName, pageSize, receiptWidthMm, pageSizeMm, orientation })
+    )
+      .then((res: any) => {
+        if (res && res.ok === false) {
+          console.warn('Silent Electron print reported failure, falling back to print dialog:', res.error);
+          printViaDialog();
+        }
+      })
+      .catch((err: any) => {
+        console.error('Silent print failed:', err);
+        printViaDialog();
+      });
     return;
   }
 
