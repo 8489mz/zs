@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Product } from '@/types/domain';
 import { collectFashionBarcodeItems, getSavedUnitBarcode } from './product-barcode-print.helpers';
+import { buildGroupBarcodePrintItems } from './workspace-sections/FashionGroupBarcodePrintAction';
 
 const product = (id: string, styleCode: string, itemKind: 'fashion' | 'standard' = 'fashion', isActive = true): Product => ({
   id, name: 'Shirt', barcode: id, styleCode, itemKind, isActive, color: 'black', size: id,
@@ -23,5 +24,16 @@ describe('clothing barcode print integrity', () => {
   });
   it('returns only the requested standard product outside fashion mode', () => {
     expect(collectFashionBarcodeItems(product('7', '', 'standard'), [product('9', '123')])).toHaveLength(1);
+  });
+  it('filters inactive and unbarcoded variants when building fashion group print batch items', () => {
+    const rows: Product[] = [
+      { ...product('1', '123'), color: 'بني', size: 'L', barcode: 'BC-1', stock: 5 },
+      { ...product('2', '123'), color: 'أسود', size: 'M', barcode: '', units: [], stock: 3 },
+      { ...product('3', '123', 'fashion', false), color: 'أبيض', size: 'S', barcode: 'BC-3', stock: 2 },
+    ];
+    const result = buildGroupBarcodePrintItems(rows);
+    expect(result.skippedMissingBarcode).toBe(1);
+    expect(result.items.map((i) => i.product.id)).toEqual(['1']);
+    expect(result.items[0].copies).toBe(5);
   });
 });

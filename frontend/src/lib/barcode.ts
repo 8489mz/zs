@@ -12,10 +12,65 @@ const CODE128_START_C = 105;
 const CODE128_CODE_B = 100;
 const CODE128_CODE_C = 99;
 const CODE128_STOP = 106;
-const BARCODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export function normalizeCode128Value(value: unknown) {
   return String(value == null ? '' : value).trim();
+}
+
+const ARABIC_KEYBOARD_TO_ENGLISH_MAP: Record<string, string> = {
+  // Arabic Letters
+  'ض': 'q', 'ص': 'w', 'ث': 'e', 'ق': 'r', 'ف': 't', 'غ': 'y', 'ع': 'u', 'ه': 'i', 'خ': 'o', 'ح': 'p', 'ج': '[', 'د': ']',
+  'ش': 'a', 'س': 's', 'ي': 'd', 'ب': 'f', 'ل': 'g', 'ا': 'h', 'ت': 'j', 'ن': 'k', 'م': 'l', 'ك': ';', 'ط': '\'',
+  'ئ': 'z', 'ء': 'x', 'ؤ': 'c', 'ر': 'v', 'لا': 'b', 'ى': 'n', 'ة': 'm', 'و': ',', 'ز': '.', 'ظ': '/',
+  // Capital / Shift letters on Arabic keyboard
+  'َ': 'Q', 'ً': 'W', 'ُ': 'E', 'ٌ': 'R', 'لإ': 'T', 'إ': 'Y', '‘': 'U', '÷': 'I', '×': 'O', '؛': 'P',
+  'ِ': 'A', 'ٍ': 'S', 'لأ': 'G', 'أ': 'H', 'ـ': 'J', '،': 'K',
+  '~': 'Z', 'ْ': 'X', 'لآ': 'B', 'آ': 'N', '؟': '?',
+  // Arabic & Persian digits
+  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+  '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4', '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+};
+
+export function remapArabicKeyboardToEnglish(input: string): string {
+  if (!input) return '';
+  let result = '';
+  for (let i = 0; i < input.length; i++) {
+    if (i + 1 < input.length) {
+      const pair = input.substring(i, i + 2);
+      if (ARABIC_KEYBOARD_TO_ENGLISH_MAP[pair]) {
+        result += ARABIC_KEYBOARD_TO_ENGLISH_MAP[pair];
+        i++;
+        continue;
+      }
+    }
+    const char = input[i];
+    result += ARABIC_KEYBOARD_TO_ENGLISH_MAP[char] !== undefined ? ARABIC_KEYBOARD_TO_ENGLISH_MAP[char] : char;
+  }
+  return result;
+}
+
+/**
+ * Ordered barcode lookup candidates covering Windows Arabic OS keyboard layouts
+ * (e.g. Arabic 101/102/AZERTY mapping '/' or '-' to 'ظ' in '321321ظ007').
+ */
+export function getBarcodeLookupCandidates(rawCode: string): string[] {
+  const trimmed = String(rawCode || '').trim();
+  if (!trimmed) return [];
+
+  const candidates: string[] = [trimmed];
+  if (!/\s/.test(trimmed)) {
+    const remapped = remapArabicKeyboardToEnglish(trimmed).trim();
+    if (remapped && !candidates.includes(remapped)) {
+      candidates.push(remapped);
+    }
+    if (remapped.includes('/') || trimmed.includes('ظ')) {
+      const hyphenVariant = remapped.replace(/\//g, '-');
+      if (hyphenVariant && !candidates.includes(hyphenVariant)) {
+        candidates.push(hyphenVariant);
+      }
+    }
+  }
+  return candidates;
 }
 
 export function isCode128BValueSupported(value: unknown) {
@@ -33,6 +88,9 @@ export function encodeCode128Auto(str: string): number[] {
 
   // 1. Purely numeric string
   if (/^\d+$/.test(str)) {
+    if (str.length === 1) {
+      return [CODE128_START_B, str.charCodeAt(0) - 32];
+    }
     if (str.length % 2 === 0) {
       // Even digits: 100% Subset C (2 digits per symbol)
       const codes = [CODE128_START_C];
@@ -41,7 +99,7 @@ export function encodeCode128Auto(str: string): number[] {
       }
       return codes;
     } else {
-      // Odd digits: start B with first digit, then Subset C for remaining pairs
+      // Odd digits (>= 3): start B with first digit, then Subset C for remaining pairs
       const codes = [CODE128_START_B, str.charCodeAt(0) - 32, CODE128_CODE_C];
       for (let i = 1; i < str.length; i += 2) {
         codes.push(parseInt(str.slice(i, i + 2), 10));
@@ -98,11 +156,10 @@ export function buildCode128Svg(value: unknown) {
   }
   codes.push(checksum % 103, CODE128_STOP);
 
-  const moduleWidth = 2;
-  const quietZone = 16;
-  const height = 72;
+  const moduleWidth = 40;
+  const quietZone = 280; // 7X inside SVG + white label edge margin preserves >= 9.5X quiet zone while stretching bars wide edge-to-edge
   let x = quietZone;
-  const rects: string[] = [];
+  const rects: Array<{ x: number; width: number }> = [];
 
   codes.forEach((code) => {
     const pattern = CODE128_PATTERNS[code];
@@ -110,24 +167,84 @@ export function buildCode128Svg(value: unknown) {
     for (let index = 0; index < pattern.length; index += 1) {
       const width = Number(pattern[index]) * moduleWidth;
       if (index % 2 === 0) {
-        rects.push(`<rect x="${x}" y="0" width="${width}" height="${height}" fill="#000" />`);
+        // Trim 0.25X total bar width (5 units each edge on 40-unit grid -> 30 black : 50 white) to eliminate heavy "bold" ink bleed while keeping timing T exact
+        rects.push({ x: x + 5, width: width - 10 });
       }
       x += width;
     }
   });
 
   const totalWidth = x + quietZone;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalWidth} ${height}" preserveAspectRatio="none" shape-rendering="crispEdges" style="display:block;width:100%;height:100%;" aria-label="Barcode ${escapeHtml(normalized)}">${rects.join('')}</svg>`;
+  const height = 400;
+  const rectSvg = [
+    `<rect x="0" y="0" width="${totalWidth}" height="${height}" fill="#fff" />`,
+    ...rects.map((r) => `<rect x="${r.x}" y="0" width="${r.width}" height="${height}" fill="#000" />`),
+  ].join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalWidth} ${height}" preserveAspectRatio="none" style="display:block;width:100%;height:100%;" aria-label="Barcode ${escapeHtml(normalized)}">${rectSvg}</svg>`;
+}
+
+function randomNumericSegment(length: number, avoidLeadingZero = false): string {
+  let out = '';
+  for (let index = 0; index < length; index += 1) {
+    const minDigit = index === 0 && avoidLeadingZero ? 2 : 0;
+    const digit = minDigit + Math.floor(Math.random() * (10 - minDigit));
+    out += String(digit);
+  }
+  return out;
 }
 
 export function createGeneratedBarcode(existingValues: string[], prefix = 'ZS') {
-  const existing = new Set(existingValues.map((value) => normalizeCode128Value(value)).filter(Boolean));
+  const existing = new Set(existingValues.map((value) => normalizeCode128Value(value).toLowerCase()).filter(Boolean));
+  const cleanPrefix = normalizeCode128Value(prefix);
+  const useDefaultPureNumeric = !cleanPrefix || cleanPrefix.toUpperCase() === 'ZS';
+  const isNumericPrefix = /^\d+$/.test(cleanPrefix);
+
   for (let attempt = 0; attempt < 500; attempt += 1) {
-    const randomSegment = Array.from({ length: 10 }, () => BARCODE_CHARS[Math.floor(Math.random() * BARCODE_CHARS.length)]).join('');
-    const candidate = `${prefix}-${randomSegment}`;
-    if (!existing.has(candidate)) return candidate;
+    let candidate = '';
+    if (useDefaultPureNumeric) {
+      // 8 pure digits -> 100% Code 128 Subset C (99 total modules, ~2x fewer bars for fast scanning on weak scanners)
+      candidate = randomNumericSegment(8, true);
+    } else if (isNumericPrefix) {
+      const needed = Math.max(4, 8 - cleanPrefix.length);
+      const evenPad = (cleanPrefix.length + needed) % 2 === 0 ? needed : needed + 1;
+      candidate = `${cleanPrefix}${randomNumericSegment(evenPad, false)}`;
+    } else {
+      candidate = `${cleanPrefix}${randomNumericSegment(6, false)}`;
+    }
+    if (!existing.has(candidate.toLowerCase())) return candidate;
   }
-  return `${prefix}-${Date.now()}`;
+
+  const tailDigits = String(Date.now()).slice(-8);
+  return useDefaultPureNumeric ? `2${tailDigits.slice(1)}` : `${cleanPrefix}${tailDigits}`;
+}
+
+export function createSequentialVariantBarcode(
+  prefix: string,
+  startSequence: number,
+  usedBarcodes: Set<string>,
+): string {
+  const cleanPrefix = normalizeCode128Value(prefix);
+  if (!cleanPrefix) return '';
+  const isNumericPrefix = /^\d+$/.test(cleanPrefix);
+  let sequence = Math.max(1, Math.round(startSequence));
+
+  const formatCandidate = (seq: number) => {
+    if (isNumericPrefix) {
+      // Even-length pure numeric strings encode cleanly in Code 128 Subset C (2 digits per symbol) with no hyphen overhead
+      const basePad = cleanPrefix.length % 2 === 0 ? 2 : 3;
+      const minWidth = seq >= Math.pow(10, basePad) ? basePad + 2 : basePad;
+      return `${cleanPrefix}${String(seq).padStart(minWidth, '0')}`;
+    }
+    return `${cleanPrefix}${String(seq).padStart(2, '0')}`;
+  };
+
+  let candidate = formatCandidate(sequence);
+  while (usedBarcodes.has(candidate.toLowerCase())) {
+    sequence += 1;
+    candidate = formatCandidate(sequence);
+  }
+  usedBarcodes.add(candidate.toLowerCase());
+  return candidate;
 }
 
 export function collectExistingBarcodes(products: Product[]) {
@@ -174,10 +291,16 @@ export function printBarcodeSheet(options: {
     </div>
   `).join('');
 
+  const resolvedPrint = resolvePrintSettings();
   const barcodePrinterName = String(
     options.deviceName ||
+    resolvedPrint.electronBarcodePrinter ||
     options.settings?.posElectronBarcodePrinter ||
-    resolvePrintSettings().electronBarcodePrinter ||
+    ''
+  ).trim();
+  const barcodeBridgePrinter = String(
+    resolvedPrint.windowsBarcodePrinter ||
+    options.settings?.posWindowsBarcodePrinterName ||
     ''
   ).trim();
 
@@ -188,6 +311,8 @@ export function printBarcodeSheet(options: {
     pageSize: 'A4',
     orientation: 'landscape',
     deviceName: barcodePrinterName || undefined,
+    windowsPrinterName: barcodeBridgePrinter || undefined,
+    disableWindowsBridge: !barcodeBridgePrinter,
     extraStyles: `
       .barcode-sheet{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
       .barcode-card{border:1px dashed #999;border-radius: 8px;padding:12px;text-align:center;break-inside:avoid;background:#fff}

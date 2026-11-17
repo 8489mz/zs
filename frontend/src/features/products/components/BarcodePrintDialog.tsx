@@ -5,16 +5,23 @@ import { Button } from '@/shared/ui/button';
 import { Field } from '@/shared/ui/field';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { AppIcons } from '@/shared/components/icons/AppIcons';
+import { BarcodePrinterPicker } from '@/features/products/components/BarcodePrinterPicker';
+import { BarcodeBatchItemsPanel } from '@/features/products/components/BarcodeBatchItemsPanel';
+import { BarcodeFoodStatementSection, getFutureDate } from '@/features/products/components/BarcodeFoodStatementSection';
 import {
   buildBarcodePreviewHtml,
   DEFAULT_BARCODE_PRINT_PRESET_ID,
+  DEFAULT_THERMAL_ROTATE_DEG,
   getBarcodeCardData,
   getBarcodePrintPreset,
   getBarcodePrintPresetsByFamily,
   printBatchBarcodeLabels,
+  sanitizeCustomDimensions,
+  type BarcodeCurrencyFormat,
   type BarcodePrintCustomization,
   type BarcodePrintFamily,
   type BarcodePrintItem,
+  type BarcodeRotationDeg,
 } from '@/lib/barcode-labels';
 import { useAuthStore } from '@/stores/auth-store';
 import type { Product, ProductUnit } from '@/types/domain';
@@ -34,30 +41,54 @@ const FAMILY_OPTIONS = [
   { value: 'sheet', label: 'ورق لاصق A4 (Sticker Sheet)' },
 ];
 
-const EXPIRY_PERIOD_OPTIONS = [
-  { value: '1', label: 'شهر واحد' },
-  { value: '2', label: 'شهران' },
-  { value: '3', label: '3 أشهر (عطارة وبقوليات)' },
-  { value: '6', label: '6 أشهر (نصف سنة)' },
-  { value: '9', label: '9 أشهر' },
-  { value: '12', label: 'سنة واحدة (12 شهر)' },
-  { value: '24', label: 'سنتان (24 شهر)' },
-  { value: '36', label: '3 سنوات' },
+const ROTATION_OPTIONS = [
+  { value: '180', label: '180° — اتجاه الطباعة الحرارية القياسي (معتدل)' },
+  { value: '0', label: '0° — بدون قلب (لبعض الطابعات / A4)' },
+  { value: '90', label: '90° — تدوير عرضي' },
+  { value: '270', label: '270° — تدوير عرضي عكسي' },
 ];
 
-const STORAGE_NOTE_PRESETS = [
-  'يحفظ في مكان جاف وبارد',
-  'يحفظ مبرداً من 1 إلى 4 م°',
-  'يحفظ مجمداً عند -18 م°',
-  'يحفظ بعيداً عن أشعة الشمس والحرارة',
+const CURRENCY_FORMAT_OPTIONS: Array<{ value: BarcodeCurrencyFormat; label: string }> = [
+  { value: 'code', label: 'كود (EGP / SAR)' },
+  { value: 'symbol', label: 'رمز (ج.م / ر.س)' },
+  { value: 'none', label: 'بدون عملة' },
 ];
 
-const NET_WEIGHT_PRESETS = ['1 كجم', '500 جم', '250 جم', '5 كجم', '10 كجم'];
+const BARCODE_PREFS_STORAGE_KEY = 'z_erp_barcode_print_prefs_v3';
 
-function getFutureDate(months: number) {
-  const d = new Date();
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
+interface StoredBarcodePrefs {
+  family?: BarcodePrintFamily;
+  presetId?: string;
+  customWidthMm?: number;
+  customHeightMm?: number;
+  rotateDeg?: BarcodeRotationDeg;
+  currencyFormat?: BarcodeCurrencyFormat;
+  showStoreName?: boolean;
+  showProductName?: boolean;
+  showPrice?: boolean;
+  showUnit?: boolean;
+  showBarcodeText?: boolean;
+  showSku?: boolean;
+  showVariant?: boolean;
+}
+
+function loadStoredBarcodePrefs(): StoredBarcodePrefs {
+  if (typeof localStorage === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(BARCODE_PREFS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredBarcodePrefs(prefs: StoredBarcodePrefs) {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(BARCODE_PREFS_STORAGE_KEY, JSON.stringify(prefs));
+  } catch {}
 }
 
 export function BarcodePrintDialog({ open, product, unit, items, onClose }: BarcodePrintDialogProps) {
@@ -68,10 +99,13 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
 
   const [family, setFamily] = useState<BarcodePrintFamily>('thermal');
   const [presetId, setPresetId] = useState(DEFAULT_BARCODE_PRINT_PRESET_ID);
+  const [customWidthMm, setCustomWidthMm] = useState(40);
+  const [customHeightMm, setCustomHeightMm] = useState(30);
+  const [rotateDeg, setRotateDeg] = useState<BarcodeRotationDeg>(DEFAULT_THERMAL_ROTATE_DEG);
   const [copies, setCopies] = useState(8);
   const [labelsPerPage, setLabelsPerPage] = useState(24);
   const [startOffset, setStartOffset] = useState(1);
-  const [previewMode, setPreviewMode] = useState<'single' | 'sheet'>('sheet');
+  const [previewMode, setPreviewMode] = useState<'single' | 'sheet'>('single');
   const previewRef = useRef<HTMLDivElement | null>(null);
   const settingsRef = useRef<HTMLDivElement | null>(null);
 
@@ -84,9 +118,11 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
   const [storeName, setStoreName] = useState('');
   const [showProductName, setShowProductName] = useState(true);
   const [showPrice, setShowPrice] = useState(true);
+  const [currencyFormat, setCurrencyFormat] = useState<BarcodeCurrencyFormat>('code');
   const [showUnit, setShowUnit] = useState(true);
   const [showBarcodeText, setShowBarcodeText] = useState(true);
   const [showSku, setShowSku] = useState(false);
+  const [showVariant, setShowVariant] = useState(true);
 
   // متطلبات التموين وحماية المستهلك (بطاقة بيان السلع الغذائية والمعبأة)
   const [showFoodStatement, setShowFoodStatement] = useState(false);
@@ -100,22 +136,39 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
   const [netWeightText, setNetWeightText] = useState('');
   const [foodStatementNote, setFoodStatementNote] = useState('');
 
-  // Initialize state when modal opens
+  // Initialize state when modal opens (restoring saved label prefs)
   useEffect(() => {
     if (!open) return;
-    setFamily('thermal');
-    setPresetId(DEFAULT_BARCODE_PRINT_PRESET_ID);
+    const saved = loadStoredBarcodePrefs();
+    const initialFamily: BarcodePrintFamily = saved.family === 'sheet' ? 'sheet' : 'thermal';
+    const familyPresets = getBarcodePrintPresetsByFamily(initialFamily);
+    const resolvedPresetId = saved.presetId && familyPresets.some((p) => p.id === saved.presetId)
+      ? saved.presetId
+      : (initialFamily === 'thermal' ? DEFAULT_BARCODE_PRINT_PRESET_ID : familyPresets[0]?.id || DEFAULT_BARCODE_PRINT_PRESET_ID);
+    const sanitizedDims = sanitizeCustomDimensions({ widthMm: saved.customWidthMm, heightMm: saved.customHeightMm });
+    const initialPreset = getBarcodePrintPreset(resolvedPresetId, sanitizedDims);
+    const initialRot: BarcodeRotationDeg = saved.rotateDeg === 0 || saved.rotateDeg === 90 || saved.rotateDeg === 180 || saved.rotateDeg === 270 ? saved.rotateDeg : DEFAULT_THERMAL_ROTATE_DEG;
+    const initialCurrency: BarcodeCurrencyFormat = saved.currencyFormat === 'symbol' || saved.currencyFormat === 'none' ? saved.currencyFormat : 'code';
+
+    setFamily(initialFamily);
+    setPresetId(resolvedPresetId);
+    setCustomWidthMm(sanitizedDims.widthMm);
+    setCustomHeightMm(sanitizedDims.heightMm);
+    setRotateDeg(initialRot);
+    setLabelsPerPage(initialPreset.maxLabelsPerPage);
     const defaultProductCopies = product && Number(product.stock) > 0 ? Number(product.stock) : 8;
-    setCopies(defaultProductCopies);
+    setCopies(initialFamily === 'thermal' ? defaultProductCopies : Math.min(24, initialPreset.maxLabelsPerPage));
     setStartOffset(1);
-    setPreviewMode('sheet');
+    setPreviewMode(initialFamily === 'thermal' && !(items && items.length > 1) ? 'single' : 'sheet');
     setStoreName(currentStoreName || '');
-    setShowStoreName(true);
-    setShowProductName(true);
-    setShowPrice(true);
-    setShowUnit(true);
-    setShowBarcodeText(true);
-    setShowSku(Boolean(product?.sku || product?.styleCode || items?.some((it) => it.product?.sku || it.product?.styleCode)));
+    setShowStoreName(saved.showStoreName ?? true);
+    setShowProductName(saved.showProductName ?? true);
+    setShowPrice(saved.showPrice ?? true);
+    setCurrencyFormat(initialCurrency);
+    setShowUnit(saved.showUnit ?? true);
+    setShowBarcodeText(saved.showBarcodeText ?? true);
+    setShowSku(saved.showSku ?? Boolean(product?.sku || product?.styleCode || items?.some((it) => it.product?.sku || it.product?.styleCode)));
+    setShowVariant(saved.showVariant ?? true);
 
     // Reset Food Statement defaults
     setShowFoodStatement(false);
@@ -130,7 +183,7 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
     setFoodStatementNote('يحفظ في مكان جاف وبارد');
 
     if (items && items.length > 0) {
-      setBatchItems(items.map((it) => ({ ...it, copies: Math.max(1, Number(it.copies || 1)) })));
+      setBatchItems(items.map((it) => ({ ...it, copies: Math.max(0, Number(it.copies ?? 1)) })));
       setActiveItemIndex(0);
     } else if (product) {
       setBatchItems([{ product, unit, copies: defaultProductCopies }]);
@@ -141,21 +194,70 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
     }
   }, [open, product?.id, unit?.id, currentStoreName, product?.styleCode, items]);
 
-  const isBatchMode = batchItems.length > 1;
+  const isBatchMode = batchItems.length > 1 || (Boolean(items && items.length > 1) && batchItems.length > 0);
   const activeItem = batchItems[activeItemIndex] || batchItems[0] || (product ? { product, unit, copies } : null);
   const activeProduct = activeItem?.product || product;
   const activeUnit = activeItem?.unit || unit;
+  const zeroStockBatchCount = useMemo(
+    () => batchItems.filter((it) => Number(it.product?.stock ?? 0) <= 0).length,
+    [batchItems]
+  );
+  const canPruneZeroStock = zeroStockBatchCount > 0 && zeroStockBatchCount < batchItems.length;
+  const hasVariantInfo = useMemo(
+    () => Boolean(activeProduct?.color || activeProduct?.size || batchItems.some((it) => Boolean(it.product?.color || it.product?.size))),
+    [activeProduct?.color, activeProduct?.size, batchItems]
+  );
 
   const totalCopies = useMemo(() => {
     if (isBatchMode) {
-      return batchItems.reduce((acc, it) => acc + Math.max(1, Number(it.copies || 1)), 0);
+      return batchItems.reduce((acc, it) => acc + Math.max(0, Number(it.copies ?? 0)), 0);
     }
     return copies;
   }, [isBatchMode, batchItems, copies]);
 
+  const customDimensions = useMemo(
+    () => sanitizeCustomDimensions({ widthMm: customWidthMm, heightMm: customHeightMm }),
+    [customWidthMm, customHeightMm]
+  );
+
+  // Persist user preferences when changed while dialog is open
+  useEffect(() => {
+    if (!open) return;
+    saveStoredBarcodePrefs({
+      family,
+      presetId,
+      customWidthMm: customDimensions.widthMm,
+      customHeightMm: customDimensions.heightMm,
+      rotateDeg,
+      currencyFormat,
+      showStoreName,
+      showProductName,
+      showPrice,
+      showUnit,
+      showBarcodeText,
+      showSku,
+      showVariant,
+    });
+  }, [
+    open,
+    family,
+    presetId,
+    customDimensions.widthMm,
+    customDimensions.heightMm,
+    rotateDeg,
+    currencyFormat,
+    showStoreName,
+    showProductName,
+    showPrice,
+    showUnit,
+    showBarcodeText,
+    showSku,
+    showVariant,
+  ]);
+
   const presetOptions = useMemo(() => getBarcodePrintPresetsByFamily(family), [family]);
-  const preset = useMemo(() => getBarcodePrintPreset(presetId), [presetId]);
-  const card = useMemo(() => (activeProduct ? getBarcodeCardData(activeProduct, activeUnit) : null), [activeProduct, activeUnit]);
+  const preset = useMemo(() => getBarcodePrintPreset(presetId, customDimensions), [presetId, customDimensions]);
+  const card = useMemo(() => (activeProduct ? getBarcodeCardData(activeProduct, activeUnit, currencyFormat) : null), [activeProduct, activeUnit, currencyFormat]);
 
   const customization: BarcodePrintCustomization = useMemo(
     () => ({
@@ -163,9 +265,11 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
       storeName: (storeName || currentStoreName || '').trim(),
       showProductName,
       showPrice,
+      currencyFormat,
       showUnit,
       showBarcodeText,
       showSku,
+      showVariant,
       showFoodStatement,
       showProductionDate,
       productionDate,
@@ -183,9 +287,11 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
       currentStoreName,
       showProductName,
       showPrice,
+      currencyFormat,
       showUnit,
       showBarcodeText,
       showSku,
+      showVariant,
       showFoodStatement,
       showProductionDate,
       productionDate,
@@ -211,9 +317,11 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
             previewMode,
             customization,
             items: isBatchMode ? batchItems : undefined,
+            customDimensions,
+            rotateDeg,
           })
         : '',
-    [activeProduct, activeUnit, presetId, labelsPerPage, startOffset, previewMode, customization, isBatchMode, batchItems]
+    [activeProduct, activeUnit, presetId, labelsPerPage, startOffset, previewMode, customization, isBatchMode, batchItems, customDimensions, rotateDeg]
   );
 
   const presetSelectOptions = useMemo(
@@ -221,15 +329,21 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
     [presetOptions]
   );
 
+  const selectedBatchCount = useMemo(
+    () => batchItems.filter((it) => Number(it.copies ?? 0) > 0).length,
+    [batchItems]
+  );
+
   useEffect(() => {
     const firstPreset = presetOptions[0];
     if (!firstPreset) return;
     if (!presetOptions.some((entry) => entry.id === presetId)) {
-      setPresetId(firstPreset.id);
-      setLabelsPerPage(firstPreset.maxLabelsPerPage);
-      setCopies(family === 'thermal' ? 8 : Math.min(24, firstPreset.maxLabelsPerPage));
+      const fallback = family === 'thermal' ? getBarcodePrintPreset(DEFAULT_BARCODE_PRINT_PRESET_ID, customDimensions) : firstPreset;
+      setPresetId(fallback.id);
+      setLabelsPerPage(fallback.maxLabelsPerPage);
+      setCopies(family === 'thermal' ? 8 : Math.min(24, fallback.maxLabelsPerPage));
     }
-  }, [presetId, presetOptions, family]);
+  }, [presetId, presetOptions, family, customDimensions]);
 
   if (!activeProduct || !card) return null;
 
@@ -238,24 +352,34 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
       ? batchItems
       : [{ product: activeProduct, unit: activeUnit, copies }];
 
-    printBatchBarcodeLabels(effectiveItems, { presetId, copies: totalCopies, labelsPerPage, startOffset }, customization, { settings: settingsQuery.data });
+    printBatchBarcodeLabels(
+      effectiveItems,
+      { presetId, copies: totalCopies, labelsPerPage, startOffset, customDimensions, rotateDeg },
+      customization,
+      { settings: settingsQuery.data }
+    );
   };
 
   const handleReset = () => {
     setPresetId(DEFAULT_BARCODE_PRINT_PRESET_ID);
     const defaultPreset = getBarcodePrintPreset(DEFAULT_BARCODE_PRINT_PRESET_ID);
     setFamily(defaultPreset.family);
+    setCustomWidthMm(40);
+    setCustomHeightMm(30);
+    setRotateDeg(DEFAULT_THERMAL_ROTATE_DEG);
     setCopies(defaultPreset.family === 'thermal' ? 8 : Math.min(24, defaultPreset.maxLabelsPerPage));
     setLabelsPerPage(defaultPreset.maxLabelsPerPage);
     setStartOffset(1);
-    setPreviewMode('sheet');
+    setPreviewMode('single');
     setStoreName(currentStoreName || '');
     setShowStoreName(true);
     setShowProductName(true);
     setShowPrice(true);
+    setCurrencyFormat('code');
     setShowUnit(true);
     setShowBarcodeText(true);
     setShowSku(Boolean(activeProduct?.sku));
+    setShowVariant(true);
     setShowFoodStatement(false);
     setShowProductionDate(false);
     setProductionDate(new Date().toISOString().slice(0, 10));
@@ -270,24 +394,59 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
 
   // Quick batch adjustments
   const setAllCopies = (qty: number) => {
-    setBatchItems((current) => current.map((it) => ({ ...it, copies: Math.max(1, qty) })));
+    const safeQty = Math.max(0, Math.round(Number(qty || 0)));
+    setBatchItems((current) => current.map((it) => ({ ...it, copies: safeQty })));
   };
 
   const setAllCopiesByStock = () => {
     setBatchItems((current) =>
-      current.map((it) => ({ ...it, copies: Math.max(1, Number(it.product?.stock || 1)) }))
+      current.map((it) => ({ ...it, copies: Math.max(0, Number(it.product?.stock ?? 0)) }))
     );
   };
 
   const adjustAllCopies = (delta: number) => {
     setBatchItems((current) =>
-      current.map((it) => ({ ...it, copies: Math.max(1, (it.copies || 1) + delta) }))
+      current.map((it) => ({ ...it, copies: Math.max(0, Number(it.copies ?? 0) + delta) }))
     );
   };
 
-  const updateItemCopies = (index: number, newCopies: number) => {
+  const toggleItemIncluded = (index: number) => {
     setBatchItems((current) =>
-      current.map((it, idx) => (idx === index ? { ...it, copies: Math.max(1, newCopies) } : it))
+      current.map((it, idx) => {
+        if (idx !== index) return it;
+        const currentQty = Math.max(0, Number(it.copies ?? 0));
+        if (currentQty > 0) return { ...it, copies: 0 };
+        const fallbackStock = Math.max(1, Number(it.product?.stock || 1));
+        return { ...it, copies: fallbackStock };
+      })
+    );
+  };
+
+  const selectOnlyItem = (index: number) => {
+    setBatchItems((current) =>
+      current.map((it, idx) => {
+        if (idx !== index) return { ...it, copies: 0 };
+        const existingQty = Math.max(0, Number(it.copies ?? 0));
+        return { ...it, copies: existingQty > 0 ? existingQty : 1 };
+      })
+    );
+    setActiveItemIndex(index);
+  };
+
+  const removeZeroStockItems = () => {
+    const remaining = batchItems.filter((it) => Number(it.product?.stock ?? 0) > 0);
+    if (remaining.length === 0 || remaining.length === batchItems.length) return;
+    setBatchItems(remaining);
+    setActiveItemIndex(0);
+    if (remaining.length === 1) {
+      setCopies(Math.max(1, Number(remaining[0].copies || 1)));
+    }
+  };
+
+  const updateItemCopies = (index: number, newCopies: number) => {
+    const safeCopies = Math.max(0, Math.round(Number(newCopies || 0)));
+    setBatchItems((current) =>
+      current.map((it, idx) => (idx === index ? { ...it, copies: safeCopies } : it))
     );
   };
 
@@ -298,10 +457,10 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
       title={t('products.barcode_print_dialog.s0', "توليد وطباعة ملصقات الباركود والرف (Barcode & Shelf Labeling)")}
       subtitle={
         isBatchMode
-          ? `طباعة مجمعة: ${batchItems.length} صنف · إجمالي ${totalCopies} ملصق`
-          : `${activeProduct.name} · ${card.unit?.name || t('products.barcode_print_dialog.s1', "قطعة")} · باركود: ${card.barcode || t('products.barcode_print_dialog.s2', "بدون باركود")}`
+          ? `طباعة مجمعة: ${selectedBatchCount} من ${batchItems.length} صنف · إجمالي ${totalCopies} ملصق`
+          : `${activeProduct.name || activeProduct.nameEn || '-'} · ${card.unit?.name || t('products.barcode_print_dialog.s1', "قطعة")} · باركود: ${card.barcode || t('products.barcode_print_dialog.s2', "بدون باركود")}`
       }
-      width="min(1160px, 96vw)"
+      width={isBatchMode ? 'min(1260px, 96vw)' : 'min(1160px, 96vw)'}
       height="min(650px, 92vh)"
       compact
       bodyStyle={{ overflow: 'hidden', padding: '12px 16px' }}
@@ -311,14 +470,14 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
           onCancel={onClose}
           submitText={`طباعة الآن (${totalCopies} ${family === 'thermal' ? t('products.barcode_print_dialog.s4', "ملصق") : t('products.barcode_print_dialog.s5', "نسخة")})`}
           onSubmit={handlePrint}
-          submitDisabled={!card.barcode && !isBatchMode}
+          submitDisabled={isBatchMode ? totalCopies <= 0 : !card.barcode}
         />
       }
     >
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1.05fr 1fr',
+          gridTemplateColumns: isBatchMode ? '1.05fr 0.95fr 0.95fr' : '1.05fr 1fr',
           gap: '14px',
           height: '100%',
           minHeight: 0,
@@ -364,8 +523,10 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
                   onChange={(val) => {
                     const nextFamily = val === 'sheet' ? 'sheet' : 'thermal';
                     setFamily(nextFamily);
-                    setPreviewMode(nextFamily === 'thermal' ? 'single' : 'sheet');
-                    const nextPreset = getBarcodePrintPresetsByFamily(nextFamily)[0];
+                    setPreviewMode(nextFamily === 'thermal' && !isBatchMode ? 'single' : 'sheet');
+                    const nextPreset = nextFamily === 'thermal'
+                      ? getBarcodePrintPreset(DEFAULT_BARCODE_PRINT_PRESET_ID, customDimensions)
+                      : getBarcodePrintPresetsByFamily(nextFamily)[0];
                     if (nextPreset) {
                       setPresetId(nextPreset.id);
                       setLabelsPerPage(nextPreset.maxLabelsPerPage);
@@ -380,7 +541,7 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
                   value={presetId}
                   options={presetSelectOptions}
                   onChange={(val) => {
-                    const nextPreset = getBarcodePrintPreset(val);
+                    const nextPreset = getBarcodePrintPreset(val, customDimensions);
                     setPresetId(nextPreset.id);
                     setLabelsPerPage(nextPreset.maxLabelsPerPage);
                     if (family === 'sheet') {
@@ -389,6 +550,33 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
                   }}
                 />
               </Field>
+
+              {family === 'thermal' && presetId === 'thermal-custom' && (
+                <>
+                  <Field label="عرض الملصق (مم)">
+                    <input
+                      type="number"
+                      min="20"
+                      max="120"
+                      step="0.5"
+                      value={customWidthMm}
+                      onChange={(e) => setCustomWidthMm(Number(e.target.value || 40))}
+                      style={{ height: '32px', fontSize: '0.82rem' }}
+                    />
+                  </Field>
+                  <Field label="ارتفاع الملصق (مم)">
+                    <input
+                      type="number"
+                      min="15"
+                      max="150"
+                      step="0.5"
+                      value={customHeightMm}
+                      onChange={(e) => setCustomHeightMm(Number(e.target.value || 30))}
+                      style={{ height: '32px', fontSize: '0.82rem' }}
+                    />
+                  </Field>
+                </>
+              )}
 
               {!isBatchMode && (
                 <Field label={family === 'thermal' ? t('products.barcode_print_dialog.s9', "عدد الملصقات المطلوب طباعتها") : t('products.barcode_print_dialog.s10', "إجمالي عدد النسخ")}>
@@ -444,12 +632,14 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
                   />
                 </Field>
               ) : (
-                <Field label={t('products.barcode_print_dialog.s13', "أبعاد الملصق الفعلي")}>
-                  <input
-                    value={`${preset.labelWidthMm} × ${preset.labelHeightMm} مم ${preset.isShelfLabel ? t('products.barcode_print_dialog.s14', "(استيكر رف)") : ''}`}
-                    readOnly
-                    disabled
-                    style={{ height: '32px', fontSize: '0.82rem', background: '#f1f5f9', fontWeight: 600, color: '#170e5e' }}
+                <Field label="اتجاه الطباعة / التدوير">
+                  <CustomSelect
+                    value={String(rotateDeg)}
+                    options={ROTATION_OPTIONS}
+                    onChange={(val) => {
+                      const n = Number(val);
+                      setRotateDeg(n === 90 || n === 180 || n === 270 ? n : 0);
+                    }}
                   />
                 </Field>
               )}
@@ -481,95 +671,6 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
               )}
             </div>
 
-            {/* شريط معلومات الطباعة المجمعة للأصناف إذا كانت دفعة */}
-            {isBatchMode && (
-              <div style={{ marginTop: '10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px 10px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#170e5e' }}>
-                    {t('products.barcode_print_dialog.s17', "الأصناف المحددة (")}{batchItems.length}{t('products.barcode_print_dialog.s18', ") · إجمالي الملصقات:")} <strong>{totalCopies}</strong>
-                  </span>
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    <button
-                      type="button"
-                      onClick={setAllCopiesByStock}
-                      style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', border: '1px solid #170e5e', borderRadius: '4px', background: '#eff6ff', color: '#170e5e', cursor: 'pointer' }}
-                      title="ضبط عدد الملصقات لكل صنف ليطابق رصيده الفعلي في المخزن"
-                    >
-                      حسب رصيد المخزن
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAllCopies(1)}
-                      style={{ fontSize: '0.7rem', padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#f8fafc', cursor: 'pointer' }}
-                      title={t('products.barcode_print_dialog.s19', "نسخة واحدة لكل صنف (ملصقات الرف)")}
-                    >
-                      {t('products.barcode_print_dialog.s20', "1 لكل صنف (رف)")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => adjustAllCopies(1)}
-                      style={{ fontSize: '0.7rem', padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#f8fafc', cursor: 'pointer' }}
-                      title={t('products.barcode_print_dialog.s21', "زيادة نسخة لكل الأصناف")}
-                    >
-                      {t('products.barcode_print_dialog.s22', "+1 للكل")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => adjustAllCopies(-1)}
-                      style={{ fontSize: '0.7rem', padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#f8fafc', cursor: 'pointer' }}
-                      title={t('products.barcode_print_dialog.s23', "إنقاص نسخة لكل الأصناف")}
-                    >
-                      {t('products.barcode_print_dialog.s24', "-1 للكل")}
-                    </button>
-                  </div>
-                </div>
-
-                {/* قائمة مصغرة سريعة للأصناف والكميات */}
-                <div style={{ maxHeight: '110px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }} className="thin-scrollbar">
-                  {batchItems.map((item, idx) => (
-                    <div
-                      key={item.product.id || idx}
-                      onClick={() => setActiveItemIndex(idx)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '4px 6px',
-                        borderRadius: '4px',
-                        background: activeItemIndex === idx ? '#eff6ff' : '#f8fafc',
-                        border: `1px solid ${activeItemIndex === idx ? '#3b82f6' : '#e2e8f0'}`,
-                        cursor: 'pointer',
-                        fontSize: '0.75rem',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
-                        <span style={{ fontWeight: activeItemIndex === idx ? 800 : 600, color: '#0f172a', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                          {item.product.name}
-                        </span>
-                        <span style={{ fontSize: '0.68rem', color: '#64748b' }}>({item.unit?.name || t('products.barcode_print_dialog.s25', "قطعة")})</span>
-                        {item.product.stock != null && (
-                          <span style={{ fontSize: '0.65rem', padding: '1px 5px', borderRadius: '4px', background: '#e2e8f0', color: '#1e293b', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                            رصيد: {item.product.stock}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
-                        <span style={{ fontSize: '0.7rem', color: '#64748b' }}>{t('products.barcode_print_dialog.s26', "الكمية:")}</span>
-                        <input
-                          type="number"
-                          min="1"
-                          max="500"
-                          value={item.copies || 1}
-                          onChange={(e) => updateItemCopies(idx, Number(e.target.value || 1))}
-                          style={{ width: '48px', height: '24px', fontSize: '0.75rem', textAlign: 'center', padding: '0 2px' }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div
               style={{
                 marginTop: '6px',
@@ -589,10 +690,35 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
               </span>
               <span>
                 {family === 'thermal'
-                  ? `رول حراري مستمر · ${totalCopies} ملصق`
+                  ? `رول حراري · ${totalCopies} ملصق${rotateDeg ? ` · تدوير ${rotateDeg}°` : ''}`
                   : `الصفحات: ${Math.ceil((totalCopies + (startOffset - 1)) / labelsPerPage)} ورقة A4`}
               </span>
             </div>
+
+            <BarcodePrinterPicker open={open} settings={settingsQuery.data} />
+
+            {family === 'thermal' && (
+              <div
+                style={{
+                  marginTop: '6px',
+                  padding: '6px 9px',
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: '6px',
+                  fontSize: '0.71rem',
+                  color: '#1e3a8a',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '6px',
+                  lineHeight: 1.45,
+                }}
+              >
+                <AppIcons.Info size={14} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <span>
+                  للطباعة الحرارية السليمة: من نافذة الطباعة اجعل <strong>Margins: None</strong> وألغِ <strong>Headers and footers</strong>، وطابق مقاس الورق الفعلي للرول في تعريف الطابعة مع (<strong>{preset.labelWidthMm}×{preset.labelHeightMm} مم</strong>) (أشهر رول صغير <strong>38×25 مم</strong>). لو خرج الملصق مقلوباً بدّل بين <strong>180°</strong> و <strong>0°</strong>.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* 2. تخصيص محتويات الملصق */}
@@ -709,233 +835,90 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
                   <span>{t('products.barcode_print_dialog.s37', "كود الصنف (")}{activeProduct.sku || activeProduct.styleCode})</span>
                 </label>
               )}
+
+              {hasVariantInfo && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: '#1e293b', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={showVariant}
+                    onChange={(e) => setShowVariant(e.target.checked)}
+                    style={{ accentColor: '#170e5e', width: '15px', height: '15px', cursor: 'pointer' }}
+                  />
+                  <span>
+                    اللون والمقاس
+                    {(activeProduct.color || activeProduct.size) ? ` (${[activeProduct.color, activeProduct.size].filter(Boolean).join(' / ')})` : ''}
+                  </span>
+                </label>
+              )}
             </div>
+
+            {showPrice && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '8px',
+                  marginTop: '8px',
+                  background: '#ffffff',
+                  padding: '6px 8px',
+                  borderRadius: '6px',
+                  border: '1px solid #e2e8f0',
+                }}
+              >
+                <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#334155', whiteSpace: 'nowrap' }}>
+                  صيغة العملة على الملصق:
+                </span>
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  {CURRENCY_FORMAT_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setCurrencyFormat(opt.value)}
+                      style={{
+                        border: `1px solid ${currencyFormat === opt.value ? '#170e5e' : '#cbd5e1'}`,
+                        background: currencyFormat === opt.value ? '#170e5e' : '#f8fafc',
+                        color: currencyFormat === opt.value ? '#ffffff' : '#475569',
+                        fontWeight: 600,
+                        fontSize: '0.71rem',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* 3. بطاقة بيان السلع الغذائية والمعبأة (الاشتراطات التموينية وحماية المستهلك - القرار 330/2017) */}
             {showFoodStatementCard && (
-            <div
-              style={{
-                marginTop: '10px',
-                background: showFoodStatement ? '#f0fdf4' : '#ffffff',
-                border: `1px solid ${showFoodStatement ? '#86efac' : '#e2e8f0'}`,
-                borderRadius: '6px',
-                padding: '8px 10px',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
-                    color: showFoodStatement ? '#166534' : '#1e293b',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={showFoodStatement}
-                    onChange={(e) => setShowFoodStatement(e.target.checked)}
-                    style={{ accentColor: '#166534', width: '15px', height: '15px', cursor: 'pointer' }}
-                  />
-                  <span>{t('products.barcode_print_dialog.s38', "بطاقة بيان السلع المعبأة (تواريخ التعبئة والصلاحية والوزن)")}</span>
-                </label>
-                <span style={{ fontSize: '0.68rem', color: '#15803d', fontWeight: 600 }}>{t('products.barcode_print_dialog.s39', "مطابقة للتموين")}</span>
-              </div>
-
-              {showFoodStatement && (
-                <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {/* أ) تواريخ الإنتاج والتعبئة والصلاحية */}
-                  <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px 10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#166534' }}>{t('products.barcode_print_dialog.s40', "التواريخ وفترة الصلاحية:")}</span>
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '0.72rem', color: '#334155' }}>
-                        <input
-                          type="checkbox"
-                          checked={showProductionDate}
-                          onChange={(e) => setShowProductionDate(e.target.checked)}
-                          style={{ accentColor: '#166534', width: '13px', height: '13px' }}
-                        />
-                        <span>{t('products.barcode_print_dialog.s41', "إضافة تاريخ الإنتاج (إنتاج: ...)")}</span>
-                      </label>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: showProductionDate ? '1fr 1fr 1fr' : '1fr 1fr', gap: '6px' }}>
-                      {showProductionDate && (
-                        <Field label={t('products.barcode_print_dialog.s42', "تاريخ الإنتاج")}>
-                          <input
-                            type="date"
-                            value={productionDate}
-                            onChange={(e) => setProductionDate(e.target.value)}
-                            style={{ height: '28px', fontSize: '0.74rem', padding: '2px 6px' }}
-                          />
-                        </Field>
-                      )}
-
-                      <Field label={t('products.barcode_print_dialog.s43', "تاريخ التعبئة")}>
-                        <input
-                          type="date"
-                          value={packagingDate}
-                          onChange={(e) => setPackagingDate(e.target.value)}
-                          style={{ height: '28px', fontSize: '0.74rem', padding: '2px 6px' }}
-                        />
-                      </Field>
-
-                      {expiryType === 'period' ? (
-                        <Field label={t('products.barcode_print_dialog.s44', "فترة الصلاحية")}>
-                          <CustomSelect
-                            value={String(expiryPeriodMonths)}
-                            options={EXPIRY_PERIOD_OPTIONS}
-                            onChange={(val) => {
-                              const m = Number(val || 6);
-                              setExpiryPeriodMonths(m);
-                              setExpiryDate(getFutureDate(m));
-                            }}
-                          />
-                        </Field>
-                      ) : (
-                        <Field label={t('products.barcode_print_dialog.s45', "تاريخ الانتهاء")}>
-                          <input
-                            type="date"
-                            value={expiryDate}
-                            onChange={(e) => setExpiryDate(e.target.value)}
-                            style={{ height: '28px', fontSize: '0.74rem', padding: '2px 6px' }}
-                          />
-                        </Field>
-                      )}
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.72rem', color: '#334155', marginTop: '6px' }}>
-                      <span>{t('products.barcode_print_dialog.s46', "صيغة الصلاحية:")}</span>
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                        <input
-                          type="radio"
-                          name="expiryType"
-                          checked={expiryType === 'period'}
-                          onChange={() => setExpiryType('period')}
-                          style={{ accentColor: '#166534' }}
-                        />
-                        <span>{t('products.barcode_print_dialog.s47', "مدة بالشهور (مثال: صالحة 6 أشهر)")}</span>
-                      </label>
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                        <input
-                          type="radio"
-                          name="expiryType"
-                          checked={expiryType === 'date'}
-                          onChange={() => setExpiryType('date')}
-                          style={{ accentColor: '#166534' }}
-                        />
-                        <span>{t('products.barcode_print_dialog.s48', "تاريخ انتهاء صريح")}</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* ب) بيان الوزن الصافي المعتمد (المواصفة 2613 لسنة 2008) */}
-                  <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px 10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, color: '#166534' }}>
-                        <input
-                          type="checkbox"
-                          checked={showNetWeight}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            setShowNetWeight(checked);
-                            if (checked && !netWeightText) {
-                              setNetWeightText(activeUnit?.name || t('products.barcode_print_dialog.s49', "1 كجم"));
-                            }
-                          }}
-                          style={{ accentColor: '#166534', width: '14px', height: '14px' }}
-                        />
-                        <span>{t('products.barcode_print_dialog.s50', "بيان الوزن الصافي المعتمد (صافي: ...)")}</span>
-                      </label>
-                      <span style={{ fontSize: '0.68rem', color: '#64748b' }}>{t('products.barcode_print_dialog.s51', "مواصفة م.ق.م 2613")}</span>
-                    </div>
-
-                    {showNetWeight && (
-                      <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <input
-                            type="text"
-                            value={netWeightText}
-                            onChange={(e) => setNetWeightText(e.target.value)}
-                            placeholder={t('products.barcode_print_dialog.s52', "مثال: 1 كجم أو 500 جم أو 250 جم")}
-                            style={{ flex: 1, height: '28px', fontSize: '0.75rem', padding: '2px 8px' }}
-                          />
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                          {NET_WEIGHT_PRESETS.map((presetWeight) => (
-                            <button
-                              key={presetWeight}
-                              type="button"
-                              onClick={() => setNetWeightText(presetWeight)}
-                              style={{
-                                fontSize: '0.68rem',
-                                padding: '2px 6px',
-                                border: '1px solid #cbd5e1',
-                                borderRadius: '4px',
-                                background: netWeightText === presetWeight ? '#dcfce7' : '#f8fafc',
-                                color: netWeightText === presetWeight ? '#15803d' : '#334155',
-                                fontWeight: netWeightText === presetWeight ? 700 : 500,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              {presetWeight}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* ج) تعليمات وشروط التخزين والحفظ (القرار 330/2017) */}
-                  <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px 10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#166534' }}>{t('products.barcode_print_dialog.s53', "تعليمات وشروط الحفظ والتخزين:")}</span>
-                      {foodStatementNote && (
-                        <button
-                          type="button"
-                          onClick={() => setFoodStatementNote('')}
-                          style={{ border: 'none', background: 'transparent', color: '#b91c1c', fontSize: '0.68rem', cursor: 'pointer', padding: 0 }}
-                        >
-                          {t('products.barcode_print_dialog.s54', "مسح الملاحظة")}
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      type="text"
-                      value={foodStatementNote}
-                      onChange={(e) => setFoodStatementNote(e.target.value)}
-                      placeholder={t('products.barcode_print_dialog.s55', "مثال: يحفظ في مكان جاف وبارد بعيداً عن الرطوبة")}
-                      style={{ width: '100%', height: '28px', fontSize: '0.75rem', padding: '2px 8px', boxSizing: 'border-box' }}
-                    />
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
-                      {STORAGE_NOTE_PRESETS.map((note) => (
-                        <button
-                          key={note}
-                          type="button"
-                          onClick={() => setFoodStatementNote(note)}
-                          style={{
-                            fontSize: '0.68rem',
-                            padding: '2px 6px',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: '4px',
-                            background: foodStatementNote === note ? '#dcfce7' : '#f8fafc',
-                            color: foodStatementNote === note ? '#15803d' : '#334155',
-                            fontWeight: foodStatementNote === note ? 700 : 500,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {note}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+              <BarcodeFoodStatementSection
+                preset={preset}
+                activeUnitName={activeUnit?.name}
+                showFoodStatement={showFoodStatement}
+                setShowFoodStatement={setShowFoodStatement}
+                showProductionDate={showProductionDate}
+                setShowProductionDate={setShowProductionDate}
+                productionDate={productionDate}
+                setProductionDate={setProductionDate}
+                packagingDate={packagingDate}
+                setPackagingDate={setPackagingDate}
+                expiryType={expiryType}
+                setExpiryType={setExpiryType}
+                expiryPeriodMonths={expiryPeriodMonths}
+                setExpiryPeriodMonths={setExpiryPeriodMonths}
+                expiryDate={expiryDate}
+                setExpiryDate={setExpiryDate}
+                showNetWeight={showNetWeight}
+                setShowNetWeight={setShowNetWeight}
+                netWeightText={netWeightText}
+                setNetWeightText={setNetWeightText}
+                foodStatementNote={foodStatementNote}
+                setFoodStatementNote={setFoodStatementNote}
+              />
             )}
 
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-start', marginTop: '10px' }}>
@@ -951,6 +934,24 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
             )}
           </div>
         </div>
+
+        {isBatchMode && (
+          <BarcodeBatchItemsPanel
+            items={batchItems}
+            activeIndex={activeItemIndex}
+            totalCopies={totalCopies}
+            zeroStockCount={zeroStockBatchCount}
+            canPruneZeroStock={canPruneZeroStock}
+            onSelectActive={setActiveItemIndex}
+            onUpdateCopies={updateItemCopies}
+            onToggleItem={toggleItemIncluded}
+            onSelectOnly={selectOnlyItem}
+            onSetAllCopies={setAllCopies}
+            onSetAllByStock={setAllCopiesByStock}
+            onAdjustAllCopies={adjustAllCopies}
+            onRemoveZeroStock={removeZeroStockItems}
+          />
+        )}
 
         {/* العمود الأيسر: المعاينة المباشرة للملصق */}
         <div
@@ -987,7 +988,7 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
                     border: 'none',
                     background: previewMode === 'sheet' ? '#ffffff' : 'transparent',
                     color: previewMode === 'sheet' ? '#170e5e' : '#64748b',
-                    fontWeight: previewMode === 'sheet' ? 700 : 500,
+                    fontWeight: 600,
                     fontSize: '0.72rem',
                     padding: '3px 8px',
                     borderRadius: '4px',
@@ -1003,7 +1004,7 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
                     border: 'none',
                     background: previewMode === 'single' ? '#ffffff' : 'transparent',
                     color: previewMode === 'single' ? '#170e5e' : '#64748b',
-                    fontWeight: previewMode === 'single' ? 700 : 500,
+                    fontWeight: 600,
                     fontSize: '0.72rem',
                     padding: '3px 8px',
                     borderRadius: '4px',

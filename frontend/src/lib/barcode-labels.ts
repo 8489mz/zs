@@ -1,110 +1,66 @@
 import { buildCode128Svg, normalizeCode128Value, productUnitsWithFallback } from '@/lib/barcode';
 import { escapeHtml, printHtmlDocument, resolvePrintSettings } from '@/lib/browser';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatCurrencyWithCode, formatCurrencyWithSymbol } from '@/lib/format';
 import type { AppSettings, Product, ProductUnit } from '@/types/domain';
+import {
+  BARCODE_PRINT_PRESETS,
+  DEFAULT_BARCODE_PRINT_PRESET_ID,
+  DEFAULT_THERMAL_ROTATE_DEG,
+  PX_PER_MM,
+  SHEET_PRESETS,
+  THERMAL_PRESETS,
+  getBarcodeLabelNameFontPt,
+  getBarcodePrintPreset,
+  getBarcodePrintPresetsByFamily,
+  getBarcodeSharedLabelCss,
+  normalizeRotationDeg,
+  sanitizeCustomDimensions,
+  type BarcodeCurrencyFormat,
+  type BarcodeCustomDimensions,
+  type BarcodePrintConfig,
+  type BarcodePrintCustomization,
+  type BarcodePrintFamily,
+  type BarcodePrintItem,
+  type BarcodePrintPreset,
+  type BarcodeRotationDeg,
+} from '@/lib/barcode-labels-presets';
 
-export type BarcodePrintFamily = 'sheet' | 'thermal';
-
-export interface BarcodePrintPreset {
-  id: string;
-  family: BarcodePrintFamily;
-  label: string;
-  pageLabel: string;
-  labelWidthMm: number;
-  labelHeightMm: number;
-  columns: number;
-  rows: number;
-  gapMm: number;
-  marginMm: number;
-  pageWidthMm?: number;
-  pageHeightMm?: number;
-  maxLabelsPerPage: number;
-  isShelfLabel?: boolean;
-}
-
-export interface BarcodePrintCustomization {
-  showStoreName?: boolean;
-  storeName?: string;
-  showProductName?: boolean;
-  showPrice?: boolean;
-  showUnit?: boolean;
-  showBarcodeText?: boolean;
-  showSku?: boolean;
-  // متطلبات التموين وحماية المستهلك (بطاقة بيان السلع الغذائية والمعبأة)
-  showFoodStatement?: boolean;
-  showProductionDate?: boolean;
-  productionDate?: string;
-  packagingDate?: string;
-  expiryType?: 'period' | 'date';
-  expiryPeriodMonths?: number;
-  expiryDate?: string;
-  foodStatementNote?: string;
-  showNetWeight?: boolean;
-  netWeightText?: string;
-}
-
-export interface BarcodePrintItem {
-  product: Product;
-  unit?: ProductUnit | null;
-  copies: number;
-}
-
-export interface BarcodePrintConfig {
-  presetId: string;
-  copies: number;
-  labelsPerPage: number;
-  startOffset?: number;
-}
-
-const SHEET_PRESETS: BarcodePrintPreset[] = [
-  { id: 'a4-24', family: 'sheet', label: 'A4 / 24 ملصق (63.5×33.9 مم)', pageLabel: 'ورق A4 لاصق', labelWidthMm: 63.5, labelHeightMm: 33.9, columns: 3, rows: 8, gapMm: 2.5, marginMm: 8, pageWidthMm: 210, pageHeightMm: 297, maxLabelsPerPage: 24 },
-  { id: 'a4-40', family: 'sheet', label: 'A4 / 40 ملصق (48×25.4 مم)', pageLabel: 'ورق A4 لاصق', labelWidthMm: 48, labelHeightMm: 25.4, columns: 4, rows: 10, gapMm: 2, marginMm: 7, pageWidthMm: 210, pageHeightMm: 297, maxLabelsPerPage: 40 },
-  { id: 'a4-48', family: 'sheet', label: 'A4 / 48 ملصق (45.7×21.2 مم)', pageLabel: 'ورق A4 لاصق', labelWidthMm: 45.7, labelHeightMm: 21.2, columns: 4, rows: 12, gapMm: 2, marginMm: 7, pageWidthMm: 210, pageHeightMm: 297, maxLabelsPerPage: 48 },
-  { id: 'a4-65', family: 'sheet', label: 'A4 / 65 ملصق (38.1×21.2 مم)', pageLabel: 'ورق A4 لاصق', labelWidthMm: 38.1, labelHeightMm: 21.2, columns: 5, rows: 13, gapMm: 2, marginMm: 6, pageWidthMm: 210, pageHeightMm: 297, maxLabelsPerPage: 65 },
-  { id: 'a4-100', family: 'sheet', label: 'A4 / 100 ملصق (38.1×19.1 مم)', pageLabel: 'ورق A4 لاصق', labelWidthMm: 38.1, labelHeightMm: 19.1, columns: 5, rows: 20, gapMm: 1.5, marginMm: 6, pageWidthMm: 210, pageHeightMm: 297, maxLabelsPerPage: 100 },
-];
-
-const THERMAL_PRESETS: BarcodePrintPreset[] = [
-  { id: 'thermal-38x25', family: 'thermal', label: '38×25 مم (Xprinter / Zebra)', pageLabel: 'رول حراري', labelWidthMm: 38, labelHeightMm: 25, columns: 1, rows: 1, gapMm: 2, marginMm: 1.5, pageWidthMm: 38, maxLabelsPerPage: 1 },
-  { id: 'thermal-40x30', family: 'thermal', label: '40×30 مم (سوبرماركت قياسي)', pageLabel: 'رول حراري', labelWidthMm: 40, labelHeightMm: 30, columns: 1, rows: 1, gapMm: 2, marginMm: 2, pageWidthMm: 40, maxLabelsPerPage: 1 },
-  { id: 'thermal-50x25', family: 'thermal', label: '50×25 مم (مقاس عريض)', pageLabel: 'رول حراري', labelWidthMm: 50, labelHeightMm: 25, columns: 1, rows: 1, gapMm: 2, marginMm: 2, pageWidthMm: 50, maxLabelsPerPage: 1 },
-  { id: 'thermal-50x30', family: 'thermal', label: '50×30 مم (ملابس وتجزئة)', pageLabel: 'رول حراري', labelWidthMm: 50, labelHeightMm: 30, columns: 1, rows: 1, gapMm: 2, marginMm: 2, pageWidthMm: 50, maxLabelsPerPage: 1 },
-  { id: 'thermal-food-50x40', family: 'thermal', label: '50×40 مم (بطاقة بيان تعبئة وتموين)', pageLabel: 'رول تعبئة وتموين', labelWidthMm: 50, labelHeightMm: 40, columns: 1, rows: 1, gapMm: 2, marginMm: 2, pageWidthMm: 50, maxLabelsPerPage: 1 },
-  { id: 'thermal-shelf-60x30', family: 'thermal', label: '60×30 مم (استيكر الرف التمويني - قرار 330)', pageLabel: 'استيكر الرف التمويني', labelWidthMm: 60, labelHeightMm: 30, columns: 1, rows: 1, gapMm: 2, marginMm: 2, pageWidthMm: 60, maxLabelsPerPage: 1, isShelfLabel: true },
-  { id: 'thermal-shelf-70x35', family: 'thermal', label: '70×35 مم (استيكر رف سوبرماركت كبير)', pageLabel: 'استيكر الرف التمويني', labelWidthMm: 70, labelHeightMm: 35, columns: 1, rows: 1, gapMm: 2, marginMm: 2, pageWidthMm: 70, maxLabelsPerPage: 1, isShelfLabel: true },
-  { id: 'thermal-60x40', family: 'thermal', label: '60×40 مم (شحن ومستودعات)', pageLabel: 'رول حراري', labelWidthMm: 60, labelHeightMm: 40, columns: 1, rows: 1, gapMm: 2, marginMm: 2, pageWidthMm: 60, maxLabelsPerPage: 1 },
-  { id: 'thermal-58-roll', family: 'thermal', label: '58 مم (رول مستمر)', pageLabel: 'رول مستمر', labelWidthMm: 54, labelHeightMm: 35, columns: 1, rows: 1, gapMm: 2, marginMm: 2, pageWidthMm: 58, maxLabelsPerPage: 1 },
-  { id: 'thermal-80-roll', family: 'thermal', label: '80 مم (رول مستمر)', pageLabel: 'رول مستمر', labelWidthMm: 76, labelHeightMm: 45, columns: 1, rows: 1, gapMm: 2, marginMm: 2, pageWidthMm: 80, maxLabelsPerPage: 1 },
-];
-
-export const BARCODE_PRINT_PRESETS = [...SHEET_PRESETS, ...THERMAL_PRESETS];
-export const DEFAULT_BARCODE_PRINT_PRESET_ID = 'thermal-40x30';
-
-export function getBarcodePrintPreset(presetId: string) {
-  return BARCODE_PRINT_PRESETS.find((preset) => preset.id === presetId) || BARCODE_PRINT_PRESETS[0];
-}
-
-export function getBarcodePrintPresetsByFamily(family: BarcodePrintFamily) {
-  return BARCODE_PRINT_PRESETS.filter((preset) => preset.family === family);
-}
+export {
+  BARCODE_PRINT_PRESETS,
+  DEFAULT_BARCODE_PRINT_PRESET_ID,
+  DEFAULT_THERMAL_ROTATE_DEG,
+  SHEET_PRESETS,
+  THERMAL_PRESETS,
+  getBarcodePrintPreset,
+  getBarcodePrintPresetsByFamily,
+  normalizeRotationDeg,
+  sanitizeCustomDimensions,
+  type BarcodeCurrencyFormat,
+  type BarcodeCustomDimensions,
+  type BarcodePrintConfig,
+  type BarcodePrintCustomization,
+  type BarcodePrintFamily,
+  type BarcodePrintItem,
+  type BarcodePrintPreset,
+  type BarcodeRotationDeg,
+};
 
 export function resolveBarcodeUnit(product: Product, requestedUnit?: ProductUnit | null) {
   const units = productUnitsWithFallback(product);
   return requestedUnit || units.find((unit) => unit.isBaseUnit) || units[0];
 }
 
-function getBarcodeLabelNameFontSize(productName: string, preset: BarcodePrintPreset, compact = false) {
-  const length = Array.from(String(productName || '')).length;
-  const isThermal = preset.family === 'thermal';
-  const base = isThermal
-    ? (compact ? (preset.labelHeightMm <= 25 ? 9.5 : preset.labelWidthMm <= 40 ? 10.5 : 11.5) : 13)
-    : (compact || preset.maxLabelsPerPage >= 65 ? 8.2 : preset.maxLabelsPerPage >= 48 ? 9 : 10.5);
-  const widthPenalty = Math.max(0, length - Math.floor(preset.labelWidthMm / 2.6)) * 0.18;
-  const heightPenalty = preset.labelHeightMm <= 25 ? 1.2 : preset.labelHeightMm <= 30 ? 0.6 : 0;
-  return Math.max(7, Math.min(base, base - widthPenalty - heightPenalty));
+export function formatLabelPriceText(amount: number, currencyFormat: BarcodeCurrencyFormat = 'code'): string {
+  if (currencyFormat === 'none') return formatCurrency(amount);
+  if (currencyFormat === 'symbol') return formatCurrencyWithSymbol(amount);
+  return formatCurrencyWithCode(amount);
 }
 
-export function getBarcodeCardData(product: Product, unit?: ProductUnit | null) {
+export function getBarcodeCardData(
+  product: Product,
+  unit?: ProductUnit | null,
+  currencyFormat: BarcodeCurrencyFormat = 'code'
+) {
   const effectiveUnit = resolveBarcodeUnit(product, unit);
   const barcode = normalizeCode128Value(effectiveUnit?.barcode || product.barcode);
   const svg = barcode ? buildCode128Svg(barcode) : '';
@@ -114,8 +70,44 @@ export function getBarcodeCardData(product: Product, unit?: ProductUnit | null) 
     barcode,
     barcodeSvg: svg,
     unitFactor,
-    priceText: formatCurrency(Number(product.retailPrice || 0) * unitFactor),
+    priceText: formatLabelPriceText(Number(product.retailPrice || 0) * unitFactor, currencyFormat),
   };
+}
+
+function resolveLabelProductName(product: Product): string {
+  return (
+    String(product.name || '').trim() ||
+    String(product.nameEn || product.name_en || '').trim() ||
+    '-'
+  );
+}
+
+function formatVariantBadgeText(product: Product): string {
+  const color = String(product.color || '').trim();
+  const size = String(product.size || '').trim();
+  if (color && size) return `${color} / ${size}`;
+  return color || size;
+}
+
+function stripTrailingVariantSuffix(name: string, product: Product): string {
+  const color = String(product.color || '').trim();
+  const size = String(product.size || '').trim();
+  const candidates = [
+    color && size ? `${color} / ${size}` : '',
+    color && size ? `${color}/${size}` : '',
+    color && size ? `${color} - ${size}` : '',
+    color,
+    size,
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    for (const sep of [' - ', ' – ', ' | ', '-']) {
+      const suffix = `${sep}${candidate}`;
+      if (name.endsWith(suffix) && name.length > suffix.length + 1) {
+        return name.slice(0, name.length - suffix.length).trim();
+      }
+    }
+  }
+  return name;
 }
 
 export function buildSingleLabelHtml(
@@ -125,9 +117,15 @@ export function buildSingleLabelHtml(
   compact = false,
   customization?: BarcodePrintCustomization
 ) {
-  const card = getBarcodeCardData(product, unit);
-  const productName = String(product.name || '-').trim() || '-';
-  const nameFontSize = getBarcodeLabelNameFontSize(productName, preset, compact);
+  const currencyFormat = customization?.currencyFormat || 'code';
+  const card = getBarcodeCardData(product, unit, currencyFormat);
+  const rawProductName = resolveLabelProductName(product);
+  const variantText = formatVariantBadgeText(product);
+  const showVariant = customization?.showVariant ?? true;
+  const productName = showVariant && variantText
+    ? stripTrailingVariantSuffix(rawProductName, product)
+    : rawProductName;
+  const nameFontPt = getBarcodeLabelNameFontPt(productName, preset);
   const showStoreName = customization?.showStoreName ?? true;
   const storeName = (customization?.storeName || '').trim();
   const showProductName = customization?.showProductName ?? true;
@@ -136,22 +134,16 @@ export function buildSingleLabelHtml(
   const showBarcodeText = customization?.showBarcodeText ?? true;
   const showSku = customization?.showSku ?? false;
   const skuText = String(product.sku || product.styleCode || '').trim();
+  const variantColor = String(product.color || '').trim();
+  const variantSize = String(product.size || '').trim();
+  const variantParts: string[] = [];
+  if (variantColor) variantParts.push(`<span>${escapeHtml(variantColor)}</span>`);
+  if (variantSize) variantParts.push(`<span dir="ltr">${escapeHtml(variantSize)}</span>`);
+  const variantRowHtml = showVariant && variantParts.length > 0
+    ? `<div class="barcode-label-variant-row"><span class="barcode-label-variant-badge">${variantParts.join('<span style="opacity:0.45;">·</span>')}</span></div>`
+    : '';
 
-  // Barcode height scaled proportionally (~35-44% of label height to leave ample room for text while maximizing scan accuracy)
-  const isShelf = preset.isShelfLabel;
   const showFoodStatement = customization?.showFoodStatement ?? false;
-  const isSmallHeight = preset.labelHeightMm <= 25;
-  const isMediumHeight = preset.labelHeightMm <= 30;
-
-  const svgHeightMm = isShelf
-    ? Math.max(7, Math.min(13, preset.labelHeightMm * 0.32))
-    : showFoodStatement
-    ? Math.max(6.5, Math.min(11, preset.labelHeightMm * 0.32))
-    : isSmallHeight
-    ? Math.max(7.5, Math.min(9.5, preset.labelHeightMm * 0.36))
-    : isMediumHeight
-    ? Math.max(9, Math.min(12, preset.labelHeightMm * 0.40))
-    : Math.max(10, Math.min(15, preset.labelHeightMm * 0.44));
 
   // Food statement & dates (بطاقة بيان السلع الغذائية والمعبأة وفق القرارات التموينية)
   const showProductionDate = customization?.showProductionDate ?? false;
@@ -173,6 +165,13 @@ export function buildSingleLabelHtml(
   }
   const foodDatesHtml = dateItems.join(' · ');
   const storageNote = (customization?.foodStatementNote || '').trim();
+  const foodInlineHtml = [
+    ...dateItems,
+    ...(storageNote ? [`<span class="barcode-label-storage-note">${escapeHtml(storageNote)}</span>`] : []),
+  ].join(' · ');
+  const effectiveNameFontPt = showFoodStatement && preset.labelHeightMm <= 32
+    ? Math.max(5.0, nameFontPt - 1.2)
+    : nameFontPt;
 
   // Net Weight calculation (الوزن الصافي الرسمي)
   const showNetWeight = customization?.showNetWeight ?? false;
@@ -186,7 +185,8 @@ export function buildSingleLabelHtml(
       <div class="barcode-label-card barcode-label-shelf ${compact ? 'compact' : ''} ${showFoodStatement ? 'has-food-statement' : ''}">
         <div class="barcode-label-header">
           ${showStoreName && storeName ? `<div class="barcode-label-store">${escapeHtml(storeName)}</div>` : ''}
-          ${showProductName ? `<div class="barcode-label-name barcode-shelf-product-name" style="font-size:${(nameFontSize + 1.2).toFixed(1)}px" title="${escapeHtml(productName)}">${escapeHtml(productName)}</div>` : ''}
+          ${showProductName ? `<div class="barcode-label-name barcode-shelf-product-name" title="${escapeHtml(productName)}">${escapeHtml(productName)}</div>` : ''}
+          ${variantRowHtml}
         </div>
 
         <div class="barcode-shelf-main-content">
@@ -201,7 +201,7 @@ export function buildSingleLabelHtml(
           </div>
 
           <div class="barcode-shelf-code-column">
-            <div class="barcode-label-svg" style="height:${svgHeightMm.toFixed(1)}mm;">
+            <div class="barcode-label-svg">
               ${card.barcodeSvg || '<div class="barcode-label-missing">بدون باركود</div>'}
             </div>
             ${showBarcodeText ? `<div class="barcode-label-text">${escapeHtml(card.barcode || '—')}</div>` : ''}
@@ -211,8 +211,7 @@ export function buildSingleLabelHtml(
 
         ${showFoodStatement ? `
           <div class="barcode-label-food-statement">
-            <div class="barcode-label-food-dates">${foodDatesHtml}</div>
-            ${storageNote ? `<div class="barcode-label-storage-note">${escapeHtml(storageNote)}</div>` : ''}
+            <div class="barcode-label-food-dates">${foodInlineHtml || foodDatesHtml}</div>
           </div>
         ` : ''}
       </div>
@@ -224,11 +223,12 @@ export function buildSingleLabelHtml(
     <div class="barcode-label-card ${compact ? 'compact' : ''} ${showFoodStatement ? 'has-food-statement' : ''}">
       <div class="barcode-label-header">
         ${showStoreName && storeName ? `<div class="barcode-label-store">${escapeHtml(storeName)}</div>` : ''}
-        ${showProductName ? `<div class="barcode-label-name" style="font-size:${nameFontSize.toFixed(1)}px" title="${escapeHtml(productName)}">${escapeHtml(productName)}</div>` : ''}
+        ${showProductName ? `<div class="barcode-label-name" style="font-size:${effectiveNameFontPt.toFixed(2)}pt" title="${escapeHtml(productName)}">${escapeHtml(productName)}</div>` : ''}
+        ${variantRowHtml}
       </div>
 
       <div class="barcode-label-body">
-        <div class="barcode-label-svg" style="height:${svgHeightMm.toFixed(1)}mm;">
+        <div class="barcode-label-svg">
           ${card.barcodeSvg || '<div class="barcode-label-missing">بدون باركود</div>'}
         </div>
         ${showBarcodeText ? `<div class="barcode-label-text">${escapeHtml(card.barcode || '—')}</div>` : ''}
@@ -236,8 +236,7 @@ export function buildSingleLabelHtml(
 
       ${showFoodStatement ? `
         <div class="barcode-label-food-statement">
-          <div class="barcode-label-food-dates">${foodDatesHtml}</div>
-          ${storageNote ? `<div class="barcode-label-storage-note">${escapeHtml(storageNote)}</div>` : ''}
+          <div class="barcode-label-food-dates">${foodInlineHtml || foodDatesHtml}</div>
         </div>
       ` : ''}
 
@@ -254,6 +253,22 @@ export function buildSingleLabelHtml(
   `;
 }
 
+function wrapScaledLabelForPreview(labelHtml: string, preset: BarcodePrintPreset, targetWidthPx: number) {
+  const naturalW = preset.labelWidthMm * PX_PER_MM;
+  const naturalH = preset.labelHeightMm * PX_PER_MM;
+  const scale = Math.min(2.4, Math.max(0.9, targetWidthPx / naturalW));
+  const scaledW = Math.round(naturalW * scale);
+  const scaledH = Math.round(naturalH * scale);
+
+  return `
+    <div style="position:relative;width:${scaledW}px;height:${scaledH}px;flex-shrink:0;overflow:hidden;border-radius:6px;box-shadow:0 4px 14px rgba(15,23,42,0.08);background:#ffffff;direction:ltr;">
+      <div style="position:absolute;top:0;left:0;transform:scale(${scale.toFixed(4)});transform-origin:top left;">
+        ${labelHtml}
+      </div>
+    </div>
+  `;
+}
+
 export function buildBarcodePreviewHtml(options: {
   product: Product;
   unit?: ProductUnit | null;
@@ -263,28 +278,39 @@ export function buildBarcodePreviewHtml(options: {
   startOffset?: number;
   previewMode?: 'single' | 'sheet';
   items?: BarcodePrintItem[];
+  customDimensions?: BarcodeCustomDimensions;
+  rotate90?: boolean;
+  rotateDeg?: BarcodeRotationDeg;
 }) {
-  const preset = getBarcodePrintPreset(options.presetId);
+  const preset = getBarcodePrintPreset(options.presetId, options.customDimensions);
   const isThermal = preset.family === 'thermal';
   const startOffset = Math.max(1, options.startOffset || 1);
   const customization = options.customization;
   const activeProduct = options.product;
   const activeUnit = options.unit;
+  const rotateDeg = normalizeRotationDeg(options);
 
-  const previewWidth = 290;
-  const aspectRatio = preset.labelHeightMm / preset.labelWidthMm;
-  const previewHeight = Math.max(140, Math.min(240, Math.round(previewWidth * aspectRatio)));
+  const sharedCss = `<style>${getBarcodeSharedLabelCss(preset, '.barcode-preview-scope', true)}</style>`;
+  const rotationBadge = rotateDeg !== 0
+    ? `<div class="barcode-preview-badge-item"><span class="barcode-preview-badge-label">اتجاه الطباعة</span><span class="barcode-preview-badge-value">مدوّر ${rotateDeg}°</span></div>`
+    : '';
 
   if (isThermal && options.previewMode === 'single') {
+    const labelHtml = buildSingleLabelHtml(activeProduct, activeUnit, preset, false, customization);
     return `
-      <div class="barcode-preview-single-wrapper">
-        <div class="barcode-preview-single-card" style="width:${previewWidth}px;min-height:${previewHeight}px;height:${previewHeight}px;">
-          ${buildSingleLabelHtml(activeProduct, activeUnit, preset, false, customization)}
-        </div>
+      <div class="barcode-preview-scope barcode-preview-single-wrapper">
+        ${sharedCss}
+        ${wrapScaledLabelForPreview(labelHtml, preset, 290)}
         <div class="barcode-preview-single-badge">
-          <span>أبعاد الملصق الفعلي: <strong>${preset.labelWidthMm} × ${preset.labelHeightMm} مم</strong></span>
-          <span style="opacity:0.4;">|</span>
-          <span>${preset.isShelfLabel ? 'استيكر رف تمويني' : 'ورق رول حراري مستمر (Die-cut)'}</span>
+          <div class="barcode-preview-badge-item">
+            <span class="barcode-preview-badge-label">أبعاد الملصق الفعلي</span>
+            <span class="barcode-preview-badge-value">${preset.labelWidthMm} × ${preset.labelHeightMm} مم</span>
+          </div>
+          <div class="barcode-preview-badge-item">
+            <span class="barcode-preview-badge-label">نوع الورق</span>
+            <span class="barcode-preview-badge-value">${preset.isShelfLabel ? 'استيكر رف تمويني' : 'رول حراري (مطابق 1:1)'}</span>
+          </div>
+          ${rotationBadge}
         </div>
       </div>
     `;
@@ -304,47 +330,61 @@ export function buildBarcodePreviewHtml(options: {
     </div>
   `).join('');
 
-  // If multiple items provided, sequence them in the preview
-  let labelItems = '';
+  let labelEntries: Array<{ product: Product; unit?: ProductUnit | null }> = [];
   if (options.items && options.items.length > 1) {
-    const flattened: Array<{ product: Product; unit?: ProductUnit | null }> = [];
-    for (const it of options.items) {
-      const itCopies = Math.max(1, Number(it.copies || 1));
-      for (let c = 0; c < itCopies && flattened.length < labelsToRender; c++) {
-        flattened.push({ product: it.product, unit: it.unit });
+    const activeBatchItems = options.items.filter((it) => Math.max(0, Number(it.copies ?? 1)) > 0);
+    const previewSource = activeBatchItems.length > 0 ? activeBatchItems : [options.items[0]];
+    for (const it of previewSource) {
+      const itCopies = Math.max(1, Number(it.copies ?? 1));
+      for (let c = 0; c < itCopies && labelEntries.length < labelsToRender; c++) {
+        labelEntries.push({ product: it.product, unit: it.unit });
       }
-      if (flattened.length >= labelsToRender) break;
+      if (labelEntries.length >= labelsToRender) break;
     }
-    while (flattened.length < labelsToRender) {
-      flattened.push({ product: activeProduct, unit: activeUnit });
+    while (labelEntries.length < labelsToRender) {
+      labelEntries.push({ product: activeProduct, unit: activeUnit });
     }
-    labelItems = flattened
-      .slice(0, labelsToRender)
-      .map((it) => isThermal
-        ? `<div class="barcode-preview-thermal-item" style="width:${previewWidth}px;height:${previewHeight}px;min-height:${previewHeight}px;">${buildSingleLabelHtml(it.product, it.unit, preset, false, customization)}</div>`
-        : buildSingleLabelHtml(it.product, it.unit, preset, false, customization)
-      )
-      .join('');
+    labelEntries = labelEntries.slice(0, labelsToRender);
   } else {
-    labelItems = Array.from({ length: labelsToRender }, () =>
-      isThermal
-        ? `<div class="barcode-preview-thermal-item" style="width:${previewWidth}px;height:${previewHeight}px;min-height:${previewHeight}px;">${buildSingleLabelHtml(activeProduct, activeUnit, preset, false, customization)}</div>`
-        : buildSingleLabelHtml(activeProduct, activeUnit, preset, false, customization)
-    ).join('');
+    labelEntries = Array.from({ length: labelsToRender }, () => ({ product: activeProduct, unit: activeUnit }));
   }
 
   if (isThermal) {
+    const reelItemsHtml = labelEntries
+      .map((entry) => wrapScaledLabelForPreview(buildSingleLabelHtml(entry.product, entry.unit, preset, false, customization), preset, 250))
+      .join('');
     return `
-      <div class="barcode-preview-sheet barcode-preview-sheet-thermal">
-        ${labelItems}
+      <div class="barcode-preview-scope" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:8px;">
+        ${sharedCss}
+        <div class="barcode-preview-sheet barcode-preview-sheet-thermal">
+          ${reelItemsHtml}
+        </div>
       </div>
     `;
   }
 
+  // A4 Sheet WYSIWYG Preview scaled proportionally to fit preview container (~436px wide)
+  const labelItemsHtml = labelEntries
+    .map((entry) => buildSingleLabelHtml(entry.product, entry.unit, preset, false, customization))
+    .join('');
+
+  const sheetNaturalW = 210 * PX_PER_MM;
+  const sheetNaturalH = 297 * PX_PER_MM;
+  const sheetScale = 436 / sheetNaturalW;
+  const sheetScaledW = Math.round(sheetNaturalW * sheetScale);
+  const sheetScaledH = Math.round(sheetNaturalH * sheetScale);
+
   return `
-    <div class="barcode-preview-sheet barcode-preview-sheet-${preset.family}" style="padding:${preset.marginMm}mm;gap:${preset.gapMm}mm;grid-template-columns:repeat(${preset.columns}, minmax(0, 1fr));">
-      ${emptyItems}
-      ${labelItems}
+    <div class="barcode-preview-scope" style="display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;">
+      ${sharedCss}
+      <div style="position:relative;width:${sheetScaledW}px;height:${sheetScaledH}px;overflow:hidden;border:1px solid #cbd5e1;border-radius:6px;background:#ffffff;box-shadow:0 4px 14px rgba(15,23,42,0.06);direction:ltr;">
+        <div style="position:absolute;top:0;left:0;width:210mm;height:297mm;padding:${preset.marginMm}mm;box-sizing:border-box;transform:scale(${sheetScale.toFixed(4)});transform-origin:top left;direction:rtl;">
+          <div style="display:grid;grid-template-columns:repeat(${preset.columns},${preset.labelWidthMm}mm);grid-auto-rows:${preset.labelHeightMm}mm;gap:${preset.gapMm}mm;justify-content:center;align-content:start;">
+            ${emptyItems}
+            ${labelItemsHtml}
+          </div>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -360,22 +400,34 @@ export function printBatchBarcodeLabels(
   customization?: BarcodePrintCustomization,
   dispatchOptions?: BarcodePrintDispatchOptions
 ) {
-  if (!items.length) return;
-  const preset = getBarcodePrintPreset(config.presetId || DEFAULT_BARCODE_PRINT_PRESET_ID);
+  const printableItems = items
+    .map((item) => ({
+      ...item,
+      copies: item.copies === undefined || item.copies === null ? 1 : Math.max(0, Number(item.copies || 0)),
+    }))
+    .filter((item) => item.copies > 0);
+  if (!printableItems.length) return;
+  const preset = getBarcodePrintPreset(config.presetId || DEFAULT_BARCODE_PRINT_PRESET_ID, config.customDimensions);
   const isThermal = preset.family === 'thermal';
   const startOffset = Math.max(1, Number(config.startOffset || 1));
+  const rotateDeg = isThermal ? normalizeRotationDeg(config) : 0;
+  const swapsAxes = rotateDeg === 90 || rotateDeg === 270;
+
+  const rawPageW = preset.pageWidthMm || preset.labelWidthMm;
+  const rawPageH = preset.labelHeightMm;
+  const effectivePageW = swapsAxes ? rawPageH : rawPageW;
+  const effectivePageH = swapsAxes ? rawPageW : rawPageH;
 
   let pageHtml = '';
 
   if (isThermal) {
-    // Thermal roll printing: Each copy of each item is an independent page
+    // Thermal roll printing: Each copy is an independent label page sized strictly to prevent extra blank feeds
     const pages: string[] = [];
-    items.forEach((item) => {
-      const copies = Math.max(1, Number(item.copies || 1));
-      for (let i = 0; i < copies; i++) {
+    printableItems.forEach((item) => {
+      for (let i = 0; i < item.copies; i++) {
         pages.push(`
-          <section class="barcode-print-page barcode-print-page-thermal page-break">
-            <div class="barcode-print-grid barcode-print-grid-thermal" style="padding:${preset.marginMm}mm;">
+          <section class="barcode-print-page barcode-print-page-thermal">
+            <div class="barcode-print-thermal-stage ${rotateDeg ? `is-rotated-${rotateDeg}` : ''}">
               ${buildSingleLabelHtml(item.product, item.unit, preset, true, customization)}
             </div>
           </section>
@@ -389,11 +441,9 @@ export function printBatchBarcodeLabels(
     const emptyCountFirstPage = Math.min(startOffset - 1, perPage - 1);
     const capacityFirstPage = perPage - emptyCountFirstPage;
 
-    // Flatten all items by copies
     const flattened: Array<{ product: Product; unit?: ProductUnit | null }> = [];
-    items.forEach((item) => {
-      const copies = Math.max(1, Number(item.copies || 1));
-      for (let i = 0; i < copies; i++) {
+    printableItems.forEach((item) => {
+      for (let i = 0; i < item.copies; i++) {
         flattened.push({ product: item.product, unit: item.unit });
       }
     });
@@ -411,8 +461,8 @@ export function printBatchBarcodeLabels(
     ).join('');
 
     pages.push(`
-      <section class="barcode-print-page">
-        <div class="barcode-print-grid barcode-print-grid-sheet" style="padding:${preset.marginMm}mm;gap:${preset.gapMm}mm;grid-template-columns:repeat(${preset.columns}, minmax(0, 1fr));">
+      <section class="barcode-print-page barcode-print-page-sheet">
+        <div class="barcode-print-grid barcode-print-grid-sheet">
           ${emptySlots}
           ${labelsFirstPage}
         </div>
@@ -427,8 +477,8 @@ export function printBatchBarcodeLabels(
         buildSingleLabelHtml(it.product, it.unit, preset, false, customization)
       ).join('');
       pages.push(`
-        <section class="barcode-print-page">
-          <div class="barcode-print-grid barcode-print-grid-sheet" style="padding:${preset.marginMm}mm;gap:${preset.gapMm}mm;grid-template-columns:repeat(${preset.columns}, minmax(0, 1fr));">
+        <section class="barcode-print-page barcode-print-page-sheet">
+          <div class="barcode-print-grid barcode-print-grid-sheet">
             ${labels}
           </div>
         </section>
@@ -439,14 +489,16 @@ export function printBatchBarcodeLabels(
     pageHtml = pages.join('');
   }
 
-  const thermalPageRule = isThermal
-    ? `@page { size: ${preset.pageWidthMm || preset.labelWidthMm}mm ${preset.labelHeightMm}mm; margin: 0; }`
-    : `@page { size: A4 portrait; margin: 0; }`;
-
+  const resolvedPrint = resolvePrintSettings();
   const barcodePrinterName = String(
     dispatchOptions?.deviceName ||
+    resolvedPrint.electronBarcodePrinter ||
     dispatchOptions?.settings?.posElectronBarcodePrinter ||
-    resolvePrintSettings().electronBarcodePrinter ||
+    ''
+  ).trim();
+  const barcodeBridgePrinter = String(
+    resolvedPrint.windowsBarcodePrinter ||
+    dispatchOptions?.settings?.posWindowsBarcodePrinterName ||
     ''
   ).trim();
 
@@ -454,60 +506,91 @@ export function printBatchBarcodeLabels(
     subtitle: `${preset.pageLabel} · ${preset.label}`,
     pageSize: isThermal ? 'auto' : 'A4',
     pageSizeMm: isThermal
-      ? { widthMm: preset.pageWidthMm || preset.labelWidthMm, heightMm: preset.labelHeightMm }
+      ? { widthMm: effectivePageW, heightMm: effectivePageH }
       : undefined,
+    pageMarginMm: 0,
     orientation: 'portrait',
     deviceName: barcodePrinterName || undefined,
+    windowsPrinterName: barcodeBridgePrinter || undefined,
+    disableWindowsBridge: !barcodeBridgePrinter,
     hideHeader: true,
     extraStyles: `
-      ${thermalPageRule}
       .print-header{display:none!important;}
-      .print-shell{padding:0!important;margin:0!important;max-width:100%!important;}
-      .print-content{gap:0!important;margin:0!important;padding:0!important;}
-      .barcode-print-page{width:100%;box-sizing:border-box;}
-      .barcode-print-page.page-break{page-break-after:always;break-after:page;}
-      .barcode-print-page-thermal{width:${preset.labelWidthMm}mm;height:${preset.labelHeightMm}mm;max-width:${preset.labelWidthMm}mm;max-height:${preset.labelHeightMm}mm;overflow:hidden;page-break-after:always;break-after:page;margin:0;padding:0;box-sizing:border-box;}
-      .barcode-print-page-thermal:last-child{page-break-after:avoid;break-after:avoid;}
-      .barcode-print-grid{display:grid;align-items:stretch;width:100%;box-sizing:border-box;}
-      .barcode-print-grid-thermal{height:100%!important;max-height:100%!important;width:100%!important;display:flex;flex-direction:column;box-sizing:border-box;}
-      .barcode-print-grid-thermal .barcode-label-card{height:100%!important;min-height:0!important;max-height:100%!important;width:100%!important;border:none!important;border-radius:0!important;padding:0.3mm 0.6mm!important;box-sizing:border-box!important;}
-      .barcode-label-card{border:1px dashed #94a3b8;border-radius:6px;padding:1.4mm 2mm;text-align:center;display:flex;flex-direction:column;justify-content:space-between;min-height:${preset.labelHeightMm}mm;height:${preset.labelHeightMm}mm;background:#fff;overflow:hidden;box-sizing:border-box;}
-      .barcode-label-card.compact{padding:1.2mm 1.6mm;}
-      .barcode-label-card.barcode-label-card-empty{visibility:hidden!important;border:none!important;background:transparent!important;}
-      .barcode-label-header{width:100%;margin-bottom:0.4mm;}
-      .barcode-label-store{font-size:7.5px;font-weight:700;color:#334155;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:rtl;margin-bottom:0.2mm;}
-      .barcode-label-name{font-weight:900;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;direction:rtl;color:#000;}
-      .barcode-label-body{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;flex:0 0 auto;margin:0.2mm 0;}
-      .barcode-label-svg{display:flex;align-items:center;justify-content:center;width:100%;max-width:100%;overflow:hidden;}
-      .barcode-label-svg svg{width:100%;height:100%;max-width:100%;max-height:100%;display:block;}
-      .barcode-label-text{font-size:${isThermal ? (preset.labelHeightMm <= 25 ? '8.2px' : '9px') : (preset.maxLabelsPerPage >= 65 ? 8.2 : preset.maxLabelsPerPage >= 48 ? 8.8 : 9.5)}px;font-weight:800;direction:ltr;letter-spacing:.3px;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:clip;margin-top:0.2mm;color:#000;}
-      .barcode-label-bottom-row{display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:0.3mm;padding-top:0.3mm;border-top:0.5px dotted #94a3b8;}
-      .barcode-label-meta-tags{display:flex;align-items:center;gap:1.5mm;}
-      .barcode-label-unit-badge{font-size:7.8px;font-weight:800;color:#000;background:#fff;border:0.5px solid #000;border-radius:2px;padding:0.2mm 1mm;line-height:1.1;}
-      .barcode-label-sku{font-size:7px;color:#334155;font-weight:600;}
-      .barcode-label-price{font-size:${isThermal ? (preset.labelHeightMm <= 25 ? '10.5px' : '12px') : (preset.maxLabelsPerPage >= 65 ? 8.6 : preset.maxLabelsPerPage >= 48 ? 9.2 : 10.5)}px;font-weight:900;color:#000;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-inline-start:auto;}
-      .barcode-label-missing{font-size:9px;color:#b91c1c;display:flex;align-items:center;justify-content:center;height:100%;}
-      
-      /* Food Statement - بطاقة بيان التموين: خلفية بيضاء نقية بنسبة 100% بدون أي رمادي وإطار أسود ناصع للطباعة الحرارية */
-      .barcode-label-food-statement{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.3mm;font-size:${isThermal ? '8.6px' : '7.8px'};font-weight:700;color:#000;background:#fff;border:0.6px solid #000;border-radius:2px;padding:0.4mm 1mm;margin:0.4mm 0;line-height:1.15;direction:rtl;}
-      .barcode-label-food-dates{display:flex;align-items:center;justify-content:center;gap:1.5mm;width:100%;color:#000;font-size:${isThermal ? '8.8px' : '7.8px'};}
-      .barcode-label-food-dates span{color:#000;}
-      .barcode-label-food-dates span strong{font-weight:900;color:#000;}
-      .barcode-label-storage-note{font-size:${isThermal ? '7.5px' : '6.8px'};font-weight:800;color:#000;line-height:1.1;text-align:center;}
-      
-      /* Regulatory Shelf Label Styling - استيكر الرف التمويني */
-      .barcode-label-shelf{display:flex;flex-direction:column;justify-content:space-between;text-align:start;}
-      .barcode-shelf-product-name{font-size:11px!important;font-weight:900!important;color:#000!important;white-space:normal!important;line-height:1.2!important;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-      .barcode-shelf-main-content{display:grid;grid-template-columns:1.2fr 1fr;gap:2mm;align-items:center;flex:1;min-height:0;margin:1mm 0;}
-      .barcode-shelf-price-column{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;}
-      .barcode-shelf-price-badge{display:flex;flex-direction:column;align-items:flex-start;}
-      .barcode-shelf-price-amount{font-size:16px;font-weight:900;color:#000;line-height:1;}
-      .barcode-shelf-tax-note{font-size:7px;font-weight:700;color:#334155;margin-top:0.4mm;}
-      .barcode-shelf-unit-line{font-size:7.5px;font-weight:700;color:#475569;margin-top:0.5mm;}
-      .barcode-shelf-code-column{display:flex;flex-direction:column;align-items:center;justify-content:center;}
-
+      .print-shell{padding:0!important;margin:0!important;max-width:100%!important;width:100%!important;}
+      .print-content{gap:0!important;margin:0!important;padding:0!important;display:block!important;}
+      .barcode-print-page{box-sizing:border-box;margin:0;padding:0;}
+      .barcode-print-page-thermal{
+        position:relative;
+        display:block;
+        width:calc(${effectivePageW}mm - 0.25mm);
+        height:calc(${effectivePageH}mm - 0.25mm);
+        max-width:${effectivePageW}mm;
+        max-height:${effectivePageH}mm;
+        margin:0;
+        padding:0;
+        overflow:hidden;
+        page-break-after:always;
+        break-after:page;
+        page-break-inside:avoid;
+        break-inside:avoid;
+      }
+      .barcode-print-page-thermal:last-child{
+        page-break-after:avoid!important;
+        break-after:avoid!important;
+      }
+      .barcode-print-thermal-stage{
+        position:relative;
+        display:block;
+        width:${Math.max(10, rawPageW - 0.4).toFixed(1)}mm;
+        height:${Math.max(10, rawPageH - 0.4).toFixed(1)}mm;
+        margin:0.075mm auto 0;
+        page-break-inside:avoid;
+        break-inside:avoid;
+      }
+      .barcode-print-thermal-stage.is-rotated-180{
+        transform:rotate(180deg);
+        transform-origin:center center;
+      }
+      .barcode-print-thermal-stage.is-rotated-90,
+      .barcode-print-thermal-stage.is-rotated-270{
+        width:100%;
+        height:100%;
+        margin:0;
+      }
+      .barcode-print-thermal-stage.is-rotated-90 .barcode-label-card,
+      .barcode-print-thermal-stage.is-rotated-270 .barcode-label-card{
+        position:absolute;
+        top:50%;
+        left:50%;
+        transform-origin:center center;
+      }
+      .barcode-print-thermal-stage.is-rotated-90 .barcode-label-card{transform:translate(-50%,-50%) rotate(90deg);}
+      .barcode-print-thermal-stage.is-rotated-270 .barcode-label-card{transform:translate(-50%,-50%) rotate(270deg);}
+      .barcode-print-page-sheet{
+        width:210mm;
+        height:296mm;
+        padding:${preset.marginMm}mm;
+        overflow:hidden;
+        page-break-after:always;
+        break-after:page;
+      }
+      .barcode-print-page-sheet:last-child{
+        page-break-after:avoid!important;
+        break-after:avoid!important;
+      }
+      .barcode-print-grid-sheet{
+        display:grid;
+        grid-template-columns:repeat(${preset.columns},${preset.labelWidthMm}mm);
+        grid-auto-rows:${preset.labelHeightMm}mm;
+        gap:${preset.gapMm}mm;
+        justify-content:center;
+        align-content:start;
+        width:100%;
+        box-sizing:border-box;
+      }
+      ${getBarcodeSharedLabelCss(preset, '', false)}
       @media print {
-        .barcode-label-card{border:none;}
+        .barcode-label-card{border:none!important;}
       }
     `,
   });
