@@ -121,6 +121,13 @@ function buildCreateSaleService(settingsRows: any[], captured: Array<{ table: st
           }),
         });
       }
+      if (table === 'price_lists') {
+        // P4 pricing: resolvePriceListContext queries the default list
+        // when the customer carries no list — the fixture customer has
+        // none, so this returns null (no list applies) and the engine
+        // never touches price_list_items.
+        return chainable({ executeTakeFirst: async () => null });
+      }
       if (table === 'products as p') {
         return chainable({
           execute: async () => [{

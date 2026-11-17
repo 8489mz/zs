@@ -9,7 +9,7 @@
  * balance was 0.00.
  *
  * After the fix dispatch reclassifies the remaining receivable to
- * courier custody (Dr 1130 partnerType 'none' / Cr 1130 partnerType
+ * courier custody (Dr 1130 partnerType 'rep' / Cr 1130 partnerType
  * 'customer', source_type 'delivery_custody_reclassification', plus a
  * matching customer-ledger transfer leg that takes the customer
  * balance to zero for the order). Settlement then credits the
@@ -80,13 +80,16 @@ async function makeDb(): Promise<{ pg: PGlite; db: Kysely<Database> }> {
     CREATE TABLE journal_entries (id bigserial PRIMARY KEY, tenant_id text, account_id text, entry_no text, dedup_key text, entry_date date, description text, source_type text, source_id bigint, status text, branch_id bigint, location_id bigint, created_by bigint, posted_by bigint, posted_at timestamptz, reversal_of_entry_id bigint, reversed_by_entry_id bigint, cancelled_by bigint, cancelled_at timestamptz, cancel_reason text, cash_flow_category text, updated_at timestamptz);
     CREATE TABLE journal_entry_lines (id bigserial PRIMARY KEY, tenant_id text, journal_entry_id bigint, account_id bigint, cost_center_id bigint, description text, debit numeric, credit numeric, partner_type text, partner_id bigint, branch_id bigint, location_id bigint, is_reconciled boolean DEFAULT false);
     CREATE TABLE accounting_posting_failures (id bigserial PRIMARY KEY, tenant_id text, source_type text, source_id bigint, resolved_at timestamptz, last_attempt_at timestamptz);
-    CREATE TABLE products (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, name_en text, barcode text, style_code text, stock_qty numeric DEFAULT 0, reserved_qty numeric DEFAULT 0, cost_price numeric DEFAULT 0, retail_price numeric DEFAULT 0, wholesale_price numeric DEFAULT 0, credit_price numeric DEFAULT 0, consumer_price numeric DEFAULT 0, min_selling_price numeric DEFAULT 0, is_active boolean DEFAULT true, track_serials boolean DEFAULT false, default_location_id bigint, item_type text, updated_at timestamptz);
+    CREATE TABLE products (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, name_en text, barcode text, style_code text, stock_qty numeric DEFAULT 0, reserved_qty numeric DEFAULT 0, cost_price numeric DEFAULT 0, retail_price numeric DEFAULT 0, wholesale_price numeric DEFAULT 0, half_wholesale_price numeric DEFAULT 0, credit_price numeric DEFAULT 0, consumer_price numeric DEFAULT 0, min_selling_price numeric DEFAULT 0, is_active boolean DEFAULT true, track_serials boolean DEFAULT false, default_location_id bigint, item_type text, updated_at timestamptz);
     CREATE TABLE product_location_stock (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, branch_id bigint, location_id bigint, qty numeric DEFAULT 0, reserved_qty numeric DEFAULT 0, updated_at timestamptz);
     CREATE TABLE stock_movements (id bigserial PRIMARY KEY, tenant_id text, account_id text, product_id bigint, movement_type text, qty numeric, before_qty numeric, after_qty numeric, reason text, note text, reference_type text, reference_id bigint, created_by bigint, branch_id bigint, location_id bigint, unit_cost numeric, total_cost numeric, created_at timestamptz DEFAULT NOW());
     CREATE TABLE pharmacy_drugs (id bigint PRIMARY KEY, tenant_id text, account_id text, product_id bigint, name text);
     CREATE TABLE pharmacy_batches (id bigint PRIMARY KEY, tenant_id text, account_id text, product_id bigint, drug_id bigint, batch_number varchar(100) NOT NULL, expiry_date varchar(30) NOT NULL, quantity numeric(14,3) DEFAULT 0 NOT NULL, unit_cost numeric(14,3) DEFAULT 0 NOT NULL, location_id integer, supplier_name varchar(150), status varchar(50) DEFAULT 'active' NOT NULL, notes text, created_at timestamptz DEFAULT NOW() NOT NULL, updated_at timestamptz DEFAULT NOW() NOT NULL);
     CREATE TABLE sale_pharmacy_batch_allocations (id bigserial PRIMARY KEY, tenant_id text, account_id text, sale_id bigint, sale_item_id bigint, product_id bigint, pharmacy_batch_id bigint, quantity numeric);
     CREATE TABLE customers (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, phone text, address text, balance numeric DEFAULT 0, credit_limit numeric DEFAULT 0, is_credit_blocked boolean DEFAULT false, credit_block_reason text, customer_type text, price_list_id integer, location_url text, metadata text, store_credit_balance numeric DEFAULT 0, loyalty_points numeric DEFAULT 0, is_active boolean DEFAULT true, updated_at timestamptz);
+    CREATE TABLE sale_inventory_batch_allocations (id bigint PRIMARY KEY, tenant_id text, account_id text, sale_id bigint, sale_item_id bigint, product_id bigint, inventory_batch_id bigint, quantity numeric DEFAULT 0, created_at timestamptz DEFAULT NOW());
+    CREATE TABLE inventory_batches (id bigint PRIMARY KEY, tenant_id text, account_id text, product_id bigint, batch_number text, expiry_date text, quantity numeric DEFAULT 0, unit_cost numeric DEFAULT 0, location_id integer, supplier_name text, status text DEFAULT 'active', notes text, created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW());
+    CREATE TABLE price_lists (id bigint PRIMARY KEY, tenant_id text, account_id text, name text, code text, currency text DEFAULT 'EGP', type text DEFAULT 'percentage', default_discount_percent numeric DEFAULT 0, is_default boolean DEFAULT false, is_active boolean DEFAULT true, notes text, created_at timestamptz DEFAULT NOW(), updated_at timestamptz DEFAULT NOW());
     CREATE TABLE customer_ledger (id bigserial PRIMARY KEY, customer_id bigint, supplier_id bigint, entry_type text, amount numeric, balance_after numeric, note text, reference_type text, reference_id bigint, van_trip_id bigint, tenant_id text, account_id text, created_by bigint, return_document_id bigint, branch_id bigint, location_id bigint, created_at timestamptz DEFAULT NOW());
     CREATE TABLE customer_loyalty_logs (id bigserial PRIMARY KEY, tenant_id text, account_id text, customer_id bigint, points_change numeric, balance_after numeric, action_type text, sale_id bigint, notes text, created_at timestamptz DEFAULT NOW());
     CREATE TABLE sales (id bigserial PRIMARY KEY, tenant_id text, account_id text, doc_no text, customer_id bigint, customer_name text, customer_phone text, customer_address text, payment_type text, payment_channel text, subtotal numeric DEFAULT 0, discount numeric DEFAULT 0, delivery_fee numeric DEFAULT 0, delivery_fee_mode text, service_charge numeric DEFAULT 0, tip_amount numeric DEFAULT 0, tax_rate numeric DEFAULT 0, tax_amount numeric DEFAULT 0, prices_include_tax boolean DEFAULT false, total numeric DEFAULT 0, paid_amount numeric DEFAULT 0, applied_amount numeric DEFAULT 0, tendered_amount numeric DEFAULT 0, change_amount numeric DEFAULT 0, store_credit_used numeric DEFAULT 0, note text, status text, collection_status text, branch_id bigint, location_id bigint, created_by bigint, created_at timestamptz DEFAULT NOW(), updated_at timestamptz, sale_origin text, exchange_return_id bigint, van_trip_id bigint, delivery_rep_id bigint, table_number text, order_type text, guest_count int, zatca_status text, cancel_reason text, cancelled_by bigint, cancelled_at timestamptz, delivery_status text, dining_course text, pager_number text, transfer_reference text, transfer_receipt_url text, recipient_name text, recipient_phone text, recipient_role text, recipient_signature text, delivery_gps_lat numeric, delivery_gps_lng numeric, delivery_proof_photo text, packaging_breakdown text, is_credit_overridden boolean DEFAULT false, credit_override_by_user_id bigint, credit_override_reason text, terminal_id text, terminal_auth_code text, terminal_rrn text, card_scheme text, card_last_four text, pos_terminal_code varchar(32), settled_at timestamptz, settled_by bigint, delivery_signature text, delivery_photo_url text, delivery_notes text, dispatched_at timestamptz);
@@ -203,7 +206,7 @@ function buildServices(db: Kysely<Database>): { sales: SalesWriteService; drawer
   const idempotency = new IdempotencyService(db);
   const tx = new TransactionHelper();
   const audit = new AuditService(db);
-  const planFeatures = { hasFeature: () => false };
+  const planFeatures = { hasFeature: (_planId: any, _extra: any, feature: string) => feature === 'pos' };
   const returnsStub = {};
   const sales = new SalesWriteService(
     db, tx, audit, authz, finance, query, posting, idempotency,
@@ -349,7 +352,7 @@ async function main(): Promise<void> {
   // 1. THE LIVE REPRODUCTION (base-red): dispatch a store-fleet COD
   // order of 131.60. The receivable must move off the customer to
   // courier custody — exactly one reclassification journal (Dr 1130
-  // partner 'none' / Cr 1130 partner 'customer'), customer 1130 net
+  // partner 'rep' / Cr 1130 partner 'customer'), customer 1130 net
   // 0, custody 1130 net +131.60, customers.balance 0, one
   // delivery_custody_transfer ledger leg, status out_for_delivery.
   // At base dispatch writes no such journal at all.
@@ -367,7 +370,7 @@ async function main(): Promise<void> {
       assert.equal(dispatched?.success, true, 'dispatchOrders succeeds');
       assert.equal(await countJournals(db, 'delivery_custody_reclassification', saleId), 1, 'exactly one reclassification journal exists');
       const reclassLegs = await partnerLegs(db, 'delivery_custody_reclassification', saleId);
-      const custodyDebit = reclassLegs.filter((l) => l.code === '1130' && l.partnerType === 'none')
+      const custodyDebit = reclassLegs.filter((l) => l.code === '1130' && l.partnerType === 'rep' && l.partnerId === 1)
         .reduce((s, l) => s + l.debit - l.credit, 0);
       const customerCredit = reclassLegs.filter((l) => l.code === '1130' && l.partnerType === 'customer')
         .reduce((s, l) => s + l.credit - l.debit, 0);
@@ -376,7 +379,7 @@ async function main(): Promise<void> {
       const reclassEntryId = await journalId(db, 'delivery_custody_reclassification', saleId);
       const net = await receivableNetByPartner(db, [saleEntryId, reclassEntryId]);
       assert.equal(net.get('customer'), 0, 'customer 1130 nets to zero after dispatch');
-      assert.equal(net.get('none'), 131.60, 'courier custody 1130 holds the full 131.60');
+      assert.equal(net.get('rep'), 131.60, 'courier custody 1130 holds the full 131.60');
       assert.equal(await customerBalance(db, 7), 0, 'customers.balance is zero for the order');
       assert.equal(await transferLegCount(db, 7, saleId), 1, 'exactly one custody-transfer ledger leg exists');
       const row = await saleFullRow(db, saleId);
@@ -408,7 +411,7 @@ async function main(): Promise<void> {
   });
 
   // 3. Settle after dispatch credits the custody leg (partner
-  // 'none'), never the customer leg: custody nets to zero, the
+  // 'rep' + partner_id 1), never the customer leg: custody nets to zero, the
   // customer stays at zero, the drawer rises by 131.60.
   await check('D-SF-02 settle after dispatch credits the courier custody leg', async () => {
     const { pg, db } = await makeDb();
@@ -421,7 +424,7 @@ async function main(): Promise<void> {
       const settled: any = await reps.settleOrder(saleId, cashierAuth, { countedCashAmount: 131.60 });
       assert.equal(settled?.ok, true, 'settleOrder succeeds');
       const settleLegs = await partnerLegs(db, 'delivery_rep_settlement', saleId);
-      const custodyCredit = settleLegs.filter((l) => l.code === '1130' && l.partnerType === 'none')
+      const custodyCredit = settleLegs.filter((l) => l.code === '1130' && l.partnerType === 'rep' && l.partnerId === 1)
         .reduce((s, l) => s + l.credit - l.debit, 0);
       assert.equal(custodyCredit, 131.60, 'the settle credits 1130 in courier custody');
       assert.equal(settleLegs.filter((l) => l.code === '1130' && l.partnerType === 'customer').length, 0, 'the settle never touches the customer leg');
@@ -430,7 +433,7 @@ async function main(): Promise<void> {
       const settleEntryId = await journalId(db, 'delivery_rep_settlement', saleId);
       const net = await receivableNetByPartner(db, [saleEntryId, reclassEntryId, settleEntryId]);
       assert.equal(net.get('customer'), 0, 'customer 1130 stays at zero');
-      assert.equal(net.get('none'), 0, 'courier custody 1130 nets to zero after settle');
+      assert.equal(net.get('rep'), 0, 'courier custody 1130 nets to zero after settle');
       assert.equal(await customerBalance(db, 7), 0, 'the customer balance stays zero (no double credit)');
       const treasury = await treasuryRows(db);
       assert.equal(treasury.length, 1, 'exactly one treasury row exists');
@@ -464,7 +467,7 @@ async function main(): Promise<void> {
 
   // 5. THE T11 LIVE REPRODUCTION (base-red): a full return after
   // dispatch nets the courier custody leg, not the customer — the
-  // return journal credits 1130 partner 'none', custody nets to
+  // return journal credits 1130 partner 'rep', custody nets to
   // zero, the customer stays at zero, the settlement basis is 0,
   // and the later settle posts no journal and leaves the balance
   // at zero. At base the return credited the customer leg while
@@ -487,7 +490,7 @@ async function main(): Promise<void> {
       const returnId = Number(ret?.returnDocumentId ?? ret?.id);
       assert.ok(Number.isInteger(returnId) && returnId > 0, 'createReturn returns a document id');
       const returnLegs = await partnerLegs(db, 'sales_return', returnId);
-      const custodyCredit = returnLegs.filter((l) => l.code === '1130' && l.partnerType === 'none')
+      const custodyCredit = returnLegs.filter((l) => l.code === '1130' && l.partnerType === 'rep' && l.partnerId === 1)
         .reduce((s, l) => s + l.credit - l.debit, 0);
       assert.equal(custodyCredit, 131.60, 'the return credits 1130 in courier custody');
       assert.equal(returnLegs.filter((l) => l.code === '1130' && l.partnerType === 'customer').length, 0, 'the return never touches the customer leg');
@@ -496,7 +499,7 @@ async function main(): Promise<void> {
       const returnEntryId = await journalId(db, 'sales_return', returnId);
       const net = await receivableNetByPartner(db, [saleEntryId, reclassEntryId, returnEntryId]);
       assert.equal(net.get('customer'), 0, 'customer 1130 stays at zero');
-      assert.equal(net.get('none'), 0, 'courier custody 1130 nets to zero after the return');
+      assert.equal(net.get('rep'), 0, 'courier custody 1130 nets to zero after the return');
       assert.equal(await customerBalance(db, 7), 0, 'the customer balance stays zero');
       const basis: any = await posting.deliverySettlementBasis(db, saleId, cashierAuth);
       assert.equal(Number(basis.remainingReceivable), 0, 'the settlement basis is zero after the full return');
@@ -537,7 +540,7 @@ async function main(): Promise<void> {
       const returnEntryId = await journalId(db, 'sales_return', returnId);
       const net = await receivableNetByPartner(db, [saleEntryId, reclassEntryId, returnEntryId]);
       assert.equal(net.get('customer'), 0, 'customer 1130 stays at zero after the partial return');
-      assert.equal(net.get('none'), 131.60, 'courier custody 1130 holds the remaining 131.60');
+      assert.equal(net.get('rep'), 131.60, 'courier custody 1130 holds the remaining 131.60');
       assert.equal(await customerBalance(db, 7), 0, 'the customer balance stays zero');
       const basis: any = await posting.deliverySettlementBasis(db, saleId, cashierAuth);
       assert.equal(Number(basis.remainingReceivable), 131.60, 'the settlement basis is the remaining 131.60');
@@ -545,7 +548,7 @@ async function main(): Promise<void> {
       assert.equal(settled?.ok, true, 'settleOrder succeeds for the remainder');
       const settleEntryId = await journalId(db, 'delivery_rep_settlement', saleId);
       const afterSettle = await receivableNetByPartner(db, [saleEntryId, reclassEntryId, returnEntryId, settleEntryId]);
-      assert.equal(afterSettle.get('none'), 0, 'courier custody 1130 nets to zero after settle');
+      assert.equal(afterSettle.get('rep'), 0, 'courier custody 1130 nets to zero after settle');
       assert.equal(await customerBalance(db, 7), 0, 'the customer balance stays zero after settle');
     } finally {
       await db.destroy();

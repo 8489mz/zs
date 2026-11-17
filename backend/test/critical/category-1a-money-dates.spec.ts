@@ -107,7 +107,9 @@ async function main(): Promise<void> {
         tax_amount numeric, tax_rate numeric, prices_include_tax boolean);
       CREATE TABLE sale_items (id bigint PRIMARY KEY, tenant_id text, sale_id bigint, qty numeric, cost_price numeric);
       CREATE TABLE expenses (id bigint PRIMARY KEY, tenant_id text, branch_id bigint, amount numeric, expense_date timestamptz);
-      CREATE TABLE daily_commercial_rollups (tenant_id text, rollup_date date, branch_id bigint, branch_key bigint,
+      CREATE TABLE return_documents (id bigint PRIMARY KEY, tenant_id text, account_id text, return_type text, invoice_id bigint, total numeric DEFAULT 0, created_at timestamptz DEFAULT NOW(), branch_id bigint);
+      CREATE TABLE return_items (id bigint PRIMARY KEY, return_document_id bigint, tenant_id text, account_id text, qty numeric DEFAULT 0, cost_price numeric DEFAULT 0, sale_item_id bigint);
+    CREATE TABLE daily_commercial_rollups (tenant_id text, rollup_date date, branch_id bigint, branch_key bigint,
         sales_count bigint, sales_total numeric, cash_sales_total numeric, credit_sales_total numeric, cogs_total numeric,
         gross_profit numeric, returns_count bigint, returns_total numeric, expenses_total numeric, net_profit numeric, updated_at timestamptz,
         UNIQUE (tenant_id, rollup_date, branch_key));
