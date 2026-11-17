@@ -33,4 +33,10 @@ describe('clothing count scanner', () => {
   it('rejects barcode shared between two active size variants', () => {
     expect(classifyStockCountBarcodeScan('B1', [make('1', 'B1'), make('2', 'B1')]).status).toBe('ambiguous');
   });
+  it('resolves dashed barcode when scanner types Arabic ظ separator under Arabic OS layout', () => {
+    const items = [make('1', '321321-007', '321321', 1)];
+    const res = classifyStockCountBarcodeScan('321321ظ007', items);
+    expect(res.status).toBe('matched');
+    if (res.status === 'matched') expect(res.product.id).toBe('1');
+  });
 });

@@ -205,7 +205,9 @@ export function buildVanSettlementThermalReceiptHtml(
     <!-- BARCODE & FOOTER -->
     ${barcodeSvg ? `
       <div style="text-align: center; margin-top: 6px;">
-        ${barcodeSvg}
+        <div style="display: flex; justify-content: center; height: 36px; max-width: 240px; margin: 0 auto; overflow: hidden;">
+          ${barcodeSvg}
+        </div>
         <div style="font-size: 8.5px; font-family: monospace; letter-spacing: 1px; margin-top: 2px;">
           ${escapeHtml(receipt.receiptNo)}
         </div>

@@ -12,6 +12,36 @@
 
 ## التحديثات الحالية
 
+### 262. توحيد محرك طباعة ملصقات الباركود والمقاسات الحرارية وورق A4 وعرض العملة والاتجاه ومتغيرات الملابس (Unified Barcode Label Print Engine, A4 Sheet Bounds, Currency, Thermal 180° Orientation & Fashion Variant Labels - 17 November 2026)
+* **حالة القدرة:** تم التحديث والتحقق بوحدات الاختبار المستهدفة (`44/44` نجاح عبر 6 ملفات في 17 نوفمبر 2026؛ لم يُشغَّل `typecheck` أو `guards` بناءً على سياسة التأجيل حتى نهاية الجلسة).
+* **المسارات المتأثرة:**
+  - `frontend/src/lib/barcode.ts`
+  - `frontend/src/lib/browser.ts`
+  - `frontend/src/lib/barcode-labels.ts`
+  - `frontend/src/lib/barcode-labels-presets.ts`
+  - `frontend/src/styles/partials/internal-detail-review.css`
+  - `frontend/src/features/products/components/BarcodePrinterPicker.tsx`
+  - `frontend/src/features/products/components/BarcodeBatchItemsPanel.tsx`
+  - `frontend/src/features/products/components/BarcodeFoodStatementSection.tsx`
+  - `frontend/src/features/products/components/BarcodePrintDialog.tsx`
+  - `frontend/src/features/products/components/workspace-sections/FashionGroupBarcodePrintAction.tsx`
+  - `frontend/src/features/products/components/workspace-sections/FashionGroupEditorCard.tsx`
+  - `frontend/src/lib/printer-preferences.ts`
+  - `frontend/src/lib/__tests__/barcode-labels.test.ts`
+  - `frontend/src/lib/__tests__/printer-preferences.spec.ts`
+  - `frontend/src/features/products/components/product-barcode-print.helpers.spec.ts`
+  - راجع تفاصيل تثبيت الطابعات وحفظها التلقائي في [SETTINGS_CAPABILITIES.md](SETTINGS_CAPABILITIES.md#settings-electron-barcode-and-receipt-printers).
+* **المشكلات المعالجة والتحسينات:**
+  1. **إصلاح أبعاد كافة مقاسات `A4` (`a4-24`, `a4-40`, `a4-48`, `a4-65`, `a4-100`):** ضبط الهوامش والفجوات وارتفاع الملصق في `SHEET_PRESETS` لتبقى جميعها فعلياً داخل حدود `210 × 297 مم` دون فيض إلى صفحة إضافية.
+  2. **إزالة تضارب `@page` وحماية جسر الطباعة:** دعم `pageSizeMm` و `pageMarginMm` و `disableWindowsBridge` في `printHtmlDocument` لمنع صدور قاعدتي `@page` متعارضتين (هامش `8mm` قبل `0mm`) ولمنع توجيه ملصقات الباركود بالخطأ إلى طابعة إيصالات الكاشير (`posWindowsPrinterName`).
+  3. **المعاينة المطابقة 1:1 للطباعة (`WYSIWYG`) والهوامش الآمنة الحرارية وتوسيع المقاسات:** توحيد CSS البطاقات بدلالة `mm`/`pt` في `getBarcodeSharedLabelCss` وإزالة قواعد `internal-detail-review.css` المتعارضة، مع توسيع هوامش الأمان الداخلية للملصقات الحرارية (`padXmm`/`padYmm`) وتقليص البطاقة `0.4mm` في الطباعة الحرارية لحماية السعر ووحدة الصنف من القص عند حواف الاستيكرات الصغيرة مثل `38×25 مم` و `35×22 مم` و `40×30 مم`، مع خيار **المقاس المخصص** (`thermal-custom` بين `20..120 × 15..150 مم`) وحفظ التفضيلات في `localStorage` (`z_erp_barcode_print_prefs_v3`).
+  4. **اعتماد `180°` افتراضياً ودعم اتجاهات التدوير الحرارية (`0° / 90° / 180° / 270°`):** إضافة `DEFAULT_THERMAL_ROTATE_DEG = 180` كوضع افتراضي في نافذة الطباعة الحرارية لمعالجة الطابعات ذات التغذية العكسية (مثل Xprinter XP-246B) مع إمكانية التبديل لحظياً إلى `0° / 90° / 270°`.
+  5. **العملة الإنجليزية `EGP` ومحاذاة السعر يساراً وجودة Code-128:** إصلاح `encodeCode128Auto` للأرقام المفردة مثل `"1"` (منع إدراج `CODE_C` فارغ بنهاية الكود)، ورفع الهامش الأبيض `quietZone` إلى `20` (`10X`) مع `preserveAspectRatio="xMidYMid meet"`، واستخدام `formatCurrencyWithCode` افتراضياً (`90.00 EGP`) مع إتاحة التبديل بين الكود/الرمز/بدون عملة، وتثبيت محاذاة السعر على اليسار (`margin-right: auto`) داخل بطاقات RTL، وتوحيد الحبر الأسود الصريح `#000000`.
+  6. **دعم ملصقات متغيرات الملابس والأحذية (`color / size`) والطباعة الفردية من الدفعة:** إضافة سطر مخصص أنيق بدون برواز للون والمقاس (`.barcode-label-variant-badge` بصيغة مختصرة مباشرة مثل `أسود · XL` بدون نصوص وصفية زائدة) قابل للتبديل (`showVariant`) مع تنظيف تكرار اللاحقة `- اللون / المقاس` تلقائياً من اسم الصنف، ودعم `nameEn`، وزر **طباعة الملصقات** المباشر داخل محرر موديلات الملابس (`FashionGroupBarcodePrintAction`). كما تم فصل قائمة أصناف الدفعة في عمود مستقل كامل الارتفاع (`BarcodeBatchItemsPanel.tsx`) للقضاء على التمرير المتداخل ("سكرول جوه سكرول")، مع دعم كمية `0` لصنف وزر **«هذا فقط»** و**تصفير الكل** وعدّاد RTL قياسي (`[+] الكمية [-]`) لإعادة طباعة استيكر متغير واحد منفرد دون إهدار بقية المتغيرات.
+  7. **توسيع الباركود القصير والأولوية التخطيطية ووضع التكيف التلقائي (`Auto-Fit`) لبيانات التموين وتخفيف الخطوط:** ضبط نسبة ارتفاع `buildCode128Svg` ديناميكياً للأكواد القصيرة (`height = Math.max(42, Math.min(72, Math.round(totalWidth / 3.1)))`) لملء العرض بشكل أوضح للماسح، وحماية حاوية الباركود بـ `overflow: hidden` وحد أدنى ثابت ومنع تداخلها مع اسم الصنف، ودمج ملاحظة التخزين جنباً إلى جنب مع الصلاحية في `.barcode-label-food-dates` بدون برواز صندوقي ثقيل وبوضع التحجيم التلقائي `.has-food-statement` للمقاسات الصغيرة، وإزالة البرواز المحيط بشارة الوحدة/الوزن الصافي مع تخفيف البولد عن النصوص الصغيرة وإبقاء السعر واضحاً (`font-weight: 800`)، وإضافة تنبيه استرشادي لطيف لمقاس `50×40 مم` في نافذة الطباعة عند تفعيل بيانات التموين على ملصق أقل من `32 مم`.
+* **القيود التشغيلية المعروفة:** عند الطباعة عبر نافذة المتصفح (خارج Electron)، يظل ضبط `Margins: None` وإلغاء `Headers and footers` وتطابق مقاس الورق الفعلي في تعريف طابعة ويندوز (`Printing preferences`) وإجراء معايرة الفجوات (`Gap/Media Calibration`) ضرورياً لثبات نقطة البداية على كل استيكر.
+* **الاختبارات المنفذة:** `vitest run src/lib/__tests__/printer-preferences.spec.ts src/lib/__tests__/barcode-labels.test.ts src/lib/electron-printing.spec.ts src/lib/browser-print-bridge.spec.ts src/features/settings/components/forms/tabs/PrintingSettingsTab.spec.tsx src/features/products/components/product-barcode-print.helpers.spec.ts` (`44/44` نجاح، 6 ملفات، 17 نوفمبر 2026).
+
 ### 261. توحيد منهجية الترتيب المؤسسي للأصناف والفرز التفاعلي للأعمدة (Catalog Unified Enterprise Sorting & Interactive Column Sort - 27 October 2026)
 * **حالة القدرة:** 🟢 مكتملة ومحمية بنسبة 100% (27 أكتوبر 2026).
 * **المسارات المتأثرة:** 
@@ -358,5 +388,23 @@ emoveDraftRow):**
   4. تطبيق الحماية في كافة شاشات ونماذج الأصناف: `ProductForm.tsx`، `NewProductForm.tsx` (كلا المسارين)، `EditProductForm.tsx`، و `ProductEditorCard.tsx`.
   5. ترقية تخصص "الملابس والأزياء والأحذية" ليكون ضمن التخصصات الفرعية الرئيسية المباشرة (`PRIMARY_COMMERCE_SUB_VERTICALS`) في `IndustryModeSelectorCard.tsx` لتفعيله بنقرة واحدة مباشرة.
 - **أدلة الاختبار:** نجاح اختبارات `frontend/src/features/products/utils/product-visibility.utils.spec.ts` (5/5 tests) واجتياز حزمة اختبارات الأصناف بالكامل في `frontend/src/features/products/` (10 test files, 37/37 tests passed).
+
+### 2026-11-17 — التعميم الشامل لوضوح طباعة الباركود الحراري، التوليد الرقمي المدمج بدون شرطة، ومعالجة لوحة المفاتيح العربية (`ظ`) عبر المنظومة
+- **الحالة:** مكتمل ومختبر على مستوى حزم الواجهة المختبرة محلياً (`78/78` اختباراً ناجحاً عبر 13 ملف Vitest).
+- **ما تم تنفيذه:**
+  1. **وضوح وفرد الباركود على الطابعات الحرارية `203 DPI` في [barcode.ts](frontend/src/lib/barcode.ts) (`buildCode128Svg`) و[barcode-labels-presets.ts](frontend/src/lib/barcode-labels-presets.ts):**
+     - تطبيق تعويض تمدد الحبر (`-25%` من سماكة الأعمدة السوداء على شبكة `moduleWidth = 40`: `30` للعمود مقابل `50` للفراغ مع ثبات التوقيت الهندسي لـ Code 128، وإزالة `crispEdges` وإضافة خلفية `#fff` صريحة، وهامش هدوء `7X` داخلي + `preserveAspectRatio="none"` + توسيع `.barcode-label-svg` أفقياً عبر `svgBleedMm`).
+     - توسيع حاوية الباركود في ملصقات الصيانة (`maintenance-receipt.utils.ts`: `height: 26px`) وإيصالات التوزيع الميداني والفان (`van-sales-receipt.utils.ts`, `van-collection-receipt.utils.ts`, `van-settlement-receipt.utils.ts`: `height: 36px; max-width: 240px`).
+  2. **التوليد الرقمي الصافي المدمج (`Code 128C`) في [barcode.ts](frontend/src/lib/barcode.ts)، [FashionGroupEditorCard.tsx](frontend/src/features/products/components/workspace-sections/FashionGroupEditorCard.tsx)، و[FashionVariantsBuilder.tsx](frontend/src/features/products/components/FashionVariantsBuilder.tsx):**
+     - `createGeneratedBarcode`: يولّد 8 أرقام صافية (`93` وحدة عرض) بدلاً من `ZS-XXXXXXXXXX`.
+     - `createSequentialVariantBarcode`: يولّد بادئة الموديل متبوعة برقم تسلسلي بدون شرطة (خانتان `01..99` لأكواد الموديل زوجية الطول مثل `321321` -> `32132101..32132199`، و3 خانات للأطوال الفردية حتى يظل الإجمالي زوجياً بأقل أعمدة ممكنة في `Code 128C`).
+     - عند الضغط على **«توليد باركودات»** في `FashionGroupEditorCard` بوجود أكواد قديمة تحتوي على شرطة (`-`)، يعرض النظام عبر `applySequentialVariantBarcodes` و`countLegacyHyphenVariantBarcodes` خياراً فورياً لاستبدالها بالصيغة الرقمية المدمجة بدون شرطة بنقرة واحدة أو الإبقاء على الحالية وتوليد الفارغ فقط (`systemConfirm`).
+  3. **معالجة حرف `ظ` ولوحة المفاتيح العربية عند المسح بالسكانر (`getBarcodeLookupCandidates` / `remapArabicKeyboardToEnglish`):**
+     - توحيد المحرك في [barcode.ts](frontend/src/lib/barcode.ts) وإعادة التصدير من [pos-barcode-normalizer.ts](frontend/src/features/pos/lib/pos-barcode-normalizer.ts)، وتفعيله عبر نقطة البيع (`PosWorkspace`, `PosProductsPanel`, `pos-workspace.helpers`), أوامر البيع (`sales-order-barcode-scan.ts`), المشتريات (`BarcodeScanDialog.tsx`), الجرد المخزني (`count-barcode-identity.ts`), وتكويد الصنف (`ProductBarcodeDialog.tsx`).
+  4. **تحسينات نافذة الطباعة واختيار الطابعة (`BarcodePrintDialog`، `BarcodeBatchItemsPanel`، `FashionGroupBarcodePrintAction`):**
+     - إصلاح تشوه طباعة الدفعات الحرارية متعددة الصفحات بتدوير `180°` في `printBatchBarcodeLabels` ([barcode-labels.ts](frontend/src/lib/barcode-labels.ts)): صفحة `.barcode-print-page-thermal` أصبحت `display:block` بفواصل صفحات صريحة، والتدوير `180°` يتم على `.barcode-print-thermal-stage` في موضعه دون `position:absolute; top:50%` (بقي هذا النمط فقط لـ `90°/270°`). لم يُختبر بعد على طابعة فعلية.
+     - تدوير حراري افتراضي `180°`، عمود ثالث مستقل لدفعات المتغيرات بدون تمرير متداخل مع زر **هذا فقط** ودعم الكمية `0` وعدادات RTL القياسية (`[+] qty [-]`)، وعزل طابعة الباركود الخاصة بمحطة العمل والمستأجر (`printer-preferences.ts`).
+- **أدلة الاختبار (`2026-11-17`):** نجاح `npx vitest run` على 13 ملف اختبار (`78/78` tests passed): `barcode-labels.test.ts` (17)، `BarcodePrintDialog.spec.tsx` (1)، `product-barcode-print.helpers.spec.ts` (4)، `FashionGroupEditorCard.helpers.spec.ts` (7)، `pos-barcode-dash.spec.ts` (8)، `useScannerBuffer.spec.tsx` (4)، `sales-order-barcode-scan.spec.ts` (2)، `count-barcode-identity.spec.ts` (6)، `van-sales-receipt.spec.ts` (5)، `electron-printing.spec.ts` (7)، `browser-print-bridge.spec.ts` (5)، `printer-preferences.spec.ts` (5)، `PrintingSettingsTab.spec.tsx` (7). *(ملاحظة: فحوصات البناء الكامل و`tsc` والحراس مؤجلة حتى أمر المستخدم النهائي وفق قاعدة المشروع.)*
+
 
 

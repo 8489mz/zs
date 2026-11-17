@@ -1,4 +1,5 @@
 import { normalizeArabicInput, normalizeArabicSearchKey } from '@/lib/arabic-normalization';
+import { createSequentialVariantBarcode } from '@/lib/barcode';
 import type { Product } from '@/types/domain';
 
 export type CommonDraft = {
@@ -284,4 +285,31 @@ export function deriveBaseName(entry: Product) {
   if (!label) return rawName;
   const suffix = ` - ${label}`;
   return rawName.endsWith(suffix) ? rawName.slice(0, -suffix.length).trim() : rawName;
+}
+
+export function countLegacyHyphenVariantBarcodes(rows: Array<Pick<VariantDraft, 'barcode'>>): number {
+  return rows.filter((row) => String(row.barcode || '').trim().includes('-')).length;
+}
+
+export function applySequentialVariantBarcodes(
+  rows: VariantDraft[],
+  prefix: string,
+  options?: { replaceLegacyHyphens?: boolean },
+): VariantDraft[] {
+  const cleanPrefix = String(prefix || '').trim();
+  if (!cleanPrefix) return rows;
+  const replaceLegacyHyphens = Boolean(options?.replaceLegacyHyphens);
+  const used = new Set(
+    rows
+      .map((row) => String(row.barcode || '').trim())
+      .filter((code) => Boolean(code) && !(replaceLegacyHyphens && code.includes('-')))
+      .map((code) => code.toLowerCase()),
+  );
+
+  return rows.map((row, index) => {
+    const existing = String(row.barcode || '').trim();
+    const shouldReplace = !existing || (replaceLegacyHyphens && existing.includes('-'));
+    if (!shouldReplace) return row;
+    return { ...row, barcode: createSequentialVariantBarcode(cleanPrefix, index + 1, used) };
+  });
 }

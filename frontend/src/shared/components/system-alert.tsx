@@ -503,6 +503,7 @@ export function SystemAlertProvider({ children }: { children: React.ReactNode })
           <div
             style={{
               display: 'flex',
+              flexWrap: 'wrap',
               justifyContent: 'center',
               gap: '12px',
               marginTop: confirmState.options.impactItems ? '0' : '8px',
@@ -515,6 +516,8 @@ export function SystemAlertProvider({ children }: { children: React.ReactNode })
               style={{
                 minWidth: '110px',
                 height: '42px',
+                padding: '0 18px',
+                whiteSpace: 'nowrap',
                 borderRadius: '8px',
                 borderColor: '#cbd5e1',
                 color: '#475569',
@@ -529,8 +532,10 @@ export function SystemAlertProvider({ children }: { children: React.ReactNode })
               onClick={() => handleConfirmClose(true)}
               variant="primary"
               style={{
-                minWidth: '160px',
+                minWidth: '140px',
                 height: '42px',
+                padding: '0 20px',
+                whiteSpace: 'nowrap',
                 borderRadius: '8px',
                 backgroundColor:
                   (confirmState.options.variant === 'danger' || confirmState.options.confirmVariant === 'danger') ? '#dc2626' : '#170e5e',

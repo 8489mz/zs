@@ -2,39 +2,9 @@
  * Arabic to English Keyboard Remapper & Invoice Barcode Normalizer
  * Translates scanner keystrokes entered while the OS keyboard layout is set to Arabic.
  */
+import { getBarcodeLookupCandidates, remapArabicKeyboardToEnglish } from '@/lib/barcode';
 
-const ARABIC_TO_ENGLISH_MAP: Record<string, string> = {
-  // Arabic Letters
-  'ض': 'q', 'ص': 'w', 'ث': 'e', 'ق': 'r', 'ف': 't', 'غ': 'y', 'ع': 'u', 'ه': 'i', 'خ': 'o', 'ح': 'p', 'ج': '[', 'د': ']',
-  'ش': 'a', 'س': 's', 'ي': 'd', 'ب': 'f', 'ل': 'g', 'ا': 'h', 'ت': 'j', 'ن': 'k', 'م': 'l', 'ك': ';', 'ط': '\'',
-  'ئ': 'z', 'ء': 'x', 'ؤ': 'c', 'ر': 'v', 'لا': 'b', 'ى': 'n', 'ة': 'm', 'و': ',', 'ز': '.', 'ظ': '/',
-  // Capital / Shift letters on Arabic keyboard
-  'َ': 'Q', 'ً': 'W', 'ُ': 'E', 'ٌ': 'R', 'لإ': 'T', 'إ': 'Y', '‘': 'U', '÷': 'I', '×': 'O', '؛': 'P',
-  'ِ': 'A', 'ٍ': 'S', 'لأ': 'G', 'أ': 'H', 'ـ': 'J', '،': 'K',
-  '~': 'Z', 'ْ': 'X', 'لآ': 'B', 'آ': 'N', '؟': '?',
-  // Arabic digits
-  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
-  '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4', '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
-};
-
-export function remapArabicKeyboardToEnglish(input: string): string {
-  if (!input) return '';
-  let result = '';
-  for (let i = 0; i < input.length; i++) {
-    // Check for two-character ligature 'لا' or 'لأ' or 'لإ' or 'لآ'
-    if (i + 1 < input.length) {
-      const pair = input.substring(i, i + 2);
-      if (ARABIC_TO_ENGLISH_MAP[pair]) {
-        result += ARABIC_TO_ENGLISH_MAP[pair];
-        i++;
-        continue;
-      }
-    }
-    const char = input[i];
-    result += ARABIC_TO_ENGLISH_MAP[char] !== undefined ? ARABIC_TO_ENGLISH_MAP[char] : char;
-  }
-  return result;
-}
+export { getBarcodeLookupCandidates, remapArabicKeyboardToEnglish };
 
 export function stripSeparators(input: string): string {
   return String(input || '')

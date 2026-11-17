@@ -15,7 +15,7 @@ import type { PosSaleMode } from '@/features/pos/lib/pos-sale-mode';
 import { ProductIcon } from '@/shared/components/icons/product-svg-catalog';
 import { ProductIconStudioModal } from '@/shared/components/icons/ProductIconStudioModal';
 import { useProductIconSettings } from '@/shared/components/icons/product-icon-theme';
-import { isInvoiceBarcodeQuery, sanitizeSearchInputLive } from '@/features/pos/lib/pos-barcode-normalizer';
+import { getBarcodeLookupCandidates, isInvoiceBarcodeQuery, sanitizeSearchInputLive } from '@/features/pos/lib/pos-barcode-normalizer';
 import { isAutoSubmittableWeightedBarcode } from '@/features/pos/lib/weighted-barcode';
 import { useScannerBuffer } from '@/features/pos/hooks/useScannerBuffer';
 import { CameraBarcodeScannerModal } from '@/shared/components/CameraBarcodeScannerModal';
@@ -116,12 +116,14 @@ function focusSearchInput(searchInputRef: RefObject<HTMLInputElement | null>) {
 }
 
 function hasExactCodeMatch(products: Product[], query: string) {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) return false;
-  return products.some((product) => 
-    product.barcode?.trim().toLowerCase() === normalized || 
-    product.sku?.trim().toLowerCase() === normalized || 
-    product.units?.some((unit) => unit.barcode?.trim().toLowerCase() === normalized)
+  const candidates = getBarcodeLookupCandidates(query).map((c) => c.toLowerCase());
+  if (!candidates.length) return false;
+  return candidates.some((candidate) =>
+    products.some((product) =>
+      product.barcode?.trim().toLowerCase() === candidate ||
+      product.sku?.trim().toLowerCase() === candidate ||
+      product.units?.some((unit) => unit.barcode?.trim().toLowerCase() === candidate),
+    ),
   );
 }
 

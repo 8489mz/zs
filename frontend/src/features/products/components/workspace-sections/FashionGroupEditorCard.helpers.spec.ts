@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applySequentialVariantBarcodes,
   buildGroupSaveRows,
   buildPayload,
+  countLegacyHyphenVariantBarcodes,
   deriveFashionStockPatch,
   pickFashionStockConsolidationTarget,
   type CommonDraft,
@@ -68,5 +70,21 @@ describe('fashion group photo save (SF-12)', () => {
     const payload = buildPayload(common, clean[0], source);
     expect(payload.barcode).toBe('901-002');
     expect(payload.sku).toBe('SKU-1');
+  });
+
+  it('counts and optionally replaces legacy hyphenated barcodes while preserving compact existing ones', () => {
+    const mixed: VariantDraft[] = [
+      { ...variant('1', 'أبيض'), size: 'S', barcode: '321321-004' },
+      { ...variant('2', 'أبيض'), size: 'M', barcode: '32132102' },
+      { ...variant('3', 'أسود'), size: 'S', barcode: '321321-001' },
+      { ...variant(undefined, 'أسود'), size: 'M', barcode: '' },
+    ];
+    expect(countLegacyHyphenVariantBarcodes(mixed)).toBe(2);
+
+    const fillEmptyOnly = applySequentialVariantBarcodes(mixed, '321321', { replaceLegacyHyphens: false });
+    expect(fillEmptyOnly.map((r) => r.barcode)).toEqual(['321321-004', '32132102', '321321-001', '32132104']);
+
+    const upgradeLegacy = applySequentialVariantBarcodes(mixed, '321321', { replaceLegacyHyphens: true });
+    expect(upgradeLegacy.map((r) => r.barcode)).toEqual(['32132101', '32132102', '32132103', '32132104']);
   });
 });

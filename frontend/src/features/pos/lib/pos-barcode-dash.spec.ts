@@ -12,6 +12,7 @@ import {
 } from '@/features/pos/lib/pos-product-lookup';
 import { parseQuantityPrefixQuery } from '@/features/pos/lib/pos-quantity-prefix';
 import {
+  getBarcodeLookupCandidates,
   isInvoiceBarcodeQuery,
   sanitizeSearchInputLive,
   shouldSkipInvoiceSearch,
@@ -87,5 +88,22 @@ describe('pos-barcode-dash frontend contract', () => {
     // An alphanumeric dashed code is not a numeric dashed barcode.
     expect(shouldSkipInvoiceSearch('ABC-123-456')).toBe(false);
     expect(shouldSkipInvoiceSearch('')).toBe(false);
+  });
+
+  it('matches dashed barcodes even when Windows Arabic keyboard maps the separator to ظ', () => {
+    expect(getBarcodeLookupCandidates('321321ظ007')).toEqual([
+      '321321ظ007',
+      '321321/007',
+      '321321-007',
+    ]);
+    const hyphenProducts = [product('321321-007')];
+    expect(matchProductByCode(hyphenProducts, '321321ظ007').status).toBe('matched');
+
+    const slashProducts = [product('321321/007')];
+    expect(matchProductByCode(slashProducts, '321321ظ007').status).toBe('matched');
+
+    // Arabic word search must not match unrelated barcodes or falsely trigger barcode lookup
+    expect(matchProductByCode(hyphenProducts, 'ظرف').status).toBe('not-found');
+    expect(isLikelyBarcodeQuery(getBarcodeLookupCandidates('ظرف')[1])).toBe(false);
   });
 });

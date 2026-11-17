@@ -18,8 +18,10 @@ import { QuickStockAdjustmentDialog, useInventoryActionCatalog } from '@/feature
 import { systemConfirm, toast } from '@/shared/components/system-alert';
 import type { Category, Product, Supplier, Location } from '@/types/domain';
 import {
+  applySequentialVariantBarcodes,
   buildGroupSaveRows,
   buildPayload,
+  countLegacyHyphenVariantBarcodes,
   deriveBaseName,
   duplicateSummary,
   rowsFingerprint,
@@ -31,6 +33,7 @@ import {
 } from '@/features/products/components/workspace-sections/FashionGroupEditorCard.helpers';
 import { splitFashionTokens, mergeFashionTokens } from '@/features/products/components/fashion-variants.utils';
 import { VariantImageCell } from '@/features/products/components/VariantImageCell';
+import { FashionGroupBarcodePrintAction } from '@/features/products/components/workspace-sections/FashionGroupBarcodePrintAction';
 
 export type VariantTemplateType = 'fashion' | 'scents' | 'sizes' | 'custom';
 
@@ -520,23 +523,23 @@ export function FashionGroupEditorCard({ product, categories, suppliers, locatio
     }
   }
 
-  function generateSequentialBarcodes() {
+  async function generateSequentialBarcodes() {
     const prefix = (barcodePrefix || commonDraft.styleCode).trim();
     if (!prefix) return;
-    setVariantRows((current) => {
-      const used = new Set(current.map((row) => row.barcode.trim().toLowerCase()).filter(Boolean));
-      return current.map((row, index) => {
-        if (row.barcode.trim()) return row;
-        let sequence = index + 1;
-        let candidate = `${prefix}-${String(sequence).padStart(3, '0')}`;
-        while (used.has(candidate.toLowerCase())) {
-          sequence++;
-          candidate = `${prefix}-${String(sequence).padStart(3, '0')}`;
-        }
-        used.add(candidate.toLowerCase());
-        return { ...row, barcode: candidate };
+    const legacyHyphenCount = countLegacyHyphenVariantBarcodes(variantRows);
+    let replaceLegacyHyphens = false;
+    if (legacyHyphenCount > 0) {
+      replaceLegacyHyphens = await systemConfirm({
+        title: 'تحديث الباركودات القديمة',
+        message: `يوجد ${legacyHyphenCount} باركود قديم به شرطة (-).\nاستبدالهم بأرقام مدمجة بدون شرطة؟`,
+        confirmText: 'استبدال الكل',
+        cancelText: 'للفارغ فقط',
       });
-    });
+    }
+    setVariantRows((current) => applySequentialVariantBarcodes(current, prefix, { replaceLegacyHyphens }));
+    if (replaceLegacyHyphens) {
+      toast.success(`تم تحديث ${legacyHyphenCount} باركود — اضغط حفظ المجموعة للاعتماد`);
+    }
   }
 
   function generateSequentialSkus() {
@@ -1229,7 +1232,7 @@ export function FashionGroupEditorCard({ product, categories, suppliers, locatio
             <Button
               type="button"
               variant="secondary"
-              onClick={generateSequentialBarcodes}
+              onClick={() => void generateSequentialBarcodes()}
               disabled={mutation.isPending || !variantRows.length || !commonDraft.styleCode.trim()}
               style={{ fontSize: '0.74rem', padding: '3px 8px', whiteSpace: 'nowrap' }}
               title={t('products.workspace_sections.fashion_group_editor_card.s31', "توليد باركودات متسلسلة")}
@@ -1246,26 +1249,9 @@ export function FashionGroupEditorCard({ product, categories, suppliers, locatio
             >
               توليد SKU
             </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={clearAllBarcodes}
-              disabled={mutation.isPending || !variantRows.length}
-              style={{ fontSize: '0.74rem', padding: '3px 8px', whiteSpace: 'nowrap' }}
-              title={t('products.workspace_sections.fashion_group_editor_card.s33', "مسح كل الباركودات")}
-            >
-              مسح الباركودات
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={resetDraft}
-              disabled={mutation.isPending || !hasDraftChanges}
-              style={{ fontSize: '0.74rem', padding: '3px 8px', whiteSpace: 'nowrap' }}
-              title={t('products.workspace_sections.fashion_group_editor_card.s34', "إعادة القيم الأصلية")}
-            >
-              إعادة الأصل
-            </Button>
+            <Button type="button" variant="secondary" onClick={clearAllBarcodes} disabled={mutation.isPending || !variantRows.length} style={{ fontSize: '0.74rem', padding: '3px 8px', whiteSpace: 'nowrap' }} title={t('products.workspace_sections.fashion_group_editor_card.s33', "مسح كل الباركودات")}>مسح الباركودات</Button>
+            <FashionGroupBarcodePrintAction groupProducts={groupProducts} hasDraftChanges={hasDraftChanges} disabled={mutation.isPending} />
+            <Button type="button" variant="secondary" onClick={resetDraft} disabled={mutation.isPending || !hasDraftChanges} style={{ fontSize: '0.74rem', padding: '3px 8px', whiteSpace: 'nowrap' }} title={t('products.workspace_sections.fashion_group_editor_card.s34', "إعادة القيم الأصلية")}>إعادة الأصل</Button>
           </div>
         </div>
 

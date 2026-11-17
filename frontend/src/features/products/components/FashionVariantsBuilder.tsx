@@ -8,6 +8,7 @@ import { normalizeArabicSearchKey } from '@/lib/arabic-normalization';
 import { mergeFashionTokens, splitFashionTokens, type FashionVariantDraft } from '@/features/products/components/fashion-variants.utils';
 import { VariantImageCell } from '@/features/products/components/VariantImageCell';
 import { CheckIcon, PlusIcon, XIcon } from '@/shared/components/icons/AppIcons';
+import { createSequentialVariantBarcode } from '@/lib/barcode';
 
 export type VariantTemplateType = 'fashion' | 'scents' | 'sizes' | 'custom';
 
@@ -250,14 +251,7 @@ export function FashionVariantsBuilder({
     onRowsChange(
       rows.map((row, index) => {
         if (row.barcode?.trim()) return row;
-        let sequence = index + 1;
-        let candidate = `${prefix}-${String(sequence).padStart(3, '0')}`;
-        while (used.has(candidate.toLowerCase())) {
-          sequence++;
-          candidate = `${prefix}-${String(sequence).padStart(3, '0')}`;
-        }
-        used.add(candidate.toLowerCase());
-        return { ...row, barcode: candidate };
+        return { ...row, barcode: createSequentialVariantBarcode(prefix, index + 1, used) };
       }),
     );
   }

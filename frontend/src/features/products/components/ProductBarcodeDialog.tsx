@@ -11,7 +11,14 @@ import { invalidateCatalogDomain } from '@/app/query-invalidation';
 import { productsApi } from '@/features/products/api/products.api';
 import { buildUpdatePayload, normalizeCustomerPrices, toProductFormValues } from '@/features/products/components/workspace-sections/product-workspace.utils';
 import { normalizeProductUnits } from '@/features/products/components/ProductUnitsEditor';
-import { buildCode128Svg, collectExistingBarcodes, createGeneratedBarcode, productUnitsWithFallback } from '@/lib/barcode';
+import {
+  buildCode128Svg,
+  collectExistingBarcodes,
+  createGeneratedBarcode,
+  isCode128BValueSupported,
+  productUnitsWithFallback,
+  remapArabicKeyboardToEnglish,
+} from '@/lib/barcode';
 import type { BarcodePrintItem } from '@/lib/barcode-labels';
 import { collectFashionBarcodeItems, getSavedUnitBarcode } from './product-barcode-print.helpers';
 import { toast } from '@/shared/components/system-alert';
@@ -246,7 +253,15 @@ export function ProductBarcodeDialog({ open, product, products, mode = 'scan', o
                 <input
                   data-autofocus
                   value={scanValue}
-                  onChange={(event) => setScanValue(event.target.value)}
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    if (raw && !isCode128BValueSupported(raw) && /[\u0600-\u06FF]/.test(raw)) {
+                      const remapped = remapArabicKeyboardToEnglish(raw);
+                      setScanValue(/^\d+[\/]\d+(?:[\/]\d+)*$/.test(remapped) && raw.includes('ظ') ? remapped.replace(/\//g, '-') : remapped);
+                      return;
+                    }
+                    setScanValue(raw);
+                  }}
                   placeholder={t('products.product_barcode_dialog.s15', "وجّه السكانر أو اكتب الباركود...")}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {

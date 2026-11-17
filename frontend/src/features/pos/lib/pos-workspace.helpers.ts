@@ -1,6 +1,7 @@
 import type { PosPriceType } from '@/features/pos/types/pos.types';
 import type { Product } from '@/types/domain';
 import type { PaymentChannel, PaymentType, PosDraftSnapshot } from '@/features/pos/hooks/usePosWorkspace';
+import { getBarcodeLookupCandidates } from '@/features/pos/lib/pos-barcode-normalizer';
 
 export function normalizePaymentChannel(
   paymentType: PaymentType,
@@ -54,10 +55,7 @@ export function computeDraftTotal(draft: PosDraftSnapshot) {
   }, 0) - Number(draft.discount || 0);
 }
 
-export function matchProductByCode(products: Product[], rawCode: string) {
-  const code = String(rawCode || '').trim().toLowerCase();
-  if (!code) return { status: 'empty' as const };
-
+function matchSingleCodeCandidate(products: Product[], code: string) {
   const matches: Array<{ product: Product; unitId?: string; unitName?: string | null; multiplier: number; kind: 'product' | 'unit' }> = [];
   const len = products.length;
 
@@ -94,6 +92,18 @@ export function matchProductByCode(products: Product[], rawCode: string) {
   if (uniqueProductIds.length > 1) return { status: 'ambiguous' as const, matches };
   const preferred = preferredUnits[0] || matches[0];
   return { status: 'matched' as const, match: preferred };
+}
+
+export function matchProductByCode(products: Product[], rawCode: string) {
+  const candidates = getBarcodeLookupCandidates(rawCode);
+  if (!candidates.length) return { status: 'empty' as const };
+
+  for (const candidate of candidates) {
+    const res = matchSingleCodeCandidate(products, candidate.toLowerCase());
+    if (res.status !== 'not-found') return res;
+  }
+
+  return { status: 'not-found' as const };
 }
 
 export function buildSaleLineKey(product: Product, priceType: PosPriceType) {

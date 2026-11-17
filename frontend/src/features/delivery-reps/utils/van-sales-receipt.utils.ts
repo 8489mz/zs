@@ -241,7 +241,7 @@ export function buildVanSaleThermalReceiptHtml(
     <!-- BARCODE -->
     ${barcodeSvg ? `
       <div style="text-align: center; margin: 4px 0 3px;">
-        <div style="display: flex; justify-content: center; height: 30px; max-width: 100%; overflow: hidden;">
+        <div style="display: flex; justify-content: center; height: 36px; max-width: 240px; margin: 0 auto; overflow: hidden;">
           ${barcodeSvg}
         </div>
         <div style="font-size: 8.5px; font-family: monospace; letter-spacing: 1px; margin-top: 1px;">

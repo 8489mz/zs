@@ -41,6 +41,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { usePosWorkspace } from '@/features/pos/hooks/usePosWorkspace';
 import { usePosWorkspaceKeyboardShortcuts } from '@/features/pos/hooks/usePosWorkspaceKeyboardShortcuts';
 import {
+  getBarcodeLookupCandidates,
   isInvoiceBarcodeQuery,
   getNormalizedInvoiceSearchTerms,
   matchesSaleDocNo,
@@ -399,7 +400,7 @@ export function PosWorkspace() {
           if (submitted) { pos.setSearch(''); return; }
         }
 
-        const remappedQuery = remapArabicKeyboardToEnglish(query);
+        const remoteCandidates = getBarcodeLookupCandidates(query).slice(1);
         let lookupProducts: Product[] = [];
         try {
           lookupProducts = await posApi.lookupProducts({ barcode: query, branchId: pos.branchId, locationId: pos.locationId, limit: 5 });
@@ -409,20 +410,22 @@ export function PosWorkspace() {
         }
         const remoteMatch = matchProductByCode(lookupProducts, query);
 
-        if (remoteMatch.status !== 'matched' && remappedQuery !== query) {
-          let remappedLookup: Product[] = [];
-          try {
-            remappedLookup = await posApi.lookupProducts({ barcode: remappedQuery, branchId: pos.branchId, locationId: pos.locationId, limit: 5 });
-          } catch {
-            const offlineItem = await lookupProductByBarcodeFromStorage(remappedQuery, activeTenantId);
-            if (offlineItem) remappedLookup = [offlineItem];
-          }
-          const remappedMatch = matchProductByCode(remappedLookup, remappedQuery);
-          if (remappedMatch.status === 'matched') {
-            const submitted = pos.handleQuickAddCodeSubmit(remappedQuery, remappedLookup);
-            if (submitted) { pos.setSearch(''); return; }
-            focusBarcodeEntry();
-            return;
+        if (remoteMatch.status !== 'matched') {
+          for (const candidate of remoteCandidates) {
+            let remappedLookup: Product[] = [];
+            try {
+              remappedLookup = await posApi.lookupProducts({ barcode: candidate, branchId: pos.branchId, locationId: pos.locationId, limit: 5 });
+            } catch {
+              const offlineItem = await lookupProductByBarcodeFromStorage(candidate, activeTenantId);
+              if (offlineItem) remappedLookup = [offlineItem];
+            }
+            const remappedMatch = matchProductByCode(remappedLookup, candidate);
+            if (remappedMatch.status === 'matched') {
+              const submitted = pos.handleQuickAddCodeSubmit(candidate, remappedLookup);
+              if (submitted) { pos.setSearch(''); return; }
+              focusBarcodeEntry();
+              return;
+            }
           }
         }
 
@@ -548,8 +551,9 @@ export function PosWorkspace() {
       }
     }
 
-    // If query is a numeric barcode (not a product text search)
-    if (isLikelyBarcodeQuery(query) || /^\d+$/.test(query)) {
+    // If query is a numeric/remapped barcode (not an Arabic text product search)
+    const barcodeCandidates = getBarcodeLookupCandidates(query);
+    if (barcodeCandidates.some((c) => isLikelyBarcodeQuery(c) || /^\d+$/.test(c))) {
       // A numeric dashed product barcode (e.g. 622123-456789) goes straight
       // to barcode lookup: it is not an invoice code, so the invoice search
       // must not run before the remote barcode lookup (INV-BARCODE-HIJACK-FIX).

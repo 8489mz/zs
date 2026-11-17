@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/shared/ui/button';
 import { Field } from '@/shared/ui/field';
 import { CameraBarcodeScannerModal } from '@/shared/components/CameraBarcodeScannerModal';
+import { getBarcodeLookupCandidates } from '@/lib/barcode';
 import { useTranslation } from '../../utils/i18n-purchase-prototype';
 import type { ProductOption } from './newPurchaseOrder.types';
 
@@ -26,6 +27,12 @@ export function BarcodeScanDialog({
   const [showCamera, setShowCamera] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
+  const scanCandidates = getBarcodeLookupCandidates(barcode).map((c) => c.toLowerCase());
+  const matched = scanCandidates
+    .map((candidate) => products.find((product) => String(product.barcode || '').trim().toLowerCase() === candidate))
+    .find(Boolean);
+  const resolvedScanCode = matched ? matched.barcode : barcode.trim();
+
   useEffect(() => {
     if (!open) return;
     setBarcode(query);
@@ -42,16 +49,14 @@ export function BarcodeScanDialog({
       }
       if (event.key === 'Enter') {
         event.preventDefault();
-        onScan(barcode);
+        onScan(resolvedScanCode || barcode);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [barcode, onClose, onScan, open]);
+  }, [barcode, resolvedScanCode, onClose, onScan, open]);
 
   if (!open) return null;
-
-  const matched = products.find((product) => product.barcode === barcode.trim());
 
   return (
     <>
@@ -83,7 +88,7 @@ export function BarcodeScanDialog({
           <div className="purchase-prototype-create-actions">
             <Button variant="secondary" type="button" onClick={onClose}>{t('cancel')}</Button>
             {matched ? (
-              <Button type="button" onClick={() => onScan(barcode)}>{t('add_to_item')}</Button>
+              <Button type="button" onClick={() => onScan(resolvedScanCode || barcode)}>{t('add_to_item')}</Button>
             ) : (
               <Button type="button" onClick={() => onOpenQuickCreate(barcode)}>{t('create_new_item_with_barcode')}</Button>
             )}

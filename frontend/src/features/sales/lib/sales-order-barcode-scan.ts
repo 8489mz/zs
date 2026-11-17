@@ -1,4 +1,5 @@
 import type { AppSettings, Product } from '@/types/domain';
+import { getBarcodeLookupCandidates } from '@/lib/barcode';
 import { matchProductByWeightedCode, parseWeightedBarcode } from '@/shared/lib/weighted-barcode';
 
 export interface SalesOrderProductOption {
@@ -73,16 +74,18 @@ export function resolveSalesOrderBarcodeScan(params: {
     return { status: 'error', message: `باركود ميزان: لم يتم العثور على كود الصنف ${weighted.productCode}.` };
   }
 
-  const lower = code.toLowerCase();
-  const found = params.productOptions.find(
-    (entry) =>
-      (entry.barcode && entry.barcode.trim().toLowerCase() === lower) ||
-      (entry.sku && entry.sku.trim().toLowerCase() === lower) ||
-      (entry.raw?.styleCode && entry.raw.styleCode.trim().toLowerCase() === lower) ||
-      entry.raw?.units?.some((u) => u.barcode && u.barcode.trim().toLowerCase() === lower),
-  );
-  if (found) {
-    return { status: 'found', option: found, quantity: 1, unitName: found.unit, total: found.price };
+  const candidates = getBarcodeLookupCandidates(code).map((c) => c.toLowerCase());
+  for (const lower of candidates) {
+    const found = params.productOptions.find(
+      (entry) =>
+        (entry.barcode && entry.barcode.trim().toLowerCase() === lower) ||
+        (entry.sku && entry.sku.trim().toLowerCase() === lower) ||
+        (entry.raw?.styleCode && entry.raw.styleCode.trim().toLowerCase() === lower) ||
+        entry.raw?.units?.some((u) => u.barcode && u.barcode.trim().toLowerCase() === lower),
+    );
+    if (found) {
+      return { status: 'found', option: found, quantity: 1, unitName: found.unit, total: found.price };
+    }
   }
   return { status: 'error', message: 'لم يتم العثور على صنف بهذا الباركود' };
 }

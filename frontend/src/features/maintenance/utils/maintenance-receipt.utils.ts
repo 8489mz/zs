@@ -169,8 +169,9 @@ export function printMaintenanceDeviceSticker(ticket: MaintenanceTicket, setting
       }
       .sticker-barcode {
         width: 100%;
-        height: 18px;
+        height: 26px;
         margin: 1px auto 0;
+        overflow: hidden;
       }
       .sticker-barcode svg {
         width: 100%;
