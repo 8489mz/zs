@@ -323,6 +323,9 @@ export function buildSettingsUpdatePayload(
     posElectronKitchenPrinter: values.posElectronKitchenPrinter !== undefined
       ? cleanText(values.posElectronKitchenPrinter)
       : cleanText(current?.posElectronKitchenPrinter),
+    posElectronBarcodePrinter: values.posElectronBarcodePrinter !== undefined
+      ? cleanText(values.posElectronBarcodePrinter)
+      : cleanText(current?.posElectronBarcodePrinter),
     posWindowsPrinterName: values.posWindowsPrinterName !== undefined
       ? cleanText(values.posWindowsPrinterName)
       : cleanText(current?.posWindowsPrinterName),

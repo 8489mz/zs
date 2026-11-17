@@ -7,8 +7,9 @@ import { FormSection } from '@/shared/components/form-section';
 import { Button } from '@/shared/ui/button';
 import { CustomSelect } from '@/shared/ui/custom-select';
 import { HardwareBridgeClient } from '@/features/pos';
-import { printSmallReceiptDocument } from '@/lib/small-receipt-printer';
-import { CurrencySymbol } from '@/shared/ui/currency-symbol';
+import { openReceiptDocument } from '@/lib/pos-printing/open-receipt';
+import { ElectronDirectPrintersSection, buildElectronPrinterOptions } from './ElectronDirectPrintersSection';
+import { buildPrintingPreviewIframeHtml, buildPrintingTestReceiptDocument } from './printing-test-receipt';
 
 const checkboxGridStyle: CSSProperties = {
   display: 'grid',
@@ -112,7 +113,10 @@ interface PrintingTabProps {
   systemPrinters?: { name: string; displayName: string }[];
   savedCashierPrinter?: string;
   savedKitchenPrinter?: string;
+  savedBarcodePrinter?: string;
   posKitchenPrinterEnabled?: boolean;
+  branchName?: string;
+  locationName?: string;
 }
 
 export const PrintingSettingsTab = memo(function PrintingSettingsTab({
@@ -123,17 +127,23 @@ export const PrintingSettingsTab = memo(function PrintingSettingsTab({
   systemPrinters = [],
   savedCashierPrinter,
   savedKitchenPrinter,
+  savedBarcodePrinter,
   posKitchenPrinterEnabled,
+  branchName,
+  locationName,
 }: PrintingTabProps) {
   const { t } = useTranslation();
+  const watchedFormValues = form.watch();
   const rawActivity = String(form.watch('businessIndustry') || settings?.businessIndustry || (settings as any)?.activityType || 'retail_general').trim().toLowerCase();
   const isContractingVertical = rawActivity === 'contracting' || rawActivity === 'construction' || rawActivity === 'مقاولات' || Boolean(form.watch('contractingModuleEnabled'));
   const isMaritimeVertical = rawActivity === 'maritime_freight' || rawActivity === 'maritime' || rawActivity === 'freight' || rawActivity === 'shipping' || rawActivity === 'شحن' || Boolean(form.watch('maritimeFreightModuleEnabled'));
-  const isManufacturingVertical = rawActivity === 'manufacturing' || rawActivity === 'production' || rawActivity === 'تصنيع' || rawActivity === 'مصنع' || Boolean(form.watch('manufacturingModuleEnabled'));
+  const isManufacturingVertical = rawActivity === 'manufacturing' || rawActivity === 'production' || rawActivity === 'تصنيع' || rawActivity === 'مصنع';
   const isServicesVertical = rawActivity === 'services' || rawActivity === 'consulting' || rawActivity === 'استشارات';
   const isNonPosVertical = isContractingVertical || isMaritimeVertical || isServicesVertical || isManufacturingVertical;
   const isPosModuleEnabled = Boolean(form.watch('posModuleEnabled') ?? settings?.posModuleEnabled ?? true);
+  const isInventoryModuleEnabled = Boolean(form.watch('inventoryModuleEnabled') ?? settings?.inventoryModuleEnabled ?? true);
   const showPosSettings = isPosModuleEnabled && !isNonPosVertical;
+  const showElectronBarcodePrinter = showPosSettings || (!isContractingVertical && !isMaritimeVertical && !isServicesVertical && isInventoryModuleEnabled);
   const savedWindowsPrinter = String(form.watch('posWindowsPrinterName') || settings?.posWindowsPrinterName || '').trim();
   // Windows printers installed on the bridge PC (null = bridge unreachable:
   // the name field stays a free-text input instead of a picker).
@@ -524,33 +534,16 @@ export const PrintingSettingsTab = memo(function PrintingSettingsTab({
         </FormSection>
       )}
 
-      {/* ===== 2d. طابعة الكاشير المباشرة في نسخة الإلكترون (كل الأنشطة) ===== */}
-      {showPosSettings && typeof window !== 'undefined' && (window as any).electronPrinter && (
-        <FormSection
-          title={t('settings.forms.tabs.printing_settings_tab.s187', "طابعة الكاشير المباشرة (الإلكترون)")}
-          description={t('settings.forms.tabs.printing_settings_tab.s188', "اختر طابعة ويندوز المتصلة بالجهاز لطباعة الإيصال مباشرة بدون نافذة الطباعة، في نسخة الإلكترون.")}
-        >
-          <div className="document-prototype-grid compact-grid-2">
-            <div className="field">
-              <label>{t('settings.forms.tabs.printing_settings_tab.s67', "طابعة الكاشير المباشرة (الريسيت)")}</label>
-              <CustomSelect
-                value={form.watch('posElectronCashierPrinter') || ''}
-                onChange={(val) => form.setValue('posElectronCashierPrinter', val, { shouldDirty: true, shouldValidate: true })}
-                options={[
-                  { value: '', label: t('settings.forms.tabs.printing_settings_tab.s68', "- الطباعة العادية (نافذة المتصفح) -") },
-                  ...(savedCashierPrinter && !systemPrinters.some((p: any) => p.name === savedCashierPrinter) ? [{ value: savedCashierPrinter, label: savedCashierPrinter }] : []),
-                  ...systemPrinters.map((p: any) => ({ value: p.name, label: p.displayName || p.name })),
-                ]}
-                disabled={disabled}
-              />
-            </div>
-
-            <div className="muted small" style={{ gridColumn: '1 / -1' }}>
-              <strong>{t('settings.forms.tabs.printing_settings_tab.s71', "معلومة:")}</strong> {t('settings.forms.tabs.printing_settings_tab.s189', "إذا اخترت طابعة هنا، سيتم إرسال الإيصال مباشرة وبدون أي شاشة تأكيد.")}
-            </div>
-          </div>
-        </FormSection>
-      )}
+      {/* ===== 2d. الطابعات المباشرة في نسخة الإلكترون (الكاشير والباركود لكل الأنشطة) ===== */}
+      <ElectronDirectPrintersSection
+        form={form}
+        disabled={disabled}
+        systemPrinters={systemPrinters}
+        savedCashierPrinter={savedCashierPrinter}
+        savedBarcodePrinter={savedBarcodePrinter}
+        showCashierPrinter={showPosSettings}
+        showBarcodePrinter={showElectronBarcodePrinter}
+      />
 
       {/* ===== 3. طابعة وشيت المطبخ ومناداة العميل (KOT) ===== */}
       {(isRestaurantVertical || posKitchenPrinterEnabled) && (
@@ -613,11 +606,11 @@ export const PrintingSettingsTab = memo(function PrintingSettingsTab({
                   <CustomSelect
                     value={form.watch('posElectronKitchenPrinter') || ''}
                     onChange={(val) => form.setValue('posElectronKitchenPrinter', val, { shouldDirty: true, shouldValidate: true })}
-                    options={[
-                      { value: '', label: t('settings.forms.tabs.printing_settings_tab.s70', "- الطباعة العادية (نافذة المتصفح) -") },
-                      ...(savedKitchenPrinter && !systemPrinters.some((p: any) => p.name === savedKitchenPrinter) ? [{ value: savedKitchenPrinter, label: savedKitchenPrinter }] : []),
-                      ...systemPrinters.map((p: any) => ({ value: p.name, label: p.displayName || p.name })),
-                    ]}
+                    options={buildElectronPrinterOptions(
+                      systemPrinters,
+                      savedKitchenPrinter,
+                      t('settings.forms.tabs.printing_settings_tab.s70', '- الطباعة العادية (نافذة المتصفح) -'),
+                    )}
                     disabled={disabled || !posKitchenPrinterEnabled}
                   />
                 </div>
@@ -812,82 +805,34 @@ export const PrintingSettingsTab = memo(function PrintingSettingsTab({
                 </div>
               </div>
             ) : (
-              /* POS / Retail Receipt Mockup */
-              <div style={{
-                width: (form.watch('paperSize') || 'receipt') === 'a4' ? '100%' : '300px',
-                maxWidth: '320px',
-                background: '#ffffff',
-                border: '1px dashed #94a3b8',
-                borderRadius: '4px',
-                padding: '16px 14px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
-                fontFamily: 'monospace, sans-serif',
-                fontSize: '11px',
-                color: '#0f172a',
-                lineHeight: 1.4,
-                boxSizing: 'border-box',
-              }}>
-                <div style={{ textAlign: 'center', borderBottom: '1px dashed #cbd5e1', paddingBottom: '10px', marginBottom: '10px' }}>
-                  <div style={{ fontSize: '15px', fontWeight: 900 }}>{settings?.storeName || t('settings.forms.tabs.printing_settings_tab.s129', "متجر Z-Systems التجريبي")}</div>
-                  <div style={{ fontSize: '10px', color: '#64748b' }}>{t('settings.forms.tabs.printing_settings_tab.s130', "الفرع الرئيسي • القاهرة")}</div>
-                  <div style={{ fontSize: '10px', color: '#64748b' }}>{t('settings.forms.tabs.printing_settings_tab.s131', "س.ت: 123456 • ت.ض: 987654321")}</div>
-                  <div style={{ marginTop: '6px', fontSize: '11px', fontWeight: 700 }}>{t('settings.forms.tabs.printing_settings_tab.s132', "فاتورة ضريبية مبسطة")}</div>
-                  <div style={{ fontSize: '10px', color: '#475569' }}>{t('settings.forms.tabs.printing_settings_tab.s133', "رقم: #Z-260818-0001 •")} {new Date().toLocaleDateString('ar-EG')}</div>
-                </div>
-
-                <div style={{ borderBottom: '1px dashed #cbd5e1', paddingBottom: '8px', marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, borderBottom: '1px solid #e2e8f0', paddingBottom: '4px', marginBottom: '4px' }}>
-                    <span>{t('settings.forms.tabs.printing_settings_tab.s134', "الصنف")}</span>
-                    <span>{t('settings.forms.tabs.printing_settings_tab.s135', "الكمية × السعر")}</span>
-                    <span>{t('settings.forms.tabs.printing_settings_tab.s136', "الإجمالي")}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0' }}>
-                    <span>{t('settings.forms.tabs.printing_settings_tab.s137', "صنف تجريبي 1")}</span>
-                    <span>2 × 50.00</span>
-                    <span>100.00</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0' }}>
-                    <span>{t('settings.forms.tabs.printing_settings_tab.s138', "صنف تجريبي 2")}</span>
-                    <span>1 × 150.00</span>
-                    <span>150.00</span>
-                  </div>
-                </div>
-
-                <div style={{ borderBottom: '1px dashed #cbd5e1', paddingBottom: '8px', marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{t('settings.forms.tabs.printing_settings_tab.s139', "المجموع الفرعي:")}</span>
-                    <span>250.00 <CurrencySymbol /></span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{t('settings.forms.tabs.printing_settings_tab.s140', "ضريبة القيمة المضافة (14%):")}</span>
-                    <span>35.00 <CurrencySymbol /></span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#b45309' }}>
-                    <span>{t('settings.forms.tabs.printing_settings_tab.s141', "خصم نقاط الولاء:")}</span>
-                    <span>-20.00 <CurrencySymbol /></span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 900, marginTop: '4px' }}>
-                    <span>{t('settings.forms.tabs.printing_settings_tab.s142', "الصافي النهائي:")}</span>
-                    <span>265.00 <CurrencySymbol /></span>
-                  </div>
-                </div>
-
-                <div style={{ textAlign: 'center', marginTop: '10px' }}>
-                  <div style={{
-                    display: 'inline-block',
-                    padding: '6px',
-                    background: '#f1f5f9',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '4px',
-                    marginBottom: '8px'
-                  }}>
-                    <span style={{ fontSize: '9px', fontWeight: 700, color: '#475569' }}>{t('settings.forms.tabs.printing_settings_tab.s143', "[ رمز QR المشفر ]")}</span>
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#64748b' }}>
-                    {form.watch('invoiceFooter') || t('settings.forms.tabs.printing_settings_tab.s144', "شكراً لتعاملكم معنا ونسعد بزيارتكم دائماً")}
-                  </div>
-                </div>
-              </div>
+              /* Live POS / Retail Receipt Preview powered by buildReceiptDocument */
+              <iframe
+                title={t('settings.forms.tabs.printing_settings_tab.s79', 'معاينة الفاتورة الحية')}
+                sandbox=""
+                srcDoc={
+                  activeTab === 'printing'
+                    ? buildPrintingPreviewIframeHtml({
+                        settings,
+                        formValues: watchedFormValues,
+                        branchName,
+                        locationName,
+                      })
+                    : ''
+                }
+                style={{
+                  width: (watchedFormValues?.paperSize || 'receipt') === 'a4'
+                    ? '100%'
+                    : Number(watchedFormValues?.receiptWidthMm) === 58
+                    ? '250px'
+                    : '320px',
+                  maxWidth: '100%',
+                  height: '520px',
+                  background: '#ffffff',
+                  border: '1px dashed #94a3b8',
+                  borderRadius: '6px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+                }}
+              />
             )}
 
             {/* Test Print Action */}
@@ -896,29 +841,27 @@ export const PrintingSettingsTab = memo(function PrintingSettingsTab({
                 type="button"
                 variant="primary"
                 onClick={() => {
-                  const footerText = form.getValues('invoiceFooter') || (isMaritimeVertical ? t('settings.forms.tabs.printing_settings_tab.s145', "شكراً لتعاملكم مع خطوطنا وخدماتنا الملاحية.") : t('settings.forms.tabs.printing_settings_tab.s146', "شكراً لتعاملكم معنا ونسعد بزيارتكم دائماً"));
                   if (isMaritimeVertical || isContractingVertical) {
                     window.print();
                     return;
                   }
-                  const testHtml = `
-                    <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 6px; margin-bottom: 6px;">
-                      <h2 style="margin: 0; font-size: 14px;">${settings?.storeName || 'Z-Systems Store'}</h2>
-                      <p style="margin: 2px 0; font-size: 10px;">فاتورة تجريبية لاختبار مقاس الطابعة</p>
-                      <p style="margin: 0; font-size: 10px;">#TEST-001 • ${new Date().toLocaleDateString('ar-EG')}</p>
-                    </div>
-                    <div style="font-size: 11px; border-bottom: 1px dashed #000; padding-bottom: 6px; margin-bottom: 6px;">
-                      <div style="display: flex; justify-content: space-between;"><span>صنف تجريبي A (x2)</span><span>100.00 <CurrencySymbol /></span></div>
-                      <div style="display: flex; justify-content: space-between;"><span>صنف تجريبي B (x1)</span><span>150.00 <CurrencySymbol /></span></div>
-                    </div>
-                    <div style="font-size: 12px; font-weight: bold; display: flex; justify-content: space-between; margin-bottom: 6px;">
-                      <span>الإجمالي الصافي:</span><span>250.00 <CurrencySymbol /></span>
-                    </div>
-                    <div style="text-align: center; font-size: 10px; border-top: 1px dashed #000; padding-top: 6px;">
-                      ${footerText}
-                    </div>
-                  `;
-                  printSmallReceiptDocument(testHtml, { title: t('settings.forms.tabs.printing_settings_tab.s147', "إيصال تجريبي"), widthMm: form.getValues('receiptWidthMm') === 58 ? 58 : 80 });
+                  const liveDoc = buildPrintingTestReceiptDocument({
+                    settings,
+                    formValues: form.getValues(),
+                    branchName,
+                    locationName,
+                  });
+                  openReceiptDocument(
+                    t('settings.forms.tabs.printing_settings_tab.s147', "إيصال تجريبي"),
+                    liveDoc.html,
+                    liveDoc.compact,
+                    {
+                      pageSize: liveDoc.pageSize,
+                      settings: liveDoc.liveSettings,
+                      cashierName: 'أحمد علي',
+                    },
+                    liveDoc.pageSize === 'receipt' ? '' : 'معاينة جاهزة للطباعة',
+                  );
                 }}
                 style={{
                   background: '#170e5e',

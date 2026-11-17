@@ -124,6 +124,9 @@ export interface AppSettings {
   posKitchenPrinterMode?: 'detailed' | 'mini';
   posKitchenLanguage?: 'dual' | 'en' | 'ar' | string;
   printBilingualItemNames?: boolean;
+  posElectronCashierPrinter?: string;
+  posElectronKitchenPrinter?: string;
+  posElectronBarcodePrinter?: string;
   posWindowsPrinterName?: string;
   posNetworkThermalPrinterIp?: string;
   posNetworkThermalPrinterPort?: number;

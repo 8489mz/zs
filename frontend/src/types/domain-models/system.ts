@@ -307,6 +307,7 @@ export interface AppSettings {
   printBilingualItemNames?: boolean;
   posElectronCashierPrinter?: string;
   posElectronKitchenPrinter?: string;
+  posElectronBarcodePrinter?: string;
   posWindowsPrinterName?: string;
   posNetworkThermalPrinterIp?: string;
   posNetworkThermalPrinterPort?: number;

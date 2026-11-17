@@ -238,11 +238,7 @@ export function BarcodePrintDialog({ open, product, unit, items, onClose }: Barc
       ? batchItems
       : [{ product: activeProduct, unit: activeUnit, copies }];
 
-    printBatchBarcodeLabels(
-      effectiveItems,
-      { presetId, copies: totalCopies, labelsPerPage, startOffset },
-      customization
-    );
+    printBatchBarcodeLabels(effectiveItems, { presetId, copies: totalCopies, labelsPerPage, startOffset }, customization, { settings: settingsQuery.data });
   };
 
   const handleReset = () => {

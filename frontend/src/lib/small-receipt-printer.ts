@@ -7,6 +7,7 @@ export interface SmallReceiptPrintOptions {
   fontSizePx?: number;
   printDelayMs?: number;
   autoClose?: boolean;
+  deviceName?: string;
 }
 
 export function getSmallReceiptStyles(options: { widthMm?: number; marginMm?: number; fontSizePx?: number } = {}) {
@@ -76,6 +77,7 @@ export function printSmallReceiptDocument(htmlContent: string, options: SmallRec
     fontSizePx = 10.5,
     printDelayMs = 150,
     autoClose = false,
+    deviceName,
   } = options;
 
   const styles = getSmallReceiptStyles({ widthMm, marginMm, fontSizePx });
@@ -94,6 +96,19 @@ export function printSmallReceiptDocument(htmlContent: string, options: SmallRec
     </div>
   </body>
 </html>`;
+
+  const trimmedDeviceName = String(deviceName || '').trim();
+  if (trimmedDeviceName && typeof window !== 'undefined' && (window as any).electronPrinter?.printHtmlSilent) {
+    (window as any).electronPrinter
+      .printHtmlSilent({
+        html: fullHtml,
+        deviceName: trimmedDeviceName,
+        pageSize: 'receipt',
+        receiptWidthMm: widthMm === 58 ? 58 : 80,
+      })
+      .catch((err: any) => console.error('Silent receipt test print failed:', err));
+    return;
+  }
 
   const printWindow = window.open('', '_blank', `width=${Math.max(380, widthMm * 4)},height=700`);
   if (!printWindow) {

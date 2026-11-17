@@ -25,7 +25,7 @@
  * (unchanged); saving the chosen printer name (settings mutation,
  * unchanged).
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { useForm } from 'react-hook-form';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PrintingSettingsTab } from './PrintingSettingsTab';
@@ -35,12 +35,16 @@ import type { SettingsFormInput, SettingsFormOutput } from '@/features/settings/
 // when its dropdown opens.
 window.HTMLElement.prototype.scrollIntoView = vi.fn() as unknown as typeof window.HTMLElement.prototype.scrollIntoView;
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (_key: string, fallback?: string) => fallback ?? _key,
-    i18n: { language: 'ar' },
-  }),
-}));
+vi.mock('react-i18next', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-i18next')>();
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (_key: string, fallback?: string) => fallback ?? _key,
+      i18n: { language: 'ar' },
+    }),
+  };
+});
 
 vi.mock('@/features/pos', () => ({
   HardwareBridgeClient: {
@@ -51,12 +55,14 @@ vi.mock('@/features/pos', () => ({
 const SYSTEM_PRINTERS = [{ name: 'EPSON WF-C5290BA', displayName: 'EPSON WF-C5290BA' }];
 
 const CASHIER_LABEL = 'طابعة الكاشير المباشرة (الريسيت)';
+const BARCODE_LABEL = 'طابعة الباركود المباشرة (الاستيكر — اختياري)';
 const KITCHEN_LABEL = 'طابعة المطبخ المباشرة (KOT)';
 
-function setElectron(on: boolean) {
+function setElectron(on: boolean, printHtmlSilent?: ReturnType<typeof vi.fn>) {
   if (on) {
     (window as any).electronPrinter = {
       getPrinters: () => Promise.resolve(SYSTEM_PRINTERS),
+      ...(printHtmlSilent ? { printHtmlSilent } : {}),
     };
   } else {
     delete (window as any).electronPrinter;
@@ -67,18 +73,39 @@ function renderTab(options: {
   businessIndustry: string;
   kitchenEnabled: boolean;
   electron: boolean;
+  manufacturingModuleEnabled?: boolean;
+  posModuleEnabled?: boolean;
+  inventoryModuleEnabled?: boolean;
+  printHtmlSilent?: ReturnType<typeof vi.fn>;
+  formOverrides?: Record<string, unknown>;
+  settingsOverrides?: Record<string, unknown>;
+  branchName?: string;
+  locationName?: string;
 }) {
-  const { businessIndustry, kitchenEnabled, electron } = options;
-  setElectron(electron);
+  const {
+    businessIndustry,
+    kitchenEnabled,
+    electron,
+    manufacturingModuleEnabled = false,
+    posModuleEnabled = true,
+    inventoryModuleEnabled = true,
+    printHtmlSilent,
+    formOverrides = {},
+    settingsOverrides = {},
+    branchName,
+    locationName,
+  } = options;
+  setElectron(electron, printHtmlSilent);
   const TestHost = () => {
     const form = useForm<SettingsFormInput, undefined, SettingsFormOutput>({
       defaultValues: {
         businessIndustry,
-        posModuleEnabled: true,
+        posModuleEnabled,
+        inventoryModuleEnabled,
         restaurantModuleEnabled: false,
         contractingModuleEnabled: false,
         maritimeFreightModuleEnabled: false,
-        manufacturingModuleEnabled: false,
+        manufacturingModuleEnabled,
         posKitchenPrinterEnabled: kitchenEnabled,
         posCashDrawerPrinterEnabled: false,
         posKitchenPrinterAuto: false,
@@ -86,10 +113,32 @@ function renderTab(options: {
         posKitchenLanguage: 'dual',
         posElectronCashierPrinter: '',
         posElectronKitchenPrinter: '',
+        posElectronBarcodePrinter: '',
         posWindowsPrinterName: '',
         posNetworkThermalPrinterIp: '',
         posNetworkThermalPrinterPort: 9100,
         paperSize: 'receipt',
+        receiptWidthMm: 80,
+        printShowLogo: true,
+        printShowPhone: true,
+        printShowAddress: true,
+        printShowTaxNumber: false,
+        printShowBranch: true,
+        printShowLocation: true,
+        printShowDocumentType: true,
+        printShowDocumentNumber: true,
+        printShowDate: true,
+        printShowHijriDate: false,
+        printShowOrderType: true,
+        printShowCashier: true,
+        printShowTax: true,
+        printShowItemCount: true,
+        printShowPiecesCount: true,
+        printShowPaymentBreakdown: true,
+        printShowInvoiceBarcode: true,
+        printShowFooter: true,
+        printCompactReceipt: true,
+        ...formOverrides,
       } as any,
     });
     return (
@@ -97,30 +146,35 @@ function renderTab(options: {
         form={form}
         disabled={false}
         activeTab="printing"
-        settings={{ businessIndustry, posModuleEnabled: true } as any}
+        settings={{ businessIndustry, posModuleEnabled, inventoryModuleEnabled, ...settingsOverrides } as any}
         systemPrinters={SYSTEM_PRINTERS}
         savedCashierPrinter=""
         savedKitchenPrinter=""
+        savedBarcodePrinter=""
         posKitchenPrinterEnabled={kitchenEnabled}
+        branchName={branchName}
+        locationName={locationName}
       />
     );
   };
   return render(<TestHost />);
 }
 
-describe('PrintingSettingsTab electron cashier printer', () => {
+describe('PrintingSettingsTab electron direct printers', () => {
   afterEach(() => {
     delete (window as any).electronPrinter;
   });
 
-  it('shows the cashier direct-printer picker for a retail tenant in Electron with kitchen printing off', () => {
+  it('shows both cashier and optional barcode pickers for a retail tenant in Electron with kitchen printing off', () => {
     renderTab({ businessIndustry: 'retail_general', kitchenEnabled: false, electron: true });
     expect(screen.getByText(CASHIER_LABEL)).toBeInTheDocument();
+    expect(screen.getByText(BARCODE_LABEL)).toBeInTheDocument();
   });
 
-  it('does not show the cashier picker in the browser (no window.electronPrinter)', () => {
+  it('does not show cashier or barcode pickers in the browser (no window.electronPrinter)', () => {
     renderTab({ businessIndustry: 'retail_general', kitchenEnabled: false, electron: false });
     expect(screen.queryByText(CASHIER_LABEL)).not.toBeInTheDocument();
+    expect(screen.queryByText(BARCODE_LABEL)).not.toBeInTheDocument();
   });
 
   it('keeps the kitchen picker gated: retail tenant with kitchen printing off has no kitchen picker', () => {
@@ -128,9 +182,88 @@ describe('PrintingSettingsTab electron cashier printer', () => {
     expect(screen.queryByText(KITCHEN_LABEL)).not.toBeInTheDocument();
   });
 
-  it('shows both pickers for a restaurant tenant in Electron', () => {
+  it('shows cashier, barcode, and kitchen pickers for a restaurant tenant in Electron', () => {
     renderTab({ businessIndustry: 'restaurant', kitchenEnabled: false, electron: true });
     expect(screen.getByText(CASHIER_LABEL)).toBeInTheDocument();
+    expect(screen.getByText(BARCODE_LABEL)).toBeInTheDocument();
     expect(screen.getByText(KITCHEN_LABEL)).toBeInTheDocument();
+  });
+
+  it('still shows cashier and barcode pickers when a retail tenant enables manufacturing as an add-on', () => {
+    renderTab({
+      businessIndustry: 'retail_general',
+      kitchenEnabled: false,
+      electron: true,
+      manufacturingModuleEnabled: true,
+    });
+    expect(screen.getByText(CASHIER_LABEL)).toBeInTheDocument();
+    expect(screen.getByText(BARCODE_LABEL)).toBeInTheDocument();
+  });
+
+  it('shows the barcode picker for non-POS inventory verticals like warehousing in Electron', () => {
+    renderTab({
+      businessIndustry: 'warehousing',
+      kitchenEnabled: false,
+      electron: true,
+      posModuleEnabled: false,
+      inventoryModuleEnabled: true,
+    });
+    expect(screen.queryByText(CASHIER_LABEL)).not.toBeInTheDocument();
+    expect(screen.getByText(BARCODE_LABEL)).toBeInTheDocument();
+  });
+
+  it('syncs both the live preview and Test Print with store details and receipt toggles (e.g. hiding cashier)', () => {
+    const printHtmlSilent = vi.fn().mockResolvedValue({ ok: true });
+    renderTab({
+      businessIndustry: 'retail_general',
+      kitchenEnabled: false,
+      electron: true,
+      printHtmlSilent,
+      branchName: 'فرع المعادي',
+      locationName: 'مخزن المعادي',
+      formOverrides: {
+        storeName: 'متجر النور',
+        phone: '01099887766',
+        address: 'شارع 9 المعادي',
+        taxNumber: '300400500',
+        printShowTaxNumber: true,
+        printShowCashier: true,
+        printShowInvoiceBarcode: true,
+        invoiceFooter: 'أهلاً بكم دائماً',
+        posElectronCashierPrinter: 'EPSON WF-C5290BA',
+      },
+    });
+
+    const previewFrame = screen.getByTitle('معاينة الفاتورة الحية') as HTMLIFrameElement;
+    const initialSrcDoc = previewFrame.getAttribute('srcdoc') || '';
+    expect(initialSrcDoc).toContain('متجر النور');
+    expect(initialSrcDoc).toContain('01099887766');
+    expect(initialSrcDoc).toContain('شارع 9 المعادي');
+    expect(initialSrcDoc).toContain('300400500');
+    expect(initialSrcDoc).toContain('فرع المعادي');
+    expect(initialSrcDoc).toContain('مخزن المعادي');
+    expect(initialSrcDoc).toContain('أهلاً بكم دائماً');
+    expect(initialSrcDoc).toContain('الكاشير:');
+    expect(initialSrcDoc).toContain('invoice-barcode-card');
+
+    // Uncheck "إظهار الكاشير" and "إظهار الفرع" live
+    fireEvent.click(screen.getByLabelText('إظهار الكاشير'));
+    fireEvent.click(screen.getByLabelText('إظهار الفرع'));
+
+    const updatedSrcDoc = previewFrame.getAttribute('srcdoc') || '';
+    expect(updatedSrcDoc).not.toContain('الكاشير:');
+    expect(updatedSrcDoc).not.toContain('فرع المعادي');
+
+    // Trigger "طباعة تجريبية حية (Test Print)"
+    fireEvent.click(screen.getByRole('button', { name: /طباعة تجريبية حية/ }));
+
+    expect(printHtmlSilent).toHaveBeenCalledTimes(1);
+    const callArg = printHtmlSilent.mock.calls[0][0];
+    expect(callArg.deviceName).toBe('EPSON WF-C5290BA');
+    expect(callArg.pageSize).toBe('receipt');
+    expect(callArg.html).toContain('متجر النور');
+    expect(callArg.html).toContain('أهلاً بكم دائماً');
+    expect(callArg.html).not.toContain('الكاشير:');
+    expect(callArg.html).not.toContain('فرع المعادي');
   });
 });

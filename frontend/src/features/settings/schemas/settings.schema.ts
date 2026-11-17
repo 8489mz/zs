@@ -118,6 +118,7 @@ export const settingsFormSchema = z.object({
   printBilingualItemNames: z.boolean().default(false),
   posElectronCashierPrinter: z.string().optional(),
   posElectronKitchenPrinter: z.string().optional(),
+  posElectronBarcodePrinter: z.string().optional(),
   posWindowsPrinterName: z.string().optional(),
   posNetworkThermalPrinterIp: z.string().optional(),
   posNetworkThermalPrinterPort: z.coerce.number().int().min(1).max(65535).default(9100),

@@ -1,7 +1,7 @@
 import { buildCode128Svg, normalizeCode128Value, productUnitsWithFallback } from '@/lib/barcode';
-import { escapeHtml, printHtmlDocument } from '@/lib/browser';
+import { escapeHtml, printHtmlDocument, resolvePrintSettings } from '@/lib/browser';
 import { formatCurrency } from '@/lib/format';
-import type { Product, ProductUnit } from '@/types/domain';
+import type { AppSettings, Product, ProductUnit } from '@/types/domain';
 
 export type BarcodePrintFamily = 'sheet' | 'thermal';
 
@@ -349,10 +349,16 @@ export function buildBarcodePreviewHtml(options: {
   `;
 }
 
+export interface BarcodePrintDispatchOptions {
+  settings?: Partial<AppSettings> | null;
+  deviceName?: string;
+}
+
 export function printBatchBarcodeLabels(
   items: BarcodePrintItem[],
   config: BarcodePrintConfig,
-  customization?: BarcodePrintCustomization
+  customization?: BarcodePrintCustomization,
+  dispatchOptions?: BarcodePrintDispatchOptions
 ) {
   if (!items.length) return;
   const preset = getBarcodePrintPreset(config.presetId || DEFAULT_BARCODE_PRINT_PRESET_ID);
@@ -437,10 +443,21 @@ export function printBatchBarcodeLabels(
     ? `@page { size: ${preset.pageWidthMm || preset.labelWidthMm}mm ${preset.labelHeightMm}mm; margin: 0; }`
     : `@page { size: A4 portrait; margin: 0; }`;
 
+  const barcodePrinterName = String(
+    dispatchOptions?.deviceName ||
+    dispatchOptions?.settings?.posElectronBarcodePrinter ||
+    resolvePrintSettings().electronBarcodePrinter ||
+    ''
+  ).trim();
+
   printHtmlDocument('ملصقات الباركود والرف', pageHtml, {
     subtitle: `${preset.pageLabel} · ${preset.label}`,
     pageSize: isThermal ? 'auto' : 'A4',
+    pageSizeMm: isThermal
+      ? { widthMm: preset.pageWidthMm || preset.labelWidthMm, heightMm: preset.labelHeightMm }
+      : undefined,
     orientation: 'portrait',
+    deviceName: barcodePrinterName || undefined,
     hideHeader: true,
     extraStyles: `
       ${thermalPageRule}
@@ -500,11 +517,13 @@ export function printProductBarcodeLabels(
   product: Product,
   unit: ProductUnit | null | undefined,
   config: BarcodePrintConfig,
-  customization?: BarcodePrintCustomization
+  customization?: BarcodePrintCustomization,
+  dispatchOptions?: BarcodePrintDispatchOptions
 ) {
   return printBatchBarcodeLabels(
     [{ product, unit, copies: Math.max(1, Number(config.copies || 1)) }],
     config,
-    customization
+    customization,
+    dispatchOptions
   );
 }

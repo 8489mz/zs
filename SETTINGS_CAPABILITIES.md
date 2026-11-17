@@ -14,6 +14,22 @@
 
 عند تعديل قدرة، حدّث وصفها في مكانها أو أضف سجلاً بمعرّف ثابت: السلوك والحدود، مصادر الكود، الاختبارات ونتائجها الفعلية، تاريخ التحقق والـcommit. اربط المجالات المتأثرة دون نسخ تفاصيلها.
 
+<a id="settings-electron-barcode-and-receipt-printers"></a>
+### اختيار طابعة الباركود الاختيارية وتحسين الطباعة الصامتة في نسخة الإلكترون (2026-11-17)
+- **السلوك الحالي والحدود:**
+  - إضافة خيار اختياري لاختيار طابعة الباركود المباشرة (`posElectronBarcodePrinter`) بجانب طابعة الكاشير المباشرة (`posElectronCashierPrinter`) داخل تبويب الطباعة في نسخة الإلكترون عبر المكون المستخرج `ElectronDirectPrintersSection`، متاحاً لجميع أنشطة التجزئة ونقاط البيع والأنشطة المخزنية (دون اشتراط تفعيل المطبخ أو إخفائه عند تفعيل موديول التصنيع كإضافة على التجزئة).
+  - عند اختيار طابعة باركود تطبع ملصقات الباركود والرفوف (`printBatchBarcodeLabels` / `printProductBarcodeLabels` / `printBarcodeSheet`) صامتاً عبر `electronPrinter.printHtmlSilent` مع تمرير الأبعاد الفعلية للملصق الحراري (`pageSizeMm` بالميكرون داخل `frontend/electron/main.cjs`) واتجاه الورق (`landscape` للشيتات)، وعند تركها فارغة تفتح نافذة الطباعة العادية كالمعتاد.
+  - ربط المعاينة البصرية الحية (`<iframe srcDoc>`) وزر «طباعة تجريبية حية (Test Print)» مباشرة بالمحرك الحقيقي `buildReceiptDocument` و`openReceiptDocument` عبر `printing-test-receipt.ts` باستخدام القيم الحية من الفورم وبيانات المتجر والفرع والمخزن، بحيث تنعكس أي تعديلات (مثل إخفاء الكاشير أو الشعار أو الباركود أو الضريبة أو الثيم) فوراً في المعاينة والطباعة التجريبية الصامتة، واستكمال تمرير إعدادات الطابعة المخزنة تلقائياً لمسارات إعادة طباعة فواتير المناديب و`printSaleReceipt`، مع منع إرسال طباعة `A4` (`F10`) إلى طابعة الريسيت عندما يكون مقاس المتجر الافتراضي `receipt`.
+- **مصدر التنفيذ:**
+  - `frontend/electron/main.cjs` (`print-html-silent` لدعم `pageSizeMm` و`orientation`)
+  - `frontend/src/features/settings/components/forms/tabs/ElectronDirectPrintersSection.tsx`، `frontend/src/features/settings/components/forms/tabs/printing-test-receipt.ts`، `frontend/src/features/settings/components/forms/tabs/PrintingSettingsTab.tsx`، `frontend/src/features/settings/components/forms/SettingsMainForm.tsx`، `frontend/src/features/settings/contracts.ts`، `frontend/src/features/settings/schemas/settings.schema.ts`
+  - `frontend/src/types/domain-models/system.ts`، `frontend/src/types/domain-models/settings.ts`
+  - `frontend/src/lib/browser.ts`، `frontend/src/lib/small-receipt-printer.ts`، `frontend/src/lib/pos-printing/open-receipt.ts`، `frontend/src/lib/pos-printing.ts`، `frontend/src/lib/barcode-labels.ts`، `frontend/src/lib/barcode.ts`، `frontend/src/features/products/components/BarcodePrintDialog.tsx`
+- **المجالات المتأثرة:** [المبيعات ونقاط البيع](SALES_CAPABILITIES.md) · [الأصناف والوحدات والمتغيرات](CATALOG_CAPABILITIES.md) · [الثوابت المعمارية](ARCHITECTURE_INVARIANTS.md) (`INV-ELECTRON-BARCODE-AND-RECEIPT-PRINTERS`)
+- **التحقق:**
+  - اجتياز 4 حزم اختبارات Vitest موجهة (25/25 اختباراً): `PrintingSettingsTab.spec.tsx` (7/7)، `electron-printing.spec.ts` (7/7)، `browser-print-bridge.spec.ts` (5/5)، `barcode-labels.test.ts` (6/6). لم يُشغّل `npm run build` أو `typecheck` أو الحراس الشاملة التزاماً بسياسة المستودع.
+- **آخر تحقق:** 2026-11-17.
+
 <a id="settings-settlement-allocations-wipe-order"></a>
 ### ترتيب حذف `settlement_allocations` قبل `sales` و`customer_payments` عند المسح وإعادة التعيين (2026-11-17)
 - **السلوك الحالي والحدود:**

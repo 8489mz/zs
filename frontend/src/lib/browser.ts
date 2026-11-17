@@ -174,10 +174,14 @@ function normalizeCachedSettings(raw: unknown): Partial<AppSettings> {
   return candidate;
 }
 
-export function resolvePrintSettings() {
-  const cachedSettings = normalizeCachedSettings(
+export function getCachedAppSettings(): Partial<AppSettings> {
+  return normalizeCachedSettings(
     queryClient.getQueryData(queryKeys.settings) ?? queryClient.getQueryData(queryKeys.posSettings)
   );
+}
+
+export function resolvePrintSettings() {
+  const cachedSettings = getCachedAppSettings();
   const sessionStoreName = useAuthStore.getState().storeName;
   const resolvedStoreName = String(cachedSettings.storeName || sessionStoreName || DEFAULT_STORE_NAME).trim() || DEFAULT_STORE_NAME;
   return {
@@ -188,6 +192,9 @@ export function resolvePrintSettings() {
     invoiceFooter: String(cachedSettings.invoiceFooter || '').trim(),
     logoData: String(cachedSettings.logoData || '').trim(),
     windowsPrinterName: String(cachedSettings.posWindowsPrinterName || '').trim(),
+    electronCashierPrinter: String(cachedSettings.posElectronCashierPrinter || '').trim(),
+    electronBarcodePrinter: String(cachedSettings.posElectronBarcodePrinter || '').trim(),
+    paperSize: cachedSettings.paperSize === 'a4' ? ('a4' as const) : ('receipt' as const),
   };
 }
 
@@ -243,6 +250,7 @@ export interface PrintDocumentOptions {
   deviceName?: string;
   windowsPrinterName?: string;
   receiptWidthMm?: 58 | 80;
+  pageSizeMm?: { widthMm: number; heightMm: number };
   hideHeader?: boolean;
 }
 
@@ -268,6 +276,7 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
     documentDirection = 'rtl',
     deviceName,
     receiptWidthMm = 80,
+    pageSizeMm,
     hideHeader = false,
   } = options;
 
@@ -591,7 +600,7 @@ export function printHtmlDocument(titleOrBody: string, bodyOrTitle: string, opti
   </html>`;
 
   if (deviceName && typeof window !== 'undefined' && (window as any).electronPrinter) {
-    (window as any).electronPrinter.printHtmlSilent({ html, deviceName, pageSize, receiptWidthMm })
+    (window as any).electronPrinter.printHtmlSilent({ html, deviceName, pageSize, receiptWidthMm, pageSizeMm, orientation })
       .catch((err: any) => console.error('Silent print failed:', err));
     return;
   }

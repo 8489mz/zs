@@ -167,6 +167,7 @@ export const SETTINGS_FIELD_METADATA: Record<
   printBilingualItemNames: { tab: 'printing', label: 'طباعة أسماء الأصناف ثنائية اللغة' },
   posElectronCashierPrinter: { tab: 'printing', label: 'طابعة الكاشير الافتراضية' },
   posElectronKitchenPrinter: { tab: 'printing', label: 'طابعة المطبخ الافتراضية' },
+  posElectronBarcodePrinter: { tab: 'printing', label: 'طابعة الباركود الافتراضية' },
   posWindowsPrinterName: { tab: 'printing', label: 'اسم طابعة ويندوز (الطباعة الصامتة)' },
   posNetworkThermalPrinterIp: { tab: 'printing', label: 'عنوان IP لطابعة الشبكة الحرارية' },
   posNetworkThermalPrinterPort: { tab: 'printing', label: 'منفذ طابعة الشبكة الحرارية' },
@@ -292,6 +293,7 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
       printBilingualItemNames: false,
       posElectronCashierPrinter: '',
       posElectronKitchenPrinter: '',
+      posElectronBarcodePrinter: '',
       posWindowsPrinterName: '',
       posNetworkThermalPrinterIp: '',
       posNetworkThermalPrinterPort: 9100,
@@ -437,13 +439,9 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
   // because the <select> loses its value if the matching <option> wasn't rendered yet during form.reset()
   useEffect(() => {
     if (!systemPrinters.length || !settings) return;
-    const savedCashier = String(settings.posElectronCashierPrinter || '').trim();
-    const savedKitchen = String(settings.posElectronKitchenPrinter || '').trim();
-    if (savedCashier && form.getValues('posElectronCashierPrinter') !== savedCashier) {
-      form.setValue('posElectronCashierPrinter', savedCashier, { shouldDirty: false });
-    }
-    if (savedKitchen && form.getValues('posElectronKitchenPrinter') !== savedKitchen) {
-      form.setValue('posElectronKitchenPrinter', savedKitchen, { shouldDirty: false });
+    for (const key of ['posElectronCashierPrinter', 'posElectronKitchenPrinter', 'posElectronBarcodePrinter'] as const) {
+      const saved = String((settings as any)[key] || '').trim();
+      if (saved && form.getValues(key) !== saved) form.setValue(key, saved, { shouldDirty: false });
     }
   }, [systemPrinters, settings, form]);
 
@@ -471,7 +469,6 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
   const branchCreateOptionVisible = Boolean(normalizeText(branchQuery) && !branchHasExactMatch);
   
   const branchMenuHasContent = filteredBranches.length > 0 || branchCreateOptionVisible;
-  
 
   const commitSelectedBranch = (branchId: string, branchName?: string) => {
     const normalizedBranchId = String(branchId || '').trim();
@@ -586,6 +583,7 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
       printBilingualItemNames: (settings as any).printBilingualItemNames === true,
       posElectronCashierPrinter: settings.posElectronCashierPrinter || '',
       posElectronKitchenPrinter: settings.posElectronKitchenPrinter || '',
+      posElectronBarcodePrinter: settings.posElectronBarcodePrinter || '',
       posWindowsPrinterName: settings.posWindowsPrinterName || '',
       posNetworkThermalPrinterIp: settings.posNetworkThermalPrinterIp || '',
       posNetworkThermalPrinterPort: Number((settings as any).posNetworkThermalPrinterPort ?? 9100) || 9100,
@@ -1258,9 +1256,6 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
             </button>
           ))}
         </div>
-
-        
-
       <div className="settings-tab-content-wrapper">
         <GeneralSettingsTab
           form={form}
@@ -1315,7 +1310,10 @@ export function SettingsMainForm({ settings, branches, locations, canManageSetti
           systemPrinters={systemPrinters}
           savedCashierPrinter={form.watch('posElectronCashierPrinter')}
           savedKitchenPrinter={form.watch('posElectronKitchenPrinter')}
+          savedBarcodePrinter={form.watch('posElectronBarcodePrinter')}
           posKitchenPrinterEnabled={form.watch('posKitchenPrinterEnabled')}
+          branchName={selectedBranch?.name}
+          locationName={visibleLocations.find((loc) => String(loc.id) === String(form.watch('currentLocationId')))?.name}
         />
       </div>
 

@@ -1,5 +1,5 @@
-import { escapeHtml, printHtmlDocument } from '@/lib/browser';
-import type { Product, ProductUnit, Sale } from '@/types/domain';
+import { escapeHtml, printHtmlDocument, resolvePrintSettings } from '@/lib/browser';
+import type { AppSettings, Product, ProductUnit, Sale } from '@/types/domain';
 import { formatCurrency } from '@/lib/format';
 import { printPostedSaleReceipt } from '@/lib/pos-printing';
 
@@ -148,6 +148,8 @@ export function printBarcodeSheet(options: {
   product: Product;
   unit?: ProductUnit | null;
   copies?: number;
+  settings?: Partial<AppSettings> | null;
+  deviceName?: string;
 }) {
   const product = options.product;
   const units = productUnitsWithFallback(product);
@@ -172,12 +174,20 @@ export function printBarcodeSheet(options: {
     </div>
   `).join('');
 
+  const barcodePrinterName = String(
+    options.deviceName ||
+    options.settings?.posElectronBarcodePrinter ||
+    resolvePrintSettings().electronBarcodePrinter ||
+    ''
+  ).trim();
+
   printHtmlDocument('Barcode Sheet', `
     <div class="barcode-sheet">${cards}</div>
   `, {
     subtitle: 'ملصقات باركود جاهزة للطباعة',
     pageSize: 'A4',
     orientation: 'landscape',
+    deviceName: barcodePrinterName || undefined,
     extraStyles: `
       .barcode-sheet{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
       .barcode-card{border:1px dashed #999;border-radius: 8px;padding:12px;text-align:center;break-inside:avoid;background:#fff}

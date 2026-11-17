@@ -947,10 +947,18 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('print-html-silent', async (_event, options = {}) => {
-    const { html, deviceName, pageSize, receiptWidthMm } = options || {};
+    const { html, deviceName, pageSize, receiptWidthMm, pageSizeMm, orientation } = options || {};
     if (typeof html !== 'string' || !html.trim() || html.length > 4 * 1024 * 1024) {
       return { ok: false, error: 'Invalid print document' };
     }
+    const customWidthMm = Number(pageSizeMm && pageSizeMm.widthMm);
+    const customHeightMm = Number(pageSizeMm && pageSizeMm.heightMm);
+    const resolvedPageSize =
+      Number.isFinite(customWidthMm) && customWidthMm > 0 && Number.isFinite(customHeightMm) && customHeightMm > 0
+        ? { width: Math.round(customWidthMm * 1000), height: Math.round(customHeightMm * 1000) }
+        : pageSize === 'receipt'
+          ? { width: receiptWidthMm === 58 ? 58000 : 80000, height: 297000 }
+          : (pageSize === 'A4' ? 'A4' : undefined);
     return new Promise((resolve) => {
       let printWin = null;
       let completed = false;
@@ -978,9 +986,8 @@ app.whenReady().then(async () => {
                 printBackground: true,
                 deviceName: typeof deviceName === 'string' ? deviceName : undefined,
                 margins: { marginType: 'none' },
-                pageSize: pageSize === 'receipt'
-                  ? { width: receiptWidthMm === 58 ? 58000 : 80000, height: 297000 }
-                  : (pageSize === 'A4' ? 'A4' : undefined)
+                ...(orientation === 'landscape' ? { landscape: true } : {}),
+                pageSize: resolvedPageSize
               }, (success, reason) => finish(success ? { ok: true } : { ok: false, error: reason || 'Print failed' }));
             } catch (error) {
               finish({ ok: false, error: String(error.message || error) });

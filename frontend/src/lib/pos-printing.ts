@@ -1,7 +1,8 @@
-import { printHtmlDocument } from '@/lib/browser';
+import { getCachedAppSettings } from '@/lib/browser';
 import type { PosItem } from '@/features/pos/types/pos.types';
 import type { Sale, AppSettings } from '@/types/domain';
-import { buildReceiptDocument, getInvoiceStyles } from '@/lib/pos-printing/template';
+import { buildReceiptDocument } from '@/lib/pos-printing/template';
+import { openReceiptDocument, type PrintReceiptOptions } from '@/lib/pos-printing/open-receipt';
 import {
   formatDateTime,
   formatSalePaymentText,
@@ -10,38 +11,7 @@ import {
 } from '@/lib/pos-printing/shared';
 import { tryPrintViaHardware, formatSaleForHardwarePrinter } from '@/lib/pos-printing/hardware';
 
-export interface PrintReceiptOptions {
-  pageSize?: PosPrintPageSize;
-  settings?: Partial<AppSettings> | null;
-  cashierName?: string;
-  isReturn?: boolean;
-  isPurchase?: boolean;
-  footerText?: string;
-  copyType?: 'customer' | 'merchant' | 'dual';
-  /* A reprint of an already-posted sale: the printed receipt is
-   * marked as a duplicate copy (see the template banner), so a
-   * reprint can never pass as the original. */
-  isReprint?: boolean;
-}
-
-export function openReceiptDocument(
-  title: string,
-  documentHtml: string,
-  compact: boolean,
-  options: PrintReceiptOptions,
-  subtitle = '',
-) {
-  printHtmlDocument(title, documentHtml, {
-    subtitle,
-    footerHtml: '',
-    pageSize: options.pageSize === 'receipt' ? 'receipt' : 'A4',
-    extraStyles: getInvoiceStyles(compact),
-    deviceName: options.settings?.posElectronCashierPrinter || undefined,
-    windowsPrinterName: options.settings?.posWindowsPrinterName || undefined,
-    receiptWidthMm: options.settings?.receiptWidthMm === 58 ? 58 : 80,
-    hideHeader: true,
-  });
-}
+export { openReceiptDocument, type PrintReceiptOptions } from '@/lib/pos-printing/open-receipt';
 
 export function printPosDraftPreview(options: {
   title?: string;
@@ -200,7 +170,8 @@ function buildPostedSaleDocument(sale: Sale, options: PrintReceiptOptions) {
 }
 
 export async function printPostedSaleReceipt(sale: Sale, options: PrintReceiptOptions = {}): Promise<void> {
-  const effectiveOptions: PrintReceiptOptions = { pageSize: 'receipt', ...options };
+  const effectiveSettings = options.settings ?? getCachedAppSettings();
+  const effectiveOptions: PrintReceiptOptions = { pageSize: 'receipt', ...options, settings: effectiveSettings };
 
   // 1. Direct Sunmi Native Android App Bridge (Instant hardware print in APK)
   if (typeof window !== 'undefined' && (window as any).SunmiPrinter?.printReceipt) {
