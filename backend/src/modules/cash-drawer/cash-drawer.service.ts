@@ -7,7 +7,6 @@ import { computeShiftCustomerCollectionsByChannel, type ShiftCustomerCollections
 import type { ShiftRow, SettingsRow, UserPasswordRow, ShiftServiceBreakdown, ShiftSalesBreakdown, ShiftSaleReturnTotals, CloseOperationDetailInput, BlindCloseMetadata, PostCloseCorrectionStamp } from './cash-drawer.types';
 import { AuthContext } from '../../core/auth/interfaces/auth-context.interface';
 import { requireTenantScope } from '../../core/auth/utils/tenant-boundary';
-import { verifyPassword } from '../../core/auth/utils/password-hasher';
 import { authorizeManagerSecret } from '../../common/utils/manager-approval';
 import { getTenantTimezone } from '../../common/utils/tenant-timezone.util';
 import { KYSELY_DB } from '../../database/database.constants';
@@ -17,17 +16,24 @@ import { AccountingPostingService } from '../accounting/accounting-posting.servi
 import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits, roundMoney, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
+import { CashDrawerAuthService } from './cash-drawer-auth.service';
 
 const BLIND_CLOSE_NOTE_PREFIX = 'BLIND_CLOSE::';
 
 @Injectable()
 export class CashDrawerService {
+  private readonly auth: CashDrawerAuthService;
   constructor(
     @Inject(KYSELY_DB) private readonly db: Kysely<Database>,
     private readonly tx: TransactionHelper,
     private readonly accountingPosting: AccountingPostingService,
     @Optional() private readonly whatsappService?: WhatsAppGatewayService,
-  ) {}
+  ) {
+    this.auth = new CashDrawerAuthService({
+      db: this.db,
+      scope: this.scope.bind(this),
+    });
+  }
 
   /**
    * Book-precision rounding for the EXPECTED-CASH computation and,
@@ -60,70 +66,24 @@ export class CashDrawerService {
     } catch { return null; }
   }
 
-  // INV-REST-MANAGER-PIN-HASHED: the drawer no longer keeps its own
-  // plaintext copy of the manager-PIN check. The shared
-  // authorizeManagerSecret is the one rule (bcrypt compare, legacy
-  // plaintext migrates in place on first success, admin login-password
-  // fallback) — the drawer's observable errors stay its own
-  // (MANAGER_PIN_INVALID + the drawer messages), so callers see no change.
   private async assertManagerPin(pin: string, auth: AuthContext): Promise<void> {
-    try {
-      await authorizeManagerSecret(this.db, auth, pin);
-    } catch (err) {
-      const code = (err as AppError)?.code;
-      if (code === 'MANAGER_AUTH_REQUIRED') {
-        throw new AppError('أدخل رمز المشرف أو كلمة مرور الإدارة', 'MANAGER_PIN_INVALID', 400);
-      }
-      if (code === 'MANAGER_AUTH_INVALID') {
-        throw new AppError('رمز الاعتماد غير صحيح', 'MANAGER_PIN_INVALID', 400);
-      }
-      throw err;
-    }
+    return this.auth.assertManagerPin(pin, auth);
   }
-  private canReviewPendingShift(auth: AuthContext): boolean { return ['admin', 'super_admin', 'manager'].includes(String(auth.role || '').trim()); }
+
+  private canReviewPendingShift(auth: AuthContext): boolean {
+    return this.auth.canReviewPendingShift(auth);
+  }
 
   private async assertCurrentUserPassword(password: string, auth: AuthContext): Promise<void> {
-    const providedPassword = String(password || '').trim();
-    if (!providedPassword) throw new AppError('أدخل كلمة مرور المستخدم الحالي', 'CURRENT_USER_PASSWORD_REQUIRED', 400);
-    const scope = this.scope(auth);
-    const result = await sql<UserPasswordRow>`select id, is_active, password_hash, password_salt from users where id = ${auth.userId} and tenant_id = ${scope.tenantId} limit 1`.execute(this.db);
-    const user = result.rows?.[0] || null;
-    if (!user || user.is_active === false || user.is_active === 0 || user.is_active === 'false') throw new AppError('المستخدم الحالي غير متاح', 'CURRENT_USER_NOT_FOUND', 400);
-    const passwordCheck = await verifyPassword(providedPassword, String(user.password_hash || ''), String(user.password_salt || ''));
-    if (!passwordCheck.valid) {
-      try {
-        await this.assertManagerPin(providedPassword, auth);
-        return;
-      } catch {
-        throw new AppError('كلمة مرور المستخدم الحالي غير صحيحة', 'CURRENT_USER_PASSWORD_INVALID', 400);
-      }
-    }
+    return this.auth.assertCurrentUserPassword(password, auth);
   }
 
   private async isPasswordRequiredOnShiftOpen(auth: AuthContext): Promise<boolean> {
-    const scope = this.scope(auth);
-    const result = await sql<SettingsRow>`select key, value from settings where tenant_id = ${scope.tenantId} and key = 'requirePasswordOnShiftOpen' limit 1`.execute(this.db);
-    const raw = result.rows?.[0]?.value;
-    if (raw == null) return false;
-    if (typeof raw === 'boolean') return raw;
-    try {
-      const parsed = JSON.parse(String(raw));
-      return parsed === true || parsed === 'true' || parsed === 1 || parsed === '1';
-    } catch {
-      return String(raw).trim() === 'true' || String(raw).trim() === '1';
-    }
+    return this.auth.isPasswordRequiredOnShiftOpen(auth);
   }
 
-  // INV-DRAWER-DISBURSE-CASHIER-PASSWORD: drawer disbursements
-  // (cash_out + safe_drop) accept the CASHIER'S OWN password —
-  // the same current-user confirmation as deposits — instead of a
-  // manager PIN. The cashier is recorded in the audit trail
-  // (treasury row created_by = auth.userId). The manager PIN is
-  // still accepted as a fallback inside assertCurrentUserPassword
-  // (the deposits pattern). Posted-invoice edit and stock-count
-  // approval stay manager-gated: they do not call this method.
   private async assertCashDrawerApproval(movementType: CashDrawerMovementType, approvalSecret: string, auth: AuthContext): Promise<void> {
-    await this.assertCurrentUserPassword(approvalSecret, auth);
+    return this.auth.assertCashDrawerApproval(movementType, approvalSecret, auth);
   }
 
   private async computeShiftCashDrawerMovements(shiftId: number, auth: AuthContext, queryable?: Kysely<Database>, digits?: MoneyDigits): Promise<{
