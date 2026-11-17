@@ -37,7 +37,6 @@
     "src/modules/partners/partners.service.ts": 1255,
     "src/modules/pharmacy/pharmacy.service.ts": 1194,
     "src/modules/purchases/services/goods-receipt.service.ts": 1382,
-    "src/modules/purchases/services/purchases-write.service.ts": 2189,
     "src/modules/returns/returns.service.ts": 1851,
     "src/modules/saas-admin/saas-admin.service.ts": 1785,
     "src/modules/sales/services/pos-terminal.service.ts": 1412,
