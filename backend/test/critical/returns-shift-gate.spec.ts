@@ -552,7 +552,7 @@ async function main(): Promise<void> {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const here = __dirname;
-    const serviceSource = readFileSync(resolve(here, '../../src/modules/returns/returns.service.ts'), 'utf8');
+    const serviceSource = readFileSync(resolve(here, '../../src/modules/returns/returns-write-helpers.service.ts'), 'utf8');
     assert.ok(serviceSource.includes('INV-REST-RETURN-SHIFT-GATE'), 'the gate names the invariant');
     assert.ok(serviceSource.includes('resolveRequireCashierShiftForSales'), 'the gate uses the I23 resolver');
     assert.ok(serviceSource.includes('requireCashierShiftForReturns'), 'the gate reads the setting on the transaction handle');

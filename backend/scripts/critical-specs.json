@@ -245,6 +245,15 @@
     "test/critical/rest-cod-collection-truth.spec.ts",
     "test/critical/restaurant-paid-gates.spec.ts",
     "test/critical/van-profit-rep-reporting.spec.ts",
-    "test/critical/settlement-allocations-delete-order.spec.ts"
+    "test/critical/settlement-allocations-delete-order.spec.ts",
+    "test/critical/audit-log-general-emitter-details.spec.ts",
+    "test/critical/customer-supplier-statements.spec.ts",
+    "test/critical/d6c-misc-book-digits.spec.ts",
+    "test/critical/large-cash-refund-approval.spec.ts",
+    "test/critical/purchase-return-wac-recompute.spec.ts",
+    "test/critical/return-document-details.spec.ts",
+    "test/critical/returns-conditional-discount-forfeit.spec.ts",
+    "test/critical/returns-relief-preview-truth.spec.ts",
+    "test/critical/returns-shift-gate.spec.ts"
   ]
 }

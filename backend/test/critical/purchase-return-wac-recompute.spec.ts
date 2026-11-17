@@ -296,8 +296,8 @@ async function main(): Promise<void> {
   // Case 4: source pin — the recompute lives in creation only, via the
   // canonical writer; the posting side keeps its original-cost variance.
   {
-    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/returns/returns.service.ts'), 'utf8');
-    const createStart = serviceSource.indexOf('private async createPurchaseReturn(');
+    const serviceSource = readFileSync(resolve(__dirname, '../../src/modules/returns/returns-purchase-return.service.ts'), 'utf8');
+    const createStart = serviceSource.indexOf('async createPurchaseReturn(');
     assert.ok(createStart > 0, 'createPurchaseReturn exists');
     const createBody = serviceSource.slice(createStart);
     assert.ok(createBody.includes('revalueStockReturn(trx, scope.tenantId, requestItem.productId, stockChange.globalAfter, preparedLine.stockDelta'),
