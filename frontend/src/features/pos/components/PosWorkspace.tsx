@@ -400,41 +400,24 @@ export function PosWorkspace() {
           if (submitted) { pos.setSearch(''); return; }
         }
 
-        const remoteCandidates = getBarcodeLookupCandidates(query).slice(1);
-        let lookupProducts: Product[] = [];
-        try {
-          lookupProducts = await posApi.lookupProducts({ barcode: query, branchId: pos.branchId, locationId: pos.locationId, limit: 5 });
-        } catch {
-          const offlineItem = await lookupProductByBarcodeFromStorage(query, activeTenantId);
-          if (offlineItem) lookupProducts = [offlineItem];
-        }
-        const remoteMatch = matchProductByCode(lookupProducts, query);
-
-        if (remoteMatch.status !== 'matched') {
-          for (const candidate of remoteCandidates) {
-            let remappedLookup: Product[] = [];
-            try {
-              remappedLookup = await posApi.lookupProducts({ barcode: candidate, branchId: pos.branchId, locationId: pos.locationId, limit: 5 });
-            } catch {
-              const offlineItem = await lookupProductByBarcodeFromStorage(candidate, activeTenantId);
-              if (offlineItem) remappedLookup = [offlineItem];
-            }
-            const remappedMatch = matchProductByCode(remappedLookup, candidate);
-            if (remappedMatch.status === 'matched') {
-              const submitted = pos.handleQuickAddCodeSubmit(candidate, remappedLookup);
-              if (submitted) { pos.setSearch(''); return; }
-              focusBarcodeEntry();
-              return;
-            }
+        let sawAmbiguous = false;
+        for (const candidate of getBarcodeLookupCandidates(query)) {
+          let lookupProducts: Product[] = [];
+          try {
+            lookupProducts = await posApi.lookupProducts({ barcode: candidate, branchId: pos.branchId, locationId: pos.locationId, limit: 5 });
+          } catch {
+            const offlineItem = await lookupProductByBarcodeFromStorage(candidate, activeTenantId);
+            if (offlineItem) lookupProducts = [offlineItem];
           }
-        }
-
-        if (remoteMatch.status === 'matched') {
-          const submitted = pos.handleQuickAddCodeSubmit(rawQuery, lookupProducts);
-          if (submitted) { pos.setSearch(''); return; }
-          // Product found but blocked (e.g. zero stock in this branch) — error already set by handleAddProduct
-          focusBarcodeEntry();
-          return;
+          const candidateMatch = matchProductByCode(lookupProducts, candidate);
+          if (candidateMatch.status === 'matched') {
+            const submitted = pos.handleQuickAddCodeSubmit(candidate === query ? rawQuery : candidate, lookupProducts);
+            if (submitted) { pos.setSearch(''); return; }
+            // Product found but blocked (e.g. zero stock in this branch) — error already set by handleAddProduct
+            focusBarcodeEntry();
+            return;
+          }
+          if (candidateMatch.status === 'ambiguous') sawAmbiguous = true;
         }
 
         // Fallback check invoice again, only for invoice-shaped queries:
@@ -447,7 +430,7 @@ export function PosWorkspace() {
           if (fallbackInvoice) return;
         }
 
-        if (remoteMatch.status === 'ambiguous') {
+        if (sawAmbiguous) {
           pos.setSubmitMessage('هذا الباركود غير واضح أو مرتبط بأكثر من نتيجة. راجع الصنف أو الوحدة أولًا.');
         } else {
           pos.setSubmitMessage('لا توجد نتيجة مطابقة الآن لإضافتها.');
