@@ -27,11 +27,11 @@ import { tenantBaseCurrency } from '../accounting/accounting-currency';
 import { currencyMoneyDigits, type MoneyDigits } from '../accounting/engines/money-minor-units.engine';
 import { WhatsAppGatewayService } from '../settings/services/whatsapp-gateway.service';
 import type {
-  type ShiftRow,
-  type BlindCloseMetadata,
-  type ShiftSalesBreakdown,
-  type ShiftServiceBreakdown,
-  type ShiftSaleReturnTotals,
+  ShiftRow,
+  BlindCloseMetadata,
+  ShiftSalesBreakdown,
+  ShiftServiceBreakdown,
+  ShiftSaleReturnTotals,
 } from './cash-drawer.types';
 
 /**
