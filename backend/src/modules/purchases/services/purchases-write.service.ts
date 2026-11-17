@@ -1,23 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Kysely, sql } from '../../../database/kysely';
+import { Kysely } from '../../../database/kysely';
 import { AuditService } from '../../../core/audit/audit.service';
 import { AuthContext } from '../../../core/auth/interfaces/auth-context.interface';
-import { requireTenantScope } from '../../../core/auth/utils/tenant-boundary';
-import { AppError } from '../../../common/errors/app-error';
 import { assertUntrackedStockMutation } from '../../inventory/helpers/inventory-tracked-stock.helper';
-import { computeInvoiceTotals } from '../../../common/utils/invoice-totals';
-import { purchaseReceiptBaseUnitCost } from '../engines/purchase-receipt-cost.engine';
-import { valueStockReceipt } from '../../accounting/inventory-valuation';
-import { getTenantTimezone } from '../../../common/utils/tenant-timezone.util';
-import { checkClientBusinessDay, CLIENT_BUSINESS_DATE_FUTURE_DAYS } from '../../../common/utils/client-date-bounds.util';
-import { ensureNonNegativeStock } from '../../../common/utils/financial-integrity';
-import { applyStockDelta, lockStockProducts, previewConsumableStockQty } from '../../../common/utils/location-stock-ledger';
 import { KYSELY_DB } from '../../../database/database.constants';
 import { Database } from '../../../database/database.types';
 import { TransactionHelper } from '../../../database/helpers/transaction.helper';
 import { ApplySupplierAdvanceDto, CreateCustomerPaymentDto, CreateSupplierPaymentDto } from '../dto/create-party-payment.dto';
 import { UpsertPurchaseDto } from '../dto/upsert-purchase.dto';
-import { allocatePurchaseInvoiceDiscount, buildHistoricCostMap, buildNormalizedPurchaseItem, buildPurchaseReferenceNote, calculatePurchaseStockDecrease, calculatePurchaseStockIncrease, assertNonCashTransferReference, normalizeInstapayAddress, normalizeOptionalNote, normalizePurchaseScope, normalizeTransferReference } from '../helpers/purchases-write.helper';
 import { AccountingPostingService } from '../../accounting/accounting-posting.service';
 import { PurchasesFinanceService } from './purchases-finance.service';
 import { PurchasesQueryService } from './purchases-query.service';
@@ -30,10 +20,8 @@ import { PurchasesWriteCreateService } from './purchases-write-create.service';
 import { PurchasesWriteSharedHelpersService } from './purchases-write-shared-helpers.service';
 import { IdempotencyService } from '../../../core/idempotency/idempotency.service';
 import { PurchasesWriteRepricingService } from './purchases-write-repricing.service';
-import { detectDuplicateBills, normalizeBillNumber, type HistoricalPurchaseRecord } from '../engines/duplicate-bill-detector.engine';
-import { assertCustomerPaymentJobOwnership } from '../helpers/customer-payment-job-ownership';
-import { tenantBaseCurrency } from '../../accounting/accounting-currency';
-import { currencyMoneyDigits, roundMoney } from '../../accounting/engines/money-minor-units.engine';
+
+import type { PurchaseRepricingCandidate, PurchaseRepricingProduct, PurchaseRepricingInsights } from './purchases-write.types';
 
 export type {
   PurchaseRepricingCandidate,
