@@ -16,12 +16,16 @@ const mocks = vi.hoisted(() => ({
   invalidateSalesDomain: vi.fn(),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (_key: string, fallback?: string) => fallback || _key,
-    i18n: { language: 'ar', dir: () => 'rtl' },
-  }),
-}));
+vi.mock('react-i18next', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-i18next')>();
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (_key: string, fallback?: string) => fallback || _key,
+      i18n: { language: 'ar', dir: () => 'rtl' },
+    }),
+  };
+});
 
 vi.mock('@/features/sales', () => ({
   salesApi: {
