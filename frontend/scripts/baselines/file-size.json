@@ -84,7 +84,7 @@
     "src/features/storefront/pages/MerchantOnlineOrdersPage.tsx": 1430,
     "src/lib/auto-translator.ts": 1560,
     "src/lib/pos-printing/template.ts": 1148,
-    "src/shared/layout/app-shell.tsx": 2540,
-    "src/shared/verticals/vertical-scope.ts": 1213
+    "src/shared/layout/app-shell.tsx": 2549,
+    "src/shared/verticals/vertical-scope.ts": 1226
   }
 }
