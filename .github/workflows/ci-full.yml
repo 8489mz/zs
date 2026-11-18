@@ -1,10 +1,17 @@
 name: ci-full
 
 # FULL SUITE (INV-CI-COST-CUT): the complete backend + frontend test runs
-# from the old ci.yml, unchanged step-for-step. Runs ONLY on workflow_dispatch
-# (dispatched once on the batch head) or pull requests — never on push.
-# Deploy to Oracle watches this workflow, so a green full run is the deploy
-# gate. The `changes` job below is the same plain-git path filter as ci-fast:
+# from the old ci.yml, unchanged step-for-step. Runs on every push to main
+# (path-filtered, in parallel with ci-fast), on workflow_dispatch, or on
+# pull requests. Deploy to Oracle watches this workflow, so a green full
+# run on the exact pushed SHA deploys it automatically — no manual dispatch.
+# Cost, accepted: a head that fails the fast stage still spends a full run
+# (~12m), because the two stages run in parallel with no gate between them.
+# Chaining this workflow on ci-fast completion (workflow_run) was rejected:
+# a workflow_run event carries no `before` SHA, so the changes job below
+# would fail closed to both sides on every push — including docs-only
+# pushes — and the path filter (the deliberate cost decision) would be lost.
+# The `changes` job below is the same plain-git path filter as ci-fast:
 # a backend-only head runs only the backend job and vice versa; on dispatch
 # both sides run (fail-closed).
 #
@@ -18,6 +25,9 @@ name: ci-full
 # (INV-CI-SEQUENTIAL-FAIL-FAST).
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
   pull_request:
     branches:

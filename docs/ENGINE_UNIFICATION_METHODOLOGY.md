@@ -275,11 +275,10 @@ entries, 2026-10-31 – 2026-11-02).
 ## R25 — Back-to-back batch pushes
 
 When several batches are generated in parallel and ready together, push them back-to-back in strict order: each batch is rebased onto the live head and re-verified before its push, with no CI wait between pushes.
-Run ONE ci-full + ONE deploy on the last head only.
-Pushes cancel prior fast runs (`concurrency: cancel-in-progress: true` per ref), and ci-full never runs on push — it is dispatch-only, so the parent dispatches it once on the last head.
+Since INV-AUTO-DEPLOY (2026-11-18), ci-full runs on every push to main (path-filtered) and a green full run deploys that head automatically — there is no longer ONE ci-full + ONE deploy on the last head by dispatch. Pushes cancel prior fast AND full runs (`concurrency: cancel-in-progress: true` per ref), so rapid back-to-back pushes normally leave only the last head's full run to complete and deploy; if an intermediate head's full run already went green and deployed before the next push lands, that head deploys too — the single-deploy economy is best-effort via cancellation, not guaranteed.
 If the final ci-full fails, bisect locally against each batch head to attribute the failure.
 Scope: parallel-ready batches only — sequential batches still get per-batch full CI.
-Evidence: parent decision 2026-11-08 ~12:05 EET (U5–U7); `batch-u567-state.md`; saving ≈75 min wall-clock (2× full CI + 2× deploy + fast cancellations).
+Evidence: parent decision 2026-11-08 ~12:05 EET (U5–U7); `batch-u567-state.md`; saving ≈75 min wall-clock (2× full CI + 2× deploy + fast cancellations). Superseded in part by INV-AUTO-DEPLOY (2026-11-18): ci-full is no longer dispatch-only.
 
 ## Evidence index (where each rule comes from)
 

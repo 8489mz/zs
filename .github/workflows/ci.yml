@@ -1,9 +1,10 @@
 name: ci-fast
 
 # FAST STAGE (INV-CI-COST-CUT): guards + typecheck only, on every push.
-# The full test suite lives in ci-full.yml and runs only on workflow_dispatch
-# (batch head) or pull requests. Deploy to Oracle watches ci-full, never this
-# workflow, so a fast-green push can never auto-deploy untested code.
+# The full test suite lives in ci-full.yml and runs on every push to main
+# (in parallel with this stage, path-filtered), on workflow_dispatch, or on
+# pull requests. Deploy to Oracle watches ci-full, never this workflow, so a
+# fast-green push deploys only once its full run is green too.
 # Path filtering: a backend-only change skips the frontend job and vice
 # versa; docs-only changes skip both code jobs. The API-contracts check
 # (qa:contracts) lives in the frontend job, so it still runs on every

@@ -3,10 +3,12 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Guard for the production deploy and backup invariants DEPLOY-1..DEPLOY-11
+// Guard for the production deploy and backup invariants DEPLOY-1..DEPLOY-12
 // (ARCHITECTURE_INVARIANTS.md §2.7, docs/DEPLOYMENT_PIPELINE.md).
 // DEPLOY-9 is the Item 5 migration-auto-revert package, now live on main (691f45ab6);
-// the reservation held so the two packages never collided on a number.
+// DEPLOY-10 is the Item 7 Sentry package, now live on main (ef3a365fe);
+// DEPLOY-11 is the repo Telegram-bot check script, now live on main (ef3a365fe);
+// DEPLOY-12 is the auto-deploy package in this commit.
 // Each of these was a real production incident on 2026-09-22: the old flow deleted dist and rebuilt
 // on the 1-OCPU server (1754 failed PM2 restarts), and the nightly backup had silently not run for
 // three weeks. Nothing fails functionally when these regress — production just goes down during
@@ -17,6 +19,10 @@ const ROOT = join(__dirname, '..', '..', '..');
 const read = (relative: string) => readFileSync(join(ROOT, relative), 'utf8').replace(/\r\n/g, '\n');
 
 const workflow = read('.github/workflows/deploy-oracle.yml');
+const ciFull = read('.github/workflows/ci-full.yml');
+const ciFast = read('.github/workflows/ci.yml');
+const deployDoc = read('docs/DEPLOYMENT_PIPELINE.md');
+const invariants = read('ARCHITECTURE_INVARIANTS.md');
 const backupScript = read('deploy/scripts/zsystems-backup.sh');
 const drillScript = read('deploy/scripts/zsystems-restore-drill.sh');
 const watchScript = read('deploy/scripts/zsystems-watch.sh');
@@ -111,10 +117,12 @@ function testDeploysTestedCommit(): void {
   assert.ok(/DEPLOY_SHA:/.test(workflow),
     'deployment must lock an exact main SHA');
   assert.ok(/actions: read/.test(workflow)
-    && /actions\/workflows\/ci-full\.yml\/runs\?head_sha=\$DEPLOY_SHA/.test(workflow)
+    && /actions\/workflows\/ci-full\.yml\/runs\?head_sha=\$DEPLOY_SHA&per_page=100/.test(workflow)
+    && !/actions\/workflows\/ci-full\.yml\/runs\?head_sha=\$DEPLOY_SHA&event=/.test(workflow)
+    && /\(\.event == \\?"workflow_dispatch\\?" or \.event == \\?"push\\?"\)/.test(workflow)
     && /test "\$PASSED" -ge 1/.test(workflow)
     && /CURRENT_MAIN/.test(workflow),
-    'current main SHA must already have a successful full-CI (workflow_dispatch) run verified before deploy');
+    'current main SHA must already have a successful full-CI (push or workflow_dispatch) run verified before deploy');
   assert.ok(/git reset --hard "\$DEPLOY_SHA"/.test(remoteScript()),
     'server must reset to the exact CI-verified SHA');
   assert.ok(/cancel-in-progress: false/.test(workflow),
@@ -335,6 +343,60 @@ function testTelegramAlertsCheck(): void {
   );
 }
 
+// DEPLOY-12: a push to main runs the full suite and deploys itself when green.
+// ci-full runs on every push to main (path-filtered, in parallel with the fast
+// stage); the deploy job accepts a green ci-full run triggered by a push or by
+// a manual dispatch, on the exact SHA, on main, in this repo. A red ci-full
+// never deploys, and ci-fast alone never deploys (deploy watches ci-full
+// only). DEPLOY-9 (migration auto-revert, Item 5), DEPLOY-10 (Sentry
+// frontend build env, Item 7) and DEPLOY-11 (Telegram bot check) are all
+// live on main; this number follows them.
+function testAutoDeploy(): void {
+  // ci-full triggers on push to main — and still on dispatch and PRs.
+  assert.ok(/on:\n\s+push:\n\s+branches:\n\s+-\s*main/.test(ciFull),
+    'ci-full must run on every push to main');
+  assert.ok(/workflow_dispatch:/.test(ciFull), 'ci-full must keep its manual dispatch trigger');
+  assert.ok(/pull_request:/.test(ciFull), 'ci-full must keep its pull-request trigger');
+  // The fast stage's header must no longer claim the full suite is dispatch-only.
+  assert.ok(!/runs only on workflow_dispatch/.test(ciFast),
+    'ci.yml must not claim ci-full runs only on workflow_dispatch');
+  assert.ok(/runs on every push to main/.test(ciFast),
+    'ci.yml must say the full suite runs on every push to main');
+
+  // The deploy gate accepts a push-triggered green ci-full run — and still
+  // requires success, main, this repo, and the exact SHA.
+  assert.ok(/workflows:\s*\["ci-full"\]/.test(workflow),
+    'deploy must watch ci-full only, never ci-fast');
+  assert.ok(/github\.event\.workflow_run\.event == 'push'/.test(workflow),
+    'the deploy gate must accept push-triggered ci-full runs');
+  assert.ok(/github\.event\.workflow_run\.event == 'workflow_dispatch'/.test(workflow),
+    'the deploy gate must keep accepting dispatch-triggered ci-full runs');
+  assert.ok(/github\.event\.workflow_run\.conclusion == 'success'/.test(workflow),
+    'a red ci-full must still block deploy');
+  assert.ok(/github\.event\.workflow_run\.head_branch == 'main'/.test(workflow),
+    'deploy must still require the run to be on main');
+  assert.ok(/github\.event\.workflow_run\.head_repository\.full_name == github\.repository/.test(workflow),
+    'deploy must still require the run to be in this repo');
+  assert.ok(/DEPLOY_SHA:/.test(workflow) && /github\.event\.workflow_run\.head_sha/.test(workflow),
+    'deploy must still lock the exact SHA of the green run');
+
+  // The pipeline doc describes the real pipeline: push -> ci-fast + ci-full
+  // -> auto-deploy on green ci-full. The old claim (push -> ci -> deploy)
+  // must be gone from both places it appeared.
+  assert.ok(/تُطلق `ci\.yml` \(الفحص السريع\) و`ci-full\.yml` \(المجموعة الكاملة\)/.test(deployDoc),
+    'the pipeline doc must say a push triggers ci-fast and ci-full');
+  assert.ok(/بعد اكتمال `ci-full` بنجاح/.test(deployDoc),
+    'the pipeline doc must say deploy follows a green ci-full');
+  assert.ok(/نجاح `ci\.yml` وحده لا ينشر شيئاً/.test(deployDoc),
+    'the pipeline doc must say a fast-green push alone never deploys');
+  assert.ok(!/بعد اكتمال `ci` بنجاح/.test(deployDoc),
+    'the pipeline doc must not claim deploy follows a green ci run');
+
+  // The invariant entry exists exactly once (presence-pinned; the guard spec
+  // owns the last-line order assertion).
+  assert.equal(invariants.split('INV-AUTO-DEPLOY').length - 1, 1, 'the invariant entry must exist exactly once');
+}
+
 function run(): void {
   testNoBuildOnServer();
   testNoLiveDistDeletion();
@@ -347,8 +409,9 @@ function run(): void {
   testRestoreDrill();
   testSentryFrontendBuildEnv();
   testTelegramAlertsCheck();
+  testAutoDeploy();
   // eslint-disable-next-line no-console
-  console.log('deploy-pipeline.spec: all deploy and backup invariants hold (DEPLOY-1..DEPLOY-11)');
+  console.log('deploy-pipeline.spec: all deploy and backup invariants hold (DEPLOY-1..DEPLOY-12)');
 }
 
 try {

@@ -162,9 +162,9 @@ async function main(): Promise<void> {
   // R25 — back-to-back batch pushes.
   ruleHeading('R25', 'Back-to-back batch pushes');
   present('push them back-to-back in strict order', 'R25 back-to-back in strict order');
-  present('ONE ci-full + ONE deploy on the last head', 'R25 one ci-full + one deploy on last head');
-  present('cancel prior fast runs', 'R25 pushes cancel prior fast runs');
-  present('ci-full never runs on push', 'R25 ci-full never runs on push');
+  present('ci-full runs on every push to main', 'R25 ci-full runs on push');
+  present('a green full run deploys that head automatically', 'R25 green full run auto-deploys');
+  present('cancel prior fast AND full runs', 'R25 pushes cancel prior runs');
   present('bisect locally against each batch head', 'R25 bisect locally per batch head');
   present('parallel-ready batches only', 'R25 parallel-ready batches only');
   present('sequential batches still get per-batch full CI', 'R25 sequential batches keep per-batch full CI');
