@@ -278,6 +278,7 @@
     "test/critical/divergence-9187-stock-scale.spec.ts",
     "test/critical/permissions-cache-invalidation.spec.ts",
     "test/critical/backup-fire-drill-playbook.spec.ts",
-    "test/critical/docs-index.spec.ts"
+    "test/critical/docs-index.spec.ts",
+    "test/critical/stock-movements-archive-residual-row.spec.ts"
   ]
 }

@@ -1,16 +1,16 @@
 # stock_movements Direct Writes — Inventory
 
-- Grounded at HEAD `fc3334c46` (file #20 repair). Method: line-based scan of `backend/src` (spec/test files and `database/migrations` + `database/legacy-migration` excluded) — a line is a business write iff it calls `insertInto('stock_movements')`, `deleteFrom('stock_movements')`, or `.from('stock_movements').update(...)`. Comments, type declarations, backup table-name lists and reads (`selectFrom` / `.from().select`) are not writes.
-- Total business writes: **67**. One further write exists in migration code (`backend/src/database/legacy-migration/entities/inventory.migration.ts:108`, data migration, not a business write) and is excluded by design.
+- Grounded at HEAD `edca43058`, re-scanned after the archive-residual fix (INV-STOCK-MOVEMENTS-ARCHIVE-ROW): the scan still finds every write below, plus the one new row at `catalog-product-archive.service.ts:331`. Method: line-based scan of `backend/src` (spec/test files and `database/migrations` + `database/legacy-migration` excluded) — a line is a business write iff it calls `insertInto('stock_movements')`, `deleteFrom('stock_movements')`, or `.from('stock_movements').update(...)`. Comments, type declarations, backup table-name lists and reads (`selectFrom` / `.from().select`) are not writes.
+- Total business writes: **68**. One further write exists in migration code (`backend/src/database/legacy-migration/entities/inventory.migration.ts:108`, data migration, not a business write) and is excluded by design.
 - The ledger (`applyStockDelta` in `backend/src/common/utils/location-stock-ledger.ts`) updates balances; each caller still writes its own `stock_movements` row. That split is the risk this inventory exists to close in Phase 1 (single writer).
 - `paired` below is file-level (YES if the same file calls `applyStockDelta` anywhere) — deterministic and reproducible. It does NOT prove the ledger call and the row happen in the same branch: see the notes, especially the archive residual.
-- VERIFIED ASYMMETRY (catalog archive): in `catalog-product-archive.service.ts`, `toggleProductArchive` calls `applyStockDelta` at line 316 for the residual global stock (`-remainingGlobal`) and writes NO `stock_movements` row for that residual — the balance moves, the audit trail has no row for it. Phase 1 must add the row (or prove the residual is covered by the rows at lines 254/290, which are on other branches).
+- FIXED ASYMMETRY (catalog archive, INV-STOCK-MOVEMENTS-ARCHIVE-ROW): `toggleProductArchive` used to call `applyStockDelta` for the residual global stock (`-remainingGlobal`) with NO `stock_movements` row for it. It now writes the row at line 331, mirroring the sibling deduct rows (same type, reason, reference, cost, posting call) — before_qty remainingGlobal, after_qty 0, qty -remainingGlobal. A zero residual writes no row.
 - Resolves the map's UNVERIFIED maintenance path: `maintenance/maintenance.service.ts:992,1116,1218` are all real inserts (maintenance_consumption / maintenance_return), listed below.
-- This document is pinned by `backend/test/critical/stock-movements-writes.spec.ts` (INV-STOCK-MOVEMENTS-WRITE-INVENTORY): the scanned write count must equal 67 and every `file:line` below must be listed.
+- This document is pinned by `backend/test/critical/stock-movements-writes.spec.ts` (INV-STOCK-MOVEMENTS-WRITE-INVENTORY): the scanned write count must equal 68 and every `file:line` below must be listed.
 
 ## Per-module totals
 
-- `catalog`: 8
+- `catalog`: 9
 - `delivery-reps`: 1
 - `import-sales`: 3
 - `inventory`: 19
@@ -22,12 +22,13 @@
 - `settings`: 6
 - `tradein`: 1
 
-## All 67 writes
+## All 68 writes
 
 | file:line | kind | movement_type | paired (file calls applyStockDelta) | notes |
 |---|---|---|---|---|
 | backend/src/modules/catalog/services/catalog-product-archive.service.ts:254 | insert | deduct | yes | Archive deduct; same method also calls applyStockDelta (line 280) — paired per flow, not per branch. |
 | backend/src/modules/catalog/services/catalog-product-archive.service.ts:290 | insert | deduct | yes | Restore deduct; same method also calls applyStockDelta (line 280) — paired per flow, not per branch. |
+| backend/src/modules/catalog/services/catalog-product-archive.service.ts:331 | insert | deduct | yes | Archive residual deduct (INV-STOCK-MOVEMENTS-ARCHIVE-ROW): the applyStockDelta for -remainingGlobal now has its own row, mirroring the sibling deduct rows; a zero residual writes no row. |
 | backend/src/modules/catalog/services/catalog-product-fashion.service.ts:355 | insert | transfer | yes |  |
 | backend/src/modules/catalog/services/catalog-product-fashion.service.ts:373 | insert | transfer | yes |  |
 | backend/src/modules/catalog/services/catalog-product-fashion.service.ts:429 | insert | deduct | yes |  |

@@ -322,6 +322,32 @@ export class CatalogProductArchiveService {
                   disableAutoDrain: true,
                   allowNegative: true,
                 });
+
+                // INV-STOCK-MOVEMENTS-ARCHIVE-ROW: the residual deduct
+                // moves a real balance, so it writes its own row,
+                // mirroring the sibling deduct rows above (same type,
+                // reason, reference, cost and posting call). Before
+                // this row the balance moved with no audit trail.
+                const insertedMovement = await trx.insertInto('stock_movements').values({
+                  product_id: product.id,
+                  movement_type: 'deduct',
+                  qty: -remainingGlobal,
+                  before_qty: remainingGlobal,
+                  after_qty: 0,
+                  unit_cost: unitCost,
+                  total_cost: stockMovementTotal(remainingGlobal, unitCost, bookDigits),
+                  reason: 'archive_stock_zeroing',
+                  note: `تسوية وتصفير رصيد الصنف (${product.name}) عند الأرشفة والتعطيل`,
+                  reference_type: 'inventory_adjustment',
+                  reference_id: product.id,
+                  location_id: fallbackLocationId || null,
+                  created_by: actor.userId,
+                  ...this.tenantFields(actor),
+                } as any).returning('id').executeTakeFirst();
+
+                if (insertedMovement?.id && this.accountingPosting) {
+                  await this.accountingPosting.postInventoryAdjustment(trx, Number(insertedMovement.id), actor);
+                }
               }
             }
 
