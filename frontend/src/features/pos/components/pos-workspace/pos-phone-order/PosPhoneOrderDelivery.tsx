@@ -6,7 +6,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DeliveryRep } from '@/shared/api/delivery-reps.api';
-import type { DoorstepPaymentMethod } from '@/features/pos/components/pos-workspace/PosPhoneOrderDialog';
+import type { DoorstepPaymentMethod } from '@/features/pos/types/pos.types';
 import { CreditCardIcon, DollarSignIcon } from '@/shared/components/icons/AppIcons';
 
 export function PosPhoneOrderDelivery({

@@ -2,26 +2,15 @@ import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { StandardDialog } from '@/shared/components/StandardDialog';
-import { Button } from '@/shared/ui/button';
 import { posApi, type PosCustomerDeliveryProfile, type PosCustomerDeliveryProfileOrder } from '@/features/pos/api/pos.api';
 import { catalogApi } from '@/lib/api/catalog';
 import { deliveryRepsApi, type DeliveryRep } from '@/shared/api/delivery-reps.api';
 import { toast } from '@/shared/components/system-alert';
-import { formatCurrency, formatDate } from '@/lib/format';
 import { callerIdService, type CallerIdCallEvent } from '@/features/pos/lib/pos-caller-id-service';
 import type { PosWorkspaceState } from '@/features/pos/components/pos-workspace/posWorkspace.helpers';
 import type { PosItem, DoorstepPaymentMethod } from '@/features/pos/types/pos.types';
 import {
-  PhoneIcon,
   PhoneCallIcon,
-  PhoneIncomingIcon,
-  SearchIcon,
-  PlusIcon,
-  ClockIcon,
-  MapPinIcon,
-  RefreshCwIcon,
-  TrashIcon,
-  UserIcon,
 } from '@/shared/components/icons/AppIcons';
 import { getCurrencySymbol, isKuwait, isSaudi } from '@/lib/currencies';
 import { PosPhoneOrderDialogTabs } from '@/features/pos/components/pos-workspace/pos-phone-order/PosPhoneOrderDialogTabs';
