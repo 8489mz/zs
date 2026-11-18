@@ -2,6 +2,8 @@ import type { RefObject } from 'react';
 import type { Product } from '@/types/domain';
 
 export type PosPriceType = 'retail' | 'wholesale' | 'half_wholesale' | 'credit';
+export type DoorstepPaymentMethod = 'cash' | 'card_pos' | 'instapay_wallet';
+
 
 export interface PosItem {
   lineKey: string;
