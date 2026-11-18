@@ -6,6 +6,7 @@ import { CustomSelect } from '@/shared/ui/custom-select';
 import { toast } from '@/shared/components/system-alert';
 import { contractingApi } from '../api/contracting.api';
 import { ContractingScheduleTask } from '../contracting.types';
+import { todayLocalDateKey } from '@/lib/format';
 
 export type ShiftMode = 'current_only' | 'selected_tasks' | 'all_subsequent';
 
@@ -36,7 +37,7 @@ function addDays(dateStr?: string | null, days: number = 0): string {
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return String(dateStr);
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return todayLocalDateKey(d);
 }
 
 const getTaskStart = (t: any): string => t?.startDate || t?.start_date || '';

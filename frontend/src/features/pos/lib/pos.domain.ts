@@ -3,6 +3,7 @@ import { roundMoneyValue, type MoneyDigits } from '@/shared/utils/money';
 import { calcCartLineTotal } from '@/features/pos/lib/pos-modifier-totals';
 import type { Product, ProductOffer, ProductUnit } from '@/types/domain';
 import type { PosItem, PosPriceType } from '@/features/pos/types/pos.types';
+import { todayLocalDateKey } from '@/lib/format';
 
 function safeUnits(product: Product) {
   return product.units?.length ? product.units : [{
@@ -30,7 +31,7 @@ function normalizeDateOnly(value: unknown) {
   const isoMatch = text.match(/^(\d{4}-\d{2}-\d{2})/);
   if (isoMatch) return isoMatch[1];
   const parsed = new Date(text);
-  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10);
+  return Number.isNaN(parsed.getTime()) ? '' : todayLocalDateKey(parsed);
 }
 
 function roundQuantity(value: number) {

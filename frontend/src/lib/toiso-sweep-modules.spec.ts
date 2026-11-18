@@ -95,12 +95,11 @@ describe('package-2 document-number and derived dates', () => {
 });
 
 describe('package-2 UTC-slice ratchet', () => {
-  it('no toISOString date-key pattern remains in any package-2 file, except the one package-3 line', () => {
-    // ScheduleGeneratorModal's addDays helper (line 226) is a (c)
-    // arbitrary-date conversion owned by package 3, not package 2.
-    const allowed: Record<string, number> = {
-      'frontend/src/features/contracting/components/ScheduleGeneratorModal.tsx': 1,
-    };
+  it('no toISOString date-key pattern remains in any package-2 file', () => {
+    // The package-3 addDays line in ScheduleGeneratorModal was allowed
+    // here (1) until package 3 fixed it; the allowance is now 0 and the
+    // whole-tree ratchet in toiso-sweep-remainder.spec.ts is the authority.
+    const allowed: Record<string, number> = {};
     const offenders: string[] = [];
     for (const rel of PACKAGE_2_FILES) {
       const text = fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8');

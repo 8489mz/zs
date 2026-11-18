@@ -9,6 +9,7 @@
  */
 
 import * as XLSX from 'xlsx';
+import { todayLocalDateKey } from '@/lib/format';
 
 export interface BankColumnMapping {
   dateCol: number;
@@ -74,9 +75,9 @@ function parseFormattedNumber(val: any): number {
 }
 
 function parseDateCell(val: any): string {
-  if (!val) return new Date().toISOString().split('T')[0];
+  if (!val) return todayLocalDateKey();
   if (val instanceof Date) {
-    if (!isNaN(val.getTime())) return val.toISOString().split('T')[0];
+    if (!isNaN(val.getTime())) return todayLocalDateKey(val);
   }
   const str = String(val).trim();
   // Check Excel serial number (e.g. 45210)
@@ -107,10 +108,10 @@ function parseDateCell(val: any): string {
 
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().split('T')[0];
+    return todayLocalDateKey(parsed);
   }
 
-  return new Date().toISOString().split('T')[0];
+  return todayLocalDateKey();
 }
 
 /**

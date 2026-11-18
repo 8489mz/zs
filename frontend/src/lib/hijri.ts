@@ -4,6 +4,7 @@
  * Compliant with Saudi ZATCA & GCC enterprise standards.
  */
 
+import { todayLocalDateKey } from './format';
 export const HIJRI_MONTHS_AR = [
   'محرم',
   'صفر',
@@ -117,7 +118,7 @@ export function formatHijriDate(
     return formatted;
   } catch {
     // Fallback if Intl is unavailable
-    return d.toISOString().slice(0, 10);
+    return todayLocalDateKey(d);
   }
 }
 
