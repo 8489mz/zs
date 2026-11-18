@@ -56,7 +56,7 @@ function getArabicColorHex(colorName?: string): string | null {
   return map[name] || null;
 }
 
-function InlineGroupPicker({
+export function InlineGroupPicker({
   group,
   onClose,
   onAddProduct,

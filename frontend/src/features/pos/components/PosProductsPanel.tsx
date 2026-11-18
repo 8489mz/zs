@@ -19,7 +19,6 @@ import { CameraBarcodeScannerModal } from '@/shared/components/CameraBarcodeScan
 import { useIsMobile } from '@/shared/hooks/use-is-mobile';
 import { useSettingsQuery } from '@/shared/hooks/use-catalog-queries';
 import { usePosUiCustomization } from '@/features/pos/hooks/usePosUiCustomization';
-import { useCachedT } from '@/features/pos/lib/cached-t';
 import { PosCustomizationDialog } from '@/features/pos/components/pos-workspace/PosCustomizationDialog';
 import { isNegativeStockSalesAllowed, isServiceProduct } from '@/features/pos/lib/pos.domain';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
@@ -137,7 +136,6 @@ function PosProductGroupCardComponent({
   onActivate,
   onToggleFavorite,
 }: PosProductGroupCardProps) {
-  const t = useCachedT();
   const priceLabel = minPrice === maxPrice
     ? formatCurrencyWithCode(minPrice)
     : `${formatCurrencyWithCode(minPrice)} - ${formatCurrencyWithCode(maxPrice)}`;
