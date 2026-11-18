@@ -10,7 +10,7 @@ import { sharedProductsApi } from '@/shared/api/products';
 import { buildPosProductGroups, buildRecentGroupKeys, getGroupShelfGroups, type PosGroupShelf, type PosProductGroup } from '@/features/pos/lib/pos-product-groups';
 import { isPosModalOpen } from '@/features/pos/lib/pos-keyboard-safety';
 import type { Product } from '@/types/domain';
-import type { PosPriceType } from '@/features/pos/types/pos.types';
+import type { PosCardDensity, PosPriceType, PosProductGroupCardProps } from '@/features/pos/types/pos.types';
 import type { PosSaleMode } from '@/features/pos/lib/pos-sale-mode';
 import { ProductIcon } from '@/shared/components/icons/product-svg-catalog';
 import { ProductIconStudioModal } from '@/shared/components/icons/ProductIconStudioModal';
@@ -28,6 +28,7 @@ import { isNegativeStockSalesAllowed, isServiceProduct } from '@/features/pos/li
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import { currencyMoneyDigits } from '@/shared/utils/money';
 import { toast } from '@/shared/components/system-alert';
+import { PosProductGroupCardGallery } from '@/features/pos/components/pos-products/PosProductGroupCardGallery';
 
 interface PosProductsPanelProps {
   search: string;
@@ -56,8 +57,6 @@ const cardDensityStorageKey = 'pos-card-density-preference-v2';
 const cardDensityDesktopKey = 'pos-card-density-desktop-v1';
 const cardDensityMobileKey = 'pos-card-density-mobile-v1';
 const touchModeVisibleStep = 60;
-
-export type PosCardDensity = 'comfortable' | 'compact' | 'gallery';
 
 function readCardDensityPreference(fallback: PosCardDensity = 'comfortable', isMobileDevice = false): PosCardDensity {
   if (typeof window === 'undefined') return fallback;
@@ -571,31 +570,6 @@ function InlineGroupPicker({
     : pickerContent;
 }
 
-interface PosProductGroupCardProps {
-  groupKey: string;
-  index: number;
-  title: string;
-  hasVariants: boolean;
-  variantCount: number;
-  minPrice: number;
-  maxPrice: number;
-  totalStock: number;
-  itemKind?: Product['itemKind'];
-  imageUrl?: string | null;
-  iconName?: string | null;
-  metaLabel: string;
-  isSelected: boolean;
-  isFavorite: boolean;
-  isOutOfStock: boolean;
-  cardDensity: PosCardDensity;
-  isMobile: boolean;
-  mobileGridColumns: '2' | '3' | 'auto';
-  showCardIcon: boolean;
-  cardRefs: RefObject<Array<HTMLElement | null>>;
-  onActivate: (groupKey: string) => void;
-  onToggleFavorite: (groupKey: string) => void;
-}
-
 // Memoized product-grid card. Every prop is a primitive, a stable ref object,
 // or a stable callback, so a card skips re-rendering when the panel
 // re-renders for any reason that leaves this card's data unchanged (new
@@ -634,283 +608,31 @@ function PosProductGroupCardComponent({
   if (cardDensity === 'gallery') {
     // Ultra-Clean Seamless Visual Card (Balanced Mobile & Touch Ergonomics)
     return (
-      <article
-        className={`pos-group-card pos-group-card-gallery ${isSelected ? 'is-selected' : ''} ${isOutOfStock ? 'is-out-of-stock' : ''}`}
-        style={{
-          background: isOutOfStock ? '#f8fafc' : '#ffffff',
-          border: isSelected
-            ? '1px solid #170e5e'
-            : isOutOfStock
-            ? '1px dashed #cbd5e1'
-            : '1px solid #e2e8f0',
-          borderRadius: '12px',
-          overflow: 'hidden',
-          boxShadow: isSelected ? '0 0 0 1px #170e5e' : '0 1px 4px rgba(0,0,0,0.03)',
-          display: 'flex',
-          flexDirection: 'column',
-          position: 'relative',
-          boxSizing: 'border-box',
-          padding: 0,
-          height: '100%',
-          maxWidth: isMobile ? '100%' : '190px',
-          width: '100%',
-          opacity: isOutOfStock ? 0.55 : 1,
-          filter: isOutOfStock ? 'grayscale(0.65)' : undefined,
-          transition: 'opacity 0.2s ease, border-color 0.2s ease',
-        }}
-      >
-        {/* Top Right Floating Pill: Variants Count OR Available Stock Badge */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '6px',
-            right: '6px',
-            zIndex: 2,
-            pointerEvents: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '3px',
-          }}
-        >
-          {hasVariants ? (
-            <span
-              style={{
-                fontSize: '9.5px',
-                fontWeight: 800,
-                padding: '2px 6px',
-                borderRadius: '5px',
-                background: 'rgba(239, 246, 255, 0.95)',
-                color: '#1d4ed8',
-                border: '1px solid #bfdbfe',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-              }}
-            >
-              {variantCount} {t('pos.options', 'خيارات')}
-            </span>
-          ) : (itemKind as string) !== 'service' && typeof totalStock === 'number' ? (
-            isOutOfStock ? (
-              <span
-                style={{
-                  fontSize: '9px',
-                  fontWeight: 800,
-                  padding: '2px 5px',
-                  borderRadius: '5px',
-                  background: 'rgba(254, 242, 242, 0.95)',
-                  color: '#b91c1c',
-                  border: '1px solid #fecaca',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                }}
-              >
-                {t('pos.out_of_stock', 'نفد')}
-              </span>
-            ) : totalStock > 0 && totalStock <= 5 ? (
-              <span
-                style={{
-                  fontSize: '9px',
-                  fontWeight: 800,
-                  padding: '2px 5px',
-                  borderRadius: '5px',
-                  background: 'rgba(255, 251, 235, 0.95)',
-                  color: '#b45309',
-                  border: '1px solid #fde68a',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                }}
-              >
-                {totalStock} {t('pos.left', 'متبقي')}
-              </span>
-            ) : (
-              <span
-                style={{
-                  fontSize: '9px',
-                  fontWeight: 700,
-                  padding: '1px 5px',
-                  borderRadius: '5px',
-                  background: 'rgba(248, 250, 252, 0.92)',
-                  color: '#64748b',
-                  border: '1px solid #e2e8f0',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-                }}
-              >
-                {totalStock}
-              </span>
-            )
-          ) : null}
-        </div>
-
-        {/* Favorite Star Button (Ergonomic Touch Separation) */}
-        <button
-          type="button"
-          className={`pos-favorite-star ${isFavorite ? 'is-active' : ''}`}
-          onPointerDown={(e) => {
-            e.stopPropagation();
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onToggleFavorite(groupKey);
-          }}
-          aria-label={isFavorite ? t('pos.pos_products_panel.s25', 'إزالة من المفضلة') : t('pos.pos_products_panel.s26', 'إضافة إلى المفضلة')}
-          style={{
-            position: 'absolute',
-            top: '6px',
-            left: '6px',
-            zIndex: 3,
-            background: isFavorite ? '#ffffff' : 'rgba(255, 255, 255, 0.92)',
-            border: isFavorite ? '1px solid #fde68a' : '1px solid #e2e8f0',
-            borderRadius: '50%',
-            width: '26px',
-            height: '26px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            padding: 0,
-            boxShadow: isFavorite ? '0 2px 6px rgba(245, 158, 11, 0.22)' : '0 1px 3px rgba(0, 0, 0, 0.08)',
-            transition: 'transform 0.1s ease, background 0.15s ease',
-          }}
-        >
-          <StarIcon size={12.5} filled={isFavorite} color={isFavorite ? '#f59e0b' : '#94a3b8'} />
-        </button>
-
-        {/* Card Action Button */}
-        <button
-          ref={(node) => { cardRefs.current[index] = node; }}
-          type="button"
-          className="pos-group-card-action"
-          onClick={() => onActivate(groupKey)}
-          style={{
-            border: 'none',
-            background: 'transparent',
-            textAlign: 'center',
-            padding: 0,
-            width: '100%',
-            cursor: isOutOfStock ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            flex: 1,
-            outline: 'none',
-            WebkitTapHighlightColor: 'transparent',
-            userSelect: 'none',
-          }}
-        >
-          {/* Dominant Hero Image (Natural Square Proportion) */}
-          <div
-            style={{
-              width: '100%',
-              aspectRatio: '1 / 1',
-              background: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              position: 'relative',
-              overflow: 'hidden',
-              padding: isMobile && mobileGridColumns === '3' ? '4px' : isMobile ? '5px' : '8px',
-              boxSizing: 'border-box',
-            }}
-          >
-            {imageUrl ? (
-              <img
-                src={imageUrl}
-                alt={title}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                }}
-                loading="lazy"
-              />
-            ) : (
-              <div
-                style={{
-                  width: isMobile ? '36px' : '48px',
-                  height: isMobile ? '36px' : '48px',
-                  borderRadius: '10px',
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#94a3b8',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-                }}
-              >
-                <ProductIcon name={iconName || 'box-package'} size={isMobile ? 18 : 24} />
-              </div>
-            )}
-          </div>
-
-          {/* Clean Bottom Text Bar: Title + Price Directly Underneath */}
-          <div
-            style={{
-              width: '100%',
-              padding: isMobile && mobileGridColumns === '3' ? '4px 3px 5px' : isMobile ? '5px 5px 6px' : '8px 6px 8px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '2px',
-              boxSizing: 'border-box',
-              borderTop: '1px solid #f1f5f9',
-              background: '#ffffff',
-              minHeight: isMobile && mobileGridColumns === '3' ? '48px' : isMobile ? '52px' : '66px',
-            }}
-          >
-            <strong
-              style={{
-                fontSize: isMobile && mobileGridColumns === '3' ? '10.5px' : isMobile ? '11.5px' : '12px',
-                fontWeight: 700,
-                color: '#0f172a',
-                lineHeight: '1.25',
-                textAlign: 'center',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                wordBreak: 'break-word',
-                width: '100%',
-                minHeight: isMobile ? '24px' : '28px',
-                boxSizing: 'border-box',
-                padding: '0 2px',
-              }}
-              title={title}
-            >
-              {title}
-            </strong>
-
-            {/* Price Pill Capsule */}
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: isMobile && mobileGridColumns === '3' ? '1.5px 5px' : isMobile ? '2px 6px' : '2px 8px',
-                borderRadius: '5px',
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                maxWidth: '100%',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: isMobile && mobileGridColumns === '3' ? '10.5px' : '11px',
-                  fontWeight: 800,
-                  color: '#170e5e',
-                  letterSpacing: '0.2px',
-                  direction: 'ltr',
-                  display: 'inline-block',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {priceLabel}
-              </span>
-            </div>
-          </div>
-        </button>
-      </article>
+      <PosProductGroupCardGallery
+        groupKey={groupKey}
+        index={index}
+        title={title}
+        hasVariants={hasVariants}
+        variantCount={variantCount}
+        minPrice={minPrice}
+        maxPrice={maxPrice}
+        totalStock={totalStock}
+        itemKind={itemKind}
+        imageUrl={imageUrl}
+        iconName={iconName}
+        metaLabel={metaLabel}
+        isSelected={isSelected}
+        isFavorite={isFavorite}
+        isOutOfStock={isOutOfStock}
+        cardDensity={cardDensity}
+        isMobile={isMobile}
+        mobileGridColumns={mobileGridColumns}
+        showCardIcon={showCardIcon}
+        cardRefs={cardRefs}
+        onActivate={onActivate}
+        onToggleFavorite={onToggleFavorite}
+        priceLabel={priceLabel}
+      />
     );
   }
 

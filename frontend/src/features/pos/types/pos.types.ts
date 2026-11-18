@@ -1,3 +1,6 @@
+import type { RefObject } from 'react';
+import type { Product } from '@/types/domain';
+
 export type PosPriceType = 'retail' | 'wholesale' | 'half_wholesale' | 'credit';
 
 export interface PosItem {
@@ -45,4 +48,31 @@ export interface PosItem {
   heldUnavailable?: boolean;
   imageUrl?: string;
   icon?: string;
+}
+
+export type PosCardDensity = 'comfortable' | 'compact' | 'gallery';
+
+export interface PosProductGroupCardProps {
+  groupKey: string;
+  index: number;
+  title: string;
+  hasVariants: boolean;
+  variantCount: number;
+  minPrice: number;
+  maxPrice: number;
+  totalStock: number;
+  itemKind?: Product['itemKind'];
+  imageUrl?: string | null;
+  iconName?: string | null;
+  metaLabel: string;
+  isSelected: boolean;
+  isFavorite: boolean;
+  isOutOfStock: boolean;
+  cardDensity: PosCardDensity;
+  isMobile: boolean;
+  mobileGridColumns: '2' | '3' | 'auto';
+  showCardIcon: boolean;
+  cardRefs: RefObject<Array<HTMLElement | null>>;
+  onActivate: (groupKey: string) => void;
+  onToggleFavorite: (groupKey: string) => void;
 }
