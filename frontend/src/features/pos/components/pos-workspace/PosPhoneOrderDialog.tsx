@@ -36,6 +36,7 @@ import { PosPhoneOrderRecentCalls } from '@/features/pos/components/pos-workspac
 import { PosPhoneOrderDialogHardware } from '@/features/pos/components/pos-workspace/pos-phone-order/PosPhoneOrderDialogHardware';
 import { PosPhoneOrderDialogSearchBar } from '@/features/pos/components/pos-workspace/pos-phone-order/PosPhoneOrderDialogSearchBar';
 import { PosPhoneOrderEmptyPrompt } from '@/features/pos/components/pos-workspace/pos-phone-order/PosPhoneOrderEmptyPrompt';
+import { PosPhoneOrderCustomerStrip } from '@/features/pos/components/pos-workspace/pos-phone-order/PosPhoneOrderCustomerStrip';
 
 interface PosPhoneOrderDialogProps {
   open: boolean;
@@ -638,75 +639,13 @@ export function PosPhoneOrderDialog({
             /* STATE 1: Existing / Selected Customer Workspace */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {/* Active Customer Strip */}
-              <div
-                style={{
-                  background: '#eff6ff',
-                  padding: '6px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #bfdbfe',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div
-                    style={{
-                      width: '26px',
-                      height: '26px',
-                      borderRadius: '50%',
-                      background: '#1e40af',
-                      color: '#ffffff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <UserIcon size={14} />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1e3a8a' }}>
-                      {t('pos.pos_workspace.pos_phone_order_dialog.s47', "العميل النشط:")} {currentCustomer.name}
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: '#3b82f6', fontWeight: 600 }}>
-                      ({currentCustomer.phone || t('pos.pos_workspace.pos_phone_order_dialog.s48', "بدون رقم")})
-                    </span>
-                    <span
-                      style={{
-                        fontSize: '0.6875rem',
-                        fontWeight: 700,
-                        padding: '1px 6px',
-                        borderRadius: '4px',
-                        background: currentCustomer.customerType === 'vip' ? '#fef3c7' : '#e0e7ff',
-                        color: currentCustomer.customerType === 'vip' ? '#92400e' : '#3730a3',
-                      }}
-                    >
-                      {currentCustomer.customerType === 'vip' ? 'VIP' : t('pos.pos_workspace.pos_phone_order_dialog.s49', "نقدي")}
-                    </span>
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    setSelectedCustomerId(null);
-                    setSelectedAddress('');
-                    setIsForceNewCustomer(false);
-                    searchInputRef.current?.focus();
-                  }}
-                  style={{
-                    fontSize: '0.72rem',
-                    fontWeight: 700,
-                    padding: '3px 8px',
-                    background: '#ffffff',
-                    border: '1px solid #93c5fd',
-                    color: '#1e40af',
-                  }}
-                >
-                  <SearchIcon size={12} style={{ marginLeft: '4px' }} />
-                  {t('pos.pos_workspace.pos_phone_order_dialog.s50', "تغيير العميل")}
-                </Button>
-              </div>
+              <PosPhoneOrderCustomerStrip
+                currentCustomer={currentCustomer}
+                setSelectedCustomerId={setSelectedCustomerId}
+                setSelectedAddress={setSelectedAddress}
+                setIsForceNewCustomer={setIsForceNewCustomer}
+                searchInputRef={searchInputRef}
+              />
 
               <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: '10px' }}>
                 {/* Left Column: Customer Profile, Addresses, Zone & Payment */}
