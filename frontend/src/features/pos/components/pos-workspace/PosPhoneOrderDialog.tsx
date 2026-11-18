@@ -22,7 +22,6 @@ import {
   MapPinIcon,
   ReceiptIcon,
   RotateCcwIcon,
-  SlidersIcon,
   RefreshCwIcon,
   XIcon,
   CreditCardIcon,
@@ -34,6 +33,7 @@ import {
 } from '@/shared/components/icons/AppIcons';
 import { openWhatsAppChat, formatRestaurantOrderWhatsAppMessage } from '@/lib/whatsapp';
 import { getCurrencySymbol, isKuwait, isSaudi } from '@/lib/currencies';
+import { PosPhoneOrderDialogTabs } from '@/features/pos/components/pos-workspace/pos-phone-order/PosPhoneOrderDialogTabs';
 
 interface PosPhoneOrderDialogProps {
   open: boolean;
@@ -566,81 +566,12 @@ export function PosPhoneOrderDialog({
       maxWidth="96vw"
       minHeight="auto"
       badge={
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <button
-            type="button"
-            onClick={() => setActiveTab('desk')}
-            style={{
-              background: activeTab === 'desk' ? '#170e5e' : '#f1f5f9',
-              color: activeTab === 'desk' ? '#ffffff' : '#475569',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '4px 10px',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            {t('pos.pos_workspace.pos_phone_order_dialog.s2', "شاشة الطلبات")}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('recent_calls')}
-            style={{
-              background: activeTab === 'recent_calls' ? '#170e5e' : '#f1f5f9',
-              color: activeTab === 'recent_calls' ? '#ffffff' : '#475569',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '4px 10px',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
-          >
-            <ClockIcon size={12} />
-            {t('pos.pos_workspace.pos_phone_order_dialog.s3', "سجل المكالمات")}
-            {recentCallsList.length > 0 && (
-              <span
-                style={{
-                  background: activeTab === 'recent_calls' ? '#3b82f6' : '#e2e8f0',
-                  color: activeTab === 'recent_calls' ? '#ffffff' : '#1e293b',
-                  fontSize: '0.6875rem',
-                  fontWeight: 800,
-                  padding: '1px 5px',
-                  borderRadius: '10px',
-                }}
-              >
-                {recentCallsList.length}
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('hardware')}
-            style={{
-              background: activeTab === 'hardware' ? '#170e5e' : '#f1f5f9',
-              color: activeTab === 'hardware' ? '#ffffff' : '#475569',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '4px 10px',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
-          >
-            <SlidersIcon size={11} />
-            {t('pos.pos_workspace.pos_phone_order_dialog.s4', "كاشف المتصل (Caller ID)")}
-            {isSerialConnected && (
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} />
-            )}
-          </button>
-        </div>
+        <PosPhoneOrderDialogTabs
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          recentCallsList={recentCallsList}
+          isSerialConnected={isSerialConnected}
+        />
       }
       footer={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
