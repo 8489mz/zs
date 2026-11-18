@@ -1,27 +1,20 @@
 import { useTranslation } from 'react-i18next';
 import { isCashDrawerTransferType } from '@/features/cash-drawer/lib/cash-drawer-movement-request-key';
 import { useCounterpartAccounts } from '@/features/cash-drawer/hooks/useCounterpartAccounts';
-import { CurrencySymbol } from '@/shared/ui/currency-symbol';
 import { useEffect, useMemo, useState } from 'react';
-import { Controller, type UseFormReturn } from 'react-hook-form';
+import { type UseFormReturn } from 'react-hook-form';
 import { DialogShell } from '@/shared/components/dialog-shell';
-import { Field } from '@/shared/ui/field';
-import { CustomSelect } from '@/shared/ui/custom-select';
-import { Button } from '@/shared/ui/button';
-import { MutationFeedback } from '@/shared/components/mutation-feedback';
-import { SubmitButton } from '@/shared/components/submit-button';
-import { formatCurrency } from '@/lib/format';
 import { getGlobalSystemCurrency } from '@/lib/currencies';
 import type { Branch, CashierShift, Location } from '@/types/domain';
 import type { CloseShiftValues, MovementValues, OpenShiftValues } from '@/features/cash-drawer/hooks/useCashDrawerPageController';
 import { getOfflineSalesQueue } from '@/features/pos/lib/pos-offline-sync';
-import { XIcon } from '@/shared/components/icons/AppIcons';
-import { CashDrawerCloseForm } from '@/features/cash-drawer/components/cash-drawer-forms/CashDrawerCloseForm';
-import { CashDrawerCloseStyleHeader } from '@/features/cash-drawer/components/cash-drawer-forms/CashDrawerCloseStyleHeader';
-import { CashDrawerMovementForm } from '@/features/cash-drawer/components/cash-drawer-forms/CashDrawerMovementForm';
-import { CashDrawerOpenForm, type MutationLike } from '@/features/cash-drawer/components/cash-drawer-forms/CashDrawerOpenForm';
 import { PaymentChannelRow } from '@/features/cash-drawer/components/cash-drawer-forms/PaymentChannelRow';
-import { AlertCircleIcon, CardIcon, CashIcon, InstaPayIcon, WalletIcon } from '@/features/cash-drawer/components/cash-drawer-forms/cash-drawer-form-icons';
+import type { DetailChannel } from '@/features/cash-drawer/components/cash-drawer-forms/PaymentChannelRow';
+import { CashDrawerOpenForm, type MutationLike } from '@/features/cash-drawer/components/cash-drawer-forms/CashDrawerOpenForm';
+import { CashDrawerMovementForm } from '@/features/cash-drawer/components/cash-drawer-forms/CashDrawerMovementForm';
+import { CashDrawerCloseStyleHeader } from '@/features/cash-drawer/components/cash-drawer-forms/CashDrawerCloseStyleHeader';
+import { CashDrawerCloseForm } from '@/features/cash-drawer/components/cash-drawer-forms/CashDrawerCloseForm';
+import { CardIcon, InstaPayIcon, WalletIcon } from '@/features/cash-drawer/components/cash-drawer-forms/cash-drawer-form-icons';
 
 interface CashDrawerFormsPanelProps {
   activeForm: 'open' | 'movement' | 'close' | null;
