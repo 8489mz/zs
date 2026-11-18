@@ -10,6 +10,11 @@
  *
  * Fail-first: the heading matcher is self-checked against a sample
  * document below (present heading found, absent heading not found).
+ * INV-MODULE-DOORS-REVIEW-CLEANUP (2026-11-18): the 8 helper/util files
+ * once flagged REVIEW are resolved — all 8 are confirmed public doors
+ * (docs/MODULE_DOORS.md section 4 records the per-door reason) — so this
+ * spec also asserts the document contains no REVIEW flag at all and names
+ * each of the 8 resolved files as a confirmed public door.
  */
 
 import { strict as assert } from 'node:assert';
@@ -101,6 +106,24 @@ async function main(): Promise<void> {
   assert.ok(doc.includes('57 edges / 133 statements'), 'docs/MODULE_DOORS.md must state the pinned frontend coupling (57 edges / 133 statements)');
   assert.ok(doc.includes('79 external imports into `accounting-posting.service`'), 'docs/MODULE_DOORS.md must state the pinned posting-service cap');
   assert.ok(doc.includes('15 into `accounting-tenant-foundation.service`'), 'docs/MODULE_DOORS.md must state the pinned foundation-service cap');
+
+  // 5. No REVIEW flag remains: the 8 Phase 1 doors are resolved, each
+  // recorded as a confirmed public door in section 4 of the document.
+  assert.ok(!doc.includes('REVIEW'), 'docs/MODULE_DOORS.md must not contain any REVIEW flag: all 8 Phase 1 doors are resolved');
+  assert.ok(doc.includes('## 4. Phase 1 door resolution'), 'docs/MODULE_DOORS.md must record the Phase 1 door resolution');
+  const resolvedDoors = [
+    'backend/src/modules/cash-drawer/helpers/cash-drawer.helper',
+    'backend/src/modules/import-sales/helpers/import-lot-allocation.helper',
+    'backend/src/modules/inventory/helpers/inventory-tracked-stock.helper',
+    'backend/src/modules/purchases/helpers/purchases-write.helper',
+    'backend/src/modules/reports/helpers/reports-range.helper',
+    'backend/src/modules/sales/helpers/restaurant-modifier-contract.helper',
+    'backend/src/modules/sales/helpers/sales-discount-filter.helper',
+    'backend/src/modules/sales/helpers/sales-write.helper',
+  ];
+  for (const door of resolvedDoors) {
+    assert.ok(doc.includes(door), `docs/MODULE_DOORS.md must list the resolved public door ${door}`);
+  }
 
   console.log(
     `module doors checks passed (${backendModules.length} backend doors, ${frontendFeatures.length} frontend doors, ${missingOnDisk.length} features missing index.ts)`,

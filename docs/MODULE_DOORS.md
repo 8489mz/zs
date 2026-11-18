@@ -4,7 +4,7 @@
 - Pinned coupling at this HEAD: backend 71 edges / 649 statements, frontend 57 edges / 133 statements, 7 backend + 12 frontend bidirectional pairs, 79 external imports into `accounting-posting.service`, 15 into `accounting-tenant-foundation.service`.
 - Backend modules: 37. Modules with inbound imports today: 20. Modules with no inbound imports today: 17 — their intended door is their Nest module file only, until a caller needs more.
 - Frontend features: 40. Features with inbound imports today: 20. Features with a public `index.ts`: 26 of 40; missing it: 14 (listed in §3).
-- `Imported by` lists the files other modules actually import today, with the importing module and statement count. That list IS the de-facto door today. Files flagged REVIEW are helper/util internals imported directly today; Phase 1 decides per file whether to keep it public or route its callers through a service method. No file is hidden by this document — hiding happens in Phase 1, with a spec.
+- `Imported by` lists the files other modules actually import today, with the importing module and statement count. That list IS the de-facto door today. Phase 1 is decided (2026-11-18): the 8 helper/util files once flagged in this inventory are all confirmed public doors — each is a shared function surface whose cross-module importers are legitimate and whose owning module is correct (reasons per door in section 4). No file is hidden by this document.
 - This document is pinned by `backend/test/critical/module-doors.spec.ts` (INV-MODULE-DOORS): every module/feature heading must exist, the missing-index list must match disk, and the pinned counts above must be present.
 
 ## 1. Backend doors (37)
@@ -29,7 +29,7 @@
   - `backend/src/modules/accounting/fx-rate-resolution` — 10 statement(s), from import-sales (5), maritime-freight (5)
   - `backend/src/modules/accounting/inventory-valuation` — 14 statement(s), from import-sales (2), maintenance (1), manufacturing (1), purchases (6), returns (2), sales (1), tradein (1)
   - `backend/src/modules/accounting/partner-subledger` — 3 statement(s), from contracting (1), maritime-freight (2)
-- Intended door: the Nest module file plus the 16 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 16 file(s) above.
 
 ### backend/activation
 
@@ -37,7 +37,7 @@
 - Imported by (de-facto door today):
   - `backend/src/modules/activation/activation.module` — 1 statement(s), from sessions (1)
   - `backend/src/modules/activation/activation.service` — 1 statement(s), from sessions (1)
-- Intended door: the Nest module file plus the 2 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 2 file(s) above.
 
 ### backend/addons
 
@@ -51,7 +51,7 @@
 - Imported by (de-facto door today):
   - `backend/src/modules/ai-copilot/ai-copilot.module` — 1 statement(s), from settings (1)
   - `backend/src/modules/ai-copilot/ai-copilot.service` — 1 statement(s), from settings (1)
-- Intended door: the Nest module file plus the 2 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 2 file(s) above.
 
 ### backend/approvals
 
@@ -59,7 +59,7 @@
 - Imported by (de-facto door today):
   - `backend/src/modules/approvals/approval-workflow.service` — 1 statement(s), from purchases (1)
   - `backend/src/modules/approvals/approvals.module` — 1 statement(s), from purchases (1)
-- Intended door: the Nest module file plus the 2 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 2 file(s) above.
 
 ### backend/bosta
 
@@ -73,15 +73,15 @@
 - Imported by (de-facto door today):
   - `backend/src/modules/cash-drawer/cash-drawer.module` — 2 statement(s), from hr (1), sales (1)
   - `backend/src/modules/cash-drawer/cash-drawer.service` — 5 statement(s), from hr (3), sales (2)
-  - `backend/src/modules/cash-drawer/helpers/cash-drawer.helper` — 6 statement(s), from delivery-reps (5), sales (1) — REVIEW (helper/util internal, see header)
-- Intended door: the Nest module file plus the 2 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+  - `backend/src/modules/cash-drawer/helpers/cash-drawer.helper` — 6 statement(s), from delivery-reps (5), sales (1)
+- Intended door: the Nest module file plus the 3 file(s) above.
 
 ### backend/catalog
 
 - Nest module: `backend/src/modules/catalog/catalog.module.ts`
 - Imported by (de-facto door today):
   - `backend/src/modules/catalog/engines/stock-movement-total.engine` — 2 statement(s), from purchases (1), settings (1)
-- Intended door: the Nest module file plus the 1 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 1 file(s) above.
 
 ### backend/contracting
 
@@ -102,7 +102,7 @@
   - `backend/src/modules/delivery-reps/services/van-common.util` — 3 statement(s), from import-sales (1), partners (1), purchases (1)
   - `backend/src/modules/delivery-reps/van-routes-schedule.util` — 1 statement(s), from partners (1)
   - `backend/src/modules/delivery-reps/van-trip-counters.engine` — 2 statement(s), from sales (2)
-- Intended door: the Nest module file plus the 3 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 3 file(s) above.
 
 ### backend/gcc-shipping
 
@@ -116,23 +116,23 @@
 - Imported by (de-facto door today):
   - `backend/src/modules/hr/engines/eos-calculation.engine` — 1 statement(s), from accounting (1)
   - `backend/src/modules/hr/engines/payroll-accrual-allocation.engine` — 1 statement(s), from accounting (1)
-- Intended door: the Nest module file plus the 2 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 2 file(s) above.
 
 ### backend/import-sales
 
 - Nest module: `backend/src/modules/import-sales/import-sales.module.ts`
 - Imported by (de-facto door today):
-  - `backend/src/modules/import-sales/helpers/import-lot-allocation.helper` — 7 statement(s), from inventory (3), returns (1), sales (3) — REVIEW (helper/util internal, see header)
-- Intended door: the Nest module file plus the 0 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+  - `backend/src/modules/import-sales/helpers/import-lot-allocation.helper` — 7 statement(s), from inventory (3), returns (1), sales (3)
+- Intended door: the Nest module file plus the 1 file(s) above.
 
 ### backend/inventory
 
 - Nest module: `backend/src/modules/inventory/inventory.module.ts`
 - Imported by (de-facto door today):
-  - `backend/src/modules/inventory/helpers/inventory-tracked-stock.helper` — 1 statement(s), from purchases (1) — REVIEW (helper/util internal, see header)
+  - `backend/src/modules/inventory/helpers/inventory-tracked-stock.helper` — 1 statement(s), from purchases (1)
   - `backend/src/modules/inventory/inventory.module` — 2 statement(s), from catalog (1), manufacturing (1)
   - `backend/src/modules/inventory/services/inventory-scope.service` — 6 statement(s), from catalog (6)
-- Intended door: the Nest module file plus the 2 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 3 file(s) above.
 
 ### backend/maintenance
 
@@ -151,7 +151,7 @@
 - Nest module: `backend/src/modules/manufacturing/manufacturing.module.ts`
 - Imported by (de-facto door today):
   - `backend/src/modules/manufacturing/engines/manufacturing-overhead.engine` — 3 statement(s), from accounting (2), sales (1)
-- Intended door: the Nest module file plus the 1 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 1 file(s) above.
 
 ### backend/maritime-freight
 
@@ -188,17 +188,17 @@
 - Nest module: `backend/src/modules/purchases/purchases.module.ts`
 - Imported by (de-facto door today):
   - `backend/src/modules/purchases/engines/landed-cost-allocation.engine` — 1 statement(s), from import-sales (1)
-  - `backend/src/modules/purchases/helpers/purchases-write.helper` — 2 statement(s), from accounting (2) — REVIEW (helper/util internal, see header)
+  - `backend/src/modules/purchases/helpers/purchases-write.helper` — 2 statement(s), from accounting (2)
   - `backend/src/modules/purchases/purchases.module` — 1 statement(s), from pharmacy (1)
   - `backend/src/modules/purchases/purchases.service` — 1 statement(s), from pharmacy (1)
-- Intended door: the Nest module file plus the 3 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 4 file(s) above.
 
 ### backend/reports
 
 - Nest module: `backend/src/modules/reports/reports.module.ts`
 - Imported by (de-facto door today):
-  - `backend/src/modules/reports/helpers/reports-range.helper` — 2 statement(s), from delivery-reps (1), sales (1) — REVIEW (helper/util internal, see header)
-- Intended door: the Nest module file plus the 0 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+  - `backend/src/modules/reports/helpers/reports-range.helper` — 2 statement(s), from delivery-reps (1), sales (1)
+- Intended door: the Nest module file plus the 1 file(s) above.
 
 ### backend/returns
 
@@ -206,7 +206,7 @@
 - Imported by (de-facto door today):
   - `backend/src/modules/returns/returns.module` — 1 statement(s), from sales (1)
   - `backend/src/modules/returns/returns.service` — 2 statement(s), from sales (2)
-- Intended door: the Nest module file plus the 2 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 2 file(s) above.
 
 ### backend/saas-admin
 
@@ -215,7 +215,7 @@
   - `backend/src/modules/saas-admin/saas-admin.module` — 1 statement(s), from public (1)
   - `backend/src/modules/saas-admin/trial-tenant-provisioning.service` — 1 statement(s), from public (1)
   - `backend/src/modules/saas-admin/trial.constants` — 2 statement(s), from public (2)
-- Intended door: the Nest module file plus the 3 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 3 file(s) above.
 
 ### backend/sales
 
@@ -225,9 +225,9 @@
   - `backend/src/modules/sales/engines/pos-exchange.engine` — 2 statement(s), from returns (2)
   - `backend/src/modules/sales/engines/price-list-resolution.engine` — 1 statement(s), from delivery-reps (1)
   - `backend/src/modules/sales/engines/sale-tax-rate.engine` — 4 statement(s), from delivery-reps (1), maritime-freight (3)
-  - `backend/src/modules/sales/helpers/restaurant-modifier-contract.helper` — 1 statement(s), from storefront (1) — REVIEW (helper/util internal, see header)
-  - `backend/src/modules/sales/helpers/sales-discount-filter.helper` — 2 statement(s), from delivery-reps (2) — REVIEW (helper/util internal, see header)
-  - `backend/src/modules/sales/helpers/sales-write.helper` — 2 statement(s), from delivery-reps (2) — REVIEW (helper/util internal, see header)
+  - `backend/src/modules/sales/helpers/restaurant-modifier-contract.helper` — 1 statement(s), from storefront (1)
+  - `backend/src/modules/sales/helpers/sales-discount-filter.helper` — 2 statement(s), from delivery-reps (2)
+  - `backend/src/modules/sales/helpers/sales-write.helper` — 2 statement(s), from delivery-reps (2)
   - `backend/src/modules/sales/sales.module` — 2 statement(s), from delivery-reps (1), storefront (1)
   - `backend/src/modules/sales/sales.service` — 3 statement(s), from delivery-reps (1), storefront (2)
   - `backend/src/modules/sales/services/kds.service` — 2 statement(s), from storefront (2)
@@ -235,7 +235,7 @@
   - `backend/src/modules/sales/services/sales-authorization.service` — 1 statement(s), from returns (1)
   - `backend/src/modules/sales/services/sales-finance.service` — 3 statement(s), from delivery-reps (3)
   - `backend/src/modules/sales/services/sales-write.service` — 1 statement(s), from settings (1)
-- Intended door: the Nest module file plus the 11 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 14 file(s) above.
 
 ### backend/services
 
@@ -257,7 +257,7 @@
   - `backend/src/modules/settings/services/whatsapp-gateway.service` — 21 statement(s), from approvals (1), cash-drawer (2), delivery-reps (1), maritime-freight (4), purchases (1), returns (2), sales (3), storefront (7)
   - `backend/src/modules/settings/settings.module` — 9 statement(s), from approvals (1), cash-drawer (1), delivery-reps (1), maritime-freight (1), purchases (1), returns (1), saas-admin (1), sales (1), storefront (1)
   - `backend/src/modules/settings/settings.service` — 1 statement(s), from saas-admin (1)
-- Intended door: the Nest module file plus the 4 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 4 file(s) above.
 
 ### backend/storefront
 
@@ -267,21 +267,21 @@
   - `backend/src/modules/storefront/storefront-media.service` — 4 statement(s), from catalog (4)
   - `backend/src/modules/storefront/storefront-slug-resolution` — 1 statement(s), from sales (1)
   - `backend/src/modules/storefront/storefront.service` — 5 statement(s), from catalog (5)
-- Intended door: the Nest module file plus the 4 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 4 file(s) above.
 
 ### backend/tax-integration
 
 - Nest module: `backend/src/modules/tax-integration/tax-integration.module.ts`
 - Imported by (de-facto door today):
   - `backend/src/modules/tax-integration/services/zatca/zatca-invoice-status` — 1 statement(s), from sales (1)
-- Intended door: the Nest module file plus the 1 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 1 file(s) above.
 
 ### backend/tenant-subscription
 
 - Nest module: `backend/src/modules/tenant-subscription/tenant-subscription.module.ts`
 - Imported by (de-facto door today):
   - `backend/src/modules/tenant-subscription/pricing/pricing-catalog.service` — 2 statement(s), from public (2)
-- Intended door: the Nest module file plus the 1 non-REVIEW file(s) above; REVIEW file(s) are decided in Phase 1.
+- Intended door: the Nest module file plus the 1 file(s) above.
 
 ### backend/tradein
 
@@ -610,4 +610,19 @@
 - `tradein`
 - `updates`
 
-REVIEW-flagged imported files total: 8 (helper/util internals imported directly today).
+Flagged imported files total: 0 — all 8 resolved in Phase 1 (see section 4); no flag remains in this document.
+
+## 4. Phase 1 door resolution (2026-11-18)
+
+Phase 1 decision: KEEP PUBLIC for all 8 doors. No file moved, no import re-pointed, no behaviour changed. Grounding re-verified at HEAD 35cdf065c: the cross-module statement counts below still match this document exactly (same static import scan as the header — comments stripped, non-spec source files only). The flag itself was raised by file path alone (every flagged file lives under a `helpers/` folder); it was never a coupling finding — the already-public accounting engines (for example money-minor-units.engine, 190 statements) were never flagged, and none of the 8 imports below is a wrong-owner import.
+
+| Door (owning module) | Cross-module importers (statements, verified) | What it is | Verdict and reason |
+| --- | --- | --- | --- |
+| `backend/src/modules/cash-drawer/helpers/cash-drawer.helper` | delivery-reps (5), sales (1) | Pure drawer math: paginate/filter/map shift rows, variance, amount assertions, shift doc-no | KEEP PUBLIC — the van services and the sale path share the same shift/drawer math; cash-drawer is the correct owner |
+| `backend/src/modules/import-sales/helpers/import-lot-allocation.helper` | inventory (3), returns (1), sales (3) | Lot allocation engine: allocate/restore/transfer/sync import lots inside the caller's transaction, plus the pure import-sale cost calculation | KEEP PUBLIC — inventory, returns and sales all operate on the same import lots, which import-sales creates; a move would touch money/cost code (import-sale cost / COGS), so no move in this package. Follow-up for a future isolation phase: consider promoting it to a dedicated lots service behind a service method instead of direct helper imports |
+| `backend/src/modules/inventory/helpers/inventory-tracked-stock.helper` | purchases (1) | Single guard: refuses a quantity-only stock mutation on a serial- or batch-tracked product inside the stock transaction | KEEP PUBLIC — the purchase receipt writes stock and must respect the tracked-stock guard; inventory owns the tracked-stock rule |
+| `backend/src/modules/purchases/helpers/purchases-write.helper` | accounting (2) | Pure purchase-line math: normalize items, allocate the invoice discount, subtotal, partition line totals, stock delta calculations | KEEP PUBLIC — both accounting importers use partitionPurchaseLineTotals for posting; purchases is the canonical place for purchase line math |
+| `backend/src/modules/reports/helpers/reports-range.helper` | delivery-reps (1), sales (1) | Pure date-range, business-day bounds, pagination and scope-filter utilities | KEEP PUBLIC — generic report-range utility owned by reports; the two outside callers need exactly this |
+| `backend/src/modules/sales/helpers/restaurant-modifier-contract.helper` | storefront (1) | Pure restaurant modifier price/contract enforcement (resolve prices, enforce group rules) | KEEP PUBLIC — the online order path carries the same modifier contract as the POS sale path; sales defines the contract |
+| `backend/src/modules/sales/helpers/sales-discount-filter.helper` | delivery-reps (2) | Single pure SQL-fragment builder for the discounted-sale filter | KEEP PUBLIC — van field sales are sales and use the same discount filter; sales is the correct owner |
+| `backend/src/modules/sales/helpers/sales-write.helper` | delivery-reps (2) | Pure sale-write math: prepared sale items, below-floor detection, conversion recovery, residual rounding, store-credit calculations, offer helpers | KEEP PUBLIC — van field sales import the offer helpers (isOfferActive, pickBestApplicableOffer); sales is the correct owner |
