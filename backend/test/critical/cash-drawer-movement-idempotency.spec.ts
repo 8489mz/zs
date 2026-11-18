@@ -94,8 +94,14 @@ async function main() {
     );
     // Stubbed collaborators (see header): the expected-cash
     // recomputation and the shift listing, both proven elsewhere.
-    (service as any).computeShiftExpectedCashFromShift = async () => 0;
-    (service as any).listCashierShifts = async () => ({
+    // NOTE (file #15 split): recordCashMovement now lives in the write
+    // slice, which captured its cross-slice deps at construction —
+    // stubbing the FACADE methods no longer intercepts them (the bound
+    // deps keep calling the real compute, which needs a `settings`
+    // table this minimal schema does not have). Stub the slice's own
+    // bound deps instead; same values, same pin.
+    (service as any).write.computeShiftExpectedCashFromShift = async () => 0;
+    (service as any).write.listCashierShifts = async () => ({
       cashierShifts: [],
       pagination: { page: 1, pageSize: 50, totalItems: 0, totalPages: 1 },
       summary: {},
