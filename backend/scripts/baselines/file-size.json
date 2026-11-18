@@ -5,7 +5,6 @@
   "note": "Ratchet baseline: files over the 1000-line cap at the base commit. A file fails the check only if it is over the cap and NOT listed here, or if it GREW past its recorded line count. Shrinkage (including partial splits) passes. Remove an entry when its file drops to <= 1000 lines. Regenerate with --update-baseline only after a reviewed change.",
   "entries": {
     "src/core/auth/services/session.service.ts": 1023,
-    "src/modules/accounting/services/fiscal-year.service.ts": 1377,
     "src/modules/accounting/services/inventory-manufacturing-cash-posting.service.ts": 1238,
     "src/modules/accounting/services/pdc-cheques.service.ts": 1072,
     "src/modules/accounting/services/purchases-treasury-posting.service.ts": 2068,

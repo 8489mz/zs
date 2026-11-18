@@ -139,9 +139,7 @@ function buildBalanceSheet(db: Kysely<Database>): BalanceSheetService {
 }
 
 function buildFiscalYear(db: Kysely<Database>): FiscalYearService {
-  const service = Object.create(FiscalYearService.prototype) as any;
-  service.db = db;
-  return service as FiscalYearService;
+  return new FiscalYearService(db, {} as any);
 }
 
 // The facade builds its 10 slices eagerly in the constructor, so the

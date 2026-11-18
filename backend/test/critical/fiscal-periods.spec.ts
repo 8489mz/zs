@@ -262,14 +262,15 @@ function testFiscalPeriodHardeningGuards() {
 
   const root = join(__dirname, '..', '..');
   const read = (relative: string) => readFileSync(join(root, relative), 'utf8').replace(/\r\n/g, '\n');
-  const service = read('src/modules/accounting/services/fiscal-year.service.ts');
+  const servicePeriods = read('src/modules/accounting/services/fiscal-year-periods.service.ts');
+  const servicePeriodClose = read('src/modules/accounting/services/fiscal-year-period-close.service.ts');
   const migration = read('src/database/migrations/2040000000144_fiscal_periods_tenant_fk_and_lock_snapshot.ts');
 
-  const closeBody = service.slice(
-    service.indexOf('async closeFiscalPeriod('),
-    service.indexOf('async reopenFiscalPeriod('),
+  const closeBody = servicePeriodClose.slice(
+    servicePeriodClose.indexOf('async closeFiscalPeriod('),
+    servicePeriodClose.indexOf('async reopenFiscalPeriod('),
   );
-  const reopenBody = service.slice(service.indexOf('async reopenFiscalPeriod('));
+  const reopenBody = servicePeriodClose.slice(servicePeriodClose.indexOf('async reopenFiscalPeriod('));
   assert.ok(closeBody.length > 0 && reopenBody.length > 0, 'closeFiscalPeriod/reopenFiscalPeriod must exist');
 
   // FP-7: الفحص والكتابة في معاملة واحدة تحت قفل الصف.
@@ -310,18 +311,18 @@ function testFiscalPeriodHardeningGuards() {
 
   // المحرك مصدر واحد: الخدمة تستورده ولا تعيد كتابته.
   assert.ok(
-    /buildMonthlyFiscalPeriods/.test(service),
+    /buildMonthlyFiscalPeriods/.test(servicePeriods),
     'the service must generate periods through the shared engine, not a private copy',
   );
   assert.ok(
-    !/const monthNamesAr = \[/.test(service),
+    !/const monthNamesAr = \[/.test(servicePeriods),
     'a second copy of the month table in the service means the engine is being bypassed',
   );
 
   // قراءة الفترات لا تكتب (نمط O33).
   // التعليقات تُزال أولاً: توثيق `generateFiscalPeriods` يذكر الاسم، والمقصود هنا الكود لا النص.
-  const listBody = service
-    .slice(service.indexOf('async listFiscalPeriods('), service.indexOf('async generateFiscalPeriods('))
+  const listBody = servicePeriods
+    .slice(servicePeriods.indexOf('async listFiscalPeriods('), servicePeriods.indexOf('async generateFiscalPeriods('))
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
   assert.ok(listBody.length > 0, 'listFiscalPeriods must exist and sit before generateFiscalPeriods');
@@ -330,7 +331,7 @@ function testFiscalPeriodHardeningGuards() {
     'listFiscalPeriods is a read path: generating rows there makes a GET write (the O33 pattern)',
   );
   assert.ok(
-    /async generateFiscalPeriods\([\s\S]{0,200}this\.assertAdmin\(auth\)/.test(service),
+    /async generateFiscalPeriods\([\s\S]{0,200}this\.assertAdmin\(auth\)/.test(servicePeriods),
     'generation must be an explicit admin-only write path',
   );
 

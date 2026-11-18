@@ -153,10 +153,7 @@ function buildService(db: Kysely<Database>): FiscalYearService {
     },
   } as never);
   (posting as any).recognizeInstallmentInterest = async () => {};
-  const service = Object.create(FiscalYearService.prototype) as any;
-  service.db = db;
-  service.accountingPosting = posting;
-  return service as FiscalYearService;
+  return new FiscalYearService(db, posting);
 }
 
 async function closingLines(db: Kysely<Database>): Promise<Array<{ accountId: number; debit: number; credit: number }>> {
@@ -285,11 +282,11 @@ async function main(): Promise<void> {
   // handle and keeps no 2dp computation or tolerance band. The
   // private toMoney helper remains only for list/get shaping.
   {
-    const source = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/fiscal-year.service.ts'), 'utf8');
+    const facade = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/fiscal-year.service.ts'), 'utf8');
+    const source = readFileSync(resolve(__dirname, '../../src/modules/accounting/services/fiscal-year-close.service.ts'), 'utf8');
     const start = source.indexOf('async previewFiscalYearClose(');
-    const end = source.indexOf('async reopenFiscalYear(');
-    assert.ok(start > 0 && end > start);
-    const body = source.slice(start, end);
+    assert.ok(start > 0);
+    const body = source.slice(start);
     assert.ok(body.includes('tenantBaseCurrency(this.db, tenantId)'));
     assert.ok(body.includes('tenantBaseCurrency(trx, tenantId)'));
     assert.ok(body.includes('buildFiscalYearClosePreview('));
@@ -298,7 +295,7 @@ async function main(): Promise<void> {
     assert.ok(!body.includes('.toFixed(2)'), 'close path must not hardcode 2dp formatting');
     assert.ok(!body.includes('> 0.009'), 'drift band must be exact equality, not 0.009');
     assert.ok(!body.includes('> 0.05'), 'balance band must be exact equality, not 0.05');
-    assert.ok(source.includes('private toMoney('), 'list/get display helper stays, untouched');
+    assert.ok(facade.includes('private toMoney('), 'list/get display helper stays, untouched');
   }
 
   console.log('fiscal-close-book-digits: all cases passed');
